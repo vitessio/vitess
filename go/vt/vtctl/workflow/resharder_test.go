@@ -42,7 +42,7 @@ import (
 const eol = "$"
 
 func TestReshardCreate(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 
 	workflowName := "wf1"
@@ -210,14 +210,14 @@ func TestReshardCreate(t *testing.T) {
 			// key from the map in the testTMC, once updateVReplicationWorklows()
 			// with the expected request is called.
 			if tc.autoStart {
-				assert.Len(t, env.tmc.updateVReplicationWorklowsRequests, 0)
+				assert.Empty(t, env.tmc.updateVReplicationWorklowsRequests)
 			}
 		})
 	}
 }
 
 func TestReadRefStreams(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	sourceKeyspace := &testKeyspace{
 		KeyspaceName: "sourceKeyspace",
@@ -392,7 +392,7 @@ func TestReadRefStreams(t *testing.T) {
 				return
 			}
 
-			assert.Error(t, err)
+			require.Error(t, err)
 			assert.ErrorContains(t, err, tc.errContains)
 		})
 	}
@@ -498,7 +498,7 @@ func TestBlsIsReference(t *testing.T) {
 			if tc.wantErr {
 				assert.ErrorContains(t, err, tc.errContains)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, tc.expected, result)
 			}
 		})

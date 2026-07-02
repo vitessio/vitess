@@ -17,7 +17,6 @@ limitations under the License.
 package cluster_test
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"sort"
@@ -167,7 +166,7 @@ func TestCreateKeyspace(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tt.expected, resp)
 		})
 	}
@@ -258,7 +257,7 @@ func TestCreateShard(t *testing.T) {
 			defer tt.tc.Cluster.Close()
 			_, err := tt.tc.Cluster.CreateShard(ctx, tt.req)
 			if tt.shouldErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 			} else {
 				require.NoError(t, err)
 			}
@@ -350,7 +349,7 @@ func TestDeleteKeyspace(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tt.expected, resp)
 		})
 	}
@@ -481,7 +480,7 @@ func TestDeleteShards(t *testing.T) {
 			defer tt.tc.Cluster.Close()
 			_, err := tt.tc.Cluster.DeleteShards(ctx, tt.req)
 			if tt.shouldErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 			} else {
 				require.NoError(t, err)
 			}
@@ -590,7 +589,7 @@ func TestFindTablet(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -607,9 +606,9 @@ func TestFindTablet(t *testing.T) {
 			tablet, err := cluster.FindTablet(ctx, tt.filter)
 
 			if tt.expectedError != nil {
-				assert.True(t, errors.Is(err, tt.expectedError), "expected error type %w does not match actual error type %w", err, tt.expectedError)
+				assert.ErrorIs(t, err, tt.expectedError)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				utils.MustMatch(t, tt.expected, tablet)
 			}
 		})
@@ -800,7 +799,7 @@ func TestFindTablets(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -816,7 +815,7 @@ func TestFindTablets(t *testing.T) {
 			defer cluster.Close()
 			tablets, err := cluster.FindTablets(ctx, tt.filter, tt.n)
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			testutil.AssertTabletSlicesEqual(t, tt.expected, tablets)
 		})
 	}
@@ -1186,7 +1185,7 @@ func TestFindWorkflows(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1201,7 +1200,7 @@ func TestFindWorkflows(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			testutil.AssertClusterWorkflowsEqual(t, tt.expected, workflows)
 		})
 	}
@@ -1474,7 +1473,7 @@ func TestGetCellInfos(t *testing.T) {
 				VtctldClient: tt.vtctld,
 			})
 			defer c.Close()
-			cellInfos, err := c.GetCellInfos(context.Background(), tt.req)
+			cellInfos, err := c.GetCellInfos(t.Context(), tt.req)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				return
@@ -1556,7 +1555,7 @@ func TestGetCellsAliases(t *testing.T) {
 				VtctldClient: tt.vtctld,
 			})
 			defer c.Close()
-			cellsAliases, err := c.GetCellsAliases(context.Background())
+			cellsAliases, err := c.GetCellsAliases(t.Context())
 			if tt.shouldErr {
 				assert.Error(t, err)
 				return
@@ -1690,7 +1689,7 @@ func TestGetSchema(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	for i, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1716,7 +1715,7 @@ func TestGetSchema(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tt.expected, schema)
 		})
 	}
@@ -2700,7 +2699,7 @@ func TestGetSchema(t *testing.T) {
 					}
 				}
 
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				testutil.AssertSchemaSlicesEqual(t, []*vtadminpb.Schema{tt.expected}, []*vtadminpb.Schema{schema})
 			})
 		}
@@ -2710,7 +2709,7 @@ func TestGetSchema(t *testing.T) {
 func TestGetShardReplicationPositions(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	tests := []struct {
 		name      string
 		cfg       testutil.TestClusterConfig
@@ -3012,7 +3011,7 @@ func TestGetVSchema(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -3028,7 +3027,7 @@ func TestGetVSchema(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tt.expected, vschema)
 		})
 	}
@@ -3169,7 +3168,7 @@ func TestGetWorkflow(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -3184,7 +3183,7 @@ func TestGetWorkflow(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tt.expected, workflow)
 		})
 	}
@@ -3334,7 +3333,7 @@ func TestGetWorkflows(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -3349,7 +3348,7 @@ func TestGetWorkflows(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			testutil.AssertClusterWorkflowsEqual(t, tt.expected, workflows)
 		})
 	}
@@ -3358,7 +3357,7 @@ func TestGetWorkflows(t *testing.T) {
 func TestSetWritable(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	tests := []struct {
 		name              string
 		cfg               testutil.TestClusterConfig
@@ -3438,7 +3437,7 @@ func TestToggleTabletReplication(t *testing.T) {
 		Name: "test",
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 	tests := []struct {
 		name              string
 		cfg               testutil.TestClusterConfig

@@ -81,18 +81,15 @@ func TestMain(m *testing.M) {
 		}
 
 		clusterInstance.VtctldExtraArgs = []string{
-			// TODO: Replace flag with dashed version in v25
-			"--schema_change_dir", schemaChangeDirectory,
-			"--schema_change_controller", "local",
-			"--schema_change_check_interval", "1s",
+			"--schema-change-dir", schemaChangeDirectory,
+			"--schema-change-controller", "local",
+			"--schema-change-check-interval", "1s",
 		}
 
 		clusterInstance.VtTabletExtraArgs = []string{
-			// TODO: Replace flag with dashed version in v25
-			"--heartbeat_interval", "250ms",
-			"--heartbeat_on_demand_duration", "5s",
-			"--migration_check_interval", "5s",
-			"--watch_replication_stream",
+			"--heartbeat-interval", "250ms",
+			"--heartbeat-on-demand-duration", "5s",
+			"--migration-check-interval", "5s",
 		}
 
 		if err := clusterInstance.StartTopo(); err != nil {
@@ -133,7 +130,7 @@ func TestMain(m *testing.M) {
 
 func TestVreplSuiteSchemaChanges(t *testing.T) {
 	shards := clusterInstance.Keyspaces[0].Shards
-	require.Equal(t, 1, len(shards))
+	require.Len(t, shards, 1)
 
 	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance)
 
@@ -274,7 +271,8 @@ func testSingle(t *testing.T, testName string, fkOnlineDDLPossible bool) {
 			sqltypes.StringBindVariable(uuid),
 		)
 		require.NoError(t, err)
-		onlineddl.VtgateExecQuery(t, &vtParams, query, "")
+		_, err = onlineddl.VtgateExecQuery(t.Context(), &vtParams, query)
+		require.NoError(t, err)
 	}()
 	row := waitForMigration(t, uuid, waitForMigrationTimeout)
 	// migration is complete
@@ -340,7 +338,8 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 }
 
 func readMigration(t *testing.T, uuid string) sqltypes.RowNamedValues {
-	rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+	rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
+	require.NoError(t, err)
 	require.NotNil(t, rs)
 	row := rs.Named().Row()
 	require.NotNil(t, row)
@@ -387,7 +386,7 @@ func mysqlExec(t *testing.T, sql string, expectError string) *sqltypes.Result {
 
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, mysqlParams())
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	qr, err := conn.ExecuteFetch(sql, 100000, true)
@@ -403,10 +402,10 @@ func mysqlExec(t *testing.T, sql string, expectError string) *sqltypes.Result {
 // getCreateTableStatement returns the CREATE TABLE statement for a given table
 func getCreateTableStatement(t *testing.T, tableName string) (statement string) {
 	queryResult, err := getTablet().VttabletProcess.QueryTablet("show create table "+tableName, keyspaceName, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
-	assert.Equal(t, len(queryResult.Rows), 1)
-	assert.Equal(t, len(queryResult.Rows[0]), 2) // table name, create statement
+	assert.Len(t, queryResult.Rows, 1)
+	assert.Len(t, queryResult.Rows[0], 2) // table name, create statement
 	statement = queryResult.Rows[0][1].ToString()
 	return statement
 }

@@ -53,7 +53,7 @@ func TestGetFuncForType(t *testing.T) {
 	assert := assert.New(t)
 
 	// Bool types
-	assert.Equal(true, get[bool](t, v, "foo.bool"), "GetFuncForType[bool](foo.bool)")
+	assert.True(get[bool](t, v, "foo.bool"), "GetFuncForType[bool](foo.bool)")
 
 	// Int types
 	assert.Equal(5, get[int](t, v, "foo.int"), "GetFuncForType[int](foo.int)")
@@ -166,7 +166,7 @@ func testPanic[T any](t testing.TB, f func() func(v *viper.Viper) func(key strin
 	}()
 
 	fn := f()
-	assert.Failf(t, fnName+" should panic", "%s should panic; got %+v", fnName, fn)
+	assert.Failf(t, fnName+" should panic", "%s should panic; got %T", fnName, fn)
 }
 
 func get[T any](t testing.TB, v *viper.Viper, key string) T {

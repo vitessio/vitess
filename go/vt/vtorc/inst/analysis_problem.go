@@ -128,7 +128,12 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 		},
 	},
 
-	// PrimaryDiskStalled
+	// PrimaryDiskStalled — no action other than ERS can resolve a stalled
+	// disk; tablet-level fixes can't recover a stalled-disk primary. Other
+	// analyses must NOT declare `BeforeAnalyses: PrimaryDiskStalled` —
+	// doing so would mask this shard-wide action via same-tablet selection.
+	// E.g. a primary that is both read-only and disk-stalled should always
+	// ERS away, demoting this tablet — not run `fixPrimary` first.
 	{
 		Meta: &DetectionAnalysisProblemMeta{
 			Analysis:    PrimaryDiskStalled,
@@ -214,6 +219,7 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			Description: "Primary is read-only",
 			Priority:    detectionAnalysisPriorityHigh,
 		},
+		BeforeAnalyses: []AnalysisCode{PrimarySemiSyncBlocked},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
 			return a.IsClusterPrimary && a.IsReadOnly
 		},
@@ -418,25 +424,17 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 		},
 	},
 
-	// Locked semi-sync primary
-	{
-		Meta: &DetectionAnalysisProblemMeta{
-			Analysis:    LockedSemiSyncPrimary,
-			Description: "Semi sync primary is locked since it doesn't get enough replica acknowledgements",
-			Priority:    detectionAnalysisPriorityMedium,
-		},
-		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
-			return a.IsPrimary && a.SemiSyncPrimaryEnabled && a.SemiSyncPrimaryStatus && a.SemiSyncPrimaryWaitForReplicaCount > 0 && a.SemiSyncPrimaryClients < a.SemiSyncPrimaryWaitForReplicaCount && isStaleBinlogCoordinates
-		},
-	},
+	// Locked semi-sync primary hypothesis. Detection only; no recovery is
+	// wired. The actionable case (MySQL itself reports
+	// Rpl_semi_sync_master_blocked) is covered by PrimarySemiSyncBlocked.
 	{
 		Meta: &DetectionAnalysisProblemMeta{
 			Analysis:    LockedSemiSyncPrimaryHypothesis,
-			Description: "Semi sync primary seems to be locked, more samplings needed to validate",
+			Description: "Semi sync primary has fewer connected semi-sync clients than required",
 			Priority:    detectionAnalysisPriorityMedium,
 		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
-			return a.IsPrimary && a.SemiSyncPrimaryEnabled && a.SemiSyncPrimaryStatus && a.SemiSyncPrimaryWaitForReplicaCount > 0 && a.SemiSyncPrimaryClients < a.SemiSyncPrimaryWaitForReplicaCount && !isStaleBinlogCoordinates
+			return a.IsPrimary && a.SemiSyncPrimaryEnabled && a.SemiSyncPrimaryStatus && a.SemiSyncPrimaryWaitForReplicaCount > 0 && a.SemiSyncPrimaryClients < a.SemiSyncPrimaryWaitForReplicaCount
 		},
 	},
 

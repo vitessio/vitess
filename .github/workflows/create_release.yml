@@ -19,12 +19,12 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
     - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
+      uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
       with:
         egress-policy: audit
 
     - name: Check out code
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       with:
         persist-credentials: 'false'
 
@@ -35,9 +35,11 @@ jobs:
         cache: 'false'
 
     - name: Tune the OS
+      timeout-minutes: 5
       uses: ./.github/actions/tune-os
 
     - name: Get dependencies
+      timeout-minutes: 5
       run: |
         sudo apt-get update
         sudo apt-get install -y make ruby ruby-dev

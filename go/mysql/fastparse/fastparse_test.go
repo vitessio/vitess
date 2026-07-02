@@ -750,7 +750,7 @@ func TestParseStringToFloat(t *testing.T) {
 	for _, tc := range tcs {
 		t.Run(tc.str, func(t *testing.T) {
 			got, _ := ParseFloat64(tc.str)
-			require.EqualValues(t, tc.val, got)
+			require.Equal(t, tc.val, got)
 		})
 	}
 }

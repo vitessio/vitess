@@ -147,7 +147,7 @@ func TestBinlogEventFormat(t *testing.T) {
 		HeaderSizes:   googleFormatEvent[76 : len(googleFormatEvent)-5],
 	}
 	got, err := input.Format()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, want, got)
 	assert.False(t, input.IsHeartbeat())
 }
@@ -254,15 +254,14 @@ func TestBinlogEventIntVarBadID(t *testing.T) {
 func TestBinlogEventIsSemiSyncNoAckQuery(t *testing.T) {
 	c := Conn{ExpectSemiSyncIndicator: true}
 	buf, semiSyncAckRequested, err := c.AnalyzeSemiSyncAckRequest(googleSemiSyncNoAckQueryEvent)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	input := newFilePosBinlogEventWithSemiSyncInfo(buf, semiSyncAckRequested)
 
 	assert.False(t, input.IsSemiSyncAckRequested())
 
 	want := true
-	if got := input.IsQuery(); got != want {
-		t.Errorf("%#v.IsQuery() = %v, want %v", input, got, want)
-	}
+	got := input.IsQuery()
+	assert.Equalf(t, want, got, "%#v.IsQuery() = %v, want %v", input, got, want)
 }
 
 func TestBinlogEventIsNotSemiSyncAckXID(t *testing.T) {
@@ -274,7 +273,7 @@ func TestBinlogEventIsNotSemiSyncAckXID(t *testing.T) {
 	{
 		c := Conn{ExpectSemiSyncIndicator: false}
 		buf, semiSyncAckRequested, err := c.AnalyzeSemiSyncAckRequest(googleXIDEvent)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		input := newFilePosBinlogEventWithSemiSyncInfo(buf, semiSyncAckRequested)
 		assert.False(t, input.IsSemiSyncAckRequested())
 	}
@@ -283,13 +282,12 @@ func TestBinlogEventIsNotSemiSyncAckXID(t *testing.T) {
 func TestBinlogEventIsSemiSyncAckXID(t *testing.T) {
 	c := Conn{ExpectSemiSyncIndicator: true}
 	buf, semiSyncAckRequested, err := c.AnalyzeSemiSyncAckRequest(googleSemiSyncAckXIDEvent)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	input := newFilePosBinlogEventWithSemiSyncInfo(buf, semiSyncAckRequested)
 
 	assert.True(t, input.IsSemiSyncAckRequested())
 
 	want := true
-	if got := input.IsXID(); got != want {
-		t.Errorf("%#v.IsXID() = %v, want %v", input, got, want)
-	}
+	got := input.IsXID()
+	assert.Equalf(t, want, got, "%#v.IsXID() = %v, want %v", input, got, want)
 }

@@ -81,12 +81,7 @@ func ElectNewPrimary(
 	}
 
 	var (
-		// mutex to secure the next two fields from concurrent access
-		mu sync.Mutex
-		// tablets that are possible candidates to be the new primary and their positions
-		validTablets         []*topodatapb.Tablet
-		tabletPositions      []*RelayLogPositions
-		innodbBufferPool     []int
+		mu                   sync.Mutex
 		errorGroup, groupCtx = errgroup.WithContext(ctx)
 	)
 
@@ -98,17 +93,17 @@ func ElectNewPrimary(
 		case opts.NewPrimaryAlias != nil:
 			// If newPrimaryAlias is provided, then that is the only valid tablet, even if it is not of type replica or in a different cell.
 			if !topoproto.TabletAliasEqual(tablet.Alias, opts.NewPrimaryAlias) {
-				reasonsToInvalidate.WriteString(fmt.Sprintf("\n%v does not match the new primary alias provided", topoproto.TabletAliasString(tablet.Alias)))
+				fmt.Fprintf(&reasonsToInvalidate, "\n%v does not match the new primary alias provided", topoproto.TabletAliasString(tablet.Alias))
 				continue
 			}
 		case !opts.AllowCrossCellPromotion && primaryCell != "" && tablet.Alias.Cell != primaryCell:
-			reasonsToInvalidate.WriteString(fmt.Sprintf("\n%v is not in the same cell as the previous primary", topoproto.TabletAliasString(tablet.Alias)))
+			fmt.Fprintf(&reasonsToInvalidate, "\n%v is not in the same cell as the previous primary", topoproto.TabletAliasString(tablet.Alias))
 			continue
 		case opts.AvoidPrimaryAlias != nil && topoproto.TabletAliasEqual(tablet.Alias, opts.AvoidPrimaryAlias):
-			reasonsToInvalidate.WriteString(fmt.Sprintf("\n%v matches the primary alias to avoid", topoproto.TabletAliasString(tablet.Alias)))
+			fmt.Fprintf(&reasonsToInvalidate, "\n%v matches the primary alias to avoid", topoproto.TabletAliasString(tablet.Alias))
 			continue
 		case tablet.Type != topodatapb.TabletType_REPLICA:
-			reasonsToInvalidate.WriteString(fmt.Sprintf("\n%v is not a replica", topoproto.TabletAliasString(tablet.Alias)))
+			fmt.Fprintf(&reasonsToInvalidate, "\n%v is not a replica", topoproto.TabletAliasString(tablet.Alias))
 			continue
 		}
 
@@ -123,6 +118,9 @@ func ElectNewPrimary(
 		return candidates[0].Alias, nil
 	}
 
+	validTablets := make([]*topodatapb.Tablet, 0, len(candidates))
+	tabletPositions := make([]*RelayLogPositions, 0, len(candidates))
+
 	for _, tablet := range candidates {
 		tb := tablet
 		errorGroup.Go(func() error {
@@ -132,16 +130,15 @@ func ElectNewPrimary(
 			defer mu.Unlock()
 			if err == nil && (opts.TolerableReplLag == 0 || opts.TolerableReplLag >= replLag) {
 				if takingBackup {
-					reasonsToInvalidate.WriteString(fmt.Sprintf("\n%v is taking a backup", topoproto.TabletAliasString(tablet.Alias)))
+					fmt.Fprintf(&reasonsToInvalidate, "\n%v is taking a backup", topoproto.TabletAliasString(tablet.Alias))
 				} else if replUnknown {
-					reasonsToInvalidate.WriteString(fmt.Sprintf("\n%v position known but unknown replication status", topoproto.TabletAliasString(tablet.Alias)))
+					fmt.Fprintf(&reasonsToInvalidate, "\n%v position known but unknown replication status", topoproto.TabletAliasString(tablet.Alias))
 				} else {
 					validTablets = append(validTablets, tb)
 					tabletPositions = append(tabletPositions, pos)
-					innodbBufferPool = append(innodbBufferPool, innodbBufferPoolData[topoproto.TabletAliasString(tb.Alias)])
 				}
 			} else {
-				reasonsToInvalidate.WriteString(fmt.Sprintf("\n%v has %v replication lag which is more than the tolerable amount", topoproto.TabletAliasString(tablet.Alias), replLag))
+				fmt.Fprintf(&reasonsToInvalidate, "\n%v has %v replication lag which is more than the tolerable amount", topoproto.TabletAliasString(tablet.Alias), replLag)
 			}
 			return err
 		})
@@ -155,6 +152,24 @@ func ElectNewPrimary(
 	// return an error if there are no valid tablets available
 	if len(validTablets) == 0 {
 		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "cannot find a tablet to reparent to%v", reasonsToInvalidate.String())
+	}
+
+	// Use buffer-pool data for tiebreaking only if every valid tablet has it. A missing
+	// entry (e.g. MariaDB, which doesn't expose Innodb_buffer_pool_pages_data) appended as
+	// a zero would unfairly outrank a legitimately low value. We gate on validTablets
+	// rather than candidates so that an ineligible candidate (taking backup, excess lag,
+	// etc.) doesn't disable tiebreaking for the rest.
+	var innodbBufferPool []int
+	if len(innodbBufferPoolData) > 0 {
+		innodbBufferPool = make([]int, 0, len(validTablets))
+		for _, t := range validTablets {
+			v, ok := innodbBufferPoolData[topoproto.TabletAliasString(t.Alias)]
+			if !ok {
+				innodbBufferPool = nil
+				break
+			}
+			innodbBufferPool = append(innodbBufferPool, v)
+		}
 	}
 
 	// sort preferred tablets for finding the best primary
@@ -379,11 +394,7 @@ func waitForCatchUp(
 	// Wait until the new primary has caught upto that position
 	waitForPosCtx, cancelFunc := context.WithTimeout(ctx, waitTime)
 	defer cancelFunc()
-	err = tmc.WaitForPosition(waitForPosCtx, newPrimary, pos)
-	if err != nil {
-		return err
-	}
-	return nil
+	return tmc.WaitForPosition(waitForPosCtx, newPrimary, pos)
 }
 
 // GetBackupCandidates is used to get a list of healthy tablets for backup

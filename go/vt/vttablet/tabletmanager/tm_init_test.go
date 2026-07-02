@@ -97,7 +97,7 @@ func TestStartBuildTabletFromInput(t *testing.T) {
 	tabletHostname = ""
 	gotTablet, err = BuildTabletFromInput(alias, port, grpcport, nil, collations.MySQL8())
 	require.NoError(t, err)
-	assert.NotEqual(t, "", gotTablet.Hostname)
+	assert.NotEmpty(t, gotTablet.Hostname)
 
 	// Canonicalize shard name and compute keyrange.
 	tabletHostname = "foo"
@@ -138,9 +138,19 @@ func TestStartBuildTabletFromInput(t *testing.T) {
 	_, err = BuildTabletFromInput(alias, port, grpcport, nil, collations.MySQL8())
 	assert.Contains(t, err.Error(), "unknown TabletType bad")
 
-	initTabletType = "primary"
-	_, err = BuildTabletFromInput(alias, port, grpcport, nil, collations.MySQL8())
-	assert.Contains(t, err.Error(), "invalid init-tablet-type PRIMARY")
+	for _, invalidType := range []string{"primary", "backup", "restore", "drained"} {
+		initTabletType = invalidType
+		_, err = BuildTabletFromInput(alias, port, grpcport, nil, collations.MySQL8())
+		require.Error(t, err, "expected tablet type %q to be invalid", invalidType)
+		assert.Contains(t, err.Error(), "invalid init-tablet-type")
+	}
+
+	for _, validType := range []string{"replica", "rdonly", "spare", "experimental"} {
+		initTabletType = validType
+		gotTablet, err = BuildTabletFromInput(alias, port, grpcport, nil, collations.MySQL8())
+		require.NoError(t, err, "expected tablet type %q to be valid", validType)
+		assert.NotNil(t, gotTablet)
+	}
 }
 
 func TestBuildTabletFromInputWithBuildTags(t *testing.T) {
@@ -197,7 +207,7 @@ func TestStartCreateKeyspaceShard(t *testing.T) {
 	defer tm.Stop()
 
 	assert.Equal(t, "replica", statsTabletType.Get())
-	assert.Equal(t, 1, len(statsTabletTypeCount.Counts()))
+	assert.Len(t, statsTabletTypeCount.Counts(), 1)
 	assert.Equal(t, int64(1), statsTabletTypeCount.Counts()["replica"])
 
 	_, err := ts.GetShard(ctx, "ks", "0")
@@ -205,7 +215,7 @@ func TestStartCreateKeyspaceShard(t *testing.T) {
 
 	ensureSrvKeyspace(t, ctx, ts, cell, "ks")
 
-	srvVSchema, err := ts.GetSrvVSchema(context.Background(), cell)
+	srvVSchema, err := ts.GetSrvVSchema(t.Context(), cell)
 	require.NoError(t, err)
 	wantVSchema := &vschemapb.Keyspace{}
 	assert.Equal(t, wantVSchema, srvVSchema.Keyspaces["ks"])
@@ -218,7 +228,7 @@ func TestStartCreateKeyspaceShard(t *testing.T) {
 	_, err = ts.GetShard(ctx, "ks1", "0")
 	require.NoError(t, err)
 	ensureSrvKeyspace(t, ctx, ts, cell, "ks1")
-	srvVSchema, err = ts.GetSrvVSchema(context.Background(), cell)
+	srvVSchema, err = ts.GetSrvVSchema(t.Context(), cell)
 	require.NoError(t, err)
 	assert.Equal(t, wantVSchema, srvVSchema.Keyspaces["ks1"])
 
@@ -231,9 +241,9 @@ func TestStartCreateKeyspaceShard(t *testing.T) {
 	defer tm.Stop()
 	_, err = ts.GetShard(ctx, "ks2", "0")
 	require.NoError(t, err)
-	_, err = ts.GetSrvKeyspace(context.Background(), cell, "ks2")
+	_, err = ts.GetSrvKeyspace(t.Context(), cell, "ks2")
 	require.NoError(t, err)
-	srvVSchema, err = ts.GetSrvVSchema(context.Background(), cell)
+	srvVSchema, err = ts.GetSrvVSchema(t.Context(), cell)
 	require.NoError(t, err)
 	assert.Equal(t, wantVSchema, srvVSchema.Keyspaces["ks2"])
 
@@ -248,9 +258,9 @@ func TestStartCreateKeyspaceShard(t *testing.T) {
 	defer tm.Stop()
 	_, err = ts.GetShard(ctx, "ks3", "0")
 	require.NoError(t, err)
-	_, err = ts.GetSrvKeyspace(context.Background(), cell, "ks3")
+	_, err = ts.GetSrvKeyspace(t.Context(), cell, "ks3")
 	require.NoError(t, err)
-	srvVSchema, err = ts.GetSrvVSchema(context.Background(), cell)
+	srvVSchema, err = ts.GetSrvVSchema(t.Context(), cell)
 	require.NoError(t, err)
 	assert.Equal(t, wantVSchema, srvVSchema.Keyspaces["ks3"])
 
@@ -260,7 +270,7 @@ func TestStartCreateKeyspaceShard(t *testing.T) {
 
 	// Wait a bit and make sure that srvKeyspace is still not created.
 	time.Sleep(100 * time.Millisecond)
-	_, err = ts.GetSrvKeyspace(context.Background(), cell, "ks4")
+	_, err = ts.GetSrvKeyspace(t.Context(), cell, "ks4")
 	require.True(t, topo.IsErrType(err, topo.NoNode), err)
 
 	tm2 := newTestTM(t, ts, 6, "ks4", "80-", nil)
@@ -422,7 +432,7 @@ func TestStartCheckMysql(t *testing.T) {
 		Port: 1,
 	}
 	tm := &TabletManager{
-		BatchCtx:            context.Background(),
+		BatchCtx:            t.Context(),
 		TopoServer:          ts,
 		MysqlDaemon:         newTestMysqlDaemon(t, 1),
 		DBConfigs:           dbconfigs.NewTestDBConfigs(cp, cp, ""),
@@ -449,7 +459,7 @@ func TestStartFindMysqlPort(t *testing.T) {
 	tablet := newTestTablet(t, 1, "ks", "0", nil)
 	fmd := newTestMysqlDaemon(t, -1)
 	tm := &TabletManager{
-		BatchCtx:            context.Background(),
+		BatchCtx:            t.Context(),
 		TopoServer:          ts,
 		MysqlDaemon:         fmd,
 		DBConfigs:           &dbconfigs.DBConfigs{},
@@ -502,10 +512,10 @@ func TestStartFixesReplicationData(t *testing.T) {
 	require.NoError(t, err)
 	sri, err = ts.GetShardReplication(ctx, cell, "ks", "0")
 	require.NoError(t, err)
-	assert.Equal(t, 0, len(sri.Nodes))
+	assert.Empty(t, sri.Nodes)
 
 	// An initTablet will recreate the shard replication data.
-	err = tm.initTablet(context.Background())
+	err = tm.initTablet(t.Context())
 	require.NoError(t, err)
 
 	sri, err = ts.GetShardReplication(ctx, cell, "ks", "0")
@@ -534,7 +544,7 @@ func TestStartDoesNotUpdateReplicationDataForTabletInWrongShard(t *testing.T) {
 
 	tablets, err := ts.FindAllTabletAliasesInShard(ctx, "ks", "-d0")
 	require.NoError(t, err)
-	assert.Equal(t, 0, len(tablets))
+	assert.Empty(t, tablets)
 }
 
 func TestCheckTabletTypeResets(t *testing.T) {
@@ -704,7 +714,7 @@ func newTestTM(t *testing.T, ts *topo.Server, uid int, keyspace, shard string, t
 	statsTabletTypeCount.ResetAll()
 
 	t.Helper()
-	ctx := context.Background()
+	ctx := t.Context()
 	tablet := newTestTablet(t, uid, keyspace, shard, tags)
 	fakeDb := newTestMysqlDaemon(t, 1)
 	tm := &TabletManager{
@@ -796,7 +806,7 @@ func TestWaitForDBAGrants(t *testing.T) {
 				testUser := "vt_test_dba"
 				cluster, err := startMySQLAndCreateUser(t, testUser)
 				require.NoError(t, err)
-				grantAllPrivilegesToUser(t, cluster.MySQLConnParams(), testUser)
+				require.NoError(t, grantAllPrivilegesToUser(t, cluster.MySQLConnParams(), testUser))
 				tc := &tabletenv.TabletConfig{
 					DB: &dbconfigs.DBConfigs{},
 				}
@@ -821,7 +831,11 @@ func TestWaitForDBAGrants(t *testing.T) {
 
 				go func() {
 					time.Sleep(500 * time.Millisecond)
-					grantAllPrivilegesToUser(t, cluster.MySQLConnParams(), testUser)
+					err := grantAllPrivilegesToUser(t, cluster.MySQLConnParams(), testUser)
+					if t.Context().Err() != nil {
+						return
+					}
+					assert.NoError(t, err)
 				}()
 
 				tc := &tabletenv.TabletConfig{
@@ -957,7 +971,7 @@ func startMySQLAndCreateUser(t *testing.T, testUser string) (vttest.LocalCluster
 	}
 
 	connParams := cluster.MySQLConnParams()
-	conn, err := mysql.Connect(context.Background(), &connParams)
+	conn, err := mysql.Connect(t.Context(), &connParams)
 	require.NoError(t, err)
 	_, err = conn.ExecuteFetch(fmt.Sprintf(`CREATE USER '%v'@'localhost'`, testUser), 1000, false)
 	conn.Close()
@@ -966,14 +980,19 @@ func startMySQLAndCreateUser(t *testing.T, testUser string) (vttest.LocalCluster
 }
 
 // grantAllPrivilegesToUser grants all the privileges to the user specified.
-func grantAllPrivilegesToUser(t *testing.T, connParams mysql.ConnParams, testUser string) {
-	conn, err := mysql.Connect(context.Background(), &connParams)
-	require.NoError(t, err)
-	_, err = conn.ExecuteFetch(fmt.Sprintf(`GRANT ALL ON *.* TO '%v'@'localhost'`, testUser), 1000, false)
-	require.NoError(t, err)
-	_, err = conn.ExecuteFetch(fmt.Sprintf(`GRANT GRANT OPTION ON *.* TO '%v'@'localhost'`, testUser), 1000, false)
-	require.NoError(t, err)
-	conn.Close()
+func grantAllPrivilegesToUser(t *testing.T, connParams mysql.ConnParams, testUser string) error {
+	conn, err := mysql.Connect(t.Context(), &connParams)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	if _, err := conn.ExecuteFetch(fmt.Sprintf(`GRANT ALL ON *.* TO '%v'@'localhost'`, testUser), 1000, false); err != nil {
+		return err
+	}
+	if _, err := conn.ExecuteFetch(fmt.Sprintf(`GRANT GRANT OPTION ON *.* TO '%v'@'localhost'`, testUser), 1000, false); err != nil {
+		return err
+	}
+	return nil
 }
 
 func TestInitTabletTypeLookup_PreservesTabletTypes(t *testing.T) {

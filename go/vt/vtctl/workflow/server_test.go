@@ -29,8 +29,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/ptr"
@@ -91,7 +89,7 @@ func (fake *fakeTMC) VReplicationExec(ctx context.Context, tablet *topodatapb.Ta
 func TestCheckReshardingJournalExistsOnTablet(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	tablet := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
 			Cell: "zone1",
@@ -197,7 +195,7 @@ func TestCheckReshardingJournalExistsOnTablet(t *testing.T) {
 }
 
 func TestMoveTablesComplete(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 
 	workflowName := "wf1"
@@ -487,7 +485,7 @@ func TestMoveTablesComplete(t *testing.T) {
 			req: &vtctldatapb.MoveTablesCompleteRequest{
 				TargetKeyspace: targetKeyspaceName,
 				Workflow:       workflowName + "_reverse",
-				KeepData:       ptr.Of(false),
+				KeepData:       new(false),
 			},
 			expectedTargetQueries: []*queryResult{
 				{
@@ -591,7 +589,7 @@ func TestMoveTablesComplete(t *testing.T) {
 				require.EqualError(t, err, tc.wantErr)
 			} else {
 				require.NoError(t, err)
-				require.EqualValues(t, got, tc.want, "Server.MoveTablesComplete() = %v, want %v", got, tc.want)
+				require.Equal(t, tc.want, got, "Server.MoveTablesComplete() = %v, want %v", got, tc.want)
 			}
 			if tc.postFunc != nil {
 				tc.postFunc(t, env)
@@ -614,7 +612,7 @@ func TestMoveTablesComplete(t *testing.T) {
 }
 
 func TestWorkflowDelete(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 
 	workflowName := "wf1"
@@ -1221,7 +1219,7 @@ func TestWorkflowDelete(t *testing.T) {
 					require.NotNil(t, si)
 					tc := si.GetTabletControl(topodatapb.TabletType_PRIMARY)
 					require.NotNil(t, tc)
-					require.EqualValues(t, []string{"t2", "t3"}, tc.DeniedTables)
+					require.Equal(t, []string{"t2", "t3"}, tc.DeniedTables)
 				}
 			},
 		},
@@ -1486,7 +1484,7 @@ func TestWorkflowDelete(t *testing.T) {
 				require.EqualError(t, err, tc.wantErr)
 			} else {
 				require.NoError(t, err)
-				require.EqualValues(t, got, tc.want, "Server.WorkflowDelete() = %v, want %v", got, tc.want)
+				require.Equal(t, tc.want, got, "Server.WorkflowDelete() = %v, want %v", got, tc.want)
 			}
 			if tc.postFunc != nil {
 				tc.postFunc(t, env)
@@ -1514,7 +1512,7 @@ func TestWorkflowDelete(t *testing.T) {
 }
 
 func TestMoveTablesTrafficSwitching(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 
 	workflowName := "wf1"
@@ -1936,7 +1934,7 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 }
 
 func TestMoveTablesSwitchWritesCompletesAfterCancelOnFreeze(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	const (
@@ -2014,28 +2012,28 @@ func TestMoveTablesSwitchWritesCompletesAfterCancelOnFreeze(t *testing.T) {
 	}, ts, state, time.Second, false)
 	require.NoError(t, err)
 
-	rules, err := topotools.GetRoutingRules(context.Background(), env.ts)
+	rules, err := topotools.GetRoutingRules(t.Context(), env.ts)
 	require.NoError(t, err)
 	require.Equal(t, []string{targetKeyspaceName + "." + tableName}, rules[tableName])
 	require.Equal(t, []string{targetKeyspaceName + "." + tableName}, rules[sourceKeyspaceName+"."+tableName])
 
-	sourceShard, err := env.ts.GetShard(context.Background(), sourceKeyspaceName, "0")
+	sourceShard, err := env.ts.GetShard(t.Context(), sourceKeyspaceName, "0")
 	require.NoError(t, err)
 	require.Len(t, sourceShard.TabletControls, 1)
 	require.Equal(t, []string{tableName}, sourceShard.TabletControls[0].DeniedTables)
 
-	targetShard, err := env.ts.GetShard(context.Background(), targetKeyspaceName, "0")
+	targetShard, err := env.ts.GetShard(t.Context(), targetKeyspaceName, "0")
 	require.NoError(t, err)
 	require.Empty(t, targetShard.TabletControls)
 
-	tsAfter, stateAfter, err := env.ws.getWorkflowState(context.Background(), targetKeyspaceName, workflowName)
+	tsAfter, stateAfter, err := env.ws.getWorkflowState(t.Context(), targetKeyspaceName, workflowName)
 	require.NoError(t, err)
 	require.True(t, stateAfter.WritesSwitched, "expected writes to remain switched after the original context was canceled")
 	require.True(t, tsAfter.frozen, "expected the target workflow to be frozen even though the original context was canceled")
 }
 
 func TestWorkflowSwitchTrafficFailsForInvalidMoveTablesSourceKeyspace(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	const (
 		workflowName       = "wf1"
@@ -2094,7 +2092,7 @@ func TestWorkflowSwitchTrafficFailsForInvalidMoveTablesSourceKeyspace(t *testing
 }
 
 func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 
 	workflowName := "wf1"
@@ -2292,13 +2290,13 @@ func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 			got, err := env.ws.WorkflowSwitchTraffic(ctx, tc.req)
 			require.NoError(t, err)
 
-			require.EqualValues(t, tc.want, got.DryRunResults, "Server.WorkflowSwitchTraffic(DryRun:true) = %v, want %v", got.DryRunResults, tc.want)
+			require.Equal(t, tc.want, got.DryRunResults, "Server.WorkflowSwitchTraffic(DryRun:true) = %v, want %v", got.DryRunResults, tc.want)
 		})
 	}
 }
 
 func TestMirrorTraffic(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	sourceKs := "source"
 	sourceShards := []string{"-"}
 	targetKs := "target"
@@ -2924,7 +2922,7 @@ func createReadVReplicationWorkflowFunc(t *testing.T, workflowType binlogdatapb.
 // Test checks that we don't include logs from non-existent streams in the result.
 // Ensures that we just skip the logs from non-existent streams and include the rest.
 func TestGetWorkflowsStreamLogs(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	sourceKeyspace := "source_keyspace"
 	targetKeyspace := "target_keyspace"
@@ -2975,13 +2973,13 @@ func TestGetWorkflowsStreamLogs(t *testing.T) {
 
 	// The non-existent stream logs shouldn't be part of the result
 	assert.Len(t, gotLogs, 1)
-	assert.Equal(t, gotLogs[0].Message, "log message")
-	assert.Equal(t, gotLogs[0].State, "Running")
-	assert.Equal(t, gotLogs[0].Id, int64(3))
+	assert.Equal(t, "log message", gotLogs[0].Message)
+	assert.Equal(t, "Running", gotLogs[0].State)
+	assert.Equal(t, int64(3), gotLogs[0].Id)
 }
 
 func TestWorkflowStatus(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	sourceKeyspace := "source_keyspace"
 	targetKeyspace := "target_keyspace"
@@ -3029,7 +3027,7 @@ func TestWorkflowStatus(t *testing.T) {
 		Shards:   targetShards,
 	})
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	require.NotNil(t, res.TableCopyState)
 
@@ -3055,7 +3053,7 @@ func TestWorkflowStatus(t *testing.T) {
 }
 
 func TestDeleteShard(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	sourceKeyspace := &testKeyspace{"source_keyspace", []string{"-"}}
 	targetKeyspace := &testKeyspace{"target_keyspace", []string{"-"}}
@@ -3070,15 +3068,15 @@ func TestDeleteShard(t *testing.T) {
 
 	// Expect to fail if recursive is false.
 	err = te.ws.DeleteShard(ctx, targetKeyspace.KeyspaceName, targetKeyspace.ShardNames[0], false, true)
-	assert.ErrorContains(t, err, "shard target_keyspace/- still has 1 tablets in cell")
+	require.ErrorContains(t, err, "shard target_keyspace/- still has 1 tablets in cell")
 
 	// Should not throw error if given keyspace or shard is invalid.
 	err = te.ws.DeleteShard(ctx, "invalid_keyspace", "-", false, true)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Successful shard delete.
 	err = te.ws.DeleteShard(ctx, targetKeyspace.KeyspaceName, targetKeyspace.ShardNames[0], true, true)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Check if the shard was deleted.
 	_, err = te.ts.GetShard(ctx, targetKeyspace.KeyspaceName, targetKeyspace.ShardNames[0])
@@ -3086,7 +3084,7 @@ func TestDeleteShard(t *testing.T) {
 }
 
 func TestCopySchemaShard(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	sourceKeyspace := &testKeyspace{"source_keyspace", []string{"-"}}
 	targetKeyspace := &testKeyspace{"target_keyspace", []string{"-"}}
@@ -3130,12 +3128,12 @@ func TestCopySchemaShard(t *testing.T) {
 
 	sourceTablet := te.tablets[sourceKeyspace.KeyspaceName][100]
 	err := te.ws.CopySchemaShard(ctx, sourceTablet.Alias, []string{"/.*/"}, nil, false, targetKeyspace.KeyspaceName, "-", 1*time.Second, true)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Empty(t, te.tmc.applySchemaRequests[200])
 }
 
 func TestValidateShardsHaveVReplicationPermissions(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	sourceKeyspace := &testKeyspace{"source_keyspace", []string{"-"}}
 	targetKeyspace := &testKeyspace{"target_keyspace", []string{"-80", "80-"}}
@@ -3153,13 +3151,6 @@ func TestValidateShardsHaveVReplicationPermissions(t *testing.T) {
 		response            *validateVReplicationPermissionsResponse
 		expectedErrContains string
 	}{
-		{
-			// Expect no error in this case.
-			name: "unimplemented error",
-			response: &validateVReplicationPermissionsResponse{
-				err: status.Error(codes.Unimplemented, "unimplemented test"),
-			},
-		},
 		{
 			name: "tmc error",
 			response: &validateVReplicationPermissionsResponse{
@@ -3204,7 +3195,7 @@ func TestValidateShardsHaveVReplicationPermissions(t *testing.T) {
 }
 
 func TestWorkflowUpdate(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	sourceKeyspace := &testKeyspace{"source_keyspace", []string{"-"}}
 	targetKeyspace := &testKeyspace{"target_keyspace", []string{"-80", "80-"}}
@@ -3299,7 +3290,7 @@ func TestWorkflowUpdate(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			for tabletID, changed := range tc.expectedResponse {
 				i := slices.IndexFunc(res.Details, func(det *vtctldatapb.WorkflowUpdateResponse_TabletInfo) bool {
 					return det.Tablet.Uid == tabletID
@@ -3312,7 +3303,7 @@ func TestWorkflowUpdate(t *testing.T) {
 }
 
 func TestFinalizeMigrateWorkflow(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	workflowName := "wf1"
 	tableName1 := "t1"
@@ -3381,7 +3372,7 @@ func TestFinalizeMigrateWorkflow(t *testing.T) {
 			}
 
 			_, err = te.ws.finalizeMigrateWorkflow(ctx, ts, "", tc.cancel, tc.keepData, false, false)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			ks, err := te.ts.GetSrvVSchema(ctx, "cell")
 			require.NoError(t, err)
@@ -3393,7 +3384,7 @@ func TestFinalizeMigrateWorkflow(t *testing.T) {
 				assert.NotNil(t, ks.Keyspaces[targetKeyspace.KeyspaceName].Tables[tableName1])
 				assert.NotNil(t, ks.Keyspaces[targetKeyspace.KeyspaceName].Tables[tableName2])
 			} else {
-				assert.Len(t, ks.Keyspaces[targetKeyspace.KeyspaceName].Tables, 0)
+				assert.Empty(t, ks.Keyspaces[targetKeyspace.KeyspaceName].Tables)
 				assert.Nil(t, ks.Keyspaces[targetKeyspace.KeyspaceName].Tables[tableName1])
 				assert.Nil(t, ks.Keyspaces[targetKeyspace.KeyspaceName].Tables[tableName2])
 			}
@@ -3406,7 +3397,7 @@ func TestFinalizeMigrateWorkflow(t *testing.T) {
 }
 
 func TestMaterializeAddTables(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	sourceKeyspace := &testKeyspace{"source_keyspace", []string{"-"}}
 	targetKeyspace := &testKeyspace{"target_keyspace", []string{"-80", "80-"}}
@@ -3555,14 +3546,14 @@ func TestMaterializeAddTables(t *testing.T) {
 			}
 			err := te.ws.WorkflowAddTables(ctx, tc.request)
 			if tc.expectedErrContains == "" {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Empty(t, te.tmc.applySchemaRequests[200])
 				assert.Empty(t, te.tmc.applySchemaRequests[210])
 				assert.Empty(t, te.tmc.updateVReplicationWorklowRequests[200])
 				assert.Empty(t, te.tmc.updateVReplicationWorklowRequests[210])
 				return
 			}
-			assert.ErrorContains(t, err, tc.expectedErrContains)
+			require.ErrorContains(t, err, tc.expectedErrContains)
 			assert.Empty(t, te.tmc.applySchemaRequests[200])
 			assert.Empty(t, te.tmc.applySchemaRequests[210])
 			assert.Empty(t, te.tmc.updateVReplicationWorklowRequests[200])
@@ -3572,7 +3563,7 @@ func TestMaterializeAddTables(t *testing.T) {
 }
 
 func TestMoveTablesPreventsSourceEqualsTarget(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 
 	ts := memorytopo.NewServer(ctx, "cell1")
@@ -3587,7 +3578,7 @@ func TestMoveTablesPreventsSourceEqualsTarget(t *testing.T) {
 }
 
 func TestMigrateAllowsSourceEqualsTarget(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 
 	ts := memorytopo.NewServer(ctx, "cell1")

@@ -105,12 +105,12 @@ func TestWatchConfig(t *testing.T) {
 		return v.GetInt
 	}, sv)
 
-	cancel, err := sv.Watch(context.Background(), v, 0)
+	cancel, err := sv.Watch(t.Context(), v, 0)
 	require.NoError(t, err)
 	defer cancel()
 
 	var wg sync.WaitGroup
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 
 	// Sleep between 25 and 50ms between reads.
 	readJitter := func() time.Duration {

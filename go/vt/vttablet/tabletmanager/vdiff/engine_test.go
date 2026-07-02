@@ -17,7 +17,6 @@ limitations under the License.
 package vdiff
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -86,10 +85,10 @@ func TestEngineOpen(t *testing.T) {
 			// Now let's short circuit the vdiff as we know that the open has worked as expected.
 			shortCircuitTestAfterQuery("update _vt.vdiff set state = 'started', last_error = left('', 1024) , started_at = utc_timestamp() where id = 1 and db_name = 'vttest'", vdiffenv.dbClient)
 
-			vdenv.vde.Open(context.Background(), vdiffenv.vre)
+			vdenv.vde.Open(t.Context(), vdiffenv.vre)
 			defer vdenv.vde.Close()
 			assert.True(t, vdenv.vde.IsOpen())
-			assert.Equal(t, 1, len(vdenv.vde.controllers))
+			assert.Len(t, vdenv.vde.controllers, 1)
 			vdenv.dbClient.Wait()
 		})
 	}
@@ -277,8 +276,8 @@ func TestEngineRetryErroredVDiffs(t *testing.T) {
 			}
 
 			err := vdiffenv.vde.retryVDiffs(vdiffenv.vde.ctx)
-			assert.NoError(t, err)
-			assert.Equal(t, expectedControllerCnt, len(vdiffenv.vde.controllers))
+			require.NoError(t, err)
+			assert.Len(t, vdiffenv.vde.controllers, expectedControllerCnt)
 			vdiffenv.dbClient.Wait()
 		})
 	}

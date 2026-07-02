@@ -17,7 +17,6 @@ limitations under the License.
 package informationschema
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -58,8 +57,8 @@ func TestDbNameOverride(t *testing.T) {
 
 	qr, err := mcmp.VtConn.ExecuteFetch("SELECT distinct database() FROM information_schema.tables WHERE table_schema = database()", 1000, true)
 
-	require.Nil(t, err)
-	assert.Equal(t, 1, len(qr.Rows), "did not get enough rows back")
+	require.NoError(t, err)
+	assert.Len(t, qr.Rows, 1, "did not get enough rows back")
 	assert.Equal(t, "vt_ks", qr.Rows[0][0].ToString())
 }
 
@@ -174,6 +173,28 @@ func TestSystemSchemaQueryWithoutQualifier(t *testing.T) {
 	require.Equal(t, qr2, qr3)
 }
 
+func TestSystemSchemaFieldDatabaseInOLAP(t *testing.T) {
+	if clusterInstance.HasPartialKeyspaces {
+		t.Skip("partial keyspace detected, skipping test")
+	}
+	mcmp, closer := start(t)
+	defer closer()
+
+	query := fmt.Sprintf("select * from information_schema.tables where table_schema = '%s' limit 1", keyspaceName)
+
+	utils.Exec(t, mcmp.VtConn, "set workload = oltp")
+	oltp := utils.Exec(t, mcmp.VtConn, query)
+
+	utils.Exec(t, mcmp.VtConn, "set workload = olap")
+	olap := utils.Exec(t, mcmp.VtConn, query)
+
+	require.Len(t, olap.Fields, len(oltp.Fields))
+	for i := range oltp.Fields {
+		assert.Equal(t, oltp.Fields[i].Database, olap.Fields[i].Database,
+			"field %q Database differs between OLTP and OLAP", oltp.Fields[i].Name)
+	}
+}
+
 func TestMultipleSchemaPredicates(t *testing.T) {
 	if clusterInstance.HasPartialKeyspaces {
 		t.Skip("test can randomly select one of the shards, and the shards are in different keyspaces")
@@ -187,7 +208,7 @@ func TestMultipleSchemaPredicates(t *testing.T) {
 		"on c.table_schema = t.table_schema and c.table_name = t.table_name "+
 		"where t.table_schema = '%s' and c.table_schema = '%s' and c.table_schema = '%s' and c.table_schema = '%s'", keyspaceName, keyspaceName, keyspaceName, keyspaceName)
 	qr1 := utils.Exec(t, mcmp.VtConn, query)
-	require.EqualValues(t, 4, len(qr1.Fields))
+	require.Len(t, qr1.Fields, 4)
 
 	// test a query with two keyspace names
 	query = fmt.Sprintf("select t.table_schema,t.table_name,c.column_name,c.column_type "+
@@ -199,15 +220,13 @@ func TestMultipleSchemaPredicates(t *testing.T) {
 	require.Error(t, err)
 	require.ErrorContains(t, err, "specifying two different database in the query is not supported")
 
-	if utils.BinaryIsAtLeastAtVersion(20, "vtgate") {
-		_, _ = mcmp.ExecNoCompare("select * from information_schema.columns where table_schema = '' limit 1")
-	}
+	_, _ = mcmp.ExecNoCompare("select * from information_schema.columns where table_schema = '' limit 1")
 }
 
 func TestInfrSchemaAndUnionAll(t *testing.T) {
 	vtConnParams := clusterInstance.GetVTParams(keyspaceName)
 	vtConnParams.DbName = keyspaceName
-	conn, err := mysql.Connect(context.Background(), &vtConnParams)
+	conn, err := mysql.Connect(t.Context(), &vtConnParams)
 	require.NoError(t, err)
 
 	for _, workload := range []string{"oltp", "olap"} {

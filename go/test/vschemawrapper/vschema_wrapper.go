@@ -170,6 +170,13 @@ func (vw *VSchemaWrapper) ForeignKeyMode(keyspace string) (vschemapb.Keyspace_Fo
 	return defaultFkMode, nil
 }
 
+func (vw *VSchemaWrapper) AllowCrossKeyspaceReads(keyspace string) (bool, error) {
+	if vw.V.Keyspaces[keyspace] != nil {
+		return !vw.V.Keyspaces[keyspace].PreventCrossKeyspaceReads, nil
+	}
+	return true, nil
+}
+
 func (vw *VSchemaWrapper) KeyspaceError(keyspace string) error {
 	return nil
 }

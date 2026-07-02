@@ -60,7 +60,7 @@ Follow these steps precisely to resolve merge conflicts in a Vitess backport PR.
 
 The backport branch may be based on a stale version of the release branch. **Always rebase before resolving conflicts** to avoid creating a resolution that conflicts with the current base.
 
-- Determine the base branch from the PR metadata `baseRefName` (e.g., `release-22.0`).
+- Determine the base branch from the PR metadata `baseRefName` (e.g., `release-24.0`).
 - Detect the remote pointing to `vitessio/vitess`. Do not assume it is named `upstream`:
   ```
   git remote -v | grep 'vitessio/vitess.*fetch'
@@ -107,7 +107,7 @@ The backport branch may be based on a stale version of the release branch. **Alw
   - Resolve the conflict to match what the upstream PR intended, adapted to the release branch context.
   - If a conflict is ambiguous and you cannot confidently determine the correct resolution, **ask the user** for guidance before proceeding.
 - Discard changes to files that are NOT in the upstream PR's file list.
-- **Missing dependencies**: If the conflicts exist because the upstream PR depends on changes from another PR that hasn't been backported yet, or if backporting an additional PR would make the resolution significantly cleaner, **propose this to the user** rather than forcing a messy resolution. For example: "This PR depends on types introduced in #12345 which hasn't been backported to release-22.0 yet. Should we backport that first?"
+- **Missing dependencies**: If the conflicts exist because the upstream PR depends on changes from another PR that hasn't been backported yet, or if backporting an additional PR would make the resolution significantly cleaner, **propose this to the user** rather than forcing a messy resolution. For example: "This PR depends on types introduced in #12345 which hasn't been backported to release-24.0 yet. Should we backport that first?"
 
 ## Step 6: Verify file scope
 
@@ -223,7 +223,7 @@ A backport PR only exists because CI passed on the upstream PR. Any CI failure o
         fi
       done < <(gh api "repos/vitessio/vitess/actions/workflows/$workflow_id/runs?branch=<base-branch>&per_page=10" --jq '.workflow_runs[].id')
       ```
-      Report the success rate to the user (e.g., "vtgate_reservedconn: 7/10 passed recently on release-22.0").
+      Report the success rate to the user (e.g., "vtgate_reservedconn: 7/10 passed recently on release-24.0").
    d. If the failure is unrelated to the backport (e.g., flaky test, infra issue), rerun the failed CI job and continue polling.
    e. If the backport caused the failure, propose and apply fixes, push, then continue polling to verify the fix resolved it.
 4. Continue polling until all checks have passed (including reruns).

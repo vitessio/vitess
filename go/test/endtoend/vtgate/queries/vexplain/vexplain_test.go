@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -63,19 +64,14 @@ func TestVtGateVExplain(t *testing.T) {
 			qr.Rows[i] = qr.Rows[i][1:]
 		}
 
-		if err := sqltypes.RowsEqualsStr(expected, qr.Rows); err != nil {
-			t.Error(err)
-		}
+		assert.NoError(t, sqltypes.RowsEqualsStr(expected, qr.Rows))
 	}
 
 	utils.AssertContainsError(t, conn,
 		`vexplain queries insert into user (id,lookup,lookup_unique) values (4,'apa','foo'),(5,'apa','bar'),(6,'monkey','nobar')`,
 		"vexplain queries/all will actually run queries")
 
-	binaryPrefix := ""
-	if utils.BinaryIsAtLeastAtVersion(23, "vtgate") {
-		binaryPrefix = "_binary"
-	}
+	binaryPrefix := "_binary"
 
 	expected := fmt.Sprintf(`[
 		[VARCHAR("ks") VARCHAR("-40") VARCHAR("begin")]

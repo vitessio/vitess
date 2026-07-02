@@ -63,7 +63,7 @@ func TestProtoConversions(t *testing.T) {
 				require.True(t, proto.Equal(got, tcase.protoVal), "ValueToProto: %v, want %v", got, tcase.protoVal)
 			}
 			gotback := ProtoToValue(got)
-			require.EqualValues(t, tcase.val, gotback)
+			require.Equal(t, tcase.val, gotback)
 		})
 	}
 }
@@ -92,13 +92,11 @@ func TestBuildBindVariables(t *testing.T) {
 	for _, tcase := range tcases {
 		bindVars, err := BuildBindVariables(tcase.in)
 		if tcase.err == "" {
-			assert.NoError(t, err)
+			require.NoError(t, err)
 		} else {
-			assert.ErrorContains(t, err, tcase.err)
+			require.ErrorContains(t, err, tcase.err)
 		}
-		if !BindVariablesEqual(bindVars, tcase.out) {
-			t.Errorf("MapToBindVars(%v): %v, want %s", tcase.in, bindVars, tcase.out)
-		}
+		assert.True(t, BindVariablesEqual(bindVars, tcase.out), "MapToBindVars(%v): %v, want %s", tcase.in, bindVars, tcase.out)
 	}
 }
 
@@ -365,7 +363,7 @@ func TestValidateBindVarables(t *testing.T) {
 	for _, tcase := range tcases {
 		err := ValidateBindVariables(tcase.in)
 		if tcase.err != "" {
-			assert.ErrorContains(t, err, tcase.err)
+			require.ErrorContains(t, err, tcase.err)
 			continue
 		}
 		assert.NoError(t, err)
@@ -572,10 +570,10 @@ func TestValidateBindVariable(t *testing.T) {
 	for _, tcase := range testcases {
 		err := ValidateBindVariable(tcase.in)
 		if tcase.err != "" {
-			assert.ErrorContains(t, err, tcase.err)
+			require.ErrorContains(t, err, tcase.err)
 			continue
 		}
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	}
 
 	// Special case: nil bind var.

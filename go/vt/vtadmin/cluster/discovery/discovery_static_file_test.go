@@ -17,7 +17,6 @@ limitations under the License.
 package discovery
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -90,7 +89,7 @@ func TestDiscoverVTGate(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -106,7 +105,7 @@ func TestDiscoverVTGate(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tt.expected, gate)
 		})
 	}
@@ -233,7 +232,7 @@ func TestDiscoverVTGates(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -243,7 +242,7 @@ func TestDiscoverVTGates(t *testing.T) {
 
 			err := disco.parseConfig(tt.contents)
 			if tt.shouldErrConfig {
-				assert.Error(t, err)
+				require.Error(t, err)
 			} else {
 				require.NoError(t, err)
 			}
@@ -254,7 +253,7 @@ func TestDiscoverVTGates(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.ElementsMatch(t, tt.expected, gates)
 		})
 	}
@@ -324,7 +323,7 @@ func TestDiscoverVtctld(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -340,7 +339,7 @@ func TestDiscoverVtctld(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tt.expected, vtctld)
 		})
 	}
@@ -467,7 +466,7 @@ func TestDiscoverVtctlds(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -477,7 +476,7 @@ func TestDiscoverVtctlds(t *testing.T) {
 
 			err := disco.parseConfig(tt.contents)
 			if tt.shouldErrConfig {
-				assert.Error(t, err)
+				require.Error(t, err)
 			} else {
 				require.NoError(t, err)
 			}
@@ -488,7 +487,7 @@ func TestDiscoverVtctlds(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.ElementsMatch(t, tt.expected, vtctlds)
 		})
 	}

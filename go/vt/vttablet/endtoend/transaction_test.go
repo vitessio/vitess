@@ -52,14 +52,14 @@ func TestCommit(t *testing.T) {
 
 	qr, err := client.Execute("select * from vitess_test", nil)
 	require.NoError(t, err)
-	require.Equal(t, 4, len(qr.Rows), "rows affected")
+	require.Len(t, qr.Rows, 4, "rows affected")
 
 	_, err = client.Execute("delete from vitess_test where intval=4", nil)
 	require.NoError(t, err)
 
 	qr, err = client.Execute("select * from vitess_test", nil)
 	require.NoError(t, err)
-	require.Equal(t, 3, len(qr.Rows), "rows affected")
+	require.Len(t, qr.Rows, 3, "rows affected")
 
 	expectedDiffs := []struct {
 		tag  string
@@ -110,7 +110,7 @@ func TestRollback(t *testing.T) {
 
 	qr, err := client.Execute("select * from vitess_test", nil)
 	require.NoError(t, err)
-	assert.Equal(t, 3, len(qr.Rows))
+	assert.Len(t, qr.Rows, 3)
 
 	expectedDiffs := []struct {
 		tag  string
@@ -149,14 +149,14 @@ func TestAutoCommit(t *testing.T) {
 
 	qr, err := client.Execute("select * from vitess_test", nil)
 	require.NoError(t, err)
-	assert.Equal(t, 4, len(qr.Rows))
+	assert.Len(t, qr.Rows, 4)
 
 	_, err = client.Execute("delete from vitess_test where intval=4", nil)
 	require.NoError(t, err)
 
 	qr, err = client.Execute("select * from vitess_test", nil)
 	require.NoError(t, err)
-	assert.Equal(t, 3, len(qr.Rows))
+	assert.Len(t, qr.Rows, 3)
 
 	expectedDiffs := []struct {
 		tag  string
@@ -192,9 +192,7 @@ func TestAutoCommit(t *testing.T) {
 		want := framework.FetchInt(vstart, expected.tag) + expected.diff
 		// It's possible that other house-keeping transactions (like messaging)
 		// can happen during this test. So, don't perform equality comparisons.
-		if got < want {
-			t.Errorf("%s: %d, must be at least %d", expected.tag, got, want)
-		}
+		assert.GreaterOrEqualf(t, got, want, "%s: %d, must be at least %d", expected.tag, got, want)
 	}
 }
 
@@ -228,13 +226,13 @@ func TestPrepareRollback(t *testing.T) {
 	err = client.Prepare("aa")
 	if err != nil {
 		client.RollbackPrepared("aa", 0)
-		t.Fatal(err.Error())
+		require.FailNow(t, err.Error())
 	}
 	err = client.RollbackPrepared("aa", 0)
 	require.NoError(t, err)
 	qr, err := client.Execute("select * from vitess_test", nil)
 	require.NoError(t, err)
-	assert.Equal(t, 3, len(qr.Rows))
+	assert.Len(t, qr.Rows, 3)
 }
 
 func TestPrepareCommit(t *testing.T) {
@@ -250,13 +248,13 @@ func TestPrepareCommit(t *testing.T) {
 	err = client.Prepare("aa")
 	if err != nil {
 		client.RollbackPrepared("aa", 0)
-		t.Fatal(err)
+		require.NoError(t, err)
 	}
 	err = client.CommitPrepared("aa")
 	require.NoError(t, err)
 	qr, err := client.Execute("select * from vitess_test", nil)
 	require.NoError(t, err)
-	assert.Equal(t, 4, len(qr.Rows))
+	assert.Len(t, qr.Rows, 4)
 }
 
 func TestPrepareReparentCommit(t *testing.T) {
@@ -272,7 +270,7 @@ func TestPrepareReparentCommit(t *testing.T) {
 	err = client.Prepare("aa")
 	if err != nil {
 		client.RollbackPrepared("aa", 0)
-		t.Fatal(err)
+		require.NoError(t, err)
 	}
 	// Rollback all transactions
 	err = client.SetServingType(topodatapb.TabletType_REPLICA)
@@ -284,7 +282,7 @@ func TestPrepareReparentCommit(t *testing.T) {
 	require.NoError(t, err)
 	qr, err := client.Execute("select * from vitess_test", nil)
 	require.NoError(t, err)
-	assert.Equal(t, 4, len(qr.Rows))
+	assert.Len(t, qr.Rows, 4)
 }
 
 func TestShutdownGracePeriod(t *testing.T) {
@@ -311,7 +309,7 @@ func TestShutdownGracePeriod(t *testing.T) {
 	start := time.Now()
 	err = client.SetServingType(topodatapb.TabletType_REPLICA)
 	require.NoError(t, err)
-	assert.True(t, time.Since(start) < 5*time.Second, time.Since(start))
+	assert.Less(t, time.Since(start), 5*time.Second, time.Since(start))
 	client.Rollback()
 
 	client = framework.NewClientWithTabletType(topodatapb.TabletType_REPLICA)
@@ -335,7 +333,7 @@ func TestShutdownGracePeriod(t *testing.T) {
 	start = time.Now()
 	err = client.SetServingType(topodatapb.TabletType_PRIMARY)
 	require.NoError(t, err)
-	assert.True(t, time.Since(start) < 1*time.Second, time.Since(start))
+	assert.Less(t, time.Since(start), 1*time.Second, time.Since(start))
 	client.Rollback()
 }
 
@@ -363,7 +361,7 @@ func TestShutdownGracePeriodWithStreamExecute(t *testing.T) {
 	start := time.Now()
 	err = client.SetServingType(topodatapb.TabletType_REPLICA)
 	require.NoError(t, err)
-	assert.True(t, time.Since(start) < 5*time.Second, time.Since(start))
+	assert.Less(t, time.Since(start), 5*time.Second, time.Since(start))
 	client.Rollback()
 
 	client = framework.NewClientWithTabletType(topodatapb.TabletType_REPLICA)
@@ -387,7 +385,7 @@ func TestShutdownGracePeriodWithStreamExecute(t *testing.T) {
 	start = time.Now()
 	err = client.SetServingType(topodatapb.TabletType_PRIMARY)
 	require.NoError(t, err)
-	assert.True(t, time.Since(start) < 1*time.Second, time.Since(start))
+	assert.Less(t, time.Since(start), 1*time.Second, time.Since(start))
 	client.Rollback()
 }
 
@@ -415,7 +413,7 @@ func TestShutdownGracePeriodWithReserveExecute(t *testing.T) {
 	start := time.Now()
 	err = client.SetServingType(topodatapb.TabletType_REPLICA)
 	require.NoError(t, err)
-	assert.True(t, time.Since(start) < 5*time.Second, time.Since(start))
+	assert.Less(t, time.Since(start), 5*time.Second, time.Since(start))
 	client.Rollback()
 
 	client = framework.NewClientWithTabletType(topodatapb.TabletType_REPLICA)
@@ -439,7 +437,7 @@ func TestShutdownGracePeriodWithReserveExecute(t *testing.T) {
 	start = time.Now()
 	err = client.SetServingType(topodatapb.TabletType_PRIMARY)
 	require.NoError(t, err)
-	assert.True(t, time.Since(start) < 1*time.Second, time.Since(start))
+	assert.Less(t, time.Since(start), 1*time.Second, time.Since(start))
 	client.Rollback()
 }
 
@@ -455,8 +453,8 @@ func TestShortTxTimeoutOltp(t *testing.T) {
 	require.NoError(t, err)
 	start := time.Now()
 	_, err = client.Execute("select sleep(10) from dual", nil)
-	assert.Error(t, err)
-	assert.True(t, time.Since(start) < 5*time.Second, time.Since(start))
+	require.Error(t, err)
+	assert.Less(t, time.Since(start), 5*time.Second, time.Since(start))
 	client.Rollback()
 }
 
@@ -472,8 +470,8 @@ func TestShortTxTimeoutOlap(t *testing.T) {
 	require.NoError(t, err)
 	start := time.Now()
 	_, err = client.StreamExecute("select sleep(10) from dual", nil)
-	assert.Error(t, err)
-	assert.True(t, time.Since(start) < 5*time.Second, time.Since(start))
+	require.Error(t, err)
+	assert.Less(t, time.Since(start), 5*time.Second, time.Since(start))
 	client.Rollback()
 }
 
@@ -532,9 +530,7 @@ func TestMMCommitFlow(t *testing.T) {
 	info, err = client.ReadTransaction("aa")
 	require.NoError(t, err)
 	wantInfo = &querypb.TransactionMetadata{}
-	if !proto.Equal(info, wantInfo) {
-		t.Errorf("ReadTransaction: %#v, want %#v", info, wantInfo)
-	}
+	assert.True(t, proto.Equal(info, wantInfo), "ReadTransaction: %#v, want %#v", info, wantInfo)
 }
 
 func TestMMRollbackFlow(t *testing.T) {
@@ -577,9 +573,7 @@ func TestMMRollbackFlow(t *testing.T) {
 			TabletType: topodatapb.TabletType_PRIMARY,
 		}},
 	}
-	if !proto.Equal(info, wantInfo) {
-		t.Errorf("ReadTransaction: %#v, want %#v", info, wantInfo)
-	}
+	assert.True(t, proto.Equal(info, wantInfo), "ReadTransaction: %#v, want %#v", info, wantInfo)
 
 	err = client.ConcludeTransaction("aa")
 	require.NoError(t, err)
@@ -597,8 +591,11 @@ func newAsyncChecker(t *testing.T) *AsyncChecker {
 	}
 }
 
-func (ac *AsyncChecker) check() {
-	ac.ch <- true
+func (ac *AsyncChecker) check(ctx context.Context) {
+	select {
+	case ac.ch <- true:
+	case <-ctx.Done():
+	}
 }
 
 func (ac *AsyncChecker) shouldNotify(timeout time.Duration, message string) {
@@ -607,7 +604,7 @@ func (ac *AsyncChecker) shouldNotify(timeout time.Duration, message string) {
 		// notified, all is well
 	case <-time.After(timeout):
 		// timed out waiting for notification
-		ac.t.Error(message)
+		assert.Fail(ac.t, message)
 	}
 }
 
@@ -615,7 +612,7 @@ func (ac *AsyncChecker) shouldNotNotify(timeout time.Duration, message string) {
 	select {
 	case <-ac.ch:
 		// notified - not expected
-		ac.t.Error(message)
+		assert.Fail(ac.t, message)
 	case <-time.After(timeout):
 		// timed out waiting for notification, which is expected
 	}
@@ -633,15 +630,19 @@ func TestTransactionWatcherSignal(t *testing.T) {
 	require.NoError(t, err)
 
 	ch := newAsyncChecker(t)
-	ctx := t.Context()
+	ctx, cancel := context.WithCancel(t.Context())
+	streamErrCh := make(chan error, 1)
+	defer func() {
+		cancel()
+		require.NoError(t, <-streamErrCh)
+	}()
 	go func() {
-		err := client.StreamHealthWithContext(ctx, func(shr *querypb.StreamHealthResponse) error {
+		streamErrCh <- client.StreamHealthWithContext(ctx, func(shr *querypb.StreamHealthResponse) error {
 			if shr.RealtimeStats.TxUnresolved {
-				ch.check()
+				ch.check(ctx)
 			}
 			return nil
 		})
-		require.NoError(t, err)
 	}()
 
 	err = client.CreateTransaction("aa", []*querypb.Target{
@@ -683,9 +684,8 @@ func TestUnresolvedTracking(t *testing.T) {
 	require.NoError(t, err)
 	time.Sleep(10 * time.Second)
 	vars := framework.DebugVars()
-	if val := framework.FetchInt(vars, "Unresolved/Prepares"); val != 1 {
-		t.Errorf("Unresolved: %d, want 1", val)
-	}
+	val := framework.FetchInt(vars, "Unresolved/Prepares")
+	assert.Equalf(t, 1, val, "Unresolved: %d, want 1", val)
 }
 
 func TestManualTwopcz(t *testing.T) {
@@ -697,7 +697,7 @@ func TestManualTwopcz(t *testing.T) {
 	client := framework.NewClient()
 	defer client.Execute("delete from vitess_test where intval=4", nil)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &connParams)
 	require.NoError(t, err)
 	defer conn.Close()

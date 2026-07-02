@@ -303,7 +303,7 @@ func TestEmergencyReparentShardSlow(t *testing.T) {
 			}
 
 			synctest.Test(t, func(t *testing.T) {
-				ctx, cancel := context.WithCancel(context.Background())
+				ctx, cancel := context.WithCancel(t.Context())
 				defer cancel()
 				ts := memorytopo.NewServer(ctx, "zone1")
 
@@ -337,7 +337,7 @@ func TestEmergencyReparentShardSlow(t *testing.T) {
 					return
 				}
 
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				testutil.AssertEmergencyReparentShardResponsesEqual(t, tt.expected, resp)
 			})
 		})
@@ -611,7 +611,7 @@ func TestPlannedReparentShardSlow(t *testing.T) {
 			t.Parallel()
 
 			synctest.Test(t, func(t *testing.T) {
-				ctx, cancel := context.WithCancel(context.Background())
+				ctx, cancel := context.WithCancel(t.Context())
 				defer cancel()
 
 				ts := memorytopo.NewServer(ctx, "zone1")
@@ -645,7 +645,7 @@ func TestPlannedReparentShardSlow(t *testing.T) {
 					return
 				}
 
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				testutil.AssertPlannedReparentShardResponsesEqual(t, tt.expected, resp)
 			})
 		})
@@ -740,7 +740,7 @@ func TestSleepTablet(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
-				ctx, cancel := context.WithCancel(context.Background())
+				ctx, cancel := context.WithCancel(t.Context())
 				defer cancel()
 
 				ts := memorytopo.NewServer(ctx, "zone1")
@@ -761,7 +761,7 @@ func TestSleepTablet(t *testing.T) {
 				resp, err := vtctld.SleepTablet(ctx, tt.req)
 				sleepDur := time.Since(start)
 				if tt.shouldErr {
-					assert.Error(t, err)
+					require.Error(t, err)
 					assert.Nil(t, resp)
 					return
 				}

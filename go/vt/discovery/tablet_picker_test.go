@@ -38,7 +38,7 @@ const (
 
 func TestPickPrimary(t *testing.T) {
 	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	ctx, cancel := context.WithTimeout(t.Context(), 200*time.Millisecond)
 	defer cancel()
 
 	te := newPickerTestEnv(t, ctx, []string{"cell", "otherCell"})
@@ -66,7 +66,7 @@ func TestPickPrimary(t *testing.T) {
 // there is no primary setup for the shard we correctly return an error.
 func TestPickNoPrimary(t *testing.T) {
 	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 
 	te := newPickerTestEnv(t, ctx, []string{"cell", "otherCell"})
@@ -523,7 +523,7 @@ func TestPickErrorLocalPreferenceDefault(t *testing.T) {
 
 	te := newPickerTestEnv(t, ctx, []string{"cell"})
 	_, err := NewTabletPicker(ctx, te.topoServ, te.cells, "cell", te.keyspace, te.shard, "badtype", TabletPickerOptions{})
-	assert.EqualError(t, err, "failed to parse list of tablet types: badtype")
+	require.EqualError(t, err, "failed to parse list of tablet types: badtype")
 
 	tp, err := NewTabletPicker(ctx, te.topoServ, te.cells, "cell", te.keyspace, te.shard, "replica", TabletPickerOptions{})
 	require.NoError(t, err)
@@ -545,7 +545,7 @@ func TestPickErrorLocalPreferenceDefault(t *testing.T) {
 	_, err = tp.PickForStreaming(timeoutCtx)
 	require.EqualError(t, err, "context has expired")
 	// if local preference is selected, tp cells include's the local cell's alias
-	require.Greater(t, globalTPStats.noTabletFoundError.Counts()["cell_cella.ks.0.replica"], int64(0))
+	require.Positive(t, globalTPStats.noTabletFoundError.Counts()["cell_cella.ks.0.replica"])
 }
 
 func TestPickErrorOnlySpecified(t *testing.T) {
@@ -573,7 +573,7 @@ func TestPickErrorOnlySpecified(t *testing.T) {
 	_, err = tp.PickForStreaming(timeoutCtx)
 	require.EqualError(t, err, "context has expired")
 
-	require.Greater(t, globalTPStats.noTabletFoundError.Counts()["cell.ks.0.replica"], int64(0))
+	require.Positive(t, globalTPStats.noTabletFoundError.Counts()["cell.ks.0.replica"])
 }
 
 // TestPickFallbackType tests that when providing a list of tablet types to
@@ -818,11 +818,11 @@ func deleteTablet(t *testing.T, te *pickerTestEnv, tablet *topodatapb.Tablet) {
 		return
 	}
 	{ // log error
-		err := te.topoServ.DeleteTablet(context.Background(), tablet.Alias)
+		err := te.topoServ.DeleteTablet(t.Context(), tablet.Alias)
 		require.NoError(t, err, "failed to DeleteTablet with alias: %v", err)
 	}
 	{ // This is not automatically removed from shard replication, which results in log spam and log error
-		err := topo.DeleteTabletReplicationData(context.Background(), te.topoServ, tablet)
+		err := topo.DeleteTabletReplicationData(t.Context(), te.topoServ, tablet)
 		require.NoError(t, err, "failed to automatically remove from shard replication: %v", err)
 	}
 }

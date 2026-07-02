@@ -17,7 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -60,7 +59,7 @@ func TestBuildDBPlan(t *testing.T) {
 			primitive, err := buildDBPlan(show.Internal.(*sqlparser.ShowBasic), vw)
 			require.NoError(t, err)
 
-			result, err := primitive.TryExecute(context.Background(), nil, nil, false)
+			result, err := primitive.TryExecute(t.Context(), nil, nil, false)
 			require.NoError(t, err)
 			require.Equal(t, s.expected, fmt.Sprintf("%v", result.Rows))
 		})

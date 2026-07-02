@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
@@ -92,7 +93,7 @@ func TestSchemaChange(t *testing.T) {
 	for _, tc := range tcs {
 		t.Run(tc.tName, func(t *testing.T) {
 			_, err := client.Execute(tc.ddl, nil)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			timeout := time.After(5 * time.Second)
 			for {
 				select {
@@ -106,7 +107,7 @@ func TestSchemaChange(t *testing.T) {
 						// This is what we wanted!
 						return
 					}
-					t.Errorf("timed out waiting for a schema notification")
+					assert.Fail(t, "timed out waiting for a schema notification")
 					return
 				}
 			}

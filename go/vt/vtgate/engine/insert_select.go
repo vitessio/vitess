@@ -157,9 +157,9 @@ func (ins *InsertSelect) insertIntoUnshardedTable(ctx context.Context, vcursor V
 }
 
 func (ins *InsertSelect) getInsertUnshardedQuery(rows []sqltypes.Row, bindVars map[string]*querypb.BindVariable) string {
-	var mids sqlparser.Values
+	mids := make(sqlparser.Values, 0, len(rows))
 	for r, inputRow := range rows {
-		row := sqlparser.ValTuple{}
+		row := make(sqlparser.ValTuple, 0, len(inputRow))
 		for c, value := range inputRow {
 			bvName := insertVarOffset(r, c)
 			bindVars[bvName] = sqltypes.ValueBindVariable(value)

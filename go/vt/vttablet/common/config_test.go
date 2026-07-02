@@ -24,9 +24,8 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"vitess.io/vitess/go/vt/utils"
 )
 
 func TestNewVReplicationConfig(t *testing.T) {
@@ -40,23 +39,23 @@ func TestNewVReplicationConfig(t *testing.T) {
 		{
 			name: "Valid values",
 			config: map[string]string{
-				"vreplication-experimental-flags":                   "3",
-				"vreplication-net-read-timeout":                     "100",
-				"vreplication-net-write-timeout":                    "200",
-				"vreplication-copy-phase-duration":                  "2h",
-				"vreplication-retry-delay":                          "10s",
-				"vreplication-max-time-to-retry-on-error":           "1h",
-				utils.GetFlagVariantForTests("relay-log-max-size"):  "500000",
-				utils.GetFlagVariantForTests("relay-log-max-items"): "10000",
-				"vreplication-replica-lag-tolerance":                "2m",
-				"vreplication-heartbeat-update-interval":            "2",
-				"vreplication-store-compressed-gtid":                "true",
-				"vreplication-parallel-insert-workers":              "4",
-				"vstream-packet-size":                               "1024",
-				"vstream_packet_size":                               "1024",
-				"vstream-dynamic-packet-size":                       "false",
-				"vstream_dynamic_packet_size":                       "false",
-				"vstream_binlog_rotation_threshold":                 "2048",
+				"vreplication-experimental-flags":         "3",
+				"vreplication-net-read-timeout":           "100",
+				"vreplication-net-write-timeout":          "200",
+				"vreplication-copy-phase-duration":        "2h",
+				"vreplication-retry-delay":                "10s",
+				"vreplication-max-time-to-retry-on-error": "1h",
+				"relay-log-max-size":                      "500000",
+				"relay-log-max-items":                     "10000",
+				"vreplication-replica-lag-tolerance":      "2m",
+				"vreplication-heartbeat-update-interval":  "2",
+				"vreplication-store-compressed-gtid":      "true",
+				"vreplication-parallel-insert-workers":    "4",
+				"vstream-packet-size":                     "1024",
+				"vstream_packet_size":                     "1024",
+				"vstream-dynamic-packet-size":             "false",
+				"vstream_dynamic_packet_size":             "false",
+				"vstream_binlog_rotation_threshold":       "2048",
 			},
 			wantErr: 0,
 			want: &VReplicationConfig{
@@ -84,23 +83,23 @@ func TestNewVReplicationConfig(t *testing.T) {
 		{
 			name: "Invalid values",
 			config: map[string]string{
-				"vreplication-experimental-flags":                   "invalid",
-				"vreplication-net-read-timeout":                     "100.0",
-				"vreplication-net-write-timeout":                    "invalid",
-				"vreplication-copy-phase-duration":                  "invalid",
-				"vreplication-retry-delay":                          "invalid",
-				"vreplication-max-time-to-retry-on-error":           "invalid",
-				utils.GetFlagVariantForTests("relay-log-max-size"):  "invalid",
-				utils.GetFlagVariantForTests("relay-log-max-items"): "invalid",
-				"vreplication-replica-lag-tolerance":                "invalid",
-				"vreplication-heartbeat-update-interval":            "invalid",
-				"vreplication-store-compressed-gtid":                "nottrue",
-				"vreplication-parallel-insert-workers":              "invalid",
-				"vstream-packet-size":                               "invalid",
-				"vstream_packet_size":                               "invalid",
-				"vstream-dynamic-packet-size":                       "waar",
-				"vstream_dynamic_packet_size":                       "waar",
-				"vstream_binlog_rotation_threshold":                 "invalid",
+				"vreplication-experimental-flags":         "invalid",
+				"vreplication-net-read-timeout":           "100.0",
+				"vreplication-net-write-timeout":          "invalid",
+				"vreplication-copy-phase-duration":        "invalid",
+				"vreplication-retry-delay":                "invalid",
+				"vreplication-max-time-to-retry-on-error": "invalid",
+				"relay-log-max-size":                      "invalid",
+				"relay-log-max-items":                     "invalid",
+				"vreplication-replica-lag-tolerance":      "invalid",
+				"vreplication-heartbeat-update-interval":  "invalid",
+				"vreplication-store-compressed-gtid":      "nottrue",
+				"vreplication-parallel-insert-workers":    "invalid",
+				"vstream-packet-size":                     "invalid",
+				"vstream_packet_size":                     "invalid",
+				"vstream-dynamic-packet-size":             "waar",
+				"vstream_dynamic_packet_size":             "waar",
+				"vstream_binlog_rotation_threshold":       "invalid",
 			},
 			wantErr: 17,
 		},
@@ -140,24 +139,21 @@ func TestNewVReplicationConfig(t *testing.T) {
 			InitVReplicationConfigDefaults()
 			got, err := NewVReplicationConfig(tt.config)
 			if tt.wantErr == 0 {
-				require.EqualValuesf(t, tt.config, got.Overrides,
+				require.Equalf(t, tt.config, got.Overrides,
 					"NewVReplicationConfig() overrides got = %v, want %v", got.Overrides, tt.config)
 			}
-			if tt.wantErr > 0 && err == nil || tt.wantErr == 0 && err != nil {
-				t.Errorf("NewVReplicationConfig() got num errors = %v, want %v", err, tt.wantErr)
-			}
+			assert.Falsef(t, tt.wantErr > 0 && err == nil || tt.wantErr == 0 && err != nil,
+				"NewVReplicationConfig() got num errors = %v, want %v", err, tt.wantErr)
 			if tt.wantErr > 0 && err != nil {
 				errors := strings.Split(err.Error(), ", ")
-				if len(errors) != tt.wantErr {
-					t.Errorf("NewVReplicationConfig() got num errors = %v, want %v", len(errors), tt.wantErr)
-				}
+				assert.Lenf(t, errors, tt.wantErr, "NewVReplicationConfig() got num errors = %v, want %v", len(errors), tt.wantErr)
 			}
 			if tt.want == nil {
-				require.EqualValuesf(t, DefaultVReplicationConfig.Map(), got.Map(),
+				require.Equalf(t, DefaultVReplicationConfig.Map(), got.Map(),
 					"NewVReplicationConfig() Map got = %v, want %v", got.Map(), DefaultVReplicationConfig.Map())
 			} else {
 				tt.want.Overrides = tt.config
-				require.EqualValues(t, tt.want.Map(), got.Map(),
+				require.Equal(t, tt.want.Map(), got.Map(),
 					"NewVReplicationConfig() Map got = %v, want %v", got.Map(), tt.want.Map())
 			}
 		})
@@ -168,7 +164,7 @@ func TestMaxRowJSONBytesOverride(t *testing.T) {
 	InitVReplicationConfigDefaults()
 	cfg, err := NewVReplicationConfig(map[string]string{"max-row-json-bytes": "1048576"})
 	require.NoError(t, err)
-	require.EqualValues(t, int64(1048576), cfg.MaxRowJSONBytes)
+	require.Equal(t, int64(1048576), cfg.MaxRowJSONBytes)
 	m := cfg.Map()
 	require.Equal(t, "1048576", m["max-row-json-bytes"])
 	require.NotContains(t, m, "max_row_json_bytes")
@@ -176,7 +172,7 @@ func TestMaxRowJSONBytesOverride(t *testing.T) {
 	t.Run("zero preserves default", func(t *testing.T) {
 		cfg, err := NewVReplicationConfig(map[string]string{"max-row-json-bytes": "0"})
 		require.NoError(t, err)
-		require.EqualValues(t, int64(0), cfg.MaxRowJSONBytes)
+		require.Equal(t, int64(0), cfg.MaxRowJSONBytes)
 	})
 	t.Run("invalid value returns error", func(t *testing.T) {
 		_, err := NewVReplicationConfig(map[string]string{"max-row-json-bytes": "notanumber"})

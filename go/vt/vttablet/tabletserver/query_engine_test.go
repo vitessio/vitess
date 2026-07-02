@@ -24,8 +24,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"path"
-	"reflect"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -48,6 +46,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema/schematest"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -68,9 +67,7 @@ func TestStrictMode(t *testing.T) {
 	qe := NewQueryEngine(env, se)
 	qe.se.InitDBConfig(newDBConfigs(db).DbaWithDB())
 	qe.se.Open()
-	if err := qe.Open(); err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, qe.Open())
 	qe.Close()
 
 	// Check that we fail if STRICT_TRANS_TABLES or STRICT_ALL_TABLES is not set.
@@ -83,18 +80,13 @@ func TestStrictMode(t *testing.T) {
 	)
 	qe = NewQueryEngine(env, se)
 	err := qe.Open()
-	wantErr := "require sql_mode to be STRICT_TRANS_TABLES or STRICT_ALL_TABLES: got ''"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("Open: %v, want %s", err, wantErr)
-	}
+	require.EqualError(t, err, "require sql_mode to be STRICT_TRANS_TABLES or STRICT_ALL_TABLES: got ''", "Open")
 	qe.Close()
 
 	// Test that we succeed if the enforcement flag is off.
 	cfg.EnforceStrictTransTables = false
 	qe = NewQueryEngine(env, se)
-	if err := qe.Open(); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, qe.Open())
 	qe.Close()
 }
 
@@ -107,7 +99,7 @@ func TestGetPlanPanicDuetoEmptyQuery(t *testing.T) {
 	qe.Open()
 	defer qe.Close()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats", streamlog.NewQueryLogConfigForTest())
 	_, err := qe.GetPlan(ctx, logStats, "", false, false)
 	require.EqualError(t, err, "Query was empty")
@@ -155,9 +147,7 @@ func TestGetMessageStreamPlan(t *testing.T) {
 	defer qe.Close()
 
 	plan, err := qe.GetMessageStreamPlan("msg")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	wantPlan := &planbuilder.Plan{
 		PlanID: planbuilder.PlanMessageStream,
 		Table:  qe.schema.Load().tables["msg"],
@@ -166,12 +156,9 @@ func TestGetMessageStreamPlan(t *testing.T) {
 			Role:      tableacl.WRITER,
 		}},
 	}
-	if !reflect.DeepEqual(plan.Plan, wantPlan) {
-		t.Errorf("GetMessageStreamPlan(msg): %v, want %v", plan.Plan, wantPlan)
-	}
-	if plan.Rules == nil || plan.Authorized == nil {
-		t.Errorf("GetMessageStreamPlan(msg): Rules or ACLResult are nil. Rules: %v, Authorized: %v", plan.Rules, plan.Authorized)
-	}
+	assert.Equalf(t, wantPlan, plan.Plan, "GetMessageStreamPlan(msg)")
+	assert.NotNilf(t, plan.Rules, "GetMessageStreamPlan(msg): Rules is nil")
+	assert.NotNilf(t, plan.Authorized, "GetMessageStreamPlan(msg): Authorized is nil")
 }
 
 func assertPlanCacheSize(t *testing.T, qe *QueryEngine, expected int) {
@@ -195,7 +182,7 @@ func TestQueryPlanCache(t *testing.T) {
 	qe.Open()
 	defer qe.Close()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats", streamlog.NewQueryLogConfigForTest())
 
 	initialHits := qe.queryEnginePlanCacheHits.Get()
@@ -236,7 +223,7 @@ func TestNoQueryPlanCache(t *testing.T) {
 	qe.Open()
 	defer qe.Close()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats", streamlog.NewQueryLogConfigForTest())
 
 	firstPlan, err := qe.GetPlan(ctx, logStats, firstQuery, true, false)
@@ -261,7 +248,7 @@ func TestNoQueryPlanCacheDirective(t *testing.T) {
 	qe.Open()
 	defer qe.Close()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats", streamlog.NewQueryLogConfigForTest())
 
 	firstPlan, err := qe.GetPlan(ctx, logStats, firstQuery, false, false)
@@ -285,7 +272,7 @@ func TestStreamQueryPlanCache(t *testing.T) {
 	qe.Open()
 	defer qe.Close()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats", streamlog.NewQueryLogConfigForTest())
 
 	firstPlan, err := qe.GetStreamPlan(ctx, logStats, firstQuery, false)
@@ -293,6 +280,60 @@ func TestStreamQueryPlanCache(t *testing.T) {
 	require.NotNil(t, firstPlan, "plan should not be nil")
 	assertPlanCacheSize(t, qe, 1)
 	qe.ClearQueryPlanCache()
+}
+
+// TestGetStreamPlanFiltersRulesByAllTables ensures the streaming plan path
+// filters query rules using every table the statement touches, matching the
+// non-streaming path. A multi-table DML/SELECT has plan.Table == nil, so
+// filtering by the single TableName() would silently skip table-scoped rules.
+func TestGetStreamPlanFiltersRulesByAllTables(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	schematest.AddDefaultQueries(db)
+
+	qe := newTestQueryEngine(10*time.Second, true, newDBConfigs(db))
+	qe.se.Open()
+	qe.Open()
+	defer qe.Close()
+
+	// A rule scoped to the second table of a multi-table statement. plan.Table
+	// is nil for multi-table queries, so a single-table-name filter would drop
+	// it.
+	const sourceName = "test stream rules"
+	qr := rules.NewQueryRule("deny test_table_02", "deny_t2", rules.QRFailRetry)
+	qr.AddTableCond("test_table_02")
+	qrs := rules.New()
+	qrs.Add(qr)
+	qe.queryRuleSources.UnRegisterSource(sourceName)
+	qe.queryRuleSources.RegisterSource(sourceName)
+	defer qe.queryRuleSources.UnRegisterSource(sourceName)
+	require.NoError(t, qe.queryRuleSources.SetRules(sourceName, qrs))
+
+	// getStreamPlan is exercised directly with a populated schema so the
+	// planbuilder resolves the referenced tables (the schema engine in this
+	// test harness does not populate the table map).
+	curSchema := &currentSchema{
+		tables: map[string]*schema.Table{
+			"test_table_01": {Name: sqlparser.NewIdentifierCS("test_table_01")},
+			"test_table_02": {Name: sqlparser.NewIdentifierCS("test_table_02")},
+		},
+	}
+
+	testcases := []struct {
+		name string
+		sql  string
+	}{
+		{"multi-table DML", "update test_table_01, test_table_02 set test_table_01.pk = 1"},
+		{"multi-table select", "select test_table_01.pk from test_table_01 join test_table_02 on test_table_01.pk = test_table_02.pk"},
+	}
+	for _, tcase := range testcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			plan, err := qe.getStreamPlan(curSchema, tcase.sql)
+			require.NoError(t, err)
+			require.Nil(t, plan.Table, "expected a multi-table plan with no single table")
+			require.NotNil(t, plan.Rules.Find("deny_t2"), "table-scoped query rule must apply to multi-table streamed query")
+		})
+	}
 }
 
 func TestNoStreamQueryPlanCache(t *testing.T) {
@@ -309,7 +350,7 @@ func TestNoStreamQueryPlanCache(t *testing.T) {
 	qe.Open()
 	defer qe.Close()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats", streamlog.NewQueryLogConfigForTest())
 	firstPlan, err := qe.GetStreamPlan(ctx, logStats, firstQuery, true)
 	require.NoError(t, err)
@@ -333,7 +374,7 @@ func TestNoStreamQueryPlanCacheDirective(t *testing.T) {
 	qe.Open()
 	defer qe.Close()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats", streamlog.NewQueryLogConfigForTest())
 	firstPlan, err := qe.GetStreamPlan(ctx, logStats, firstQuery, false)
 	require.NoError(t, err)
@@ -353,7 +394,7 @@ func TestStatsURL(t *testing.T) {
 	qe.Open()
 	defer qe.Close()
 	// warm up cache
-	ctx := context.Background()
+	ctx := t.Context()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats", streamlog.NewQueryLogConfigForTest())
 	qe.GetPlan(ctx, logStats, query, false, false)
 
@@ -395,13 +436,9 @@ func runConsolidatedQuery(t *testing.T, sql string) *QueryEngine {
 	defer qe.Close()
 
 	r1, ok := qe.consolidator.Create(sql)
-	if !ok {
-		t.Errorf("expected first consolidator ok")
-	}
+	assert.True(t, ok, "expected first consolidator ok")
 	r2, ok := qe.consolidator.Create(sql)
-	if ok {
-		t.Errorf("expected second consolidator not ok")
-	}
+	assert.False(t, ok, "expected second consolidator not ok")
 
 	r1.Broadcast()
 	r2.Wait()
@@ -420,22 +457,15 @@ func TestConsolidationsUIRedaction(t *testing.T) {
 	qe := runConsolidatedQuery(t, sql)
 
 	qe.handleHTTPConsolidations(unRedactedResponse, request)
-	if !strings.Contains(unRedactedResponse.Body.String(), sql) {
-		t.Fatalf("Response is missing the consolidated query: %v %v", sql, unRedactedResponse.Body.String())
-	}
+	require.Containsf(t, unRedactedResponse.Body.String(), sql, "Response is missing the consolidated query: %v %v", sql, unRedactedResponse.Body.String())
 
 	// Now with the redaction on
 	qe.redactUIQuery = true
 	redactedResponse := httptest.NewRecorder()
 	qe.handleHTTPConsolidations(redactedResponse, request)
 
-	if strings.Contains(redactedResponse.Body.String(), "secret") {
-		t.Fatalf("Response contains unredacted consolidated query: %v %v", sql, redactedResponse.Body.String())
-	}
-
-	if !strings.Contains(redactedResponse.Body.String(), redactedSQL) {
-		t.Fatalf("Response missing redacted consolidated query: %v %v", redactedSQL, redactedResponse.Body.String())
-	}
+	require.NotContainsf(t, redactedResponse.Body.String(), "secret", "Response contains unredacted consolidated query: %v %v", sql, redactedResponse.Body.String())
+	require.Containsf(t, redactedResponse.Body.String(), redactedSQL, "Response missing redacted consolidated query: %v %v", redactedSQL, redactedResponse.Body.String())
 }
 
 func BenchmarkPlanCacheThroughput(b *testing.B) {
@@ -551,7 +581,9 @@ func TestPlanCachePollution(t *testing.T) {
 		cacheMode := "lfu"
 
 		out, err := os.Create(path.Join(plotPath, fmt.Sprintf("cache_plot_%d_%s.dat", cfg.QueryCacheMemory, cacheMode)))
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 		defer out.Close()
 
 		var last1 uint64
@@ -596,7 +628,7 @@ func TestPlanCachePollution(t *testing.T) {
 
 	runner := func(totalQueries uint64, stats *Stats, sample func() string) {
 		for range totalQueries {
-			ctx := context.Background()
+			ctx := t.Context()
 			logStats := tabletenv.NewLogStats(ctx, "GetPlanStats", streamlog.NewQueryLogConfigForTest())
 			query := sample()
 

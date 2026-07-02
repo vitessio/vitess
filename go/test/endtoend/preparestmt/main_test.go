@@ -30,7 +30,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/vt/utils"
 )
 
 // tableData is a temporary structure to hold selected data.
@@ -163,10 +162,10 @@ func TestMain(m *testing.M) {
 		vtgateInstance.MySQLAuthServerImpl = "static"
 		// add extra arguments
 		vtgateInstance.ExtraArgs = []string{
-			utils.GetFlagVariantForTests("--mysql-server-query-timeout"), "1s",
+			"--mysql-server-query-timeout", "1s",
 			"--mysql-auth-server-static-file", clusterInstance.TmpDirectory + "/" + mysqlAuthServerStatic,
 			"--pprof-http",
-			utils.GetFlagVariantForTests("--schema-change-signal") + "=false",
+			"--schema-change-signal" + "=false",
 		}
 
 		// Start vtgate
@@ -215,14 +214,14 @@ func createConfig(name, data string) error {
 // Connect will connect the vtgate through mysql protocol.
 func Connect(t testing.TB, params ...string) *sql.DB {
 	dbo, err := sql.Open("mysql", dbInfo.ConnectionString(params...))
-	require.Nil(t, err)
+	require.NoError(t, err)
 	return dbo
 }
 
 // execWithError executes the prepared query, and validates the error_code.
 func execWithError(t *testing.T, dbo *sql.DB, errorCodes []uint16, stmt string, params ...any) {
 	_, err := dbo.Exec(stmt, params...)
-	require.NotNilf(t, err, "error expected, got nil")
+	require.Errorf(t, err, "error expected, got nil")
 	mysqlErr, ok := err.(*mysql.MySQLError)
 	require.Truef(t, ok, "invalid error type")
 	require.Contains(t, errorCodes, mysqlErr.Number)
@@ -254,7 +253,7 @@ func selectWhere(t *testing.T, dbo *sql.DB, where string, params ...any) []table
 
 	// execute query
 	r, err := dbo.Query(qry, params...)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// prepare result
 	for r.Next() {
@@ -276,7 +275,7 @@ func selectWhereWithTx(t *testing.T, tx *sql.Tx, where string, params ...any) []
 
 	// execute query
 	r, err := tx.Query(qry, params...)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// prepare result
 	for r.Next() {

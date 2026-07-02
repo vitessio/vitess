@@ -17,7 +17,6 @@ limitations under the License.
 package vtgate
 
 import (
-	"context"
 	"fmt"
 	"sync/atomic"
 	"testing"
@@ -28,6 +27,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
@@ -231,7 +231,7 @@ func TestExplainPassthrough(t *testing.T) {
 	// but we are trying to make the test less fragile
 
 	result = utils.Exec(t, conn, "explain ks.t1")
-	require.EqualValues(t, 2, len(result.Rows))
+	require.Len(t, result.Rows, 2)
 }
 
 func TestXXHash(t *testing.T) {
@@ -313,6 +313,96 @@ func TestInsertStmtInOLAP(t *testing.T) {
 	utils.AssertMatches(t, conn, `select id1 from t1 order by id1`, `[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(4)] [INT64(5)]]`)
 }
 
+// TestShardTargetedDMLInOLAP covers https://github.com/vitessio/vitess/issues/19561.
+// When a session targets a specific shard, DML is planned as a Send primitive whose
+// streaming path (used in OLAP mode) issues a StreamExecute RPC to the tablet. DML
+// must succeed on that path and run in an implicit transaction, just like the
+// non-streaming path.
+func TestShardTargetedDMLInOLAP(t *testing.T) {
+	conn, closer := start(t)
+	t.Cleanup(closer)
+
+	utils.Exec(t, conn, `set workload='olap'`)
+	utils.Exec(t, conn, "use `ks:-80`")
+	qr := utils.Exec(t, conn, `insert into t1(id1, id2) values (1, 1)`)
+	require.EqualValues(t, 1, qr.RowsAffected)
+	utils.AssertMatches(t, conn, `select id1, id2 from t1`, `[[INT64(1) INT64(1)]]`)
+}
+
+// TestShardTargetedDMLInOLAPRecordsTabletStats verifies that DML executed on the
+// streaming path (StreamExecute, used for shard-targeted DML in OLAP mode) records
+// the same per-table query stats on the tablet as the non-streaming Execute path.
+// Before the fix, streamed DML returned the correct result but recorded no
+// QueryRowsAffected, leaving these DMLs invisible to per-table tablet metrics.
+func TestShardTargetedDMLInOLAPRecordsTabletStats(t *testing.T) {
+	conn, closer := start(t)
+	t.Cleanup(closer)
+
+	// The DML below is shard-targeted to -80, so it runs on that shard's primary.
+	primary := shardPrimaryTablet(t, "-80")
+	const statKey = "t1.Insert"
+	rowsAffectedBefore := tabletQueryStat(t, primary, "QueryRowsAffected", statKey)
+
+	utils.Exec(t, conn, `set workload='olap'`)
+	utils.Exec(t, conn, "use `ks:-80`")
+	qr := utils.Exec(t, conn, `insert into t1(id1, id2) values (1, 1)`)
+	require.EqualValues(t, 1, qr.RowsAffected)
+
+	rowsAffectedAfter := tabletQueryStat(t, primary, "QueryRowsAffected", statKey)
+	require.Equal(t, rowsAffectedBefore+1, rowsAffectedAfter,
+		"streamed DML must record QueryRowsAffected on the tablet like the non-streaming path")
+}
+
+// TestShardTargetedFailedDMLInOLAPRecordsErrorStats verifies that a DML that fails
+// on the streaming path records error stats on the tablet, just like the
+// non-streaming Execute path. Before the fix, a failed streamed DML returned the
+// error to the client but incremented no QueryErrorCounts.
+func TestShardTargetedFailedDMLInOLAPRecordsErrorStats(t *testing.T) {
+	conn, closer := start(t)
+	t.Cleanup(closer)
+
+	// The DML below is shard-targeted to -80, so it runs on that shard's primary.
+	primary := shardPrimaryTablet(t, "-80")
+	const statKey = "t1.Insert"
+	errCountBefore := tabletQueryStat(t, primary, "QueryErrorCounts", statKey)
+
+	utils.Exec(t, conn, `set workload='olap'`)
+	utils.Exec(t, conn, "use `ks:-80`")
+	// The first insert succeeds; the duplicate primary key makes the second fail
+	// on the tablet, exercising streamDML's error path.
+	utils.Exec(t, conn, `insert into t1(id1, id2) values (1, 1)`)
+	_, err := utils.ExecAllowError(t, conn, `insert into t1(id1, id2) values (1, 1)`)
+	require.ErrorContains(t, err, "errno 1062")
+
+	errCountAfter := tabletQueryStat(t, primary, "QueryErrorCounts", statKey)
+	require.Equal(t, errCountBefore+1, errCountAfter,
+		"failed streamed DML must record QueryErrorCounts on the tablet like the non-streaming path")
+}
+
+func shardPrimaryTablet(t *testing.T, shardName string) *cluster.Vttablet {
+	t.Helper()
+	for _, shard := range clusterInstance.Keyspaces[0].Shards {
+		if shard.Name == shardName {
+			primary := shard.FindPrimaryTablet()
+			require.NotNilf(t, primary, "no primary tablet for shard %q", shardName)
+			return primary
+		}
+	}
+	require.Failf(t, "shard not found", "no shard %q in keyspace %s", shardName, KeyspaceName)
+	return nil
+}
+
+func tabletQueryStat(t *testing.T, tablet *cluster.Vttablet, varName, key string) float64 {
+	t.Helper()
+	vars := tablet.VttabletProcess.GetVars()
+	counter, ok := vars[varName].(map[string]any)
+	if !ok {
+		return 0
+	}
+	val, _ := counter[key].(float64)
+	return val
+}
+
 func TestCreateIndex(t *testing.T) {
 	conn, closer := start(t)
 	defer closer()
@@ -357,7 +447,9 @@ func TestFlushLock(t *testing.T) {
 	go func() {
 		ctx := t.Context()
 		conn2, err := mysql.Connect(ctx, &vtParams)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 		defer conn2.Close()
 
 		cnt.Add(1)
@@ -378,7 +470,7 @@ func TestFlushLock(t *testing.T) {
 	for cnt.Load() != 2 {
 		select {
 		case <-timeout:
-			t.Fatalf("test timeout waiting for select query to complete")
+			require.Fail(t, "test timeout waiting for select query to complete")
 		default:
 		}
 	}
@@ -404,13 +496,13 @@ func TestShowVGtid(t *testing.T) {
 
 	query := "show global vgtid_executed from ks"
 	qr := utils.Exec(t, conn, query)
-	require.Equal(t, 1, len(qr.Rows))
-	require.Equal(t, 2, len(qr.Rows[0]))
+	require.Len(t, qr.Rows, 1)
+	require.Len(t, qr.Rows[0], 2)
 
 	utils.Exec(t, conn, `insert into t1(id1, id2) values (1, 1), (2, 2), (3, 3), (4, 4), (5, 5)`)
 	qr2 := utils.Exec(t, conn, query)
-	require.Equal(t, 1, len(qr2.Rows))
-	require.Equal(t, 2, len(qr2.Rows[0]))
+	require.Len(t, qr2.Rows, 1)
+	require.Len(t, qr2.Rows[0], 2)
 
 	require.Equal(t, qr.Rows[0][0], qr2.Rows[0][0], "keyspace should be same")
 	require.NotEqual(t, qr.Rows[0][1].ToString(), qr2.Rows[0][1].ToString(), "vgtid should have changed")
@@ -422,7 +514,7 @@ func TestShowGtid(t *testing.T) {
 
 	query := "show global gtid_executed from ks"
 	qr := utils.Exec(t, conn, query)
-	require.Equal(t, 2, len(qr.Rows))
+	require.Len(t, qr.Rows, 2)
 
 	res := make(map[string]string, 2)
 	for _, row := range qr.Rows {
@@ -432,7 +524,7 @@ func TestShowGtid(t *testing.T) {
 
 	utils.Exec(t, conn, `insert into t1(id1, id2) values (1, 1), (2, 2), (3, 3), (4, 4), (5, 5)`)
 	qr2 := utils.Exec(t, conn, query)
-	require.Equal(t, 2, len(qr2.Rows))
+	require.Len(t, qr2.Rows, 2)
 
 	for _, row := range qr2.Rows {
 		require.Equal(t, KeyspaceName, row[0].ToString())
@@ -498,7 +590,7 @@ func TestRenameFieldsOnOLAP(t *testing.T) {
 	_ = utils.Exec(t, conn, "set workload = olap")
 
 	qr := utils.Exec(t, conn, "show tables")
-	require.Equal(t, 1, len(qr.Fields))
+	require.Len(t, qr.Fields, 1)
 	assert.Equal(t, `Tables_in_ks`, qr.Fields[0].Name)
 	_ = utils.Exec(t, conn, "use mysql")
 	qr = utils.Exec(t, conn, "select @@workload")
@@ -541,10 +633,10 @@ func TestSQLSelectLimit(t *testing.T) {
 
 		//	without order by the results are not deterministic for testing purpose. Checking row count only.
 		qr := utils.Exec(t, conn, "select /*vt+ PLANNER=gen4 */ uid, msg from t7_xxhash union all select uid, msg from t7_xxhash")
-		assert.Equal(t, 2, len(qr.Rows))
+		assert.Len(t, qr.Rows, 2)
 
 		qr = utils.Exec(t, conn, "select /*vt+ PLANNER=gen4 */ uid, msg from t7_xxhash union all select uid, msg from t7_xxhash limit 3")
-		assert.Equal(t, 3, len(qr.Rows))
+		assert.Len(t, qr.Rows, 3)
 	}
 }
 
@@ -843,7 +935,7 @@ func TestDDLTargeted(t *testing.T) {
 // TestTabletTargeting tests tablet-specific routing with USE keyspace:shard@tablet-alias syntax.
 // When shard is specified, tablet-specific routing bypasses vindex-based shard resolution.
 func TestTabletTargeting(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -976,7 +1068,7 @@ func TestTabletTargeting(t *testing.T) {
 	for i := range 5 {
 		result1 := utils.Exec(t, conn, "SELECT @@server_uuid")
 		require.NotNil(t, result1)
-		require.Greater(t, len(result1.Rows), 0)
+		require.NotEmpty(t, result1.Rows)
 		if i > 0 {
 			// UUID should be the same across multiple queries to same tablet
 			require.Equal(t, uuid1, result1.Rows[0][0].ToString())
@@ -991,7 +1083,7 @@ func TestTabletTargeting(t *testing.T) {
 	for i := range 5 {
 		result2 := utils.Exec(t, conn, "SELECT @@server_uuid")
 		require.NotNil(t, result2)
-		require.Greater(t, len(result2.Rows), 0)
+		require.NotEmpty(t, result2.Rows)
 		if i > 0 {
 			// UUID should be the same across multiple queries to same tablet
 			require.Equal(t, uuid2, result2.Rows[0][0].ToString())
@@ -1089,7 +1181,7 @@ func TestLookupErrorMetric(t *testing.T) {
 	require.ErrorContains(t, err, `(errno 1062) (sqlstate 23000)`)
 
 	newErrCount := getVtgateApiErrorCounts(t)
-	require.EqualValues(t, oldErrCount+1, newErrCount)
+	require.Equal(t, oldErrCount+1, newErrCount)
 }
 
 func getVtgateApiErrorCounts(t *testing.T) float64 {

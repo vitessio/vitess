@@ -56,17 +56,11 @@ func TestPrepFetchForRollback(t *testing.T) {
 	conn := &StatefulConnection{}
 	pp.Put(conn, "aa")
 	got := pp.FetchForRollback("bb")
-	if got != nil {
-		t.Errorf("Get(bb): %v, want nil", got)
-	}
+	assert.Nilf(t, got, "Get(bb): %v, want nil", got)
 	got = pp.FetchForRollback("aa")
-	if got != conn {
-		t.Errorf("pp.Get(aa): %p, want %p", got, conn)
-	}
+	assert.Equalf(t, conn, got, "pp.Get(aa): %p, want %p", got, conn)
 	got = pp.FetchForRollback("aa")
-	if got != nil {
-		t.Errorf("Get(aa): %v, want nil", got)
-	}
+	assert.Nilf(t, got, "Get(aa): %v, want nil", got)
 }
 
 func TestPrepFetchForCommit(t *testing.T) {
@@ -82,15 +76,15 @@ func TestPrepFetchForCommit(t *testing.T) {
 	assert.Equal(t, conn, got)
 
 	_, err = pp.FetchForCommit("aa")
-	assert.ErrorContains(t, err, "locked for committing")
+	require.ErrorContains(t, err, "locked for committing")
 
 	pp.SetFailed("aa")
 	_, err = pp.FetchForCommit("aa")
-	assert.ErrorContains(t, err, "failed to commit")
+	require.ErrorContains(t, err, "failed to commit")
 
 	pp.SetFailed("bb")
 	_, err = pp.FetchForCommit("bb")
-	assert.ErrorContains(t, err, "failed to commit")
+	require.ErrorContains(t, err, "failed to commit")
 
 	pp.Forget("aa")
 	got, err = pp.FetchForCommit("aa")
@@ -106,7 +100,7 @@ func TestPrepFetchAll(t *testing.T) {
 	pp.Put(conn2, "bb")
 	got := pp.FetchAllForRollback()
 	require.Len(t, got, 2)
-	require.Len(t, pp.conns, 0)
+	require.Empty(t, pp.conns)
 	_, err := pp.FetchForCommit("aa")
 	require.ErrorContains(t, err, "pool is shutdown")
 }

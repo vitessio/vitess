@@ -29,7 +29,6 @@ import (
 	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/gc"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -99,13 +98,12 @@ func TestMain(m *testing.M) {
 
 		// Set extra tablet args for lock timeout
 		clusterInstance.VtTabletExtraArgs = []string{
-			utils.GetFlagVariantForTests("--lock-tables-timeout"), "5s",
-			utils.GetFlagVariantForTests("--watch-replication-stream"),
-			utils.GetFlagVariantForTests("--enable-replication-reporter"),
-			utils.GetFlagVariantForTests("--heartbeat-interval"), "250ms",
-			utils.GetFlagVariantForTests("--gc-check-interval"), gcCheckInterval.String(),
-			utils.GetFlagVariantForTests("--gc-purge-check-interval"), gcPurgeCheckInterval.String(),
-			utils.GetFlagVariantForTests("--table-gc-lifecycle"), "hold,purge,evac,drop",
+			"--lock-tables-timeout", "5s",
+			"--enable-replication-reporter",
+			"--heartbeat-interval", "250ms",
+			"--gc-check-interval", gcCheckInterval.String(),
+			"--gc-purge-check-interval", gcPurgeCheckInterval.String(),
+			"--table-gc-lifecycle", "hold,purge,evac,drop",
 		}
 
 		// Start keyspace
@@ -189,7 +187,7 @@ func tableExists(exprs ...string) (exists bool, tableName string, err error) {
 }
 
 func validateTableDoesNotExist(t *testing.T, tableExpr string) {
-	ctx, cancel := context.WithTimeout(context.Background(), waitForTransitionTimeout)
+	ctx, cancel := context.WithTimeout(t.Context(), waitForTransitionTimeout)
 	defer cancel()
 
 	ticker := time.NewTicker(time.Second)
@@ -211,7 +209,7 @@ func validateTableDoesNotExist(t *testing.T, tableExpr string) {
 }
 
 func validateTableExists(t *testing.T, tableExpr string) {
-	ctx, cancel := context.WithTimeout(context.Background(), waitForTransitionTimeout)
+	ctx, cancel := context.WithTimeout(t.Context(), waitForTransitionTimeout)
 	defer cancel()
 
 	ticker := time.NewTicker(time.Second)
@@ -235,7 +233,7 @@ func validateTableExists(t *testing.T, tableExpr string) {
 func validateAnyState(t *testing.T, expectNumRows int64, states ...schema.TableGCState) {
 	t.Run(fmt.Sprintf("validateAnyState: expectNumRows=%v, states=%v", expectNumRows, states), func(t *testing.T) {
 		timeout := gc.NextChecksIntervals[len(gc.NextChecksIntervals)-1] + 5*time.Second
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		ctx, cancel := context.WithTimeout(t.Context(), timeout)
 		defer cancel()
 
 		ticker := time.NewTicker(time.Second)
@@ -326,10 +324,10 @@ func generateRenameStatement(fromTableName string, state schema.TableGCState, tm
 func TestHold(t *testing.T) {
 	populateTable(t)
 	query, tableName, err := generateRenameStatement("t1", schema.HoldTableGCState, time.Now().UTC().Add(tableTransitionExpiration))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	_, err = primaryTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	validateTableDoesNotExist(t, "t1")
 	validateTableExists(t, tableName)
@@ -359,10 +357,10 @@ func TestEvac(t *testing.T) {
 		var query string
 		var err error
 		query, tableName, err = generateRenameStatement("t1", schema.EvacTableGCState, time.Now().UTC().Add(tableTransitionExpiration))
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		_, err = primaryTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		validateTableDoesNotExist(t, "t1")
 	})
@@ -390,10 +388,10 @@ func TestEvac(t *testing.T) {
 func TestDrop(t *testing.T) {
 	populateTable(t)
 	query, tableName, err := generateRenameStatement("t1", schema.DropTableGCState, time.Now().UTC().Add(tableTransitionExpiration))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	_, err = primaryTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	validateTableDoesNotExist(t, "t1")
 

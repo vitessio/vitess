@@ -17,8 +17,6 @@ limitations under the License.
 package wrangler
 
 import (
-	"context"
-	"strings"
 	"testing"
 	"time"
 
@@ -456,7 +454,7 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			df := &vdiff{env: vtenv.NewTestEnv(), sourceTimeZone: tcase.sourceTimeZone, targetTimeZone: "UTC"}
 			err := df.buildVDiffPlan(filter, schm, nil)
 			require.NoError(t, err, tcase.input)
-			require.Equal(t, 1, len(df.differs), tcase.input)
+			require.Len(t, df.differs, 1, tcase.input)
 			assert.Equal(t, tcase.td, df.differs[tcase.table], tcase.input)
 		})
 	}
@@ -790,7 +788,7 @@ func TestVDiffUnsharded(t *testing.T) {
 			env.tablets[101].setResults("select c1, c2 from t1 order by c1 asc", vdiffSourceGtid, tcase.source)
 			env.tablets[201].setResults("select c1, c2 from t1 order by c1 asc", vdiffTargetPrimaryPosition, tcase.target)
 
-			dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, "", 100, "", tcase.debug, tcase.onlyPks, 100)
+			dr, err := env.wr.VDiff(t.Context(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, "", 100, "", tcase.debug, tcase.onlyPks, 100)
 			require.NoError(t, err)
 			assert.Equal(t, tcase.dr, dr["t1"], tcase.id)
 		})
@@ -865,7 +863,7 @@ func TestVDiffSharded(t *testing.T) {
 		),
 	)
 
-	dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, "", 100, "", false /*debug*/, false /*onlyPks*/, 100)
+	dr, err := env.wr.VDiff(t.Context(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, "", 100, "", false /*debug*/, false /*onlyPks*/, 100)
 	require.NoError(t, err)
 	wantdr := &DiffReport{
 		ProcessedRows: 3,
@@ -934,7 +932,7 @@ func TestVDiffAggregates(t *testing.T) {
 		),
 	)
 
-	dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, "", 100, "", false /*debug*/, false /*onlyPks*/, 100)
+	dr, err := env.wr.VDiff(t.Context(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, "", 100, "", false /*debug*/, false /*onlyPks*/, 100)
 	require.NoError(t, err)
 	wantdr := &DiffReport{
 		ProcessedRows: 5,
@@ -975,28 +973,28 @@ func TestVDiffDefaults(t *testing.T) {
 	env.tablets[101].setResults("select c1, c2 from t1 order by c1 asc", vdiffSourceGtid, source)
 	env.tablets[201].setResults("select c1, c2 from t1 order by c1 asc", vdiffTargetPrimaryPosition, target)
 
-	_, err := env.wr.VDiff(context.Background(), "target", env.workflow, "", "", "replica", 30*time.Second, "", 100, "", false /*debug*/, false /*onlyPks*/, 100)
+	_, err := env.wr.VDiff(t.Context(), "target", env.workflow, "", "", "replica", 30*time.Second, "", 100, "", false /*debug*/, false /*onlyPks*/, 100)
 	require.NoError(t, err)
-	_, err = env.wr.VDiff(context.Background(), "target", env.workflow, "", env.cell, "replica", 30*time.Second, "", 100, "", false /*debug*/, false /*onlyPks*/, 100)
+	_, err = env.wr.VDiff(t.Context(), "target", env.workflow, "", env.cell, "replica", 30*time.Second, "", 100, "", false /*debug*/, false /*onlyPks*/, 100)
 	require.NoError(t, err)
 
 	var df map[string]*DiffReport
-	df, err = env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, "", "replica", 30*time.Second, "", 100, "", false /*debug*/, false /*onlyPks*/, 100)
+	df, err = env.wr.VDiff(t.Context(), "target", env.workflow, env.cell, "", "replica", 30*time.Second, "", 100, "", false /*debug*/, false /*onlyPks*/, 100)
 	require.NoError(t, err)
-	require.Equal(t, df["t1"].ProcessedRows, 3)
-	df, err = env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, "", "replica", 30*time.Second, "", 1, "", false /*debug*/, false /*onlyPks*/, 100)
+	require.Equal(t, 3, df["t1"].ProcessedRows)
+	df, err = env.wr.VDiff(t.Context(), "target", env.workflow, env.cell, "", "replica", 30*time.Second, "", 1, "", false /*debug*/, false /*onlyPks*/, 100)
 	require.NoError(t, err)
-	require.Equal(t, df["t1"].ProcessedRows, 1)
-	df, err = env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, "", "replica", 30*time.Second, "", 0, "", false /*debug*/, false /*onlyPks*/, 100)
+	require.Equal(t, 1, df["t1"].ProcessedRows)
+	df, err = env.wr.VDiff(t.Context(), "target", env.workflow, env.cell, "", "replica", 30*time.Second, "", 0, "", false /*debug*/, false /*onlyPks*/, 100)
 	require.NoError(t, err)
-	require.Equal(t, df["t1"].ProcessedRows, 0)
+	require.Equal(t, 0, df["t1"].ProcessedRows)
 
-	_, err = env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, "", "replica", 1*time.Nanosecond, "", 100, "", false /*debug*/, false /*onlyPks*/, 100)
+	_, err = env.wr.VDiff(t.Context(), "target", env.workflow, env.cell, "", "replica", 1*time.Nanosecond, "", 100, "", false /*debug*/, false /*onlyPks*/, 100)
 	require.Error(t, err)
-	err = topo.CheckKeyspaceLocked(context.Background(), "target")
-	require.EqualErrorf(t, err, "keyspace target is not locked (no locksInfo)", "")
-	err = topo.CheckKeyspaceLocked(context.Background(), "source")
-	require.EqualErrorf(t, err, "keyspace source is not locked (no locksInfo)", "")
+	err = topo.CheckKeyspaceLocked(t.Context(), "target")
+	require.EqualError(t, err, "keyspace target is not locked (no locksInfo)")
+	err = topo.CheckKeyspaceLocked(t.Context(), "source")
+	require.EqualError(t, err, "keyspace source is not locked (no locksInfo)")
 }
 
 func TestVDiffReplicationWait(t *testing.T) {
@@ -1030,9 +1028,9 @@ func TestVDiffReplicationWait(t *testing.T) {
 	env.tablets[101].setResults("select c1, c2 from t1 order by c1 asc", vdiffSourceGtid, source)
 	env.tablets[201].setResults("select c1, c2 from t1 order by c1 asc", vdiffTargetPrimaryPosition, target)
 
-	_, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 0*time.Second, "", 100, "", false /*debug*/, false /*onlyPks*/, 100)
+	_, err := env.wr.VDiff(t.Context(), "target", env.workflow, env.cell, env.cell, "replica", 0*time.Second, "", 100, "", false /*debug*/, false /*onlyPks*/, 100)
 	require.Error(t, err)
-	require.True(t, strings.Contains(err.Error(), "context deadline exceeded"))
+	require.Contains(t, err.Error(), "context deadline exceeded")
 }
 
 func TestVDiffFindPKs(t *testing.T) {
@@ -1110,7 +1108,7 @@ func TestVDiffFindPKs(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := findPKs(env, tc.table, tc.targetSelect, tc.tdIn)
 			require.NoError(t, err)
-			require.EqualValues(t, tc.tdOut, tc.tdIn)
+			require.Equal(t, tc.tdOut, tc.tdIn)
 		})
 	}
 }
@@ -1152,16 +1150,16 @@ func TestVDiffPlanInclude(t *testing.T) {
 	var err error
 	err = df.buildVDiffPlan(filter, schm, []string{"t2"})
 	require.NoError(t, err)
-	require.Equal(t, 1, len(df.differs))
+	require.Len(t, df.differs, 1)
 	err = df.buildVDiffPlan(filter, schm, []string{"t2", "t3"})
 	require.NoError(t, err)
-	require.Equal(t, 2, len(df.differs))
+	require.Len(t, df.differs, 2)
 	err = df.buildVDiffPlan(filter, schm, []string{"t1", "t2", "t3"})
 	require.NoError(t, err)
-	require.Equal(t, 3, len(df.differs))
+	require.Len(t, df.differs, 3)
 	err = df.buildVDiffPlan(filter, schm, []string{"t1", "t2", "t3", "t4"})
 	require.NoError(t, err)
-	require.Equal(t, 4, len(df.differs))
+	require.Len(t, df.differs, 4)
 	err = df.buildVDiffPlan(filter, schm, []string{"t1", "t2", "t3", "t5"})
 	require.Error(t, err)
 }

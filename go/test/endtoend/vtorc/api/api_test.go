@@ -303,7 +303,7 @@ func waitForErrantGTIDTabletCount(t *testing.T, vtorc *cluster.VTOrcProcess, err
 	for {
 		select {
 		case <-timeout:
-			t.Fatalf("Timed out waiting for errant gtid count in the metrics to be %v", errantGTIDCountWanted)
+			require.Failf(t, "errant gtid count timeout", "Timed out waiting for errant gtid count in the metrics to be %v", errantGTIDCountWanted)
 			return
 		default:
 			_, resp, err := utils.MakeAPICall(t, vtorc, "/debug/vars")
@@ -326,5 +326,5 @@ func verifyErrantGTIDCount(t *testing.T, vtorc *cluster.VTOrcProcess, tabletAlia
 	gtidCountVal, isPresent := errantGTIDCounts[tabletAlias]
 	require.True(t, isPresent, "Tablet %s not found in errant GTID counts", tabletAlias)
 	gtidCount := utils.GetIntFromValue(gtidCountVal)
-	require.EqualValues(t, countWanted, gtidCount, "Tablet %s has %d errant GTIDs, wanted %d", tabletAlias, gtidCount, countWanted)
+	require.Equal(t, countWanted, gtidCount, "Tablet %s has %d errant GTIDs, wanted %d", tabletAlias, gtidCount, countWanted)
 }

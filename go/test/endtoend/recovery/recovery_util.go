@@ -26,7 +26,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 )
 
@@ -37,17 +36,17 @@ var (
 	UseXb = false
 	// XbArgs are the arguments for specifying xtrabackup.
 	XbArgs = []string{
-		utils.GetFlagVariantForTests("--backup-engine-implementation"), "xtrabackup",
-		utils.GetFlagVariantForTests("--xtrabackup-stream-mode") + "=xbstream",
-		utils.GetFlagVariantForTests("--xtrabackup-user") + "=vt_dba",
-		utils.GetFlagVariantForTests("--xtrabackup-backup-flags"), "--password=" + dbPassword,
+		"--backup-engine-implementation", "xtrabackup",
+		"--xtrabackup-stream-mode" + "=xbstream",
+		"--xtrabackup-user" + "=vt_dba",
+		"--xtrabackup-backup-flags", "--password=" + dbPassword,
 	}
 )
 
 // VerifyQueriesUsingVtgate verifies queries using vtgate.
 func VerifyQueriesUsingVtgate(t *testing.T, session *vtgateconn.VTGateSession, query string, value string) {
 	qr, err := session.Execute(context.Background(), query, nil, false)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, value, fmt.Sprintf("%v", qr.Rows[0][0]))
 }
 
@@ -66,32 +65,32 @@ func RestoreTablet(t *testing.T, localCluster *cluster.LocalProcessCluster, tabl
 		_, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("CreateKeyspace", restoreKSName,
 			"--type=SNAPSHOT", "--base-keyspace="+keyspaceName,
 			"--snapshot-timestamp", restoreTime.Format(time.RFC3339))
-		require.Nil(t, err)
+		require.NoError(t, err)
 	}
 
 	if UseXb {
 		replicaTabletArgs = append(replicaTabletArgs, XbArgs...)
 	}
 	replicaTabletArgs = append(replicaTabletArgs,
-		utils.GetFlagVariantForTests("--enable-replication-reporter")+"=false",
-		utils.GetFlagVariantForTests("--init-tablet-type"), "replica",
-		utils.GetFlagVariantForTests("--init-keyspace"), restoreKSName,
-		utils.GetFlagVariantForTests("--init-shard"), shardName,
-		utils.GetFlagVariantForTests("--init-db-name-override"), "vt_"+keyspaceName,
+		"--enable-replication-reporter"+"=false",
+		"--init-tablet-type", "replica",
+		"--init-keyspace", restoreKSName,
+		"--init-shard", shardName,
+		"--init-db-name-override", "vt_"+keyspaceName,
 	)
 	tablet.VttabletProcess.SupportsBackup = true
 	tablet.VttabletProcess.ExtraArgs = replicaTabletArgs
 
 	tablet.VttabletProcess.ServingStatus = ""
 	err = tablet.VttabletProcess.Setup()
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	err = tablet.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, 20*time.Second)
-	require.Nil(t, err)
+	require.NoError(t, err)
 }
 
 // InsertData inserts data.
 func InsertData(t *testing.T, tablet *cluster.Vttablet, index int, keyspaceName string) {
 	_, err := tablet.VttabletProcess.QueryTablet(fmt.Sprintf("insert into vt_insert_test (id, msg) values (%d, 'test %d')", index, index), keyspaceName, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 }

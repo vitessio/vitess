@@ -414,6 +414,10 @@ func (pr *PlannedReparenter) performPotentialPromotion(
 	defer stopAllCancel()
 
 	for alias, tabletInfo := range tabletMap {
+		if tabletInfo.Type == topodatapb.TabletType_RESTORE {
+			continue
+		}
+
 		stopAllWg.Add(1)
 
 		go func(alias string, tablet *topodatapb.Tablet) {
@@ -683,6 +687,10 @@ func (pr *PlannedReparenter) reparentTablets(
 			continue
 		}
 
+		if tabletInfo.Type == topodatapb.TabletType_RESTORE {
+			continue
+		}
+
 		replicasWg.Add(1)
 
 		go func(alias string, tablet *topodatapb.Tablet) {
@@ -755,14 +763,29 @@ func (pr *PlannedReparenter) verifyAllTabletsReachable(ctx context.Context, tabl
 	errorGroup, groupCtx := errgroup.WithContext(verifyCtx)
 	for tblStr, info := range tabletMap {
 		tablet := info.Tablet
+		if tablet.Type == topodatapb.TabletType_RESTORE {
+			continue
+		}
 		errorGroup.Go(func() error {
 			statusValues, err := pr.tmc.GetGlobalStatusVars(groupCtx, tablet, []string{InnodbBufferPoolsDataVar})
 			if err != nil {
 				return err
 			}
-			// We are ignoring the error in conversion because some MySQL variants might not have this
-			// status variable like MariaDB.
-			val, _ := strconv.Atoi(statusValues[InnodbBufferPoolsDataVar])
+			// Some MySQL variants like MariaDB don't expose this status variable. Omit those
+			// tablets from the map so a missing or unparseable value can't be confused with a
+			// legitimate zero when tiebreaking primary election by buffer-pool warmth. We treat
+			// an empty string the same as a missing key to avoid log spam on variants that
+			// return the row but with no value.
+			rawVal, ok := statusValues[InnodbBufferPoolsDataVar]
+			if !ok || rawVal == "" {
+				return nil
+			}
+			val, err := strconv.Atoi(rawVal)
+			if err != nil {
+				pr.logger.Warningf("could not parse %s=%q for tablet %v as int: %v",
+					InnodbBufferPoolsDataVar, rawVal, tblStr, err)
+				return nil
+			}
 			mu.Lock()
 			defer mu.Unlock()
 			innodbBufferPoolsData[tblStr] = val

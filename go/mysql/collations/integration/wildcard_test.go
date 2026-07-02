@@ -20,6 +20,9 @@ import (
 	"encoding/hex"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/mysql/collations/colldata"
@@ -112,10 +115,10 @@ func TestRemoteWildcardMatches(t *testing.T) {
 				localResult := local.Wildcard(pat, 0, 0, chEscape).Match(input)
 				remoteResult := remote.Wildcard(pat, 0, 0, chEscape).Match(input)
 				if err := remote.LastError(); err != nil {
-					t.Fatalf("remote collation failed: %v", err)
+					require.NoError(t, err)
 				}
 				if localResult != remoteResult {
-					t.Errorf("expected %q LIKE %q = %v (got %v)", tc.in, tc.pat, remoteResult, localResult)
+					assert.Failf(t, "wildcard mismatch", "expected %q LIKE %q = %v (got %v)", tc.in, tc.pat, remoteResult, localResult)
 
 					printDebugData(t, []string{
 						"wildcmp",

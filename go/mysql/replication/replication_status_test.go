@@ -17,7 +17,6 @@ limitations under the License.
 package replication
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -30,9 +29,8 @@ func TestStatusReplicationRunning(t *testing.T) {
 		SQLState: ReplicationStatusToState("yes"),
 	}
 	want := true
-	if got := input.Running(); got != want {
-		t.Errorf("%#v.Running() = %v, want %v", input, got, want)
-	}
+	got := input.Running()
+	assert.Equalf(t, want, got, "%#v.Running() = %v, want %v", input, got, want)
 }
 
 func TestStatusIOThreadNotRunning(t *testing.T) {
@@ -41,9 +39,8 @@ func TestStatusIOThreadNotRunning(t *testing.T) {
 		SQLState: ReplicationStatusToState("yes"),
 	}
 	want := false
-	if got := input.Running(); got != want {
-		t.Errorf("%#v.Running() = %v, want %v", input, got, want)
-	}
+	got := input.Running()
+	assert.Equalf(t, want, got, "%#v.Running() = %v, want %v", input, got, want)
 }
 
 func TestStatusSQLThreadNotRunning(t *testing.T) {
@@ -52,9 +49,8 @@ func TestStatusSQLThreadNotRunning(t *testing.T) {
 		SQLState: ReplicationStatusToState("no"),
 	}
 	want := false
-	if got := input.Running(); got != want {
-		t.Errorf("%#v.Running() = %v, want %v", input, got, want)
-	}
+	got := input.Running()
+	assert.Equalf(t, want, got, "%#v.Running() = %v, want %v", input, got, want)
 }
 
 func TestFindErrantGTIDs(t *testing.T) {
@@ -154,7 +150,7 @@ func TestMysqlRetrieveMasterServerId(t *testing.T) {
 	want := ReplicationStatus{SourceServerID: 1}
 	got, err := ParseMysqlReplicationStatus(resultMap, false)
 	require.NoError(t, err)
-	assert.Equalf(t, got.SourceServerID, want.SourceServerID, "got SourceServerID: %v; want SourceServerID: %v", got.SourceServerID, want.SourceServerID)
+	assert.Equalf(t, want.SourceServerID, got.SourceServerID, "got SourceServerID: %v; want SourceServerID: %v", got.SourceServerID, want.SourceServerID)
 }
 
 func TestMysqlRetrieveSourceServerId(t *testing.T) {
@@ -165,7 +161,7 @@ func TestMysqlRetrieveSourceServerId(t *testing.T) {
 	want := ReplicationStatus{SourceServerID: 1}
 	got, err := ParseMysqlReplicationStatus(resultMap, true)
 	require.NoError(t, err)
-	assert.Equalf(t, got.SourceServerID, want.SourceServerID, "got SourceServerID: %v; want SourceServerID: %v", got.SourceServerID, want.SourceServerID)
+	assert.Equalf(t, want.SourceServerID, got.SourceServerID, "got SourceServerID: %v; want SourceServerID: %v", got.SourceServerID, want.SourceServerID)
 }
 
 func TestMysqlRetrieveFileBasedPositions(t *testing.T) {
@@ -239,7 +235,7 @@ func TestMariadbRetrieveSourceServerId(t *testing.T) {
 	want := ReplicationStatus{SourceServerID: 1}
 	got, err := ParseMariadbReplicationStatus(resultMap)
 	require.NoError(t, err)
-	assert.Equal(t, got.SourceServerID, want.SourceServerID, fmt.Sprintf("got SourceServerID: %v; want SourceServerID: %v", got.SourceServerID, want.SourceServerID))
+	assert.Equal(t, want.SourceServerID, got.SourceServerID, "got SourceServerID: %v; want SourceServerID: %v", got.SourceServerID, want.SourceServerID)
 }
 
 func TestMariadbRetrieveFileBasedPositions(t *testing.T) {
@@ -261,8 +257,8 @@ func TestMariadbRetrieveFileBasedPositions(t *testing.T) {
 	got, err := ParseMariadbReplicationStatus(resultMap)
 	require.NoError(t, err)
 	assert.Equalf(t, got.RelayLogFilePosition.GTIDSet, want.RelayLogFilePosition.GTIDSet, "got RelayLogFilePosition: %v; want RelayLogFilePosition: %v", got.RelayLogFilePosition.GTIDSet, want.RelayLogFilePosition.GTIDSet)
-	assert.Equal(t, got.FilePosition.GTIDSet, want.FilePosition.GTIDSet, fmt.Sprintf("got FilePosition: %v; want FilePosition: %v", got.FilePosition.GTIDSet, want.FilePosition.GTIDSet))
-	assert.Equal(t, got.RelayLogSourceBinlogEquivalentPosition.GTIDSet, want.RelayLogSourceBinlogEquivalentPosition.GTIDSet, fmt.Sprintf("got RelayLogSourceBinlogEquivalentPosition: %v; want RelayLogSourceBinlogEquivalentPosition: %v", got.RelayLogSourceBinlogEquivalentPosition.GTIDSet, want.RelayLogSourceBinlogEquivalentPosition.GTIDSet))
+	assert.Equal(t, got.FilePosition.GTIDSet, want.FilePosition.GTIDSet, "got FilePosition: %v; want FilePosition: %v", got.FilePosition.GTIDSet, want.FilePosition.GTIDSet)
+	assert.Equal(t, got.RelayLogSourceBinlogEquivalentPosition.GTIDSet, want.RelayLogSourceBinlogEquivalentPosition.GTIDSet, "got RelayLogSourceBinlogEquivalentPosition: %v; want RelayLogSourceBinlogEquivalentPosition: %v", got.RelayLogSourceBinlogEquivalentPosition.GTIDSet, want.RelayLogSourceBinlogEquivalentPosition.GTIDSet)
 }
 
 func TestMariadbShouldGetNilRelayLogPosition(t *testing.T) {
@@ -286,7 +282,7 @@ func TestFilePosRetrieveSourceServerId(t *testing.T) {
 	want := ReplicationStatus{SourceServerID: 1}
 	got, err := ParseFilePosReplicationStatus(resultMap)
 	require.NoError(t, err)
-	assert.Equalf(t, got.SourceServerID, want.SourceServerID, "got SourceServerID: %v; want SourceServerID: %v", got.SourceServerID, want.SourceServerID)
+	assert.Equalf(t, want.SourceServerID, got.SourceServerID, "got SourceServerID: %v; want SourceServerID: %v", got.SourceServerID, want.SourceServerID)
 }
 
 func TestFilePosRetrieveExecutedPosition(t *testing.T) {

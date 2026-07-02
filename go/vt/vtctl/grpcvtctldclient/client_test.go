@@ -56,7 +56,7 @@ func TestFindAllShardsInKeyspace(t *testing.T) {
 		require.NoError(t, err)
 
 		resp, err := client.FindAllShardsInKeyspace(ctx, &vtctldatapb.FindAllShardsInKeyspaceRequest{Keyspace: ks.Name})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.NotNil(t, resp)
 
 		expected := map[string]*vtctldatapb.Shard{
@@ -99,7 +99,7 @@ func TestGetKeyspace(t *testing.T) {
 		testutil.AddKeyspace(ctx, t, ts, expected.Keyspace)
 
 		resp, err := client.GetKeyspace(ctx, &vtctldatapb.GetKeyspaceRequest{Keyspace: expected.Keyspace.Name})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		utils.MustMatch(t, expected, resp)
 
 		client.Close()
@@ -119,7 +119,7 @@ func TestGetKeyspaces(t *testing.T) {
 
 	testutil.WithTestServer(ctx, t, vtctld, func(t *testing.T, client vtctldclient.VtctldClient) {
 		resp, err := client.GetKeyspaces(ctx, &vtctldatapb.GetKeyspacesRequest{})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Empty(t, resp.Keyspaces)
 
 		expected := &vtctldatapb.Keyspace{
@@ -129,7 +129,7 @@ func TestGetKeyspaces(t *testing.T) {
 		testutil.AddKeyspace(ctx, t, ts, expected)
 
 		resp, err = client.GetKeyspaces(ctx, &vtctldatapb.GetKeyspacesRequest{})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		utils.MustMatch(t, []*vtctldatapb.Keyspace{expected}, resp.Keyspaces)
 
 		client.Close()

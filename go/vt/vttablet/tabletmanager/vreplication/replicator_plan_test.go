@@ -607,6 +607,24 @@ func TestBuildPlayerPlan(t *testing.T) {
 		},
 		err: "failed to build table replication plan for t1 table: unsupported multi-table usage in query: select * from t1, t2",
 	}, {
+		// no FROM clause
+		input: &binlogdatapb.Filter{
+			Rules: []*binlogdatapb.Rule{{
+				Match:  "t1",
+				Filter: "select 1",
+			}},
+		},
+		err: "failed to build table replication plan for t1 table: unsupported select from dual in query: select 1",
+	}, {
+		// FROM DUAL (virtual dual, no real table)
+		input: &binlogdatapb.Filter{
+			Rules: []*binlogdatapb.Rule{{
+				Match:  "t1",
+				Filter: "select 1 from dual",
+			}},
+		},
+		err: "failed to build table replication plan for t1 table: unsupported select from dual in query: select 1 from dual",
+	}, {
 		// no join
 		input: &binlogdatapb.Filter{
 			Rules: []*binlogdatapb.Rule{{
@@ -786,9 +804,7 @@ func TestBuildPlayerPlanNoDup(t *testing.T) {
 	}
 	_, err := vr.buildReplicatorPlan(getSource(input), PrimaryKeyInfos, nil, binlogplayer.NewStats(), collations.MySQL8(), sqlparser.NewTestParser())
 	want := "more than one target for source table t"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("buildReplicatorPlan err: %v, must contain: %v", err, want)
-	}
+	assert.ErrorContainsf(t, err, want, "buildReplicatorPlan err: %v, must contain: %v", err, want)
 }
 
 func TestBuildPlayerPlanExclude(t *testing.T) {
@@ -809,7 +825,7 @@ func TestBuildPlayerPlanExclude(t *testing.T) {
 		workflowConfig: vttablet.DefaultVReplicationConfig,
 	}
 	plan, err := vr.buildReplicatorPlan(getSource(input), PrimaryKeyInfos, nil, binlogplayer.NewStats(), collations.MySQL8(), sqlparser.NewTestParser())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	want := &TestReplicatorPlan{
 		VStreamFilter: &binlogdatapb.Filter{
@@ -829,7 +845,7 @@ func TestBuildPlayerPlanExclude(t *testing.T) {
 
 	gotPlan, _ := json.Marshal(plan)
 	wantPlan, _ := json.Marshal(want)
-	assert.Equal(t, string(gotPlan), string(wantPlan))
+	assert.Equal(t, string(wantPlan), string(gotPlan))
 }
 
 func TestAppendFromRow(t *testing.T) {
@@ -1203,6 +1219,48 @@ func TestApplyBulkInsertChangesMaxQuerySize(t *testing.T) {
 		require.Len(t, executed, 1)
 		assert.Contains(t, executed[0], "insert into t(j) values")
 		assert.NotContains(t, executed[0], "not-json")
+	})
+}
+
+func TestApplyBulkDeleteChanges(t *testing.T) {
+	newTablePlan := func() *TablePlan {
+		return &TablePlan{
+			TargetName:  "t",
+			MultiDelete: sqlparser.BuildParsedQuery("delete from t where id in %a", "::bulk_pks"),
+			Fields: []*querypb.Field{
+				{Name: "id", Type: querypb.Type_INT64},
+				{Name: "v", Type: querypb.Type_VARCHAR},
+			},
+			PKIndices: []bool{true, false},
+			TablePlanBuilder: &tablePlanBuilder{
+				pkCols: []*colExpr{{}},
+				stats:  binlogplayer.NewStats(),
+			},
+		}
+	}
+	makeRowDelete := func(id int64, v string) *binlogdatapb.RowChange {
+		return &binlogdatapb.RowChange{
+			Before: sqltypes.RowToProto3([]sqltypes.Value{
+				sqltypes.NewInt64(id),
+				sqltypes.NewVarChar(v),
+			}),
+		}
+	}
+
+	t.Run("happy path batches into single query", func(t *testing.T) {
+		tp := newTablePlan()
+		rowDeletes := []*binlogdatapb.RowChange{
+			makeRowDelete(1, "a"),
+			makeRowDelete(2, "b"),
+		}
+		var executed []string
+		_, err := tp.applyBulkDeleteChanges(rowDeletes, func(sql string) (*sqltypes.Result, error) {
+			executed = append(executed, sql)
+			return &sqltypes.Result{RowsAffected: 1}, nil
+		}, 1024)
+		require.NoError(t, err)
+		require.Len(t, executed, 1)
+		assert.Equal(t, "delete from t where id in (1, 2)", executed[0])
 	})
 }
 

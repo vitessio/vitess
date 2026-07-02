@@ -20,11 +20,11 @@ jobs:
   upgrade_downgrade_test_manual:
     timeout-minutes: 40
     name: Run Upgrade Downgrade Test - Backups - Manual - Next Release
-    runs-on: oracle-vm-16cpu-64gb-x86-64
+    runs-on: ${{ github.repository == 'vitessio/vitess' && 'oracle-vm-16cpu-64gb-x86-64' || 'ubuntu-24.04' }}
 
     steps:
     - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
+      uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
       with:
         egress-policy: audit
 
@@ -37,7 +37,7 @@ jobs:
 
     # Checkout to this build's commit
     - name: Checkout to commit's code
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       with:
         fetch-depth: 0
         persist-credentials: 'false'
@@ -75,6 +75,7 @@ jobs:
 
     - name: Tune the OS
       if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
+      timeout-minutes: 5
       uses: ./.github/actions/tune-os
 
     - name: Set up python
@@ -83,12 +84,14 @@ jobs:
 
     - name: Setup MySQL
       if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
+      timeout-minutes: 8
       uses: ./.github/actions/setup-mysql
       with:
         flavor: mysql-8.4
 
     - name: Setup Percona Apt repository
       if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
+      timeout-minutes: 5
       uses: ./.github/actions/setup-percona-repo
 
     - name: Get base dependencies
@@ -110,7 +113,7 @@ jobs:
     # Checkout to the next release of Vitess
     - name: Checkout to the other version's code (${{ steps.output-next-release-ref.outputs.next_release_ref }})
       if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       with:
         ref: ${{ steps.output-next-release-ref.outputs.next_release_ref }}
         persist-credentials: 'false'
@@ -124,6 +127,7 @@ jobs:
 
     - name: Get dependencies for the next release
       if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
+      timeout-minutes: 5
       run: |
         go mod download
 
@@ -140,7 +144,7 @@ jobs:
     # Checkout to this build's commit
     - name: Checkout to commit's code
       if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       with:
         persist-credentials: 'false'
 
@@ -153,11 +157,13 @@ jobs:
 
     - name: Get dependencies for this commit
       if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
+      timeout-minutes: 5
       run: |
         go mod download
 
     - name: Run make minimaltools
       if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
+      timeout-minutes: 5
       run: |
         make minimaltools
 

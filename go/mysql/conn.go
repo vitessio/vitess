@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"strings"
 	"sync"
@@ -85,6 +86,14 @@ type Conn struct {
 	// query is in progress.  If the streaming query returned no
 	// fields, this is set to an empty array (but not nil).
 	fields []*querypb.Field
+
+	// streamOK holds the OK packet of a streaming query (ExecuteStreamFetch) that
+	// returned no resultset — e.g. a CALL of a procedure that performs DML. For
+	// such a query the OK packet is the only place its RowsAffected, InsertID,
+	// Info and status flags appear, and ExecuteStreamFetch consumes it, so they
+	// are captured here for the caller to inspect once streaming completes. It is
+	// nil when the query returned a resultset, exposed via StreamOKResult.
+	streamOK *sqltypes.Result
 
 	// salt is sent by the server during initial handshake to be used for authentication
 	salt []byte
@@ -185,6 +194,9 @@ type Conn struct {
 	// by Handler methods.
 	StatusFlags uint16
 
+	pendingMultiResultStatusFlags    uint16
+	hasPendingMultiResultStatusFlags bool
+
 	// CharacterSet is the charset for this connection, as negotiated
 	// in our handshake with the server. Note that although the MySQL protocol lists this
 	// as a "character set", the returned byte value is actually a Collation ID,
@@ -245,6 +257,20 @@ const (
 	execErr
 	connErr
 )
+
+func (c *Conn) SetPendingMultiResultStatusFlags(flags uint16) {
+	c.pendingMultiResultStatusFlags = flags
+	c.hasPendingMultiResultStatusFlags = true
+}
+
+func (c *Conn) consumePendingMultiResultStatusFlags() (uint16, bool) {
+	if !c.hasPendingMultiResultStatusFlags {
+		return 0, false
+	}
+	flags := c.pendingMultiResultStatusFlags
+	c.hasPendingMultiResultStatusFlags = false
+	return flags, true
+}
 
 // bufPool is used to allocate and free buffers in an efficient way.
 var bufPool = bucketpool.New(connBufferSize, MaxPacketSize)
@@ -1278,6 +1304,9 @@ func (c *Conn) handleComStmtExecute(handler Handler, data []byte) (kontinue bool
 			kontinue = false
 		}
 	}()
+	defer func() {
+		c.StatusFlags &^= ServerQueryWasSlow
+	}()
 	queryStart := time.Now()
 	stmtID, _, err := c.parseComStmtExecute(c.PrepareData, data)
 	c.recycleReadPacket()
@@ -1339,16 +1368,20 @@ func (c *Conn) handleComStmtExecute(handler Handler, data []byte) (kontinue bool
 		}
 	} else {
 		if err != nil {
-			// We can't send an error in the middle of a stream.
-			// All we can do is abort the send, which will cause a 2013.
-			log.Error(fmt.Sprintf("Error in the middle of a stream to %s: %v", c, err))
-			return false
-		}
-
-		// Send the end packet only sendFinished is false (results were streamed).
-		// In this case the affectedRows and lastInsertID are always 0 since it
-		// was a read operation.
-		if !sendFinished {
+			// An OK packet already terminated the result; we cannot safely
+			// append an ERR without desynchronizing the protocol for the
+			// next command. Tear down the connection instead.
+			if sendFinished {
+				log.Error("Error after OK-terminated result", slog.String("connection", c.String()), slog.Any("error", err))
+				return false
+			}
+			if !c.writeErrorPacketFromErrorAndLog(err) {
+				return false
+			}
+		} else if !sendFinished {
+			// Send the end packet only sendFinished is false (results were streamed).
+			// In this case the affectedRows and lastInsertID are always 0 since it
+			// was a read operation.
 			if err := c.writeEndResult(false, 0, 0, handler.WarningCount(c)); err != nil {
 				log.Error(fmt.Sprintf("Error writing result to %s: %v", c, err))
 				return false
@@ -1488,19 +1521,26 @@ func (c *Conn) execQueryMulti(query string, handler Handler) execResult {
 	needsEndPacket := false
 	callbackCalled := false
 	res := execSuccess
+	previousStatusFlags := c.StatusFlags
+	c.hasPendingMultiResultStatusFlags = false
+	defer func() {
+		c.StatusFlags &^= ServerQueryWasSlow
+	}()
 
 	err := handler.ComQueryMulti(c, query, func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error {
+		currentStatusFlags := c.StatusFlags
 		callbackCalled = true
-		flag := c.StatusFlags
-		if more {
-			flag |= ServerMoreResultsExists
-		}
 
 		// firstPacket tells us that this is the start of a new query result.
 		// If we haven't sent a last packet yet, we should send the end result packet.
 		if firstPacket && needsEndPacket {
-			if err := c.writeEndResult(true, 0, 0, handler.WarningCount(c)); err != nil {
-				log.Error(fmt.Sprintf("Error writing result to %s: %v", c, err))
+			if flags, ok := c.consumePendingMultiResultStatusFlags(); ok {
+				if err := c.writeEndResultWithFlags(flags, true, 0, 0, handler.WarningCount(c)); err != nil {
+					log.Error("Error writing result", slog.String("connection", c.String()), slog.Any("error", err))
+					return err
+				}
+			} else if err := c.writeEndResultWithFlags(previousStatusFlags, true, 0, 0, handler.WarningCount(c)); err != nil {
+				log.Error("Error writing result", slog.String("connection", c.String()), slog.Any("error", err))
 				return err
 			}
 		}
@@ -1521,7 +1561,12 @@ func (c *Conn) execQueryMulti(query string, handler Handler) execResult {
 			// So we reset the needsEndPacket variable to signify we haven't sent the last
 			// packet for this query.
 			needsEndPacket = true
+			previousStatusFlags = currentStatusFlags
 			if len(qr.QueryResult.Fields) == 0 {
+				flags := currentStatusFlags
+				if more {
+					flags |= ServerMoreResultsExists
+				}
 				// A successful callback with no fields means that this was a
 				// DML or other write-only operation.
 				//
@@ -1531,7 +1576,7 @@ func (c *Conn) execQueryMulti(query string, handler Handler) execResult {
 				ok := PacketOK{
 					affectedRows:     qr.QueryResult.RowsAffected,
 					lastInsertID:     qr.QueryResult.InsertID,
-					statusFlags:      flag,
+					statusFlags:      flags,
 					warnings:         handler.WarningCount(c),
 					info:             "",
 					sessionStateData: qr.QueryResult.SessionStateChanges,
@@ -1569,10 +1614,17 @@ func (c *Conn) execQueryMulti(query string, handler Handler) execResult {
 	}
 
 	if err != nil {
-		// We can't send an error in the middle of a stream.
-		// All we can do is abort the send, which will cause a 2013.
-		log.Error(fmt.Sprintf("Error in the middle of a stream to %s: %v", c, err))
-		return connErr
+		// An OK packet already terminated the last result; we cannot safely
+		// append an ERR without desynchronizing the protocol for the next
+		// command. Tear down the connection instead.
+		if !needsEndPacket {
+			log.Error("Error after OK-terminated result", slog.String("connection", c.String()), slog.Any("error", err))
+			return connErr
+		}
+		if !c.writeErrorPacketFromErrorAndLog(err) {
+			return connErr
+		}
+		return execErr
 	}
 
 	// If we haven't sent the final packet for the last query, we should send that too.
@@ -1636,6 +1688,9 @@ func (c *Conn) execQuery(query string, handler Handler, more bool) execResult {
 	callbackCalled := false
 	// sendFinished is set if the response should just be an OK packet.
 	sendFinished := false
+	defer func() {
+		c.StatusFlags &^= ServerQueryWasSlow
+	}()
 
 	err := handler.ComQuery(c, query, func(qr *sqltypes.Result) error {
 		flag := c.StatusFlags
@@ -1689,10 +1744,17 @@ func (c *Conn) execQuery(query string, handler Handler, more bool) execResult {
 		return execErr
 	}
 	if err != nil {
-		// We can't send an error in the middle of a stream.
-		// All we can do is abort the send, which will cause a 2013.
-		log.Error(fmt.Sprintf("Error in the middle of a stream to %s: %v", c, err))
-		return connErr
+		// An OK packet already terminated the result; we cannot safely
+		// append an ERR without desynchronizing the protocol for the
+		// next command. Tear down the connection instead.
+		if sendFinished {
+			log.Error("Error after OK-terminated result", slog.String("connection", c.String()), slog.Any("error", err))
+			return connErr
+		}
+		if !c.writeErrorPacketFromErrorAndLog(err) {
+			return connErr
+		}
+		return execErr
 	}
 
 	// Send the end packet only sendFinished is false (results were streamed).

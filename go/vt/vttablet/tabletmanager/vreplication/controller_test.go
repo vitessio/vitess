@@ -27,6 +27,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/log"
@@ -116,10 +117,8 @@ func TestControllerKeyRange(t *testing.T) {
 	vre := NewTestEngine(nil, wantTablet.GetAlias().Cell, mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
 
 	defer setTabletTypesStr("replica")()
-	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], nil, vre, defaultTabletPickerOptions)
-	if err != nil {
-		t.Fatal(err)
-	}
+	ct, err := newController(t.Context(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], nil, vre, defaultTabletPickerOptions)
+	require.NoError(t, err)
 	defer func() {
 		dbClient.ExpectRequest("update _vt.vreplication set state='Stopped', message='context canceled' where id=1", testDMLResponse, nil)
 		ct.Stop(true)
@@ -179,10 +178,8 @@ func TestControllerTables(t *testing.T) {
 	mysqld.MysqlPort.Store(3306)
 	vre := NewTestEngine(nil, wantTablet.GetAlias().Cell, mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
 	defer setTabletTypesStr("replica")()
-	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], nil, vre, defaultTabletPickerOptions)
-	if err != nil {
-		t.Fatal(err)
-	}
+	ct, err := newController(t.Context(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], nil, vre, defaultTabletPickerOptions)
+	require.NoError(t, err)
 	defer func() {
 		dbClient.ExpectRequest("update _vt.vreplication set state='Stopped', message='context canceled' where id=1", testDMLResponse, nil)
 		ct.Stop(true)
@@ -197,11 +194,9 @@ func TestControllerBadID(t *testing.T) {
 		"id":      "bad",
 		"options": "{}",
 	}
-	_, err := newController(context.Background(), params, nil, nil, nil, "", nil, nil, defaultTabletPickerOptions)
+	_, err := newController(t.Context(), params, nil, nil, nil, "", nil, nil, defaultTabletPickerOptions)
 	want := `strconv.ParseInt: parsing "bad": invalid syntax`
-	if err == nil || err.Error() != want {
-		t.Errorf("newController err: %v, want %v", err, want)
-	}
+	require.EqualErrorf(t, err, want, "newController err: %v, want %v", err, want)
 }
 
 func TestControllerStopped(t *testing.T) {
@@ -211,16 +206,14 @@ func TestControllerStopped(t *testing.T) {
 		"options": "{}",
 	}
 
-	ct, err := newController(context.Background(), params, nil, nil, nil, "", nil, nil, defaultTabletPickerOptions)
-	if err != nil {
-		t.Fatal(err)
-	}
+	ct, err := newController(t.Context(), params, nil, nil, nil, "", nil, nil, defaultTabletPickerOptions)
+	require.NoError(t, err)
 	defer ct.Stop(true)
 
 	select {
 	case <-ct.done:
 	default:
-		t.Errorf("context should be closed, but is not: %v", ct)
+		assert.Failf(t, "context not closed", "context should be closed, but is not: %v", ct)
 	}
 }
 
@@ -253,10 +246,8 @@ func TestControllerOverrides(t *testing.T) {
 	vre := NewTestEngine(nil, wantTablet.GetAlias().Cell, mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
 
 	defer setTabletTypesStr("rdonly")()
-	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], nil, vre, defaultTabletPickerOptions)
-	if err != nil {
-		t.Fatal(err)
-	}
+	ct, err := newController(t.Context(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], nil, vre, defaultTabletPickerOptions)
+	require.NoError(t, err)
 	defer func() {
 		dbClient.ExpectRequest("update _vt.vreplication set state='Stopped', message='context canceled' where id=1", testDMLResponse, nil)
 		ct.Stop(true)
@@ -277,20 +268,18 @@ func TestControllerCanceledContext(t *testing.T) {
 		"options": "{}",
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	vre := NewTestEngine(nil, wantTablet.GetAlias().Cell, nil, nil, nil, "", nil)
 
 	ct, err := newController(ctx, params, nil, nil, env.TopoServ, env.Cells[0], nil, vre, defaultTabletPickerOptions)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer ct.Stop(true)
 
 	select {
 	case <-ct.done:
 	case <-time.After(1 * time.Second):
-		t.Errorf("context should be closed, but is not: %v", ct)
+		assert.Failf(t, "context not closed", "context should be closed, but is not: %v", ct)
 	}
 }
 
@@ -329,10 +318,8 @@ func TestControllerRetry(t *testing.T) {
 	vre := NewTestEngine(nil, env.Cells[0], mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
 
 	defer setTabletTypesStr("rdonly")()
-	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], nil, vre, defaultTabletPickerOptions)
-	if err != nil {
-		t.Fatal(err)
-	}
+	ct, err := newController(t.Context(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], nil, vre, defaultTabletPickerOptions)
+	require.NoError(t, err)
 	defer ct.Stop(true)
 
 	dbClient.Wait()
@@ -392,10 +379,8 @@ func TestControllerStopPosition(t *testing.T) {
 	mysqld.MysqlPort.Store(3306)
 	vre := NewTestEngine(nil, wantTablet.GetAlias().Cell, mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
 
-	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], nil, vre, defaultTabletPickerOptions)
-	if err != nil {
-		t.Fatal(err)
-	}
+	ct, err := newController(t.Context(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], nil, vre, defaultTabletPickerOptions)
+	require.NoError(t, err)
 	defer func() {
 		dbClient.ExpectRequest("update _vt.vreplication set state='Stopped', message='context canceled' where id=1", testDMLResponse, nil)
 		ct.Stop(true)
@@ -405,7 +390,7 @@ func TestControllerStopPosition(t *testing.T) {
 	select {
 	case <-ct.done:
 	case <-time.After(1 * time.Second):
-		t.Errorf("context should be closed, but is not: %v", ct)
+		assert.Failf(t, "context not closed", "context should be closed, but is not: %v", ct)
 	}
 
 	dbClient.Wait()
@@ -501,9 +486,7 @@ func TestControllerTabletPickerErrors(t *testing.T) {
 
 				require.True(t, foundExpectedErr, "Expected error containing %q in history, but last message was: %s", tc.expectedErrSubstr, lastMsg)
 
-				if !tc.expectRetry {
-					require.FailNow(t, "Expected controller to fail immediately, but it kept retrying. Last error: %s", lastMsg)
-				}
+				require.True(t, tc.expectRetry, "Expected controller to fail immediately, but it kept retrying. Last error: %s", lastMsg)
 			}
 		})
 	}

@@ -83,8 +83,9 @@ var (
 	maxPayloadSize  int
 	warnPayloadSize int
 
-	noScatter          bool
-	enableShardRouting bool
+	noScatter                 bool
+	preventCrossKeyspaceReads bool
+	enableShardRouting        bool
 
 	// healthCheckRetryDelay is the time to wait before retrying healthcheck
 	healthCheckRetryDelay = 2 * time.Millisecond
@@ -166,6 +167,8 @@ var (
 
 	// vtgate views flags
 	queryTimeout int
+	// slowQueryThreshold marks vtgate queries as slow when TotalTime meets or exceeds it.
+	slowQueryThreshold time.Duration
 
 	// queryLogToFile controls whether query logs are sent to a file
 	queryLogToFile string
@@ -194,6 +197,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	utils.SetFlagStringVar(fs, &defaultDDLStrategy, "ddl-strategy", defaultDDLStrategy, "Set default strategy for DDL statements. Override with @@ddl_strategy session variable")
 	utils.SetFlagStringVar(fs, &dbDDLPlugin, "dbddl-plugin", dbDDLPlugin, "controls how to handle CREATE/DROP DATABASE. use it if you are using your own database provisioning service")
 	utils.SetFlagBoolVar(fs, &noScatter, "no-scatter", noScatter, "when set to true, the planner will fail instead of producing a plan that includes scatter queries")
+	utils.SetFlagBoolVar(fs, &preventCrossKeyspaceReads, "prevent-cross-keyspace-reads", preventCrossKeyspaceReads, "when set to true, the planner will fail instead of producing a plan that includes cross-keyspace joins or UNIONs")
 	fs.BoolVar(&enableShardRouting, "enable-partial-keyspace-migration", enableShardRouting, "(Experimental) Follow shard routing rules: enable only while migrating a keyspace shard by shard. See documentation on Partial MoveTables for more. (default false)")
 	utils.SetFlagDurationVar(fs, &healthCheckRetryDelay, "healthcheck-retry-delay", healthCheckRetryDelay, "health check retry delay")
 	utils.SetFlagDurationVar(fs, &healthCheckTimeout, "healthcheck-timeout", healthCheckTimeout, "the health check timeout period")
@@ -210,6 +214,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.Bool("enable-binlog-dump", enableBinlogDump.Default(), "Allow users to perform binlog dump operations for CDC/replication")
 	utils.SetFlagBoolVar(fs, &enableSchemaChangeSignal, "schema-change-signal", enableSchemaChangeSignal, "Enable the schema tracker; requires queryserver-config-schema-change-signal to be enabled on the underlying vttablets for this to work")
 	fs.IntVar(&queryTimeout, "query-timeout", queryTimeout, "Sets the default query timeout (in ms). Can be overridden by session variable (query_timeout) or comment directive (QUERY_TIMEOUT_MS)")
+	utils.SetFlagDurationVar(fs, &slowQueryThreshold, "slow-query-threshold", slowQueryThreshold, "Mark vtgate queries as slow when their total execution time meets or exceeds this duration. 0 disables slow-query detection.")
 	utils.SetFlagStringVar(fs, &queryLogToFile, "log-queries-to-file", queryLogToFile, "Enable query logging to the specified file")
 	fs.IntVar(&queryLogBufferSize, "querylog-buffer-size", queryLogBufferSize, "Maximum number of buffered query logs before throttling log output")
 	utils.SetFlagDurationVar(fs, &messageStreamGracePeriod, "message-stream-grace-period", messageStreamGracePeriod, "the amount of time to give for a vttablet to resume if it ends a message stream, usually because of a reparent.")
@@ -405,11 +410,12 @@ func Init(
 	plans := DefaultPlanCache()
 
 	eConfig := ExecutorConfig{
-		Normalize:           normalizeQueries,
-		StreamSize:          streamBufferSize,
-		AllowScatter:        !noScatter,
-		WarmingReadsPercent: warmingReadsPercent,
-		QueryLogToFile:      queryLogToFile,
+		Normalize:                 normalizeQueries,
+		StreamSize:                streamBufferSize,
+		AllowScatter:              !noScatter,
+		PreventCrossKeyspaceReads: preventCrossKeyspaceReads,
+		WarmingReadsPercent:       warmingReadsPercent,
+		QueryLogToFile:            queryLogToFile,
 	}
 
 	executor := NewExecutor(ctx, env, serv, cell, resolver, eConfig, warnShardedOnly, plans, si, pv, dynamicConfig)
@@ -677,7 +683,7 @@ func (vtg *VTGate) ExecuteBatch(ctx context.Context, session *vtgatepb.Session, 
 
 // StreamExecute executes a streaming query.
 // Note we guarantee the callback will not be called concurrently by multiple go routines.
-func (vtg *VTGate) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) (*vtgatepb.Session, error) {
+func (vtg *VTGate) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, prepared bool, callback func(*sqltypes.Result) error) (*vtgatepb.Session, error) {
 	// In this context, we don't care if we can't fully parse destination
 	destKeyspace, destTabletType, _, _, _ := vtg.executor.ParseDestinationTarget(session.TargetString)
 	statsKey := []string{"StreamExecute", destKeyspace, topoproto.TabletTypeLString(destTabletType)}
@@ -696,6 +702,7 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MyS
 			safeSession,
 			sql,
 			bindVariables,
+			prepared,
 			func(reply *sqltypes.Result) error {
 				vtg.rowsReturned.Add(statsKey, int64(len(reply.Rows)))
 				vtg.rowsAffected.Add(statsKey, int64(reply.RowsAffected))
@@ -735,7 +742,7 @@ func (vtg *VTGate) StreamExecuteMulti(ctx context.Context, mysqlCtx vtgateservic
 				ctx, cancel = context.WithTimeout(ctx, mysqlQueryTimeout)
 				defer cancel()
 			}
-			session, err = vtg.StreamExecute(ctx, mysqlCtx, session, query, make(map[string]*querypb.BindVariable), func(result *sqltypes.Result) error {
+			session, err = vtg.StreamExecute(ctx, mysqlCtx, session, query, make(map[string]*querypb.BindVariable), false, func(result *sqltypes.Result) error {
 				defer func() {
 					firstPacket = false
 				}()

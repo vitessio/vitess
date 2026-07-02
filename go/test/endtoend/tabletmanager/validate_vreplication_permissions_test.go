@@ -1,3 +1,19 @@
+/*
+Copyright 2026 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package tabletmanager
 
 import (
@@ -37,13 +53,13 @@ func TestValidateVReplicationPermissions_FailsWithoutSelectPermissions(t *testin
 
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		_, err = conn.ExecuteFetch("revoke select on *.* from vt_filtered@localhost", 0, false)
-		require.NoError(c, err)
+		assert.NoError(c, err)
 	}, vreplicationPermissionTimeout*3, 200*time.Millisecond)
 	t.Cleanup(func() {
 		// Restore the permission for other tests
 		require.EventuallyWithT(t, func(c *assert.CollectT) {
 			_, err = conn.ExecuteFetch("grant select on *.* to vt_filtered@localhost", 0, false)
-			require.NoError(c, err)
+			assert.NoError(c, err)
 		}, vreplicationPermissionTimeout*3, 200*time.Millisecond)
 	})
 
@@ -53,9 +69,10 @@ func TestValidateVReplicationPermissions_FailsWithoutSelectPermissions(t *testin
 		ictx, icancel := context.WithTimeout(ctx, vreplicationPermissionTimeout)
 		defer icancel()
 		res, err = tmClient.ValidateVReplicationPermissions(ictx, tablet, req)
-		require.NoError(c, err)
-		require.NotNil(c, res)
-		require.False(c, res.Ok)
+		assert.NoError(c, err)
+		if assert.NotNil(c, res) {
+			assert.False(c, res.Ok)
+		}
 	}, vreplicationPermissionTimeout*3, 200*time.Millisecond)
 }
 
@@ -72,13 +89,13 @@ func TestValidateVReplicationPermissions_FailsWithoutInsertPermissions(t *testin
 
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		_, err = conn.ExecuteFetch("revoke insert on *.* from vt_filtered@localhost", 0, false)
-		require.NoError(c, err)
+		assert.NoError(c, err)
 	}, vreplicationPermissionTimeout*3, 200*time.Millisecond)
 	t.Cleanup(func() {
 		// Restore the permission for other tests
 		require.EventuallyWithT(t, func(c *assert.CollectT) {
 			_, err = conn.ExecuteFetch("grant insert on *.* to vt_filtered@localhost", 0, false)
-			require.NoError(c, err)
+			assert.NoError(c, err)
 		}, vreplicationPermissionTimeout*3, 200*time.Millisecond)
 	})
 
@@ -88,9 +105,10 @@ func TestValidateVReplicationPermissions_FailsWithoutInsertPermissions(t *testin
 		ictx, icancel := context.WithTimeout(ctx, vreplicationPermissionTimeout)
 		defer icancel()
 		res, err = tmClient.ValidateVReplicationPermissions(ictx, tablet, req)
-		require.NoError(c, err)
-		require.NotNil(c, res)
-		require.False(c, res.Ok)
+		assert.NoError(c, err)
+		if assert.NotNil(c, res) {
+			assert.False(c, res.Ok)
+		}
 	}, vreplicationPermissionTimeout*3, 200*time.Millisecond)
 }
 
@@ -107,13 +125,13 @@ func TestValidateVReplicationPermissions_FailsWithoutUpdatePermissions(t *testin
 
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		_, err = conn.ExecuteFetch("revoke update on *.* from vt_filtered@localhost", 0, false)
-		require.NoError(c, err)
+		assert.NoError(c, err)
 	}, vreplicationPermissionTimeout*3, 200*time.Millisecond)
 	t.Cleanup(func() {
 		// Restore the permission for other tests
 		require.EventuallyWithT(t, func(c *assert.CollectT) {
 			_, err = conn.ExecuteFetch("grant update on *.* to vt_filtered@localhost", 0, false)
-			require.NoError(c, err)
+			assert.NoError(c, err)
 		}, vreplicationPermissionTimeout*3, 200*time.Millisecond)
 	})
 
@@ -123,9 +141,10 @@ func TestValidateVReplicationPermissions_FailsWithoutUpdatePermissions(t *testin
 		ictx, icancel := context.WithTimeout(ctx, vreplicationPermissionTimeout)
 		defer icancel()
 		res, err = tmClient.ValidateVReplicationPermissions(ictx, tablet, req)
-		require.NoError(c, err)
-		require.NotNil(c, res)
-		require.False(c, res.Ok)
+		assert.NoError(c, err)
+		if assert.NotNil(c, res) {
+			assert.False(c, res.Ok)
+		}
 	}, vreplicationPermissionTimeout*3, 200*time.Millisecond)
 }
 
@@ -142,13 +161,13 @@ func TestValidateVReplicationPermissions_FailsWithoutDeletePermissions(t *testin
 
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		_, err = conn.ExecuteFetch("revoke delete on *.* from vt_filtered@localhost", 0, false)
-		require.NoError(c, err)
+		assert.NoError(c, err)
 	}, vreplicationPermissionTimeout*3, 200*time.Millisecond)
 	t.Cleanup(func() {
 		// Restore the permission for other tests
 		require.EventuallyWithT(t, func(c *assert.CollectT) {
 			_, err = conn.ExecuteFetch("grant delete on *.* to vt_filtered@localhost", 0, false)
-			require.NoError(c, err)
+			assert.NoError(c, err)
 		}, vreplicationPermissionTimeout*3, 200*time.Millisecond)
 	})
 
@@ -158,9 +177,10 @@ func TestValidateVReplicationPermissions_FailsWithoutDeletePermissions(t *testin
 		ictx, icancel := context.WithTimeout(ctx, vreplicationPermissionTimeout)
 		defer icancel()
 		res, err = tmClient.ValidateVReplicationPermissions(ictx, tablet, req)
-		require.NoError(c, err)
-		require.NotNil(c, res)
-		require.False(c, res.Ok)
+		assert.NoError(c, err)
+		if assert.NotNil(c, res) {
+			assert.False(c, res.Ok)
+		}
 	}, vreplicationPermissionTimeout*3, 200*time.Millisecond)
 }
 
@@ -177,13 +197,13 @@ func TestValidateVReplicationPermissions_FailsIfUserCantLogin(t *testing.T) {
 
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		_, err = conn.ExecuteFetch("alter user 'vt_filtered'@'localhost' account lock", 0, false)
-		require.NoError(c, err)
+		assert.NoError(c, err)
 	}, vreplicationPermissionTimeout*3, 200*time.Millisecond)
 	t.Cleanup(func() {
 		// Restore the permission for other tests
 		require.EventuallyWithT(t, func(c *assert.CollectT) {
 			_, err = conn.ExecuteFetch("alter user 'vt_filtered'@'localhost' account unlock", 0, false)
-			require.NoError(c, err)
+			assert.NoError(c, err)
 		}, vreplicationPermissionTimeout*3, 200*time.Millisecond)
 	})
 
@@ -194,7 +214,8 @@ func TestValidateVReplicationPermissions_FailsIfUserCantLogin(t *testing.T) {
 		_, err = tmClient.ValidateVReplicationPermissions(ictx, tablet, req)
 
 		// This is an unexpected error, so we receive an error back.
-		require.Error(c, err)
-		require.Contains(c, err.Error(), "Access denied for user 'vt_filtered'@'localhost'")
+		if assert.Error(c, err) {
+			assert.Contains(c, err.Error(), "Access denied for user 'vt_filtered'@'localhost'")
+		}
 	}, vreplicationPermissionTimeout*3, 200*time.Millisecond)
 }

@@ -29,6 +29,7 @@ import (
 	"syscall"
 	"testing"
 	"testing/synctest"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -42,6 +43,7 @@ import (
 	"vitess.io/vitess/go/trace"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/tlstest"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -122,15 +124,11 @@ func TestConnectionUnixSocket(t *testing.T) {
 	// Use tmp file to reserve a path, remove it immediately, we only care about
 	// name in this context
 	unixSocket, err := os.CreateTemp("", "mysql_vitess_test.sock")
-	if err != nil {
-		t.Fatalf("Failed to create temp file")
-	}
+	require.NoError(t, err, "Failed to create temp file")
 	os.Remove(unixSocket.Name())
 
 	l, err := newMysqlUnixSocket(unixSocket.Name(), authServer, th)
-	if err != nil {
-		t.Fatalf("NewUnixSocket failed: %v", err)
-	}
+	require.NoError(t, err)
 	defer l.Close()
 	go l.Accept()
 
@@ -140,10 +138,8 @@ func TestConnectionUnixSocket(t *testing.T) {
 		Pass:       "password1",
 	}
 
-	c, err := mysql.Connect(context.Background(), params)
-	if err != nil {
-		t.Errorf("Should be able to connect to server but found error: %v", err)
-	}
+	c, err := mysql.Connect(t.Context(), params)
+	require.NoError(t, err)
 	c.Close()
 }
 
@@ -155,14 +151,10 @@ func TestConnectionStaleUnixSocket(t *testing.T) {
 	// First let's create a file. In this way, we simulate
 	// having a stale socket on disk that needs to be cleaned up.
 	unixSocket, err := os.CreateTemp("", "mysql_vitess_test.sock")
-	if err != nil {
-		t.Fatalf("Failed to create temp file")
-	}
+	require.NoError(t, err, "Failed to create temp file")
 
 	l, err := newMysqlUnixSocket(unixSocket.Name(), authServer, th)
-	if err != nil {
-		t.Fatalf("NewListener failed: %v", err)
-	}
+	require.NoError(t, err)
 	defer l.Close()
 	go l.Accept()
 
@@ -172,10 +164,8 @@ func TestConnectionStaleUnixSocket(t *testing.T) {
 		Pass:       "password1",
 	}
 
-	c, err := mysql.Connect(context.Background(), params)
-	if err != nil {
-		t.Errorf("Should be able to connect to server but found error: %v", err)
-	}
+	c, err := mysql.Connect(t.Context(), params)
+	require.NoError(t, err)
 	c.Close()
 }
 
@@ -185,22 +175,17 @@ func TestConnectionRespectsExistingUnixSocket(t *testing.T) {
 	authServer := newTestAuthServerStatic()
 
 	unixSocket, err := os.CreateTemp("", "mysql_vitess_test.sock")
-	if err != nil {
-		t.Fatalf("Failed to create temp file")
-	}
+	require.NoError(t, err, "Failed to create temp file")
 	os.Remove(unixSocket.Name())
 
 	l, err := newMysqlUnixSocket(unixSocket.Name(), authServer, th)
-	if err != nil {
-		t.Errorf("NewListener failed: %v", err)
-	}
+	require.NoError(t, err)
 	defer l.Close()
 	go l.Accept()
 	_, err = newMysqlUnixSocket(unixSocket.Name(), authServer, th)
 	want := "listen unix"
-	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("Error: %v, want prefix %s", err, want)
-	}
+	require.Error(t, err)
+	assert.Truef(t, strings.HasPrefix(err.Error(), want), "Error: %v, want prefix %s", err, want)
 }
 
 func TestNewConnectionSetsAutocommitStatusFlag(t *testing.T) {
@@ -213,7 +198,7 @@ func TestNewConnectionSetsAutocommitStatusFlag(t *testing.T) {
 
 	vh.NewConnection(c)
 
-	assert.True(t, c.StatusFlags&mysql.ServerStatusAutocommit != 0,
+	assert.NotEqual(t, uint16(0), c.StatusFlags&mysql.ServerStatusAutocommit,
 		"NewConnection should set ServerStatusAutocommit flag to match VTGate's default session state")
 }
 
@@ -227,84 +212,84 @@ var newFromStringOK = func(ctx context.Context, spanContext, label string) (trac
 
 func newFromStringFail(t *testing.T) func(ctx context.Context, parentSpan string, label string) (trace.Span, context.Context, error) {
 	return func(ctx context.Context, parentSpan string, label string) (trace.Span, context.Context, error) {
-		t.Fatalf("we didn't provide a parent span in the sql query. this should not have been called. got: %v", parentSpan)
-		return trace.NoopSpan{}, context.Background(), nil
+		require.Failf(t, "unexpected call", "we didn't provide a parent span in the sql query. this should not have been called. got: %v", parentSpan)
+		return trace.NoopSpan{}, t.Context(), nil
 	}
 }
 
 func newFromStringError(t *testing.T) func(ctx context.Context, parentSpan string, label string) (trace.Span, context.Context, error) {
 	return func(ctx context.Context, parentSpan string, label string) (trace.Span, context.Context, error) {
-		return trace.NoopSpan{}, context.Background(), errors.New("")
+		return trace.NoopSpan{}, t.Context(), errors.New("")
 	}
 }
 
 func newFromStringExpect(t *testing.T, expected string) func(ctx context.Context, parentSpan string, label string) (trace.Span, context.Context, error) {
 	return func(ctx context.Context, parentSpan string, label string) (trace.Span, context.Context, error) {
 		assert.Equal(t, expected, parentSpan)
-		return trace.NoopSpan{}, context.Background(), nil
+		return trace.NoopSpan{}, t.Context(), nil
 	}
 }
 
 func newSpanFail(t *testing.T) func(ctx context.Context, label string) (trace.Span, context.Context) {
 	return func(ctx context.Context, label string) (trace.Span, context.Context) {
-		t.Fatalf("we provided a span context but newFromString was not used as expected")
-		return trace.NoopSpan{}, context.Background()
+		require.Fail(t, "we provided a span context but newFromString was not used as expected")
+		return trace.NoopSpan{}, t.Context()
 	}
 }
 
 func TestNoSpanContextPassed(t *testing.T) {
-	_, _, err := startSpanTestable(context.Background(), "sql without comments", "someLabel", newSpanOK, newFromStringFail(t))
+	_, _, err := startSpanTestable(t.Context(), "sql without comments", "someLabel", newSpanOK, newFromStringFail(t))
 	assert.NoError(t, err)
 }
 
 func TestSpanContextNoPassedInButExistsInString(t *testing.T) {
-	_, _, err := startSpanTestable(context.Background(), "SELECT * FROM SOMETABLE WHERE COL = \"/*VT_SPAN_CONTEXT=123*/", "someLabel", newSpanOK, newFromStringFail(t))
+	_, _, err := startSpanTestable(t.Context(), "SELECT * FROM SOMETABLE WHERE COL = \"/*VT_SPAN_CONTEXT=123*/", "someLabel", newSpanOK, newFromStringFail(t))
 	assert.NoError(t, err)
 }
 
 func TestSpanContextPassedIn(t *testing.T) {
-	_, _, err := startSpanTestable(context.Background(), "/*VT_SPAN_CONTEXT=123*/SQL QUERY", "someLabel", newSpanFail(t), newFromStringOK)
+	_, _, err := startSpanTestable(t.Context(), "/*VT_SPAN_CONTEXT=123*/SQL QUERY", "someLabel", newSpanFail(t), newFromStringOK)
 	assert.NoError(t, err)
 }
 
 func TestSpanContextPassedInEvenAroundOtherComments(t *testing.T) {
-	_, _, err := startSpanTestable(context.Background(), "/*VT_SPAN_CONTEXT=123*/SELECT /*vt+ SCATTER_ERRORS_AS_WARNINGS */ col1, col2 FROM TABLE ", "someLabel",
+	_, _, err := startSpanTestable(t.Context(), "/*VT_SPAN_CONTEXT=123*/SELECT /*vt+ SCATTER_ERRORS_AS_WARNINGS */ col1, col2 FROM TABLE ", "someLabel",
 		newSpanFail(t),
 		newFromStringExpect(t, "123"))
 	assert.NoError(t, err)
 }
 
 func TestSpanContextWithMultipleLeadingComments(t *testing.T) {
-	_, _, err := startSpanTestable(context.Background(), "/*VT_SPAN_CONTEXT=123*//*vt+ SCATTER_ERRORS_AS_WARNINGS */ SELECT col1 FROM TABLE", "someLabel",
+	_, _, err := startSpanTestable(t.Context(), "/*VT_SPAN_CONTEXT=123*//*vt+ SCATTER_ERRORS_AS_WARNINGS */ SELECT col1 FROM TABLE", "someLabel",
 		newSpanFail(t), newFromStringExpect(t, "123"))
 	assert.NoError(t, err)
 }
 
 func TestSpanContextNotParsable(t *testing.T) {
 	hasRun := false
-	_, _, err := startSpanTestable(context.Background(), "/*VT_SPAN_CONTEXT=123*/SQL QUERY", "someLabel",
+	_, _, err := startSpanTestable(t.Context(), "/*VT_SPAN_CONTEXT=123*/SQL QUERY", "someLabel",
 		func(c context.Context, s string) (trace.Span, context.Context) {
 			hasRun = true
-			return trace.NoopSpan{}, context.Background()
+			return trace.NoopSpan{}, t.Context()
 		},
 		newFromStringError(t))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, hasRun, "Should have continued execution despite failure to parse VT_SPAN_CONTEXT")
 }
 
 func TestStartSpanFromPrepare_NoSpanContext(t *testing.T) {
 	prepare := &mysql.PrepareData{PrepareStmt: "SELECT 1"}
-	_, _, err := startSpanFromPrepareTestable(context.Background(), prepare, "someLabel", newSpanOK, newFromStringFail(t))
-	assert.NoError(t, err)
+	_, _, err := startSpanFromPrepareTestable(t.Context(), prepare, "someLabel", newSpanOK, newFromStringFail(t))
+	require.NoError(t, err)
 	require.NotNil(t, prepare.SpanContext)
 	assert.Empty(t, *prepare.SpanContext)
 }
 
 func TestStartSpanFromPrepare_WithSpanContext(t *testing.T) {
 	prepare := &mysql.PrepareData{PrepareStmt: "/*VT_SPAN_CONTEXT=123*/SELECT 1"}
-	_, _, err := startSpanFromPrepareTestable(context.Background(), prepare, "someLabel",
+	_, _, err := startSpanFromPrepareTestable(t.Context(), prepare, "someLabel",
 		newSpanFail(t), newFromStringExpect(t, "123"))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	require.NotNil(t, prepare.SpanContext)
 	assert.Equal(t, "123", *prepare.SpanContext)
 }
@@ -312,15 +297,15 @@ func TestStartSpanFromPrepare_WithSpanContext(t *testing.T) {
 func TestStartSpanFromPrepare_CachesSpanContext(t *testing.T) {
 	prepare := &mysql.PrepareData{PrepareStmt: "/*VT_SPAN_CONTEXT=456*/SELECT 1"}
 	// First call extracts and caches the span context.
-	_, _, err := startSpanFromPrepareTestable(context.Background(), prepare, "someLabel",
+	_, _, err := startSpanFromPrepareTestable(t.Context(), prepare, "someLabel",
 		newSpanFail(t), newFromStringExpect(t, "456"))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	require.NotNil(t, prepare.SpanContext)
 	assert.Equal(t, "456", *prepare.SpanContext)
 
 	// Second call reuses the cached span context (PrepareStmt is not re-parsed).
 	prepare.PrepareStmt = "modified query that would not match"
-	_, _, err = startSpanFromPrepareTestable(context.Background(), prepare, "someLabel",
+	_, _, err = startSpanFromPrepareTestable(t.Context(), prepare, "someLabel",
 		newSpanFail(t), newFromStringExpect(t, "456"))
 	assert.NoError(t, err)
 }
@@ -329,16 +314,16 @@ func TestStartSpanFromPrepare_SpanContextNotParsable(t *testing.T) {
 	prepare := &mysql.PrepareData{PrepareStmt: "/*VT_SPAN_CONTEXT=123*/SELECT 1"}
 	newFromStringCalls := 0
 	newSpanCalls := 0
-	_, _, err := startSpanFromPrepareTestable(context.Background(), prepare, "someLabel",
+	_, _, err := startSpanFromPrepareTestable(t.Context(), prepare, "someLabel",
 		func(c context.Context, s string) (trace.Span, context.Context) {
 			newSpanCalls++
-			return trace.NoopSpan{}, context.Background()
+			return trace.NoopSpan{}, t.Context()
 		},
 		func(ctx context.Context, parentSpan string, label string) (trace.Span, context.Context, error) {
 			newFromStringCalls++
-			return trace.NoopSpan{}, context.Background(), errors.New("parse error")
+			return trace.NoopSpan{}, t.Context(), errors.New("parse error")
 		})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, 1, newFromStringCalls, "newFromString should be called on first execution")
 	assert.Equal(t, 1, newSpanCalls, "newSpan should be called as fallback")
 	// After the first failure, the cached SpanContext should be cleared so
@@ -349,16 +334,16 @@ func TestStartSpanFromPrepare_SpanContextNotParsable(t *testing.T) {
 	// Second execution should not call newFromString again.
 	newFromStringCalls = 0
 	newSpanCalls = 0
-	_, _, err = startSpanFromPrepareTestable(context.Background(), prepare, "someLabel",
+	_, _, err = startSpanFromPrepareTestable(t.Context(), prepare, "someLabel",
 		func(c context.Context, s string) (trace.Span, context.Context) {
 			newSpanCalls++
-			return trace.NoopSpan{}, context.Background()
+			return trace.NoopSpan{}, t.Context()
 		},
 		func(ctx context.Context, parentSpan string, label string) (trace.Span, context.Context, error) {
 			newFromStringCalls++
-			return trace.NoopSpan{}, context.Background(), errors.New("parse error")
+			return trace.NoopSpan{}, t.Context(), errors.New("parse error")
 		})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, 0, newFromStringCalls, "newFromString should not be called after cached failure")
 	assert.Equal(t, 1, newSpanCalls, "newSpan should be called directly")
 }
@@ -372,18 +357,14 @@ func TestDefaultWorkloadEmpty(t *testing.T) {
 	vh := &vtgateHandler{}
 	mysqlDefaultWorkload = int32(querypb.ExecuteOptions_OLTP)
 	sess := vh.session(&mysql.Conn{})
-	if sess.Options.Workload != querypb.ExecuteOptions_OLTP {
-		t.Fatalf("Expected default workload OLTP")
-	}
+	require.Equal(t, querypb.ExecuteOptions_OLTP, sess.Options.Workload, "Expected default workload OLTP")
 }
 
 func TestDefaultWorkloadOLAP(t *testing.T) {
 	vh := &vtgateHandler{}
 	mysqlDefaultWorkload = int32(querypb.ExecuteOptions_OLAP)
 	sess := vh.session(&mysql.Conn{})
-	if sess.Options.Workload != querypb.ExecuteOptions_OLAP {
-		t.Fatalf("Expected default workload OLAP")
-	}
+	require.Equal(t, querypb.ExecuteOptions_OLAP, sess.Options.Workload, "Expected default workload OLAP")
 }
 
 func TestInitTLSConfigWithoutServerCA(t *testing.T) {
@@ -411,22 +392,18 @@ func testInitTLSConfig(t *testing.T, serverCA bool) {
 
 		srv := &mysqlServer{tcpListener: &mysql.Listener{}}
 		if err := initTLSConfig(ctx, srv, path.Join(root, "server-cert.pem"), path.Join(root, "server-key.pem"), path.Join(root, "ca-cert.pem"), path.Join(root, "ca-crl.pem"), serverCACert, true, tls.VersionTLS12); err != nil {
-			t.Fatalf("init tls config failure due to: +%v", err)
+			require.NoError(t, err)
 		}
 
 		serverConfig := srv.tcpListener.TLSConfig.Load()
-		if serverConfig == nil {
-			t.Fatalf("init tls config shouldn't create nil server config")
-		}
+		require.NotNil(t, serverConfig, "init tls config shouldn't create nil server config")
 
 		srv.sigChan <- syscall.SIGHUP
 
 		// wait for signal handler
 		synctest.Wait()
 
-		if srv.tcpListener.TLSConfig.Load() == serverConfig {
-			t.Fatalf("init tls config should have been recreated after SIGHUP")
-		}
+		require.NotEqual(t, serverConfig, srv.tcpListener.TLSConfig.Load(), "init tls config should have been recreated after SIGHUP")
 	})
 }
 
@@ -437,10 +414,10 @@ func TestKillMethods(t *testing.T) {
 
 	// connection does not exist
 	err := vh.KillQuery(12345)
-	assert.ErrorContains(t, err, "Unknown thread id: 12345 (errno 1094) (sqlstate HY000)")
+	require.ErrorContains(t, err, "Unknown thread id: 12345 (errno 1094) (sqlstate HY000)")
 
-	err = vh.KillConnection(context.Background(), 12345)
-	assert.ErrorContains(t, err, "Unknown thread id: 12345 (errno 1094) (sqlstate HY000)")
+	err = vh.KillConnection(t.Context(), 12345)
+	require.ErrorContains(t, err, "Unknown thread id: 12345 (errno 1094) (sqlstate HY000)")
 
 	// add a connection
 	mysqlConn := mysql.GetTestConn()
@@ -450,21 +427,21 @@ func TestKillMethods(t *testing.T) {
 	// connection exists
 
 	// updating context.
-	cancelCtx, cancelFunc := context.WithCancel(context.Background())
+	cancelCtx, cancelFunc := context.WithCancel(t.Context())
 	mysqlConn.UpdateCancelCtx(cancelFunc)
 
 	// kill query
 	err = vh.KillQuery(1)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	require.EqualError(t, cancelCtx.Err(), "context canceled")
 
 	// updating context.
-	cancelCtx, cancelFunc = context.WithCancel(context.Background())
+	cancelCtx, cancelFunc = context.WithCancel(t.Context())
 	mysqlConn.UpdateCancelCtx(cancelFunc)
 
 	// kill connection
-	err = vh.KillConnection(context.Background(), 1)
-	assert.NoError(t, err)
+	err = vh.KillConnection(t.Context(), 1)
+	require.NoError(t, err)
 	require.EqualError(t, cancelCtx.Err(), "context canceled")
 	require.True(t, mysqlConn.IsMarkedForClose())
 }
@@ -955,7 +932,7 @@ func TestComQueryMulti(t *testing.T) {
 				if tt.queryResponses[idx].QueryError != nil {
 					assert.Equal(t, tt.queryResponses[idx].QueryError.Error(), qr.QueryError.Error(), "Error Got: %v", qr.QueryError)
 				} else {
-					assert.Nil(t, qr.QueryError, "Error Got: %v", qr.QueryError)
+					require.NoError(t, qr.QueryError, "Error Got: %v", qr.QueryError)
 				}
 				assert.Equal(t, tt.more[idx], more, idx)
 				assert.Equal(t, tt.firstPacket[idx], firstPacket, idx)
@@ -966,6 +943,447 @@ func TestComQueryMulti(t *testing.T) {
 			assert.Equal(t, len(tt.queryResponses), idx)
 		})
 	}
+}
+
+func TestSlowQueryStatusFlagsComQuery(t *testing.T) {
+	executor, sbc1, _, _, _ := createExecutorEnv(t)
+
+	oldThreshold := slowQueryThreshold
+	slowQueryThreshold = 5 * time.Millisecond
+	t.Cleanup(func() {
+		slowQueryThreshold = oldThreshold
+		sbc1.ExecDelayResponse = 0
+	})
+
+	sbc1.SetResults([]*sqltypes.Result{
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1"),
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1"),
+	})
+
+	th := &testHandler{}
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), th, 0, 0, false, false, 0, 0, false)
+	require.NoError(t, err)
+	defer listener.Close()
+
+	mysqlConn := mysql.GetTestServerConn(listener)
+	mysqlConn.ConnectionID = 1
+	mysqlConn.UserData = &mysql.StaticUserData{}
+
+	vh := newVtgateHandler(newVTGate(executor, nil, nil, nil, nil))
+	vh.connections[1] = mysqlConn
+
+	sbc1.ExecDelayResponse = 20 * time.Millisecond
+	err = vh.ComQuery(mysqlConn, "select id from user where id = 1", func(result *sqltypes.Result) error {
+		return nil
+	})
+	require.NoError(t, err)
+	assert.NotZero(t, mysqlConn.StatusFlags&mysql.ServerQueryWasSlow)
+
+	sbc1.ExecDelayResponse = 0
+	err = vh.ComQuery(mysqlConn, "select id from user where id = 1", func(result *sqltypes.Result) error {
+		return nil
+	})
+	require.NoError(t, err)
+	assert.Zero(t, mysqlConn.StatusFlags&mysql.ServerQueryWasSlow)
+}
+
+func TestSlowQueryStatusFlagsComQueryOKOnlyOLAPWire(t *testing.T) {
+	executor, sbc1, _, _, _ := createExecutorEnv(t)
+
+	oldThreshold := slowQueryThreshold
+	oldDefaultWorkload := mysqlDefaultWorkload
+	slowQueryThreshold = 5 * time.Millisecond
+	mysqlDefaultWorkload = int32(querypb.ExecuteOptions_OLAP)
+	t.Cleanup(func() {
+		slowQueryThreshold = oldThreshold
+		mysqlDefaultWorkload = oldDefaultWorkload
+		sbc1.ExecDelayResponse = 0
+	})
+
+	sbc1.SetResults([]*sqltypes.Result{{RowsAffected: 1}})
+	sbc1.ExecDelayResponse = 20 * time.Millisecond
+
+	vh := newVtgateHandler(newVTGate(executor, nil, nil, nil, nil))
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), vh, 0, 0, false, false, 0, 0, false)
+	require.NoError(t, err)
+	defer listener.Close()
+
+	go listener.Accept()
+
+	addr := listener.Addr().(*net.TCPAddr)
+	params := &mysql.ConnParams{
+		Host:  addr.IP.String(),
+		Port:  addr.Port,
+		Uname: "user1",
+		Pass:  "password1",
+	}
+
+	conn, err := mysql.Connect(t.Context(), params)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	result, err := conn.ExecuteFetch("update user set name = 'foo' where id = 1", 100, true)
+	require.NoError(t, err)
+	assert.Empty(t, result.Fields)
+	assert.NotZero(t, result.StatusFlags&mysql.ServerQueryWasSlow)
+}
+
+func TestSlowQueryStatusFlagsComQueryMultiOKOnlyOLAPFallbackWire(t *testing.T) {
+	executor, sbc1, _, _, _ := createExecutorEnv(t)
+
+	oldThreshold := slowQueryThreshold
+	oldDefaultWorkload := mysqlDefaultWorkload
+	slowQueryThreshold = 5 * time.Millisecond
+	mysqlDefaultWorkload = int32(querypb.ExecuteOptions_OLAP)
+	t.Cleanup(func() {
+		slowQueryThreshold = oldThreshold
+		mysqlDefaultWorkload = oldDefaultWorkload
+		sbc1.ExecDelayResponse = 0
+	})
+
+	sbc1.SetResults([]*sqltypes.Result{{RowsAffected: 1}})
+	sbc1.ExecDelayResponse = 20 * time.Millisecond
+
+	vh := newVtgateHandler(newVTGate(executor, nil, nil, nil, nil))
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), vh, 0, 0, false, false, 0, 0, true)
+	require.NoError(t, err)
+	defer listener.Close()
+
+	go listener.Accept()
+
+	addr := listener.Addr().(*net.TCPAddr)
+	params := &mysql.ConnParams{
+		Host:  addr.IP.String(),
+		Port:  addr.Port,
+		Uname: "user1",
+		Pass:  "password1",
+	}
+
+	conn, err := mysql.Connect(t.Context(), params)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	result, err := conn.ExecuteFetch("update user set name = 'foo' where id = 1", 100, true)
+	require.NoError(t, err)
+	assert.Empty(t, result.Fields)
+	assert.NotZero(t, result.StatusFlags&mysql.ServerQueryWasSlow)
+}
+
+func TestComQueryMultiOLAPDeferredOKRefreshesTransactionStatusWire(t *testing.T) {
+	executor, _, _, _, _ := createExecutorEnv(t)
+
+	oldDefaultWorkload := mysqlDefaultWorkload
+	mysqlDefaultWorkload = int32(querypb.ExecuteOptions_OLAP)
+	t.Cleanup(func() {
+		mysqlDefaultWorkload = oldDefaultWorkload
+	})
+
+	vh := newVtgateHandler(newVTGate(executor, nil, nil, nil, nil))
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), vh, 0, 0, false, false, 0, 0, true)
+	require.NoError(t, err)
+	defer listener.Close()
+
+	go listener.Accept()
+
+	addr := listener.Addr().(*net.TCPAddr)
+	params := &mysql.ConnParams{
+		Host:  addr.IP.String(),
+		Port:  addr.Port,
+		Uname: "user1",
+		Pass:  "password1",
+		Flags: mysql.CapabilityClientMultiStatements,
+	}
+
+	conn, err := mysql.Connect(t.Context(), params)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	result, more, err := conn.ExecuteFetchMulti("select 1; begin", 100, true)
+	require.NoError(t, err)
+	require.True(t, more)
+	assert.NotEmpty(t, result.Fields)
+	assert.Zero(t, result.StatusFlags&mysql.ServerStatusInTrans)
+
+	result, more, _, err = conn.ReadQueryResult(100, true)
+	require.NoError(t, err)
+	require.False(t, more)
+	assert.Empty(t, result.Fields)
+	assert.NotZero(t, result.StatusFlags&mysql.ServerStatusInTrans)
+}
+
+func TestSlowQueryStatusFlagsComStmtExecute(t *testing.T) {
+	executor, sbc1, _, _, _ := createExecutorEnv(t)
+
+	oldThreshold := slowQueryThreshold
+	slowQueryThreshold = 5 * time.Millisecond
+	t.Cleanup(func() {
+		slowQueryThreshold = oldThreshold
+		sbc1.ExecDelayResponse = 0
+	})
+
+	sbc1.SetResults([]*sqltypes.Result{
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1"),
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1"),
+	})
+
+	th := &testHandler{}
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), th, 0, 0, false, false, 0, 0, false)
+	require.NoError(t, err)
+	defer listener.Close()
+
+	mysqlConn := mysql.GetTestServerConn(listener)
+	mysqlConn.ConnectionID = 1
+	mysqlConn.UserData = &mysql.StaticUserData{}
+
+	vh := newVtgateHandler(newVTGate(executor, nil, nil, nil, nil))
+	vh.connections[1] = mysqlConn
+
+	prepare := &mysql.PrepareData{
+		PrepareStmt: "select id from user where id = 1",
+		BindVars:    map[string]*querypb.BindVariable{},
+	}
+
+	sbc1.ExecDelayResponse = 20 * time.Millisecond
+	err = vh.ComStmtExecute(mysqlConn, prepare, func(result *sqltypes.Result) error {
+		return nil
+	})
+	require.NoError(t, err)
+	assert.NotZero(t, mysqlConn.StatusFlags&mysql.ServerQueryWasSlow)
+
+	sbc1.ExecDelayResponse = 0
+	err = vh.ComStmtExecute(mysqlConn, prepare, func(result *sqltypes.Result) error {
+		return nil
+	})
+	require.NoError(t, err)
+	assert.Zero(t, mysqlConn.StatusFlags&mysql.ServerQueryWasSlow)
+}
+
+func TestDeferFirstOKOnlyResultForwardsRowChunksAfterFields(t *testing.T) {
+	fields := sqltypes.MakeTestFields("id", "int64")
+	input := []*sqltypes.Result{
+		{Fields: fields},
+		{Rows: [][]sqltypes.Value{{sqltypes.NewInt64(1)}}},
+		{Rows: [][]sqltypes.Value{{sqltypes.NewInt64(2)}}},
+	}
+	var results []*sqltypes.Result
+	callback, deferredResult := deferFirstOKOnlyResult(func(result *sqltypes.Result) error {
+		results = append(results, result)
+		return nil
+	})
+
+	for _, result := range input {
+		require.NoError(t, callback(result))
+	}
+
+	require.Nil(t, deferredResult())
+	assertOLAPRowChunksAfterFields(t, fields, results)
+}
+
+func TestDeferFirstOKOnlyResultDefersOnlyFirstOKResult(t *testing.T) {
+	okResult := &sqltypes.Result{RowsAffected: 1}
+	callback, deferredResult := deferFirstOKOnlyResult(func(result *sqltypes.Result) error {
+		require.Failf(t, "callback called for deferred OK-only result", "%v", result)
+		return nil
+	})
+
+	err := callback(okResult)
+	require.NoError(t, err)
+	assert.Same(t, okResult, deferredResult())
+}
+
+func assertOLAPRowChunksAfterFields(t *testing.T, fields []*querypb.Field, results []*sqltypes.Result) {
+	t.Helper()
+
+	require.Len(t, results, 3)
+	assert.Equal(t, fields, results[0].Fields)
+	assert.Empty(t, results[0].Rows)
+	assert.Empty(t, results[1].Fields)
+	assert.Equal(t, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, results[1].Rows)
+	assert.Empty(t, results[2].Fields)
+	assert.Equal(t, [][]sqltypes.Value{{sqltypes.NewInt64(2)}}, results[2].Rows)
+}
+
+func TestSlowQueryStatusFlagsComQueryMulti(t *testing.T) {
+	executor, sbc1, _, _, _ := createExecutorEnv(t)
+
+	oldThreshold := slowQueryThreshold
+	slowQueryThreshold = 5 * time.Millisecond
+	t.Cleanup(func() {
+		slowQueryThreshold = oldThreshold
+		sbc1.ExecDelayResponse = 0
+	})
+
+	sbc1.SetResults([]*sqltypes.Result{
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1"),
+	})
+	sbc1.ExecDelayResponse = 20 * time.Millisecond
+
+	vh := newVtgateHandler(newVTGate(executor, nil, nil, nil, nil))
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), vh, 0, 0, false, false, 0, 0, false)
+	require.NoError(t, err)
+	defer listener.Close()
+
+	go listener.Accept()
+
+	addr := listener.Addr().(*net.TCPAddr)
+	params := &mysql.ConnParams{
+		Host:  addr.IP.String(),
+		Port:  addr.Port,
+		Uname: "user1",
+		Pass:  "password1",
+		Flags: mysql.CapabilityClientMultiStatements,
+	}
+
+	conn, err := mysql.Connect(t.Context(), params)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	result, more, err := conn.ExecuteFetchMulti("select id from user where id = 1; select 1", 100, true)
+	require.NoError(t, err)
+	require.True(t, more)
+	assert.NotZero(t, result.StatusFlags&mysql.ServerQueryWasSlow)
+
+	result, more, _, err = conn.ReadQueryResult(100, true)
+	require.NoError(t, err)
+	require.False(t, more)
+	assert.Zero(t, result.StatusFlags&mysql.ServerQueryWasSlow)
+}
+
+func TestSlowQueryStatusFlagsStreamExecuteMultiOLAP(t *testing.T) {
+	executor, sbc1, _, _, _ := createExecutorEnv(t)
+
+	oldThreshold := slowQueryThreshold
+	slowQueryThreshold = 5 * time.Millisecond
+	t.Cleanup(func() {
+		slowQueryThreshold = oldThreshold
+		sbc1.ExecDelayResponse = 0
+	})
+
+	sbc1.SetResults([]*sqltypes.Result{
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1"),
+	})
+	sbc1.ExecDelayResponse = 20 * time.Millisecond
+
+	vh := newVtgateHandler(newVTGate(executor, nil, nil, nil, nil))
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), &testHandler{}, 0, 0, false, false, 0, 0, false)
+	require.NoError(t, err)
+	defer listener.Close()
+
+	mysqlConn := mysql.GetTestServerConn(listener)
+	mysqlConn.ConnectionID = 1
+	mysqlConn.UserData = &mysql.StaticUserData{}
+	mysqlCtx := &vtgateMySQLConnection{handler: vh, conn: mysqlConn}
+	session := &vtgatepb.Session{
+		Autocommit:           true,
+		EnableSystemSettings: true,
+		TargetString:         "TestExecutor",
+		Options: &querypb.ExecuteOptions{
+			Workload: querypb.ExecuteOptions_OLAP,
+		},
+	}
+
+	seenOKOnly := false
+	session, err = vh.streamExecuteMultiQuery(t.Context(), mysqlConn, mysqlCtx, session, "select id from user where id = 1; set autocommit = 1", func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error {
+		if firstPacket && len(qr.QueryResult.Fields) == 0 {
+			seenOKOnly = true
+			assert.False(t, more)
+			assert.Zero(t, mysqlConn.StatusFlags&mysql.ServerQueryWasSlow)
+		}
+		return nil
+	})
+	require.NoError(t, err)
+	require.NotNil(t, session)
+	assert.True(t, seenOKOnly)
+	assert.Equal(t, []bool{true, false}, mysqlCtx.slowQueryStates)
+}
+
+func TestSlowQueryStatusFlagsComQueryMultiOLAPErrorAfterSlowRowsWire(t *testing.T) {
+	executor, sbc1, _, _, _ := createExecutorEnv(t)
+
+	oldThreshold := slowQueryThreshold
+	oldDefaultWorkload := mysqlDefaultWorkload
+	slowQueryThreshold = 5 * time.Millisecond
+	mysqlDefaultWorkload = int32(querypb.ExecuteOptions_OLAP)
+	t.Cleanup(func() {
+		slowQueryThreshold = oldThreshold
+		mysqlDefaultWorkload = oldDefaultWorkload
+		sbc1.ExecDelayResponse = 0
+	})
+
+	sbc1.SetResults([]*sqltypes.Result{
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1"),
+	})
+	sbc1.ExecDelayResponse = 20 * time.Millisecond
+
+	vh := newVtgateHandler(newVTGate(executor, nil, nil, nil, nil))
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), vh, 0, 0, false, false, 0, 0, true)
+	require.NoError(t, err)
+	defer listener.Close()
+
+	go listener.Accept()
+
+	addr := listener.Addr().(*net.TCPAddr)
+	params := &mysql.ConnParams{
+		Host:  addr.IP.String(),
+		Port:  addr.Port,
+		Uname: "user1",
+		Pass:  "password1",
+		Flags: mysql.CapabilityClientMultiStatements,
+	}
+
+	conn, err := mysql.Connect(t.Context(), params)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	result, more, err := conn.ExecuteFetchMulti("select id from user where id = 1; select from", 100, true)
+	require.NoError(t, err)
+	require.True(t, more)
+	assert.NotZero(t, result.StatusFlags&mysql.ServerQueryWasSlow)
+
+	result, more, _, err = conn.ReadQueryResult(100, true)
+	require.Error(t, err)
+	assert.False(t, more)
+	assert.Nil(t, result)
+}
+
+func TestStreamExecuteMultiOLAPTimeoutUsesParentContextPerStatement(t *testing.T) {
+	executor, sbc1, _, _, _ := createExecutorEnv(t)
+
+	oldTimeout := mysqlQueryTimeout
+	mysqlQueryTimeout = time.Second
+	sbc1.ExecDelayResponse = time.Millisecond
+	t.Cleanup(func() {
+		mysqlQueryTimeout = oldTimeout
+		sbc1.ExecDelayResponse = 0
+	})
+
+	vh := newVtgateHandler(newVTGate(executor, nil, nil, nil, nil))
+	mysqlConn := mysql.GetTestServerConn(&mysql.Listener{})
+	mysqlConn.ConnectionID = 1
+	mysqlConn.UserData = &mysql.StaticUserData{}
+	mysqlCtx := &vtgateMySQLConnection{handler: vh, conn: mysqlConn}
+	session := &vtgatepb.Session{
+		Autocommit:           true,
+		EnableSystemSettings: true,
+		TargetString:         "TestExecutor",
+		Options: &querypb.ExecuteOptions{
+			Workload: querypb.ExecuteOptions_OLAP,
+		},
+	}
+
+	var moreFlags []bool
+	session, err := vh.streamExecuteMultiQuery(t.Context(), mysqlConn, mysqlCtx, session, "select id from user where id = 1; select id from user where id = 1", func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error {
+		if qr.QueryError != nil {
+			return qr.QueryError
+		}
+		if firstPacket {
+			moreFlags = append(moreFlags, more)
+		}
+		return nil
+	})
+	require.NoError(t, err)
+	require.NotNil(t, session)
+	assert.Equal(t, []bool{true, false}, moreFlags)
 }
 
 func TestGracefulShutdown(t *testing.T) {
@@ -986,11 +1404,11 @@ func TestGracefulShutdown(t *testing.T) {
 	err = vh.ComQuery(mysqlConn, "select 1", func(result *sqltypes.Result) error {
 		return nil
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	err = vh.ComQueryMulti(mysqlConn, "select 1", func(res sqltypes.QueryResponse, more bool, firstPacket bool) error {
 		return nil
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	listener.Shutdown()
 
@@ -1425,24 +1843,24 @@ func TestGracefulShutdownWithTransaction(t *testing.T) {
 	err = vh.ComQuery(mysqlConn, "BEGIN", func(result *sqltypes.Result) error {
 		return nil
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	err = vh.ComQuery(mysqlConn, "select 1", func(result *sqltypes.Result) error {
 		return nil
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	listener.Shutdown()
 
 	err = vh.ComQuery(mysqlConn, "select 1", func(result *sqltypes.Result) error {
 		return nil
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	err = vh.ComQuery(mysqlConn, "COMMIT", func(result *sqltypes.Result) error {
 		return nil
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	require.False(t, mysqlConn.IsMarkedForClose())
 

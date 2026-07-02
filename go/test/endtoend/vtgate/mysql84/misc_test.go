@@ -73,7 +73,7 @@ ts12 TIMESTAMP DEFAULT LOCALTIME()
 // TestCheckConstraint test check constraints on CREATE TABLE
 // This feature is supported from MySQL 8.0.16 and MariaDB 10.2.1.
 func TestCheckConstraint(t *testing.T) {
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
@@ -94,7 +94,7 @@ func TestValueDefault(t *testing.T) {
 		Host: "localhost",
 		Port: clusterInstance.VtgateMySQLPort,
 	}
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
@@ -104,7 +104,7 @@ func TestValueDefault(t *testing.T) {
 }
 
 func TestVersionCommentWorks(t *testing.T) {
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 	utils.Exec(t, conn, "/*!80000 SET SESSION information_schema_stats_expiry=0 */")
@@ -112,7 +112,7 @@ func TestVersionCommentWorks(t *testing.T) {
 }
 
 func TestSystemVariables(t *testing.T) {
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
@@ -137,7 +137,7 @@ func TestSystemVariables(t *testing.T) {
 }
 
 func TestUseSystemAndUserVariables(t *testing.T) {
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 

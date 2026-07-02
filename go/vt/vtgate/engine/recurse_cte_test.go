@@ -17,7 +17,6 @@ limitations under the License.
 package engine
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -73,7 +72,7 @@ func TestRecurseDualQuery(t *testing.T) {
 		Vars: map[string]int{"col1": 0},
 	}
 
-	r, err := cte.TryExecute(context.Background(), &noopVCursor{}, bv, true)
+	r, err := cte.TryExecute(t.Context(), &noopVCursor{}, bv, true)
 	require.NoError(t, err)
 
 	rightPrim.ExpectLog(t, []string{

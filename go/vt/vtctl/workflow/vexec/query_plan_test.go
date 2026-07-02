@@ -17,13 +17,12 @@ limitations under the License.
 package vexec
 
 import (
-	"context"
-	"errors"
 	"testing"
 
 	"vitess.io/vitess/go/test/utils"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
@@ -156,20 +155,20 @@ func TestQueryPlanExecute(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx := context.Background()
+			ctx := t.Context()
 
 			qr, err := tt.plan.Execute(ctx, tt.target)
 			if tt.shouldErr {
 				assert.Error(t, err)
 
 				if tt.errKind != nil {
-					assert.True(t, errors.Is(err, tt.errKind), "expected error kind (= %v), got = %v", tt.errKind, err)
+					require.ErrorIs(t, err, tt.errKind)
 				}
 
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			utils.MustMatch(t, tt.expected, qr)
 		})
 	}
@@ -304,20 +303,20 @@ func TestQueryPlanExecuteScatter(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx := context.Background()
+			ctx := t.Context()
 
 			results, err := tt.plan.ExecuteScatter(ctx, tt.targets...)
 			if tt.shouldErr {
 				assert.Error(t, err)
 
 				if tt.errKind != nil {
-					assert.True(t, errors.Is(err, tt.errKind), "expected error kind (= %v), got = %v", tt.errKind, err)
+					require.ErrorIs(t, err, tt.errKind)
 				}
 
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			resultsByAlias := make(map[string]*querypb.QueryResult, len(results))
 			for tablet, qr := range results {

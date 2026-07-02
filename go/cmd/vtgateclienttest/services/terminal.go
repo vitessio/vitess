@@ -69,7 +69,7 @@ func (c *terminalClient) ExecuteBatch(ctx context.Context, session *vtgatepb.Ses
 	return session, nil, errTerminal
 }
 
-func (c *terminalClient) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) (*vtgatepb.Session, error) {
+func (c *terminalClient) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, prepared bool, callback func(*sqltypes.Result) error) (*vtgatepb.Session, error) {
 	return session, errTerminal
 }
 

@@ -17,10 +17,10 @@ limitations under the License.
 package endtoend
 
 import (
-	"context"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/callerid"
@@ -195,7 +195,7 @@ func TestGetSchemaRPC(t *testing.T) {
 		t.Run(testcase.name, func(t *testing.T) {
 			client := framework.NewClient()
 			client.UpdateContext(callerid.NewContext(
-				context.Background(),
+				t.Context(),
 				&vtrpcpb.CallerID{},
 				&querypb.VTGateCallerID{Username: "dev"}))
 
@@ -215,7 +215,7 @@ func TestGetSchemaRPC(t *testing.T) {
 			for {
 				select {
 				case <-wait:
-					t.Errorf("Schema tracking hasn't caught up")
+					assert.Fail(t, "Schema tracking hasn't caught up")
 					return
 				case <-time.After(1 * time.Second):
 					schemaDefs, udfs, err := client.GetSchema(testcase.getSchemaQueryType, testcase.getSchemaTables...)
@@ -252,7 +252,7 @@ func TestGetSchemaRPCWithViewsDisabled(t *testing.T) {
 
 	client := framework.NewClient()
 	client.UpdateContext(callerid.NewContext(
-		context.Background(),
+		t.Context(),
 		&vtrpcpb.CallerID{},
 		&querypb.VTGateCallerID{Username: "dev"}))
 
@@ -285,7 +285,7 @@ func TestGetSchemaRPCWithViewsDisabled(t *testing.T) {
 	for {
 		select {
 		case <-wait:
-			t.Errorf("Schema tracking hasn't caught up")
+			assert.Fail(t, "Schema tracking hasn't caught up")
 			return
 		case <-time.After(100 * time.Millisecond):
 			schemaDefs, udfs, err := client.GetSchema(querypb.SchemaTableType_ALL)

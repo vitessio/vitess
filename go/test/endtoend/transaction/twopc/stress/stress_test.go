@@ -218,7 +218,7 @@ func TestDisruptions(t *testing.T) {
 			twopcutil.RunMultiShardCommitWithDelay(t, conn, tt.commitDelayTime, &wg, append([]string{"begin"}, getMultiShardInsertQueries()...))
 			// Allow enough time for the commit to have started.
 			time.Sleep(1 * time.Second)
-			writeCtx, writeCancel := context.WithCancel(context.Background())
+			writeCtx, writeCancel := context.WithCancel(t.Context())
 			var writerWg sync.WaitGroup
 			// Run multiple threads to try to write to the database on the same values of id to ensure that we don't
 			// allow any writes while the transaction is prepared and not committed.

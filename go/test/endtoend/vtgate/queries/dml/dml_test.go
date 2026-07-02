@@ -482,9 +482,7 @@ func TestDMLInUnique(t *testing.T) {
 		for i := range qr.Rows {
 			qr.Rows[i] = qr.Rows[i][1:]
 		}
-		if err := sqltypes.RowsEqualsStr(expected, qr.Rows); err != nil {
-			t.Error(err)
-		}
+		assert.NoError(t, sqltypes.RowsEqualsStr(expected, qr.Rows))
 	}
 	expected := `[
 		[VARCHAR("sks") VARCHAR("-80") VARCHAR("begin")] 
