@@ -385,7 +385,7 @@ func TestRestoreChunkedRetryPreservesData(t *testing.T) {
 	be := &BuiltinBackupEngine{}
 
 	// Pre-create and pre-size destination files, as restoreFiles() would.
-	require.NoError(t, createChunkedDestinations(fes, cnf, ""))
+	require.NoError(t, createChunkedDestinations(t.Context(), fes, cnf, "", logutil.NewConsoleLogger()))
 
 	// First pass: chunk 0-1 will fail.
 	err := be.restoreFileEntries(t.Context(), fes, bh, bm, params, "")
@@ -528,7 +528,7 @@ func TestRestoreCloseErrorIsFatal(t *testing.T) {
 	}
 
 	be := &BuiltinBackupEngine{}
-	require.NoError(t, createChunkedDestinations(fes, cnf, ""))
+	require.NoError(t, createChunkedDestinations(t.Context(), fes, cnf, "", logutil.NewConsoleLogger()))
 
 	err := be.restoreFileEntries(t.Context(), fes, bh, bm, params, "")
 	require.Error(t, err)
@@ -621,7 +621,7 @@ func TestBackupRestoreWithManyChunks(t *testing.T) {
 	_, err = ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
 		si.PrimaryAlias = &topodata.TabletAlias{Uid: 100, Cell: "cell1"}
 		now := time.Now()
-		si.PrimaryTermStartTime = &vttime.Time{Seconds: int64(now.Second()), Nanoseconds: int32(now.Nanosecond())}
+		si.PrimaryTermStartTime = &vttime.Time{Seconds: now.Unix(), Nanoseconds: int32(now.Nanosecond())}
 		return nil
 	})
 	require.NoError(t, err)

@@ -1331,7 +1331,7 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 
 	// For chunked files, we pre-create the files at the right size, each chunk then only writes to the right offset.
 	// This is done to prevent them from being truncated when retries happen.
-	if err := createChunkedDestinations(fes, params.Cnf, createdDir); err != nil {
+	if err := createChunkedDestinations(ctx, fes, params.Cnf, createdDir, params.Logger); err != nil {
 		return "", err
 	}
 
@@ -1376,7 +1376,7 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 // createChunkedDestinations pre-creates and pre-sizes destination files for chunked
 // entries. This is called once before any restore pass so that restoreFileEntries can
 // always open them with O_WRONLY (no truncation), making retries safe.
-func createChunkedDestinations(fes []FileEntry, cnf *Mycnf, createdDir string) error {
+func createChunkedDestinations(ctx context.Context, fes []FileEntry, cnf *Mycnf, createdDir string, logger logutil.Logger) error {
 	for i := range fes {
 		fe := &fes[i]
 		if len(fe.Chunks) == 0 {
@@ -1395,10 +1395,10 @@ func createChunkedDestinations(fes []FileEntry, cnf *Mycnf, createdDir string) e
 			}
 		}
 		if err := dest.Truncate(totalSize); err != nil {
-			dest.Close()
+			closeWithRetry(ctx, logger, dest, fe.Name)
 			return vterrors.Wrapf(err, "can't pre-size chunked file %v", fe.Name)
 		}
-		if err := dest.Close(); err != nil {
+		if err := closeWithRetry(ctx, logger, dest, fe.Name); err != nil {
 			return vterrors.Wrapf(err, "can't close pre-sized chunked file %v", fe.Name)
 		}
 	}
