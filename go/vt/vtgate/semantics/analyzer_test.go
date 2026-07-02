@@ -904,6 +904,60 @@ func TestUnionCheckFirstAndLastSelectsDeps(t *testing.T) {
 	assert.Equal(t, TS1, d2)
 }
 
+func TestValuesStatementUnion(t *testing.T) {
+	queries := []string{
+		"values row(1)",
+		"select 1 union values row(1)",
+		"select * from (select 1) a union values row(1)",
+		"values row(1) union select 2",
+		"values row(1) union values row(2)",
+		"select * from (values row(1) union select 2) as dt",
+		"select * from (values row(1) union values row(2)) as dt",
+	}
+
+	for _, query := range queries {
+		t.Run(query, func(t *testing.T) {
+			stmt, semTable := parseAndAnalyze(t, query, "")
+			require.Len(t, semTable.SelectExprs(stmt.(sqlparser.TableStatement)), 1)
+		})
+	}
+}
+
+func TestValuesStatementUnionRejectsListArg(t *testing.T) {
+	queries := []string{
+		"select 1 union values ::vals",
+		"values ::vals union select 1",
+		"values ::vals union values ::other",
+	}
+
+	for _, query := range queries {
+		t.Run(query, func(t *testing.T) {
+			stmt, err := sqlparser.NewTestParser().Parse(query)
+			require.NoError(t, err)
+			_, err = Analyze(stmt, "", fakeSchemaInfo())
+			require.ErrorContains(t, err, "VT12001: unsupported: VALUES list argument in UNION statements")
+		})
+	}
+}
+
+func TestValuesStatementOrderByAndWith(t *testing.T) {
+	stmt, semTable := parseAndAnalyze(t, "values row(1) order by column_0", "")
+	values, ok := stmt.(*sqlparser.ValuesStatement)
+	require.True(t, ok)
+	require.Len(t, values.Order, 1)
+	assert.Equal(t, NoTables, semTable.RecursiveDeps(values.Order[0].Expr))
+
+	stmt, semTable = parseAndAnalyze(t, "values row(1) order by 1", "")
+	values, ok = stmt.(*sqlparser.ValuesStatement)
+	require.True(t, ok)
+	require.Len(t, values.Order, 1)
+	assert.Equal(t, "column_0", sqlparser.String(values.Order[0].Expr))
+	assert.Equal(t, NoTables, semTable.RecursiveDeps(values.Order[0].Expr))
+
+	stmt, semTable = parseAndAnalyze(t, "with cte as (select 1) values row(1)", "")
+	require.Len(t, semTable.SelectExprs(stmt.(sqlparser.TableStatement)), 1)
+}
+
 func TestUnionOrderByRewrite(t *testing.T) {
 	query := "select tabl1.id from tabl1 union select 1 order by 1"
 
@@ -944,6 +998,12 @@ func TestInvalidQueries(t *testing.T) {
 		sql: "select 1 union select *, m from t1",
 		err: &UnionColumnsDoNotMatchError{FirstProj: 1, SecondProj: 2},
 	}, {
+		sql: "values row(1, 2), row(3)",
+		err: &UnionColumnsDoNotMatchError{FirstProj: 2, SecondProj: 1},
+	}, {
+		sql: "values row(1, 2), row(3) order by column_1 + 1",
+		err: &UnionColumnsDoNotMatchError{FirstProj: 2, SecondProj: 1},
+	}, {
 		sql:  "select * from (select sql_calc_found_rows id from a) as t",
 		serr: "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'",
 	}, {
@@ -973,6 +1033,9 @@ func TestInvalidQueries(t *testing.T) {
 	}, {
 		sql:  "select 1 from t1 where (id, id) in (select 1, 2, 3)",
 		serr: "Operand should contain 2 column(s)",
+	}, {
+		sql:  "select (values row(1))",
+		serr: "VT12001: unsupported: VALUES statements in subqueries",
 	}, {
 		sql:  "with x as (select 1), x as (select 1) select * from x",
 		serr: "VT03013: not unique table/alias: 'x'",

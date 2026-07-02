@@ -26,7 +26,7 @@ import (
 )
 
 // WireupRoute returns an engine primitive for the given route.
-func WireupRoute(ctx *plancontext.PlanningContext, eroute *engine.Route, sel sqlparser.SelectStatement) (engine.Primitive, error) {
+func WireupRoute(ctx *plancontext.PlanningContext, eroute *engine.Route, sel sqlparser.TableStatement) (engine.Primitive, error) {
 	// prepare the queries we will pass down
 	eroute.Query = sqlparser.String(sel)
 	eroute.QueryStatement = sel
@@ -47,7 +47,7 @@ func WireupRoute(ctx *plancontext.PlanningContext, eroute *engine.Route, sel sql
 	}
 	reservedVars := sqlparser.NewReservedVars("vtg", reserved)
 
-	lookupPrimitive, err := gen4SelectStmtPlanner(query, querypb.ExecuteOptions_Gen4, stmt.(sqlparser.SelectStatement), reservedVars, ctx.VSchema)
+	lookupPrimitive, err := gen4SelectStmtPlanner(query, querypb.ExecuteOptions_Gen4, stmt.(sqlparser.TableStatement), reservedVars, ctx.VSchema)
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "failed to plan the lookup query: [%s]", query)
 	}
@@ -70,7 +70,7 @@ func WireupRoute(ctx *plancontext.PlanningContext, eroute *engine.Route, sel sql
 }
 
 // prepareTheAST does minor fixups of the SELECT struct before producing the query string
-func prepareTheAST(sel sqlparser.SelectStatement) {
+func prepareTheAST(sel sqlparser.TableStatement) {
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
 		switch node := node.(type) {
 		case *sqlparser.Select:

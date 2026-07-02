@@ -390,10 +390,7 @@ func (r *earlyRewriter) handleOrderBy(parent sqlparser.SQLNode, iter iterator) e
 		return nil
 	}
 
-	sel, err := sqlparser.GetFirstSelect(stmt)
-	if err != nil {
-		return err
-	}
+	sel := firstSelectInTableStatement(stmt)
 
 	for e := iter.next(); e != nil; e = iter.next() {
 		lit, err := r.replaceLiteralsInOrderBy(e, iter)
@@ -404,9 +401,12 @@ func (r *earlyRewriter) handleOrderBy(parent sqlparser.SQLNode, iter iterator) e
 			continue
 		}
 
-		expr, err := r.rewriteAliasesInOrderBy(e, sel)
-		if err != nil {
-			return err
+		expr := e
+		if sel != nil {
+			expr, err = r.rewriteAliasesInOrderBy(e, sel)
+			if err != nil {
+				return err
+			}
 		}
 
 		if err = iter.replace(expr); err != nil {
@@ -771,9 +771,9 @@ func (r *earlyRewriter) rewriteOrderByLiteral(node *sqlparser.Literal) (expr sql
 		return nil, false, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "error parsing column number: %s", node.Val)
 	}
 
-	stmt, isSel := scope.stmt.(*sqlparser.Select)
-	if !isSel {
-		return nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "error invalid statement type, expect Select, got: %T", scope.stmt)
+	stmt, isTableStatement := scope.stmt.(sqlparser.TableStatement)
+	if !isTableStatement {
+		return nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "error invalid statement type, expect TableStatement, got: %T", scope.stmt)
 	}
 
 	if num < 1 || num > stmt.GetColumnCount() {

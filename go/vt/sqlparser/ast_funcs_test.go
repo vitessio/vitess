@@ -85,6 +85,26 @@ func TestAddQueryHint(t *testing.T) {
 	}
 }
 
+func TestValuesStatementListArgColumns(t *testing.T) {
+	stmt, err := NewTestParser().Parse("values ::vals")
+	require.NoError(t, err)
+	values, ok := stmt.(*ValuesStatement)
+	require.True(t, ok)
+
+	assert.Equal(t, 0, values.GetColumnCount())
+	assert.Empty(t, values.GetColumns())
+}
+
+func TestValuesStatementIsTableStatementOnly(t *testing.T) {
+	stmt, err := NewTestParser().Parse("values row(1)")
+	require.NoError(t, err)
+
+	_, isTableStatement := stmt.(TableStatement)
+	assert.True(t, isTableStatement)
+	_, isSelectStatement := stmt.(SelectStatement)
+	assert.False(t, isSelectStatement)
+}
+
 func TestSQLTypeToQueryType(t *testing.T) {
 	tcs := []struct {
 		input    string

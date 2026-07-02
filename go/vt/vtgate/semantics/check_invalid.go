@@ -36,6 +36,8 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 		return &LockOnlyWithDualError{Node: node}
 	case *sqlparser.Union:
 		return checkUnion(node)
+	case *sqlparser.ValuesStatement:
+		return checkValuesStatement(node)
 	case *sqlparser.JSONTableExpr:
 		return &JSONTablesError{}
 	case *sqlparser.DerivedTable:
@@ -47,6 +49,9 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 			return NotSingleRouteErr{Inner: &UnsupportedConstruct{errString: "ANY/ALL/SOME comparison operator"}}
 		}
 	case *sqlparser.Subquery:
+		if tableStatementHasValues(node.Select) {
+			return vterrors.VT12001("VALUES statements in subqueries")
+		}
 		return a.checkSubqueryColumns(cursor.Parent(), node)
 	case *sqlparser.Insert:
 		if !a.singleUnshardedKeyspace && node.Action == sqlparser.ReplaceAct {
@@ -54,6 +59,24 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 		}
 	}
 
+	return nil
+}
+
+func checkValuesStatement(values *sqlparser.ValuesStatement) error {
+	if len(values.Rows) == 0 {
+		return nil
+	}
+
+	size := len(values.Rows[0])
+	for _, row := range values.Rows[1:] {
+		if len(row) != size {
+			return &UnionColumnsDoNotMatchError{FirstProj: size, SecondProj: len(row)}
+		}
+	}
+
+	if sqlparser.ValuesStatementHasSubquery(values) {
+		return vterrors.VT12001("subqueries in VALUES statements")
+	}
 	return nil
 }
 

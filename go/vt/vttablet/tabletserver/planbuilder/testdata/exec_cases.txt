@@ -34,6 +34,14 @@
   "FullQuery": "select * from a union select * from b limit 10"
 }
 
+# values statement
+"values row(1)"
+{
+  "PlanID": "Select",
+  "TableName": "",
+  "FullQuery": "values row(1) limit :#maxLimit"
+}
+
 # with no where clause
 "select * from a"
 {

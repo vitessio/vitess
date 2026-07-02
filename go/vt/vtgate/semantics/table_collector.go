@@ -154,11 +154,11 @@ func (tc *tableCollector) visitAliasedTableExpr(node *sqlparser.AliasedTableExpr
 }
 
 func (tc *tableCollector) visitUnion(union *sqlparser.Union) error {
-	firstSelect, err := sqlparser.GetFirstSelect(union)
-	if err != nil {
-		return err
+	if unionHasValuesListArg(union) {
+		return vterrors.VT12001("VALUES list argument in UNION statements")
 	}
-	expanded, selectExprs := getColumnNames(firstSelect.GetColumns())
+
+	expanded, selectExprs := getColumnNames(union.GetColumns())
 	info := unionInfo{
 		isAuthoritative: expanded,
 		exprs:           selectExprs,
@@ -168,28 +168,28 @@ func (tc *tableCollector) visitUnion(union *sqlparser.Union) error {
 		return nil
 	}
 
-	size := firstSelect.GetColumnCount()
+	size := union.GetColumnCount()
 	info.recursive = make([]TableSet, size)
 	typers := make([]evalengine.TypeAggregator, size)
-	collations := tc.org.collationEnv()
 
-	err = sqlparser.VisitAllSelects(union, func(s *sqlparser.Select, idx int) error {
-		for i, expr := range s.GetColumns() {
-			if i >= size {
-				return &UnionColumnsDoNotMatchError{FirstProj: size, SecondProj: len(s.GetColumns())}
-			}
-			ae, ok := expr.(*sqlparser.AliasedExpr)
-			if !ok {
-				continue
-			}
-			_, recursiveDeps, qt := tc.org.depsForExpr(ae.Expr)
-			info.recursive[i] = info.recursive[i].Merge(recursiveDeps)
-			if err := typers[i].Add(qt, collations); err != nil {
+	var collectTypesAndDeps func(sqlparser.TableStatement) error
+	collectTypesAndDeps = func(stmt sqlparser.TableStatement) error {
+		switch stmt := stmt.(type) {
+		case *sqlparser.Select:
+			return tc.collectSelectUnionTypesAndDeps(stmt, size, info.recursive, typers)
+		case *sqlparser.ValuesStatement:
+			return tc.collectValuesUnionTypesAndDeps(stmt, size, info.recursive, typers)
+		case *sqlparser.Union:
+			if err := collectTypesAndDeps(stmt.Left); err != nil {
 				return err
 			}
+			return collectTypesAndDeps(stmt.Right)
+		default:
+			return vterrors.VT13001(fmt.Sprintf("unknown type for SelectStatement: %T", stmt))
 		}
-		return nil
-	})
+	}
+
+	err := collectTypesAndDeps(union)
 	if err != nil {
 		return err
 	}
@@ -198,6 +198,52 @@ func (tc *tableCollector) visitUnion(union *sqlparser.Union) error {
 		info.types = append(info.types, ts.Type())
 	}
 	tc.unionInfo[union] = info
+	return nil
+}
+
+func (tc *tableCollector) collectSelectUnionTypesAndDeps(
+	s *sqlparser.Select,
+	size int,
+	recursive []TableSet,
+	typers []evalengine.TypeAggregator,
+) error {
+	collations := tc.org.collationEnv()
+	for i, expr := range s.GetColumns() {
+		if i >= size {
+			return &UnionColumnsDoNotMatchError{FirstProj: size, SecondProj: len(s.GetColumns())}
+		}
+		ae, ok := expr.(*sqlparser.AliasedExpr)
+		if !ok {
+			continue
+		}
+		_, recursiveDeps, qt := tc.org.depsForExpr(ae.Expr)
+		recursive[i] = recursive[i].Merge(recursiveDeps)
+		if err := typers[i].Add(qt, collations); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (tc *tableCollector) collectValuesUnionTypesAndDeps(
+	values *sqlparser.ValuesStatement,
+	size int,
+	recursive []TableSet,
+	typers []evalengine.TypeAggregator,
+) error {
+	collations := tc.org.collationEnv()
+	for _, row := range values.Rows {
+		if len(row) != size {
+			return &UnionColumnsDoNotMatchError{FirstProj: size, SecondProj: len(row)}
+		}
+		for i, expr := range row {
+			_, recursiveDeps, qt := tc.org.depsForExpr(expr)
+			recursive[i] = recursive[i].Merge(recursiveDeps)
+			if err := typers[i].Add(qt, collations); err != nil {
+				return err
+			}
+		}
+	}
 	return nil
 }
 
@@ -440,8 +486,10 @@ func (tc *tableCollector) handleDerivedTable(node *sqlparser.AliasedTableExpr, t
 		return tc.addSelectDerivedTable(sel, node, node.Columns, node.As)
 	case *sqlparser.Union:
 		return tc.addUnionDerivedTable(sel, node, node.Columns, node.As)
+	case *sqlparser.ValuesStatement:
+		return tc.addValuesDerivedTable(sel, node, node.Columns, node.As)
 	default:
-		return vterrors.VT13001("[BUG] %T in a derived table", sel)
+		return vterrors.VT13001(fmt.Sprintf("%T in a derived table", sel))
 	}
 }
 
@@ -484,17 +532,17 @@ func (tc *tableCollector) addUnionDerivedTable(
 	columns sqlparser.Columns,
 	alias sqlparser.IdentifierCS,
 ) error {
-	firstSelect, err := sqlparser.GetFirstSelect(union)
-	if err != nil {
-		return err
-	}
-	tables := tc.scoper.wScope[firstSelect]
 	info, found := tc.unionInfo[union]
 	if !found {
 		return vterrors.VT13001("information about union is not available")
 	}
 
-	tableInfo := createDerivedTableForExpressions(info.exprs, columns, tables.tables, tc.org, info.isAuthoritative, info.recursive, info.types)
+	var tables []TableInfo
+	if firstSelect := firstSelectInTableStatement(union); firstSelect != nil {
+		tables = tc.scoper.wScope[firstSelect].tables
+	}
+
+	tableInfo := createDerivedTableForExpressions(info.exprs, columns, tables, tc.org, info.isAuthoritative, info.recursive, info.types)
 	if err := tableInfo.checkForDuplicates(); err != nil {
 		return err
 	}
@@ -504,6 +552,94 @@ func (tc *tableCollector) addUnionDerivedTable(
 	tc.Tables = append(tc.Tables, tableInfo)
 	scope := tc.scoper.currentScope()
 	return scope.addTable(tableInfo)
+}
+
+func firstSelectInTableStatement(stmt sqlparser.TableStatement) *sqlparser.Select {
+	switch stmt := stmt.(type) {
+	case *sqlparser.Select:
+		return stmt
+	case *sqlparser.Union:
+		if sel := firstSelectInTableStatement(stmt.Left); sel != nil {
+			return sel
+		}
+		return firstSelectInTableStatement(stmt.Right)
+	case *sqlparser.ValuesStatement:
+		return nil
+	default:
+		panic(vterrors.VT13001(fmt.Sprintf("unknown type for SelectStatement: %T", stmt)))
+	}
+}
+
+func (tc *tableCollector) addValuesDerivedTable(
+	values *sqlparser.ValuesStatement,
+	node *sqlparser.AliasedTableExpr,
+	columns sqlparser.Columns,
+	alias sqlparser.IdentifierCS,
+) error {
+	if len(values.Rows) == 0 && values.ListArg == "" {
+		return vterrors.VT12001("VALUES statement without rows in derived table")
+	}
+	if values.ListArg != "" && len(columns) == 0 {
+		return vterrors.VT12001("VALUES list argument in derived table requires column aliases")
+	}
+
+	size := valuesColumnCount(values, columns)
+	if len(columns) > 0 && len(values.Rows) > 0 && len(columns) != size {
+		return vterrors.VT03033()
+	}
+	deps := make([]TableSet, size)
+	types := make([]evalengine.Type, size)
+	for i := range types {
+		types[i] = evalengine.NewUnknownType()
+	}
+
+	if len(values.Rows) > 0 {
+		typers := make([]evalengine.TypeAggregator, size)
+		collations := tc.org.collationEnv()
+
+		for _, row := range values.Rows {
+			if len(row) != size {
+				return &UnionColumnsDoNotMatchError{FirstProj: size, SecondProj: len(row)}
+			}
+			for i, expr := range row {
+				_, recursiveDeps, qt := tc.org.depsForExpr(expr)
+				deps[i] = deps[i].Merge(recursiveDeps)
+				if err := typers[i].Add(qt, collations); err != nil {
+					return err
+				}
+			}
+		}
+
+		for i, typer := range typers {
+			types[i] = typer.Type()
+		}
+	}
+
+	tableInfo := createDerivedTableForExpressions(valuesColumns(size), columns, nil, tc.org, true, deps, types)
+	if err := tableInfo.checkForDuplicates(); err != nil {
+		return err
+	}
+	tableInfo.ASTNode = node
+	tableInfo.tableName = alias.String()
+
+	tc.Tables = append(tc.Tables, tableInfo)
+	scope := tc.scoper.currentScope()
+	return scope.addTable(tableInfo)
+}
+
+func valuesColumnCount(values *sqlparser.ValuesStatement, columns sqlparser.Columns) int {
+	if count := values.GetColumnCount(); count > 0 {
+		return count
+	}
+	return len(columns)
+}
+
+func valuesColumns(size int) []sqlparser.SelectExpr {
+	result := make([]sqlparser.SelectExpr, 0, size)
+	for i := range size {
+		result = append(result, &sqlparser.AliasedExpr{Expr: sqlparser.NewColName(fmt.Sprintf("column_%d", i))})
+	}
+	return result
 }
 
 func newVindexTable(t sqlparser.IdentifierCS) *vindexes.BaseTable {

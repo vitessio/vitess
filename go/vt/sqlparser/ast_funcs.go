@@ -2941,6 +2941,8 @@ func (v *visitor) visitAllSelects(in TableStatement, f func(p *Select, idx int) 
 			return err
 		}
 		return v.visitAllSelects(sel.Right, f)
+	case *ValuesStatement:
+		return nil
 	}
 	panic("switch should be exhaustive")
 }
@@ -3187,7 +3189,7 @@ func (node *ValuesStatement) GetColumnCount() int {
 	if len(node.Rows) > 0 {
 		return len(node.Rows[0])
 	}
-	panic("no columns available") // TODO: we need a better solution than a panic
+	return 0
 }
 
 func (node *ValuesStatement) GetColumns() []SelectExpr {
@@ -3196,8 +3198,23 @@ func (node *ValuesStatement) GetColumns() []SelectExpr {
 	for i := range columnCount {
 		sel = append(sel, &AliasedExpr{Expr: NewColName(fmt.Sprintf("column_%d", i))})
 	}
-	_ = sel
-	panic("no columns available") // TODO: we need a better solution than a panic
+	return sel
+}
+
+func ValuesStatementHasSubquery(values *ValuesStatement) bool {
+	if len(values.Rows) == 0 {
+		return false
+	}
+
+	found := false
+	_ = Walk(func(node SQLNode) (bool, error) {
+		if _, ok := node.(*Subquery); ok {
+			found = true
+			return false, nil
+		}
+		return !found, nil
+	}, values.Rows)
+	return found
 }
 
 func (node *ValuesStatement) SetComments(comments Comments) {}

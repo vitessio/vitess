@@ -512,6 +512,8 @@ func (st *SemTable) SelectExprs(sel sqlparser.TableStatement) []sqlparser.Select
 	switch sel := sel.(type) {
 	case *sqlparser.Select:
 		return sel.GetColumns()
+	case *sqlparser.ValuesStatement:
+		return sel.GetColumns()
 	case *sqlparser.Union:
 		exprs, found := st.columns[sel]
 		if found {
