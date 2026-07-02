@@ -16,6 +16,7 @@
     - **[VReplication](#minor-changes-vreplication)**
         - [Default data protection for `_reverse` workflow cancel/complete](#vreplication-reverse-workflow-data-protection)
     - **[VTGate](#minor-changes-vtgate)**
+        - [Ingress bytes in query LogStats](#vtgate-logstats-ingress-bytes)
         - [New controls for cross-keyspace reads](#vtgate-cross-keyspace-reads)
         - [Streaming errors no longer surface as connection loss](#vtgate-streamexecute-real-errors)
     - **[VTTablet](#minor-changes-vttablet)**
@@ -93,7 +94,13 @@ See [#19906](https://github.com/vitessio/vitess/pull/19906) for details.
 
 #### <a id="vtgate-logstats-ingress-bytes"/>Ingress bytes in query LogStats</a>
 
-VTGate query `LogStats` now include `IngressBytes`, which records the inbound request bytes attributed to each query. MySQL protocol requests use bytes read from client packets. gRPC requests use the serialized protobuf request size.
+VTGate query `LogStats` now include an `IngressBytes` field that records the approximate number of inbound request bytes attributed to each query.
+
+For MySQL-protocol connections, this is the number of bytes read from the client packets for the command that produced the query, including any prepared-statement long-data chunks folded in when `COM_STMT_EXECUTE` consumes them. For gRPC connections, it is approximated from the serialized size of the protobuf request. When a single command carries multiple statements, the bytes are distributed across them by query length.
+
+`IngressBytes` is available through the `LogStats` struct for telemetry and monitoring integrations. It is not written to VTGate's query log output and defaults to zero for callers that do not set it.
+
+See [#20358](https://github.com/vitessio/vitess/pull/20358) for details.
 
 #### <a id="vtgate-cross-keyspace-reads"/>New controls for cross-keyspace reads</a>
 
