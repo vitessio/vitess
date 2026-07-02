@@ -47,6 +47,7 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl/filebackupstorage"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vttime"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 )
@@ -990,10 +991,15 @@ func TestRestoreChunkedCorruptedBackup(t *testing.T) {
 	const chunkSize = 4 * 1024 * 1024 // 4MiB (minimum allowed)
 	const fileSize = 12 * 1024 * 1024 // 12MiB → 3 chunks per file
 
-	oldThreshold := mysqlctl.SetBackupFileChunkThresholdForTest(chunkSize)
-	defer mysqlctl.SetBackupFileChunkThresholdForTest(oldThreshold)
-	oldSize := mysqlctl.SetBackupFileChunkSizeForTest(chunkSize)
-	defer mysqlctl.SetBackupFileChunkSizeForTest(oldSize)
+	fs := servenv.GetFlagSetFor("vtbackup")
+	oldThreshold := fs.Lookup("builtinbackup-file-chunk-threshold").Value.String()
+	oldSize := fs.Lookup("builtinbackup-file-chunk-size").Value.String()
+	require.NoError(t, fs.Set("builtinbackup-file-chunk-threshold", strconv.Itoa(chunkSize)))
+	require.NoError(t, fs.Set("builtinbackup-file-chunk-size", strconv.Itoa(chunkSize)))
+	t.Cleanup(func() {
+		fs.Set("builtinbackup-file-chunk-threshold", oldThreshold)
+		fs.Set("builtinbackup-file-chunk-size", oldSize)
+	})
 
 	backupRoot, keyspace, shard, ts := SetupCluster(ctx, t, 1, 1, fileSize)
 

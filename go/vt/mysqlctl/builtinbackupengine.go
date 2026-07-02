@@ -110,18 +110,6 @@ var (
 	errRestoreFatal = errors.New("fatal restore error")
 )
 
-func SetBackupFileChunkThresholdForTest(v uint64) uint64 {
-	old := backupFileChunkThreshold
-	backupFileChunkThreshold = v
-	return old
-}
-
-func SetBackupFileChunkSizeForTest(v uint64) uint64 {
-	old := backupFileChunkSize
-	backupFileChunkSize = v
-	return old
-}
-
 // BuiltinBackupEngine encapsulates the logic of the builtin engine
 // it implements the BackupEngine interface and contains all the logic
 // required to implement a backup/restore by copying files from and to

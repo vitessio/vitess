@@ -40,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/mysqlctl/blackbox"
 	"vitess.io/vitess/go/vt/mysqlctl/s3backupstorage"
+	"vitess.io/vitess/go/vt/servenv"
 )
 
 /*
@@ -476,24 +477,33 @@ func TestExecuteRestoreS3FailEachFileTwice(t *testing.T) {
 
 func TestExecuteBackupRestoreS3WithChunking(t *testing.T) {
 	checkEnvForS3(t)
+
+	const (
+		dirs        = 1
+		filesPerDir = 1
+		fileSize    = 5 * 1024 * 1024 // 5MiB — just over the minimum chunk size to produce 2 chunks
+		chunkSize   = 4 * 1024 * 1024 // 4MiB
+	)
+
+	// GetFlagSetFor re-registers all flags (including S3 ones) with their
+	// defaults, so it must be called before InitFlag to avoid overwriting
+	// the bucket/region/endpoint values.
+	fs := servenv.GetFlagSetFor("vtbackup")
+	oldThreshold := fs.Lookup("builtinbackup-file-chunk-threshold").Value.String()
+	oldSize := fs.Lookup("builtinbackup-file-chunk-size").Value.String()
+	require.NoError(t, fs.Set("builtinbackup-file-chunk-threshold", strconv.Itoa(chunkSize)))
+	require.NoError(t, fs.Set("builtinbackup-file-chunk-size", strconv.Itoa(chunkSize)))
+	t.Cleanup(func() {
+		fs.Set("builtinbackup-file-chunk-threshold", oldThreshold)
+		fs.Set("builtinbackup-file-chunk-size", oldSize)
+	})
+
 	s3backupstorage.InitFlag(s3backupstorage.FakeConfig{
 		Region:    os.Getenv("AWS_REGION"),
 		Endpoint:  os.Getenv("AWS_ENDPOINT"),
 		Bucket:    os.Getenv("AWS_BUCKET"),
 		ForcePath: true,
 	})
-
-	const (
-		dirs        = 2
-		filesPerDir = 2
-		fileSize    = 256 * 1024 * 1024 // 256MiB
-		chunkSize   = 4 * 1024 * 1024   // 4MiB
-	)
-
-	oldThreshold := mysqlctl.SetBackupFileChunkThresholdForTest(chunkSize)
-	defer mysqlctl.SetBackupFileChunkThresholdForTest(oldThreshold)
-	oldSize := mysqlctl.SetBackupFileChunkSizeForTest(chunkSize)
-	defer mysqlctl.SetBackupFileChunkSizeForTest(oldSize)
 
 	ctx := context.Background()
 	backupRoot, keyspace, shard, ts := blackbox.SetupCluster(ctx, t, dirs, filesPerDir, fileSize)
@@ -542,7 +552,7 @@ func TestExecuteBackupRestoreS3WithChunking(t *testing.T) {
 
 	ss := blackbox.GetStats(fakeStats)
 	totalFiles := dirs * filesPerDir
-	chunksPerFile := fileSize / chunkSize
+	chunksPerFile := (fileSize + chunkSize - 1) / chunkSize
 	totalChunks := totalFiles * chunksPerFile
 	t.Logf("Backup stats: %d files, %d chunks total (%d chunks per file)", totalFiles, ss.DestinationCloseStats, chunksPerFile)
 	assert.Equal(t, totalChunks, ss.DestinationCloseStats)

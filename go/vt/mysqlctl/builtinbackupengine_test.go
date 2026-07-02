@@ -20,6 +20,7 @@ package mysqlctl
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -27,16 +28,26 @@ import (
 	"io"
 	"math"
 	"os"
+	"path"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/fileutil"
+	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/os2"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
+	"vitess.io/vitess/go/vt/mysqlctl/filebackupstorage"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	"vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vttime"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
 )
 
 func TestGetIncrementalFromPosGTIDSet(t *testing.T) {
@@ -547,4 +558,147 @@ func TestShouldDrainForBackupBuiltIn(t *testing.T) {
 	assert.False(t, be.ShouldDrainForBackup(&tabletmanagerdatapb.BackupRequest{IncrementalFromPos: "auto"}))
 	assert.False(t, be.ShouldDrainForBackup(&tabletmanagerdatapb.BackupRequest{IncrementalFromPos: "99ca8ed4-399c-11ee-861b-0a43f95f28a3:1-197"}))
 	assert.False(t, be.ShouldDrainForBackup(&tabletmanagerdatapb.BackupRequest{IncrementalFromPos: "MySQL56/99ca8ed4-399c-11ee-861b-0a43f95f28a3:1-197"}))
+}
+
+// TestBackupRestoreWithManyChunks exercises backup and restore with a high
+// chunk count (256 chunks) by overriding minBackupFileChunkSize below the
+// production floor. This validates that chunking works correctly under heavy
+// fan-out without requiring the large file sizes that the 4MiB minimum would
+// impose.
+func TestBackupRestoreWithManyChunks(t *testing.T) {
+	ctx := context.Background()
+
+	const (
+		fileSize  = 16 * 1024 * 1024 // 16MiB
+		chunkSize = 64 * 1024        // 64KiB → 256 chunks
+	)
+
+	// Override the minimum chunk size so we can use 64KiB chunks without
+	// hitting the 4MiB production floor validation in ExecuteBackup.
+	oldThreshold := backupFileChunkThreshold
+	oldSize := backupFileChunkSize
+	oldMin := minBackupFileChunkSize
+	t.Cleanup(func() {
+		backupFileChunkThreshold = oldThreshold
+		backupFileChunkSize = oldSize
+		minBackupFileChunkSize = oldMin
+	})
+	backupFileChunkThreshold = chunkSize
+	backupFileChunkSize = chunkSize
+	minBackupFileChunkSize = chunkSize
+
+	// Create a single 16MiB file filled with random (incompressible) data.
+	backupRoot := t.TempDir()
+	filebackupstorage.FileBackupStorageRoot = backupRoot
+	require.NoError(t, os.MkdirAll(path.Join(backupRoot, "innodb"), 0o755))
+	require.NoError(t, os.MkdirAll(path.Join(backupRoot, "log"), 0o755))
+	dataDir := path.Join(backupRoot, "datadir", "test1")
+	require.NoError(t, os.MkdirAll(dataDir, 0o755))
+
+	filePath := path.Join(dataDir, "0.ibd")
+	f, err := os2.Create(filePath)
+	require.NoError(t, err)
+	_, err = io.CopyN(f, rand.Reader, fileSize)
+	require.NoError(t, err)
+	require.NoError(t, f.Close())
+
+	// Checksum the original file before backup.
+	originalData, err := os.ReadFile(filePath)
+	require.NoError(t, err)
+	originalChecksum := crc32.ChecksumIEEE(originalData)
+
+	// Set up topo — required by ExecuteBackup for MANIFEST metadata.
+	keyspace, shard := "mykeyspace", "-"
+	ts := memorytopo.NewServer(ctx, "cell1")
+	t.Cleanup(ts.Close)
+
+	require.NoError(t, ts.CreateKeyspace(ctx, keyspace, &topodata.Keyspace{}))
+	require.NoError(t, ts.CreateShard(ctx, keyspace, shard))
+	tablet := topo.NewTablet(100, "cell1", "mykeyspace-00-80-0100")
+	tablet.Keyspace = keyspace
+	tablet.Shard = shard
+	require.NoError(t, ts.CreateTablet(ctx, tablet))
+	_, err = ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
+		si.PrimaryAlias = &topodata.TabletAlias{Uid: 100, Cell: "cell1"}
+		now := time.Now()
+		si.PrimaryTermStartTime = &vttime.Time{Seconds: int64(now.Second()), Nanoseconds: int32(now.Nanosecond())}
+		return nil
+	})
+	require.NoError(t, err)
+
+	oldDeadline := BuiltinBackupMysqldTimeout
+	BuiltinBackupMysqldTimeout = time.Second
+	t.Cleanup(func() { BuiltinBackupMysqldTimeout = oldDeadline })
+
+	// Backup: should split the 16MiB file into 256 chunks of 64KiB each.
+	be := &BuiltinBackupEngine{}
+	bh := filebackupstorage.NewBackupHandle(nil, "", "", false)
+
+	fakedb := fakesqldb.New(t)
+	t.Cleanup(fakedb.Close)
+	mysqld := NewFakeMysqlDaemon(fakedb)
+	t.Cleanup(mysqld.Close)
+	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "START REPLICA"}
+
+	backupResult, err := be.ExecuteBackup(ctx, BackupParams{
+		Logger: logutil.NewMemoryLogger(),
+		Mysqld: mysqld,
+		Cnf: &Mycnf{
+			InnodbDataHomeDir:     path.Join(backupRoot, "innodb"),
+			InnodbLogGroupHomeDir: path.Join(backupRoot, "log"),
+			DataDir:               path.Join(backupRoot, "datadir"),
+		},
+		Stats:                backupstats.NoStats(),
+		Concurrency:          4,
+		HookExtraEnv:         map[string]string{},
+		TopoServer:           ts,
+		Keyspace:             keyspace,
+		Shard:                shard,
+		MysqlShutdownTimeout: time.Minute,
+	}, bh)
+
+	require.NoError(t, err)
+	require.Equal(t, BackupUsable, backupResult)
+
+	// Restore: read back all 256 chunks and reassemble into the original file.
+	restoreBh := filebackupstorage.NewBackupHandle(nil, "", "", true)
+	fakedb2 := fakesqldb.New(t)
+	t.Cleanup(fakedb2.Close)
+	mysqld2 := NewFakeMysqlDaemon(fakedb2)
+	t.Cleanup(mysqld2.Close)
+	mysqld2.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "START REPLICA"}
+
+	bm, err := be.ExecuteRestore(ctx, RestoreParams{
+		Cnf: &Mycnf{
+			InnodbDataHomeDir:     path.Join(backupRoot, "innodb"),
+			InnodbLogGroupHomeDir: path.Join(backupRoot, "log"),
+			DataDir:               path.Join(backupRoot, "datadir"),
+			BinLogPath:            path.Join(backupRoot, "binlog"),
+			RelayLogPath:          path.Join(backupRoot, "relaylog"),
+			RelayLogIndexPath:     path.Join(backupRoot, "relaylogindex"),
+			RelayLogInfoPath:      path.Join(backupRoot, "relayloginfo"),
+		},
+		Logger:               logutil.NewMemoryLogger(),
+		Mysqld:               mysqld2,
+		Concurrency:          4,
+		HookExtraEnv:         map[string]string{},
+		DeleteBeforeRestore:  false,
+		DbName:               "test",
+		Keyspace:             "test",
+		Shard:                "-",
+		StartTime:            time.Now(),
+		RestoreToPos:         replication.Position{},
+		RestoreToTimestamp:   time.Time{},
+		DryRun:               false,
+		Stats:                backupstats.NoStats(),
+		MysqlShutdownTimeout: time.Minute,
+	}, restoreBh)
+
+	require.NoError(t, err)
+	require.NotNil(t, bm)
+
+	// Verify restored file matches the original.
+	restoredData, err := os.ReadFile(filePath)
+	require.NoError(t, err)
+	assert.Equal(t, originalChecksum, crc32.ChecksumIEEE(restoredData))
 }
