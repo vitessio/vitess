@@ -83,7 +83,6 @@ func TestMain(m *testing.M) {
 
 		clusterInstance.VtTabletExtraArgs = []string{
 			"--lock-tables-timeout", "5s",
-			"--watch-replication-stream",
 			"--enable-replication-reporter",
 			"--heartbeat-interval", "250ms",
 			"--heartbeat-on-demand-duration", "5s",
