@@ -184,7 +184,10 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start vtgate
-		clusterInstance.VtGateExtraArgs = []string{"--warn-sharded-only" + "=true"}
+		// The temp-table heartbeat must be below the tablets'
+		// --queryserver-config-transaction-timeout (3s above) so that idle
+		// connections holding temporary tables are kept alive.
+		clusterInstance.VtGateExtraArgs = []string{"--warn-sharded-only" + "=true", "--temp-table-heartbeat-time", "1s"}
 		if err := clusterInstance.StartVtgate(); err != nil {
 			log.Error(err.Error())
 			os.Exit(1)
@@ -375,6 +378,12 @@ func TestTempTable(t *testing.T) {
 
 	utils.AssertMatches(t, conn2, `select count(table_id) from information_schema.innodb_temp_table_info`, `[[INT64(1)]]`)
 	utils.AssertContainsError(t, conn2, `show create table temp_t`, `Table 'vt_customer.temp_t' doesn't exist (errno 1146) (sqlstate 42S02)`)
+
+	// The temp table must survive the connection sitting idle for longer than
+	// the tablets' --queryserver-config-transaction-timeout (3s): vtgate's
+	// temp-table heartbeat keeps the reserved connection alive.
+	time.Sleep(6 * time.Second)
+	utils.AssertMatches(t, conn1, `select id from temp_t order by id`, `[[INT64(1)] [INT64(2)] [INT64(3)]]`)
 }
 
 func TestReservedConnDML(t *testing.T) {

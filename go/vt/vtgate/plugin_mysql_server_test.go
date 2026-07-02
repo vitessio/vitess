@@ -25,6 +25,7 @@ import (
 	"net"
 	"os"
 	"path"
+	"slices"
 	"strings"
 	"syscall"
 	"testing"
@@ -45,10 +46,12 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/tlstest"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/binlogacl"
 )
 
@@ -1873,61 +1876,160 @@ func TestGracefulShutdownWithTransaction(t *testing.T) {
 	require.True(t, mysqlConn.IsMarkedForClose())
 }
 
-// TestUpdateHeartbeatTargets verifies that the per-connection heartbeat registry
-// tracks only reserved shard sessions of a session that holds temporary tables.
-func TestUpdateHeartbeatTargets(t *testing.T) {
+// TestTempTableCommandTracking verifies that the command start/end hooks
+// register only reserved shard sessions of a session that holds temporary
+// tables, lock out the sweeper while a command is in flight, and deregister
+// the connection once the temporary tables are gone.
+func TestTempTableCommandTracking(t *testing.T) {
 	vh := &vtgateHandler{}
 	c := &mysql.Conn{ConnectionID: 7}
 
 	target := &querypb.Target{Keyspace: "ks", Shard: "-", TabletType: topodatapb.TabletType_PRIMARY}
 	alias := &topodatapb.TabletAlias{Cell: "aa", Uid: 1}
 
-	// No temp tables -> no entry.
-	vh.updateHeartbeatTargets(c, &vtgatepb.Session{})
-	_, ok := vh.heartbeatTargets.Load(c.ConnectionID)
+	// No temp tables -> the command leaves the connection unregistered.
+	c.ClientData = &vtgatepb.Session{}
+	ttc := vh.tempTableCommandStart(c)
+	require.Nil(t, ttc)
+	vh.tempTableCommandEnd(c, ttc)
+	_, ok := vh.tempTableConns.Load(c)
 	require.False(t, ok)
 
-	// Temp tables + a reserved shard session -> one target (reserved id 0 excluded).
-	vh.updateHeartbeatTargets(c, &vtgatepb.Session{
+	// Temp tables + a reserved shard session -> registered with one target
+	// (reserved id 0 excluded).
+	c.ClientData = &vtgatepb.Session{
 		Options: &querypb.ExecuteOptions{HasCreatedTempTables: true},
 		ShardSessions: []*vtgatepb.Session_ShardSession{
 			{Target: target, TabletAlias: alias, ReservedId: 42},
 			{Target: target, TabletAlias: alias, ReservedId: 0},
 		},
-	})
-	v, ok := vh.heartbeatTargets.Load(c.ConnectionID)
+	}
+	vh.tempTableCommandEnd(c, vh.tempTableCommandStart(c))
+	v, ok := vh.tempTableConns.Load(c)
 	require.True(t, ok)
-	targets := v.([]tempTableHeartbeatTarget)
-	require.Len(t, targets, 1)
-	require.Equal(t, int64(42), targets[0].reservedID)
+	registered := v.(*tempTableConn)
+	require.Len(t, registered.targets, 1)
+	require.Equal(t, int64(42), registered.targets[0].reservedID)
 
-	// The temp-table flag being cleared removes the entry.
-	vh.updateHeartbeatTargets(c, &vtgatepb.Session{Options: &querypb.ExecuteOptions{}})
-	_, ok = vh.heartbeatTargets.Load(c.ConnectionID)
+	// A command in flight on a registered connection locks out the sweeper.
+	ttc = vh.tempTableCommandStart(c)
+	require.Same(t, registered, ttc)
+	require.False(t, ttc.mu.TryLock(), "command must lock out the sweeper")
+	vh.tempTableCommandEnd(c, ttc)
+
+	// The temp-table flag being cleared deregisters the connection and clears
+	// the published targets.
+	c.ClientData = &vtgatepb.Session{Options: &querypb.ExecuteOptions{}}
+	vh.tempTableCommandEnd(c, vh.tempTableCommandStart(c))
+	_, ok = vh.tempTableConns.Load(c)
+	require.False(t, ok)
+	require.Empty(t, registered.targets)
+
+	// Closing the connection deregisters it as well.
+	c.ClientData = &vtgatepb.Session{
+		Options: &querypb.ExecuteOptions{HasCreatedTempTables: true},
+		ShardSessions: []*vtgatepb.Session_ShardSession{
+			{Target: target, TabletAlias: alias, ReservedId: 43},
+		},
+	}
+	vh.tempTableCommandEnd(c, vh.tempTableCommandStart(c))
+	_, ok = vh.tempTableConns.Load(c)
+	require.True(t, ok)
+	vh.stopTempTableHeartbeats(c)
+	_, ok = vh.tempTableConns.Load(c)
 	require.False(t, ok)
 }
 
 // TestTempTableHeartbeatSweep verifies that a sweep pings the registered
-// reserved connection with a "select 1".
+// reserved connection with a "select 1", skips a connection whose command is
+// in flight, and evicts a reserved connection that no longer exists.
 func TestTempTableHeartbeatSweep(t *testing.T) {
 	vtg, sbc, ctx := createVtgateEnv(t)
 	vh := newVtgateHandler(vtg)
 
 	tablet := sbc.Tablet()
 	target := &querypb.Target{Keyspace: tablet.Keyspace, Shard: tablet.Shard, TabletType: tablet.Type}
-	vh.heartbeatTargets.Store(uint32(1), []tempTableHeartbeatTarget{
+	c := &mysql.Conn{ConnectionID: 1}
+	ttc := &tempTableConn{targets: []tempTableHeartbeatTarget{
 		{target: target, alias: tablet.Alias, reservedID: 99},
-	})
+	}}
+	vh.tempTableConns.Store(c, ttc)
 
+	// A sweep pings the reserved connection.
 	before := sbc.ExecCount.Load()
 	vh.sendTempTableHeartbeats(ctx)
 	require.Greater(t, sbc.ExecCount.Load(), before)
-
-	found := false
-	for _, q := range sbc.Queries {
-		if q.Sql == "select 1" {
-			found = true
-		}
-	}
+	found := slices.ContainsFunc(sbc.Queries, func(q *querypb.BoundQuery) bool {
+		return q.Sql == "select 1"
+	})
 	require.True(t, found, "sandbox tablet should have received the heartbeat query")
+
+	// A connection with a command in flight is skipped, not delayed.
+	before = sbc.ExecCount.Load()
+	ttc.mu.Lock()
+	vh.sendTempTableHeartbeats(ctx)
+	ttc.mu.Unlock()
+	require.Equal(t, before, sbc.ExecCount.Load())
+
+	// A reserved connection that no longer exists is evicted so it is not
+	// beaten (and warned about) on every sweep.
+	sbc.EphemeralShardErr = vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction 99: not found")
+	vh.sendTempTableHeartbeats(ctx)
+	require.Empty(t, ttc.targets)
+	_, ok := vh.tempTableConns.Load(c)
+	require.False(t, ok)
+
+	// A transient failure keeps the target so it is retried on the next sweep.
+	c2 := &mysql.Conn{ConnectionID: 2}
+	ttc2 := &tempTableConn{targets: []tempTableHeartbeatTarget{
+		{target: target, alias: tablet.Alias, reservedID: 100},
+	}}
+	vh.tempTableConns.Store(c2, ttc2)
+	sbc.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
+	vh.sendTempTableHeartbeats(ctx)
+	require.Len(t, ttc2.targets, 1)
+	_, ok = vh.tempTableConns.Load(c2)
+	require.True(t, ok)
+}
+
+// TestComQueryTempTableHeartbeatRegistration verifies that creating a
+// temporary table through the mysql protocol handler reserves a connection
+// and registers it for background heartbeats, that an ordinary query does
+// not, and that closing the connection deregisters it.
+func TestComQueryTempTableHeartbeatRegistration(t *testing.T) {
+	executor, _, _, sbclookup, _ := createExecutorEnv(t)
+	th := &testHandler{}
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), th, 0, 0, false, false, 0, 0, false)
+	require.NoError(t, err)
+	defer listener.Close()
+
+	c := mysql.GetTestServerConn(listener)
+	c.ConnectionID = 1
+	c.UserData = &mysql.StaticUserData{}
+	vh := newVtgateHandler(newVTGate(executor, nil, nil, nil, nil))
+	vh.connections[1] = c
+	vh.session(c).TargetString = KsTestUnsharded
+
+	// An ordinary query does not register the connection.
+	err = vh.ComQuery(c, "select id from main1", func(*sqltypes.Result) error { return nil })
+	require.NoError(t, err)
+	_, ok := vh.tempTableConns.Load(c)
+	require.False(t, ok)
+
+	// Creating a temporary table sets the session flag, reserves a
+	// connection, and registers it for heartbeats.
+	err = vh.ComQuery(c, "create temporary table temp_t(id bigint)", func(*sqltypes.Result) error { return nil })
+	require.NoError(t, err)
+	require.True(t, vh.session(c).GetOptions().GetHasCreatedTempTables())
+	v, ok := vh.tempTableConns.Load(c)
+	require.True(t, ok)
+	targets := v.(*tempTableConn).targets
+	require.Len(t, targets, 1)
+	require.NotZero(t, targets[0].reservedID)
+	require.Equal(t, topoproto.TabletAliasString(sbclookup.Tablet().Alias), topoproto.TabletAliasString(targets[0].alias))
+
+	// Closing the connection deregisters it.
+	vh.ConnectionClosed(c)
+	_, ok = vh.tempTableConns.Load(c)
+	require.False(t, ok)
 }
