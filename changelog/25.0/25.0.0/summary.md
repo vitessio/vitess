@@ -91,6 +91,10 @@ See [#19906](https://github.com/vitessio/vitess/pull/19906) for details.
 
 ### <a id="minor-changes-vtgate"/>VTGate</a>
 
+#### <a id="vtgate-logstats-ingress-bytes"/>Ingress bytes in query LogStats</a>
+
+VTGate query `LogStats` now include `IngressBytes`, which records the inbound request bytes attributed to each query. MySQL protocol requests use bytes read from client packets. gRPC requests use the serialized protobuf request size.
+
 #### <a id="vtgate-cross-keyspace-reads"/>New controls for cross-keyspace reads</a>
 
 VTGate now supports preventing cross-keyspace reads (joins and UNIONs), preventing queries that would combine data from different keyspaces. This can be configured at two levels:

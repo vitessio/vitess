@@ -2990,8 +2990,9 @@ func TestExecutorKillStmt(t *testing.T) {
 }
 
 type fakeMysqlConnection struct {
-	ErrMsg string
-	Log    []string
+	ErrMsg       string
+	Log          []string
+	ingressBytes uint64
 }
 
 func (f *fakeMysqlConnection) KillQuery(connID uint32) error {
@@ -3014,7 +3015,77 @@ func (f *fakeMysqlConnection) SetQueryWasSlow(slow bool) {
 	f.Log = append(f.Log, fmt.Sprintf("slow query: %t", slow))
 }
 
+func (f *fakeMysqlConnection) IngressBytes() uint64 {
+	return f.ingressBytes
+}
+
 var _ vtgateservice.MySQLConnection = (*fakeMysqlConnection)(nil)
+
+// TestFinalizeLogStatsAttributesIngressBytes verifies that MySQL connection
+// ingress bytes are copied to query log stats.
+func TestFinalizeLogStatsAttributesIngressBytes(t *testing.T) {
+	e, _, _, _, ctx := createExecutorEnv(t)
+
+	logStats := logstats.NewLogStats(ctx, "Execute", "select 1", "", nil, streamlog.NewQueryLogConfigForTest())
+	mysqlCtx := &fakeMysqlConnection{ingressBytes: 4242}
+
+	e.finalizeLogStats(logStats, mysqlCtx)
+
+	assert.Equal(t, uint64(4242), logStats.IngressBytes)
+}
+
+// TestFinalizeLogStatsUsesContextIngressBytes verifies that context ingress
+// bytes override connection ingress bytes for non-MySQL protocol callers.
+func TestFinalizeLogStatsUsesContextIngressBytes(t *testing.T) {
+	e, _, _, _, ctx := createExecutorEnv(t)
+	ctx = vtgateservice.ContextWithIngressBytes(ctx, 99)
+
+	logStats := logstats.NewLogStats(ctx, "Execute", "select 1", "", nil, streamlog.NewQueryLogConfigForTest())
+	mysqlCtx := &fakeMysqlConnection{ingressBytes: 4242}
+
+	e.finalizeLogStats(logStats, mysqlCtx)
+
+	assert.Equal(t, uint64(99), logStats.IngressBytes)
+	require.Len(t, mysqlCtx.Log, 1)
+	assert.Equal(t, "slow query: false", mysqlCtx.Log[0])
+}
+
+// TestQueryIngressBytesForStatementsUsesContext verifies that VTGate splits
+// request-level ingress across multi-statement SQL before logging each query.
+func TestQueryIngressBytesForStatementsUsesContext(t *testing.T) {
+	ctx := vtgateservice.ContextWithIngressBytes(context.Background(), 27)
+
+	ingressBytes := queryIngressBytesForStatements(ctx, nil, []string{"select 1", "select 222222"})
+
+	assert.Equal(t, []uint64{10, 17}, ingressBytes)
+}
+
+// TestQueryIngressBytesForStatementsUsesMySQLConnection verifies that
+// multi-statement ingress from MySQL connections is split across statements.
+func TestQueryIngressBytesForStatementsUsesMySQLConnection(t *testing.T) {
+	mysqlCtx := &fakeMysqlConnection{ingressBytes: 27}
+
+	ingressBytes := queryIngressBytesForStatements(context.Background(), mysqlCtx, []string{"select 1", "select 222222"})
+
+	assert.Equal(t, []uint64{10, 17}, ingressBytes)
+}
+
+// TestQueryIngressBytesForBatchUsesContext verifies that ExecuteBatch splits
+// request-level ingress across queries by SQL and bind-variable size.
+func TestQueryIngressBytesForBatchUsesContext(t *testing.T) {
+	ctx := vtgateservice.ContextWithIngressBytes(context.Background(), 100)
+	sqlList := []string{"select :v", "select :v"}
+	bindVariablesList := []map[string]*querypb.BindVariable{
+		{"v": sqltypes.StringBindVariable("small")},
+		{"v": sqltypes.StringBindVariable("larger bind variable payload")},
+	}
+
+	ingressBytes := queryIngressBytesForBatch(ctx, sqlList, bindVariablesList)
+
+	require.Len(t, ingressBytes, 2)
+	assert.Equal(t, uint64(100), ingressBytes[0]+ingressBytes[1])
+	assert.Greater(t, ingressBytes[1], ingressBytes[0])
+}
 
 func exec(executor *Executor, session *econtext.SafeSession, sql string) (*sqltypes.Result, error) {
 	return executorExecSession(context.Background(), executor, session, sql, nil)
