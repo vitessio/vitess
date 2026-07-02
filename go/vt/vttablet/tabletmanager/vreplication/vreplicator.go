@@ -496,6 +496,15 @@ func (vr *vreplicator) loadSettings(ctx context.Context, dbClient *vdbClient) (s
 		vr.WorkflowType = int32(settings.WorkflowType)
 		vr.WorkflowSubType = int32(settings.WorkflowSubType)
 		vr.WorkflowName = settings.WorkflowName
+		// Reconcile the in-memory state with the row we just read from
+		// _vt.vreplication, which is the source of truth. A previous
+		// setState() advances stats.State (and vr.state) before its DB
+		// UPDATE is sent; when that UPDATE fails (e.g. the target is
+		// read-only during a reparent) the in-memory state is left out of
+		// sync with the persisted row. Re-syncing here on every successful
+		// read recovers the metric once the stream resumes. See #20012.
+		vr.state = settings.State
+		vr.stats.State.Store(settings.State.String())
 	}
 	return settings, numTablesToCopy, err
 }
