@@ -1165,6 +1165,7 @@ query_expression:
 | with_clause query_expression_parens
   {
     $2.SetWith($1)
+    $$ = $2
   }
 | SELECT comment_opt cache_opt NEXT num_val for_from table_name
   {

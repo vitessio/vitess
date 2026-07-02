@@ -510,6 +510,9 @@ var validSQL = []struct {
 	input:  "WITH count_a AS (SELECT COUNT(`id`) AS `num` FROM `tbl_a`), count_b AS (SELECT COUNT(`id`) AS `num` FROM tbl_b) SELECT 'a', `num` FROM `count_a` UNION SELECT 'b', `num` FROM `count_b`",
 	output: "with count_a as (select count(id) as num from tbl_a) , count_b as (select count(id) as num from tbl_b) select 'a', num from count_a union select 'b', num from count_b",
 }, {
+	input:  "with x as (select 1) (select * from x)",
+	output: "with x as (select 1 from dual) select * from x",
+}, {
 	input: "select 1 from t",
 }, {
 	input:  "select * from (select 1) as x(user)",
