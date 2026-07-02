@@ -2967,3 +2967,29 @@ func TestAddEnumAndSetMappingsActionableError(t *testing.T) {
 	require.ErrorContains(t, err, "enum or set column plan does not have valid string values")
 	assert.ErrorContains(t, err, "--track-schema-versions")
 }
+
+// TestBuildSetStringValue64thMember verifies that a SET column with the maximum
+// of 64 members does not drop its 64th value when converted to a string. The
+// 64th member is stored as bit 1<<63 in the bitmap.
+func TestBuildSetStringValue64thMember(t *testing.T) {
+	// A 64-member SET, mapping keyed 1..64 as ParseEnumOrSetTokensMap builds it.
+	setValues := make(map[int]string, 64)
+	for i := 1; i <= 64; i++ {
+		setValues[i] = fmt.Sprintf("v%d", i)
+	}
+	plan := &streamerPlan{
+		Plan: &Plan{
+			Table: &Table{
+				Name:   "t",
+				Fields: []*querypb.Field{{Name: "s", Type: querypb.Type_SET}},
+			},
+			EnumSetValuesMap: map[int]map[int]string{0: setValues},
+		},
+	}
+
+	// A stored value with member 1 and member 64 set (member k -> bit k-1).
+	value := sqltypes.NewUint64(uint64(1)<<0 | uint64(1)<<63)
+	got, err := buildSetStringValue(env.SchemaEngine.Environment(), plan, 0, value)
+	require.NoError(t, err)
+	assert.Equal(t, "v1,v64", got.ToString())
+}
