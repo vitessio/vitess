@@ -528,13 +528,17 @@ func getQueryCount(t *testing.T, url string, query string) (int, []byte) {
 	err := json.Unmarshal(body, &queryStats)
 	require.NoError(t, err)
 
+	// The same query can appear in multiple entries: the tablet caches buffered
+	// and streaming plans separately, and each entry tracks its own stats. Sum
+	// them so the count is independent of which path executed the query.
+	var count int
 	for _, q := range queryStats {
 		if strings.Contains(q.Query, query) {
-			return int(q.QueryCount), body
+			count += int(q.QueryCount)
 		}
 	}
 
-	return 0, body
+	return count, body
 }
 
 func validateDryRunResults(t *testing.T, output string, want []string) {
