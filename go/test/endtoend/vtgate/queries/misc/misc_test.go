@@ -853,6 +853,17 @@ func TestEnumSetVals(t *testing.T) {
 
 	mcmp.AssertMatches("select id, enum_col, cast(enum_col as signed) from tbl_enum_set order by enum_col, id", `[[INT64(4) ENUM("xsmall") INT64(1)] [INT64(2) ENUM("small") INT64(2)] [INT64(1) ENUM("medium") INT64(3)] [INT64(5) ENUM("medium") INT64(3)] [INT64(3) ENUM("large") INT64(4)]]`)
 	mcmp.AssertMatches("select id, set_col, cast(set_col as unsigned) from tbl_enum_set order by set_col, id", `[[INT64(4) SET("a,b") UINT64(3)] [INT64(3) SET("c") UINT64(4)] [INT64(5) SET("a,d") UINT64(9)] [INT64(1) SET("a,b,e") UINT64(19)] [INT64(2) SET("e,f,g") UINT64(112)]]`)
+
+	// An ENUM used in a numeric context must use MySQL's 1-based ordinal
+	// (xsmall=1 ... xlarge=5), and a SET its bitmap value. These compare Vitess
+	// against MySQL directly so any divergence in the numeric conversion fails.
+	mcmp.Exec("select id, enum_col + 0 from tbl_enum_set order by id")
+	mcmp.Exec("select id, enum_col + 1 from tbl_enum_set order by id")
+	mcmp.Exec("select id, cast(enum_col as unsigned) from tbl_enum_set order by id")
+	mcmp.Exec("select id from tbl_enum_set where enum_col = 3 order by id")
+	mcmp.Exec("select id, enum_col from tbl_enum_set where enum_col > 2 order by enum_col, id")
+	mcmp.Exec("select id, set_col + 0 from tbl_enum_set order by id")
+	mcmp.Exec("select max(cast(enum_col as signed)) from tbl_enum_set")
 }
 
 func TestTimeZones(t *testing.T) {
