@@ -25,6 +25,8 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 type FakeS3BackupHandle struct {
@@ -148,6 +150,26 @@ func (fbh *FakeS3BackupHandle) ResetErrorForFile(s string) {
 	fbh.S3BackupHandle.ResetErrorForFile(s)
 }
 
+func (fbh *FakeS3BackupHandle) AddFileAttempts() int {
+	fbh.mu.Lock()
+	defer fbh.mu.Unlock()
+	total := 0
+	for _, v := range fbh.addPerFile {
+		total += v
+	}
+	return total
+}
+
+func (fbh *FakeS3BackupHandle) ReadFileAttempts() int {
+	fbh.mu.Lock()
+	defer fbh.mu.Unlock()
+	total := 0
+	for _, v := range fbh.readPerFile {
+		total += v
+	}
+	return total
+}
+
 type failReadPipeReader struct {
 	*io.PipeReader
 }
@@ -227,4 +249,16 @@ func FailAllReadExpectManifest(s3bh *S3BackupHandle, ctx context.Context, filena
 		return s3bh.ReadFile(ctx, filename)
 	}
 	return &failRead{}, nil
+}
+
+func FailWithFatalError(_ *S3BackupHandle, _ context.Context, _ string, _ int64, _ bool) (io.WriteCloser, error) {
+	return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "simulated non-retryable error")
+}
+
+func FailWithFatalReadError(s3bh *S3BackupHandle, ctx context.Context, filename string, _ bool) (io.ReadCloser, error) {
+	const manifestFileName = "MANIFEST"
+	if filename == manifestFileName {
+		return s3bh.ReadFile(ctx, filename)
+	}
+	return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "simulated non-retryable error")
 }

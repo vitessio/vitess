@@ -294,6 +294,28 @@ func TestExecuteBackupS3FailEachFileOnce(t *testing.T) {
 	})
 }
 
+func TestExecuteBackupS3FatalError(t *testing.T) {
+	runBackupTest(t, backupTestConfig{
+		concurrency: 1,
+
+		addFileReturnFn:   s3backupstorage.FailWithFatalError,
+		checkCleanupError: false,
+		expectedResult:    mysqlctl.BackupUnusable,
+
+		// FAILED_PRECONDITION must abort immediately without retrying.
+		// With 4 files and concurrency=1, only the first file is attempted.
+		// AddFile fails before any Destination stats are recorded.
+		expectedStats: blackbox.StatSummary{
+			DestinationCloseStats: 0,
+			DestinationOpenStats:  0,
+			DestinationWriteStats: 0,
+			SourceCloseStats:      1,
+			SourceOpenStats:       1,
+			SourceReadStats:       0,
+		},
+	})
+}
+
 func TestExecuteBackupS3FailEachFileTwice(t *testing.T) {
 	runBackupTest(t, backupTestConfig{
 		concurrency: 1,
@@ -324,9 +346,10 @@ func TestExecuteBackupS3FailEachFileTwice(t *testing.T) {
 }
 
 type restoreTestConfig struct {
-	readFileReturnFn func(s3 *s3backupstorage.S3BackupHandle, ctx context.Context, filename string, firstRead bool) (io.ReadCloser, error)
-	expectSuccess    bool
-	expectedStats    blackbox.StatSummary
+	readFileReturnFn         func(s3 *s3backupstorage.S3BackupHandle, ctx context.Context, filename string, firstRead bool) (io.ReadCloser, error)
+	expectSuccess            bool
+	expectedStats            blackbox.StatSummary
+	expectedReadFileAttempts int // if > 0, assert total ReadFile attempts on the restore handle
 }
 
 func runRestoreTest(t *testing.T, cfg restoreTestConfig) {
@@ -439,6 +462,10 @@ func runRestoreTest(t *testing.T, cfg restoreTestConfig) {
 	require.Equal(t, cfg.expectedStats.SourceCloseStats, ss.SourceCloseStats)
 	require.Equal(t, cfg.expectedStats.SourceOpenStats, ss.SourceOpenStats)
 	require.Equal(t, cfg.expectedStats.SourceReadStats, ss.SourceReadStats)
+
+	if cfg.expectedReadFileAttempts > 0 {
+		require.Equal(t, cfg.expectedReadFileAttempts, restoreBh.ReadFileAttempts())
+	}
 }
 
 func TestExecuteRestoreS3FailEachFileOnce(t *testing.T) {
@@ -472,6 +499,28 @@ func TestExecuteRestoreS3FailEachFileTwice(t *testing.T) {
 			SourceOpenStats:       5,
 			SourceReadStats:       5,
 		},
+	})
+}
+
+func TestExecuteRestoreS3FatalError(t *testing.T) {
+	runRestoreTest(t, restoreTestConfig{
+		readFileReturnFn: s3backupstorage.FailWithFatalReadError,
+		expectSuccess:    false,
+
+		// FAILED_PRECONDITION must abort immediately without retrying.
+		// ReadFile fails before any stats are recorded.
+		expectedStats: blackbox.StatSummary{
+			DestinationCloseStats: 0,
+			DestinationOpenStats:  0,
+			DestinationWriteStats: 0,
+			SourceCloseStats:      0,
+			SourceOpenStats:       0,
+			SourceReadStats:       0,
+		},
+
+		// MANIFEST is read once (allowed), plus one data file attempt = 2 total.
+		// With retry (broken behavior), ReadFileCount would be 3+.
+		expectedReadFileAttempts: 2,
 	})
 }
 

@@ -715,6 +715,9 @@ func (be *BuiltinBackupEngine) backupFiles(
 
 	// Backup all work items concurrently.
 	backupErr := be.backupWorkItems(ctx, workItems, fes, bh, params)
+	if vterrors.Code(backupErr) == vtrpcpb.Code_FAILED_PRECONDITION {
+		return backupErr
+	}
 
 	// BackupHandle supports the BackupErrorRecorder interface for tracking errors
 	// across any goroutines that fan out to take the backup. This means that we
@@ -821,15 +824,20 @@ func (be *BuiltinBackupEngine) backupWorkItems(ctx context.Context, workItems []
 
 			if errBackupFile := be.backupFile(ctxCancel, params, bh, fe, wi.name, wi.chunkIndex); errBackupFile != nil {
 				bh.RecordError(wi.name, vterrors.Wrapf(errBackupFile, "failed to backup '%s'", wi.name))
-				if fe.RetryCount >= maxRetriesPerFile || vterrors.Code(errBackupFile) == vtrpcpb.Code_FAILED_PRECONDITION {
-					// This is the last attempt, and we have an error, we can cancel everything and fail fast.
+				if vterrors.Code(errBackupFile) == vtrpcpb.Code_FAILED_PRECONDITION {
+					cancel()
+					return errBackupFile
+				}
+				if fe.RetryCount >= maxRetriesPerFile {
 					cancel()
 				}
 			}
 			return nil
 		})
 	}
-	_ = g.Wait()
+	if err := g.Wait(); err != nil {
+		return err
+	}
 
 	if err := bh.EndBackup(ctx); err != nil {
 		return err
@@ -1500,18 +1508,24 @@ func (be *BuiltinBackupEngine) restoreFileEntries(ctx context.Context, fes []Fil
 			}
 
 			if err != nil {
-				bh.RecordError(wi.name, vterrors.Wrapf(err, "failed to restore %v", wi.name))
+				wrappedErr := vterrors.Wrapf(err, "failed to restore %v", wi.name)
+				bh.RecordError(wi.name, wrappedErr)
 				if wi.fe.RetryCount >= maxRetriesPerFile || vterrors.Code(err) == vtrpcpb.Code_FAILED_PRECONDITION {
 					// This is the last attempt, and we have an error, we can return an error,
 					// which will let errgroup know it can cancel the context.
-					return err
+					return wrappedErr
 				}
 			}
 			return nil
 		})
 	}
 
-	_ = g.Wait()
+	if err := g.Wait(); err != nil {
+		if vterrors.Code(err) == vtrpcpb.Code_FAILED_PRECONDITION {
+			return fmt.Errorf("%w: %w", errRestoreFatal, err)
+		}
+		return err
+	}
 	return bh.Error()
 }
 
