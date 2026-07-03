@@ -1108,7 +1108,7 @@ func verifyBackupChunking(t *testing.T, expectChunked bool) {
 
 	if expectChunked {
 		assert.Positive(t, chunkedFileCount, "expected at least one file to be chunked")
-		assert.Greater(t, nonChunkedFileCount, 0, "expected at least one file to NOT be chunked (mixed scenario)")
+		assert.Positive(t, nonChunkedFileCount, "expected at least one file to NOT be chunked (mixed scenario)")
 
 		// Verify that our small test table (well under chunk threshold) was NOT chunked.
 		foundSmallFile := false
