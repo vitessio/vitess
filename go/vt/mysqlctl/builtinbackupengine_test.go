@@ -609,7 +609,7 @@ func TestBackupFilesDoesNotCallEndBackup(t *testing.T) {
 			},
 			Logger:      logutil.NewMemoryLogger(),
 			Stats:       backupstats.NoStats(),
-			Concurrency: 2,
+			Concurrency: 1,
 		},
 		bh,
 		replication.Position{},

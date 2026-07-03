@@ -836,6 +836,7 @@ func (be *BuiltinBackupEngine) backupWorkItems(ctx context.Context, workItems []
 		})
 	}
 	if err := g.Wait(); err != nil {
+		bh.Wait()
 		return err
 	}
 
