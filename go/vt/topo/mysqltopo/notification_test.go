@@ -56,6 +56,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -886,4 +887,238 @@ func TestDeadNotificationSystemRefusesWatchers(t *testing.T) {
 	defer rlateCancel()
 	rlate := &recursiveWatcher{pathPrefix: "/", ctx: rlateCtx, cancel: rlateCancel, changes: make(chan *topo.WatchDataRecursive, 1)}
 	require.False(t, ns.addRecursiveWatcher(rlate), "recursive registration on a dead system must be refused")
+}
+
+// requireWatchDelivers asserts that the watch channel delivers a data
+// notification — neither an error nor a channel close — while update keeps
+// nudging the topo data. The periodic re-nudge covers the gap between a
+// notification system being acquired and its binlog dump actually streaming:
+// an update landing in that gap produces no event, so a single write could
+// starve a healthy watch.
+func requireWatchDelivers(t *testing.T, changes <-chan *topo.WatchData, update func()) {
+	t.Helper()
+
+	deadline := time.After(15 * time.Second)
+	tick := time.NewTicker(500 * time.Millisecond)
+	defer tick.Stop()
+	update()
+	for {
+		select {
+		case wd, ok := <-changes:
+			require.True(t, ok, "watch channel closed: the watch was killed")
+			require.NoError(t, wd.Err, "watch delivered an error instead of an update")
+			return
+		case <-tick.C:
+			update()
+		case <-deadline:
+			t.Fatal("watch did not deliver any update")
+		}
+	}
+}
+
+// TestWatchSurvivesSiblingFailedAcquisitionClose reproduces the "vschema
+// watch silently dies" incident seen in strata's driver e2e suite: many topo
+// connections open and close in one process against the same schema, and a
+// long-lived connection's watch permanently stops delivering updates once
+// the shared notification system's refcount hits zero under it.
+//
+// The trigger is a sibling server whose notification-system acquisition
+// FAILED (here: a credential-less placeholder DSN, the deterministic
+// stand-in for any transient MySQL failure during acquisition). The old
+// schema-keyed refcounting marked such a server as holding a reference
+// before the acquisition succeeded, so its Close released a reference it
+// never took — draining the count owned by the live server, closing the
+// notification system out from under its watch, and leaving every later
+// watch attempt failing with "notification system not found" until process
+// restart.
+//
+// With instance-scoped references a failed acquisition leaves no claim, so
+// the sibling's Close touches nothing and the live watch keeps delivering.
+func TestWatchSurvivesSiblingFailedAcquisitionClose(t *testing.T) {
+	schemaName := generateRandomSchemaName()
+
+	// Sibling with a credential-less DSN for the SAME schema: NewServer
+	// returns a connectionless placeholder (see NewServer), and its Watch
+	// fails during notification-system acquisition because it cannot
+	// connect. It must not be left holding a reference it never acquired.
+	cfg, err := mysql.ParseDSN(mySQLTopoTestAddr)
+	require.NoError(t, err)
+	cfg.User = ""
+	cfg.Passwd = ""
+	cfg.DBName = schemaName
+	sibling, err := NewServer(cfg.FormatDSN(), "/test")
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
+	defer cancel()
+
+	// The failed acquisition must happen while no notification system exists
+	// for the schema (as it does when the sibling is the first to watch), so
+	// it attempts — and fails — to build one.
+	_, _, err = sibling.Watch(ctx, "somefile")
+	require.Error(t, err, "watch through a connectionless placeholder must fail")
+
+	// Long-lived server: creates the notification system and holds the only
+	// real reference.
+	server, _, cleanup := createTestServer(t, schemaName)
+	defer cleanup()
+
+	testPath := "sibling_close_test"
+	_, err = server.Create(ctx, testPath, []byte("v0"))
+	require.NoError(t, err)
+
+	current, changes, err := server.Watch(ctx, testPath)
+	require.NoError(t, err)
+	require.Equal(t, []byte("v0"), current.Contents)
+
+	rev := 0
+	update := func() {
+		rev++
+		_, err := server.Update(ctx, testPath, fmt.Appendf(nil, "v%d", rev), nil)
+		require.NoError(t, err)
+	}
+
+	// Sanity: the watch is live before the sibling closes.
+	requireWatchDelivers(t, changes, update)
+
+	// Closing the sibling must not release anything: it never successfully
+	// acquired. (The old code released here, dropped the refcount to zero,
+	// and closed the notification system under the live watch.)
+	sibling.Close()
+
+	notificationSystemsMu.RLock()
+	ns, exists := notificationSystems[schemaName]
+	notificationSystemsMu.RUnlock()
+	require.True(t, exists, "notification system must survive the sibling's close")
+	require.Equal(t, int32(1), ns.refCount.Load(), "the live server must still hold its reference")
+
+	// The original watch channel must keep delivering.
+	requireWatchDelivers(t, changes, update)
+
+	// And new watches on the live server must still be possible.
+	_, changes2, err := server.Watch(ctx, testPath)
+	require.NoError(t, err, "a live server must always be able to establish new watches")
+	requireWatchDelivers(t, changes2, update)
+}
+
+// TestWatchReacquiresAfterNotificationSystemDeath verifies the recovery
+// contract consumers rely on (e.g. srvtopo's resilient watcher, strata's
+// vschema manager): when the notification system dies terminally, every
+// registered watch is cancelled — delivering topo.Interrupted and a channel
+// close so the consumer's retry loop wakes up — and the NEXT watch on the
+// same server transparently re-acquires a fresh notification system instead
+// of failing forever or registering on the corpse.
+func TestWatchReacquiresAfterNotificationSystemDeath(t *testing.T) {
+	schemaName := generateRandomSchemaName()
+	server, _, cleanup := createTestServer(t, schemaName)
+	defer cleanup()
+
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
+	defer cancel()
+
+	testPath := "reacquire_test"
+	_, err := server.Create(ctx, testPath, []byte("v0"))
+	require.NoError(t, err)
+
+	_, changes, err := server.Watch(ctx, testPath)
+	require.NoError(t, err)
+
+	corpse, err := server.getNotificationSystemForServer()
+	require.NoError(t, err)
+
+	// Kill the notification system the way a terminal binlog failure does.
+	corpse.markDead()
+
+	// The registered watch is torn down: Interrupted, then closed.
+	select {
+	case wd := <-changes:
+		require.Error(t, wd.Err, "a dead notification system must error its watches")
+		require.True(t, topo.IsErrType(wd.Err, topo.Interrupted), "watch teardown must deliver Interrupted")
+	case <-time.After(5 * time.Second):
+		t.Fatal("watch was not cancelled by the notification system's death")
+	}
+	select {
+	case _, ok := <-changes:
+		require.False(t, ok, "watch channel must be closed after the final error")
+	case <-time.After(5 * time.Second):
+		t.Fatal("watch channel was not closed after the final error")
+	}
+
+	// A retried watch must get a fresh, working notification system.
+	_, changes2, err := server.Watch(ctx, testPath)
+	require.NoError(t, err, "watch retry after notification-system death must succeed")
+
+	fresh, err := server.getNotificationSystemForServer()
+	require.NoError(t, err)
+	require.NotSame(t, corpse, fresh, "retry must not reuse the dead notification system")
+	require.Equal(t, int32(1), fresh.refCount.Load(), "the replacement must carry exactly the server's reference")
+
+	rev := 0
+	requireWatchDelivers(t, changes2, func() {
+		rev++
+		_, err := server.Update(ctx, testPath, fmt.Appendf(nil, "r%d", rev), nil)
+		require.NoError(t, err)
+	})
+}
+
+// TestStaleClaimReleaseDoesNotDrainSuccessor pins down the instance-scoped
+// release invariant: a server still holding a claim on a dead, superseded
+// notification system must, on Close, release that corpse — never the live
+// successor other servers are using. A schema-keyed release would decrement
+// the successor and, at zero, close it out from under live watches.
+func TestStaleClaimReleaseDoesNotDrainSuccessor(t *testing.T) {
+	schemaName := generateRandomSchemaName()
+
+	serverA, _, cleanupA := createTestServer(t, schemaName)
+	defer cleanupA()
+	serverB, _, cleanupB := createTestServer(t, schemaName)
+	defer cleanupB()
+
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
+	defer cancel()
+
+	testPath := "stale_claim_test"
+	_, err := serverA.Create(ctx, testPath, []byte("v0"))
+	require.NoError(t, err)
+
+	// Both servers take a counted reference on the same system.
+	_, _, err = serverA.Watch(ctx, testPath)
+	require.NoError(t, err)
+	_, _, err = serverB.Watch(ctx, testPath)
+	require.NoError(t, err)
+
+	corpse, err := serverA.getNotificationSystemForServer()
+	require.NoError(t, err)
+	require.Equal(t, int32(2), corpse.refCount.Load())
+
+	corpse.markDead()
+
+	// A re-watches: it re-acquires, creating the successor system and moving
+	// its own claim there. B still holds a stale claim on the corpse.
+	_, changesA, err := serverA.Watch(ctx, testPath)
+	require.NoError(t, err)
+
+	successor, err := serverA.getNotificationSystemForServer()
+	require.NoError(t, err)
+	require.NotSame(t, corpse, successor)
+	require.Equal(t, int32(1), successor.refCount.Load(), "successor must carry only A's reference")
+
+	// B closes. Its stale claim must drain the corpse, not the successor.
+	serverB.Close()
+
+	notificationSystemsMu.RLock()
+	got, exists := notificationSystems[schemaName]
+	notificationSystemsMu.RUnlock()
+	require.True(t, exists, "successor must survive the stale holder's close")
+	require.Same(t, successor, got, "the corpse's release must not evict the successor from the registry")
+	require.Equal(t, int32(1), successor.refCount.Load(), "the stale release must not touch the successor's refcount")
+	require.LessOrEqual(t, corpse.refCount.Load(), int32(0), "the stale release must land on the corpse")
+
+	// A's re-established watch keeps working.
+	rev := 0
+	requireWatchDelivers(t, changesA, func() {
+		rev++
+		_, err := serverA.Update(ctx, testPath, fmt.Appendf(nil, "s%d", rev), nil)
+		require.NoError(t, err)
+	})
 }

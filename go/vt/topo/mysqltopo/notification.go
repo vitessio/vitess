@@ -84,15 +84,16 @@ type notificationSystem struct {
 	wg       sync.WaitGroup
 	refCount atomic.Int32
 
-	// dead indicates the notification system has exhausted retries and is
-	// no longer processing binlog events. All its watchers were cancelled
-	// when it died (see markDead); getNotificationSystem replaces a dead
-	// system with a fresh one on the next acquisition.
+	// dead indicates the notification system is no longer processing binlog
+	// events: it exhausted retries, or it was closed (superseded, or its last
+	// reference was released). All its watchers were cancelled when it died
+	// (see markDead/close); acquireNotificationSystem replaces a dead system
+	// with a fresh one on the next acquisition.
 	dead atomic.Bool
 
 	// closeOnce makes close() idempotent: a dead system is closed when it
-	// is replaced in getNotificationSystem, and possibly again when the
-	// last reference is released.
+	// is replaced in acquireNotificationSystem, and again when its last
+	// stale reference is released.
 	closeOnce sync.Once
 }
 
@@ -113,90 +114,76 @@ type recursiveWatcher struct {
 	cancel     context.CancelFunc
 }
 
-// getNotificationSystem gets or creates a notification system for the given schema.
-func getNotificationSystem(schemaName, serverAddr string) (*notificationSystem, error) {
+// acquireNotificationSystem returns the live notification system for the
+// schema — creating one, or replacing a dead one (binlog retries exhausted,
+// or superseded and closed), as needed — and increments its reference count.
+// Every successful call must be balanced by exactly one
+// releaseNotificationSystemRef on the RETURNED instance.
+//
+// References are held against a specific *notificationSystem instance, not
+// against the schema key. Instance-scoped accounting is what makes the
+// count trustworthy across system replacement: a holder of an old (dead or
+// superseded) instance releases that instance, never whatever currently
+// occupies the map entry. A schema-keyed release cannot tell those apart,
+// so a stale holder could drain the refcount of a successor system it never
+// acquired and close it out from under servers with live watches — which
+// then starve until process restart.
+func acquireNotificationSystem(schemaName, serverAddr string) (*notificationSystem, error) {
 	notificationSystemsMu.Lock()
 	defer notificationSystemsMu.Unlock()
-	return getOrReviveNotificationSystemLocked(schemaName, serverAddr, true)
-}
 
-// getOrReviveNotificationSystemLocked returns the live notification system
-// for the schema, replacing a dead one (binlog retries exhausted) with a
-// fresh system so that new and re-established watches actually receive
-// updates again. incRef controls whether the caller is acquiring a new
-// reference (getNotificationSystem) or already holds one
-// (getNotificationSystemForServer's cached path). The caller must hold
-// notificationSystemsMu.
-//
-// When a dead system is replaced, its reference count is transferred to the
-// replacement: releaseNotificationSystem is keyed by schema, so releases
-// from servers that acquired against the dead system must stay balanced
-// against the entry currently in the map. If building the replacement fails
-// (e.g. MySQL still unreachable), the dead entry is kept for the same
-// reason, and the error is returned to the caller.
-func getOrReviveNotificationSystemLocked(schemaName, serverAddr string, incRef bool) (*notificationSystem, error) {
-	key := schemaName // Use schema name as key since notifications should be shared across same schema
-
-	ns, exists := notificationSystems[key]
+	ns, exists := notificationSystems[schemaName]
 	if exists && !ns.dead.Load() {
-		if incRef {
-			ns.refCount.Add(1)
-			log.Info("MySQL topo notification system: refcount incremented", slog.String("schema", schemaName), slog.Int("refcount", int(ns.refCount.Load())))
-		}
+		ns.refCount.Add(1)
+		log.Info("MySQL topo notification system: refcount incremented", slog.String("schema", schemaName), slog.Int("refcount", int(ns.refCount.Load())))
 		return ns, nil
 	}
 
 	if exists {
 		// The cached system is dead: its run() goroutine has exited and its
-		// watchers were cancelled by markDead. Build a replacement.
+		// watchers were cancelled by markDead. Build a replacement. If that
+		// fails (e.g. MySQL still unreachable), the dead entry stays in the
+		// map — harmless, since releases are instance-scoped — and the next
+		// acquisition retries the replacement.
 		log.Warn("MySQL topo notification system is dead; replacing it with a fresh one", slog.String("schema", schemaName))
-		fresh, err := newNotificationSystem(schemaName, serverAddr)
-		if err != nil {
-			return nil, fmt.Errorf("notification system for schema %s is dead and could not be replaced: %v", schemaName, err)
-		}
-		refs := ns.refCount.Load()
-		if incRef {
-			refs++
-		}
-		fresh.refCount.Store(refs)
-		notificationSystems[key] = fresh
-		ns.close() // safe: run() already exited, close is idempotent
-		return fresh, nil
 	}
-
-	if !incRef {
-		// The caller claims to hold a reference but no system exists — it
-		// was fully released. This mirrors the previous behavior of the
-		// cached-lookup path.
-		return nil, fmt.Errorf("notification system for schema %s not found", schemaName)
-	}
-
-	// Create new notification system
 	fresh, err := newNotificationSystem(schemaName, serverAddr)
 	if err != nil {
+		if exists {
+			return nil, fmt.Errorf("notification system for schema %s is dead and could not be replaced: %v", schemaName, err)
+		}
 		return nil, err
 	}
-
 	fresh.refCount.Store(1)
-	notificationSystems[key] = fresh
+	notificationSystems[schemaName] = fresh
+	if exists {
+		// Close the dead predecessor (safe: run() already exited, close is
+		// idempotent). Its reference count is NOT transferred: holders of
+		// the corpse release against the corpse, so the successor starts at
+		// exactly one reference — the caller's.
+		ns.close()
+	}
 	return fresh, nil
 }
 
-// releaseNotificationSystem decrements the reference count and cleans up if needed.
-func releaseNotificationSystem(schemaName string) {
-	key := schemaName
-
+// releaseNotificationSystemRef releases one reference on the specific
+// instance the caller acquired. When the last reference is released the
+// instance is closed, and the schema's map entry is removed only if it
+// still points at this instance — a drained corpse must not evict the live
+// successor that replaced it.
+func releaseNotificationSystemRef(ns *notificationSystem) {
 	notificationSystemsMu.Lock()
 	defer notificationSystemsMu.Unlock()
 
-	if ns, exists := notificationSystems[key]; exists {
-		newCount := ns.refCount.Add(-1)
-		log.Info("MySQL topo notification system: refcount decremented", slog.String("schema", schemaName), slog.Int("refcount", int(newCount)))
-		if newCount <= 0 {
-			log.Info("MySQL topo notification system: refcount reached zero, closing", slog.String("schema", schemaName))
-			ns.close()
-			delete(notificationSystems, key)
-		}
+	newCount := ns.refCount.Add(-1)
+	log.Info("MySQL topo notification system: refcount decremented", slog.String("schema", ns.schemaName), slog.Int("refcount", int(newCount)))
+	if newCount > 0 {
+		return
+	}
+	log.Info("MySQL topo notification system: refcount reached zero, closing", slog.String("schema", ns.schemaName))
+	ns.close()
+	if notificationSystems[ns.schemaName] == ns {
+		delete(notificationSystems, ns.schemaName)
 	}
 }
 
@@ -854,8 +841,9 @@ func (ns *notificationSystem) notifyDeletion(path string) {
 // delivers topo.Interrupted on its channel, so consumers — e.g. srvtopo's
 // resilient watcher — learn the watch is broken and re-establish it instead
 // of silently serving stale topology forever. The re-established watch gets
-// a fresh notification system via getNotificationSystem's dead-replacement
-// path. Called from run() itself, so it must not wait on ns.wg.
+// a fresh notification system via acquireNotificationSystem's
+// dead-replacement path. Called from run() itself, so it must not wait on
+// ns.wg.
 //
 // dead is set while holding watchersMu — the same lock addWatcher checks it
 // under — so a concurrent Watch either registered before the sweep (and is

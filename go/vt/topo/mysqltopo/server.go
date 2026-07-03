@@ -123,9 +123,22 @@ type Server struct {
 	// closed indicates if the server has been closed
 	closed bool
 
-	// hasNotificationSystem indicates if this server has acquired a reference
-	// to the shared notification system. This ensures we only release what we acquired.
-	hasNotificationSystem bool
+	// notifMu guards notif. It is separate from mu so that acquiring a
+	// notification system — which dials MySQL and can be slow — never blocks
+	// readers of the server state, and so the lock order stays acyclic:
+	// getNotificationSystemForServer takes notifMu then mu (read, via
+	// checkClosed), while Close takes mu and notifMu strictly in sequence,
+	// never nested.
+	notifMu sync.Mutex
+
+	// notif is the notification system instance this server holds a
+	// reference on (nil until the first watch, or after a failed
+	// acquisition). The reference is instance-scoped: Close releases exactly
+	// this instance, and getNotificationSystemForServer re-acquires when the
+	// instance has died, so the shared refcount stays exact — this server
+	// can neither drain a system it never acquired nor be left holding a
+	// claim on nothing.
+	notif *notificationSystem
 
 	// ctx is the server context for graceful shutdown
 	ctx    context.Context
@@ -419,9 +432,9 @@ func (s *Server) checkClosed() error {
 // Close implements topo.Server.Close.
 func (s *Server) Close() {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	if s.closed {
+		s.mu.Unlock()
 		return
 	}
 	s.closed = true
@@ -433,42 +446,62 @@ func (s *Server) Close() {
 		s.cancel()
 	}
 
-	// Release the notification system only if we acquired a reference
-	if s.hasNotificationSystem {
-		releaseNotificationSystem(s.schemaName)
-	}
-
 	// Close the database connection
 	if s.db != nil {
 		if err := s.db.Close(); err != nil {
 			log.Warn("MySQL topo: error closing database connection", slog.String("root", s.root), slog.String("schema", s.schemaName), slog.Any("error", err))
 		}
 	}
-}
-
-// getNotificationSystemForServer gets the notification system for this server.
-// It acquires a reference to the shared notification system on the first call,
-// and returns the cached reference on subsequent calls. The reference is released
-// when the server is closed.
-func (s *Server) getNotificationSystemForServer() (*notificationSystem, error) {
-	s.mu.Lock()
-	alreadyAcquired := s.hasNotificationSystem
-	if !alreadyAcquired {
-		s.hasNotificationSystem = true
-	}
 	s.mu.Unlock()
 
-	if alreadyAcquired {
-		// We already hold a reference, so don't increment the refcount —
-		// but still go through the dead-replacement path: if the cached
-		// system exhausted its binlog retries, a fresh one is built so new
-		// watches receive updates again (our reference is transferred).
-		notificationSystemsMu.Lock()
-		defer notificationSystemsMu.Unlock()
-		return getOrReviveNotificationSystemLocked(s.schemaName, s.serverAddr, false)
+	// Release the notification-system reference after dropping mu: an
+	// in-flight getNotificationSystemForServer that passed checkClosed
+	// before we flipped closed may still be installing an instance under
+	// notifMu; waiting for notifMu here (without holding mu) means we
+	// release whatever it installed instead of leaking it.
+	s.notifMu.Lock()
+	if s.notif != nil {
+		releaseNotificationSystemRef(s.notif)
+		s.notif = nil
+	}
+	s.notifMu.Unlock()
+}
+
+// getNotificationSystemForServer returns the notification system this server
+// holds a reference on, acquiring one on the first call and re-acquiring
+// whenever the held instance has died — its binlog stream failed terminally,
+// or it was superseded and closed. Re-acquisition releases the stale claim
+// and takes a counted reference on the replacement, so a server can always
+// get a working notification system for a retried watch, and the shared
+// refcount stays exact. The reference is released when the server is closed.
+func (s *Server) getNotificationSystemForServer() (*notificationSystem, error) {
+	s.notifMu.Lock()
+	defer s.notifMu.Unlock()
+
+	if s.notif != nil && !s.notif.dead.Load() {
+		return s.notif, nil
 	}
 
-	return getNotificationSystem(s.schemaName, s.serverAddr)
+	// Refuse to acquire on a closed server: Close has already released (or
+	// is about to release, see Close) this server's claim, so an acquisition
+	// past this point would leak a reference and keep the system alive
+	// forever.
+	if err := s.checkClosed(); err != nil {
+		return nil, convertError(err, s.root)
+	}
+
+	ns, err := acquireNotificationSystem(s.schemaName, s.serverAddr)
+	if err != nil {
+		// Keep the stale claim (if any): its release stays balanced against
+		// the instance it was acquired on, and the next call retries the
+		// acquisition.
+		return nil, err
+	}
+	if s.notif != nil {
+		releaseNotificationSystemRef(s.notif)
+	}
+	s.notif = ns
+	return ns, nil
 }
 
 // resolvePath returns the full path by combining the server's root with the given path
