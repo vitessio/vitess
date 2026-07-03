@@ -74,6 +74,12 @@ type BackupHandle interface {
 	// the file size is unknown.
 	AddFile(ctx context.Context, filename string, filesize int64) (io.WriteCloser, error)
 
+	// Wait blocks until all pending asynchronous AddFile operations complete.
+	// It does not finalize the backup; AddFile may still be called after Wait.
+	// Errors from async operations are available via Error()/GetFailedFiles().
+	// Idempotent and safe to call multiple times.
+	Wait()
+
 	// EndBackup stops and closes a backup. The contents should be kept.
 	// Only works for read-write backups (created by StartBackup).
 	EndBackup(ctx context.Context) error

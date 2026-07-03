@@ -109,6 +109,10 @@ func (fbh *FakeS3BackupHandle) AddFile(ctx context.Context, filename string, fil
 	return fbh.S3BackupHandle.AddFile(ctx, filename, filesize)
 }
 
+func (fbh *FakeS3BackupHandle) Wait() {
+	fbh.S3BackupHandle.Wait()
+}
+
 func (fbh *FakeS3BackupHandle) EndBackup(ctx context.Context) error {
 	return fbh.S3BackupHandle.EndBackup(ctx)
 }

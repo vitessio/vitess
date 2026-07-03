@@ -746,7 +746,7 @@ func (be *BuiltinBackupEngine) backupFiles(
 			return err
 		}
 	} else if backupErr != nil {
-		// EndBackup returned an error not represented in per-file failures.
+		// Wait surfaced an error not represented in per-file failures.
 		// Bail before MANIFEST upload to avoid reporting a successful backup.
 		return backupErr
 	}
@@ -801,7 +801,7 @@ func (be *BuiltinBackupEngine) backupWorkItems(ctx context.Context, workItems []
 	ctxCancel, cancel := context.WithCancel(ctx)
 	defer func() {
 		// If we reached this defer in all cases we can cancel the context.
-		// The only ways to get here are: a panic, an error when ending the backup, a successful backup.
+		// The only ways to get here are: a panic, an error when waiting for pending uploads, a successful backup.
 		// For all three options, it is safe to cancel the context, there should be no pending operations
 		// that 1) haven't completed, 2) we care about anymore.
 		cancel()
@@ -839,9 +839,7 @@ func (be *BuiltinBackupEngine) backupWorkItems(ctx context.Context, workItems []
 		return err
 	}
 
-	if err := bh.EndBackup(ctx); err != nil {
-		return err
-	}
+	bh.Wait()
 	return bh.Error()
 }
 
@@ -1137,7 +1135,7 @@ func (be *BuiltinBackupEngine) backupManifest(
 	}()
 
 	// Creating this function allows us to ensure we always close the writer no matter what,
-	// and in case of success that we close it before calling bh.EndBackup.
+	// and in case of success that we close it before calling bh.Wait.
 	addAndWrite := func() (addAndWriteError error) {
 		// open the MANIFEST
 		wc, err := bh.AddFile(ctx, backupManifestFileName, backupstorage.FileSizeUnknown)
@@ -1200,10 +1198,7 @@ func (be *BuiltinBackupEngine) backupManifest(
 		return err
 	}
 
-	err = bh.EndBackup(ctx)
-	if err != nil {
-		return err
-	}
+	bh.Wait()
 	return bh.Error()
 }
 

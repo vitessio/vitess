@@ -162,6 +162,8 @@ func (m *mockBackupHandle) ReadFile(ctx context.Context, filename string) (io.Re
 	return m.readFileReturn, nil
 }
 
+func (m *mockBackupHandle) Wait() {}
+
 func (m *mockBackupHandle) EndBackup(ctx context.Context) error {
 	return nil
 }

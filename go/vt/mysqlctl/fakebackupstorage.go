@@ -36,6 +36,7 @@ type FakeBackupHandle struct {
 	AddFileCalls      []FakeBackupHandleAddFileCall
 	AddFileReturn     FakeBackupHandleAddFileReturn
 	AddFileReturnF    func(filename string) FakeBackupHandleAddFileReturn
+	WaitCalls         int
 	EndBackupCalls    []context.Context
 	EndBackupReturn   error
 	ReadFileCalls     []FakeBackupHandleReadFileCall
@@ -75,6 +76,8 @@ func (fbh *FakeBackupHandle) AddFile(ctx context.Context, filename string, files
 	}
 	return fbh.AddFileReturn.WriteCloser, fbh.AddFileReturn.Err
 }
+
+func (fbh *FakeBackupHandle) Wait() { fbh.WaitCalls++ }
 
 func (fbh *FakeBackupHandle) EndBackup(ctx context.Context) error {
 	fbh.EndBackupCalls = append(fbh.EndBackupCalls, ctx)

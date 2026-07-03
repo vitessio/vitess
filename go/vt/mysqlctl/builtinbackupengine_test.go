@@ -560,6 +560,73 @@ func TestShouldDrainForBackupBuiltIn(t *testing.T) {
 	assert.False(t, be.ShouldDrainForBackup(&tabletmanagerdatapb.BackupRequest{IncrementalFromPos: "MySQL56/99ca8ed4-399c-11ee-861b-0a43f95f28a3:1-197"}))
 }
 
+type nopWriteCloser struct{}
+
+func (nopWriteCloser) Write(p []byte) (int, error) { return len(p), nil }
+func (nopWriteCloser) Close() error                { return nil }
+
+func TestBackupFilesDoesNotCallEndBackup(t *testing.T) {
+	tmpDir := t.TempDir()
+	dataDir := path.Join(tmpDir, "datadir", "test1")
+	require.NoError(t, os.MkdirAll(dataDir, 0o755))
+	require.NoError(t, os.MkdirAll(path.Join(tmpDir, "innodb"), 0o755))
+	require.NoError(t, os.MkdirAll(path.Join(tmpDir, "log"), 0o755))
+
+	for _, name := range []string{"0.ibd", "1.ibd"} {
+		f, err := os2.Create(path.Join(dataDir, name))
+		require.NoError(t, err)
+		_, err = f.WriteString("test data for backup")
+		require.NoError(t, err)
+		require.NoError(t, f.Close())
+	}
+
+	var addFileCalls sync.Map
+	bh := &FakeBackupHandle{
+		AddFileReturnF: func(filename string) FakeBackupHandleAddFileReturn {
+			count := 0
+			if v, ok := addFileCalls.Load(filename); ok {
+				count = v.(int)
+			}
+			count++
+			addFileCalls.Store(filename, count)
+
+			// Fail file "0" on first attempt to trigger a retry.
+			if filename == "0" && count == 1 {
+				return FakeBackupHandleAddFileReturn{WriteCloser: nil, Err: errors.New("simulated transient error")}
+			}
+			return FakeBackupHandleAddFileReturn{WriteCloser: nopWriteCloser{}}
+		},
+	}
+
+	be := &BuiltinBackupEngine{}
+	err := be.backupFiles(
+		t.Context(),
+		BackupParams{
+			Cnf: &Mycnf{
+				InnodbDataHomeDir:     path.Join(tmpDir, "innodb"),
+				InnodbLogGroupHomeDir: path.Join(tmpDir, "log"),
+				DataDir:               path.Join(tmpDir, "datadir"),
+			},
+			Logger:      logutil.NewMemoryLogger(),
+			Stats:       backupstats.NoStats(),
+			Concurrency: 2,
+		},
+		bh,
+		replication.Position{},
+		replication.Position{},
+		replication.Position{},
+		"",
+		nil,
+		"",
+		"",
+		nil,
+	)
+	require.NoError(t, err)
+
+	assert.Empty(t, bh.EndBackupCalls, "backupFiles must not call EndBackup; only the top-level Backup() caller should")
+	assert.Positive(t, bh.WaitCalls, "backupFiles must call Wait() to flush pending async operations")
+}
+
 // TestBackupRestoreWithManyChunks exercises backup and restore with a high
 // chunk count (256 chunks) by overriding minBackupFileChunkSize below the
 // production floor. This validates that chunking works correctly under heavy
