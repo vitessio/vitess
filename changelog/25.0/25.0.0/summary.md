@@ -22,8 +22,6 @@
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
-    - **[VTTablet](#minor-changes-vttablet)**
-        - [Polling replication reporter surfaces fatal IO errors](#vttablet-fatal-replication-io-error)
     - **[General](#minor-changes-general)**
         - [Build version metadata now sourced from VCS stamping](#build-info-from-vcs)
 
@@ -149,14 +147,6 @@ Two changes:
 Tablets that already have more tracked schema objects than the configured limit will reload fine — only new creations are gated. Operators who need to support more tables and views should increase the flag and ensure both vttablet and mysqld have enough memory to comfortably hold the larger schema.
 
 See [#19978](https://github.com/vitessio/vitess/issues/19978) for details.
-
-### <a id="minor-changes-vttablet"/>VTTablet</a>
-
-#### <a id="vttablet-fatal-replication-io-error"/>Polling replication reporter surfaces fatal IO errors</a>
-
-The polling replication reporter (used when the heartbeat reporter is disabled) previously kept reporting a replica as healthy — serving its last estimated lag — until it crossed `--unhealthy_threshold`, even when replication had hit an unrecoverable IO error. It now reports the replica `UNAVAILABLE` immediately when `Last_IO_Errno` is MySQL error `1236` (`ER_MASTER/SOURCE_FATAL_ERROR_READING_BINLOG`), which the source raises when the replica requests binlog events the source no longer has. The original `Last_IO_Error` message is returned to the caller, and the estimated lag is still included alongside it when a cached sample exists. Other, non-fatal replication states keep the existing cached-lag behavior.
-
-See [#20446](https://github.com/vitessio/vitess/pull/20446) for details.
 
 ### <a id="minor-changes-general"/>General</a>
 
