@@ -25,6 +25,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/bytes2"
+	"vitess.io/vitess/go/mysql/binlog"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/mysql/collations/colldata"
@@ -607,20 +608,6 @@ func (tp *TablePlan) clearEmptyPartialJSONDataColumns(rowChange *binlogdatapb.Ro
 	}
 }
 
-// substitutePartialJSONBase inserts the base column expression into a partial
-// JSON diff produced by binlog.ParseBinaryJSONDiff (for example
-// "JSON_INSERT(%s, ...)"). The diff embeds JSON paths and values verbatim, and
-// those can legitimately contain a '%' (for example the string "100% done"), so
-// the diff must not be used as a printf format string.
-// See https://github.com/vitessio/vitess/issues/20447.
-//
-// The generated diff carries a single "%s" placeholder for the base column,
-// always as the first occurrence in the string. A diff with no placeholder,
-// such as a bare JSON null literal, is returned unchanged.
-func substitutePartialJSONBase(diff, base string) string {
-	return strings.Replace(diff, "%s", base, 1)
-}
-
 func (tp *TablePlan) bindAfterJSONFieldVals(rowChange *binlogdatapb.RowChange, afterVals []sqltypes.Value, bindvars map[string]*querypb.BindVariable) error {
 	jsonIndex := 0
 	for i, field := range tp.Fields {
@@ -657,7 +644,7 @@ func (tp *TablePlan) bindAfterJSONFieldVals(rowChange *binlogdatapb.RowChange, a
 				tp.clearEmptyPartialJSONDataColumns(rowChange, afterVals)
 				newVal = new(sqltypes.MakeTrusted(querypb.Type_EXPRESSION, nil))
 			} else {
-				expr := substitutePartialJSONBase(afterVals[i].RawStr(), sqlescape.EscapeID(field.Name))
+				expr := binlog.FillJSONDiff(afterVals[i].RawStr(), sqlescape.EscapeID(field.Name))
 				newVal = new(sqltypes.MakeTrusted(querypb.Type_EXPRESSION, []byte(expr)))
 			}
 		default: // A JSON value (which may be a JSON null literal value)
@@ -819,7 +806,7 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 						buf.WriteByte('\'')
 						buf.Write(beforeVal)
 						buf.WriteByte('\'')
-						expr := substitutePartialJSONBase(diff, buf.String())
+						expr := binlog.FillJSONDiff(diff, buf.String())
 						newVal := sqltypes.MakeTrusted(querypb.Type_EXPRESSION, []byte(expr))
 						bv, err := tp.bindFieldVal(field, &newVal)
 						if err != nil {

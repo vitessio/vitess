@@ -859,8 +859,7 @@ func TestAppendFromRow(t *testing.T) {
 		{
 			name: "simple",
 			tp: &TablePlan{
-				BulkInsertValues: sqlparser.BuildParsedQuery(
-					"values (%a, %a, %a)",
+				BulkInsertValues: sqlparser.BuildParsedQuery("values (%a, %a, %a)",
 					":c1", ":c2", ":c3",
 				),
 				Fields: []*querypb.Field{
@@ -881,8 +880,7 @@ func TestAppendFromRow(t *testing.T) {
 		{
 			name: "too few fields",
 			tp: &TablePlan{
-				BulkInsertValues: sqlparser.BuildParsedQuery(
-					"values (%a, %a, %a)",
+				BulkInsertValues: sqlparser.BuildParsedQuery("values (%a, %a, %a)",
 					":c1", ":c2", ":c3",
 				),
 				Fields: []*querypb.Field{
@@ -895,8 +893,7 @@ func TestAppendFromRow(t *testing.T) {
 		{
 			name: "skip half",
 			tp: &TablePlan{
-				BulkInsertValues: sqlparser.BuildParsedQuery(
-					"values (%a, %a, %a, %a)",
+				BulkInsertValues: sqlparser.BuildParsedQuery("values (%a, %a, %a, %a)",
 					":c1", ":c2", ":c4", ":c8",
 				),
 				Fields: []*querypb.Field{
@@ -933,8 +930,7 @@ func TestAppendFromRow(t *testing.T) {
 		{
 			name: "skip all but one",
 			tp: &TablePlan{
-				BulkInsertValues: sqlparser.BuildParsedQuery(
-					"values (%a)",
+				BulkInsertValues: sqlparser.BuildParsedQuery("values (%a)",
 					":c4",
 				),
 				Fields: []*querypb.Field{
@@ -989,8 +985,7 @@ func TestAppendFromRow(t *testing.T) {
 func TestApplyBulkInsertMaxQuerySize(t *testing.T) {
 	tp := &TablePlan{
 		BulkInsertFront: sqlparser.BuildParsedQuery("insert into t(c1, c2)"),
-		BulkInsertValues: sqlparser.BuildParsedQuery(
-			"(%a, %a)",
+		BulkInsertValues: sqlparser.BuildParsedQuery("(%a, %a)",
 			":c1", ":c2",
 		),
 		Fields: []*querypb.Field{
@@ -1081,8 +1076,7 @@ func TestApplyBulkInsertMaxQuerySize(t *testing.T) {
 	t.Run("ignores skipped JSON columns when enforcing limit", func(t *testing.T) {
 		jsonTP := &TablePlan{
 			BulkInsertFront: sqlparser.BuildParsedQuery("insert into t(j1)"),
-			BulkInsertValues: sqlparser.BuildParsedQuery(
-				"(%a)",
+			BulkInsertValues: sqlparser.BuildParsedQuery("(%a)",
 				":j1",
 			),
 			Fields: []*querypb.Field{
@@ -1115,8 +1109,7 @@ func TestApplyBulkInsertMaxQuerySize(t *testing.T) {
 func TestApplyBulkInsertChangesMaxQuerySize(t *testing.T) {
 	tp := &TablePlan{
 		BulkInsertFront: sqlparser.BuildParsedQuery("insert into t(c1, c2)"),
-		BulkInsertValues: sqlparser.BuildParsedQuery(
-			"(%a, %a)",
+		BulkInsertValues: sqlparser.BuildParsedQuery("(%a, %a)",
 			":a_c1", ":a_c2",
 		),
 		BulkInsertOnDup: sqlparser.BuildParsedQuery(" on duplicate key update c2=values(c2)"),
@@ -1172,8 +1165,7 @@ func TestApplyBulkInsertChangesMaxQuerySize(t *testing.T) {
 	t.Run("enforces max row JSON bytes", func(t *testing.T) {
 		jsonTP := &TablePlan{
 			BulkInsertFront: sqlparser.BuildParsedQuery("insert into t(j)"),
-			BulkInsertValues: sqlparser.BuildParsedQuery(
-				"(%a)",
+			BulkInsertValues: sqlparser.BuildParsedQuery("(%a)",
 				":a_j",
 			),
 			Fields: []*querypb.Field{
@@ -1198,8 +1190,7 @@ func TestApplyBulkInsertChangesMaxQuerySize(t *testing.T) {
 	t.Run("skips generated JSON columns before marshalling", func(t *testing.T) {
 		jsonTP := &TablePlan{
 			BulkInsertFront: sqlparser.BuildParsedQuery("insert into t(j)"),
-			BulkInsertValues: sqlparser.BuildParsedQuery(
-				"(%a)",
+			BulkInsertValues: sqlparser.BuildParsedQuery("(%a)",
 				":a_j",
 			),
 			Fields: []*querypb.Field{
@@ -1351,8 +1342,7 @@ func TestAppendFromRowLargeJSON(t *testing.T) {
 	largeJSON := `[` + strings.Repeat(`12345678,`, 150000) + `0]`
 
 	tp := &TablePlan{
-		BulkInsertValues: sqlparser.BuildParsedQuery(
-			"(%a)",
+		BulkInsertValues: sqlparser.BuildParsedQuery("(%a)",
 			":c1",
 		),
 		Fields: []*querypb.Field{
@@ -1376,8 +1366,7 @@ func TestAppendFromRowLargeJSON(t *testing.T) {
 func TestAppendFromRowSmallJSON(t *testing.T) {
 	// Verify that small JSON values use the tree encoding (JSON_OBJECT/JSON_ARRAY).
 	tp := &TablePlan{
-		BulkInsertValues: sqlparser.BuildParsedQuery(
-			"(%a)",
+		BulkInsertValues: sqlparser.BuildParsedQuery("(%a)",
 			":c1",
 		),
 		Fields: []*querypb.Field{
@@ -1525,12 +1514,10 @@ func TestApplyChangeChecksEffectiveJSONSizeForPartialDeleteInsert(t *testing.T) 
 	beforeJSON := []byte(`{"big":"` + strings.Repeat("x", 64) + `"}`)
 	tp := &TablePlan{
 		TargetName: "t",
-		Insert: sqlparser.BuildParsedQuery(
-			"insert into t(id, j) values (%a, %a)",
+		Insert: sqlparser.BuildParsedQuery("insert into t(id, j) values (%a, %a)",
 			":a_id", ":a_j",
 		),
-		Delete: sqlparser.BuildParsedQuery(
-			"delete from t where id=%a",
+		Delete: sqlparser.BuildParsedQuery("delete from t where id=%a",
 			":b_id",
 		),
 		Fields: []*querypb.Field{
@@ -1572,8 +1559,7 @@ func TestApplyChangeIgnoresSkippedJSONColumnsWhenCheckingUpdateLimit(t *testing.
 	skippedJSON := []byte(`{"big":"` + strings.Repeat("x", 64) + `"}`)
 	tp := &TablePlan{
 		TargetName: "t",
-		Update: sqlparser.BuildParsedQuery(
-			"update t set v=%a where id=%a",
+		Update: sqlparser.BuildParsedQuery("update t set v=%a where id=%a",
 			":a_v", ":b_id",
 		),
 		Fields: []*querypb.Field{
@@ -1617,8 +1603,7 @@ func TestApplyChangeSkipsMarshallingGeneratedJSONColumns(t *testing.T) {
 	validJSON := []byte(`{"ok":true}`)
 	tp := &TablePlan{
 		TargetName: "t",
-		Insert: sqlparser.BuildParsedQuery(
-			"insert into t(id, j) values (%a, %a)",
+		Insert: sqlparser.BuildParsedQuery("insert into t(id, j) values (%a, %a)",
 			":a_id", ":a_j",
 		),
 		Fields: []*querypb.Field{
@@ -1668,12 +1653,10 @@ func TestApplyChangePartialRebuildSkipsGeneratedJSONColumns(t *testing.T) {
 
 	tp := &TablePlan{
 		TargetName: "t",
-		Insert: sqlparser.BuildParsedQuery(
-			"insert into t(id, j) values (%a, %a)",
+		Insert: sqlparser.BuildParsedQuery("insert into t(id, j) values (%a, %a)",
 			":a_id", ":a_j",
 		),
-		Delete: sqlparser.BuildParsedQuery(
-			"delete from t where id=%a",
+		Delete: sqlparser.BuildParsedQuery("delete from t where id=%a",
 			":b_id",
 		),
 		Fields: []*querypb.Field{
@@ -1726,12 +1709,10 @@ func TestApplyChangeChecksPartialJSONDiffSizeForDeleteInsert(t *testing.T) {
 	diff := []byte(`JSON_INSERT(%s, _utf8mb4'$.big', CAST(JSON_QUOTE(_utf8mb4'` + strings.Repeat("x", 64) + `') as JSON))`)
 	tp := &TablePlan{
 		TargetName: "t",
-		Insert: sqlparser.BuildParsedQuery(
-			"insert into t(id, j) values (%a, %a)",
+		Insert: sqlparser.BuildParsedQuery("insert into t(id, j) values (%a, %a)",
 			":a_id", ":a_j",
 		),
-		Delete: sqlparser.BuildParsedQuery(
-			"delete from t where id=%a",
+		Delete: sqlparser.BuildParsedQuery("delete from t where id=%a",
 			":b_id",
 		),
 		Fields: []*querypb.Field{
@@ -1779,16 +1760,13 @@ func TestApplyChangePartialJSONDiffWithPercent(t *testing.T) {
 	diff := []byte(`JSON_INSERT(%s, _utf8mb4'$.msg', CAST(JSON_QUOTE(_utf8mb4'100% done') as JSON))`)
 	tp := &TablePlan{
 		TargetName: "t",
-		Insert: sqlparser.BuildParsedQuery(
-			"insert into t(id, j) values (%a, %a)",
+		Insert: sqlparser.BuildParsedQuery("insert into t(id, j) values (%a, %a)",
 			":a_id", ":a_j",
 		),
-		Update: sqlparser.BuildParsedQuery(
-			"update t set j=%a where id=%a",
+		Update: sqlparser.BuildParsedQuery("update t set j=%a where id=%a",
 			":a_j", ":b_id",
 		),
-		Delete: sqlparser.BuildParsedQuery(
-			"delete from t where id=%a",
+		Delete: sqlparser.BuildParsedQuery("delete from t where id=%a",
 			":b_id",
 		),
 		Fields: []*querypb.Field{
@@ -1832,8 +1810,7 @@ func TestApplyChangeChecksJSONSizeBeforeMarshalling(t *testing.T) {
 	raw := []byte(`{"big":"` + strings.Repeat("x", 64))
 	tp := &TablePlan{
 		TargetName: "t",
-		Insert: sqlparser.BuildParsedQuery(
-			"insert into t(j) values (%a)",
+		Insert: sqlparser.BuildParsedQuery("insert into t(j) values (%a)",
 			":a_j",
 		),
 		Fields: []*querypb.Field{
@@ -1926,8 +1903,7 @@ func TestApplyChangeFailsFastForLargeExistingJSONWithTinyPartialUpdate(t *testin
 func BenchmarkAppendFromRowLargeJSON(b *testing.B) {
 	raw := []byte(`[` + strings.Repeat(`12345678,`, 150000) + `0]`)
 	tp := &TablePlan{
-		BulkInsertValues: sqlparser.BuildParsedQuery(
-			"(%a)",
+		BulkInsertValues: sqlparser.BuildParsedQuery("(%a)",
 			":c1",
 		),
 		Fields: []*querypb.Field{

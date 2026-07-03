@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+	"strings"
 
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/format"
@@ -70,6 +71,26 @@ func ParseBinaryJSON(data []byte) (*json.Value, error) {
 		}
 	}
 	return node, nil
+}
+
+// jsonDiffBasePlaceholder is the token that ParseBinaryJSONDiff writes in place
+// of the base column expression in a partial JSON diff (for example the "%s" in
+// "JSON_INSERT(%s, ...)"). It is always written as the first occurrence in the
+// diff, before any path or value bytes, and is substituted on the target side
+// by FillJSONDiff.
+const jsonDiffBasePlaceholder = "%s"
+
+// FillJSONDiff substitutes base for the base column placeholder in a partial
+// JSON diff produced by ParseBinaryJSONDiff. The diff embeds JSON paths and
+// values verbatim, and those can legitimately contain a '%' (for example the
+// string "100% done"), so the diff must never be used as a printf format
+// string. See https://github.com/vitessio/vitess/issues/20447.
+//
+// The placeholder is always the first occurrence in the diff, so a literal
+// first-match replace is unambiguous. A diff with no placeholder, such as a
+// bare JSON null literal, is returned unchanged.
+func FillJSONDiff(diff, base string) string {
+	return strings.Replace(diff, jsonDiffBasePlaceholder, base, 1)
 }
 
 // ParseBinaryJSONDiff provides the parsing function from the binary MySQL
@@ -191,7 +212,12 @@ func ParseBinaryJSONDiff(data []byte) (sqltypes.Value, error) {
 			diff.WriteString(innerStr)
 			diff.WriteString(", ")
 		} else { // Only the inner most function has the field name
-			diff.WriteString("%s, ") // This will later be replaced by the field name
+			// The base column expression is filled in on the target side by
+			// FillJSONDiff. It is always written here first, before any path or
+			// value bytes, which is what makes the first-occurrence replace in
+			// FillJSONDiff unambiguous.
+			diff.WriteString(jsonDiffBasePlaceholder)
+			diff.WriteString(", ")
 		}
 		outer = true
 
