@@ -646,10 +646,9 @@ func TestStreamUnsharded(t *testing.T) {
 func TestStreamPassthrough(t *testing.T) {
 	executor, _, _, sbclookup, _ := createExecutorEnv(t)
 
-	// This test is similar to TestStreamUnsharded except that it returns a
-	// Result larger than the configured StreamSize, verifying that packets are
-	// forwarded to the callback exactly as the tablet sent them, without any
-	// re-chunking in vtgate.
+	// This test is similar to TestStreamUnsharded except that it verifies that
+	// packets are forwarded to the callback exactly as the tablet sent them,
+	// without any re-chunking in the executor.
 	sbclookup.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
 			{Name: "id", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},

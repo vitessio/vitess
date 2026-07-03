@@ -112,9 +112,8 @@ func init() {
 // the abilities of the underlying vttablets.
 type (
 	ExecutorConfig struct {
-		Name       string
-		Normalize  bool
-		StreamSize int
+		Name      string
+		Normalize bool
 		// AllowScatter will fail planning if set to false and a plan contains any scatter queries
 		AllowScatter bool
 		// PreventCrossKeyspaceReads will fail planning if set to true and a plan contains any cross-keyspace joins or UNIONs.
