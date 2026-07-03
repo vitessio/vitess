@@ -19,6 +19,7 @@ package servenv
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"math"
 	"net"
@@ -348,9 +349,14 @@ func serveGRPC() {
 	//       runs all OnRun() hooks after createGRPCServer() and before
 	//       serveGRPC(). If this was not the case, the binary would crash with
 	//       the error "grpc: Server.RegisterService after Server.Serve".
+	// Capture the server so the goroutine below does not read the GRPCServer
+	// global, which tests swap out between runs.
+	server := GRPCServer
 	go func() {
-		err := GRPCServer.Serve(listener)
-		if err != nil {
+		err := server.Serve(listener)
+		// Serve returns ErrServerStopped when Stop or GracefulStop was called
+		// before it started; that is a clean shutdown, not a startup failure.
+		if err != nil && !errors.Is(err, grpc.ErrServerStopped) {
 			log.Error(fmt.Sprintf("Failed to start grpc server: %v", err))
 			os.Exit(1)
 		}
