@@ -72,22 +72,15 @@ func TestMergeSortNormal(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Results are returned one row at a time.
+	// Merged rows are returned in batches.
 	wantResults := sqltypes.MakeTestStreamingResults(idColFields,
 		"1|a",
-		"---",
 		"2|b",
-		"---",
 		"3|c",
-		"---",
 		"4|d",
-		"---",
 		"4|d",
-		"---",
 		"6|f",
-		"---",
 		"7|g",
-		"---",
 		"8|h",
 	)
 	utils.MustMatch(t, wantResults, results)
@@ -130,22 +123,15 @@ func TestMergeSortWeightString(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Results are returned one row at a time.
+	// Merged rows are returned in batches.
 	wantResults := sqltypes.MakeTestStreamingResults(idColFields,
 		"1|a",
-		"---",
 		"2|b",
-		"---",
 		"3|c",
-		"---",
 		"4|d",
-		"---",
 		"4|d",
-		"---",
 		"6|f",
-		"---",
 		"7|g",
-		"---",
 		"8|h",
 	)
 	utils.MustMatch(t, wantResults, results)
@@ -192,22 +178,15 @@ func TestMergeSortCollation(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Results are returned one row at a time.
+	// Merged rows are returned in batches.
 	wantResults := sqltypes.MakeTestStreamingResults(idColFields,
 		"a",
-		"---",
 		"c",
-		"---",
 		"c",
-		"---",
 		"cs",
-		"---",
 		"cs",
-		"---",
 		"d",
-		"---",
 		"d",
-		"---",
 		"lu",
 	)
 	utils.MustMatch(t, wantResults, results)
@@ -253,22 +232,15 @@ func TestMergeSortDescending(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Results are returned one row at a time.
+	// Merged rows are returned in batches.
 	wantResults := sqltypes.MakeTestStreamingResults(idColFields,
 		"8|h",
-		"---",
 		"7|g",
-		"---",
 		"6|f",
-		"---",
 		"4|d",
-		"---",
 		"4|d",
-		"---",
 		"3|c",
-		"---",
 		"2|b",
-		"---",
 		"1|a",
 	)
 	utils.MustMatch(t, wantResults, results)
@@ -303,14 +275,11 @@ func TestMergeSortEmptyResults(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Results are returned one row at a time.
+	// Merged rows are returned in batches.
 	wantResults := sqltypes.MakeTestStreamingResults(idColFields,
 		"1|a",
-		"---",
 		"4|d",
-		"---",
 		"6|f",
-		"---",
 		"7|g",
 	)
 	utils.MustMatch(t, wantResults, results)
