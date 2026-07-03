@@ -50,7 +50,6 @@ type VReplicationConfig struct {
 	StoreCompressedGTID     bool
 	ParallelInsertWorkers   int
 	TabletTypesStr          string
-	EnableHttpLog           bool // Enable the /debug/vrlog endpoint
 	MaxRowJSONBytes         int64
 
 	// Config parameters applicable to the source side (vstreamer)
@@ -96,7 +95,6 @@ func GetVReplicationConfigDefaults(useCached bool) *VReplicationConfig {
 		StoreCompressedGTID:     vreplicationStoreCompressedGTID,
 		ParallelInsertWorkers:   vreplicationParallelInsertWorkers,
 		TabletTypesStr:          vreplicationTabletTypesStr,
-		EnableHttpLog:           vreplicationEnableHttpLog,
 		MaxRowJSONBytes:         vreplicationMaxRowJSONBytes,
 
 		VStreamPacketSizeOverride:              false,
