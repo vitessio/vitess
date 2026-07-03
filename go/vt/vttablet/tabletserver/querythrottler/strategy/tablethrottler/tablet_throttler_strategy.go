@@ -476,8 +476,8 @@ func (s *TabletThrottlerStrategy) Evaluate(ctx context.Context, targetTabletType
 		s.recordFullDecision(tabletTypeStr, stmtType, decisionOutcomeThrottled, decisionReasonMetricBreach, startTime)
 		return registry.ThrottleDecision{
 			Throttle: true,
-			Message: fmt.Sprintf("[VTTabletThrottler] Query=\"%s\" throttled: workload=%s priority=%d metric=%s value=%."+
-				"2f breached threshold=%.2f throttle=%.0f%%", parsedQuery.Query, workloadName, priority, maxMetricName, maxMetricValue, maxBreachedThreshold,
+			Message: fmt.Sprintf("[VTTabletThrottler] query throttled: stmtType=%s workload=%s priority=%d metric=%s value=%."+
+				"2f breached threshold=%.2f throttle=%.0f%%", stmtType, workloadName, priority, maxMetricName, maxMetricValue, maxBreachedThreshold,
 				maxThrottleRatio*100),
 			MetricName:         maxMetricName,
 			MetricValue:        maxMetricValue,

@@ -226,7 +226,7 @@ func TestTabletThrottlerStrategy_ThrottleIfNeeded_Legacy(t *testing.T) {
 			giveThrottleCheckOK:   false,
 			giveRandValue:         0.09,
 			givePriorityRandValue: 99,
-			wantErr:               "[VTTabletThrottler] Query=\"SELECT * from A where X=1\" throttled: workload=unknown priority=100 metric=lag value=20.00 breached threshold=10.00 throttle=10%",
+			wantErr:               "[VTTabletThrottler] query throttled: stmtType=SELECT workload=unknown priority=100 metric=lag value=20.00 breached threshold=10.00 throttle=10%",
 		},
 		{
 			name:           "priority 0 query is NEVER throttled (edge case)",
