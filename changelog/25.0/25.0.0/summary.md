@@ -10,6 +10,7 @@
         - [`--watch-replication-stream` flag removed](#vttablet-watch-replication-stream-removed)
         - [Snapshot Topology feature removed](#vtorc-snapshot-topology-removed)
         - [VTOrc `--cell` flag is now required](#vtorc-cell-required)
+        - [`BackupHandle` interface gains `Wait()` method](#backup-handle-wait-method)
     - **[Deprecations](#deprecations)**
         - [CLI Flags](#deprecated-cli-flags)
 - **[Minor Changes](#minor-changes)**
@@ -61,6 +62,18 @@ The `--cell` VTOrc flag, [introduced in v24](../../24.0/24.0.0/summary.md#vtorc-
 **Impact**: VTOrc will fail to start with a `FAILED_PRECONDITION` error if `--cell` is empty.
 
 See [#20048](https://github.com/vitessio/vitess/pull/20048) for the removal and [#19047](https://github.com/vitessio/vitess/pull/19047) for the original `--cell` flag introduction.
+
+#### <a id="backup-handle-wait-method"/>`BackupHandle` interface gains `Wait()` method</a>
+
+The `backupstorage.BackupHandle` interface now requires a `Wait()` method. This method blocks until all pending asynchronous `AddFile` operations complete without finalizing the backup. It is idempotent and safe to call multiple times.
+
+**Impact**: Any out-of-tree or custom `BackupHandle` implementation will fail to compile until a `Wait()` method is added. For synchronous backends, a no-op implementation is sufficient:
+
+```go
+func (bh *MyBackupHandle) Wait() {}
+```
+
+See [#20167](https://github.com/vitessio/vitess/pull/20167) for details.
 
 ### <a id="deprecations"/>Deprecations</a>
 
