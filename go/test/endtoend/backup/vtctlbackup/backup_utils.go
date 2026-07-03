@@ -1091,14 +1091,14 @@ func verifyBackupChunking(t *testing.T, expectChunked bool) {
 			if fileSize%backupChunkSizeBytes != 0 {
 				expectedChunks++
 			}
-			assert.Equal(t, expectedChunks, len(fe.Chunks), "file %s: expected %d chunks for size %d with chunk size %d", fe.Name, expectedChunks, fileSize, backupChunkSizeBytes)
+			assert.Len(t, fe.Chunks, expectedChunks, "file %s: expected %d chunks for size %d with chunk size %d", fe.Name, expectedChunks, fileSize, backupChunkSizeBytes)
 			t.Logf("File %s: size=%d, chunks=%d (expected %d)", fe.Name, fileSize, len(fe.Chunks), expectedChunks)
 
 			for _, chunk := range fe.Chunks {
 				assert.NotEmpty(t, chunk.StorageName, "chunk StorageName must not be empty for file %s", fe.Name)
 				assert.NotEmpty(t, chunk.Hash, "chunk Hash must not be empty for file %s", fe.Name)
 				assert.Contains(t, chunk.StorageName, "-", "chunk StorageName must follow fileIndex-chunkIndex format, got %s", chunk.StorageName)
-				assert.Greater(t, chunk.Size, int64(0), "chunk Size must be positive for file %s chunk %s", fe.Name, chunk.StorageName)
+				assert.Positive(t, chunk.Size, "chunk Size must be positive for file %s chunk %s", fe.Name, chunk.StorageName)
 			}
 		} else {
 			nonChunkedFileCount++
@@ -1107,7 +1107,7 @@ func verifyBackupChunking(t *testing.T, expectChunked bool) {
 	t.Logf("Total chunks: %d, chunked files: %d, non-chunked files: %d", totalChunks, chunkedFileCount, nonChunkedFileCount)
 
 	if expectChunked {
-		assert.Greater(t, chunkedFileCount, 0, "expected at least one file to be chunked")
+		assert.Positive(t, chunkedFileCount, "expected at least one file to be chunked")
 		assert.Greater(t, nonChunkedFileCount, 0, "expected at least one file to NOT be chunked (mixed scenario)")
 
 		// Verify that our small test table (well under chunk threshold) was NOT chunked.

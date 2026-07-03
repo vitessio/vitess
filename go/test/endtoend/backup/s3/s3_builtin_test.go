@@ -649,7 +649,7 @@ func TestExecuteBackupRestoreS3WithChunking(t *testing.T) {
 	}
 
 	bm, err := be.ExecuteRestore(ctx, restoreParams, restoreBh)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, bm)
 
 	restoreSS := blackbox.GetStats(restoreStats)

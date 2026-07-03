@@ -534,7 +534,7 @@ func TestVtBackupWithChunking(t *testing.T) {
 			t.Logf("File %s: %d chunks", fe.Name, len(fe.Chunks))
 		}
 	}
-	assert.Greater(t, chunkedFiles, 0, "expected at least one file with chunks in MANIFEST")
+	assert.Positive(t, chunkedFiles, "expected at least one file with chunks in MANIFEST")
 
 	err = localCluster.InitTablet(replica2, keyspaceName, shardName)
 	require.NoError(t, err)

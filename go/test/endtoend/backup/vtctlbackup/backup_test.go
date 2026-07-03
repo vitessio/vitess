@@ -84,7 +84,7 @@ func TestBuiltinBackupChunked(t *testing.T) {
 	)
 
 	code, err := LaunchCluster(BuiltinBackup, "xbstream", 0, nil)
-	require.Nilf(t, err, "setup failed with status code %d", code)
+	require.NoErrorf(t, err, "setup failed with status code %d", code)
 	defer TearDownCluster()
 
 	t.Run("TestChunkedBackup", chunkedBackup)
@@ -95,7 +95,7 @@ func TestBuiltinBackupChunked(t *testing.T) {
 func TestBuiltinBackupNonChunked(t *testing.T) {
 	defer setDefaultCommonArgs()
 	code, err := LaunchCluster(BuiltinBackup, "xbstream", 0, nil)
-	require.Nilf(t, err, "setup failed with status code %d", code)
+	require.NoErrorf(t, err, "setup failed with status code %d", code)
 	defer TearDownCluster()
 
 	t.Run("TestNonChunkedBackup", nonChunkedBackup)
@@ -106,7 +106,7 @@ func TestBuiltinBackupNonChunked(t *testing.T) {
 func TestBuiltinBackupChunkedRestoreNonChunked(t *testing.T) {
 	defer setDefaultCommonArgs()
 	code, err := LaunchCluster(BuiltinBackup, "xbstream", 0, nil)
-	require.Nilf(t, err, "setup failed with status code %d", code)
+	require.NoErrorf(t, err, "setup failed with status code %d", code)
 	defer TearDownCluster()
 
 	t.Run("TestChunkedRestoreNonChunked", chunkedRestoreNonChunkedBackup)
