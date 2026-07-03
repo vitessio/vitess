@@ -429,3 +429,23 @@ func TestBuildLdPathsTZ(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, env, "TZ=Europe/Berlin")
 }
+
+// TestMysqlbinlogEnvironForcesUTC verifies that the environment used for
+// mysqlbinlog forces TZ=UTC so that the UTC-formatted --stop-datetime is
+// interpreted as UTC regardless of the host time zone. It also verifies that
+// the shared base environment is not mutated. Regression test for #20373.
+func TestMysqlbinlogEnvironForcesUTC(t *testing.T) {
+	base := []string{"LD_LIBRARY_PATH=/opt/mysql/lib", "LD_PRELOAD="}
+	baseCopy := append([]string(nil), base...)
+
+	got := mysqlbinlogEnviron(base)
+
+	require.Contains(t, got, "TZ=UTC")
+	// every entry from the base environment is preserved
+	for _, e := range baseCopy {
+		require.Contains(t, got, e)
+	}
+	// the shared base environment is left untouched (it is reused by the mysql
+	// command that applies the mysqlbinlog output)
+	require.Equal(t, baseCopy, base)
+}

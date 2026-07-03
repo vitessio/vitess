@@ -1431,6 +1431,20 @@ func (mysqld *Mysqld) HostMetrics(ctx context.Context, cnf *Mycnf) (*mysqlctlpb.
 	return hostMetrics(ctx, cnf)
 }
 
+// mysqlbinlogEnviron returns the environment to use when running mysqlbinlog.
+// mysqlbinlog interprets --stop-datetime (and --start-datetime) in its own
+// process time zone. ApplyBinlogFile formats the restore timestamp in UTC, and
+// Vitess clears the host environment before invoking mysqlbinlog, so we force
+// TZ=UTC here to make mysqlbinlog read that timestamp as UTC too. Without this,
+// on a host whose time zone is not UTC, mysqlbinlog stops at the wrong point and
+// the wrong point in time is restored.
+// See https://github.com/vitessio/vitess/issues/20373.
+func mysqlbinlogEnviron(baseEnv []string) []string {
+	// Use a full three-index slice so the append never mutates baseEnv, which is
+	// shared with the mysql command that applies the output.
+	return append(baseEnv[:len(baseEnv):len(baseEnv)], "TZ=UTC")
+}
+
 // ApplyBinlogFile extracts a binary log file and applies it to MySQL. It is the equivalent of:
 // $ mysqlbinlog --include-gtids binlog.file | mysql
 func (mysqld *Mysqld) ApplyBinlogFile(ctx context.Context, req *mysqlctlpb.ApplyBinlogFileRequest) error {
@@ -1485,7 +1499,7 @@ func (mysqld *Mysqld) ApplyBinlogFile(ctx context.Context, req *mysqlctlpb.Apply
 
 		mysqlbinlogCmd = exec.Command(name, args...)
 		mysqlbinlogCmd.Dir = dir
-		mysqlbinlogCmd.Env = env
+		mysqlbinlogCmd.Env = mysqlbinlogEnviron(env)
 		mysqlbinlogCmd.Stderr = mysqlbinlogErrFile
 		log.Info(fmt.Sprintf("ApplyBinlogFile: running mysqlbinlog command: %#v with errfile=%v", mysqlbinlogCmd, mysqlbinlogErrFile.Name()))
 		pipe, err = mysqlbinlogCmd.StdoutPipe() // to be piped into mysql
