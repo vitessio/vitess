@@ -1100,6 +1100,42 @@ func TestQueryExecutorTableAclNoPermission(t *testing.T) {
 	require.Equalf(t, vtrpcpb.Code_PERMISSION_DENIED, vterrors.Code(err), "qre.Execute: %v, want %v", vterrors.Code(err), vtrpcpb.Code_PERMISSION_DENIED)
 }
 
+// TestQueryExecutorTableAclCTEBypass guards against GHSA-mv22-c3rp-c6m4: a
+// non-recursive CTE that shares its name with a real table used to suppress the
+// table's READER permission, letting a user denied READER read the table by
+// wrapping it in a same-named CTE. The wrapped read must be denied just like a
+// plain read.
+func TestQueryExecutorTableAclCTEBypass(t *testing.T) {
+	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int64())
+	tableacl.Register(aclName, &simpleacl.Factory{})
+	tableacl.SetDefaultACL(aclName)
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+
+	username := "u2"
+	callerID := &querypb.VTGateCallerID{Username: username}
+	ctx := callerid.NewContext(t.Context(), nil, callerID)
+	// u2 is not a reader of test_table; only superuser is.
+	config := &tableaclpb.Config{
+		TableGroups: []*tableaclpb.TableGroupSpec{{
+			Name:                 "group01",
+			TableNamesOrPrefixes: []string{"test_table"},
+			Readers:              []string{"superuser"},
+		}},
+	}
+	require.NoError(t, tableacl.InitFromProto(config))
+
+	tsv := newTestTabletServer(ctx, enableStrictTableACL, db)
+	defer tsv.StopService()
+
+	query := "with test_table as (select * from test_table) select * from test_table"
+	qre := newTestQueryExecutor(ctx, tsv, query, 0)
+	require.NotEmpty(t, qre.plan.Permissions, "a permission must be derived for the real table read inside the CTE body")
+	_, err := qre.Execute()
+	require.Error(t, err, "CTE-wrapped read of test_table must not bypass the ACL")
+	require.Equalf(t, vtrpcpb.Code_PERMISSION_DENIED, vterrors.Code(err), "qre.Execute: %v, want %v", vterrors.Code(err), vtrpcpb.Code_PERMISSION_DENIED)
+}
+
 func TestQueryExecutorTableAclDualTableExempt(t *testing.T) {
 	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int64())
 	tableacl.Register(aclName, &simpleacl.Factory{})

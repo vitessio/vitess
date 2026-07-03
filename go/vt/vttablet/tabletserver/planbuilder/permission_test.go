@@ -221,6 +221,42 @@ func TestBuildPermissions(t *testing.T) {
 			TableName: "t1",
 			Role:      tableacl.READER,
 		}},
+	}, {
+		// A non-recursive CTE is not visible inside its own definition, so the
+		// reference in the CTE body is the real base table and must require a
+		// READER permission. See GHSA-mv22-c3rp-c6m4.
+		input: "with secret as (select * from secret) select * from secret",
+		output: []Permission{{
+			TableName: "secret",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		// A non-recursive CTE that shadows a real table only shadows it for the
+		// consumer, not for the CTE's own body.
+		input: "with t as (select * from t where id in (select id from u)) select * from t",
+		output: []Permission{{
+			TableName: "t",
+			Role:      tableacl.READER,
+		}, {
+			TableName: "u",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		// An earlier sibling CTE is visible inside a later sibling's body and
+		// carries no permission; the real table it wraps does.
+		input: "with a as (select * from real1), b as (select * from a) select * from b",
+		output: []Permission{{
+			TableName: "real1",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		// A recursive CTE may reference itself, so the self-reference in its own
+		// body is the CTE and carries no permission.
+		input: "with recursive t as (select * from real1 union all select * from t) select * from t",
+		output: []Permission{{
+			TableName: "real1",
+			Role:      tableacl.READER,
+		}},
 	}}
 
 	for _, tcase := range tcases {

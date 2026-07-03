@@ -81,7 +81,17 @@ func BuildPermissions(stmt sqlparser.Statement) []Permission {
 }
 
 func buildSubqueryPermissions(stmt sqlparser.Statement, role tableacl.Role, permissions []Permission) []Permission {
+	return buildSubqueryPermissionsInScope(stmt, role, nil, permissions)
+}
+
+// buildSubqueryPermissionsInScope walks stmt and collects the permissions for
+// every real table it references. outerCTEs are the CTE names that are already
+// in scope from an enclosing query (used when recursing into a CTE body).
+func buildSubqueryPermissionsInScope(stmt sqlparser.Statement, role tableacl.Role, outerCTEs []sqlparser.IdentifierCS, permissions []Permission) []Permission {
 	var cteScopes [][]sqlparser.IdentifierCS
+	if len(outerCTEs) > 0 {
+		cteScopes = append(cteScopes, outerCTEs)
+	}
 	sqlparser.Rewrite(stmt, func(cursor *sqlparser.Cursor) bool {
 		switch node := cursor.Node().(type) {
 		case *sqlparser.Select:
@@ -105,18 +115,36 @@ func buildSubqueryPermissions(stmt sqlparser.Statement, role tableacl.Role, perm
 			if node.With != nil {
 				cteScopes = append(cteScopes, gatherCTEs(node.With))
 			}
-		}
-		return true
-	}, func(cursor *sqlparser.Cursor) bool {
-		// When we encounter a With expression coming up, we should remove
-		// the last value from the cte scopes to ensure we none of the outer
-		// elements of the query see this table name.
-		_, isWith := cursor.Node().(*sqlparser.With)
-		if isWith {
+		case *sqlparser.ValuesStatement:
+			if node.With != nil {
+				cteScopes = append(cteScopes, gatherCTEs(node.With))
+			}
+		case *sqlparser.With:
+			// The enclosing statement pushed this WITH's CTE names as the top
+			// scope so the consumer query can see them. A CTE body has a
+			// narrower view: a non-recursive CTE is not visible inside its own
+			// definition (there the name is the real base table), and later
+			// siblings are never visible. Walk each body with exactly the CTEs
+			// that are legal there, then drop this scope so the walker does not
+			// re-process the bodies with the consumer scope.
+			names := cteScopes[len(cteScopes)-1]
 			cteScopes = cteScopes[:len(cteScopes)-1]
+			var outer []sqlparser.IdentifierCS
+			for _, cteScope := range cteScopes {
+				outer = append(outer, cteScope...)
+			}
+			for i, cte := range node.CTEs {
+				bodyScope := append([]sqlparser.IdentifierCS(nil), outer...)
+				bodyScope = append(bodyScope, names[:i]...)
+				if node.Recursive {
+					bodyScope = append(bodyScope, names[i])
+				}
+				permissions = buildSubqueryPermissionsInScope(cte.Subquery, role, bodyScope, permissions)
+			}
+			return false
 		}
 		return true
-	})
+	}, nil)
 	return permissions
 }
 
