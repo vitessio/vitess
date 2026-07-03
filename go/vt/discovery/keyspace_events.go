@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -480,14 +481,48 @@ func (mts MoveTablesState) String() string {
 	return fmt.Sprintf("{Type: %s, State: %s}", typ, state)
 }
 
+// rulesReferenceKeyspace reports whether any routing rule in the SrvVSchema
+// references the given keyspace: as the keyspace qualifier of a table routing
+// rule's from-table or to-tables, or as an endpoint of a shard routing rule.
+//
+// This is safe to use as a MoveTables gate because the traffic switcher always
+// writes keyspace-qualified rule variants naming both the source and the
+// target keyspace, unquoted (see trafficSwitcher's routing rule handling), for
+// regular as well as shard-by-shard workflows. A keyspace not referenced by
+// any rule therefore cannot be part of an in-progress MoveTables.
+func rulesReferenceKeyspace(vs *vschemapb.SrvVSchema, keyspace string) bool {
+	prefix := keyspace + "."
+	for _, rule := range vs.GetRoutingRules().GetRules() {
+		if strings.HasPrefix(rule.GetFromTable(), prefix) {
+			return true
+		}
+		for _, toTable := range rule.GetToTables() {
+			if strings.HasPrefix(toTable, prefix) {
+				return true
+			}
+		}
+	}
+	for _, rule := range vs.GetShardRoutingRules().GetRules() {
+		if rule.GetFromKeyspace() == keyspace || rule.GetToKeyspace() == keyspace {
+			return true
+		}
+	}
+	return false
+}
+
 func (kss *keyspaceState) getMoveTablesStatus(vs *vschemapb.SrvVSchema) (*MoveTablesState, error) {
 	mtState := &MoveTablesState{
 		Typ:   MoveTablesNone,
 		State: MoveTablesUnknown,
 	}
 
-	// If there are no routing rules defined, then movetables is not in progress, exit early.
-	if len(vs.GetRoutingRules().GetRules()) == 0 && len(vs.GetShardRoutingRules().GetRules()) == 0 {
+	// If no routing rules reference this keyspace, then movetables is not in
+	// progress for it, exit early. This check must be scoped to the keyspace:
+	// every keyspaceState on every vtgate runs this on every SrvVSchema
+	// update, and falling through fetches all of the keyspace's shard records
+	// from the global topo server — an unrelated routing rule must not turn
+	// one SrvVSchema write into a cluster-wide shard-record read storm.
+	if !rulesReferenceKeyspace(vs, kss.keyspace) {
 		return mtState, nil
 	}
 
