@@ -1483,13 +1483,15 @@ func (mysqld *Mysqld) ApplyBinlogFile(ctx context.Context, req *mysqlctlpb.Apply
 
 		args := []string{}
 		if gtids := req.BinlogRestorePosition; gtids != "" {
-			args = append(args,
+			args = append(
+				args,
 				"--include-gtids",
 				gtids,
 			)
 		}
 		if restoreToTimestamp := protoutil.TimeFromProto(req.BinlogRestoreDatetime).UTC(); !restoreToTimestamp.IsZero() {
-			args = append(args,
+			args = append(
+				args,
 				"--stop-datetime",
 				restoreToTimestamp.Format(sqltypes.TimestampFormat),
 			)
@@ -1700,6 +1702,12 @@ func (mysqld *Mysqld) ReadBinlogFilesTimestamps(ctx context.Context, req *mysqlc
 	if err != nil {
 		return nil, err
 	}
+	// mysqlbinlog prints event timestamps in its own process time zone, and the
+	// MySQL 5.7 fallback in parseBinlogEntryTimestamp parses the zone-less value
+	// as UTC. Force TZ=UTC so the recorded First/LastTimestamp match that
+	// assumption on non-UTC hosts, the same way ApplyBinlogFile does for
+	// --stop-datetime. See https://github.com/vitessio/vitess/issues/20373.
+	mysqlbinlogEnv := mysqlbinlogEnviron(env)
 
 	lastMatchedTimeMap := map[string]time.Time{} // a simple cache to avoid rescanning same files. Key=binlog file name
 
@@ -1707,7 +1715,7 @@ func (mysqld *Mysqld) ReadBinlogFilesTimestamps(ctx context.Context, req *mysqlc
 	// Find first timestamp
 	err = func() error {
 		for _, binlogFile := range req.BinlogFileNames {
-			firstMatchedTime, lastMatchedTime, err := mysqld.scanBinlogTimestamp(dir, env, mysqlbinlogName, binlogFile, true)
+			firstMatchedTime, lastMatchedTime, err := mysqld.scanBinlogTimestamp(dir, mysqlbinlogEnv, mysqlbinlogName, binlogFile, true)
 			if err != nil {
 				return vterrors.Wrapf(err, "while scanning for first binlog timestamp in %v", binlogFile)
 			}
@@ -1736,7 +1744,7 @@ func (mysqld *Mysqld) ReadBinlogFilesTimestamps(ctx context.Context, req *mysqlc
 			lastMatchedTime, ok := lastMatchedTimeMap[binlogFile]
 			if !ok {
 				var err error
-				_, lastMatchedTime, err = mysqld.scanBinlogTimestamp(dir, env, mysqlbinlogName, binlogFile, false)
+				_, lastMatchedTime, err = mysqld.scanBinlogTimestamp(dir, mysqlbinlogEnv, mysqlbinlogName, binlogFile, false)
 				if err != nil {
 					return vterrors.Wrapf(err, "while scanning for last binlog timestamp in %v", binlogFile)
 				}
