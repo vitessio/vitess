@@ -814,3 +814,34 @@ func TestVal2MySQLNonZeroDateTime(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, byte(0x04), out[0])
 }
+
+// TestIsZeroDateTime pins the exact set of textual forms treated as the MySQL
+// zero temporal value. Only the canonical zero DATE/DATETIME/TIMESTAMP forms
+// (including all-zero fractional seconds) are zero; malformed values fall
+// through to the normal length-based path instead of being silently accepted
+// as a zero-length date.
+func TestIsZeroDateTime(t *testing.T) {
+	testcases := []struct {
+		raw  string
+		want bool
+	}{
+		{"0000-00-00", true},
+		{"0000-00-00 00:00:00", true},
+		{"0000-00-00 00:00:00.0", true},
+		{"0000-00-00 00:00:00.000000", true},
+		{"", false},
+		{"2020-01-02 03:04:05", false},
+		{"0001-00-00", false},
+		{"0000-00-00 00:00:01", false},
+		{"----", false},
+		{"0000/00/00", false},
+		{"0000-00-00 00:00:00.", false},
+		{"0000-00-00 00:00:00.0000000", false}, // 7 fractional digits
+		{"0000-00-00 00:00:00.00000a", false},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.raw, func(t *testing.T) {
+			assert.Equal(t, tc.want, isZeroDateTime([]byte(tc.raw)))
+		})
+	}
+}

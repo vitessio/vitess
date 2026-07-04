@@ -1123,7 +1123,7 @@ func (c *Conn) writePrepare(fld []*querypb.Field, prepare *PrepareData) error {
 	ok := PacketComStmtPrepareOK{
 		status:       OKPacket,
 		stmtID:       prepare.StatementID,
-		numCols:      (uint16)(columnCount),
+		numCols:      uint16(columnCount),
 		numParams:    paramsCount,
 		warningCount: 0,
 	}
@@ -1233,21 +1233,40 @@ func (c *Conn) writeBinaryRows(result *sqltypes.Result) error {
 	return nil
 }
 
-// isZeroDateTime reports whether the raw DATE, DATETIME or TIMESTAMP value is
-// the MySQL zero value (every date and time component is zero, e.g.
-// "0000-00-00 00:00:00"). MySQL encodes this as a zero-length value in the
-// binary protocol, so we must do the same to avoid clients decoding a length-4
-// or length-7 packet with all-zero components into a garbage date.
+// isZeroDateTime reports whether raw is a MySQL zero temporal value in one of
+// the canonical textual forms Vitess receives from MySQL:
+//
+//	"0000-00-00"                        (DATE)
+//	"0000-00-00 00:00:00"               (DATETIME / TIMESTAMP)
+//	"0000-00-00 00:00:00.0" … ".000000" (with 1-6 all-zero fractional digits)
+//
+// MySQL encodes these as a zero-length value in the binary protocol, so we must
+// do the same to avoid clients decoding a length-4/7/11 packet with all-zero
+// components into a garbage date. Only these exact forms are treated as zero;
+// anything malformed (e.g. "----", "0000/00/00", or a trailing "." with no
+// fractional digits) falls through to the normal length-based path rather than
+// being silently accepted as a valid zero date.
 func isZeroDateTime(raw []byte) bool {
-	if len(raw) == 0 {
-		return false
-	}
-	for _, b := range raw {
-		if b >= '1' && b <= '9' {
+	const zeroDateTime = "0000-00-00 00:00:00" // its 10-char prefix is the zero DATE
+	switch {
+	case string(raw) == zeroDateTime[:10], string(raw) == zeroDateTime:
+		return true
+	case len(raw) > len(zeroDateTime) && raw[len(zeroDateTime)] == '.' &&
+		string(raw[:len(zeroDateTime)]) == zeroDateTime:
+		// Fractional seconds must be 1-6 digits, all zero.
+		frac := raw[len(zeroDateTime)+1:]
+		if len(frac) == 0 || len(frac) > 6 {
 			return false
 		}
+		for _, b := range frac {
+			if b != '0' {
+				return false
+			}
+		}
+		return true
+	default:
+		return false
 	}
-	return true
 }
 
 func val2MySQL(v sqltypes.Value) ([]byte, error) {
