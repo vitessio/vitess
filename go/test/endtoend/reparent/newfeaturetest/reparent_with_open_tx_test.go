@@ -17,7 +17,6 @@ limitations under the License.
 package newfeaturetest
 
 import (
-	"strings"
 	"testing"
 	"time"
 
@@ -114,15 +113,7 @@ func testExecuteErrorWhileTabletIsNotServing(t *testing.T, conn *mysql.Conn, clu
 		if !assert.ErrorContains(t, err, "VT15001") {
 			return
 		}
-		// Depending on whether vtgate has re-established its health stream to the
-		// restarted tablet by the time the query runs, the underlying reason is
-		// either the tablet rejecting the query as the wrong type, or vtgate not
-		// yet having a live connection to it. Both are valid VT15001 transaction
-		// errors against a no-longer-serving pinned tablet.
-		if !assert.True(t,
-			strings.Contains(err.Error(), vterrors.WrongTablet) ||
-				strings.Contains(err.Error(), "is either down or nonexistent"),
-			"unexpected VT15001 reason: %v", err) {
+		if !assert.ErrorContains(t, err, vterrors.WrongTablet) {
 			return
 		}
 

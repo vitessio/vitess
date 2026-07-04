@@ -23,40 +23,23 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// TestRetryInterval verifies that the retry interval stays within a bounded
-// jitter window around the configured base delay. The jitter de-synchronizes
-// reconnection attempts across vtgate instances so that a fleet recovering from
-// a shared outage does not stampede a tablet at the same instant (#19894),
-// while never growing the interval the way exponential backoff did.
-func TestRetryInterval(t *testing.T) {
-	const base = 5 * time.Second
-	lower := time.Duration(float64(base) * 0.75)
-	upper := time.Duration(float64(base) * 1.25)
+// TestNextHealthCheckRetryDelay verifies the reconnection back-off doubles while
+// below the cap and never grows past maxHealthCheckRetryDelay. Capping the
+// back-off well below healthCheckTimeout (default 1m) is what lets vtgate
+// rediscover a recovered tablet promptly. See #19894.
+func TestNextHealthCheckRetryDelay(t *testing.T) {
+	// Doubles while comfortably below the cap.
+	assert.Equal(t, 20*time.Millisecond, nextHealthCheckRetryDelay(10*time.Millisecond))
+	assert.Equal(t, 2*time.Second, nextHealthCheckRetryDelay(time.Second))
 
-	seen := make(map[time.Duration]struct{})
-	for range 1000 {
-		got := retryInterval(base)
-		assert.GreaterOrEqual(t, got, lower, "interval must not drop below 75% of base")
-		assert.LessOrEqual(t, got, upper, "interval must not exceed 125% of base")
-		seen[got] = struct{}{}
-	}
+	// Caps at maxHealthCheckRetryDelay once doubling would exceed it.
+	assert.Equal(t, maxHealthCheckRetryDelay, nextHealthCheckRetryDelay(6*time.Second))
+	assert.Equal(t, maxHealthCheckRetryDelay, nextHealthCheckRetryDelay(maxHealthCheckRetryDelay))
 
-	// Jitter must actually vary; a single repeated value would re-synchronize
-	// the fleet and defeat the purpose.
-	assert.Greater(t, len(seen), 1, "retry interval should vary across calls")
-}
+	// Never exceeds the cap, even from an already-huge delay.
+	assert.Equal(t, maxHealthCheckRetryDelay, nextHealthCheckRetryDelay(time.Hour))
 
-// TestRetryIntervalNonPositive verifies that a zero or negative base delay is
-// returned unchanged, so the jitter math never produces a panic or a negative
-// sleep duration.
-func TestRetryIntervalNonPositive(t *testing.T) {
-	assert.Equal(t, time.Duration(0), retryInterval(0))
-	assert.Equal(t, -time.Second, retryInterval(-time.Second))
-}
-
-// TestRetryIntervalTinyBase verifies that a positive base too small to jitter
-// (base/2 truncates to zero) is returned unchanged rather than panicking inside
-// rand.Int64N, which rejects a non-positive argument.
-func TestRetryIntervalTinyBase(t *testing.T) {
-	assert.Equal(t, time.Nanosecond, retryInterval(time.Nanosecond))
+	// The cap stays well under the default health check timeout, so a recovered
+	// tablet is not stranded behind a back-off grown to the silence timeout.
+	assert.Less(t, maxHealthCheckRetryDelay, DefaultHealthCheckTimeout)
 }
