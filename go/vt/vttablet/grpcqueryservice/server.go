@@ -65,8 +65,10 @@ func (q *query) StreamExecute(request *querypb.StreamExecuteRequest, stream quer
 		request.ImmediateCallerId,
 	)
 	err = q.server.StreamExecute(ctx, nil, request.Target, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.ReservedId, request.Options, func(reply *sqltypes.Result) error {
+		result := sqltypes.ResultToProto3Pooled(reply)
+		defer sqltypes.ReleaseProto3Result(result)
 		return stream.Send(&querypb.StreamExecuteResponse{
-			Result: sqltypes.ResultToProto3(reply),
+			Result: result,
 		})
 	})
 	return vterrors.ToGRPC(err)
@@ -280,8 +282,10 @@ func (q *query) BeginStreamExecute(request *querypb.BeginStreamExecuteRequest, s
 		request.ImmediateCallerId,
 	)
 	state, err := q.server.BeginStreamExecute(ctx, nil, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.ReservedId, request.Options, func(reply *sqltypes.Result) error {
+		result := sqltypes.ResultToProto3Pooled(reply)
+		defer sqltypes.ReleaseProto3Result(result)
 		return stream.Send(&querypb.BeginStreamExecuteResponse{
-			Result: sqltypes.ResultToProto3(reply),
+			Result: result,
 		})
 	})
 
@@ -306,8 +310,10 @@ func (q *query) MessageStream(request *querypb.MessageStreamRequest, stream quer
 		request.ImmediateCallerId,
 	)
 	err = q.server.MessageStream(ctx, request.Target, request.Name, func(qr *sqltypes.Result) error {
+		result := sqltypes.ResultToProto3Pooled(qr)
+		defer sqltypes.ReleaseProto3Result(result)
 		return stream.Send(&querypb.MessageStreamResponse{
-			Result: sqltypes.ResultToProto3(qr),
+			Result: result,
 		})
 	})
 	return vterrors.ToGRPC(err)
@@ -431,8 +437,10 @@ func (q *query) ReserveStreamExecute(request *querypb.ReserveStreamExecuteReques
 	)
 
 	state, err := q.server.ReserveStreamExecute(ctx, nil, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.Options, func(reply *sqltypes.Result) error {
+		result := sqltypes.ResultToProto3Pooled(reply)
+		defer sqltypes.ReleaseProto3Result(result)
 		return stream.Send(&querypb.ReserveStreamExecuteResponse{
-			Result: sqltypes.ResultToProto3(reply),
+			Result: result,
 		})
 	})
 	if err != nil && state.ReservedID == 0 {
@@ -487,8 +495,10 @@ func (q *query) ReserveBeginStreamExecute(request *querypb.ReserveBeginStreamExe
 	)
 
 	state, err := q.server.ReserveBeginStreamExecute(ctx, nil, request.Target, request.PreQueries, request.PostBeginQueries, request.Query.Sql, request.Query.BindVariables, request.Options, func(reply *sqltypes.Result) error {
+		result := sqltypes.ResultToProto3Pooled(reply)
+		defer sqltypes.ReleaseProto3Result(result)
 		return stream.Send(&querypb.ReserveBeginStreamExecuteResponse{
-			Result: sqltypes.ResultToProto3(reply),
+			Result: result,
 		})
 	})
 	if err != nil && state.ReservedID == 0 && state.TransactionID == 0 {
