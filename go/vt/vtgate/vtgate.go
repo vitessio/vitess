@@ -762,6 +762,11 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MyS
 	if bvErr := sqltypes.ValidateBindVariables(bindVariables); bvErr != nil {
 		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", bvErr)
 	} else {
+		// Accumulate the row stats locally and record them once the query is
+		// done: the callback runs per streamed packet, and updating the shared
+		// stats counters from it would contend on them once per packet.
+		// Invocations are serialized by the executor.
+		var rowsReturned, rowsAffected int64
 		err = vtg.executor.StreamExecute(
 			ctx,
 			mysqlCtx,
@@ -771,10 +776,12 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MyS
 			bindVariables,
 			prepared,
 			func(reply *sqltypes.Result) error {
-				vtg.rowsReturned.Add(statsKey, int64(len(reply.Rows)))
-				vtg.rowsAffected.Add(statsKey, int64(reply.RowsAffected))
+				rowsReturned += int64(len(reply.Rows))
+				rowsAffected += int64(reply.RowsAffected)
 				return callback(reply)
 			})
+		vtg.rowsReturned.Add(statsKey, rowsReturned)
+		vtg.rowsAffected.Add(statsKey, rowsAffected)
 		safeSession.RemoveInternalSavepoint()
 	}
 	if err != nil {
