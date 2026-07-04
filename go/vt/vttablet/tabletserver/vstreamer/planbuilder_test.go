@@ -147,7 +147,16 @@ func TestMustSendDDL(t *testing.T) {
 		output: false,
 	}, {
 		sql:    "bad query",
-		output: true,
+		output: false,
+	}, {
+		sql:    "create trigger ins_sum before insert on t1a for each row set @sum = @sum + new.amount",
+		output: false,
+	}, {
+		sql:    "create definer=`root`@`localhost` trigger ins_sum before insert on t1a for each row set @sum = @sum + new.amount",
+		output: false,
+	}, {
+		sql:    "alter user 'foo'@'localhost' identified by 'bar'",
+		output: false,
 	}, {
 		sql:    "select * from t",
 		output: true,

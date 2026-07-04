@@ -378,10 +378,13 @@ func mustSendDDL(query mysql.Query, dbname string, filter *binlogdatapb.Filter, 
 		return false
 	}
 	ast, err := parser.Parse(query.SQL)
-	// If there was a parsing error, we send it through. Hopefully,
-	// recipient can handle it.
+	// We can't parse the statement, so we can't tell whether it affects a table
+	// this stream cares about. Statements that MySQL always logs as statement
+	// based events regardless of binlog_format, such as CREATE TRIGGER or ALTER
+	// USER, land here; forwarding them to the target breaks the workflow because
+	// they cannot be applied there. See #18715.
 	if err != nil {
-		return true
+		return false
 	}
 	switch stmt := ast.(type) {
 	case sqlparser.DBDDLStatement:
