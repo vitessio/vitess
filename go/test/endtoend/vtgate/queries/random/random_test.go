@@ -338,9 +338,11 @@ func TestBuggyQueries(t *testing.T) {
 }
 
 // TestEnumSetJSONTypeAxes exercises the ENUM, SET and JSON type axes end to end
-// against MySQL. These types are otherwise thinly covered by this suite, and the
-// ENUM numeric-ordinal cases in particular guard the fix from #20454 (ENUM in a
-// numeric context must use MySQL's 1-based ordinal, not a 0-based index).
+// against MySQL, which are otherwise thinly covered by this suite. The ENUM
+// numeric-context cases below are pushdown-friendly (MySQL evaluates them on each
+// tablet), so they assert end-to-end parity with MySQL for #20454's behavior
+// rather than directly guarding the vtgate evalengine fix; the precise regression
+// guard for the 1-based ordinal belongs at the evalengine unit layer.
 func TestEnumSetJSONTypeAxes(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
@@ -350,7 +352,7 @@ func TestEnumSetJSONTypeAxes(t *testing.T) {
 	// projection of each type
 	mcmp.Exec("select empno, grade, skills, meta from emp order by empno")
 
-	// ENUM numeric ordinal (regression guard for #20454)
+	// ENUM in numeric context — end-to-end parity with MySQL (see #20454)
 	mcmp.Exec("select empno, grade + 0 from emp order by empno")
 	mcmp.Exec("select empno, cast(grade as unsigned) from emp order by empno")
 	mcmp.Exec("select empno from emp where grade = 3 order by empno")
