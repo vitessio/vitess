@@ -347,13 +347,13 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 	}()
 
 	if mysqlSessionUsesStreaming(session) {
-		streamCallback, deferredResult := deferOKOnlyResults(callback)
-		session, err := vh.vtg.StreamExecute(ctx, mysqlCtx, session, query, make(map[string]*querypb.BindVariable), false, streamCallback)
+		deferrer := deferOKOnlyResults(callback)
+		session, err := vh.vtg.StreamExecute(ctx, mysqlCtx, session, query, make(map[string]*querypb.BindVariable), false, deferrer.stream)
 		if err != nil {
 			return sqlerror.NewSQLErrorFromError(err)
 		}
 		fillInTxStatusFlags(c, session)
-		if result := deferredResult(); result != nil {
+		if result := deferrer.result(); result != nil {
 			return callback(result)
 		}
 		return nil
@@ -413,15 +413,15 @@ func (vh *vtgateHandler) ComQueryMulti(c *mysql.Conn, sql string, callback func(
 			session, err = vh.streamExecuteMultiQuery(ctx, c, mysqlCtx, session, sql, callback)
 		} else {
 			firstPacket := true
-			streamCallback, deferredResult := deferOKOnlyResults(func(result *sqltypes.Result) error {
+			deferrer := deferOKOnlyResults(func(result *sqltypes.Result) error {
 				defer func() {
 					firstPacket = false
 				}()
 				return callback(sqltypes.QueryResponse{QueryResult: result}, false, firstPacket)
 			})
-			session, err = vh.vtg.StreamExecute(ctx, mysqlCtx, session, sql, make(map[string]*querypb.BindVariable), false, streamCallback)
+			session, err = vh.vtg.StreamExecute(ctx, mysqlCtx, session, sql, make(map[string]*querypb.BindVariable), false, deferrer.stream)
 			if err == nil {
-				if result := deferredResult(); result != nil {
+				if result := deferrer.result(); result != nil {
 					fillInTxStatusFlags(c, session)
 					return callback(sqltypes.QueryResponse{QueryResult: result}, false, true)
 				}
@@ -644,13 +644,13 @@ func (vh *vtgateHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareDat
 	}()
 
 	if mysqlSessionUsesStreaming(session) {
-		streamCallback, deferredResult := deferOKOnlyResults(callback)
-		_, err := vh.vtg.StreamExecute(ctx, mysqlCtx, session, prepare.PrepareStmt, prepare.BindVars, true, streamCallback)
+		deferrer := deferOKOnlyResults(callback)
+		_, err := vh.vtg.StreamExecute(ctx, mysqlCtx, session, prepare.PrepareStmt, prepare.BindVars, true, deferrer.stream)
 		if err != nil {
 			return sqlerror.NewSQLErrorFromError(err)
 		}
 		fillInTxStatusFlags(c, session)
-		if result := deferredResult(); result != nil {
+		if result := deferrer.result(); result != nil {
 			return callback(result)
 		}
 		return nil
@@ -673,29 +673,38 @@ func (vh *vtgateHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareDat
 // merge them all into a single deferred result, matching the buffered Execute
 // path which aggregates the per-shard results. Result-set responses (whose
 // first result carries fields) are streamed through unchanged.
-func deferOKOnlyResults(callback func(*sqltypes.Result) error) (func(*sqltypes.Result) error, func() *sqltypes.Result) {
-	firstPacket := true
-	okOnly := false
-	var deferredResult *sqltypes.Result
+type okOnlyResultDeferrer struct {
+	callback   func(*sqltypes.Result) error
+	seenPacket bool
+	okOnly     bool
+	deferred   *sqltypes.Result
+}
 
-	streamCallback := func(result *sqltypes.Result) error {
-		if firstPacket {
-			firstPacket = false
-			okOnly = len(result.Fields) == 0
-		}
-		if okOnly {
-			if deferredResult == nil {
-				deferredResult = result
-			} else {
-				deferredResult.AppendResult(result)
-			}
-			return nil
-		}
-		return callback(result)
+func deferOKOnlyResults(callback func(*sqltypes.Result) error) *okOnlyResultDeferrer {
+	return &okOnlyResultDeferrer{callback: callback}
+}
+
+// stream is the callback to pass to the streaming execution; it forwards
+// result-set packets and defers OK-only ones.
+func (d *okOnlyResultDeferrer) stream(result *sqltypes.Result) error {
+	if !d.seenPacket {
+		d.seenPacket = true
+		d.okOnly = len(result.Fields) == 0
 	}
-	return streamCallback, func() *sqltypes.Result {
-		return deferredResult
+	if d.okOnly {
+		if d.deferred == nil {
+			d.deferred = result
+		} else {
+			d.deferred.AppendResult(result)
+		}
+		return nil
 	}
+	return d.callback(result)
+}
+
+// result returns the merged deferred OK result, if any.
+func (d *okOnlyResultDeferrer) result() *sqltypes.Result {
+	return d.deferred
 }
 
 func (vh *vtgateHandler) WarningCount(c *mysql.Conn) uint16 {

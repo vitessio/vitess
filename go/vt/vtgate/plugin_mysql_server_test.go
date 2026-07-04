@@ -1094,16 +1094,16 @@ func TestDeferOKOnlyResultsForwardsRowChunksAfterFields(t *testing.T) {
 		{Rows: [][]sqltypes.Value{{sqltypes.NewInt64(2)}}},
 	}
 	var results []*sqltypes.Result
-	callback, deferredResult := deferOKOnlyResults(func(result *sqltypes.Result) error {
+	deferrer := deferOKOnlyResults(func(result *sqltypes.Result) error {
 		results = append(results, result)
 		return nil
 	})
 
 	for _, result := range input {
-		require.NoError(t, callback(result))
+		require.NoError(t, deferrer.stream(result))
 	}
 
-	require.Nil(t, deferredResult())
+	require.Nil(t, deferrer.result())
 	assertOLAPRowChunksAfterFields(t, fields, results)
 }
 
@@ -1117,16 +1117,16 @@ func TestDeferOKOnlyResultsMergesAllOKResults(t *testing.T) {
 		{RowsAffected: 2},
 		{RowsAffected: 3},
 	}
-	callback, deferredResult := deferOKOnlyResults(func(result *sqltypes.Result) error {
+	deferrer := deferOKOnlyResults(func(result *sqltypes.Result) error {
 		require.Failf(t, "callback called for deferred OK-only result", "%v", result)
 		return nil
 	})
 
 	for _, result := range input {
-		require.NoError(t, callback(result))
+		require.NoError(t, deferrer.stream(result))
 	}
 
-	merged := deferredResult()
+	merged := deferrer.result()
 	require.NotNil(t, merged)
 	assert.EqualValues(t, 6, merged.RowsAffected)
 }
