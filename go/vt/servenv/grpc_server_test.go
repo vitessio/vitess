@@ -84,7 +84,9 @@ func TestReportedOrca(t *testing.T) {
 	// stopped before the withTempVar cleanups above restore the globals.
 	stopOrcaUpdater := serveGRPC()
 	t.Cleanup(stopOrcaUpdater)
-	defer GRPCServer.Stop()
+	// The method value binds the receiver now, so the cleanup stops this
+	// test's server no matter when the GRPCServer global gets restored.
+	t.Cleanup(GRPCServer.Stop)
 
 	serverMetrics := GRPCServerMetricsRecorder.ServerMetrics()
 	cpuUsage := serverMetrics.CPUUtilization
@@ -165,19 +167,19 @@ func runIngressStatsTestRPC(t *testing.T, ingressBytes *uint64) {
 	t.Helper()
 
 	port := getFreePort()
-	defer withTempVar(&gRPCPort, port)()
-	defer withTempVar(&gRPCBindAddress, "127.0.0.1")()
-	defer withTempVar(&GRPCServer, (*grpc.Server)(nil))()
+	t.Cleanup(withTempVar(&gRPCPort, port))
+	t.Cleanup(withTempVar(&gRPCBindAddress, "127.0.0.1"))
+	t.Cleanup(withTempVar(&GRPCServer, (*grpc.Server)(nil)))
 
 	createGRPCServer()
 	require.NotNil(t, GRPCServer)
 	GRPCServer.RegisterService(&ingressStatsTestServiceDesc, &ingressStatsTestServer{ingressBytes: ingressBytes})
 	serveGRPC()
-	defer GRPCServer.Stop()
+	t.Cleanup(GRPCServer.Stop)
 
 	conn, err := grpc.NewClient(fmt.Sprintf("127.0.0.1:%d", port), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
-	defer conn.Close()
+	t.Cleanup(func() { conn.Close() })
 
 	require.NoError(t, conn.Invoke(context.Background(), "/test.IngressStats/Check", &emptypb.Empty{}, &emptypb.Empty{}))
 }
