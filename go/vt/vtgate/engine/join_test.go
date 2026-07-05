@@ -21,8 +21,10 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -491,6 +493,96 @@ func TestJoinStreamExecuteEmptyLeftWithoutFieldsCallback(t *testing.T) {
 	})
 	expectResult(t, r, sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("col1|col2|col4|col5", "int64|varchar|int64|varchar"),
+	))
+}
+
+// TestJoinStreamExecuteRightFieldsAndRowsInOneChunk covers a right side that
+// emits fields and rows in a single callback, as the Rows primitive does. The
+// joined fields and the first joined rows must come out in the same chunk.
+func TestJoinStreamExecuteRightFieldsAndRowsInOneChunk(t *testing.T) {
+	leftPrim := &fakePrimitive{
+		results: []*sqltypes.Result{
+			sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("col1|col2|col3", "int64|varchar|varchar"),
+				"1|a|aa",
+				"2|b|bb",
+			),
+		},
+	}
+	rightResult := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("col4|col5|col6", "int64|varchar|varchar"),
+		"4|d|dd",
+	)
+	jn := &Join{
+		Opcode: InnerJoin,
+		Left:   leftPrim,
+		Right:  NewRowsPrimitive(rightResult.Rows, rightResult.Fields),
+		Cols:   []int{-1, -2, 1, 2},
+		Vars:   map[string]int{"bv": 1},
+	}
+
+	r, err := wrapStreamExecute(jn, &noopVCursor{}, map[string]*querypb.BindVariable{}, true)
+	require.NoError(t, err)
+	leftPrim.ExpectLog(t, []string{
+		`StreamExecute  true`,
+	})
+	expectResult(t, r, sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("col1|col2|col4|col5", "int64|varchar|int64|varchar"),
+		"1|a|4|d",
+		"2|b|4|d",
+	))
+}
+
+// TestJoinStreamExecuteAsyncLeft covers concurrent left-side callback
+// delivery. The write-once capture of the left fields must hold up under
+// concurrent chunks, and the joined fields must be emitted exactly once, in
+// the first chunk. Run with -race to validate the synchronization.
+func TestJoinStreamExecuteAsyncLeft(t *testing.T) {
+	leftFields := sqltypes.MakeTestFields("col1|col2|col3", "int64|varchar|varchar")
+	leftPrim := &fakePrimitive{
+		results: []*sqltypes.Result{
+			sqltypes.MakeTestResult(leftFields, "1|a|aa"),
+			sqltypes.MakeTestResult(leftFields, "2|b|bb"),
+		},
+		async: true,
+	}
+	rightPrim := &fakePrimitive{
+		results: []*sqltypes.Result{
+			sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("col4|col5|col6", "int64|varchar|varchar"),
+				"4|d|dd",
+			),
+		},
+		async: true,
+		noLog: true,
+	}
+	jn := &Join{
+		Opcode: InnerJoin,
+		Left:   leftPrim,
+		Right:  rightPrim,
+		Cols:   []int{-1, -2, 1, 2},
+		Vars:   map[string]int{"bv": 1},
+	}
+
+	var res *sqltypes.Result
+	var mu sync.Mutex
+	err := jn.TryStreamExecute(t.Context(), &noopVCursor{}, map[string]*querypb.BindVariable{}, true, func(result *sqltypes.Result) error {
+		mu.Lock()
+		defer mu.Unlock()
+		if res == nil {
+			assert.NotEmpty(t, result.Fields, "the first chunk must carry the joined fields")
+			res = result
+		} else {
+			assert.Empty(t, result.Fields, "only the first chunk may carry fields")
+			res.Rows = append(res.Rows, result.Rows...)
+		}
+		return nil
+	})
+	require.NoError(t, err)
+	expectResultAnyOrder(t, res, sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("col1|col2|col4|col5", "int64|varchar|int64|varchar"),
+		"1|a|4|d",
+		"2|b|4|d",
 	))
 }
 
