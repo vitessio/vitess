@@ -72,14 +72,17 @@ func TestOrcaRecorder(t *testing.T) {
 
 func TestReportedOrca(t *testing.T) {
 	// Set the port to enable gRPC server.
-	withTempVar(&gRPCPort, getFreePort())
-	withTempVar(&gRPCEnableOrcaMetrics, true)
-	withTempVar(&GRPCServerMetricsRecorder, nil)
+	t.Cleanup(withTempVar(&gRPCPort, getFreePort()))
+	t.Cleanup(withTempVar(&gRPCEnableOrcaMetrics, true))
+	t.Cleanup(withTempVar(&GRPCServerMetricsRecorder, nil))
 
 	createGRPCServer()
 	assert.NotNil(t, GRPCServerMetricsRecorder, "GRPCServerMetricsRecorder should be initialized when gRPCEnableOrcaMetrics is false")
 
-	serveGRPC()
+	// Cleanups run last-in-first-out, so the updater goroutine is fully
+	// stopped before the withTempVar cleanups above restore the globals.
+	stopOrcaUpdater := serveGRPC()
+	t.Cleanup(stopOrcaUpdater)
 	defer GRPCServer.Stop()
 
 	serverMetrics := GRPCServerMetricsRecorder.ServerMetrics()
