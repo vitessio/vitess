@@ -26,6 +26,7 @@ import (
 	"os"
 	"runtime"
 	"strconv"
+	"sync"
 	"time"
 
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
@@ -411,10 +412,10 @@ func registerOrca() (stop func()) {
 		}
 	}()
 
-	return func() {
+	return sync.OnceFunc(func() {
 		close(stopCh)
 		<-doneCh
-	}
+	})
 }
 
 // GRPCCheckServiceMap returns if we should register a gRPC service

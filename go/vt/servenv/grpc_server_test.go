@@ -75,6 +75,7 @@ func TestReportedOrca(t *testing.T) {
 	t.Cleanup(withTempVar(&gRPCPort, getFreePort()))
 	t.Cleanup(withTempVar(&gRPCEnableOrcaMetrics, true))
 	t.Cleanup(withTempVar(&GRPCServerMetricsRecorder, nil))
+	t.Cleanup(withTempVar(&GRPCServer, (*grpc.Server)(nil)))
 
 	createGRPCServer()
 	assert.NotNil(t, GRPCServerMetricsRecorder, "GRPCServerMetricsRecorder should be initialized when gRPCEnableOrcaMetrics is false")
