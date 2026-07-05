@@ -368,7 +368,7 @@ func serveGRPC() (stopOrcaUpdater func()) {
 
 	OnTermSync(func() {
 		log.Info("Initiated graceful stop of gRPC server")
-		GRPCServer.GracefulStop()
+		server.GracefulStop()
 		log.Info("gRPC server stopped")
 	})
 
