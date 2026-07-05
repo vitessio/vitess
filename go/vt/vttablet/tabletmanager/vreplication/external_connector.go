@@ -143,15 +143,14 @@ func (c *mysqlConnector) VStream(ctx context.Context, startPos string, tablePKs 
 func (c *mysqlConnector) VStreamRows(ctx context.Context, query string, lastpk *querypb.QueryResult,
 	send func(*binlogdatapb.VStreamRowsResponse) error, options *binlogdatapb.VStreamOptions,
 ) error {
-	var row []sqltypes.Value
+	var lastpkResult *sqltypes.Result
 	if lastpk != nil {
-		r := sqltypes.Proto3ToResult(lastpk)
-		if len(r.Rows) != 1 {
+		lastpkResult = sqltypes.Proto3ToResult(lastpk)
+		if len(lastpkResult.Rows) != 1 {
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected lastpk input: %v", lastpk)
 		}
-		row = r.Rows[0]
 	}
-	return c.vstreamer.StreamRows(ctx, query, row, send, options)
+	return c.vstreamer.StreamRows(ctx, query, lastpkResult, send, options)
 }
 
 func (c *mysqlConnector) VStreamTables(ctx context.Context,

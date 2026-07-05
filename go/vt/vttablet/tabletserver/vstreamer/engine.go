@@ -285,14 +285,17 @@ func (vse *Engine) Stream(ctx context.Context, startPos string, tablePKs []*binl
 
 // StreamRows streams rows.
 // This streams the table data rows (so we can copy the table data snapshot)
-func (vse *Engine) StreamRows(ctx context.Context, query string, lastpk []sqltypes.Value,
+// The lastpk result, when provided, carries both the values and the fields of
+// the last PK from a previous copy phase cycle, so that the row streamer can
+// verify the values still bind to the same key columns before resuming.
+func (vse *Engine) StreamRows(ctx context.Context, query string, lastpk *sqltypes.Result,
 	send func(*binlogdatapb.VStreamRowsResponse) error, options *binlogdatapb.VStreamOptions,
 ) error {
 	// Ensure vschema is initialized and the watcher is started.
 	// Starting of the watcher has to be delayed till the first call to Stream
 	// because this overhead should be incurred only if someone uses this feature.
 	vse.watcherOnce.Do(vse.setWatch)
-	log.Info(fmt.Sprintf("Streaming rows for query %s, lastpk: %s", query, lastpk))
+	log.Info(fmt.Sprintf("Streaming rows for query %s, lastpk: %v", query, lastpk))
 
 	// Create stream and add it to the map.
 	rowStreamer, idx, err := func() (*rowStreamer, int, error) {

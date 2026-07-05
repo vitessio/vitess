@@ -149,7 +149,7 @@ func (ts *tableStreamer) Stream() error {
 	return nil
 }
 
-func (ts *tableStreamer) newRowStreamer(ctx context.Context, query string, lastpk []sqltypes.Value,
+func (ts *tableStreamer) newRowStreamer(ctx context.Context, query string, lastpk *sqltypes.Result,
 	send func(*binlogdatapb.VStreamRowsResponse) error,
 ) (*rowStreamer, func(), error) {
 	vse := ts.vse

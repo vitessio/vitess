@@ -176,19 +176,17 @@ func (uvs *uvstreamer) sendEventsForRows(ctx context.Context, tableName string, 
 	return nil
 }
 
-// converts lastpk from proto to value
-func getLastPKFromQR(qr *querypb.QueryResult) []sqltypes.Value {
+// converts lastpk from proto to result
+func getLastPKFromQR(qr *querypb.QueryResult) *sqltypes.Result {
 	if qr == nil {
 		return nil
 	}
-	var lastPK []sqltypes.Value
 	r := sqltypes.Proto3ToResult(qr)
 	if len(r.Rows) != 1 {
 		log.Error(fmt.Sprintf("unexpected lastpk input: %v", qr))
 		return nil
 	}
-	lastPK = r.Rows[0]
-	return lastPK
+	return r
 }
 
 // converts lastpk from value to proto

@@ -39,6 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/schemadiff"
+	"vitess.io/vitess/go/vt/vtenv"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -84,15 +85,66 @@ func TestMaxQuerySize(t *testing.T) {
 }
 
 // fakeFetchSuperQueryMysqld is a minimal MysqlDaemon test double that delegates
-// FetchSuperQuery to a callback. Only the methods exercised by tests are valid;
-// any other call will panic on the embedded nil interface.
+// FetchSuperQuery and GetSchema to callbacks. Only the methods exercised by
+// tests are valid; any other call will panic on the embedded nil interface.
 type fakeFetchSuperQueryMysqld struct {
 	mysqlctl.MysqlDaemon
-	callback func(query string) (*sqltypes.Result, error)
+	callback       func(query string) (*sqltypes.Result, error)
+	schemaCallback func(dbName string, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error)
 }
 
 func (f *fakeFetchSuperQueryMysqld) FetchSuperQuery(ctx context.Context, query string) (*sqltypes.Result, error) {
 	return f.callback(query)
+}
+
+func (f *fakeFetchSuperQueryMysqld) GetSchema(ctx context.Context, dbName string, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error) {
+	return f.schemaCallback(dbName, request)
+}
+
+// TestBuildColInfoMapUnparseableSchemaFallback confirms that a no-PK table
+// whose CREATE TABLE statement cannot be parsed (e.g. it uses table options
+// unknown to the SQL parser, such as SECONDARY_ENGINE) does not fail the
+// stream: we warn and fall back to using all columns as the substitute PK.
+func TestBuildColInfoMapUnparseableSchemaFallback(t *testing.T) {
+	infoSchemaCols := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"character_set_name|collation_name|column_name|data_type|column_type|extra",
+			"varchar|varchar|varchar|varchar|varchar|varchar",
+		),
+		"utf8mb4|utf8mb4_general_ci|c1|int|int|",
+		"utf8mb4|utf8mb4_general_ci|c2|varchar|varchar(10)|",
+	)
+	fmd := &fakeFetchSuperQueryMysqld{
+		callback: func(query string) (*sqltypes.Result, error) {
+			return infoSchemaCols, nil
+		},
+		schemaCallback: func(dbName string, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error) {
+			return &tabletmanagerdatapb.SchemaDefinition{
+				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+					Name:    "t1",
+					Columns: []string{"c1", "c2"},
+					Fields:  sqltypes.MakeTestFields("c1|c2", "int64|varchar"),
+					Schema:  "CREATE TABLE t1 (c1 int NOT NULL, c2 varchar(10), UNIQUE KEY uk1 (c1)) SECONDARY_ENGINE=RAPID",
+				}},
+			}, nil
+		},
+	}
+	stats := binlogplayer.NewStats()
+	defer stats.Stop()
+	vr := &vreplicator{
+		mysqld:       fmd,
+		dbClient:     newVDBClient(binlogplayer.NewMockDBClient(t), stats, vttablet.DefaultVReplicationConfig.RelayLogMaxItems),
+		vre:          &Engine{env: vtenv.NewTestEnv()},
+		WorkflowName: "wf1",
+	}
+
+	colInfo, err := vr.buildColInfoMap(t.Context())
+	require.NoError(t, err)
+	require.Contains(t, colInfo, "t1")
+	require.Len(t, colInfo["t1"], 2)
+	for _, ci := range colInfo["t1"] {
+		assert.True(t, ci.IsPK, "column %s should be part of the all-columns substitute PK", ci.Name)
+	}
 }
 
 func TestFetchInfoSchemaColumnsRetry(t *testing.T) {

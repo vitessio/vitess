@@ -220,6 +220,10 @@ func IsValidPKEquivalent(key *IndexDefinitionEntity) bool {
 }
 
 // GetPrimaryKeyEquivalent returns the lowest-cost valid PKE in a CREATE TABLE statement.
+// Exact (type cost, column count) ties are broken by the lexicographically smallest
+// index name, matching the ordering observed from the legacy information_schema-based
+// mysqlctl.GetPrimaryKeyEquivalentColumns query, so that the chosen key is stable
+// across restarts and upgrades.
 func GetPrimaryKeyEquivalent(createTableEntity *CreateTableEntity) (columns []string, indexName string) {
 	var bestKey *IndexDefinitionEntity
 	for _, key := range createTableEntity.IndexDefinitionEntities() {
@@ -244,6 +248,9 @@ func GetPrimaryKeyEquivalent(createTableEntity *CreateTableEntity) (columns []st
 				bestKey = key
 			}
 			continue
+		}
+		if key.Name() < bestKey.Name() {
+			bestKey = key
 		}
 	}
 	if bestKey != nil {

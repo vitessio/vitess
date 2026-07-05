@@ -95,9 +95,16 @@ See [#19906](https://github.com/vitessio/vitess/pull/19906) for details.
 
 #### <a id="vreplication-unified-pke-selection"/>Unified Primary Key Equivalent (PKE) selection</a>
 
-VReplication workflows (MoveTables, Reshard, Materialize, VDiff) and Online DDL now share a single implementation for selecting a Primary Key Equivalent (PKE) — the unique, non-NULLable key used to iterate and identify rows in tables that have no defined PRIMARY KEY. The PKE is now determined by parsing the table's `CREATE TABLE` statement (via the `schemadiff` package) instead of querying `information_schema`, and both code paths rank candidate keys using the same data-type cost model.
+VReplication workflows (MoveTables, Reshard, Materialize, VDiff) and Online DDL now share a single implementation for selecting a Primary Key Equivalent (PKE) — the unique, non-NULLable key used to iterate and identify rows in tables that have no defined PRIMARY KEY. The PKE is now determined by parsing the table's `CREATE TABLE` statement (via the `schemadiff` package) instead of querying `information_schema`, and both code paths rank candidate keys using the same data-type cost model. Exact cost ties are broken deterministically by the lexicographically smallest index name, matching the ordering previously observed from the `information_schema`-based query.
 
-**Behavior change:** Online DDL's unique key prioritization now ranks candidate keys by the total storage cost of all columns in the key, rather than by properties of the key's first column only. For some tables this changes which unique key an Online DDL migration iterates over. The selected key is still a valid unique, non-NULLable key in all cases; only the preference order among multiple candidates has changed. VReplication's PKE selection behavior is unchanged.
+**Behavior changes:**
+
+- Online DDL's unique key prioritization now ranks candidate keys by the total storage cost of all columns in the key, rather than by properties of the key's first column only. For some tables this changes which unique key an Online DDL migration iterates over. The selected key is still a valid unique, non-NULLable key in all cases; only the preference order among multiple candidates has changed.
+- Unique keys containing functional (expression) key parts are no longer PKE candidates. Previously, the `information_schema`-based selection could pick such a key and produce a broken column list that could make VReplication identify rows by a non-unique set of columns; such keys are now skipped in favor of the next valid candidate, or all columns when no valid candidate exists.
+- If a no-PK table's `CREATE TABLE` statement cannot be parsed (for example, it uses table options unknown to the Vitess SQL parser, such as `SECONDARY_ENGINE`), VReplication and VDiff now log a warning and use all columns as the substitute PK instead of failing the workflow.
+- The `schemadiff` type-cost ranking expects MySQL-canonical type names, as emitted by `SHOW CREATE TABLE`; all Vitess call sites provide this form.
+
+**Upgrading with in-flight workflows:** the PKE is re-derived whenever a workflow (re)starts, so the key selected for a no-PK table can change across an upgrade while that table's copy phase is in progress. The source tablet now validates that a resumed copy's `lastpk` value was generated using the currently selected key columns and fails with a clear error rather than resuming from the wrong position. If you hit this error, restart the copy for the affected table (for example, by recreating the workflow) and run VDiff afterwards. Where possible, let the copy phase of tables without a primary key complete before upgrading.
 
 See [#10259](https://github.com/vitessio/vitess/issues/10259) for details.
 

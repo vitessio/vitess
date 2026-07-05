@@ -530,7 +530,8 @@ func (td *tableDiffer) diff(ctx context.Context, coreOpts *tabletmanagerdatapb.V
 	// We need to continue were we left off when appropriate. This can be an
 	// auto-retry on error, or a manual retry via the resume command.
 	// Otherwise the existing state will be empty and we start from scratch.
-	query, err := sqlparser.ParseAndBind(sqlGetVDiffTable,
+	query, err := sqlparser.ParseAndBind(
+		sqlGetVDiffTable,
 		sqltypes.Int64BindVariable(td.wd.ct.id),
 		sqltypes.StringBindVariable(td.table.Name),
 	)
@@ -768,7 +769,8 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, dr *D
 	}
 
 	if lastRow == nil {
-		query, err = sqlparser.ParseAndBind(sqlUpdateTableNoProgress,
+		query, err = sqlparser.ParseAndBind(
+			sqlUpdateTableNoProgress,
 			sqltypes.Int64BindVariable(dr.ProcessedRows),
 			sqltypes.StringBindVariable(string(rpt)),
 			sqltypes.Int64BindVariable(td.wd.ct.id),
@@ -794,7 +796,8 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, dr *D
 		if err != nil {
 			return vterrors.Wrapf(err, "failed to marshal lastpk value %+v for table %s", lastPK, td.table.Name)
 		}
-		query, err = sqlparser.ParseAndBind(sqlUpdateTableProgress,
+		query, err = sqlparser.ParseAndBind(
+			sqlUpdateTableProgress,
 			sqltypes.Int64BindVariable(dr.ProcessedRows),
 			sqltypes.StringBindVariable(string(lastPKTxt)),
 			sqltypes.StringBindVariable(string(rpt)),
@@ -814,7 +817,8 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, dr *D
 }
 
 func (td *tableDiffer) updateTableState(ctx context.Context, dbClient binlogplayer.DBClient, state VDiffState) error {
-	query, err := sqlparser.ParseAndBind(sqlUpdateTableState,
+	query, err := sqlparser.ParseAndBind(
+		sqlUpdateTableState,
 		sqltypes.StringBindVariable(string(state)),
 		sqltypes.Int64BindVariable(td.wd.ct.id),
 		sqltypes.StringBindVariable(td.table.Name),
@@ -841,7 +845,8 @@ func (td *tableDiffer) updateTableStateAndReport(ctx context.Context, dbClient b
 	} else {
 		report = "{}"
 	}
-	query, err := sqlparser.ParseAndBind(sqlUpdateTableStateAndReport,
+	query, err := sqlparser.ParseAndBind(
+		sqlUpdateTableStateAndReport,
 		sqltypes.StringBindVariable(string(state)),
 		sqltypes.Int64BindVariable(dr.ProcessedRows),
 		sqltypes.StringBindVariable(report),
@@ -860,7 +865,8 @@ func (td *tableDiffer) updateTableStateAndReport(ctx context.Context, dbClient b
 }
 
 func updateTableMismatch(dbClient binlogplayer.DBClient, vdiffID int64, table string) error {
-	query, err := sqlparser.ParseAndBind(sqlUpdateTableMismatch,
+	query, err := sqlparser.ParseAndBind(
+		sqlUpdateTableMismatch,
 		sqltypes.Int64BindVariable(vdiffID),
 		sqltypes.StringBindVariable(table),
 	)
@@ -919,7 +925,8 @@ func (td *tableDiffer) adjustForSourceTimeZone(targetSelectExprs []sqlparser.Sel
 				colName := colAs.Name.Lowered()
 				fieldType := fields[colName]
 				if fieldType == querypb.Type_DATETIME {
-					convertTZFuncExpr = sqlparser.NewFuncExpr("convert_tz",
+					convertTZFuncExpr = sqlparser.NewFuncExpr(
+						"convert_tz",
 						selExpr.Expr,
 						sqlparser.NewStrLiteral(td.wd.ct.targetTimeZone),
 						sqlparser.NewStrLiteral(td.wd.ct.sourceTimeZone),
@@ -991,13 +998,17 @@ func (td *tableDiffer) getSourcePKCols() error {
 			senv := schemadiff.NewEnvWithDefaults(td.wd.ct.vde.env)
 			createTableEntity, err := schemadiff.NewCreateTableEntityFromSQL(senv, sourceTable.Schema)
 			if err != nil {
-				return vterrors.Wrapf(err, "failed to parse CREATE TABLE schema for table %s from source tablet %s",
-					td.table.Name, topoproto.TabletAliasString(sourceTablet.Alias))
-			}
-			pkeCols, _ := schemadiff.GetPrimaryKeyEquivalent(createTableEntity)
-			if len(pkeCols) > 0 {
-				log.Info(fmt.Sprintf("Using primary key equivalent columns %+v for table %s in vdiff %s", pkeCols, td.table.Name, td.wd.ct.uuid))
-				sourceTable.PrimaryKeyColumns = pkeCols
+				log.Warn("Failed to parse the CREATE TABLE schema to determine a primary key equivalent; falling back to using all columns",
+					slog.String("table", td.table.Name),
+					slog.String("source_tablet", topoproto.TabletAliasString(sourceTablet.Alias)),
+					slog.String("vdiff", td.wd.ct.uuid),
+					slog.Any("error", err))
+			} else {
+				pkeCols, _ := schemadiff.GetPrimaryKeyEquivalent(createTableEntity)
+				if len(pkeCols) > 0 {
+					log.Info(fmt.Sprintf("Using primary key equivalent columns %+v for table %s in vdiff %s", pkeCols, td.table.Name, td.wd.ct.uuid))
+					sourceTable.PrimaryKeyColumns = pkeCols
+				}
 			}
 		} else {
 			log.Warn("No CREATE TABLE schema available to determine a primary key equivalent",

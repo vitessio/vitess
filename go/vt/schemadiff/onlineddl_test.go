@@ -209,6 +209,20 @@ func TestGetPrimaryKeyEquivalent(t *testing.T) {
 			wantCols:  []string{"char_col"},
 			wantIndex: "char_prefix",
 		},
+		{
+			name: "TIEBREAKBYNAME",
+			ddl: `CREATE TABLE tiebyname_t (id1 INT NOT NULL, id2 INT NOT NULL,
+					UNIQUE KEY uk_b (id1), UNIQUE KEY uk_a (id2))`,
+			wantCols:  []string{"id2"},
+			wantIndex: "uk_a",
+		},
+		{
+			name: "TIEBREAKLENGTHBLINDVARCHAR",
+			ddl: `CREATE TABLE tievarchar_t (col1 VARCHAR(10) NOT NULL, col2 VARCHAR(100) NOT NULL,
+					UNIQUE KEY uk_z (col1), UNIQUE KEY uk_y (col2))`,
+			wantCols:  []string{"col2"},
+			wantIndex: "uk_y",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
