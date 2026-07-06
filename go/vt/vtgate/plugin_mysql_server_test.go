@@ -987,6 +987,18 @@ func TestSlowQueryStatusFlagsComQuery(t *testing.T) {
 	assert.Zero(t, mysqlConn.StatusFlags&mysql.ServerQueryWasSlow)
 }
 
+// waitForConnectionsClosed waits until the handler has run ConnectionClosed
+// for every wire connection. Tests that accept real connections must drain
+// them before returning: the server-side connection goroutine reads package
+// globals (e.g. mysqlQueryTimeout) during teardown, which races with later
+// tests mutating them.
+func waitForConnectionsClosed(t *testing.T, vh *vtgateHandler) {
+	t.Helper()
+	require.Eventually(t, func() bool {
+		return vh.numConnections() == 0
+	}, 30*time.Second, time.Millisecond)
+}
+
 func TestSlowQueryStatusFlagsComQueryOKOnlyOLAPWire(t *testing.T) {
 	executor, sbc1, _, _, _ := createExecutorEnv(t)
 
@@ -1007,6 +1019,7 @@ func TestSlowQueryStatusFlagsComQueryOKOnlyOLAPWire(t *testing.T) {
 	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), vh, 0, 0, false, false, 0, 0, false)
 	require.NoError(t, err)
 	defer listener.Close()
+	defer waitForConnectionsClosed(t, vh)
 
 	go listener.Accept()
 
@@ -1048,6 +1061,7 @@ func TestSlowQueryStatusFlagsComQueryMultiOKOnlyOLAPFallbackWire(t *testing.T) {
 	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), vh, 0, 0, false, false, 0, 0, true)
 	require.NoError(t, err)
 	defer listener.Close()
+	defer waitForConnectionsClosed(t, vh)
 
 	go listener.Accept()
 
@@ -1082,6 +1096,7 @@ func TestComQueryMultiOLAPDeferredOKRefreshesTransactionStatusWire(t *testing.T)
 	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), vh, 0, 0, false, false, 0, 0, true)
 	require.NoError(t, err)
 	defer listener.Close()
+	defer waitForConnectionsClosed(t, vh)
 
 	go listener.Accept()
 
@@ -1222,6 +1237,7 @@ func TestSlowQueryStatusFlagsComQueryMulti(t *testing.T) {
 	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), vh, 0, 0, false, false, 0, 0, false)
 	require.NoError(t, err)
 	defer listener.Close()
+	defer waitForConnectionsClosed(t, vh)
 
 	go listener.Accept()
 
@@ -1319,6 +1335,7 @@ func TestSlowQueryStatusFlagsComQueryMultiOLAPErrorAfterSlowRowsWire(t *testing.
 	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), vh, 0, 0, false, false, 0, 0, true)
 	require.NoError(t, err)
 	defer listener.Close()
+	defer waitForConnectionsClosed(t, vh)
 
 	go listener.Accept()
 
@@ -1887,6 +1904,7 @@ func TestComQueryIngressBytes(t *testing.T) {
 	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), vh, 0, 0, false, false, 0, 0, false)
 	require.NoError(t, err)
 	defer listener.Close()
+	defer waitForConnectionsClosed(t, vh)
 
 	go listener.Accept()
 
@@ -1947,6 +1965,7 @@ func TestComQueryMultiOLAPIngressBytes(t *testing.T) {
 	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), vh, 0, 0, false, false, 0, 0, true)
 	require.NoError(t, err)
 	defer listener.Close()
+	defer waitForConnectionsClosed(t, vh)
 
 	go listener.Accept()
 
@@ -2001,6 +2020,7 @@ func TestComPrepareIngressBytes(t *testing.T) {
 	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), vh, 0, 0, false, false, 0, 0, false)
 	require.NoError(t, err)
 	defer listener.Close()
+	defer waitForConnectionsClosed(t, vh)
 
 	go listener.Accept()
 
