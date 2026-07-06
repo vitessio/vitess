@@ -1319,7 +1319,7 @@ func TestStreamingJoinQueryRoutes(t *testing.T) {
 		t.Run(tc.sql, func(t *testing.T) {
 			utils.Exec(t, conn, tc.sql)
 			updatedQR := getQPMetric(t, "QueryRoutes")
-			assert.EqualValuesf(t, tc.routes, getValue(updatedQR, tc.queryMetric)-getValue(initialQR, tc.queryMetric), "queryRoutes metric: %s", tc.queryMetric)
+			assert.Equalf(t, tc.routes, getValue(updatedQR, tc.queryMetric)-getValue(initialQR, tc.queryMetric), "queryRoutes metric: %s", tc.queryMetric)
 			initialQR = updatedQR
 		})
 	}
