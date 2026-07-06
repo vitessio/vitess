@@ -35,96 +35,72 @@ func row(val string) []sqltypes.Value {
 	return []sqltypes.Value{sqltypes.NewVarChar(val)}
 }
 
-func collectChunker(size int) (chunked func(*sqltypes.Result) error, flush func() error, results *[]*sqltypes.Result) {
+func collectChunker(size int) (chunked func(*sqltypes.Result) error, results *[]*sqltypes.Result) {
 	results = &[]*sqltypes.Result{}
-	chunked, flush = newStreamResponseChunker(size, func(qr *sqltypes.Result) error {
+	chunked = newStreamResponseChunker(size, func(qr *sqltypes.Result) error {
 		*results = append(*results, qr)
 		return nil
 	})
-	return chunked, flush, results
+	return chunked, results
 }
 
-func TestStreamResponseChunkerSplitsFieldsFromRows(t *testing.T) {
-	chunked, flush, results := collectChunker(1000)
-
-	require.NoError(t, chunked(&sqltypes.Result{
-		Fields: chunkerFields,
-		Rows:   [][]sqltypes.Value{row("a"), row("b")},
-	}))
-	require.NoError(t, flush())
-
-	want := []*sqltypes.Result{
-		{Fields: chunkerFields},
-		{Fields: chunkerFields, Rows: [][]sqltypes.Value{row("a"), row("b")}},
-	}
-	utils.MustMatch(t, want, *results)
-}
-
-func TestStreamResponseChunkerCoalescesSmallPackets(t *testing.T) {
-	// Single-row packets, as emitted by a streaming merge sort, are coalesced
-	// up to the chunk size. Each row is 4 bytes; with a chunk size of 8 every
-	// second row completes a chunk.
-	chunked, flush, results := collectChunker(8)
+func TestStreamResponseChunkerForwardsPacketsImmediately(t *testing.T) {
+	// Packets that fit the chunk size are forwarded as-is from within the
+	// callback. Nothing may be buffered across callbacks: a message stream
+	// (stream * from msg) trickles rows for the lifetime of the stream, and a
+	// buffered row would not be delivered until the buffer fills, which for a
+	// message stream is never.
+	chunked, results := collectChunker(1000)
 
 	require.NoError(t, chunked(&sqltypes.Result{Fields: chunkerFields}))
-	for _, val := range []string{"aaaa", "bbbb", "cccc", "dddd", "eeee"} {
-		require.NoError(t, chunked(&sqltypes.Result{Rows: [][]sqltypes.Value{row(val)}}))
-	}
-	require.NoError(t, flush())
+	utils.MustMatch(t, []*sqltypes.Result{{Fields: chunkerFields}}, *results)
 
-	want := []*sqltypes.Result{
+	require.NoError(t, chunked(&sqltypes.Result{Rows: [][]sqltypes.Value{row("a")}}))
+	utils.MustMatch(t, []*sqltypes.Result{
 		{Fields: chunkerFields},
-		{Fields: chunkerFields, Rows: [][]sqltypes.Value{row("aaaa"), row("bbbb")}},
-		{Rows: [][]sqltypes.Value{row("cccc"), row("dddd")}},
-		{Rows: [][]sqltypes.Value{row("eeee")}},
-	}
-	utils.MustMatch(t, want, *results)
+		{Rows: [][]sqltypes.Value{row("a")}},
+	}, *results)
+
+	require.NoError(t, chunked(&sqltypes.Result{Rows: [][]sqltypes.Value{row("b")}}))
+	utils.MustMatch(t, []*sqltypes.Result{
+		{Fields: chunkerFields},
+		{Rows: [][]sqltypes.Value{row("a")}},
+		{Rows: [][]sqltypes.Value{row("b")}},
+	}, *results)
 }
 
 func TestStreamResponseChunkerSplitsLargePackets(t *testing.T) {
 	// A single oversized packet, as emitted by an in-memory sort, is split at
-	// the chunk size instead of being forwarded as one giant gRPC message.
-	chunked, flush, results := collectChunker(8)
+	// the chunk size instead of being forwarded as one giant gRPC message. The
+	// packet's fields and OK data ride on the first chunk only.
+	chunked, results := collectChunker(8)
 
 	require.NoError(t, chunked(&sqltypes.Result{
-		Fields: chunkerFields,
-		Rows:   [][]sqltypes.Value{row("aaaa"), row("bbbb"), row("cccc"), row("dddd"), row("eeee")},
+		Fields:       chunkerFields,
+		Rows:         [][]sqltypes.Value{row("aaaa"), row("bbbb"), row("cccc"), row("dddd"), row("eeee")},
+		RowsAffected: 5,
 	}))
-	require.NoError(t, flush())
 
 	want := []*sqltypes.Result{
-		{Fields: chunkerFields},
-		{Fields: chunkerFields, Rows: [][]sqltypes.Value{row("aaaa"), row("bbbb")}},
+		{Fields: chunkerFields, Rows: [][]sqltypes.Value{row("aaaa"), row("bbbb")}, RowsAffected: 5},
 		{Rows: [][]sqltypes.Value{row("cccc"), row("dddd")}},
 		{Rows: [][]sqltypes.Value{row("eeee")}},
 	}
 	utils.MustMatch(t, want, *results)
 }
 
-func TestStreamResponseChunkerFieldsOnlyResult(t *testing.T) {
-	// A SELECT returning no rows still delivers the fields; flush must not
-	// append an empty packet after it.
-	chunked, flush, results := collectChunker(1000)
-
-	require.NoError(t, chunked(&sqltypes.Result{Fields: chunkerFields}))
-	require.NoError(t, flush())
-
-	want := []*sqltypes.Result{{Fields: chunkerFields}}
-	utils.MustMatch(t, want, *results)
-}
-
 func TestStreamResponseChunkerDedupsScatterFields(t *testing.T) {
-	// In a scatter query every shard stream leads with its own fields; only
-	// the first one is forwarded.
-	chunked, flush, results := collectChunker(1000)
+	// In a scatter query every shard stream leads with its own fields packet,
+	// and with the coalesced tablet stream format the rows ride along in it;
+	// only the first stream's fields are forwarded.
+	chunked, results := collectChunker(1000)
 
 	require.NoError(t, chunked(&sqltypes.Result{Fields: chunkerFields, Rows: [][]sqltypes.Value{row("a")}}))
 	require.NoError(t, chunked(&sqltypes.Result{Fields: chunkerFields, Rows: [][]sqltypes.Value{row("b")}}))
-	require.NoError(t, flush())
 
 	want := []*sqltypes.Result{
-		{Fields: chunkerFields},
-		{Fields: chunkerFields, Rows: [][]sqltypes.Value{row("a"), row("b")}},
+		{Fields: chunkerFields, Rows: [][]sqltypes.Value{row("a")}},
+		{Rows: [][]sqltypes.Value{row("b")}},
 	}
 	utils.MustMatch(t, want, *results)
 }
@@ -132,8 +108,8 @@ func TestStreamResponseChunkerDedupsScatterFields(t *testing.T) {
 func TestStreamResponseChunkerOKPacketPassthrough(t *testing.T) {
 	// A stream whose first packet has no fields carries OK packets (e.g.
 	// DML); those pass through unchanged, keeping fields like
-	// SessionStateChanges intact, and flush adds nothing.
-	chunked, flush, results := collectChunker(1000)
+	// SessionStateChanges intact.
+	chunked, results := collectChunker(1000)
 
 	ok := &sqltypes.Result{
 		RowsAffected:        3,
@@ -141,42 +117,29 @@ func TestStreamResponseChunkerOKPacketPassthrough(t *testing.T) {
 		SessionStateChanges: "state",
 	}
 	require.NoError(t, chunked(ok))
-	require.NoError(t, flush())
 
 	utils.MustMatch(t, []*sqltypes.Result{ok}, *results)
 }
 
-func TestStreamResponseChunkerCarriesOKDataToRows(t *testing.T) {
-	// A row-returning stream whose packets carry OK data (e.g. a CALL of a
-	// procedure that performs DML) reports it on the leading fields packet
-	// and on the next flushed row packet.
-	chunked, flush, results := collectChunker(1000)
+func TestStreamResponseChunkerDoesNotMutateSource(t *testing.T) {
+	// Stripping duplicate fields and splitting must not modify the caller's
+	// result: the result belongs to the producing stream, which may reuse it.
+	chunked, _ := collectChunker(8)
 
-	require.NoError(t, chunked(&sqltypes.Result{
-		Fields:          chunkerFields,
-		Rows:            [][]sqltypes.Value{row("a")},
-		RowsAffected:    7,
-		InsertID:        99,
-		InsertIDChanged: true,
-		Info:            "info",
-	}))
-	require.NoError(t, flush())
+	first := &sqltypes.Result{Fields: chunkerFields, Rows: [][]sqltypes.Value{row("a")}}
+	require.NoError(t, chunked(first))
 
-	want := []*sqltypes.Result{
-		{Fields: chunkerFields, RowsAffected: 7, InsertID: 99, InsertIDChanged: true, Info: "info"},
-		{Fields: chunkerFields, Rows: [][]sqltypes.Value{row("a")}, RowsAffected: 7, InsertID: 99, InsertIDChanged: true, Info: "info"},
+	second := &sqltypes.Result{
+		Fields: chunkerFields,
+		Rows:   [][]sqltypes.Value{row("aaaa"), row("bbbb"), row("cccc")},
 	}
-	utils.MustMatch(t, want, *results)
-}
+	require.NoError(t, chunked(second))
 
-func TestStreamResponseChunkerEmptyStream(t *testing.T) {
-	// If the stream produced no packets at all, flush still delivers one
-	// empty result so the client sees a response.
-	chunked, flush, results := collectChunker(1000)
-	_ = chunked
-
-	require.NoError(t, flush())
-	utils.MustMatch(t, []*sqltypes.Result{{}}, *results)
+	utils.MustMatch(t, &sqltypes.Result{Fields: chunkerFields, Rows: [][]sqltypes.Value{row("a")}}, first)
+	utils.MustMatch(t, &sqltypes.Result{
+		Fields: chunkerFields,
+		Rows:   [][]sqltypes.Value{row("aaaa"), row("bbbb"), row("cccc")},
+	}, second)
 }
 
 type multiPacket struct {
@@ -187,43 +150,64 @@ type multiPacket struct {
 
 func TestStreamExecuteMultiChunker(t *testing.T) {
 	var got []multiPacket
-	callback, flush := NewStreamExecuteMultiChunker(func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error {
+	callback := NewStreamExecuteMultiChunker(func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error {
 		got = append(got, multiPacket{qr: qr, more: more, firstPacket: firstPacket})
 		return nil
 	})
 
-	// Statement 1: fields, then a row, buffered until statement 2 starts.
+	// Statement 1: fields, then a row.
 	require.NoError(t, callback(sqltypes.QueryResponse{QueryResult: &sqltypes.Result{Fields: chunkerFields}}, true, true))
 	require.NoError(t, callback(sqltypes.QueryResponse{QueryResult: &sqltypes.Result{Rows: [][]sqltypes.Value{row("a")}}}, true, false))
-	// Statement 2: a single combined packet, buffered until flush.
+	// Statement 2: a single combined packet; its fields are forwarded again
+	// because it is a new statement.
 	require.NoError(t, callback(sqltypes.QueryResponse{QueryResult: &sqltypes.Result{Fields: chunkerFields, Rows: [][]sqltypes.Value{row("b")}}}, false, true))
-	require.NoError(t, flush())
 
 	want := []multiPacket{
 		{qr: sqltypes.QueryResponse{QueryResult: &sqltypes.Result{Fields: chunkerFields}}, more: true, firstPacket: true},
-		{qr: sqltypes.QueryResponse{QueryResult: &sqltypes.Result{Fields: chunkerFields, Rows: [][]sqltypes.Value{row("a")}}}, more: true, firstPacket: false},
-		{qr: sqltypes.QueryResponse{QueryResult: &sqltypes.Result{Fields: chunkerFields}}, more: false, firstPacket: true},
-		{qr: sqltypes.QueryResponse{QueryResult: &sqltypes.Result{Fields: chunkerFields, Rows: [][]sqltypes.Value{row("b")}}}, more: false, firstPacket: false},
+		{qr: sqltypes.QueryResponse{QueryResult: &sqltypes.Result{Rows: [][]sqltypes.Value{row("a")}}}, more: true, firstPacket: false},
+		{qr: sqltypes.QueryResponse{QueryResult: &sqltypes.Result{Fields: chunkerFields, Rows: [][]sqltypes.Value{row("b")}}}, more: false, firstPacket: true},
+	}
+	utils.MustMatch(t, want, got)
+}
+
+func TestStreamExecuteMultiChunkerSplitKeepsFlags(t *testing.T) {
+	// When one source packet splits into several chunks, only the first chunk
+	// of the statement's first packet keeps firstPacket=true, and all chunks
+	// carry the statement's more flag.
+	var got []multiPacket
+	callback := newStreamExecuteMultiChunker(8, func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error {
+		got = append(got, multiPacket{qr: qr, more: more, firstPacket: firstPacket})
+		return nil
+	})
+
+	require.NoError(t, callback(sqltypes.QueryResponse{QueryResult: &sqltypes.Result{
+		Fields: chunkerFields,
+		Rows:   [][]sqltypes.Value{row("aaaa"), row("bbbb"), row("cccc")},
+	}}, true, true))
+
+	want := []multiPacket{
+		{qr: sqltypes.QueryResponse{QueryResult: &sqltypes.Result{Fields: chunkerFields, Rows: [][]sqltypes.Value{row("aaaa"), row("bbbb")}}}, more: true, firstPacket: true},
+		{qr: sqltypes.QueryResponse{QueryResult: &sqltypes.Result{Rows: [][]sqltypes.Value{row("cccc")}}}, more: true, firstPacket: false},
 	}
 	utils.MustMatch(t, want, got)
 }
 
 func TestStreamExecuteMultiChunkerError(t *testing.T) {
 	var got []multiPacket
-	callback, flush := NewStreamExecuteMultiChunker(func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error {
+	callback := NewStreamExecuteMultiChunker(func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error {
 		got = append(got, multiPacket{qr: qr, more: more, firstPacket: firstPacket})
 		return nil
 	})
 
-	// Statement 1 succeeds, statement 2 fails before producing results.
+	// Statement 1 succeeds, statement 2 fails before producing results. The
+	// error passes through unchanged and statement 1's rows were already
+	// delivered from within their callback.
 	require.NoError(t, callback(sqltypes.QueryResponse{QueryResult: &sqltypes.Result{Fields: chunkerFields, Rows: [][]sqltypes.Value{row("a")}}}, true, true))
 	queryErr := sqltypes.QueryResponse{QueryError: sqltypes.ErrIncompatibleTypeCast}
 	require.NoError(t, callback(queryErr, false, true))
-	require.NoError(t, flush())
 
 	want := []multiPacket{
-		{qr: sqltypes.QueryResponse{QueryResult: &sqltypes.Result{Fields: chunkerFields}}, more: true, firstPacket: true},
-		{qr: sqltypes.QueryResponse{QueryResult: &sqltypes.Result{Fields: chunkerFields, Rows: [][]sqltypes.Value{row("a")}}}, more: true, firstPacket: false},
+		{qr: sqltypes.QueryResponse{QueryResult: &sqltypes.Result{Fields: chunkerFields, Rows: [][]sqltypes.Value{row("a")}}}, more: true, firstPacket: true},
 		{qr: queryErr, more: false, firstPacket: true},
 	}
 	utils.MustMatch(t, want, got)

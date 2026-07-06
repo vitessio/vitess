@@ -185,10 +185,10 @@ func (vtg *VTGate) StreamExecuteMulti(request *vtgatepb.StreamExecuteMultiReques
 		session = &vtgatepb.Session{Autocommit: true}
 	}
 
-	// Re-chunk each statement's results to --stream-buffer-size'd packets so
-	// response message sizes stay independent of how the underlying
-	// primitives chunk their output.
-	callback, flush := vtgate.NewStreamExecuteMultiChunker(func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error {
+	// Split oversized result packets to --stream-buffer-size so response
+	// message sizes stay independent of how the underlying primitives chunk
+	// their output.
+	callback := vtgate.NewStreamExecuteMultiChunker(func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error {
 		// Send is not safe to call concurrently, but vtgate
 		// guarantees that it's not.
 		return stream.Send(&vtgatepb.StreamExecuteMultiResponse{
@@ -198,9 +198,6 @@ func (vtg *VTGate) StreamExecuteMulti(request *vtgatepb.StreamExecuteMultiReques
 		})
 	})
 	session, vtgErr := vtg.server.StreamExecuteMulti(ctx, nil, session, request.Sql, callback)
-	if vtgErr == nil {
-		vtgErr = flush()
-	}
 
 	var errs []error
 	if vtgErr != nil {
@@ -254,10 +251,10 @@ func (vtg *VTGate) StreamExecute(request *vtgatepb.StreamExecuteRequest, stream 
 		session = &vtgatepb.Session{Autocommit: true}
 	}
 
-	// Re-chunk the results to --stream-buffer-size'd packets so response
+	// Split oversized result packets to --stream-buffer-size so response
 	// message sizes stay independent of how the underlying primitives chunk
 	// their output.
-	chunked, flush := vtgate.NewStreamResponseChunker(func(value *sqltypes.Result) error {
+	chunked := vtgate.NewStreamResponseChunker(func(value *sqltypes.Result) error {
 		// Send is not safe to call concurrently, but vtgate
 		// guarantees that it's not.
 		return stream.Send(&vtgatepb.StreamExecuteResponse{
@@ -266,9 +263,6 @@ func (vtg *VTGate) StreamExecute(request *vtgatepb.StreamExecuteRequest, stream 
 	})
 	// The streaming gRPC API has no prepared-statement field, so prepared is always false here.
 	session, vtgErr := vtg.server.StreamExecute(ctx, nil, session, request.Query.Sql, request.Query.BindVariables, false, chunked)
-	if vtgErr == nil {
-		vtgErr = flush()
-	}
 
 	var errs []error
 	if vtgErr != nil {
