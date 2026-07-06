@@ -61,7 +61,7 @@ func TestPrimaryVttabletProcessDeath(t *testing.T) {
 	// all three of its shard peers' pings fail, satisfying both. ERS is enabled by default in VTOrc,
 	// so no extra reparent flag is needed.
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{
-		"--emergency-reparent-on-tablet-unreachable",
+		"--emergency-reparent-on-primary-tablet-unreachable",
 		"--shard-quorum-fraction=1.0",
 		"--shard-quorum-min-observers=1",
 	}, cluster.VTOrcConfiguration{}, cluster.DefaultVtorcsByCell, policy.DurabilityNone)
@@ -179,7 +179,7 @@ func TestPrimaryVttabletDeathColdStart(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
 
 	quorumArgs := []string{
-		"--emergency-reparent-on-tablet-unreachable",
+		"--emergency-reparent-on-primary-tablet-unreachable",
 		"--shard-quorum-fraction=1.0",
 		"--shard-quorum-min-observers=1",
 	}

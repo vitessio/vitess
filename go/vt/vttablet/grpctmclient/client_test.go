@@ -175,6 +175,22 @@ func TestCloseShardHealthPool(t *testing.T) {
 	require.NotEmpty(t, rpcClient.rpcDialPoolMap[dialPoolGroupPing])
 	rpcClient.rpcDialPoolMapMu.Unlock()
 
+	// Open a second pooled ping connection, then evict just the first tablet's
+	// entry: the second entry and other groups must be left intact.
+	otherPingTablet := &topodatapb.Tablet{Hostname: "localhost", PortMap: map[string]int32{"grpc": 15996}}
+	_, _, err = poolDialer.dialDedicatedPool(ctx, dialPoolGroupPing, pingTablet)
+	require.NoError(t, err)
+	_, _, err = poolDialer.dialDedicatedPool(ctx, dialPoolGroupPing, otherPingTablet)
+	require.NoError(t, err)
+
+	client.CloseShardHealthPoolEntry(pingTablet)
+
+	rpcClient.rpcDialPoolMapMu.Lock()
+	assert.Len(t, rpcClient.rpcDialPoolMap[dialPoolGroupPing], 1, "only the evicted tablet's ping pool entry may be removed")
+	rpcClient.rpcDialPoolMapMu.Unlock()
+	// Evicting an address with no pool entry is a no-op.
+	client.CloseShardHealthPoolEntry(pingTablet)
+
 	client.CloseShardHealthPool()
 
 	rpcClient.rpcDialPoolMapMu.Lock()

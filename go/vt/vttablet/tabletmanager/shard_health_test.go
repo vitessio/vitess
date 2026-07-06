@@ -227,6 +227,10 @@ func TestShardHealthMonitor_RefreshPrunesDepartedPrimary(t *testing.T) {
 		}
 	}()
 	m := newShardHealthMonitor(pinger, lister, primaryAlias, topoproto.TabletAliasString(self.Alias), time.Second, time.Second)
+	var evicted []string
+	m.evictPooledConn = func(tablet *topodatapb.Tablet) {
+		evicted = append(evicted, topoproto.TabletAliasString(tablet.Alias))
+	}
 
 	// Only the primary (101) is tracked and pinged.
 	require.NoError(t, m.refreshPeers(t.Context()))
@@ -235,11 +239,15 @@ func TestShardHealthMonitor_RefreshPrunesDepartedPrimary(t *testing.T) {
 	snap := m.snapshot()
 	require.Len(t, snap, 1)
 	assert.Equal(t, "zone1-0000000101", topoproto.TabletAliasString(snap[0].TabletAlias))
+	assert.Empty(t, evicted, "no pooled connection may be evicted while the peer is still tracked")
 
-	// The primary moves to 102; the old primary's health must be pruned (it is no longer tracked).
+	// The primary moves to 102; the old primary's health must be pruned (it is no longer tracked)
+	// and its pooled ping connection released — nothing will ever ping 101 again, so nothing else
+	// would close it.
 	// 102 has not been pinged yet, so the snapshot is empty rather than carrying stale 101 health.
 	require.NoError(t, m.refreshPeers(t.Context()))
 	assert.Empty(t, m.snapshot(), "health for the departed primary must be pruned")
+	assert.Equal(t, []string{"zone1-0000000101"}, evicted, "the departed primary's pooled connection must be evicted")
 }
 
 // TestShardHealthMonitor_InFlightPingDoesNotResurrectPrunedPeer covers the race the prune test

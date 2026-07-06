@@ -102,6 +102,12 @@ type peerPingHealth struct {
 // shardHealthMonitor pings this tablet's shard primary and exposes the primary's latest raw
 // liveness signals via snapshot(). It is safe for concurrent use.
 type shardHealthMonitor struct {
+	// evictPooledConn, when set, releases the pooled ping connection to a peer
+	// that has left the probe set (e.g. a demoted primary): nothing pings such
+	// a peer again, so nothing else would ever close its connection. It must
+	// be set before Start and never mutated afterwards.
+	evictPooledConn func(tablet *topodatapb.Tablet)
+
 	pinger    tabletPinger
 	listPeers func(ctx context.Context) (map[string]*topo.TabletInfo, error)
 	// shardPrimaryAlias returns the shard record's authoritative PrimaryAlias (nil when the shard
@@ -150,8 +156,9 @@ func newShardHealthMonitor(
 	}
 }
 
-// Start launches the ping and refresh loops. It performs one synchronous peer
-// refresh first so the first ping round has a peer list.
+// Start launches the ping and refresh loops. The refresh loop performs the
+// initial peer refresh, so Start never blocks on topo and is safe to call on
+// the tablet startup path.
 func (m *shardHealthMonitor) Start(ctx context.Context) {
 	if m.interval <= 0 || m.pingTimeout <= 0 {
 		log.Warn("shard health monitor disabled because interval and ping timeout must be positive",
@@ -172,18 +179,11 @@ func (m *shardHealthMonitor) Start(ctx context.Context) {
 		return
 	}
 	m.cancel = cancel
-	// Increment the WaitGroup before the (potentially slow) initial refresh and while
-	// holding mu, so a concurrent Stop either observes the increment before its Wait or
+	// Increment the WaitGroup before launching the loops and while holding mu,
+	// so a concurrent Stop either observes the increment before its Wait or
 	// installs m.stopped before we get here — never Add-after-Wait.
 	m.wg.Add(2)
 	m.mu.Unlock()
-
-	// Initial synchronous refresh so the first ping round has a peer list. A concurrent Stop
-	// cancels monitorCtx, which unblocks this refresh and makes both loops exit immediately;
-	// the WaitGroup is already incremented, so Stop's Wait correctly drains them.
-	if err := m.refreshPeers(monitorCtx); err != nil {
-		log.Warn("shard health monitor: initial peer refresh failed", slog.Any("error", err))
-	}
 
 	go m.pingLoop(monitorCtx)
 	go m.refreshLoop(monitorCtx)
@@ -218,6 +218,14 @@ func (m *shardHealthMonitor) pingLoop(ctx context.Context) {
 
 func (m *shardHealthMonitor) refreshLoop(ctx context.Context) {
 	defer m.wg.Done()
+	// Initial refresh so the first ping round (one interval after start) has a
+	// peer list. It runs here, on the loop goroutine, rather than synchronously
+	// in Start: a slow or unreachable topo must not stall tablet startup, which
+	// calls Start on its critical path. A missed first ping round (topo slower
+	// than one ping interval) is harmless — pings begin on the next round.
+	if err := m.refreshPeers(ctx); err != nil {
+		log.Warn("shard health monitor: initial peer refresh failed", slog.Any("error", err))
+	}
 	ticker := time.NewTicker(shardHealthTopoRefreshInterval)
 	defer ticker.Stop()
 	for {
@@ -282,11 +290,26 @@ func (m *shardHealthMonitor) refreshPeers(ctx context.Context) error {
 	}
 
 	m.mu.Lock()
-	defer m.mu.Unlock()
+	var departed []*topodatapb.Tablet
+	for alias, tablet := range m.peers {
+		if _, ok := peers[alias]; !ok {
+			departed = append(departed, tablet)
+		}
+	}
 	m.peers = peers
 	for alias := range m.health {
 		if _, ok := peers[alias]; !ok {
 			delete(m.health, alias)
+		}
+	}
+	m.mu.Unlock()
+
+	// Release the pooled ping connections of peers that left the probe set,
+	// outside the mutex: closing a connection may abort an in-flight ping to
+	// that peer, whose result is then dropped by pingPeer's membership check.
+	if m.evictPooledConn != nil {
+		for _, tablet := range departed {
+			m.evictPooledConn(tablet)
 		}
 	}
 	return nil

@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/protoutil"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtorc/config"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
@@ -426,6 +427,30 @@ func TestRecordShardPeerHealth(t *testing.T) {
 	_, present = shardPeerHealthByObserver["zone1-0000000999"]
 	shardPeerHealthMu.Unlock()
 	assert.False(t, present, "prune runs once the interval elapses, dropping the stale record")
+
+	// A deleted tablet's record lingers for up to the TTL and inflates the quorum
+	// denominator, which can block the verdict in small shards until it is pruned.
+	// ForgetInstance calls RemoveShardPeerObserver so the departed observer stops
+	// counting immediately.
+	resetShardPeerHealth()
+	RecordShardPeerHealth(alias(101), topodatapb.TabletType_REPLICA, "ks", "0", reportFor(primary, 3, 0, now), now)
+	shardPeerHealthMu.Lock()
+	shardPeerHealthByObserver["zone1-0000000888"] = &observerRecord{
+		observerType: topodatapb.TabletType_REPLICA,
+		keyspace:     "ks",
+		shard:        "0",
+		recordedAt:   now.Add(-30 * time.Second), // Within the TTL, but stale for voting.
+		peers:        map[string]peerReport{topoproto.TabletAliasString(primary): {}},
+	}
+	shardPeerHealthMu.Unlock()
+	// The lingering record makes 2 eligible observers with only 1 fresh reporter:
+	// not a strict majority, so the down verdict is blocked.
+	assert.False(t, PrimaryDownByQuorum(primary, "ks", "0", 1, defaultOpts(), now),
+		"a deleted observer's lingering record must block the verdict (denominator inflated)")
+	RemoveShardPeerObserver("zone1-0000000888")
+	// With the departed observer dropped, the single fresh down-voter is the whole shard.
+	assert.True(t, PrimaryDownByQuorum(primary, "ks", "0", 1, defaultOpts(), now),
+		"removing the forgotten observer must unblock the quorum verdict")
 }
 
 // TestIsShardHealthObserverType pins the single predicate behind the quorum voter filter and the

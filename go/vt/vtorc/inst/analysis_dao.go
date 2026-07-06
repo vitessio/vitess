@@ -316,30 +316,28 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 	// the shard-peer health monitor and is eligible to vote on a primary's liveness (see
 	// IsShardHealthObserverType). The quorum gate uses it as the expected observer count for both
 	// the unreachable-primary matcher and the InvalidPrimary cold-start upgrade, so the denominator
-	// always matches the voters. The count is only consumed when quorum ERS is enabled, so when the
-	// feature is off we select a constant 0 and omit the shard_observers join entirely — the default
-	// analysis query then does no extra observer-count work. When on, the count is precomputed once
-	// per (keyspace, shard) in the shard_observers derived table and joined in — one row per shard,
-	// so it adds a column without fanning out rows — rather than re-scanning vitess_tablet for every
-	// analyzed row. The tablet-type list is derived from the proto enum so it cannot drift from
-	// IsShardHealthObserverType.
-	shardObserverColumn := "0"
-	shardObserverJoin := ""
-	if config.ERSOnTabletUnreachableEnabled() {
-		shardObserverColumn = "IFNULL(MIN(shard_observers.observer_count), 0)"
-		shardObserverJoin = strings.Replace(`LEFT JOIN (
-			SELECT
-				keyspace,
-				shard,
-				COUNT(*) AS observer_count
-			FROM vitess_tablet
-			WHERE tablet_type IN (SHARD_OBSERVER_TABLET_TYPES)
-			GROUP BY keyspace, shard
-		) AS shard_observers ON (
-			shard_observers.keyspace = vitess_tablet.keyspace
-			AND shard_observers.shard = vitess_tablet.shard
-		)`, "SHARD_OBSERVER_TABLET_TYPES", shardObserverTabletTypeList(), 1)
-	}
+	// always matches the voters. The count is computed unconditionally — NOT gated on
+	// --emergency-reparent-on-primary-tablet-unreachable — because that flag is dynamic and is
+	// re-read by the consumers later in the cycle: gating the query column too would let a flag
+	// flip mid-cycle evaluate the quorum with a baked-in denominator of 0, degenerating the
+	// strict-majority gate to the observed reporters only (exactly the minority view it exists to
+	// block). The count is precomputed once per (keyspace, shard) in the shard_observers derived
+	// table and joined in — one row per shard, so it adds a column without fanning out rows —
+	// rather than re-scanning vitess_tablet for every analyzed row. The tablet-type list is derived
+	// from the proto enum so it cannot drift from IsShardHealthObserverType.
+	shardObserverColumn := "IFNULL(MIN(shard_observers.observer_count), 0)"
+	shardObserverJoin := strings.Replace(`LEFT JOIN (
+		SELECT
+			keyspace,
+			shard,
+			COUNT(*) AS observer_count
+		FROM vitess_tablet
+		WHERE tablet_type IN (SHARD_OBSERVER_TABLET_TYPES)
+		GROUP BY keyspace, shard
+	) AS shard_observers ON (
+		shard_observers.keyspace = vitess_tablet.keyspace
+		AND shard_observers.shard = vitess_tablet.shard
+	)`, "SHARD_OBSERVER_TABLET_TYPES", shardObserverTabletTypeList(), 1)
 	query = strings.Replace(query, "SHARD_OBSERVER_COLUMN", shardObserverColumn, 1)
 	query = strings.Replace(query, "SHARD_OBSERVER_JOIN", shardObserverJoin, 1)
 

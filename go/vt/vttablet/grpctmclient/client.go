@@ -137,6 +137,7 @@ type poolDialer interface {
 	dialPool(ctx context.Context, tablet *topodatapb.Tablet) (tabletmanagerservicepb.TabletManagerClient, error)
 	dialDedicatedPool(ctx context.Context, dialPoolGroup DialPoolGroup, tablet *topodatapb.Tablet) (tabletmanagerservicepb.TabletManagerClient, invalidatorFunc, error)
 	closeDedicatedPool(dialPoolGroup DialPoolGroup)
+	closeDedicatedPoolEntry(dialPoolGroup DialPoolGroup, addr string)
 }
 
 // Client implements tmclient.TabletManagerClient.
@@ -348,6 +349,27 @@ func (client *grpcClient) closeDedicatedPool(dialPoolGroup DialPoolGroup) {
 	}
 }
 
+// closeDedicatedPoolEntry closes and removes the pooled connection to a single
+// address within the given dial-pool group, leaving the rest of the group (and
+// other groups) untouched. It lets a feature release the connection to a peer
+// it no longer probes (e.g. a demoted primary) without churning the others.
+func (client *grpcClient) closeDedicatedPoolEntry(dialPoolGroup DialPoolGroup, addr string) {
+	client.rpcDialPoolMapMu.Lock()
+	defer client.rpcDialPoolMapMu.Unlock()
+	poolEntries, ok := client.rpcDialPoolMap[dialPoolGroup]
+	if !ok {
+		return
+	}
+	entry, ok := poolEntries[addr]
+	if !ok {
+		return
+	}
+	if entry != nil && entry.tmc != nil && entry.tmc.cc != nil {
+		entry.tmc.cc.Close()
+	}
+	delete(poolEntries, addr)
+}
+
 // Close is part of the tmclient.TabletManagerClient interface.
 func (client *grpcClient) Close() {
 	func() {
@@ -429,6 +451,17 @@ func (client *Client) PingPooled(ctx context.Context, tablet *topodatapb.Tablet)
 func (client *Client) CloseShardHealthPool() {
 	if poolDialer, ok := client.dialer.(poolDialer); ok {
 		poolDialer.closeDedicatedPool(dialPoolGroupPing)
+	}
+}
+
+// CloseShardHealthPoolEntry closes the pooled shard-health ping connection to a
+// single tablet, if one exists. The vttablet shard-health monitor calls this when
+// a peer leaves its probe set (e.g. after the primary changed) so the departed
+// peer's connection is released promptly instead of lingering until the monitor
+// stops. Not part of the tmclient.TabletManagerClient interface.
+func (client *Client) CloseShardHealthPoolEntry(tablet *topodatapb.Tablet) {
+	if poolDialer, ok := client.dialer.(poolDialer); ok {
+		poolDialer.closeDedicatedPoolEntry(dialPoolGroupPing, netutil.JoinHostPort(tablet.Hostname, int32(tablet.PortMap["grpc"])))
 	}
 }
 

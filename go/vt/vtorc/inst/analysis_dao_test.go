@@ -1276,9 +1276,9 @@ func TestGetDetectionAnalysis(t *testing.T) {
 // REPLICA/RDONLY tablets (the shard-peer health voters). A SPARE (or any non-REPLICA/RDONLY) tablet
 // in the shard must not inflate it: topo.IsReplicaType(SPARE) is true, so an IsReplicaType-based
 // count would include it and could wrongly block an ERS even when every actual observer agrees the
-// primary is down. The count is also gated on the quorum-ERS feature: with it disabled (the default)
-// the query selects a constant 0 and skips the observer-count scan entirely; only when enabled does
-// it compute the real count.
+// primary is down. The count is deliberately NOT gated on the (dynamic) quorum-ERS flag: the
+// consumers re-read the flag later in the cycle, so a flag flip mid-cycle must still see the real
+// denominator rather than a baked-in 0 that would degenerate the strict-majority gate.
 func TestGetDetectionAnalysisShardEligibleObservers(t *testing.T) {
 	defer resetPrimaryHealthState()
 	defer db.ClearVTOrcDatabase()
@@ -1317,10 +1317,11 @@ func TestGetDetectionAnalysisShardEligibleObservers(t *testing.T) {
 		return primaryAnalysis.ShardEligibleObservers
 	}
 
-	// With quorum ERS disabled (the default) the count is gated off: the query selects a constant 0
-	// and omits the shard_observers join, so the default analysis poll does no observer-count work.
-	assert.Equal(t, uint(0), primaryEligibleObservers(t),
-		"with the feature disabled, shard_eligible_observers must be a constant 0 (no observer-count scan)")
+	// Even with quorum ERS disabled (the default), the count is computed: the flag is dynamic and
+	// its consumers re-read it later in the analysis cycle, so the denominator must never be a
+	// baked-in 0 just because the flag was off when the query was built.
+	assert.Equal(t, uint(3), primaryEligibleObservers(t),
+		"shard_eligible_observers must be computed regardless of the quorum-ERS flag")
 
 	// With quorum ERS enabled, only the shard's 2 REPLICA + 1 RDONLY tablets are eligible observers;
 	// the SPARE and PRIMARY must be excluded.

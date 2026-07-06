@@ -208,6 +208,17 @@ func shardObserverTabletTypeList() string {
 	return fmt.Sprintf("%d, %d", int(topodatapb.TabletType_REPLICA), int(topodatapb.TabletType_RDONLY))
 }
 
+// RemoveShardPeerObserver drops all health reports from a single observer, if any.
+// It is called when VTOrc forgets a tablet (e.g. it was deleted from the topo) so
+// that the departed observer stops counting toward the quorum denominator right
+// away, instead of blocking quorum in small shards until the stale-record TTL
+// prunes it.
+func RemoveShardPeerObserver(tabletAliasString string) {
+	shardPeerHealthMu.Lock()
+	defer shardPeerHealthMu.Unlock()
+	delete(shardPeerHealthByObserver, tabletAliasString)
+}
+
 // pruneStaleShardPeerRecordsLocked bounds records for deleted tablets without a background task.
 func pruneStaleShardPeerRecordsLocked(now time.Time) {
 	lastShardPeerPruneAt = now
@@ -306,8 +317,12 @@ func EvaluatePrimaryQuorum(primaryAlias *topodatapb.TabletAlias, keyspace, shard
 
 	// A verdict is trusted only when the fresh reporters form a strict majority of the shard
 	// (2*fresh > quorumBase). This stops a minority view — a single partitioned replica while the
-	// rest are stale or missing — from driving ERS, while the down ratio is still taken over the
-	// fresh reporters so a stale or dead replica cannot block a genuine failover.
+	// rest are stale or missing — from driving ERS. It is deliberately fail-closed in the other
+	// direction too: replicas that are stale, dead, or not yet re-polled still count in quorumBase
+	// (via the topo-derived expectedObservers), so a fresh majority of the WHOLE shard is required
+	// before any down verdict — a shard where most reports are stale blocks quorum ERS rather than
+	// firing on the few fresh ones. The down *ratio*, by contrast, is taken over the fresh
+	// reporters only, so a stale replica never contributes a down vote it did not cast.
 	//
 	// opts.valid() keeps an invalid dynamic config (e.g. Fraction 0) from turning the verdict
 	// fail-open; an invalid config yields no down verdict while still surfacing observer data.
