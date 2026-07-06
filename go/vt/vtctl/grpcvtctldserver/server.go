@@ -2407,12 +2407,14 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 
 		tablets := make([]*topodatapb.Tablet, 0, len(tabletMap))
 		for _, ti := range tabletMap {
-			if req.TabletType != topodatapb.TabletType_UNKNOWN && ti.Type != req.TabletType {
-				continue
-			}
+			// Demote stale primaries before applying the tablet_type filter so
+			// the filter matches the reported type, not the stale on-disk type.
 			key := topoproto.KeyspaceShardString(ti.Keyspace, ti.Shard)
 			if _, skip := skipStaleCheck[key]; !skip {
 				adjustTypeForStalePrimary(ti, truePrimaryByShard[key])
+			}
+			if req.TabletType != topodatapb.TabletType_UNKNOWN && ti.Type != req.TabletType {
+				continue
 			}
 			tablets = append(tablets, ti.Tablet)
 		}
