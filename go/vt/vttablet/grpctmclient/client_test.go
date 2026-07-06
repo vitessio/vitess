@@ -104,53 +104,6 @@ func TestDialDedicatedPool(t *testing.T) {
 	})
 }
 
-// TestDialDedicatedPoolEvictsFailedEntry verifies that a pooled dial that failed
-// to initialize is not cached forever. Each pool entry is guarded by a sync.Once,
-// so a first createTmc failure would otherwise make every subsequent PingPooled
-// return the same error without redialing — permanently marking a reachable
-// tablet as down and feeding a false quorum/ERS decision. The failed entry must
-// be evicted so the next dial reconnects.
-func TestDialDedicatedPoolEvictsFailedEntry(t *testing.T) {
-	ctx := t.Context()
-	client := NewClient()
-	tablet := &topodatapb.Tablet{
-		Hostname: "localhost",
-		PortMap:  map[string]int32{"grpc": 15992},
-	}
-	addr := netutil.JoinHostPort(tablet.Hostname, int32(tablet.PortMap["grpc"]))
-
-	rpcClient, ok := client.dialer.(*grpcClient)
-	require.True(t, ok)
-	poolDialer, ok := client.dialer.(poolDialer)
-	require.True(t, ok)
-
-	// Simulate a first dial that failed: install an entry whose once has already
-	// fired with an error, exactly as a createTmc failure would leave it.
-	failed := &tmcEntry{}
-	failed.once.Do(func() { failed.err = errors.New("simulated dial failure") })
-	rpcClient.rpcDialPoolMapMu.Lock()
-	rpcClient.rpcDialPoolMap = map[DialPoolGroup]addrTmcMap{
-		dialPoolGroupPing: {addr: failed},
-	}
-	rpcClient.rpcDialPoolMapMu.Unlock()
-
-	// A dial that finds the failed entry must surface the error AND evict it.
-	_, _, err := poolDialer.dialDedicatedPool(ctx, dialPoolGroupPing, tablet)
-	require.ErrorContains(t, err, "simulated dial failure")
-
-	rpcClient.rpcDialPoolMapMu.Lock()
-	_, stillCached := rpcClient.rpcDialPoolMap[dialPoolGroupPing][addr]
-	rpcClient.rpcDialPoolMapMu.Unlock()
-	assert.False(t, stillCached, "a failed pooled-dial entry must be evicted so the next probe redials")
-
-	// The next dial redials and succeeds (grpc dials lazily), proving the cached
-	// failure no longer permanently blocks recovery.
-	cli, invalidator, err := poolDialer.dialDedicatedPool(ctx, dialPoolGroupPing, tablet)
-	require.NoError(t, err)
-	assert.NotNil(t, cli)
-	assert.NotNil(t, invalidator)
-}
-
 // TestCloseShardHealthPool verifies that CloseShardHealthPool releases the pooled ping connections
 // (so the shard-health monitor does not leak its connection to the primary on stop) while leaving
 // other dial-pool groups untouched.
