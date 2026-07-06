@@ -1440,9 +1440,18 @@ func (mysqld *Mysqld) HostMetrics(ctx context.Context, cnf *Mycnf) (*mysqlctlpb.
 // the wrong point in time is restored.
 // See https://github.com/vitessio/vitess/issues/20373.
 func mysqlbinlogEnviron(baseEnv []string) []string {
-	// Use a full three-index slice so the append never mutates baseEnv, which is
-	// shared with the mysql command that applies the output.
-	return append(baseEnv[:len(baseEnv):len(baseEnv)], "TZ=UTC")
+	// baseEnv can already carry a TZ entry (e.g. from os.Environ() via
+	// buildLdPaths()). Drop it so mysqlbinlog only ever sees one TZ entry;
+	// otherwise the effective time zone would depend on how the child
+	// process resolves duplicate environment variables.
+	env := make([]string, 0, len(baseEnv)+1)
+	for _, e := range baseEnv {
+		if strings.HasPrefix(e, "TZ=") {
+			continue
+		}
+		env = append(env, e)
+	}
+	return append(env, "TZ=UTC")
 }
 
 // ApplyBinlogFile extracts a binary log file and applies it to MySQL. It is the equivalent of:

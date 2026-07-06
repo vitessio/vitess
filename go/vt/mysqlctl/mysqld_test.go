@@ -449,3 +449,25 @@ func TestMysqlbinlogEnvironForcesUTC(t *testing.T) {
 	// command that applies the mysqlbinlog output)
 	require.Equal(t, baseCopy, base)
 }
+
+// TestMysqlbinlogEnvironOverridesExistingTZ verifies that a pre-existing TZ
+// entry in the base environment (e.g. from os.Environ() via buildLdPaths())
+// is replaced, not duplicated, so mysqlbinlog can't end up seeing two TZ
+// values.
+func TestMysqlbinlogEnvironOverridesExistingTZ(t *testing.T) {
+	base := []string{"LD_LIBRARY_PATH=/opt/mysql/lib", "TZ=Europe/Berlin"}
+	baseCopy := append([]string(nil), base...)
+
+	got := mysqlbinlogEnviron(base)
+
+	count := 0
+	for _, e := range got {
+		if strings.HasPrefix(e, "TZ=") {
+			count++
+		}
+	}
+	require.Equal(t, 1, count, "expected exactly one TZ entry, got %v", got)
+	require.Contains(t, got, "TZ=UTC")
+	require.NotContains(t, got, "TZ=Europe/Berlin")
+	require.Equal(t, baseCopy, base)
+}
