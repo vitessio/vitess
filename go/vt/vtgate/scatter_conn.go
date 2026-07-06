@@ -171,12 +171,12 @@ func (stc *ScatterConn) ExecuteMultiShard(
 	// with concurrent sources marshalling them (e.g. a streamed UNION runs
 	// each source through its own StreamExecuteMulti against the same session).
 	var callOptions *querypb.ExecuteOptions
-	if session != nil {
-		// GetOptions is nil-safe on the embedded proto session.
-		if options := session.GetOptions(); options != nil {
-			callOptions = options.CloneVT()
-			callOptions.FetchLastInsertId = fetchLastInsertID
-		}
+	// The explicit session.Session selector spells out why the nil check
+	// on the embedded session is needed.
+	//nolint:staticcheck // QF1008
+	if session != nil && session.Session != nil && session.Session.Options != nil {
+		callOptions = session.Session.Options.CloneVT()
+		callOptions.FetchLastInsertId = fetchLastInsertID
 	}
 
 	allErrors := stc.multiGoTransaction(
@@ -410,12 +410,12 @@ func (stc *ScatterConn) StreamExecuteMulti(
 	// with concurrent sources marshalling them (e.g. a streamed UNION runs
 	// each source through its own StreamExecuteMulti against the same session).
 	var callOptions *querypb.ExecuteOptions
-	if session != nil {
-		// GetOptions is nil-safe on the embedded proto session.
-		if options := session.GetOptions(); options != nil {
-			callOptions = options.CloneVT()
-			callOptions.FetchLastInsertId = fetchLastInsertID
-		}
+	// The explicit session.Session selector spells out why the nil check
+	// on the embedded session is needed.
+	//nolint:staticcheck // QF1008
+	if session != nil && session.Session != nil && session.Session.Options != nil {
+		callOptions = session.Session.Options.CloneVT()
+		callOptions.FetchLastInsertId = fetchLastInsertID
 	}
 
 	allErrors := stc.multiGoTransaction(
