@@ -217,7 +217,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 	// Now sleep for the rest of the interval and we should get the value again
 	time.Sleep(srvTopoCacheRefresh)
 	got, err = rs.GetSrvKeyspace(t.Context(), "test_cell", "test_ks")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, proto.Equal(want, got), "expected value to be restored, got %v", got)
 
 	// Now sleep for the full TTL before setting the error again to test
@@ -318,7 +318,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 	time.Sleep(srvTopoCacheTTL)
 
 	got, err = rs.GetSrvKeyspace(t.Context(), "test_cell", "test_ks")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, proto.Equal(want, got), "expected error to clear, got %v", got)
 
 	// Force another error and lock the topo. Then wait for the TTL to
@@ -519,7 +519,7 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 	require.NoError(t, err, "UpdateSrvKeyspace(test_cell, test_ks2, %s) failed", want)
 
 	names, err := rs.GetSrvKeyspaceNames(ctx, "test_cell", false)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	wantNames := []string{"test_ks", "test_ks2"}
 
 	assert.Equalf(t, wantNames, names, "GetSrvKeyspaceNames got %v want %v", names, wantNames)
@@ -540,7 +540,7 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 	start := time.Now()
 	for {
 		names, err = rs.GetSrvKeyspaceNames(ctx, "test_cell", false)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		assert.Equalf(t, wantNames, names, "GetSrvKeyspaceNames got %v want %v", names, wantNames)
 
@@ -716,8 +716,8 @@ func TestGetSrvKeyspaceNamesCachedErrorRecovery(t *testing.T) {
 	}
 
 	// All requests should have succeeded
-	assert.Greaterf(t, successCount, int32(0), "Expected successful requests after service recovery, got %d errors out of %d requests", errorCount, numGoroutines)
-	assert.EqualValuesf(t, successCount, numGoroutines, "Not all requests succeeded after service recovery: %d/%d", successCount, numGoroutines)
+	assert.Positivef(t, successCount, "Expected successful requests after service recovery, got %d errors out of %d requests", errorCount, numGoroutines)
+	assert.EqualValuesf(t, numGoroutines, successCount, "Not all requests succeeded after service recovery: %d/%d", successCount, numGoroutines)
 }
 
 type watched struct {
@@ -795,7 +795,7 @@ func TestSrvKeyspaceWatcher(t *testing.T) {
 	seen2 := waitForEntries(2)
 	assert.Len(t, seen2, 2)
 	assert.NotNil(t, seen2[1].keyspace)
-	assert.Nil(t, seen2[1].err)
+	require.NoError(t, seen2[1].err)
 	assert.True(t, proto.Equal(want, seen2[1].keyspace))
 
 	// Now delete the SrvKeyspace, wait until we get the error.
@@ -837,7 +837,7 @@ func TestSrvKeyspaceWatcher(t *testing.T) {
 
 	for i := range 5 {
 		w := seen4[3+i]
-		assert.Nil(t, w.err)
+		require.NoError(t, w.err)
 	}
 
 	// Now simulate a topo service error
@@ -853,7 +853,7 @@ func TestSrvKeyspaceWatcher(t *testing.T) {
 
 	seen6 := waitForEntries(10)
 	assert.Len(t, seen6, 10)
-	assert.Nil(t, seen6[9].err)
+	require.NoError(t, seen6[9].err)
 	assert.NotNil(t, seen6[9].keyspace)
 }
 

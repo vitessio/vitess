@@ -26,7 +26,7 @@ import (
 func TestNew(t *testing.T) {
 	in := "%a-%Y"
 	res, err := New(in)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, res.Pattern(), in)
 	assert.Equal(t, res.compiled[0].format([]byte{}, DateTime{Date: Date{2024, 3, 15}}, 1), []byte("Fri"))
 	assert.Equal(t, res.compiled[1].format([]byte{}, DateTime{Date: Date{2024, 3, 15}}, 1), []byte("-"))
@@ -35,11 +35,11 @@ func TestNew(t *testing.T) {
 	in = "%"
 	res, err = New(in)
 	assert.Nil(t, res)
-	assert.Error(t, err)
+	require.Error(t, err)
 
 	in = "-"
 	res, err = New(in)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, res.Pattern(), in)
 	assert.Equal(t, res.compiled[0].format([]byte{}, DateTime{Date: Date{2024, 3, 15}}, 1), []byte("-"))
 }

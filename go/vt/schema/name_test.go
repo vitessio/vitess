@@ -99,7 +99,7 @@ func TestIsInternalOperationTableName(t *testing.T) {
 
 func TestAnalyzeInternalTableName(t *testing.T) {
 	baseTime, err := time.Parse(time.RFC1123, "Tue, 15 Sep 2020 12:04:10 UTC")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	tt := []struct {
 		tableName  string
 		hint       string
@@ -158,7 +158,7 @@ func TestAnalyzeInternalTableName(t *testing.T) {
 			isInternal, hint, uuid, tm, err := AnalyzeInternalTableName(ts.tableName)
 			assert.Equal(t, ts.isInternal, isInternal)
 			if ts.isInternal {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.True(t, isCondensedUUID(uuid))
 				assert.Equal(t, ts.hint, hint)
 				assert.Equal(t, ts.t, tm)
@@ -169,7 +169,7 @@ func TestAnalyzeInternalTableName(t *testing.T) {
 
 func TestToReadableTimestamp(t *testing.T) {
 	ti, err := time.Parse(time.UnixDate, "Wed Feb 25 11:06:39 PST 2015")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	readableTimestamp := ToReadableTimestamp(ti)
 	assert.Equal(t, "20150225110639", readableTimestamp)
@@ -177,7 +177,7 @@ func TestToReadableTimestamp(t *testing.T) {
 
 func TestGenerateInternalTableName(t *testing.T) {
 	ti, err := time.Parse(time.UnixDate, "Wed Feb 25 11:06:39 PST 2015")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	{
 		uuid := "6ace8bcef73211ea87e9f875a4d24e90"

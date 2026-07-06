@@ -176,7 +176,7 @@ func TestParseAndValidateCreateOptions(t *testing.T) {
 				return nil
 			}
 			err := test()
-			assert.Falsef(t, (err != nil) != tt.wantErr, "ParseAndValidateCreateOptions() error = %v, wantErr %t", err, tt.wantErr)
+			assert.Equalf(t, tt.wantErr, (err != nil), "ParseAndValidateCreateOptions() error = %v, wantErr %t", err, tt.wantErr)
 			if tt.checkFunc != nil {
 				tt.checkFunc()
 			}

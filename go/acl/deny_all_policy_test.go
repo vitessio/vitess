@@ -27,11 +27,11 @@ func TestDenyAllPolicy(t *testing.T) {
 
 	want := errDenyAll
 	err := testDenyAllPolicy.CheckAccessHTTP(nil, ADMIN)
-	assert.Equalf(t, err, want, "got %v; want %v", err, want)
+	assert.Equalf(t, want, err, "got %v; want %v", err, want)
 
 	err = testDenyAllPolicy.CheckAccessHTTP(nil, DEBUGGING)
-	assert.Equalf(t, err, want, "got %v; want %v", err, want)
+	assert.Equalf(t, want, err, "got %v; want %v", err, want)
 
 	err = testDenyAllPolicy.CheckAccessHTTP(nil, MONITORING)
-	assert.Equalf(t, err, want, "got %v; want %v", err, want)
+	assert.Equalf(t, want, err, "got %v; want %v", err, want)
 }

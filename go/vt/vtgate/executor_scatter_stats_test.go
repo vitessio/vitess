@@ -37,7 +37,7 @@ func TestScatterStatsWithNoScatterQuery(t *testing.T) {
 
 	result, err := executor.gatherScatterStats()
 	require.NoError(t, err)
-	require.Equal(t, 0, len(result.Items))
+	require.Empty(t, result.Items)
 }
 
 func TestScatterStatsWithSingleScatterQuery(t *testing.T) {
@@ -49,7 +49,7 @@ func TestScatterStatsWithSingleScatterQuery(t *testing.T) {
 
 	result, err := executor.gatherScatterStats()
 	require.NoError(t, err)
-	require.Equal(t, 1, len(result.Items))
+	require.Len(t, result.Items, 1)
 }
 
 func TestScatterStatsHttpWriting(t *testing.T) {

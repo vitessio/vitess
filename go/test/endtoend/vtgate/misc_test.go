@@ -18,6 +18,7 @@ package vtgate
 
 import (
 	"fmt"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -231,7 +232,7 @@ func TestExplainPassthrough(t *testing.T) {
 	// but we are trying to make the test less fragile
 
 	result = utils.Exec(t, conn, "explain ks.t1")
-	require.EqualValues(t, 2, len(result.Rows))
+	require.Len(t, result.Rows, 2)
 }
 
 func TestXXHash(t *testing.T) {
@@ -496,13 +497,13 @@ func TestShowVGtid(t *testing.T) {
 
 	query := "show global vgtid_executed from ks"
 	qr := utils.Exec(t, conn, query)
-	require.Equal(t, 1, len(qr.Rows))
-	require.Equal(t, 2, len(qr.Rows[0]))
+	require.Len(t, qr.Rows, 1)
+	require.Len(t, qr.Rows[0], 2)
 
 	utils.Exec(t, conn, `insert into t1(id1, id2) values (1, 1), (2, 2), (3, 3), (4, 4), (5, 5)`)
 	qr2 := utils.Exec(t, conn, query)
-	require.Equal(t, 1, len(qr2.Rows))
-	require.Equal(t, 2, len(qr2.Rows[0]))
+	require.Len(t, qr2.Rows, 1)
+	require.Len(t, qr2.Rows[0], 2)
 
 	require.Equal(t, qr.Rows[0][0], qr2.Rows[0][0], "keyspace should be same")
 	require.NotEqual(t, qr.Rows[0][1].ToString(), qr2.Rows[0][1].ToString(), "vgtid should have changed")
@@ -514,7 +515,7 @@ func TestShowGtid(t *testing.T) {
 
 	query := "show global gtid_executed from ks"
 	qr := utils.Exec(t, conn, query)
-	require.Equal(t, 2, len(qr.Rows))
+	require.Len(t, qr.Rows, 2)
 
 	res := make(map[string]string, 2)
 	for _, row := range qr.Rows {
@@ -524,7 +525,7 @@ func TestShowGtid(t *testing.T) {
 
 	utils.Exec(t, conn, `insert into t1(id1, id2) values (1, 1), (2, 2), (3, 3), (4, 4), (5, 5)`)
 	qr2 := utils.Exec(t, conn, query)
-	require.Equal(t, 2, len(qr2.Rows))
+	require.Len(t, qr2.Rows, 2)
 
 	for _, row := range qr2.Rows {
 		require.Equal(t, KeyspaceName, row[0].ToString())
@@ -590,7 +591,7 @@ func TestRenameFieldsOnOLAP(t *testing.T) {
 	_ = utils.Exec(t, conn, "set workload = olap")
 
 	qr := utils.Exec(t, conn, "show tables")
-	require.Equal(t, 1, len(qr.Fields))
+	require.Len(t, qr.Fields, 1)
 	assert.Equal(t, `Tables_in_ks`, qr.Fields[0].Name)
 	_ = utils.Exec(t, conn, "use mysql")
 	qr = utils.Exec(t, conn, "select @@workload")
@@ -633,10 +634,10 @@ func TestSQLSelectLimit(t *testing.T) {
 
 		//	without order by the results are not deterministic for testing purpose. Checking row count only.
 		qr := utils.Exec(t, conn, "select /*vt+ PLANNER=gen4 */ uid, msg from t7_xxhash union all select uid, msg from t7_xxhash")
-		assert.Equal(t, 2, len(qr.Rows))
+		assert.Len(t, qr.Rows, 2)
 
 		qr = utils.Exec(t, conn, "select /*vt+ PLANNER=gen4 */ uid, msg from t7_xxhash union all select uid, msg from t7_xxhash limit 3")
-		assert.Equal(t, 3, len(qr.Rows))
+		assert.Len(t, qr.Rows, 3)
 	}
 }
 
@@ -800,6 +801,28 @@ func TestUnionWithManyInfSchemaQueries(t *testing.T) {
                     TABLE_SCHEMA = 'ionescu'
                     AND
                     TABLE_NAME = 'user'`)
+}
+
+// TestUnionInfSchemaQueriesOLAP streams a UNION of many information_schema
+// queries (OLAP workload). Each branch routes through routeInfoSchemaQuery,
+// which mutates the bindVars map in place; the parallel streaming Concatenate
+// path must hand each source its own copy, otherwise the sources race on the
+// shared map and crash vtgate with a concurrent map write.
+func TestUnionInfSchemaQueriesOLAP(t *testing.T) {
+	conn, closer := start(t)
+	defer closer()
+
+	utils.Exec(t, conn, "set workload='olap'")
+
+	selects := make([]string, 0, 16)
+	for i := range 16 {
+		selects = append(selects, fmt.Sprintf("select TABLE_SCHEMA, TABLE_NAME from INFORMATION_SCHEMA.TABLES where TABLE_SCHEMA = 'ionescu' and TABLE_NAME = 'table_%d'", i))
+	}
+	query := strings.Join(selects, " UNION ")
+
+	for range 100 {
+		utils.Exec(t, conn, query)
+	}
 }
 
 func TestTransactionsInStreamingMode(t *testing.T) {
@@ -1068,7 +1091,7 @@ func TestTabletTargeting(t *testing.T) {
 	for i := range 5 {
 		result1 := utils.Exec(t, conn, "SELECT @@server_uuid")
 		require.NotNil(t, result1)
-		require.Greater(t, len(result1.Rows), 0)
+		require.NotEmpty(t, result1.Rows)
 		if i > 0 {
 			// UUID should be the same across multiple queries to same tablet
 			require.Equal(t, uuid1, result1.Rows[0][0].ToString())
@@ -1083,7 +1106,7 @@ func TestTabletTargeting(t *testing.T) {
 	for i := range 5 {
 		result2 := utils.Exec(t, conn, "SELECT @@server_uuid")
 		require.NotNil(t, result2)
-		require.Greater(t, len(result2.Rows), 0)
+		require.NotEmpty(t, result2.Rows)
 		if i > 0 {
 			// UUID should be the same across multiple queries to same tablet
 			require.Equal(t, uuid2, result2.Rows[0][0].ToString())
@@ -1181,7 +1204,7 @@ func TestLookupErrorMetric(t *testing.T) {
 	require.ErrorContains(t, err, `(errno 1062) (sqlstate 23000)`)
 
 	newErrCount := getVtgateApiErrorCounts(t)
-	require.EqualValues(t, oldErrCount+1, newErrCount)
+	require.Equal(t, oldErrCount+1, newErrCount)
 }
 
 func getVtgateApiErrorCounts(t *testing.T) float64 {

@@ -134,10 +134,10 @@ func TestCFCCreateVindexOptions(t *testing.T) {
 		},
 	)
 	require.NotNil(t, vdx)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	unknownParams := vdx.(ParamValidating).UnknownParams()
 	require.Empty(t, unknownParams)
-	require.EqualValues(t, vdx.(*CFC).offsets, []int{3, 7})
+	require.Equal(t, []int{3, 7}, vdx.(*CFC).offsets)
 }
 
 func makeCFC(t *testing.T, params map[string]string) *CFC {
@@ -166,8 +166,8 @@ func TestCFCComputeKsidNoHash(t *testing.T) {
 	cfc := makeCFC(t, nil)
 	id := []byte{3, 6, 20, 7, 60, 1}
 	ksid, err := cfc.computeKsid(id, true)
-	assert.NoError(t, err)
-	assert.EqualValues(t, id, ksid)
+	require.NoError(t, err)
+	assert.Equal(t, id, ksid)
 }
 
 func TestCFCComputeKsid(t *testing.T) {
@@ -245,7 +245,7 @@ func TestCFCComputeKsid(t *testing.T) {
 			ksid, err := cfc.computeKsid(fid, tc.prefix)
 			assertEqualVtError(t, tc.err, err)
 			if err == nil {
-				assert.EqualValues(t, tc.expected, ksid)
+				assert.Equal(t, tc.expected, ksid)
 			}
 		})
 	}
@@ -325,7 +325,7 @@ func TestCFCComputeKsidXxhash(t *testing.T) {
 			ksid, err := cfc.computeKsid(fid, tc.prefix)
 			assertEqualVtError(t, tc.err, err)
 			if err == nil {
-				assert.EqualValues(t, tc.expected, ksid)
+				assert.Equal(t, tc.expected, ksid)
 			}
 		})
 	}
@@ -335,16 +335,16 @@ func TestCFCVerifyNoHash(t *testing.T) {
 	cfc := makeCFC(t, nil)
 	id := []byte{3, 10, 7, 200}
 	out, err := cfc.Verify(t.Context(), nil, []sqltypes.Value{sqltypes.NewVarBinary(string(id))}, [][]byte{id})
-	assert.NoError(t, err)
-	assert.EqualValues(t, []bool{true}, out)
+	require.NoError(t, err)
+	assert.Equal(t, []bool{true}, out)
 
 	out, err = cfc.Verify(t.Context(), nil, []sqltypes.Value{sqltypes.NewVarBinary("foobar")}, [][]byte{id})
-	assert.NoError(t, err)
-	assert.EqualValues(t, []bool{false}, out)
+	require.NoError(t, err)
+	assert.Equal(t, []bool{false}, out)
 	pcfc := cfc.PrefixVindex()
 	out, err = pcfc.Verify(t.Context(), nil, []sqltypes.Value{sqltypes.NewVarBinary("foobar")}, [][]byte{id})
-	assert.NoError(t, err)
-	assert.EqualValues(t, []bool{false}, out)
+	require.NoError(t, err)
+	assert.Equal(t, []bool{false}, out)
 }
 
 func TestCFCVerifyWithHash(t *testing.T) {
@@ -353,30 +353,30 @@ func TestCFCVerifyWithHash(t *testing.T) {
 		{1, 234, 3}, {12, 32}, {7, 9},
 	}
 	out, err := cfc.Verify(t.Context(), nil, []sqltypes.Value{sqltypes.NewVarBinary(string(flattenKey(id)))}, [][]byte{expectedHash(id)})
-	assert.NoError(t, err)
-	assert.EqualValues(t, []bool{true}, out)
+	require.NoError(t, err)
+	assert.Equal(t, []bool{true}, out)
 
 	_, err = cfc.Verify(t.Context(), nil, []sqltypes.Value{sqltypes.NewVarBinary("foo")}, [][]byte{expectedHash(id)})
-	assert.Error(t, err)
+	require.Error(t, err)
 
 	pcfc := cfc.PrefixVindex()
 	out, err = pcfc.Verify(t.Context(), nil, []sqltypes.Value{sqltypes.NewVarBinary(string(flattenKey(id)))}, [][]byte{expectedHash(id)})
-	assert.NoError(t, err)
-	assert.EqualValues(t, []bool{true}, out)
+	require.NoError(t, err)
+	assert.Equal(t, []bool{true}, out)
 }
 
 func TestCFCMap(t *testing.T) {
 	cfc := makeCFC(t, map[string]string{"hash": "md5", "offsets": "[3,5]"})
 	_, err := cfc.Map(t.Context(), nil, []sqltypes.Value{sqltypes.NewVarBinary("abc")})
-	assert.EqualError(t, err, "insufficient size for cfc vindex cfc. need 5, got 3")
+	require.EqualError(t, err, "insufficient size for cfc vindex cfc. need 5, got 3")
 
 	dests, err := cfc.Map(t.Context(), nil, []sqltypes.Value{sqltypes.NewVarBinary("12345567")})
 	require.NoError(t, err)
 	ksid, ok := dests[0].(key.DestinationKeyspaceID)
 	require.True(t, ok)
 	out, err := cfc.Verify(t.Context(), nil, []sqltypes.Value{sqltypes.NewVarBinary("12345567")}, [][]byte{ksid})
-	assert.NoError(t, err)
-	assert.EqualValues(t, []bool{true}, out)
+	require.NoError(t, err)
+	assert.Equal(t, []bool{true}, out)
 }
 
 func TestCFCBuildPrefix(t *testing.T) {
@@ -424,7 +424,7 @@ func TestCFCPrefixMap(t *testing.T) {
 		t.Run(tc.testName, func(t *testing.T) {
 			dests, err := prefixcfc.Map(t.Context(), nil, []sqltypes.Value{sqltypes.NewVarBinary(tc.id)})
 			require.NoError(t, err)
-			assert.EqualValues(t, tc.dest, dests[0])
+			assert.Equal(t, tc.dest, dests[0])
 		})
 	}
 }
@@ -450,8 +450,8 @@ func TestCFCPrefixQueryMapNoHash(t *testing.T) {
 	for i, dest := range dests {
 		kr, ok := dest.(key.DestinationKeyRange)
 		require.True(t, ok)
-		assert.EqualValues(t, expected[i].start, kr.KeyRange.Start)
-		assert.EqualValues(t, expected[i].end, kr.KeyRange.End)
+		assert.Equal(t, expected[i].start, kr.KeyRange.Start)
+		assert.Equal(t, expected[i].end, kr.KeyRange.End)
 	}
 }
 
@@ -530,7 +530,7 @@ func TestCFCFindPrefixEscape(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		assert.EqualValues(t, tc.prefix, string(findPrefix([]byte(tc.str))))
+		assert.Equal(t, tc.prefix, string(findPrefix([]byte(tc.str))))
 	}
 }
 
@@ -578,7 +578,7 @@ func TestDestinationKeyRangeFromPrefix(t *testing.T) {
 
 	for _, tc := range testCases {
 		dest := NewKeyRangeFromPrefix(tc.start)
-		assert.EqualValues(t, tc.dest, dest)
+		assert.Equal(t, tc.dest, dest)
 	}
 
 	t.Run("add one to bytes", func(t *testing.T) {
@@ -620,7 +620,7 @@ func TestDestinationKeyRangeFromPrefix(t *testing.T) {
 
 		for _, tc := range cases {
 			t.Run(tc.testName, func(t *testing.T) {
-				assert.EqualValues(t, tc.expected, addOne(tc.input))
+				assert.Equal(t, tc.expected, addOne(tc.input))
 			})
 		}
 	})
@@ -638,8 +638,8 @@ func TestCFCHashFunction(t *testing.T) {
 		{"abcdefghijklmnopqrst", 16, 8},
 	}
 	for _, c := range cases {
-		assert.Equal(t, c.outMD5, len(md5hash([]byte(c.src))))
-		assert.Equal(t, c.outXXHash, len(xxhash64([]byte(c.src))))
+		assert.Len(t, md5hash([]byte(c.src)), c.outMD5)
+		assert.Len(t, xxhash64([]byte(c.src)), c.outXXHash)
 	}
 }
 

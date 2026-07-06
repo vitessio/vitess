@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestMySQLTermHandlerOnTermCallsCallback(t *testing.T) {
@@ -40,7 +41,7 @@ func TestMySQLTermHandlerIgnoreTermsForSuppressesCallback(t *testing.T) {
 		return nil
 	})
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, 0, callCount)
 
 	handler.onTerm()

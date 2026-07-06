@@ -511,7 +511,7 @@ func TestShardPrimary(t *testing.T) {
 				assert.Contains(t, err.Error(), testcase.expectedErr)
 				assert.Nil(t, primary)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				diff := cmp.Diff(primary, testcase.expectedPrimary, cmp.Comparer(proto.Equal))
 				assert.Empty(t, diff)
 			}
@@ -545,7 +545,7 @@ func verifyTabletInfo(t *testing.T, tabletWanted *topodatapb.Tablet, errString s
 	if errString != "" {
 		assert.EqualError(t, err, errString)
 	} else {
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.True(t, topoproto.TabletAliasEqual(tabletWanted.Alias, tablet.Alias), "expected %v, got %v", tabletWanted.Alias, tablet.Alias)
 		diff := cmp.Diff(tablet, tabletWanted, cmp.Comparer(proto.Equal))
 		assert.Empty(t, diff)
@@ -968,7 +968,7 @@ func TestRefreshTabletsUsingCellsToWatch(t *testing.T) {
 	assert.NotContains(t, discoveredAliases, topoproto.TabletAliasString(tabCell2.Alias))
 
 	tabletFromDB, err := inst.ReadTablet(tabCell1.Alias)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, tabletFromDB)
 
 	_, err = inst.ReadTablet(tabCell2.Alias)
@@ -1041,7 +1041,7 @@ func TestRefreshTabletsInKeyspaceShardCellsToWatch(t *testing.T) {
 	assert.NotContains(t, discoveredAliases, topoproto.TabletAliasString(tabCell2.Alias))
 
 	tabletFromDB, err := inst.ReadTablet(tabCell1.Alias)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, tabletFromDB)
 
 	_, err = inst.ReadTablet(tabCell2.Alias)

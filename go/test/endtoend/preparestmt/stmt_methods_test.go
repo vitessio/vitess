@@ -77,7 +77,7 @@ func TestSelectDatabase(t *testing.T) {
 	require.True(t, rows.Next(), "no rows found")
 	err = rows.Scan(&resultBytes)
 	require.NoError(t, err)
-	assert.Equal(t, string(resultBytes), "uks")
+	assert.Equal(t, "uks", string(resultBytes))
 }
 
 // TestInsertUpdateDelete validates all insert, update and
@@ -120,7 +120,7 @@ func TestInsertUpdateDelete(t *testing.T) {
 	// select data with id 1 and validate the data accordingly
 	// validate row count
 	data := selectWhere(t, dbo, "id = ?", testingID)
-	assert.Equal(t, 1, len(data))
+	assert.Len(t, data, 1)
 
 	// validate value of msg column in data
 	assert.Equal(t, fmt.Sprintf("%d21", testingID), data[0].Msg)
@@ -158,12 +158,12 @@ func testReplica(t *testing.T) {
 // testcount validates inserted rows count with expected count.
 func testcount(t *testing.T, dbo *sql.DB, except int) {
 	r, err := dbo.Query("SELECT count(1) FROM vt_prepare_stmt_test")
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	r.Next()
 	var i int
 	err = r.Scan(&i)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, except, i)
 }
 
@@ -211,7 +211,7 @@ func deleteRecord(t *testing.T, dbo *sql.DB) {
 	exec(t, dbo, "DELETE FROM vt_prepare_stmt_test WHERE id = ?;", testingID)
 
 	data := selectWhere(t, dbo, "id = ?", testingID)
-	assert.Equal(t, 0, len(data))
+	assert.Empty(t, data)
 }
 
 // updateRecord test update operation corresponds to the testingID.
@@ -226,7 +226,7 @@ func updateRecord(t *testing.T, dbo *sql.DB) {
 	// validate the updated value
 	// validate row count
 	data := selectWhere(t, dbo, "id = ?", testingID)
-	assert.Equal(t, 1, len(data))
+	assert.Len(t, data, 1)
 
 	// validate value of msg column in data
 	assert.Equal(t, updateData, data[0].Data)
@@ -239,7 +239,7 @@ func reconnectAndTest(t *testing.T) {
 	dbo := Connect(t)
 	defer dbo.Close()
 	data := selectWhere(t, dbo, "id = ?", testingID)
-	assert.Equal(t, 0, len(data))
+	assert.Empty(t, data)
 }
 
 // TestColumnParameter query database using column
@@ -265,7 +265,7 @@ func TestColumnParameter(t *testing.T) {
 	selectStmt := "SELECT COALESCE(?, id), msg FROM vt_prepare_stmt_test WHERE msg = ? LIMIT ?"
 
 	results1, err := dbo.Query(selectStmt, parameter1, message, 1)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	require.True(t, results1.Next())
 
 	results1.Scan(&param, &msg)
@@ -273,7 +273,7 @@ func TestColumnParameter(t *testing.T) {
 	assert.Equal(t, message, msg)
 
 	results2, err := dbo.Query(selectStmt, nil, message, 1)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	require.True(t, results2.Next())
 
 	results2.Scan(&recID, &msg)
@@ -385,7 +385,7 @@ func TestSelectDBA(t *testing.T) {
 		assert.False(t, rec.datetimePrecision.Valid)
 		assert.False(t, rec.columnDefault.Valid)
 		assert.Equal(t, "NO", rec.isNullable)
-		assert.Equal(t, "", rec.extra)
+		assert.Empty(t, rec.extra)
 		assert.Equal(t, "a", rec.tableName)
 		rowCount++
 	}
@@ -628,7 +628,7 @@ func validateBaselineErrSpecializedPlan(t *testing.T, p map[string]any) {
 	require.EqualValues(t, "PlanSwitcher", pm["OperatorType"])
 	baselineErr := pm["BaselineErr"].(string)
 
-	require.EqualValues(t, "VT12001: unsupported: window functions are only supported for single-shard queries", baselineErr)
+	require.Equal(t, "VT12001: unsupported: window functions are only supported for single-shard queries", baselineErr)
 
 	pd, err := engine.PrimitiveDescriptionFromMap(plan.(map[string]any))
 	require.NoError(t, err)

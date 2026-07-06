@@ -62,20 +62,20 @@ func TestSplitUnescape(t *testing.T) {
 	{
 		s := ""
 		elems, err := SplitUnescape(s, ",")
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Nil(t, elems)
 	}
 	{
 		s := "normal,with+space,with%2Ccomma,with%3Fquestion"
 		expected := []string{"normal", "with space", "with,comma", "with?question"}
 		elems, err := SplitUnescape(s, ",")
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, expected, elems)
 	}
 	{
 		s := "invalid%2"
 		elems, err := SplitUnescape(s, ",")
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Equal(t, []string{}, elems)
 	}
 }

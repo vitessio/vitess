@@ -32,7 +32,7 @@ import (
 )
 
 func TestURLPrefix(t *testing.T) {
-	assert.Equal(t, "", NewExporter("", "").URLPrefix())
+	assert.Empty(t, NewExporter("", "").URLPrefix())
 	assert.Equal(t, "/a", NewExporter("a", "").URLPrefix())
 }
 
@@ -586,11 +586,11 @@ func TestRates(t *testing.T) {
 	// Ensure var gets reused.
 	rates1 := ebd.NewRates("lrates", tm, 15*60/5, 5*time.Second)
 	rates2 := ebd.NewRates("lrates", tm, 15*60/5, 5*time.Second)
-	assert.True(t, rates2 == rates1)
+	assert.Same(t, rates2, rates1)
 
 	ebd = NewExporter("i2", "label")
 	rates3 := ebd.NewRates("lrates", tm, 15*60/5, 5*time.Second)
-	assert.True(t, rates3 != rates1)
+	assert.NotSame(t, rates3, rates1)
 }
 
 func TestHistogram(t *testing.T) {
