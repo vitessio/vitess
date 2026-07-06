@@ -544,7 +544,7 @@ func TestNormalizeOneCasae(t *testing.T) {
 	out, err := Normalize(tree, NewReservedVars("vtg", known), bv, true, "ks", 0, "", map[string]string{}, nil, nil)
 	require.NoError(t, err)
 	normalizerOutput := String(out.AST)
-	require.EqualValues(t, testOne.output, normalizerOutput)
+	require.Equal(t, testOne.output, normalizerOutput)
 	if normalizerOutput == "otheradmin" || normalizerOutput == "otherread" {
 		return
 	}
@@ -633,7 +633,7 @@ func TestRewrites(in *testing.T) {
 	}, {
 		// unnest database() call
 		in:       "select (select database()) from test",
-		expected: "select database() as `(select database() from dual)` from test",
+		expected: "select database() as `(select database())` from test",
 		// no bindvar needs
 	}, {
 		// unnest database() call
@@ -714,7 +714,7 @@ func TestRewrites(in *testing.T) {
 		socket:   true,
 	}, {
 		in:       "select (select 42) from dual",
-		expected: "select 42 as `(select 42 from dual)` from dual",
+		expected: "select 42 as `(select 42)` from dual",
 	}, {
 		in:       "select * from user where col = (select 42)",
 		expected: "select * from user where col = 42",
@@ -916,7 +916,7 @@ func TestRewrites(in *testing.T) {
 			assert.Equal(tc.db, result.NeedsFuncResult(DBVarName), "should need database name")
 			assert.Equal(tc.foundRows, result.NeedsFuncResult(FoundRowsName), "should need found rows")
 			assert.Equal(tc.rowCount, result.NeedsFuncResult(RowCountName), "should need row count")
-			assert.Equal(tc.udv, len(result.NeedUserDefinedVariables), "count of user defined variables")
+			assert.Len(result.NeedUserDefinedVariables, tc.udv, "count of user defined variables")
 			assert.Equal(tc.autocommit, result.NeedsSysVar(sysvars.Autocommit.Name), "should need :__vtautocommit")
 			assert.Equal(tc.foreignKeyChecks, result.NeedsSysVar(sysvars.ForeignKeyChecks), "should need :__vtforeignKeyChecks")
 			assert.Equal(tc.clientFoundRows, result.NeedsSysVar(sysvars.ClientFoundRows.Name), "should need :__vtclientFoundRows")

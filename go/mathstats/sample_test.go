@@ -149,7 +149,7 @@ func TestSampleCopy(t *testing.T) {
 	s.Xs[0] = 100
 
 	assert.NotEqual(t, s.Xs[0], copySample.Xs[0], "Original and copied samples should not share data")
-	assert.Equal(t, len(s.Xs), len(copySample.Xs), "Length of original and copied samples should be the same")
+	assert.Len(t, copySample.Xs, len(s.Xs), "Length of original and copied samples should be the same")
 	assert.Equal(t, s.Sorted, copySample.Sorted, "Sorting status should be the same")
 }
 

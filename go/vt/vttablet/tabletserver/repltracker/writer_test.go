@@ -171,7 +171,7 @@ func TestWriteHeartbeatDisabled(t *testing.T) {
 		<-time.After(tw.onDemandDuration)
 		currentWrites := writes.Get()
 		<-time.After(3 * time.Second)
-		assert.EqualValues(t, currentWrites, writes.Get())
+		assert.Equal(t, currentWrites, writes.Get())
 	})
 	tw.Close()
 	{
@@ -238,7 +238,7 @@ func TestWriteHeartbeatOnDemand(t *testing.T) {
 		<-time.After(tw.onDemandDuration)
 		currentWrites := writes.Get()
 		<-time.After(3 * time.Second)
-		assert.EqualValues(t, currentWrites, writes.Get())
+		assert.Equal(t, currentWrites, writes.Get())
 	})
 	t.Run("request heartbeats, heartbeats", func(t *testing.T) {
 		tw.RequestHeartbeats()
@@ -250,7 +250,7 @@ func TestWriteHeartbeatOnDemand(t *testing.T) {
 		<-time.After(tw.onDemandDuration)
 		currentWrites := writes.Get()
 		<-time.After(3 * time.Second)
-		assert.EqualValues(t, currentWrites, writes.Get())
+		assert.Equal(t, currentWrites, writes.Get())
 	})
 	tw.Close()
 	{

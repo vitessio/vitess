@@ -32,6 +32,7 @@ const (
 	DiffDependencyOrderUnknown
 	DiffDependencyInOrderCompletion
 	DiffDependencySequentialExecution
+	DiffDependencyImpossibleExecution
 )
 
 // DiffDependency indicates a dependency between two diffs, and the type of that dependency
@@ -78,6 +79,12 @@ func (d *DiffDependency) IsInOrder() bool {
 // IsSequential returns true if this is a sequential dependency
 func (d *DiffDependency) IsSequential() bool {
 	return d.typ >= DiffDependencySequentialExecution
+}
+
+// IsImpossible returns true if this is an impossible-execution dependency, ie the two diffs
+// cannot be safely applied together in the same batch under any ordering.
+func (d *DiffDependency) IsImpossible() bool {
+	return d.typ >= DiffDependencyImpossibleExecution
 }
 
 /*
@@ -200,6 +207,8 @@ type SchemaDiff struct {
 	diffMap      map[string]EntityDiff // key is diff's CanonicalStatementString()
 	dependencies map[string]*DiffDependency
 
+	foreignKeyShadowConflicts []*ForeignKeyShadowConflictError
+
 	r *mathutil.EquivalenceRelation // internal structure to help determine diffs
 }
 
@@ -317,9 +326,41 @@ func (d *SchemaDiff) HasSequentialExecutionDependencies() bool {
 	return false
 }
 
+// AllImpossibleExecutionDependencies returns all diffs that are of "impossible execution" type.
+func (d *SchemaDiff) AllImpossibleExecutionDependencies() (deps []*DiffDependency) {
+	for _, dep := range d.dependencies {
+		if dep.typ >= DiffDependencyImpossibleExecution {
+			deps = append(deps, dep)
+		}
+	}
+	return deps
+}
+
+// HasImpossibleExecutionDependencies returns `true` if there is at least one "impossible execution" type diff.
+// If so, the diffs cannot be linearized into a safe order and the batch must be rejected.
+func (d *SchemaDiff) HasImpossibleExecutionDependencies() bool {
+	for _, dep := range d.dependencies {
+		if dep.typ >= DiffDependencyImpossibleExecution {
+			return true
+		}
+	}
+	return false
+}
+
 // OrderedDiffs returns the list of diff in applicable order, if possible. This is a linearized representation
 // where diffs may be applied in-order one after another, keeping the schema in valid state at all times.
 func (d *SchemaDiff) OrderedDiffs(ctx context.Context) ([]EntityDiff, error) {
+	// An impossible-execution dependency cannot be resolved by any ordering of the diffs, so we
+	// reject the batch up front with a precise error rather than failing the permutation search.
+	if d.HasImpossibleExecutionDependencies() {
+		if len(d.foreignKeyShadowConflicts) > 0 {
+			return nil, d.foreignKeyShadowConflicts[0]
+		}
+		return nil, &ImpossibleApplyDiffOrderError{
+			UnorderedDiffs:   d.UnorderedDiffs(),
+			ConflictingDiffs: d.UnorderedDiffs(),
+		}
+	}
 	lastGoodSchema := d.schema.copy()
 	var orderedDiffs []EntityDiff
 	m := d.r.Map()

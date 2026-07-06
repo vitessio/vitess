@@ -161,12 +161,12 @@ func TestEquivalenceRelation(t *testing.T) {
 			r.AddAll(initialElements)
 			trivialM := r.Map()
 			assert.Equal(t, trivialExpect, trivialM)
-			require.Equal(t, len(initialElements), len(trivialM))
+			require.Len(t, trivialM, len(initialElements))
 
 			for _, relation := range tc.relations {
-				require.Equal(t, 2, len(relation))
+				require.Len(t, relation, 2)
 				_, err := r.Relate(relation[0:1], relation[1:2])
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 			m := r.Map()
 			assert.Equal(t, tc.expect, m)
@@ -204,7 +204,7 @@ func TestEquivalenceRelationError(t *testing.T) {
 			r.AddAll([]string{"a", "b", "c"})
 
 			_, err := r.Relate(tc.element1, tc.element2)
-			assert.Error(t, err)
+			require.Error(t, err)
 			assert.EqualError(t, err, tc.expectedErr)
 		})
 	}
@@ -246,7 +246,7 @@ func TestElementClass(t *testing.T) {
 	element := "test_element"
 
 	_, err := r.ElementClass(element)
-	assert.Error(t, err)
+	require.Error(t, err)
 
 	r.Add(element)
 	class, err := r.ElementClass(element)

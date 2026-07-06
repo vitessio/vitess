@@ -1738,10 +1738,10 @@ func TestBuildRowColValues(t *testing.T) {
 	})
 
 	require.Len(t, out, 4)
-	require.EqualValues(t, "[INT64(1) INT64(10) INT64(3)]", fmt.Sprintf("%s", out[0]))
-	require.EqualValues(t, "[INT64(1) INT64(10) INT64(4)]", fmt.Sprintf("%s", out[1]))
-	require.EqualValues(t, "[INT64(2) INT64(20) INT64(3)]", fmt.Sprintf("%s", out[2]))
-	require.EqualValues(t, "[INT64(2) INT64(20) INT64(4)]", fmt.Sprintf("%s", out[3]))
+	require.Equal(t, "[INT64(1) INT64(10) INT64(3)]", fmt.Sprintf("%s", out[0]))
+	require.Equal(t, "[INT64(1) INT64(10) INT64(4)]", fmt.Sprintf("%s", out[1]))
+	require.Equal(t, "[INT64(2) INT64(20) INT64(3)]", fmt.Sprintf("%s", out[2]))
+	require.Equal(t, "[INT64(2) INT64(20) INT64(4)]", fmt.Sprintf("%s", out[3]))
 }
 
 func TestBuildMultiColumnVindexValues(t *testing.T) {
@@ -1788,7 +1788,7 @@ func TestBuildMultiColumnVindexValues(t *testing.T) {
 	for idx, testcase := range testcases {
 		t.Run(strconv.Itoa(idx), func(t *testing.T) {
 			out := buildMultiColumnVindexValues(testcase.input)
-			require.EqualValues(t, testcase.output, out)
+			require.Equal(t, testcase.output, out)
 		})
 	}
 }

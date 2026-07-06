@@ -214,7 +214,7 @@ func readRowsUsingStream(t *testing.T, conn *mysql.Conn, expectedCount int) {
 			// We're done.
 			break
 		}
-		require.Equal(t, 2, len(row), "Unexpected row found: %v", row)
+		require.Len(t, row, 2, "Unexpected row found: %v", row)
 
 		count++
 	}
@@ -245,7 +245,7 @@ func doTestWarnings(t *testing.T, disableClientDeprecateEOF bool) {
 	require.NoError(t, err, "insert failed: %v", err)
 
 	assert.Equal(t, uint64(1), result.RowsAffected, "unexpected rows affected by insert; result: %v", result)
-	assert.Equal(t, 0, len(result.Rows), "unexpected row count in result for insert: %v", result)
+	assert.Empty(t, result.Rows, "unexpected row count in result for insert: %v", result)
 	assert.Equal(t, uint16(1), warnings, "unexpected result for warnings: %v", warnings)
 
 	_, err = conn.ExecuteFetch("drop table a", 0, false)
@@ -289,7 +289,7 @@ func TestSysInfo(t *testing.T) {
 	WHERE table_schema = 'vttest' and table_name = 'a'
 	ORDER BY ordinal_position`, 1000, true)
 	require.NoError(t, err)
-	require.Equal(t, 2, len(qr.Rows))
+	require.Len(t, qr.Rows, 2)
 
 	// is_nullable
 	assert.Equal(t, `VARCHAR("NO")`, qr.Rows[0][8].String())
@@ -302,8 +302,8 @@ func TestSysInfo(t *testing.T) {
 	assert.Contains(t, []string{`VARBINARY("a")`, `VARCHAR("a")`}, qr.Rows[0][10].String())
 	assert.Contains(t, []string{`VARBINARY("a")`, `VARCHAR("a")`}, qr.Rows[1][10].String())
 
-	assert.EqualValues(t, sqltypes.Uint64, qr.Fields[4].Type)
-	assert.EqualValues(t, querypb.Type_UINT64, qr.Rows[0][4].Type())
+	assert.Equal(t, sqltypes.Uint64, qr.Fields[4].Type)
+	assert.Equal(t, querypb.Type_UINT64, qr.Rows[0][4].Type())
 }
 
 func getDefaultCollationID() collations.ID {

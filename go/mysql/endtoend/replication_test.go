@@ -882,7 +882,7 @@ func TestRowReplicationTypes(t *testing.T) {
 	createTable := "create table replicationtypes(id int"
 	var createTableSb912 strings.Builder
 	for _, tcase := range testcases {
-		createTableSb912.WriteString(fmt.Sprintf(", %v %v", tcase.name, tcase.createType))
+		fmt.Fprintf(&createTableSb912, ", %v %v", tcase.name, tcase.createType)
 	}
 	createTable += createTableSb912.String()
 	createTable += ", primary key(id))"
@@ -893,7 +893,7 @@ func TestRowReplicationTypes(t *testing.T) {
 	insert := "insert into replicationtypes set id=1"
 	var insertSb922 strings.Builder
 	for _, tcase := range testcases {
-		insertSb922.WriteString(fmt.Sprintf(", %v=%v", tcase.name, tcase.createValue))
+		fmt.Fprintf(&insertSb922, ", %v=%v", tcase.name, tcase.createValue)
 	}
 	insert += insertSb922.String()
 
@@ -996,7 +996,7 @@ func TestRowReplicationTypes(t *testing.T) {
 	stmt += " from replicationtypes"
 	result, err = dConn.ExecuteFetch(stmt, 2, false)
 	require.NoError(t, err, "select failed: %v", err)
-	require.Equal(t, 2, len(result.Rows), "unexpected result for select: %v", result)
+	require.Len(t, result.Rows, 2, "unexpected result for select: %v", result)
 
 	for i, tcase := range testcases {
 		assert.True(t, reflect.DeepEqual(result.Rows[0][i+1], result.Rows[1][i+1]), "Field %v is not the same, got %v and %v", tcase.name, result.Rows[0][i+1], result.Rows[1][i+1])

@@ -252,6 +252,13 @@ func primaryPosition(t *testing.T) string {
 	return replication.EncodePosition(pos)
 }
 
+func primaryPositionParsed(t *testing.T) replication.Position {
+	t.Helper()
+	pos, err := env.Mysqld.PrimaryPosition(t.Context())
+	require.NoError(t, err)
+	return pos
+}
+
 func execStatements(t *testing.T, queries []string) {
 	t.Helper()
 	if err := env.Mysqld.ExecuteSuperQueryList(t.Context(), queries); err != nil {
@@ -1292,10 +1299,7 @@ func expectDBClientQueries(t *testing.T, expectations qh.ExpectationSequence, sk
 						}
 					}
 				}
-				require.True(t, result.Accepted, fmt.Sprintf(
-					"query:%q\nmessage:%s\nexpectation:%s\nmatched:%t\nerror:%v\nhistory:%s",
-					got, result.Message, result.Expectation, result.Matched, result.Error, validator.History(),
-				))
+				require.True(t, result.Accepted, "query:%q\nmessage:%s\nexpectation:%s\nmatched:%t\nerror:%v\nhistory:%s", got, result.Message, result.Expectation, result.Matched, result.Error, validator.History())
 			}
 		case <-time.After(5 * time.Second):
 			require.FailNow(t, "no query received")
@@ -1311,7 +1315,7 @@ func expectDBClientQueries(t *testing.T, expectations qh.ExpectationSequence, sk
 			assert.Failf(t, "unexpected query", "unexpected query: %s", got)
 		default:
 			// Assert there are no pending expectations.
-			require.Len(t, validator.Pending(), 0)
+			require.Empty(t, validator.Pending())
 			return
 		}
 	}
@@ -1343,10 +1347,7 @@ func expectNontxQueries(t *testing.T, expectations qh.ExpectationSequence, recvT
 
 			result := validator.AcceptQuery(got)
 			require.NotNil(t, result)
-			require.True(t, result.Accepted, fmt.Sprintf(
-				"query:%q\nmessage:%s\nexpectation:%s\nmatched:%t\nerror:%v\nhistory:%s",
-				got, result.Message, result.Expectation, result.Matched, result.Error, validator.History(),
-			))
+			require.True(t, result.Accepted, "query:%q\nmessage:%s\nexpectation:%s\nmatched:%t\nerror:%v\nhistory:%s", got, result.Message, result.Expectation, result.Matched, result.Error, validator.History())
 		case <-time.After(recvTimeout):
 			require.FailNowf(t, "no query received", "pending expectations: %s", validator.Pending())
 			failed = true
@@ -1364,7 +1365,7 @@ func expectNontxQueries(t *testing.T, expectations qh.ExpectationSequence, recvT
 			assert.Failf(t, "unexpected query", "unexpected query: %s", got)
 		default:
 			// Assert there are no pending expectations.
-			require.Len(t, validator.Pending(), 0)
+			require.Empty(t, validator.Pending())
 			return
 		}
 	}

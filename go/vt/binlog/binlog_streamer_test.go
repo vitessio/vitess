@@ -330,7 +330,7 @@ func TestStreamerParseEventsGTIDPurged(t *testing.T) {
 	require.Error(t, err)
 	sqlErr, ok := err.(*sqlerror.SQLError)
 	require.True(t, ok, "expected SQLError, got %T", err)
-	require.True(t, sqlErr.Num == sqlerror.ERMasterFatalReadingBinlog, "expected ERMasterFatalReadingBinlog (%d), got %d",
+	require.Equal(t, sqlerror.ERMasterFatalReadingBinlog, sqlErr.Num, "expected ERMasterFatalReadingBinlog (%d), got %d",
 		sqlerror.ERMasterFatalReadingBinlog, sqlErr.Num)
 }
 

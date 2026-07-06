@@ -103,6 +103,7 @@ func executorStreamMessages(executor *Executor, sql string) (qr *sqltypes.Result
 		econtext.NewSafeSession(session),
 		sql,
 		nil,
+		false,
 		func(qr *sqltypes.Result) error {
 			results <- qr
 			return nil

@@ -1015,14 +1015,17 @@ func (wr *Wrangler) buildTrafficSwitcher(ctx context.Context, targetKeyspace, wo
 }
 
 func (ts *trafficSwitcher) getSourceAndTargetShardsNames() ([]string, []string) {
-	var sourceShards, targetShards []string
-	for _, si := range ts.SourceShards() {
-		sourceShards = append(sourceShards, si.ShardName())
+	sourceShards := ts.SourceShards()
+	targetShards := ts.TargetShards()
+	sourceShardNames := make([]string, 0, len(sourceShards))
+	targetShardNames := make([]string, 0, len(targetShards))
+	for _, si := range sourceShards {
+		sourceShardNames = append(sourceShardNames, si.ShardName())
 	}
-	for _, si := range ts.TargetShards() {
-		targetShards = append(targetShards, si.ShardName())
+	for _, si := range targetShards {
+		targetShardNames = append(targetShardNames, si.ShardName())
 	}
-	return sourceShards, targetShards
+	return sourceShardNames, targetShardNames
 }
 
 // isPartialMoveTables returns true if whe workflow is MoveTables, has the

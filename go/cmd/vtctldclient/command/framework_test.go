@@ -96,7 +96,7 @@ func TabletKeyspaceShard(t *testing.T, keyspace, shard string) TabletOption {
 		tablet.Keyspace = keyspace
 		shard, kr, err := topo.ValidateShardName(shard)
 		if err != nil {
-			require.FailNow(t, "cannot ValidateShardName value %v", shard)
+			require.FailNowf(t, "cannot ValidateShardName value", "%v", shard)
 		}
 		tablet.Shard = shard
 		tablet.KeyRange = kr
@@ -121,7 +121,7 @@ func NewFakeTablet(t *testing.T, ts *topo.Server, cell string, uid uint32, table
 	t.Helper()
 
 	if uid > 99 {
-		require.FailNow(t, "uid has to be between 0 and 99: %v", uid)
+		require.FailNowf(t, "uid has to be between 0 and 99", "%v", uid)
 	}
 	mysqlPort := int32(3300 + uid)
 	tablet := &topodatapb.Tablet{
@@ -145,7 +145,7 @@ func NewFakeTablet(t *testing.T, ts *topo.Server, cell string, uid uint32, table
 	_, force := tablet.PortMap["force_init"]
 	delete(tablet.PortMap, "force_init")
 	if err := ts.InitTablet(t.Context(), tablet, force, true /* createShardAndKeyspace */, false /* allowUpdate */); err != nil {
-		require.FailNow(t, "cannot create tablet %v: %v", uid, err)
+		require.FailNowf(t, "cannot create tablet", "%v: %v", uid, err)
 	}
 
 	// create a FakeMysqlDaemon with the right information by default.
@@ -167,14 +167,14 @@ var exporter = servenv.NewExporter("TestVtctldClientCommand", "")
 func (ft *FakeTablet) StartActionLoop(t *testing.T, ts *topo.Server) {
 	t.Helper()
 	if ft.TM != nil {
-		require.FailNow(t, "TM for %v is already running", ft.Tablet.Alias)
+		require.FailNowf(t, "TM for", "%v is already running", ft.Tablet.Alias)
 	}
 
 	// Listen on a random port for gRPC.
 	var err error
 	ft.Listener, err = net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		require.FailNow(t, "Cannot listen: %v", err)
+		require.FailNowf(t, "Cannot listen", "%v", err)
 	}
 	gRPCPort := int32(ft.Listener.Addr().(*net.TCPAddr).Port)
 
@@ -183,7 +183,7 @@ func (ft *FakeTablet) StartActionLoop(t *testing.T, ts *topo.Server) {
 	if ft.StartHTTPServer {
 		ft.HTTPListener, err = net.Listen("tcp", "127.0.0.1:0")
 		if err != nil {
-			require.FailNow(t, "Cannot listen on http port: %v", err)
+			require.FailNowf(t, "Cannot listen on http port", "%v", err)
 		}
 		handler := http.NewServeMux()
 		ft.HTTPServer = &http.Server{
@@ -211,7 +211,7 @@ func (ft *FakeTablet) StartActionLoop(t *testing.T, ts *topo.Server) {
 		Env:                 vtenv.NewTestEnv(),
 	}
 	if err := ft.TM.Start(ft.Tablet, nil); err != nil {
-		require.FailNow(t, "Error in tablet - %v, err - %v", topoproto.TabletAliasString(ft.Tablet.Alias), err.Error())
+		require.FailNowf(t, "Error in tablet", "%v, err - %v", topoproto.TabletAliasString(ft.Tablet.Alias), err.Error())
 	}
 	ft.Tablet = ft.TM.Tablet()
 

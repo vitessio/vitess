@@ -77,13 +77,13 @@ func TestParseEnumTokens(t *testing.T) {
 	{
 		input := `enum('x-small','small','medium','large','x-large')`
 		enumTokens, err := parseEnumOrSetTokens(env, input)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Nil(t, enumTokens)
 	}
 	{
 		input := `set('x-small','small','medium','large','x-large')`
 		enumTokens, err := parseEnumOrSetTokens(env, input)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Nil(t, enumTokens)
 	}
 }
@@ -111,7 +111,7 @@ func TestParseEnumTokensMap(t *testing.T) {
 		}
 		for _, input := range inputs {
 			enumTokensMap, err := ParseEnumOrSetTokensMap(env, input)
-			assert.Error(t, err)
+			require.Error(t, err)
 			assert.Nil(t, enumTokensMap)
 		}
 	}

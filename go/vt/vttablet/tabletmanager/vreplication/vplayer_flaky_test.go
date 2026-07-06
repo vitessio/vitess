@@ -283,7 +283,7 @@ func TestVReplicationTimeUpdated(t *testing.T) {
 		qr, err := env.Mysqld.FetchSuperQuery(ctx, "select time_updated, transaction_timestamp, time_heartbeat from _vt.vreplication")
 		require.NoError(t, err)
 		require.NotNil(t, qr)
-		require.Equal(t, 1, len(qr.Rows))
+		require.Len(t, qr.Rows, 1)
 		row := qr.Named().Row()
 		timeUpdated, err := row.ToInt64("time_updated")
 		require.NoError(t, err)
@@ -1352,7 +1352,7 @@ func TestUnicode(t *testing.T) {
 
 	for _, tcases := range testcases {
 		_, err := conn.ExecuteFetch(tcases.input, 10000, false)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		expectDBClientQueries(t, tcases.output)
 		if tcases.table != "" {
 			customExpectData(t, tcases.table, tcases.data, func(ctx context.Context, query string) (*sqltypes.Result, error) {
@@ -1934,7 +1934,7 @@ func TestPlayerTypes(t *testing.T) {
 		},
 	}, {
 		input:  "insert into vitess_decimal values(1, 0, 1, null, 0, 1.1, 1)",
-		output: "insert into vitess_decimal(id,d1,d2,d3,d4,d5,d6) values (1,0,1,null,.0,1.1,1.0)",
+		output: "insert into vitess_decimal(id,d1,d2,d3,d4,d5,d6) values (1,0,1,null,0.0,1.1,1.0)",
 		table:  "vitess_decimal",
 		data: [][]string{
 			{"1", "0", "1", "", "0.0", "1.1", "1.0"},
@@ -2051,20 +2051,20 @@ func TestPlayerDDL(t *testing.T) {
 		OnDdl:    binlogdatapb.OnDDLAction_STOP,
 	}
 	cancel, id := startVReplication(t, bls, "")
-	pos0 := primaryPosition(t) // For debugging only
+	pos0 := primaryPositionParsed(t)
 	execStatements(t, []string{"alter table t1 add column val varchar(128)"})
-	pos1 := primaryPosition(t)
-	// The stop position must be the GTID of the first DDL
-	expectDBClientQueries(t, qh.Expect(
-		"begin",
-		posOrPrevRegex(pos1),
-		"/update _vt.vreplication set state='Stopped'",
-		"commit",
-	))
-	pos2b := primaryPosition(t)
+	pos1 := primaryPositionParsed(t)
+	// The stop position must be the GTID of the first DDL, which lies between
+	// the positions observed before and after the ALTER.
+	expectDBClientQueries(t, qh.Expect("begin").
+		Then(qh.PosBetween(pos0, pos1)).
+		Then(qh.Immediately(
+			"/update _vt.vreplication set state='Stopped'",
+			"commit",
+		)))
+	pos2b := primaryPositionParsed(t)
 	execStatements(t, []string{"alter table t1 drop column val"})
-	pos2 := primaryPosition(t)
-	log.Error(fmt.Sprintf("Expected log:: TestPlayerDDL Positions are: before first alter %v, after first alter %v, before second alter %v, after second alter %v", pos0, pos1, pos2b, pos2)) // For debugging only: to check what are the positions when test works and if/when it fails
+	pos2 := primaryPositionParsed(t)
 	// Restart vreplication
 	_, err := playerEngine.Exec(fmt.Sprintf(`update _vt.vreplication set state = 'Running', message='' where id=%d`, id))
 	require.NoError(t, err)
@@ -2075,10 +2075,12 @@ func TestPlayerDDL(t *testing.T) {
 		"/update _vt.vreplication set message='Picked source tablet.*",
 		"/update.*'Running'",
 		"begin",
-		fmt.Sprintf("/update.*'%s'", pos2),
-		"/update _vt.vreplication set state='Stopped'",
-		"commit",
-	))
+	).
+		Then(qh.PosBetween(pos2b, pos2)).
+		Then(qh.Immediately(
+			"/update _vt.vreplication set state='Stopped'",
+			"commit",
+		)))
 	cancel()
 	bls = &binlogdatapb.BinlogSource{
 		Keyspace: env.KeyspaceName,
@@ -2164,7 +2166,7 @@ func TestGTIDCompress(t *testing.T) {
 			qr, err := env.Mysqld.FetchSuperQuery(ctx, "select pos from _vt.vreplication where id = 1")
 			require.NoError(t, err)
 			require.NotNil(t, qr)
-			require.Equal(t, 1, len(qr.Rows))
+			require.Len(t, qr.Rows, 1)
 			gotGTID := qr.Rows[0][0].ToString()
 			pos, err := replication.DecodePosition(gotGTID)
 			if tCase.compress {
@@ -2281,32 +2283,6 @@ func TestPlayerStopPos(t *testing.T) {
 	))
 }
 
-func posOrPrevRegex(pos string) string {
-	positions := []string{pos}
-	if prev, ok := decrementPosition(pos); ok {
-		positions = append(positions, prev)
-		if prev2, ok := decrementPosition(prev); ok {
-			positions = append(positions, prev2)
-		}
-	}
-	for i := range positions {
-		positions[i] = regexp.QuoteMeta(positions[i])
-	}
-	return fmt.Sprintf("/update _vt.vreplication set pos='(%s)'", strings.Join(positions, "|"))
-}
-
-func decrementPosition(pos string) (string, bool) {
-	idx := strings.LastIndex(pos, "-")
-	if idx == -1 || idx+1 >= len(pos) {
-		return "", false
-	}
-	val, err := strconv.Atoi(pos[idx+1:])
-	if err != nil || val <= 0 {
-		return "", false
-	}
-	return pos[:idx+1] + strconv.Itoa(val-1), true
-}
-
 func TestPlayerStopAtOther(t *testing.T) {
 	t.Skip("This test was written to verify a bug fix, but is extremely flaky. Only a manual test is possible")
 
@@ -2354,16 +2330,16 @@ func TestPlayerStopAtOther(t *testing.T) {
 
 	vconn := &realDBClient{nolog: true}
 	err = vconn.Connect()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer vconn.Close()
 
 	// Insert the same row on the target and lock it.
 	_, err = vconn.ExecuteFetch("insert into t1 values(1, 'aaa')", 1)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	_, err = vconn.ExecuteFetch("begin", 1)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	_, err = vconn.ExecuteFetch("update t1 set val='bbb' where id=1", 1)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Start a VReplication where the first transaction updates the locked row.
 	// It will cause the apply to wait, which will cause the other two events
@@ -2555,14 +2531,14 @@ func TestPlayerLockErrors(t *testing.T) {
 
 	vconn := &realDBClient{nolog: true}
 	err := vconn.Connect()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer vconn.Close()
 
 	// Start a transaction and lock the second row.
 	_, err = vconn.ExecuteFetch("begin", 1)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	_, err = vconn.ExecuteFetch("update t1 set val='bbb' where id=2", 1)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	execStatements(t, []string{
 		"begin",
@@ -2637,14 +2613,14 @@ func TestPlayerCancelOnLock(t *testing.T) {
 
 	vconn := &realDBClient{nolog: true}
 	err := vconn.Connect()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer vconn.Close()
 
 	// Start a transaction and lock the row.
 	_, err = vconn.ExecuteFetch("begin", 1)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	_, err = vconn.ExecuteFetch("update t1 set val='bbb' where id=1", 1)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	execStatements(t, []string{
 		"begin",
@@ -2709,14 +2685,14 @@ func TestPlayerTransactions(t *testing.T) {
 
 	vconn := &realDBClient{nolog: true}
 	err := vconn.Connect()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer vconn.Close()
 
 	// Start a transaction and lock the row.
 	_, err = vconn.ExecuteFetch("begin", 1)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	_, err = vconn.ExecuteFetch("update t1 set val='bbb' where id=1", 1)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// create one transaction
 	execStatements(t, []string{
@@ -2811,14 +2787,14 @@ func TestPlayerRelayLogMaxSize(t *testing.T) {
 
 			vconn := &realDBClient{nolog: true}
 			err := vconn.Connect()
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			defer vconn.Close()
 
 			// Start a transaction and lock the row.
 			_, err = vconn.ExecuteFetch("begin", 1)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			_, err = vconn.ExecuteFetch("update t1 set val='bbb' where id=1", 1)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			// create one transaction
 			execStatements(t, []string{
@@ -3490,8 +3466,8 @@ func TestPlayerNoBlob(t *testing.T) {
 		}
 	}
 	stats := globalStats.controllers[int32(vrId)].blpStats
-	require.Equal(t, 2, len(stats.PartialQueryCount.Counts()))
-	require.Equal(t, 2, len(stats.PartialQueryCacheSize.Counts()))
+	require.Len(t, stats.PartialQueryCount.Counts(), 2)
+	require.Len(t, stats.PartialQueryCacheSize.Counts(), 2)
 	require.Equal(t, int64(2), stats.PartialQueryCacheSize.Counts()["insert"])
 	require.Equal(t, int64(3), stats.PartialQueryCount.Counts()["insert"])
 	require.Equal(t, int64(2), stats.PartialQueryCacheSize.Counts()["update"])
@@ -4085,7 +4061,7 @@ func expectJSON(t *testing.T, table string, values [][]string, id int, exec func
 		require.Equal(t, qr.Rows[i][0].ToString(), row[0], "Id mismatch: want %s, got %s", qr.Rows[i][0].ToString(), row[0])
 		opts := jsondiff.DefaultConsoleOptions()
 		compare, s := jsondiff.Compare(qr.Rows[i][1].Raw(), []byte(row[1]), &opts)
-		require.Equal(t, compare, jsondiff.FullMatch, "Diff:\n%s\n", s)
+		require.Equal(t, jsondiff.FullMatch, compare, "Diff:\n%s\n", s)
 	}
 }
 
