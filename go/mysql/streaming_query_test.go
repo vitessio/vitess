@@ -114,11 +114,11 @@ func TestExecuteStreamFetchNoOKResultForRows(t *testing.T) {
 // aborting with ER_CTE_MAX_RECURSION_DEPTH after the fields were sent).
 func TestStreamFetchErrorMidResultSet(t *testing.T) {
 	listener, sConn, cConn := createSocketPair(t)
-	defer func() {
+	t.Cleanup(func() {
 		listener.Close()
 		sConn.Close()
 		cConn.Close()
-	}()
+	})
 
 	result := &sqltypes.Result{
 		Fields: []*querypb.Field{{Type: querypb.Type_INT64, Name: "n"}},
