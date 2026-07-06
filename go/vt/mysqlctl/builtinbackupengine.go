@@ -691,26 +691,30 @@ func (be *BuiltinBackupEngine) backupFiles(
 	var workItems []backupWorkItem
 	for i := range fes {
 		fe := &fes[i]
-		fullPath, pathErr := fe.fullPath(params.Cnf)
-		if pathErr != nil {
-			return vterrors.Wrapf(pathErr, "cannot get full path for %v", fe.Name)
-		}
-		fi, statErr := os.Stat(fullPath)
-		if statErr != nil {
-			return vterrors.Wrapf(statErr, "cannot stat file %v", fullPath)
-		}
-		fileSize := fi.Size()
 
-		// Files larger than the threshold are split into chunks for parallel backup/restore.
-		// A threshold of 0 disables chunking entirely.
-		if backupFileChunkThreshold > 0 && uint64(fileSize) > backupFileChunkThreshold {
-			fe.Chunks = computeFileChunks(i, fileSize, int64(backupFileChunkSize))
-			for j, chunk := range fe.Chunks {
-				workItems = append(workItems, backupWorkItem{feIndex: i, chunkIndex: j, name: chunk.StorageName})
+		// Only fetch file size and calculate chunks if the threshold is enabled.
+		if backupFileChunkThreshold > 0 {
+			fullPath, pathErr := fe.fullPath(params.Cnf)
+			if pathErr != nil {
+				return vterrors.Wrapf(pathErr, "cannot get full path for %v", fe.Name)
 			}
-		} else {
-			workItems = append(workItems, backupWorkItem{feIndex: i, chunkIndex: -1, name: strconv.Itoa(i)})
+			fi, statErr := os.Stat(fullPath)
+			if statErr != nil {
+				return vterrors.Wrapf(statErr, "cannot stat file %v", fullPath)
+			}
+			fileSize := fi.Size()
+
+			// Files larger than the threshold are split into chunks for parallel backup/restore.
+			if uint64(fileSize) > backupFileChunkThreshold {
+				fe.Chunks = computeFileChunks(i, fileSize, int64(backupFileChunkSize))
+				for j, chunk := range fe.Chunks {
+					workItems = append(workItems, backupWorkItem{feIndex: i, chunkIndex: j, name: chunk.StorageName})
+				}
+				continue
+			}
 		}
+
+		workItems = append(workItems, backupWorkItem{feIndex: i, chunkIndex: -1, name: strconv.Itoa(i)})
 	}
 
 	// Backup all work items concurrently.
@@ -1404,39 +1408,18 @@ func createChunkedDestinations(ctx context.Context, fes []FileEntry, cnf *Mycnf,
 // restoreWorkItem represents a single unit of restore work: either a chunk of a
 // chunked file, or a whole non-chunked file.
 type restoreWorkItem struct {
-	fe    *FileEntry
-	chunk *FileChunk // nil for non-chunked files
-	dest  *os.File   // shared dest for chunked files, nil for non-chunked
-	name  string     // storage name for error recording
+	fe       *FileEntry
+	chunk    *FileChunk // nil for non-chunked files
+	destPath string     // full path for chunked files, empty for non-chunked
+	name     string     // storage name for error recording
 }
 
-func (be *BuiltinBackupEngine) restoreFileEntries(ctx context.Context, fes []FileEntry, bh backupstorage.BackupHandle, bm builtinBackupManifest, params RestoreParams, createdDir string) (finalErr error) {
-	// Capture the parent context before errgroup.WithContext replaces ctx with a
-	// child that is cancelled after g.Wait(). The deferred close of chunked
-	// destinations needs a live context.
-	cleanupCtx := ctx
+func (be *BuiltinBackupEngine) restoreFileEntries(ctx context.Context, fes []FileEntry, bh backupstorage.BackupHandle, bm builtinBackupManifest, params RestoreParams, createdDir string) error {
 	g, ctx := errgroup.WithContext(ctx)
 	g.SetLimit(params.Concurrency)
 
-	// Pre-open destinations for chunked files so chunks can pwrite in parallel.
-	type chunkedDest struct {
-		dest *os.File
-		fe   *FileEntry
-	}
-	var chunkedDests []chunkedDest
-	defer func() {
-		for _, cd := range chunkedDests {
-			closeDestAt := time.Now()
-			if err := closeWithRetry(cleanupCtx, params.Logger, cd.dest, cd.fe.Name); err != nil {
-				params.Logger.Errorf("Failed to close chunked destination file %s: %v", cd.fe.Name, err)
-				finalErr = errors.Join(finalErr, fmt.Errorf("%w: %w", errRestoreFatal, vterrors.Wrapf(err, "failed to close chunked destination file %s", cd.fe.Name)))
-				continue
-			}
-			params.Stats.Scope(stats.Operation("Destination:Close")).TimedIncrement(time.Since(closeDestAt))
-		}
-	}()
-
-	// Phase 1: Build work items and open chunked destinations.
+	// Build work items. Chunked files resolve their destination path here;
+	// each chunk opens/closes the fd independently during execution.
 	var workItems []restoreWorkItem
 	var setupErr error
 	for i := range fes {
@@ -1447,28 +1430,18 @@ func (be *BuiltinBackupEngine) restoreFileEntries(ctx context.Context, fes []Fil
 		fe.ParentPath = createdDir
 
 		if len(fe.Chunks) > 0 {
-			// Chunked file: open destination for writing and submit each chunk.
-			// The file was already created and pre-sized by createChunkedDestinations.
 			fullPath, pathErr := fe.fullPath(params.Cnf)
 			if pathErr != nil {
 				setupErr = vterrors.Wrapf(pathErr, "can't get path for chunked file %v", fe.Name)
 				break
 			}
-			openDestAt := time.Now()
-			dest, openErr := openFile(fullPath, os.O_WRONLY, 0o644)
-			if openErr != nil {
-				setupErr = vterrors.Wrapf(openErr, "can't open destination for chunked file %v", fe.Name)
-				break
-			}
-			params.Stats.Scope(stats.Operation("Destination:Open")).TimedIncrement(time.Since(openDestAt))
-			chunkedDests = append(chunkedDests, chunkedDest{dest: dest, fe: fe})
 
 			for j := range fe.Chunks {
 				workItems = append(workItems, restoreWorkItem{
-					fe:    fe,
-					chunk: &fe.Chunks[j],
-					dest:  dest,
-					name:  fe.Chunks[j].StorageName,
+					fe:       fe,
+					chunk:    &fe.Chunks[j],
+					destPath: fullPath,
+					name:     fe.Chunks[j].StorageName,
 				})
 			}
 		} else {
@@ -1497,7 +1470,7 @@ func (be *BuiltinBackupEngine) restoreFileEntries(ctx context.Context, fes []Fil
 			var err error
 			if wi.chunk != nil {
 				params.Logger.Infof("Restoring chunk %s of file %v (offset=%d, size=%d)", wi.name, wi.fe.Name, wi.chunk.Offset, wi.chunk.Size)
-				err = be.restoreFileChunk(ctx, params, bh, wi.chunk, bm, wi.dest)
+				err = be.restoreFileChunk(ctx, params, bh, wi.chunk, bm, wi.destPath)
 			} else {
 				params.Logger.Infof("Copying file %v: %v %s", wi.name, wi.fe.Name, retryToString(wi.fe.RetryCount))
 				err = be.restoreFile(ctx, params, bh, wi.fe, bm, wi.name)
@@ -1671,11 +1644,33 @@ func (w *offsetWriter) Write(p []byte) (int, error) {
 	return n, err
 }
 
-// restoreFileChunk restores a single chunk of a large file. The dest file has
-// already been opened and pre-sized by the caller.
-func (be *BuiltinBackupEngine) restoreFileChunk(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle, chunk *FileChunk, bm builtinBackupManifest, dest *os.File) (finalErr error) {
+// restoreFileChunk restores a single chunk of a large file. The destination
+// file has been pre-created and pre-sized by createChunkedDestinations; this
+// function opens it for pwrite and closes it when done.
+func (be *BuiltinBackupEngine) restoreFileChunk(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle, chunk *FileChunk, bm builtinBackupManifest, destPath string) (finalErr error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+
+	openDestAt := time.Now()
+	dest, err := openFile(destPath, os.O_WRONLY, 0o644)
+	if err != nil {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "can't open destination for chunk %v: %v", chunk.StorageName, err)
+	}
+	params.Stats.Scope(stats.Operation("Destination:Open")).TimedIncrement(time.Since(openDestAt))
+	defer func() {
+		closeDestAt := time.Now()
+		if cerr := closeWithRetry(ctx, params.Logger, dest, chunk.StorageName); cerr != nil {
+			if finalErr != nil {
+				params.Logger.Errorf("Chunk %s had prior error before close failure: %v", chunk.StorageName, finalErr)
+			}
+			// Overwrite (not join) so that closeWithRetry's FAILED_PRECONDITION code
+			// propagates through the dispatch's vterrors.Code() check, ensuring the
+			// error is treated as fatal and not retried.
+			finalErr = cerr
+			return
+		}
+		params.Stats.Scope(stats.Operation("Destination:Close")).TimedIncrement(time.Since(closeDestAt))
+	}()
 
 	openSourceAt := time.Now()
 	source, err := bh.ReadFile(ctx, chunk.StorageName)

@@ -653,8 +653,8 @@ func TestExecuteBackupRestoreS3WithChunking(t *testing.T) {
 	assert.NotNil(t, bm)
 
 	restoreSS := blackbox.GetStats(restoreStats)
-	assert.Equal(t, totalFiles, restoreSS.DestinationOpenStats)
-	assert.Equal(t, totalFiles, restoreSS.DestinationCloseStats)
+	assert.Equal(t, totalChunks, restoreSS.DestinationOpenStats)
+	assert.Equal(t, totalChunks, restoreSS.DestinationCloseStats)
 	assert.Equal(t, totalChunks, restoreSS.DestinationWriteStats)
 	assert.Equal(t, totalFiles*fileSize, restoreSS.DestinationWriteBytes)
 	assert.Equal(t, totalChunks, restoreSS.SourceCloseStats)
