@@ -18,6 +18,7 @@ package vdiff
 
 import (
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -119,11 +120,13 @@ func (td *tableDiffer) buildTablePlan(dbClient binlogplayer.DBClient, dbName str
 					// this won't work: "select count(*) from (select id from t limit 1)"
 					// since vreplication only handles simple tables (no joins/derived tables) this is fine for now
 					// but will need to be revisited when we add such support to vreplication
-					aggregates = append(aggregates, engine.NewAggregateParam(
-						/*opcode*/ opcode.AggregateSum,
-						/*offset*/ sourceSelect.GetColumnCount()-1,
-						nil,
-						/*alias*/ "", collationEnv),
+					aggregates = append(
+						aggregates, engine.NewAggregateParam(
+							/*opcode*/ opcode.AggregateSum,
+							/*offset*/ sourceSelect.GetColumnCount()-1,
+							nil,
+							/*alias*/ "", collationEnv,
+						),
 					)
 				}
 			}
@@ -271,7 +274,8 @@ func (tp *tablePlan) getPKColumnCollations(dbClient binlogplayer.DBClient, colla
 	if err != nil {
 		return err
 	}
-	query, err := sqlparser.ParseAndBind(sqlSelectColumnCollations,
+	query, err := sqlparser.ParseAndBind(
+		sqlSelectColumnCollations,
 		sqltypes.StringBindVariable(tp.dbName),
 		sqltypes.StringBindVariable(tp.table.Name),
 		columnsBV,
@@ -316,7 +320,10 @@ func (tp *tablePlan) getPKEquivalentColumns(dbClient binlogplayer.DBClient, env 
 	createTableSQL := qr.Rows[0][1].ToString()
 	createTableEntity, err := schemadiff.NewCreateTableEntityFromSQL(env, createTableSQL)
 	if err != nil {
-		return nil, err
+		log.Warn("Failed to parse the CREATE TABLE schema to determine a primary key equivalent; falling back to using all columns",
+			slog.String("table", tp.table.Name),
+			slog.Any("error", err))
+		return nil, nil
 	}
 	pkeCols, _ := schemadiff.GetPrimaryKeyEquivalent(createTableEntity)
 	return pkeCols, nil

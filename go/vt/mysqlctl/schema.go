@@ -578,9 +578,8 @@ func (mysqld *Mysqld) ApplySchemaChange(ctx context.Context, dbName string, chan
 	return &tabletmanagerdatapb.SchemaChangeResult{BeforeSchema: beforeSchema, AfterSchema: afterSchema}, nil
 }
 
-// Deprecated: GetPrimaryKeyEquivalentColumns is deprecated. Use
-// schemadiff.GetPrimaryKeyEquivalent instead, which works at the SQL
-// parser level and does not require a database connection.
+// Deprecated: Use schemadiff.GetPrimaryKeyEquivalent instead; it works
+// at the SQL parser level and needs no database connection.
 func GetPrimaryKeyEquivalentColumns(ctx context.Context, exec func(string, int, bool) (*sqltypes.Result, error), dbName, table string) ([]string, string, error) {
 	// We use column name aliases to guarantee lower case for our named results.
 	sql := `
@@ -666,4 +665,4 @@ func (t tableDefinitions) Swap(i, j int) {
 	t[i], t[j] = t[j], t[i]
 }
 
-var _ sort.Interface = (tableDefinitions)(nil)
+var _ sort.Interface = tableDefinitions(nil)

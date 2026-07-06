@@ -102,9 +102,9 @@ func (f *fakeFetchSuperQueryMysqld) GetSchema(ctx context.Context, dbName string
 }
 
 // TestBuildColInfoMapUnparseableSchemaFallback confirms that a no-PK table
-// whose CREATE TABLE statement cannot be parsed (e.g. it uses table options
-// unknown to the SQL parser, such as SECONDARY_ENGINE) does not fail the
-// stream: we warn and fall back to using all columns as the substitute PK.
+// whose CREATE TABLE cannot be parsed (e.g. unknown SECONDARY_ENGINE
+// option) does not fail the stream: buildColInfoMap warns and falls back
+// to all columns.
 func TestBuildColInfoMapUnparseableSchemaFallback(t *testing.T) {
 	infoSchemaCols := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(

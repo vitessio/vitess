@@ -162,10 +162,10 @@ func TestGetSourcePKCols_TableDroppedOnSource(t *testing.T) {
 	require.Nil(t, td.tablePlan.sourcePkCols)
 }
 
-// TestGetSourcePKCols_UnparseableSourceSchema confirms that a source table
-// whose CREATE TABLE statement cannot be parsed (e.g. it uses table options
-// unknown to the SQL parser, such as SECONDARY_ENGINE) does not fail the
-// diff: we warn and fall back to using all columns as the substitute PK.
+// TestGetSourcePKCols_UnparseableSourceSchema confirms that a source
+// CREATE TABLE the SQL parser cannot parse (e.g. one using the unknown
+// SECONDARY_ENGINE option) does not fail the diff: we warn and fall back
+// to all columns as the substitute PK.
 func TestGetSourcePKCols_UnparseableSourceSchema(t *testing.T) {
 	tvde := newTestVDiffEnv(t)
 	defer tvde.close()

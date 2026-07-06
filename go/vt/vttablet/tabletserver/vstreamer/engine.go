@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
@@ -630,6 +631,9 @@ func (vse *Engine) mapPKEquivalentCols(ctx context.Context, db dbconfigs.Connect
 	senv := schemadiff.NewEnvWithDefaults(vse.env.Environment())
 	createTableEntity, err := schemadiff.NewCreateTableEntityFromSQL(senv, createTableSQL)
 	if err != nil {
+		log.Warn("Failed to parse the CREATE TABLE schema to determine a primary key equivalent; the row streamer will fall back to using all columns",
+			slog.String("table", table.Name),
+			slog.Any("error", err))
 		return nil, err
 	}
 	pkeColNames, indexName := schemadiff.GetPrimaryKeyEquivalent(createTableEntity)

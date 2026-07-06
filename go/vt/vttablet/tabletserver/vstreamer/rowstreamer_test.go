@@ -671,12 +671,11 @@ func TestStreamRowsHeartbeat(t *testing.T) {
 	}, 50*time.Millisecond, time.Millisecond, "expected context cancellation to stop row and heartbeat callbacks")
 }
 
-// TestStreamRowsLastPKStaleKeyColumns confirms that resuming a copy phase
-// with a lastpk whose field names no longer match the table's currently
-// selected key columns fails with a clear error, instead of silently binding
-// the stale lastpk values to the wrong columns and skipping rows. The key
-// selection can change, e.g., when the PK equivalent ranking changes across
-// an upgrade.
+// TestStreamRowsLastPKStaleKeyColumns confirms that resuming a copy with a
+// lastpk whose field names no longer match the currently selected key
+// columns fails with a clear error instead of silently binding the values
+// to the wrong columns and skipping rows. Key selection can change, e.g.
+// when the PKE ranking changes across an upgrade.
 func TestStreamRowsLastPKStaleKeyColumns(t *testing.T) {
 	if testing.Short() {
 		t.Skip()

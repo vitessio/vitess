@@ -192,6 +192,31 @@ func TestMapPKEquivalentCols(t *testing.T) {
 	require.Equal(t, "tiny_uid", table.PKIndexName)
 }
 
+// TestMapPKEquivalentColsUnparseableSchema confirms that a CREATE TABLE
+// statement the SQL parser cannot parse (e.g. one using the unknown
+// SECONDARY_ENGINE option) returns an error, which the row streamer
+// discards to fall back to using all columns.
+func TestMapPKEquivalentColsUnparseableSchema(t *testing.T) {
+	testDB := fakesqldb.New(t)
+	defer testDB.Close()
+
+	dbName := engine.env.Config().DB.DBName
+	query := "SHOW CREATE TABLE " + sqlescape.EscapeID(dbName) + "." + sqlescape.EscapeID("t1")
+	showCreateResult := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("Table|Create Table", "varchar|varchar"),
+		"t1|CREATE TABLE `t1` (`c1` int NOT NULL, UNIQUE KEY `uk1` (`c1`)) ENGINE=InnoDB SECONDARY_ENGINE=RAPID",
+	)
+	testDB.AddQuery(query, showCreateResult)
+
+	table := &binlogdatapb.MinimalTable{
+		Name:   "t1",
+		Fields: sqltypes.MakeTestFields("c1", "int64"),
+	}
+	_, err := engine.mapPKEquivalentCols(t.Context(), dbconfigs.New(testDB.ConnParams()), table)
+	require.ErrorContains(t, err, "syntax error")
+	require.Empty(t, table.PKIndexName)
+}
+
 // TestVStreamerWaitForMySQL tests the wait for MySQL to catch-up
 // logic that is used by vstreamer when starting a copy phase cycle.
 // This logic today supports waiting for MySQL replication lag
@@ -202,24 +227,32 @@ func TestVStreamerWaitForMySQL(t *testing.T) {
 	expectedWaits := int64(0)
 	testDB := fakesqldb.New(t)
 	defer testDB.Close()
-	hostres := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"hostname|port",
-		"varchar|int64"),
+	hostres := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"hostname|port",
+			"varchar|int64",
+		),
 		"localhost|3306",
 	)
-	thlres := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"history_len",
-		"int64"),
+	thlres := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"history_len",
+			"int64",
+		),
 		"1000",
 	)
-	sbmres := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"Seconds_Behind_Source",
-		"int64"),
+	sbmres := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"Seconds_Behind_Source",
+			"int64",
+		),
 		"10",
 	)
-	sbmlegacyres := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"Seconds_Behind_Master",
-		"int64"),
+	sbmlegacyres := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"Seconds_Behind_Master",
+			"int64",
+		),
 		"10",
 	)
 	type fields struct {

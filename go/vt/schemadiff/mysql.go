@@ -121,9 +121,9 @@ func IsExpandingDataType(sourceType string, targetType string) bool {
 
 const defaultTypeCost = 1000
 
-// typeCost maps MySQL data types to a relative cost for use in ranking
-// Primary Key Equivalent (PKE) indexes. Lower cost types are preferred.
-// This matches the ranking used in mysqlctl.GetPrimaryKeyEquivalentColumns.
+// typeCost maps MySQL data types to a relative cost for ranking Primary
+// Key Equivalent (PKE) candidate keys; lower is preferred. It matches the
+// ranking in the deprecated mysqlctl.GetPrimaryKeyEquivalentColumns.
 var typeCost = map[string]int{
 	"enum":      0,
 	"tinyint":   1,
@@ -148,8 +148,10 @@ var typeCost = map[string]int{
 	"tinytext":  81,
 }
 
-// TypeCost returns the relative cost for the given column type.
-// Unknown types return defaultTypeCost.
+// TypeCost returns the relative cost of a MySQL column type for PKE
+// ranking. columnType must be a bare MySQL-canonical type name as emitted
+// by SHOW CREATE TABLE (e.g. "varchar", not "varchar(255)"); unknown
+// types get a high cost so they rank last.
 func TypeCost(columnType string) int {
 	if cost, ok := typeCost[strings.ToLower(columnType)]; ok {
 		return cost
