@@ -121,6 +121,7 @@ jobs:
               - 'config/**'
               - 'bootstrap.sh'
               - '.github/workflows/unit_test.yml'
+              - '.github/actions/setup-mysql/action.yml'
 
       - name: Set up Go
         if: steps.changes.outputs.unit_tests == 'true'
