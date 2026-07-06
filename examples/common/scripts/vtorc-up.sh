@@ -18,7 +18,7 @@ vtorc \
   --cell $cell \
   --port $port \
   --log-format text \
-  --emergency-reparent-on-tablet-unreachable \
+  --emergency-reparent-on-primary-tablet-unreachable \
   --shard-quorum-fraction=1.0 \
   --shard-quorum-min-observers=1 \
   ${VTORC_EXTRA_FLAGS:-} \
