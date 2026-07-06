@@ -70,8 +70,8 @@ func TestMkInsertSingle(t *testing.T) {
 
 	sql, args, err := mkInsertForInstances(nil, true, true)
 	require.NoError(t, err)
-	require.Equal(t, sql, "")
-	require.Equal(t, len(args), 0)
+	require.Empty(t, sql)
+	require.Empty(t, args)
 
 	// one instance
 	s1 := `INSERT OR IGNORE INTO database_instance
@@ -196,7 +196,7 @@ func TestReadInstance(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, tt.instanceFound, found)
 			if tt.instanceFound {
-				require.EqualValues(t, tt.tabletAliasToRead, got.InstanceAlias)
+				require.Equal(t, tt.tabletAliasToRead, got.InstanceAlias)
 			}
 		})
 	}
@@ -470,7 +470,7 @@ func TestReadInstanceAllFields(t *testing.T) {
 	instance.SecondsSinceLastSeen = sql.NullInt64{}
 	instance.Problems = nil
 	instance.LastDiscoveryLatency = 0
-	require.EqualValues(t, wantInstance, instance)
+	require.Equal(t, wantInstance, instance)
 }
 
 // TestReadInstancesByCondition is used to test the functionality of readInstancesByCondition and verify its failure modes and successes.
@@ -532,7 +532,7 @@ func TestReadInstancesByCondition(t *testing.T) {
 			for _, instance := range instances {
 				tabletAliases = append(tabletAliases, topoproto.TabletAliasString(instance.InstanceAlias))
 			}
-			require.EqualValues(t, tt.instancesRequired, tabletAliases)
+			require.Equal(t, tt.instancesRequired, tabletAliases)
 		})
 	}
 }
@@ -618,7 +618,7 @@ from database_instance`, func(rowMap sqlutils.RowMap) error {
 			for _, tabletAlias := range tabletAliases {
 				tabletAliasStrings = append(tabletAliasStrings, topoproto.TabletAliasString(tabletAlias))
 			}
-			require.EqualValues(t, tt.instancesRequired, tabletAliasStrings)
+			require.Equal(t, tt.instancesRequired, tabletAliasStrings)
 		})
 	}
 }
@@ -796,7 +796,7 @@ func TestForgetInstanceAndInstanceIsForgotten(t *testing.T) {
 			for _, instance := range instances {
 				tabletAliases = append(tabletAliases, instance.InstanceAlias)
 			}
-			require.EqualValues(t, tt.tabletsExpected, tabletAliases)
+			require.Equal(t, tt.tabletsExpected, tabletAliases)
 		})
 	}
 }
@@ -869,7 +869,7 @@ func TestExpireTableData(t *testing.T) {
 				return nil
 			})
 			require.NoError(t, err)
-			require.EqualValues(t, tt.expectedRowCount, rowsCount)
+			require.Equal(t, tt.expectedRowCount, rowsCount)
 		})
 	}
 }
@@ -996,7 +996,7 @@ func TestDetectErrantGTIDs(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			require.EqualValues(t, tt.wantErrantGTID, tt.instance.GtidErrant)
+			require.Equal(t, tt.wantErrantGTID, tt.instance.GtidErrant)
 		})
 	}
 }
@@ -1145,7 +1145,7 @@ func TestPrimaryErrantGTIDs(t *testing.T) {
 	instance.ExecutedGtidSet = "230ea8ea-81e3-11e4-972a-e25ec4bd140a:1-10589,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-34,316d193c-70e5-11e5-adb2-ecf4bb2262ff:1-351"
 	err = detectErrantGTIDs(instance, tablet)
 	require.NoError(t, err)
-	require.EqualValues(t, "", instance.GtidErrant)
+	require.Empty(t, instance.GtidErrant)
 }
 
 // TestErrantGTIDCountGaugeIsResetWhenResolved verifies that the per-tablet

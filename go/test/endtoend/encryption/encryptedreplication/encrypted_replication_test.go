@@ -52,7 +52,7 @@ func testReplicationBase(t *testing.T, isClientCertPassed bool) {
 
 	// initialize cluster
 	_, err := initializeCluster(t)
-	require.Nil(t, err, "setup failed")
+	require.NoError(t, err, "setup failed")
 
 	defer teardownCluster()
 

@@ -91,7 +91,7 @@ func TestDBDDLTimeout(t *testing.T) {
 	primitive := &DBDDL{name: "ks", create: true, queryTimeout: 100}
 	vc := &loggingVCursor{dbDDLPlugin: pluginName, shardErr: errors.New("db not available")}
 	_, err := primitive.TryExecute(t.Context(), vc, nil, false)
-	assert.EqualError(t, err, "could not validate create database: destination not resolved")
+	require.EqualError(t, err, "could not validate create database: destination not resolved")
 
 	primitive = &DBDDL{name: "ks", queryTimeout: 100}
 	vc = &loggingVCursor{dbDDLPlugin: pluginName, ksAvailable: true}

@@ -181,7 +181,7 @@ func TestPermutations(t *testing.T) {
 			require.NoError(t, err)
 
 			allDiffs := schemaDiff.UnorderedDiffs()
-			require.Equal(t, tc.expectDiffs, len(allDiffs))
+			require.Len(t, allDiffs, tc.expectDiffs)
 
 			toSingleString := func(diffs []EntityDiff) string {
 				res := ""
@@ -208,13 +208,13 @@ func TestPermutations(t *testing.T) {
 					}
 					return false, -1
 				})
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				if len(allDiffs) > 0 {
-					assert.Equal(t, numEquals, 1)
+					assert.Equal(t, 1, numEquals)
 				}
 
 				assert.False(t, earlyBreak)
-				assert.Equalf(t, tc.expectPermutations, len(allPerms), "all perms: %v", strings.Join(allPermsStatements, "\n"))
+				assert.Lenf(t, allPerms, tc.expectPermutations, "all perms: %v", strings.Join(allPermsStatements, "\n"))
 			})
 			t.Run("early break", func(t *testing.T) {
 				allPerms := map[string]bool{}
@@ -228,14 +228,14 @@ func TestPermutations(t *testing.T) {
 					// early break; this callback function should not be invoked again
 					return true, -1
 				})
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				if len(allDiffs) > 0 {
 					assert.True(t, earlyBreak)
-					assert.Equal(t, 1, len(allPerms))
+					assert.Len(t, allPerms, 1)
 				} else {
 					// no diffs means no permutations, and no call to the callback function
 					assert.False(t, earlyBreak)
-					assert.Equal(t, 0, len(allPerms))
+					assert.Empty(t, allPerms)
 				}
 			})
 		})
@@ -686,7 +686,8 @@ func TestSchemaDiff(t *testing.T) {
 		},
 		{
 			name: "two table cycle with create, strict",
-			fromQueries: append(createQueries,
+			fromQueries: append(
+				createQueries,
 				"create table t11 (id int primary key, i0 int);",
 			),
 			toQueries: append(
@@ -704,7 +705,8 @@ func TestSchemaDiff(t *testing.T) {
 		},
 		{
 			name: "two table cycle with create, strict, changed lexicographic order",
-			fromQueries: append(createQueries,
+			fromQueries: append(
+				createQueries,
 				"create table t12 (id int primary key, i0 int);",
 			),
 			toQueries: append(
@@ -722,7 +724,8 @@ func TestSchemaDiff(t *testing.T) {
 		},
 		{
 			name: "two table cycle with create, ignore",
-			fromQueries: append(createQueries,
+			fromQueries: append(
+				createQueries,
 				"create table t11 (id int primary key, i0 int);",
 			),
 			toQueries: append(
@@ -740,7 +743,8 @@ func TestSchemaDiff(t *testing.T) {
 		},
 		{
 			name: "two table cycle with create, ignore, changed lexicographic order",
-			fromQueries: append(createQueries,
+			fromQueries: append(
+				createQueries,
 				"create table t12 (id int primary key, i0 int);",
 			),
 			toQueries: append(
@@ -758,7 +762,8 @@ func TestSchemaDiff(t *testing.T) {
 		},
 		{
 			name: "two table cycle with create, existing column, ignore",
-			fromQueries: append(createQueries,
+			fromQueries: append(
+				createQueries,
 				"create table t12 (id int primary key, i int, key (i));",
 			),
 			toQueries: append(
@@ -776,7 +781,8 @@ func TestSchemaDiff(t *testing.T) {
 		},
 		{
 			name: "two table cycle with create, existing column, changed lexicographic order, ignore",
-			fromQueries: append(createQueries,
+			fromQueries: append(
+				createQueries,
 				"create table t11 (id int primary key, i int, key (i));",
 			),
 			toQueries: append(
@@ -794,7 +800,8 @@ func TestSchemaDiff(t *testing.T) {
 		},
 		{
 			name: "two table cycle with create, create table first",
-			fromQueries: append(createQueries,
+			fromQueries: append(
+				createQueries,
 				"create table t12 (id int primary key, i int, key (i));",
 			),
 			toQueries: append(
@@ -812,7 +819,8 @@ func TestSchemaDiff(t *testing.T) {
 		},
 		{
 			name: "two table cycle with create, changed lexicographic order, create table first",
-			fromQueries: append(createQueries,
+			fromQueries: append(
+				createQueries,
 				"create table t11 (id int primary key, i int, key (i));",
 			),
 			toQueries: append(
@@ -1326,14 +1334,14 @@ func TestSchemaDiff(t *testing.T) {
 			for _, diff := range allDiffs {
 				allDiffsStatements = append(allDiffsStatements, diff.CanonicalStatementString())
 			}
-			assert.Equalf(t, tc.expectDiffs, len(allDiffs), "found diffs: %v", allDiffsStatements)
+			assert.Lenf(t, allDiffs, tc.expectDiffs, "found diffs: %v", allDiffsStatements)
 
 			deps := schemaDiff.AllDependencies()
 			depsKeys := []string{}
 			for _, dep := range deps {
 				depsKeys = append(depsKeys, dep.hashKey())
 			}
-			assert.Equalf(t, tc.expectDeps, len(deps), "found %v deps: %v", len(depsKeys), depsKeys)
+			assert.Lenf(t, deps, tc.expectDeps, "found %v deps: %v", len(depsKeys), depsKeys)
 			assert.Equal(t, tc.sequential, schemaDiff.HasSequentialExecutionDependencies())
 
 			relatedFKTables := schemaDiff.RelatedForeignKeyTables()
@@ -1356,7 +1364,7 @@ func TestSchemaDiff(t *testing.T) {
 				for _, diff := range impossibleOrderErr.ConflictingDiffs {
 					conflictingDiffsStatements = append(conflictingDiffsStatements, diff.CanonicalStatementString())
 				}
-				assert.Equalf(t, tc.conflictingDiffs, len(impossibleOrderErr.ConflictingDiffs), "found conflicting diffs: %+v\n diff statements=%+v", conflictingDiffsStatements, allDiffsStatements)
+				assert.Lenf(t, impossibleOrderErr.ConflictingDiffs, tc.conflictingDiffs, "found conflicting diffs: %+v\n diff statements=%+v", conflictingDiffsStatements, allDiffsStatements)
 			} else {
 				require.NoErrorf(t, err, "Unordered diffs: %v", allDiffsStatements)
 			}
@@ -1368,7 +1376,7 @@ func TestSchemaDiff(t *testing.T) {
 				// validate that the order of diffs is as expected (we don't check for the full diff statement,
 				// just for the order of affected tables/views)
 				require.NotNil(t, tc.entityOrder) // making sure we explicitly specified expected order
-				assert.Equalf(t, len(tc.entityOrder), len(orderedDiffs), "expected %d diffs/entities per %v", len(tc.entityOrder), tc.entityOrder)
+				assert.Lenf(t, orderedDiffs, len(tc.entityOrder), "expected %d diffs/entities per %v", len(tc.entityOrder), tc.entityOrder)
 				diffEntities := []string{}
 				for _, diff := range orderedDiffs {
 					diffEntities = append(diffEntities, diff.EntityName())
@@ -1383,6 +1391,191 @@ func TestSchemaDiff(t *testing.T) {
 			}
 			instantCapability := schemaDiff.InstantDDLCapability()
 			assert.Equal(t, tc.instantCapability, instantCapability, "for instant capability")
+		})
+	}
+}
+
+// TestSchemaDiffForeignKeyShadowConflict validates detection of "shadow table" foreign key conflicts:
+// a foreign key present in the source schema survives on the OnlineDDL held table while the referenced
+// parent is concurrently altered into an incompatible signature in the same batch. Such a batch must be
+// rejected when ForeignKeyShadowConflictStrategyReject is set, and left untouched otherwise.
+func TestSchemaDiffForeignKeyShadowConflict(t *testing.T) {
+	ctx := t.Context()
+	tt := []struct {
+		name           string
+		fromQueries    []string
+		toQueries      []string
+		reject         bool // set ForeignKeyShadowConflictStrategyReject
+		expectConflict bool // expect an impossible-execution dependency and a rejected OrderedDiffs
+	}{
+		{
+			name: "drop fk on child, change referenced column type on parent",
+			fromQueries: []string{
+				"create table parent (id int primary key)",
+				"create table child (id int primary key, parent_id int, key parent_id_idx (parent_id), constraint f foreign key (parent_id) references parent (id))",
+			},
+			toQueries: []string{
+				"create table parent (id varchar(32) primary key)",
+				"create table child (id int primary key, parent_id int, key parent_id_idx (parent_id))",
+			},
+			reject:         true,
+			expectConflict: true,
+		},
+		{
+			name: "drop fk on child, drop referenced column on parent",
+			fromQueries: []string{
+				"create table parent (id int primary key, ref int, key ref_idx (ref))",
+				"create table child (id int primary key, parent_id int, key parent_id_idx (parent_id), constraint f foreign key (parent_id) references parent (ref))",
+			},
+			toQueries: []string{
+				"create table parent (id int primary key)",
+				"create table child (id int primary key, parent_id int, key parent_id_idx (parent_id))",
+			},
+			reject:         true,
+			expectConflict: true,
+		},
+		{
+			name: "drop fk on child, drop referenced index on parent",
+			fromQueries: []string{
+				"create table parent (id int primary key, ref int, key ref_idx (ref))",
+				"create table child (id int primary key, parent_id int, key parent_id_idx (parent_id), constraint f foreign key (parent_id) references parent (ref))",
+			},
+			toQueries: []string{
+				"create table parent (id int primary key, ref int)",
+				"create table child (id int primary key, parent_id int, key parent_id_idx (parent_id))",
+			},
+			reject:         true,
+			expectConflict: true,
+		},
+		{
+			name: "drop child table, change referenced column type on parent",
+			fromQueries: []string{
+				"create table parent (id int primary key)",
+				"create table child (id int primary key, parent_id int, key parent_id_idx (parent_id), constraint f foreign key (parent_id) references parent (id))",
+			},
+			toQueries: []string{
+				"create table parent (id varchar(32) primary key)",
+			},
+			reject:         true,
+			expectConflict: true,
+		},
+		{
+			name: "drop child table, drop parent table: reclaimable by GC, not rejected",
+			fromQueries: []string{
+				"create table parent (id int primary key)",
+				"create table child (id int primary key, parent_id int, key parent_id_idx (parent_id), constraint f foreign key (parent_id) references parent (id))",
+			},
+			toQueries:      []string{},
+			reject:         true,
+			expectConflict: false,
+		},
+		{
+			name: "drop fk on child, change referenced column collation on parent",
+			fromQueries: []string{
+				"create table parent (id varchar(32) charset utf8mb4 collate utf8mb4_bin primary key)",
+				"create table child (id int primary key, parent_id varchar(32) charset utf8mb4 collate utf8mb4_bin, key parent_id_idx (parent_id), constraint f foreign key (parent_id) references parent (id))",
+			},
+			toQueries: []string{
+				"create table parent (id varchar(32) charset utf8mb4 collate utf8mb4_general_ci primary key)",
+				"create table child (id int primary key, parent_id varchar(32) charset utf8mb4 collate utf8mb4_bin, key parent_id_idx (parent_id))",
+			},
+			reject:         true,
+			expectConflict: true,
+		},
+		{
+			name: "lockstep type change on both parent and child, fk preserved",
+			fromQueries: []string{
+				"create table parent (id int primary key)",
+				"create table child (id int primary key, parent_id int, key parent_id_idx (parent_id), constraint f foreign key (parent_id) references parent (id))",
+			},
+			toQueries: []string{
+				"create table parent (id varchar(32) primary key)",
+				"create table child (id int primary key, parent_id varchar(32), key parent_id_idx (parent_id), constraint f foreign key (parent_id) references parent (id))",
+			},
+			reject:         true,
+			expectConflict: true,
+		},
+		{
+			name: "same conflict but strategy not set: not rejected",
+			fromQueries: []string{
+				"create table parent (id int primary key)",
+				"create table child (id int primary key, parent_id int, key parent_id_idx (parent_id), constraint f foreign key (parent_id) references parent (id))",
+			},
+			toQueries: []string{
+				"create table parent (id varchar(32) primary key)",
+				"create table child (id int primary key, parent_id int, key parent_id_idx (parent_id))",
+			},
+			reject:         false,
+			expectConflict: false,
+		},
+		{
+			name: "parent altered compatibly, child untouched: not rejected",
+			fromQueries: []string{
+				"create table parent (id int primary key)",
+				"create table child (id int primary key, parent_id int, key parent_id_idx (parent_id), constraint f foreign key (parent_id) references parent (id))",
+			},
+			toQueries: []string{
+				"create table parent (id int primary key, extra int)",
+				"create table child (id int primary key, parent_id int, key parent_id_idx (parent_id), constraint f foreign key (parent_id) references parent (id))",
+			},
+			reject:         true,
+			expectConflict: false,
+		},
+		{
+			name: "self-referencing fk, referenced column type change: not rejected",
+			fromQueries: []string{
+				"create table t (id int primary key, parent_id int, key parent_id_idx (parent_id), constraint f foreign key (parent_id) references t (id))",
+			},
+			toQueries: []string{
+				"create table t (id bigint primary key, parent_id bigint, key parent_id_idx (parent_id), constraint f foreign key (parent_id) references t (id))",
+			},
+			reject:         true,
+			expectConflict: false,
+		},
+		{
+			name: "char to varchar lockstep stays fk-compatible: not rejected",
+			fromQueries: []string{
+				"create table parent (id char(32) primary key)",
+				"create table child (id int primary key, parent_id char(32), key parent_id_idx (parent_id), constraint f foreign key (parent_id) references parent (id))",
+			},
+			toQueries: []string{
+				"create table parent (id varchar(32) primary key)",
+				"create table child (id int primary key, parent_id varchar(32), key parent_id_idx (parent_id), constraint f foreign key (parent_id) references parent (id))",
+			},
+			reject:         true,
+			expectConflict: false,
+		},
+	}
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			venv, err := vtenv.New(vtenv.Options{})
+			require.NoError(t, err)
+			env := NewEnv(venv, collations.CollationUtf8mb4ID)
+
+			fromSchema, err := NewSchemaFromQueries(env, tc.fromQueries)
+			require.NoError(t, err)
+			toSchema, err := NewSchemaFromQueries(env, tc.toQueries)
+			require.NoError(t, err)
+
+			hints := &DiffHints{RangeRotationStrategy: RangeRotationDistinctStatements}
+			if tc.reject {
+				hints.ForeignKeyShadowConflictStrategy = ForeignKeyShadowConflictStrategyReject
+			}
+			schemaDiff, err := fromSchema.SchemaDiff(toSchema, hints)
+			require.NoError(t, err)
+
+			assert.Equal(t, tc.expectConflict, schemaDiff.HasImpossibleExecutionDependencies())
+
+			_, err = schemaDiff.OrderedDiffs(ctx)
+			if tc.expectConflict {
+				require.Error(t, err)
+				var conflictErr *ForeignKeyShadowConflictError
+				require.ErrorAs(t, err, &conflictErr)
+				// The error must name the referenced column; it must never render an empty identifier.
+				assert.NotContains(t, err.Error(), "``")
+			} else {
+				require.NoError(t, err)
+			}
 		})
 	}
 }

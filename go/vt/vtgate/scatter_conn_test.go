@@ -185,13 +185,13 @@ func TestFetchLastInsertIDResets(t *testing.T) {
 			session.Options = tt.initialSessionOpts
 
 			checkLastOption := func(expected bool) {
-				require.Equal(t, 1, len(sbc0.Options))
+				require.Len(t, sbc0.Options, 1)
 				options := sbc0.Options[0]
-				assert.Equal(t, options.FetchLastInsertId, expected)
+				assert.Equal(t, expected, options.FetchLastInsertId)
 				sbc0.Options = nil
 			}
 			checkLastOptionNil := func() {
-				require.Equal(t, 1, len(sbc0.Options))
+				require.Len(t, sbc0.Options, 1)
 				assert.Nil(t, sbc0.Options[0])
 				sbc0.Options = nil
 			}
@@ -469,10 +469,10 @@ func TestReservedBeginTableDriven(t *testing.T) {
 					destinations = append(destinations, key.DestinationShard(shard))
 				}
 				executeOnShards(t, ctx, res, keyspace, sc, session, destinations)
-				assert.EqualValues(t, action.sbc0Reserve, sbc0.ReserveCount.Load(), "sbc0 reserve count")
-				assert.EqualValues(t, action.sbc0Begin, sbc0.BeginCount.Load(), "sbc0 begin count")
-				assert.EqualValues(t, action.sbc1Reserve, sbc1.ReserveCount.Load(), "sbc1 reserve count")
-				assert.EqualValues(t, action.sbc1Begin, sbc1.BeginCount.Load(), "sbc1 begin count")
+				assert.Equal(t, action.sbc0Reserve, sbc0.ReserveCount.Load(), "sbc0 reserve count")
+				assert.Equal(t, action.sbc0Begin, sbc0.BeginCount.Load(), "sbc0 begin count")
+				assert.Equal(t, action.sbc1Reserve, sbc1.ReserveCount.Load(), "sbc1 reserve count")
+				assert.Equal(t, action.sbc1Begin, sbc1.BeginCount.Load(), "sbc1 begin count")
 				sbc0.BeginCount.Store(0)
 				sbc0.ReserveCount.Store(0)
 				sbc1.BeginCount.Store(0)
@@ -497,53 +497,53 @@ func TestReservedConnFail(t *testing.T) {
 	destinations := []key.ShardDestination{key.DestinationShard("0")}
 
 	executeOnShards(t, ctx, res, keyspace, sc, session, destinations)
-	assert.Equal(t, 1, len(session.ShardSessions))
+	assert.Len(t, session.ShardSessions, 1)
 	oldRId := session.Session.ShardSessions[0].ReservedId
 
 	sbc0.EphemeralShardErr = sqlerror.NewSQLError(sqlerror.CRServerGone, sqlerror.SSUnknownSQLState, "lost connection")
 	_ = executeOnShardsReturnsErr(t, ctx, res, keyspace, sc, session, destinations)
-	assert.Equal(t, 3, len(sbc0.Queries), "1 for the successful run, one for the failed attempt, and one for the retry")
-	require.Equal(t, 1, len(session.ShardSessions))
+	assert.Len(t, sbc0.Queries, 3, "1 for the successful run, one for the failed attempt, and one for the retry")
+	require.Len(t, session.ShardSessions, 1)
 	assert.NotEqual(t, oldRId, session.Session.ShardSessions[0].ReservedId, "should have recreated a reserved connection since the last connection was lost")
 	oldRId = session.Session.ShardSessions[0].ReservedId
 
 	sbc0.Queries = nil
 	sbc0.EphemeralShardErr = sqlerror.NewSQLError(sqlerror.ERQueryInterrupted, sqlerror.SSUnknownSQLState, "transaction 123 not found")
 	_ = executeOnShardsReturnsErr(t, ctx, res, keyspace, sc, session, destinations)
-	assert.Equal(t, 2, len(sbc0.Queries), "one for the failed attempt, and one for the retry")
-	require.Equal(t, 1, len(session.ShardSessions))
+	assert.Len(t, sbc0.Queries, 2, "one for the failed attempt, and one for the retry")
+	require.Len(t, session.ShardSessions, 1)
 	assert.NotEqual(t, oldRId, session.Session.ShardSessions[0].ReservedId, "should have recreated a reserved connection since the last connection was lost")
 	oldRId = session.Session.ShardSessions[0].ReservedId
 
 	sbc0.Queries = nil
 	sbc0.EphemeralShardErr = sqlerror.NewSQLError(sqlerror.ERQueryInterrupted, sqlerror.SSUnknownSQLState, "transaction 123 ended at 2020-01-20")
 	_ = executeOnShardsReturnsErr(t, ctx, res, keyspace, sc, session, destinations)
-	assert.Equal(t, 2, len(sbc0.Queries), "one for the failed attempt, and one for the retry")
-	require.Equal(t, 1, len(session.ShardSessions))
+	assert.Len(t, sbc0.Queries, 2, "one for the failed attempt, and one for the retry")
+	require.Len(t, session.ShardSessions, 1)
 	assert.NotEqual(t, oldRId, session.Session.ShardSessions[0].ReservedId, "should have recreated a reserved connection since the last connection was lost")
 	oldRId = session.Session.ShardSessions[0].ReservedId
 
 	sbc0.Queries = nil
 	sbc0.EphemeralShardErr = sqlerror.NewSQLError(sqlerror.ERQueryInterrupted, sqlerror.SSUnknownSQLState, "transaction 123 in use: for tx killer rollback")
 	_ = executeOnShardsReturnsErr(t, ctx, res, keyspace, sc, session, destinations)
-	assert.Equal(t, 2, len(sbc0.Queries), "one for the failed attempt, and one for the retry")
-	require.Equal(t, 1, len(session.ShardSessions))
+	assert.Len(t, sbc0.Queries, 2, "one for the failed attempt, and one for the retry")
+	require.Len(t, session.ShardSessions, 1)
 	assert.NotEqual(t, oldRId, session.Session.ShardSessions[0].ReservedId, "should have recreated a reserved connection since the last connection was lost")
 	oldRId = session.Session.ShardSessions[0].ReservedId
 
 	sbc0.Queries = nil
 	sbc0.EphemeralShardErr = vterrors.New(vtrpcpb.Code_CLUSTER_EVENT, "operation not allowed in state NOT_SERVING during query: query1")
 	_ = executeOnShardsReturnsErr(t, ctx, res, keyspace, sc, session, destinations)
-	assert.Equal(t, 2, len(sbc0.Queries), "one for the failed attempt, and one for the retry")
-	require.Equal(t, 1, len(session.ShardSessions))
+	assert.Len(t, sbc0.Queries, 2, "one for the failed attempt, and one for the retry")
+	require.Len(t, session.ShardSessions, 1)
 	assert.NotEqual(t, oldRId, session.Session.ShardSessions[0].ReservedId, "should have recreated a reserved connection since the last connection was lost")
 	oldRId = session.Session.ShardSessions[0].ReservedId
 
 	sbc0.Queries = nil
 	sbc0.EphemeralShardErr = vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "invalid tablet type: REPLICA, want: PRIMARY")
 	_ = executeOnShardsReturnsErr(t, ctx, res, keyspace, sc, session, destinations)
-	assert.Equal(t, 2, len(sbc0.Queries), "one for the failed attempt, and one for the retry")
-	require.Equal(t, 1, len(session.ShardSessions))
+	assert.Len(t, sbc0.Queries, 2, "one for the failed attempt, and one for the retry")
+	require.Len(t, session.ShardSessions, 1)
 	assert.NotEqual(t, oldRId, session.Session.ShardSessions[0].ReservedId, "should have recreated a reserved connection since the last connection was lost")
 	oldRId = session.Session.ShardSessions[0].ReservedId
 	oldAlias := session.Session.ShardSessions[0].TabletAlias
@@ -564,9 +564,9 @@ func TestReservedConnFail(t *testing.T) {
 	sbc0.ExecCount.Store(0)
 	_ = executeOnShardsReturnsErr(t, ctx, res, keyspace, sc, session, destinations)
 	assert.EqualValues(t, 1, sbc0.ExecCount.Load(), "first attempt should be made on original tablet")
-	assert.EqualValues(t, 0, len(sbc0.Queries), "no query should be executed on it")
-	assert.Equal(t, 1, len(sbc0Rep.Queries), "this attempt on new healthy tablet should pass")
-	require.Equal(t, 1, len(session.ShardSessions))
+	assert.Empty(t, sbc0.Queries, "no query should be executed on it")
+	assert.Len(t, sbc0Rep.Queries, 1, "this attempt on new healthy tablet should pass")
+	require.Len(t, session.ShardSessions, 1)
 	assert.NotEqual(t, oldRId, session.Session.ShardSessions[0].ReservedId, "should have recreated a reserved connection since the last connection was lost")
 	assert.NotEqual(t, oldAlias, session.Session.ShardSessions[0].TabletAlias, "tablet alias should have changed as this is a different tablet")
 	oldRId = session.Session.ShardSessions[0].ReservedId
@@ -594,9 +594,9 @@ func TestReservedConnFail(t *testing.T) {
 	sbc0Rep.ExecCount.Store(0)
 	_ = executeOnShardsReturnsErr(t, ctx, res, keyspace, sc, session, destinations)
 	assert.EqualValues(t, 1, sbc0Rep.ExecCount.Load(), "first attempt should be made on the changed tablet type")
-	assert.EqualValues(t, 0, len(sbc0Rep.Queries), "no query should be executed on it")
-	assert.Equal(t, 1, len(sbc0.Queries), "this attempt should pass as it is on new healthy tablet and matches the target")
-	require.Equal(t, 1, len(session.ShardSessions))
+	assert.Empty(t, sbc0Rep.Queries, "no query should be executed on it")
+	assert.Len(t, sbc0.Queries, 1, "this attempt should pass as it is on new healthy tablet and matches the target")
+	require.Len(t, session.ShardSessions, 1)
 	assert.NotEqual(t, oldRId, session.Session.ShardSessions[0].ReservedId, "should have recreated a reserved connection since the last connection was lost")
 	assert.NotEqual(t, oldAlias, session.Session.ShardSessions[0].TabletAlias, "tablet alias should have changed as this is a different tablet")
 }

@@ -2355,7 +2355,7 @@ func TestCreateTableDiff(t *testing.T) {
 			hints.SubsequentDiffStrategy = ts.subsequent
 			alter, err := c.Diff(other, &hints)
 
-			require.Equal(t, len(ts.diffs), len(ts.cdiffs))
+			require.Len(t, ts.cdiffs, len(ts.diffs))
 			if ts.diff == "" && len(ts.diffs) > 0 {
 				ts.diff = ts.diffs[0]
 				ts.cdiff = ts.cdiffs[0]
@@ -2374,7 +2374,7 @@ func TestCreateTableDiff(t *testing.T) {
 				return
 			}
 			if ts.diff == "" {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.True(t, alter.IsEmpty(), "expected empty diff, found changes")
 				if !alter.IsEmpty() {
 					t.Logf(" statements[0]: %v", alter.StatementString())
@@ -2388,7 +2388,7 @@ func TestCreateTableDiff(t *testing.T) {
 			}
 
 			// Expecting diff
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			require.NotNil(t, alter)
 			assert.False(t, alter.IsEmpty(), "expected changes, found empty diff")
 
@@ -2402,8 +2402,8 @@ func TestCreateTableDiff(t *testing.T) {
 					for _, d := range allSubsequentDiffs {
 						allSubsequentDiffsStatements = append(allSubsequentDiffsStatements, d.CanonicalStatementString())
 					}
-					require.Equal(t, len(ts.diffs), len(allSubsequentDiffs), allSubsequentDiffsStatements)
-					require.Equal(t, len(ts.cdiffs), len(allSubsequentDiffs), allSubsequentDiffsStatements)
+					require.Len(t, allSubsequentDiffs, len(ts.diffs), allSubsequentDiffsStatements)
+					require.Len(t, allSubsequentDiffs, len(ts.cdiffs), allSubsequentDiffsStatements)
 					for i := range ts.diffs {
 						assert.Equal(t, ts.diffs[i], allSubsequentDiffs[i].StatementString())
 						assert.Equal(t, ts.cdiffs[i], allSubsequentDiffs[i].CanonicalStatementString())
@@ -2411,7 +2411,7 @@ func TestCreateTableDiff(t *testing.T) {
 				}
 				// validate we can parse back the statement
 				_, err := env.Parser().ParseStrictDDL(diff)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				// Validate "from/to" entities
 				eFrom, eTo := alter.Entities()
@@ -2424,7 +2424,7 @@ func TestCreateTableDiff(t *testing.T) {
 
 				{ // Validate "apply()" on "from" converges with "to"
 					applied, err := c.Apply(alter)
-					assert.NoError(t, err)
+					require.NoError(t, err)
 					require.NotNil(t, applied)
 					appliedDiff, err := eTo.Diff(applied, &hints)
 					require.NoError(t, err)
@@ -2439,12 +2439,12 @@ func TestCreateTableDiff(t *testing.T) {
 				// Validate atomic diffs
 				atomicDiffs := AtomicDiffs(alter)
 				if len(ts.atomicdiffs) > 0 {
-					assert.Equal(t, len(ts.atomicdiffs), len(atomicDiffs), "%+v", atomicDiffs)
+					assert.Len(t, atomicDiffs, len(ts.atomicdiffs), "%+v", atomicDiffs)
 					for i := range ts.atomicdiffs {
 						assert.Equal(t, ts.atomicdiffs[i], atomicDiffs[i].CanonicalStatementString())
 					}
 				} else {
-					assert.Equal(t, 1, len(atomicDiffs))
+					assert.Len(t, atomicDiffs, 1)
 					assert.Equal(t, alter.CanonicalStatementString(), atomicDiffs[0].CanonicalStatementString())
 				}
 
@@ -2488,11 +2488,11 @@ func TestCreateTableDiff(t *testing.T) {
 					for _, textdiff := range ts.textdiffs {
 						uniqueDiffs[textdiff] = true
 					}
-					require.Equal(t, len(uniqueDiffs), len(ts.textdiffs)) // integrity of test
+					require.Len(t, ts.textdiffs, len(uniqueDiffs)) // integrity of test
 					for _, textdiff := range ts.textdiffs {
 						assert.Containsf(t, annotatedUnifiedString, textdiff, "unified: %s\nfrom: %s\nto: %s\nstmt: %s", annotatedUnifiedString, annotatedFromString, annotatedToString, alterEntityDiff.CanonicalStatementString())
 					}
-					assert.Equalf(t, len(annotatedUnified.Removed())+len(annotatedUnified.Added()), len(ts.textdiffs), annotatedUnifiedString)
+					assert.Lenf(t, ts.textdiffs, len(annotatedUnified.Removed())+len(annotatedUnified.Added()), annotatedUnifiedString)
 				}
 			}
 			{
@@ -3086,10 +3086,10 @@ func TestValidate(t *testing.T) {
 				if applied != nil {
 					appliedCanonicalStatementString = applied.Create().CanonicalStatementString()
 				}
-				assert.Error(t, err)
+				require.Error(t, err)
 				assert.EqualErrorf(t, err, ts.expectErr.Error(), "applied: %v", appliedCanonicalStatementString)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.NotNil(t, applied)
 
 				c, ok := applied.(*CreateTableEntity)
@@ -3449,7 +3449,7 @@ func TestNormalize(t *testing.T) {
 
 			autoinc, err := from.AutoIncrementValue()
 			require.NoError(t, err)
-			assert.EqualValues(t, ts.autoinc, autoinc)
+			assert.Equal(t, ts.autoinc, autoinc)
 		})
 	}
 }

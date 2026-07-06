@@ -1,4 +1,4 @@
-FROM debian:latest@sha256:fe7312b5f05bf5f43fad76bcd8945642e4e47a68aefd1b73f447615899d0fac1
+FROM debian:latest@sha256:d07d1b51c39f51188e60be9b64e6bf769fa94e187f092bc32b91305cfa34ba5a
 
 ARG MYSQL_VERSION=8.0.34
 

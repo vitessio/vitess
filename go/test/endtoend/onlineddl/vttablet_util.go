@@ -62,7 +62,7 @@ func WaitForVReplicationStatus(t *testing.T, vtParams *mysql.ConnParams, tablet 
 func GetMySQLVersion(t *testing.T, tablet *cluster.Vttablet) string {
 	query := `select @@version as version`
 	rs, err := tablet.VttabletProcess.QueryTablet(query, "", true)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	row := rs.Named().Row()
 	assert.NotNil(t, row)
 	version := row["version"].ToString()

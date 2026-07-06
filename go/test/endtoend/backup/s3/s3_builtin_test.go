@@ -449,10 +449,10 @@ func runRestoreTest(t *testing.T, cfg restoreTestConfig) {
 	bm, err := be.ExecuteRestore(ctx, restoreParams, restoreBh)
 
 	if cfg.expectSuccess {
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.NotNil(t, bm)
 	} else {
-		assert.Error(t, err)
+		require.Error(t, err)
 	}
 
 	ss := blackbox.GetStats(fakeStats)

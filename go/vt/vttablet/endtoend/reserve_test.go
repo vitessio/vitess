@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
 )
@@ -29,13 +30,13 @@ func TestReserveFlushTables(t *testing.T) {
 	client := framework.NewClient()
 
 	_, err := client.Execute("flush tables with read lock", nil)
-	assert.ErrorContains(t, err, "Flush not allowed without reserved connection")
+	require.ErrorContains(t, err, "Flush not allowed without reserved connection")
 
 	_, err = client.Execute("unlock tables", nil)
-	assert.ErrorContains(t, err, "unlock tables should be executed with an existing connection")
+	require.ErrorContains(t, err, "unlock tables should be executed with an existing connection")
 
 	_, err = client.ReserveExecute("flush tables with read lock", nil, nil)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	_, err = client.Execute("unlock tables", nil)
 	assert.NoError(t, err)

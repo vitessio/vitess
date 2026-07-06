@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestEncodeBytes(t *testing.T) {
@@ -90,10 +91,10 @@ func TestDecodedLen(t *testing.T) {
 
 func TestDecodeBytes(t *testing.T) {
 	err := DecodeBytes([]byte("testDst"), []byte("1"))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	err = DecodeBytes([]byte("testDst"), []byte("12"))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// DecodeBytes should return an error for "é" as
 	// hex.decode returns an error for non-ASCII characters

@@ -1943,7 +1943,7 @@ func TestInsertAutoincUnsharded(t *testing.T) {
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	assertQueries(t, sbclookup, wantQueries)
-	assert.Equal(t, result, wantResult)
+	assert.Equal(t, wantResult, result)
 
 	testQueryLog(t, router, logChan, "TestExecute", "INSERT", "insert into `simple`(val) values ('val')", 1)
 }
@@ -2919,7 +2919,7 @@ func TestMultiInternalSavepoint(t *testing.T) {
 		},
 	}}
 	assertQueriesWithSavepoint(t, sbc1, wantQ)
-	require.Len(t, sbc2.Queries, 0)
+	require.Empty(t, sbc2.Queries)
 	sbc1.Queries = nil
 
 	_, err = executorExec(ctx, executor, session.Session, "insert into user_extra(user_id) values (3), (6)", nil)
@@ -3243,7 +3243,7 @@ func TestConsistentLookupInsert(t *testing.T) {
 		sbc1.EphemeralShardErr = sqlerror.NewSQLError(sqlerror.ERDupEntry, sqlerror.SSConstraintViolation, "Duplicate entry '10' for key 't1_lkp_idx.PRIMARY'")
 		sbc2.SetResults([]*sqltypes.Result{{RowsAffected: 1}})
 		_, err := executorExecSession(ctx, executor, session, "insert into t1(id, unq_col) values (1, 10), (4, 10), (50, 4)", nil)
-		assert.ErrorContains(t, err,
+		require.ErrorContains(t, err,
 			"lookup.Create: transaction rolled back to reverse changes of partial DML execution: target: TestExecutor.-80.primary: "+
 				"Duplicate entry '10' for key 't1_lkp_idx.PRIMARY' (errno 1062) (sqlstate 23000)")
 
@@ -3265,7 +3265,7 @@ func TestConsistentLookupInsert(t *testing.T) {
 			{RowsAffected: 1},
 		})
 		_, err := executorExecSession(ctx, executor, session, "insert into t1(id, unq_col) values (1, 10), (4, 10)", nil)
-		assert.ErrorContains(t, err,
+		require.ErrorContains(t, err,
 			"transaction rolled back to reverse changes of partial DML execution: lookup.Create: target: TestExecutor.-80.primary: "+
 				"Duplicate entry '10' for key 't1_lkp_idx.PRIMARY' (errno 1062) (sqlstate 23000)")
 

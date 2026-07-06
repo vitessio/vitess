@@ -67,6 +67,11 @@ func TestFormatImpossibleQuery_Select(t *testing.T) {
 			expected: "select col from t where 1 != 1 group by col",
 		},
 		{
+			name:     "select with query hint comment is preserved",
+			input:    "select /*+ SET_VAR(sql_mode = ' ') */ col, count(*) from t group by .0",
+			expected: "select /*+ SET_VAR(sql_mode = ' ') */ col, count(*) from t where 1 != 1 group by .0",
+		},
+		{
 			name:     "select with with clause",
 			input:    "with cte as (select * from t) select * from cte",
 			expected: "with cte as (select * from t) select * from cte where 1 != 1",

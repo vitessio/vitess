@@ -69,4 +69,7 @@ type MySQLConnection interface {
 	// SetQueryWasSlow stores whether the most recently completed statement
 	// should be marked as slow on the MySQL protocol connection.
 	SetQueryWasSlow(bool)
+	// IngressBytes returns the number of bytes read for the command currently
+	// being handled.
+	IngressBytes() uint64
 }

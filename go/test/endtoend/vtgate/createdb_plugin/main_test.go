@@ -23,7 +23,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -89,29 +88,39 @@ func TestDBDDLPlugin(t *testing.T) {
 
 	createAndDrop := func(t *testing.T) {
 		wg := sync.WaitGroup{}
+		// require.* is unsafe on a worker goroutine, so record the result and assert after wg.Wait().
+		var createErr error
+		var createRowsAffected uint64
 		wg.Go(func() {
-			qr := utils.Exec(t, conn, `create database aaa`)
-			require.EqualValues(t, 1, qr.RowsAffected)
+			qr, err := conn.ExecuteFetch(`create database aaa`, 1000, true)
+			createErr = err
+			if err == nil {
+				createRowsAffected = qr.RowsAffected
+			}
 		})
 		time.Sleep(300 * time.Millisecond)
 		start(t, "aaa")
 
 		// wait until the create database query has returned
 		wg.Wait()
+		require.NoError(t, createErr, "for query: create database aaa")
+		require.EqualValues(t, 1, createRowsAffected)
 
 		utils.Exec(t, conn, `use aaa`)
 		utils.Exec(t, conn, `create table t (id bigint primary key)`)
 		utils.Exec(t, conn, `insert into t(id) values (1),(2),(3),(4),(5)`)
 		utils.AssertMatches(t, conn, "select count(*) from t", `[[INT64(5)]]`)
 
+		var dropErr error
 		wg.Go(func() {
-			_ = utils.Exec(t, conn, `drop database aaa`)
+			_, dropErr = conn.ExecuteFetch(`drop database aaa`, 1000, true)
 		})
 		time.Sleep(300 * time.Millisecond)
 		shutdown(t, "aaa")
 
 		// wait until the drop database query has returned
 		wg.Wait()
+		require.NoError(t, dropErr, "for query: drop database aaa")
 
 		_, err = conn.ExecuteFetch(`select count(*) from t`, 1000, true)
 		require.Error(t, err)
@@ -144,11 +153,11 @@ func shutdown(t *testing.T, ksName string) {
 			for _, tablet := range shard.Vttablets {
 				if tablet.MysqlctlProcess.TabletUID > 0 {
 					_, err := tablet.MysqlctlProcess.StopProcess()
-					assert.NoError(t, err)
+					require.NoError(t, err)
 				}
 				if tablet.MysqlctldProcess.TabletUID > 0 {
 					err := tablet.MysqlctldProcess.Stop()
-					assert.NoError(t, err)
+					require.NoError(t, err)
 				}
 				_ = tablet.VttabletProcess.TearDown()
 			}

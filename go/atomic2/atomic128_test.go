@@ -40,5 +40,5 @@ func TestCompareAndSwap(t *testing.T) {
 
 	pp, uu = n.Load()
 	require.Equal(t, pp, i2)
-	require.Equal(t, uu, uint64(67890))
+	require.Equal(t, uint64(67890), uu)
 }
