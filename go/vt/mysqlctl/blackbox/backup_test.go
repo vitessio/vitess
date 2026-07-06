@@ -371,8 +371,9 @@ func TestExecuteBackupWithCanceledContext(t *testing.T) {
 	}, bh)
 
 	require.Error(t, err)
-	// all four files will fail
-	require.ErrorContains(t, err, "context canceled; context canceled; context canceled; context canceled")
+	// No work is scheduled when the context is already cancelled; we expect a
+	// single context error rather than one per file.
+	require.ErrorContains(t, err, "context canceled")
 	assert.Equal(t, mysqlctl.BackupUnusable, backupResult)
 }
 

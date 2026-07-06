@@ -814,6 +814,9 @@ func (be *BuiltinBackupEngine) backupWorkItems(ctx context.Context, workItems []
 	g := errgroup.Group{}
 	g.SetLimit(params.Concurrency)
 	for _, wi := range workItems {
+		if ctx.Err() != nil {
+			break
+		}
 		g.Go(func() error {
 			fe := &fes[wi.feIndex]
 
@@ -845,7 +848,7 @@ func (be *BuiltinBackupEngine) backupWorkItems(ctx context.Context, workItems []
 	}
 
 	bh.Wait()
-	return bh.Error()
+	return errors.Join(bh.Error(), ctxCancel.Err())
 }
 
 type backupPipe struct {
@@ -1415,6 +1418,7 @@ type restoreWorkItem struct {
 }
 
 func (be *BuiltinBackupEngine) restoreFileEntries(ctx context.Context, fes []FileEntry, bh backupstorage.BackupHandle, bm builtinBackupManifest, params RestoreParams, createdDir string) error {
+	parentCtx := ctx
 	g, ctx := errgroup.WithContext(ctx)
 	g.SetLimit(params.Concurrency)
 
@@ -1458,6 +1462,9 @@ func (be *BuiltinBackupEngine) restoreFileEntries(ctx context.Context, fes []Fil
 
 	// Phase 2: Dispatch all work items concurrently.
 	for _, wi := range workItems {
+		if parentCtx.Err() != nil {
+			break
+		}
 		g.Go(func() error {
 			select {
 			case <-ctx.Done():
@@ -1495,7 +1502,7 @@ func (be *BuiltinBackupEngine) restoreFileEntries(ctx context.Context, fes []Fil
 		}
 		return err
 	}
-	return bh.Error()
+	return errors.Join(bh.Error(), parentCtx.Err())
 }
 
 // createDecompressor sets up decompression based on the backup manifest settings.
