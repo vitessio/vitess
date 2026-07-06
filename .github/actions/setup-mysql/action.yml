@@ -24,9 +24,20 @@ runs:
 
         # We have to install this old version of libaio1. See also:
         # https://bugs.launchpad.net/ubuntu/+source/libaio/+bug/2067501
-        wget http://archive.ubuntu.com/ubuntu/pool/main/liba/libaio/libaio1_0.3.112-13build1_amd64.deb && \
-          sudo dpkg -i libaio1_0.3.112-13build1_amd64.deb && \
-          rm libaio1_0.3.112-13build1_amd64.deb
+        # Note: these commands must stay separate statements: `set -e` does
+        # not fire for failures inside a `&&` chain, and the install must
+        # fail right here rather than in a later, unrelated apt-get run.
+        wget \
+          --tries=3 \
+          --waitretry=2 \
+          --timeout=30 \
+          https://archive.ubuntu.com/ubuntu/pool/main/liba/libaio/libaio1_0.3.112-13build1_amd64.deb || {
+          echo "Failed to download libaio1. The pinned version may have been superseded and removed from archive.ubuntu.com; check https://archive.ubuntu.com/ubuntu/pool/main/liba/libaio/ for the current version."
+          exit 1
+        }
+        echo "2dcfe0b49d7cccfbf1bd6a3f627cf44bea9f51fb32f7e0e552a0df75698e0d27  libaio1_0.3.112-13build1_amd64.deb" | sha256sum --check
+        sudo dpkg -i libaio1_0.3.112-13build1_amd64.deb
+        rm libaio1_0.3.112-13build1_amd64.deb
 
         # Get key to latest MySQL repo
         sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A8D3785C
@@ -39,9 +50,17 @@ runs:
           echo mysql-apt-config mysql-apt-config/select-server select mysql-5.7 | sudo debconf-set-selections
           sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
           sudo apt-get update
-          # libtinfo5 is also needed for older MySQL 5.7 builds.
-          curl -L -O http://archive.ubuntu.com/ubuntu/pool/universe/n/ncurses/libtinfo5_6.3-2ubuntu0.1_amd64.deb
-          sudo dpkg -i libtinfo5_6.3-2ubuntu0.1_amd64.deb
+          # libtinfo5 is also needed for older MySQL 5.7 builds. Separate
+          # statements for the same fail-fast reason as libaio1 above.
+          curl -fsSL -O https://archive.ubuntu.com/ubuntu/pool/universe/n/ncurses/libtinfo5_6.3-2ubuntu0.2_amd64.deb \
+            --retry 3 \
+            --retry-delay 2 || {
+            echo "Failed to download libtinfo5. The pinned version may have been superseded and removed from archive.ubuntu.com; check https://archive.ubuntu.com/ubuntu/pool/universe/n/ncurses/ for the current version."
+            exit 1
+          }
+          echo "b9bb64e716a7d9de05b1b33992763142ca81bcae3a7f8ce7e29fa3c6fd32f1e8  libtinfo5_6.3-2ubuntu0.2_amd64.deb" | sha256sum --check
+          sudo dpkg -i libtinfo5_6.3-2ubuntu0.2_amd64.deb
+          rm libtinfo5_6.3-2ubuntu0.2_amd64.deb
           sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-client=5.7* mysql-community-server=5.7* mysql-server=5.7* libncurses6
         elif [[ "${{ inputs.flavor }}" == "mysql-8.0" ]]; then
           echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
