@@ -100,13 +100,15 @@ func (dbc *DBConnection) ExecuteStreamFetch(query string, callback func(*sqltype
 	}
 	firstResult := &sqltypes.Result{Fields: flds}
 	// If the query produced no result set but an OK packet (e.g. a CALL that
-	// performs DML), carry its RowsAffected/InsertID/Info through so the streaming
-	// path reports them like the buffered ExecuteFetch path does.
+	// performs DML), carry its RowsAffected/InsertID/Info/SessionStateChanges
+	// through so the streaming path reports them like the buffered ExecuteFetch
+	// path does.
 	if okRes := dbc.StreamOKResult(); okRes != nil {
 		firstResult.RowsAffected = okRes.RowsAffected
 		firstResult.InsertID = okRes.InsertID
 		firstResult.InsertIDChanged = okRes.InsertIDChanged
 		firstResult.Info = okRes.Info
+		firstResult.SessionStateChanges = okRes.SessionStateChanges
 	}
 	err = callback(firstResult)
 	if err != nil {

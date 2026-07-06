@@ -340,10 +340,21 @@ func (e *Executor) StreamExecute(
 			srr.callback = func(qr *sqltypes.Result) error {
 				resultMu.Lock()
 				defer resultMu.Unlock()
-				// Carry over the affected-row count so statements that return an OK
-				// packet (e.g. CALL of a procedure that performs DML) report it to the
-				// client, matching the buffered Execute path.
+				// Carry over the OK-packet data (affected rows, last insert id, info,
+				// session state changes) so statements that return an OK packet (e.g.
+				// CALL of a procedure that performs DML) report it to the client,
+				// matching the buffered Execute path.
 				result.RowsAffected += qr.RowsAffected
+				if qr.InsertIDUpdated() {
+					result.InsertID = qr.InsertID
+					result.InsertIDChanged = true
+				}
+				if qr.SessionStateChanges != "" {
+					result.SessionStateChanges = qr.SessionStateChanges
+				}
+				if qr.Info != "" {
+					result.Info = qr.Info
+				}
 				// If the row has field info, send it separately.
 				// TODO(sougou): this behavior is for handling tests because
 				// the framework currently sends all results as one packet.
@@ -436,8 +447,13 @@ func (e *Executor) StreamExecute(
 			return nil
 		}
 
-		// Send left-over rows if there is no error on execution.
-		if len(result.Rows) > 0 || !seenResults.Load() {
+		// Send left-over rows if there is no error on execution. The left-over
+		// result must also go out when it carries OK-packet data with no rows —
+		// e.g. an affected-row count that arrived after a result set was already
+		// sent — so that data is not dropped.
+		hasOKData := result.RowsAffected > 0 || result.InsertIDUpdated() ||
+			result.SessionStateChanges != "" || result.Info != ""
+		if len(result.Rows) > 0 || hasOKData || !seenResults.Load() {
 			if err := callback(result); err != nil {
 				// The query executed; only the delivery to the client failed.
 				// Record it as an error, like a mid-stream send failure that

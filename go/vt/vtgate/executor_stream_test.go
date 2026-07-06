@@ -92,26 +92,65 @@ func TestStreamSQLSharded(t *testing.T) {
 	assert.Truef(t, result.Equal(wantResult), "result: %+v, want %+v", result, wantResult)
 }
 
-// TestStreamExecutePropagatesRowsAffected verifies that the streaming path reports
-// the affected-row count to the client for row-returning statements that carry an
-// OK packet (e.g. a CALL of a procedure that performs DML), matching the buffered
-// Execute path.
-func TestStreamExecutePropagatesRowsAffected(t *testing.T) {
+// TestStreamExecutePropagatesOKPacketData verifies that the streaming path reports
+// the OK-packet data — affected rows, last insert id and session-state changes —
+// to the client for row-returning statements that carry an OK packet (e.g. a CALL
+// of a procedure that performs DML), matching the buffered Execute path.
+func TestStreamExecutePropagatesOKPacketData(t *testing.T) {
 	executor, _, _, sbclookup, ctx := createExecutorEnv(t)
 
 	// An OK packet with affected rows but no fields or rows, like a CALL that
 	// performs an INSERT.
-	sbclookup.SetResults([]*sqltypes.Result{{RowsAffected: 1}})
+	sbclookup.SetResults([]*sqltypes.Result{{
+		RowsAffected:        1,
+		InsertID:            99,
+		InsertIDChanged:     true,
+		SessionStateChanges: "8bb25b46-16bd-11ea-8ffa-98af65266957:8",
+	}})
+
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
+	got := &sqltypes.Result{}
+	err := executor.StreamExecute(ctx, nil, "TestStreamExecutePropagatesOKPacketData", session,
+		"select id from main1", nil, false, func(qr *sqltypes.Result) error {
+			got.AppendResult(qr)
+			if qr.SessionStateChanges != "" {
+				got.SessionStateChanges = qr.SessionStateChanges
+			}
+			return nil
+		})
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, got.RowsAffected, "streamed result must carry RowsAffected to the client")
+	assert.EqualValues(t, 99, got.InsertID, "streamed result must carry InsertID to the client")
+	assert.True(t, got.InsertIDChanged)
+	assert.Equal(t, "8bb25b46-16bd-11ea-8ffa-98af65266957:8", got.SessionStateChanges,
+		"streamed result must carry SessionStateChanges to the client")
+}
+
+// TestStreamExecuteOKPacketDataAfterResultSet verifies that OK-packet data arriving
+// after a result set was already delivered to the client is still sent in a final
+// packet instead of being dropped — e.g. a stream that first produces fields and
+// then an affected-row count.
+func TestStreamExecuteOKPacketDataAfterResultSet(t *testing.T) {
+	executor, _, _, sbclookup, ctx := createExecutorEnv(t)
+
+	// The first result carries only fields, so the metadata is sent to the client
+	// immediately. The second carries OK-packet data with no rows, so the final
+	// left-over result has no rows either and must still be sent.
+	sbclookup.SetResults([]*sqltypes.Result{
+		{Fields: sqltypes.MakeTestFields("id", "int64")},
+		{RowsAffected: 1},
+	})
 
 	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
 	var rowsAffected uint64
-	err := executor.StreamExecute(ctx, nil, "TestStreamExecutePropagatesRowsAffected", session,
+	err := executor.StreamExecute(ctx, nil, "TestStreamExecuteOKPacketDataAfterResultSet", session,
 		"select id from main1", nil, false, func(qr *sqltypes.Result) error {
 			rowsAffected += qr.RowsAffected
 			return nil
 		})
 	require.NoError(t, err)
-	assert.EqualValues(t, 1, rowsAffected, "streamed result must carry RowsAffected to the client")
+	assert.EqualValues(t, 1, rowsAffected,
+		"RowsAffected arriving after the result set was sent must still reach the client")
 }
 
 // TestStreamExecuteRecordsPlanStats verifies that the streaming path records

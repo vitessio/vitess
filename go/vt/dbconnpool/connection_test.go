@@ -33,7 +33,7 @@ import (
 // the buffered ExecuteFetch path.
 func TestExecuteStreamFetchCarriesOKPacket(t *testing.T) {
 	db := fakesqldb.New(t)
-	defer db.Close()
+	t.Cleanup(db.Close)
 
 	const query = "CALL sp_insert()"
 	db.AddQuery(query, &sqltypes.Result{
@@ -44,7 +44,7 @@ func TestExecuteStreamFetchCarriesOKPacket(t *testing.T) {
 
 	conn, err := NewDBConnection(t.Context(), dbconfigs.New(db.ConnParams()))
 	require.NoError(t, err)
-	defer conn.Close()
+	t.Cleanup(conn.Close)
 
 	got := &sqltypes.Result{}
 	err = conn.ExecuteStreamFetch(query, func(r *sqltypes.Result) error {
