@@ -1387,15 +1387,23 @@ func createChunkedDestinations(ctx context.Context, fes []FileEntry, cnf *Mycnf,
 			continue
 		}
 		fe.ParentPath = createdDir
-		dest, err := fe.open(cnf, false)
-		if err != nil {
-			return vterrors.Wrapf(err, "can't create destination for chunked file %v", fe.Name)
-		}
+
 		var totalSize int64
-		for _, c := range fe.Chunks {
+		for j, c := range fe.Chunks {
+			if c.Offset < 0 || c.Size <= 0 {
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "invalid chunk metadata for file %v chunk %d: offset=%d, size=%d", fe.Name, j, c.Offset, c.Size)
+			}
+			if c.Offset > math.MaxInt64-c.Size {
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "chunk metadata for file %v chunk %d overflows int64: offset=%d, size=%d", fe.Name, j, c.Offset, c.Size)
+			}
 			if c.Offset+c.Size > totalSize {
 				totalSize = c.Offset + c.Size
 			}
+		}
+
+		dest, err := fe.open(cnf, false)
+		if err != nil {
+			return vterrors.Wrapf(err, "can't create destination for chunked file %v", fe.Name)
 		}
 		if err := dest.Truncate(totalSize); err != nil {
 			closeWithRetry(ctx, logger, dest, fe.Name)
