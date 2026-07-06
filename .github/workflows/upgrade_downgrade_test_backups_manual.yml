@@ -62,6 +62,7 @@ jobs:
             - 'config/**'
             - 'bootstrap.sh'
             - '.github/workflows/upgrade_downgrade_test_backups_manual.yml'
+            - '.github/actions/setup-mysql/action.yml'
             - 'examples/**'
 
 
