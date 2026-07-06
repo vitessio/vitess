@@ -360,6 +360,70 @@ func TestMergeSortDataFailures(t *testing.T) {
 	require.EqualError(t, err, want)
 }
 
+// recyclingShardResult streams row packets that share one Rows backing array,
+// which it truncates and refills after every callback. This mirrors the
+// tabletserver streamResultPool contract: a streamed result is only valid for
+// the duration of the callback, and its Rows slice is recycled as soon as the
+// callback returns (observable through vtcombo's zero-copy internal tabletconn).
+type recyclingShardResult struct {
+	shardRoute
+
+	fields  []*querypb.Field
+	batches [][][]sqltypes.Value
+}
+
+func (rs *recyclingShardResult) StreamExecute(_ context.Context, _ VCursor, _ map[string]*querypb.BindVariable, _ bool, _ bool, callback func(*sqltypes.Result) error) error {
+	if err := callback(&sqltypes.Result{Fields: rs.fields}); err != nil {
+		return err
+	}
+	shared := make([][]sqltypes.Value, 0, 8)
+	for _, batch := range rs.batches {
+		shared = shared[:0]
+		shared = append(shared, batch...)
+		if err := callback(&sqltypes.Result{Rows: shared}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// TestMergeSortRecycledRows tests that the merge sort does not read a source's
+// row packet after its callback has returned, since the rows are only valid
+// for the duration of the callback.
+func TestMergeSortRecycledRows(t *testing.T) {
+	idColFields := sqltypes.MakeTestFields("id|col", "int32|varchar")
+	makeRows := func(vals ...string) [][][]sqltypes.Value {
+		var batches [][][]sqltypes.Value
+		for _, r := range sqltypes.MakeTestStreamingResults(idColFields, vals...) {
+			if len(r.Rows) > 0 {
+				batches = append(batches, r.Rows)
+			}
+		}
+		return batches
+	}
+	prims := []StreamExecutor{
+		&recyclingShardResult{fields: idColFields, batches: makeRows("1|a", "3|c", "---", "5|e", "7|g")},
+		&recyclingShardResult{fields: idColFields, batches: makeRows("2|b", "4|d", "---", "6|f", "8|h")},
+	}
+	ms := MergeSort{
+		Primitives: prims,
+		OrderBy: []evalengine.OrderByParams{{
+			WeightStringCol: -1,
+			Col:             0,
+		}},
+	}
+
+	var rows []string
+	err := ms.TryStreamExecute(context.Background(), &noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
+		for _, row := range qr.Rows {
+			rows = append(rows, row[0].ToString()+"|"+row[1].ToString())
+		}
+		return nil
+	})
+	require.NoError(t, err)
+	require.Equal(t, []string{"1|a", "2|b", "3|c", "4|d", "5|e", "6|f", "7|g", "8|h"}, rows)
+}
+
 func testMergeSort(shardResults []*shardResult, orderBy []evalengine.OrderByParams, callback func(qr *sqltypes.Result) error) error {
 	prims := make([]StreamExecutor, 0, len(shardResults))
 	for _, sr := range shardResults {

@@ -19,6 +19,7 @@ package engine
 import (
 	"context"
 	"io"
+	"slices"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
@@ -275,8 +276,13 @@ func runOneStream(
 			if len(qr.Rows) == 0 {
 				return nil
 			}
+			// The result is only valid for the duration of the callback: the
+			// tabletserver recycles its Rows slice once the callback returns
+			// (observable through vtcombo's zero-copy internal tabletconn), so
+			// the batch that outlives this callback needs its own row slice.
+			// The rows themselves are not recycled.
 			select {
-			case handle.rows <- qr.Rows:
+			case handle.rows <- slices.Clone(qr.Rows):
 			case <-ctx.Done():
 				return io.EOF
 			}
