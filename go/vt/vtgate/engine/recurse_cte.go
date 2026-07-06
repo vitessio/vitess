@@ -18,6 +18,7 @@ package engine
 
 import (
 	"context"
+	"sync"
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -36,6 +37,10 @@ type RecurseCTE struct {
 }
 
 var _ Primitive = (*RecurseCTE)(nil)
+
+// maxRecurseDepth caps the number of recursion iterations before we abort.
+// TODO: This should be controlled with the cte_max_recursion_depth system variable.
+const maxRecurseDepth = 1000
 
 func (r *RecurseCTE) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	res, err := vcursor.ExecutePrimitive(ctx, r.Seed, bindVars, wantfields)
@@ -59,16 +64,16 @@ func (r *RecurseCTE) TryExecute(ctx context.Context, vcursor VCursor, bindVars m
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
+			loops++
+			if loops > maxRecurseDepth {
+				return nil, vterrors.VT09030("")
+			}
 			rresult, err := vcursor.ExecutePrimitive(ctx, r.Term, combineVars(bindVars, joinVars), false)
 			if err != nil {
 				return nil, err
 			}
 			recurseRows = append(recurseRows, rresult.Rows...)
 			res.Rows = append(res.Rows, rresult.Rows...)
-			loops++
-			if loops > 1000 { // TODO: This should be controlled with a system variable setting
-				return nil, vterrors.VT09030("")
-			}
 		}
 	}
 	return res, nil
@@ -82,34 +87,55 @@ func (r *RecurseCTE) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 		}
 		return callback(res)
 	}
-	return vcursor.StreamExecutePrimitive(ctx, r.Seed, bindVars, wantfields, func(result *sqltypes.Result) error {
-		err := callback(result)
-		if err != nil {
-			return err
-		}
-		return r.recurse(ctx, vcursor, bindVars, result, callback)
+
+	// A scatter source delivers its result chunks concurrently, one goroutine
+	// per shard, so both the shared frontier and the downstream callback must be
+	// serialized.
+	var mu sync.Mutex
+
+	// Stream the seed, emitting its rows and collecting them to drive the first
+	// recursion level.
+	var recurseRows []sqltypes.Row
+	err := vcursor.StreamExecutePrimitive(ctx, r.Seed, bindVars, wantfields, func(result *sqltypes.Result) error {
+		mu.Lock()
+		defer mu.Unlock()
+		recurseRows = append(recurseRows, result.Rows...)
+		return callback(result)
 	})
-}
-
-func (r *RecurseCTE) recurse(ctx context.Context, vcursor VCursor, bindvars map[string]*querypb.BindVariable, result *sqltypes.Result, callback func(*sqltypes.Result) error) error {
-	if len(result.Rows) == 0 {
-		return nil
+	if err != nil {
+		return err
 	}
-	joinVars := make(map[string]*querypb.BindVariable)
-	for _, row := range result.Rows {
-		for k, col := range r.Vars {
-			joinVars[k] = sqltypes.ValueBindVariable(row[col])
-		}
 
-		err := vcursor.StreamExecutePrimitive(ctx, r.Term, combineVars(bindvars, joinVars), false, func(result *sqltypes.Result) error {
-			err := callback(result)
+	// Expand each recursion level iteratively, mirroring the buffered path. Only
+	// one Term stream is active at a time: recursing inside the Term callback
+	// would nest a live stream per level and exhaust the connection pool.
+	joinVars := make(map[string]*querypb.BindVariable)
+	loops := 0
+	for len(recurseRows) > 0 {
+		// copy over the results from the previous recursion
+		theseRows := recurseRows
+		recurseRows = nil
+		for _, row := range theseRows {
+			for k, col := range r.Vars {
+				joinVars[k] = sqltypes.ValueBindVariable(row[col])
+			}
+			// check if the context is done - we might be in a long running recursion
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			loops++
+			if loops > maxRecurseDepth {
+				return vterrors.VT09030("")
+			}
+			err := vcursor.StreamExecutePrimitive(ctx, r.Term, combineVars(bindVars, joinVars), false, func(result *sqltypes.Result) error {
+				mu.Lock()
+				defer mu.Unlock()
+				recurseRows = append(recurseRows, result.Rows...)
+				return callback(result)
+			})
 			if err != nil {
 				return err
 			}
-			return r.recurse(ctx, vcursor, bindvars, result, callback)
-		})
-		if err != nil {
-			return err
 		}
 	}
 	return nil
