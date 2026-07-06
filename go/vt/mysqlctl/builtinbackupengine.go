@@ -814,7 +814,7 @@ func (be *BuiltinBackupEngine) backupWorkItems(ctx context.Context, workItems []
 	g := errgroup.Group{}
 	g.SetLimit(params.Concurrency)
 	for _, wi := range workItems {
-		if ctx.Err() != nil {
+		if ctxCancel.Err() != nil {
 			break
 		}
 		g.Go(func() error {
@@ -1462,7 +1462,7 @@ func (be *BuiltinBackupEngine) restoreFileEntries(ctx context.Context, fes []Fil
 
 	// Phase 2: Dispatch all work items concurrently.
 	for _, wi := range workItems {
-		if parentCtx.Err() != nil {
+		if ctx.Err() != nil {
 			break
 		}
 		g.Go(func() error {
