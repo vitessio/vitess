@@ -990,7 +990,7 @@ func TestJoinMixedCaseExpr(t *testing.T) {
 // and leaving the client waiting indefinitely.
 func TestOlapErrorAfterFields(t *testing.T) {
 	mcmp, closer := start(t)
-	defer closer()
+	t.Cleanup(closer)
 
 	utils.Exec(t, mcmp.VtConn, "set workload = olap")
 
