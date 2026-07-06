@@ -2366,42 +2366,40 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 			}
 
 			var (
-				mu  sync.Mutex
-				wg  sync.WaitGroup
-				rec concurrency.AllErrorRecorder
+				mu sync.Mutex
+				eg errgroup.Group
 			)
+			eg.SetLimit(10)
 			for key, ks := range uniqueShards {
-				wg.Add(1)
-				go func(key string, ks ksShard) {
-					defer wg.Done()
+				eg.Go(func() error {
 					si, getErr := s.ts.GetShard(ctx, ks.keyspace, ks.shard)
-					mu.Lock()
-					defer mu.Unlock()
 					if getErr != nil {
+						mu.Lock()
 						skipStaleCheck[key] = struct{}{}
-						rec.RecordError(fmt.Errorf("GetShard(%s/%s) failed: %w", ks.keyspace, ks.shard, getErr))
-						return
+						mu.Unlock()
+						return fmt.Errorf("GetShard(%s/%s) failed: %w", ks.keyspace, ks.shard, getErr)
 					}
 					// A zero shard-record term (e.g. briefly after a promotion)
 					// keeps the seed, so transient cases stay best-effort.
 					if t := si.GetPrimaryTermStartTime(); !t.IsZero() {
+						mu.Lock()
 						truePrimaryByShard[key] = t
+						mu.Unlock()
 					}
-				}(key, ks)
+					return nil
+				})
 			}
-			wg.Wait()
-			if rec.HasErrors() {
-				// errors.Join preserves Unwrap() []error so in-process callers and
-				// tests can still classify via topo.IsErrType/errors.Is before the
-				// gRPC layer translates this into a status (remote clients see the
-				// status, not the joined error).
-				joinedErr := errors.Join(rec.Errors...)
+			// Plain errgroup.Group (not WithContext) so one shard's failure never
+			// cancels the rest: every shard runs to completion and records its own
+			// skip, while Wait reports the first error. req.Strict surfaces it;
+			// otherwise we log and leave the affected shards' tablets unadjusted.
+			if err := eg.Wait(); err != nil {
 				if req.Strict {
-					return nil, joinedErr
+					return nil, err
 				}
 				log.Warn(
 					"GetTablets could not resolve shard primary terms for some shards; reporting on-disk types for tablets in those shards",
-					slog.Any("error", joinedErr),
+					slog.Any("error", err),
 					slog.Int("affected_shards", len(skipStaleCheck)),
 				)
 			}

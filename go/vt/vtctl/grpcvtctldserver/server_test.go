@@ -8458,7 +8458,7 @@ func TestGetTablets(t *testing.T) {
 			shouldErr: true,
 			errorAssertion: func(t *testing.T, err error) {
 				assert.ErrorContains(t, err, "GetShard")
-				assert.True(t, topo.IsErrType(err, topo.Timeout), "expected underlying topo.Timeout to be preserved via errors.Join chain")
+				assert.True(t, topo.IsErrType(err, topo.Timeout), "expected underlying topo.Timeout to be preserved via the wrapped error chain")
 			},
 		},
 		{
