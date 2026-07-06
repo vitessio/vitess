@@ -62,8 +62,8 @@ func TestPrimaryVttabletProcessDeath(t *testing.T) {
 	// so no extra reparent flag is needed.
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{
 		"--emergency-reparent-on-primary-tablet-unreachable",
-		"--shard-quorum-fraction=1.0",
-		"--shard-quorum-min-observers=1",
+		"--shard-tablet-health-quorum-fraction=1.0",
+		"--shard-tablet-health-quorum-min-observers=1",
 	}, cluster.VTOrcConfiguration{}, cluster.DefaultVtorcsByCell, policy.DurabilityNone)
 
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
@@ -87,13 +87,13 @@ func TestPrimaryVttabletProcessDeath(t *testing.T) {
 	// Make sure replication is healthy before we induce the failure.
 	utils.CheckReplication(t, clusterInfo, primary, nonPrimaryTablets, 10*time.Second)
 
-	// Observability: while the primary is healthy, /api/shard-quorum should report this shard with
+	// Observability: while the primary is healthy, /api/shard-tablet-health-quorum should report this shard with
 	// the primary present, no down verdict, and every fresh observer voting "up". This exercises the
 	// full live path: the monitor pinging peers -> shard_peer_health in FullStatus -> VTOrc ingest ->
 	// EvaluatePrimaryQuorum -> the endpoint. We poll because the monitor + VTOrc poll need a few
 	// seconds to populate after setup.
 	assert.Eventually(t, func() bool {
-		status, body, err := vtOrcProcess.MakeAPICall("api/shard-quorum")
+		status, body, err := vtOrcProcess.MakeAPICall("api/shard-tablet-health-quorum")
 		if err != nil || status != http.StatusOK {
 			return false
 		}
@@ -125,7 +125,7 @@ func TestPrimaryVttabletProcessDeath(t *testing.T) {
 			return true
 		}
 		return false
-	}, 30*time.Second, 1*time.Second, "expected /api/shard-quorum to report the healthy primary with fresh observers voting up")
+	}, 30*time.Second, 1*time.Second, "expected /api/shard-tablet-health-quorum to report the healthy primary with fresh observers voting up")
 
 	// SIGKILL ONLY the primary's vttablet process, matching the issue's `kill -9`. We must use
 	// Kill (SIGKILL), not TearDown (graceful SIGTERM): a graceful shutdown runs the tablet
@@ -180,8 +180,8 @@ func TestPrimaryVttabletDeathColdStart(t *testing.T) {
 
 	quorumArgs := []string{
 		"--emergency-reparent-on-primary-tablet-unreachable",
-		"--shard-quorum-fraction=1.0",
-		"--shard-quorum-min-observers=1",
+		"--shard-tablet-health-quorum-fraction=1.0",
+		"--shard-tablet-health-quorum-min-observers=1",
 	}
 	// Bring up the shard with an initial VTOrc so a primary is elected and replication is healthy.
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, quorumArgs, cluster.VTOrcConfiguration{}, cluster.DefaultVtorcsByCell, policy.DurabilityNone)

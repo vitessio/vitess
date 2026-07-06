@@ -19,8 +19,8 @@ vtorc \
   --port $port \
   --log-format text \
   --emergency-reparent-on-primary-tablet-unreachable \
-  --shard-quorum-fraction=1.0 \
-  --shard-quorum-min-observers=1 \
+  --shard-tablet-health-quorum-fraction=1.0 \
+  --shard-tablet-health-quorum-min-observers=1 \
   ${VTORC_EXTRA_FLAGS:-} \
   > "${log_dir}/vtorc.out" 2>&1 &
 

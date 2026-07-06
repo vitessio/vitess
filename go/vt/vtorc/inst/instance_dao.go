@@ -230,7 +230,7 @@ func ReadTopologyInstanceBufferable(tabletAlias *topodatapb.TabletAlias, latency
 		if len(fs.ShardPeerHealth) > 0 {
 			// Ingestion is intentionally not gated on --emergency-reparent-on-primary-tablet-unreachable: it
 			// only runs when a tablet opts in via --track-shard-tablet-health (otherwise ShardPeerHealth
-			// is empty), and the recorded data also feeds the read-only /api/shard-quorum endpoint, so
+			// is empty), and the recorded data also feeds the read-only /api/shard-tablet-health-quorum endpoint, so
 			// operators can inspect the live quorum view before enabling quorum ERS. The flag gates only
 			// where the data is acted upon (the matcher and the InvalidPrimary upgrade), not where it is
 			// stored.

@@ -251,18 +251,18 @@ var (
 	)
 
 	shardQuorumFraction = viperutil.Configure(
-		"shard-quorum-fraction",
+		"shard-tablet-health-quorum-fraction",
 		viperutil.Options[float64]{
-			FlagName: "shard-quorum-fraction",
+			FlagName: "shard-tablet-health-quorum-fraction",
 			Default:  1.0,
 			Dynamic:  true,
 		},
 	)
 
 	shardQuorumMinObservers = viperutil.Configure(
-		"shard-quorum-min-observers",
+		"shard-tablet-health-quorum-min-observers",
 		viperutil.Options[int]{
-			FlagName: "shard-quorum-min-observers",
+			FlagName: "shard-tablet-health-quorum-min-observers",
 			Default:  1,
 			Dynamic:  true,
 		},
@@ -298,8 +298,8 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.Bool("emergency-reparent-on-primary-tablet-unreachable", ersOnTabletUnreachable.Default(), "Whether VTOrc should run an emergency reparent when the primary vttablet is unreachable by VTOrc and confirmed down by a quorum of the shard's replicas")
 	fs.Int("shard-tablet-health-failure-threshold", shardTabletHealthFailureThreshold.Default(), "Consecutive shard-peer ping failures before an observer considers a peer down")
 	fs.Duration("shard-tablet-health-freshness", shardTabletHealthFreshness.Default(), "Maximum age of an observer's shard-peer report for it to count toward quorum. Must exceed --instance-poll-time (ideally 2-3x), since reports only refresh when VTOrc polls each observer")
-	fs.Float64("shard-quorum-fraction", shardQuorumFraction.Default(), "Required fraction of 'down' votes among eligible observers to declare the primary unreachable (1.0 = unanimous)")
-	fs.Int("shard-quorum-min-observers", shardQuorumMinObservers.Default(), "Minimum number of eligible observers required before a quorum-based emergency reparent may run; at 1, a single-observer shard relies on that observer plus VTOrc's own check")
+	fs.Float64("shard-tablet-health-quorum-fraction", shardQuorumFraction.Default(), "Required fraction of 'down' votes among eligible observers to declare the primary unreachable (1.0 = unanimous)")
+	fs.Int("shard-tablet-health-quorum-min-observers", shardQuorumMinObservers.Default(), "Minimum number of eligible observers required before a quorum-based emergency reparent may run; at 1, a single-observer shard relies on that observer plus VTOrc's own check")
 
 	viperutil.BindFlags(
 		fs,

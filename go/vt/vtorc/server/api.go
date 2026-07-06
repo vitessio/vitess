@@ -49,7 +49,7 @@ const (
 	databaseStateAPI           = "/api/database-state"
 	configAPI                  = "/api/config"
 	healthAPI                  = "/debug/health"
-	shardQuorumAPI             = "/api/shard-quorum"
+	shardQuorumAPI             = "/api/shard-tablet-health-quorum"
 
 	shardWithoutKeyspaceFilteringErrorStr = "Filtering by shard without keyspace isn't supported"
 	notAValidValueForSeconds              = "Invalid value for seconds"
@@ -227,7 +227,7 @@ func shardQuorumAPIHandler(response http.ResponseWriter) {
 		// (the majority gate then uses only the observers actually seen) and log it.
 		expectedObservers, err := inst.ShardEligibleObserverCount(ks.Keyspace, ks.Shard)
 		if err != nil {
-			log.Warn("shard-quorum API: could not count eligible observers, using observed-only base",
+			log.Warn("shard-tablet-health-quorum API: could not count eligible observers, using observed-only base",
 				slog.String("keyspace", ks.Keyspace), slog.String("shard", ks.Shard), slog.Any("error", err))
 			expectedObservers = 0
 		}

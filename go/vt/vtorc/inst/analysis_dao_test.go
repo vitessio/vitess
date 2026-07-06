@@ -1330,7 +1330,7 @@ func TestGetDetectionAnalysisShardEligibleObservers(t *testing.T) {
 	assert.Equal(t, uint(3), primaryEligibleObservers(t),
 		"only the shard's 2 REPLICA + 1 RDONLY tablets are eligible observers; the SPARE and PRIMARY must be excluded")
 
-	// ShardEligibleObserverCount — the standalone helper the /api/shard-quorum endpoint uses to source
+	// ShardEligibleObserverCount — the standalone helper the /api/shard-tablet-health-quorum endpoint uses to source
 	// the same expected observer count without an analysis row — must agree with the analysis path so
 	// the endpoint's verdict matches the actionable ERS decision. It is not feature-gated.
 	count, err := ShardEligibleObserverCount("ks", "0")

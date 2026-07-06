@@ -74,10 +74,10 @@ Flags:
       --recovery-poll-duration duration                             Timer duration on which VTOrc polls its database to run a recovery (default 1s)
       --remote-operation-timeout duration                           time to wait for a remote operation (default 15s)
       --security-policy string                                      the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
-      --shard-quorum-fraction float                                 Required fraction of 'down' votes among eligible observers to declare the primary unreachable (1.0 = unanimous) (default 1)
-      --shard-quorum-min-observers int                              Minimum number of eligible observers required before a quorum-based emergency reparent may run; at 1, a single-observer shard relies on that observer plus VTOrc's own check (default 1)
       --shard-tablet-health-failure-threshold int                   Consecutive shard-peer ping failures before an observer considers a peer down (default 3)
       --shard-tablet-health-freshness duration                      Maximum age of an observer's shard-peer report for it to count toward quorum. Must exceed --instance-poll-time (ideally 2-3x), since reports only refresh when VTOrc polls each observer (default 15s)
+      --shard-tablet-health-quorum-fraction float                   Required fraction of 'down' votes among eligible observers to declare the primary unreachable (1.0 = unanimous) (default 1)
+      --shard-tablet-health-quorum-min-observers int                Minimum number of eligible observers required before a quorum-based emergency reparent may run; at 1, a single-observer shard relies on that observer plus VTOrc's own check (default 1)
       --shutdown-wait-time duration                                 Maximum time to wait for VTOrc to release all the locks that it is holding before shutting down on SIGTERM (default 30s)
       --sqlite-data-file string                                     SQLite Datafile to use as VTOrc's database (default "file::memory:?mode=memory&cache=shared")
       --stats-backend string                                        The name of the registered push-based monitoring/stats backend to use

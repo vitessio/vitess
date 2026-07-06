@@ -57,7 +57,7 @@ func (opts QuorumOptions) valid() bool {
 }
 
 // voteType is an observer's vote on the primary's liveness, derived from its report against the
-// quorum policy. It is serialized as a string in the /api/shard-quorum output.
+// quorum policy. It is serialized as a string in the /api/shard-tablet-health-quorum output.
 type voteType string
 
 const (
@@ -77,7 +77,7 @@ type ObserverVote struct {
 
 // QuorumResult is the full evaluation of whether a shard's primary is down by quorum, including
 // the per-observer breakdown. It is the single source of truth behind the decision log, the audit
-// detail, and the /api/shard-quorum endpoint.
+// detail, and the /api/shard-tablet-health-quorum endpoint.
 type QuorumResult struct {
 	PrimaryAlias   string
 	Keyspace       string
