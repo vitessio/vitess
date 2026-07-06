@@ -2335,39 +2335,36 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 	}
 
 	if tabletMap != nil {
-		// Seed a per-shard true-primary time from the max PrimaryTermStartTime
-		// among PRIMARY tablets in the result set. The shard-filter path
-		// (--keyspace --shard) includes the real primary in its result, so the
-		// seed reflects it; the alias-filter path (--tablet-alias) may omit it
-		// (issue #19898) and overwrites the seed via GetShard below.
-		//
-		// Only shards with a PRIMARY tablet in the result need tracking:
-		// stale-primary adjustment only demotes PRIMARY tablets, so the GetShard
-		// overlay is pointless for shards without one. Restricting uniqueShards
-		// to PRIMARY-bearing shards avoids those needless topo lookups.
-		type ksShard struct{ keyspace, shard string }
-		uniqueShards := make(map[string]ksShard, len(tabletMap))
+		// Seed each shard's true-primary term from the max PrimaryTermStartTime
+		// among PRIMARY tablets already in the result. For the --keyspace/--shard
+		// path that single shard's seed is authoritative; this is the original
+		// stale-primary behavior. skipStaleCheck marks shards we could not resolve
+		// so their tablets keep their on-disk type.
 		truePrimaryByShard := make(map[string]time.Time, len(tabletMap))
+		skipStaleCheck := make(map[string]struct{})
 		for _, ti := range tabletMap {
 			if ti.Type != topodatapb.TabletType_PRIMARY {
 				continue
 			}
 			key := topoproto.KeyspaceShardString(ti.Keyspace, ti.Shard)
-			if _, ok := uniqueShards[key]; !ok {
-				uniqueShards[key] = ksShard{ti.Keyspace, ti.Shard}
-			}
 			if t := ti.GetPrimaryTermStartTime(); t.After(truePrimaryByShard[key]) {
 				truePrimaryByShard[key] = t
 			}
 		}
 
-		// Only the alias-filter path needs the GetShard overlay. A zero shard-record
-		// term (e.g. briefly after a promotion) keeps the seed, so transient cases
-		// stay best-effort. Failure policy: req.Strict returns the error; otherwise
-		// it is logged and stale-primary adjustment is skipped for the affected
-		// shards only, leaving their tablets' on-disk type intact.
-		skipStaleCheck := make(map[string]struct{})
+		// Only the --tablet-alias filter can omit a shard's real primary from the
+		// result (issue #19898), so only it needs the authoritative shard-record
+		// term. Shards without a PRIMARY in the result need no adjustment and are
+		// skipped, avoiding needless topo lookups.
 		if len(req.TabletAliases) > 0 {
+			type ksShard struct{ keyspace, shard string }
+			uniqueShards := make(map[string]ksShard)
+			for _, ti := range tabletMap {
+				if ti.Type == topodatapb.TabletType_PRIMARY {
+					uniqueShards[topoproto.KeyspaceShardString(ti.Keyspace, ti.Shard)] = ksShard{ti.Keyspace, ti.Shard}
+				}
+			}
+
 			var (
 				mu  sync.Mutex
 				wg  sync.WaitGroup
@@ -2385,6 +2382,8 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 						rec.RecordError(fmt.Errorf("GetShard(%s/%s) failed: %w", ks.keyspace, ks.shard, getErr))
 						return
 					}
+					// A zero shard-record term (e.g. briefly after a promotion)
+					// keeps the seed, so transient cases stay best-effort.
 					if t := si.GetPrimaryTermStartTime(); !t.IsZero() {
 						truePrimaryByShard[key] = t
 					}
