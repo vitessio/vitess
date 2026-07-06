@@ -158,7 +158,7 @@ func TestStreamExecuteCompat_MetricKeyConsistency(t *testing.T) {
 	require.NoError(t, err)
 
 	executeCount := tsv.Stats().UserTableQueryCount.Counts()["test_table.test_user.Execute"]
-	assert.Greater(t, executeCount, int64(0), "Execute should record with 'Execute' label")
+	assert.Positive(t, executeCount, "Execute should record with 'Execute' label")
 
 	// Stream path records with "Stream" label.
 	qreStream := newTestQueryExecutorStreaming(ctx, tsv, query, 0)
@@ -166,7 +166,7 @@ func TestStreamExecuteCompat_MetricKeyConsistency(t *testing.T) {
 	require.NoError(t, err)
 
 	streamCount := tsv.Stats().UserTableQueryCount.Counts()["test_table.test_user.Stream"]
-	assert.Greater(t, streamCount, int64(0), "Stream should record with 'Stream' label")
+	assert.Positive(t, streamCount, "Stream should record with 'Stream' label")
 }
 
 // Execute and Stream log the same PlanType for equivalent queries.
@@ -484,7 +484,7 @@ func TestStreamExecuteCompat_SavepointViaStreamExecute(t *testing.T) {
 
 	callback := func(*sqltypes.Result) error { return nil }
 	err = tsv.StreamExecute(ctx, nil, &target, savepointSQL, nil, state.TransactionID, 0, nil, callback)
-	assert.NoError(t, err,
+	require.NoError(t, err,
 		"StreamExecute should handle savepoint statements within a transaction")
 
 	_, err = tsv.Commit(ctx, &target, state.TransactionID)
