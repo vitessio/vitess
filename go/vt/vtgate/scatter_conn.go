@@ -171,9 +171,12 @@ func (stc *ScatterConn) ExecuteMultiShard(
 	// with concurrent sources marshalling them (e.g. a streamed UNION runs
 	// each source through its own StreamExecuteMulti against the same session).
 	var callOptions *querypb.ExecuteOptions
-	if session != nil && session.Session != nil && session.Options != nil {
-		callOptions = session.Options.CloneVT()
-		callOptions.FetchLastInsertId = fetchLastInsertID
+	if session != nil {
+		// GetOptions is nil-safe on the embedded proto session.
+		if options := session.GetOptions(); options != nil {
+			callOptions = options.CloneVT()
+			callOptions.FetchLastInsertId = fetchLastInsertID
+		}
 	}
 
 	allErrors := stc.multiGoTransaction(
@@ -407,9 +410,12 @@ func (stc *ScatterConn) StreamExecuteMulti(
 	// with concurrent sources marshalling them (e.g. a streamed UNION runs
 	// each source through its own StreamExecuteMulti against the same session).
 	var callOptions *querypb.ExecuteOptions
-	if session != nil && session.Session != nil && session.Options != nil {
-		callOptions = session.Options.CloneVT()
-		callOptions.FetchLastInsertId = fetchLastInsertID
+	if session != nil {
+		// GetOptions is nil-safe on the embedded proto session.
+		if options := session.GetOptions(); options != nil {
+			callOptions = options.CloneVT()
+			callOptions.FetchLastInsertId = fetchLastInsertID
+		}
 	}
 
 	allErrors := stc.multiGoTransaction(
