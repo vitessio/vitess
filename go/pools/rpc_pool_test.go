@@ -36,7 +36,7 @@ func TestRPCPool(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), time.Millisecond*5)
 	err = pool.Acquire(ctx)
 	cancel()
-	assert.Error(t, err)
+	require.Error(t, err)
 
 	pool.Release()
 	err = pool.Acquire(t.Context())
@@ -49,7 +49,7 @@ func TestRPCPool(t *testing.T) {
 		defer cancel()
 
 		err := pool.Acquire(ctx)
-		assert.Error(t, err)
+		require.Error(t, err)
 
 		select {
 		case <-ctx.Done():
@@ -65,7 +65,7 @@ func TestRPCPool(t *testing.T) {
 		defer cancel()
 
 		err := pool.Acquire(ctx)
-		assert.Error(t, err)
+		require.Error(t, err)
 
 		select {
 		case <-ctx.Done():

@@ -295,7 +295,7 @@ func TestEngineBadInsert(t *testing.T) {
 	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
 	dbClient.ExpectRequest("insert into _vt.vreplication values(null)", &sqltypes.Result{}, nil)
 	_, err := vre.Exec("insert into _vt.vreplication values(null)")
-	assert.EqualError(t, err, "insert failed to generate an id", "vre.Exec")
+	require.EqualError(t, err, "insert failed to generate an id", "vre.Exec")
 
 	// Verify stats
 	assert.Equalf(t, vre.controllers, globalStats.controllers, "stats are mismatched")
@@ -371,17 +371,17 @@ func TestWaitForPosError(t *testing.T) {
 	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
 
 	err := vre.WaitForPos(t.Context(), 1, "MariaDB/0-1-1084")
-	assert.EqualError(t, err, `vreplication engine is closed`, "WaitForPos")
+	require.EqualError(t, err, `vreplication engine is closed`, "WaitForPos")
 
 	dbClient.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
 	vre.Open(t.Context())
 
 	err = vre.WaitForPos(t.Context(), 1, "BadFlavor/0-1-1084")
-	assert.EqualError(t, err, `parse error: unknown GTIDSet flavor "BadFlavor"`, "WaitForPos")
+	require.EqualError(t, err, `parse error: unknown GTIDSet flavor "BadFlavor"`, "WaitForPos")
 
 	dbClient.ExpectRequest("select pos, state, message from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{}}}, nil)
 	err = vre.WaitForPos(t.Context(), 1, "MariaDB/0-1-1084")
-	assert.EqualError(t, err, "vreplication stream received an unexpected number of columns, got 0 instead of 3", "WaitForPos")
+	require.EqualError(t, err, "vreplication stream received an unexpected number of columns, got 0 instead of 3", "WaitForPos")
 
 	dbClient.ExpectRequest("select pos, state, message from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
 		sqltypes.NewVarBinary("MariaDB/0-1-1083"),
@@ -411,7 +411,7 @@ func TestWaitForPosCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	err := vre.WaitForPos(ctx, 1, "MariaDB/0-1-1084")
-	assert.ErrorContains(t, err, "error waiting for pos: MariaDB/0-1-1084, last pos: MariaDB/0-1-1083: context canceled", "WaitForPos")
+	require.ErrorContains(t, err, "error waiting for pos: MariaDB/0-1-1084, last pos: MariaDB/0-1-1083: context canceled", "WaitForPos")
 	dbClient.Wait()
 
 	go func() {

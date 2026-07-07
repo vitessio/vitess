@@ -292,7 +292,7 @@ func TestEmergencyReparentShardPrimaryElectNotBest(t *testing.T) {
 	})
 	cancel()
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	// check what was run
 	err = newPrimary.FakeMysqlDaemon.CheckSuperQueryList()
 	require.NoError(t, err)

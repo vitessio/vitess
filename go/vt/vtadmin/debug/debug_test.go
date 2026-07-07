@@ -33,7 +33,7 @@ func TestSanitizeString(t *testing.T) {
 		t.Parallel()
 
 		out := SanitizeString("")
-		assert.Equal(t, "", out)
+		assert.Empty(t, out)
 	})
 
 	t.Run("non-empty strings", func(t *testing.T) {

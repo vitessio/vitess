@@ -45,7 +45,7 @@ func TestMoveTablesBuffering(t *testing.T) {
 	err := tstWorkflowExec(t, defaultCellName, defaultWorkflowName, defaultSourceKs, defaultTargetKs,
 		tables, workflowActionCreate, "", "", "", defaultWorkflowExecOptions)
 	require.NoError(t, err)
-	waitForWorkflowState(t, vc, defaultKsWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+	require.NoError(t, waitForWorkflowState(vc, defaultKsWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String()))
 
 	lg := newLoadGenerator(t, vc)
 	go func() {

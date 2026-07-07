@@ -85,11 +85,11 @@ func TestGaugesFunc(t *testing.T) {
 
 	// Verify String() calls the function.
 	result := f.String()
-	require.Greater(t, callCount, 0)
+	require.Positive(t, callCount)
 	require.NotEmpty(t, result)
 
 	// Verify Help().
-	require.Equal(t, f.Help(), "test gauges")
+	require.Equal(t, "test gauges", f.Help())
 }
 
 func TestGaugesNoSampling(t *testing.T) {
@@ -103,5 +103,5 @@ func TestGaugesNoSampling(t *testing.T) {
 	result := g.Get()
 	require.NotNil(t, result["metric1"])
 	require.Len(t, result["metric1"], 1)
-	require.Equal(t, result["metric1"][0], 100.0)
+	require.Equal(t, 100.0, result["metric1"][0])
 }

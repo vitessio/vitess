@@ -475,8 +475,8 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 			defer config.SetConvertTabletWithErrantGTIDs(convertErrantVal)
 
 			gotFunc, recoverySkipCode := getCheckAndRecoverFunctionCode(tt.analysisEntry)
-			require.EqualValues(t, tt.wantRecoveryFunction, gotFunc)
-			require.EqualValues(t, tt.wantRecoverySkipCode.String(), recoverySkipCode.String())
+			require.Equal(t, tt.wantRecoveryFunction, gotFunc)
+			require.Equal(t, tt.wantRecoverySkipCode.String(), recoverySkipCode.String())
 		})
 	}
 }

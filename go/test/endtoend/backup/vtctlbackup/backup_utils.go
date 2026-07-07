@@ -418,7 +418,7 @@ func TestBackup(t *testing.T, setupType int, streamMode string, stripes int, cDe
 
 	// setup cluster for the testing
 	code, err := LaunchCluster(setupType, streamMode, stripes, cDetails)
-	require.Nilf(t, err, "setup failed with status code %d", code)
+	require.NoErrorf(t, err, "setup failed with status code %d", code)
 
 	// Teardown the cluster
 	defer TearDownCluster()
@@ -787,7 +787,7 @@ func restartPrimaryAndReplica(t *testing.T) {
 	for _, tablet := range []*cluster.Vttablet{primary, replica1, replica2} {
 		if tablet.MysqlctldProcess.TabletUID > 0 {
 			err := tablet.MysqlctldProcess.Start()
-			require.Nilf(t, err, "error while starting mysqlctld, tabletUID %v", tablet.TabletUID)
+			require.NoErrorf(t, err, "error while starting mysqlctld, tabletUID %v", tablet.TabletUID)
 			continue
 		}
 		proc, _ := tablet.MysqlctlProcess.StartProcess()
@@ -836,15 +836,15 @@ func terminatedRestore(t *testing.T) {
 	// previous test to complete (suspicion: MySQL does not fully start)
 	time.Sleep(5 * time.Second)
 
-	checkTabletType(t, replica1.Alias, topodata.TabletType_REPLICA)
+	require.NoError(t, checkTabletType(replica1.Alias, topodata.TabletType_REPLICA))
 	terminateBackup(t, replica1.Alias)
 	// If backup fails then the tablet type goes back to original type.
-	checkTabletType(t, replica1.Alias, topodata.TabletType_REPLICA)
+	require.NoError(t, checkTabletType(replica1.Alias, topodata.TabletType_REPLICA))
 
 	// backup the replica
 	err := localCluster.VtctldClientProcess.ExecuteCommand("Backup", replica1.Alias)
 	require.NoError(t, err)
-	checkTabletType(t, replica1.Alias, topodata.TabletType_REPLICA)
+	require.NoError(t, checkTabletType(replica1.Alias, topodata.TabletType_REPLICA))
 
 	verifyTabletBackupStats(t, replica1.VttabletProcess.GetVars())
 
@@ -861,14 +861,14 @@ func terminatedRestore(t *testing.T) {
 	_, err = replica1.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test3')", keyspaceName, true)
 	require.NoError(t, err)
 
-	checkTabletType(t, primary.Alias, topodata.TabletType_REPLICA)
+	require.NoError(t, checkTabletType(primary.Alias, topodata.TabletType_REPLICA))
 	terminateRestore(t)
 	// If restore fails then the tablet type goes back to original type.
-	checkTabletType(t, primary.Alias, topodata.TabletType_REPLICA)
+	require.NoError(t, checkTabletType(primary.Alias, topodata.TabletType_REPLICA))
 
 	err = localCluster.VtctldClientProcess.ExecuteCommand("RestoreFromBackup", primary.Alias)
 	require.NoError(t, err)
-	checkTabletType(t, primary.Alias, topodata.TabletType_REPLICA)
+	require.NoError(t, checkTabletType(primary.Alias, topodata.TabletType_REPLICA))
 
 	_, err = os.Stat(path.Join(primary.VttabletProcess.Directory, "restore_in_progress"))
 	assert.True(t, os.IsNotExist(err))
@@ -880,43 +880,73 @@ func terminatedRestore(t *testing.T) {
 	stopAllTablets()
 }
 
-func checkTabletType(t *testing.T, alias string, tabletType topodata.TabletType) {
-	t.Helper()
+// checkTabletType returns an error instead of asserting, so callers running in
+// a goroutine can propagate the result back to the test goroutine. Callers on
+// the test goroutine should wrap it with require.NoError.
+func checkTabletType(alias string, tabletType topodata.TabletType) error {
 	// for loop for 15 seconds to check if tablet type is correct
 	for range 15 {
 		output, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("GetTablet", alias)
-		require.NoError(t, err)
+		if err != nil {
+			return err
+		}
 		var tabletPB topodata.Tablet
-		err = json2.UnmarshalPB([]byte(output), &tabletPB)
-		require.NoError(t, err)
+		if err := json2.UnmarshalPB([]byte(output), &tabletPB); err != nil {
+			return err
+		}
 		if tabletType == tabletPB.Type {
-			return
+			return nil
 		}
 		time.Sleep(1 * time.Second)
 	}
-	require.Failf(t, "checkTabletType failed.", "Tablet type is not correct. Expected: %v", tabletType)
+	return fmt.Errorf("tablet %s type is not %v", alias, tabletType)
 }
 
 func doNotDemoteNewlyPromotedPrimaryIfReparentingDuringBackup(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(2)
 
+	// checkType runs the tablet-type check in a goroutine and records the first
+	// error so the test goroutine can assert on it after wg.Wait().
+	var (
+		mu      sync.Mutex
+		typeErr error
+	)
+	checkType := func(alias string, tabletType topodata.TabletType) bool {
+		err := checkTabletType(alias, tabletType)
+		if err != nil {
+			mu.Lock()
+			if typeErr == nil {
+				typeErr = err
+			}
+			mu.Unlock()
+			return false
+		}
+		return true
+	}
+
 	// Start the backup on a replica
 	go func() {
 		defer wg.Done()
 		// ensure this is a primary first
-		checkTabletType(t, primary.Alias, topodata.TabletType_PRIMARY)
+		if !checkType(primary.Alias, topodata.TabletType_PRIMARY) {
+			return
+		}
 
 		// now backup
 		err := localCluster.VtctldClientProcess.ExecuteCommand("Backup", replica1.Alias)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 	}()
 
 	// Perform a graceful reparent operation
 	go func() {
 		defer wg.Done()
 		// ensure this is a primary first
-		checkTabletType(t, primary.Alias, topodata.TabletType_PRIMARY)
+		if !checkType(primary.Alias, topodata.TabletType_PRIMARY) {
+			return
+		}
 
 		// now reparent
 		_, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput(
@@ -924,16 +954,19 @@ func doNotDemoteNewlyPromotedPrimaryIfReparentingDuringBackup(t *testing.T) {
 			"--new-primary", replica1.Alias,
 			fmt.Sprintf("%s/%s", keyspaceName, shardName),
 		)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 
 		// check that we reparented
-		checkTabletType(t, replica1.Alias, topodata.TabletType_PRIMARY)
+		checkType(replica1.Alias, topodata.TabletType_PRIMARY)
 	}()
 
 	wg.Wait()
+	require.NoError(t, typeErr)
 
 	// check that this is still a primary
-	checkTabletType(t, replica1.Alias, topodata.TabletType_PRIMARY)
+	require.NoError(t, checkTabletType(replica1.Alias, topodata.TabletType_PRIMARY))
 }
 
 // test_backup will:
@@ -1068,17 +1101,17 @@ func verifySemiSyncStatus(t *testing.T, vttablet *cluster.Vttablet, expectedStat
 	case mysql.SemiSyncTypeSource:
 		status, err := vttablet.VttabletProcess.GetDBVar("rpl_semi_sync_replica_enabled", keyspaceName)
 		require.NoError(t, err)
-		assert.Equal(t, status, expectedStatus)
+		assert.Equal(t, expectedStatus, status)
 		status, err = vttablet.VttabletProcess.GetDBStatus("rpl_semi_sync_replica_status", keyspaceName)
 		require.NoError(t, err)
-		assert.Equal(t, status, expectedStatus)
+		assert.Equal(t, expectedStatus, status)
 	case mysql.SemiSyncTypeMaster:
 		status, err := vttablet.VttabletProcess.GetDBVar("rpl_semi_sync_slave_enabled", keyspaceName)
 		require.NoError(t, err)
-		assert.Equal(t, status, expectedStatus)
+		assert.Equal(t, expectedStatus, status)
 		status, err = vttablet.VttabletProcess.GetDBStatus("rpl_semi_sync_slave_status", keyspaceName)
 		require.NoError(t, err)
-		assert.Equal(t, status, expectedStatus)
+		assert.Equal(t, expectedStatus, status)
 	}
 }
 
@@ -1381,7 +1414,7 @@ func TestReplicaRestoreToPos(t *testing.T, replicaIndex int, restoreToPos replic
 	}
 	require.NoErrorf(t, err, "output: %v", output)
 	verifyTabletRestoreStats(t, replica.VttabletProcess.GetVars())
-	checkTabletType(t, replica1.Alias, topodata.TabletType_DRAINED)
+	require.NoError(t, checkTabletType(replica1.Alias, topodata.TabletType_DRAINED))
 }
 
 func TestReplicaRestoreToTimestamp(t *testing.T, restoreToTimestamp time.Time, expectError string) {
@@ -1395,7 +1428,7 @@ func TestReplicaRestoreToTimestamp(t *testing.T, restoreToTimestamp time.Time, e
 	}
 	require.NoErrorf(t, err, "output: %v", output)
 	verifyTabletRestoreStats(t, replica1.VttabletProcess.GetVars())
-	checkTabletType(t, replica1.Alias, topodata.TabletType_DRAINED)
+	require.NoError(t, checkTabletType(replica1.Alias, topodata.TabletType_DRAINED))
 }
 
 func verifyTabletBackupStats(t *testing.T, vars map[string]any) {
@@ -1453,8 +1486,8 @@ func verifyRestorePositionAndTimeStats(t *testing.T, vars map[string]any) {
 	backupTime := vars["RestoredBackupTime"].(string)
 	require.Contains(t, vars, "RestoredBackupTime")
 	require.Contains(t, vars, "RestorePosition")
-	require.NotEqual(t, "", backupPosition)
-	require.NotEqual(t, "", backupTime)
+	require.NotEmpty(t, backupPosition)
+	require.NotEmpty(t, backupTime)
 	rp, err := replication.DecodePosition(backupPosition)
 	require.NoError(t, err)
 	require.False(t, rp.IsZero())
@@ -1543,7 +1576,7 @@ func TestBackupEngineSelector(t *testing.T) {
 
 	// launch the custer with xtrabackup as the default engine
 	code, err := LaunchCluster(XtraBackup, "xbstream", 0, &CompressionDetails{CompressorEngineName: "pgzip"})
-	require.Nilf(t, err, "setup failed with status code %d", code)
+	require.NoErrorf(t, err, "setup failed with status code %d", code)
 
 	defer TearDownCluster()
 
@@ -1587,7 +1620,7 @@ func TestRestoreAllowedBackupEngines(t *testing.T) {
 
 	// launch the custer with xtrabackup as the default engine
 	code, err := LaunchCluster(XtraBackup, "xbstream", 0, cDetails)
-	require.Nilf(t, err, "setup failed with status code %d", code)
+	require.NoErrorf(t, err, "setup failed with status code %d", code)
 
 	defer TearDownCluster()
 

@@ -346,14 +346,14 @@ func TestUndoDemotePrimaryStateChange(t *testing.T) {
 	require.NoError(t, err)
 
 	// Check that the tablet is initially a replica.
-	require.EqualValues(t, topodatapb.TabletType_REPLICA, tm.Tablet().Type)
+	require.Equal(t, topodatapb.TabletType_REPLICA, tm.Tablet().Type)
 	// Verify that the tablet record says the tablet should be a primary.
-	require.EqualValues(t, topodatapb.TabletType_PRIMARY, ti.Type)
+	require.Equal(t, topodatapb.TabletType_PRIMARY, ti.Type)
 
 	err = tm.UndoDemotePrimary(ctx, false)
 	require.NoError(t, err)
-	require.EqualValues(t, topodatapb.TabletType_PRIMARY, tm.Tablet().Type)
-	require.EqualValues(t, ti.PrimaryTermStartTime, tm.Tablet().PrimaryTermStartTime)
+	require.Equal(t, topodatapb.TabletType_PRIMARY, tm.Tablet().Type)
+	require.Equal(t, ti.PrimaryTermStartTime, tm.Tablet().PrimaryTermStartTime)
 	require.True(t, tm.QueryServiceControl.IsServing())
 	isReadOnly, err := tm.MysqlDaemon.IsReadOnly(ctx)
 	require.NoError(t, err)

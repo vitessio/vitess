@@ -67,7 +67,7 @@ func TestStrictMode(t *testing.T) {
 	qe := NewQueryEngine(env, se)
 	qe.se.InitDBConfig(newDBConfigs(db).DbaWithDB())
 	qe.se.Open()
-	assert.NoError(t, qe.Open())
+	require.NoError(t, qe.Open())
 	qe.Close()
 
 	// Check that we fail if STRICT_TRANS_TABLES or STRICT_ALL_TABLES is not set.
@@ -80,7 +80,7 @@ func TestStrictMode(t *testing.T) {
 	)
 	qe = NewQueryEngine(env, se)
 	err := qe.Open()
-	assert.EqualError(t, err, "require sql_mode to be STRICT_TRANS_TABLES or STRICT_ALL_TABLES: got ''", "Open")
+	require.EqualError(t, err, "require sql_mode to be STRICT_TRANS_TABLES or STRICT_ALL_TABLES: got ''", "Open")
 	qe.Close()
 
 	// Test that we succeed if the enforcement flag is off.

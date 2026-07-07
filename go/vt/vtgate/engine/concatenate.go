@@ -244,8 +244,9 @@ func (c *Concatenate) parallelStreamExec(inCtx context.Context, vcursor VCursor,
 	// Start streaming query execution in parallel for all sources.
 	for i, source := range c.Sources {
 		currIndex, currSource := i, source
+		vars := copyBindVars(bindVars)
 		wg.Go(func() error {
-			err := vcursor.StreamExecutePrimitive(ctx, currSource, bindVars, true, func(resultChunk *sqltypes.Result) error {
+			err := vcursor.StreamExecutePrimitive(ctx, currSource, vars, true, func(resultChunk *sqltypes.Result) error {
 				muFields.Lock()
 
 				// Process fields when they arrive; coordinate field agreement across sources.
@@ -325,7 +326,8 @@ func (c *Concatenate) sequentialStreamExec(ctx context.Context, vcursor VCursor,
 
 	var mu sync.Mutex
 	for idx, source := range c.Sources {
-		err := vcursor.StreamExecutePrimitive(ctx, source, bindVars, true, func(resultChunk *sqltypes.Result) error {
+		vars := copyBindVars(bindVars)
+		err := vcursor.StreamExecutePrimitive(ctx, source, vars, true, func(resultChunk *sqltypes.Result) error {
 			// check if context has expired.
 			if ctx.Err() != nil {
 				return ctx.Err()

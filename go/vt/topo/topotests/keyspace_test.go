@@ -40,7 +40,7 @@ func TestCreateKeyspace(t *testing.T) {
 	})
 	t.Run("invalid name", func(t *testing.T) {
 		err := ts.CreateKeyspace(ctx, "no/slashes/allowed", &topodatapb.Keyspace{})
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Equal(t, vtrpc.Code_INVALID_ARGUMENT, vterrors.Code(err), "%+v", err)
 	})
 }
@@ -66,7 +66,7 @@ func TestGetKeyspace(t *testing.T) {
 		// with an invalid name), so we'll validate the error we get is *not*
 		// NOT_FOUND.
 		ks, err := ts.GetKeyspace(ctx, "no/slashes/allowed")
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Equal(t, vtrpc.Code_INVALID_ARGUMENT, vterrors.Code(err), "%+v", err)
 		assert.Nil(t, ks)
 	})

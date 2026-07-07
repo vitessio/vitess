@@ -22,7 +22,7 @@ import (
 	"path"
 	"time"
 
-	"github.com/hashicorp/consul/api"
+	"github.com/hashicorp/consul/api/v2"
 
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"

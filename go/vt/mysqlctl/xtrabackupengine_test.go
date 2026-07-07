@@ -25,6 +25,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/logutil"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -48,7 +49,7 @@ func TestFindReplicationPosition(t *testing.T) {
 	want := "145e508e-ae54-11e9-8ce6-46824dd1815e:1-3,1e51f8be-ae54-11e9-a7c6-4280a041109b:1-3,47b59de1-b368-11e9-b48b-624401d35560:1-152981,557def0a-b368-11e9-84ed-f6fffd91cc57:1-3,599ef589-ae55-11e9-9688-ca1f44501925:1-14857169,b9ce485d-b36b-11e9-9b17-2a6e0a6011f4:1-371262"
 
 	pos, err := findReplicationPosition(input, "MySQL56", logutil.NewConsoleLogger())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, want, pos.String())
 }
 
@@ -65,16 +66,16 @@ func TestFindReplicationPositionFromXtrabackupInfo(t *testing.T) {
 	want := "145e508e-ae54-11e9-8ce6-46824dd1815e:1-3,1e51f8be-ae54-11e9-a7c6-4280a041109b:1-3,47b59de1-b368-11e9-b48b-624401d35560:1-152981,557def0a-b368-11e9-84ed-f6fffd91cc57:1-3,599ef589-ae55-11e9-9688-ca1f44501925:1-14857169,b9ce485d-b36b-11e9-9b17-2a6e0a6011f4:1-371262"
 
 	tmp, err := os.MkdirTemp(t.TempDir(), "test")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	f, err := os.Create(path.Join(tmp, xtrabackupInfoFile))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	_, err = f.WriteString(input)
 	assert.NoError(t, err)
 	assert.NoError(t, f.Close())
 
 	pos, err := findReplicationPositionFromXtrabackupInfo(tmp, "MySQL56", logutil.NewConsoleLogger())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, want, pos.String())
 }
 
@@ -116,7 +117,7 @@ func TestStripeRoundTrip(t *testing.T) {
 		// Read it back and merge.
 		outBuf := &bytes.Buffer{}
 		written, err := io.Copy(outBuf, stripeReader(readers, blockSize))
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, dataSize, written)
 
 		output := outBuf.Bytes()

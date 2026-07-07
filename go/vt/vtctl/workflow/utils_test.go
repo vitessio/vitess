@@ -141,7 +141,7 @@ func TestCreateDefaultShardRoutingRules(t *testing.T) {
 			require.NoError(t, err)
 			require.Len(t, rules, len(tc.shards))
 			want := getExpectedRules(tc.sourceKeyspace, tc.targetKeyspace)
-			require.EqualValues(t, want, rules)
+			require.Equal(t, want, rules)
 		})
 	}
 }
@@ -159,7 +159,7 @@ func TestUpdateKeyspaceRoutingRule(t *testing.T) {
 	require.NoError(t, err)
 	rules, err := topotools.GetKeyspaceRoutingRules(ctx, ts)
 	require.NoError(t, err)
-	require.EqualValues(t, routes, rules)
+	require.Equal(t, routes, rules)
 }
 
 // TestConcurrentKeyspaceRoutingRulesUpdates runs multiple keyspace routing rules updates concurrently to test
@@ -203,6 +203,10 @@ func testConcurrentKeyspaceRoutingRulesUpdates(t *testing.T, ctx context.Context
 	shortCtx, cancel := context.WithTimeout(ctx, duration)
 	defer cancel()
 	log.Info(fmt.Sprintf("Starting %d concurrent updates", concurrency))
+	var (
+		updateMu  sync.Mutex
+		updateErr error
+	)
 	for i := range concurrency {
 		go func(id int) {
 			defer wg.Done()
@@ -211,12 +215,20 @@ func testConcurrentKeyspaceRoutingRulesUpdates(t *testing.T, ctx context.Context
 				case <-shortCtx.Done():
 					return
 				default:
-					update(t, shortCtx, ts, id)
+					if err := update(shortCtx, ts, id); err != nil {
+						updateMu.Lock()
+						if updateErr == nil {
+							updateErr = err
+						}
+						updateMu.Unlock()
+						return
+					}
 				}
 			}
 		}(i)
 	}
 	wg.Wait()
+	require.NoError(t, updateErr)
 	log.Info("All updates completed")
 	verifyCtx, verifyCancel := context.WithTimeout(ctx, 10*time.Second)
 	defer verifyCancel()
@@ -225,7 +237,7 @@ func testConcurrentKeyspaceRoutingRulesUpdates(t *testing.T, ctx context.Context
 	require.LessOrEqual(t, concurrency, len(rules.Rules))
 }
 
-func update(t *testing.T, ctx context.Context, ts *topo.Server, id int) {
+func update(ctx context.Context, ts *topo.Server, id int) error {
 	s := fmt.Sprintf("%d_%d", id, rand.IntN(math.MaxInt))
 	routes := make(map[string]string)
 	for _, tabletType := range tabletTypeSuffixes {
@@ -234,18 +246,25 @@ func update(t *testing.T, ctx context.Context, ts *topo.Server, id int) {
 	}
 	err := updateKeyspaceRoutingRules(ctx, ts, "test", routes)
 	if ctx.Err() != nil {
-		return
+		return nil
 	}
-	require.NoError(t, err)
+	if err != nil {
+		return err
+	}
 	got, err := topotools.GetKeyspaceRoutingRules(ctx, ts)
 	if ctx.Err() != nil {
-		return
+		return nil
 	}
-	require.NoError(t, err)
+	if err != nil {
+		return err
+	}
 	for _, tabletType := range tabletTypeSuffixes {
 		from := fmt.Sprintf("from%s%s", s, tabletType)
-		require.Equal(t, s+tabletType, got[from])
+		if got[from] != s+tabletType {
+			return fmt.Errorf("routing rule %q = %q, want %q", from, got[from], s+tabletType)
+		}
 	}
+	return nil
 }
 
 // startEtcd starts an etcd subprocess, and waits for it to be ready.
@@ -392,17 +411,17 @@ func TestLegacyBuildTargets(t *testing.T) {
 	assert.Len(t, t2.Sources, 2)
 	assert.Len(t, t1.Sources[1].Filter.Rules, 2)
 
-	assert.Equal(t, t1.Sources[1].Filter.Rules[0].Match, "t1")
-	assert.Equal(t, t1.Sources[1].Filter.Rules[1].Match, "t2")
-	assert.Equal(t, t1.Sources[1].Shard, "-80")
+	assert.Equal(t, "t1", t1.Sources[1].Filter.Rules[0].Match)
+	assert.Equal(t, "t2", t1.Sources[1].Filter.Rules[1].Match)
+	assert.Equal(t, "-80", t1.Sources[1].Shard)
 
 	assert.Len(t, t2.Sources[1].Filter.Rules, 2)
 	assert.Len(t, t2.Sources[2].Filter.Rules, 2)
 
-	assert.Equal(t, t2.Sources[1].Shard, "80-")
-	assert.Equal(t, t2.Sources[2].Shard, "80-")
-	assert.Equal(t, t2.Sources[1].Filter.Rules[0].Match, "t1")
-	assert.Equal(t, t2.Sources[1].Filter.Rules[1].Match, "t2")
-	assert.Equal(t, t2.Sources[2].Filter.Rules[0].Match, "t3")
-	assert.Equal(t, t2.Sources[2].Filter.Rules[1].Match, "t4")
+	assert.Equal(t, "80-", t2.Sources[1].Shard)
+	assert.Equal(t, "80-", t2.Sources[2].Shard)
+	assert.Equal(t, "t1", t2.Sources[1].Filter.Rules[0].Match)
+	assert.Equal(t, "t2", t2.Sources[1].Filter.Rules[1].Match)
+	assert.Equal(t, "t3", t2.Sources[2].Filter.Rules[0].Match)
+	assert.Equal(t, "t4", t2.Sources[2].Filter.Rules[1].Match)
 }
