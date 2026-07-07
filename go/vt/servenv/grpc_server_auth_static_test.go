@@ -72,16 +72,16 @@ func authenticate(t *testing.T, plugin *StaticAuthPlugin, username, password str
 // TestStaticAuthPlugin_Authenticate tests authentication against a credentials
 // file mixing plaintext and SHA256-hashed passwords.
 func TestStaticAuthPlugin_Authenticate(t *testing.T) {
-	// SHA256 hash of "password" is "5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8"
-	// SHA256 hash of "secret123" is "fcf730b6d95236ecd3c9fc2d92d7b6b2bb061514961aec041d6c7a7192f592e4"
+	// SHA256(SHA256("password")) is "73641c99f7719f57d8f4beb11a303afcd190243a51ced8782ca6d3dbe014d146"
+	// SHA256(SHA256("secret123")) is "49bbd275dd4bfb1170ced93e839a8ec1d5b86eab6acb0842502130a31702390d"
 	plugin := newTestStaticAuthPlugin(t, []StaticAuthConfigEntry{
 		{
-			Username:             "user1",
-			SHA256HashedPassword: "5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8", // "password" as SHA256 hash
+			Username:            "user1",
+			CachingSha2Password: "73641c99f7719f57d8f4beb11a303afcd190243a51ced8782ca6d3dbe014d146", // SHA256(SHA256("password"))
 		},
 		{
-			Username:             "user2",
-			SHA256HashedPassword: "fcf730b6d95236ecd3c9fc2d92d7b6b2bb061514961aec041d6c7a7192f592e4", // "secret123" as SHA256 hash
+			Username:            "user2",
+			CachingSha2Password: "49bbd275dd4bfb1170ced93e839a8ec1d5b86eab6acb0842502130a31702390d", // SHA256(SHA256("secret123"))
 		},
 		{
 			Username: "user3",
@@ -170,14 +170,30 @@ func TestStaticAuthPlugin_Authenticate(t *testing.T) {
 	}
 }
 
-// TestStaticAuthPlugin_UppercaseHash tests that a SHA256HashedPassword written
+// TestStaticAuthPlugin_UppercaseHash tests that a CachingSha2Password written
 // in uppercase (or mixed-case) hex still authenticates, since the hash is
 // hex-decoded at initialization rather than compared as a string.
 func TestStaticAuthPlugin_UppercaseHash(t *testing.T) {
 	plugin := newTestStaticAuthPlugin(t, []StaticAuthConfigEntry{
 		{
-			Username:             "user1",
-			SHA256HashedPassword: "5E884898DA28047151D0E56F8DC6292773603D0D6AABBDD62A11EF721D1542D8", // "password" as uppercase SHA256 hash
+			Username:            "user1",
+			CachingSha2Password: "73641C99F7719F57D8F4BEB11A303AFCD190243A51CED8782CA6D3DBE014D146", // uppercase SHA256(SHA256("password"))
+		},
+	})
+
+	newCtx, err := authenticate(t, plugin, "user1", "password")
+	require.NoError(t, err)
+	assert.Equal(t, "user1", StaticAuthUsernameFromContext(newCtx))
+}
+
+// TestStaticAuthPlugin_StarPrefixedHash tests that a CachingSha2Password with
+// the MySQL-style leading '*' authenticates, so values can be copied verbatim
+// from a MySQL static auth configuration.
+func TestStaticAuthPlugin_StarPrefixedHash(t *testing.T) {
+	plugin := newTestStaticAuthPlugin(t, []StaticAuthConfigEntry{
+		{
+			Username:            "user1",
+			CachingSha2Password: "*73641c99f7719f57d8f4beb11a303afcd190243a51ced8782ca6d3dbe014d146", // SHA256(SHA256("password"))
 		},
 	})
 
@@ -193,12 +209,12 @@ func TestStaticAuthPlugin_UppercaseHash(t *testing.T) {
 func TestStaticAuthPlugin_DuplicateUsernameEntries(t *testing.T) {
 	plugin := newTestStaticAuthPlugin(t, []StaticAuthConfigEntry{
 		{
-			Username:             "user1",
-			SHA256HashedPassword: "faa9ef1976a332ec21a17d4a88fb0cae8ce93743b3f8c69370161d6b38839898", // "first_password" as SHA256 hash
+			Username:            "user1",
+			CachingSha2Password: "1cb0d8e6f8975f4993ac48974d03a903bba80ed3ea94997ffc4e339c0f1e8b3d", // SHA256(SHA256("first_password"))
 		},
 		{
-			Username:             "user1",
-			SHA256HashedPassword: "900cc4a6adbb527ac2ef8ac8f4d92104a040befa1c46c21bb6bab09eb72fc565", // "second_password" as SHA256 hash
+			Username:            "user1",
+			CachingSha2Password: "064fb3be00bc3bcf9df547e3be390829e45710fca25966fb068798ae4ea5ff76", // SHA256(SHA256("second_password"))
 		},
 	})
 
@@ -242,14 +258,14 @@ func TestStaticAuthPlugin_DuplicateUsernameEntries(t *testing.T) {
 }
 
 // TestStaticAuthPlugin_PlaintextTakesPrecedence tests that when an entry has
-// both Password and SHA256HashedPassword set, the plaintext Password is used
+// both Password and CachingSha2Password set, the plaintext Password is used
 // and the SHA256 hash is ignored.
 func TestStaticAuthPlugin_PlaintextTakesPrecedence(t *testing.T) {
 	plugin := newTestStaticAuthPlugin(t, []StaticAuthConfigEntry{
 		{
-			Username:             "user1",
-			Password:             "plain_password",
-			SHA256HashedPassword: "b2867617492e26c338ab49f72afabc984d798b59755a27e312b953716ae964d7", // "hashed_password" as SHA256 hash
+			Username:            "user1",
+			Password:            "plain_password",
+			CachingSha2Password: "79cc80902b3f156439204d9c08f77f59a918fbbd302309e0844993d7c21c6da5", // SHA256(SHA256("hashed_password"))
 		},
 	})
 
@@ -337,7 +353,7 @@ func TestStaticAuthPlugin_MissingCredentials(t *testing.T) {
 
 // TestStaticAuthPluginInitializer tests the initialization and validation of
 // the static auth plugin credentials file, in particular the SHA256 hash
-// validation added for SHA256HashedPassword entries.
+// validation added for CachingSha2Password entries.
 func TestStaticAuthPluginInitializer(t *testing.T) {
 	writeConfig := func(t *testing.T, contents string) {
 		t.Helper()
@@ -361,8 +377,8 @@ func TestStaticAuthPluginInitializer(t *testing.T) {
 	t.Run("valid config file", func(t *testing.T) {
 		writeConfig(t, marshal(t, []StaticAuthConfigEntry{
 			{
-				Username:             "testuser",
-				SHA256HashedPassword: "13d249f2cb4127b40cfa757866850278793f814ded3c587fe5889e889a7a9f6c", // "testpass" as SHA256 hash
+				Username:            "testuser",
+				CachingSha2Password: "6cbfe567592500d58fdcc0e0bbeca784fbc53bd6159869df6cbeac0b6604d4e9", // SHA256(SHA256("testpass"))
 			},
 			{
 				Username: "plainuser",
@@ -377,9 +393,9 @@ func TestStaticAuthPluginInitializer(t *testing.T) {
 		require.True(t, ok)
 		require.Len(t, staticPlugin.entries, 2)
 		assert.Equal(t, "testuser", staticPlugin.entries[0].Username)
-		assert.Len(t, staticPlugin.entries[0].sha256HashedPassword, 32)
+		assert.Len(t, staticPlugin.entries[0].cachingSha2Password, 32)
 		assert.Equal(t, "plainuser", staticPlugin.entries[1].Username)
-		assert.Empty(t, staticPlugin.entries[1].sha256HashedPassword)
+		assert.Empty(t, staticPlugin.entries[1].cachingSha2Password)
 	})
 
 	t.Run("missing file path", func(t *testing.T) {
@@ -411,26 +427,26 @@ func TestStaticAuthPluginInitializer(t *testing.T) {
 	t.Run("invalid hash length", func(t *testing.T) {
 		writeConfig(t, marshal(t, []StaticAuthConfigEntry{
 			{
-				Username:             "testuser",
-				SHA256HashedPassword: "abcdef", // valid hex but not a SHA256 digest
+				Username:            "testuser",
+				CachingSha2Password: "abcdef", // valid hex but not a SHA256 digest
 			},
 		}))
 
 		_, err := staticAuthPluginInitializer()
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "invalid SHA256HashedPassword length")
+		assert.Contains(t, err.Error(), "invalid CachingSha2Password length")
 	})
 
 	t.Run("invalid hex encoding", func(t *testing.T) {
 		writeConfig(t, marshal(t, []StaticAuthConfigEntry{
 			{
-				Username:             "testuser",
-				SHA256HashedPassword: strings.Repeat("z", 64), // 64 chars but invalid hex
+				Username:            "testuser",
+				CachingSha2Password: strings.Repeat("z", 64), // 64 chars but invalid hex
 			},
 		}))
 
 		_, err := staticAuthPluginInitializer()
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "invalid hex-encoded SHA256HashedPassword")
+		assert.Contains(t, err.Error(), "invalid hex-encoded CachingSha2Password")
 	})
 }

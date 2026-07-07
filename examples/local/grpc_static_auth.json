@@ -5,6 +5,6 @@
   },
   {
     "Username": "vitess_hashed",
-    "SHA256HashedPassword": "415a6502923945972202c5ce270568103e037be716652bb5e940737a66625a41"
+    "CachingSha2Password": "*6c68316a29c3fcf7431524722c1be6cb54f5471f2cca326114f9eed99f731faa"
   }
 ]

@@ -27,7 +27,7 @@ import (
 
 // newBenchStaticAuthPlugin builds a plugin with numEntries entries; the target
 // user is the last entry (worst case for the linear scan). If hashed is true
-// the target entry uses SHA256HashedPassword, otherwise plaintext Password.
+// the target entry uses CachingSha2Password, otherwise plaintext Password.
 func newBenchStaticAuthPlugin(numEntries int, hashed bool, password string) *StaticAuthPlugin {
 	entries := make([]staticAuthEntry, 0, numEntries)
 	for i := 0; i < numEntries-1; i++ {
@@ -44,9 +44,10 @@ func newBenchStaticAuthPlugin(numEntries int, hashed bool, password string) *Sta
 		},
 	}
 	if hashed {
-		hash := sha256.Sum256([]byte(password))
-		target.SHA256HashedPassword = hex.EncodeToString(hash[:])
-		target.sha256HashedPassword = hash[:]
+		stage1 := sha256.Sum256([]byte(password))
+		hash := sha256.Sum256(stage1[:])
+		target.CachingSha2Password = hex.EncodeToString(hash[:])
+		target.cachingSha2Password = hash[:]
 	} else {
 		target.Password = password
 	}
@@ -78,7 +79,7 @@ func BenchmarkStaticAuthPlugin_AuthenticatePlaintext(b *testing.B) {
 }
 
 // BenchmarkStaticAuthPlugin_AuthenticateHashed measures per-RPC authentication
-// cost with a SHA256HashedPassword entry.
+// cost with a CachingSha2Password entry.
 func BenchmarkStaticAuthPlugin_AuthenticateHashed(b *testing.B) {
 	benchmarkStaticAuthPluginAuthenticate(b, true)
 }
