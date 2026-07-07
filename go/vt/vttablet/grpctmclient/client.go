@@ -461,6 +461,15 @@ func (client *Client) CloseShardHealthPool() {
 // peer's connection is released promptly instead of lingering until the monitor
 // stops. Not part of the tmclient.TabletManagerClient interface.
 func (client *Client) CloseShardHealthPoolEntry(tablet *topodatapb.Tablet) {
+	// Eviction is best-effort cleanup on shutdown/refresh paths, so a nil or
+	// partially-populated tablet record must not panic: without a hostname and
+	// grpc port no pool entry could have been dialed for it either, so there is
+	// nothing to evict. Note that we deliberately do not use validateTablet
+	// here: it rejects records with TabletShutdownTime set, and a shut-down
+	// peer is exactly the kind whose pooled connection we want to release.
+	if tablet == nil || tablet.Hostname == "" || tablet.PortMap["grpc"] <= 0 {
+		return
+	}
 	if poolDialer, ok := client.dialer.(poolDialer); ok {
 		poolDialer.closeDedicatedPoolEntry(dialPoolGroupPing, netutil.JoinHostPort(tablet.Hostname, int32(tablet.PortMap["grpc"])))
 	}

@@ -145,6 +145,17 @@ func TestCloseShardHealthPool(t *testing.T) {
 	// Evicting an address with no pool entry is a no-op.
 	client.CloseShardHealthPoolEntry(pingTablet)
 
+	// Eviction is best-effort: nil or partially-populated tablet records (no
+	// address to construct) must be a no-op rather than a panic, and must not
+	// disturb the remaining pool entry.
+	client.CloseShardHealthPoolEntry(nil)
+	client.CloseShardHealthPoolEntry(&topodatapb.Tablet{PortMap: map[string]int32{"grpc": 15996}})
+	client.CloseShardHealthPoolEntry(&topodatapb.Tablet{Hostname: "localhost"})
+	client.CloseShardHealthPoolEntry(&topodatapb.Tablet{Hostname: "localhost", PortMap: map[string]int32{"grpc": -1}})
+	rpcClient.rpcDialPoolMapMu.Lock()
+	assert.Len(t, rpcClient.rpcDialPoolMap[dialPoolGroupPing], 1, "invalid tablet records must not evict anything")
+	rpcClient.rpcDialPoolMapMu.Unlock()
+
 	client.CloseShardHealthPool()
 
 	rpcClient.rpcDialPoolMapMu.Lock()
