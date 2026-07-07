@@ -731,6 +731,15 @@ func TestShardWideRecoveryIgnoredTablets(t *testing.T) {
 			analysis:    inst.PrimaryDiskStalled,
 			wantIgnored: false,
 		},
+		{
+			// The quorum case is specifically a vttablet crash with mysqld
+			// still up: the vttablet may restart between detection and
+			// recovery, so the primary must be refreshed under the shard
+			// lock for checkIfAlreadyFixed to abort on a recovered primary.
+			name:        "PrimaryTabletUnreachableByQuorum does NOT skip primary refresh",
+			analysis:    inst.PrimaryTabletUnreachableByQuorum,
+			wantIgnored: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
