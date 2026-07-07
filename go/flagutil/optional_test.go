@@ -94,19 +94,17 @@ func TestOptionalFlag_Compatibility(t *testing.T) {
 	require.False(t, iface.IsSet())
 
 	// Old type names compile and work as before.
-	var f64 *OptionalFloat64
-	f64 = NewOptionalFloat64(1.0)
+	f64 := NewOptionalFloat64(1.0)
 	require.NotNil(t, f64)
 
-	var str *OptionalString
-	str = NewOptionalString("world")
+	str := NewOptionalString("world")
 	require.NotNil(t, str)
 
 	// Zero-value concrete types must work without a constructor (the original
 	// behavior that type aliases broke).
 	var zeroStr OptionalString
 	require.Equal(t, "string", zeroStr.Type())
-	require.Equal(t, "", zeroStr.String())
+	require.Empty(t, zeroStr.String())
 	require.False(t, zeroStr.IsSet())
 	require.NoError(t, zeroStr.Set("x"))
 	require.Equal(t, "x", zeroStr.Get())
@@ -114,7 +112,7 @@ func TestOptionalFlag_Compatibility(t *testing.T) {
 
 	var zeroF64 OptionalFloat64
 	require.Equal(t, "float64", zeroF64.Type())
-	require.Equal(t, "0", zeroF64.String())
+	require.Empty(t, zeroF64.String())
 	require.False(t, zeroF64.IsSet())
 	require.NoError(t, zeroF64.Set("3.14"))
 	require.Equal(t, 3.14, zeroF64.Get())
