@@ -353,7 +353,7 @@ func TestDBConnStreamCtxError(t *testing.T) {
 	execOnce := func(ctx context.Context, query string, dbconn *Conn) error {
 		return dbconn.StreamOnce(ctx, query, func(result *sqltypes.Result) error {
 			return nil
-		}, alloc, 1, querypb.ExecuteOptions_ALL)
+		}, alloc, 1, querypb.ExecuteOptions_ALL, true /* insideTxn */)
 	}
 
 	t.Run("context cancel - non-tx exec", func(t *testing.T) {
@@ -645,6 +645,25 @@ func TestDBExecOnceKillTimeout(t *testing.T) {
 func TestDBExecOnceNotInTxnKillQueryTimeout(t *testing.T) {
 	executeWithTimeout(t, `kill query \d+`, 1000*time.Millisecond, func(ctx context.Context, dbConn *Conn) (*sqltypes.Result, error) {
 		return dbConn.ExecOnce(ctx, "select 1", 1, false, false /* insideTxn */)
+	})
+}
+
+func TestDBStreamOnceKillTimeout(t *testing.T) {
+	executeWithTimeout(t, `kill \d+`, 150*time.Millisecond, func(ctx context.Context, dbConn *Conn) (*sqltypes.Result, error) {
+		err := dbConn.StreamOnce(ctx, "select 1", func(*sqltypes.Result) error { return nil },
+			func() *sqltypes.Result { return &sqltypes.Result{} }, 1, querypb.ExecuteOptions_TYPE_AND_NAME, true /* insideTxn */)
+		return nil, err
+	})
+}
+
+// TestDBStreamOnceNotInTxnKillQueryTimeout is the streaming twin of
+// TestDBExecOnceNotInTxnKillQueryTimeout: outside a transaction a mid-stream
+// deadline kills only the query, preserving the reserved connection's state.
+func TestDBStreamOnceNotInTxnKillQueryTimeout(t *testing.T) {
+	executeWithTimeout(t, `kill query \d+`, 1000*time.Millisecond, func(ctx context.Context, dbConn *Conn) (*sqltypes.Result, error) {
+		err := dbConn.StreamOnce(ctx, "select 1", func(*sqltypes.Result) error { return nil },
+			func() *sqltypes.Result { return &sqltypes.Result{} }, 1, querypb.ExecuteOptions_TYPE_AND_NAME, false /* insideTxn */)
+		return nil, err
 	})
 }
 

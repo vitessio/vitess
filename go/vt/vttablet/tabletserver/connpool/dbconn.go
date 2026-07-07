@@ -342,7 +342,14 @@ func (dbc *Conn) streamOnce(
 	return err
 }
 
-// StreamOnce executes the query and streams the results. But, does not retry on connection errors.
+// StreamOnce executes the query and streams the results. But, does not retry
+// on connection errors. Use it whenever the connection itself carries state a
+// silent reconnect would destroy (an open transaction, a reserved
+// connection's temp tables or settings). insideTxn controls what happens if
+// ctx expires while the stream is executing: inside a transaction the whole
+// connection is killed, because a partially-executed transaction cannot be
+// safely continued; outside one only the query is killed (KILL QUERY), so
+// the session and its state survive the interruption.
 func (dbc *Conn) StreamOnce(
 	ctx context.Context,
 	query string,
@@ -350,6 +357,7 @@ func (dbc *Conn) StreamOnce(
 	alloc func() *sqltypes.Result,
 	streamBufferSize int,
 	includedFields querypb.ExecuteOptions_IncludedFields,
+	insideTxn bool,
 ) error {
 	resultSent := false
 	return dbc.streamOnce(
@@ -364,7 +372,7 @@ func (dbc *Conn) StreamOnce(
 		},
 		alloc,
 		streamBufferSize,
-		true, // Once means we are in a txn
+		insideTxn,
 	)
 }
 

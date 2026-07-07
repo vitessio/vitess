@@ -446,6 +446,24 @@ func (vh *vtgateHandler) ComResetConnection(c *mysql.Conn) {
 	if err != nil {
 		log.Error(fmt.Sprintf("Error happened in transaction rollback: %v", err))
 	}
+	// The reset released the reserved connections, and the temporary tables
+	// and applied session settings died with them — but the session object
+	// survives on the connection, so clear vtgate's record of that state.
+	// Otherwise the session would still look like a temp-table holder (the
+	// next reserved shard session would re-register it for heartbeats, and
+	// query-plan caching would stay disabled for the rest of the
+	// connection's life), and every subsequent query would be forced onto a
+	// pointless fresh reserved connection. InReservedConn and
+	// SystemVariables must be cleared together: the flag plus the recorded
+	// variables are what re-establish settings on newly reserved
+	// connections, so clearing one without the other would desynchronize
+	// what the session reports (@@var reads) from what its connections
+	// actually have applied.
+	if opts := session.GetOptions(); opts != nil {
+		opts.HasCreatedTempTables = false
+	}
+	session.InReservedConn = false
+	session.SystemVariables = nil
 }
 
 func (vh *vtgateHandler) ConnectionClosed(c *mysql.Conn) {

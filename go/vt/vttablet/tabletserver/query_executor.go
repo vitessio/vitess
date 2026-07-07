@@ -391,7 +391,7 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 						return err
 					}
 					defer dbConn.Recycle()
-					return qre.execStreamSQL(dbConn, qre.connID != 0, sql, func(result *sqltypes.Result) error {
+					return qre.execStreamSQL(dbConn, qre.connID != 0, false /* insideTxn */, sql, func(result *sqltypes.Result) error {
 						// this stream result is potentially used by more than one client, so
 						// the consolidator will return it to the pool once it knows it's no longer
 						// being shared
@@ -436,7 +436,7 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 		}
 
 		conn := txConn.UnderlyingDBConn()
-		err = qre.execStreamSQL(conn, true, sql, streamCallback)
+		err = qre.execStreamSQL(conn, true /* isStateful */, txConn.IsInTransaction(), sql, streamCallback)
 		if qre.plan.PlanID == p.PlanCallProc {
 			if err != nil {
 				txConn.Close()
@@ -469,7 +469,7 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 	}
 	defer dbConn.Recycle()
 
-	err = qre.execStreamSQL(dbConn, false, sql, streamCallback)
+	err = qre.execStreamSQL(dbConn, false /* isStateful */, false /* insideTxn */, sql, streamCallback)
 	if qre.plan.PlanID == p.PlanCallProc {
 		if err != nil {
 			dbConn.Close()
@@ -1478,7 +1478,7 @@ func (qre *QueryExecutor) fetchLastInsertID(ctx context.Context, conn *connpool.
 	return nil
 }
 
-func (qre *QueryExecutor) execStreamSQL(conn *connpool.PooledConn, isTransaction bool, sql string, callback func(*sqltypes.Result) error) error {
+func (qre *QueryExecutor) execStreamSQL(conn *connpool.PooledConn, isStateful, insideTxn bool, sql string, callback func(*sqltypes.Result) error) error {
 	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.execStreamSQL")
 	defer span.Finish()
 	trace.AnnotateSQL(span, sqlparser.Preview(sql))
@@ -1506,13 +1506,13 @@ func (qre *QueryExecutor) execStreamSQL(conn *connpool.PooledConn, isTransaction
 	}
 
 	var err error
-	if isTransaction {
+	if isStateful {
 		err = qre.tsv.statefulql.Add(qd)
 		if err != nil {
 			return err
 		}
 		defer qre.tsv.statefulql.Remove(qd)
-		err = conn.Conn.StreamOnce(ctx, sql, cb, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Load()), sqltypes.IncludeFieldsOrDefault(qre.options))
+		err = conn.Conn.StreamOnce(ctx, sql, cb, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Load()), sqltypes.IncludeFieldsOrDefault(qre.options), insideTxn)
 	} else {
 		err = qre.tsv.olapql.Add(qd)
 		if err != nil {
@@ -1605,7 +1605,7 @@ func (qre *QueryExecutor) executeGetSchemaQuery(query string, callback func(sche
 	}
 	defer conn.Recycle()
 
-	return qre.execStreamSQL(conn, false /* isTransaction */, query, func(result *sqltypes.Result) error {
+	return qre.execStreamSQL(conn, false /* isStateful */, false /* insideTxn */, query, func(result *sqltypes.Result) error {
 		schemaDef := make(map[string]string)
 		for _, row := range result.Rows {
 			tableName := row[0].ToString()
@@ -1631,7 +1631,7 @@ func (qre *QueryExecutor) getUDFs(callback func(schemaRes *querypb.GetSchemaResp
 	}
 	defer conn.Recycle()
 
-	return qre.execStreamSQL(conn, false /* isTransaction */, query, func(result *sqltypes.Result) error {
+	return qre.execStreamSQL(conn, false /* isStateful */, false /* insideTxn */, query, func(result *sqltypes.Result) error {
 		var udfs []*querypb.UDFInfo
 		for _, row := range result.Rows {
 			aggr := strings.EqualFold(row[2].ToString(), "aggregate")

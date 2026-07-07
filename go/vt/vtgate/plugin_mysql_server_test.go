@@ -2081,6 +2081,27 @@ func TestComQueryTempTableHeartbeatRegistration(t *testing.T) {
 	require.NotZero(t, targets[0].reservedID)
 	require.Equal(t, topoproto.TabletAliasString(sbclookup.Tablet().Alias), topoproto.TabletAliasString(targets[0].alias))
 
+	// COM_RESET_CONNECTION releases the reserved connections, and the
+	// temporary tables and applied session settings die with them: the
+	// connection must be deregistered and the temp-table flag, the
+	// reserved-connection mode, and the recorded system variables all
+	// cleared — otherwise the next queries would be forced onto pointless
+	// fresh reserved connections and could re-register for heartbeats.
+	require.True(t, vh.session(c).GetInReservedConn())
+	vh.ComResetConnection(c)
+	require.False(t, vh.session(c).GetOptions().GetHasCreatedTempTables())
+	require.False(t, vh.session(c).GetInReservedConn())
+	require.Empty(t, vh.session(c).GetSystemVariables())
+	require.Empty(t, vh.session(c).GetShardSessions())
+	_, ok = vh.tempTableConns.Load(c)
+	require.False(t, ok)
+
+	// Creating a temporary table again after the reset re-registers.
+	err = vh.ComQuery(c, "create temporary table temp_t(id bigint)", func(*sqltypes.Result) error { return nil })
+	require.NoError(t, err)
+	_, ok = vh.tempTableConns.Load(c)
+	require.True(t, ok)
+
 	// Closing the connection deregisters it.
 	vh.ConnectionClosed(c)
 	_, ok = vh.tempTableConns.Load(c)
