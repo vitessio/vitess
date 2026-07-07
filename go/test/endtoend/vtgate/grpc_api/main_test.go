@@ -39,11 +39,14 @@ var (
 			primary key(id)
 		) Engine=InnoDB;
 `
+	// The config mixes plaintext and SHA256-hashed passwords so both
+	// authentication paths of the static auth plugin are exercised.
+	// SHA256 hash of "test_password": "10a6e6cc8311a3e2bcc09bf6c199adecd5dd59408c343e926b129c4914f3cb01"
 	grpcServerAuthStaticJSON = `
 		[
 		  {
 			"Username": "some_other_user",
-			"Password": "test_password"
+			"SHA256HashedPassword": "10a6e6cc8311a3e2bcc09bf6c199adecd5dd59408c343e926b129c4914f3cb01"
 		  },
 		  {
 			"Username": "another_unrelated_user",
@@ -51,7 +54,7 @@ var (
 		  },
 		  {
 			"Username": "user_with_access",
-			"Password": "test_password"
+			"SHA256HashedPassword": "10a6e6cc8311a3e2bcc09bf6c199adecd5dd59408c343e926b129c4914f3cb01"
 		  },
 		  {
 			"Username": "user_no_access",

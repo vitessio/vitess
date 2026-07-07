@@ -2,5 +2,9 @@
   {
     "Username": "vitess",
     "Password": "vitess_password"
+  },
+  {
+    "Username": "vitess_hashed",
+    "SHA256HashedPassword": "415a6502923945972202c5ce270568103e037be716652bb5e940737a66625a41"
   }
 ]

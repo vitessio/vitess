@@ -18,7 +18,9 @@ package servenv
 
 import (
 	"context"
+	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -57,13 +59,26 @@ func registerGRPCServerAuthStaticFlags(fs *pflag.FlagSet) {
 type StaticAuthConfigEntry struct {
 	Username string
 	Password string
+	// SHA256HashedPassword is the hex-encoded SHA256 hash of the user's password.
+	// It is used only when Password is empty, allowing plaintext and hashed
+	// credentials to be mixed in the same configuration file.
+	SHA256HashedPassword string
 	// TODO (@rafael) Add authorization parameters
+}
+
+// staticAuthEntry is the runtime representation of a StaticAuthConfigEntry,
+// with the SHA256HashedPassword hex-decoded once at initialization so that
+// Authenticate does not re-decode it on every request.
+type staticAuthEntry struct {
+	StaticAuthConfigEntry
+
+	sha256HashedPassword []byte
 }
 
 // StaticAuthPlugin  implements static username/password authentication for grpc. It contains an array of username/passwords
 // that will be authorized to connect to the grpc server.
 type StaticAuthPlugin struct {
-	entries []StaticAuthConfigEntry
+	entries []staticAuthEntry
 }
 
 // Authenticate implements AuthPlugin interface. This method will be used inside a middleware in grpc_server to authenticate
@@ -76,7 +91,15 @@ func (sa *StaticAuthPlugin) Authenticate(ctx context.Context, fullMethod string)
 		username := md["username"][0]
 		password := md["password"][0]
 		for _, authEntry := range sa.entries {
-			if username == authEntry.Username && subtle.ConstantTimeCompare([]byte(password), []byte(authEntry.Password)) == 1 {
+			if username != authEntry.Username {
+				continue
+			}
+			if authEntry.Password == "" && len(authEntry.sha256HashedPassword) > 0 {
+				hashedPassword := sha256.Sum256([]byte(password))
+				if subtle.ConstantTimeCompare(hashedPassword[:], authEntry.sha256HashedPassword) == 1 {
+					return newStaticAuthContext(ctx, username), nil
+				}
+			} else if subtle.ConstantTimeCompare([]byte(password), []byte(authEntry.Password)) == 1 {
 				return newStaticAuthContext(ctx, username), nil
 			}
 		}
@@ -116,8 +139,23 @@ func staticAuthPluginInitializer() (Authenticator, error) {
 		err := fmt.Errorf("fail to load static auth plugin: %v", err)
 		return nil, err
 	}
+	authEntries := make([]staticAuthEntry, 0, len(entries))
+	for i, entry := range entries {
+		authEntry := staticAuthEntry{StaticAuthConfigEntry: entry}
+		if entry.SHA256HashedPassword != "" {
+			hash, err := hex.DecodeString(entry.SHA256HashedPassword)
+			if err != nil {
+				return nil, fmt.Errorf("fail to load static auth plugin: entry %d (user=%s) has an invalid hex-encoded SHA256HashedPassword: %v", i, entry.Username, err)
+			}
+			if len(hash) != sha256.Size {
+				return nil, fmt.Errorf("fail to load static auth plugin: entry %d (user=%s) has an invalid SHA256HashedPassword length: expected %d hex chars, got %d", i, entry.Username, sha256.Size*2, len(entry.SHA256HashedPassword))
+			}
+			authEntry.sha256HashedPassword = hash
+		}
+		authEntries = append(authEntries, authEntry)
+	}
 	staticAuthPlugin := &StaticAuthPlugin{
-		entries: entries,
+		entries: authEntries,
 	}
 	log.Info("static auth plugin have initialized successfully with config from grpc-auth-static-password-file")
 	return staticAuthPlugin, nil
