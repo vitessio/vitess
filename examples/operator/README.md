@@ -32,8 +32,8 @@ kubectl apply -f 101_initial_cluster.yaml
 ./pf.sh &
 alias mysql="mysql -h 127.0.0.1 -P 15306 -u user"
 alias vtctldclient="vtctldclient --server localhost:15999 --alsologtostderr"
-vtctldclient ApplySchema --sql="$(cat create_commerce_schema.sql)" commerce
-vtctldclient ApplyVSchema --vschema="$(cat vschema_commerce_initial.json)" commerce
+vtctldclient ApplySchema --sql="$(cat ../common/create_commerce_schema.sql)" commerce
+vtctldclient ApplyVSchema --vschema="$(cat ../common/vschema_commerce_initial.json)" commerce
 
 # Insert and verify data
 mysql < ../common/insert_commerce_data.sql
@@ -57,10 +57,10 @@ vtctldclient MoveTables --workflow commerce2customer --target-keyspace customer 
 vtctldclient MoveTables --workflow commerce2customer --target-keyspace customer complete
 
 # Prepare for resharding
-vtctldclient ApplySchema --sql="$(cat create_commerce_seq.sql)" commerce
-vtctldclient ApplyVSchema --vschema="$(cat vschema_commerce_seq.json)" commerce
-vtctldclient ApplySchema --sql="$(cat create_customer_sharded.sql)" customer
-vtctldclient ApplyVSchema --vschema="$(cat vschema_customer_sharded.json)" customer
+vtctldclient ApplySchema --sql="$(cat ../common/create_commerce_seq.sql)" commerce
+vtctldclient ApplyVSchema --vschema="$(cat ../common/vschema_commerce_seq.json)" commerce
+vtctldclient ApplySchema --sql="$(cat ../common/create_customer_sharded.sql)" customer
+vtctldclient ApplyVSchema --vschema="$(cat ../common/vschema_customer_sharded.json)" customer
 kubectl apply -f 302_new_shards.yaml
 
 # Reshard

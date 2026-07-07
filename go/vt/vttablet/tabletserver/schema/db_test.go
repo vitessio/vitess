@@ -21,7 +21,9 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/maps"
 
@@ -97,7 +99,7 @@ func TestGenerateFullQuery(t *testing.T) {
 func TestGetCreateStatement(t *testing.T) {
 	db := fakesqldb.New(t)
 	env := tabletenv.NewEnv(vtenv.NewTestEnv(), nil, "TestGetCreateStatement")
-	conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
+	conn, err := connpool.NewConn(t.Context(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 	require.NoError(t, err)
 
 	// Success view
@@ -106,7 +108,7 @@ func TestGetCreateStatement(t *testing.T) {
 		sqltypes.MakeTestFields(" View | Create View | character_set_client | collation_connection", "varchar|varchar|varchar|varchar"),
 		fmt.Sprintf("lead|%v|utf8mb4|utf8mb4_0900_ai_ci", createStatement),
 	))
-	got, err := getCreateStatement(context.Background(), conn, "`lead`")
+	got, err := getCreateStatement(t.Context(), conn, "`lead`")
 	require.NoError(t, err)
 	require.Equal(t, createStatement, got)
 	require.NoError(t, db.LastError())
@@ -117,7 +119,7 @@ func TestGetCreateStatement(t *testing.T) {
 		sqltypes.MakeTestFields(" Table | Create Table", "varchar|varchar"),
 		fmt.Sprintf("area|%v", createStatement),
 	))
-	got, err = getCreateStatement(context.Background(), conn, "area")
+	got, err = getCreateStatement(t.Context(), conn, "area")
 	require.NoError(t, err)
 	require.Equal(t, createStatement, got)
 	require.NoError(t, db.LastError())
@@ -125,15 +127,15 @@ func TestGetCreateStatement(t *testing.T) {
 	// Failure
 	errMessage := "ERROR 1146 (42S02): Table 'ks.v1' doesn't exist"
 	db.AddRejectedQuery("show create table v1", errors.New(errMessage))
-	got, err = getCreateStatement(context.Background(), conn, "v1")
+	got, err = getCreateStatement(t.Context(), conn, "v1")
 	require.ErrorContains(t, err, errMessage)
-	require.Equal(t, "", got)
+	require.Empty(t, got)
 }
 
 func TestGetChangedViewNames(t *testing.T) {
 	db := fakesqldb.New(t)
 	env := tabletenv.NewEnv(vtenv.NewTestEnv(), nil, "TestGetChangedViewNames")
-	conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
+	conn, err := connpool.NewConn(t.Context(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 	require.NoError(t, err)
 
 	// Success
@@ -144,22 +146,22 @@ func TestGetChangedViewNames(t *testing.T) {
 		"v1",
 		"v2",
 	))
-	got, err := getChangedViewNames(context.Background(), conn, true)
+	got, err := getChangedViewNames(t.Context(), conn, true)
 	require.NoError(t, err)
 	require.Len(t, got, 3)
 	require.ElementsMatch(t, maps.Keys(got), []string{"v1", "v2", "lead"})
 	require.NoError(t, db.LastError())
 
 	// Not serving primary
-	got, err = getChangedViewNames(context.Background(), conn, false)
+	got, err = getChangedViewNames(t.Context(), conn, false)
 	require.NoError(t, err)
-	require.Len(t, got, 0)
+	require.Empty(t, got)
 	require.NoError(t, db.LastError())
 
 	// Failure
 	errMessage := "ERROR 1146 (42S02): Table '_vt.views' doesn't exist"
 	db.AddRejectedQuery(query, errors.New(errMessage))
-	got, err = getChangedViewNames(context.Background(), conn, true)
+	got, err = getChangedViewNames(t.Context(), conn, true)
 	require.ErrorContains(t, err, errMessage)
 	require.Nil(t, got)
 }
@@ -167,7 +169,7 @@ func TestGetChangedViewNames(t *testing.T) {
 func TestGetViewDefinition(t *testing.T) {
 	db := fakesqldb.New(t)
 	env := tabletenv.NewEnv(vtenv.NewTestEnv(), nil, "TestGetViewDefinition")
-	conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
+	conn, err := connpool.NewConn(t.Context(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 	require.NoError(t, err)
 
 	viewsBV, err := sqltypes.BuildBindVariable([]string{"v1", "lead"})
@@ -194,13 +196,13 @@ func TestGetViewDefinition(t *testing.T) {
 	db.AddRejectedQuery(query, errors.New(errMessage))
 	got, err = collectGetViewDefinitions(conn, bv)
 	require.ErrorContains(t, err, errMessage)
-	require.Len(t, got, 0)
+	require.Empty(t, got)
 
 	// Failure empty bv
 	bv = nil
 	got, err = collectGetViewDefinitions(conn, bv)
 	require.EqualError(t, err, "missing bind var viewNames")
-	require.Len(t, got, 0)
+	require.Empty(t, got)
 }
 
 func collectGetViewDefinitions(conn *connpool.Conn, bv map[string]*querypb.BindVariable) (map[string]string, error) {
@@ -273,23 +275,8 @@ func TestGetMismatchedTableNames(t *testing.T) {
 			isServingPrimary:   true,
 			expectedTableNames: []string{"t2"},
 		}, {
-			name: "DualGetsIgnored",
-			tables: map[string]*Table{
-				"dual": NewTable("dual", NoType),
-				"t2": {
-					Name:       sqlparser.NewIdentifierCS("t2"),
-					Type:       NoType,
-					CreateTime: 31234,
-				},
-			},
-			dbData: sqltypes.MakeTestResult(queryFields,
-				"t2|31234"),
-			isServingPrimary:   true,
-			expectedTableNames: []string{},
-		}, {
 			name: "AllProblems",
 			tables: map[string]*Table{
-				"dual": NewTable("dual", NoType),
 				"t2": {
 					Name:       sqlparser.NewIdentifierCS("t2"),
 					Type:       NoType,
@@ -340,7 +327,7 @@ func TestGetMismatchedTableNames(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			db := fakesqldb.New(t)
 			env := tabletenv.NewEnv(vtenv.NewTestEnv(), nil, tc.name)
-			conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
+			conn, err := connpool.NewConn(t.Context(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 			require.NoError(t, err)
 
 			if tc.dbError != "" {
@@ -351,7 +338,7 @@ func TestGetMismatchedTableNames(t *testing.T) {
 			se := &Engine{
 				tables: tc.tables,
 			}
-			mismatchedTableNames, err := se.getMismatchedTableNames(context.Background(), conn, tc.isServingPrimary)
+			mismatchedTableNames, err := se.getMismatchedTableNames(t.Context(), conn, tc.isServingPrimary)
 			if tc.expectedError != "" {
 				require.ErrorContains(t, err, tc.expectedError)
 			} else {
@@ -461,7 +448,7 @@ func TestReloadTablesInDB(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			db := fakesqldb.New(t)
 			env := tabletenv.NewEnv(vtenv.NewTestEnv(), nil, tc.name)
-			conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
+			conn, err := connpool.NewConn(t.Context(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 			require.NoError(t, err)
 
 			// Add queries with the expected results and errors.
@@ -472,7 +459,7 @@ func TestReloadTablesInDB(t *testing.T) {
 				db.AddRejectedQuery(query, errorToThrow)
 			}
 
-			err = reloadTablesDataInDB(context.Background(), conn, tc.tablesToReload, tc.tablesToDelete, sqlparser.NewTestParser())
+			err = reloadTablesDataInDB(t.Context(), conn, tc.tablesToReload, tc.tablesToDelete, sqlparser.NewTestParser())
 			if tc.expectedError != "" {
 				require.ErrorContains(t, err, tc.expectedError)
 				return
@@ -481,6 +468,176 @@ func TestReloadTablesInDB(t *testing.T) {
 			require.NoError(t, db.LastError())
 		})
 	}
+}
+
+// reloadTestQueries are the exact queries a single-table (t1) reload issues.
+const (
+	reloadDeleteQuery = "delete from _vt.`tables` where table_schema = database() and `table_name` in ('t1')"
+	reloadInsertQuery = "insert into _vt.`tables`(table_schema, `table_name`, create_statement, create_time) values (database(), 't1', 'create_table_t1', 1234)"
+)
+
+// getReloadTestConn returns a pooled schema connection backed by db. It uses a
+// real connpool.Pool (not connpool.NewConn) so the connection is wired with a
+// dba pool, which the cancellation KillQuery path needs to issue `kill query`.
+func getReloadTestConn(t *testing.T, db *fakesqldb.DB, name string) *connpool.Conn {
+	t.Helper()
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), nil, name)
+	params := dbconfigs.New(db.ConnParams())
+	cp := connpool.NewPool(env, name, tabletenv.ConnPoolConfig{Size: 1, IdleTimeout: 10 * time.Second})
+	cp.Open(params, params, params)
+	t.Cleanup(cp.Close)
+
+	pooled, err := cp.Get(t.Context(), nil)
+	require.NoError(t, err)
+	t.Cleanup(pooled.Recycle)
+	return pooled.Conn
+}
+
+// TestReloadTablesInDBRollsBackOnCanceledContext guards the schema-reload wedge
+// (vitessio/vitess#20314): when the reload context is canceled mid-transaction,
+// the deferred rollback must still reach MySQL so the pooled connection is not
+// recycled with an open transaction holding locks on _vt.tables.
+func TestReloadTablesInDBRollsBackOnCanceledContext(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	showCreateTableFields := sqltypes.MakeTestFields("Table | Create Table", "varchar|varchar")
+	conn := getReloadTestConn(t, db, "ReloadRollback")
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	// killed is closed once the cancellation handler has issued `kill query`,
+	// proving the KillQuery path ran: the query is killed but the session and
+	// its open transaction survive (insideTxn=false).
+	killed := make(chan struct{})
+	db.AddQueryPatternWithCallback(`kill query \d+`, &sqltypes.Result{}, func(string) {
+		close(killed)
+	})
+
+	db.AddQuery("begin", &sqltypes.Result{})
+	db.AddQuery("commit", &sqltypes.Result{})
+	db.AddQuery("rollback", &sqltypes.Result{})
+	db.AddQuery("show create table t1", sqltypes.MakeTestResult(showCreateTableFields, "t1|create_table_t1"))
+	db.AddQuery(reloadInsertQuery, &sqltypes.Result{})
+
+	// Cancel while the DELETE is in flight, then block until the cancellation
+	// handler has actually killed the query. Holding the DELETE open until the
+	// kill is observed deterministically reproduces the poisoning sequence.
+	db.AddQuery(reloadDeleteQuery, &sqltypes.Result{})
+	db.SetBeforeFunc(reloadDeleteQuery, func() {
+		cancel()
+		select {
+		case <-killed:
+		case <-time.After(10 * time.Second):
+			assert.Fail(t, "cancellation handler never issued `kill query`")
+		}
+	})
+
+	tables := []*Table{{Name: sqlparser.NewIdentifierCS("t1"), Type: NoType, CreateTime: 1234}}
+	err := reloadTablesDataInDB(ctx, conn, tables, nil, sqlparser.NewTestParser())
+	require.Error(t, err)
+
+	// The transaction must have been rolled back on MySQL despite the canceled
+	// context. Without the fix the deferred rollback short-circuits on the
+	// canceled context and never reaches MySQL.
+	require.Contains(t, db.QueryLog(), "rollback")
+}
+
+// TestReloadTablesInDBClosesConnectionOnRollbackFailure verifies that if the
+// cleanup rollback itself fails, the connection is closed so the pool discards
+// it rather than recycling a session whose transaction state is unknown.
+func TestReloadTablesInDBClosesConnectionOnRollbackFailure(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	showCreateTableFields := sqltypes.MakeTestFields("Table | Create Table", "varchar|varchar")
+	conn := getReloadTestConn(t, db, "ReloadRollbackFail")
+
+	db.AddQuery("begin", &sqltypes.Result{})
+	db.AddQuery("commit", &sqltypes.Result{})
+	db.AddQuery("show create table t1", sqltypes.MakeTestResult(showCreateTableFields, "t1|create_table_t1"))
+	db.AddQuery(reloadInsertQuery, &sqltypes.Result{})
+	// The reload fails on the clear, then the rollback is refused too: the
+	// helper must discard the connection.
+	db.AddRejectedQuery(reloadDeleteQuery, errors.New("clear failed"))
+	db.AddRejectedQuery("rollback", errors.New("rollback failed"))
+
+	tables := []*Table{{Name: sqlparser.NewIdentifierCS("t1"), Type: NoType, CreateTime: 1234}}
+	err := reloadTablesDataInDB(t.Context(), conn, tables, nil, sqlparser.NewTestParser())
+	require.Error(t, err)
+
+	require.True(t, conn.IsClosed())
+}
+
+// TestReloadTablesInDBRollsBackWhenBeginIsCanceled guards the same wedge as
+// TestReloadTablesInDBRollsBackOnCanceledContext, but for the narrow window
+// where the context is canceled while the `begin` itself is in flight. The
+// `begin` reaches MySQL and opens the transaction, but the killed query makes
+// Exec report an error — the cleanup rollback must still run so the connection
+// is not recycled holding an open transaction.
+func TestReloadTablesInDBRollsBackWhenBeginIsCanceled(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	showCreateTableFields := sqltypes.MakeTestFields("Table | Create Table", "varchar|varchar")
+	conn := getReloadTestConn(t, db, "ReloadRollbackBegin")
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	killed := make(chan struct{})
+	db.AddQueryPatternWithCallback(`kill query \d+`, &sqltypes.Result{}, func(string) {
+		close(killed)
+	})
+
+	db.AddQuery("rollback", &sqltypes.Result{})
+	db.AddQuery("show create table t1", sqltypes.MakeTestResult(showCreateTableFields, "t1|create_table_t1"))
+
+	// Cancel while `begin` is in flight, then block until the cancellation
+	// handler has killed the query. The transaction is opened on MySQL but
+	// Exec returns an error, so the reload never reaches the delete/insert.
+	db.AddQuery("begin", &sqltypes.Result{})
+	db.SetBeforeFunc("begin", func() {
+		cancel()
+		select {
+		case <-killed:
+		case <-time.After(10 * time.Second):
+			assert.Fail(t, "cancellation handler never issued `kill query`")
+		}
+	})
+
+	tables := []*Table{{Name: sqlparser.NewIdentifierCS("t1"), Type: NoType, CreateTime: 1234}}
+	err := reloadTablesDataInDB(ctx, conn, tables, nil, sqlparser.NewTestParser())
+	require.Error(t, err)
+
+	// The transaction opened by `begin` must have been rolled back on MySQL.
+	// Without the fix the rollback is only deferred after `begin` succeeds, so
+	// a canceled `begin` leaves the transaction open and the connection is
+	// recycled poisoned.
+	require.Contains(t, db.QueryLog(), "rollback")
+}
+
+// TestReloadTablesInDBSkipsRollbackOnSuccess verifies that a reload that
+// commits successfully does not issue the cleanup rollback, so the success
+// path doesn't pay for a redundant round-trip while holding the engine mutex.
+func TestReloadTablesInDBSkipsRollbackOnSuccess(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	showCreateTableFields := sqltypes.MakeTestFields("Table | Create Table", "varchar|varchar")
+	conn := getReloadTestConn(t, db, "ReloadNoRollback")
+
+	db.AddQuery("begin", &sqltypes.Result{})
+	db.AddQuery("commit", &sqltypes.Result{})
+	db.AddQuery("show create table t1", sqltypes.MakeTestResult(showCreateTableFields, "t1|create_table_t1"))
+	db.AddQuery(reloadDeleteQuery, &sqltypes.Result{})
+	db.AddQuery(reloadInsertQuery, &sqltypes.Result{})
+
+	tables := []*Table{{Name: sqlparser.NewIdentifierCS("t1"), Type: NoType, CreateTime: 1234}}
+	require.NoError(t, reloadTablesDataInDB(t.Context(), conn, tables, nil, sqlparser.NewTestParser()))
+
+	require.NotContains(t, db.QueryLog(), "rollback")
 }
 
 func TestReloadViewsInDB(t *testing.T) {
@@ -594,7 +751,7 @@ func TestReloadViewsInDB(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			db := fakesqldb.New(t)
 			env := tabletenv.NewEnv(vtenv.NewTestEnv(), nil, tc.name)
-			conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
+			conn, err := connpool.NewConn(t.Context(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 			require.NoError(t, err)
 
 			// Add queries with the expected results and errors.
@@ -605,7 +762,7 @@ func TestReloadViewsInDB(t *testing.T) {
 				db.AddRejectedQuery(query, errorToThrow)
 			}
 
-			err = reloadViewsDataInDB(context.Background(), conn, tc.viewsToReload, tc.viewsToDelete, sqlparser.NewTestParser())
+			err = reloadViewsDataInDB(t.Context(), conn, tc.viewsToReload, tc.viewsToDelete, sqlparser.NewTestParser())
 			if tc.expectedError != "" {
 				require.ErrorContains(t, err, tc.expectedError)
 				return
@@ -885,7 +1042,7 @@ func TestReloadDataInDB(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			db := fakesqldb.New(t)
 			env := tabletenv.NewEnv(vtenv.NewTestEnv(), nil, tc.name)
-			conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
+			conn, err := connpool.NewConn(t.Context(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 			require.NoError(t, err)
 
 			// Add queries with the expected results and errors.
@@ -896,7 +1053,7 @@ func TestReloadDataInDB(t *testing.T) {
 				db.AddRejectedQuery(query, errorToThrow)
 			}
 
-			err = reloadDataInDB(context.Background(), conn, tc.altered, tc.created, tc.dropped, false, sqlparser.NewTestParser())
+			err = reloadDataInDB(t.Context(), conn, tc.altered, tc.created, tc.dropped, false, sqlparser.NewTestParser())
 			if tc.expectedError != "" {
 				require.ErrorContains(t, err, tc.expectedError)
 				return

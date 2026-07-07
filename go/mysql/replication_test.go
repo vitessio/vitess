@@ -44,9 +44,8 @@ func TestComBinlogDump(t *testing.T) {
 	require.Error(t, err)
 
 	// Write ComBinlogDump packet, read it, compare.
-	if err := cConn.WriteComBinlogDump(0x01020304, "moofarm", 0x05060708, 0x090a); err != nil {
-		t.Fatalf("WriteComBinlogDump failed: %v", err)
-	}
+	err = cConn.WriteComBinlogDump(0x01020304, "moofarm", 0x05060708, 0x090a)
+	require.NoError(t, err, "WriteComBinlogDump failed")
 
 	data, err := sConn.ReadPacket()
 	require.NoError(t, err, "sConn.ReadPacket - ComBinlogDump failed: %v", err)
@@ -63,9 +62,8 @@ func TestComBinlogDump(t *testing.T) {
 	sConn.sequence = 0
 
 	// Write ComBinlogDump packet with no filename, read it, compare.
-	if err := cConn.WriteComBinlogDump(0x01020304, "", 0x05060708, 0x090a); err != nil {
-		t.Fatalf("WriteComBinlogDump failed: %v", err)
-	}
+	err = cConn.WriteComBinlogDump(0x01020304, "", 0x05060708, 0x090a)
+	require.NoError(t, err, "WriteComBinlogDump failed")
 
 	data, err = sConn.ReadPacket()
 	require.NoError(t, err, "sConn.ReadPacket - ComBinlogDump failed: %v", err)
@@ -92,11 +90,11 @@ func TestComBinlogDumpGTID(t *testing.T) {
 		// Write ComBinlogDumpGTID packet, read it, compare.
 		var flags uint16 = 0x0d0e
 		err := cConn.WriteComBinlogDumpGTID(0x01020304, "moofarm", 0x05060708090a0b0c, flags, []byte{})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		data, err := sConn.ReadPacket()
 		require.NoError(t, err, "sConn.ReadPacket - ComBinlogDumpGTID failed: %v", err)
 		require.NotEmpty(t, data)
-		require.EqualValues(t, data[0], ComBinlogDumpGTID)
+		require.EqualValues(t, ComBinlogDumpGTID, data[0])
 
 		expectedData := []byte{
 			ComBinlogDumpGTID,
@@ -128,11 +126,11 @@ func TestComBinlogDumpGTID(t *testing.T) {
 		assert.Len(t, sidBlock, 48)
 
 		err = cConn.WriteComBinlogDumpGTID(0x01020304, "moofarm", 0x05060708090a0b0c, flags, sidBlock)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		data, err := sConn.ReadPacket()
 		require.NoError(t, err, "sConn.ReadPacket - ComBinlogDumpGTID failed: %v", err)
 		require.NotEmpty(t, data)
-		require.EqualValues(t, data[0], ComBinlogDumpGTID)
+		require.EqualValues(t, ComBinlogDumpGTID, data[0])
 
 		expectedData := []byte{
 			ComBinlogDumpGTID,
@@ -159,7 +157,7 @@ func TestComBinlogDumpGTID(t *testing.T) {
 	t.Run("WriteComBinlogDumpGTID no filename", func(t *testing.T) {
 		// Write ComBinlogDumpGTID packet with no filename, read it, compare.
 		err := cConn.WriteComBinlogDumpGTID(0x01020304, "", 0x05060708090a0b0c, 0x0d0e, []byte{0xfa, 0xfb})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		data, err := sConn.ReadPacket()
 		require.NoError(t, err, "sConn.ReadPacket - ComBinlogDumpGTID failed: %v", err)
 
@@ -180,7 +178,7 @@ func TestComBinlogDumpGTID(t *testing.T) {
 	t.Run("Write rotate event", func(t *testing.T) {
 		event := NewRotateEvent(f, s, 456, "mysql-bin.000123")
 		err := cConn.WriteBinlogEvent(event, false)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		data, err := sConn.ReadPacket()
 		require.NoError(t, err)
 
@@ -204,7 +202,7 @@ func TestComBinlogDumpGTID(t *testing.T) {
 		}
 		event := NewQueryEvent(f, s, q)
 		err := cConn.WriteBinlogEvent(event, false)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		data, err := sConn.ReadPacket()
 		require.NoError(t, err)
 
@@ -461,9 +459,8 @@ func TestSendSemiSyncAck(t *testing.T) {
 	// Write ComBinlogDumpGTID packet, read it, compare.
 	logName := "moofarm"
 	logPos := uint64(1852)
-	if err := cConn.SendSemiSyncAck(logName, logPos); err != nil {
-		t.Fatalf("SendSemiSyncAck failed: %v", err)
-	}
+	err := cConn.SendSemiSyncAck(logName, logPos)
+	require.NoError(t, err, "SendSemiSyncAck failed")
 
 	data, err := sConn.ReadPacket()
 	require.NoError(t, err, "sConn.ReadPacket - SendSemiSyncAck failed: %v", err)

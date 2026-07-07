@@ -247,6 +247,14 @@ func (v *vschema) SysVarSetEnabled() bool {
 	panic("implement me")
 }
 
+func (v *vschema) IsSystemVariableDenied(string) bool {
+	return false
+}
+
+func (v *vschema) HasDeniedSystemVariables() bool {
+	return false
+}
+
 func (v *vschema) KeyspaceExists(keyspace string) bool {
 	// TODO implement me
 	panic("implement me")
@@ -304,6 +312,10 @@ func (v *vschema) PlannerWarning(message string) {
 func (v *vschema) ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKeyMode, error) {
 	// TODO implement me
 	panic("implement me")
+}
+
+func (v *vschema) AllowCrossKeyspaceReads(keyspace string) (bool, error) {
+	return true, nil
 }
 
 func (v *vschema) KeyspaceError(keyspace string) error {

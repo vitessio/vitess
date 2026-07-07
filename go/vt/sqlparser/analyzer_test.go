@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestPreview(t *testing.T) {
@@ -88,7 +89,7 @@ func TestPreview(t *testing.T) {
 	}
 	for _, tcase := range testcases {
 		if got := Preview(tcase.sql); got != tcase.want {
-			t.Errorf("Preview(%s): %v, want %v", tcase.sql, got, tcase.want)
+			assert.Equalf(t, tcase.want, got, "Preview(%s): %v, want %v", tcase.sql, got, tcase.want)
 		}
 	}
 }
@@ -111,7 +112,7 @@ func TestIsDML(t *testing.T) {
 	}
 	for _, tcase := range testcases {
 		if got := IsDML(tcase.sql); got != tcase.want {
-			t.Errorf("IsDML(%s): %v, want %v", tcase.sql, got, tcase.want)
+			assert.Equalf(t, tcase.want, got, "IsDML(%s): %v, want %v", tcase.sql, got, tcase.want)
 		}
 	}
 }
@@ -148,7 +149,7 @@ func TestSplitAndExpression(t *testing.T) {
 	parser := NewTestParser()
 	for _, tcase := range testcases {
 		stmt, err := parser.Parse(tcase.sql)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		var expr Expr
 		if where := stmt.(*Select).Where; where != nil {
 			expr = where.Expr
@@ -271,7 +272,7 @@ func TestTableFromStatement(t *testing.T) {
 			got = String(name)
 		}
 		if got != tc.out {
-			t.Errorf("TableFromStatement('%s'): %s, want %s", tc.in, got, tc.out)
+			assert.Equalf(t, tc.out, got, "TableFromStatement('%s'): %s, want %s", tc.in, got, tc.out)
 		}
 	}
 }
@@ -293,13 +294,10 @@ func TestGetTableName(t *testing.T) {
 	parser := NewTestParser()
 	for _, tc := range testcases {
 		tree, err := parser.Parse(tc.in)
-		if err != nil {
-			t.Error(err)
-			continue
-		}
+		require.NoError(t, err)
 		out := GetTableName(tree.(*Select).From[0].(*AliasedTableExpr).Expr)
 		if out.String() != tc.out {
-			t.Errorf("GetTableName('%s'): %s, want %s", tc.in, out, tc.out)
+			assert.Equalf(t, tc.out, out.String(), "GetTableName('%s'): %s, want %s", tc.in, out, tc.out)
 		}
 	}
 }
@@ -317,7 +315,7 @@ func TestIsColName(t *testing.T) {
 	for _, tc := range testcases {
 		out := IsColName(tc.in)
 		if out != tc.out {
-			t.Errorf("IsColName(%T): %v, want %v", tc.in, out, tc.out)
+			assert.Equalf(t, tc.out, out, "IsColName(%T): %v, want %v", tc.in, out, tc.out)
 		}
 	}
 }
@@ -335,7 +333,7 @@ func TestIsNull(t *testing.T) {
 	for _, tc := range testcases {
 		out := IsNull(tc.in)
 		if out != tc.out {
-			t.Errorf("IsNull(%T): %v, want %v", tc.in, out, tc.out)
+			assert.Equalf(t, tc.out, out, "IsNull(%T): %v, want %v", tc.in, out, tc.out)
 		}
 	}
 }

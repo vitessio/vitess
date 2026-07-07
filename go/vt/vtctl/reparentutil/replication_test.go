@@ -19,6 +19,7 @@ package reparentutil
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -189,13 +190,13 @@ func TestFindPositionsOfAllCandidates(t *testing.T) {
 			t.Parallel()
 
 			actual, isGTIDBased, err := FindPositionsOfAllCandidates(tt.statusMap, tt.primaryStatusMap)
-			require.EqualValues(t, tt.expectedGTIDBased, isGTIDBased)
+			require.Equal(t, tt.expectedGTIDBased, isGTIDBased)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			keys := make([]string, 0, len(actual))
 			for key := range actual {
@@ -204,6 +205,34 @@ func TestFindPositionsOfAllCandidates(t *testing.T) {
 			assert.ElementsMatch(t, tt.expected, keys)
 		})
 	}
+}
+
+// TestFindPositionsOfAllCandidates_ErrorNotDuplicated verifies that when
+// FindPositionsOfAllCandidates wraps an error the underlying cause message is
+// not repeated twice in the output. vterrors.Wrapf already appends the cause
+// via "wrapper: cause", so including the cause in the format string would
+// duplicate it.
+func TestFindPositionsOfAllCandidates_ErrorNotDuplicated(t *testing.T) {
+	t.Parallel()
+
+	_, _, err := FindPositionsOfAllCandidates(
+		map[string]*replicationdatapb.StopReplicationStatus{
+			"r1": {After: &replicationdatapb.Status{
+				SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+				RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+			}},
+		},
+		map[string]*replicationdatapb.PrimaryStatus{
+			"p1": {Position: "InvalidFlavor/1234"},
+		},
+	)
+	require.Error(t, err)
+
+	cause := vterrors.Cause(err)
+	require.Error(t, cause)
+	causeMsg := cause.Error()
+	assert.Equal(t, 1, strings.Count(err.Error(), causeMsg),
+		"cause message must appear exactly once in the wrapped error")
 }
 
 // stopReplicationAndBuildStatusMapsTestTMClient implements
@@ -270,7 +299,7 @@ func (fake *stopReplicationAndBuildStatusMapsTestTMClient) StopReplicationAndGet
 }
 
 func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	logger := logutil.NewMemoryLogger()
 	tests := []struct {
 		name                     string
@@ -1369,6 +1398,101 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 			}},
 			shouldErr: false,
 		},
+		{
+			// ignoredTablets contains a stale alias not present in tabletMap.
+			// The old code computed numGoRoutines as len(tabletMap) - ignoredTablets.Len(),
+			// which would be 2 - 2 = 0 instead of the correct 1.
+			name:       "stale alias in ignoredTablets does not miscount goroutines",
+			durability: policy.DurabilityNone,
+			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
+				stopReplicationAndGetStatusResults: map[string]*struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Err        error
+				}{
+					"zone1-0000000100": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-5", IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After:  &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-9"},
+						},
+					},
+					"zone1-0000000101": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-5", IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After:  &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-9"},
+						},
+					},
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Type: topodatapb.TabletType_REPLICA,
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Type: topodatapb.TabletType_REPLICA,
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+			},
+			// zone1-0000000101 is in the map, but zone1-0000000999 is stale/not in the map.
+			// Old code: numGoRoutines = 2 - 2 = 0 (wrong). New code: numGoRoutines = 1 (correct).
+			ignoredTablets: sets.New[string]("zone1-0000000101", "zone1-0000000999"),
+			expectedStatusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"zone1-0000000100": {
+					Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-5", IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+					After:  &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-9"},
+				},
+			},
+			expectedTakingBackup:     map[string]bool{"zone1-0000000100": false},
+			expectedPrimaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{},
+			expectedTabletsReachable: []*topodatapb.Tablet{{
+				Type: topodatapb.TabletType_REPLICA,
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			}},
+			shouldErr: false,
+		},
+		{
+			// All tablets in the map are in the ignored set — the new precondition
+			// guard should return FAILED_PRECONDITION instead of silently proceeding
+			// with numGoRoutines=0 / requiredSuccesses=-1.
+			name:       "all tablets ignored returns FAILED_PRECONDITION",
+			durability: policy.DurabilityNone,
+			tmc:        &stopReplicationAndBuildStatusMapsTestTMClient{},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Type: topodatapb.TabletType_REPLICA,
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Type: topodatapb.TabletType_REPLICA,
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+			},
+			ignoredTablets: sets.New[string]("zone1-0000000100", "zone1-0000000101"),
+			shouldErr:      true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -1386,10 +1510,10 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tt.expectedStatusMap, res.statusMap, "StopReplicationStatus mismatch")
 			assert.Equal(t, tt.expectedPrimaryStatusMap, res.primaryStatusMap, "PrimaryStatusMap mismatch")
-			require.Equal(t, len(tt.expectedTabletsReachable), len(res.reachableTablets), "TabletsReached length mismatch")
+			require.Len(t, res.reachableTablets, len(tt.expectedTabletsReachable), "TabletsReached length mismatch")
 			for idx, tablet := range res.reachableTablets {
 				assert.True(t, topoproto.IsTabletInList(tablet, tt.expectedTabletsReachable), "TabletsReached[%d] not found - %s", idx, topoproto.TabletAliasString(tablet.Alias))
 			}
@@ -1478,7 +1602,7 @@ func TestReplicaWasRunning(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tt.expected, actual)
 		})
 	}
@@ -1597,7 +1721,7 @@ func (fake *waitForRelayLogsToApplyTestTMClient) WaitForPosition(_ context.Conte
 func TestWaitForRelayLogsToApply(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	tests := []struct {
 		name                    string
 		client                  *waitForRelayLogsToApplyTestTMClient

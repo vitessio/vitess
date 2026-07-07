@@ -17,7 +17,6 @@ limitations under the License.
 package tabletbalancer
 
 import (
-	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -133,7 +132,7 @@ func setupCluster(t *testing.T) (*cluster.VtgateProcess, mysql.ConnParams, []*cl
 	shardName := clusterInstance.Keyspaces[0].Shards[0].Name
 	replicaTablets := replicaTablets(allTablets)
 
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
@@ -161,7 +160,7 @@ func getServerID(t *testing.T, conn *mysql.Conn) int64 {
 
 	res, err := conn.ExecuteFetch("SELECT @@server_id", 1, false)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(res.Rows), "expected one row from server_id query")
+	require.Len(t, res.Rows, 1, "expected one row from server_id query")
 
 	serverID, err := res.Rows[0][0].ToInt64()
 	require.NoError(t, err)
@@ -179,7 +178,7 @@ func createSessionConnections(t *testing.T, vtParams *mysql.ConnParams, numConne
 
 	// Try up to 50 times to get numConnections with different server IDs
 	for range 50 {
-		conn, err := mysql.Connect(context.Background(), vtParams)
+		conn, err := mysql.Connect(t.Context(), vtParams)
 		require.NoError(t, err)
 
 		_, err = conn.ExecuteFetch("USE @replica", 1, false)
@@ -205,7 +204,7 @@ func createSessionConnections(t *testing.T, vtParams *mysql.ConnParams, numConne
 		conn.Close()
 	}
 
-	t.Fatalf("could not create %d connections with different tablets after 50 attempts, only got %d", numConnections, len(conns))
+	require.Failf(t, "not enough connections", "could not create %d connections with different tablets after 50 attempts, only got %d", numConnections, len(conns))
 	return nil
 }
 

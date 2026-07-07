@@ -204,6 +204,9 @@ func runBackupTest(t *testing.T, cfg backupTestConfig) {
 		ForcePath: true,
 	})
 
+	// Use context.Background() because ctx is captured by t.Cleanup callbacks
+	// (e.g., bh.AbortBackup(ctx)). t.Context() is cancelled before t.Cleanup runs,
+	// which would cause the cleanup S3 calls to fail with "context canceled".
 	ctx := context.Background()
 	backupRoot, keyspace, shard, ts := blackbox.SetupCluster(ctx, t, 2, 2)
 
@@ -333,6 +336,9 @@ func runRestoreTest(t *testing.T, cfg restoreTestConfig) {
 		ForcePath: true,
 	})
 
+	// Use context.Background() because ctx is captured by t.Cleanup callbacks
+	// (e.g., bh.AbortBackup(ctx)). t.Context() is cancelled before t.Cleanup runs,
+	// which would cause the cleanup S3 calls to fail with "context canceled".
 	ctx := context.Background()
 	backupRoot, keyspace, shard, ts := blackbox.SetupCluster(ctx, t, 2, 2)
 
@@ -418,10 +424,10 @@ func runRestoreTest(t *testing.T, cfg restoreTestConfig) {
 	bm, err := be.ExecuteRestore(ctx, restoreParams, restoreBh)
 
 	if cfg.expectSuccess {
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.NotNil(t, bm)
 	} else {
-		assert.Error(t, err)
+		require.Error(t, err)
 	}
 
 	ss := blackbox.GetStats(fakeStats)

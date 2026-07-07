@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/proto/vttime"
 )
@@ -83,12 +84,12 @@ func TestDurationFromProto(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			actual, ok, err := DurationFromProto(tt.in)
 			if tt.shouldErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 				assert.Equal(t, tt.isOk, ok, "expected (_, ok, _) = DurationFromProto; to be ok = %v", tt.isOk)
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tt.expected, actual)
 			assert.Equal(t, tt.isOk, ok, "expected (_, ok, _) = DurationFromProto; to be ok = %v", tt.isOk)
 		})

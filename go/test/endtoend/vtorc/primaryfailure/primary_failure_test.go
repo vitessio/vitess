@@ -30,7 +30,6 @@ import (
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/vtorc/utils"
-	vtutils "vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtorc/logic"
 )
@@ -43,7 +42,7 @@ func TestDownPrimary(t *testing.T) {
 	// We specify the --wait-replicas-timeout to a small value because we spawn a cross-cell replica later in the test.
 	// If that replica is more advanced than the same-cell-replica, then we try to promote the cross-cell replica as an intermediate source.
 	// If we don't specify a small value of --wait-replicas-timeout, then we would end up waiting for 30 seconds for the dead-primary to respond, failing this test.
-	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{vtutils.GetFlagVariantForTests("--remote-operation-timeout") + "=10s", "--wait-replicas-timeout=5s"}, cluster.VTOrcConfiguration{
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{"--remote-operation-timeout" + "=10s", "--wait-replicas-timeout=5s"}, cluster.VTOrcConfiguration{
 		PreventCrossCellFailover: true,
 	}, cluster.DefaultVtorcsByCell, policy.DurabilitySemiSync)
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
@@ -117,7 +116,7 @@ func TestDownPrimary(t *testing.T) {
 // confirm no ERS occurs.
 func TestDownPrimary_KeyspaceEmergencyReparentDisabled(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
-	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{vtutils.GetFlagVariantForTests("--remote-operation-timeout") + "=10s", "--wait-replicas-timeout=5s"}, cluster.VTOrcConfiguration{}, cluster.DefaultVtorcsByCell, policy.DurabilityNone)
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{"--remote-operation-timeout" + "=10s", "--wait-replicas-timeout=5s"}, cluster.VTOrcConfiguration{}, cluster.DefaultVtorcsByCell, policy.DurabilityNone)
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	// find primary from topo
@@ -149,16 +148,16 @@ func TestDownPrimary_KeyspaceEmergencyReparentDisabled(t *testing.T) {
 
 	// disable ERS on the keyspace via SetVtorcEmergencyReparent --disable
 	_, err := clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetVtorcEmergencyReparent", "--disable", keyspace.Name)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	utils.WaitForShardERSDisabledState(t, vtOrcProcess, keyspace.Name, shard0.Name, true)
 	utils.CheckVarExists(t, vtOrcProcess, "EmergencyReparentShardDisabled")
 	utils.CheckMetricExists(t, vtOrcProcess, "vtorc_emergency_reparent_shard_disabled")
 
 	// make the current primary vttablet unavailable
 	err = curPrimary.VttabletProcess.TearDown()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	err = curPrimary.MysqlctlProcess.Stop()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer func() {
 		// we remove the tablet from our global list
 		utils.PermanentlyRemoveVttablet(clusterInfo, curPrimary)
@@ -177,7 +176,7 @@ func TestDownPrimary_KeyspaceEmergencyReparentDisabled(t *testing.T) {
 
 	// enable ERS on the keyspace via SetVtorcEmergencyReparent --enable
 	_, err = clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetVtorcEmergencyReparent", "--enable", keyspace.Name)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	utils.WaitForShardERSDisabledState(t, vtOrcProcess, keyspace.Name, shard0.Name, false)
 
 	// check that the replica gets promoted by vtorc
@@ -234,7 +233,7 @@ func TestDownPrimaryBeforeVTOrc(t *testing.T) {
 	require.NoError(t, err)
 
 	// Start a VTOrc instance
-	utils.StartVTOrcs(t, clusterInfo, []string{vtutils.GetFlagVariantForTests("--remote-operation-timeout") + "=10s"}, cluster.VTOrcConfiguration{
+	utils.StartVTOrcs(t, clusterInfo, []string{"--remote-operation-timeout" + "=10s"}, cluster.VTOrcConfiguration{
 		PreventCrossCellFailover: true,
 	}, cluster.DefaultVtorcsByCell)
 
@@ -257,7 +256,7 @@ func TestDownPrimaryBeforeVTOrc(t *testing.T) {
 // delete the primary record and let vtorc repair.
 func TestDeletedPrimaryTablet(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
-	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{vtutils.GetFlagVariantForTests("--remote-operation-timeout") + "=10s"}, cluster.VTOrcConfiguration{}, cluster.DefaultVtorcsByCell, policy.DurabilityNone)
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{"--remote-operation-timeout" + "=10s"}, cluster.VTOrcConfiguration{}, cluster.DefaultVtorcsByCell, policy.DurabilityNone)
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	// find primary from topo
@@ -528,10 +527,10 @@ func TestLostRdonlyOnPrimaryFailure(t *testing.T) {
 	// assert that the replica and rdonly are indeed lagging and do not have the new insertion by checking the count of rows in the tables
 	out, err := utils.RunSQL(t, "SELECT * FROM vt_insert_test", replica, "vt_ks")
 	require.NoError(t, err)
-	require.Equal(t, 1, len(out.Rows))
+	require.Len(t, out.Rows, 1)
 	out, err = utils.RunSQL(t, "SELECT * FROM vt_insert_test", rdonly, "vt_ks")
 	require.NoError(t, err)
-	require.Equal(t, 1, len(out.Rows))
+	require.Len(t, out.Rows, 1)
 
 	// Make the current primary database unavailable.
 	err = curPrimary.MysqlctlProcess.Stop()
@@ -759,7 +758,7 @@ func TestDownPrimaryPromotionRuleWithLag(t *testing.T) {
 	// assert that the crossCellReplica is indeed lagging and does not have the new insertion by checking the count of rows in the table
 	out, err := utils.RunSQL(t, "SELECT * FROM vt_insert_test", crossCellReplica, "vt_ks")
 	require.NoError(t, err)
-	require.Equal(t, 1, len(out.Rows))
+	require.Len(t, out.Rows, 1)
 
 	// Make the current primary database unavailable.
 	err = curPrimary.MysqlctlProcess.Stop()
@@ -775,7 +774,7 @@ func TestDownPrimaryPromotionRuleWithLag(t *testing.T) {
 	// assert that the crossCellReplica has indeed caught up
 	out, err = utils.RunSQL(t, "SELECT * FROM vt_insert_test", crossCellReplica, "vt_ks")
 	require.NoError(t, err)
-	require.Equal(t, 2, len(out.Rows))
+	require.Len(t, out.Rows, 2)
 
 	// check that rdonly and replica are able to replicate from the crossCellReplica
 	utils.VerifyWritesSucceed(t, clusterInfo, crossCellReplica, []*cluster.Vttablet{replica, rdonly}, 15*time.Second)
@@ -839,7 +838,7 @@ func TestDownPrimaryPromotionRuleWithLagCrossCenter(t *testing.T) {
 	// assert that the replica is indeed lagging and does not have the new insertion by checking the count of rows in the table
 	out, err := utils.RunSQL(t, "SELECT * FROM vt_insert_test", replica, "vt_ks")
 	require.NoError(t, err)
-	require.Equal(t, 1, len(out.Rows))
+	require.Len(t, out.Rows, 1)
 
 	// Make the current primary database unavailable.
 	err = curPrimary.MysqlctlProcess.Stop()
@@ -855,7 +854,7 @@ func TestDownPrimaryPromotionRuleWithLagCrossCenter(t *testing.T) {
 	// assert that the replica has indeed caught up
 	out, err = utils.RunSQL(t, "SELECT * FROM vt_insert_test", replica, "vt_ks")
 	require.NoError(t, err)
-	require.Equal(t, 2, len(out.Rows))
+	require.Len(t, out.Rows, 2)
 
 	// check that rdonly and crossCellReplica are able to replicate from the replica
 	utils.VerifyWritesSucceed(t, clusterInfo, replica, []*cluster.Vttablet{crossCellReplica, rdonly}, 15*time.Second)

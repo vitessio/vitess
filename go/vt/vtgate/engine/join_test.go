@@ -20,8 +20,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
+	"sync"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -78,10 +81,8 @@ func TestJoinExecute(t *testing.T) {
 			"bv": 1,
 		},
 	}
-	r, err := jn.TryExecute(context.Background(), &noopVCursor{}, bv, true)
-	if err != nil {
-		t.Fatal(err)
-	}
+	r, err := jn.TryExecute(t.Context(), &noopVCursor{}, bv, true)
+	require.NoError(t, err)
 	leftPrim.ExpectLog(t, []string{
 		fmt.Sprintf(`Execute %v true`, printBindVars(map[string]*querypb.BindVariable{"a": sqltypes.Int64BindVariable(10)})),
 	})
@@ -105,10 +106,8 @@ func TestJoinExecute(t *testing.T) {
 	leftPrim.rewind()
 	rightPrim.rewind()
 	jn.Opcode = LeftJoin
-	r, err = jn.TryExecute(context.Background(), &noopVCursor{}, bv, true)
-	if err != nil {
-		t.Fatal(err)
-	}
+	r, err = jn.TryExecute(t.Context(), &noopVCursor{}, bv, true)
+	require.NoError(t, err)
 	leftPrim.ExpectLog(t, []string{
 		fmt.Sprintf(`Execute %v true`, printBindVars(map[string]*querypb.BindVariable{"a": sqltypes.Int64BindVariable(10)})),
 	})
@@ -196,7 +195,7 @@ func TestJoinExecuteMaxMemoryRows(t *testing.T) {
 			},
 		}
 		testIgnoreMaxMemoryRows = test.ignoreMaxMemoryRows
-		_, err := jn.TryExecute(context.Background(), &noopVCursor{}, bv, true)
+		_, err := jn.TryExecute(t.Context(), &noopVCursor{}, bv, true)
 		if testIgnoreMaxMemoryRows {
 			require.NoError(t, err)
 		} else {
@@ -237,7 +236,7 @@ func TestJoinExecuteNoResult(t *testing.T) {
 			"bv": 1,
 		},
 	}
-	r, err := jn.TryExecute(context.Background(), &noopVCursor{}, map[string]*querypb.BindVariable{}, true)
+	r, err := jn.TryExecute(t.Context(), &noopVCursor{}, map[string]*querypb.BindVariable{}, true)
 	require.NoError(t, err)
 	leftPrim.ExpectLog(t, []string{
 		`Execute  true`,
@@ -265,7 +264,7 @@ func TestJoinExecuteErrors(t *testing.T) {
 		Opcode: InnerJoin,
 		Left:   leftPrim,
 	}
-	_, err := jn.TryExecute(context.Background(), &noopVCursor{}, map[string]*querypb.BindVariable{}, true)
+	_, err := jn.TryExecute(t.Context(), &noopVCursor{}, map[string]*querypb.BindVariable{}, true)
 	require.EqualError(t, err, "left err")
 
 	// Error on right query
@@ -295,7 +294,7 @@ func TestJoinExecuteErrors(t *testing.T) {
 			"bv": 1,
 		},
 	}
-	_, err = jn.TryExecute(context.Background(), &noopVCursor{}, map[string]*querypb.BindVariable{}, true)
+	_, err = jn.TryExecute(t.Context(), &noopVCursor{}, map[string]*querypb.BindVariable{}, true)
 	require.EqualError(t, err, "right err")
 
 	// Error on right getfields
@@ -322,7 +321,7 @@ func TestJoinExecuteErrors(t *testing.T) {
 			"bv": 1,
 		},
 	}
-	_, err = jn.TryExecute(context.Background(), &noopVCursor{}, map[string]*querypb.BindVariable{}, true)
+	_, err = jn.TryExecute(t.Context(), &noopVCursor{}, map[string]*querypb.BindVariable{}, true)
 	require.EqualError(t, err, "right err")
 }
 
@@ -346,10 +345,6 @@ func TestJoinStreamExecute(t *testing.T) {
 	)
 	rightPrim := &fakePrimitive{
 		results: []*sqltypes.Result{
-			// First right query will always be a GetFields.
-			sqltypes.MakeTestResult(
-				rightFields,
-			),
 			sqltypes.MakeTestResult(
 				rightFields,
 				"4|d|dd",
@@ -377,16 +372,12 @@ func TestJoinStreamExecute(t *testing.T) {
 		},
 	}
 	r, err := wrapStreamExecute(jn, &noopVCursor{}, map[string]*querypb.BindVariable{}, true)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	leftPrim.ExpectLog(t, []string{
 		`StreamExecute  true`,
 	})
 	rightPrim.ExpectLog(t, []string{
-		`GetFields bv: `,
-		`Execute bv:  true`,
-		fmt.Sprintf(`StreamExecute %v false`, printBindVars(map[string]*querypb.BindVariable{"bv": sqltypes.StringBindVariable("a")})),
+		fmt.Sprintf(`StreamExecute %v true`, printBindVars(map[string]*querypb.BindVariable{"bv": sqltypes.StringBindVariable("a")})),
 		fmt.Sprintf(`StreamExecute %v false`, printBindVars(map[string]*querypb.BindVariable{"bv": sqltypes.StringBindVariable("b")})),
 		fmt.Sprintf(`StreamExecute %v false`, printBindVars(map[string]*querypb.BindVariable{"bv": sqltypes.StringBindVariable("c")})),
 	})
@@ -406,16 +397,12 @@ func TestJoinStreamExecute(t *testing.T) {
 	rightPrim.rewind()
 	jn.Opcode = LeftJoin
 	r, err = wrapStreamExecute(jn, &noopVCursor{}, map[string]*querypb.BindVariable{}, true)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	leftPrim.ExpectLog(t, []string{
 		`StreamExecute  true`,
 	})
 	rightPrim.ExpectLog(t, []string{
-		`GetFields bv: `,
-		`Execute bv:  true`,
-		fmt.Sprintf(`StreamExecute %v false`, printBindVars(map[string]*querypb.BindVariable{"bv": sqltypes.StringBindVariable("a")})),
+		fmt.Sprintf(`StreamExecute %v true`, printBindVars(map[string]*querypb.BindVariable{"bv": sqltypes.StringBindVariable("a")})),
 		fmt.Sprintf(`StreamExecute %v false`, printBindVars(map[string]*querypb.BindVariable{"bv": sqltypes.StringBindVariable("b")})),
 		fmt.Sprintf(`StreamExecute %v false`, printBindVars(map[string]*querypb.BindVariable{"bv": sqltypes.StringBindVariable("c")})),
 	})
@@ -429,6 +416,173 @@ func TestJoinStreamExecute(t *testing.T) {
 		"3|c|5|e",
 		"3|c|6|f",
 		"3|c|7|g",
+	))
+}
+
+// TestJoinStreamExecuteEmptyLeft covers the post-stream field path when the
+// left streams its fields but no rows (an empty result set). The fields are
+// derived after the left stream completes, so the left is streamed once and
+// the right's fields come from a single GetFields.
+func TestJoinStreamExecuteEmptyLeft(t *testing.T) {
+	leftPrim := &fakePrimitive{
+		results: []*sqltypes.Result{
+			sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("col1|col2|col3", "int64|varchar|varchar"),
+			),
+		},
+	}
+	rightPrim := &fakePrimitive{
+		results: []*sqltypes.Result{
+			sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("col4|col5|col6", "int64|varchar|varchar"),
+			),
+		},
+	}
+	jn := &Join{
+		Opcode: InnerJoin,
+		Left:   leftPrim,
+		Right:  rightPrim,
+		Cols:   []int{-1, -2, 1, 2},
+		Vars:   map[string]int{"bv": 1},
+	}
+
+	r, err := wrapStreamExecute(jn, &noopVCursor{}, map[string]*querypb.BindVariable{}, true)
+	require.NoError(t, err)
+	leftPrim.ExpectLog(t, []string{
+		`StreamExecute  true`,
+	})
+	rightPrim.ExpectLog(t, []string{
+		`GetFields bv: `,
+		`Execute bv:  true`,
+	})
+	expectResult(t, r, sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("col1|col2|col4|col5", "int64|varchar|int64|varchar"),
+	))
+}
+
+// TestJoinStreamExecuteEmptyLeftWithoutFieldsCallback covers the degenerate
+// case where the left stream returns without ever invoking the callback (no
+// fields, no rows). The join must still derive fields via GetFields on both
+// sides rather than panic.
+func TestJoinStreamExecuteEmptyLeftWithoutFieldsCallback(t *testing.T) {
+	leftPrim := &emptyLeftStreamPrimitive{}
+	rightPrim := &fakePrimitive{
+		results: []*sqltypes.Result{
+			sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("col4|col5|col6", "int64|varchar|varchar"),
+			),
+		},
+	}
+	jn := &Join{
+		Opcode: InnerJoin,
+		Left:   leftPrim,
+		Right:  rightPrim,
+		Cols:   []int{-1, -2, 1, 2},
+		Vars:   map[string]int{"bv": 1},
+	}
+
+	r, err := wrapStreamExecute(jn, &noopVCursor{}, map[string]*querypb.BindVariable{}, true)
+	require.NoError(t, err)
+	leftPrim.ExpectLog(t, []string{
+		`StreamExecute true`,
+		`GetFields`,
+	})
+	rightPrim.ExpectLog(t, []string{
+		`GetFields bv: `,
+		`Execute bv:  true`,
+	})
+	expectResult(t, r, sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("col1|col2|col4|col5", "int64|varchar|int64|varchar"),
+	))
+}
+
+// TestJoinStreamExecuteRightFieldsAndRowsInOneChunk covers a right side that
+// emits fields and rows in a single callback, as the Rows primitive does. The
+// joined fields and the first joined rows must come out in the same chunk.
+func TestJoinStreamExecuteRightFieldsAndRowsInOneChunk(t *testing.T) {
+	leftPrim := &fakePrimitive{
+		results: []*sqltypes.Result{
+			sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("col1|col2|col3", "int64|varchar|varchar"),
+				"1|a|aa",
+				"2|b|bb",
+			),
+		},
+	}
+	rightResult := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("col4|col5|col6", "int64|varchar|varchar"),
+		"4|d|dd",
+	)
+	jn := &Join{
+		Opcode: InnerJoin,
+		Left:   leftPrim,
+		Right:  NewRowsPrimitive(rightResult.Rows, rightResult.Fields),
+		Cols:   []int{-1, -2, 1, 2},
+		Vars:   map[string]int{"bv": 1},
+	}
+
+	r, err := wrapStreamExecute(jn, &noopVCursor{}, map[string]*querypb.BindVariable{}, true)
+	require.NoError(t, err)
+	leftPrim.ExpectLog(t, []string{
+		`StreamExecute  true`,
+	})
+	expectResult(t, r, sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("col1|col2|col4|col5", "int64|varchar|int64|varchar"),
+		"1|a|4|d",
+		"2|b|4|d",
+	))
+}
+
+// TestJoinStreamExecuteAsyncLeft covers concurrent left-side callback
+// delivery. The write-once capture of the left fields must hold up under
+// concurrent chunks, and the joined fields must be emitted exactly once, in
+// the first chunk. Run with -race to validate the synchronization.
+func TestJoinStreamExecuteAsyncLeft(t *testing.T) {
+	leftFields := sqltypes.MakeTestFields("col1|col2|col3", "int64|varchar|varchar")
+	leftPrim := &fakePrimitive{
+		results: []*sqltypes.Result{
+			sqltypes.MakeTestResult(leftFields, "1|a|aa"),
+			sqltypes.MakeTestResult(leftFields, "2|b|bb"),
+		},
+		async: true,
+	}
+	rightPrim := &fakePrimitive{
+		results: []*sqltypes.Result{
+			sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("col4|col5|col6", "int64|varchar|varchar"),
+				"4|d|dd",
+			),
+		},
+		async: true,
+		noLog: true,
+	}
+	jn := &Join{
+		Opcode: InnerJoin,
+		Left:   leftPrim,
+		Right:  rightPrim,
+		Cols:   []int{-1, -2, 1, 2},
+		Vars:   map[string]int{"bv": 1},
+	}
+
+	var res *sqltypes.Result
+	var mu sync.Mutex
+	err := jn.TryStreamExecute(t.Context(), &noopVCursor{}, map[string]*querypb.BindVariable{}, true, func(result *sqltypes.Result) error {
+		mu.Lock()
+		defer mu.Unlock()
+		if res == nil {
+			assert.NotEmpty(t, result.Fields, "the first chunk must carry the joined fields")
+			res = result
+		} else {
+			assert.Empty(t, result.Fields, "only the first chunk may carry fields")
+			res.Rows = append(res.Rows, result.Rows...)
+		}
+		return nil
+	})
+	require.NoError(t, err)
+	expectResultAnyOrder(t, res, sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("col1|col2|col4|col5", "int64|varchar|int64|varchar"),
+		"1|a|4|d",
+		"2|b|4|d",
 	))
 }
 
@@ -464,10 +618,8 @@ func TestGetFields(t *testing.T) {
 			"bv": 1,
 		},
 	}
-	r, err := jn.GetFields(context.Background(), nil, map[string]*querypb.BindVariable{})
-	if err != nil {
-		t.Fatal(err)
-	}
+	r, err := jn.GetFields(t.Context(), nil, map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
 	leftPrim.ExpectLog(t, []string{
 		`GetFields `,
 		`Execute  true`,
@@ -501,7 +653,7 @@ func TestGetFieldsErrors(t *testing.T) {
 			"bv": 1,
 		},
 	}
-	_, err := jn.GetFields(context.Background(), nil, map[string]*querypb.BindVariable{})
+	_, err := jn.GetFields(t.Context(), nil, map[string]*querypb.BindVariable{})
 	require.EqualError(t, err, "left err")
 
 	jn.Left = &fakePrimitive{
@@ -514,6 +666,47 @@ func TestGetFieldsErrors(t *testing.T) {
 			),
 		},
 	}
-	_, err = jn.GetFields(context.Background(), nil, map[string]*querypb.BindVariable{})
+	_, err = jn.GetFields(t.Context(), nil, map[string]*querypb.BindVariable{})
 	require.EqualError(t, err, "right err")
+}
+
+// emptyLeftStreamPrimitive is a left input whose stream returns without ever
+// invoking the callback, but whose GetFields still reports fields.
+type emptyLeftStreamPrimitive struct {
+	log []string
+}
+
+func (p *emptyLeftStreamPrimitive) TryExecute(context.Context, VCursor, map[string]*querypb.BindVariable, bool) (*sqltypes.Result, error) {
+	return sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("col1|col2|col3", "int64|varchar|varchar"),
+	), nil
+}
+
+func (p *emptyLeftStreamPrimitive) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	p.log = append(p.log, fmt.Sprintf("StreamExecute %v", wantfields))
+	return nil
+}
+
+func (p *emptyLeftStreamPrimitive) GetFields(context.Context, VCursor, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	p.log = append(p.log, "GetFields")
+	return sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("col1|col2|col3", "int64|varchar|varchar"),
+	), nil
+}
+
+func (p *emptyLeftStreamPrimitive) NeedsTransaction() bool {
+	return false
+}
+
+func (p *emptyLeftStreamPrimitive) Inputs() ([]Primitive, []map[string]any) {
+	return nil, nil
+}
+
+func (p *emptyLeftStreamPrimitive) description() PrimitiveDescription {
+	return PrimitiveDescription{OperatorType: "emptyLeftStream"}
+}
+
+func (p *emptyLeftStreamPrimitive) ExpectLog(t *testing.T, want []string) {
+	t.Helper()
+	require.Equal(t, strings.Join(want, "\n"), strings.Join(p.log, "\n"))
 }

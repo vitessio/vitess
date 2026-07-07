@@ -16,7 +16,6 @@ limitations under the License.
 package tabletmanager
 
 import (
-	"context"
 	"os"
 	"testing"
 	"time"
@@ -54,11 +53,11 @@ func TestTopoCustomRule(t *testing.T) {
 
 	// Copy config file into topo.
 	err = clusterInstance.VtctldClientProcess.ExecuteCommand("--server", "internal", "WriteTopologyPath", topoCustomRulePath, topoCustomRuleFile)
-	require.Nil(t, err, "error should be Nil")
+	require.NoError(t, err, "error should be Nil")
 
 	// Set extra tablet args for topo custom rule
 	clusterInstance.VtTabletExtraArgs = []string{
-		"--topocustomrule_path", topoCustomRulePath,
+		"--topocustomrule-path", topoCustomRulePath,
 	}
 
 	// Start a new Tablet
@@ -66,21 +65,21 @@ func TestTopoCustomRule(t *testing.T) {
 
 	// Start Mysql Processes
 	err = cluster.StartMySQL(ctx, rTablet, username, clusterInstance.TmpDirectory)
-	require.Nil(t, err, "error should be Nil")
+	require.NoError(t, err, "error should be Nil")
 
 	// Start Vttablet
 	err = clusterInstance.StartVttablet(rTablet, false, "SERVING", false, cell, keyspaceName, hostname, shardName)
-	require.Nil(t, err, "error should be Nil")
+	require.NoError(t, err, "error should be Nil")
 
 	err = clusterInstance.VtctldClientProcess.ExecuteCommand("Validate")
-	require.Nil(t, err, "error should be Nil")
+	require.NoError(t, err, "error should be Nil")
 
 	// And wait until the query is working.
 	// We need a wait here because the instance we have created is a replica
 	// It might take a while to replicate the two rows.
 	timeout := time.Now().Add(10 * time.Second)
 	for time.Now().Before(timeout) {
-		qr, err := clusterInstance.ExecOnTablet(context.Background(), rTablet, "select id, value from t1", nil, nil)
+		qr, err := clusterInstance.ExecOnTablet(t.Context(), rTablet, "select id, value from t1", nil, nil)
 		if err == nil {
 			if len(qr.Rows) == 2 {
 				break
@@ -100,12 +99,12 @@ func TestTopoCustomRule(t *testing.T) {
 	require.NoError(t, err)
 
 	err = clusterInstance.VtctldClientProcess.ExecuteCommand("--server", "internal", "WriteTopologyPath", topoCustomRulePath, topoCustomRuleFile)
-	require.Nil(t, err, "error should be Nil")
+	require.NoError(t, err, "error should be Nil")
 
 	// And wait until the query fails with the right error.
 	timeout = time.Now().Add(10 * time.Second)
 	for time.Now().Before(timeout) {
-		if _, err := clusterInstance.ExecOnTablet(context.Background(), rTablet, "select id, value from t1", nil, nil); err != nil {
+		if _, err := clusterInstance.ExecOnTablet(t.Context(), rTablet, "select id, value from t1", nil, nil); err != nil {
 			assert.Contains(t, err.Error(), "disallow select on table t1")
 			break
 		}

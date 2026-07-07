@@ -17,12 +17,29 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
         with:
           egress-policy: audit
 
+      - name: Generate GitHub App token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        id: app-token
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+          permission-members: read
+
+      - name: Get GitHub App User ID
+        id: get-user-id
+        env:
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: echo "user-id=$(gh api "/users/${APP_SLUG}[bot]" --jq .id)" >> "$GITHUB_OUTPUT"
+
       - name: Check out code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           ref: main
           persist-credentials: 'false'
@@ -36,19 +53,31 @@ jobs:
       - name: Upgrade the Golang Dependencies
         id: detect-and-update
         run: |
-          go get -u ./...
+          # Upgrade the root module and every tool module under tools/.
+          modules="."
+          for f in tools/*/go.mod; do
+            modules="${modules} $(dirname "${f}")"
+          done
+
+          for mod in ${modules}; do
+            (cd "${mod}" && go get -u ./...)
+          done
 
           output=$(git status -s)
           if [ -z "${output}" ]; then
             exit 0
           fi
 
-          go mod tidy
+          for mod in ${modules}; do
+            (cd "${mod}" && go mod tidy)
+          done
 
       - name: Create Pull Request
-        uses: peter-evans/create-pull-request@c0f553fe549906ede9cf27b5156039d195d2ece0 # v8.1.0
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
         with:
-          token: ${{ secrets.CREATE_PR_VITESS_BOT }}
+          token: ${{ steps.app-token.outputs.token }}
+          committer: "${{ steps.app-token.outputs.app-slug }}[bot] <${{ steps.get-user-id.outputs.user-id }}+${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com>"
+          author: "${{ steps.app-token.outputs.app-slug }}[bot] <${{ steps.get-user-id.outputs.user-id }}+${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com>"
           branch: "upgrade-go-deps-on-main"
           commit-message: "upgrade go deps"
           signoff: true
@@ -56,8 +85,8 @@ jobs:
           team-reviewers: Release
           title: "Upgrade the Golang Dependencies"
           body: |
-            This Pull Request updates all the Golang dependencies to their latest version using `go get -u ./...`.
-            
+            This Pull Request updates all the Golang dependencies to their latest version using `go get -u ./...`, both for the root module and for the tool modules under `tools/`.
+
             cc @vitessio/release
           base: main
           labels: |

@@ -19,7 +19,6 @@ package vtgate
 import (
 	"context"
 	"errors"
-	"strings"
 	"testing"
 
 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
@@ -150,8 +149,8 @@ func TestTabletGatewayShuffleTablets(t *testing.T) {
 	for range 10 {
 		tg.shuffleTablets("cell1", sameCellTablets)
 		assert.Len(t, sameCellTablets, 2, "Wrong number of TabletHealth")
-		assert.Equal(t, sameCellTablets[0].Tablet.Alias.Cell, "cell1", "Wrong tablet cell")
-		assert.Equal(t, sameCellTablets[1].Tablet.Alias.Cell, "cell1", "Wrong tablet cell")
+		assert.Equal(t, "cell1", sameCellTablets[0].Tablet.Alias.Cell, "Wrong tablet cell")
+		assert.Equal(t, "cell1", sameCellTablets[1].Tablet.Alias.Cell, "Wrong tablet cell")
 
 		tg.shuffleTablets("cell1", diffCellTablets)
 		assert.Len(t, diffCellTablets, 2, "should shuffle in only diff cell tablets")
@@ -277,7 +276,7 @@ func testTabletGatewayGenericHelper(t *testing.T, ctx context.Context, f func(ct
 	sc1 = hc.AddTestTablet("cell", host, port, keyspace, shard, tabletType, true, 10, nil)
 	sc2 = hc.AddTestTablet("cell2", host, port, keyspace, shard, tabletType, true, 10, nil)
 	err = f(ctx, tg, target)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	verifyExpectedCount(t, sc1, 0)
 	verifyExpectedCount(t, sc2, 1)
 
@@ -287,7 +286,7 @@ func testTabletGatewayGenericHelper(t *testing.T, ctx context.Context, f func(ct
 	sc2 = hc.AddTestTablet("cell2", host, port+1, keyspace, shard, tabletType, true, 10, nil)
 	sc1.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
 	err = f(ctx, tg, target)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	verifyExpectedCount(t, sc1, 1)
 	verifyExpectedCount(t, sc2, 1)
 }
@@ -331,9 +330,7 @@ func testTabletGatewayTransact(t *testing.T, ctx context.Context, f func(ctx con
 
 func verifyContainsError(t *testing.T, err error, wantErr string, wantCode vtrpcpb.Code) {
 	require.Error(t, err)
-	if !strings.Contains(err.Error(), wantErr) {
-		assert.Failf(t, "", "wanted error: \n%s\n, got error: \n%v\n", wantErr, err)
-	}
+	assert.Contains(t, err.Error(), wantErr, "wanted error: \n%s\n, got error: \n%v\n", wantErr, err)
 	if code := vterrors.Code(err); code != wantCode {
 		assert.Failf(t, "", "wanted error code: %v, got: %v", wantCode, code)
 	}
@@ -344,12 +341,12 @@ func verifyShardErrors(t *testing.T, err error, wantErrors []string, wantCode vt
 	for _, wantErr := range wantErrors {
 		require.Contains(t, err.Error(), wantErr, "wanted error: \n%s\n, got error: \n%v\n", wantErr, err)
 	}
-	require.Equal(t, vterrors.Code(err), wantCode, "wanted error code: %s, got: %v", wantCode, vterrors.Code(err))
+	require.Equal(t, wantCode, vterrors.Code(err), "wanted error code: %s, got: %v", wantCode, vterrors.Code(err))
 }
 
 // TestWithRetry tests the functionality of withRetry function in different circumstances.
 func TestWithRetry(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	tg := NewTabletGateway(ctx, discovery.NewFakeHealthCheck(nil), &econtext.FakeTopoServer{}, "cell")
 	tg.kev = discovery.NewKeyspaceEventWatcher(ctx, tg.srvTopoServer, tg.hc, tg.localCell)
 	defer func() {

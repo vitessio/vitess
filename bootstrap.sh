@@ -28,7 +28,7 @@ BUILD_CONSUL=${BUILD_CONSUL:-1}
 BUILD_PROTOC=${BUILD_PROTOC:-1}
 
 VITESS_RESOURCES_DOWNLOAD_BASE_URL="https://github.com/vitessio/vitess-resources/releases/download"
-VITESS_RESOURCES_RELEASE="v4.0"
+VITESS_RESOURCES_RELEASE="v5.0"
 VITESS_RESOURCES_DOWNLOAD_URL="${VITESS_RESOURCES_DOWNLOAD_BASE_URL}/${VITESS_RESOURCES_RELEASE}"
 #
 # 0. Initialization and helper methods.
@@ -186,10 +186,12 @@ install_zookeeper() {
 	local zk="zookeeper-$version"
 	local file="apache-${zk}-bin.tar.gz"
 
-	# SHA512 checksum for Zookeeper 3.9.4 from Apache archives.
-	local sha512="36bffae6440ed0d71ed83a621b8c52c583860b414812197373237f0c148bd16e6b599977c90e5eb81c0fce6b82ef44aa782621535417cffc4c2a0a51a56f2cdf"
+	# SHA512 checksum for Zookeeper 3.9.5 from Apache archives.
+	local sha512="baa1c21dda4d57238fca751e4fa2bbf1daff9a28612b125e497dccd5c188ee6449e2f79947e474c2dd4d19992789d4d36b27b1ba2feb80c2b0c45e7df0e22aa8"
 
-	"${VTROOT}/tools/wget-retry" -q "https://archive.apache.org/dist/zookeeper/${zk}/${file}"
+	# dlcdn.apache.org only serves current releases; fall back to archive.apache.org for older versions.
+	"${VTROOT}/tools/wget-retry" -q "https://dlcdn.apache.org/zookeeper/${zk}/${file}" || \
+		"${VTROOT}/tools/wget-retry" -q "https://archive.apache.org/dist/zookeeper/${zk}/${file}"
 	verify_sha512 "$dist/$file" "$sha512"
 	tar -xzf "$dist/$file"
 	mkdir -p "$dist"/lib
@@ -280,14 +282,14 @@ install_consul() {
 		;;
 	esac
 
-	# SHA256 checksums for consul 1.11.4 from Vitess resources mirror.
+	# SHA256 checksums for consul 2.0.1 from Vitess resources mirror.
 	# Note: darwin checksums differ from official HashiCorp releases.
 	local sha256
 	case "${platform}_${target}" in
-	linux_amd64) sha256="5155f6a3b7ff14d3671b0516f6b7310530b509a2b882b95b4fdf25f4219342c8" ;;
-	linux_arm64) sha256="97dbf36500dcefbe463f070471602992d148cb2fe91db7e37319e1b9c809f1f0" ;;
-	darwin_amd64) sha256="f00f81897ec0c608019a37dec243837ce0fd471b67401ea05be9a8b105d247ce" ;;
-	darwin_arm64) sha256="22a87e88c9fd36f773ebd62b18f41dad5512e753769f5a385a7842a0b9364e0a" ;;
+	linux_amd64) sha256="f8189736b05e3fe42d27dd83dfbd3a6d7e44b5669b2e51684362e9c1639babe0" ;;
+	linux_arm64) sha256="06a88f29c408f02a4c6388dccf30c059b8d8ce3778576701603fbb4dfc03b365" ;;
+	darwin_amd64) sha256="e5c1cf801dcd2f50cb0fec43feda03e74527fa4e28ee04890bfe3eb2ca0faaa1" ;;
+	darwin_arm64) sha256="ab6f2baa756b7ade58b335ec98312ff8235bc3d6d520de9c7ec95bd9c8a13485" ;;
 	*)
 		echo "ERROR: no checksum for consul ${platform}_${target}"
 		exit 1

@@ -243,20 +243,30 @@ func GetBackupEngine(backupEngine string) (BackupEngine, error) {
 // GetRestoreEngine returns the RestoreEngine implementation to restore a given backup.
 // It reads the MANIFEST file from the backup to check which engine was used to create it.
 func GetRestoreEngine(ctx context.Context, backup backupstorage.BackupHandle) (RestoreEngine, error) {
+	re, _, err := GetRestoreEngineAndManifest(ctx, backup)
+	return re, err
+}
+
+// GetRestoreEngineAndManifest returns the RestoreEngine and the BackupManifest
+// for a given backup in a single MANIFEST read.
+// Note: if BackupMethod is empty (legacy builtin backups), the returned manifest
+// will have BackupMethod set to "builtin" — this may differ from what is on disk.
+func GetRestoreEngineAndManifest(ctx context.Context, backup backupstorage.BackupHandle) (RestoreEngine, *BackupManifest, error) {
 	manifest, err := GetBackupManifest(ctx, backup)
 	if err != nil {
-		return nil, vterrors.Wrap(err, "can't get backup MANIFEST")
+		return nil, nil, vterrors.Wrap(err, "can't get backup MANIFEST")
 	}
 	engine := manifest.BackupMethod
 	if engine == "" {
 		// The builtin engine is the only one that ever left BackupMethod unset.
 		engine = builtinBackupEngineName
+		manifest.BackupMethod = engine
 	}
 	re, ok := BackupRestoreEngineMap[engine]
 	if !ok {
-		return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "can't restore backup created with %q engine; no such BackupEngine implementation is registered", manifest.BackupMethod)
+		return nil, nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "can't restore backup created with %q engine; no such BackupEngine implementation is registered", manifest.BackupMethod)
 	}
-	return re, nil
+	return re, manifest, nil
 }
 
 // GetBackupManifest returns the common fields of the MANIFEST file for a given backup.
@@ -442,8 +452,7 @@ func (p *RestorePath) String() string {
 // findLatestSuccessfulBackup returns the handle and manifest for the last good backup,
 // which can be either full or increment
 func findLatestSuccessfulBackup(ctx context.Context, logger logutil.Logger, bhs []backupstorage.BackupHandle, excludeBackupName string) (backupstorage.BackupHandle, *BackupManifest, error) {
-	for index := len(bhs) - 1; index >= 0; index-- {
-		bh := bhs[index]
+	for _, bh := range slices.Backward(bhs) {
 		if bh.Name() == excludeBackupName {
 			// skip this bh. Use case: in an incremental backup, as we look for previous successful backups,
 			// the new incremental backup handle is partial: the directory exists, it will show in ListBackups, but
@@ -551,8 +560,7 @@ func FindBackupToRestore(ctx context.Context, params RestoreParams, bhs []backup
 	if !params.IsIncrementalRecovery() {
 		// incremental recovery has its own logic for searching the best full backup. Here we only deal with full backup recovery.
 		fullBackupIndex := func() int {
-			for index := len(manifests) - 1; index >= 0; index-- {
-				bm := manifests[index]
+			for index, bm := range slices.Backward(manifests) {
 				if bm == nil {
 					continue
 				}

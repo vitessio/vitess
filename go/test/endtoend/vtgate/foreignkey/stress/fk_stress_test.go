@@ -24,6 +24,7 @@ import (
 	"os"
 	"path"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -31,7 +32,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
@@ -44,7 +44,6 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
-	vtutils "vitess.io/vitess/go/vt/utils"
 )
 
 // This endtoend test is designd to validate VTGate's FOREIGN KEY implementation for unsharded/single-sharded/shard-scope, meaning
@@ -355,11 +354,10 @@ func TestMain(m *testing.M) {
 		}
 
 		clusterInstance.VtTabletExtraArgs = []string{
-			vtutils.GetFlagVariantForTests("--heartbeat-enable"),
-			vtutils.GetFlagVariantForTests("--heartbeat-interval"), "250ms",
-			vtutils.GetFlagVariantForTests("--heartbeat-on-demand-duration"), "5s",
-			vtutils.GetFlagVariantForTests("--migration-check-interval"), "3s",
-			vtutils.GetFlagVariantForTests("--watch-replication-stream"),
+			"--heartbeat-enable",
+			"--heartbeat-interval", "250ms",
+			"--heartbeat-on-demand-duration", "5s",
+			"--migration-check-interval", "3s",
 		}
 		clusterInstance.VtGateExtraArgs = []string{}
 
@@ -467,7 +465,7 @@ func waitForReplicaCatchup(t *testing.T, ctx context.Context, replica *cluster.V
 }
 
 func waitForReplicationCatchup(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
 	defer cancel()
 	primaryPos := getTabletPosition(t, primary)
 	var wg sync.WaitGroup
@@ -505,8 +503,8 @@ func validateMetrics(t *testing.T, tcase *testCase) {
 
 func TestInitialSetup(t *testing.T) {
 	shards = clusterInstance.Keyspaces[0].Shards
-	require.Equal(t, 1, len(shards))
-	require.Equal(t, 3, len(shards[0].Vttablets)) // primary, no-fk replica, fk replica
+	require.Len(t, shards, 1)
+	require.Len(t, shards[0].Vttablets, 3) // primary, no-fk replica, fk replica
 	primary = shards[0].Vttablets[0]
 	require.NotNil(t, primary)
 	replicaNoFK = shards[0].Vttablets[1]
@@ -609,7 +607,8 @@ func ExecuteFKTest(t *testing.T, tcase *testCase) {
 						ok := onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 						require.True(t, ok) // or else don't attempt to cleanup artifacts
 						t.Run("cleanup artifacts", func(t *testing.T) {
-							rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+							rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
+							require.NoError(t, err)
 							require.NotNil(t, rs)
 							row := rs.Named().Row()
 							require.NotNil(t, row)
@@ -794,7 +793,7 @@ func validateTableDefinitions(t *testing.T, afterOnlineDDL bool) {
 func createInitialSchema(t *testing.T, tcase *testCase) {
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	t.Run("dropping tables", func(t *testing.T) {
@@ -838,9 +837,9 @@ func createInitialSchema(t *testing.T, tcase *testCase) {
 					// are unsopported and can be rejected.
 					onUpdateAction = sqlparser.NoAction
 				}
-				b.WriteString(fmt.Sprintf(sql, referenceActionMap[onDeleteAction], referenceActionMap[onUpdateAction]))
+				fmt.Fprintf(&b, sql, referenceActionMap[onDeleteAction], referenceActionMap[onUpdateAction])
 			default:
-				b.WriteString(fmt.Sprintf(sql, referenceActionMap[tcase.onDeleteAction], referenceActionMap[tcase.onUpdateAction]))
+				fmt.Fprintf(&b, sql, referenceActionMap[tcase.onDeleteAction], referenceActionMap[tcase.onUpdateAction])
 			}
 			b.WriteString(";")
 		}
@@ -850,7 +849,7 @@ func createInitialSchema(t *testing.T, tcase *testCase) {
 	if tcase.preStatement != "" {
 		t.Run("pre-statement", func(t *testing.T) {
 			_, err = conn.ExecuteFetch(tcase.preStatement, 1, false)
-			require.Nil(t, err)
+			require.NoError(t, err)
 		})
 	}
 	t.Run("wait for replication", func(t *testing.T) {
@@ -903,14 +902,14 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 	} else {
 		var err error
 		uuid, err = clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(keyspaceName, alterStatement, cluster.ApplySchemaParams{DDLStrategy: ddlStrategy})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	}
 	uuid = strings.TrimSpace(uuid)
 	fmt.Println("# Generated UUID (for debug purposes):")
 	fmt.Printf("<%s>\n", uuid)
 
 	strategySetting, err := schema.ParseDDLStrategy(ddlStrategy)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	if !strategySetting.Strategy.IsDirect() {
 		t.Logf("===== waiting for migration %v to conclude", uuid)
@@ -929,7 +928,8 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 
 	if !strategySetting.Strategy.IsDirect() {
 		// let's see what FK tables have been renamed to
-		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+		rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
+		require.NoError(t, err)
 		require.NotNil(t, rs)
 		row := rs.Named().Row()
 		require.NotNil(t, row)
@@ -945,7 +945,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 
 // waitForTable waits until table is seen in VTGate
 func waitForTable(t *testing.T, tableName string, conn *mysql.Conn) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*10)
 	defer cancel()
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
@@ -978,12 +978,12 @@ func checkTable(t *testing.T, showTableName string, expectHint string) {
 // checkTablesCount checks the number of tables in the given tablet
 func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName string, expectCount int) {
 	query := fmt.Sprintf(`show tables like '%s';`, showTableName)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	rowcount := 0
 	for {
 		queryResult, err := tablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
-		require.Nil(t, err)
+		require.NoError(t, err)
 		rowcount = len(queryResult.Rows)
 		if rowcount > 0 {
 			break
@@ -1002,9 +1002,9 @@ func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName stri
 func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName string) (statement string) {
 	queryResult := queryTablet(t, tablet, "show create table "+tableName, "")
 
-	require.Equal(t, len(queryResult.Rows), 1)
+	require.Len(t, queryResult.Rows, 1)
 	row := queryResult.Rows[0]
-	assert.Equal(t, len(row), 2) // table name, create statement
+	assert.Len(t, row, 2) // table name, create statement
 	statement = row[1].ToString()
 	return statement
 }
@@ -1157,13 +1157,13 @@ func generateDelete(t *testing.T, tableName string, conn *mysql.Conn) error {
 func runSingleConnection(ctx context.Context, t *testing.T, tableName string, tcase *testCase, sleepInterval time.Duration) {
 	log.Info("Running single connection on " + tableName)
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	_, err = conn.ExecuteFetch("set autocommit=1", 1000, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	_, err = conn.ExecuteFetch("set transaction isolation level read committed", 1000, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	ticker := time.NewTicker(sleepInterval)
 	defer ticker.Stop()
@@ -1192,7 +1192,7 @@ func populateTables(t *testing.T, tcase *testCase) {
 
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	t.Run("clearing", func(t *testing.T) {
@@ -1202,11 +1202,11 @@ func populateTables(t *testing.T, tcase *testCase) {
 				t.Run("deleting", func(t *testing.T) {
 					deleteQuery := fmt.Sprintf(deleteAllStatement, tableName)
 					_, err = conn.ExecuteFetch(deleteQuery, 1000, true)
-					require.Nil(t, err)
+					require.NoError(t, err)
 				})
 				t.Run("counting after delete", func(t *testing.T) {
 					rs, err := conn.ExecuteFetch(fmt.Sprintf(selectCountRowsStatement, tableName), 1000, true)
-					require.Nil(t, err)
+					require.NoError(t, err)
 					row := rs.Named().Row()
 					require.NotNil(t, row)
 					numRows := row.AsInt64("num_rows", -1)
@@ -1400,43 +1400,43 @@ func testFKIntegrity(
 	t.Run(testName, func(t *testing.T) {
 		t.Run("matching parent-child rows", func(t *testing.T) {
 			rs := queryTablet(t, tablet, selectMatchingRowsChild, "")
-			assert.NotZero(t, len(rs.Rows))
+			assert.NotEmpty(t, rs.Rows)
 		})
 		t.Run("matching parent-child2 rows", func(t *testing.T) {
 			rs := queryTablet(t, tablet, selectMatchingRowsChild2, "")
-			assert.NotZero(t, len(rs.Rows))
+			assert.NotEmpty(t, rs.Rows)
 		})
 		t.Run("matching child-grandchild rows", func(t *testing.T) {
 			rs := queryTablet(t, tablet, selectMatchingRowsGrandchild, "")
-			assert.NotZero(t, len(rs.Rows))
+			assert.NotEmpty(t, rs.Rows)
 		})
 		t.Run("matching self rows", func(t *testing.T) {
 			rs := queryTablet(t, tablet, selectMatchingRowsSelf, "")
-			assert.NotZero(t, len(rs.Rows))
+			assert.NotEmpty(t, rs.Rows)
 		})
 		if tcase.onDeleteAction != sqlparser.SetNull && tcase.onUpdateAction != sqlparser.SetNull {
 			// Because with SET NULL there _are_ orphaned rows
 			t.Run("parent-child orphaned rows", func(t *testing.T) {
 				rs := queryTablet(t, tablet, selectOrphanedRowsChild, "")
-				assert.Zero(t, len(rs.Rows))
+				assert.Empty(t, rs.Rows)
 			})
 			t.Run("parent-child2 orphaned rows", func(t *testing.T) {
 				rs := queryTablet(t, tablet, selectOrphanedRowsChild2, "")
-				assert.Zero(t, len(rs.Rows))
+				assert.Empty(t, rs.Rows)
 			})
 			t.Run("child-grandchild orphaned rows", func(t *testing.T) {
 				rs := queryTablet(t, tablet, selectOrphanedRowsGrandchild, "")
-				assert.Zero(t, len(rs.Rows))
+				assert.Empty(t, rs.Rows)
 			})
 			t.Run("self orphaned rows", func(t *testing.T) {
 				rs := queryTablet(t, tablet, selectOrphanedRowsSelf, "")
-				assert.Zero(t, len(rs.Rows))
+				assert.Empty(t, rs.Rows)
 			})
 			if !tcase.skipNofkOrphanedRows {
 				t.Run("parent-nofk orphaned rows", func(t *testing.T) {
 					rs := queryTablet(t, tablet, selectOrphanedRowsNoFK, "")
 					// Expect orphaned rows!
-					assert.NotZero(t, len(rs.Rows))
+					assert.NotEmpty(t, rs.Rows)
 				})
 			}
 		}

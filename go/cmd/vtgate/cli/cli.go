@@ -67,7 +67,7 @@ var (
 	--grpc-port 15991 \
 	--mysql-server-port 15306 \
 	--cell test \
-	--cells_to_watch test \
+	--cells-to-watch test \
 	--tablet-types-to-wait PRIMARY,REPLICA \
 	--service-map 'grpc-vtgateservice' \
 	--pid-file $VTDATAROOT/tmp/vtgate.pid \
@@ -200,6 +200,7 @@ func init() {
 	servenv.RegisterGRPCServerFlags()
 	servenv.RegisterGRPCServerAuthFlags()
 	servenv.RegisterServiceMapFlag()
+	servenv.EnableGRPCIngressStats()
 
 	servenv.MoveFlagsToCobraCommand(Main)
 

@@ -18,7 +18,6 @@ package grpctmclient
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"math/rand/v2"
 	"net"
@@ -44,9 +43,7 @@ func grpcTestServer(t testing.TB, tm tabletmanager.RPCTM) (*net.TCPAddr, func())
 	t.Helper()
 
 	lis, err := nettest.NewLocalListener("tcp")
-	if err != nil {
-		t.Fatalf("Cannot listen: %v", err)
-	}
+	require.NoError(t, err)
 
 	s := grpc.NewServer()
 	grpctmserver.RegisterForTest(s, tm)
@@ -216,7 +213,7 @@ func BenchmarkCachedConnClientSteadyStateEvictions(b *testing.B) {
 		require.NoError(b, err)
 	}
 
-	assert.Equal(b, len(client.dialer.(*cachedConnDialer).conns), 100)
+	assert.Len(b, client.dialer.(*cachedConnDialer).conns, 100)
 
 	procs := runtime.GOMAXPROCS(0) / 4
 	if procs == 0 {
@@ -259,7 +256,7 @@ func BenchmarkCachedConnClientSteadyStateEvictions(b *testing.B) {
 func TestCachedConnClient(t *testing.T) {
 	t.Parallel()
 
-	testCtx, testCancel := context.WithCancel(context.Background())
+	testCtx, testCancel := context.WithCancel(t.Context())
 	wg := sync.WaitGroup{}
 	procs := 0
 
@@ -326,7 +323,7 @@ func TestCachedConnClient(t *testing.T) {
 
 					tablet := tablets[rand.IntN(len(tablets))]
 					start := time.Now()
-					_, closer, err := client.dialer.dial(context.Background(), tablet)
+					_, closer, err := client.dialer.dial(t.Context(), tablet)
 					if err != nil {
 						dialErrors.Add(1)
 						continue
@@ -356,7 +353,7 @@ func TestCachedConnClient(t *testing.T) {
 	}
 
 	attempts, errors := dialAttempts.Load(), dialErrors.Load()
-	assert.Less(t, float64(errors)/float64(attempts), 0.001, fmt.Sprintf("fewer than 0.1%% of dial attempts should fail (attempts = %d, errors = %d, max running procs = %d)", attempts, errors, procs))
+	assert.Less(t, float64(errors)/float64(attempts), 0.001, "fewer than 0.1%% of dial attempts should fail (attempts = %d, errors = %d, max running procs = %d)", attempts, errors, procs)
 	assert.Less(t, errors, int64(1), "at least one dial attempt failed (attempts = %d, errors = %d)", attempts, errors)
 	assert.Less(t, longestDial.Milliseconds(), int64(50))
 }
@@ -386,7 +383,7 @@ func TestCachedConnClient_evictions(t *testing.T) {
 
 	client := NewCachedConnClient(len(tablets) - 1)
 	for i := 0; i < len(tablets)-1; i++ {
-		_, closer, err := client.dialer.dial(context.Background(), tablets[i])
+		_, closer, err := client.dialer.dial(t.Context(), tablets[i])
 		t.Logf("holding connection open to %d", tablets[i].Alias.Uid)
 		require.NoError(t, err)
 
@@ -407,10 +404,10 @@ func TestCachedConnClient_evictions(t *testing.T) {
 	defer dialCancel()
 
 	err := client.Ping(dialCtx, tablets[0]) // this should take the rlock_fast path
-	assert.NoError(t, err, "could not redial on inuse cached connection")
+	require.NoError(t, err, "could not redial on inuse cached connection")
 
 	err = client.Ping(dialCtx, tablets[4]) // this will enter the poll loop until context timeout
-	assert.Error(t, err, "should have timed out waiting for an eviction, while all conns were held")
+	require.Error(t, err, "should have timed out waiting for an eviction, while all conns were held")
 
 	// free up a connection
 	connHoldCancel()

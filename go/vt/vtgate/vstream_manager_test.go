@@ -25,6 +25,7 @@ import (
 	"runtime/pprof"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -88,7 +89,7 @@ func TestVStreamSkew(t *testing.T) {
 	for idx, tcase := range tcases {
 		t.Run("", func(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
-				ctx, cancel := context.WithCancel(context.Background())
+				ctx, cancel := context.WithCancel(t.Context())
 				defer cancel()
 
 				ks := fmt.Sprintf("TestVStreamSkew-%d", idx)
@@ -296,6 +297,14 @@ func TestVStreamEvents(t *testing.T) {
 	require.ErrorIs(t, vterrors.UnwrapAll(err), context.Canceled)
 
 	require.ElementsMatch(t, []*binlogdatapb.VStreamResponse{want1, want2}, receivedEvents)
+
+	// Confirm that the VStream request sent to the tablet had NoTimeouts=true so that the
+	// MAX_EXECUTION_TIME query hint is not added to copy/sync queries (see issue #20039).
+	require.NotEmpty(t, sbc0.VStreamRequests)
+	for _, req := range sbc0.VStreamRequests {
+		require.NotNil(t, req.Options)
+		require.True(t, req.Options.NoTimeouts, "expected VStream request Options.NoTimeouts to be true")
+	}
 }
 
 func BenchmarkVStreamEvents(b *testing.B) {
@@ -434,7 +443,7 @@ func TestVStreamChunks(t *testing.T) {
 		switch events[0].Type {
 		case binlogdatapb.VEventType_ROW:
 			if doneCounting {
-				t.Errorf("Unexpected event, only expecting DDL: %v", events[0])
+				assert.Failf(t, "unexpected event", "Unexpected event, only expecting DDL: %v", events[0])
 				return fmt.Errorf("unexpected event: %v", events[0])
 			}
 			rowEncountered = true
@@ -442,20 +451,20 @@ func TestVStreamChunks(t *testing.T) {
 
 		case binlogdatapb.VEventType_COMMIT:
 			if !rowEncountered {
-				t.Errorf("Unexpected event, COMMIT after non-rows: %v", events[0])
+				assert.Failf(t, "unexpected event", "Unexpected event, COMMIT after non-rows: %v", events[0])
 				return fmt.Errorf("unexpected event: %v", events[0])
 			}
 			doneCounting = true
 
 		case binlogdatapb.VEventType_DDL:
 			if !doneCounting && rowEncountered {
-				t.Errorf("Unexpected event, DDL during ROW events: %v", events[0])
+				assert.Failf(t, "unexpected event", "Unexpected event, DDL during ROW events: %v", events[0])
 				return fmt.Errorf("unexpected event: %v", events[0])
 			}
 			ddlCount += 1
 
 		default:
-			t.Errorf("Unexpected event: %v", events[0])
+			assert.Failf(t, "unexpected event", "Unexpected event: %v", events[0])
 			return fmt.Errorf("unexpected event: %v", events[0])
 		}
 
@@ -614,7 +623,7 @@ func TestVStreamChunksOverSizeThreshold(t *testing.T) {
 
 	require.Error(t, err)
 	require.ErrorIs(t, vterrors.UnwrapAll(err), context.Canceled)
-	require.Equal(t, 2, len(completedTxs), "Should receive both transactions")
+	require.Len(t, completedTxs, 2, "Should receive both transactions")
 
 	var rowCounts []int
 	for _, tx := range completedTxs {
@@ -684,7 +693,7 @@ func TestVStreamMulti(t *testing.T) {
 	require.Error(t, err)
 	require.ErrorIs(t, vterrors.UnwrapAll(err), context.Canceled)
 
-	require.Equal(t, 4, len(receivedEvents))
+	require.Len(t, receivedEvents, 4)
 
 	var got *binlogdatapb.VGtid
 	for _, ev := range receivedEvents {
@@ -770,7 +779,7 @@ func TestVStreamsMetrics(t *testing.T) {
 
 	require.Error(t, err)
 	require.ErrorIs(t, vterrors.UnwrapAll(err), context.Canceled)
-	require.Equal(t, 2, len(receivedResponses))
+	require.Len(t, receivedResponses, 2)
 
 	counts := vsm.vstreamsCount.Counts()
 	require.Contains(t, counts, expectedLabels1, "Should have count for shard -20")
@@ -1055,7 +1064,7 @@ func TestVStreamRetriableErrors(t *testing.T) {
 			err := vsm.VStream(vstreamCtx, topodatapb.TabletType_REPLICA, vgtid, nil, &vtgatepb.VStreamFlags{Cells: strings.Join(cells, ",")}, func(events []*binlogdatapb.VEvent) error {
 				defer vstreamCancel()
 
-				require.Equal(t, 1, len(events))
+				require.Len(t, events, 1)
 				require.Equal(t, commit, events)
 
 				return nil
@@ -1138,7 +1147,7 @@ func TestVStreamShouldNotSendSourceHeartbeats(t *testing.T) {
 	require.Error(t, err)
 	require.ErrorIs(t, vterrors.UnwrapAll(err), context.Canceled)
 
-	require.Equal(t, 1, len(receivedResponses))
+	require.Len(t, receivedResponses, 1)
 	require.EqualExportedValues(t, want, receivedResponses[0])
 }
 
@@ -1242,7 +1251,7 @@ func TestVStreamJournalOneToMany(t *testing.T) {
 	require.Error(t, err)
 	require.ErrorIs(t, vterrors.UnwrapAll(err), context.Canceled)
 
-	require.Equal(t, 3, len(receivedEvents))
+	require.Len(t, receivedEvents, 3)
 
 	// First event should be the first transaction from the first shard.
 	require.EqualExportedValues(t, want1, receivedEvents[0])
@@ -1375,7 +1384,7 @@ func TestVStreamJournalManyToOne(t *testing.T) {
 	require.Error(t, err)
 	require.ErrorIs(t, vterrors.UnwrapAll(err), context.Canceled)
 
-	require.Equal(t, 3, len(receivedResponses))
+	require.Len(t, receivedResponses, 3)
 
 	require.EqualExportedValues(t, &binlogdatapb.VEvent{
 		Type: binlogdatapb.VEventType_VGTID,
@@ -1393,6 +1402,81 @@ func TestVStreamJournalManyToOne(t *testing.T) {
 	}, receivedResponses[1].Events[0])
 
 	require.EqualExportedValues(t, want1, receivedResponses[2])
+}
+
+func TestVStreamStopOnReshardEndsWhenParticipantsConverge(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx := t.Context()
+
+		ks := "TestVStream"
+		cell := "aa"
+		_ = createSandbox(ks)
+		hc := discovery.NewFakeHealthCheck(nil)
+		st := getSandboxTopo(ctx, cell, ks, []string{"-80", "80-"})
+		vsm := newTestVStreamManager(ctx, hc, st, cell)
+		sbc0 := hc.AddTestTablet(cell, "1.1.1.1", 1001, ks, "-80", topodatapb.TabletType_PRIMARY, true, 1, nil)
+		addTabletToSandboxTopo(t, ctx, st, ks, "-80", sbc0.Tablet())
+		sbc1 := hc.AddTestTablet(cell, "1.1.1.1", 1002, ks, "80-", topodatapb.TabletType_PRIMARY, true, 1, nil)
+		addTabletToSandboxTopo(t, ctx, st, ks, "80-", sbc1.Tablet())
+
+		journal := &binlogdatapb.Journal{
+			Id:            1,
+			MigrationType: binlogdatapb.MigrationType_SHARDS,
+			ShardGtids: []*binlogdatapb.ShardGtid{{
+				Keyspace: ks,
+				Shard:    "-40",
+				Gtid:     "pos40",
+			}, {
+				Keyspace: ks,
+				Shard:    "40-80",
+				Gtid:     "pos4080",
+			}, {
+				Keyspace: ks,
+				Shard:    "80-",
+				Gtid:     "pos80",
+			}},
+			Participants: []*binlogdatapb.KeyspaceShard{{
+				Keyspace: ks,
+				Shard:    "-80",
+			}, {
+				Keyspace: ks,
+				Shard:    "80-",
+			}},
+		}
+		journalEvents := []*binlogdatapb.VEvent{
+			{Type: binlogdatapb.VEventType_BEGIN},
+			{Type: binlogdatapb.VEventType_JOURNAL, Journal: journal},
+			{Type: binlogdatapb.VEventType_GTID, Gtid: "gtid"},
+			{Type: binlogdatapb.VEventType_COMMIT},
+		}
+		sbc0.AddVStreamEvents(journalEvents, nil)
+		sbc1.AddVStreamEvents(journalEvents, nil)
+
+		vgtid := &binlogdatapb.VGtid{
+			ShardGtids: []*binlogdatapb.ShardGtid{{
+				Keyspace: ks,
+				Shard:    "-80",
+				Gtid:     "pos80",
+			}, {
+				Keyspace: ks,
+				Shard:    "80-",
+				Gtid:     "pos80",
+			}},
+		}
+
+		var journalCount int
+		err := vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{StopOnReshard: true}, func(events []*binlogdatapb.VEvent) error {
+			for _, ev := range events {
+				if ev.Type == binlogdatapb.VEventType_JOURNAL {
+					journalCount++
+				}
+			}
+			return nil
+		})
+
+		require.NoError(t, err)
+		require.Equal(t, 2, journalCount)
+	})
 }
 
 func TestVStreamJournalNoMatch(t *testing.T) {
@@ -1537,7 +1621,7 @@ func TestVStreamJournalNoMatch(t *testing.T) {
 	require.Error(t, err)
 	require.ErrorIs(t, vterrors.UnwrapAll(err), context.Canceled)
 
-	require.Equal(t, 5, len(receivedResponses))
+	require.Len(t, receivedResponses, 5)
 
 	require.EqualExportedValues(t, want1, receivedResponses[0])
 	require.EqualExportedValues(t, wantjn1, receivedResponses[1])
@@ -1769,11 +1853,9 @@ func TestResolveVStreamParams(t *testing.T) {
 		}},
 	}
 	for _, tcase := range testcases {
-		vgtid, filter, flags, err := vsm.resolveParams(context.Background(), topodatapb.TabletType_REPLICA, tcase.input, nil, nil)
+		vgtid, filter, flags, err := vsm.resolveParams(t.Context(), topodatapb.TabletType_REPLICA, tcase.input, nil, nil)
 		if tcase.err != "" {
-			if err == nil || !strings.Contains(err.Error(), tcase.err) {
-				t.Errorf("resolve(%v) err: %v, must contain %v", tcase.input, err, tcase.err)
-			}
+			require.ErrorContainsf(t, err, tcase.err, "resolve(%v) err: %v, must contain %v", tcase.input, err, tcase.err)
 			continue
 		}
 		require.NoError(t, err, tcase.input)
@@ -1814,10 +1896,10 @@ func TestResolveVStreamParams(t *testing.T) {
 		input := &binlogdatapb.VGtid{
 			ShardGtids: []*binlogdatapb.ShardGtid{tcase.input},
 		}
-		vgtid, _, _, err := vsm.resolveParams(context.Background(), topodatapb.TabletType_REPLICA, input, nil, nil)
+		vgtid, _, _, err := vsm.resolveParams(t.Context(), topodatapb.TabletType_REPLICA, input, nil, nil)
 		require.NoError(t, err, tcase.input)
 		if got, expectTestVStreamShardNumber := len(vgtid.ShardGtids), 8; expectTestVStreamShardNumber >= got {
-			t.Errorf("len(vgtid.ShardGtids): %v, must be >%d", got, expectTestVStreamShardNumber)
+			assert.Failf(t, "too few shards", "len(vgtid.ShardGtids): %v, must be >%d", got, expectTestVStreamShardNumber)
 		}
 		for _, s := range vgtid.ShardGtids {
 			require.Equal(t, tcase.input.Gtid, s.Gtid)
@@ -1834,7 +1916,7 @@ func TestResolveVStreamParams(t *testing.T) {
 					Gtid:     "current",
 				}},
 			}
-			_, _, flags2, err := vsm.resolveParams(context.Background(), topodatapb.TabletType_REPLICA, vgtid, nil, flags)
+			_, _, flags2, err := vsm.resolveParams(t.Context(), topodatapb.TabletType_REPLICA, vgtid, nil, flags)
 			require.NoError(t, err)
 			require.Equal(t, minimizeSkew, flags2.MinimizeSkew)
 		})
@@ -1891,7 +1973,7 @@ func TestVStreamIdleHeartbeat(t *testing.T) {
 			require.Error(t, err)
 			require.ErrorIs(t, vterrors.UnwrapAll(err), context.DeadlineExceeded)
 
-			require.Equalf(t, heartbeatCount, tcase.want, "got %d, want %d", heartbeatCount, tcase.want)
+			require.Equalf(t, tcase.want, heartbeatCount, "got %d, want %d", heartbeatCount, tcase.want)
 		})
 	}
 }
@@ -1971,6 +2053,142 @@ func TestVStreamLivenessChecks(t *testing.T) {
 			}
 			require.EqualError(t, err, tcase.wantErr)
 		})
+	}
+}
+
+func TestVStreamMaxStreamAge(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	cell := "aa"
+	ks := "TestVStream"
+	_ = createSandbox(ks)
+	hc := discovery.NewFakeHealthCheck(nil)
+	st := getSandboxTopo(ctx, cell, ks, []string{"-20"})
+	vsm := newTestVStreamManager(ctx, hc, st, cell)
+	fakeTablet := hc.AddTestTablet("aa", "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	addTabletToSandboxTopo(t, ctx, st, fakeTablet.Tablet().Keyspace, fakeTablet.Tablet().Shard, fakeTablet.Tablet())
+	vgtid := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{
+			Keyspace: fakeTablet.Tablet().Keyspace,
+			Shard:    fakeTablet.Tablet().Shard,
+			Gtid:     "pos",
+		}},
+	}
+
+	type testcase struct {
+		name                string
+		maxStreamAgeSeconds uint32
+		streamDuration      time.Duration
+		wantErr             string
+		wantErrCode         vtrpcpb.Code
+	}
+	testcases := []testcase{
+		{
+			name:                "no max age - stream runs until context timeout",
+			maxStreamAgeSeconds: 0,
+			streamDuration:      200 * time.Millisecond,
+			wantErr:             "context deadline exceeded",
+			wantErrCode:         vtrpcpb.Code_DEADLINE_EXCEEDED,
+		},
+		{
+			name:                "max age exceeded - stream terminated with UNAVAILABLE",
+			maxStreamAgeSeconds: 1,
+			streamDuration:      3 * time.Second,
+			wantErr:             "vstream exceeded maximum age",
+			wantErrCode:         vtrpcpb.Code_UNAVAILABLE,
+		},
+	}
+
+	for _, tcase := range testcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			vstreamCtx, vstreamCancel := context.WithTimeout(ctx, tcase.streamDuration)
+			defer vstreamCancel()
+
+			flags := &vtgatepb.VStreamFlags{
+				MaxStreamAgeSeconds: tcase.maxStreamAgeSeconds,
+			}
+
+			err := vsm.VStream(vstreamCtx, topodatapb.TabletType_PRIMARY, vgtid, nil, flags, func(events []*binlogdatapb.VEvent) error {
+				return nil
+			})
+
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tcase.wantErr)
+			require.Equal(t, tcase.wantErrCode, vterrors.Code(err))
+		})
+	}
+}
+
+func TestVStreamMaxStreamAgeBlockedSend(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	cell := "aa"
+	ks := "TestVStream"
+	_ = createSandbox(ks)
+	hc := discovery.NewFakeHealthCheck(nil)
+	st := getSandboxTopo(ctx, cell, ks, []string{"-20"})
+	vsm := newTestVStreamManager(ctx, hc, st, cell)
+	fakeTablet := hc.AddTestTablet("aa", "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	addTabletToSandboxTopo(t, ctx, st, fakeTablet.Tablet().Keyspace, fakeTablet.Tablet().Shard, fakeTablet.Tablet())
+
+	fakeTablet.AddVStreamEvents([]*binlogdatapb.VEvent{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "gtid01"},
+		{Type: binlogdatapb.VEventType_COMMIT},
+	}, nil)
+
+	vgtid := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{
+			Keyspace: fakeTablet.Tablet().Keyspace,
+			Shard:    fakeTablet.Tablet().Shard,
+			Gtid:     "pos",
+		}},
+	}
+
+	maxAge := 1 * time.Second
+	callbackDelay := 3 * time.Second
+	testTimeout := 10 * time.Second
+
+	t.Log("test parameters",
+		slog.Duration("max_age", maxAge),
+		slog.Duration("callback_delay", callbackDelay),
+		slog.Duration("test_timeout", testTimeout),
+	)
+
+	flags := &vtgatepb.VStreamFlags{
+		MaxStreamAgeSeconds: uint32(maxAge.Seconds()),
+	}
+
+	var callbackInFlight atomic.Bool
+
+	done := make(chan error, 1)
+	start := time.Now()
+	go func() {
+		done <- vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil, flags, func(events []*binlogdatapb.VEvent) error {
+			callbackInFlight.Store(true)
+			defer callbackInFlight.Store(false)
+			time.Sleep(callbackDelay)
+			return nil
+		})
+	}()
+
+	assert.Eventually(t, callbackInFlight.Load, 5*time.Second, 10*time.Millisecond,
+		"callback was never entered")
+
+	select {
+	case err := <-done:
+		elapsed := time.Since(start)
+		t.Log("VStream returned",
+			slog.Duration("elapsed", elapsed),
+			slog.Any("error", err),
+			slog.Any("code", vterrors.Code(err)),
+		)
+		require.Error(t, err)
+		require.ErrorContains(t, err, "vstream exceeded maximum age")
+		assert.Equal(t, vtrpcpb.Code_UNAVAILABLE, vterrors.Code(err))
+		assert.Falsef(t, callbackInFlight.Load(),
+			"callback is still in-flight after VStream() returned; lifecycle violation")
+		assert.GreaterOrEqual(t, elapsed, callbackDelay,
+			"VStream should wait for blocked send to finish before returning (best-effort max-age)")
+	case <-time.After(testTimeout):
+		require.FailNowf(t, "VStream did not terminate in time", "timeout=%v max_age=%v", testTimeout, maxAge)
 	}
 }
 

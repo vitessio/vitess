@@ -523,17 +523,15 @@ func (hc *HealthCheckImpl) deleteTablet(tablet *topodata.Tablet) {
 	delete(hc.healthByAlias, tabletAlias)
 }
 
-func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, prevTarget *query.Target, trivialUpdate bool, up bool) {
-	// hc.healthByAlias is authoritative, it should be updated
+func (hc *HealthCheckImpl) updateHealth(thc *tabletHealthCheck, prevTarget *query.Target, trivialUpdate bool, up bool) {
+	tabletAlias := tabletAliasString(topoproto.TabletAliasString(thc.Tablet.Alias))
+	th := thc.SimpleCopy()
+
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
-
-	tabletAlias := tabletAliasString(topoproto.TabletAliasString(th.Tablet.Alias))
-	// let's be sure that this tablet hasn't been deleted from the authoritative map
-	// so that we're not racing to update it and in effect re-adding a copy of the
-	// tablet record that was deleted
-	if _, ok := hc.healthByAlias[tabletAlias]; !ok {
-		hc.logger().Infof("Tablet %v has been deleted, skipping health update", th.Tablet)
+	// Verify that this update came from the tabletHealthCheck currently registered for this alias.
+	if !hc.isRegisteredHealthCheckLocked(tabletAlias, thc) {
+		hc.logger().Infof("Tablet %v has been deleted or replaced, skipping health update", tabletAlias)
 		return
 	}
 
@@ -899,11 +897,24 @@ func (hc *HealthCheckImpl) GetTabletHealth(kst KeyspaceShardTabletType, alias *t
 	return nil, fmt.Errorf("could not find tablet: %s", alias.String())
 }
 
+// isRegisteredHealthCheckLocked reports whether thc is the current healthcheck for tabletAlias.
+// hc.mu must be locked before calling it.
+func (hc *HealthCheckImpl) isRegisteredHealthCheckLocked(tabletAlias tabletAliasString, thc *tabletHealthCheck) bool {
+	registered, ok := hc.healthByAlias[tabletAlias]
+	return ok && registered == thc
+}
+
+// registeredHealthCheck returns the tabletHealthCheck currently registered
+// for the given alias, or nil if there is none.
+func (hc *HealthCheckImpl) registeredHealthCheck(alias *topodata.TabletAlias) *tabletHealthCheck {
+	hc.mu.Lock()
+	defer hc.mu.Unlock()
+	return hc.healthByAlias[tabletAliasString(topoproto.TabletAliasString(alias))]
+}
+
 // TabletConnection returns the Connection to a given tablet.
 func (hc *HealthCheckImpl) TabletConnection(ctx context.Context, alias *topodata.TabletAlias, target *query.Target) (queryservice.QueryService, error) {
-	hc.mu.Lock()
-	thc := hc.healthByAlias[tabletAliasString(topoproto.TabletAliasString(alias))]
-	hc.mu.Unlock()
+	thc := hc.registeredHealthCheck(alias)
 	if thc == nil || thc.Conn == nil {
 		return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "tablet: %v is either down or nonexistent", alias)
 	}

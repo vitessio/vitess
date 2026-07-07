@@ -69,7 +69,7 @@ func (c *terminalClient) ExecuteBatch(ctx context.Context, session *vtgatepb.Ses
 	return session, nil, errTerminal
 }
 
-func (c *terminalClient) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) (*vtgatepb.Session, error) {
+func (c *terminalClient) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, prepared bool, callback func(*sqltypes.Result) error) (*vtgatepb.Session, error) {
 	return session, errTerminal
 }
 
@@ -90,6 +90,10 @@ func (c *terminalClient) CloseSession(ctx context.Context, session *vtgatepb.Ses
 }
 
 func (c *terminalClient) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags, send func([]*binlogdatapb.VEvent) error) error {
+	return errTerminal
+}
+
+func (c *terminalClient) BinlogDumpGTID(ctx context.Context, req *vtgatepb.BinlogDumpGTIDRequest, send func(*vtgatepb.BinlogDumpResponse) error) error {
 	return errTerminal
 }
 

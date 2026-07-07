@@ -20,8 +20,6 @@ import (
 	"database/sql/driver"
 	"errors"
 	"io"
-	"reflect"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -93,9 +91,7 @@ func TestStreamingRows(t *testing.T) {
 		"field3",
 	}
 	gotCols := ri.Columns()
-	if !reflect.DeepEqual(gotCols, wantCols) {
-		t.Errorf("cols: %v, want %v", gotCols, wantCols)
-	}
+	require.Equal(t, wantCols, gotCols)
 
 	wantRow := []driver.Value{
 		int64(1),
@@ -105,9 +101,7 @@ func TestStreamingRows(t *testing.T) {
 	gotRow := make([]driver.Value, 3)
 	err := ri.Next(gotRow)
 	require.NoError(t, err)
-	if !reflect.DeepEqual(gotRow, wantRow) {
-		t.Errorf("row1: %v, want %v", gotRow, wantRow)
-	}
+	require.Equal(t, wantRow, gotRow)
 
 	wantRow = []driver.Value{
 		int64(2),
@@ -116,14 +110,10 @@ func TestStreamingRows(t *testing.T) {
 	}
 	err = ri.Next(gotRow)
 	require.NoError(t, err)
-	if !reflect.DeepEqual(gotRow, wantRow) {
-		t.Errorf("row1: %v, want %v", gotRow, wantRow)
-	}
+	require.Equal(t, wantRow, gotRow)
 
 	err = ri.Next(gotRow)
-	if err != io.EOF {
-		t.Errorf("got: %v, want %v", err, io.EOF)
-	}
+	require.ErrorIs(t, err, io.EOF)
 
 	_ = ri.Close()
 }
@@ -145,9 +135,7 @@ func TestStreamingRowsReversed(t *testing.T) {
 	gotRow := make([]driver.Value, 3)
 	err := ri.Next(gotRow)
 	require.NoError(t, err)
-	if !reflect.DeepEqual(gotRow, wantRow) {
-		t.Errorf("row1: %v, want %v", gotRow, wantRow)
-	}
+	require.Equal(t, wantRow, gotRow)
 
 	wantCols := []string{
 		"field1",
@@ -155,9 +143,7 @@ func TestStreamingRowsReversed(t *testing.T) {
 		"field3",
 	}
 	gotCols := ri.Columns()
-	if !reflect.DeepEqual(gotCols, wantCols) {
-		t.Errorf("cols: %v, want %v", gotCols, wantCols)
-	}
+	require.Equal(t, wantCols, gotCols)
 
 	_ = ri.Close()
 }
@@ -168,15 +154,10 @@ func TestStreamingRowsError(t *testing.T) {
 	ri := newStreamingRows(&adapter{c: c, err: errors.New("error before fields")}, &converter{})
 
 	gotCols := ri.Columns()
-	if gotCols != nil {
-		t.Errorf("cols: %v, want nil", gotCols)
-	}
+	require.Nil(t, gotCols)
 	gotRow := make([]driver.Value, 3)
 	err := ri.Next(gotRow)
-	wantErr := "error before fields"
-	if err == nil || !strings.Contains(err.Error(), wantErr) {
-		t.Errorf("err: %v does not contain %v", err, wantErr)
-	}
+	require.ErrorContains(t, err, "error before fields")
 	_ = ri.Close()
 
 	c = make(chan *sqltypes.Result, 1)
@@ -189,20 +170,13 @@ func TestStreamingRowsError(t *testing.T) {
 		"field3",
 	}
 	gotCols = ri.Columns()
-	if !reflect.DeepEqual(gotCols, wantCols) {
-		t.Errorf("cols: %v, want %v", gotCols, wantCols)
-	}
+	require.Equal(t, wantCols, gotCols)
 	gotRow = make([]driver.Value, 3)
 	err = ri.Next(gotRow)
-	wantErr = "error after fields"
-	if err == nil || !strings.Contains(err.Error(), wantErr) {
-		t.Errorf("err: %v does not contain %v", err, wantErr)
-	}
+	require.ErrorContains(t, err, "error after fields")
 	// Ensure error persists.
 	err = ri.Next(gotRow)
-	if err == nil || !strings.Contains(err.Error(), wantErr) {
-		t.Errorf("err: %v does not contain %v", err, wantErr)
-	}
+	require.ErrorContains(t, err, "error after fields")
 	_ = ri.Close()
 
 	c = make(chan *sqltypes.Result, 2)
@@ -214,10 +188,7 @@ func TestStreamingRowsError(t *testing.T) {
 	err = ri.Next(gotRow)
 	require.NoError(t, err)
 	err = ri.Next(gotRow)
-	wantErr = "error after rows"
-	if err == nil || !strings.Contains(err.Error(), wantErr) {
-		t.Errorf("err: %v does not contain %v", err, wantErr)
-	}
+	require.ErrorContains(t, err, "error after rows")
 	_ = ri.Close()
 
 	c = make(chan *sqltypes.Result, 1)
@@ -226,9 +197,6 @@ func TestStreamingRowsError(t *testing.T) {
 	ri = newStreamingRows(&adapter{c: c, err: io.EOF}, &converter{})
 	gotRow = make([]driver.Value, 3)
 	err = ri.Next(gotRow)
-	wantErr = "first packet did not return fields"
-	if err == nil || !strings.Contains(err.Error(), wantErr) {
-		t.Errorf("err: %v does not contain %v", err, wantErr)
-	}
+	require.ErrorContains(t, err, "first packet did not return fields")
 	_ = ri.Close()
 }

@@ -17,7 +17,6 @@ limitations under the License.
 package mysqlctld
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -141,35 +140,35 @@ func initCluster(shardNames []string, totalTabletsRequired int) error {
 
 func TestRestart(t *testing.T) {
 	err := primaryTablet.MysqlctldProcess.Stop()
-	require.Nil(t, err)
+	require.NoError(t, err)
 	require.Truef(t, primaryTablet.MysqlctldProcess.WaitForMysqlCtldShutdown(), "Mysqlctld has not stopped...")
 	primaryTablet.MysqlctldProcess.CleanupFiles(primaryTablet.TabletUID)
 	err = primaryTablet.MysqlctldProcess.Start()
-	require.Nil(t, err)
+	require.NoError(t, err)
 }
 
 func TestAutoDetect(t *testing.T) {
 	err := clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].VttabletProcess.Setup()
-	require.Nil(t, err, "error should be nil")
+	require.NoError(t, err, "error should be nil")
 	err = clusterInstance.Keyspaces[0].Shards[0].Vttablets[1].VttabletProcess.Setup()
-	require.Nil(t, err, "error should be nil")
+	require.NoError(t, err, "error should be nil")
 
 	// Reparent tablets, which requires flavor detection
 	err = clusterInstance.VtctldClientProcess.InitializeShard(keyspaceName, shardName, cell, primaryTablet.TabletUID)
-	require.Nil(t, err, "error should be nil")
+	require.NoError(t, err, "error should be nil")
 }
 
 func TestVersionString(t *testing.T) {
-	client, err := mysqlctlclient.New(context.Background(), "unix", primaryTablet.MysqlctldProcess.SocketFile)
+	client, err := mysqlctlclient.New(t.Context(), "unix", primaryTablet.MysqlctldProcess.SocketFile)
 	require.NoError(t, err)
-	version, err := client.VersionString(context.Background())
+	version, err := client.VersionString(t.Context())
 	require.NoError(t, err)
 	require.NotEmpty(t, version)
 }
 
 func TestReadBinlogFilesTimestamps(t *testing.T) {
-	client, err := mysqlctlclient.New(context.Background(), "unix", primaryTablet.MysqlctldProcess.SocketFile)
+	client, err := mysqlctlclient.New(t.Context(), "unix", primaryTablet.MysqlctldProcess.SocketFile)
 	require.NoError(t, err)
-	_, err = client.ReadBinlogFilesTimestamps(context.Background(), &mysqlctl.ReadBinlogFilesTimestampsRequest{})
+	_, err = client.ReadBinlogFilesTimestamps(t.Context(), &mysqlctl.ReadBinlogFilesTimestampsRequest{})
 	require.ErrorContains(t, err, "empty binlog list in ReadBinlogFilesTimestampsRequest")
 }

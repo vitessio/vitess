@@ -18,6 +18,7 @@ package mysqlctl
 
 import (
 	"context"
+	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -26,10 +27,14 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	_ "vitess.io/vitess/go/vt/mysqlctl/grpcmysqlctlclient"
+	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
 )
 
 type testcase struct {
@@ -110,9 +115,78 @@ func TestParseVersionString(t *testing.T) {
 	for _, testcase := range testcases {
 		f, v, err := ParseVersionString(testcase.versionString)
 		if v != testcase.version || f != testcase.flavor || err != nil {
-			t.Errorf("ParseVersionString failed for: %#v, Got: %#v, %#v Expected: %#v, %#v", testcase.versionString, v, f, testcase.version, testcase.flavor)
+			assert.Failf(t, "ParseVersionString failed", "ParseVersionString failed for: %#v, Got: %#v, %#v Expected: %#v, %#v", testcase.versionString, v, f, testcase.version, testcase.flavor)
 		}
 	}
+}
+
+// shutdownRecordingMysqlCtlServer records remote Shutdown requests from Mysqld.
+type shutdownRecordingMysqlCtlServer struct {
+	mysqlctlpb.UnimplementedMysqlCtlServer
+
+	// shutdownRequests carries the remote shutdown request.
+	shutdownRequests chan *mysqlctlpb.ShutdownRequest
+}
+
+// Shutdown records the request and returns a successful response.
+func (s *shutdownRecordingMysqlCtlServer) Shutdown(ctx context.Context, request *mysqlctlpb.ShutdownRequest) (*mysqlctlpb.ShutdownResponse, error) {
+	s.shutdownRequests <- request
+
+	return &mysqlctlpb.ShutdownResponse{}, nil
+}
+
+// TestMysqldShutdownForwardsTimeoutToRemoteMysqlctld verifies that the remote
+// shutdown path preserves the caller's timeout.
+func TestMysqldShutdownForwardsTimeoutToRemoteMysqlctld(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	t.Cleanup(cancel)
+
+	oldSocketFile := socketFile
+	t.Cleanup(func() {
+		socketFile = oldSocketFile
+	})
+
+	tempSocketFile, err := os.CreateTemp("/tmp", "mysqlctld-*.sock")
+	require.NoError(t, err)
+	require.NoError(t, tempSocketFile.Close())
+	require.NoError(t, os.Remove(tempSocketFile.Name()))
+	t.Cleanup(func() {
+		_ = os.Remove(tempSocketFile.Name())
+	})
+
+	socketPath := tempSocketFile.Name()
+	listener, err := net.Listen("unix", socketPath)
+	require.NoError(t, err)
+
+	server := grpc.NewServer()
+	t.Cleanup(server.Stop)
+
+	recordingServer := &shutdownRecordingMysqlCtlServer{
+		shutdownRequests: make(chan *mysqlctlpb.ShutdownRequest, 1),
+	}
+	mysqlctlpb.RegisterMysqlCtlServer(server, recordingServer)
+
+	go func() { _ = server.Serve(listener) }()
+
+	socketFile = socketPath
+	shutdownTimeout := 43*time.Second + 125*time.Millisecond
+
+	mysqld := &Mysqld{}
+	err = mysqld.Shutdown(ctx, &Mycnf{}, true, shutdownTimeout)
+	require.NoError(t, err)
+
+	var request *mysqlctlpb.ShutdownRequest
+	select {
+	case request = <-recordingServer.shutdownRequests:
+	case <-ctx.Done():
+		require.Failf(t, "timed out waiting for remote shutdown request", "context error: %v", ctx.Err())
+	}
+	assert.True(t, request.WaitForMysqld)
+
+	gotTimeout, ok, err := protoutil.DurationFromProto(request.MysqlShutdownTimeout)
+	require.NoError(t, err)
+	require.True(t, ok)
+	assert.Equal(t, shutdownTimeout, gotTimeout)
 }
 
 func TestRegexps(t *testing.T) {
@@ -121,7 +195,7 @@ func TestRegexps(t *testing.T) {
 		require.NotEmpty(t, submatch)
 		assert.Equal(t, "230608 13:14:31", submatch[1])
 		_, err := ParseBinlogTimestamp(submatch[1])
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	}
 	{
 		submatch := binlogEntryTimestampGTIDRegexp.FindStringSubmatch(`#230608 13:14:31 server id 484362839  end_log_pos 322 CRC32 0x651af842 	Query	thread_id=62	exec_time=0	error_code=0`)
@@ -171,7 +245,7 @@ func TestParseBinlogEntryTimestamp(t *testing.T) {
 	for _, tcase := range tcases {
 		t.Run(tcase.name, func(t *testing.T) {
 			tm, err := parseBinlogEntryTimestamp(tcase.entry)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tcase.tm, tm)
 		})
 	}
@@ -183,27 +257,27 @@ func TestCleanupLockfile(t *testing.T) {
 	})
 	ts := "prefix"
 	// All good if no lockfile exists
-	assert.NoError(t, cleanupLockfile("mysql.sock", ts))
+	require.NoError(t, cleanupLockfile("mysql.sock", ts))
 
 	// If lockfile exists, but the process is not found, we clean it up.
 	os.WriteFile("mysql.sock.lock", []byte("123456789"), 0o600)
-	assert.NoError(t, cleanupLockfile("mysql.sock", ts))
+	require.NoError(t, cleanupLockfile("mysql.sock", ts))
 	assert.NoFileExists(t, "mysql.sock.lock")
 
 	// If lockfile exists, but the process is not found, we clean it up.
 	os.WriteFile("mysql.sock.lock", []byte("123456789\n"), 0o600)
-	assert.NoError(t, cleanupLockfile("mysql.sock", ts))
+	require.NoError(t, cleanupLockfile("mysql.sock", ts))
 	assert.NoFileExists(t, "mysql.sock.lock")
 
 	// If the lockfile exists, and the process is found, but it's for ourselves,
 	// we clean it up.
 	os.WriteFile("mysql.sock.lock", []byte(strconv.Itoa(os.Getpid())), 0o600)
-	assert.NoError(t, cleanupLockfile("mysql.sock", ts))
+	require.NoError(t, cleanupLockfile("mysql.sock", ts))
 	assert.NoFileExists(t, "mysql.sock.lock")
 
 	// If the lockfile exists, and the process is found, we don't clean it up.
 	os.WriteFile("mysql.sock.lock", []byte(strconv.Itoa(os.Getppid())), 0o600)
-	assert.Error(t, cleanupLockfile("mysql.sock", ts))
+	require.Error(t, cleanupLockfile("mysql.sock", ts))
 	assert.FileExists(t, "mysql.sock.lock")
 }
 
@@ -224,9 +298,9 @@ func TestRunMysqlUpgrade(t *testing.T) {
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	err = testMysqld.RunMysqlUpgrade(ctx)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Should not fail for older versions
 	testMysqld.capabilities = newCapabilitySet(FlavorMySQL, ServerVersion{Major: 8, Minor: 0, Patch: 15})
@@ -245,7 +319,7 @@ func TestGetDbaConnection(t *testing.T) {
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	conn, err := testMysqld.GetDbaConnection(ctx)
 	assert.NoError(t, err)
@@ -264,9 +338,9 @@ func TestGetVersionString(t *testing.T) {
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	str, err := testMysqld.GetVersionString(ctx)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotEmpty(t, str)
 
 	ver := "test_version"
@@ -292,20 +366,20 @@ func TestGetVersionComment(t *testing.T) {
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	_, err := testMysqld.GetVersionComment(ctx)
-	assert.ErrorContains(t, err, "unexpected result length")
+	require.ErrorContains(t, err, "unexpected result length")
 
 	ver := "test_version"
 	db.AddQuery("select @@global.version_comment", sqltypes.MakeTestResult(sqltypes.MakeTestFields("@@global.version_comment", "varchar"), ver))
 
 	str, err := testMysqld.GetVersionComment(ctx)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, ver, str)
 }
 
 func TestHostMetrics(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	cnf := &Mycnf{
 		DataDir: os.TempDir(),
 	}
@@ -352,6 +426,6 @@ func TestBuildLdPathsTZ(t *testing.T) {
 	defer os.Unsetenv("TZ")
 
 	env, err := buildLdPaths()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Contains(t, env, "TZ=Europe/Berlin")
 }

@@ -23,7 +23,6 @@ import (
 	"time"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	"vitess.io/vitess/go/vt/utils"
 
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
@@ -61,7 +60,7 @@ func testCancel(t *testing.T) {
 		validateTableInDenyList(t, vc, fmt.Sprintf("%s:%s", keyspace, shard), table, expected)
 	}
 
-	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+	require.NoError(t, waitForWorkflowState(vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String()))
 
 	checkDenyList(targetKeyspace, false)
 	checkDenyList(sourceKeyspace, false)
@@ -101,7 +100,7 @@ func testPartialMoveTablesBasic(t *testing.T, flavor workflowFlavor) {
 	// unknown symbol before attempting to route the query.
 	extraVTGateArgs = append(extraVTGateArgs, []string{
 		"--enable-partial-keyspace-migration",
-		utils.GetFlagVariantForTests("--schema-change-signal") + "=false",
+		"--schema-change-signal" + "=false",
 	}...)
 	defer func() {
 		extraVTGateArgs = origExtraVTGateArgs
@@ -125,7 +124,7 @@ func testPartialMoveTablesBasic(t *testing.T, flavor workflowFlavor) {
 	}, flavor)
 	mt.Create()
 
-	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKeyspace, workflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
+	require.NoError(t, waitForWorkflowState(vc, fmt.Sprintf("%s.%s", targetKeyspace, workflowName), binlogdatapb.VReplicationWorkflowState_Running.String()))
 	catchup(t, targetTab80Dash, workflowName, "MoveTables")
 	vdiff(t, targetKeyspace, workflowName, defaultCellName, nil)
 	mt.SwitchReadsAndWrites()
@@ -189,7 +188,7 @@ func testPartialMoveTablesBasic(t *testing.T, flavor workflowFlavor) {
 		}()
 		lg.waitForCount(1000)
 	}
-	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKeyspace, workflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
+	require.NoError(t, waitForWorkflowState(vc, fmt.Sprintf("%s.%s", targetKeyspace, workflowName), binlogdatapb.VReplicationWorkflowState_Running.String()))
 	catchup(t, targetTab80Dash, workflowName, "MoveTables")
 	vdiff(t, targetKeyspace, workflowName, defaultCellName, nil)
 
@@ -332,7 +331,7 @@ func testPartialMoveTablesBasic(t *testing.T, flavor workflowFlavor) {
 	}, flavor)
 	mtDash80.Create()
 
-	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKeyspace, workflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
+	require.NoError(t, waitForWorkflowState(vc, fmt.Sprintf("%s.%s", targetKeyspace, workflowName), binlogdatapb.VReplicationWorkflowState_Running.String()))
 
 	catchup(t, targetTabDash80, workflowName, "MoveTables")
 	vdiff(t, targetKeyspace, workflowName, defaultCellName, nil)

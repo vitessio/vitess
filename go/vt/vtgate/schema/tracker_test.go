@@ -195,7 +195,7 @@ func TestTrackerNoLock(t *testing.T) {
 		select {
 		case ch <- th:
 		case <-time.After(50 * time.Millisecond):
-			t.Fatalf("failed to send health check to tracker")
+			require.Fail(t, "failed to send health check to tracker")
 		}
 	}
 	require.GreaterOrEqual(t, sbc.GetSchemaCount.Load(), int64(1), "GetSchema rpc should be called")
@@ -563,7 +563,7 @@ func testTracker(t *testing.T, enableUDFs bool, schemaDefResult []sandboxconn.Sc
 			require.EqualValues(t, count+initialLoadCount, sbc.GetSchemaCount.Load())
 
 			_, keyspacePresent := tracker.tracked[target.Keyspace]
-			require.Equal(t, true, keyspacePresent)
+			require.True(t, keyspacePresent)
 
 			for k, expectedCols := range tcase.expTbl {
 				actualCols := tracker.GetColumns(keyspace, k)
@@ -577,7 +577,7 @@ func testTracker(t *testing.T, enableUDFs bool, schemaDefResult []sandboxconn.Sc
 				expIndexes := tcase.expIdx[k]
 				if len(expIndexes) > 0 {
 					idxs := tracker.GetIndexes(keyspace, k)
-					require.Equal(t, len(expIndexes), len(idxs))
+					require.Len(t, idxs, len(expIndexes))
 					for i, idx := range idxs {
 						assert.Equal(t, expIndexes[i], sqlparser.String(idx), "mismatch index for table: ", k)
 					}

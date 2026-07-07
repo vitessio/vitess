@@ -82,9 +82,9 @@ func TestTransactionModeMetrics(t *testing.T) {
 				utils.Exec(t, conn, stmt)
 			}
 			updatedMetric := getCommitMetric(t)
-			assert.EqualValues(t, tc.want.TotalCount, updatedMetric.TotalCount-initial.TotalCount, "TotalCount")
-			assert.EqualValues(t, tc.want.SingleCount, updatedMetric.SingleCount-initial.SingleCount, "SingleCount")
-			assert.EqualValues(t, tc.want.MultiCount, updatedMetric.MultiCount-initial.MultiCount, "MultiCount")
+			assert.Equal(t, tc.want.TotalCount, updatedMetric.TotalCount-initial.TotalCount, "TotalCount")
+			assert.Equal(t, tc.want.SingleCount, updatedMetric.SingleCount-initial.SingleCount, "SingleCount")
+			assert.Equal(t, tc.want.MultiCount, updatedMetric.MultiCount-initial.MultiCount, "MultiCount")
 			assert.Zero(t, updatedMetric.TwoPCCount-initial.TwoPCCount, "TwoPCCount")
 			initial = updatedMetric
 		})
@@ -97,10 +97,10 @@ func TestTransactionModeMetrics(t *testing.T) {
 				utils.Exec(t, conn, stmt)
 			}
 			updatedMetric := getCommitMetric(t)
-			assert.EqualValues(t, tc.want.TotalCount, updatedMetric.TotalCount-initial.TotalCount, "TotalCount")
-			assert.EqualValues(t, tc.want.SingleCount, updatedMetric.SingleCount-initial.SingleCount, "SingleCount")
+			assert.Equal(t, tc.want.TotalCount, updatedMetric.TotalCount-initial.TotalCount, "TotalCount")
+			assert.Equal(t, tc.want.SingleCount, updatedMetric.SingleCount-initial.SingleCount, "SingleCount")
 			assert.Zero(t, updatedMetric.MultiCount-initial.MultiCount, "MultiCount")
-			assert.EqualValues(t, tc.want.TwoPCCount, updatedMetric.TwoPCCount-initial.TwoPCCount, "TwoPCCount")
+			assert.Equal(t, tc.want.TwoPCCount, updatedMetric.TwoPCCount-initial.TwoPCCount, "TwoPCCount")
 			initial = updatedMetric
 		})
 	}
@@ -112,7 +112,7 @@ func TestVTGate2PCCommitMetricOnFailure(t *testing.T) {
 
 	initialCount := getVarValue[float64](t, "CommitUnresolved", clusterInstance.VtgateProcess.GetVars)
 
-	vtgateConn, err := cluster.DialVTGate(context.Background(), t.Name(), vtgateGrpcAddress, "dt_user", "")
+	vtgateConn, err := cluster.DialVTGate(t.Context(), t.Name(), vtgateGrpcAddress, "dt_user", "")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
@@ -156,12 +156,12 @@ func TestVTGate2PCCommitMetricOnFailure(t *testing.T) {
 func TestVTTablet2PCMetrics(t *testing.T) {
 	defer cleanup(t)
 
-	vtgateConn, err := cluster.DialVTGate(context.Background(), t.Name(), vtgateGrpcAddress, "dt_user", "")
+	vtgateConn, err := cluster.DialVTGate(t.Context(), t.Name(), vtgateGrpcAddress, "dt_user", "")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
 	conn := vtgateConn.Session("", nil)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	ctx = callerid.NewContext(ctx, callerid.NewEffectiveCallerID("MMCommitted_FailNow", "", ""), nil)
 	defer cancel()
 
@@ -177,9 +177,9 @@ func TestVTTablet2PCMetrics(t *testing.T) {
 		// fail after mm commit.
 		_, err = conn.Execute(ctx, "commit", nil, false)
 		if multi {
-			assert.ErrorContains(t, err, "Fail After MM commit")
+			require.ErrorContains(t, err, "Fail After MM commit")
 		} else {
-			assert.NoError(t, err)
+			require.NoError(t, err)
 		}
 	}
 
@@ -194,7 +194,7 @@ func TestVTTablet2PCMetrics(t *testing.T) {
 	for {
 		select {
 		case <-timeout:
-			t.Errorf("unresolved transaction not reduced to zero within the time limit")
+			assert.Fail(t, "unresolved transaction not reduced to zero within the time limit")
 			return
 		case <-time.After(500 * time.Millisecond):
 			unresolvedCount = getUnresolvedTxCount(t)
@@ -210,7 +210,7 @@ func TestVTTablet2PCMetrics(t *testing.T) {
 func TestVTTablet2PCMetricsFailCommitPrepared(t *testing.T) {
 	defer cleanup(t)
 
-	vtgateConn, err := cluster.DialVTGate(context.Background(), t.Name(), vtgateGrpcAddress, "dt_user", "")
+	vtgateConn, err := cluster.DialVTGate(t.Context(), t.Name(), vtgateGrpcAddress, "dt_user", "")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
@@ -348,9 +348,7 @@ func getVarValue[T any](t *testing.T, key string, varFunc func() map[string]any)
 		return *new(T)
 	}
 	castValue, ok := value.(T)
-	if !ok {
-		t.Errorf("unexpected type, want: %T, got %T", new(T), value)
-	}
+	assert.Truef(t, ok, "unexpected type, want: %T, got %T", new(T), value)
 	return castValue
 }
 
@@ -373,7 +371,7 @@ func getDTIDFromWarnings(ctx context.Context, t *testing.T, conn *vtgateconn.VTG
 
 	// extract transaction ID
 	indx := strings.Index(w.Msg, " ")
-	require.Greater(t, indx, 0)
+	require.Positive(t, indx)
 	return w.Msg[:indx]
 }
 
@@ -383,7 +381,7 @@ func waitForDTIDResolve(ctx context.Context, t *testing.T, conn *vtgateconn.VTGa
 	for unresolved {
 		select {
 		case <-totalTime:
-			t.Errorf("transaction resolution exceeded wait time of %v", waitTime)
+			assert.Failf(t, "transaction resolution timed out", "transaction resolution exceeded wait time of %v", waitTime)
 			unresolved = false // break the loop.
 		case <-time.After(100 * time.Millisecond):
 			qr, err := conn.Execute(ctx, fmt.Sprintf(`show transaction status for '%s'`, dtid), nil, false)

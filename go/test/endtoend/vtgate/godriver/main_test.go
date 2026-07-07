@@ -24,13 +24,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
 
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vitessdriver"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -114,7 +112,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start vtgate
-		clusterInstance.VtGateExtraArgs = []string{utils.GetFlagVariantForTests("--warn-sharded-only") + "=true"}
+		clusterInstance.VtGateExtraArgs = []string{"--warn-sharded-only" + "=true"}
 		if err := clusterInstance.StartVtgate(); err != nil {
 			log.Error(err.Error())
 			os.Exit(1)
@@ -157,7 +155,7 @@ func TestStreamMessaging(t *testing.T) {
 
 	// Exec not allowed in streaming
 	_, err = streamDB.Exec("stream * from my_message")
-	assert.EqualError(t, err, "Exec not allowed for streaming connections")
+	require.EqualError(t, err, "Exec not allowed for streaming connections")
 
 	row := streamDB.QueryRow("stream * from my_message")
 	require.NoError(t, row.Err())

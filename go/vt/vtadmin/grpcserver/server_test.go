@@ -17,7 +17,6 @@ limitations under the License.
 package grpcserver
 
 import (
-	"context"
 	"net"
 	"testing"
 	"time"
@@ -25,6 +24,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/net/nettest"
 	"google.golang.org/grpc"
 
@@ -59,19 +59,19 @@ func TestServer(t *testing.T) {
 	select {
 	case <-readyCh:
 	case serveStop := <-time.After(time.Millisecond * 500):
-		t.Errorf("server did not start within %s", serveStop.Sub(serveStart))
+		assert.Failf(t, "server did not start", "server did not start within %s", serveStop.Sub(serveStart))
 		return
 	}
 	close(readyCh)
 
 	conn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock()) //nolint:staticcheck
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	defer conn.Close()
 
 	healthclient := healthpb.NewHealthClient(conn)
-	resp, err := healthclient.Check(context.Background(), &healthpb.HealthCheckRequest{Service: "grpc.health.v1.Health"})
-	assert.NoError(t, err)
+	resp, err := healthclient.Check(t.Context(), &healthpb.HealthCheckRequest{Service: "grpc.health.v1.Health"})
+	require.NoError(t, err)
 	assert.NotNil(t, resp)
 }
 
@@ -99,7 +99,7 @@ func TestLameduck(t *testing.T) {
 	select {
 	case <-readyCh:
 	case serveStop := <-time.After(time.Millisecond * 500):
-		t.Errorf("server did not start within %s", serveStop.Sub(serveStart))
+		assert.Failf(t, "server did not start", "server did not start within %s", serveStop.Sub(serveStart))
 		return
 	}
 
@@ -140,8 +140,8 @@ func TestError(t *testing.T) {
 	start := time.Now()
 	select {
 	case err := <-errCh:
-		assert.Error(t, err)
+		require.Error(t, err)
 	case ti := <-time.After(time.Millisecond * 10):
-		assert.Fail(t, "timed out waiting for error after %s", ti.Sub(start))
+		assert.Failf(t, "timed out waiting for error after", "%s", ti.Sub(start))
 	}
 }

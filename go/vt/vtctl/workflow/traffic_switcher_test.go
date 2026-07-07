@@ -77,7 +77,7 @@ func TestReverseWorkflowName(t *testing.T) {
 // executed against the source between the stop source writes and wait for
 // catchup steps, that we have the correct position and do not lose the write(s).
 func TestTrafficSwitchPositionHandling(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 
 	workflowName := "wf1"
@@ -143,7 +143,7 @@ func TestTrafficSwitchPositionHandling(t *testing.T) {
 }
 
 func TestAddTenantFilter(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 
 	workflowName := "wf1"
@@ -192,12 +192,12 @@ func TestAddTenantFilter(t *testing.T) {
 	ts.options.TenantId = "123"
 
 	filter, err := ts.addTenantFilter(ctx, fmt.Sprintf("select * from %s where id < 5", tableName))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "select * from t1 where tenant_id = 123 and id < 5", filter)
 }
 
 func TestChangeShardRouting(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 
 	workflowName := "wf1"
@@ -265,19 +265,19 @@ func TestChangeShardRouting(t *testing.T) {
 	require.NoError(t, err)
 
 	err = ts.changeShardRouting(ctx)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	sourceShardInfo, err := env.ws.ts.GetShard(ctx, sourceKeyspaceName, "0")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.False(t, sourceShardInfo.IsPrimaryServing, "source shard shouldn't have it's primary serving after changeShardRouting() is called.")
 
 	targetShardInfo, err := env.ws.ts.GetShard(ctx, targetKeyspaceName, "0")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, targetShardInfo.IsPrimaryServing, "target shard should have it's primary serving after changeShardRouting() is called.")
 }
 
 func TestAddParticipatingTablesToKeyspace(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 
 	workflowName := "wf1"
@@ -313,19 +313,19 @@ func TestAddParticipatingTablesToKeyspace(t *testing.T) {
 	require.NoError(t, err)
 
 	err = ts.addParticipatingTablesToKeyspace(ctx, sourceKeyspaceName, "")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	vs, err := env.ts.GetVSchema(ctx, sourceKeyspaceName)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, vs.Tables["t1"])
 	assert.Empty(t, vs.Tables["t1"])
 
 	specs := `{"t1":{"column_vindexes":[{"column":"col1","name":"v1"}, {"column":"col2","name":"v2"}]},"t2":{"column_vindexes":[{"column":"col2","name":"v2"}]}}`
 	err = ts.addParticipatingTablesToKeyspace(ctx, sourceKeyspaceName, specs)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	vs, err = env.ts.GetVSchema(ctx, sourceKeyspaceName)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	require.NotNil(t, vs.Tables["t1"])
 	require.NotNil(t, vs.Tables["t2"])
 	assert.Len(t, vs.Tables["t1"].ColumnVindexes, 2)
@@ -333,7 +333,7 @@ func TestAddParticipatingTablesToKeyspace(t *testing.T) {
 }
 
 func TestCancelMigration_TABLES(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 
 	workflowName := "wf1"
@@ -393,7 +393,7 @@ func TestCancelMigration_TABLES(t *testing.T) {
 }
 
 func TestCancelMigration_SHARDS(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 
 	workflowName := "wf1"
@@ -455,7 +455,7 @@ func TestCancelMigration_SHARDS(t *testing.T) {
 }
 
 func TestDeleteRoutingRulesPreservesUnrelated(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 
 	workflowName := "wf1"
@@ -510,7 +510,7 @@ func TestDeleteRoutingRulesPreservesUnrelated(t *testing.T) {
 }
 
 func TestDeleteShardRoutingRulesPreservesUnrelated(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 
 	workflowName := "wf1"
@@ -562,7 +562,7 @@ func TestDeleteShardRoutingRulesPreservesUnrelated(t *testing.T) {
 }
 
 func TestDeleteKeyspaceRoutingRulesPreservesUnrelated(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 
 	workflowName := "wf1"

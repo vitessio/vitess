@@ -51,7 +51,7 @@ func TestMultipleConcurrentVDiffs(t *testing.T) {
 	index := 1000
 	var loadCtx context.Context
 	var loadCancel context.CancelFunc
-	loadCtx, loadCancel = context.WithCancel(context.Background())
+	loadCtx, loadCancel = context.WithCancel(t.Context())
 	load := func(tableName string) {
 		query := "insert into %s(cid, name) values(%d, 'customer-%d')"
 		for {
@@ -86,7 +86,7 @@ func TestMultipleConcurrentVDiffs(t *testing.T) {
 			tables:         tables,
 		}, workflowFlavorVtctld)
 		mt.Create()
-		waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKeyspace, workflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
+		require.NoError(t, waitForWorkflowState(vc, fmt.Sprintf("%s.%s", targetKeyspace, workflowName), binlogdatapb.VReplicationWorkflowState_Running.String()))
 		catchup(t, targetTab, workflowName, "MoveTables")
 	}
 

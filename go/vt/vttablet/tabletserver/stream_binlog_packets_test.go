@@ -129,7 +129,7 @@ func TestStreamBinlogPackets_NormalEOFFromMySQL(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- tsv.streamBinlogPackets(context.Background(), reader, send)
+		done <- tsv.streamBinlogPackets(t.Context(), reader, send)
 	}()
 
 	// MySQL sends an EOF packet — this is a terminal packet.
@@ -151,7 +151,7 @@ func TestStreamBinlogPackets_NormalEventAndEOF(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- tsv.streamBinlogPackets(context.Background(), reader, send)
+		done <- tsv.streamBinlogPackets(t.Context(), reader, send)
 	}()
 
 	// Send a normal binlog event (status byte 0x00 = OK)
@@ -176,7 +176,7 @@ func TestStreamBinlogPackets_MultipleEventsAndEOF(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- tsv.streamBinlogPackets(context.Background(), reader, send)
+		done <- tsv.streamBinlogPackets(t.Context(), reader, send)
 	}()
 
 	// Send several events followed by EOF.
@@ -209,7 +209,7 @@ func TestStreamBinlogPackets_ConnectionCloseDuringRead(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- tsv.streamBinlogPackets(context.Background(), reader, send)
+		done <- tsv.streamBinlogPackets(t.Context(), reader, send)
 	}()
 
 	// Close immediately — first ReadHeaderInto fails.
@@ -228,7 +228,7 @@ func TestStreamBinlogPackets_ConnectionCloseBetweenEvents(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- tsv.streamBinlogPackets(context.Background(), reader, send)
+		done <- tsv.streamBinlogPackets(t.Context(), reader, send)
 	}()
 
 	// Deliver one event, then close.
@@ -250,7 +250,7 @@ func TestStreamBinlogPackets_ReadError(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- tsv.streamBinlogPackets(context.Background(), reader, send)
+		done <- tsv.streamBinlogPackets(t.Context(), reader, send)
 	}()
 
 	// Inject a custom error.
@@ -266,7 +266,7 @@ func TestStreamBinlogPackets_ContextCancelledBeforeAnyData(t *testing.T) {
 	reader := newMockPacketReader()
 	send, responses := collectSender()
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	cancel() // Cancel immediately before any data is written.
 
 	err := tsv.streamBinlogPackets(ctx, reader, send)
@@ -279,7 +279,7 @@ func TestStreamBinlogPackets_ContextCancelledBetweenEvents(t *testing.T) {
 	reader := newMockPacketReader()
 	send, _ := collectSender()
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 
 	done := make(chan error, 1)
 	go func() {
@@ -314,7 +314,7 @@ func TestStreamBinlogPackets_HeaderAtBufferBoundary(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- tsv.streamBinlogPackets(context.Background(), reader, send)
+		done <- tsv.streamBinlogPackets(t.Context(), reader, send)
 	}()
 
 	reader.WritePacket(bigPayload)
@@ -335,7 +335,7 @@ func TestStreamBinlogPackets_MaxPacketSizeMessage(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- tsv.streamBinlogPackets(context.Background(), reader, send)
+		done <- tsv.streamBinlogPackets(t.Context(), reader, send)
 	}()
 
 	// Send a multi-packet message: MaxPacketSize payload + zero-length continuation + EOF.

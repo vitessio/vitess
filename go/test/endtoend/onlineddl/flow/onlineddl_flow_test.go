@@ -130,21 +130,18 @@ func TestMain(m *testing.M) {
 		}
 
 		clusterInstance.VtctldExtraArgs = []string{
-			// TODO: Replace flag with dashed version in v25
-			"--schema_change_dir", schemaChangeDirectory,
-			"--schema_change_controller", "local",
-			"--schema_change_check_interval", "1s",
+			"--schema-change-dir", schemaChangeDirectory,
+			"--schema-change-controller", "local",
+			"--schema-change-check-interval", "1s",
 		}
 
 		clusterInstance.VtTabletExtraArgs = []string{
-			// TODO: Replace flag with dashed version in v25
-			"--heartbeat_interval", "250ms",
-			"--heartbeat_on_demand_duration", "5s",
-			"--migration_check_interval", "2s",
-			"--watch_replication_stream",
+			"--heartbeat-interval", "250ms",
+			"--heartbeat-on-demand-duration", "5s",
+			"--migration-check-interval", "2s",
 		}
 		clusterInstance.VtGateExtraArgs = []string{
-			"--ddl_strategy", "online",
+			"--ddl-strategy", "online",
 		}
 
 		if err := clusterInstance.StartTopo(); err != nil {
@@ -199,7 +196,7 @@ func TestOnlineDDLFlow(t *testing.T) {
 	require.NotNil(t, clusterInstance)
 	require.NotNil(t, primaryTablet)
 	require.NotNil(t, replicaTablet)
-	require.Equal(t, 2, len(tablets))
+	require.Len(t, tablets, 2)
 
 	// This test is designed with upgrade/downgrade in mind. Do some logging to show what's
 	// the configuration for this test.
@@ -212,7 +209,7 @@ func TestOnlineDDLFlow(t *testing.T) {
 
 	require.NotEmpty(t, clusterInstance.Keyspaces)
 	shards = clusterInstance.Keyspaces[0].Shards
-	require.Equal(t, 1, len(shards))
+	require.Len(t, shards, 1)
 
 	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance)
 
@@ -250,6 +247,7 @@ func TestOnlineDDLFlow(t *testing.T) {
 			})
 
 			var wg sync.WaitGroup
+			var workloadErr error
 			t.Run("generate workload", func(t *testing.T) {
 				// Create work for vplayer.
 				// This workload will consider throttling state and avoid generating DMLs if throttled.
@@ -258,7 +256,7 @@ func TestOnlineDDLFlow(t *testing.T) {
 					defer cancel()
 					defer wg.Done()
 					defer fmt.Println("Terminating workload")
-					runMultipleConnections(workloadCtx, t)
+					workloadErr = runMultipleConnections(workloadCtx, t)
 				}()
 			})
 			appliedDMLStart := totalAppliedDML.Load()
@@ -284,7 +282,7 @@ func TestOnlineDDLFlow(t *testing.T) {
 				onlineddl.UnthrottleAllMigrations(t, &vtParams)
 				if !onlineddl.CheckThrottledApps(t, &vtParams, throttlerapp.OnlineDDLName, false) {
 					status, err := throttler.GetThrottlerStatus(&clusterInstance.VtctldClientProcess, primaryTablet)
-					assert.NoError(t, err)
+					require.NoError(t, err)
 
 					t.Logf("Throttler status: %+v", status)
 				}
@@ -293,7 +291,7 @@ func TestOnlineDDLFlow(t *testing.T) {
 			t.Run("apply more DML", func(t *testing.T) {
 				// Looking to run a substantial amount of DML, giving vreplication
 				// more "opportunities" to throttle or to make progress.
-				ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+				ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
 				defer cancel()
 				ticker := time.NewTicker(time.Second)
 				defer ticker.Stop()
@@ -360,6 +358,7 @@ func TestOnlineDDLFlow(t *testing.T) {
 			cancelWorkload() // Early break
 			cancel()         // Early break
 			wg.Wait()
+			require.NoError(t, workloadErr)
 		})
 	})
 }
@@ -367,7 +366,7 @@ func TestOnlineDDLFlow(t *testing.T) {
 func testWithInitialSchema(t *testing.T) {
 	// Create the stress table
 	err := clusterInstance.VtctldClientProcess.ApplySchema(keyspaceName, createStatement)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// Check if table is created
 	checkTable(t, tableName)
@@ -384,7 +383,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 	t.Logf("<%s>", uuid)
 
 	strategySetting, err := schema.ParseDDLStrategy(ddlStrategy)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	if !strategySetting.Strategy.IsDirect() && !skipWait && uuid != "" {
 		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
@@ -407,7 +406,7 @@ func checkTable(t *testing.T, showTableName string) {
 // checkTablesCount checks the number of tables in the given tablet
 func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName string, expectCount int) {
 	query := fmt.Sprintf(`show tables like '%%%s%%';`, showTableName)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
@@ -416,7 +415,7 @@ func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName stri
 
 	for {
 		queryResult, err := tablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
-		require.Nil(t, err)
+		require.NoError(t, err)
 		rowcount = len(queryResult.Rows)
 		if rowcount > 0 {
 			break
@@ -446,22 +445,23 @@ func checkMigratedTable(t *testing.T, tableName, expectHint string) {
 // getCreateTableStatement returns the CREATE TABLE statement for a given table
 func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName string) (statement string) {
 	queryResult, err := tablet.VttabletProcess.QueryTablet(fmt.Sprintf("show create table %s;", tableName), keyspaceName, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
-	assert.Equal(t, len(queryResult.Rows), 1)
-	assert.Equal(t, len(queryResult.Rows[0]), 2) // table name, create statement
+	assert.Len(t, queryResult.Rows, 1)
+	assert.Len(t, queryResult.Rows[0], 2) // table name, create statement
 	statement = queryResult.Rows[0][1].ToString()
 	return statement
 }
 
 func waitForReadyToComplete(t *testing.T, uuid string, expected bool) bool {
-	ctx, cancel := context.WithTimeout(context.Background(), migrationWaitTimeout)
+	ctx, cancel := context.WithTimeout(t.Context(), migrationWaitTimeout)
 	defer cancel()
 
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	for {
-		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+		rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
+		require.NoError(t, err)
 		require.NotNil(t, rs)
 		for _, row := range rs.Named().Rows {
 			readyToComplete := row.AsInt64("ready_to_complete", 0)
@@ -518,16 +518,20 @@ func generateDelete(t *testing.T, conn *mysql.Conn) error {
 	return err
 }
 
-func runSingleConnection(ctx context.Context, t *testing.T, sleepInterval time.Duration) {
+func runSingleConnection(ctx context.Context, t *testing.T, sleepInterval time.Duration) error {
 	log.Info("Running single connection")
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	if err != nil {
+		return err
+	}
 	defer conn.Close()
 
-	_, err = conn.ExecuteFetch("set autocommit=1", 1000, true)
-	require.Nil(t, err)
-	_, err = conn.ExecuteFetch("set transaction isolation level read committed", 1000, true)
-	require.Nil(t, err)
+	if _, err := conn.ExecuteFetch("set autocommit=1", 1000, true); err != nil {
+		return err
+	}
+	if _, err := conn.ExecuteFetch("set transaction isolation level read committed", 1000, true); err != nil {
+		return err
+	}
 
 	ticker := time.NewTicker(sleepInterval)
 	defer ticker.Stop()
@@ -546,14 +550,16 @@ func runSingleConnection(ctx context.Context, t *testing.T, sleepInterval time.D
 		select {
 		case <-ctx.Done():
 			log.Info("Terminating single connection")
-			return
+			return nil
 		case <-ticker.C:
 		}
-		assert.Nil(t, err)
+		if err != nil {
+			return err
+		}
 	}
 }
 
-func runMultipleConnections(ctx context.Context, t *testing.T) {
+func runMultipleConnections(ctx context.Context, t *testing.T) error {
 	// The workload for a 16 vCPU machine is:
 	// - Concurrency of 16
 	// - 2ms interval between queries for each connection
@@ -566,14 +572,25 @@ func runMultipleConnections(ctx context.Context, t *testing.T) {
 	sleepInterval := time.Duration(int64(singleConnectionSleepIntervalNanoseconds))
 
 	log.Info(fmt.Sprintf("Running multiple connections: maxConcurrency=%v, sleep interval=%v", maxConcurrency, sleepInterval))
+	var (
+		mu       sync.Mutex
+		firstErr error
+	)
 	var wg sync.WaitGroup
 	for range maxConcurrency {
 		wg.Go(func() {
-			runSingleConnection(ctx, t, sleepInterval)
+			if err := runSingleConnection(ctx, t, sleepInterval); err != nil {
+				mu.Lock()
+				if firstErr == nil {
+					firstErr = err
+				}
+				mu.Unlock()
+			}
 		})
 	}
 	wg.Wait()
 	log.Info("Running multiple connections: done")
+	return firstErr
 }
 
 func initTable(t *testing.T) {
@@ -582,7 +599,7 @@ func initTable(t *testing.T) {
 
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	appliedDMLStart := totalAppliedDML.Load()

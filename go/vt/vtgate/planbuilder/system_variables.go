@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 type sysvarPlanCache struct {
@@ -86,9 +87,13 @@ func (pc *sysvarPlanCache) init(env *vtenv.Environment) {
 
 var sysvarPlanningFuncs sysvarPlanCache
 
-func (pc *sysvarPlanCache) Get(env *vtenv.Environment, expr *sqlparser.SetExpr) (planFunc, error) {
-	pc.init(env)
-	pf, ok := pc.funcs[expr.Var.Name.Lowered()]
+func (pc *sysvarPlanCache) Get(vschema plancontext.VSchema, expr *sqlparser.SetExpr) (planFunc, error) {
+	pc.init(vschema.Environment())
+	name := expr.Var.Name.Lowered()
+	if vschema.IsSystemVariableDenied(name) {
+		return buildNotSupported(setting{name: name}), nil
+	}
+	pf, ok := pc.funcs[name]
 	if !ok {
 		return nil, vterrors.VT05006(sqlparser.String(expr))
 	}

@@ -213,20 +213,20 @@ func (m *mockBackupHandle) HasErrors() bool {
 
 // TestCloseWithRetrySuccess tests that closeWithRetry succeeds when Close succeeds.
 func TestCloseWithRetrySuccess(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	logger := logutil.NewMemoryLogger()
 	closer := newMockCloser(0, nil)
 
 	err := closeWithRetry(ctx, logger, closer, "test-file")
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, 1, closer.getCloseCalled())
 	assert.True(t, closer.isClosed())
 }
 
 // TestCloseWithRetryTransientFailure tests that closeWithRetry retries on transient failures.
 func TestCloseWithRetryTransientFailure(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	logger := logutil.NewMemoryLogger()
 
 	// Test with various failure counts that should eventually succeed.
@@ -247,7 +247,7 @@ func TestCloseWithRetryTransientFailure(t *testing.T) {
 
 			err := closeWithRetry(ctx, logger, closer, "test-file")
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.True(t, closer.isClosed())
 			// Should have called Close failCount+1 times (failCount failures + 1 success).
 			assert.Equal(t, tc.failCount+1, closer.getCloseCalled())
@@ -260,7 +260,7 @@ func TestCloseWithRetryTransientFailure(t *testing.T) {
 // which can take several minutes with 20 retries.
 func TestCloseWithRetryPermanentFailure(t *testing.T) {
 	// Use a context with a short timeout to avoid waiting for all retries.
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
 	defer cancel()
 	logger := logutil.NewMemoryLogger()
 	closer := newAlwaysFailingCloser(errors.New("permanent error"))
@@ -268,7 +268,7 @@ func TestCloseWithRetryPermanentFailure(t *testing.T) {
 	err := closeWithRetry(ctx, logger, closer, "test-file")
 
 	// Should fail with context deadline exceeded.
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Equal(t, context.DeadlineExceeded, err)
 	// Should have attempted multiple times before context deadline.
 	assert.Greater(t, closer.getCloseCalled(), 1)
@@ -277,7 +277,7 @@ func TestCloseWithRetryPermanentFailure(t *testing.T) {
 
 // TestCloseWithRetryContextCancellation tests that closeWithRetry respects context cancellation.
 func TestCloseWithRetryContextCancellation(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	logger := logutil.NewMemoryLogger()
 	closer := newAlwaysFailingCloser(errors.New("error"))
 	// Cancel the context after a short delay.
@@ -288,16 +288,16 @@ func TestCloseWithRetryContextCancellation(t *testing.T) {
 
 	err := closeWithRetry(ctx, logger, closer, "test-file")
 
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Equal(t, context.Canceled, err)
 	// Should have called Close at least once but not maxFileCloseRetries times.
-	assert.Greater(t, closer.getCloseCalled(), 0)
+	assert.Positive(t, closer.getCloseCalled())
 	assert.Less(t, closer.getCloseCalled(), maxFileCloseRetries+1)
 }
 
 // TestBackupFileSourceCloseError tests error handling when a source file close fails during backup.
 func TestBackupFileSourceCloseError(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	logger := logutil.NewMemoryLogger()
 	// Create a temporary directory for test files.
 	tmpDir := t.TempDir()
@@ -329,14 +329,14 @@ func TestBackupFileSourceCloseError(t *testing.T) {
 	err = be.backupFile(ctx, params, bh, fe, "0")
 
 	// Should succeed after retries.
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, 3, sourceCloser.getCloseCalled()) // 2 failures + 1 success
 	assert.True(t, sourceCloser.isClosed())
 }
 
 // TestBackupFileDestinationCloseError tests error handling when a destination file close fails during backup.
 func TestBackupFileDestinationCloseError(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	logger := logutil.NewMemoryLogger()
 	// Create a temporary directory for test files.
 	tmpDir := t.TempDir()
@@ -368,7 +368,7 @@ func TestBackupFileDestinationCloseError(t *testing.T) {
 	err = be.backupFile(ctx, params, bh, fe, "0")
 
 	// Should succeed after retries.
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, 4, destCloser.getCloseCalled()) // 3 failures + 1 success
 	assert.True(t, destCloser.isClosed())
 }
@@ -378,7 +378,7 @@ func TestBackupFileDestinationCloseError(t *testing.T) {
 // backoff.
 func TestBackupFileDestinationCloseMaxRetries(t *testing.T) {
 	// Use a short timeout to avoid waiting for the full exponential backoff.
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 	defer cancel()
 	logger := logutil.NewMemoryLogger()
 	// Create a temporary directory for test files.
@@ -414,7 +414,7 @@ func TestBackupFileDestinationCloseMaxRetries(t *testing.T) {
 	err = be.backupFile(ctx, params, bh, fe, "0")
 
 	// Should fail due to close error (context deadline exceeded).
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to close destination file")
 	// Should have attempted multiple times before timeout.
 	assert.Greater(t, destCloser.getCloseCalled(), 1)
@@ -423,7 +423,7 @@ func TestBackupFileDestinationCloseMaxRetries(t *testing.T) {
 
 // TestBackupManifestCloseError tests error handling when manifest writer close fails.
 func TestBackupManifestCloseError(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	logger := logutil.NewMemoryLogger()
 	be := &BuiltinBackupEngine{}
 
@@ -495,10 +495,10 @@ func TestBackupManifestCloseError(t *testing.T) {
 			err := be.backupManifest(testCtx, params, bh, testPosition(), testPosition(), testPosition(), "", "test-uuid", "8.0.32", nil, fes, 0)
 
 			if tc.expectError {
-				assert.Error(t, err)
+				require.Error(t, err)
 				assert.Contains(t, err.Error(), "cannot close backup")
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 			assert.GreaterOrEqual(t, wc.getCloseCalled(), tc.expectedCallCount)
 		})
@@ -507,7 +507,7 @@ func TestBackupManifestCloseError(t *testing.T) {
 
 // TestRestoreFileSourceCloseError tests error handling when a source file close fails during restore.
 func TestRestoreFileSourceCloseError(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	logger := logutil.NewMemoryLogger()
 	tmpDir := t.TempDir()
 	be := &BuiltinBackupEngine{}
@@ -535,14 +535,14 @@ func TestRestoreFileSourceCloseError(t *testing.T) {
 	err := be.restoreFile(ctx, params, bh, fe, bm, "0")
 
 	// Will fail due to hash mismatch, but we can verify close was attempted with retries.
-	assert.Error(t, err)
+	require.Error(t, err)
 	// Source should have been closed with retries.
 	assert.GreaterOrEqual(t, sourceCloser.getCloseCalled(), 1)
 }
 
 // TestRestoreFileDestinationClose tests the happy path when closing a destination file during restore.
 func TestRestoreFileDestinationClose(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	logger := logutil.NewMemoryLogger()
 	tmpDir := t.TempDir()
 	// We need to create a more complete test setup for this
@@ -580,7 +580,7 @@ func TestRestoreFileDestinationClose(t *testing.T) {
 	err := be.restoreFile(ctx, params, bh, fe, bm, "0")
 
 	// The restore should succeed (destination close should work for real files).
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	// Verify the file was actually created
 	destPath := filepath.Join(tmpDir, "test-restore.txt")
 	_, err = os.Stat(destPath)
@@ -590,7 +590,7 @@ func TestRestoreFileDestinationClose(t *testing.T) {
 // TestRestoreFileWithCloseRetriesIntegration is an integration test that verifies
 // the full restore flow handles close retries properly.
 func TestRestoreFileWithCloseRetriesIntegration(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	logger := logutil.NewMemoryLogger()
 	tmpDir := t.TempDir()
 	be := &BuiltinBackupEngine{}
@@ -626,7 +626,7 @@ func TestRestoreFileWithCloseRetriesIntegration(t *testing.T) {
 	err := be.restoreFile(ctx, params, bh, fe, bm, "0")
 
 	// Should succeed after retries.
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	// Verify source was closed with retry (1 failure + 1 success)
 	assert.Equal(t, 2, sourceCloser.getCloseCalled())
 	assert.True(t, sourceCloser.isClosed())

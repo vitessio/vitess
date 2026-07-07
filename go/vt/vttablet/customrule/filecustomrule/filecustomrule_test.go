@@ -21,6 +21,8 @@ import (
 	"path"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
 )
@@ -44,23 +46,15 @@ func TestFileCustomRule(t *testing.T) {
 	rulepath := path.Join(os.TempDir(), ".customrule.json")
 	// Set r1 and try to get it back
 	err := os.WriteFile(rulepath, []byte(customRule1), os.FileMode(0o644))
-	if err != nil {
-		t.Fatalf("Cannot write r1 to rule file %s, err=%v", rulepath, err)
-	}
+	require.NoErrorf(t, err, "Cannot write r1 to rule file %s, err=%v", rulepath, err)
 
 	fcr := NewFileCustomRule()
 	// Let FileCustomRule to build rule from the local file
 	err = fcr.Open(tqsc, rulepath)
-	if err != nil {
-		t.Fatalf("Cannot open file custom rule service, err=%v", err)
-	}
+	require.NoError(t, err)
 	// Fetch query rules we built to verify correctness
 	qrs, _, err = fcr.GetRules()
-	if err != nil {
-		t.Fatalf("GetRules returns error: %v", err)
-	}
+	require.NoError(t, err)
 	qr := qrs.Find("r1")
-	if qr == nil {
-		t.Fatalf("Expect custom rule r1 to be found, but got nothing, qrs=%v", qrs)
-	}
+	require.NotNilf(t, qr, "Expect custom rule r1 to be found, but got nothing, qrs=%v", qrs)
 }

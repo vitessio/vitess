@@ -51,6 +51,14 @@ type Table struct {
 	PKColumns []int
 	Type      int
 
+	// EnumSetColumnTypes records the full type definition (the column_type,
+	// e.g. enum('a','b')) of the table's ENUM and SET columns, keyed by column
+	// name. It is fetched together with Fields (see fetchColumns) and is
+	// persisted by schema version tracking so that historical ROW events for
+	// these columns can be decoded after the column is dropped or modified. It
+	// is only populated when schema version tracking is enabled.
+	EnumSetColumnTypes map[string]string
+
 	// SequenceInfo contains info for sequence tables.
 	SequenceInfo *SequenceInfo
 

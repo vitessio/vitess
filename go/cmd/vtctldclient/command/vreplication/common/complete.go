@@ -1,3 +1,19 @@
+/*
+Copyright 2026 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package common
 
 import (
@@ -44,7 +60,7 @@ func commandComplete(cmd *cobra.Command, args []string) error {
 	req := &vtctldatapb.MoveTablesCompleteRequest{
 		Workflow:             BaseOptions.Workflow,
 		TargetKeyspace:       BaseOptions.TargetKeyspace,
-		KeepData:             CompleteOptions.KeepData,
+		KeepData:             OptionalBoolFromFlag(cmd, "keep-data", CompleteOptions.KeepData),
 		KeepRoutingRules:     CompleteOptions.KeepRoutingRules,
 		RenameTables:         CompleteOptions.RenameTables,
 		DryRun:               CompleteOptions.DryRun,
@@ -63,16 +79,17 @@ func commandComplete(cmd *cobra.Command, args []string) error {
 		}
 	} else {
 		tout := bytes.Buffer{}
-		tout.WriteString(resp.Summary + "\n")
+		AppendWarnings(&tout, resp.Warnings)
+		tout.WriteString(resp.Summary)
 		if len(resp.DryRunResults) > 0 {
-			tout.WriteString("\n")
+			tout.WriteString("\n\n")
 			for _, r := range resp.DryRunResults {
 				tout.WriteString(r + "\n")
 			}
 		}
 		output = tout.Bytes()
 	}
-	fmt.Println(string(output))
+	fmt.Printf("%s\n", output)
 
 	return nil
 }

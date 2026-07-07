@@ -19,6 +19,9 @@ package json
 import (
 	"slices"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestParseJSONPath(t *testing.T) {
@@ -48,15 +51,9 @@ func TestParseJSONPath(t *testing.T) {
 		var p PathParser
 		jp, err := p.ParseBytes([]byte(tc.P))
 		if tc.Err == "" {
-			if err != nil {
-				t.Fatalf("failed to parse '%s': %v", tc.P, err)
-			}
+			require.NoErrorf(t, err, "failed to parse '%s': %v", tc.P, err)
 		} else {
-			if err == nil {
-				t.Fatalf("bad parse for '%s': expected an error", tc.P)
-			} else if err.Error() != tc.Err {
-				t.Fatalf("bad parse for '%s': expected err='%s', got err='%s'", tc.P, tc.Err, err)
-			}
+			require.EqualErrorf(t, err, tc.Err, "bad parse for '%s': expected err='%s', got err='%v'", tc.P, tc.Err, err)
 			continue
 		}
 		want := tc.Want
@@ -64,9 +61,7 @@ func TestParseJSONPath(t *testing.T) {
 			want = tc.P
 		}
 		got := jp.String()
-		if got != want {
-			t.Fatalf("bad parse for '%s': want '%s', got '%s'", tc.P, want, got)
-		}
+		require.Equalf(t, want, got, "bad parse for '%s': want '%s', got '%s'", tc.P, want, got)
 	}
 }
 
@@ -105,30 +100,25 @@ func TestJSONExtract(t *testing.T) {
 			matched = append(matched, string(value.MarshalTo(nil)))
 		})
 		if err != nil {
-			t.Errorf("failed to match '%s'->'%s': %v", tc.J, tc.JP, err)
+			assert.Failf(t, "failed to match", "failed to match '%s'->'%s': %v", tc.J, tc.JP, err)
 			continue
 		}
-		if !slices.Equal(tc.Expected, matched) {
-			t.Errorf("'%s'->'%s' = %v (expected %v)", tc.J, tc.JP, matched, tc.Expected)
-		}
+		// slices.Equal treats nil and empty slices as equal; assert.Equal would not.
+		assert.True(t, slices.Equal(tc.Expected, matched), "'%s'->'%s' = %v (expected %v)", tc.J, tc.JP, matched, tc.Expected)
 	}
 }
 
 func json(t *testing.T, raw string) *Value {
 	var p Parser
 	v, err := p.Parse(raw)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	return v
 }
 
 func path(t *testing.T, raw string) *Path {
 	var p PathParser
 	v, err := p.ParseBytes([]byte(raw))
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	return v
 }
 
@@ -223,13 +213,9 @@ func TestTransformations(t *testing.T) {
 		}
 
 		err := ApplyTransform(tc.T, doc, paths, values)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 
 		result := string(doc.MarshalTo(nil))
-		if result != tc.Expected {
-			t.Errorf("bad transformation (%v)\nwant: %s\ngot:  %s", tc.T, tc.Expected, result)
-		}
+		assert.Equalf(t, tc.Expected, result, "bad transformation (%v)\nwant: %s\ngot:  %s", tc.T, tc.Expected, result)
 	}
 }

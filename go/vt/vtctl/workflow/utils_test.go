@@ -1,3 +1,19 @@
+/*
+Copyright 2026 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package workflow
 
 import (
@@ -27,6 +43,38 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/proto/vtctldata"
 )
+
+func TestResolveWorkflowKeepData(t *testing.T) {
+	t.Run("non-reverse workflow keeps existing default", func(t *testing.T) {
+		keepData, warnings := resolveWorkflowKeepData("wf1", nil)
+		require.False(t, keepData)
+		require.Empty(t, warnings)
+	})
+
+	t.Run("reverse workflow defaults to keeping data", func(t *testing.T) {
+		keepData, warnings := resolveWorkflowKeepData("wf1_reverse", nil)
+		require.True(t, keepData)
+		require.Len(t, warnings, 1)
+		assert.Contains(t, warnings[0], "wf1_reverse")
+		assert.Contains(t, warnings[0], "keeping data by default")
+		assert.Contains(t, warnings[0], "keep_data=false")
+		assert.Contains(t, warnings[0], "--keep-data=false")
+	})
+
+	t.Run("explicit false on reverse workflow is honored", func(t *testing.T) {
+		keepDataValue := false
+		keepData, warnings := resolveWorkflowKeepData("wf1_reverse", &keepDataValue)
+		require.False(t, keepData)
+		require.Empty(t, warnings)
+	})
+
+	t.Run("explicit true on reverse workflow is honored", func(t *testing.T) {
+		keepDataValue := true
+		keepData, warnings := resolveWorkflowKeepData("wf1_reverse", &keepDataValue)
+		require.True(t, keepData)
+		require.Empty(t, warnings)
+	})
+}
 
 // TestCreateDefaultShardRoutingRules confirms that the default shard routing rules are created correctly for sharded
 // and unsharded keyspaces.
@@ -93,7 +141,7 @@ func TestCreateDefaultShardRoutingRules(t *testing.T) {
 			require.NoError(t, err)
 			require.Len(t, rules, len(tc.shards))
 			want := getExpectedRules(tc.sourceKeyspace, tc.targetKeyspace)
-			require.EqualValues(t, want, rules)
+			require.Equal(t, want, rules)
 		})
 	}
 }
@@ -111,7 +159,7 @@ func TestUpdateKeyspaceRoutingRule(t *testing.T) {
 	require.NoError(t, err)
 	rules, err := topotools.GetKeyspaceRoutingRules(ctx, ts)
 	require.NoError(t, err)
-	require.EqualValues(t, routes, rules)
+	require.Equal(t, routes, rules)
 }
 
 // TestConcurrentKeyspaceRoutingRulesUpdates runs multiple keyspace routing rules updates concurrently to test
@@ -125,7 +173,7 @@ func TestConcurrentKeyspaceRoutingRulesUpdates(t *testing.T) {
 		t.Skip()
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	ts := memorytopo.NewServer(ctx, "zone1")
 	defer ts.Close()
@@ -155,6 +203,10 @@ func testConcurrentKeyspaceRoutingRulesUpdates(t *testing.T, ctx context.Context
 	shortCtx, cancel := context.WithTimeout(ctx, duration)
 	defer cancel()
 	log.Info(fmt.Sprintf("Starting %d concurrent updates", concurrency))
+	var (
+		updateMu  sync.Mutex
+		updateErr error
+	)
 	for i := range concurrency {
 		go func(id int) {
 			defer wg.Done()
@@ -163,21 +215,29 @@ func testConcurrentKeyspaceRoutingRulesUpdates(t *testing.T, ctx context.Context
 				case <-shortCtx.Done():
 					return
 				default:
-					update(t, ts, id)
+					if err := update(shortCtx, ts, id); err != nil {
+						updateMu.Lock()
+						if updateErr == nil {
+							updateErr = err
+						}
+						updateMu.Unlock()
+						return
+					}
 				}
 			}
 		}(i)
 	}
 	wg.Wait()
+	require.NoError(t, updateErr)
 	log.Info("All updates completed")
-	rules, err := ts.GetKeyspaceRoutingRules(ctx)
+	verifyCtx, verifyCancel := context.WithTimeout(ctx, 10*time.Second)
+	defer verifyCancel()
+	rules, err := ts.GetKeyspaceRoutingRules(verifyCtx)
 	require.NoError(t, err)
 	require.LessOrEqual(t, concurrency, len(rules.Rules))
 }
 
-func update(t *testing.T, ts *topo.Server, id int) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+func update(ctx context.Context, ts *topo.Server, id int) error {
 	s := fmt.Sprintf("%d_%d", id, rand.IntN(math.MaxInt))
 	routes := make(map[string]string)
 	for _, tabletType := range tabletTypeSuffixes {
@@ -185,13 +245,26 @@ func update(t *testing.T, ts *topo.Server, id int) {
 		routes[from] = s + tabletType
 	}
 	err := updateKeyspaceRoutingRules(ctx, ts, "test", routes)
-	require.NoError(t, err)
+	if ctx.Err() != nil {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
 	got, err := topotools.GetKeyspaceRoutingRules(ctx, ts)
-	require.NoError(t, err)
+	if ctx.Err() != nil {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
 	for _, tabletType := range tabletTypeSuffixes {
 		from := fmt.Sprintf("from%s%s", s, tabletType)
-		require.Equal(t, s+tabletType, got[from])
+		if got[from] != s+tabletType {
+			return fmt.Errorf("routing rule %q = %q, want %q", from, got[from], s+tabletType)
+		}
 	}
+	return nil
 }
 
 // startEtcd starts an etcd subprocess, and waits for it to be ready.
@@ -199,11 +272,9 @@ func startEtcd(t *testing.T) string {
 	// Create a temporary directory.
 	dataDir := t.TempDir()
 
-	// Get our two ports to listen to.
-	port := testfiles.GoVtTopoEtcd2topoPort
 	name := "vitess_unit_test"
-	clientAddr := fmt.Sprintf("http://localhost:%v", port)
-	peerAddr := fmt.Sprintf("http://localhost:%v", port+1)
+	clientAddr := fmt.Sprintf("http://localhost:%v", testfiles.GoVtVtctlWorkflowPort)
+	peerAddr := fmt.Sprintf("http://localhost:%v", testfiles.GoVtVtctlWorkflowPeerPort)
 	initialCluster := fmt.Sprintf("%v=%v", name, peerAddr)
 	cmd := exec.Command("etcd",
 		"-name", name,
@@ -225,7 +296,7 @@ func startEtcd(t *testing.T) string {
 	defer cli.Close()
 
 	// Wait until we can list "/", or timeout.
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 	start := time.Now()
 	for {
@@ -282,7 +353,7 @@ func TestValidateSourceTablesExist(t *testing.T) {
 }
 
 func TestLegacyBuildTargets(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 
 	workflowName := "wf1"
@@ -340,17 +411,17 @@ func TestLegacyBuildTargets(t *testing.T) {
 	assert.Len(t, t2.Sources, 2)
 	assert.Len(t, t1.Sources[1].Filter.Rules, 2)
 
-	assert.Equal(t, t1.Sources[1].Filter.Rules[0].Match, "t1")
-	assert.Equal(t, t1.Sources[1].Filter.Rules[1].Match, "t2")
-	assert.Equal(t, t1.Sources[1].Shard, "-80")
+	assert.Equal(t, "t1", t1.Sources[1].Filter.Rules[0].Match)
+	assert.Equal(t, "t2", t1.Sources[1].Filter.Rules[1].Match)
+	assert.Equal(t, "-80", t1.Sources[1].Shard)
 
 	assert.Len(t, t2.Sources[1].Filter.Rules, 2)
 	assert.Len(t, t2.Sources[2].Filter.Rules, 2)
 
-	assert.Equal(t, t2.Sources[1].Shard, "80-")
-	assert.Equal(t, t2.Sources[2].Shard, "80-")
-	assert.Equal(t, t2.Sources[1].Filter.Rules[0].Match, "t1")
-	assert.Equal(t, t2.Sources[1].Filter.Rules[1].Match, "t2")
-	assert.Equal(t, t2.Sources[2].Filter.Rules[0].Match, "t3")
-	assert.Equal(t, t2.Sources[2].Filter.Rules[1].Match, "t4")
+	assert.Equal(t, "80-", t2.Sources[1].Shard)
+	assert.Equal(t, "80-", t2.Sources[2].Shard)
+	assert.Equal(t, "t1", t2.Sources[1].Filter.Rules[0].Match)
+	assert.Equal(t, "t2", t2.Sources[1].Filter.Rules[1].Match)
+	assert.Equal(t, "t3", t2.Sources[2].Filter.Rules[0].Match)
+	assert.Equal(t, "t4", t2.Sources[2].Filter.Rules[1].Match)
 }

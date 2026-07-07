@@ -164,13 +164,7 @@ func NewClient() *Client {
 // validateTablet confirms the tablet record contains the necessary fields
 // for talking gRPC.
 func validateTablet(tablet *topodatapb.Tablet) error {
-	// v24+ adds a TabletShutdownTime field that is set to "now" on clean shutdown.
 	if tablet.TabletShutdownTime != nil {
-		return vterrors.New(vtrpcpb.Code_UNAVAILABLE, "tablet is shutdown")
-	}
-
-	// <= v23 compatibility to similuate missing TabletShutdownTime field. Remove in v25.
-	if tablet.Hostname == "" && tablet.MysqlHostname == "" && tablet.PortMap == nil && tablet.Type != topodatapb.TabletType_UNKNOWN {
 		return vterrors.New(vtrpcpb.Code_UNAVAILABLE, "tablet is shutdown")
 	}
 
@@ -300,6 +294,17 @@ func (client *grpcClient) dialDedicatedPool(ctx context.Context, dialPoolGroup D
 	})
 
 	if entry.err != nil {
+		// A failed dial must not be cached forever. The entry is guarded by a
+		// sync.Once, so without eviction every future call returns this same
+		// error even after the peer recovers — which would permanently mark a
+		// reachable tablet as down. Evict the entry so the next call redials.
+		// Only evict THIS entry: a concurrent caller may already have installed
+		// a fresh one for the same addr.
+		client.rpcDialPoolMapMu.Lock()
+		if poolEntries, ok := client.rpcDialPoolMap[dialPoolGroup]; ok && poolEntries[addr] == entry {
+			delete(poolEntries, addr)
+		}
+		client.rpcDialPoolMapMu.Unlock()
 		return nil, nil, entry.err
 	}
 

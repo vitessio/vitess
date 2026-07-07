@@ -1,3 +1,19 @@
+/*
+Copyright 2026 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package vreplication
 
 import (
@@ -15,7 +31,6 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/schema"
-	"vitess.io/vitess/go/vt/utils"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
@@ -34,7 +49,7 @@ func TestOnlineDDLVDiff(t *testing.T) {
 	vc = setupMinimalCluster(t)
 	defer vc.TearDown()
 	keyspace := defaultSourceKs
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	createQuery := "create table temp (id int, name varchar(100), blb blob, primary key (id))"
@@ -48,13 +63,13 @@ func TestOnlineDDLVDiff(t *testing.T) {
 	var output string
 
 	t.Run("OnlineDDL VDiff", func(t *testing.T) {
-		done := make(chan bool)
-		go populate(ctx, t, done, insertTemplate, updateTemplate)
+		done := make(chan error)
+		go populate(ctx, done, insertTemplate, updateTemplate)
 
 		waitForAdditionalRows(t, keyspace, "temp", 100)
 		output = execOnlineDDL(t, "vitess --postpone-completion", keyspace, alterQuery)
 		uuid := strings.TrimSpace(output)
-		waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", keyspace, uuid), binlogdatapb.VReplicationWorkflowState_Running.String())
+		require.NoError(t, waitForWorkflowState(vc, fmt.Sprintf("%s.%s", keyspace, uuid), binlogdatapb.VReplicationWorkflowState_Running.String()))
 		waitForAdditionalRows(t, keyspace, "temp", 200)
 
 		require.NoError(t, waitForCondition("online ddl migration to be ready to complete", func() bool {
@@ -75,7 +90,7 @@ func TestOnlineDDLVDiff(t *testing.T) {
 		doVtctldclientVDiff(t, keyspace, uuid, "zone1", want)
 
 		cancel()
-		<-done
+		require.NoError(t, <-done)
 	})
 }
 
@@ -89,12 +104,12 @@ func onlineDDLShow(t *testing.T, keyspace, uuid string) *vtctldata.GetSchemaMigr
 }
 
 func execOnlineDDL(t *testing.T, strategy, keyspace, query string) string {
-	output, err := vc.VtctldClient.ExecuteCommandWithOutput("ApplySchema", utils.GetFlagVariantForTests("--ddl-strategy"), strategy, "--sql", query, keyspace)
+	output, err := vc.VtctldClient.ExecuteCommandWithOutput("ApplySchema", "--ddl-strategy", strategy, "--sql", query, keyspace)
 	require.NoError(t, err, output)
 	output = strings.TrimSpace(output)
 	if strategy != "direct" {
-		// We expect a UUID as the only output, but when using --ddl_strategy we get a warning mixed into the output:
-		//   Flag --ddl_strategy has been deprecated, use --ddl-strategy instead
+		// We expect a UUID as the only output, but when using --ddl-strategy we get a warning mixed into the output:
+		//   Flag --ddl-strategy has been deprecated, use --ddl-strategy instead
 		// In order to prevent this and other similar future issues, lets hunt for the UUID (which should be on its own line)
 		// in the returned output.
 		uuid := ""
@@ -131,7 +146,7 @@ func waitForAdditionalRows(t *testing.T, keyspace, table string, count int) {
 
 	numRowsStart := getNumRows(t, vtgateConn, keyspace, table)
 	numRows := 0
-	shortCtx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	shortCtx, cancel := context.WithTimeout(t.Context(), defaultTimeout)
 	defer cancel()
 	for {
 		switch {
@@ -148,15 +163,18 @@ func waitForAdditionalRows(t *testing.T, keyspace, table string, count int) {
 }
 
 func getNumRows(t *testing.T, vtgateConn *mysql.Conn, keyspace, table string) int {
-	qr := execVtgateQuery(t, vtgateConn, keyspace, "SELECT COUNT(*) FROM "+table)
+	qr, err := execVtgateQuery(vtgateConn, keyspace, "SELECT COUNT(*) FROM "+table)
+	require.NoError(t, err)
 	require.NotNil(t, qr)
 	numRows, err := strconv.Atoi(qr.Rows[0][0].ToString())
 	require.NoError(t, err)
 	return numRows
 }
 
-func populate(ctx context.Context, t *testing.T, done chan bool, insertTemplate, updateTemplate string) {
-	defer close(done)
+// populate runs a write load in a goroutine until ctx is cancelled. It reports
+// its outcome (nil on clean cancellation, or the first error) on done, so the
+// test goroutine can assert on it.
+func populate(ctx context.Context, done chan error, insertTemplate, updateTemplate string) {
 	vtgateConn, closeConn := getVTGateConn()
 	defer closeConn()
 	id := 1
@@ -164,14 +182,19 @@ func populate(ctx context.Context, t *testing.T, done chan bool, insertTemplate,
 		select {
 		case <-ctx.Done():
 			log.Info("load cancelled")
+			done <- nil
 			return
 		default:
 			query := fmt.Sprintf(insertTemplate, id, id, id)
-			_, err := vtgateConn.ExecuteFetch(query, 1, false)
-			require.NoErrorf(t, err, "error in insert")
+			if _, err := vtgateConn.ExecuteFetch(query, 1, false); err != nil {
+				done <- fmt.Errorf("error in insert: %w", err)
+				return
+			}
 			query = fmt.Sprintf(updateTemplate, id, id)
-			_, err = vtgateConn.ExecuteFetch(query, 1, false)
-			require.NoErrorf(t, err, "error in update")
+			if _, err := vtgateConn.ExecuteFetch(query, 1, false); err != nil {
+				done <- fmt.Errorf("error in update: %w", err)
+				return
+			}
 			id++
 			time.Sleep(10 * time.Millisecond)
 		}

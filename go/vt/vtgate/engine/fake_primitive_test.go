@@ -22,6 +22,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/proto"
 
@@ -47,6 +48,12 @@ type fakePrimitive struct {
 	async bool
 
 	useNewPrintBindVars bool
+
+	// writeBindVar, when set, is written into the bindVars map on execution.
+	// It mirrors primitives such as the information_schema route that mutate
+	// the bindVars map in place, and lets tests assert each source is handed
+	// its own copy.
+	writeBindVar string
 }
 
 func (f *fakePrimitive) Inputs() ([]Primitive, []map[string]any) {
@@ -67,6 +74,10 @@ func (f *fakePrimitive) TryExecute(ctx context.Context, vcursor VCursor, bindVar
 		f.log = append(f.log, fmt.Sprintf("Execute %v %v", deprecatedPrintBindVars(bindVars), wantfields))
 	}
 
+	if f.writeBindVar != "" {
+		bindVars[f.writeBindVar] = sqltypes.Int64BindVariable(1)
+	}
+
 	if f.results == nil {
 		return nil, f.sendErr
 	}
@@ -83,6 +94,11 @@ func (f *fakePrimitive) TryStreamExecute(ctx context.Context, vcursor VCursor, b
 	if !f.noLog {
 		f.log = append(f.log, fmt.Sprintf("StreamExecute %v %v", deprecatedPrintBindVars(bindVars), wantfields))
 	}
+
+	if f.writeBindVar != "" {
+		bindVars[f.writeBindVar] = sqltypes.Int64BindVariable(1)
+	}
+
 	if f.results == nil {
 		return f.sendErr
 	}
@@ -171,9 +187,7 @@ func (f *fakePrimitive) GetFields(ctx context.Context, vcursor VCursor, bindVars
 
 func (f *fakePrimitive) ExpectLog(t *testing.T, want []string) {
 	t.Helper()
-	if strings.Join(f.log, "\n") != strings.Join(want, "\n") {
-		t.Errorf("vc.log got:\n%v\nwant:\n%v", strings.Join(f.log, "\n"), strings.Join(want, "\n"))
-	}
+	assert.Equalf(t, strings.Join(want, "\n"), strings.Join(f.log, "\n"), "vc.log")
 }
 
 func (f *fakePrimitive) NeedsTransaction() bool {

@@ -42,6 +42,9 @@ func Run(bindAddress string, port int) {
 	populateListeningURL(int32(port))
 	createGRPCServer()
 	onRunHooks.Fire()
+	// The returned stop function is deliberately discarded: the ORCA metrics
+	// updater is meant to run for the lifetime of the process. It only needs
+	// stopping in tests, which would otherwise leak its goroutine across tests.
 	serveGRPC()
 	serveSocketFile()
 

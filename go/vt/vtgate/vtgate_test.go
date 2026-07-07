@@ -35,8 +35,10 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/binlogacl"
 	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
@@ -65,16 +67,12 @@ func TestVTGateExecute(t *testing.T) {
 		nil,
 		false,
 	)
-	if err != nil {
-		t.Errorf("want nil, got %v", err)
-	}
+	require.NoError(t, err)
 
 	want := *sandboxconn.SingleRowResult
 	want.StatusFlags = 0 // VTGate result set does not contain status flags in sqltypes.Result
 	utils.MustMatch(t, &want, qr)
-	if !proto.Equal(sbc.Options[0], executeOptions) {
-		t.Errorf("got ExecuteOptions \n%+v, want \n%+v", sbc.Options[0], executeOptions)
-	}
+	assert.Truef(t, proto.Equal(sbc.Options[0], executeOptions), "got ExecuteOptions \n%+v, want \n%+v", sbc.Options[0], executeOptions)
 
 	newCounts := vtg.timings.Counts()
 	require.Contains(t, newCounts, "All")
@@ -138,9 +136,7 @@ func TestVTGatePrepare(t *testing.T) {
 
 	want := sandboxconn.SingleRowResult.Fields
 	utils.MustMatch(t, want, qr)
-	if !proto.Equal(sbc.Options[0], executeOptions) {
-		t.Errorf("got ExecuteOptions \n%+v, want \n%+v", sbc.Options[0], executeOptions)
-	}
+	assert.Truef(t, proto.Equal(sbc.Options[0], executeOptions), "got ExecuteOptions \n%+v, want \n%+v", sbc.Options[0], executeOptions)
 
 	newCounts := vtg.timings.Counts()
 	require.Contains(t, newCounts, "All")
@@ -197,9 +193,7 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 		nil,
 		false,
 	)
-	if err != nil {
-		t.Errorf("want nil, got %v", err)
-	}
+	require.NoError(t, err)
 	wantQr := *sandboxconn.SingleRowResult
 	wantQr.StatusFlags = 0 // VTGate result set does not contain status flags in sqltypes.Result
 	utils.MustMatch(t, &wantQr, qr)
@@ -216,7 +210,7 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 		false,
 	)
 	want := "VT05003: unknown database 'invalid_keyspace' in vschema"
-	assert.EqualError(t, err, want)
+	require.EqualError(t, err, want)
 
 	// Valid keyspace/shard.
 	_, qr, err = vtg.Execute(
@@ -229,9 +223,7 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 		nil,
 		false,
 	)
-	if err != nil {
-		t.Errorf("want nil, got %v", err)
-	}
+	require.NoError(t, err)
 	utils.MustMatch(t, &wantQr, qr)
 
 	// Invalid keyspace/shard.
@@ -262,6 +254,7 @@ func TestVTGateStreamExecute(t *testing.T) {
 		},
 		"select id from t1",
 		nil,
+		false,
 		func(r *sqltypes.Result) error {
 			qrs = append(qrs, r)
 			return nil
@@ -275,9 +268,7 @@ func TestVTGateStreamExecute(t *testing.T) {
 		Rows:   sandboxconn.StreamRowResult.Rows,
 	}}
 	utils.MustMatch(t, want, qrs)
-	if !proto.Equal(sbc.Options[0], executeOptions) {
-		t.Errorf("got ExecuteOptions \n%+v, want \n%+v", sbc.Options[0], executeOptions)
-	}
+	assert.Truef(t, proto.Equal(sbc.Options[0], executeOptions), "got ExecuteOptions \n%+v, want \n%+v", sbc.Options[0], executeOptions)
 }
 
 func TestVTGateBindVarError(t *testing.T) {
@@ -310,14 +301,13 @@ func TestVTGateBindVarError(t *testing.T) {
 	}, {
 		name: "StreamExecute",
 		f: func() error {
-			_, err := vtg.StreamExecute(ctx, nil, session, "", bindVars, func(_ *sqltypes.Result) error { return nil })
+			_, err := vtg.StreamExecute(ctx, nil, session, "", bindVars, false, func(_ *sqltypes.Result) error { return nil })
 			return err
 		},
 	}}
 	for _, tcase := range tcases {
-		if err := tcase.f(); err == nil || !strings.Contains(err.Error(), want) {
-			t.Errorf("%v error: %v, must contain %s", tcase.name, err, want)
-		}
+		err := tcase.f()
+		assert.ErrorContainsf(t, err, want, "%v error", tcase.name)
 	}
 }
 
@@ -338,13 +328,8 @@ func testErrorPropagation(t *testing.T, ctx context.Context, vtg *VTGate, sbcs [
 		nil,
 		false,
 	)
-	if err == nil {
-		t.Errorf("error %v not propagated for Execute", expected)
-	} else {
-		ec := vterrors.Code(err)
-		if ec != expected {
-			t.Errorf("unexpected error, got code %v err %v, want %v", ec, err, expected)
-		}
+	if assert.Errorf(t, err, "error %v not propagated for Execute", expected) {
+		assert.Equalf(t, expected, vterrors.Code(err), "unexpected error code, err %v", err)
 	}
 	for _, sbc := range sbcs {
 		after(sbc)
@@ -360,17 +345,13 @@ func testErrorPropagation(t *testing.T, ctx context.Context, vtg *VTGate, sbcs [
 		session,
 		"select id from t1",
 		nil,
+		false,
 		func(r *sqltypes.Result) error {
 			return nil
 		},
 	)
-	if err == nil {
-		t.Errorf("error %v not propagated for StreamExecute", expected)
-	} else {
-		ec := vterrors.Code(err)
-		if ec != expected {
-			t.Errorf("unexpected error, got %v want %v: %v", ec, expected, err)
-		}
+	if assert.Errorf(t, err, "error %v not propagated for StreamExecute", expected) {
+		assert.Equalf(t, expected, vterrors.Code(err), "unexpected error code, err %v", err)
 	}
 	for _, sbc := range sbcs {
 		after(sbc)
@@ -470,24 +451,14 @@ func TestErrorIssuesRollback(t *testing.T) {
 	// Simulate an error that should trigger a rollback:
 	// vtrpcpb.Code_ABORTED case.
 	session, _, err := vtg.Execute(ctx, nil, &vtgatepb.Session{TargetString: KsTestUnsharded + "@primary"}, "begin", nil, false)
-	if err != nil {
-		t.Fatalf("cannot start a transaction: %v", err)
-	}
+	require.NoError(t, err)
 	session, _, err = vtg.Execute(ctx, nil, session, "select id from t1", nil, false)
-	if err != nil {
-		t.Fatalf("want nil, got %v", err)
-	}
-	if sbc.RollbackCount.Load() != 0 {
-		t.Errorf("want 0, got %d", sbc.RollbackCount.Load())
-	}
+	require.NoError(t, err)
+	assert.EqualValues(t, 0, sbc.RollbackCount.Load())
 	sbc.MustFailCodes[vtrpcpb.Code_ABORTED] = 20
 	_, _, err = vtg.Execute(ctx, nil, session, "select id from t1", nil, false)
-	if err == nil {
-		t.Fatalf("want error but got nil")
-	}
-	if sbc.RollbackCount.Load() != 1 {
-		t.Errorf("want 1, got %d", sbc.RollbackCount.Load())
-	}
+	require.Error(t, err, "want error but got nil")
+	assert.EqualValues(t, 1, sbc.RollbackCount.Load())
 	sbc.RollbackCount.Store(0)
 	sbc.MustFailCodes[vtrpcpb.Code_ABORTED] = 0
 
@@ -495,24 +466,14 @@ func TestErrorIssuesRollback(t *testing.T) {
 	// Simulate an error that should trigger a rollback:
 	// vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED case.
 	session, _, err = vtg.Execute(ctx, nil, &vtgatepb.Session{TargetString: KsTestUnsharded + "@primary"}, "begin", nil, false)
-	if err != nil {
-		t.Fatalf("cannot start a transaction: %v", err)
-	}
+	require.NoError(t, err)
 	session, _, err = vtg.Execute(ctx, nil, session, "select id from t1", nil, false)
-	if err != nil {
-		t.Fatalf("want nil, got %v", err)
-	}
-	if sbc.RollbackCount.Load() != 0 {
-		t.Errorf("want 0, got %d", sbc.RollbackCount.Load())
-	}
+	require.NoError(t, err)
+	assert.EqualValues(t, 0, sbc.RollbackCount.Load())
 	sbc.MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 20
 	_, _, err = vtg.Execute(ctx, nil, session, "select id from t1", nil, false)
-	if err == nil {
-		t.Fatalf("want error but got nil")
-	}
-	if sbc.RollbackCount.Load() != 1 {
-		t.Errorf("want 1, got %d", sbc.RollbackCount.Load())
-	}
+	require.Error(t, err, "want error but got nil")
+	assert.EqualValues(t, 1, sbc.RollbackCount.Load())
 	sbc.RollbackCount.Store(0)
 	sbc.MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 0
 
@@ -520,24 +481,14 @@ func TestErrorIssuesRollback(t *testing.T) {
 	// Simulate an error that should *not* trigger a rollback:
 	// vtrpcpb.Code_ALREADY_EXISTS case.
 	session, _, err = vtg.Execute(ctx, nil, &vtgatepb.Session{TargetString: KsTestUnsharded + "@primary"}, "begin", nil, false)
-	if err != nil {
-		t.Fatalf("cannot start a transaction: %v", err)
-	}
+	require.NoError(t, err)
 	session, _, err = vtg.Execute(ctx, nil, session, "select id from t1", nil, false)
-	if err != nil {
-		t.Fatalf("want nil, got %v", err)
-	}
-	if sbc.RollbackCount.Load() != 0 {
-		t.Errorf("want 0, got %d", sbc.RollbackCount.Load())
-	}
+	require.NoError(t, err)
+	assert.EqualValues(t, 0, sbc.RollbackCount.Load())
 	sbc.MustFailCodes[vtrpcpb.Code_ALREADY_EXISTS] = 20
 	_, _, err = vtg.Execute(ctx, nil, session, "select id from t1", nil, false)
-	if err == nil {
-		t.Fatalf("want error but got nil")
-	}
-	if sbc.RollbackCount.Load() != 0 {
-		t.Errorf("want 0, got %d", sbc.RollbackCount.Load())
-	}
+	require.Error(t, err, "want error but got nil")
+	assert.EqualValues(t, 0, sbc.RollbackCount.Load())
 	sbc.MustFailCodes[vtrpcpb.Code_ALREADY_EXISTS] = 0
 }
 
@@ -644,9 +595,9 @@ func TestMultiInternalSavepointVtGate(t *testing.T) {
 		"_user_id_1": sqltypes.Int64BindVariable(3),
 	}
 	assertQueriesWithSavepoint(t, sbc2, wantQ)
-	assert.Len(t, sbc3.Queries, 0)
+	assert.Empty(t, sbc3.Queries)
 	// internal savepoint should be removed.
-	assert.Len(t, session.Savepoints, 0)
+	assert.Empty(t, session.Savepoints)
 	sbc1.Queries = nil
 	sbc2.Queries = nil
 
@@ -664,7 +615,7 @@ func TestMultiInternalSavepointVtGate(t *testing.T) {
 	}}
 	assertQueriesWithSavepoint(t, sbc3, wantQ)
 	// internal savepoint should be removed.
-	assert.Len(t, session.Savepoints, 0)
+	assert.Empty(t, session.Savepoints)
 	sbc2.Queries = nil
 	sbc3.Queries = nil
 
@@ -903,7 +854,7 @@ func TestRebuildTopoGraphs(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 			defer cancel()
 			ts, factory := memorytopo.NewServerAndFactory(ctx, cell)
 			err := tt.setupFunc(ctx, ts, factory)
@@ -918,4 +869,112 @@ func TestRebuildTopoGraphs(t *testing.T) {
 			tt.checkFunc(t, ctx, ts, factory)
 		})
 	}
+}
+
+func TestBinlogDumpGTID(t *testing.T) {
+	origEnableBinlogDump := enableBinlogDump.Get()
+	enableBinlogDump.Set(true)
+	t.Cleanup(func() {
+		enableBinlogDump.Set(origEnableBinlogDump)
+	})
+
+	origAuthorizedBinlogUsers := binlogacl.AuthorizedBinlogUsers.Get()
+	binlogacl.AuthorizedBinlogUsers.Set(binlogacl.NewAuthorizedBinlogUsers("%"))
+	t.Cleanup(func() {
+		binlogacl.AuthorizedBinlogUsers.Set(origAuthorizedBinlogUsers)
+	})
+
+	executor, sbc1, _, _, ctx := createExecutorEnv(t)
+	vtg := newVTGate(executor, executor.resolver, nil, nil, executor.scatterConn.gateway)
+
+	tabletAlias := sbc1.Tablet().Alias
+
+	noopSend := func(*vtgatepb.BinlogDumpResponse) error { return nil }
+
+	t.Run("filename is rejected", func(t *testing.T) {
+		err := vtg.BinlogDumpGTID(ctx, &vtgatepb.BinlogDumpGTIDRequest{
+			Keyspace:       "TestExecutor",
+			Shard:          "-20",
+			BinlogFilename: "binlog.000003",
+		}, noopSend)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "binlog filename is not supported")
+	})
+
+	t.Run("filename is rejected even with tablet alias", func(t *testing.T) {
+		err := vtg.BinlogDumpGTID(ctx, &vtgatepb.BinlogDumpGTIDRequest{
+			Keyspace:       "TestExecutor",
+			Shard:          "-20",
+			BinlogFilename: "binlog.000003",
+			TabletAlias:    tabletAlias,
+		}, noopSend)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "binlog filename is not supported")
+	})
+
+	t.Run("position below minimum is rejected", func(t *testing.T) {
+		err := vtg.BinlogDumpGTID(ctx, &vtgatepb.BinlogDumpGTIDRequest{
+			Keyspace:       "TestExecutor",
+			Shard:          "-20",
+			BinlogPosition: 3,
+		}, noopSend)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "Client requested source to start replication from position < 4")
+	})
+
+	t.Run("non-default position is rejected", func(t *testing.T) {
+		err := vtg.BinlogDumpGTID(ctx, &vtgatepb.BinlogDumpGTIDRequest{
+			Keyspace:       "TestExecutor",
+			Shard:          "-20",
+			BinlogPosition: 1234,
+		}, noopSend)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "only binlog position 4 is supported")
+	})
+
+	t.Run("non-default position is rejected even with tablet alias", func(t *testing.T) {
+		err := vtg.BinlogDumpGTID(ctx, &vtgatepb.BinlogDumpGTIDRequest{
+			Keyspace:       "TestExecutor",
+			Shard:          "-20",
+			BinlogPosition: 5,
+			TabletAlias:    tabletAlias,
+		}, noopSend)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "only binlog position 4 is supported")
+	})
+
+	t.Run("flags exceeding uint16 rejected", func(t *testing.T) {
+		err := vtg.BinlogDumpGTID(ctx, &vtgatepb.BinlogDumpGTIDRequest{
+			Keyspace:       "TestExecutor",
+			Shard:          "-20",
+			BinlogPosition: 4,
+			Flags:          0x10000,
+		}, noopSend)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "exceeds the 2-byte MySQL protocol field")
+	})
+
+	t.Run("zero-value tablet alias routes via gateway", func(t *testing.T) {
+		sbc1.BinlogDumpResponses = []*binlogdatapb.BinlogDumpResponse{}
+
+		err := vtg.BinlogDumpGTID(ctx, &vtgatepb.BinlogDumpGTIDRequest{
+			Keyspace:       "TestExecutor",
+			Shard:          "-20",
+			BinlogPosition: 4,
+			TabletAlias:    &topodatapb.TabletAlias{},
+		}, noopSend)
+		require.NoError(t, err)
+	})
+
+	t.Run("valid tablet alias routes via QueryServiceByAlias", func(t *testing.T) {
+		sbc1.BinlogDumpResponses = []*binlogdatapb.BinlogDumpResponse{}
+
+		err := vtg.BinlogDumpGTID(ctx, &vtgatepb.BinlogDumpGTIDRequest{
+			Keyspace:       "TestExecutor",
+			Shard:          "-20",
+			BinlogPosition: 4,
+			TabletAlias:    tabletAlias,
+		}, noopSend)
+		require.NoError(t, err)
+	})
 }

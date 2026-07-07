@@ -19,6 +19,7 @@ package sqltypes
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"google.golang.org/protobuf/proto"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -70,11 +71,9 @@ func TestEventTokenMinimum(t *testing.T) {
 	for _, tcase := range testcases {
 		got := EventTokenMinimum(tcase.ev1, tcase.ev2)
 		if tcase.expected == nil && got != nil {
-			t.Errorf("expected nil result for Minimum(%v, %v) but got: %v", tcase.ev1, tcase.ev2, got)
+			assert.Failf(t, "unexpected non-nil result", "expected nil result for Minimum(%v, %v) but got: %v", tcase.ev1, tcase.ev2, got)
 			continue
 		}
-		if !proto.Equal(got, tcase.expected) {
-			t.Errorf("got %v but expected %v for Minimum(%v, %v)", got, tcase.expected, tcase.ev1, tcase.ev2)
-		}
+		assert.True(t, proto.Equal(got, tcase.expected), "got %v but expected %v for Minimum(%v, %v)", got, tcase.expected, tcase.ev1, tcase.ev2)
 	}
 }

@@ -17,7 +17,6 @@ limitations under the License.
 package engine
 
 import (
-	"context"
 	"errors"
 	"testing"
 
@@ -147,7 +146,7 @@ func TestSendTable(t *testing.T) {
 				MultishardAutocommit: tc.multiShardAutocommit,
 			}
 			vc := &loggingVCursor{shards: tc.shards}
-			_, err := send.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+			_, err := send.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 			if tc.expectedError != "" {
 				require.EqualError(t, err, tc.expectedError)
 			} else {
@@ -157,12 +156,12 @@ func TestSendTable(t *testing.T) {
 
 			// Failure cases
 			vc = &loggingVCursor{shardErr: errors.New("shard_error")}
-			_, err = send.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+			_, err = send.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 			require.EqualError(t, err, "shard_error")
 
 			if !tc.sharded {
 				vc = &loggingVCursor{}
-				_, err = send.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+				_, err = send.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 				require.EqualError(t, err, "Keyspace does not have exactly one shard: []")
 			}
 		})
@@ -310,20 +309,20 @@ func TestSendGetFields(t *testing.T) {
 	vc := &loggingVCursor{shards: []string{"-20", "20-"}, results: results}
 
 	t.Run("GetFields - not a dml query", func(t *testing.T) {
-		qr, err := send.GetFields(context.Background(), vc, map[string]*querypb.BindVariable{})
+		qr, err := send.GetFields(t.Context(), vc, map[string]*querypb.BindVariable{})
 		require.NoError(t, err)
 		vc.ExpectLog(t, []string{
 			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 			`ExecuteMultiShard ks.-20: dummy_query {} ks.20-: dummy_query {} false false`,
 		})
 		require.Nil(t, qr.Rows)
-		require.Equal(t, 4, len(qr.Fields))
+		require.Len(t, qr.Fields, 4)
 	})
 
 	vc.Rewind()
 	t.Run("GetFields - a dml query", func(t *testing.T) {
 		send.IsDML = true
-		qr, err := send.GetFields(context.Background(), vc, map[string]*querypb.BindVariable{})
+		qr, err := send.GetFields(t.Context(), vc, map[string]*querypb.BindVariable{})
 		require.NoError(t, err)
 		require.Empty(t, qr.Fields)
 		vc.ExpectLog(t, nil)

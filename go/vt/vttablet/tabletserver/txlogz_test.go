@@ -19,26 +19,23 @@ package tabletserver
 import (
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/callerid"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 )
 
 func testNotRedacted(t *testing.T, r *httptest.ResponseRecorder) {
-	if strings.Contains(r.Body.String(), "redacted") {
-		t.Errorf("/debug/txlogz unexpectedly redacted")
-	}
+	assert.NotContains(t, r.Body.String(), "redacted", "/debug/txlogz unexpectedly redacted")
 }
 
 func testRedacted(t *testing.T, r *httptest.ResponseRecorder) {
-	if !strings.Contains(r.Body.String(), "redacted") {
-		t.Errorf("/debug/txlogz unexpectedly not redacted")
-	}
+	assert.Contains(t, r.Body.String(), "redacted", "/debug/txlogz unexpectedly not redacted")
 }
 
 func testHandler(req *http.Request, t *testing.T) {
@@ -47,9 +44,7 @@ func testHandler(req *http.Request, t *testing.T) {
 	response := httptest.NewRecorder()
 	tabletenv.TxLogger.Send("test msg")
 	txlogzHandler(response, req, false)
-	if !strings.Contains(response.Body.String(), "error") {
-		t.Fatalf("should show an error page since transaction log format is invalid.")
-	}
+	require.Contains(t, response.Body.String(), "error", "should show an error page since transaction log format is invalid.")
 	txConn := &StatefulConnection{
 		ConnID: 123456,
 		txProps: &tx.Properties{

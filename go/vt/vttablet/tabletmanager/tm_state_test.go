@@ -210,17 +210,17 @@ func TestStateIsShardServingisInSrvKeyspace(t *testing.T) {
 
 	leftKeyRange, err := key.ParseShardingSpec("-80")
 	if err != nil || len(leftKeyRange) != 1 {
-		t.Fatalf("ParseShardingSpec failed. Expected non error and only one element. Got err: %v, len(%v)", err, len(leftKeyRange))
+		require.Failf(t, "ParseShardingSpec failed", "ParseShardingSpec failed. Expected non error and only one element. Got err: %v, len(%v)", err, len(leftKeyRange))
 	}
 
 	rightKeyRange, err := key.ParseShardingSpec("80-")
 	if err != nil || len(rightKeyRange) != 1 {
-		t.Fatalf("ParseShardingSpec failed. Expected non error and only one element. Got err: %v, len(%v)", err, len(rightKeyRange))
+		require.Failf(t, "ParseShardingSpec failed", "ParseShardingSpec failed. Expected non error and only one element. Got err: %v, len(%v)", err, len(rightKeyRange))
 	}
 
 	keyRange, err := key.ParseShardingSpec("0")
 	if err != nil || len(keyRange) != 1 {
-		t.Fatalf("ParseShardingSpec failed. Expected non error and only one element. Got err: %v, len(%v)", err, len(keyRange))
+		require.Failf(t, "ParseShardingSpec failed", "ParseShardingSpec failed. Expected non error and only one element. Got err: %v, len(%v)", err, len(keyRange))
 	}
 
 	// Shard not in the SrvKeyspace, ServedType not in SrvKeyspace
@@ -391,7 +391,7 @@ func TestStateChangeTabletType(t *testing.T) {
 	tm := newTestTM(t, ts, 2, "ks", "0", nil)
 	defer tm.Stop()
 
-	assert.Equal(t, 1, len(statsTabletTypeCount.Counts()))
+	assert.Len(t, statsTabletTypeCount.Counts(), 1)
 	assert.Equal(t, int64(1), statsTabletTypeCount.Counts()["replica"])
 
 	alias := &topodatapb.TabletAlias{
@@ -406,7 +406,7 @@ func TestStateChangeTabletType(t *testing.T) {
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, ti.Type)
 	assert.NotNil(t, ti.PrimaryTermStartTime)
 	assert.Equal(t, "primary", statsTabletType.Get())
-	assert.Equal(t, 2, len(statsTabletTypeCount.Counts()))
+	assert.Len(t, statsTabletTypeCount.Counts(), 2)
 	assert.Equal(t, int64(1), statsTabletTypeCount.Counts()["primary"])
 
 	err = tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_REPLICA, DBActionNone)
@@ -416,7 +416,7 @@ func TestStateChangeTabletType(t *testing.T) {
 	assert.Equal(t, topodatapb.TabletType_REPLICA, ti.Type)
 	assert.Nil(t, ti.PrimaryTermStartTime)
 	assert.Equal(t, "replica", statsTabletType.Get())
-	assert.Equal(t, 2, len(statsTabletTypeCount.Counts()))
+	assert.Len(t, statsTabletTypeCount.Counts(), 2)
 	assert.Equal(t, int64(2), statsTabletTypeCount.Counts()["replica"])
 }
 
@@ -435,7 +435,7 @@ func TestStateChangeTabletTypeWithFailure(t *testing.T) {
 	qsc.SetServingTypeError = vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "mocking resource exhaustion error ")
 	defer tm.Stop()
 
-	assert.Equal(t, 1, len(statsTabletTypeCount.Counts()))
+	assert.Len(t, statsTabletTypeCount.Counts(), 1)
 	assert.Equal(t, int64(1), statsTabletTypeCount.Counts()["replica"])
 
 	alias := &topodatapb.TabletAlias{
@@ -454,7 +454,7 @@ func TestStateChangeTabletTypeWithFailure(t *testing.T) {
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, ti.Type)
 	assert.NotNil(t, ti.PrimaryTermStartTime)
 	assert.Equal(t, "primary", statsTabletType.Get())
-	assert.Equal(t, 2, len(statsTabletTypeCount.Counts()))
+	assert.Len(t, statsTabletTypeCount.Counts(), 2)
 	assert.Equal(t, int64(1), statsTabletTypeCount.Counts()["primary"])
 
 	err = tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_REPLICA, DBActionNone)
@@ -465,7 +465,7 @@ func TestStateChangeTabletTypeWithFailure(t *testing.T) {
 	assert.Equal(t, topodatapb.TabletType_REPLICA, ti.Type)
 	assert.Nil(t, ti.PrimaryTermStartTime)
 	assert.Equal(t, "replica", statsTabletType.Get())
-	assert.Equal(t, 2, len(statsTabletTypeCount.Counts()))
+	assert.Len(t, statsTabletTypeCount.Counts(), 2)
 	assert.Equal(t, int64(2), statsTabletTypeCount.Counts()["replica"])
 
 	// since the table type is spare, it will exercise reason != "" in UpdateLocked and thus
@@ -479,7 +479,7 @@ func TestStateChangeTabletTypeWithFailure(t *testing.T) {
 	assert.Equal(t, topodatapb.TabletType_SPARE, ti.Type)
 	assert.Nil(t, ti.PrimaryTermStartTime)
 	assert.Equal(t, "spare", statsTabletType.Get())
-	assert.Equal(t, 3, len(statsTabletTypeCount.Counts()))
+	assert.Len(t, statsTabletTypeCount.Counts(), 3)
 	assert.Equal(t, int64(1), statsTabletTypeCount.Counts()["spare"])
 }
 
@@ -527,7 +527,7 @@ func TestChangeTypeErrorWhileWritingToTopo(t *testing.T) {
 			for i := 0; i < testcase.numberOfReadErrors; i++ {
 				fakeConn.AddGetError(true)
 			}
-			ctx := context.Background()
+			ctx := t.Context()
 			err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_PRIMARY, DBActionSetReadWrite)
 			if testcase.expectedError != "" {
 				require.EqualError(t, err, testcase.expectedError)
@@ -544,7 +544,7 @@ func TestChangeTypeErrorWhileWritingToTopo(t *testing.T) {
 			require.Equal(t, testcase.expectedTabletType, ti.Type)
 
 			// assert that next change type succeeds irrespective of previous failures
-			err = tm.tmState.ChangeTabletType(context.Background(), topodatapb.TabletType_REPLICA, DBActionNone)
+			err = tm.tmState.ChangeTabletType(t.Context(), topodatapb.TabletType_REPLICA, DBActionNone)
 			require.NoError(t, err)
 		})
 	}

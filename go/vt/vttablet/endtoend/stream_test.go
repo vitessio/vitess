@@ -17,10 +17,8 @@ limitations under the License.
 package endtoend
 
 import (
-	"context"
 	"errors"
 	"fmt"
-	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -38,11 +36,8 @@ import (
 
 func TestStreamUnion(t *testing.T) {
 	qr, err := framework.NewClient().StreamExecute("select 1 from dual union select 1 from dual", nil)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	assert.Equal(t, 1, len(qr.Rows))
+	require.NoError(t, err)
+	assert.Len(t, qr.Rows, 1)
 }
 
 func populateStressQuery(client *framework.QueryClient, rowCount int, rowContent string) error {
@@ -90,41 +85,41 @@ func TestStreamConsolidation(t *testing.T) {
 
 	client := framework.NewClient()
 	err := populateStressQuery(client, RowCount, RowContent)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer client.Execute("delete from vitess_stress", nil)
 
 	defaultPoolSize := framework.Server.StreamPoolSize()
 
-	err = framework.Server.SetStreamPoolSize(context.Background(), 4)
+	err = framework.Server.SetStreamPoolSize(t.Context(), 4)
 	require.NoError(t, err)
 
 	framework.Server.SetStreamConsolidationBlocking(true)
 
 	defer func() {
-		_ = framework.Server.SetStreamPoolSize(context.Background(), defaultPoolSize)
+		_ = framework.Server.SetStreamPoolSize(t.Context(), defaultPoolSize)
 		framework.Server.SetStreamConsolidationBlocking(false)
 	}()
 
 	start := make(chan struct{})
 	var finish sync.WaitGroup
+	// require.* is unsafe on a worker goroutine, so record per-worker results and assert after finish.Wait().
+	errs := make([]error, Workers)
+	rowCounts := make([]int, Workers)
 
 	// Spawn N workers at the same time to stress test the stream consolidator
-	for range Workers {
+	for i := range Workers {
 		finish.Go(func() {
 			// block all the workers so they all perform their queries at the same time
 			<-start
 
-			var rowCount int
-			err := client.Stream("select * from vitess_stress", nil, func(result *sqltypes.Result) error {
+			rowCount := 0
+			errs[i] = client.Stream("select * from vitess_stress", nil, func(result *sqltypes.Result) error {
 				for _, r := range result.Rows {
 					rowCount += len(r)
 				}
 				return nil
 			})
-			require.NoError(t, err)
-			require.Equal(t, 2200, rowCount)
+			rowCounts[i] = rowCount
 		})
 	}
 
@@ -132,22 +127,20 @@ func TestStreamConsolidation(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 	close(start)
 	finish.Wait()
+	for i := range Workers {
+		require.NoError(t, errs[i])
+		require.Equal(t, 2200, rowCounts[i])
+	}
 }
 
 func TestStreamBigData(t *testing.T) {
 	client := framework.NewClient()
 	err := populateBigData(client)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	defer client.Execute("delete from vitess_big", nil)
 
 	qr, err := client.StreamExecute("select * from vitess_big b1, vitess_big b2 order by b1.id, b2.id", nil)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	row10 := framework.RowsToStrings(qr)[10]
 	want := []string{
 		"0",
@@ -175,28 +168,20 @@ func TestStreamBigData(t *testing.T) {
 		"10",
 		"10",
 	}
-	if !reflect.DeepEqual(row10, want) {
-		t.Errorf("Row10: \n%#v, want \n%#v", row10, want)
-	}
+	assert.Equalf(t, want, row10, "Row10: \n%#v, want \n%#v", row10, want)
 }
 
 func TestStreamBigDataInTx(t *testing.T) {
 	client := framework.NewClient()
 	defer client.Release()
 	err := populateBigData(client)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	defer func() {
 		framework.NewClient().Execute("delete from vitess_big", nil)
 	}()
 
 	qr, err := client.StreamBeginExecuteWithOptions("select * from vitess_big b1, vitess_big b2 order by b1.id, b2.id", nil, nil, nil)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	row10 := framework.RowsToStrings(qr)[10]
 	want := []string{
 		"0",
@@ -224,18 +209,13 @@ func TestStreamBigDataInTx(t *testing.T) {
 		"10",
 		"10",
 	}
-	if !reflect.DeepEqual(row10, want) {
-		t.Errorf("Row10: \n%#v, want \n%#v", row10, want)
-	}
+	assert.Equalf(t, want, row10, "Row10: \n%#v, want \n%#v", row10, want)
 }
 
 func TestStreamTerminate(t *testing.T) {
 	client := framework.NewClient()
 	err := populateBigData(client)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	defer client.Execute("delete from vitess_big", nil)
 
 	called := false
@@ -246,7 +226,7 @@ func TestStreamTerminate(t *testing.T) {
 			if !called {
 				queries := framework.LiveQueryz()
 				if l := len(queries); l != 1 {
-					t.Errorf("len(queries): %d, want 1", l)
+					assert.Failf(t, "unexpected queries length", "len(queries): %d, want 1", l)
 					return errors.New("no queries from LiveQueryz")
 				}
 				err := framework.StreamTerminate(queries[0].ConnID)
@@ -259,9 +239,8 @@ func TestStreamTerminate(t *testing.T) {
 			return nil
 		},
 	)
-	if code := vterrors.Code(err); code != vtrpcpb.Code_CANCELED {
-		t.Errorf("Errorcode: %v, want %v", code, vtrpcpb.Code_CANCELED)
-	}
+	code := vterrors.Code(err)
+	assert.Equalf(t, vtrpcpb.Code_CANCELED, code, "Errorcode: %v, want %v", code, vtrpcpb.Code_CANCELED)
 }
 
 func populateBigData(client *framework.QueryClient) error {
@@ -298,6 +277,6 @@ func TestStreamError(t *testing.T) {
 	_, err := framework.NewClient().StreamExecute("select count(abcd) from vitess_big", nil)
 	want := "Unknown column"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("Error: %v, must start with %s", err, want)
+		assert.Failf(t, "unexpected error", "Error: %v, must start with %s", err, want)
 	}
 }
