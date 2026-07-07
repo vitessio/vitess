@@ -769,3 +769,62 @@ func TestBackupRestoreWithManyChunks(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, originalChecksum, crc32.ChecksumIEEE(restoredData))
 }
+
+func TestCreateChunkedDestinationsRejectsBadStorageName(t *testing.T) {
+	tmpDir := t.TempDir()
+	cnf := &Mycnf{DataDir: tmpDir}
+
+	fes := []FileEntry{
+		{
+			Base: backupData,
+			Name: "testfile.ibd",
+			Chunks: []FileChunk{
+				{StorageName: "0-0", Offset: 0, Size: 10},
+				{StorageName: "wrong-name", Offset: 10, Size: 10},
+			},
+		},
+	}
+
+	err := createChunkedDestinations(t.Context(), fes, cnf, "", logutil.NewConsoleLogger())
+	require.ErrorContains(t, err, "unexpected storage name")
+	require.ErrorContains(t, err, `got "wrong-name"`)
+	require.ErrorContains(t, err, `expected "0-1"`)
+}
+
+func TestRestoreFileChunkRejectsDecompressedSizeMismatch(t *testing.T) {
+	tmpDir := t.TempDir()
+	cnf := &Mycnf{DataDir: tmpDir}
+
+	chunkData := []byte("AAAAAAAAAA")
+
+	fes := []FileEntry{
+		{
+			Base: backupData,
+			Name: "testfile.ibd",
+			Chunks: []FileChunk{
+				{StorageName: "0-0", Offset: 0, Size: 20, Hash: crc32Hash(chunkData)},
+			},
+		},
+	}
+
+	bh := &FakeBackupHandle{
+		ReadFileReturnF: func(_ context.Context, filename string) (io.ReadCloser, error) {
+			return io.NopCloser(bytes.NewReader(chunkData)), nil
+		},
+	}
+
+	bm := builtinBackupManifest{SkipCompress: true}
+	params := RestoreParams{
+		Cnf:         cnf,
+		Logger:      logutil.NewMemoryLogger(),
+		Stats:       backupstats.NoStats(),
+		Concurrency: 1,
+	}
+
+	be := &BuiltinBackupEngine{}
+	require.NoError(t, createChunkedDestinations(t.Context(), fes, cnf, "", logutil.NewConsoleLogger()))
+
+	err := be.restoreFileEntries(t.Context(), fes, bh, bm, params, "")
+	require.ErrorContains(t, err, "decompressed size mismatch")
+	require.ErrorContains(t, err, "wrote 10 bytes, expected 20")
+}

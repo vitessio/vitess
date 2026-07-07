@@ -1396,6 +1396,10 @@ func createChunkedDestinations(ctx context.Context, fes []FileEntry, cnf *Mycnf,
 			if c.Offset > math.MaxInt64-c.Size {
 				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "chunk metadata for file %v chunk %d overflows int64: offset=%d, size=%d", fe.Name, j, c.Offset, c.Size)
 			}
+			expectedName := fmt.Sprintf("%d-%d", i, j)
+			if c.StorageName != expectedName {
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "unexpected storage name for file %v chunk %d: got %q, expected %q", fe.Name, j, c.StorageName, expectedName)
+			}
 			if c.Offset+c.Size > totalSize {
 				totalSize = c.Offset + c.Size
 			}
@@ -1741,9 +1745,17 @@ func (be *BuiltinBackupEngine) restoreFileChunk(ctx context.Context, params Rest
 		return vterrors.Wrapf(err, "failed to flush chunk %v", chunk.StorageName)
 	}
 
+	// Hash check first: a truncated read fails with INTERNAL (retryable).
+	// Size check second: if the hash passes but the size is wrong, the MANIFEST metadata is corrupt (fatal).
 	hash := br.HashString()
 	if hash != chunk.Hash {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "hash mismatch for chunk %v, got %v expected %v", chunk.StorageName, hash, chunk.Hash)
+	}
+
+	// ow.offset holds initial offset + bytes written, so we can obtain how much we wrote by subtracting the initial offset.
+	written := ow.offset - chunk.Offset
+	if written != chunk.Size {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "chunk %v: decompressed size mismatch: wrote %d bytes, expected %d", chunk.StorageName, written, chunk.Size)
 	}
 
 	return nil
