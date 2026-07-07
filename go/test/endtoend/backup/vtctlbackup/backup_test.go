@@ -75,12 +75,11 @@ func TestBuiltinBackupWithExternalZstdCompressionAndManifestedDecompressor(t *te
 // This verifies that MySQL can start successfully and read back rows after a chunked restore.
 func TestBuiltinBackupChunked(t *testing.T) {
 	defer setDefaultCommonArgs()
-	backupChunkSizeBytes = 4194304 // 4MiB
-	defer func() { backupChunkSizeBytes = 0 }()
+	const chunkSizeBytes = 4194304 // 4MiB
 	commonTabletArg = append(
 		getDefaultCommonArgs(),
-		"--builtinbackup-file-chunk-threshold", strconv.FormatInt(backupChunkSizeBytes, 10),
-		"--builtinbackup-file-chunk-size", strconv.FormatInt(backupChunkSizeBytes, 10),
+		"--builtinbackup-file-chunk-threshold", strconv.Itoa(chunkSizeBytes),
+		"--builtinbackup-file-chunk-size", strconv.Itoa(chunkSizeBytes),
 	)
 
 	code, err := LaunchCluster(BuiltinBackup, "xbstream", 0, nil)

@@ -296,6 +296,9 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 	if backupFileChunkThreshold > 0 && backupFileChunkSize > math.MaxInt64 {
 		return BackupUnusable, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "builtinbackup-file-chunk-size exceeds maximum allowed value of %d", int64(math.MaxInt64))
 	}
+	if backupFileChunkThreshold > 0 && backupFileChunkThreshold < backupFileChunkSize {
+		return BackupUnusable, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "builtinbackup-file-chunk-threshold (%d) must be >= builtinbackup-file-chunk-size (%d)", backupFileChunkThreshold, backupFileChunkSize)
+	}
 
 	if isIncrementalBackup(params) {
 		return be.executeIncrementalBackup(ctx, params, bh)
@@ -823,7 +826,7 @@ func (be *BuiltinBackupEngine) backupWorkItems(ctx context.Context, workItems []
 			select {
 			// Skip work if the context has been cancelled (e.g. another goroutine failed).
 			case <-ctxCancel.Done():
-				log.Error(fmt.Sprintf("Context canceled or timed out during %q backup", fe.Name))
+				params.Logger.Errorf("Context canceled or timed out during %q backup", fe.Name)
 				bh.RecordError(wi.name, vterrors.Errorf(vtrpcpb.Code_CANCELED, "context canceled"))
 				return nil
 			default:
@@ -1480,7 +1483,7 @@ func (be *BuiltinBackupEngine) restoreFileEntries(ctx context.Context, fes []Fil
 		g.Go(func() error {
 			select {
 			case <-ctx.Done():
-				log.Error(fmt.Sprintf("Context canceled or timed out during %q restore", wi.fe.Name))
+				params.Logger.Errorf("Context canceled or timed out during %q restore", wi.fe.Name)
 				bh.RecordError(wi.name, vterrors.Errorf(vtrpcpb.Code_CANCELED, "context canceled"))
 				return nil
 			default:

@@ -78,7 +78,6 @@ var (
 	dbCredentialFile     string
 	shardName            = "0"
 	commonTabletArg      = getDefaultCommonArgs()
-	backupChunkSizeBytes int64
 
 	vtInsertTest = `
 		create table vt_insert_test (
@@ -1020,11 +1019,11 @@ func vtctlBackup(t *testing.T, tabletType string) {
 }
 
 func chunkedBackup(t *testing.T) {
-	verifyBackupChunking(t, true)
+	verifyBackupChunking(t, true, 4194304)
 }
 
 func nonChunkedBackup(t *testing.T) {
-	verifyBackupChunking(t, false)
+	verifyBackupChunking(t, false, 0)
 }
 
 func chunkedRestoreNonChunkedBackup(t *testing.T) {
@@ -1080,7 +1079,7 @@ func chunkedRestoreNonChunkedBackup(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func verifyBackupChunking(t *testing.T, expectChunked bool) {
+func verifyBackupChunking(t *testing.T, expectChunked bool, chunkSizeBytes int64) {
 	verifyInitialReplication(t)
 
 	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 1)
@@ -1120,11 +1119,11 @@ func verifyBackupChunking(t *testing.T, expectChunked bool) {
 			// We want to make sure the chunk count matches what we are expecting in terms of the file size.
 			lastChunk := fe.Chunks[len(fe.Chunks)-1]
 			fileSize := lastChunk.Offset + lastChunk.Size
-			expectedChunks := int(fileSize / backupChunkSizeBytes)
-			if fileSize%backupChunkSizeBytes != 0 {
+			expectedChunks := int(fileSize / chunkSizeBytes)
+			if fileSize%chunkSizeBytes != 0 {
 				expectedChunks++
 			}
-			assert.Len(t, fe.Chunks, expectedChunks, "file %s: expected %d chunks for size %d with chunk size %d", fe.Name, expectedChunks, fileSize, backupChunkSizeBytes)
+			assert.Len(t, fe.Chunks, expectedChunks, "file %s: expected %d chunks for size %d with chunk size %d", fe.Name, expectedChunks, fileSize, chunkSizeBytes)
 			t.Logf("File %s: size=%d, chunks=%d (expected %d)", fe.Name, fileSize, len(fe.Chunks), expectedChunks)
 
 			for _, chunk := range fe.Chunks {
