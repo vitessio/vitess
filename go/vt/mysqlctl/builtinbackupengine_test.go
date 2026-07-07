@@ -48,6 +48,9 @@ import (
 	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/vterrors"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 func TestGetIncrementalFromPosGTIDSet(t *testing.T) {
@@ -827,4 +830,127 @@ func TestRestoreFileChunkRejectsDecompressedSizeMismatch(t *testing.T) {
 	err := be.restoreFileEntries(t.Context(), fes, bh, bm, params, "")
 	require.ErrorContains(t, err, "decompressed size mismatch")
 	require.ErrorContains(t, err, "wrote 10 bytes, expected 20")
+}
+
+func TestCreateChunkedDestinationsRejectsGap(t *testing.T) {
+	tmpDir := t.TempDir()
+	cnf := &Mycnf{DataDir: tmpDir}
+
+	fes := []FileEntry{
+		{
+			Base: backupData,
+			Name: "testfile.ibd",
+			Chunks: []FileChunk{
+				{StorageName: "0-0", Offset: 0, Size: 10},
+				{StorageName: "0-1", Offset: 20, Size: 10},
+			},
+		},
+	}
+
+	err := createChunkedDestinations(t.Context(), fes, cnf, "", logutil.NewConsoleLogger())
+	require.ErrorContains(t, err, "gap/overlap")
+	require.ErrorContains(t, err, "expected offset 10, got 20")
+}
+
+func TestCreateChunkedDestinationsRejectsOverlap(t *testing.T) {
+	tmpDir := t.TempDir()
+	cnf := &Mycnf{DataDir: tmpDir}
+
+	fes := []FileEntry{
+		{
+			Base: backupData,
+			Name: "testfile.ibd",
+			Chunks: []FileChunk{
+				{StorageName: "0-0", Offset: 0, Size: 15},
+				{StorageName: "0-1", Offset: 10, Size: 10},
+			},
+		},
+	}
+
+	err := createChunkedDestinations(t.Context(), fes, cnf, "", logutil.NewConsoleLogger())
+	require.ErrorContains(t, err, "gap/overlap")
+	require.ErrorContains(t, err, "expected offset 15, got 10")
+}
+
+// TestCreateChunkedDestinationsAcceptsOutOfOrderChunks verifies that chunks listed
+// out of offset order in the MANIFEST are accepted as long as the file is complete
+// (contiguous coverage with no gaps or overlaps and correct StorageNames).
+func TestCreateChunkedDestinationsAcceptsOutOfOrderChunks(t *testing.T) {
+	tmpDir := t.TempDir()
+	cnf := &Mycnf{DataDir: tmpDir}
+
+	fes := []FileEntry{
+		{
+			Base: backupData,
+			Name: "testfile.ibd",
+			Chunks: []FileChunk{
+				{StorageName: "0-1", Offset: 10, Size: 10},
+				{StorageName: "0-0", Offset: 0, Size: 10},
+			},
+		},
+	}
+
+	err := createChunkedDestinations(t.Context(), fes, cnf, "", logutil.NewConsoleLogger())
+	require.NoError(t, err)
+}
+
+func TestHasErrorCode(t *testing.T) {
+	precondition := vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "fatal error")
+	internal := vterrors.Errorf(vtrpcpb.Code_INTERNAL, "transient error")
+
+	tests := []struct {
+		name     string
+		err      error
+		code     vtrpcpb.Code
+		expected bool
+	}{
+		{
+			name:     "nil error",
+			err:      nil,
+			code:     vtrpcpb.Code_FAILED_PRECONDITION,
+			expected: false,
+		},
+		{
+			name:     "single error with matching code",
+			err:      precondition,
+			code:     vtrpcpb.Code_FAILED_PRECONDITION,
+			expected: true,
+		},
+		{
+			name:     "single error with non-matching code",
+			err:      internal,
+			code:     vtrpcpb.Code_FAILED_PRECONDITION,
+			expected: false,
+		},
+		{
+			name:     "joined error with matching code in second position",
+			err:      errors.Join(internal, precondition),
+			code:     vtrpcpb.Code_FAILED_PRECONDITION,
+			expected: true,
+		},
+		{
+			name:     "joined error with no matching code",
+			err:      errors.Join(internal, errors.New("plain error")),
+			code:     vtrpcpb.Code_FAILED_PRECONDITION,
+			expected: false,
+		},
+		{
+			name:     "nested join with matching code",
+			err:      errors.Join(errors.New("outer"), errors.Join(internal, precondition)),
+			code:     vtrpcpb.Code_FAILED_PRECONDITION,
+			expected: true,
+		},
+		{
+			name:     "wrapped error with matching code",
+			err:      vterrors.Wrapf(precondition, "context"),
+			code:     vtrpcpb.Code_FAILED_PRECONDITION,
+			expected: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, hasErrorCode(tc.err, tc.code))
+		})
+	}
 }

@@ -30,6 +30,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -109,6 +110,20 @@ var (
 
 	errRestoreFatal = errors.New("fatal restore error")
 )
+
+func hasErrorCode(err error, code vtrpcpb.Code) bool {
+	if vterrors.Code(err) == code {
+		return true
+	}
+	if joined, ok := err.(interface{ Unwrap() []error }); ok {
+		for _, e := range joined.Unwrap() {
+			if hasErrorCode(e, code) {
+				return true
+			}
+		}
+	}
+	return false
+}
 
 // BuiltinBackupEngine encapsulates the logic of the builtin engine
 // it implements the BackupEngine interface and contains all the logic
@@ -762,7 +777,7 @@ func (be *BuiltinBackupEngine) backupFiles(
 	var manifestErr error
 	for currentRetry := 0; currentRetry <= maxRetriesPerFile; currentRetry++ {
 		manifestErr = be.backupManifest(ctx, params, bh, backupPosition, purgedPosition, fromPosition, fromBackupName, serverUUID, mysqlVersion, incrDetails, fes, currentRetry)
-		if manifestErr == nil || vterrors.Code(manifestErr) == vtrpcpb.Code_FAILED_PRECONDITION {
+		if manifestErr == nil || hasErrorCode(manifestErr, vtrpcpb.Code_FAILED_PRECONDITION) {
 			break
 		}
 		bh.ResetErrorForFile(backupManifestFileName)
@@ -834,7 +849,7 @@ func (be *BuiltinBackupEngine) backupWorkItems(ctx context.Context, workItems []
 
 			if errBackupFile := be.backupFile(ctxCancel, params, bh, fe, wi.name, wi.chunkIndex); errBackupFile != nil {
 				bh.RecordError(wi.name, vterrors.Wrapf(errBackupFile, "failed to backup '%s'", wi.name))
-				if vterrors.Code(errBackupFile) == vtrpcpb.Code_FAILED_PRECONDITION {
+				if hasErrorCode(errBackupFile, vtrpcpb.Code_FAILED_PRECONDITION) {
 					cancel()
 					return errBackupFile
 				}
@@ -1379,6 +1394,36 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 	return createdDir, nil
 }
 
+// validateChunkMetadata checks that a file's chunk list is well-formed: no negative
+// offsets, no non-positive sizes, no int64 overflow, correct StorageName format, and
+// contiguous coverage with no gaps or overlaps. Sorts chunks by offset in place.
+// Returns the total file size on success.
+func validateChunkMetadata(fe *FileEntry, fileIndex int) (int64, error) {
+	sort.Slice(fe.Chunks, func(a, b int) bool {
+		return fe.Chunks[a].Offset < fe.Chunks[b].Offset
+	})
+
+	var expectedOffset int64
+	for j, c := range fe.Chunks {
+		if c.Offset < 0 || c.Size <= 0 {
+			return 0, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "invalid chunk metadata for file %v chunk %d: offset=%d, size=%d", fe.Name, j, c.Offset, c.Size)
+		}
+		if c.Offset > math.MaxInt64-c.Size {
+			return 0, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "chunk metadata for file %v chunk %d overflows int64: offset=%d, size=%d", fe.Name, j, c.Offset, c.Size)
+		}
+		expectedName := fmt.Sprintf("%d-%d", fileIndex, j)
+		if c.StorageName != expectedName {
+			return 0, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "unexpected storage name for file %v chunk %d: got %q, expected %q", fe.Name, j, c.StorageName, expectedName)
+		}
+		if c.Offset != expectedOffset {
+			return 0, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "chunk metadata for file %v chunk %d has gap/overlap: expected offset %d, got %d", fe.Name, j, expectedOffset, c.Offset)
+		}
+		expectedOffset = c.Offset + c.Size
+	}
+
+	return expectedOffset, nil
+}
+
 // createChunkedDestinations pre-creates and pre-sizes destination files for chunked
 // entries. This is called once before any restore pass so that restoreFileEntries can
 // always open them with O_WRONLY (no truncation), making retries safe.
@@ -1391,21 +1436,9 @@ func createChunkedDestinations(ctx context.Context, fes []FileEntry, cnf *Mycnf,
 		}
 		fe.ParentPath = createdDir
 
-		var totalSize int64
-		for j, c := range fe.Chunks {
-			if c.Offset < 0 || c.Size <= 0 {
-				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "invalid chunk metadata for file %v chunk %d: offset=%d, size=%d", fe.Name, j, c.Offset, c.Size)
-			}
-			if c.Offset > math.MaxInt64-c.Size {
-				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "chunk metadata for file %v chunk %d overflows int64: offset=%d, size=%d", fe.Name, j, c.Offset, c.Size)
-			}
-			expectedName := fmt.Sprintf("%d-%d", i, j)
-			if c.StorageName != expectedName {
-				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "unexpected storage name for file %v chunk %d: got %q, expected %q", fe.Name, j, c.StorageName, expectedName)
-			}
-			if c.Offset+c.Size > totalSize {
-				totalSize = c.Offset + c.Size
-			}
+		totalSize, err := validateChunkMetadata(fe, i)
+		if err != nil {
+			return err
 		}
 
 		dest, err := fe.open(cnf, false)
@@ -1501,7 +1534,7 @@ func (be *BuiltinBackupEngine) restoreFileEntries(ctx context.Context, fes []Fil
 			if err != nil {
 				wrappedErr := vterrors.Wrapf(err, "failed to restore %v", wi.name)
 				bh.RecordError(wi.name, wrappedErr)
-				if wi.fe.RetryCount >= maxRetriesPerFile || vterrors.Code(err) == vtrpcpb.Code_FAILED_PRECONDITION {
+				if wi.fe.RetryCount >= maxRetriesPerFile || hasErrorCode(err, vtrpcpb.Code_FAILED_PRECONDITION) {
 					// This is the last attempt, and we have an error, we can return an error,
 					// which will let errgroup know it can cancel the context.
 					return wrappedErr
@@ -1512,7 +1545,7 @@ func (be *BuiltinBackupEngine) restoreFileEntries(ctx context.Context, fes []Fil
 	}
 
 	if err := g.Wait(); err != nil {
-		if vterrors.Code(err) == vtrpcpb.Code_FAILED_PRECONDITION {
+		if hasErrorCode(err, vtrpcpb.Code_FAILED_PRECONDITION) {
 			return fmt.Errorf("%w: %w", errRestoreFatal, err)
 		}
 		return err
