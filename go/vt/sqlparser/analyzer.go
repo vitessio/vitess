@@ -224,6 +224,78 @@ func Preview(sql string) StatementType {
 	}
 	switch loweredFirstWord {
 	case "create", "alter", "rename", "drop", "truncate":
+		rest := trimmedNoComments[len(firstWord):]
+		start := strings.IndexFunc(rest, func(r rune) bool { return unicode.IsLetter(r) })
+		if start != -1 {
+			rest = rest[start:]
+			end := strings.IndexFunc(rest, func(r rune) bool { return !unicode.IsLetter(r) })
+			var secondWord string
+			if end == -1 {
+				secondWord = rest
+				rest = ""
+			} else {
+				secondWord = rest[:end]
+				rest = rest[end:]
+			}
+
+			if strings.EqualFold(secondWord, "trigger") || strings.EqualFold(secondWord, "event") {
+				return StmtOther
+			}
+			if strings.EqualFold(secondWord, "user") {
+				return StmtPriv
+			}
+			if strings.EqualFold(secondWord, "definer") {
+				// skip '='
+				idx := strings.IndexByte(rest, '=')
+				if idx != -1 {
+					rest = strings.TrimSpace(rest[idx+1:])
+					
+					// Helper to skip an identifier (quoted or unquoted)
+					skipIdentifier := func(s string) string {
+						if len(s) == 0 { return s }
+						q := s[0]
+						if q == '`' || q == '\'' || q == '"' {
+							for i := 1; i < len(s); i++ {
+								if s[i] == q {
+									return s[i+1:]
+								}
+							}
+							return ""
+						}
+						endID := strings.IndexFunc(s, func(r rune) bool {
+							return !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '_' && r != '$'
+						})
+						if endID == -1 { return "" }
+						return s[endID:]
+					}
+
+					// skip user
+					rest = skipIdentifier(rest)
+					rest = strings.TrimSpace(rest)
+
+					// skip optional @host
+					if strings.HasPrefix(rest, "@") {
+						rest = strings.TrimSpace(rest[1:])
+						rest = skipIdentifier(rest)
+					}
+					
+					rest = strings.TrimSpace(rest)
+
+					// Now find the object type
+					endID := strings.IndexFunc(rest, func(r rune) bool { return !unicode.IsLetter(r) })
+					var objType string
+					if endID == -1 {
+						objType = rest
+					} else {
+						objType = rest[:endID]
+					}
+					
+					if strings.EqualFold(objType, "trigger") || strings.EqualFold(objType, "event") {
+						return StmtOther
+					}
+				}
+			}
+		}
 		return StmtDDL
 	case "flush":
 		return StmtFlush

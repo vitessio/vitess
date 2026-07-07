@@ -85,6 +85,24 @@ func TestPreview(t *testing.T) {
 		{"/* leading comment no end select ...", StmtUnknown},
 		{"-- leading single line comment no end select ...", StmtUnknown},
 		{"/*!40000 ALTER TABLE `t1` DISABLE KEYS */", StmtComment},
+
+		{"create trigger ...", StmtOther},
+		{"create event ...", StmtOther},
+		{"drop trigger ...", StmtOther},
+		{"drop event ...", StmtOther},
+		{"alter event ...", StmtOther},
+		{"alter user ...", StmtPriv},
+		{"create user ...", StmtPriv},
+		{"rename user ...", StmtPriv},
+		{"drop user ...", StmtPriv},
+		{"create definer=foo@bar trigger ...", StmtOther},
+		{"create definer=foo@bar event ...", StmtOther},
+		{"create definer=foo@bar procedure ...", StmtDDL},
+		{"create definer = foo@bar view ...", StmtDDL},
+		{"create table ...", StmtDDL},
+		{"create view ...", StmtDDL},
+		{"alter table ...", StmtDDL},
+		{"create definer = trigger view ...", StmtDDL},
 	}
 	for _, tcase := range testcases {
 		if got := Preview(tcase.sql); got != tcase.want {
