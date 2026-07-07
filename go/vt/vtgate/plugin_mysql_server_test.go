@@ -1895,13 +1895,17 @@ func TestTempTableCommandTracking(t *testing.T) {
 	_, ok := vh.tempTableConns.Load(c)
 	require.False(t, ok)
 
-	// Temp tables + a reserved shard session -> registered with one target
-	// (reserved id 0 excluded).
+	// Temp tables + a reserved shard session -> registered with one target.
+	// A reserved id of 0 is excluded, and so is a shard session with an open
+	// transaction: the tablet does not reset its transaction timer on beats,
+	// so in-transaction connections are not kept alive (transactions remain
+	// subject to the transaction timeout, temp tables or not).
 	c.ClientData = &vtgatepb.Session{
 		Options: &querypb.ExecuteOptions{HasCreatedTempTables: true},
 		ShardSessions: []*vtgatepb.Session_ShardSession{
 			{Target: target, TabletAlias: alias, ReservedId: 42},
 			{Target: target, TabletAlias: alias, ReservedId: 0},
+			{Target: target, TabletAlias: alias, ReservedId: 43, TransactionId: 43},
 		},
 	}
 	vh.tempTableCommandEnd(c, vh.tempTableCommandStart(c))

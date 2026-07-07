@@ -190,7 +190,14 @@ func tempTableHeartbeatTargets(session *vtgatepb.Session) []tempTableHeartbeatTa
 	shardSessions := session.GetShardSessions()
 	targets := make([]tempTableHeartbeatTarget, 0, len(shardSessions))
 	for _, ss := range shardSessions {
-		if ss.GetReservedId() != 0 {
+		// Shard sessions with an open transaction are deliberately excluded:
+		// the tablet does not reset its transaction timer for activity on an
+		// in-transaction connection (idle transactions are supposed to be
+		// killed at the transaction timeout, temp tables or not), so a beat
+		// would not keep the connection alive — it would only inject a query
+		// into the user's open transaction. When the transaction commits, the
+		// command's end hook republishes the target and keepalives resume.
+		if ss.GetReservedId() != 0 && ss.GetTransactionId() == 0 {
 			targets = append(targets, tempTableHeartbeatTarget{
 				target:     ss.GetTarget(),
 				alias:      ss.GetTabletAlias(),
@@ -255,15 +262,17 @@ func (vh *vtgateHandler) stopTempTableHeartbeats(c *mysql.Conn) {
 	}
 	ttc := v.(*tempTableConn)
 	ttc.mu.Lock()
+	defer ttc.mu.Unlock()
 	ttc.targets = nil
 	vh.tempTableConns.Delete(c)
-	ttc.mu.Unlock()
 }
 
 // startTempTableHeartbeat launches the background sweeper that keeps reserved
 // connections holding temporary tables alive. It stops when ctx is cancelled.
 func (vh *vtgateHandler) startTempTableHeartbeat(ctx context.Context) {
 	if tempTableHeartbeatTime <= 0 {
+		log.Info("temp-table connection heartbeats are disabled",
+			slog.Duration("temp_table_heartbeat_time", tempTableHeartbeatTime))
 		return
 	}
 	go func() {
@@ -312,8 +321,14 @@ func (vh *vtgateHandler) beatTempTableConn(ctx context.Context, c *mysql.Conn, t
 	}
 	// Bound the round to half the heartbeat interval: it caps how long a
 	// foreground command arriving mid-beat can wait on the lock, and it
-	// guarantees a sweep always settles before the next tick.
-	ctx, cancel := context.WithTimeout(ctx, tempTableHeartbeatTime/2)
+	// keeps a sweep from piling onto the next tick. With short heartbeat
+	// intervals, though, half the interval would leave a sub-second budget
+	// that a momentarily slow (but healthy) tablet can miss, so the budget
+	// never drops below a floor; missing a tick because a sweep ran long is
+	// harmless (the ticker just skips), while spurious beat failures burn
+	// the keepalive window for no reason.
+	budget := max(tempTableHeartbeatTime/2, 2*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
 	kept := make([]tempTableHeartbeatTarget, 0, len(ttc.targets))
 	for _, t := range ttc.targets {
