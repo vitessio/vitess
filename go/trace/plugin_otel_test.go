@@ -37,7 +37,7 @@ func TestOTelPluginFlags(t *testing.T) {
 
 	endpointFlag := fs.Lookup("otel-endpoint")
 	require.NotNil(t, endpointFlag)
-	assert.Equal(t, "", endpointFlag.DefValue)
+	assert.Empty(t, endpointFlag.DefValue)
 
 	insecureFlag := fs.Lookup("otel-insecure")
 	require.NotNil(t, insecureFlag)

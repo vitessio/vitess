@@ -82,9 +82,9 @@ func TestTransactionModeMetrics(t *testing.T) {
 				utils.Exec(t, conn, stmt)
 			}
 			updatedMetric := getCommitMetric(t)
-			assert.EqualValues(t, tc.want.TotalCount, updatedMetric.TotalCount-initial.TotalCount, "TotalCount")
-			assert.EqualValues(t, tc.want.SingleCount, updatedMetric.SingleCount-initial.SingleCount, "SingleCount")
-			assert.EqualValues(t, tc.want.MultiCount, updatedMetric.MultiCount-initial.MultiCount, "MultiCount")
+			assert.Equal(t, tc.want.TotalCount, updatedMetric.TotalCount-initial.TotalCount, "TotalCount")
+			assert.Equal(t, tc.want.SingleCount, updatedMetric.SingleCount-initial.SingleCount, "SingleCount")
+			assert.Equal(t, tc.want.MultiCount, updatedMetric.MultiCount-initial.MultiCount, "MultiCount")
 			assert.Zero(t, updatedMetric.TwoPCCount-initial.TwoPCCount, "TwoPCCount")
 			initial = updatedMetric
 		})
@@ -97,10 +97,10 @@ func TestTransactionModeMetrics(t *testing.T) {
 				utils.Exec(t, conn, stmt)
 			}
 			updatedMetric := getCommitMetric(t)
-			assert.EqualValues(t, tc.want.TotalCount, updatedMetric.TotalCount-initial.TotalCount, "TotalCount")
-			assert.EqualValues(t, tc.want.SingleCount, updatedMetric.SingleCount-initial.SingleCount, "SingleCount")
+			assert.Equal(t, tc.want.TotalCount, updatedMetric.TotalCount-initial.TotalCount, "TotalCount")
+			assert.Equal(t, tc.want.SingleCount, updatedMetric.SingleCount-initial.SingleCount, "SingleCount")
 			assert.Zero(t, updatedMetric.MultiCount-initial.MultiCount, "MultiCount")
-			assert.EqualValues(t, tc.want.TwoPCCount, updatedMetric.TwoPCCount-initial.TwoPCCount, "TwoPCCount")
+			assert.Equal(t, tc.want.TwoPCCount, updatedMetric.TwoPCCount-initial.TwoPCCount, "TwoPCCount")
 			initial = updatedMetric
 		})
 	}
@@ -177,9 +177,9 @@ func TestVTTablet2PCMetrics(t *testing.T) {
 		// fail after mm commit.
 		_, err = conn.Execute(ctx, "commit", nil, false)
 		if multi {
-			assert.ErrorContains(t, err, "Fail After MM commit")
+			require.ErrorContains(t, err, "Fail After MM commit")
 		} else {
-			assert.NoError(t, err)
+			require.NoError(t, err)
 		}
 	}
 
@@ -371,7 +371,7 @@ func getDTIDFromWarnings(ctx context.Context, t *testing.T, conn *vtgateconn.VTG
 
 	// extract transaction ID
 	indx := strings.Index(w.Msg, " ")
-	require.Greater(t, indx, 0)
+	require.Positive(t, indx)
 	return w.Msg[:indx]
 }
 

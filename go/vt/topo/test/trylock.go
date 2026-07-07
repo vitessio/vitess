@@ -61,7 +61,7 @@ func checkTryLockTimeout(ctx context.Context, t *testing.T, conn topo.Conn) {
 	// It should not contain anything, except Ephemeral files.
 	entries, err := conn.ListDir(ctx, keyspacePath, true /*full*/)
 	if err != nil {
-		require.Fail(t, "ListDir failed: %v", err.Error())
+		require.Failf(t, "ListDir failed", "%v", err.Error())
 	}
 	for _, e := range entries {
 		if e.Name == "Keyspace" {

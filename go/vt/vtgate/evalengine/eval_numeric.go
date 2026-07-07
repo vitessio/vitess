@@ -162,7 +162,7 @@ func evalToNumeric(e eval, preciseDatetime bool) evalNumeric {
 		}
 		return &evalFloat{f: e.toFloat()}
 	case *evalEnum:
-		return &evalFloat{f: float64(e.value)}
+		return &evalFloat{f: float64(enumNumeric(e.value))}
 	case *evalSet:
 		return &evalFloat{f: float64(e.set)}
 	default:
@@ -222,7 +222,7 @@ func evalToFloat(e eval) (*evalFloat, bool) {
 	case *evalTemporal:
 		return &evalFloat{f: e.toFloat()}, true
 	case *evalEnum:
-		return &evalFloat{f: float64(e.value)}, e.value != -1
+		return &evalFloat{f: float64(enumNumeric(e.value))}, e.value != -1
 	case *evalSet:
 		return &evalFloat{f: float64(e.set)}, true
 	default:
@@ -290,7 +290,7 @@ func evalToDecimal(e eval, m, d int32) *evalDecimal {
 	case *evalTemporal:
 		return newEvalDecimal(e.toDecimal(), m, d)
 	case *evalEnum:
-		return newEvalDecimal(decimal.NewFromInt(int64(e.value)), m, d)
+		return newEvalDecimal(decimal.NewFromInt(enumNumeric(e.value)), m, d)
 	case *evalSet:
 		return newEvalDecimal(decimal.NewFromUint(e.set), m, d)
 	default:
@@ -357,7 +357,7 @@ func evalToInt64(e eval) *evalInt64 {
 	case *evalTemporal:
 		return newEvalInt64(e.toInt64())
 	case *evalEnum:
-		return newEvalInt64(int64(e.value))
+		return newEvalInt64(enumNumeric(e.value))
 	case *evalSet:
 		return newEvalInt64(int64(e.set))
 	default:

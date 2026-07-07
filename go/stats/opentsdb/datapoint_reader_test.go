@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestRead(t *testing.T) {
@@ -34,7 +35,7 @@ func TestRead(t *testing.T) {
 		dpr := NewDataPointReader(mockReader)
 		dp, err := dpr.Read()
 
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Nil(t, dp)
 	}
 
@@ -42,7 +43,7 @@ func TestRead(t *testing.T) {
 	dpr := NewDataPointReader(mockReader)
 	dp, err := dpr.Read()
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	expectedDataPoint := DataPoint{
 		Metric:    "testMetric",

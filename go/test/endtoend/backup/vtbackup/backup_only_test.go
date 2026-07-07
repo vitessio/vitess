@@ -263,14 +263,25 @@ func startVtBackup(t *testing.T, initialBackup bool, restartBeforeBackup, disabl
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
+	verifyErrCh := make(chan error, 1)
 	if !initialBackup && disableRedoLog {
-		go verifyDisableEnableRedoLogs(ctx, t, mysqlSocket.Name())
+		go func() {
+			verifyErrCh <- verifyDisableEnableRedoLogs(ctx, mysqlSocket.Name())
+		}()
+	} else {
+		verifyErrCh <- nil
 	}
 
 	log.Info(fmt.Sprintf("starting backup tablet %s", time.Now()))
 	err = localCluster.StartVtbackup(newInitDBFile, initialBackup, keyspaceName, shardName, cell, extraArgs...)
+	// The backup is done (or failed); stop the redo-log monitor and collect its result.
+	cancel()
+	verifyErr := <-verifyErrCh
 	if err != nil {
 		return nil, err
+	}
+	if verifyErr != nil {
+		return nil, verifyErr
 	}
 
 	f, err := os.OpenFile(statsPath, os.O_RDONLY, 0)
@@ -289,7 +300,7 @@ func vtBackup(t *testing.T, initialBackup bool, restartBeforeBackup, disableRedo
 func verifyBackupCount(t *testing.T, shardKsName string, expected int) []string {
 	backups, err := listBackups(shardKsName)
 	require.NoError(t, err)
-	assert.Equalf(t, expected, len(backups), "invalid number of backups")
+	assert.Lenf(t, backups, expected, "invalid number of backups")
 	return backups
 }
 
@@ -441,7 +452,7 @@ func tearDown(t *testing.T, initMysql bool) {
 	}
 }
 
-func verifyDisableEnableRedoLogs(ctx context.Context, t *testing.T, mysqlSocket string) {
+func verifyDisableEnableRedoLogs(ctx context.Context, mysqlSocket string) error {
 	params := cluster.NewConnParams(0, dbPassword, mysqlSocket, keyspaceName)
 
 	for {
@@ -456,19 +467,19 @@ func verifyDisableEnableRedoLogs(ctx context.Context, t *testing.T, mysqlSocket 
 
 			// Check if server supports disable/enable redo log.
 			qr, err := conn.ExecuteFetch("SELECT 1 FROM performance_schema.global_status WHERE variable_name = 'innodb_redo_log_enabled'", 1, false)
-			if !assert.NoError(t, err) {
-				return
+			if err != nil {
+				return err
 			}
 			// If not, there's nothing to test.
 			if len(qr.Rows) == 0 {
-				return
+				return nil
 			}
 
 			// MY-013600
 			// https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference.html#error_er_ib_wrn_redo_disabled
 			qr, err = conn.ExecuteFetch("SELECT 1 FROM performance_schema.error_log WHERE data like '%InnoDB redo logging is disabled%'", 1, false)
-			if !assert.NoError(t, err) {
-				return
+			if err != nil {
+				return err
 			}
 			if len(qr.Rows) != 1 {
 				// Keep trying, possible we haven't disabled yet.
@@ -478,8 +489,8 @@ func verifyDisableEnableRedoLogs(ctx context.Context, t *testing.T, mysqlSocket 
 			// MY-013601
 			// https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference.html#error_er_ib_wrn_redo_enabled
 			qr, err = conn.ExecuteFetch("SELECT 1 FROM performance_schema.error_log WHERE data like '%InnoDB redo logging is enabled%'", 1, false)
-			if !assert.NoError(t, err) {
-				return
+			if err != nil {
+				return err
 			}
 			if len(qr.Rows) != 1 {
 				// Keep trying, possible we haven't disabled yet.
@@ -487,10 +498,9 @@ func verifyDisableEnableRedoLogs(ctx context.Context, t *testing.T, mysqlSocket 
 			}
 
 			// Success
-			return
+			return nil
 		case <-ctx.Done():
-			assert.Fail(t, "Failed to verify disable/enable redo log.")
-			return
+			return errors.New("failed to verify disable/enable redo log")
 		}
 	}
 }

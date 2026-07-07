@@ -29,7 +29,7 @@ func TestParseMariaGTID(t *testing.T) {
 	want := MariadbGTID{Domain: 12, Server: 345, Sequence: 6789}
 
 	got, err := parseMariadbGTID(input)
-	assert.NoError(t, err, "%v", err)
+	require.NoError(t, err, "%v", err)
 	assert.Equal(t, want, got.(MariadbGTID), "parseMariadbGTID(%v) = %v, want %v", input, got, want)
 }
 
@@ -38,7 +38,7 @@ func TestParseInvalidMariaGTID(t *testing.T) {
 	want := "invalid MariaDB GTID"
 
 	_, err := parseMariadbGTID(input)
-	assert.Error(t, err, "expected error for invalid input (%v)", input)
+	require.Error(t, err, "expected error for invalid input (%v)", input)
 	assert.True(t, strings.HasPrefix(err.Error(), want), "wrong error message, got '%v', want '%v'", err, want)
 }
 
@@ -47,7 +47,7 @@ func TestParseMariaGTIDInvalidDomain(t *testing.T) {
 	want := "invalid MariaDB GTID Domain ID"
 
 	_, err := parseMariadbGTID(input)
-	assert.Error(t, err, "expected error for invalid input (%v)", input)
+	require.Error(t, err, "expected error for invalid input (%v)", input)
 	assert.True(t, strings.HasPrefix(err.Error(), want), "wrong error message, got '%v', want '%v'", err, want)
 }
 
@@ -56,7 +56,7 @@ func TestParseMariaGTIDInvalidServer(t *testing.T) {
 	want := "invalid MariaDB GTID Server ID"
 
 	_, err := parseMariadbGTID(input)
-	assert.Error(t, err, "expected error for invalid input (%v)", input)
+	require.Error(t, err, "expected error for invalid input (%v)", input)
 	assert.True(t, strings.HasPrefix(err.Error(), want), "wrong error message, got '%v', want '%v'", err, want)
 }
 
@@ -65,7 +65,7 @@ func TestParseMariaGTIDInvalidSequence(t *testing.T) {
 	want := "invalid MariaDB GTID Sequence number"
 
 	_, err := parseMariadbGTID(input)
-	assert.Error(t, err, "expected error for invalid input (%v)", input)
+	require.Error(t, err, "expected error for invalid input (%v)", input)
 	assert.True(t, strings.HasPrefix(err.Error(), want), "wrong error message, got '%v', want '%v'", err, want)
 }
 
@@ -77,7 +77,7 @@ func TestParseMariaGTIDSet(t *testing.T) {
 	}
 
 	got, err := ParseMariadbGTIDSet(input)
-	assert.NoError(t, err, "%v", err)
+	require.NoError(t, err, "%v", err)
 	assert.True(t, got.Equal(want), "ParseMariadbGTIDSet(%#v) = %#v, want %#v", input, got, want)
 }
 

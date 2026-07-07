@@ -32,16 +32,16 @@ func TestTabletResultMapSplit(t *testing.T) {
 	{
 		withAlias, all := tabletResultMap.Split("b")
 
-		assert.Equal(t, 1, len(withAlias))
-		assert.EqualValues(t, maps.Keys(withAlias), []string{"b"})
-		assert.Equal(t, 3, len(all))
+		assert.Len(t, withAlias, 1)
+		assert.Equal(t, []string{"b"}, maps.Keys(withAlias))
+		assert.Len(t, all, 3)
 		assert.ElementsMatch(t, maps.Keys(all), []string{"a", "b", "c"})
 	}
 	{
 		withAlias, all := tabletResultMap.Split("x")
 
-		assert.Equal(t, 0, len(withAlias))
-		assert.Equal(t, 3, len(all))
+		assert.Empty(t, withAlias)
+		assert.Len(t, all, 3)
 		assert.ElementsMatch(t, maps.Keys(all), []string{"a", "b", "c"})
 	}
 }

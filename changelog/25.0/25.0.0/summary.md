@@ -6,6 +6,7 @@
 
 - **[Major Changes](#major-changes)**
     - **[New Support](#new-support)**
+        - [VTOrc failover of an unreachable primary `vttablet` via replica quorum](#vtorc-quorum-unreachable-primary)
     - **[Breaking Changes](#breaking-changes)**
         - [`--watch-replication-stream` flag removed](#vttablet-watch-replication-stream-removed)
         - [Snapshot Topology feature removed](#vtorc-snapshot-topology-removed)
@@ -16,6 +17,7 @@
     - **[VReplication](#minor-changes-vreplication)**
         - [Default data protection for `_reverse` workflow cancel/complete](#vreplication-reverse-workflow-data-protection)
     - **[VTGate](#minor-changes-vtgate)**
+        - [Ingress bytes in query LogStats](#vtgate-logstats-ingress-bytes)
         - [New controls for cross-keyspace reads](#vtgate-cross-keyspace-reads)
         - [Streaming errors no longer surface as connection loss](#vtgate-streamexecute-real-errors)
         - [Temporary-table connections are kept alive with a heartbeat](#vtgate-temp-table-heartbeat)
@@ -29,6 +31,29 @@
 ## <a id="major-changes"/>Major Changes</a>
 
 ### <a id="new-support"/>New Support</a>
+
+#### <a id="vtorc-quorum-unreachable-primary"/>VTOrc failover of an unreachable primary `vttablet` via replica quorum</a>
+
+VTOrc can now run an Emergency Reparent Shard (ERS) when a `PRIMARY` tablet's `vttablet` process is unreachable while its MySQL keeps running — a case the existing replication-based detection misses, because the replicas keep replicating from the still-running MySQL.
+
+To avoid acting on VTOrc's own connectivity problems (for example, a network partition between VTOrc and the primary), the failover requires a quorum: a configurable fraction of the shard's `REPLICA`/`RDONLY` tablets must also report the primary's `vttablet` unreachable, in addition to VTOrc's own failed check. The liveness signal is gathered over the existing `Ping` and `FullStatus` RPCs — there is no new protocol or service.
+
+The feature is opt-in and disabled by default:
+
+- On `vttablet`, set `--track-shard-tablet-health` so the tablet periodically pings its shard's current primary and reports the primary's `vttablet` liveness in `FullStatus`.
+- On VTOrc, set `--emergency-reparent-on-primary-tablet-unreachable` to act on the quorum. The strictness is tunable via `--shard-tablet-health-quorum-fraction` (default `1.0`, i.e. unanimous), `--shard-tablet-health-quorum-min-observers`, `--shard-tablet-health-failure-threshold`, and `--shard-tablet-health-freshness`.
+
+The quorum decision is observable: VTOrc logs why it did or did not fail over an unreachable primary, records the per-observer vote tally in the recovery audit message, and exposes the live per-shard quorum state — the primary, the verdict, and each observer's vote — at the read-only `/api/shard-tablet-health-quorum` endpoint.
+
+Detection and decision latency is bounded by the tunables: an observer considers the primary down after `--shard-tablet-health-failure-threshold` consecutive failed pings at `--shard-tablet-health-interval` (defaults: 3 × 1s), its report reaches VTOrc with the next `FullStatus` poll of that observer, and the report counts toward quorum only while younger than `--shard-tablet-health-freshness` (default `15s`, measured from the observer's underlying ping). VTOrc therefore acts on evidence that is at most one freshness window old — and immediately before reparenting it re-polls the observers and the primary itself and re-evaluates the analysis under the shard lock, so a primary whose `vttablet` recovered in the meantime aborts the failover. Note that `--shard-tablet-health-quorum-fraction` values below `1.0` make detection more tolerant of partial agreement, but give up the default (unanimous) guarantee that a single fresh "up" report vetoes the failover.
+
+For the quorum to add protection beyond VTOrc's own view, the shard's observers should sit in failure domains independent of VTOrc and of one another: if VTOrc and a majority of observers share a network segment that is partitioned from a still-serving primary, the failover can still fire on a live primary. The strict-majority gate requires a genuine majority of the shard's `REPLICA`/`RDONLY` tablets, counted from topology — so unreported (e.g. down) replicas still count toward the denominator, and for shards with two or more eligible observers no single flaky report can drive a reparent. A shard whose only eligible observer is a single `REPLICA`/`RDONLY` therefore rests on that one observer plus VTOrc's own failed check; raise `--shard-tablet-health-quorum-min-observers` if you want quorum ERS to require more than one observer (at the cost of not failing such single-observer shards over automatically).
+
+A graceful `vttablet` shutdown records a shutdown marker in the topology server so that intentionally stopped primaries (e.g. during rolling restarts) are not failed over by the quorum. That marker write is best-effort: if it fails — which requires the topology server to be unavailable at shutdown time — the graceful shutdown is indistinguishable from a crash and may be failed over. In that situation VTOrc's own topology access is typically degraded as well, which further gates any recovery.
+
+Note that in this scenario the old primary's MySQL keeps running, and because its `vttablet` is the unreachable component, it cannot be demoted until that `vttablet` comes back and discovers the shard has a new primary. As with any emergency reparent away from an unreachable primary, a semi-sync durability policy (e.g. `semi_sync`) is what prevents the old primary from acknowledging new writes in the meantime; with `none` durability, anything writing directly to the old MySQL (bypassing `vtgate`) could cause a split brain.
+
+See [#19918](https://github.com/vitessio/vitess/issues/19918).
 
 ### <a id="breaking-changes"/>Breaking Changes</a>
 
@@ -91,6 +116,16 @@ The `--keep-data` flag help text has been updated to note this default explicitl
 See [#19906](https://github.com/vitessio/vitess/pull/19906) for details.
 
 ### <a id="minor-changes-vtgate"/>VTGate</a>
+
+#### <a id="vtgate-logstats-ingress-bytes"/>Ingress bytes in query LogStats</a>
+
+VTGate query `LogStats` now include an `IngressBytes` field that records the approximate number of inbound request bytes attributed to each query.
+
+For MySQL-protocol connections, this is the number of bytes read from the client packets for the command that produced the query, including any prepared-statement long-data chunks folded in when `COM_STMT_EXECUTE` consumes them. For gRPC connections, it is approximated from the serialized size of the protobuf request. When a single command carries multiple statements, the bytes are distributed across them by query length.
+
+`IngressBytes` is available through the `LogStats` struct for telemetry and monitoring integrations. It is not written to VTGate's query log output and defaults to zero for callers that do not set it.
+
+See [#20358](https://github.com/vitessio/vitess/pull/20358) for details.
 
 #### <a id="vtgate-cross-keyspace-reads"/>New controls for cross-keyspace reads</a>
 

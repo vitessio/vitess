@@ -19,12 +19,15 @@ package grpctmclient
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/status"
 
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/protoutil"
@@ -47,11 +50,11 @@ func TestDialDedicatedPool(t *testing.T) {
 		require.True(t, ok)
 
 		cli, invalidator, err := poolDialer.dialDedicatedPool(ctx, dialPoolGroupThrottler, tablet)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.NotNil(t, invalidator)
 		assert.NotNil(t, cli)
 		_, invalidatorTwo, err := poolDialer.dialDedicatedPool(ctx, dialPoolGroupThrottler, tablet)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		// Ensure that running both the invalidators doesn't cause any issues.
 		invalidator()
 		invalidatorTwo()
@@ -102,6 +105,132 @@ func TestDialDedicatedPool(t *testing.T) {
 	})
 }
 
+// TestCloseShardHealthPool verifies that CloseShardHealthPool releases the pooled ping connections
+// (so the shard-health monitor does not leak its connection to the primary on stop) while leaving
+// other dial-pool groups untouched.
+func TestCloseShardHealthPool(t *testing.T) {
+	ctx := t.Context()
+	client := NewClient()
+	pingTablet := &topodatapb.Tablet{Hostname: "localhost", PortMap: map[string]int32{"grpc": 15994}}
+	throttlerTablet := &topodatapb.Tablet{Hostname: "localhost", PortMap: map[string]int32{"grpc": 15995}}
+
+	poolDialer, ok := client.dialer.(poolDialer)
+	require.True(t, ok)
+	rpcClient, ok := client.dialer.(*grpcClient)
+	require.True(t, ok)
+
+	// Open a pooled connection in the ping group (what the monitor uses) and one in another group.
+	_, _, err := poolDialer.dialDedicatedPool(ctx, dialPoolGroupPing, pingTablet)
+	require.NoError(t, err)
+	_, _, err = poolDialer.dialDedicatedPool(ctx, dialPoolGroupThrottler, throttlerTablet)
+	require.NoError(t, err)
+
+	rpcClient.rpcDialPoolMapMu.Lock()
+	require.NotEmpty(t, rpcClient.rpcDialPoolMap[dialPoolGroupPing])
+	rpcClient.rpcDialPoolMapMu.Unlock()
+
+	// Open a second pooled ping connection, then evict just the first tablet's
+	// entry: the second entry and other groups must be left intact.
+	otherPingTablet := &topodatapb.Tablet{Hostname: "localhost", PortMap: map[string]int32{"grpc": 15996}}
+	_, _, err = poolDialer.dialDedicatedPool(ctx, dialPoolGroupPing, pingTablet)
+	require.NoError(t, err)
+	_, _, err = poolDialer.dialDedicatedPool(ctx, dialPoolGroupPing, otherPingTablet)
+	require.NoError(t, err)
+
+	client.CloseShardHealthPoolEntry(pingTablet)
+
+	rpcClient.rpcDialPoolMapMu.Lock()
+	assert.Len(t, rpcClient.rpcDialPoolMap[dialPoolGroupPing], 1, "only the evicted tablet's ping pool entry may be removed")
+	rpcClient.rpcDialPoolMapMu.Unlock()
+	// Evicting an address with no pool entry is a no-op.
+	client.CloseShardHealthPoolEntry(pingTablet)
+
+	// Eviction is best-effort: nil or partially-populated tablet records (no
+	// address to construct) must be a no-op rather than a panic, and must not
+	// disturb the remaining pool entry.
+	client.CloseShardHealthPoolEntry(nil)
+	client.CloseShardHealthPoolEntry(&topodatapb.Tablet{PortMap: map[string]int32{"grpc": 15996}})
+	client.CloseShardHealthPoolEntry(&topodatapb.Tablet{Hostname: "localhost"})
+	client.CloseShardHealthPoolEntry(&topodatapb.Tablet{Hostname: "localhost", PortMap: map[string]int32{"grpc": -1}})
+	rpcClient.rpcDialPoolMapMu.Lock()
+	assert.Len(t, rpcClient.rpcDialPoolMap[dialPoolGroupPing], 1, "invalid tablet records must not evict anything")
+	rpcClient.rpcDialPoolMapMu.Unlock()
+
+	client.CloseShardHealthPool()
+
+	rpcClient.rpcDialPoolMapMu.Lock()
+	defer rpcClient.rpcDialPoolMapMu.Unlock()
+	assert.Empty(t, rpcClient.rpcDialPoolMap[dialPoolGroupPing], "ping pool must be closed and emptied")
+	assert.NotEmpty(t, rpcClient.rpcDialPoolMap[dialPoolGroupThrottler], "other dial-pool groups must be left intact")
+}
+
+// TestShouldInvalidatePooledConn verifies that only connection-level failures invalidate a pooled
+// conn. A DeadlineExceeded/Canceled (a slow but alive peer, or a cancelled probe) must keep the
+// conn so a momentary stall does not close + redial the pool; an Unavailable (or any other error)
+// still invalidates so a genuinely dead peer redials.
+func TestShouldInvalidatePooledConn(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"deadline exceeded keeps the conn", status.Error(codes.DeadlineExceeded, "timed out"), false},
+		{"canceled keeps the conn", status.Error(codes.Canceled, "canceled"), false},
+		{"unavailable invalidates", status.Error(codes.Unavailable, "connection refused"), true},
+		{"non-status error invalidates", errors.New("boom"), true},
+		// Raw and wrapped context errors are not gRPC status errors (they map
+		// to codes.Unknown) but indicate caller-side shutdown or timeout, not
+		// a broken connection: they must keep the conn.
+		{"raw context.Canceled keeps the conn", context.Canceled, false},
+		{"raw context.DeadlineExceeded keeps the conn", context.DeadlineExceeded, false},
+		{"wrapped context.Canceled keeps the conn", fmt.Errorf("ping: %w", context.Canceled), false},
+		{"wrapped context.DeadlineExceeded keeps the conn", fmt.Errorf("ping: %w", context.DeadlineExceeded), false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, shouldInvalidatePooledConn(tt.err))
+		})
+	}
+}
+
+// TestDialDedicatedPoolInvalidatorOnlyDeletesOwnEntry verifies a pooled-conn invalidator deletes
+// only the entry it was created for. If a concurrent caller has already replaced that addr's entry
+// with a fresh one, the stale invalidator must leave the new entry in place — otherwise it removes
+// a pooled connection it never owned, orphaning that conn (only its own was closed).
+func TestDialDedicatedPoolInvalidatorOnlyDeletesOwnEntry(t *testing.T) {
+	ctx := t.Context()
+	client := NewClient()
+	tablet := &topodatapb.Tablet{
+		Hostname: "localhost",
+		PortMap:  map[string]int32{"grpc": 15993},
+	}
+	addr := netutil.JoinHostPort(tablet.Hostname, int32(tablet.PortMap["grpc"]))
+
+	rpcClient, ok := client.dialer.(*grpcClient)
+	require.True(t, ok)
+	poolDialer, ok := client.dialer.(poolDialer)
+	require.True(t, ok)
+
+	// Dial entry A and grab its invalidator.
+	_, invalidatorA, err := poolDialer.dialDedicatedPool(ctx, dialPoolGroupPing, tablet)
+	require.NoError(t, err)
+	require.NotNil(t, invalidatorA)
+
+	// Simulate a concurrent caller having replaced the addr's entry with a fresh entry B.
+	entryB := &tmcEntry{}
+	rpcClient.rpcDialPoolMapMu.Lock()
+	rpcClient.rpcDialPoolMap[dialPoolGroupPing][addr] = entryB
+	rpcClient.rpcDialPoolMapMu.Unlock()
+
+	// A's invalidator must NOT delete B — different identity.
+	invalidatorA()
+
+	rpcClient.rpcDialPoolMapMu.Lock()
+	got := rpcClient.rpcDialPoolMap[dialPoolGroupPing][addr]
+	rpcClient.rpcDialPoolMapMu.Unlock()
+	assert.Same(t, entryB, got, "invalidator must not delete a concurrently-installed entry it does not own")
+}
+
 func TestDialPool(t *testing.T) {
 	ctx := t.Context()
 	client := NewClient()
@@ -117,7 +246,7 @@ func TestDialPool(t *testing.T) {
 		require.True(t, ok)
 
 		cli, err := poolDialer.dialPool(ctx, tablet)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.NotNil(t, cli)
 	})
 

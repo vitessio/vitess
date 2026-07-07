@@ -168,7 +168,7 @@ func TestColumns_Indexes(t *testing.T) {
 				return
 			}
 			require.True(t, isSubset)
-			require.EqualValues(t, tt.indexesWanted, indexes)
+			require.Equal(t, tt.indexesWanted, indexes)
 		})
 	}
 }
@@ -473,7 +473,7 @@ func TestVersionedCommentParsing(t *testing.T) {
 			if tt.isError {
 				require.Error(t, err, "expected parse error for: %s", tt.query)
 				if tt.errMsg != "" {
-					assert.EqualError(t, err, tt.errMsg)
+					require.EqualError(t, err, tt.errMsg)
 				}
 				return
 			}
