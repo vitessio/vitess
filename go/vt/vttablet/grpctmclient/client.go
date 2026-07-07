@@ -18,6 +18,7 @@ package grpctmclient
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"sync"
@@ -491,6 +492,14 @@ func (client *Client) ping(ctx context.Context, c tabletmanagerservicepb.TabletM
 // likely broken (so it should be closed and redialed) rather than a transient timeout or
 // cancellation. A dead/unreachable peer surfaces as Unavailable and still invalidates.
 func shouldInvalidatePooledConn(err error) bool {
+	// status.Code only recognizes gRPC status errors: a raw or wrapped
+	// context.Canceled / context.DeadlineExceeded (e.g. the monitor shutting
+	// down or a caller-side timeout firing before the RPC hits the wire) maps
+	// to codes.Unknown and would needlessly close and redial a healthy
+	// connection. Check the context errors directly first.
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
 	switch status.Code(err) {
 	case codes.DeadlineExceeded, codes.Canceled:
 		return false

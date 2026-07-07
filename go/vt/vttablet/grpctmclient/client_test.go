@@ -19,6 +19,7 @@ package grpctmclient
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -166,6 +167,13 @@ func TestShouldInvalidatePooledConn(t *testing.T) {
 		{"canceled keeps the conn", status.Error(codes.Canceled, "canceled"), false},
 		{"unavailable invalidates", status.Error(codes.Unavailable, "connection refused"), true},
 		{"non-status error invalidates", errors.New("boom"), true},
+		// Raw and wrapped context errors are not gRPC status errors (they map
+		// to codes.Unknown) but indicate caller-side shutdown or timeout, not
+		// a broken connection: they must keep the conn.
+		{"raw context.Canceled keeps the conn", context.Canceled, false},
+		{"raw context.DeadlineExceeded keeps the conn", context.DeadlineExceeded, false},
+		{"wrapped context.Canceled keeps the conn", fmt.Errorf("ping: %w", context.Canceled), false},
+		{"wrapped context.DeadlineExceeded keeps the conn", fmt.Errorf("ping: %w", context.DeadlineExceeded), false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
