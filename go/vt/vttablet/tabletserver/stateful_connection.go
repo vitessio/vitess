@@ -95,7 +95,11 @@ func (sc *StatefulConnection) Exec(ctx context.Context, query string, maxrows in
 		}
 		return nil, vterrors.New(vtrpcpb.Code_ABORTED, "connection was aborted")
 	}
-	r, err := sc.dbConn.Conn.ExecOnce(ctx, query, maxrows, wantfields)
+	// Outside a transaction, a context deadline expiring mid-query kills only
+	// the query, not the connection: a reserved connection's state (temp
+	// tables, settings) survives the interruption, matching how non-stateful
+	// query timeouts behave.
+	r, err := sc.dbConn.Conn.ExecOnce(ctx, query, maxrows, wantfields, sc.IsInTransaction())
 	if err != nil {
 		if sqlerror.IsConnErr(err) {
 			select {

@@ -337,7 +337,15 @@ func tempTableBeatContext(ctx context.Context, c *mysql.Conn) context.Context {
 // session re-registers live ones at the end of its next command.
 func (vh *vtgateHandler) beatTempTableConn(ctx context.Context, c *mysql.Conn, ttc *tempTableConn) {
 	// A command in flight holds the lock, and its own execution keeps the
-	// reserved connections alive, so skip this round rather than wait.
+	// reserved connections it touches alive, so skip this round rather than
+	// wait. This does mean a single command running longer than the tablet
+	// timeout can starve the keepalives of reserved connections on shards
+	// it does not touch. That trade is deliberate: beating a reserved
+	// connection the command is concurrently using fails the user's query
+	// with a tablet-side "connection in use" error, and vtgate cannot know
+	// mid-flight which targets a command will use — routing decides that
+	// downstream. Removing the trade needs a tablet-side keepalive that
+	// no-ops when the connection is busy instead of erroring.
 	if !ttc.mu.TryLock() {
 		return
 	}
@@ -354,11 +362,10 @@ func (vh *vtgateHandler) beatTempTableConn(ctx context.Context, c *mysql.Conn, t
 	// never drops below a floor; missing a tick because a sweep ran long is
 	// harmless (the ticker just skips), while spurious beat failures burn
 	// the keepalive window for no reason. If the deadline instead expires
-	// while the select 1 is executing on the tablet, the tablet kills the
-	// reserved connection (standard query-timeout semantics, shared with
-	// the lock heartbeat); that window is only the moment the query
-	// actually runs — expiry during transit or queueing fails the RPC
-	// without executing — and the floor keeps it rare.
+	// while the select 1 is executing on the tablet, only the query is
+	// killed: reserved connections outside a transaction get KILL QUERY on
+	// timeout, so the connection and its temp tables survive and the next
+	// sweep retries.
 	budget := max(tempTableHeartbeatTime/2, 2*time.Second)
 	ctx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()

@@ -729,8 +729,10 @@ func (te *TxEngine) beginNewDbaConnection(ctx context.Context, settingsQuery str
 	}
 
 	// If we have a settings query that we need to apply, we do that before starting the transaction.
+	// This is a fresh dba connection being set up; it is discarded whole on
+	// any failure, so an interruption may kill the connection.
 	if settingsQuery != "" {
-		if _, err = dbConn.ExecOnce(ctx, settingsQuery, 1, false); err != nil {
+		if _, err = dbConn.ExecOnce(ctx, settingsQuery, 1, false, true /* insideTxn */); err != nil {
 			return nil, err
 		}
 	}

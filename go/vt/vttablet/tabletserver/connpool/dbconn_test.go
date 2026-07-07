@@ -294,7 +294,7 @@ func TestDBConnCtxError(t *testing.T) {
 	}
 
 	execOnce := func(ctx context.Context, query string, dbconn *Conn) error {
-		_, err := dbconn.ExecOnce(ctx, query, 1, false)
+		_, err := dbconn.ExecOnce(ctx, query, 1, false, true /* insideTxn */)
 		return err
 	}
 
@@ -634,7 +634,17 @@ func TestDBConnReApplySetting(t *testing.T) {
 
 func TestDBExecOnceKillTimeout(t *testing.T) {
 	executeWithTimeout(t, `kill \d+`, 150*time.Millisecond, func(ctx context.Context, dbConn *Conn) (*sqltypes.Result, error) {
-		return dbConn.ExecOnce(ctx, "select 1", 1, false)
+		return dbConn.ExecOnce(ctx, "select 1", 1, false, true /* insideTxn */)
+	})
+}
+
+// TestDBExecOnceNotInTxnKillQueryTimeout verifies that outside a transaction
+// a context deadline expiring mid-query kills only the query (KILL QUERY),
+// not the connection, so a reserved connection's state (temp tables,
+// settings) survives the interruption.
+func TestDBExecOnceNotInTxnKillQueryTimeout(t *testing.T) {
+	executeWithTimeout(t, `kill query \d+`, 1000*time.Millisecond, func(ctx context.Context, dbConn *Conn) (*sqltypes.Result, error) {
+		return dbConn.ExecOnce(ctx, "select 1", 1, false, false /* insideTxn */)
 	})
 }
 

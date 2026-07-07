@@ -223,9 +223,16 @@ func (dbc *Conn) terminate(ctx context.Context, insideTxn bool, now time.Time) {
 	}
 }
 
-// ExecOnce executes the specified query, but does not retry on connection errors.
-func (dbc *Conn) ExecOnce(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
-	return dbc.execOnce(ctx, query, maxrows, wantfields, true /* Once means we are in a txn*/)
+// ExecOnce executes the specified query, but does not retry on connection
+// errors. Use it whenever the connection itself carries state a silent
+// reconnect would destroy (an open transaction, a reserved connection's temp
+// tables or settings). insideTxn controls what happens if ctx expires while
+// the query is executing: inside a transaction the whole connection is
+// killed, because a partially-executed transaction cannot be safely
+// continued; outside one only the query is killed (KILL QUERY), so the
+// session and its state survive the interruption.
+func (dbc *Conn) ExecOnce(ctx context.Context, query string, maxrows int, wantfields bool, insideTxn bool) (*sqltypes.Result, error) {
+	return dbc.execOnce(ctx, query, maxrows, wantfields, insideTxn)
 }
 
 // FetchNext returns the next result set.

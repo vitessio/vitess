@@ -23,6 +23,7 @@
         - [Temporary-table connections are kept alive with a heartbeat](#vtgate-temp-table-heartbeat)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
+        - [Query timeouts no longer kill reserved connections outside transactions](#vttablet-reserved-conn-kill-query)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
     - **[General](#minor-changes-general)**
@@ -161,7 +162,7 @@ This affects all three streaming code paths in `go/mysql`: `COM_QUERY` (text pro
 
 #### <a id="vtgate-temp-table-heartbeat"/>Temporary-table connections are kept alive with a heartbeat</a>
 
-A session that creates an explicit `CREATE TEMPORARY TABLE` pins a reserved connection on the tablet. Previously that connection was reclaimed by the tablet's idle timeout (`--queryserver-config-transaction-timeout`, default 30s), silently dropping the temporary table out from under an idle session. VTGate now sends a low-frequency background keepalive (`select 1`) on those reserved connections, controlled by the new `--temp-table-heartbeat-time` flag (default 10s), which resets both the tablet's idle timer and mysqld's `wait_timeout`. Keepalives are skipped while the connection has a command in flight (the command itself keeps the connection alive), and they stop for reserved connections that no longer exist. Sessions with an open transaction are not kept alive: the tablet intentionally does not reset its transaction timer for in-transaction activity, so transactions — with or without temporary tables — remain subject to the transaction timeout as always, and keepalives resume once the transaction commits.
+A session that creates an explicit `CREATE TEMPORARY TABLE` pins a reserved connection on the tablet. Previously that connection was reclaimed by the tablet's idle timeout (`--queryserver-config-transaction-timeout`, default 30s), silently dropping the temporary table out from under an idle session. VTGate now sends a low-frequency background keepalive (`select 1`) on those reserved connections, controlled by the new `--temp-table-heartbeat-time` flag (default 10s), which resets both the tablet's idle timer and mysqld's `wait_timeout`. Keepalives are skipped while the connection has a command in flight (the command itself keeps the connections it touches alive), and they stop for reserved connections that no longer exist. Note that a single command running longer than the tablet timeout can therefore still lose temporary tables on shards that command does not touch. Sessions with an open transaction are not kept alive: the tablet intentionally does not reset its transaction timer for in-transaction activity, so transactions — with or without temporary tables — remain subject to the transaction timeout as always, and keepalives resume once the transaction commits.
 
 `--temp-table-heartbeat-time` **must be set below the tablets' `--queryserver-config-transaction-timeout`**, or the connection can still be reclaimed between heartbeats. If VTGate is lost (crash or restart), the heartbeats stop and the tablet reclaims the connection at its normal timeout, so nothing leaks.
 
@@ -178,6 +179,12 @@ A new `--consolidator-reject-on-cap` flag (default `false`) has been added to VT
 **Important:** The cap is enforced against the consolidator's global `totalWaiterCount` across all queries, not a per-query waiter count. This means a duplicate for query B can be rejected because query A has already consumed most of the global waiter budget. This provides backpressure when the consolidator as a whole is saturated, rather than when any single query has too many waiters.
 
 See [#19836](https://github.com/vitessio/vitess/pull/19836) for details.
+
+#### <a id="vttablet-reserved-conn-kill-query"/>Query timeouts no longer kill reserved connections outside transactions</a>
+
+Previously, when a query executing on a reserved connection (one holding temporary tables or session settings) exceeded its timeout, the tablet killed the entire MySQL connection, destroying the session state along with it. Now, when the reserved connection is not inside a transaction, only the query is killed (`KILL QUERY`): the client receives a query-interrupted error, and the connection — with its temporary tables and settings — survives. This matches how timeouts already behaved for regular (non-reserved) queries and mirrors MySQL's own statement-timeout semantics. Behavior inside transactions is unchanged: the connection is still killed, because a partially-executed transaction cannot be safely continued.
+
+See [#20429](https://github.com/vitessio/vitess/pull/20429) for details.
 
 ### <a id="minor-changes-vttablet"/>VTTablet</a>
 
