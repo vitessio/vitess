@@ -339,6 +339,58 @@ func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] %s unexpected plan type", qre.plan.PlanID.String())
 }
 
+// streamAdminPlan runs the OnlineDDL and throttler admin plans for Stream(),
+// aligned with the Execute codepath: outside a transaction each plan runs its
+// dedicated executor, while inside a transaction txConnExec serves SHOW
+// VITESS_MIGRATIONS on the transaction's connection and rejects the rest as
+// unexpected. This alignment should be revisited on both execution paths —
+// ideally vtgate stops sending admin statements inside a transaction
+// altogether, the way it commits before DDL.
+func (qre *QueryExecutor) streamAdminPlan() (*sqltypes.Result, error) {
+	if qre.connID != 0 {
+		return qre.txConnStreamExec()
+	}
+	switch qre.plan.PlanID {
+	case p.PlanShowMigrations:
+		return qre.execShowMigrations(nil)
+	case p.PlanShowMigrationLogs:
+		return qre.execShowMigrationLogs()
+	case p.PlanShowThrottledApps:
+		return qre.execShowThrottledApps()
+	case p.PlanShowThrottlerStatus:
+		return qre.execShowThrottlerStatus()
+	case p.PlanAlterMigration:
+		return qre.execAlterMigration()
+	case p.PlanRevertMigration:
+		return qre.execRevertMigration()
+	}
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] %s unexpected plan type", qre.plan.PlanID.String())
+}
+
+// txConnStreamExec runs the plan through txConnExec on the client's
+// transaction or reserved connection, mirroring how Execute dispatches
+// stateful plans, for streamed plans that run a dedicated executor rather
+// than the generic streaming SQL path.
+func (qre *QueryExecutor) txConnStreamExec() (*sqltypes.Result, error) {
+	conn, err := qre.tsv.te.txPool.GetAndLock(qre.connID, "for streaming query")
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Unlock()
+	if qre.setting != nil {
+		applied, err := conn.ApplySetting(qre.ctx, qre.setting)
+		if err != nil {
+			return nil, vterrors.Wrap(err, "failed to execute system setting on the connection")
+		}
+		// If we have applied the settings on the connection, then we should record the query detail.
+		// This is required for redoing the transaction in case of a failure.
+		if applied {
+			conn.TxProperties().RecordQueryDetail(qre.setting.ApplyQuery(), nil)
+		}
+	}
+	return qre.txConnExec(conn)
+}
+
 // Stream performs a streaming query execution.
 func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 	qre.logStats.PlanType = qre.plan.PlanID.String()
@@ -353,14 +405,18 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 	// inside streamDML, so its stats defer is registered before those checks and
 	// records per-table error stats for their rejections too, matching Execute.
 	switch qre.plan.PlanID {
-	case p.PlanInsert, p.PlanUpdate, p.PlanDelete, p.PlanUpdateLimit, p.PlanDeleteLimit:
+	case p.PlanInsert, p.PlanUpdate, p.PlanDelete, p.PlanUpdateLimit, p.PlanDeleteLimit, p.PlanLoad:
 		return qre.streamDML(callback)
 	}
 
 	// Record the per-table and per-plan stats that the DML path records in
 	// streamDML, so reads on the streaming path match Execute. Registered after
 	// the DML dispatch above so DML statements are not double-counted.
+	// rowsAffected is only known for dedicated-executor plans, which produce a
+	// single result; the generic streaming path leaves it 0 because a stream
+	// only carries rows, not the final OK packet's rows-affected count.
 	var totalRows int64
+	var rowsAffected uint64
 	defer func(start time.Time) {
 		duration := time.Since(start)
 		mysqlTime := qre.logStats.MysqlResponseTime
@@ -373,8 +429,8 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 		if err != nil {
 			errCount = 1
 		}
-		qre.tsv.qe.AddStats(qre.plan, tableName, qre.options.GetWorkloadName(), qre.targetTabletType, 1, duration, mysqlTime, 0, totalRows, errCount, errCode)
-		qre.plan.AddStats(1, duration, mysqlTime, 0, uint64(totalRows), uint64(errCount))
+		qre.tsv.qe.AddStats(qre.plan, tableName, qre.options.GetWorkloadName(), qre.targetTabletType, 1, duration, mysqlTime, int64(rowsAffected), totalRows, errCount, errCode)
+		qre.plan.AddStats(1, duration, mysqlTime, rowsAffected, uint64(totalRows), uint64(errCount))
 		// Like Execute, only successful queries contribute a result-size
 		// sample; failed ones would skew the histogram toward empty results.
 		if err == nil {
@@ -396,22 +452,73 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 		return reqThrottledErr
 	}
 
-	// Handle plans that don't use generic SQL execution.
+	// Plans that don't use generic SQL execution run a dedicated executor and
+	// stream its single result, matching Execute(). Most carry a nil FullQuery,
+	// so they must not fall through to the generic SQL path below, which would
+	// send the Vitess-internal statement to MySQL; DDL falls through with real
+	// SQL but would skip execDDL's table-count limit, online-DDL detection,
+	// in-transaction guard, and schema reload.
+	var result *sqltypes.Result
+	handled := true
 	switch qre.plan.PlanID {
 	case p.PlanNextval:
-		result, err := qre.execNextval()
+		result, err = qre.execNextval()
+	case p.PlanDDL:
+		if qre.connID != 0 {
+			result, err = qre.txConnStreamExec()
+		} else {
+			result, err = qre.execDDL(nil)
+		}
+	case p.PlanSavepoint, p.PlanSRollback, p.PlanRelease:
+		if qre.connID != 0 {
+			result, err = qre.txConnStreamExec()
+		} else {
+			result, err = qre.execOther()
+		}
+	case p.PlanSet:
+		switch {
+		case qre.connID != 0:
+			result, err = qre.txConnStreamExec()
+		case qre.setting == nil:
+			err = vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "[BUG] %s not allowed without setting connection", qre.query)
+		default:
+			// The execution is not required as this setting will be applied when any other query type is executed.
+			result = &sqltypes.Result{}
+		}
+	case p.PlanUnlockTables:
+		if qre.connID != 0 {
+			result, err = qre.txConnStreamExec()
+		} else {
+			err = vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "unlock tables should be executed with an existing connection")
+		}
+	case p.PlanShowMigrations, p.PlanShowMigrationLogs, p.PlanShowThrottledApps,
+		p.PlanShowThrottlerStatus, p.PlanAlterMigration, p.PlanRevertMigration:
+		result, err = qre.streamAdminPlan()
+	default:
+		handled = false
+	}
+	if handled {
 		if err != nil {
 			return err
 		}
-		return countingCallback(result)
-	case p.PlanShowMigrations:
-		result, err := qre.execShowMigrations(nil)
-		if err != nil {
-			return err
+		// Execute() tolerates a dedicated executor returning a nil result on
+		// success, and the RPC layer serializes that as an empty result; the
+		// streaming path must deliver the same shape rather than dereference it.
+		if result == nil {
+			result = &sqltypes.Result{}
 		}
+		// The single result is fully in hand, so record the rows-affected
+		// stats and query-log fields that Execute records for these plans.
+		rowsAffected = result.RowsAffected
+		qre.logStats.RowsAffected = int(result.RowsAffected)
+		qre.logStats.Rows = result.Rows
 		return countingCallback(result)
 	}
 
+	// Only the plan types enumerated here run as generic streaming SQL below.
+	// Anything else must have been dispatched above, so reject it the way
+	// Execute rejects unknown plan types, rather than sending its raw SQL to
+	// MySQL with none of the semantics its executor provides.
 	switch qre.plan.PlanID {
 	case p.PlanSelect, p.PlanSelectImpossible, p.PlanShow:
 		// Same case list as Execute. Only PlanSelect can actually carry the
@@ -422,6 +529,10 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 		if qre.bindVars[sqltypes.BvReplaceSchemaName] != nil {
 			qre.bindVars[sqltypes.BvSchemaName] = sqltypes.StringBindVariable(qre.tsv.config.DB.DBName)
 		}
+	case p.PlanSelectLockFunc, p.PlanOtherRead, p.PlanOtherAdmin, p.PlanFlush, p.PlanCallProc:
+		// Plain SQL statements with no bind-variable rewriting.
+	default:
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] %s unexpected plan type", qre.plan.PlanID.String())
 	}
 
 	// Produce the SQL to send to MySQL. Templated plans (SELECT, SHOW, ...)
@@ -622,25 +733,7 @@ func (qre *QueryExecutor) streamDML(callback StreamCallback) (err error) {
 		// Run the DML on the existing transaction or reserved connection, just
 		// like Execute's connID != 0 branch (e.g. a DML following Begin via
 		// BeginStreamExecute).
-		var conn *StatefulConnection
-		conn, err = qre.tsv.te.txPool.GetAndLock(qre.connID, "for query")
-		if err != nil {
-			return err
-		}
-		defer conn.Unlock()
-		if qre.setting != nil {
-			var applied bool
-			applied, err = conn.ApplySetting(qre.ctx, qre.setting)
-			if err != nil {
-				return vterrors.Wrap(err, "failed to execute system setting on the connection")
-			}
-			// If we have applied the settings on the connection, then we should record the query detail.
-			// This is required for redoing the transaction in case of a failure.
-			if applied {
-				conn.TxProperties().RecordQueryDetail(qre.setting.ApplyQuery(), nil)
-			}
-		}
-		reply, err = qre.txConnExec(conn)
+		reply, err = qre.txConnStreamExec()
 	case qre.plan.PlanID == p.PlanUpdateLimit || qre.plan.PlanID == p.PlanDeleteLimit:
 		reply, err = qre.execAsTransaction(qre.txConnExec)
 	default:
