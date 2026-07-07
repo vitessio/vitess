@@ -547,6 +547,28 @@ func TestImport(t *testing.T) {
 	assert.Equalf(t, want, got, "qrs:\n%s, want\n%s", got, want)
 }
 
+// A rules file written before the SelectStream plan type was removed must keep
+// loading: the name is accepted as a deprecated alias for Select, so the rule
+// keeps matching streamed selects (which now plan as Select) instead of the
+// whole rules file failing to load.
+func TestSelectStreamPlanNameCompat(t *testing.T) {
+	qrs := New()
+	jsondata := `[{
+		"Description": "legacy stream rule",
+		"Name": "block_streamed_select",
+		"Query": "select.*",
+		"Plans": ["SelectStream"],
+		"Action": "FAIL"
+	}]`
+	require.NoError(t, qrs.UnmarshalJSON([]byte(jsondata)))
+	require.Len(t, qrs.rules, 1)
+	assert.Equal(t, []planbuilder.PlanType{planbuilder.PlanSelect}, qrs.rules[0].plans)
+
+	filtered := qrs.FilterByPlan("select * from a", planbuilder.PlanSelect, "a")
+	require.Len(t, filtered.rules, 1)
+	assert.Equal(t, "block_streamed_select", filtered.rules[0].Name)
+}
+
 type ValidJSONCase struct {
 	input string
 	op    Operator

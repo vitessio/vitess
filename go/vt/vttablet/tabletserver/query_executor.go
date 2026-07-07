@@ -366,15 +366,35 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 	}
 
 	switch qre.plan.PlanID {
-	case p.PlanSelectStream:
+	case p.PlanSelect, p.PlanSelectImpossible, p.PlanShow:
+		// Same case list as Execute. Only PlanSelect can actually carry the
+		// BvReplaceSchemaName marker — SHOW statements can't contain bind
+		// variables and an impossible-WHERE query can't reference
+		// :__vtschemaname — so the other two are here only for consistency
+		// and should eventually be dropped from both execution paths.
 		if qre.bindVars[sqltypes.BvReplaceSchemaName] != nil {
 			qre.bindVars[sqltypes.BvSchemaName] = sqltypes.StringBindVariable(qre.tsv.config.DB.DBName)
 		}
 	}
 
-	sql, sqlWithoutComments, err := qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars)
-	if err != nil {
-		return err
+	// Produce the SQL to send to MySQL. Templated plans (SELECT, SHOW, ...)
+	// carry a ParsedQuery that generateFinalSQL resolves with the bind
+	// variables. Plans without one (FLUSH, OPTIMIZE, ... — statements that
+	// can't carry bind variables and that Execute also sends verbatim via
+	// execOther) fall back to the client's original text. The comment-less
+	// form is the stream consolidator's dedup key, so identical queries
+	// consolidate regardless of their margin comments.
+	var sql string
+	var sqlWithoutComments string
+	if qre.plan.FullQuery != nil {
+		var err error
+		sql, sqlWithoutComments, err = qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars)
+		if err != nil {
+			return err
+		}
+	} else {
+		sql = qre.query
+		sqlWithoutComments, _ = sqlparser.SplitMarginComments(qre.query)
 	}
 
 	var replaceKeyspace string
@@ -383,7 +403,7 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 	}
 
 	if consolidator := qre.tsv.qe.streamConsolidator; consolidator != nil {
-		if qre.connID == 0 && qre.plan.PlanID == p.PlanSelectStream && qre.shouldConsolidate() {
+		if qre.connID == 0 && qre.plan.PlanID == p.PlanSelect && qre.shouldConsolidate() {
 			return consolidator.Consolidate(qre.tsv.stats.WaitTimings, qre.logStats, sqlWithoutComments, callback,
 				func(callback StreamCallback) error {
 					dbConn, err := qre.getStreamConn()

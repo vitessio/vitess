@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"reflect"
 	"regexp"
 	"slices"
@@ -28,6 +29,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -924,7 +926,19 @@ func BuildQueryRule(ruleInfo map[string]any) (qr *Rule, err error) {
 				}
 				pt, ok := planbuilder.PlanByName(pv)
 				if !ok {
-					return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid plan name: %s", pv)
+					// The SelectStream plan type was removed when streamed
+					// reads unified onto their real plan types; a rule keyed
+					// on it now matches Select, which includes buffered
+					// execution. Rejecting the name instead would silently
+					// drop the operator's entire rules file at load time.
+					if pv != "SelectStream" {
+						return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid plan name: %s", pv)
+					}
+					// qr.Name may not be set yet (map iteration order), so
+					// read the name from the raw rule info.
+					name, _ := ruleInfo["Name"].(string)
+					log.Warn("query rule uses removed plan name SelectStream; treating it as Select, which also matches buffered queries", slog.String("rule", name))
+					pt = planbuilder.PlanSelect
 				}
 				qr.AddPlanCond(pt)
 			}
