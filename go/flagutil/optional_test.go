@@ -112,7 +112,7 @@ func TestOptionalFlag_Compatibility(t *testing.T) {
 
 	var zeroF64 OptionalFloat64
 	require.Equal(t, "float64", zeroF64.Type())
-	require.Empty(t, zeroF64.String())
+	require.Equal(t, "0", zeroF64.String())
 	require.False(t, zeroF64.IsSet())
 	require.NoError(t, zeroF64.Set("3.14"))
 	require.Equal(t, 3.14, zeroF64.Get())
