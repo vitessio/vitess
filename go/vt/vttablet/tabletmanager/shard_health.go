@@ -348,13 +348,23 @@ func (m *shardHealthMonitor) pingPeer(ctx context.Context, alias string, tablet 
 	now := m.now()
 
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	// If a refresh pruned this peer while the ping was in flight (e.g. the primary moved), drop the
 	// result instead of resurrecting a health entry for a tablet that is no longer a tracked peer —
 	// otherwise a departed primary would linger in this observer's snapshot until the next refresh.
 	if _, ok := m.peers[alias]; !ok {
+		m.mu.Unlock()
+		// The stale ping may have (re)opened a pooled connection to the
+		// departed peer after the refresh already evicted it, and no future
+		// refresh will see this alias depart again — so evict here too, or a
+		// ping round racing the refresh would leak a connection to a
+		// demoted-but-alive primary until the monitor stops. Evicting an
+		// absent entry is a no-op, so the common (non-racing) case is free.
+		if m.evictPooledConn != nil {
+			m.evictPooledConn(tablet)
+		}
 		return
 	}
+	defer m.mu.Unlock()
 	h := m.health[alias]
 	if h == nil {
 		h = &peerPingHealth{alias: tablet.Alias}

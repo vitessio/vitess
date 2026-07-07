@@ -270,6 +270,13 @@ func TestShardHealthMonitor_InFlightPingDoesNotResurrectPrunedPeer(t *testing.T)
 		return current, nil
 	}
 	m := newShardHealthMonitor(pinger, lister, primaryAlias, topoproto.TabletAliasString(self.Alias), time.Second, 30*time.Second)
+	var evictedMu sync.Mutex
+	var evicted []string
+	m.evictPooledConn = func(tablet *topodatapb.Tablet) {
+		evictedMu.Lock()
+		defer evictedMu.Unlock()
+		evicted = append(evicted, topoproto.TabletAliasString(tablet.Alias))
+	}
 
 	// Track only the old primary (101), then dispatch a ping that blocks while in flight.
 	require.NoError(t, m.refreshPeers(t.Context()))
@@ -282,10 +289,16 @@ func TestShardHealthMonitor_InFlightPingDoesNotResurrectPrunedPeer(t *testing.T)
 	primaryMu.Unlock()
 	require.NoError(t, m.refreshPeers(t.Context()))
 
-	// Let the in-flight ping complete. It must not resurrect health for the pruned 101.
+	// Let the in-flight ping complete. It must not resurrect health for the pruned 101, and it
+	// must re-evict 101's pooled connection: the stale ping may have (re)opened it after the
+	// refresh's eviction, and no future refresh will see 101 depart again.
 	close(block)
 	assert.Eventually(t, func() bool { return m.inflightCount() == 0 }, 30*time.Second, 5*time.Millisecond)
 	assert.Empty(t, m.snapshot(), "an in-flight ping must not re-insert health for a peer pruned during the refresh")
+	evictedMu.Lock()
+	defer evictedMu.Unlock()
+	assert.Equal(t, []string{"zone1-0000000101", "zone1-0000000101"}, evicted,
+		"the departed primary must be evicted by the refresh and re-evicted by the stale ping's dropped-result path")
 }
 
 // TestShardHealthMonitor_PingsOnlyThePrimary pins that the monitor probes and reports only the
