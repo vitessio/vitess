@@ -42,6 +42,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/trace"
+	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/tlstest"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -2012,6 +2013,36 @@ func TestTempTableHeartbeatSweep(t *testing.T) {
 	require.Len(t, ttc2.targets, 1)
 	_, ok = vh.tempTableConns.Load(c2)
 	require.True(t, ok)
+}
+
+// TestTempTableBeatContext verifies that beats carry the client's caller
+// identity the same way the command path does: without an immediate caller
+// id, tablets running with --queryserver-config-strict-table-acl reject the
+// beat ("missing caller id") and the reserved connection would still be
+// reclaimed despite the heartbeats.
+func TestTempTableBeatContext(t *testing.T) {
+	client, server := net.Pipe()
+	t.Cleanup(func() {
+		_ = client.Close()
+		_ = server.Close()
+	})
+	c := mysql.NewConnForTest(server)
+	c.User = "app_user"
+	c.UserData = &mysql.StaticUserData{Username: "acl_user", Groups: []string{"g1"}}
+
+	ctx := tempTableBeatContext(t.Context(), c)
+	im := callerid.ImmediateCallerIDFromContext(ctx)
+	require.NotNil(t, im)
+	require.Equal(t, "acl_user", im.Username)
+	require.Equal(t, []string{"g1"}, im.Groups)
+	ef := callerid.EffectiveCallerIDFromContext(ctx)
+	require.NotNil(t, ef)
+	require.Equal(t, "app_user", ef.Principal)
+
+	// A connection without auth-provided identity leaves the context bare.
+	bare := &mysql.Conn{ConnectionID: 3}
+	bareCtx := tempTableBeatContext(t.Context(), bare)
+	require.Nil(t, callerid.ImmediateCallerIDFromContext(bareCtx))
 }
 
 // TestComQueryTempTableHeartbeatRegistration verifies that creating a

@@ -310,6 +310,27 @@ func (vh *vtgateHandler) sendTempTableHeartbeats(ctx context.Context) {
 	wg.Wait()
 }
 
+// tempTableBeatContext returns ctx carrying the client's caller identity,
+// built exactly as the command path builds it: with
+// --queryserver-config-strict-table-acl the tablet rejects any query without
+// an immediate caller id ("missing caller id"), which would make every beat
+// fail (and not as a connection-closed error), so the reserved connection
+// would still be reclaimed. It also attributes the beats to the owning user
+// in the tablet's query logs. The identity fields on the connection are set
+// at authentication time and immutable after, so reading them from the
+// sweeper is safe.
+func tempTableBeatContext(ctx context.Context, c *mysql.Conn) context.Context {
+	if c.UserData == nil {
+		return ctx
+	}
+	return callerid.NewContext(ctx,
+		callerid.NewEffectiveCallerID(
+			c.User,                  /* principal: who */
+			c.RemoteAddr().String(), /* component: running client process */
+			"VTGate MySQL Connector" /* subcomponent: part of the client */),
+		c.UserData.Get())
+}
+
 // beatTempTableConn sends one keepalive per reserved connection registered
 // for a client connection. Reserved connections that no longer exist are
 // evicted so they are not beaten (and warned about) on every sweep; the
@@ -324,6 +345,7 @@ func (vh *vtgateHandler) beatTempTableConn(ctx context.Context, c *mysql.Conn, t
 	if len(ttc.targets) == 0 {
 		return
 	}
+	ctx = tempTableBeatContext(ctx, c)
 	// Bound the round to half the heartbeat interval: it caps how long a
 	// foreground command arriving mid-beat can wait on the lock, and it
 	// keeps a sweep from piling onto the next tick. With short heartbeat
@@ -331,7 +353,12 @@ func (vh *vtgateHandler) beatTempTableConn(ctx context.Context, c *mysql.Conn, t
 	// that a momentarily slow (but healthy) tablet can miss, so the budget
 	// never drops below a floor; missing a tick because a sweep ran long is
 	// harmless (the ticker just skips), while spurious beat failures burn
-	// the keepalive window for no reason.
+	// the keepalive window for no reason. If the deadline instead expires
+	// while the select 1 is executing on the tablet, the tablet kills the
+	// reserved connection (standard query-timeout semantics, shared with
+	// the lock heartbeat); that window is only the moment the query
+	// actually runs — expiry during transit or queueing fails the RPC
+	// without executing — and the floor keeps it rare.
 	budget := max(tempTableHeartbeatTime/2, 2*time.Second)
 	ctx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
