@@ -61,6 +61,8 @@ var (
 	mysqlShellBackupShouldDrain = false
 	// disable redo logging and double write buffer
 	mysqlShellSpeedUpRestore = false
+	// skip the MySQL version compatibility check when restoring from a mysql-shell backup
+	mysqlShellRestoreSkipVersionCheck = false
 
 	// use when checking if we need to create the directory on the local filesystem or not.
 	knownObjectStoreParams = []string{"s3BucketName", "osBucketName", "azureContainerName"}
@@ -107,6 +109,7 @@ func registerMysqlShellBackupEngineFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&mysqlShellLoadFlags, "mysql-shell-load-flags", mysqlShellLoadFlags, "flags to pass to mysql shell load utility. This should be a JSON string")
 	fs.BoolVar(&mysqlShellBackupShouldDrain, "mysql-shell-should-drain", mysqlShellBackupShouldDrain, "decide if we should drain while taking a backup or continue to serving traffic")
 	fs.BoolVar(&mysqlShellSpeedUpRestore, "mysql-shell-speedup-restore", mysqlShellSpeedUpRestore, "speed up restore by disabling redo logging and double write buffer during the restore process")
+	fs.BoolVar(&mysqlShellRestoreSkipVersionCheck, "mysql-shell-restore-skip-version-check", mysqlShellRestoreSkipVersionCheck, "skip the MySQL version compatibility check when restoring from a mysql-shell backup")
 }
 
 // MySQLShellBackupEngine encapsulates the logic to implement the restoration

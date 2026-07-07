@@ -571,7 +571,8 @@ func FindBackupToRestore(ctx context.Context, params RestoreParams, bhs []backup
 				bh := manifestHandleMap.Handle(bm)
 
 				// check if the backup can be used with this MySQL version.
-				if bm.MySQLVersion != "" {
+				skipVersionCheck := bm.BackupMethod == mysqlShellBackupEngineName && mysqlShellRestoreSkipVersionCheck
+				if bm.MySQLVersion != "" && !skipVersionCheck {
 					if err := validateMySQLVersionUpgradeCompatible(mysqlVersion, bm.MySQLVersion, bm.UpgradeSafe); err != nil {
 						params.Logger.Warningf("Skipping backup %v/%v with incompatible MySQL version %v (upgrade safe: %v): %v", backupDir, bh.Name(), bm.MySQLVersion, bm.UpgradeSafe, err)
 						continue

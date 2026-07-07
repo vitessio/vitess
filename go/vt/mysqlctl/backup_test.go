@@ -519,6 +519,83 @@ func TestRestoreManifestMySQLVersionValidation(t *testing.T) {
 	}
 }
 
+// TestFindBackupToRestoreMySQLShellSkipVersionCheck tests that FindBackupToRestore
+// skips the MySQL version compatibility check for mysqlshell backups only when
+// mysqlShellRestoreSkipVersionCheck is enabled.
+func TestFindBackupToRestoreMySQLShellSkipVersionCheck(t *testing.T) {
+	// 8.0.32 -> 8.0.31 is a downgrade, which is never version-compatible.
+	const (
+		backupVersion  = "mysqld  Ver 8.0.32"
+		restoreVersion = "mysqld  Ver 8.0.31"
+	)
+
+	testCases := []struct {
+		name             string
+		backupMethod     string
+		skipVersionCheck bool
+		wantBackup       bool
+	}{
+		{
+			name:             "mysqlshell backup, skip enabled",
+			backupMethod:     mysqlShellBackupEngineName,
+			skipVersionCheck: true,
+			wantBackup:       true,
+		},
+		{
+			name:             "mysqlshell backup, skip disabled",
+			backupMethod:     mysqlShellBackupEngineName,
+			skipVersionCheck: false,
+			wantBackup:       false,
+		},
+		{
+			name:             "non-mysqlshell backup, skip enabled",
+			backupMethod:     fakeBackupEngineName,
+			skipVersionCheck: true,
+			wantBackup:       false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			originalSkip := mysqlShellRestoreSkipVersionCheck
+			t.Cleanup(func() { mysqlShellRestoreSkipVersionCheck = originalSkip })
+			mysqlShellRestoreSkipVersionCheck = tc.skipVersionCheck
+
+			env := createFakeBackupRestoreEnv(t)
+			env.mysqld.Version = restoreVersion
+			// look at all backups, regardless of when they were taken.
+			env.restoreParams.StartTime = time.Time{}
+
+			manifest := BackupManifest{
+				BackupTime:   FormatRFC3339(time.Now().Add(-1 * time.Hour)),
+				BackupMethod: tc.backupMethod,
+				Keyspace:     "test",
+				Shard:        "-",
+				MySQLVersion: backupVersion,
+				UpgradeSafe:  false,
+			}
+			manifestBytes, err := json.Marshal(manifest)
+			require.NoError(t, err)
+
+			bhs := []backupstorage.BackupHandle{
+				&FakeBackupHandle{
+					ReadFileReturnF: func(context.Context, string) (io.ReadCloser, error) {
+						return io.NopCloser(bytes.NewBuffer(manifestBytes)), nil
+					},
+				},
+			}
+
+			restorePath, err := FindBackupToRestore(env.ctx, env.restoreParams, bhs)
+			if tc.wantBackup {
+				require.NoError(t, err)
+				require.False(t, restorePath.IsEmpty())
+			} else {
+				require.ErrorIs(t, err, ErrNoCompleteBackup)
+			}
+		})
+	}
+}
+
 type forTest []FileEntry
 
 func (f forTest) Len() int           { return len(f) }
