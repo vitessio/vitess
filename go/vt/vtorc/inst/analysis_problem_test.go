@@ -15,10 +15,13 @@ package inst
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/protoutil"
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -326,4 +329,71 @@ func TestGroupDetectionAnalysesByShard(t *testing.T) {
 	ks2 := result["ks2/0"]
 	require.Len(t, ks2, 1)
 	assert.Equal(t, PrimaryIsReadOnly, ks2[0].Analysis)
+}
+
+func TestPrimaryTabletUnreachableByQuorumMatch(t *testing.T) {
+	now := time.Now()
+	primary := &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}
+
+	resetShardPeerHealth()
+	RecordShardPeerHealth(&topodatapb.TabletAlias{Cell: "zone1", Uid: 101}, topodatapb.TabletType_REPLICA, "ks", "0",
+		[]*replicationdatapb.ShardPeerHealth{{TabletAlias: primary, ConsecutivePingFailures: 5, LastAttemptedPing: protoutil.TimeToProto(now)}}, now)
+	RecordShardPeerHealth(&topodatapb.TabletAlias{Cell: "zone1", Uid: 102}, topodatapb.TabletType_REPLICA, "ks", "0",
+		[]*replicationdatapb.ShardPeerHealth{{TabletAlias: primary, ConsecutivePingFailures: 5, LastAttemptedPing: protoutil.TimeToProto(now)}}, now)
+
+	a := &DetectionAnalysis{
+		IsClusterPrimary:       true,
+		LastCheckValid:         false,
+		AnalyzedInstanceAlias:  primary,
+		AnalyzedKeyspace:       "ks",
+		AnalyzedShard:          "0",
+		ShardEligibleObservers: 2, // both replicas report down -> a majority of the shard
+	}
+	problem := GetDetectionAnalysisProblem(PrimaryTabletUnreachableByQuorum)
+	require.NotNil(t, problem)
+	assert.False(t, problem.MatchFunc(a, &clusterAnalysis{}, nil, &topodatapb.Tablet{Alias: primary}, false, false), "feature is disabled by default")
+	assert.True(t, matchPrimaryTabletUnreachableByQuorum(a, now))
+
+	// When the matcher fires, it records the structured quorum detail for the audit.
+	require.NotNil(t, a.QuorumDetail, "matcher must record the quorum detail when it fires")
+	assert.True(t, a.QuorumDetail.Down)
+	assert.Equal(t, 2, a.QuorumDetail.DownVotes)
+
+	// Minority protection through the matcher: the same two fresh down votes must NOT fire ERS
+	// when the shard is known (via ShardEligibleObservers from topo) to have more eligible observers
+	// that are not reporting down — a minority view cannot drive a failover.
+	minority := &DetectionAnalysis{
+		IsClusterPrimary:       true,
+		LastCheckValid:         false,
+		AnalyzedInstanceAlias:  primary,
+		AnalyzedKeyspace:       "ks",
+		AnalyzedShard:          "0",
+		ShardEligibleObservers: 5, // 2 of 5 reporting down is not a majority of the shard
+	}
+	assert.False(t, matchPrimaryTabletUnreachableByQuorum(minority, now))
+	assert.Nil(t, minority.QuorumDetail, "the matcher must not record a quorum detail when it does not fire")
+
+	// If VTOrc can still reach the primary, no match.
+	a.LastCheckValid = true
+	assert.False(t, problem.MatchFunc(a, &clusterAnalysis{}, nil, &topodatapb.Tablet{Alias: primary}, false, false))
+
+	// The non-firing path must not record a quorum detail. Use a fresh analysis because the
+	// earlier firing already set QuorumDetail on `a`.
+	notFired := &DetectionAnalysis{IsClusterPrimary: true, LastCheckValid: true, AnalyzedInstanceAlias: primary, AnalyzedKeyspace: "ks", AnalyzedShard: "0"}
+	assert.False(t, matchPrimaryTabletUnreachableByQuorum(notFired, now))
+	assert.Nil(t, notFired.QuorumDetail)
+
+	// An intentionally shut down primary must not fire ERS even though the same fresh quorum reports
+	// its vttablet down: a graceful shutdown stamps TabletShutdownTime and is an operator action.
+	shutdown := &DetectionAnalysis{
+		IsClusterPrimary:       true,
+		LastCheckValid:         false,
+		IsTabletShutdown:       true,
+		AnalyzedInstanceAlias:  primary,
+		AnalyzedKeyspace:       "ks",
+		AnalyzedShard:          "0",
+		ShardEligibleObservers: 2,
+	}
+	assert.False(t, matchPrimaryTabletUnreachableByQuorum(shutdown, now), "intentionally shut down primary must not be failed over")
+	assert.Nil(t, shutdown.QuorumDetail, "no quorum detail recorded when the matcher fails closed on shutdown")
 }
