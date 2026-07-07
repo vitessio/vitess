@@ -340,7 +340,7 @@ func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result
 }
 
 // Stream performs a streaming query execution.
-func (qre *QueryExecutor) Stream(callback StreamCallback) error {
+func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 	qre.logStats.PlanType = qre.plan.PlanID.String()
 
 	defer func(start time.Time) {
@@ -357,12 +357,59 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 		return qre.streamDML(callback)
 	}
 
+	// Record the per-table and per-plan stats that the DML path records in
+	// streamDML, so reads on the streaming path match Execute. Registered after
+	// the DML dispatch above so DML statements are not double-counted.
+	var totalRows int64
+	defer func(start time.Time) {
+		duration := time.Since(start)
+		mysqlTime := qre.logStats.MysqlResponseTime
+		tableName := qre.plan.TableName().String()
+		if tableName == "" {
+			tableName = "Join"
+		}
+		errCode := vterrors.Code(err).String()
+		var errCount int64
+		if err != nil {
+			errCount = 1
+		}
+		qre.tsv.qe.AddStats(qre.plan, tableName, qre.options.GetWorkloadName(), qre.targetTabletType, 1, duration, mysqlTime, 0, totalRows, errCount, errCode)
+		qre.plan.AddStats(1, duration, mysqlTime, 0, uint64(totalRows), uint64(errCount))
+		// Like Execute, only successful queries contribute a result-size
+		// sample; failed ones would skew the histogram toward empty results.
+		if err == nil {
+			qre.tsv.Stats().ResultHistogram.Add(totalRows)
+		}
+	}(time.Now())
+
+	// Wrap the callback to track total rows for the stats recorded above.
+	countingCallback := func(result *sqltypes.Result) error {
+		totalRows += int64(len(result.Rows))
+		return callback(result)
+	}
+
 	if err := qre.checkPermissions(); err != nil {
 		return err
 	}
 
 	if reqThrottledErr := qre.tsv.queryThrottler.Throttle(qre.ctx, qre.targetTabletType, qre.plan.FullQuery, qre.connID, qre.options); reqThrottledErr != nil {
 		return reqThrottledErr
+	}
+
+	// Handle plans that don't use generic SQL execution.
+	switch qre.plan.PlanID {
+	case p.PlanNextval:
+		result, err := qre.execNextval()
+		if err != nil {
+			return err
+		}
+		return countingCallback(result)
+	case p.PlanShowMigrations:
+		result, err := qre.execShowMigrations(nil)
+		if err != nil {
+			return err
+		}
+		return countingCallback(result)
 	}
 
 	switch qre.plan.PlanID {
@@ -404,7 +451,7 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 
 	if consolidator := qre.tsv.qe.streamConsolidator; consolidator != nil {
 		if qre.connID == 0 && qre.plan.PlanID == p.PlanSelect && qre.shouldConsolidate() {
-			return consolidator.Consolidate(qre.tsv.stats.WaitTimings, qre.logStats, sqlWithoutComments, callback,
+			return consolidator.Consolidate(qre.tsv.stats.WaitTimings, qre.logStats, sqlWithoutComments, countingCallback,
 				func(callback StreamCallback) error {
 					dbConn, err := qre.getStreamConn()
 					if err != nil {
@@ -430,6 +477,7 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 		// returned to the pool once the callback has fully returned
 		defer returnStreamResult(result)
 
+		totalRows += int64(len(result.Rows))
 		if replaceKeyspace != "" {
 			result.ReplaceKeyspace(qre.tsv.config.DB.DBName, replaceKeyspace)
 		}

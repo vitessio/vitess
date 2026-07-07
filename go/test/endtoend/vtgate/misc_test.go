@@ -380,6 +380,32 @@ func TestShardTargetedFailedDMLInOLAPRecordsErrorStats(t *testing.T) {
 		"failed streamed DML must record QueryErrorCounts on the tablet like the non-streaming path")
 }
 
+// TestShardTargetedFailedSelectInOLAPRecordsErrorStats verifies that a read that
+// fails on the streaming path records error stats on the tablet, just like the
+// non-streaming Execute path. A failed streamed read that only surfaces its
+// error to the client, without incrementing QueryErrorCounts, would leave the
+// per-table error stats blind to streaming failures.
+func TestShardTargetedFailedSelectInOLAPRecordsErrorStats(t *testing.T) {
+	conn, closer := start(t)
+	t.Cleanup(closer)
+
+	// The select below is shard-targeted to -80, so it runs on that shard's primary.
+	primary := shardPrimaryTablet(t, "-80")
+	const statKey = "t1.Select"
+	errCountBefore := tabletQueryStat(t, primary, "QueryErrorCounts", statKey)
+
+	utils.Exec(t, conn, "use `ks:-80`")
+	utils.Exec(t, conn, `set workload='olap'`)
+	// The tablet planbuilder doesn't validate columns, so this still plans as a
+	// t1 select and MySQL rejects it when the tablet runs it.
+	_, err := utils.ExecAllowError(t, conn, `select no_such_column from t1`)
+	require.ErrorContains(t, err, "errno 1054")
+
+	errCountAfter := tabletQueryStat(t, primary, "QueryErrorCounts", statKey)
+	require.Equal(t, errCountBefore+1, errCountAfter,
+		"failed streamed select must record QueryErrorCounts on the tablet like the non-streaming path")
+}
+
 func shardPrimaryTablet(t *testing.T, shardName string) *cluster.Vttablet {
 	t.Helper()
 	for _, shard := range clusterInstance.Keyspaces[0].Shards {
