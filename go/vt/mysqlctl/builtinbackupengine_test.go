@@ -946,6 +946,18 @@ func TestHasErrorCode(t *testing.T) {
 			code:     vtrpcpb.Code_FAILED_PRECONDITION,
 			expected: true,
 		},
+		{
+			name:     "wrapped joined error with matching code",
+			err:      vterrors.Wrapf(errors.Join(internal, precondition), "context"),
+			code:     vtrpcpb.Code_FAILED_PRECONDITION,
+			expected: true,
+		},
+		{
+			name:     "fmt wrapped joined error with matching code",
+			err:      fmt.Errorf("outer: %w", errors.Join(internal, precondition)),
+			code:     vtrpcpb.Code_FAILED_PRECONDITION,
+			expected: true,
+		},
 	}
 
 	for _, tc := range tests {

@@ -122,6 +122,15 @@ func hasErrorCode(err error, code vtrpcpb.Code) bool {
 			}
 		}
 	}
+	if single, ok := err.(interface{ Unwrap() error }); ok {
+		if hasErrorCode(single.Unwrap(), code) {
+			return true
+		}
+	} else if causer, ok := err.(interface{ Cause() error }); ok {
+		if hasErrorCode(causer.Cause(), code) {
+			return true
+		}
+	}
 	return false
 }
 
@@ -737,7 +746,7 @@ func (be *BuiltinBackupEngine) backupFiles(
 
 	// Backup all work items concurrently.
 	backupErr := be.backupWorkItems(ctx, workItems, fes, bh, params)
-	if vterrors.Code(backupErr) == vtrpcpb.Code_FAILED_PRECONDITION {
+	if hasErrorCode(backupErr, vtrpcpb.Code_FAILED_PRECONDITION) {
 		return backupErr
 	}
 

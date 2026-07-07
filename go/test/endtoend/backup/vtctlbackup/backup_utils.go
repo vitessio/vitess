@@ -70,14 +70,13 @@ var (
 	newInitDBFile    string
 	currentSetupType int
 	cell             = cluster.DefaultCell
-
-	hostname             = "localhost"
-	keyspaceName         = "ks"
-	dbPassword           = "VtDbaPass"
-	shardKsName          = fmt.Sprintf("%s/%s", keyspaceName, shardName)
-	dbCredentialFile     string
-	shardName            = "0"
-	commonTabletArg      = getDefaultCommonArgs()
+	hostname         = "localhost"
+	keyspaceName     = "ks"
+	dbPassword       = "VtDbaPass"
+	shardKsName      = fmt.Sprintf("%s/%s", keyspaceName, shardName)
+	dbCredentialFile string
+	shardName        = "0"
+	commonTabletArg  = getDefaultCommonArgs()
 
 	vtInsertTest = `
 		create table vt_insert_test (
