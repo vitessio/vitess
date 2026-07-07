@@ -61,11 +61,6 @@ func (wf writerFunc) Write(p []byte) (int, error) {
 	return wf(p)
 }
 
-func seedTestAnalysisRow(row sqlutils.RowMap) error {
-	_ = row
-	return nil
-}
-
 func TestAnalysisEntriesHaveSameRecovery(t *testing.T) {
 	tests := []struct {
 		prevAnalysisCode inst.AnalysisCode
@@ -324,6 +319,25 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 			ersEnabled: false,
 			analysisEntry: &inst.DetectionAnalysis{
 				Analysis:         inst.PrimarySemiSyncBlocked,
+				AnalyzedKeyspace: keyspace,
+				AnalyzedShard:    shard,
+			},
+			wantRecoveryFunction: recoverDeadPrimaryFunc,
+			wantRecoverySkipCode: RecoverySkipERSDisabled,
+		}, {
+			name:       "PrimaryTabletUnreachableByQuorum with ERS enabled",
+			ersEnabled: true,
+			analysisEntry: &inst.DetectionAnalysis{
+				Analysis:         inst.PrimaryTabletUnreachableByQuorum,
+				AnalyzedKeyspace: keyspace,
+				AnalyzedShard:    shard,
+			},
+			wantRecoveryFunction: recoverDeadPrimaryFunc,
+		}, {
+			name:       "PrimaryTabletUnreachableByQuorum with ERS disabled",
+			ersEnabled: false,
+			analysisEntry: &inst.DetectionAnalysis{
+				Analysis:         inst.PrimaryTabletUnreachableByQuorum,
 				AnalyzedKeyspace: keyspace,
 				AnalyzedShard:    shard,
 			},
@@ -715,6 +729,15 @@ func TestShardWideRecoveryIgnoredTablets(t *testing.T) {
 		{
 			name:        "PrimaryDiskStalled does NOT skip primary refresh",
 			analysis:    inst.PrimaryDiskStalled,
+			wantIgnored: false,
+		},
+		{
+			// The quorum case is specifically a vttablet crash with mysqld
+			// still up: the vttablet may restart between detection and
+			// recovery, so the primary must be refreshed under the shard
+			// lock for checkIfAlreadyFixed to abort on a recovered primary.
+			name:        "PrimaryTabletUnreachableByQuorum does NOT skip primary refresh",
+			analysis:    inst.PrimaryTabletUnreachableByQuorum,
 			wantIgnored: false,
 		},
 	}
