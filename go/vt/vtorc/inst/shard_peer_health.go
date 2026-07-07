@@ -24,9 +24,10 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/protoutil"
+	"vitess.io/vitess/go/vt/topo/topoproto"
+
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
 // staleShardPeerRecordTTL bounds how long an observer's report is retained before it is
