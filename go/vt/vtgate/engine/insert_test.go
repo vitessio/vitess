@@ -2414,7 +2414,15 @@ func TestInsertSelectShardingCases(t *testing.T) {
 
 		// the query exec
 		`ResolveDestinations sks1 [value:"0"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
+<<<<<<< HEAD
 		fmt.Sprintf(`ExecuteMultiShard sks1.-20: prefix values (:_c0_0) {_c0_0: %v} true true`, sqltypes.Int64BindVariable(1))})
+||||||| parent of 1c5bf8d943 (vtgate: do not autocommit per-chunk in streaming insert-select (#20497))
+		fmt.Sprintf(`ExecuteMultiShard sks1.-20: prefix values (:_c0_0) {_c0_0: %v} true true`, sqltypes.Int64BindVariable(1)),
+	})
+=======
+		fmt.Sprintf(`ExecuteMultiShard sks1.-20: prefix values (:_c0_0) {_c0_0: %v} true false`, sqltypes.Int64BindVariable(1)),
+	})
+>>>>>>> 1c5bf8d943 (vtgate: do not autocommit per-chunk in streaming insert-select (#20497))
 
 	// sks1 and uks2
 	ins.Input = uRoute
@@ -2443,7 +2451,15 @@ func TestInsertSelectShardingCases(t *testing.T) {
 
 		// the query exec
 		`ResolveDestinations sks1 [value:"0"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
+<<<<<<< HEAD
 		fmt.Sprintf(`ExecuteMultiShard sks1.-20: prefix values (:_c0_0) {_c0_0: %v} true true`, sqltypes.Int64BindVariable(1))})
+||||||| parent of 1c5bf8d943 (vtgate: do not autocommit per-chunk in streaming insert-select (#20497))
+		fmt.Sprintf(`ExecuteMultiShard sks1.-20: prefix values (:_c0_0) {_c0_0: %v} true true`, sqltypes.Int64BindVariable(1)),
+	})
+=======
+		fmt.Sprintf(`ExecuteMultiShard sks1.-20: prefix values (:_c0_0) {_c0_0: %v} true false`, sqltypes.Int64BindVariable(1)),
+	})
+>>>>>>> 1c5bf8d943 (vtgate: do not autocommit per-chunk in streaming insert-select (#20497))
 
 	// uks1 and sks2
 	ins = newInsertSelect(
@@ -2480,7 +2496,15 @@ func TestInsertSelectShardingCases(t *testing.T) {
 
 		// the query exec
 		`ResolveDestinations uks1 [] Destinations:DestinationAllShards()`,
+<<<<<<< HEAD
 		fmt.Sprintf(`ExecuteMultiShard uks1.0: prefix values (:_c0_0) {_c0_0: %v} true true`, sqltypes.Int64BindVariable(1))})
+||||||| parent of 1c5bf8d943 (vtgate: do not autocommit per-chunk in streaming insert-select (#20497))
+		fmt.Sprintf(`ExecuteMultiShard uks1.0: prefix values (:_c0_0) {_c0_0: %v} true true`, sqltypes.Int64BindVariable(1)),
+	})
+=======
+		fmt.Sprintf(`ExecuteMultiShard uks1.0: prefix values (:_c0_0) {_c0_0: %v} true false`, sqltypes.Int64BindVariable(1)),
+	})
+>>>>>>> 1c5bf8d943 (vtgate: do not autocommit per-chunk in streaming insert-select (#20497))
 
 	// uks1 and uks2
 	ins.Input = uRoute
@@ -2509,5 +2533,13 @@ func TestInsertSelectShardingCases(t *testing.T) {
 
 		// the query exec
 		`ResolveDestinations uks1 [] Destinations:DestinationAllShards()`,
+<<<<<<< HEAD
 		fmt.Sprintf(`ExecuteMultiShard uks1.0: prefix values (:_c0_0) {_c0_0: %v} true true`, sqltypes.Int64BindVariable(1))})
+||||||| parent of 1c5bf8d943 (vtgate: do not autocommit per-chunk in streaming insert-select (#20497))
+		fmt.Sprintf(`ExecuteMultiShard uks1.0: prefix values (:_c0_0) {_c0_0: %v} true true`, sqltypes.Int64BindVariable(1)),
+	})
+=======
+		fmt.Sprintf(`ExecuteMultiShard uks1.0: prefix values (:_c0_0) {_c0_0: %v} true false`, sqltypes.Int64BindVariable(1)),
+	})
+>>>>>>> 1c5bf8d943 (vtgate: do not autocommit per-chunk in streaming insert-select (#20497))
 }

@@ -131,7 +131,7 @@ func (ins *Insert) insertIntoUnshardedTable(ctx context.Context, vcursor VCursor
 		return nil, err
 	}
 
-	return ins.executeUnshardedTableQuery(ctx, vcursor, ins, bindVars, ins.Query, uint64(insertID))
+	return ins.executeUnshardedTableQuery(ctx, vcursor, ins, bindVars, ins.Query, uint64(insertID), true /* canAutocommit */)
 }
 
 func (ins *Insert) insertIntoShardedTable(
