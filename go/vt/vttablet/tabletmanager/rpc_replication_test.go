@@ -170,7 +170,8 @@ func TestDemotePrimaryWaitingForSemiSyncUnblock(t *testing.T) {
 	fakeDb.AddQuery("SELECT /*+ MAX_EXECUTION_TIME(500) */ variable_name, variable_value FROM performance_schema.global_status WHERE REGEXP_LIKE(variable_name, 'Rpl_semi_sync_(source|master)_(wait_sessions|yes_tx)')", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"),
 		"Rpl_semi_sync_source_wait_sessions|1",
-		"Rpl_semi_sync_source_yes_tx|5"))
+		"Rpl_semi_sync_source_yes_tx|5",
+	))
 
 	// Verify that in the beginning the tablet is serving.
 	require.True(t, tm.QueryServiceControl.IsServing())
@@ -200,7 +201,8 @@ func TestDemotePrimaryWaitingForSemiSyncUnblock(t *testing.T) {
 	fakeDb.AddQuery("SELECT /*+ MAX_EXECUTION_TIME(1000) */ variable_name, variable_value FROM performance_schema.global_status WHERE REGEXP_LIKE(variable_name, 'Rpl_semi_sync_(source|master)_(wait_sessions|yes_tx)')", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"),
 		"Rpl_semi_sync_source_wait_sessions|0",
-		"Rpl_semi_sync_source_yes_tx|5"))
+		"Rpl_semi_sync_source_yes_tx|5",
+	))
 	close(ch)
 
 	// This should unblock the demote primary operation eventually.
@@ -235,14 +237,16 @@ func TestDemotePrimaryWithSemiSyncProgressDetection(t *testing.T) {
 		fakeDb.AddQuery("SELECT /*+ MAX_EXECUTION_TIME(1000) */ variable_name, variable_value FROM performance_schema.global_status WHERE REGEXP_LIKE(variable_name, 'Rpl_semi_sync_(source|master)_(wait_sessions|yes_tx)')", sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"),
 			"Rpl_semi_sync_source_wait_sessions|1",
-			"Rpl_semi_sync_source_yes_tx|5"))
+			"Rpl_semi_sync_source_yes_tx|5",
+		))
 	}
 	// Next calls: waiting sessions present, but ackedTrxs=6 (progress!).
 	for range 10 {
 		fakeDb.AddQuery("SELECT /*+ MAX_EXECUTION_TIME(1000) */ variable_name, variable_value FROM performance_schema.global_status WHERE REGEXP_LIKE(variable_name, 'Rpl_semi_sync_(source|master)_(wait_sessions|yes_tx)')", sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"),
 			"Rpl_semi_sync_source_wait_sessions|1",
-			"Rpl_semi_sync_source_yes_tx|6"))
+			"Rpl_semi_sync_source_yes_tx|6",
+		))
 	}
 
 	// Verify that in the beginning the tablet is serving.
@@ -274,8 +278,7 @@ func TestDemotePrimaryWithSemiSyncProgressDetection(t *testing.T) {
 }
 
 func TestDemotePrimaryRollbackUsesDetachedContext(t *testing.T) {
-	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-	t.Cleanup(cancel)
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	tm := newTestTM(t, ts, 1, "ks", "0", nil)
 	err := tm.ChangeType(ctx, topodatapb.TabletType_PRIMARY, false)
@@ -335,8 +338,7 @@ func TestDemotePrimaryRollbackUsesDetachedContext(t *testing.T) {
 }
 
 func TestDemotePrimaryForceSemiSyncRollbackUsesDetachedContext(t *testing.T) {
-	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-	t.Cleanup(cancel)
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	tm := newTestTM(t, ts, 1, "ks", "0", nil)
 	err := tm.ChangeType(ctx, topodatapb.TabletType_PRIMARY, false)
@@ -419,13 +421,15 @@ func TestDemotePrimaryWhenSemiSyncBecomesUnblockedBetweenChecks(t *testing.T) {
 	fakeDb.AddQuery("SELECT /*+ MAX_EXECUTION_TIME(1000) */ variable_name, variable_value FROM performance_schema.global_status WHERE REGEXP_LIKE(variable_name, 'Rpl_semi_sync_(source|master)_(wait_sessions|yes_tx)')", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"),
 		"Rpl_semi_sync_source_wait_sessions|2",
-		"Rpl_semi_sync_source_yes_tx|5"))
+		"Rpl_semi_sync_source_yes_tx|5",
+	))
 	// Second and subsequent calls: no waiting sessions (unblocked!).
 	for range 10 {
 		fakeDb.AddQuery("SELECT /*+ MAX_EXECUTION_TIME(1000) */ variable_name, variable_value FROM performance_schema.global_status WHERE REGEXP_LIKE(variable_name, 'Rpl_semi_sync_(source|master)_(wait_sessions|yes_tx)')", sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"),
 			"Rpl_semi_sync_source_wait_sessions|0",
-			"Rpl_semi_sync_source_yes_tx|5"))
+			"Rpl_semi_sync_source_yes_tx|5",
+		))
 	}
 
 	// Verify that in the beginning the tablet is serving.
