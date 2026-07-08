@@ -287,9 +287,12 @@ func rejectInternalTablePrepare(stmt *sqlparser.PrepareStmt, parser *sqlparser.P
 		return nil
 	}
 
+	// The vitess grammar is a subset of MySQL's, so a literal it cannot parse
+	// may still be valid on the backend. Such literals pass through unchecked,
+	// like dynamic PREPARE.
 	preparedStmt, err := parser.Parse(preparedQuery)
 	if err != nil {
-		return err
+		return nil
 	}
 
 	return rejectInternalTablePreparedStatement(preparedStmt, preparedQuery, parser)

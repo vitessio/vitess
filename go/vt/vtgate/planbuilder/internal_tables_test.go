@@ -128,6 +128,15 @@ begin
 	execute stmt;
 end`,
 		},
+		{
+			name: "literal outside the vitess grammar",
+			query: `
+create procedure p()
+begin
+	prepare stmt from 'handler t open';
+	execute stmt;
+end`,
+		},
 	}
 
 	for _, tt := range tests {
