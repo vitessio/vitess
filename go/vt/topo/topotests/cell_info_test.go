@@ -49,7 +49,7 @@ func TestCellInfo(t *testing.T) {
 	var cells []string
 	cells, err = ts.ExpandCells(ctx, cell)
 	require.NoError(t, err)
-	require.EqualValues(t, []string{"cell1"}, cells)
+	require.Equal(t, []string{"cell1"}, cells)
 
 	// Update the Server Address.
 	if err := ts.UpdateCellInfoFields(ctx, cell, func(ci *topodatapb.CellInfo) error {
@@ -154,7 +154,7 @@ func TestExpandCells(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 			}
-			require.EqualValues(t, tCase.cellsOut, cells)
+			require.Equal(t, tCase.cellsOut, cells)
 		})
 	}
 
@@ -241,14 +241,14 @@ func TestDeleteCellInfo(t *testing.T) {
 
 			err := ts.DeleteCellInfo(requestCtx, "unreachable", tt.force)
 			if tt.shouldErr {
-				assert.Error(t, err, "force=%t", tt.force)
+				require.Error(t, err, "force=%t", tt.force)
 			} else {
-				assert.NoError(t, err, "force=%t", tt.force)
+				require.NoError(t, err, "force=%t", tt.force)
 			}
 
 			ci, err := ts.GetCellInfo(ctx, "unreachable", true /* strongRead */)
 			if tt.shouldExist {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.NotNil(t, ci)
 			} else {
 				assert.True(t, topo.IsErrType(err, topo.NoNode), "expected cell %q to not exist", "unreachable")

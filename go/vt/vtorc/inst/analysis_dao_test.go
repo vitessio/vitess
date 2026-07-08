@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
+	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/test"
 )
@@ -1078,7 +1079,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 			}
 			require.NoError(t, err)
 			if tt.codeWanted == NoProblem {
-				require.Len(t, got, 0)
+				require.Empty(t, got)
 				return
 			}
 			require.Len(t, got, 1)
@@ -1259,7 +1260,7 @@ func TestGetDetectionAnalysis(t *testing.T) {
 			got, err := GetDetectionAnalysis("", "", &DetectionAnalysisHints{})
 			require.NoError(t, err)
 			if tt.codeWanted == NoProblem {
-				require.Len(t, got, 0)
+				require.Empty(t, got)
 				return
 			}
 			require.Len(t, got, 1)
@@ -1268,6 +1269,74 @@ func TestGetDetectionAnalysis(t *testing.T) {
 			require.Equal(t, tt.shardWanted, got[0].AnalyzedShard)
 		})
 	}
+}
+
+// TestGetDetectionAnalysisShardEligibleObservers verifies that shard_eligible_observers — the
+// expected observer count the quorum gate feeds to EvaluatePrimaryQuorum — counts only the shard's
+// REPLICA/RDONLY tablets (the shard-peer health voters). A SPARE (or any non-REPLICA/RDONLY) tablet
+// in the shard must not inflate it: topo.IsReplicaType(SPARE) is true, so an IsReplicaType-based
+// count would include it and could wrongly block an ERS even when every actual observer agrees the
+// primary is down. The count is deliberately NOT gated on the (dynamic) quorum-ERS flag: the
+// consumers re-read the flag later in the cycle, so a flag flip mid-cycle must still see the real
+// denominator rather than a baked-in 0 that would degenerate the strict-majority gate.
+func TestGetDetectionAnalysisShardEligibleObservers(t *testing.T) {
+	defer resetPrimaryHealthState()
+	defer db.ClearVTOrcDatabase()
+
+	// Seed the standard ks/0 topology (1 PRIMARY + 2 REPLICA + 1 RDONLY = 3 eligible observers) and
+	// drop the primary's MySQL record so it surfaces as an InvalidPrimary row we can read.
+	for _, query := range append(initialSQL, `delete from database_instance where port = 6714`) {
+		_, err := db.ExecVTOrc(query)
+		require.NoError(t, err)
+	}
+	// Add a SPARE tablet to the same shard. It must NOT be counted as an eligible observer.
+	require.NoError(t, SaveTablet(&topodatapb.Tablet{
+		Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 399},
+		Keyspace:      "ks",
+		Shard:         "0",
+		Type:          topodatapb.TabletType_SPARE,
+		Hostname:      "localhost",
+		MysqlHostname: "localhost",
+		MysqlPort:     6799,
+	}))
+
+	// primaryEligibleObservers runs the real analysis query and returns the ks/0 primary row's
+	// ShardEligibleObservers count.
+	primaryEligibleObservers := func(t *testing.T) uint {
+		t.Helper()
+		got, err := GetDetectionAnalysis("", "", &DetectionAnalysisHints{})
+		require.NoError(t, err)
+		var primaryAnalysis *DetectionAnalysis
+		for _, a := range got {
+			if a.AnalyzedKeyspace == "ks" && a.AnalyzedShard == "0" && a.TabletType == topodatapb.TabletType_PRIMARY {
+				primaryAnalysis = a
+				break
+			}
+		}
+		require.NotNil(t, primaryAnalysis, "expected an analysis row for the ks/0 primary")
+		return primaryAnalysis.ShardEligibleObservers
+	}
+
+	// Even with quorum ERS disabled (the default), the count is computed: the flag is dynamic and
+	// its consumers re-read it later in the analysis cycle, so the denominator must never be a
+	// baked-in 0 just because the flag was off when the query was built.
+	assert.Equal(t, uint(3), primaryEligibleObservers(t),
+		"shard_eligible_observers must be computed regardless of the quorum-ERS flag")
+
+	// With quorum ERS enabled, only the shard's 2 REPLICA + 1 RDONLY tablets are eligible observers;
+	// the SPARE and PRIMARY must be excluded.
+	config.SetERSOnTabletUnreachable(true)
+	t.Cleanup(func() { config.SetERSOnTabletUnreachable(false) })
+	assert.Equal(t, uint(3), primaryEligibleObservers(t),
+		"only the shard's 2 REPLICA + 1 RDONLY tablets are eligible observers; the SPARE and PRIMARY must be excluded")
+
+	// ShardEligibleObserverCount — the standalone helper the /api/shard-tablet-health-quorum endpoint uses to source
+	// the same expected observer count without an analysis row — must agree with the analysis path so
+	// the endpoint's verdict matches the actionable ERS decision. It is not feature-gated.
+	count, err := ShardEligibleObserverCount("ks", "0")
+	require.NoError(t, err)
+	assert.Equal(t, 3, count,
+		"ShardEligibleObserverCount must match the analysis path: 2 REPLICA + 1 RDONLY, excluding the SPARE and PRIMARY")
 }
 
 // TestAuditInstanceAnalysisInChangelog tests the functionality of the auditInstanceAnalysisInChangelog function
@@ -1336,7 +1405,7 @@ func TestAuditInstanceAnalysisInChangelog(t *testing.T) {
 					continue
 				}
 				require.NoError(t, err)
-				require.EqualValues(t, upd.writeCounterExpectation, analysisChangeWriteCounter.Get()-before)
+				require.Equal(t, upd.writeCounterExpectation, analysisChangeWriteCounter.Get()-before)
 			}
 		})
 	}
@@ -1356,8 +1425,69 @@ func TestPostProcessAnalyses(t *testing.T) {
 		},
 	}
 
+	// Shared fixtures for the QuorumDetail cases below. The quorum matcher records QuorumDetail as a
+	// side effect while matching; postProcessAnalyses folds it into the winning quorum analysis and
+	// drops it from any other analysis that won instead.
+	quorumDescription := "Primary vttablet is unreachable by VTOrc and confirmed down by a quorum of the shard's replicas"
+	quorumDetail := &QuorumResult{
+		PrimaryAlias: "zone1-0000000100", Keyspace: keyspace, Shard: shard0,
+		Down: true, DownVotes: 1, TotalObservers: 1, Fraction: 1, MinObservers: 1,
+		Observers: []ObserverVote{{Alias: "zone1-0000000101", Vote: voteDown, ConsecutiveFailures: 5, Fresh: true}},
+	}
+
+	// Cold-start fixtures: VTOrc has never reached the primary's vttablet (no instance row), so
+	// the analysis is InvalidPrimary while the reachable replicas' fresh shard-peer reports can
+	// still confirm the primary down. postProcessAnalyses upgrades such an analysis to
+	// PrimaryTabletUnreachableByQuorum so the recovery can run; with absent quorum data or the
+	// feature disabled it must stay InvalidPrimary (fail closed).
+	// invalidPrimaryAnalysis builds the cold-start primary analysis. CountReplicas is left 0 (for a
+	// real InvalidPrimary it is joined through the primary's database_instance row, which VTOrc never
+	// created); ShardEligibleObservers carries the shard's REPLICA/RDONLY count from the analysis
+	// query, which is the expected observer population the quorum gate must use.
+	invalidPrimaryAnalysis := func(shardEligibleObservers uint) *DetectionAnalysis {
+		return &DetectionAnalysis{
+			Analysis:               InvalidPrimary,
+			Description:            "VTOrc hasn't been able to reach the primary even once since restart/shutdown",
+			AnalyzedInstanceAlias:  &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+			AnalyzedKeyspace:       keyspace,
+			AnalyzedShard:          shard0,
+			TabletType:             topodatapb.TabletType_PRIMARY,
+			ShardEligibleObservers: shardEligibleObservers,
+		}
+	}
+	// shutdownInvalidPrimaryAnalysis is an InvalidPrimary whose vttablet was gracefully shut down
+	// (TabletShutdownTime stamped), so the quorum path must fail closed and leave it InvalidPrimary.
+	shutdownInvalidPrimaryAnalysis := func(shardEligibleObservers uint) *DetectionAnalysis {
+		a := invalidPrimaryAnalysis(shardEligibleObservers)
+		a.IsTabletShutdown = true
+		return a
+	}
+	upgradedQuorumDetail := &QuorumResult{
+		PrimaryAlias: "zone1-0000000100", Keyspace: keyspace, Shard: shard0,
+		Down: true, DownVotes: 2, TotalObservers: 2, EligibleObservers: 2, ExpectedObservers: 2, Fraction: 1, MinObservers: 1,
+		Observers: []ObserverVote{
+			{Alias: "zone1-0000000101", TabletType: "REPLICA", Vote: voteDown, ConsecutiveFailures: 5, Fresh: true},
+			{Alias: "zone1-0000000102", TabletType: "REPLICA", Vote: voteDown, ConsecutiveFailures: 5, Fresh: true},
+		},
+	}
+	seedQuorumDown := func(t *testing.T) {
+		t.Helper()
+		resetShardPeerHealth()
+		t.Cleanup(resetShardPeerHealth)
+		now := time.Now()
+		primary := &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}
+		RecordShardPeerHealth(&topodatapb.TabletAlias{Cell: "zone1", Uid: 101}, topodatapb.TabletType_REPLICA, keyspace, shard0, reportFor(primary, 5, 0, now), now)
+		RecordShardPeerHealth(&topodatapb.TabletAlias{Cell: "zone1", Uid: 102}, topodatapb.TabletType_REPLICA, keyspace, shard0, reportFor(primary, 5, 0, now), now)
+	}
+	enableERSOnTabletUnreachable := func(t *testing.T) {
+		t.Helper()
+		config.SetERSOnTabletUnreachable(true)
+		t.Cleanup(func() { config.SetERSOnTabletUnreachable(false) })
+	}
+
 	tests := []struct {
 		name     string
+		prep     func(t *testing.T)
 		analyses []*DetectionAnalysis
 		want     []*DetectionAnalysis
 	}{
@@ -1498,13 +1628,147 @@ func TestPostProcessAnalyses(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "QuorumDetail dropped from a non-quorum analysis",
+			analyses: []*DetectionAnalysis{
+				{
+					Analysis:              DeadPrimary,
+					Description:           "Primary cannot be reached by vtorc and none of its replicas is replicating",
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					AnalyzedKeyspace:      keyspace,
+					AnalyzedShard:         shard0,
+					TabletType:            topodatapb.TabletType_PRIMARY,
+					QuorumDetail: &QuorumResult{
+						PrimaryAlias: "zone1-0000000100", Keyspace: keyspace, Shard: shard0,
+						Down: true, DownVotes: 2, TotalObservers: 2,
+					},
+				},
+			},
+			want: []*DetectionAnalysis{
+				{
+					Analysis:              DeadPrimary,
+					Description:           "Primary cannot be reached by vtorc and none of its replicas is replicating",
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					AnalyzedKeyspace:      keyspace,
+					AnalyzedShard:         shard0,
+					TabletType:            topodatapb.TabletType_PRIMARY,
+				},
+			},
+		},
+		{
+			name: "QuorumDetail summary folded into quorum analysis description",
+			analyses: []*DetectionAnalysis{
+				{
+					Analysis:              PrimaryTabletUnreachableByQuorum,
+					Description:           quorumDescription,
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					AnalyzedKeyspace:      keyspace,
+					AnalyzedShard:         shard0,
+					TabletType:            topodatapb.TabletType_PRIMARY,
+					QuorumDetail:          quorumDetail,
+				},
+			},
+			want: []*DetectionAnalysis{
+				{
+					Analysis:              PrimaryTabletUnreachableByQuorum,
+					Description:           quorumDescription + " [" + quorumDetail.Summary() + "]",
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					AnalyzedKeyspace:      keyspace,
+					AnalyzedShard:         shard0,
+					TabletType:            topodatapb.TabletType_PRIMARY,
+					QuorumDetail:          quorumDetail,
+				},
+			},
+		},
+		{
+			name: "InvalidPrimary upgraded to PrimaryTabletUnreachableByQuorum when a fresh quorum confirms the primary down",
+			prep: func(t *testing.T) {
+				enableERSOnTabletUnreachable(t)
+				seedQuorumDown(t)
+			},
+			// The shard has two eligible (REPLICA/RDONLY) observers (ShardEligibleObservers, from the
+			// analysis query); both report the primary down. The healthy replicas are NoProblem and so
+			// are absent from the analysis result — only the InvalidPrimary primary is present.
+			analyses: []*DetectionAnalysis{invalidPrimaryAnalysis(2)},
+			want: []*DetectionAnalysis{
+				{
+					Analysis:               PrimaryTabletUnreachableByQuorum,
+					Description:            quorumDescription + " [" + upgradedQuorumDetail.Summary() + "]",
+					AnalyzedInstanceAlias:  &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					AnalyzedKeyspace:       keyspace,
+					AnalyzedShard:          shard0,
+					TabletType:             topodatapb.TabletType_PRIMARY,
+					ShardEligibleObservers: 2,
+					QuorumDetail:           upgradedQuorumDetail,
+				},
+			},
+		},
+		{
+			// Regression for the cold-start minority hole: the shard has three eligible observers
+			// (ShardEligibleObservers) but only one fresh down report. The expected count must come
+			// from the shard's REPLICA/RDONLY population, NOT from the analysis result — the healthy
+			// replicas are NoProblem and dropped before postProcessAnalyses, so a result-derived count
+			// would be 0 and let this single report become a 1/1 quorum. With the real count of 3, one
+			// report is a minority (1 of 3) and must NOT upgrade to a quorum failover.
+			name: "InvalidPrimary stays when only a minority of the shard's observers report down",
+			prep: func(t *testing.T) {
+				enableERSOnTabletUnreachable(t)
+				resetShardPeerHealth()
+				t.Cleanup(resetShardPeerHealth)
+				now := time.Now()
+				primary := &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}
+				RecordShardPeerHealth(&topodatapb.TabletAlias{Cell: "zone1", Uid: 101}, topodatapb.TabletType_REPLICA, keyspace, shard0, reportFor(primary, 5, 0, now), now)
+			},
+			analyses: []*DetectionAnalysis{invalidPrimaryAnalysis(3)},
+			want:     []*DetectionAnalysis{invalidPrimaryAnalysis(3)},
+		},
+		{
+			name: "InvalidPrimary stays without quorum data (fail closed)",
+			prep: func(t *testing.T) {
+				enableERSOnTabletUnreachable(t)
+				resetShardPeerHealth()
+			},
+			analyses: []*DetectionAnalysis{invalidPrimaryAnalysis(2)},
+			want:     []*DetectionAnalysis{invalidPrimaryAnalysis(2)},
+		},
+		{
+			name: "InvalidPrimary stays when quorum ERS is disabled",
+			prep: func(t *testing.T) {
+				seedQuorumDown(t)
+			},
+			analyses: []*DetectionAnalysis{invalidPrimaryAnalysis(2)},
+			want:     []*DetectionAnalysis{invalidPrimaryAnalysis(2)},
+		},
+		{
+			// A gracefully shut down primary must NOT be upgraded to a quorum failover even though a
+			// fresh quorum of its shard peers reports its vttablet down — the shutdown was an operator
+			// action, not a crash. Without the TabletShutdownTime guard this would become a
+			// PrimaryTabletUnreachableByQuorum and run ERS.
+			name: "InvalidPrimary stays when the primary was intentionally shut down",
+			prep: func(t *testing.T) {
+				enableERSOnTabletUnreachable(t)
+				seedQuorumDown(t)
+			},
+			analyses: []*DetectionAnalysis{shutdownInvalidPrimaryAnalysis(2)},
+			want:     []*DetectionAnalysis{shutdownInvalidPrimaryAnalysis(2)},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			if tt.prep != nil {
+				tt.prep(t)
+			}
 			if tt.want == nil {
 				tt.want = tt.analyses
 			}
 			result := postProcessAnalyses(tt.analyses, clusters)
+			// The quorum upgrade evaluates at time.Now(); zero the timestamp so expected
+			// QuorumResult fixtures compare deterministically.
+			for _, analysis := range result {
+				if analysis.QuorumDetail != nil {
+					analysis.QuorumDetail.EvaluatedAt = time.Time{}
+				}
+			}
 			require.ElementsMatch(t, tt.want, result)
 		})
 	}

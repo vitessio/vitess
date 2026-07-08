@@ -57,8 +57,8 @@ func TestDbNameOverride(t *testing.T) {
 
 	qr, err := mcmp.VtConn.ExecuteFetch("SELECT distinct database() FROM information_schema.tables WHERE table_schema = database()", 1000, true)
 
-	require.Nil(t, err)
-	assert.Equal(t, 1, len(qr.Rows), "did not get enough rows back")
+	require.NoError(t, err)
+	assert.Len(t, qr.Rows, 1, "did not get enough rows back")
 	assert.Equal(t, "vt_ks", qr.Rows[0][0].ToString())
 }
 
@@ -188,7 +188,7 @@ func TestSystemSchemaFieldDatabaseInOLAP(t *testing.T) {
 	utils.Exec(t, mcmp.VtConn, "set workload = olap")
 	olap := utils.Exec(t, mcmp.VtConn, query)
 
-	require.Equal(t, len(oltp.Fields), len(olap.Fields))
+	require.Len(t, olap.Fields, len(oltp.Fields))
 	for i := range oltp.Fields {
 		assert.Equal(t, oltp.Fields[i].Database, olap.Fields[i].Database,
 			"field %q Database differs between OLTP and OLAP", oltp.Fields[i].Name)
@@ -208,7 +208,7 @@ func TestMultipleSchemaPredicates(t *testing.T) {
 		"on c.table_schema = t.table_schema and c.table_name = t.table_name "+
 		"where t.table_schema = '%s' and c.table_schema = '%s' and c.table_schema = '%s' and c.table_schema = '%s'", keyspaceName, keyspaceName, keyspaceName, keyspaceName)
 	qr1 := utils.Exec(t, mcmp.VtConn, query)
-	require.EqualValues(t, 4, len(qr1.Fields))
+	require.Len(t, qr1.Fields, 4)
 
 	// test a query with two keyspace names
 	query = fmt.Sprintf("select t.table_schema,t.table_name,c.column_name,c.column_type "+

@@ -151,7 +151,7 @@ func AssertSingleRowIsReturned(t *testing.T, conn *mysql.Conn, predicate string,
 	t.Run(predicate, func(t *testing.T) {
 		qr, err := conn.ExecuteFetch("SELECT distinct table_schema FROM information_schema.tables WHERE "+predicate, 1000, true)
 		require.NoError(t, err)
-		assert.Equal(t, 1, len(qr.Rows), "did not get enough rows back")
+		assert.Len(t, qr.Rows, 1, "did not get enough rows back")
 		assert.Equal(t, expectedKs, qr.Rows[0][0].ToString())
 	})
 }
@@ -450,7 +450,7 @@ func RunSQLs(t *testing.T, sqls []string, tablet *cluster.Vttablet, db string) e
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutDuration*time.Second)
 	defer cancel()
 	conn, err := mysql.Connect(ctx, &tabletParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	// Run SQLs
@@ -469,7 +469,7 @@ func RunSQL(t *testing.T, sql string, tablet *cluster.Vttablet, db string) (*sql
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	conn, err := mysql.Connect(ctx, &tabletParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	// RunSQL

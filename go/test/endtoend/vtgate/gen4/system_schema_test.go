@@ -30,22 +30,22 @@ import (
 func TestDbNameOverride(t *testing.T) {
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	// Test query in OLTP workload (default).
 	qr, err := conn.ExecuteFetch("SELECT distinct database() FROM information_schema.tables WHERE table_schema = database()", 1000, true)
 
-	require.Nil(t, err)
-	assert.Equal(t, 1, len(qr.Rows), "did not get enough rows back")
+	require.NoError(t, err)
+	assert.Len(t, qr.Rows, 1, "did not get enough rows back")
 	assert.Equal(t, "vt_ks", qr.Rows[0][0].ToString())
 
 	// Test again in OLAP workload (default).
 	utils.Exec(t, conn, "SET workload=OLAP")
 	qr, err = conn.ExecuteFetch("SELECT distinct database() FROM information_schema.tables WHERE table_schema = database()", 1000, true)
 
-	require.Nil(t, err)
-	assert.Equal(t, 1, len(qr.Rows), "did not get enough rows back")
+	require.NoError(t, err)
+	assert.Len(t, qr.Rows, 1, "did not get enough rows back")
 	assert.Equal(t, "vt_ks", qr.Rows[0][0].ToString())
 }
 
@@ -78,7 +78,7 @@ func assertSingleRowIsReturned(t *testing.T, conn *mysql.Conn, predicate string,
 	t.Run(predicate, func(t *testing.T) {
 		qr, err := conn.ExecuteFetch("SELECT distinct table_schema FROM information_schema.tables WHERE "+predicate, 1000, true)
 		require.NoError(t, err)
-		assert.Equal(t, 1, len(qr.Rows), "did not get enough rows back")
+		assert.Len(t, qr.Rows, 1, "did not get enough rows back")
 		assert.Equal(t, expectedKs, qr.Rows[0][0].ToString())
 	})
 }
@@ -190,7 +190,7 @@ func TestMultipleSchemaPredicates(t *testing.T) {
 		"on c.table_schema = t.table_schema and c.table_name = t.table_name "+
 		"where t.table_schema = '%s' and c.table_schema = '%s' and c.table_schema = '%s' and c.table_schema = '%s'", shardedKs, shardedKs, shardedKs, shardedKs)
 	qr1 := utils.Exec(t, conn, query)
-	require.EqualValues(t, 4, len(qr1.Fields))
+	require.Len(t, qr1.Fields, 4)
 
 	// test a query with two keyspace names
 	query = fmt.Sprintf("select t.table_schema,t.table_name,c.column_name,c.column_type "+

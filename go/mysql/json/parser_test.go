@@ -332,7 +332,7 @@ func TestParserParse(t *testing.T) {
 		require.Equal(t, "array", tp.String())
 		a, ok := v.Array()
 		require.True(t, ok, "unexpected error")
-		require.Zerof(t, len(a), "unexpected number of items in empty array: %d; want 0", len(a))
+		require.Emptyf(t, a, "unexpected number of items in empty array: %d; want 0", len(a))
 		require.Equalf(t, "[]", v.String(), "unexpected string representation of empty array")
 	})
 

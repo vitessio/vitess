@@ -115,5 +115,5 @@ func TestParseBuildTime(t *testing.T) {
 
 func TestBuildVersionStats(t *testing.T) {
 	buildVersion := statsBuildVersion.Get()
-	assert.Equal(t, buildVersion, versionName)
+	assert.Equal(t, versionName, buildVersion)
 }

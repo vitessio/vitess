@@ -190,13 +190,13 @@ func TestFindPositionsOfAllCandidates(t *testing.T) {
 			t.Parallel()
 
 			actual, isGTIDBased, err := FindPositionsOfAllCandidates(tt.statusMap, tt.primaryStatusMap)
-			require.EqualValues(t, tt.expectedGTIDBased, isGTIDBased)
+			require.Equal(t, tt.expectedGTIDBased, isGTIDBased)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			keys := make([]string, 0, len(actual))
 			for key := range actual {
@@ -229,7 +229,7 @@ func TestFindPositionsOfAllCandidates_ErrorNotDuplicated(t *testing.T) {
 	require.Error(t, err)
 
 	cause := vterrors.Cause(err)
-	require.NotNil(t, cause)
+	require.Error(t, cause)
 	causeMsg := cause.Error()
 	assert.Equal(t, 1, strings.Count(err.Error(), causeMsg),
 		"cause message must appear exactly once in the wrapped error")
@@ -1510,10 +1510,10 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tt.expectedStatusMap, res.statusMap, "StopReplicationStatus mismatch")
 			assert.Equal(t, tt.expectedPrimaryStatusMap, res.primaryStatusMap, "PrimaryStatusMap mismatch")
-			require.Equal(t, len(tt.expectedTabletsReachable), len(res.reachableTablets), "TabletsReached length mismatch")
+			require.Len(t, res.reachableTablets, len(tt.expectedTabletsReachable), "TabletsReached length mismatch")
 			for idx, tablet := range res.reachableTablets {
 				assert.True(t, topoproto.IsTabletInList(tablet, tt.expectedTabletsReachable), "TabletsReached[%d] not found - %s", idx, topoproto.TabletAliasString(tablet.Alias))
 			}
@@ -1602,7 +1602,7 @@ func TestReplicaWasRunning(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tt.expected, actual)
 		})
 	}

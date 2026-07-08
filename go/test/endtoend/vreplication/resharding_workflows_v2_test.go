@@ -220,29 +220,29 @@ func testWorkflowUpdate(t *testing.T) {
 	require.Error(t, err)
 	// Change the tablet-types to rdonly.
 	resp, err := vc.VtctldClient.ExecuteCommandWithOutput("workflow", "--keyspace", defaultTargetKs, "update", "--workflow", defaultWorkflowName, "--tablet-types", "rdonly")
-	require.NoError(t, err, err)
+	require.NoError(t, err)
 	// Confirm that we changed the workflow.
 	var ures vtctldatapb.WorkflowUpdateResponse
 	require.NoError(t, err)
 	err = protojson.Unmarshal([]byte(resp), &ures)
 	require.NoError(t, err)
-	require.Greater(t, len(ures.Details), 0)
+	require.NotEmpty(t, ures.Details)
 	require.True(t, ures.Details[0].Changed)
 	// Change tablet-types back to primary,replica,rdonly.
 	resp, err = vc.VtctldClient.ExecuteCommandWithOutput("workflow", "--keyspace", defaultTargetKs, "update", "--workflow", defaultWorkflowName, "--tablet-types", tabletTypes)
-	require.NoError(t, err, err)
+	require.NoError(t, err)
 	// Confirm that we changed the workflow.
 	err = protojson.Unmarshal([]byte(resp), &ures)
 	require.NoError(t, err)
-	require.Greater(t, len(ures.Details), 0)
+	require.NotEmpty(t, ures.Details)
 	require.True(t, ures.Details[0].Changed)
 	// Execute a no-op as tablet-types is already primary,replica,rdonly.
 	resp, err = vc.VtctldClient.ExecuteCommandWithOutput("workflow", "--keyspace", defaultTargetKs, "update", "--workflow", defaultWorkflowName, "--tablet-types", tabletTypes)
-	require.NoError(t, err, err)
+	require.NoError(t, err)
 	// Confirm that we didn't change the workflow.
 	err = protojson.Unmarshal([]byte(resp), &ures)
 	require.NoError(t, err)
-	require.Greater(t, len(ures.Details), 0)
+	require.NotEmpty(t, ures.Details)
 	require.False(t, ures.Details[0].Changed)
 }
 
@@ -321,7 +321,7 @@ func revert(t *testing.T, workflowType string) {
 
 	// cancel the workflow to cleanup
 	_, err := vc.VtctldClient.ExecuteCommandWithOutput(workflowType, "--target-keyspace", defaultTargetKs, "--workflow", defaultWorkflowName, "cancel")
-	require.NoError(t, err, fmt.Sprintf("%s Cancel error: %v", workflowType, err))
+	require.NoError(t, err, "%s Cancel error: %v", workflowType, err)
 }
 
 func checkStates(t *testing.T, startState, endState string) {
@@ -550,7 +550,7 @@ func testReshardV2Workflow(t *testing.T) {
 	cnres, err := execVtgateQuery(dataGenConn, defaultTargetKs, "select count(*) from customer_name")
 	require.NoError(t, err)
 	require.Len(t, cnres.Rows, 1)
-	require.EqualValues(t, cres.Rows, cnres.Rows)
+	require.Equal(t, cres.Rows, cnres.Rows)
 	if debugMode {
 		// We expect the row count to differ in enterprise_customer because it is
 		// using a `where typ='enterprise'` filter. So the count is only for debug
@@ -885,7 +885,7 @@ func switchReadsNew(t *testing.T, workflowType, cells, ksWorkflow string, revers
 	ks, wf := parts[0], parts[1]
 	output, err := vc.VtctldClient.ExecuteCommandWithOutput(workflowType, "--workflow", wf, "--target-keyspace", ks, command,
 		"--cells", cells, "--tablet-types=rdonly,replica")
-	require.NoError(t, err, fmt.Sprintf("SwitchReads Error: %s: %s", err, output))
+	require.NoError(t, err, "SwitchReads Error: %s: %s", err, output)
 	if output != "" {
 		fmt.Printf("SwitchReads output: %s\n", output)
 	}
@@ -999,7 +999,7 @@ func createAdditionalTargetShards(t *testing.T, shards string) {
 func tstApplySchemaOnlineDDL(t *testing.T, sql string, keyspace string) {
 	err := vc.VtctldClient.ExecuteCommand("ApplySchema", "--ddl-strategy"+"=online",
 		"--sql", sql, keyspace)
-	require.NoError(t, err, fmt.Sprintf("ApplySchema Error: %s", err))
+	require.NoError(t, err, "ApplySchema Error: %s", err)
 }
 
 func validateTableRoutingRule(t *testing.T, table, tabletType, fromKeyspace, toKeyspace string) {

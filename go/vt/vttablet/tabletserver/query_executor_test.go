@@ -342,7 +342,7 @@ func TestQueryExecutorPlans(t *testing.T) {
 			qre := newTestQueryExecutorWithRowsLimit(ctx, tsv, tcase.input, 0, tcase.passThrough && tcase.inDMLExec)
 			got, err := qre.Execute()
 			if tcase.outsideTxErr || (tcase.errorWant != "" && !tcase.onlyInTxErr) {
-				assert.EqualError(t, err, tcase.errorWant)
+				require.EqualError(t, err, tcase.errorWant)
 			} else {
 				require.NoError(t, err, tcase.input)
 				assert.Equal(t, tcase.resultWant, got, tcase.input)
@@ -673,7 +673,7 @@ func TestExecDDLSchemaTableCountLimit(t *testing.T) {
 				}
 			} else {
 				require.Error(t, err)
-				assert.ErrorContains(t, err, tc.wantErrContains)
+				require.ErrorContains(t, err, tc.wantErrContains)
 				assert.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err))
 			}
 		})
@@ -786,7 +786,7 @@ func TestQueryExecutorLimitFailure(t *testing.T) {
 			// Test outside a transaction.
 			qre := newTestQueryExecutor(ctx, tsv, tcase.input, 0)
 			_, err := qre.Execute()
-			assert.Error(t, err)
+			require.Error(t, err)
 			assert.Contains(t, err.Error(), tcase.err)
 			assert.Equal(t, tcase.logWant, qre.logStats.RewrittenSQL(), tcase.input)
 
@@ -800,7 +800,7 @@ func TestQueryExecutorLimitFailure(t *testing.T) {
 
 			qre = newTestQueryExecutor(ctx, tsv, tcase.input, state.TransactionID)
 			_, err = qre.Execute()
-			assert.Error(t, err)
+			require.Error(t, err)
 			assert.Contains(t, err.Error(), tcase.err)
 
 			want := tcase.logWant
@@ -1005,7 +1005,7 @@ func TestQueryExecutorMessageStreamACL(t *testing.T) {
 		return io.EOF
 	})
 
-	assert.EqualError(t, err, `MessageStream command denied to user 'u2', in groups [non-admin], for table 'msg' (ACL check error)`)
+	require.EqualError(t, err, `MessageStream command denied to user 'u2', in groups [non-admin], for table 'msg' (ACL check error)`)
 	require.Equalf(t, vtrpcpb.Code_PERMISSION_DENIED, vterrors.Code(err), "qre.Execute: %v, want %v", vterrors.Code(err), vtrpcpb.Code_PERMISSION_DENIED)
 }
 
@@ -1130,7 +1130,7 @@ func TestQueryExecutorTableAclDualTableExempt(t *testing.T) {
 	_, err := qre.Execute()
 	require.Equalf(t, vtrpcpb.Code_PERMISSION_DENIED, vterrors.Code(err), "qre.Execute: %v, want %v", vterrors.Code(err), vtrpcpb.Code_PERMISSION_DENIED)
 
-	assert.EqualError(t, err, `SelectImpossible command denied to user 'basic_username' for table 'test_table' (ACL check error)`)
+	require.EqualError(t, err, `SelectImpossible command denied to user 'basic_username' for table 'test_table' (ACL check error)`)
 
 	// table acl should be ignored when querying against dual table
 	query = "select @@version_comment from dual limit 1"
@@ -1253,7 +1253,7 @@ func TestQueryExecutorTableAclExemptACL(t *testing.T) {
 	// query should fail because current user do not have read permissions
 	_, err := qre.Execute()
 	require.Equalf(t, vtrpcpb.Code_PERMISSION_DENIED, vterrors.Code(err), "qre.Execute: %v, want %v", vterrors.Code(err), vtrpcpb.Code_PERMISSION_DENIED)
-	assert.EqualError(t, err, `Select command denied to user 'u2', in groups [eng, beta], for table 'test_table' (ACL check error)`)
+	require.EqualError(t, err, `Select command denied to user 'u2', in groups [eng, beta], for table 'test_table' (ACL check error)`)
 
 	// table acl should be ignored since this is an exempt user.
 	username = "exempt-acl"
@@ -1751,7 +1751,7 @@ func TestQueryExecutorShouldConsolidate(t *testing.T) {
 			// Execute query.
 
 			_, err := qre.Execute()
-			require.Nil(t, err)
+			require.NoError(t, err)
 
 			// Verify expectations.
 
@@ -1766,7 +1766,7 @@ func TestQueryExecutorShouldConsolidate(t *testing.T) {
 					require.Equal(t, 0, fakePendingResult.WaitCalls)
 				}
 			} else {
-				require.Len(t, fakeConsolidator.CreateCalls, 0)
+				require.Empty(t, fakeConsolidator.CreateCalls)
 			}
 
 			if tcase.expectExec {
@@ -1928,7 +1928,7 @@ func TestQueryExecutorConsolidatorRejectOnCap(t *testing.T) {
 			if tc.wantErr {
 				require.Error(t, err)
 				assert.Equal(t, tc.wantErrCode, vterrors.Code(err))
-				assert.ErrorContains(t, err, tc.wantErrMsg)
+				require.ErrorContains(t, err, tc.wantErrMsg)
 			} else {
 				require.NoError(t, err)
 				require.NotNil(t, got)
@@ -1959,16 +1959,16 @@ func TestGetConnectionLogStats(t *testing.T) {
 	// getConn() happy path
 	qre := newTestQueryExecutor(ctx, tsv, input, 0)
 	conn, err := qre.getConn()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, conn)
-	assert.True(t, qre.logStats.WaitingForConnection > 0)
+	assert.Positive(t, qre.logStats.WaitingForConnection)
 
 	// getStreamConn() happy path
 	qre = newTestQueryExecutor(ctx, tsv, input, 0)
 	conn, err = qre.getStreamConn()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, conn)
-	assert.True(t, qre.logStats.WaitingForConnection > 0)
+	assert.Positive(t, qre.logStats.WaitingForConnection)
 
 	// Close the db connection to induce connection errors
 	db.Close()
@@ -1976,14 +1976,14 @@ func TestGetConnectionLogStats(t *testing.T) {
 	// getConn() error path
 	qre = newTestQueryExecutor(ctx, tsv, input, 0)
 	_, err = qre.getConn()
-	assert.Error(t, err)
-	assert.True(t, qre.logStats.WaitingForConnection > 0)
+	require.Error(t, err)
+	assert.Positive(t, qre.logStats.WaitingForConnection)
 
 	// getStreamConn() error path
 	qre = newTestQueryExecutor(ctx, tsv, input, 0)
 	_, err = qre.getStreamConn()
-	assert.Error(t, err)
-	assert.True(t, qre.logStats.WaitingForConnection > 0)
+	require.Error(t, err)
+	assert.Positive(t, qre.logStats.WaitingForConnection)
 }
 
 type executorFlags int64

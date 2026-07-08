@@ -297,7 +297,7 @@ func TestVindexHints(t *testing.T) {
 	// We make sure the query still works.
 	res, err = mcmp.VtConn.ExecuteFetch("select id, unq_col, nonunq_col from tbl USE VINDEX (unq_vdx) where unq_col = 10 and id = 2 and nonunq_col in (10, 20)", 100, false)
 	require.NoError(t, err)
-	require.EqualValues(t, fmt.Sprintf("%v", res.Rows), "[[INT64(2) INT64(10) INT64(10)]]")
+	require.Equal(t, "[[INT64(2) INT64(10) INT64(10)]]", fmt.Sprintf("%v", res.Rows))
 	// Verify that we are using the unq_vdx, that we requested explicitly.
 	res, err = mcmp.VtConn.ExecuteFetch("vexplain plan select id, unq_col, nonunq_col from tbl USE VINDEX (unq_vdx) where unq_col = 10 and id = 2 and nonunq_col in (10, 20)", 100, false)
 	require.NoError(t, err)
@@ -307,7 +307,7 @@ func TestVindexHints(t *testing.T) {
 	// We make sure the query still works.
 	res, err = mcmp.VtConn.ExecuteFetch("select id, unq_col, nonunq_col from tbl IGNORE VINDEX (hash, unq_vdx) where unq_col = 10 and id = 2 and nonunq_col in (10, 20)", 100, false)
 	require.NoError(t, err)
-	require.EqualValues(t, fmt.Sprintf("%v", res.Rows), "[[INT64(2) INT64(10) INT64(10)]]")
+	require.Equal(t, "[[INT64(2) INT64(10) INT64(10)]]", fmt.Sprintf("%v", res.Rows))
 	// Verify that we are using the nonunq_vdx, which is the only one left to be used.
 	res, err = mcmp.VtConn.ExecuteFetch("vexplain plan select id, unq_col, nonunq_col from tbl IGNORE VINDEX (hash, unq_vdx) where unq_col = 10 and id = 2 and nonunq_col in (10, 20)", 100, false)
 	require.NoError(t, err)
@@ -530,11 +530,11 @@ func TestPrepareStatements(t *testing.T) {
 	// Fail by providing wrong number of arguments
 	_, err := mcmp.ExecAllowAndCompareError(`execute prep_in_pk using @id1, @id1, @id`, utils.CompareOptions{})
 	incorrectCount := "VT03025: Incorrect arguments to EXECUTE"
-	assert.ErrorContains(t, err, incorrectCount)
+	require.ErrorContains(t, err, incorrectCount)
 	_, err = mcmp.ExecAllowAndCompareError(`execute prep_in_pk using @id1`, utils.CompareOptions{})
-	assert.ErrorContains(t, err, incorrectCount)
+	require.ErrorContains(t, err, incorrectCount)
 	_, err = mcmp.ExecAllowAndCompareError(`execute prep_in_pk`, utils.CompareOptions{})
-	assert.ErrorContains(t, err, incorrectCount)
+	require.ErrorContains(t, err, incorrectCount)
 
 	mcmp.Exec(`prepare prep_art from 'select 1+?, 10/?'`)
 	mcmp.Exec(`set @x1 = 1, @x2 = 2.0, @x3 = "v", @x4 = 9999999999999999999999999999`)
@@ -554,7 +554,7 @@ func TestPrepareStatements(t *testing.T) {
 
 	mcmp.Exec("deallocate prepare prep_art")
 	_, err = mcmp.ExecAllowAndCompareError(`execute prep_art using @id1, @id1`, utils.CompareOptions{})
-	assert.ErrorContains(t, err, "VT09011: Unknown prepared statement handler (prep_art) given to EXECUTE")
+	require.ErrorContains(t, err, "VT09011: Unknown prepared statement handler (prep_art) given to EXECUTE")
 
 	_, err = mcmp.ExecAllowAndCompareError("deallocate prepare prep_art", utils.CompareOptions{})
 	assert.ErrorContains(t, err, "VT09011: Unknown prepared statement handler (prep_art) given to DEALLOCATE PREPARE")
@@ -853,6 +853,17 @@ func TestEnumSetVals(t *testing.T) {
 
 	mcmp.AssertMatches("select id, enum_col, cast(enum_col as signed) from tbl_enum_set order by enum_col, id", `[[INT64(4) ENUM("xsmall") INT64(1)] [INT64(2) ENUM("small") INT64(2)] [INT64(1) ENUM("medium") INT64(3)] [INT64(5) ENUM("medium") INT64(3)] [INT64(3) ENUM("large") INT64(4)]]`)
 	mcmp.AssertMatches("select id, set_col, cast(set_col as unsigned) from tbl_enum_set order by set_col, id", `[[INT64(4) SET("a,b") UINT64(3)] [INT64(3) SET("c") UINT64(4)] [INT64(5) SET("a,d") UINT64(9)] [INT64(1) SET("a,b,e") UINT64(19)] [INT64(2) SET("e,f,g") UINT64(112)]]`)
+
+	// An ENUM used in a numeric context must use MySQL's 1-based ordinal
+	// (xsmall=1 ... xlarge=5), and a SET its bitmap value. These compare Vitess
+	// against MySQL directly so any divergence in the numeric conversion fails.
+	mcmp.Exec("select id, enum_col + 0 from tbl_enum_set order by id")
+	mcmp.Exec("select id, enum_col + 1 from tbl_enum_set order by id")
+	mcmp.Exec("select id, cast(enum_col as unsigned) from tbl_enum_set order by id")
+	mcmp.Exec("select id from tbl_enum_set where enum_col = 3 order by id")
+	mcmp.Exec("select id, enum_col from tbl_enum_set where enum_col > 2 order by enum_col, id")
+	mcmp.Exec("select id, set_col + 0 from tbl_enum_set order by id")
+	mcmp.Exec("select max(cast(enum_col as signed)) from tbl_enum_set")
 }
 
 func TestTimeZones(t *testing.T) {
@@ -969,4 +980,35 @@ func TestJoinMixedCaseExpr(t *testing.T) {
 	mcmp.Exec(`insert into all_types(id, int_unsigned) values (1, 1), (2, 2), (3,3), (4,4), (10,5), (20, 6)`)
 	mcmp.Exec(`prepare prep_pk from 'SELECT t1.id from all_types t1 join all_types t2 on t1.int_unsigned = (case when t2.int_unsigned in (1, 2, 3) then 1 when t2.int_unsigned = 4 then 10 else 20 end)'`)
 	mcmp.AssertMatches(`execute prep_pk`, `[[INT64(1)] [INT64(1)] [INT64(1)]]`)
+}
+
+// TestOlapErrorAfterFields verifies that a streamed (OLAP) query whose error
+// arrives mid result set - after the field packets were already sent, like a
+// recursive CTE aborting with ER_CTE_MAX_RECURSION_DEPTH while producing rows -
+// returns the error promptly. The tablet's streaming path used to try to drain
+// the already-terminated result set, blocking forever on the MySQL connection
+// and leaving the client waiting indefinitely.
+func TestOlapErrorAfterFields(t *testing.T) {
+	mcmp, closer := start(t)
+	t.Cleanup(closer)
+
+	utils.Exec(t, mcmp.VtConn, "set workload = olap")
+
+	query := "with recursive cte as (select 1 as n union all select n + 1 from cte) select * from cte"
+	errCh := make(chan error, 1)
+	go func() {
+		_, err := mcmp.VtConn.ExecuteFetch(query, 1000, false)
+		errCh <- err
+	}()
+
+	select {
+	case err := <-errCh:
+		require.ErrorContains(t, err, "Recursive query aborted")
+	case <-time.After(60 * time.Second):
+		require.FailNow(t, "the streamed query did not return",
+			"the tablet is stuck draining a result set that already ended with an error packet")
+	}
+
+	// The error ended the result set cleanly, so the connection stays usable.
+	utils.AssertMatches(t, mcmp.VtConn, "select 1", "[[INT64(1)]]")
 }
