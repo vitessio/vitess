@@ -211,7 +211,7 @@ func TestMysql56ParsePosition(t *testing.T) {
 	want := replication.Position{GTIDSet: set}
 
 	got, err := replication.ParsePosition(replication.Mysql56FlavorID, input)
-	assert.NoError(t, err, "unexpected error: %v", err)
+	require.NoError(t, err, "unexpected error: %v", err)
 	assert.True(t, got.Equal(want), "(&mysql56{}).ParsePosition(%#v) = %#v, want %#v", input, got, want)
 }
 
@@ -219,7 +219,7 @@ func TestMysql56SemiSyncAck(t *testing.T) {
 	{
 		c := Conn{ExpectSemiSyncIndicator: false}
 		buf, semiSyncAckRequested, err := c.AnalyzeSemiSyncAckRequest(mysql56QueryEvent.Bytes())
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		e := NewMysql56BinlogEventWithSemiSyncInfo(buf, semiSyncAckRequested)
 
 		assert.False(t, e.IsSemiSyncAckRequested())
@@ -228,7 +228,7 @@ func TestMysql56SemiSyncAck(t *testing.T) {
 	{
 		c := Conn{ExpectSemiSyncIndicator: true}
 		buf, semiSyncAckRequested, err := c.AnalyzeSemiSyncAckRequest(mysql56SemiSyncNoAckQueryEvent.Bytes())
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		e := NewMysql56BinlogEventWithSemiSyncInfo(buf, semiSyncAckRequested)
 
 		assert.False(t, e.IsSemiSyncAckRequested())
@@ -237,7 +237,7 @@ func TestMysql56SemiSyncAck(t *testing.T) {
 	{
 		c := Conn{ExpectSemiSyncIndicator: true}
 		buf, semiSyncAckRequested, err := c.AnalyzeSemiSyncAckRequest(mysql56SemiSyncAckQueryEvent.Bytes())
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		e := NewMysql56BinlogEventWithSemiSyncInfo(buf, semiSyncAckRequested)
 
 		assert.True(t, e.IsSemiSyncAckRequested())
@@ -708,7 +708,7 @@ func TestMySQL56PartialUpdateRowsEvent(t *testing.T) {
 			ev, err := mysql56PartialUpdateRowEvent.Rows(format, tm)
 			require.NoError(t, err)
 
-			assert.Equal(t, tc.numRows, len(ev.Rows))
+			assert.Len(t, ev.Rows, tc.numRows)
 			require.NoError(t, err)
 
 			for i := range ev.Rows {

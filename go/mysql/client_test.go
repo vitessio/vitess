@@ -23,7 +23,6 @@ import (
 	"net"
 	"os"
 	"path"
-	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -48,7 +47,7 @@ func assertSQLError(t *testing.T, err error, code sqlerror.ErrorCode, sqlState, 
 	require.Equal(t, code, serr.Num, "was expecting SQLError %v / %v / %v but got code %v", code, sqlState, subtext, serr.Num)
 	require.Equal(t, sqlState, serr.State, "was expecting SQLError %v / %v / %v but got state %v", code, sqlState, subtext, serr.State)
 	if pattern != "" {
-		require.Regexp(t, regexp.MustCompile(pattern), serr.Message)
+		require.Regexp(t, pattern, serr.Message)
 	} else {
 		require.True(t, subtext == "" || strings.Contains(serr.Message, subtext), "was expecting SQLError %v / %v / %v but got message %v", code, sqlState, subtext, serr.Message)
 	}

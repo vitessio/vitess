@@ -53,7 +53,7 @@ func TestAggregate(t *testing.T) {
 		}
 		m2 := MetricHealthMap{}
 		m1.Aggregate(m2)
-		assert.Equal(t, 1, len(m1))
+		assert.Len(t, m1, 1)
 		assert.Equal(t, int64(0), m1["a"].SecondsSinceLastHealthy)
 	}
 	{
@@ -62,7 +62,7 @@ func TestAggregate(t *testing.T) {
 		}
 		m2 := MetricHealthMap{}
 		m2.Aggregate(m1)
-		assert.Equal(t, 1, len(m2))
+		assert.Len(t, m2, 1)
 		assert.Equal(t, int64(0), m2["a"].SecondsSinceLastHealthy)
 	}
 	{
@@ -71,7 +71,7 @@ func TestAggregate(t *testing.T) {
 		}
 		m2 := MetricHealthMap{}
 		m1.Aggregate(m2)
-		assert.Equal(t, 1, len(m1))
+		assert.Len(t, m1, 1)
 		assert.Equal(t, int64(7), m1["a"].SecondsSinceLastHealthy)
 	}
 	{
@@ -80,7 +80,7 @@ func TestAggregate(t *testing.T) {
 		}
 		m2 := MetricHealthMap{}
 		m2.Aggregate(m1)
-		assert.Equal(t, 1, len(m2))
+		assert.Len(t, m2, 1)
 		assert.Equal(t, int64(7), m2["a"].SecondsSinceLastHealthy)
 	}
 	{
@@ -91,7 +91,7 @@ func TestAggregate(t *testing.T) {
 			"a": &MetricHealth{SecondsSinceLastHealthy: 11},
 		}
 		m1.Aggregate(m2)
-		assert.Equal(t, 1, len(m1))
+		assert.Len(t, m1, 1)
 		assert.Equal(t, int64(11), m1["a"].SecondsSinceLastHealthy)
 	}
 	{
@@ -102,7 +102,7 @@ func TestAggregate(t *testing.T) {
 			"a": &MetricHealth{SecondsSinceLastHealthy: 7},
 		}
 		m1.Aggregate(m2)
-		assert.Equal(t, 1, len(m1))
+		assert.Len(t, m1, 1)
 		assert.Equal(t, int64(11), m1["a"].SecondsSinceLastHealthy)
 	}
 	{
@@ -115,7 +115,7 @@ func TestAggregate(t *testing.T) {
 			"b": &MetricHealth{SecondsSinceLastHealthy: 17},
 		}
 		m1.Aggregate(m2)
-		assert.Equal(t, 2, len(m1))
+		assert.Len(t, m1, 2)
 		assert.Equal(t, int64(11), m1["a"].SecondsSinceLastHealthy)
 		assert.Equal(t, int64(19), m1["b"].SecondsSinceLastHealthy)
 	}
@@ -129,7 +129,7 @@ func TestAggregate(t *testing.T) {
 			"c": &MetricHealth{SecondsSinceLastHealthy: 17},
 		}
 		m1.Aggregate(m2)
-		assert.Equal(t, 3, len(m1), 3)
+		assert.Len(t, m1, 3, 3)
 		assert.Equal(t, int64(11), m1["a"].SecondsSinceLastHealthy)
 		assert.Equal(t, int64(19), m1["b"].SecondsSinceLastHealthy)
 		assert.Equal(t, int64(17), m1["c"].SecondsSinceLastHealthy)
@@ -146,7 +146,7 @@ func TestAggregate(t *testing.T) {
 		}
 		m0.Aggregate(m2)
 		m0.Aggregate(m1)
-		assert.Equal(t, 3, len(m0))
+		assert.Len(t, m0, 3)
 		assert.Equal(t, int64(11), m0["a"].SecondsSinceLastHealthy)
 		assert.Equal(t, int64(19), m0["b"].SecondsSinceLastHealthy)
 		assert.Equal(t, int64(17), m0["c"].SecondsSinceLastHealthy)

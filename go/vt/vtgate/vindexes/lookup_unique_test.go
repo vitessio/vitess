@@ -76,7 +76,7 @@ func TestLookupUniqueMap(t *testing.T) {
 
 	vc.numRows = 2
 	_, err = lookupUnique.Map(t.Context(), vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
-	assert.EqualError(t, err, "Lookup.Map: unexpected multiple results from vindex t: INT64(1)", "lookupUnique(query fail)")
+	require.EqualError(t, err, "Lookup.Map: unexpected multiple results from vindex t: INT64(1)", "lookupUnique(query fail)")
 
 	// Test query fail.
 	vc.mustFail = true

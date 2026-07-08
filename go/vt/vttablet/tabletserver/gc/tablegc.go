@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"maps"
 	"sort"
 	"strings"
@@ -584,6 +585,21 @@ func (collector *TableGC) purge(ctx context.Context) (tableName string, err erro
 		}
 	}()
 
+	// Disable foreign key checks: the rows we purge belong to a doomed table, and another doomed
+	// table (e.g. a child table also being garbage collected) may still reference them. We must not
+	// let an ON DELETE RESTRICT constraint block reclamation. The connection is dedicated and closed
+	// when we're done, but we restore the value defensively, in case this ever becomes pooled.
+	if _, err := conn.ExecuteFetch("SET SESSION foreign_key_checks = 0", 0, false); err != nil {
+		return tableName, err
+	}
+	defer func() {
+		if !conn.IsClosed() {
+			if _, err := conn.ExecuteFetch("SET SESSION foreign_key_checks = 1", 0, false); err != nil {
+				log.Error("TableGC: error setting foreign_key_checks = 1", slog.Any("error", err))
+			}
+		}
+	}()
+
 	log.Info("TableGC: purge begin for " + tableName)
 	for {
 		if ctx.Err() != nil {
@@ -622,6 +638,21 @@ func (collector *TableGC) dropTable(ctx context.Context, tableName string, isBas
 		sqlDrop = sqlDropView
 	}
 	parsed := sqlparser.BuildParsedQuery(sqlDrop, tableName)
+
+	// Disable foreign key checks so we can drop a table that is still referenced by another
+	// (also-doomed) table's foreign key, regardless of the order in which the GC drops them. The
+	// connection is dedicated and closed when we're done, but we restore the value defensively, in
+	// case this ever becomes pooled.
+	if _, err := conn.Conn.ExecuteFetch("SET SESSION foreign_key_checks = 0", 0, false); err != nil {
+		return err
+	}
+	defer func() {
+		if !conn.IsClosed() {
+			if _, err := conn.Conn.ExecuteFetch("SET SESSION foreign_key_checks = 1", 0, false); err != nil {
+				log.Error("TableGC: error setting foreign_key_checks = 1", slog.Any("error", err))
+			}
+		}
+	}()
 
 	log.Info("TableGC: dropping table: " + tableName)
 	_, err = conn.Conn.ExecuteFetch(parsed.Query, 1, false)

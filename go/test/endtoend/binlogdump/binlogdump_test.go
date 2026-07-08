@@ -164,7 +164,7 @@ func TestBinlogDumpGTID_NoTarget(t *testing.T) {
 	// Server should send an error packet when no target is specified
 	data, err := conn.ReadPacket()
 	require.NoError(t, err, "Should receive error packet, not connection close")
-	require.True(t, len(data) > 0, "Response should not be empty")
+	require.NotEmpty(t, data, "Response should not be empty")
 	require.Equal(t, byte(mysql.ErrPacket), data[0], "Expected error packet")
 
 	// Parse the error packet and verify the message
@@ -441,7 +441,7 @@ func TestBinlogDumpGTID_InvalidFormat(t *testing.T) {
 	// Should receive an error packet
 	data, err := binlogConn.ReadPacket()
 	require.NoError(t, err, "Should receive error packet, not connection close")
-	require.True(t, len(data) > 0, "Response should not be empty")
+	require.NotEmpty(t, data, "Response should not be empty")
 	require.Equal(t, byte(mysql.ErrPacket), data[0], "Expected error packet")
 
 	// Parse and verify error message
@@ -515,7 +515,7 @@ func TestBinlogDumpGTID_FuturePosition(t *testing.T) {
 	}
 
 	// If we got a packet, check if it's an error packet
-	require.True(t, len(data) > 0, "Response should not be empty")
+	require.NotEmpty(t, data, "Response should not be empty")
 	if data[0] == mysql.ErrPacket {
 		// Error packet - parse and log it
 		sqlErr := mysql.ParseErrorPacket(data)

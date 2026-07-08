@@ -34,6 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/semisyncmonitor"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 
@@ -345,14 +346,14 @@ func TestUndoDemotePrimaryStateChange(t *testing.T) {
 	require.NoError(t, err)
 
 	// Check that the tablet is initially a replica.
-	require.EqualValues(t, topodatapb.TabletType_REPLICA, tm.Tablet().Type)
+	require.Equal(t, topodatapb.TabletType_REPLICA, tm.Tablet().Type)
 	// Verify that the tablet record says the tablet should be a primary.
-	require.EqualValues(t, topodatapb.TabletType_PRIMARY, ti.Type)
+	require.Equal(t, topodatapb.TabletType_PRIMARY, ti.Type)
 
 	err = tm.UndoDemotePrimary(ctx, false)
 	require.NoError(t, err)
-	require.EqualValues(t, topodatapb.TabletType_PRIMARY, tm.Tablet().Type)
-	require.EqualValues(t, ti.PrimaryTermStartTime, tm.Tablet().PrimaryTermStartTime)
+	require.Equal(t, topodatapb.TabletType_PRIMARY, tm.Tablet().Type)
+	require.Equal(t, ti.PrimaryTermStartTime, tm.Tablet().PrimaryTermStartTime)
 	require.True(t, tm.QueryServiceControl.IsServing())
 	isReadOnly, err := tm.MysqlDaemon.IsReadOnly(ctx)
 	require.NoError(t, err)
@@ -725,4 +726,25 @@ func TestSetReplicationSourceRecovery(t *testing.T) {
 		require.EqualValues(t, 3306, fakeMysqlDaemon.CurrentSourcePort)
 		require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
 	})
+}
+
+func TestShardPeerHealthSnapshot(t *testing.T) {
+	// Without a monitor configured, FullStatus gets a nil snapshot and must not panic.
+	tm := &TabletManager{}
+	assert.Nil(t, tm.shardPeerHealthSnapshot(), "no monitor configured -> nil snapshot, no panic")
+
+	// With a monitor, the primary's latest liveness signals are surfaced. The monitor tracks only
+	// the shard primary, so the observed peer must be PRIMARY-typed.
+	self := &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}}
+	peer := &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}, Keyspace: "ks", Shard: "0", Type: topodatapb.TabletType_PRIMARY}
+	pinger := &fakePinger{fail: true}
+	m := newShardHealthMonitor(pinger, staticLister(self, peer), staticPrimaryAlias(peer), topoproto.TabletAliasString(self.Alias), time.Second, time.Second)
+	require.NoError(t, m.refreshPeers(t.Context()))
+	m.runPingRound(t.Context())
+	assert.Eventually(t, func() bool { return m.inflightCount() == 0 }, 30*time.Second, 5*time.Millisecond)
+
+	tm = &TabletManager{shardHealthMonitor: m}
+	snap := tm.shardPeerHealthSnapshot()
+	require.Len(t, snap, 1)
+	assert.Equal(t, int64(1), snap[0].ConsecutivePingFailures)
 }

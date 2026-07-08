@@ -1171,7 +1171,7 @@ func TestEngineMysqlTime(t *testing.T) {
 				require.ErrorContains(t, err, tt.wantErr)
 				return
 			}
-			require.EqualValues(t, tt.wantTime, gotTime)
+			require.Equal(t, tt.wantTime, gotTime)
 			require.NoError(t, db.LastError())
 		})
 	}

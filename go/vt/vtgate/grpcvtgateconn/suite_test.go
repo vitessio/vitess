@@ -494,7 +494,7 @@ func testStreamExecute(t *testing.T, session *vtgateconn.VTGateSession) {
 		packet, err := stream.Recv()
 		if err != nil {
 			if err != io.EOF {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 			break
 		}
@@ -530,7 +530,7 @@ func testStreamExecuteMulti(t *testing.T, session *vtgateconn.VTGateSession) {
 		packet, newRes, err := stream.Recv()
 		if err != nil {
 			if err != io.EOF {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 			break
 		}
@@ -795,27 +795,27 @@ func RunSessionTests(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservic
 
 	fs := fakeServer.(*fakeVTGateService)
 
-	require.Equal(t, fs.ActiveTxns, 0)
+	require.Equal(t, 0, fs.ActiveTxns)
 
 	testExecute(t, session, "begin")
-	require.Equal(t, fs.ActiveTxns, 1)
+	require.Equal(t, 1, fs.ActiveTxns)
 	testExecute(t, session, "txnRequest")
-	require.Equal(t, fs.ActiveTxns, 1)
+	require.Equal(t, 1, fs.ActiveTxns)
 	testExecute(t, session, "commit")
-	require.Equal(t, fs.ActiveTxns, 0)
+	require.Equal(t, 0, fs.ActiveTxns)
 
 	session = conn.Session("connection_ks", nil)
 	session.SessionPb().Autocommit = false
 
 	testExecute(t, session, "begin")
-	require.Equal(t, fs.ActiveTxns, 1)
+	require.Equal(t, 1, fs.ActiveTxns)
 
 	session.CloseSession(newContext())
-	require.Equal(t, fs.ActiveTxns, 0)
+	require.Equal(t, 0, fs.ActiveTxns)
 
 	session = conn.Session("connection_ks", nil)
 	session.SessionPb().Autocommit = false
 
 	testExecute(t, session, "nontxnRequest")
-	require.Equal(t, fs.ActiveTxns, 0)
+	require.Equal(t, 0, fs.ActiveTxns)
 }

@@ -56,9 +56,9 @@ const mysqlShutdownTimeout = 1 * time.Minute
 func TestBackupExecutesBackupWithScopedParams(t *testing.T) {
 	env := createFakeBackupRestoreEnv(t)
 
-	require.Nil(t, Backup(env.ctx, env.backupParams), env.logger.Events)
+	require.NoError(t, Backup(env.ctx, env.backupParams), env.logger.Events)
 
-	require.Equal(t, 1, len(env.backupEngine.ExecuteBackupCalls))
+	require.Len(t, env.backupEngine.ExecuteBackupCalls, 1)
 	executeBackupParams := env.backupEngine.ExecuteBackupCalls[0].BackupParams
 	var executeBackupStats *backupstats.FakeStats
 	for _, sr := range env.stats.ScopeReturns {
@@ -78,10 +78,10 @@ func TestBackupNoStats(t *testing.T) {
 	env := createFakeBackupRestoreEnv(t)
 	env.setStats(nil)
 
-	require.Nil(t, Backup(env.ctx, env.backupParams), env.logger.Events)
+	require.NoError(t, Backup(env.ctx, env.backupParams), env.logger.Events)
 
 	// It parameterizes the backup storage with nop stats.
-	require.Equal(t, 1, len(env.backupStorage.WithParamsCalls))
+	require.Len(t, env.backupStorage.WithParamsCalls, 1)
 	require.Equal(t, backupstats.NoStats(), env.backupStorage.WithParamsCalls[0].Stats)
 }
 
@@ -90,9 +90,9 @@ func TestBackupNoStats(t *testing.T) {
 func TestBackupParameterizesBackupStorageWithScopedStats(t *testing.T) {
 	env := createFakeBackupRestoreEnv(t)
 
-	require.Nil(t, Backup(env.ctx, env.backupParams), env.logger.Events)
+	require.NoError(t, Backup(env.ctx, env.backupParams), env.logger.Events)
 
-	require.Equal(t, 1, len(env.backupStorage.WithParamsCalls))
+	require.Len(t, env.backupStorage.WithParamsCalls, 1)
 	var storageStats *backupstats.FakeStats
 	for _, sr := range env.stats.ScopeReturns {
 		if sr == env.backupStorage.WithParamsCalls[0].Stats {
@@ -112,11 +112,11 @@ func TestBackupEmitsStats(t *testing.T) {
 	// Force ExecuteBackup to take time so we can test stats emission.
 	env.backupEngine.ExecuteBackupDuration = 1001 * time.Millisecond
 
-	require.Nil(t, Backup(env.ctx, env.backupParams), env.logger.Events)
+	require.NoError(t, Backup(env.ctx, env.backupParams), env.logger.Events)
 
 	require.NotZero(t, backupstats.DeprecatedBackupDurationS.Get())
-	require.Equal(t, 0, len(env.stats.TimedIncrementCalls))
-	require.Equal(t, 0, len(env.stats.ScopeV))
+	require.Empty(t, env.stats.TimedIncrementCalls)
+	require.Empty(t, env.stats.ScopeV)
 }
 
 // TestBackupTriesToParameterizeBackupStorage tests that Backup tries to pass
@@ -125,9 +125,9 @@ func TestBackupEmitsStats(t *testing.T) {
 func TestBackupTriesToParameterizeBackupStorage(t *testing.T) {
 	env := createFakeBackupRestoreEnv(t)
 
-	require.Nil(t, Backup(env.ctx, env.backupParams), env.logger.Events)
+	require.NoError(t, Backup(env.ctx, env.backupParams), env.logger.Events)
 
-	require.Equal(t, 1, len(env.backupStorage.WithParamsCalls))
+	require.Len(t, env.backupStorage.WithParamsCalls, 1)
 	require.Equal(t, env.logger, env.backupStorage.WithParamsCalls[0].Logger)
 	var scopedStats backupstats.Stats
 	for _, sr := range env.stats.ScopeReturns {
@@ -222,7 +222,7 @@ func TestFindFilesToBackupWithoutRedoLog(t *testing.T) {
 		},
 	}
 	require.Equalf(t, expected, result, "got wrong list of FileEntry %v, expected %v", result, expected)
-	require.Greaterf(t, totalSize, int64(0), "backup size should be > 0, got %v", totalSize)
+	require.Positivef(t, totalSize, "backup size should be > 0, got %v", totalSize)
 }
 
 func TestFindFilesToBackupWithRedoLog(t *testing.T) {
@@ -306,7 +306,7 @@ func TestFindFilesToBackupWithRedoLog(t *testing.T) {
 		},
 	}
 	require.Equalf(t, expected, result, "got wrong list of FileEntry %v, expected %v", result, expected)
-	require.Greaterf(t, totalSize, int64(0), "backup size should be > 0, got %v", totalSize)
+	require.Positivef(t, totalSize, "backup size should be > 0, got %v", totalSize)
 }
 
 // TestRestoreEmitsStats tests that Restore emits stats.
@@ -317,11 +317,11 @@ func TestRestoreEmitsStats(t *testing.T) {
 	env.backupEngine.ExecuteRestoreDuration = 1001 * time.Millisecond
 
 	_, err := Restore(env.ctx, env.restoreParams)
-	require.Nil(t, err, env.logger.Events)
+	require.NoError(t, err, env.logger.Events)
 
 	require.NotZero(t, backupstats.DeprecatedRestoreDurationS.Get())
-	require.Equal(t, 0, len(env.stats.TimedIncrementCalls))
-	require.Equal(t, 0, len(env.stats.ScopeV))
+	require.Empty(t, env.stats.TimedIncrementCalls)
+	require.Empty(t, env.stats.ScopeV)
 }
 
 // TestRestoreExecutesRestoreWithScopedParams tests that Restore passes
@@ -330,9 +330,9 @@ func TestRestoreExecutesRestoreWithScopedParams(t *testing.T) {
 	env := createFakeBackupRestoreEnv(t)
 
 	_, err := Restore(env.ctx, env.restoreParams)
-	require.Nil(t, err, env.logger.Events)
+	require.NoError(t, err, env.logger.Events)
 
-	require.Equal(t, 1, len(env.backupEngine.ExecuteRestoreCalls))
+	require.Len(t, env.backupEngine.ExecuteRestoreCalls, 1)
 	executeRestoreParams := env.backupEngine.ExecuteRestoreCalls[0].RestoreParams
 	var executeRestoreStats *backupstats.FakeStats
 	for _, sr := range env.stats.ScopeReturns {
@@ -353,10 +353,10 @@ func TestRestoreNoStats(t *testing.T) {
 	env.setStats(nil)
 
 	_, err := Restore(env.ctx, env.restoreParams)
-	require.Nil(t, err, env.logger.Events)
+	require.NoError(t, err, env.logger.Events)
 
 	// It parameterizes the backup storage with nop stats.
-	require.Equal(t, 1, len(env.backupStorage.WithParamsCalls))
+	require.Len(t, env.backupStorage.WithParamsCalls, 1)
 	require.Equal(t, backupstats.NoStats(), env.backupStorage.WithParamsCalls[0].Stats)
 }
 
@@ -366,9 +366,9 @@ func TestRestoreParameterizesBackupStorageWithScopedStats(t *testing.T) {
 	env := createFakeBackupRestoreEnv(t)
 
 	_, err := Restore(env.ctx, env.restoreParams)
-	require.Nil(t, err, env.logger.Events)
+	require.NoError(t, err, env.logger.Events)
 
-	require.Equal(t, 1, len(env.backupStorage.WithParamsCalls))
+	require.Len(t, env.backupStorage.WithParamsCalls, 1)
 	var storageStats *backupstats.FakeStats
 	for _, sr := range env.stats.ScopeReturns {
 		if sr == env.backupStorage.WithParamsCalls[0].Stats {
@@ -388,9 +388,9 @@ func TestRestoreTriesToParameterizeBackupStorage(t *testing.T) {
 	env := createFakeBackupRestoreEnv(t)
 
 	_, err := Restore(env.ctx, env.restoreParams)
-	require.Nil(t, err, env.logger.Events)
+	require.NoError(t, err, env.logger.Events)
 
-	require.Equal(t, 1, len(env.backupStorage.WithParamsCalls))
+	require.Len(t, env.backupStorage.WithParamsCalls, 1)
 	require.Equal(t, env.logger, env.backupStorage.WithParamsCalls[0].Logger)
 	var scopedStats backupstats.Stats
 	for _, sr := range env.stats.ScopeReturns {
@@ -496,7 +496,7 @@ func TestRestoreManifestMySQLVersionValidation(t *testing.T) {
 			}
 
 			manifestBytes, err := json.Marshal(manifest)
-			require.Nil(t, err)
+			require.NoError(t, err)
 
 			env.backupEngine.ExecuteRestoreReturn = FakeBackupEngineExecuteRestoreReturn{&manifest, nil}
 			env.backupStorage.ListBackupsReturn = FakeBackupStorageListBackupsReturn{
@@ -543,10 +543,10 @@ func createFakeBackupRestoreEnv(t *testing.T) *fakeBackupRestoreEnv {
 	sqldb := fakesqldb.New(t)
 	sqldb.SetNeverFail(true)
 	mysqld := NewFakeMysqlDaemon(sqldb)
-	require.Nil(t, mysqld.Shutdown(ctx, nil, false, mysqlShutdownTimeout))
+	require.NoError(t, mysqld.Shutdown(ctx, nil, false, mysqlShutdownTimeout))
 
 	dirName, err := os.MkdirTemp("", "vt_backup_test")
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	cnf := &Mycnf{
 		DataDir: dirName,
@@ -595,7 +595,7 @@ func createFakeBackupRestoreEnv(t *testing.T) *fakeBackupRestoreEnv {
 	}
 
 	manifestBytes, err := json.Marshal(manifest)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	testBackupEngine := FakeBackupEngine{}
 	testBackupEngine.ExecuteRestoreReturn = FakeBackupEngineExecuteRestoreReturn{&manifest, nil}
@@ -660,13 +660,13 @@ func (fbe *fakeBackupRestoreEnv) setStats(stats *backupstats.FakeStats) {
 func TestParseBackupName(t *testing.T) {
 	// backup name doesn't contain 3 parts
 	_, _, err := ParseBackupName("dir", "asd.saddsa")
-	assert.ErrorContains(t, err, "cannot backup name")
+	require.ErrorContains(t, err, "cannot backup name")
 
 	// Invalid time
 	bt, al, err := ParseBackupName("dir", "2024-03-18.123.tablet_id")
 	assert.Nil(t, bt)
 	assert.Nil(t, al)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Valid case
 	bt, al, err = ParseBackupName("dir", "2024-03-18.180911.cell1-42")
@@ -682,13 +682,13 @@ func TestShouldRestore(t *testing.T) {
 	b, err := ShouldRestore(env.ctx, env.restoreParams.Logger, env.restoreParams.Cnf,
 		env.restoreParams.Mysqld, env.restoreParams.DbName, env.restoreParams.DeleteBeforeRestore)
 	assert.False(t, b)
-	assert.Error(t, err)
+	require.Error(t, err)
 
 	env.restoreParams.DeleteBeforeRestore = true
 	b, err = ShouldRestore(env.ctx, env.restoreParams.Logger, env.restoreParams.Cnf,
 		env.restoreParams.Mysqld, env.restoreParams.DbName, env.restoreParams.DeleteBeforeRestore)
 	assert.True(t, b)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	env.restoreParams.DeleteBeforeRestore = false
 
 	env.mysqld.FetchSuperQueryMap = map[string]*sqltypes.Result{
@@ -696,7 +696,7 @@ func TestShouldRestore(t *testing.T) {
 	}
 	b, err = ShouldRestore(env.ctx, env.restoreParams.Logger, env.restoreParams.Cnf,
 		env.restoreParams.Mysqld, env.restoreParams.DbName, env.restoreParams.DeleteBeforeRestore)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, b)
 
 	env.mysqld.FetchSuperQueryMap = map[string]*sqltypes.Result{
@@ -724,7 +724,7 @@ func TestScanLinesToLogger(t *testing.T) {
 	writer.Close()
 	wg.Wait()
 
-	require.Equal(t, 100, len(logger.Events))
+	require.Len(t, logger.Events, 100)
 
 	for i, event := range logger.Events {
 		require.Equal(t, fmt.Sprintf("test: foobar %d", i), event.Value)
@@ -1087,14 +1087,14 @@ func TestExecuteBackupInitSQL(t *testing.T) {
 			if tc.wantErr {
 				require.Error(t, err)
 				if tc.wantErrString != "" {
-					assert.ErrorContains(t, err, tc.wantErrString)
+					require.ErrorContains(t, err, tc.wantErrString)
 				}
 			} else {
 				require.NoError(t, err)
 			}
 
 			if mysqld != nil && !tc.wantErr {
-				assert.NoError(t, mysqld.CheckSuperQueryList())
+				require.NoError(t, mysqld.CheckSuperQueryList())
 			}
 
 			// Verify logging too.

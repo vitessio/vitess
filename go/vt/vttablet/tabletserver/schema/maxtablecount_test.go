@@ -124,7 +124,7 @@ func TestCheckCreateTableLimit(t *testing.T) {
 
 		err := CheckCreateTableLimit(se, stmts(t, "create table c (id int primary key)"), 0)
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "schema engine table limit of 2 reached")
+		require.ErrorContains(t, err, "schema engine table limit of 2 reached")
 		assert.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err))
 	})
 
@@ -160,9 +160,9 @@ func TestCheckCreateTableLimit(t *testing.T) {
 			"create table c (id int primary key)",
 		), 0)
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "cannot create table")
-		assert.ErrorContains(t, err, "c")
-		assert.ErrorContains(t, err, "schema engine table limit of 2 reached")
+		require.ErrorContains(t, err, "cannot create table")
+		require.ErrorContains(t, err, "c")
+		require.ErrorContains(t, err, "schema engine table limit of 2 reached")
 		assert.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err))
 	})
 
@@ -459,9 +459,9 @@ func TestCheckCreateTableLimit(t *testing.T) {
 
 		err := CheckCreateTableLimit(se, stmts(t, "create view v as select 1 from dual"), 0)
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "cannot create view")
-		assert.ErrorContains(t, err, "v")
-		assert.ErrorContains(t, err, "schema engine table limit of 2 reached")
+		require.ErrorContains(t, err, "cannot create view")
+		require.ErrorContains(t, err, "v")
+		require.ErrorContains(t, err, "schema engine table limit of 2 reached")
 		assert.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err))
 	})
 
@@ -495,8 +495,8 @@ func TestCheckCreateTableLimit(t *testing.T) {
 			"create table b (id int primary key)",
 		), 0)
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "cannot create table")
-		assert.ErrorContains(t, err, "b")
+		require.ErrorContains(t, err, "cannot create table")
+		require.ErrorContains(t, err, "b")
 		assert.ErrorContains(t, err, "schema engine table limit of 2 reached")
 	})
 
@@ -575,8 +575,8 @@ func TestCheckCreateTableLimit(t *testing.T) {
 			stmts(t, "create table b (id int primary key)"),
 			2)
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "schema engine table limit of 3 would be exceeded")
-		assert.ErrorContains(t, err, "unparseable statement")
+		require.ErrorContains(t, err, "schema engine table limit of 3 would be exceeded")
+		require.ErrorContains(t, err, "unparseable statement")
 		assert.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err))
 	})
 
@@ -591,7 +591,7 @@ func TestCheckCreateTableLimit(t *testing.T) {
 
 		err := CheckCreateTableLimit(se, nil, 1)
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "schema engine table limit of 2 would be exceeded")
+		require.ErrorContains(t, err, "schema engine table limit of 2 would be exceeded")
 		assert.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err))
 	})
 
@@ -631,7 +631,7 @@ func TestCheckCreateTableLimit(t *testing.T) {
 			"drop table a",
 		})
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "schema engine table limit of 2 would be exceeded")
+		require.ErrorContains(t, err, "schema engine table limit of 2 would be exceeded")
 		assert.ErrorContains(t, err, "running count: 3")
 	})
 

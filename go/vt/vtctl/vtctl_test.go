@@ -112,7 +112,7 @@ If this is not what you expected, check the input data (as JSON parsing will ski
 			err := commandApplyVSchema(ctx, env.wr, subFlags, tt.args)
 			require.NoError(t, err)
 			if strings.HasPrefix(tt.want, "/") {
-				require.Regexp(t, regexp.MustCompile(tt.want[1:]), env.cmdlog.String())
+				require.Regexp(t, tt.want[1:], env.cmdlog.String())
 			} else {
 				require.Equal(t, tt.want, env.cmdlog.String())
 			}
@@ -460,7 +460,7 @@ func TestGenerateOnlineDDLQuery(t *testing.T) {
 			if tcase.expectError {
 				assert.Error(t, err)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, tcase.expectQuery, query)
 			}
 		})

@@ -18,7 +18,6 @@ package grpctmclient
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"math/rand/v2"
 	"net"
@@ -214,7 +213,7 @@ func BenchmarkCachedConnClientSteadyStateEvictions(b *testing.B) {
 		require.NoError(b, err)
 	}
 
-	assert.Equal(b, len(client.dialer.(*cachedConnDialer).conns), 100)
+	assert.Len(b, client.dialer.(*cachedConnDialer).conns, 100)
 
 	procs := runtime.GOMAXPROCS(0) / 4
 	if procs == 0 {
@@ -354,7 +353,7 @@ func TestCachedConnClient(t *testing.T) {
 	}
 
 	attempts, errors := dialAttempts.Load(), dialErrors.Load()
-	assert.Less(t, float64(errors)/float64(attempts), 0.001, fmt.Sprintf("fewer than 0.1%% of dial attempts should fail (attempts = %d, errors = %d, max running procs = %d)", attempts, errors, procs))
+	assert.Less(t, float64(errors)/float64(attempts), 0.001, "fewer than 0.1%% of dial attempts should fail (attempts = %d, errors = %d, max running procs = %d)", attempts, errors, procs)
 	assert.Less(t, errors, int64(1), "at least one dial attempt failed (attempts = %d, errors = %d)", attempts, errors)
 	assert.Less(t, longestDial.Milliseconds(), int64(50))
 }
@@ -405,10 +404,10 @@ func TestCachedConnClient_evictions(t *testing.T) {
 	defer dialCancel()
 
 	err := client.Ping(dialCtx, tablets[0]) // this should take the rlock_fast path
-	assert.NoError(t, err, "could not redial on inuse cached connection")
+	require.NoError(t, err, "could not redial on inuse cached connection")
 
 	err = client.Ping(dialCtx, tablets[4]) // this will enter the poll loop until context timeout
-	assert.Error(t, err, "should have timed out waiting for an eviction, while all conns were held")
+	require.Error(t, err, "should have timed out waiting for an eviction, while all conns were held")
 
 	// free up a connection
 	connHoldCancel()

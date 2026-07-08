@@ -65,7 +65,7 @@ func TestFixShardReplication(t *testing.T) {
 	// Run FixShardReplication, should do nothing.
 	logger := logutil.NewMemoryLogger()
 	problem, err := topo.FixShardReplication(ctx, ts, logger, cell, keyspace, shard)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Nilf(t, problem, "FixShardReplication should have found no issues, got %+v", problem)
 	sri, err = ts.GetShardReplication(ctx, cell, keyspace, shard)
 	require.NoError(t, err)
@@ -91,7 +91,7 @@ func TestFixShardReplication(t *testing.T) {
 	}
 	logger.Clear()
 	problem, err = topo.FixShardReplication(ctx, ts, logger, cell, keyspace, shard)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	if assert.NotNil(t, problem, "FixShardReplication should have found problem, but found none") {
 		assert.Equalf(t, topodatapb.ShardReplicationError_NOT_FOUND, problem.Type,
 			"FixShardReplication problem.Type mismatch: want %q got %q",
@@ -129,7 +129,7 @@ func TestFixShardReplication(t *testing.T) {
 	}
 	logger.Clear()
 	problem, err = topo.FixShardReplication(ctx, ts, logger, cell, keyspace, shard)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	if assert.NotNil(t, problem, "FixShardReplication should have found problem, but found none") {
 		assert.Equalf(t, topodatapb.ShardReplicationError_TOPOLOGY_MISMATCH, problem.Type,
 			"FixShardReplication problem.Type mismatch: want %q got %q",

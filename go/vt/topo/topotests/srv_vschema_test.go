@@ -49,7 +49,7 @@ func TestRebuildVSchema(t *testing.T) {
 	}
 	for _, cell := range cells {
 		v, err := ts.GetSrvVSchema(ctx, cell)
-		assert.NoErrorf(t, err, "unexpected GetSrvVSchema(%v) error: %v %v", cell, v, err)
+		require.NoErrorf(t, err, "unexpected GetSrvVSchema(%v) error: %v %v", cell, v, err)
 		assert.Truef(t, proto.Equal(v, emptySrvVSchema), "unexpected GetSrvVSchema(%v) result: %v %v", cell, v, err)
 	}
 
@@ -70,7 +70,7 @@ func TestRebuildVSchema(t *testing.T) {
 	}
 	for _, cell := range cells {
 		v, err := ts.GetSrvVSchema(ctx, cell)
-		assert.NoErrorf(t, err, "unexpected GetSrvVSchema(%v) error: %v %v", cell, v, err)
+		require.NoErrorf(t, err, "unexpected GetSrvVSchema(%v) error: %v %v", cell, v, err)
 		assert.Truef(t, proto.Equal(v, emptyKs1SrvVSchema), "unexpected GetSrvVSchema(%v) result: %v %v", cell, v, err)
 	}
 
@@ -97,7 +97,7 @@ func TestRebuildVSchema(t *testing.T) {
 	}
 	for _, cell := range cells {
 		v, err := ts.GetSrvVSchema(ctx, cell)
-		assert.NoErrorf(t, err, "unexpected GetSrvVSchema(%v) error: %v %v", cell, v, err)
+		require.NoErrorf(t, err, "unexpected GetSrvVSchema(%v) error: %v %v", cell, v, err)
 		assert.Truef(t, proto.Equal(v, wanted1), "unexpected GetSrvVSchema(%v) result: %v %v", cell, v, err)
 	}
 
@@ -142,10 +142,10 @@ func TestRebuildVSchema(t *testing.T) {
 		},
 	}
 	v, err := ts.GetSrvVSchema(ctx, "cell1")
-	assert.NoErrorf(t, err, "unexpected GetSrvVSchema error: %v %v", v, err)
+	require.NoErrorf(t, err, "unexpected GetSrvVSchema error: %v %v", v, err)
 	assert.Truef(t, proto.Equal(v, wanted2), "unexpected GetSrvVSchema result: %v %v", v, err)
 	v, err = ts.GetSrvVSchema(ctx, "cell2")
-	assert.NoErrorf(t, err, "unexpected GetSrvVSchema error: %v %v", v, err)
+	require.NoErrorf(t, err, "unexpected GetSrvVSchema error: %v %v", v, err)
 	assert.Truef(t, proto.Equal(v, wanted1), "unexpected GetSrvVSchema result: %v %v", v, err)
 
 	// now rebuild everywhere
@@ -154,7 +154,7 @@ func TestRebuildVSchema(t *testing.T) {
 	}
 	for _, cell := range cells {
 		v, err := ts.GetSrvVSchema(ctx, cell)
-		assert.NoErrorf(t, err, "unexpected GetSrvVSchema(%v) error: %v %v", cell, v, err)
+		require.NoErrorf(t, err, "unexpected GetSrvVSchema(%v) error: %v %v", cell, v, err)
 		assert.Truef(t, proto.Equal(v, wanted2), "unexpected GetSrvVSchema(%v) result: %v %v", cell, v, err)
 	}
 
@@ -182,7 +182,7 @@ func TestRebuildVSchema(t *testing.T) {
 	}
 	for _, cell := range cells {
 		v, err := ts.GetSrvVSchema(ctx, cell)
-		assert.NoErrorf(t, err, "unexpected GetSrvVSchema(%v) error: %v %v", cell, v, err)
+		require.NoErrorf(t, err, "unexpected GetSrvVSchema(%v) error: %v %v", cell, v, err)
 		assert.Truef(t, proto.Equal(v, wanted3), "unexpected GetSrvVSchema(%v) result: %v %v", cell, v, err)
 	}
 
@@ -204,7 +204,7 @@ func TestRebuildVSchema(t *testing.T) {
 	}
 	for _, cell := range cells {
 		v, err := ts.GetSrvVSchema(ctx, cell)
-		assert.NoErrorf(t, err, "unexpected GetSrvVSchema(%v) error: %v != %v (err = %v)", cell, v, wanted4, err)
+		require.NoErrorf(t, err, "unexpected GetSrvVSchema(%v) error: %v != %v (err = %v)", cell, v, wanted4, err)
 		assert.Truef(t, proto.Equal(v, wanted4), "unexpected GetSrvVSchema(%v) result: %v != %v (err = %v)", cell, v, wanted4, err)
 	}
 }

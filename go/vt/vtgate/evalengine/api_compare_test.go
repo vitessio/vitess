@@ -88,11 +88,11 @@ func (tc testCase) run(t *testing.T) {
 	if tc.err == "" {
 		require.NoError(t, err)
 		if tc.out != nil && *tc.out {
-			require.EqualValues(t, uint64(1), evalToInt64(v).toUint64().u)
+			require.Equal(t, uint64(1), evalToInt64(v).toUint64().u)
 		} else if tc.out != nil && !*tc.out {
-			require.EqualValues(t, uint64(0), evalToInt64(v).toUint64().u)
+			require.Equal(t, uint64(0), evalToInt64(v).toUint64().u)
 		} else {
-			require.EqualValues(t, nil, v)
+			require.Nil(t, v)
 		}
 	} else {
 		require.EqualError(t, err, tc.err)
@@ -1198,6 +1198,35 @@ func TestNullsafeCompare(t *testing.T) {
 	}
 }
 
+// TestNullsafeCompareEnumNumeric ensures an ENUM compared against an integer
+// uses MySQL's 1-based ordinal (a=1, b=2, c=3), not a 0-based index. Comparing
+// enum('a','b','c') to the integer 2 must equal 'b'.
+func TestNullsafeCompareEnumNumeric(t *testing.T) {
+	values := &EnumSetValues{"'a'", "'b'", "'c'"}
+	collation := collations.ID(collations.CollationUtf8mb4ID)
+	tcases := []struct {
+		enum string
+		num  int64
+		out  int
+	}{
+		{"a", 2, -1},
+		{"b", 2, 0}, // 'b' is the 2nd member => ordinal 2
+		{"c", 2, 1},
+		{"a", 1, 0}, // 'a' is the 1st member => ordinal 1
+		{"c", 3, 0}, // 'c' is the 3rd member => ordinal 3
+	}
+	for _, tc := range tcases {
+		t.Run(fmt.Sprintf("%s?%d", tc.enum, tc.num), func(t *testing.T) {
+			got, err := NullsafeCompare(
+				sqltypes.TestValue(sqltypes.Enum, tc.enum),
+				sqltypes.NewInt64(tc.num),
+				collations.MySQL8(), collation, values)
+			require.NoError(t, err)
+			assert.Equal(t, tc.out, got)
+		})
+	}
+}
+
 func getCollationID(collation string) collations.ID {
 	id, _ := collationEnv.LookupID(collation)
 	return id
@@ -1416,7 +1445,7 @@ func TestCompareSorter(t *testing.T) {
 			}
 
 			sorted := sorter.Sorted()
-			assert.Equal(t, len(want), len(sorted))
+			assert.Len(t, sorted, len(want))
 			for i := 0; i < len(want); i++ {
 				require.True(t, sqltypes.RowEqual(want[i], sorted[i]), "row %d is not sorted.\nwant: %v\ngot:  %v", i, want, sorted)
 			}
