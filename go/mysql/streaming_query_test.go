@@ -149,7 +149,6 @@ func TestStreamFetchErrorMidResultSet(t *testing.T) {
 	require.NoError(t, sConn.writeFields(result))
 	require.NoError(t, sConn.writeRow([]sqltypes.Value{sqltypes.MakeTrusted(querypb.Type_INT64, []byte("1"))}))
 	require.NoError(t, sConn.writeErrorPacket(sqlerror.ERCTEMaxRecursionDepth, sqlerror.SSUnknownSQLState, "Recursive query aborted after 1001 iterations."))
-	require.NoError(t, sConn.FlushWriteBuffer())
 
 	doneCh := make(chan struct{})
 	go func() {
