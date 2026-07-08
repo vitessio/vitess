@@ -25,6 +25,7 @@
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
+        - [Streaming path aligned with `Execute`: plan-type labels, stats, and query-rule changes](#vttablet-stream-plan-parity)
     - **[Backup/Restore](#minor-changes-backup)**
         - [Chunked backup/restore for the builtinbackupengine](#backup-chunked-builtin)
     - **[General](#minor-changes-general)**
@@ -197,6 +198,22 @@ Two changes:
 Tablets that already have more tracked schema objects than the configured limit will reload fine — only new creations are gated. Operators who need to support more tables and views should increase the flag and ensure both vttablet and mysqld have enough memory to comfortably hold the larger schema.
 
 See [#19978](https://github.com/vitessio/vitess/issues/19978) for details.
+
+#### <a id="vttablet-stream-plan-parity"/>Streaming path aligned with `Execute`: plan-type labels, stats, and query-rule changes</a>
+
+The tablet streaming path — `workload=olap` connections and the `StreamExecute` API — now dispatches the same statement types as the buffered `Execute` path and records the same query statistics. Previously the streaming path handled only plain reads and DML; other statements fell through to a generic SQL path, and streamed queries were largely absent from the per-table and per-plan statistics.
+
+This alignment changes several observable behaviors that dashboards and query-rule configurations may depend on:
+
+- **Plan-type labels for streamed queries have changed.** The internal `SelectStream` plan type has been removed. Streamed reads now report their real plan type (for example `Select` or `Show`) in the query log, and appear in the per-table and per-plan query statistics and the result-size histogram, just like buffered reads. Dashboards or alerts keyed on the `SelectStream` plan type, or that assumed streamed queries were absent from these statistics, will see a shift.
+- **Failed streamed reads now increment error statistics.** A streamed read that fails now increments `QueryErrorCounts` and `QueryErrorCountsWithCode`, which the streaming path previously left flat. A stream that fails mid-delivery records the rows already sent alongside the error.
+- **Query rules referencing `SelectStream` are now deprecated aliases.** A query rule whose `Plans` list contains `SelectStream` still loads, but is now treated as `Select` with a logged deprecation warning, so it also matches buffered queries. Conversely, rules keyed on real plan names such as `Select` now match streamed queries as well, since streamed queries carry real plan types. The `SelectStream` alias will be removed in a future release.
+
+Beyond observability, statements that previously failed or were mishandled over `workload=olap` connections now work: Online DDL and throttler administration statements (such as `SHOW VITESS_MIGRATIONS`), `LOAD`, DDL, savepoints, `SET`, and `UNLOCK TABLES` are all dispatched the same way as on the buffered path.
+
+This change is not backported. On release branches the streaming path is opt-in per connection, and the statistics alignment changes observable metrics.
+
+See [#20499](https://github.com/vitessio/vitess/pull/20499) for details.
 
 ### <a id="minor-changes-backup"/>Backup/Restore</a>
 
