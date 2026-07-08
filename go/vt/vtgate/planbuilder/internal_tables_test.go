@@ -124,6 +124,61 @@ end`
 	require.NoError(t, rejectInternalTableProcedureQuery(t, query, parser))
 }
 
+// TestRejectInternalTableLoad verifies that LOAD DATA is blocked for every
+// identifier quoting form that can name an internal operation table.
+func TestRejectInternalTableLoad(t *testing.T) {
+	parser := sqlparser.NewTestParser()
+
+	tests := []struct {
+		name string
+
+		query string
+
+		wantErr string
+	}{
+		{
+			name:    "bare identifier",
+			query:   "load data infile 'x.txt' into table _vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+			wantErr: "VT09033: modification of internal table",
+		},
+		{
+			name:    "backtick quoted",
+			query:   "load data infile 'x.txt' into table `_vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_`",
+			wantErr: "VT09033: modification of internal table",
+		},
+		{
+			name:    "ansi quotes double quoted",
+			query:   `load data infile 'x.txt' into table "_vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_"`,
+			wantErr: "VT09033: modification of internal table",
+		},
+		{
+			name:    "ansi quotes double quoted qualified",
+			query:   `load data infile 'x.txt' into table "main"."_vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_"`,
+			wantErr: "VT09033: modification of internal table",
+		},
+		{
+			name:  "regular table",
+			query: "load data infile 'x.txt' into table t",
+		},
+		{
+			name:  "regular table double quoted",
+			query: `load data infile 'x.txt' into table "t"`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := rejectInternalTableLoad(tt.query, parser)
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+				return
+			}
+
+			require.ErrorContains(t, err, tt.wantErr)
+		})
+	}
+}
+
 // rejectInternalTableProcedureQuery parses query as a DDL statement and runs it
 // through the internal-table guard.
 func rejectInternalTableProcedureQuery(t *testing.T, query string, parser *sqlparser.Parser) error {

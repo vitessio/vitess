@@ -136,9 +136,11 @@ func loadDataTableIdentifier(tokenizer *sqlparser.Tokenizer) (string, bool) {
 	return loadDataIdentifier(token, value)
 }
 
-// loadDataIdentifier converts a tokenizer token into a table identifier.
+// loadDataIdentifier converts a tokenizer token into a table identifier. An
+// identifier double-quoted under the ANSI_QUOTES sql_mode is lexed as STRING,
+// so string tokens are treated as identifiers too.
 func loadDataIdentifier(token int, value string) (string, bool) {
-	if token == sqlparser.ID {
+	if token == sqlparser.ID || token == sqlparser.STRING {
 		return value, true
 	}
 
