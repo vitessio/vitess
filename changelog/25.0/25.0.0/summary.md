@@ -11,6 +11,7 @@
         - [`--watch-replication-stream` flag removed](#vttablet-watch-replication-stream-removed)
         - [Snapshot Topology feature removed](#vtorc-snapshot-topology-removed)
         - [VTOrc `--cell` flag is now required](#vtorc-cell-required)
+        - [`BackupHandle` interface gains `Wait()` method](#backup-handle-wait-method)
     - **[Deprecations](#deprecations)**
         - [CLI Flags](#deprecated-cli-flags)
 - **[Minor Changes](#minor-changes)**
@@ -24,6 +25,8 @@
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
+    - **[Backup/Restore](#minor-changes-backup)**
+        - [Chunked backup/restore for the builtinbackupengine](#backup-chunked-builtin)
     - **[General](#minor-changes-general)**
         - [Build version metadata now sourced from VCS stamping](#build-info-from-vcs)
 
@@ -85,6 +88,18 @@ The `--cell` VTOrc flag, [introduced in v24](../../24.0/24.0.0/summary.md#vtorc-
 **Impact**: VTOrc will fail to start with a `FAILED_PRECONDITION` error if `--cell` is empty.
 
 See [#20048](https://github.com/vitessio/vitess/pull/20048) for the removal and [#19047](https://github.com/vitessio/vitess/pull/19047) for the original `--cell` flag introduction.
+
+#### <a id="backup-handle-wait-method"/>`BackupHandle` interface gains `Wait()` method</a>
+
+The `backupstorage.BackupHandle` interface now requires a `Wait()` method. This method blocks until all pending asynchronous `AddFile` operations complete without finalizing the backup. It is idempotent and safe to call multiple times.
+
+**Impact**: Any out-of-tree or custom `BackupHandle` implementation will fail to compile until a `Wait()` method is added. For synchronous backends, a no-op implementation is sufficient:
+
+```go
+func (bh *MyBackupHandle) Wait() {}
+```
+
+See [#20167](https://github.com/vitessio/vitess/pull/20167) for details.
 
 ### <a id="deprecations"/>Deprecations</a>
 
@@ -182,6 +197,21 @@ Two changes:
 Tablets that already have more tracked schema objects than the configured limit will reload fine — only new creations are gated. Operators who need to support more tables and views should increase the flag and ensure both vttablet and mysqld have enough memory to comfortably hold the larger schema.
 
 See [#19978](https://github.com/vitessio/vitess/issues/19978) for details.
+
+### <a id="minor-changes-backup"/>Backup/Restore</a>
+
+#### <a id="backup-chunked-builtin"/>Chunked backup/restore for the `builtinbackupengine`</a>
+
+The builtin backup engine now supports splitting large files into chunks for parallel backup and restore. This significantly improves restore throughput for keyspaces dominated by a small number of large InnoDB files, as individual chunks can be restored concurrently via parallel writes.
+
+Two new flags control chunking behavior:
+
+- `--builtinbackup-file-chunk-threshold` (default `0`, chunking disabled): files larger than this size in bytes are split into chunks during backup.
+- `--builtinbackup-file-chunk-size` (default `1073741824` / 1 GiB): the target size in bytes for each chunk.
+
+**Compatibility note:** Backups created with chunking enabled are **not restorable by older Vitess versions** that do not understand the `Chunks` field in the backup MANIFEST. Non-chunked backups (the default) remain fully compatible with older versions.
+
+See [#20167](https://github.com/vitessio/vitess/pull/20167) for details.
 
 ### <a id="minor-changes-general"/>General</a>
 

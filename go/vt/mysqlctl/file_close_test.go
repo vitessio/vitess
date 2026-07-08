@@ -162,6 +162,8 @@ func (m *mockBackupHandle) ReadFile(ctx context.Context, filename string) (io.Re
 	return m.readFileReturn, nil
 }
 
+func (m *mockBackupHandle) Wait() {}
+
 func (m *mockBackupHandle) EndBackup(ctx context.Context) error {
 	return nil
 }
@@ -326,7 +328,7 @@ func TestBackupFileSourceCloseError(t *testing.T) {
 	}
 
 	// backupFile should handle the error gracefully.
-	err = be.backupFile(ctx, params, bh, fe, "0")
+	err = be.backupFile(ctx, params, bh, fe, "0", -1)
 
 	// Should succeed after retries.
 	require.NoError(t, err)
@@ -365,7 +367,7 @@ func TestBackupFileDestinationCloseError(t *testing.T) {
 		Name: "source.txt",
 	}
 
-	err = be.backupFile(ctx, params, bh, fe, "0")
+	err = be.backupFile(ctx, params, bh, fe, "0", -1)
 
 	// Should succeed after retries.
 	require.NoError(t, err)
@@ -411,7 +413,7 @@ func TestBackupFileDestinationCloseMaxRetries(t *testing.T) {
 		Name: "destination.txt",
 	}
 
-	err = be.backupFile(ctx, params, bh, fe, "0")
+	err = be.backupFile(ctx, params, bh, fe, "0", -1)
 
 	// Should fail due to close error (context deadline exceeded).
 	require.Error(t, err)
