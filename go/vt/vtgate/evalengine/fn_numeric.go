@@ -960,11 +960,14 @@ func (call *builtinRound) eval(env *ExpressionEnv) (eval, error) {
 		}
 		return newEvalDecimalWithPrec(rounded, digit), nil
 	case *evalFloat:
+		// MySQL rounds floating point values half to even (my_double_round
+		// uses rint), unlike the half away from zero rule it applies to
+		// exact-value numbers.
 		if arg.f == 0.0 {
 			return arg, nil
 		}
 		if round == 0 {
-			return newEvalFloat(math.Round(arg.f)), nil
+			return newEvalFloat(math.RoundToEven(arg.f)), nil
 		}
 
 		round = clampRounding(round)
@@ -972,7 +975,7 @@ func (call *builtinRound) eval(env *ExpressionEnv) (eval, error) {
 		if f == 0 {
 			return newEvalFloat(0), nil
 		}
-		return newEvalFloat(math.Round(arg.f*f) / f), nil
+		return newEvalFloat(math.RoundToEven(arg.f*f) / f), nil
 	default:
 		v, _ := evalToFloat(arg)
 		if v.f == 0.0 {
@@ -980,7 +983,7 @@ func (call *builtinRound) eval(env *ExpressionEnv) (eval, error) {
 		}
 
 		if round == 0 {
-			return newEvalFloat(math.Round(v.f)), nil
+			return newEvalFloat(math.RoundToEven(v.f)), nil
 		}
 
 		round = clampRounding(round)
@@ -988,7 +991,7 @@ func (call *builtinRound) eval(env *ExpressionEnv) (eval, error) {
 		if f == 0 {
 			return newEvalFloat(0), nil
 		}
-		return newEvalFloat(math.Round(v.f*f) / f), nil
+		return newEvalFloat(math.RoundToEven(v.f*f) / f), nil
 	}
 }
 
