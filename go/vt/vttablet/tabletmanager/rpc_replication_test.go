@@ -297,13 +297,15 @@ func TestDemotePrimaryRollbackUsesDetachedContext(t *testing.T) {
 		mockMysqlDaemon.EXPECT().IsSemiSyncBlocked(gomock.Any()).Return(false, nil),
 		mockMysqlDaemon.EXPECT().SetSuperReadOnly(gomock.Any(), true).DoAndReturn(
 			func(ctx context.Context, on bool) (mysqlctl.ResetSuperReadOnlyFunc, error) {
-				return nil, ctx.Err()
+				require.NoError(t, ctx.Err())
+				return nil, nil
 			},
 		),
 		mockMysqlDaemon.EXPECT().SemiSyncEnabled(gomock.Any()).Return(true, true),
 		mockMysqlDaemon.EXPECT().SetSemiSyncEnabled(gomock.Any(), false, true).DoAndReturn(
 			func(ctx context.Context, primary bool, replica bool) error {
-				return ctx.Err()
+				require.NoError(t, ctx.Err())
+				return nil
 			},
 		),
 		mockMysqlDaemon.EXPECT().PrimaryStatus(gomock.Any()).DoAndReturn(
@@ -358,12 +360,14 @@ func TestDemotePrimaryForceSemiSyncRollbackUsesDetachedContext(t *testing.T) {
 		mockMysqlDaemon.EXPECT().SemiSyncEnabled(gomock.Any()).Return(true, true),
 		mockMysqlDaemon.EXPECT().SetSemiSyncEnabled(gomock.Any(), false, true).DoAndReturn(
 			func(ctx context.Context, primary bool, replica bool) error {
-				return ctx.Err()
+				require.NoError(t, ctx.Err())
+				return nil
 			},
 		),
 		mockMysqlDaemon.EXPECT().SetSuperReadOnly(gomock.Any(), true).DoAndReturn(
 			func(ctx context.Context, on bool) (mysqlctl.ResetSuperReadOnlyFunc, error) {
-				return nil, ctx.Err()
+				require.NoError(t, ctx.Err())
+				return nil, nil
 			},
 		),
 		mockMysqlDaemon.EXPECT().SemiSyncEnabled(gomock.Any()).Return(false, true),
