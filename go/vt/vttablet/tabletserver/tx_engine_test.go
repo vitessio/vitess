@@ -232,6 +232,35 @@ func TestCommitRejectedByClusterActionRecordsKill(t *testing.T) {
 	require.NotContains(t, err.Error(), "transaction committed")
 }
 
+// TestAutocommitCommitAllowedDuringClusterAction verifies that a COMMIT for an autocommit
+// transaction succeeds during shutdown: every statement is already durably committed in
+// MySQL, so rejecting the RPC would invite the client to retry already-applied writes.
+func TestAutocommitCommitAllowedDuringClusterAction(t *testing.T) {
+	db := fakesqldb.New(t)
+	db.AddQueryPattern(".*", &sqltypes.Result{})
+	t.Cleanup(func() { db.Close() })
+
+	txEngine := setupTxEngine(db)
+	txEngine.AcceptReadWrite()
+	t.Cleanup(func() { txEngine.Close() })
+
+	ctx := t.Context()
+
+	txID, _, _, err := txEngine.Begin(ctx, 0, nil, &querypb.ExecuteOptions{
+		TransactionIsolation: querypb.ExecuteOptions_AUTOCOMMIT,
+	})
+	require.NoError(t, err)
+
+	initialKills := txEngine.txPool.txStats.Counts()["TabletServerTest.kill"]
+
+	txEngine.SetClusterAction(ClusterActionInProgress)
+	txEngine.SetClusterAction(ClusterActionNoQueries)
+
+	_, _, err = txEngine.Commit(ctx, txID)
+	require.NoError(t, err)
+	require.Equal(t, initialKills, txEngine.txPool.txStats.Counts()["TabletServerTest.kill"])
+}
+
 // TestActiveCommitsIncludesDTExecutorInternalTransactions verifies that internal 2PC metadata
 // commits can be interrupted during shutdown.
 func TestActiveCommitsIncludesDTExecutorInternalTransactions(t *testing.T) {

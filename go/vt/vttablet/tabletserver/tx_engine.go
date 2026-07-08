@@ -326,6 +326,13 @@ func (te *TxEngine) Commit(ctx context.Context, transactionID int64) (int64, str
 
 // commit commits the transaction.
 func (te *TxEngine) commit(ctx context.Context, conn *StatefulConnection) (string, error) {
+	// An autocommit transaction never sends a COMMIT to MySQL: every statement
+	// was already durably committed. There is nothing to track or interrupt, and
+	// rejecting it during shutdown would report failure for applied writes.
+	if conn.IsInTransaction() && conn.TxProperties().Autocommit {
+		return te.txPool.Commit(ctx, conn)
+	}
+
 	remove, err := te.addActiveCommit(ctx, conn)
 	if err != nil {
 		return "", err
