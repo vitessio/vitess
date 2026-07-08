@@ -278,11 +278,13 @@ func rejectInternalTableCreateProcedure(
 }
 
 // rejectInternalTablePrepare returns an error when a prepared statement inside a
-// stored procedure could modify a Vitess internal operation table.
+// stored procedure could modify a Vitess internal operation table. Dynamic
+// PREPARE reads its SQL from a variable at execution time, so it cannot be
+// inspected here and is passed through.
 func rejectInternalTablePrepare(stmt *sqlparser.PrepareStmt, parser *sqlparser.Parser) error {
 	preparedQuery, ok := prepareStatementLiteral(stmt)
 	if !ok {
-		return vterrors.VT12001("dynamic PREPARE in stored procedure")
+		return nil
 	}
 
 	preparedStmt, err := parser.Parse(preparedQuery)

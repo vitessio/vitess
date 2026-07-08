@@ -89,17 +89,6 @@ begin
 end`,
 			wantErr: "VT09033: modification of internal table",
 		},
-		{
-			name: "dynamic variable",
-			query: `
-create procedure p()
-begin
-	set @sql = 'delete from _vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_';
-	prepare stmt from @sql;
-	execute stmt;
-end`,
-			wantErr: "VT12001: unsupported: dynamic PREPARE in stored procedure",
-		},
 	}
 
 	for _, tt := range tests {
@@ -110,18 +99,42 @@ end`,
 	}
 }
 
-// TestRejectInternalTableDDLAllowsSafeProcedurePrepare verifies that literal
-// prepared statements remain available when their SQL is inspectable and safe.
+// TestRejectInternalTableDDLAllowsSafeProcedurePrepare verifies that prepared
+// statements remain available when their SQL is inspectable and safe, and that
+// dynamic PREPARE, whose SQL is not inspectable, is passed through untouched.
 func TestRejectInternalTableDDLAllowsSafeProcedurePrepare(t *testing.T) {
 	parser := sqlparser.NewTestParser()
-	query := `
+
+	tests := []struct {
+		name  string
+		query string
+	}{
+		{
+			name: "literal select",
+			query: `
 create procedure p()
 begin
 	prepare stmt from 'select 1';
 	execute stmt;
-end`
+end`,
+		},
+		{
+			name: "dynamic variable",
+			query: `
+create procedure p()
+begin
+	set @sql = concat('select * from t where id = ', 1);
+	prepare stmt from @sql;
+	execute stmt;
+end`,
+		},
+	}
 
-	require.NoError(t, rejectInternalTableProcedureQuery(t, query, parser))
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.NoError(t, rejectInternalTableProcedureQuery(t, tt.query, parser))
+		})
+	}
 }
 
 // TestRejectInternalTableLoad verifies that LOAD DATA is blocked for every
