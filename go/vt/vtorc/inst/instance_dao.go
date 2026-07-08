@@ -235,9 +235,9 @@ func ReadTopologyInstanceBufferable(tabletAlias *topodatapb.TabletAlias, latency
 		// issue. FullStatus returns only the disk flags in that case, so
 		// processing the rest of `fs` would clobber known-good instance
 		// fields (ServerID, version, replication state) with zero values.
-		// Persistence is unconditional so the analysis pipeline sees the
-		// state truthfully; the recovery flags gate the recovery action
-		// in getCheckAndRecoverFunctionCode.
+		// Persistence is unconditional so the backend records the state
+		// truthfully; the recovery flags gate whether the disk analyses
+		// fire on it (in their MatchFuncs).
 		if writeErr := writeDiskHealthInstance(tablet, dh.stalled, dh.full); writeErr != nil {
 			log.Error(
 				"failed to persist disk health instance",

@@ -147,6 +147,10 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 	// doing so would mask this shard-wide action via same-tablet selection.
 	// E.g. a primary that is both read-only and disk-stalled should always
 	// ERS away, demoting this tablet — not run `fixPrimary` first.
+	// The match is gated on the recovery flag: when stalled-disk recovery is
+	// disabled the flag may still be set — possibly preserved from a prior
+	// poll — and must not produce an analysis whose recovery would be
+	// skipped, masking a recoverable DeadPrimary*.
 	{
 		Meta: &DetectionAnalysisProblemMeta{
 			Analysis:    PrimaryDiskStalled,
@@ -155,14 +159,15 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 		},
 		BeforeAnalyses: []AnalysisCode{DeadPrimary, DeadPrimaryAndReplicas, DeadPrimaryAndSomeReplicas, DeadPrimaryWithoutReplicas},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
-			return a.IsClusterPrimary && !a.LastCheckValid && a.IsDiskStalled
+			return a.IsClusterPrimary && !a.LastCheckValid && a.IsDiskStalled && config.GetStalledDiskPrimaryRecovery()
 		},
 	},
-	// PrimaryDiskFull — same constraint as PrimaryDiskStalled: only ERS can
+	// PrimaryDiskFull — same constraints as PrimaryDiskStalled: only ERS can
 	// recover a full-disk primary, so other analyses must NOT declare
-	// `BeforeAnalyses: PrimaryDiskFull`. PrimarySemiSyncBlocked is listed so
-	// a stale `semi_sync_blocked=1` from a prior poll doesn't mask the
-	// disk-full root cause.
+	// `BeforeAnalyses: PrimaryDiskFull`, and the match is gated on the
+	// recovery flag. PrimarySemiSyncBlocked is listed so a stale
+	// `semi_sync_blocked=1` from a prior poll doesn't mask the disk-full
+	// root cause.
 	{
 		Meta: &DetectionAnalysisProblemMeta{
 			Analysis:    PrimaryDiskFull,
@@ -171,7 +176,7 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 		},
 		BeforeAnalyses: []AnalysisCode{DeadPrimary, DeadPrimaryAndReplicas, DeadPrimaryAndSomeReplicas, DeadPrimaryWithoutReplicas, PrimarySemiSyncBlocked},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
-			return a.IsClusterPrimary && !a.LastCheckValid && a.IsDiskFull
+			return a.IsClusterPrimary && !a.LastCheckValid && a.IsDiskFull && config.GetFullDiskPrimaryRecovery()
 		},
 	},
 	{
@@ -562,7 +567,8 @@ func evaluateAndLogPrimaryQuorum(primaryAlias *topodatapb.TabletAlias, keyspace,
 	result := EvaluatePrimaryQuorum(primaryAlias, keyspace, shard, expectedObservers, QuorumOptionsFromConfig(), now)
 	logKey := fmt.Sprintf("%s/%s:%t", keyspace, shard, result.Down)
 	if util.ClearToLog("shard_quorum", logKey) {
-		log.Info("shard quorum decision",
+		log.Info(
+			"shard quorum decision",
 			slog.String("keyspace", keyspace),
 			slog.String("shard", shard),
 			slog.Bool("down", result.Down),
@@ -584,7 +590,8 @@ func QuorumOptionsFromConfig() QuorumOptions {
 	}
 	if !opts.valid() {
 		if util.ClearToLog("shard_quorum_config", "invalid") {
-			log.Warn("invalid shard quorum configuration; quorum detection is disabled (failing closed)",
+			log.Warn(
+				"invalid shard quorum configuration; quorum detection is disabled (failing closed)",
 				slog.Int("failure_threshold", opts.FailureThreshold),
 				slog.Duration("freshness", opts.Freshness),
 				slog.Float64("fraction", opts.Fraction),
@@ -593,7 +600,8 @@ func QuorumOptionsFromConfig() QuorumOptions {
 		}
 	} else if pollTime := config.GetInstancePollTime(); opts.Freshness <= pollTime {
 		if util.ClearToLog("shard_quorum_config", "freshness") {
-			log.Warn("--shard-tablet-health-freshness does not exceed --instance-poll-time; observer reports go stale between polls and quorum detection may never fire",
+			log.Warn(
+				"--shard-tablet-health-freshness does not exceed --instance-poll-time; observer reports go stale between polls and quorum detection may never fire",
 				slog.Duration("freshness", opts.Freshness),
 				slog.Duration("instance_poll_time", pollTime),
 			)

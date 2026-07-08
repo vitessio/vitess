@@ -236,7 +236,7 @@ VTTablet's existing disk health monitor (`--disk-write-dir`) now distinguishes b
 
 VTOrc gains a matching analysis (`PrimaryDiskFull`) and a new flag, `--enable-primary-disk-full-recovery` (default `false`), that mirrors the existing `--enable-primary-disk-stalled-recovery`. When enabled and a primary's disk is full, VTOrc runs `EmergencyReparentShard` to fail over to a healthy replica. Replicas with full disks are excluded from being promoted, but can still serve as the intermediate replication source for catch-up — so ERS still picks the most-advanced candidate, then chooses a different replica for promotion.
 
-Operators must opt in to the recovery action explicitly. Without the flag, VTOrc will still surface the analysis but take no action.
+Operators must opt in to the recovery action explicitly. Without the flag, VTOrc still records the disk-health state it reads from `FullStatus` but raises no disk-specific analysis — an unreachable primary is handled by the ordinary `DeadPrimary` detection and recovery.
 
 Note that `EDQUOT` (per-user/group quota exceeded on xfs/ext4/NFS) is treated identically to `ENOSPC`. If the quota applies to the user the tablet runs as across all nodes in the shard, failover may not resolve the underlying condition — the new primary will hit the same quota and ERS may run again. Operators relying on filesystem quotas should verify the quota scope before enabling `--enable-primary-disk-full-recovery`.
 

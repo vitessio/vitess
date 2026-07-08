@@ -58,7 +58,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 		codeWanted     AnalysisCode
 		shardWanted    string
 		keyspaceWanted string
-		preFunc        func()
+		preFunc        func(t *testing.T)
 		wantErr        string
 	}{
 		{
@@ -123,7 +123,39 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 			}},
 			keyspaceWanted: "ks",
 			shardWanted:    "0",
-			codeWanted:     PrimaryDiskStalled,
+			preFunc: func(t *testing.T) {
+				config.SetStalledDiskPrimaryRecovery(true)
+				t.Cleanup(func() { config.SetStalledDiskPrimaryRecovery(false) })
+			},
+			codeWanted: PrimaryDiskStalled,
+		},
+		{
+			// With stalled-disk recovery disabled, a stalled-disk flag —
+			// possibly preserved from a prior poll — must not mask DeadPrimary,
+			// or the shard would be stuck with no recovery at all.
+			name: "StalledDiskPrimaryFallsBackToDeadPrimaryWhenRecoveryDisabled",
+			info: []*test.InfoForRecoveryAnalysis{{
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_PRIMARY,
+					MysqlHostname: "localhost",
+					MysqlPort:     6709,
+				},
+				DurabilityPolicy:              "none",
+				LastCheckValid:                0,
+				CountReplicas:                 4,
+				CountValidReplicas:            4,
+				CountValidReplicatingReplicas: 0,
+				IsPrimary:                     1,
+				IsStalledDisk:                 1,
+				CurrentTabletType:             int(topodatapb.TabletType_PRIMARY),
+			}},
+			keyspaceWanted: "ks",
+			shardWanted:    "0",
+			codeWanted:     DeadPrimary,
 		},
 		{
 			name: "FullDiskPrimary",
@@ -148,7 +180,39 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 			}},
 			keyspaceWanted: "ks",
 			shardWanted:    "0",
-			codeWanted:     PrimaryDiskFull,
+			preFunc: func(t *testing.T) {
+				config.SetFullDiskPrimaryRecovery(true)
+				t.Cleanup(func() { config.SetFullDiskPrimaryRecovery(false) })
+			},
+			codeWanted: PrimaryDiskFull,
+		},
+		{
+			// With full-disk recovery disabled, a full-disk flag — possibly
+			// preserved from a prior poll — must not mask DeadPrimary, or the
+			// shard would be stuck with no recovery at all.
+			name: "FullDiskPrimaryFallsBackToDeadPrimaryWhenRecoveryDisabled",
+			info: []*test.InfoForRecoveryAnalysis{{
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_PRIMARY,
+					MysqlHostname: "localhost",
+					MysqlPort:     6709,
+				},
+				DurabilityPolicy:              "none",
+				LastCheckValid:                0,
+				CountReplicas:                 4,
+				CountValidReplicas:            4,
+				CountValidReplicatingReplicas: 0,
+				IsPrimary:                     1,
+				IsFullDisk:                    1,
+				CurrentTabletType:             int(topodatapb.TabletType_PRIMARY),
+			}},
+			keyspaceWanted: "ks",
+			shardWanted:    "0",
+			codeWanted:     DeadPrimary,
 		},
 		{
 			name: "FullDiskReplica",
@@ -294,7 +358,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 			}},
 			keyspaceWanted: "ks",
 			shardWanted:    "0",
-			preFunc: func() {
+			preFunc: func(t *testing.T) {
 				RecordPrimaryHealthCheck(&topodatapb.TabletAlias{Cell: "zon1", Uid: 100}, true)
 				RecordPrimaryHealthCheck(&topodatapb.TabletAlias{Cell: "zon1", Uid: 100}, false)
 				RecordPrimaryHealthCheck(&topodatapb.TabletAlias{Cell: "zon1", Uid: 100}, false)
@@ -326,7 +390,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 			}},
 			keyspaceWanted: "ks",
 			shardWanted:    "0",
-			preFunc: func() {
+			preFunc: func(t *testing.T) {
 				RecordPrimaryHealthCheck(&topodatapb.TabletAlias{Cell: "zon1", Uid: 100}, true)
 				RecordPrimaryHealthCheck(&topodatapb.TabletAlias{Cell: "zon1", Uid: 100}, false)
 				RecordPrimaryHealthCheck(&topodatapb.TabletAlias{Cell: "zon1", Uid: 100}, false)
@@ -1121,7 +1185,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			resetPrimaryHealthState()
 			if tt.preFunc != nil {
-				tt.preFunc()
+				tt.preFunc(t)
 			}
 			oldDB := db.Db
 			defer func() {
@@ -1153,12 +1217,9 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 	}
 }
 
-func TestGetDetectionAnalysisDecisionDiskFull(t *testing.T) {
-	oldDB := db.Db
-	defer func() {
-		db.Db = oldDB
-	}()
-
+// fullDiskShardRows returns rows for a shard whose primary and only replica
+// both report a full disk and a failed last check.
+func fullDiskShardRows() []sqlutils.RowMap {
 	rows := []sqlutils.RowMap{}
 	for _, analysis := range []*test.InfoForRecoveryAnalysis{
 		{
@@ -1199,12 +1260,44 @@ func TestGetDetectionAnalysisDecisionDiskFull(t *testing.T) {
 		analysis.SetValuesFromTabletInfo()
 		rows = append(rows, analysis.ConvertToRowMap())
 	}
-	db.Db = test.NewTestDB([][]sqlutils.RowMap{rows})
+	return rows
+}
+
+func TestGetDetectionAnalysisDecisionDiskFull(t *testing.T) {
+	oldDB := db.Db
+	defer func() {
+		db.Db = oldDB
+	}()
+
+	config.SetFullDiskPrimaryRecovery(true)
+	t.Cleanup(func() { config.SetFullDiskPrimaryRecovery(false) })
+
+	db.Db = test.NewTestDB([][]sqlutils.RowMap{fullDiskShardRows()})
 
 	got, err := GetDetectionAnalysis("", "", &DetectionAnalysisHints{})
 	require.NoError(t, err)
 	require.Len(t, got, 2)
 	assert.ElementsMatch(t, []AnalysisCode{PrimaryDiskFull, ReplicaDiskFull}, []AnalysisCode{got[0].Analysis, got[1].Analysis})
+}
+
+// TestGetDetectionAnalysisDecisionDiskFullRecoveryDisabled is a regression
+// test for a full-disk primary when --enable-primary-disk-full-recovery is
+// off (the default): the full-disk flag — possibly preserved from a prior
+// poll after the tablet became unreachable — must not produce PrimaryDiskFull
+// (whose recovery would be skipped), but fall back to plain DeadPrimary so
+// the ordinary ERS recovery can run.
+func TestGetDetectionAnalysisDecisionDiskFullRecoveryDisabled(t *testing.T) {
+	oldDB := db.Db
+	defer func() {
+		db.Db = oldDB
+	}()
+
+	db.Db = test.NewTestDB([][]sqlutils.RowMap{fullDiskShardRows()})
+
+	got, err := GetDetectionAnalysis("", "", &DetectionAnalysisHints{})
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.Equal(t, DeadPrimary, got[0].Analysis)
 }
 
 // TestStalePrimary tests that an old primary that remains writable and is of tablet type PRIMARY

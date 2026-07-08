@@ -484,6 +484,20 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 			return nil
 		}
 		isInvalid := m.GetBool("is_invalid")
+		// A primary with a recoverable disk-health issue must not match any
+		// other analysis (e.g. DeadPrimary, InvalidPrimary) — only ERS can
+		// resolve it, and the disk analysis names the root cause. Each disk
+		// flag only masks when its recovery flag is enabled: a disabled
+		// recovery also disables the disk analysis (gated in its MatchFunc),
+		// so the flag — possibly preserved from a prior poll while the tablet
+		// is unreachable — must fall through to DeadPrimary* instead of
+		// leaving the shard with an analysis whose recovery is skipped.
+		// Evaluating both flags together tolerates both being set on the same
+		// poll: either enabled disk analysis can still fire (problem-ordering
+		// picks the winner) instead of silently filtering both out.
+		diskHealthMasksPrimaryAnalyses := a.IsClusterPrimary &&
+			((a.IsDiskFull && config.GetFullDiskPrimaryRecovery()) ||
+				(a.IsDiskStalled && config.GetStalledDiskPrimaryRecovery()))
 		var matchedProblems []*DetectionAnalysisProblem
 		for _, problem := range detectionAnalysisProblems {
 			// When isInvalid is true, instance data is unreliable (never been reached).
@@ -495,14 +509,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 			if a.IsDiskFull && topo.IsReplicaType(a.TabletType) && problem.Meta.Analysis != ReplicaDiskFull {
 				continue
 			}
-			// A primary with a disk-health issue must not match any other
-			// analysis (e.g. DeadPrimary, InvalidPrimary). The combined
-			// check tolerates both flags being set on the same poll: either
-			// disk analysis can still fire (problem-ordering picks the
-			// winner) instead of silently filtering both out. The recovery
-			// action is gated by the corresponding flag in
-			// getCheckAndRecoverFunctionCode.
-			if a.IsClusterPrimary && (a.IsDiskFull || a.IsDiskStalled) &&
+			if diskHealthMasksPrimaryAnalyses &&
 				problem.Meta.Analysis != PrimaryDiskFull && problem.Meta.Analysis != PrimaryDiskStalled {
 				continue
 			}

@@ -696,8 +696,10 @@ func getCheckAndRecoverFunctionCode(analysisEntry *inst.DetectionAnalysis) (reco
 	// primary
 	case inst.DeadPrimary, inst.DeadPrimaryAndSomeReplicas, inst.PrimaryDiskStalled, inst.PrimaryDiskFull, inst.PrimarySemiSyncBlocked, inst.PrimaryTabletUnreachableByQuorum:
 		// Disk-specific recovery flags can disable a disk-health recovery
-		// independent of the global ERS toggle. The corresponding analysis
-		// still fires for observability, but no recovery action is taken.
+		// independent of the global ERS toggle. A disabled flag normally
+		// also gates the analysis itself (in its MatchFunc), so these cases
+		// are defensive: the flags are dynamic and may flip between
+		// detection and recovery dispatch.
 		switch {
 		case analysisCode == inst.PrimaryDiskStalled && !config.GetStalledDiskPrimaryRecovery():
 			log.Info("VTOrc not configured to recover from a stalled disk, skipping recovery", slog.Any("analysis", analysisCode))
