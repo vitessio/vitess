@@ -960,3 +960,33 @@ func TestPrepareTx(t *testing.T) {
 		})
 	}
 }
+
+// TestBeginNewDbaConnectionClosesOnFailure verifies that the fresh dba
+// connection is closed when its setup fails (applying the settings query or
+// starting the transaction): the redo-prepared-transactions caller returns
+// immediately on error, so a connection left open here would leak.
+func TestBeginNewDbaConnectionClosesOnFailure(t *testing.T) {
+	ctx := t.Context()
+
+	t.Run("settings query fails", func(t *testing.T) {
+		db := fakesqldb.New(t)
+		defer db.Close()
+		db.AddRejectedQuery("dummy_setting", errors.New("failed executing dummy_setting"))
+		te := setupTxEngine(db)
+
+		_, err := te.beginNewDbaConnection(ctx, "dummy_setting")
+		require.ErrorContains(t, err, "dummy_setting")
+		require.NoError(t, db.WaitForClose(30*time.Second), "dba connection must be closed when applying settings fails")
+	})
+
+	t.Run("begin fails", func(t *testing.T) {
+		db := fakesqldb.New(t)
+		defer db.Close()
+		db.AddRejectedQuery("begin", errors.New("failed executing begin"))
+		te := setupTxEngine(db)
+
+		_, err := te.beginNewDbaConnection(ctx, "")
+		require.ErrorContains(t, err, "begin")
+		require.NoError(t, db.WaitForClose(30*time.Second), "dba connection must be closed when begin fails")
+	})
+}

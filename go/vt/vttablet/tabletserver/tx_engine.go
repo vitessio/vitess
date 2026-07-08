@@ -733,6 +733,9 @@ func (te *TxEngine) beginNewDbaConnection(ctx context.Context, settingsQuery str
 	// any failure, so an interruption may kill the connection.
 	if settingsQuery != "" {
 		if _, err = dbConn.ExecOnce(ctx, settingsQuery, 1, false, true /* insideTxn */); err != nil {
+			// The caller bails out on any error, so close the fresh
+			// connection here or it leaks.
+			dbConn.Close()
 			return nil, err
 		}
 	}
@@ -744,8 +747,11 @@ func (te *TxEngine) beginNewDbaConnection(ctx context.Context, settingsQuery str
 		env: te.env,
 	}
 
-	_, _, err = te.txPool.begin(ctx, nil, false, sc)
-	return sc, err
+	if _, _, err = te.txPool.begin(ctx, nil, false, sc); err != nil {
+		sc.Close()
+		return nil, err
+	}
+	return sc, nil
 }
 
 // IsTwoPCAllowed checks if TwoPC is allowed.
