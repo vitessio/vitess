@@ -17,14 +17,8 @@ limitations under the License.
 package vtgate
 
 import (
-<<<<<<< HEAD
 	"fmt"
-||||||| parent of 838f3bcc0d (vtgate: copy execute options per scatter call for FetchLastInsertId (#20439))
-	"log/slog"
-=======
-	"log/slog"
 	"sync"
->>>>>>> 838f3bcc0d (vtgate: copy execute options per scatter call for FetchLastInsertId (#20439))
 	"testing"
 
 	"github.com/aws/smithy-go/ptr"

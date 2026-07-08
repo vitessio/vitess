@@ -197,17 +197,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 			transactionID := info.transactionID
 			reservedID := info.reservedID
 
-<<<<<<< HEAD
-			if session != nil && session.Session != nil {
-				opts = session.Session.Options
-			}
-||||||| parent of 838f3bcc0d (vtgate: copy execute options per scatter call for FetchLastInsertId (#20439))
-			if session != nil && session.Session != nil {
-				opts = session.Options
-			}
-=======
 			opts = callOptions
->>>>>>> 838f3bcc0d (vtgate: copy execute options per scatter call for FetchLastInsertId (#20439))
 
 			if opts == nil && fetchLastInsertID {
 				opts = &querypb.ExecuteOptions{FetchLastInsertId: fetchLastInsertID}
@@ -445,17 +435,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 			transactionID := info.transactionID
 			reservedID := info.reservedID
 
-<<<<<<< HEAD
-			if session != nil && session.Session != nil {
-				opts = session.Session.Options
-			}
-||||||| parent of 838f3bcc0d (vtgate: copy execute options per scatter call for FetchLastInsertId (#20439))
-			if session != nil && session.Session != nil {
-				opts = session.Options
-			}
-=======
 			opts = callOptions
->>>>>>> 838f3bcc0d (vtgate: copy execute options per scatter call for FetchLastInsertId (#20439))
 
 			if opts == nil && fetchLastInsertID {
 				opts = &querypb.ExecuteOptions{FetchLastInsertId: fetchLastInsertID}
