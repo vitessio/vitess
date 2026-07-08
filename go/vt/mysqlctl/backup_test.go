@@ -525,8 +525,8 @@ func TestRestoreManifestMySQLVersionValidation(t *testing.T) {
 func TestFindBackupToRestoreMySQLShellSkipVersionCheck(t *testing.T) {
 	// 8.0.32 -> 8.0.31 is a downgrade, which is never version-compatible.
 	const (
-		backupVersion  = "mysqld  Ver 8.0.32"
-		restoreVersion = "mysqld  Ver 8.0.31"
+		backupVersion  = "mysqld  Ver 8.4.10"
+		restoreVersion = "mysqld  Ver 8.0.36"
 	)
 
 	testCases := []struct {
