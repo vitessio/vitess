@@ -26,10 +26,13 @@ import (
 	"hash"
 	"hash/crc32"
 	"io"
+	"math"
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -67,11 +70,16 @@ const (
 	// How many times we will retry file operations. Note that a file operation that
 	// returns a vtrpc.Code_FAILED_PRECONDITION error is considered fatal and we will
 	// not retry.
-	maxRetriesPerFile   = 1
-	maxFileCloseRetries = 20 // At this point we should consider it permanent
+	maxRetriesPerFile = 1
 )
 
 var (
+	// How many times we will retry file close operations. Note that a file operation that
+	// returns a vtrpc.Code_FAILED_PRECONDITION error is considered fatal and we will
+	// not retry.
+	maxFileCloseRetries = 20
+	openFile            = os.OpenFile
+
 	// BuiltinBackupMysqldTimeout is how long ExecuteBackup should wait for response from mysqld.Shutdown.
 	// It can later be extended for other calls to mysqld during backup functions.
 	// Exported for testing.
@@ -95,7 +103,36 @@ var (
 	// The path should exist.
 	// When empty, the default OS temp dir is assumed.
 	builtinIncrementalRestorePath = ""
+
+	backupFileChunkThreshold uint64                          // 0 means chunking is disabled
+	backupFileChunkSize      uint64 = 1 * 1024 * 1024 * 1024 // 1 GiB
+	minBackupFileChunkSize   uint64 = 4 * 1024 * 1024        // 4 MiB minimum to prevent the accidental allocation of a huge amount of files
+
+	errRestoreFatal = errors.New("fatal restore error")
 )
+
+func hasErrorCode(err error, code vtrpcpb.Code) bool {
+	if vterrors.Code(err) == code {
+		return true
+	}
+	if joined, ok := err.(interface{ Unwrap() []error }); ok {
+		for _, e := range joined.Unwrap() {
+			if hasErrorCode(e, code) {
+				return true
+			}
+		}
+	}
+	if single, ok := err.(interface{ Unwrap() error }); ok {
+		if hasErrorCode(single.Unwrap(), code) {
+			return true
+		}
+	} else if causer, ok := err.(interface{ Cause() error }); ok {
+		if hasErrorCode(causer.Cause(), code) {
+			return true
+		}
+	}
+	return false
+}
 
 // BuiltinBackupEngine encapsulates the logic of the builtin engine
 // it implements the BackupEngine interface and contains all the logic
@@ -159,12 +196,55 @@ type FileEntry struct {
 	// for writing files in a temporary directory
 	ParentPath string
 
+	// Chunks, when non-empty, indicates this file was split into chunks for
+	// parallel backup/restore. Each chunk is independently compressed and hashed.
+	Chunks []FileChunk `json:",omitempty"`
+
 	// RetryCount specifies how many times we retried restoring/backing up this FileEntry.
 	// If we fail to restore/backup this FileEntry, we will retry up to maxRetriesPerFile times.
 	// Every time the builtin backup engine retries this file, we increment this field by 1.
 	// We don't care about adding this information to the MANIFEST and also to not cause any compatibility issue
 	// we are adding the - json tag to let Go know it can ignore the field.
 	RetryCount int `json:"-"`
+}
+
+// FileChunk describes one chunk of a large file that has been split for parallel backup/restore.
+type FileChunk struct {
+	// StorageName is the name used to store this chunk in the backup storage.
+	// Format is "fileIndex-chunkIndex" (e.g. "5-0", "5-1").
+	StorageName string
+
+	// Offset is the byte offset within the original file where this chunk starts.
+	Offset int64
+
+	// Size is the number of bytes in this chunk.
+	Size int64
+
+	// Hash is the CRC32 hash of the stored data (after compression, if any).
+	Hash string
+}
+
+// computeFileChunks splits a file of the given size into chunks of chunkSize bytes.
+// The fileIndex is used to generate storage names in "fileIndex-chunkIndex" format.
+func computeFileChunks(fileIndex int, fileSize, chunkSize int64) []FileChunk {
+	numChunks := fileSize / chunkSize
+	if fileSize%chunkSize != 0 {
+		numChunks++
+	}
+	chunks := make([]FileChunk, numChunks)
+	for j := range numChunks {
+		offset := j * chunkSize
+		size := chunkSize
+		if offset+size > fileSize {
+			size = fileSize - offset
+		}
+		chunks[j] = FileChunk{
+			StorageName: fmt.Sprintf("%d-%d", fileIndex, j),
+			Offset:      offset,
+			Size:        size,
+		}
+	}
+	return chunks
 }
 
 func init() {
@@ -179,6 +259,8 @@ func registerBuiltinBackupEngineFlags(fs *pflag.FlagSet) {
 	fs.UintVar(&builtinBackupFileReadBufferSize, "builtinbackup-file-read-buffer-size", builtinBackupFileReadBufferSize, "read files using an IO buffer of this many bytes. Golang defaults are used when set to 0.")
 	fs.UintVar(&builtinBackupFileWriteBufferSize, "builtinbackup-file-write-buffer-size", builtinBackupFileWriteBufferSize, "write files using an IO buffer of this many bytes. Golang defaults are used when set to 0.")
 	fs.StringVar(&builtinIncrementalRestorePath, "builtinbackup-incremental-restore-path", builtinIncrementalRestorePath, "the directory where incremental restore files, namely binlog files, are extracted to. In k8s environments, this should be set to a directory that is shared between the vttablet and mysqld pods. The path should exist. When empty, the default OS temp dir is assumed.")
+	fs.Uint64Var(&backupFileChunkThreshold, "builtinbackup-file-chunk-threshold", backupFileChunkThreshold, "Files larger than this size (in bytes) are split into chunks for parallel backup/restore. 0 disables chunking.")
+	fs.Uint64Var(&backupFileChunkSize, "builtinbackup-file-chunk-size", backupFileChunkSize, "Size of each chunk (in bytes) when splitting large files for parallel backup/restore.")
 }
 
 // fullPath returns the full path of the entry, based on its type.
@@ -231,6 +313,16 @@ func (fe *FileEntry) open(cnf *Mycnf, readOnly bool) (*os.File, error) {
 func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (BackupResult, error) {
 	params.Logger.Infof("Executing Backup at %v for keyspace/shard %v/%v on tablet %v, concurrency: %v, compress: %v, incrementalFromPos: %v",
 		params.BackupTime, params.Keyspace, params.Shard, params.TabletAlias, params.Concurrency, backupStorageCompress, params.IncrementalFromPos)
+
+	if backupFileChunkThreshold > 0 && backupFileChunkSize < minBackupFileChunkSize {
+		return BackupUnusable, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "builtinbackup-file-chunk-size must be >= %d", minBackupFileChunkSize)
+	}
+	if backupFileChunkThreshold > 0 && backupFileChunkSize > math.MaxInt64 {
+		return BackupUnusable, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "builtinbackup-file-chunk-size exceeds maximum allowed value of %d", int64(math.MaxInt64))
+	}
+	if backupFileChunkThreshold > 0 && backupFileChunkThreshold < backupFileChunkSize {
+		return BackupUnusable, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "builtinbackup-file-chunk-threshold (%d) must be >= builtinbackup-file-chunk-size (%d)", backupFileChunkThreshold, backupFileChunkSize)
+	}
 
 	if isIncrementalBackup(params) {
 		return be.executeIncrementalBackup(ctx, params, bh)
@@ -620,8 +712,43 @@ func (be *BuiltinBackupEngine) backupFiles(
 	}
 	params.Logger.Infof("found %v files to backup", len(fes))
 
-	// The error here can be ignored safely. Failed FileEntry's are handled in the next 'if' statement.
-	_ = be.backupFileEntries(ctx, fes, bh, params)
+	// Build a flat work list. For large files that exceed the chunk threshold,
+	// we split them into chunks that participate as individual work items in the
+	// shared concurrency pool.
+	var workItems []backupWorkItem
+	for i := range fes {
+		fe := &fes[i]
+
+		// Only fetch file size and calculate chunks if the threshold is enabled.
+		if backupFileChunkThreshold > 0 {
+			fullPath, pathErr := fe.fullPath(params.Cnf)
+			if pathErr != nil {
+				return vterrors.Wrapf(pathErr, "cannot get full path for %v", fe.Name)
+			}
+			fi, statErr := os.Stat(fullPath)
+			if statErr != nil {
+				return vterrors.Wrapf(statErr, "cannot stat file %v", fullPath)
+			}
+			fileSize := fi.Size()
+
+			// Files larger than the threshold are split into chunks for parallel backup/restore.
+			if uint64(fileSize) > backupFileChunkThreshold {
+				fe.Chunks = computeFileChunks(i, fileSize, int64(backupFileChunkSize))
+				for j, chunk := range fe.Chunks {
+					workItems = append(workItems, backupWorkItem{feIndex: i, chunkIndex: j, name: chunk.StorageName})
+				}
+				continue
+			}
+		}
+
+		workItems = append(workItems, backupWorkItem{feIndex: i, chunkIndex: -1, name: strconv.Itoa(i)})
+	}
+
+	// Backup all work items concurrently.
+	backupErr := be.backupWorkItems(ctx, workItems, fes, bh, params)
+	if hasErrorCode(backupErr, vtrpcpb.Code_FAILED_PRECONDITION) {
+		return backupErr
+	}
 
 	// BackupHandle supports the BackupErrorRecorder interface for tracking errors
 	// across any goroutines that fan out to take the backup. This means that we
@@ -632,44 +759,34 @@ func (be *BuiltinBackupEngine) backupFiles(
 	// error were encountered
 	// [here](https://github.com/vitessio/vitess/blob/d26b6c7975b12a87364e471e2e2dfa4e253c2a5b/go/vt/mysqlctl/s3backupstorage/s3.go#L139-L142).
 	//
-	// All the errors are grouped per file, if one or more files failed, we back them up
-	// once more concurrently, if any of the retry fail, we fail-fast by canceling the context
-	// and return an error. There is no reason to continue processing the other retries, if
-	// one of them failed.
+	// All the errors are grouped per file (or chunk), if one or more failed, we retry
+	// them once more concurrently. If any of the retries fail, we fail-fast by canceling
+	// the context and return an error.
 	if files := bh.GetFailedFiles(); len(files) > 0 {
-		newFEs := make([]FileEntry, len(fes))
+		var retryItems []backupWorkItem
 		for _, file := range files {
-			fileNb, err := strconv.Atoi(file)
+			feIdx, chunkIdx, err := parseBackupName(file)
 			if err != nil {
-				return vterrors.Wrapf(err, "failed to retry file '%s'", file)
+				return err
 			}
-			oldFes := fes[fileNb]
-			newFEs[fileNb] = FileEntry{
-				Base:       oldFes.Base,
-				Name:       oldFes.Name,
-				ParentPath: oldFes.ParentPath,
-				RetryCount: 1,
-			}
+			fes[feIdx].RetryCount = 1
 			bh.ResetErrorForFile(file)
+			retryItems = append(retryItems, backupWorkItem{feIndex: feIdx, chunkIndex: chunkIdx, name: file})
 		}
-		err = be.backupFileEntries(ctx, newFEs, bh, params)
-		if err != nil {
+		if err := be.backupWorkItems(ctx, retryItems, fes, bh, params); err != nil {
 			return err
 		}
-		// Propagate retry results back to the original entries so the
-		// manifest records correct hashes and metadata.
-		for i, fe := range newFEs {
-			if fe.Name != "" {
-				fes[i] = fe
-			}
-		}
+	} else if backupErr != nil {
+		// Wait surfaced an error not represented in per-file failures.
+		// Bail before MANIFEST upload to avoid reporting a successful backup.
+		return backupErr
 	}
 
 	// Backup the MANIFEST file and apply retry logic.
 	var manifestErr error
 	for currentRetry := 0; currentRetry <= maxRetriesPerFile; currentRetry++ {
 		manifestErr = be.backupManifest(ctx, params, bh, backupPosition, purgedPosition, fromPosition, fromBackupName, serverUUID, mysqlVersion, incrDetails, fes, currentRetry)
-		if manifestErr == nil || vterrors.Code(manifestErr) == vtrpcpb.Code_FAILED_PRECONDITION {
+		if manifestErr == nil || hasErrorCode(manifestErr, vtrpcpb.Code_FAILED_PRECONDITION) {
 			break
 		}
 		bh.ResetErrorForFile(backupManifestFileName)
@@ -680,15 +797,42 @@ func (be *BuiltinBackupEngine) backupFiles(
 	return nil
 }
 
-// backupFileEntries iterates over a slice of FileEntry, backing them up concurrently up to the defined concurrency limit.
-// This function will ignore empty FileEntry, allowing the retry mechanism to send a partially empty slice, to not
-// mess up the index of retriable FileEntry.
-// This function does not leave any background operation behind itself, all calls to bh.AddFile will be finished or canceled.
-func (be *BuiltinBackupEngine) backupFileEntries(ctx context.Context, fes []FileEntry, bh backupstorage.BackupHandle, params BackupParams) error {
+// parseBackupName parses a storage name back into a file index and chunk index.
+// Names are either "5" (whole file) or "5-2" (file 5, chunk 2).
+// Returns (fileIndex, chunkIndex) where chunkIndex is -1 for whole files.
+func parseBackupName(name string) (int, int, error) {
+	if strings.Contains(name, "-") {
+		parts := strings.SplitN(name, "-", 2)
+		feIdx, err := strconv.Atoi(parts[0])
+		if err != nil {
+			return 0, 0, vterrors.Wrapf(err, "failed to parse backup name '%s'", name)
+		}
+		chunkIdx, err := strconv.Atoi(parts[1])
+		if err != nil {
+			return 0, 0, vterrors.Wrapf(err, "failed to parse backup name '%s'", name)
+		}
+		return feIdx, chunkIdx, nil
+	}
+	feIdx, err := strconv.Atoi(name)
+	if err != nil {
+		return 0, 0, vterrors.Wrapf(err, "failed to parse backup name '%s'", name)
+	}
+	return feIdx, -1, nil
+}
+
+type backupWorkItem struct {
+	feIndex    int
+	chunkIndex int    // -1 means whole-file (non-chunked)
+	name       string // storage name: "5" or "5-0"
+}
+
+// backupWorkItems dispatches backup work items concurrently up to the defined concurrency limit.
+// Each work item is either a whole file or a single chunk of a large file.
+func (be *BuiltinBackupEngine) backupWorkItems(ctx context.Context, workItems []backupWorkItem, fes []FileEntry, bh backupstorage.BackupHandle, params BackupParams) error {
 	ctxCancel, cancel := context.WithCancel(ctx)
 	defer func() {
 		// If we reached this defer in all cases we can cancel the context.
-		// The only ways to get here are: a panic, an error when ending the backup, a successful backup.
+		// The only ways to get here are: a panic, an error when waiting for pending uploads, a successful backup.
 		// For all three options, it is safe to cancel the context, there should be no pending operations
 		// that 1) haven't completed, 2) we care about anymore.
 		cancel()
@@ -696,45 +840,42 @@ func (be *BuiltinBackupEngine) backupFileEntries(ctx context.Context, fes []File
 
 	g := errgroup.Group{}
 	g.SetLimit(params.Concurrency)
-	for i := range fes {
-		if fes[i].Name == "" {
-			continue
+	for _, wi := range workItems {
+		if ctxCancel.Err() != nil {
+			break
 		}
 		g.Go(func() error {
-			fe := &fes[i]
-			name := strconv.Itoa(i)
+			fe := &fes[wi.feIndex]
 
-			// Check for context cancellation explicitly because, the way semaphore code is written, theoretically we might
-			// end up not throwing an error even after cancellation. Please see https://cs.opensource.google/go/x/sync/+/refs/tags/v0.1.0:semaphore/semaphore.go;l=66,
-			// which suggests that if the context is already done, `Acquire()` may still succeed without blocking. This introduces
-			// unpredictability in my test cases, so in order to avoid that, I am adding this cancellation check.
 			select {
+			// Skip work if the context has been cancelled (e.g. another goroutine failed).
 			case <-ctxCancel.Done():
-				log.Error(fmt.Sprintf("Context canceled or timed out during %q backup", fe.Name))
-				bh.RecordError(name, vterrors.Errorf(vtrpcpb.Code_CANCELED, "context canceled"))
+				params.Logger.Errorf("Context canceled or timed out during %q backup", fe.Name)
+				bh.RecordError(wi.name, vterrors.Errorf(vtrpcpb.Code_CANCELED, "context canceled"))
 				return nil
 			default:
 			}
 
-			// Backup the individual file.
-			var errBackupFile error
-			if errBackupFile = be.backupFile(ctxCancel, params, bh, fe, name); errBackupFile != nil {
-				bh.RecordError(name, vterrors.Wrapf(errBackupFile, "failed to backup file '%s'", name))
-				if fe.RetryCount >= maxRetriesPerFile || vterrors.Code(errBackupFile) == vtrpcpb.Code_FAILED_PRECONDITION {
-					// this is the last attempt, and we have an error, we can cancel everything and fail fast.
+			if errBackupFile := be.backupFile(ctxCancel, params, bh, fe, wi.name, wi.chunkIndex); errBackupFile != nil {
+				bh.RecordError(wi.name, vterrors.Wrapf(errBackupFile, "failed to backup '%s'", wi.name))
+				if hasErrorCode(errBackupFile, vtrpcpb.Code_FAILED_PRECONDITION) {
+					cancel()
+					return errBackupFile
+				}
+				if fe.RetryCount >= maxRetriesPerFile {
 					cancel()
 				}
 			}
 			return nil
 		})
 	}
-	_ = g.Wait()
-
-	err := bh.EndBackup(ctx)
-	if err != nil {
+	if err := g.Wait(); err != nil {
+		bh.Wait()
 		return err
 	}
-	return bh.Error()
+
+	bh.Wait()
+	return errors.Join(bh.Error(), ctxCancel.Err())
 }
 
 type backupPipe struct {
@@ -846,8 +987,10 @@ func (bp *backupPipe) ReportProgress(ctx context.Context, period time.Duration, 
 	}
 }
 
-// backupFile backs up an individual file.
-func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle, fe *FileEntry, name string) (finalErr error) {
+// backupFile backs up an individual file or a single chunk of a large file.
+// When chunkIndex is -1, the entire file is backed up as a single unit.
+// When chunkIndex >= 0, only the specified chunk (from fe.Chunks) is backed up.
+func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle, fe *FileEntry, name string, chunkIndex int) (finalErr error) {
 	// We need another context that does not live outside of this function.
 	// Reporting progress, compressing and writing are operations that will be
 	// over by the time we exit this function, they can use this cancelable context.
@@ -875,21 +1018,46 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 	}()
 
 	readStats := params.Stats.Scope(stats.Operation("Source:Read"))
-	timedSource := ioutil.NewMeteredReadCloser(source, readStats.TimedIncrementBytes)
 
-	fi, err := source.Stat()
-	if err != nil {
-		return err
+	var sourceReader io.Reader
+	var dataSize int64
+	var label string
+
+	if chunkIndex >= 0 {
+		// Chunked backup: seek to the chunk's offset and read only chunk.Size bytes.
+		// Each chunk is stored independently with its own name in the backup storage.
+		chunk := &fe.Chunks[chunkIndex]
+		name = chunk.StorageName
+		label = fmt.Sprintf("%s[%d]", fe.Name, chunkIndex)
+
+		if _, err := source.Seek(chunk.Offset, io.SeekStart); err != nil {
+			return vterrors.Wrapf(err, "cannot seek to offset %d in %v", chunk.Offset, fe.Name)
+		}
+		sourceReader = ioutil.NewMeteredReader(io.LimitReader(source, chunk.Size), readStats.TimedIncrementBytes)
+		dataSize = chunk.Size
+	} else {
+		// Whole-file backup: read the entire file.
+		label = fe.Name
+		fi, err := source.Stat()
+		if err != nil {
+			return err
+		}
+		sourceReader = ioutil.NewMeteredReadCloser(source, readStats.TimedIncrementBytes)
+		dataSize = fi.Size()
 	}
 
 	retryStr := retryToString(fe.RetryCount)
-	br := newBackupReader(fe.Name, fi.Size(), timedSource)
+	br := newBackupReader(label, dataSize, sourceReader)
 	go br.ReportProgress(cancelableCtx, builtinBackupProgress, params.Logger, false /*restore*/, retryStr)
 
 	// Open the destination file for writing, and a buffer.
-	params.Logger.Infof("Backing up file: %v %s", fe.Name, retryStr)
+	if chunkIndex >= 0 {
+		params.Logger.Infof("Backing up chunk %d of file %v (offset=%d, size=%d) %s", chunkIndex, fe.Name, fe.Chunks[chunkIndex].Offset, fe.Chunks[chunkIndex].Size, retryStr)
+	} else {
+		params.Logger.Infof("Backing up file: %v %s", fe.Name, retryStr)
+	}
 	openDestAt := time.Now()
-	dest, err := bh.AddFile(ctx, name, fi.Size())
+	dest, err := bh.AddFile(ctx, name, dataSize)
 	if err != nil {
 		return vterrors.Wrapf(err, "cannot add file: %v,%v", name, fe.Name)
 	}
@@ -909,17 +1077,13 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 	destStats := params.Stats.Scope(stats.Operation("Destination:Write"))
 	timedDest := ioutil.NewMeteredWriteCloser(dest, destStats.TimedIncrementBytes)
 
-	bw := newBackupWriter(fe.Name, builtinBackupStorageWriteBufferSize, fi.Size(), timedDest)
+	bw := newBackupWriter(label, builtinBackupStorageWriteBufferSize, dataSize, timedDest)
 
-	// We create the following inner function because:
-	// - we must `defer` the compressor's Close() function
-	// - but it must take place before we close the pipe reader&writer
 	createAndCopy := func() (createAndCopyErr error) {
 		var reader io.Reader = br
 		var writer io.Writer = bw
 
 		defer func() {
-			// Close the backupPipe to finish writing on destination.
 			if err := bw.Close(createAndCopyErr == nil); err != nil {
 				createAndCopyErr = errors.Join(createAndCopyErr, vterrors.Wrapf(err, "cannot flush destination: %v", name))
 			}
@@ -928,7 +1092,7 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 				createAndCopyErr = errors.Join(createAndCopyErr, vterrors.Wrap(err, "failed to close the source reader"))
 			}
 		}()
-		// Create the gzip compression pipe, if necessary.
+
 		if backupStorageCompress {
 			var compressor io.WriteCloser
 			if ExternalCompressorCmd != "" {
@@ -945,11 +1109,10 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 
 			closer := ioutil.NewTimeoutCloser(cancelableCtx, compressor, closeTimeout)
 			defer func() {
-				// Close gzip to flush it, after that all data is sent to writer.
-				params.Logger.Infof("Closing compressor for file: %s %s", fe.Name, retryStr)
+				params.Logger.Infof("Closing compressor for file: %s %s", label, retryStr)
 				closeCompressorAt := time.Now()
 				if cerr := closeWithRetry(ctx, params.Logger, closer, "compressor"); cerr != nil {
-					cerr = vterrors.Wrapf(cerr, "failed to close compressor %v", fe.Name)
+					cerr = vterrors.Wrapf(cerr, "failed to close compressor %v", label)
 					params.Logger.Error(cerr)
 					createAndCopyErr = errors.Join(createAndCopyErr, cerr)
 					return
@@ -962,8 +1125,6 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 			reader = bufio.NewReaderSize(br, int(builtinBackupFileReadBufferSize))
 		}
 
-		// Copy from the source file to writer (optional gzip,
-		// optional pipe, tee, output file and hasher).
 		_, err = io.Copy(writer, reader)
 		if err != nil {
 			return vterrors.Wrap(err, "cannot copy data")
@@ -975,8 +1136,12 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 		return errors.Join(finalErr, err)
 	}
 
-	// Save the hash.
-	fe.Hash = bw.HashString()
+	// Save the hash — each chunk goroutine writes a distinct index, no race.
+	if chunkIndex >= 0 {
+		fe.Chunks[chunkIndex].Hash = bw.HashString()
+	} else {
+		fe.Hash = bw.HashString()
+	}
 	return nil
 }
 
@@ -1005,7 +1170,7 @@ func (be *BuiltinBackupEngine) backupManifest(
 	}()
 
 	// Creating this function allows us to ensure we always close the writer no matter what,
-	// and in case of success that we close it before calling bh.EndBackup.
+	// and in case of success that we close it before calling bh.Wait.
 	addAndWrite := func() (addAndWriteError error) {
 		// open the MANIFEST
 		wc, err := bh.AddFile(ctx, backupManifestFileName, backupstorage.FileSizeUnknown)
@@ -1068,10 +1233,7 @@ func (be *BuiltinBackupEngine) backupManifest(
 		return err
 	}
 
-	err = bh.EndBackup(ctx)
-	if err != nil {
-		return err
-	}
+	bh.Wait()
 	return bh.Error()
 }
 
@@ -1196,21 +1358,40 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 		}
 	}
 	fes := bm.FileEntries
-	_ = be.restoreFileEntries(ctx, fes, bh, bm, params, createdDir)
-	if files := bh.GetFailedFiles(); len(files) > 0 {
+
+	// For chunked files, we pre-create the files at the right size, each chunk then only writes to the right offset.
+	// This is done to prevent them from being truncated when retries happen.
+	if err := createChunkedDestinations(ctx, fes, params.Cnf, createdDir, params.Logger); err != nil {
+		return "", err
+	}
+
+	restoreErr := be.restoreFileEntries(ctx, fes, bh, bm, params, createdDir)
+	if errors.Is(restoreErr, errRestoreFatal) {
+		return "", restoreErr
+	}
+	files := bh.GetFailedFiles()
+	if restoreErr != nil && len(files) == 0 {
+		return "", restoreErr
+	}
+	if len(files) > 0 {
 		newFEs := make([]FileEntry, len(fes))
 		for _, file := range files {
-			fileNb, err := strconv.Atoi(file)
-			if err != nil {
-				return "", vterrors.Wrapf(err, "failed to retry file '%s'", file)
+			feIdx, chunkIdx, parseErr := parseBackupName(file)
+			if parseErr != nil {
+				return "", parseErr
 			}
-			oldFes := fes[fileNb]
-			newFEs[fileNb] = FileEntry{
-				Base:       oldFes.Base,
-				Name:       oldFes.Name,
-				ParentPath: oldFes.ParentPath,
-				Hash:       oldFes.Hash,
-				RetryCount: 1,
+			oldFe := fes[feIdx]
+			if newFEs[feIdx].Name == "" {
+				newFEs[feIdx] = FileEntry{
+					Base:       oldFe.Base,
+					Name:       oldFe.Name,
+					ParentPath: oldFe.ParentPath,
+					Hash:       oldFe.Hash,
+					RetryCount: 1,
+				}
+			}
+			if chunkIdx >= 0 {
+				newFEs[feIdx].Chunks = append(newFEs[feIdx].Chunks, oldFe.Chunks[chunkIdx])
 			}
 			bh.ResetErrorForFile(file)
 		}
@@ -1222,49 +1403,213 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 	return createdDir, nil
 }
 
+// validateChunkMetadata checks that a file's chunk list is well-formed: no negative
+// offsets, no non-positive sizes, no int64 overflow, correct StorageName format, and
+// contiguous coverage with no gaps or overlaps. Sorts chunks by offset in place.
+// Returns the total file size on success.
+func validateChunkMetadata(fe *FileEntry, fileIndex int) (int64, error) {
+	sort.Slice(fe.Chunks, func(a, b int) bool {
+		return fe.Chunks[a].Offset < fe.Chunks[b].Offset
+	})
+
+	var expectedOffset int64
+	for j, c := range fe.Chunks {
+		if c.Offset < 0 || c.Size <= 0 {
+			return 0, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "invalid chunk metadata for file %v chunk %d: offset=%d, size=%d", fe.Name, j, c.Offset, c.Size)
+		}
+		if c.Offset > math.MaxInt64-c.Size {
+			return 0, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "chunk metadata for file %v chunk %d overflows int64: offset=%d, size=%d", fe.Name, j, c.Offset, c.Size)
+		}
+		expectedName := fmt.Sprintf("%d-%d", fileIndex, j)
+		if c.StorageName != expectedName {
+			return 0, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "unexpected storage name for file %v chunk %d: got %q, expected %q", fe.Name, j, c.StorageName, expectedName)
+		}
+		if c.Offset != expectedOffset {
+			return 0, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "chunk metadata for file %v chunk %d has gap/overlap: expected offset %d, got %d", fe.Name, j, expectedOffset, c.Offset)
+		}
+		expectedOffset = c.Offset + c.Size
+	}
+
+	return expectedOffset, nil
+}
+
+// createChunkedDestinations pre-creates and pre-sizes destination files for chunked
+// entries. This is called once before any restore pass so that restoreFileEntries can
+// always open them with O_WRONLY (no truncation), making retries safe.
+func createChunkedDestinations(ctx context.Context, fes []FileEntry, cnf *Mycnf, createdDir string, logger logutil.Logger) error {
+	for i := range fes {
+		fe := &fes[i]
+		if len(fe.Chunks) == 0 {
+			// Non-chunked files are not pre-created. this is handled by the restoreFileEntries function.
+			continue
+		}
+		fe.ParentPath = createdDir
+
+		totalSize, err := validateChunkMetadata(fe, i)
+		if err != nil {
+			return err
+		}
+
+		dest, err := fe.open(cnf, false)
+		if err != nil {
+			return vterrors.Wrapf(err, "can't create destination for chunked file %v", fe.Name)
+		}
+		if err := dest.Truncate(totalSize); err != nil {
+			closeWithRetry(ctx, logger, dest, fe.Name)
+			return vterrors.Wrapf(err, "can't pre-size chunked file %v", fe.Name)
+		}
+		if err := closeWithRetry(ctx, logger, dest, fe.Name); err != nil {
+			return vterrors.Wrapf(err, "can't close pre-sized chunked file %v", fe.Name)
+		}
+	}
+	return nil
+}
+
+// restoreWorkItem represents a single unit of restore work: either a chunk of a
+// chunked file, or a whole non-chunked file.
+type restoreWorkItem struct {
+	fe       *FileEntry
+	chunk    *FileChunk // nil for non-chunked files
+	destPath string     // full path for chunked files, empty for non-chunked
+	name     string     // storage name for error recording
+}
+
 func (be *BuiltinBackupEngine) restoreFileEntries(ctx context.Context, fes []FileEntry, bh backupstorage.BackupHandle, bm builtinBackupManifest, params RestoreParams, createdDir string) error {
+	parentCtx := ctx
 	g, ctx := errgroup.WithContext(ctx)
 	g.SetLimit(params.Concurrency)
 
+	// Build work items. Chunked files resolve their destination path here;
+	// each chunk opens/closes the fd independently during execution.
+	var workItems []restoreWorkItem
+	var setupErr error
 	for i := range fes {
 		if fes[i].Name == "" {
 			continue
 		}
+		fe := &fes[i]
+		fe.ParentPath = createdDir
+
+		if len(fe.Chunks) > 0 {
+			fullPath, pathErr := fe.fullPath(params.Cnf)
+			if pathErr != nil {
+				setupErr = vterrors.Wrapf(pathErr, "can't get path for chunked file %v", fe.Name)
+				break
+			}
+
+			for j := range fe.Chunks {
+				workItems = append(workItems, restoreWorkItem{
+					fe:       fe,
+					chunk:    &fe.Chunks[j],
+					destPath: fullPath,
+					name:     fe.Chunks[j].StorageName,
+				})
+			}
+		} else {
+			workItems = append(workItems, restoreWorkItem{
+				fe:   fe,
+				name: strconv.Itoa(i),
+			})
+		}
+	}
+
+	if setupErr != nil {
+		return fmt.Errorf("%w: %w", errRestoreFatal, setupErr)
+	}
+
+	// Phase 2: Dispatch all work items concurrently.
+	for _, wi := range workItems {
+		if ctx.Err() != nil {
+			break
+		}
 		g.Go(func() error {
-			fe := &fes[i]
-			name := strconv.Itoa(i)
-			// Check for context cancellation explicitly because, the way semaphore code is written, theoretically we might
-			// end up not throwing an error even after cancellation. Please see https://cs.opensource.google/go/x/sync/+/refs/tags/v0.1.0:semaphore/semaphore.go;l=66,
-			// which suggests that if the context is already done, `Acquire()` may still succeed without blocking. This introduces
-			// unpredictability in my test cases, so in order to avoid that, I am adding this cancellation check.
 			select {
 			case <-ctx.Done():
-				log.Error(fmt.Sprintf("Context canceled or timed out during %q restore", fe.Name))
-				bh.RecordError(name, vterrors.Errorf(vtrpcpb.Code_CANCELED, "context canceled"))
+				params.Logger.Errorf("Context canceled or timed out during %q restore", wi.fe.Name)
+				bh.RecordError(wi.name, vterrors.Errorf(vtrpcpb.Code_CANCELED, "context canceled"))
 				return nil
 			default:
 			}
 
-			fe.ParentPath = createdDir
+			var err error
+			if wi.chunk != nil {
+				params.Logger.Infof("Restoring chunk %s of file %v (offset=%d, size=%d)", wi.name, wi.fe.Name, wi.chunk.Offset, wi.chunk.Size)
+				err = be.restoreFileChunk(ctx, params, bh, wi.chunk, bm, wi.destPath)
+			} else {
+				params.Logger.Infof("Copying file %v: %v %s", wi.name, wi.fe.Name, retryToString(wi.fe.RetryCount))
+				err = be.restoreFile(ctx, params, bh, wi.fe, bm, wi.name)
+			}
 
-			// And restore the file.
-			params.Logger.Infof("Copying file %v: %v %s", name, fe.Name, retryToString(fe.RetryCount))
-			if errRestore := be.restoreFile(ctx, params, bh, fe, bm, name); errRestore != nil {
-				bh.RecordError(name, vterrors.Wrapf(errRestore, "failed to restore file %v to %v", name, fe.Name))
-				if fe.RetryCount >= maxRetriesPerFile || vterrors.Code(errRestore) == vtrpcpb.Code_FAILED_PRECONDITION {
-					// this is the last attempt, and we have an error, we can return an error, which will let errgroup
-					// know it can cancel the context
-					return errRestore
+			if err != nil {
+				wrappedErr := vterrors.Wrapf(err, "failed to restore %v", wi.name)
+				bh.RecordError(wi.name, wrappedErr)
+				if wi.fe.RetryCount >= maxRetriesPerFile || hasErrorCode(err, vtrpcpb.Code_FAILED_PRECONDITION) {
+					// This is the last attempt, and we have an error, we can return an error,
+					// which will let errgroup know it can cancel the context.
+					return wrappedErr
 				}
 			}
 			return nil
 		})
 	}
-	_ = g.Wait()
-	return bh.Error()
+
+	if err := g.Wait(); err != nil {
+		if hasErrorCode(err, vtrpcpb.Code_FAILED_PRECONDITION) {
+			return fmt.Errorf("%w: %w", errRestoreFatal, err)
+		}
+		return err
+	}
+	return errors.Join(bh.Error(), parentCtx.Err())
 }
 
-// restoreFile restores an individual file.
+// createDecompressor sets up decompression based on the backup manifest settings.
+// Returns the wrapped reader, a cleanup function (must be deferred), and error.
+func createDecompressor(ctx context.Context, bm builtinBackupManifest, reader io.Reader, params RestoreParams, name string) (io.Reader, func() error, error) {
+	deCompressionEngine := bm.CompressionEngine
+	if deCompressionEngine == "" {
+		deCompressionEngine = PgzipCompressor
+	}
+
+	externalDecompressorCmd := resolveExternalDecompressor(bm.ExternalDecompressor)
+
+	var decompressor io.ReadCloser
+	var err error
+	if externalDecompressorCmd != "" {
+		if deCompressionEngine == ExternalCompressor {
+			deCompressionEngine = externalDecompressorCmd
+			decompressor, err = newExternalDecompressor(ctx, deCompressionEngine, reader, params.Logger)
+		} else {
+			decompressor, err = newBuiltinDecompressor(deCompressionEngine, reader, params.Logger)
+		}
+	} else {
+		if deCompressionEngine == ExternalCompressor {
+			return nil, nil, fmt.Errorf("%w value: %q", errUnsupportedDeCompressionEngine, ExternalCompressor)
+		}
+		decompressor, err = newBuiltinDecompressor(deCompressionEngine, reader, params.Logger)
+	}
+	if err != nil {
+		return nil, nil, vterrors.Wrap(err, "can't create decompressor")
+	}
+
+	closer := ioutil.NewTimeoutCloser(ctx, decompressor, closeTimeout)
+	decompressStats := params.Stats.Scope(stats.Operation("Decompressor:Read"))
+	wrappedReader := ioutil.NewMeteredReader(decompressor, decompressStats.TimedIncrementBytes)
+
+	cleanup := func() error {
+		params.Logger.Infof("closing decompressor for %s", name)
+		closeAt := time.Now()
+		cerr := closeWithRetry(ctx, params.Logger, closer, "decompressor")
+		if cerr != nil {
+			cerr = vterrors.Wrapf(cerr, "failed to close decompressor %v", name)
+			params.Logger.Error(cerr)
+		}
+		params.Stats.Scope(stats.Operation("Decompressor:Close")).TimedIncrement(time.Since(closeAt))
+		return cerr
+	}
+	return wrappedReader, cleanup, nil
+}
+
+// restoreFile restores an individual non-chunked file.
 func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle, fe *FileEntry, bm builtinBackupManifest, name string) (finalErr error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -1289,7 +1634,6 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 		params.Stats.Scope(stats.Operation("Source:Close")).TimedIncrement(time.Since(closeSourceAt))
 	}()
 
-	// Create the backup/source reader and start reporting progress
 	retryStr := retryToString(fe.RetryCount)
 	br := newBackupReader(fe.Name, 0, timedSource)
 	go br.ReportProgress(ctx, builtinBackupProgress, params.Logger, true, retryStr)
@@ -1320,67 +1664,143 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 
 	writeStats := params.Stats.Scope(stats.Operation("Destination:Write"))
 	timedDest := ioutil.NewMeteredWriter(dest, writeStats.TimedIncrementBytes)
-
 	bufferedDest := bufio.NewWriterSize(timedDest, int(builtinBackupFileWriteBufferSize))
 
-	// Create the uncompresser if needed.
 	if !bm.SkipCompress {
-		var decompressor io.ReadCloser
-		deCompressionEngine := bm.CompressionEngine
-
-		if deCompressionEngine == "" {
-			// for backward compatibility
-			deCompressionEngine = PgzipCompressor
-		}
-		externalDecompressorCmd := resolveExternalDecompressor(bm.ExternalDecompressor)
-		if externalDecompressorCmd != "" {
-			if deCompressionEngine == ExternalCompressor {
-				deCompressionEngine = externalDecompressorCmd
-				decompressor, err = newExternalDecompressor(ctx, deCompressionEngine, reader, params.Logger)
-			} else {
-				decompressor, err = newBuiltinDecompressor(deCompressionEngine, reader, params.Logger)
-			}
-		} else {
-			if deCompressionEngine == ExternalCompressor {
-				return fmt.Errorf("%w value: %q", errUnsupportedDeCompressionEngine, ExternalCompressor)
-			}
-			decompressor, err = newBuiltinDecompressor(deCompressionEngine, reader, params.Logger)
-		}
+		var decompressCleanup func() error
+		reader, decompressCleanup, err = createDecompressor(ctx, bm, reader, params, name)
 		if err != nil {
-			return vterrors.Wrap(err, "can't create decompressor")
+			return err
 		}
-		closer := ioutil.NewTimeoutCloser(ctx, decompressor, closeTimeout)
-
-		decompressStats := params.Stats.Scope(stats.Operation("Decompressor:Read"))
-		reader = ioutil.NewMeteredReader(decompressor, decompressStats.TimedIncrementBytes)
-
 		defer func() {
-			params.Logger.Infof("closing decompressor")
-			closeDecompressorAt := time.Now()
-			if cerr := closeWithRetry(ctx, params.Logger, closer, "decompressor"); cerr != nil {
-				cerr = vterrors.Wrapf(cerr, "failed to close decompressor %v", name)
-				params.Logger.Error(cerr)
+			if cerr := decompressCleanup(); cerr != nil {
 				finalErr = errors.Join(finalErr, cerr)
-				return
 			}
-			params.Stats.Scope(stats.Operation("Decompressor:Close")).TimedIncrement(time.Since(closeDecompressorAt))
 		}()
 	}
 
-	// Copy the data. Will also write to the hasher.
 	if _, err := io.Copy(bufferedDest, reader); err != nil {
 		return vterrors.Wrap(err, "failed to copy file contents")
 	}
 
-	// Check the hash.
 	hash := br.HashString()
 	if hash != fe.Hash {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "hash mismatch for %v, got %v expected %v", fe.Name, hash, fe.Hash)
 	}
 
-	// Flush the buffer.
 	if err := bufferedDest.Flush(); err != nil {
 		return vterrors.Wrap(err, "failed to flush destination buffer")
+	}
+
+	return nil
+}
+
+// offsetWriter writes to a file at a specific offset using pwrite semantics.
+// Multiple offsetWriters can write to the same file concurrently at different offsets.
+type offsetWriter struct {
+	f      *os.File
+	offset int64
+}
+
+func (w *offsetWriter) Write(p []byte) (int, error) {
+	n, err := w.f.WriteAt(p, w.offset)
+	w.offset += int64(n)
+	return n, err
+}
+
+// restoreFileChunk restores a single chunk of a large file. The destination
+// file has been pre-created and pre-sized by createChunkedDestinations; this
+// function opens it for pwrite and closes it when done.
+func (be *BuiltinBackupEngine) restoreFileChunk(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle, chunk *FileChunk, bm builtinBackupManifest, destPath string) (finalErr error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	openDestAt := time.Now()
+	dest, err := openFile(destPath, os.O_WRONLY, 0o644)
+	if err != nil {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "can't open destination for chunk %v: %v", chunk.StorageName, err)
+	}
+	params.Stats.Scope(stats.Operation("Destination:Open")).TimedIncrement(time.Since(openDestAt))
+	defer func() {
+		closeDestAt := time.Now()
+		if cerr := closeWithRetry(ctx, params.Logger, dest, chunk.StorageName); cerr != nil {
+			if finalErr != nil {
+				params.Logger.Errorf("Chunk %s had prior error before close failure: %v", chunk.StorageName, finalErr)
+			}
+			// Overwrite (not join) so that closeWithRetry's FAILED_PRECONDITION code
+			// propagates through the dispatch's vterrors.Code() check, ensuring the
+			// error is treated as fatal and not retried.
+			finalErr = cerr
+			return
+		}
+		params.Stats.Scope(stats.Operation("Destination:Close")).TimedIncrement(time.Since(closeDestAt))
+	}()
+
+	openSourceAt := time.Now()
+	source, err := bh.ReadFile(ctx, chunk.StorageName)
+	if err != nil {
+		return vterrors.Wrapf(err, "can't open source chunk %v for reading", chunk.StorageName)
+	}
+	params.Stats.Scope(stats.Operation("Source:Open")).TimedIncrement(time.Since(openSourceAt))
+
+	readStats := params.Stats.Scope(stats.Operation("Source:Read"))
+	timedSource := ioutil.NewMeteredReader(source, readStats.TimedIncrementBytes)
+
+	defer func() {
+		closeSourceAt := time.Now()
+		if err := closeWithRetry(ctx, params.Logger, source, chunk.StorageName); err != nil {
+			params.Logger.Errorf("Failed to close source chunk %s during restore: %v", chunk.StorageName, err)
+			return
+		}
+		params.Stats.Scope(stats.Operation("Source:Close")).TimedIncrement(time.Since(closeSourceAt))
+	}()
+
+	br := newBackupReader(chunk.StorageName, 0, timedSource)
+	go br.ReportProgress(ctx, builtinBackupProgress, params.Logger, true, "")
+	defer func() {
+		if err := br.Close(finalErr == nil); err != nil {
+			finalErr = errors.Join(finalErr, vterrors.Wrap(err, "failed to close source reader"))
+		}
+	}()
+	var reader io.Reader = br
+
+	if !bm.SkipCompress {
+		var decompressCleanup func() error
+		reader, decompressCleanup, err = createDecompressor(ctx, bm, reader, params, chunk.StorageName)
+		if err != nil {
+			return err
+		}
+		defer func() {
+			if cerr := decompressCleanup(); cerr != nil {
+				finalErr = errors.Join(finalErr, cerr)
+			}
+		}()
+	}
+
+	ow := &offsetWriter{f: dest, offset: chunk.Offset}
+	writeStats := params.Stats.Scope(stats.Operation("Destination:Write"))
+	timedDest := ioutil.NewMeteredWriter(ow, writeStats.TimedIncrementBytes)
+	bufferedDest := bufio.NewWriterSize(timedDest, int(builtinBackupFileWriteBufferSize))
+
+	if _, err := io.Copy(bufferedDest, reader); err != nil {
+		return vterrors.Wrapf(err, "failed to copy chunk %v", chunk.StorageName)
+	}
+
+	if err := bufferedDest.Flush(); err != nil {
+		return vterrors.Wrapf(err, "failed to flush chunk %v", chunk.StorageName)
+	}
+
+	// Hash check first: a truncated read fails with INTERNAL (retryable).
+	// Size check second: if the hash passes but the size is wrong, the MANIFEST metadata is corrupt (fatal).
+	hash := br.HashString()
+	if hash != chunk.Hash {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "hash mismatch for chunk %v, got %v expected %v", chunk.StorageName, hash, chunk.Hash)
+	}
+
+	// ow.offset holds initial offset + bytes written, so we can obtain how much we wrote by subtracting the initial offset.
+	written := ow.offset - chunk.Offset
+	if written != chunk.Size {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "chunk %v: decompressed size mismatch: wrote %d bytes, expected %d", chunk.StorageName, written, chunk.Size)
 	}
 
 	return nil
