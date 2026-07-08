@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM golang:1.26.4-trixie@sha256:069cffa8011efba291595b8030af0f7edfb1d2b6d6e2b86327937cf75d03c6ac AS go-builder
+FROM golang:1.26.5-trixie@sha256:bf0bf2dd9146b6d1a79ddc35ebcd7cca2f49d47091accefe3a12b8483a3c9ed6 AS go-builder
 
 # Allows docker builds to set the BUILD_NUMBER
 ARG BUILD_NUMBER
