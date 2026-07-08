@@ -17,6 +17,7 @@ limitations under the License.
 package engine
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -85,8 +86,22 @@ func TestDDLTempTable(t *testing.T) {
 	_, err := ddl.TryExecute(t.Context(), vc, nil, true)
 	require.NoError(t, err)
 
+	// The session is marked as holding temp tables only after the create
+	// succeeded.
 	vc.ExpectLog(t, []string{
+		"Needs Reserved Conn",
+		"ResolveDestinations ks [] Destinations:DestinationAllShards()",
+		"ExecuteMultiShard false false",
 		"temp table getting created",
+	})
+
+	// A failed create must not mark the session: there is no table to
+	// preserve, and the flag would enable reserved-connection keepalives and
+	// disable plan caching for nothing.
+	vc = &loggingVCursor{multiShardErrs: []error{errors.New("create failed")}}
+	_, err = ddl.TryExecute(t.Context(), vc, nil, true)
+	require.ErrorContains(t, err, "create failed")
+	vc.ExpectLog(t, []string{
 		"Needs Reserved Conn",
 		"ResolveDestinations ks [] Destinations:DestinationAllShards()",
 		"ExecuteMultiShard false false",

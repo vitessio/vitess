@@ -77,9 +77,18 @@ func (ddl *DDL) isOnlineSchemaDDL() bool {
 // TryExecute implements the Primitive interface
 func (ddl *DDL) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (result *sqltypes.Result, err error) {
 	if ddl.CreateTempTable {
-		vcursor.Session().HasCreatedTempTable()
 		vcursor.Session().NeedsReservedConn()
-		return vcursor.ExecutePrimitive(ctx, ddl.NormalDDL, bindVars, wantfields)
+		result, err = vcursor.ExecutePrimitive(ctx, ddl.NormalDDL, bindVars, wantfields)
+		if err != nil {
+			return nil, err
+		}
+		// Mark the session as holding temp tables only after the create
+		// succeeded: a failed create leaves no table to preserve, and the
+		// flag would otherwise put the session into temp-table mode —
+		// keepalives on its reserved connections and no plan caching — for
+		// nothing.
+		vcursor.Session().HasCreatedTempTable()
+		return result, nil
 	}
 
 	// Commit any open transaction before executing the ddl query.

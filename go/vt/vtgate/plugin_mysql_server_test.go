@@ -2073,6 +2073,15 @@ func TestComQueryTempTableHeartbeatRegistration(t *testing.T) {
 	_, ok := vh.tempTableConns.Load(c)
 	require.False(t, ok)
 
+	// A failed CREATE TEMPORARY TABLE must not register the connection or
+	// mark the session: there is no temp table to keep alive.
+	sbclookup.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
+	err = vh.ComQuery(c, "create temporary table temp_t(id bigint)", func(*sqltypes.Result) error { return nil })
+	require.Error(t, err)
+	require.False(t, vh.session(c).GetOptions().GetHasCreatedTempTables())
+	_, ok = vh.tempTableConns.Load(c)
+	require.False(t, ok)
+
 	// Creating a temporary table sets the session flag, reserves a
 	// connection, and registers it for heartbeats.
 	err = vh.ComQuery(c, "create temporary table temp_t(id bigint)", func(*sqltypes.Result) error { return nil })
