@@ -1983,9 +1983,13 @@ func TestTempTableHeartbeatSweep(t *testing.T) {
 	vh.sendTempTableHeartbeats(ctx)
 	require.Greater(t, sbc.ExecCount.Load(), before)
 	found := slices.ContainsFunc(sbc.Queries, func(q *querypb.BoundQuery) bool {
-		return q.Sql == "select 1"
+		return q.Sql == "/* temp-table keepalive */ select 1"
 	})
 	require.True(t, found, "sandbox tablet should have received the heartbeat query")
+	opts := sbc.GetOptions()
+	require.NotEmpty(t, opts)
+	require.True(t, opts[len(opts)-1].GetReservedConnKeepAlive(),
+		"beats must be keepalive touches so mysqld's wait_timeout keeps counting only real user traffic")
 
 	// A connection with a command in flight is skipped, not delayed.
 	before = sbc.ExecCount.Load()

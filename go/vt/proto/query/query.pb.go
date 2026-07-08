@@ -1409,9 +1409,17 @@ type ExecuteOptions struct {
 	// but will not return rows or fields in the response. This flag is not
 	// currently honored by StreamExecute. This is useful for warming reads
 	// where the goal is to warm the buffer pool, not to retrieve data.
-	NoResult      bool `protobuf:"varint,21,opt,name=no_result,json=noResult,proto3" json:"no_result,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	NoResult bool `protobuf:"varint,21,opt,name=no_result,json=noResult,proto3" json:"no_result,omitempty"`
+	// reserved_conn_keep_alive, together with a reserved_id, turns the Execute
+	// into a keepalive touch for the reserved connection: the tablet refreshes
+	// the connection's idle timers without executing the query or sending
+	// anything to MySQL, so mysqld's wait_timeout keeps counting only real
+	// user traffic. A connection that is busy executing counts as alive.
+	// Tablets that predate this field ignore it and execute the query
+	// normally.
+	ReservedConnKeepAlive bool `protobuf:"varint,22,opt,name=reserved_conn_keep_alive,json=reservedConnKeepAlive,proto3" json:"reserved_conn_keep_alive,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *ExecuteOptions) Reset() {
@@ -1568,6 +1576,13 @@ func (x *ExecuteOptions) GetTransactionTimeout() int64 {
 func (x *ExecuteOptions) GetNoResult() bool {
 	if x != nil {
 		return x.NoResult
+	}
+	return false
+}
+
+func (x *ExecuteOptions) GetReservedConnKeepAlive() bool {
+	if x != nil {
+		return x.ReservedConnKeepAlive
 	}
 	return false
 }
@@ -5839,7 +5854,7 @@ const file_query_proto_rawDesc = "" +
 	"\x0ebind_variables\x18\x02 \x03(\v2$.query.BoundQuery.BindVariablesEntryR\rbindVariables\x1aU\n" +
 	"\x12BindVariablesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12)\n" +
-	"\x05value\x18\x02 \x01(\v2\x13.query.BindVariableR\x05value:\x028\x01\"\xa0\r\n" +
+	"\x05value\x18\x02 \x01(\v2\x13.query.BindVariableR\x05value:\x028\x01\"\xd9\r\n" +
 	"\x0eExecuteOptions\x12M\n" +
 	"\x0fincluded_fields\x18\x04 \x01(\x0e2$.query.ExecuteOptions.IncludedFieldsR\x0eincludedFields\x12*\n" +
 	"\x11client_found_rows\x18\x05 \x01(\bR\x0fclientFoundRows\x12:\n" +
@@ -5858,7 +5873,8 @@ const file_query_proto_rawDesc = "" +
 	"\x14fetch_last_insert_id\x18\x12 \x01(\bR\x11fetchLastInsertId\x12(\n" +
 	"\x10in_dml_execution\x18\x13 \x01(\bR\x0einDmlExecution\x124\n" +
 	"\x13transaction_timeout\x18\x14 \x01(\x03H\x01R\x12transactionTimeout\x88\x01\x01\x12\x1b\n" +
-	"\tno_result\x18\x15 \x01(\bR\bnoResult\";\n" +
+	"\tno_result\x18\x15 \x01(\bR\bnoResult\x127\n" +
+	"\x18reserved_conn_keep_alive\x18\x16 \x01(\bR\x15reservedConnKeepAlive\";\n" +
 	"\x0eIncludedFields\x12\x11\n" +
 	"\rTYPE_AND_NAME\x10\x00\x12\r\n" +
 	"\tTYPE_ONLY\x10\x01\x12\a\n" +

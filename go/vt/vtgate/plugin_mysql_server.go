@@ -403,14 +403,20 @@ func (vh *vtgateHandler) beatTempTableConn(ctx context.Context, c *mysql.Conn, t
 	}
 }
 
-// sendTempTableBeat runs a "select 1" on a single reserved connection, which
-// resets both the tablet's idle timeout and mysqld's wait_timeout.
+// sendTempTableBeat sends a keepalive touch for a single reserved
+// connection: the tablet refreshes the connection's idle timers without
+// executing anything on the underlying MySQL connection, so mysqld's
+// wait_timeout keeps counting only real user traffic and reclaims idle
+// sessions exactly as MySQL would. The "select 1" only executes on tablets
+// that predate the keepalive option (they ignore it), where the beat then
+// also resets mysqld's idle timer until the tablet is upgraded.
 func (vh *vtgateHandler) sendTempTableBeat(ctx context.Context, t tempTableHeartbeatTarget) error {
 	qs, err := vh.vtg.gw.QueryServiceByAlias(ctx, t.alias, t.target)
 	if err != nil {
 		return err
 	}
-	_, err = qs.Execute(ctx, nil, t.target, "select 1", nil, 0 /* transactionID */, t.reservedID, nil)
+	options := &querypb.ExecuteOptions{ReservedConnKeepAlive: true}
+	_, err = qs.Execute(ctx, nil, t.target, "/* temp-table keepalive */ select 1", nil, 0 /* transactionID */, t.reservedID, options)
 	return err
 }
 

@@ -179,6 +179,29 @@ func (tp *TxPool) GetAndLock(connID tx.ConnID, reason string) (*StatefulConnecti
 	return conn, nil
 }
 
+// KeepAliveReserved refreshes the idle timers of a reserved connection
+// without executing anything on it — in particular, nothing is sent to the
+// underlying MySQL connection, so mysqld's wait_timeout keeps counting only
+// real user traffic. A connection that is currently in use counts as alive:
+// its own activity refreshes the timers when it is unlocked. A connection
+// that no longer exists returns the same "transaction %d: ..." error shape
+// as GetAndLock so callers can recognize that it is gone.
+func (tp *TxPool) KeepAliveReserved(reservedID tx.ConnID) error {
+	conn, err := tp.scp.GetAndLock(reservedID, "for reserved connection keepalive")
+	if err != nil {
+		// The pool's in-use error means the connection is alive and busy —
+		// exactly what a keepalive wants to hear.
+		if strings.Contains(err.Error(), "in use:") {
+			return nil
+		}
+		return vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction %d: %v", reservedID, err)
+	}
+	// Unlock refreshes the connection's timers for non-transactional
+	// connections, which is the whole point of the keepalive.
+	conn.Unlock()
+	return nil
+}
+
 // Commit commits the transaction on the connection.
 func (tp *TxPool) Commit(ctx context.Context, txConn *StatefulConnection) (string, error) {
 	if !txConn.IsInTransaction() {

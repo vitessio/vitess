@@ -889,3 +889,41 @@ func setupWithEnv(t *testing.T, env tabletenv.Env) (*fakesqldb.DB, *TxPool, *fak
 		db.Close()
 	}
 }
+
+// TestTxPoolKeepAliveReserved verifies the reserved-connection keepalive:
+// it refreshes the connection's tablet-side expiry without sending anything
+// to MySQL (mysqld's wait_timeout must keep counting only real user
+// traffic), treats a busy connection as alive, and reports a gone
+// connection with the same "transaction %d: ..." shape as GetAndLock so
+// vtgate stops beating it.
+func TestTxPoolKeepAliveReserved(t *testing.T) {
+	ctx := t.Context()
+	db, txPool, _, closer := setup(t)
+	defer closer()
+
+	conn, err := txPool.scp.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
+	require.NoError(t, err)
+	id := conn.ReservedID()
+	conn.Unlock()
+
+	// The keepalive refreshes the expiry and sends nothing to MySQL.
+	queryLogBefore := db.QueryLog()
+	expiryBefore := conn.expiryTime
+	time.Sleep(time.Millisecond)
+	require.NoError(t, txPool.KeepAliveReserved(id))
+	require.True(t, conn.expiryTime.After(expiryBefore), "keepalive must refresh the connection's expiry")
+	require.Equal(t, queryLogBefore, db.QueryLog(), "keepalive must not execute anything on the MySQL connection")
+
+	// A busy connection counts as alive.
+	relocked, err := txPool.GetAndLock(id, "for test")
+	require.NoError(t, err)
+	require.NoError(t, txPool.KeepAliveReserved(id))
+	relocked.Unlock()
+
+	// A connection that no longer exists reports the gone shape.
+	relocked, err = txPool.GetAndLock(id, "for test")
+	require.NoError(t, err)
+	relocked.ReleaseString("test")
+	err = txPool.KeepAliveReserved(id)
+	require.ErrorContains(t, err, fmt.Sprintf("transaction %d: ", id))
+}

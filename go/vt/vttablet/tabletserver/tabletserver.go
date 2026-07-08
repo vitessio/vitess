@@ -916,6 +916,19 @@ func (tsv *TabletServer) Execute(ctx context.Context, session queryservice.Sessi
 		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] transactionID and reserveID must match if both are non-zero")
 	}
 
+	// A reserved-connection keepalive only touches the connection's tablet-side
+	// idle timers: nothing is executed, and nothing is sent to MySQL, so
+	// mysqld's wait_timeout keeps counting only real user traffic.
+	if options.GetReservedConnKeepAlive() {
+		if reservedID == 0 {
+			return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "reserved connection keepalive requires a reserved ID")
+		}
+		if err := tsv.te.txPool.KeepAliveReserved(reservedID); err != nil {
+			return nil, err
+		}
+		return &sqltypes.Result{}, nil
+	}
+
 	return tsv.execute(ctx, target, sql, bindVariables, transactionID, reservedID, nil, options)
 }
 

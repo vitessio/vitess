@@ -386,6 +386,15 @@ message ExecuteOptions {
   // currently honored by StreamExecute. This is useful for warming reads
   // where the goal is to warm the buffer pool, not to retrieve data.
   bool no_result = 21;
+
+  // reserved_conn_keep_alive, together with a reserved_id, turns the Execute
+  // into a keepalive touch for the reserved connection: the tablet refreshes
+  // the connection's idle timers without executing the query or sending
+  // anything to MySQL, so mysqld's wait_timeout keeps counting only real
+  // user traffic. A connection that is busy executing counts as alive.
+  // Tablets that predate this field ignore it and execute the query
+  // normally.
+  bool reserved_conn_keep_alive = 22;
 }
 
 // Field describes a single column returned by a query
