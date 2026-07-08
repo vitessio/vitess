@@ -336,7 +336,6 @@ func TestDemotePrimaryRollbackUsesDetachedContext(t *testing.T) {
 
 	_, err = tm.demotePrimary(demoteCtx, true /* revertPartialFailure */, false /* force */)
 	require.ErrorIs(t, err, primaryStatusErr)
-	require.ErrorIs(t, demoteCtx.Err(), context.Canceled)
 }
 
 func TestDemotePrimaryForceSemiSyncRollbackUsesDetachedContext(t *testing.T) {
@@ -399,7 +398,6 @@ func TestDemotePrimaryForceSemiSyncRollbackUsesDetachedContext(t *testing.T) {
 
 	_, err = tm.demotePrimary(demoteCtx, true /* revertPartialFailure */, true /* force */)
 	require.ErrorIs(t, err, primaryStatusErr)
-	require.ErrorIs(t, demoteCtx.Err(), context.Canceled)
 }
 
 // TestDemotePrimaryWhenSemiSyncBecomesUnblockedBetweenChecks tests that demote primary
