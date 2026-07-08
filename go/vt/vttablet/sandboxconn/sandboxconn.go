@@ -235,6 +235,15 @@ func (sbc *SandboxConn) appendToQueries(q *querypb.BoundQuery) {
 	sbc.Queries = append(sbc.Queries, q)
 }
 
+// appendToOptions appends to the Options in sandboxconn.
+func (sbc *SandboxConn) appendToOptions(o *querypb.ExecuteOptions) {
+	if sbc.queriesRequireLocking {
+		sbc.queriesMu.Lock()
+		defer sbc.queriesMu.Unlock()
+	}
+	sbc.Options = append(sbc.Options, o)
+}
+
 func (sbc *SandboxConn) getError() error {
 	for code, count := range sbc.MustFailCodes {
 		if count == 0 {
@@ -281,7 +290,7 @@ func (sbc *SandboxConn) Execute(ctx context.Context, target *querypb.Target, que
 		Sql:           query,
 		BindVariables: bv,
 	})
-	sbc.Options = append(sbc.Options, options)
+	sbc.appendToOptions(options)
 	if err := sbc.getError(); err != nil {
 		return nil, err
 	}
@@ -307,7 +316,7 @@ func (sbc *SandboxConn) StreamExecute(ctx context.Context, target *querypb.Targe
 		Sql:           query,
 		BindVariables: bv,
 	})
-	sbc.Options = append(sbc.Options, options)
+	sbc.appendToOptions(options)
 	err := sbc.getError()
 	if err != nil {
 		sbc.sExecMu.Unlock()
