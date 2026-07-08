@@ -26,15 +26,20 @@ import (
 	"time"
 
 	"github.com/patrickmn/go-cache"
+	"github.com/sjmudd/stopwatch"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/log"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
+
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 var spacesRegexp = regexp.MustCompile(`[ \t\n\r]+`)
@@ -1146,6 +1151,57 @@ func TestPrimaryErrantGTIDs(t *testing.T) {
 	err = detectErrantGTIDs(instance, tablet)
 	require.NoError(t, err)
 	require.Empty(t, instance.GtidErrant)
+}
+
+// TestReadTopologyInstanceRecordsObserverTypeFromFullStatus verifies that the shard-peer
+// observer type stored for quorum comes from the tablet's current self-reported
+// FullStatus.TabletType, not VTOrc's topo snapshot (tablet.Type), which can lag during
+// promotions/demotions. Here the topo says PRIMARY (stale) while FullStatus reports REPLICA;
+// quorum evaluation must count the observer as a REPLICA (a PRIMARY-typed observer is skipped),
+// so without the fix the observer would be dropped and the verdict would be no-quorum.
+func TestReadTopologyInstanceRecordsObserverTypeFromFullStatus(t *testing.T) {
+	_, err := db.OpenVTOrc()
+	require.NoError(t, err)
+	t.Cleanup(db.ClearVTOrcDatabase)
+	resetShardPeerHealth()
+	t.Cleanup(resetShardPeerHealth)
+
+	oldTmc := tmc
+	t.Cleanup(func() { tmc = oldTmc })
+
+	now := time.Now()
+	primary := alias(100)
+	observerAlias := alias(101)
+
+	require.NoError(t, SaveTablet(&topodatapb.Tablet{
+		Alias:         observerAlias,
+		Hostname:      "localhost",
+		MysqlHostname: "localhost",
+		MysqlPort:     17101,
+		Keyspace:      "ks",
+		Shard:         "0",
+		Type:          topodatapb.TabletType_PRIMARY, // stale topo type
+	}))
+
+	tmc = &testutil.TabletManagerClient{
+		FullStatusResult: &replicationdatapb.FullStatus{
+			TabletType:      topodatapb.TabletType_REPLICA, // current self-reported type
+			ShardPeerHealth: reportFor(primary, 5, 0, now),
+		},
+	}
+
+	latency := stopwatch.NewNamedStopwatch()
+	require.NoError(t, latency.AddMany([]string{"backend", "instance", "total"}))
+	// ReadTopologyInstance need not fully succeed against this minimal FullStatus; the
+	// shard-peer recording happens early in the read, which is what we assert on.
+	_, _ = ReadTopologyInstanceBufferable(observerAlias, latency)
+
+	opts := QuorumOptions{FailureThreshold: 3, Freshness: 5 * time.Second, Fraction: 1.0, MinObservers: 1}
+	r := EvaluatePrimaryQuorum(primary, "ks", "0", 1, opts, time.Now())
+	require.Len(t, r.Observers, 1)
+	assert.Equal(t, "REPLICA", r.Observers[0].TabletType)
+	assert.Equal(t, 1, r.TotalObservers)
+	assert.True(t, r.Down, "a fresh REPLICA observer reporting the primary down yields a quorum-down verdict")
 }
 
 // TestErrantGTIDCountGaugeIsResetWhenResolved verifies that the per-tablet

@@ -496,6 +496,17 @@ func (vr *vreplicator) loadSettings(ctx context.Context, dbClient *vdbClient) (s
 		vr.WorkflowType = int32(settings.WorkflowType)
 		vr.WorkflowSubType = int32(settings.WorkflowSubType)
 		vr.WorkflowName = settings.WorkflowName
+		// Reconcile the exported state metric with the row we just read
+		// from _vt.vreplication, which is the source of truth. setState()
+		// advances stats.State before its DB UPDATE is sent, while vr.state
+		// is only updated after a successful write; when that UPDATE fails
+		// (e.g. the target is read-only during a reparent) the metric is
+		// left out of sync with the persisted row. Re-syncing it here on
+		// every successful read recovers the metric once the stream
+		// resumes. vr.state is deliberately left alone: it already matches
+		// the persisted row, and overwriting it would break the state
+		// transitions Replicate() relies on. See #20012.
+		vr.stats.State.Store(settings.State.String())
 	}
 	return settings, numTablesToCopy, err
 }
