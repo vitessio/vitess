@@ -5039,9 +5039,49 @@
     "skip_e2e": true
   },
   {
-    "comment": "Unsupported delete of regular table joined with internal operation table",
+    "comment": "delete of regular table joined with internal operation table is allowed",
     "query": "delete u from main.unsharded u join main._vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_ gc on u.id = gc.id",
-    "plan": "VT09033: modification of internal table '_vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_' is not allowed",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "DELETE",
+      "Original": "delete u from main.unsharded u join main._vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_ gc on u.id = gc.id",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "Query": "delete u from unsharded as u join _vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_ as gc on u.id = gc.id"
+      },
+      "TablesUsed": [
+        "main._vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+        "main.unsharded"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "update of regular table joined with internal operation table is allowed",
+    "query": "update main.unsharded u join main._vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_ gc on u.id = gc.id set u.name = 'a'",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "UPDATE",
+      "Original": "update main.unsharded u join main._vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_ gc on u.id = gc.id set u.name = 'a'",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "Query": "update unsharded as u join _vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_ as gc on u.id = gc.id set u.`name` = 'a'"
+      },
+      "TablesUsed": [
+        "main._vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+        "main.unsharded"
+      ]
+    },
     "skip_e2e": true
   },
   {
