@@ -3072,7 +3072,16 @@ func TestInsertSelectFromTable(t *testing.T) {
 // those execute their own statements in between, which takes the approval
 // away before any chunk can claim it and hides the bug.
 func TestStreamingInsertSelectFromTable(t *testing.T) {
-	executor, sbc1, _, _, ctx := createExecutorEnv(t)
+	// The scatter select keeps streaming from the other shards while each
+	// chunk's insert executes, so the sandbox conns record queries from
+	// concurrent goroutines and need locking around their Queries field.
+	var sbc1 *sandboxconn.SandboxConn
+	executor, ctx := createExecutorEnvCallback(t, createExecutorConfig(), func(shard, ks string, tabletType topodatapb.TabletType, conn *sandboxconn.SandboxConn) {
+		conn.RequireQueriesLocking()
+		if ks == KsTestSharded && shard == "-20" {
+			sbc1 = conn
+		}
+	})
 
 	session := econtext.NewAutocommitSession(&vtgatepb.Session{})
 
