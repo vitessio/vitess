@@ -447,6 +447,27 @@ func TestExecutorStartCommitFailure(t *testing.T) {
 	assert.Equal(t, querypb.StartCommitState_Fail, state)
 }
 
+// TestExecutorStartCommitRejectedByClusterAction verifies that a commit rejected by the
+// active-commit gate maps to Fail, not Unknown: the rejection happens before any COMMIT
+// reaches MySQL and the kill rolls back the DTStateCommit transition, so the outcome is
+// deterministically not-committed and vtgate can roll back immediately.
+func TestExecutorStartCommitRejectedByClusterAction(t *testing.T) {
+	ctx := t.Context()
+	txe, tsv, db, closer := newTestTxExecutor(t, ctx)
+	defer closer()
+
+	commitTransition := fmt.Sprintf("update _vt.dt_state set state = %d where dtid = _binary'aa' and state = %d", int(querypb.TransactionState_COMMIT), int(querypb.TransactionState_PREPARE))
+	db.AddQuery(commitTransition, &sqltypes.Result{RowsAffected: 1})
+	txid := newTxForPrep(ctx, tsv)
+
+	tsv.te.SetClusterAction(ClusterActionInProgress)
+	tsv.te.SetClusterAction(ClusterActionNoQueries)
+
+	state, err := txe.StartCommit(txid, "aa")
+	require.ErrorContains(t, err, vterrors.ShuttingDown)
+	assert.Equal(t, querypb.StartCommitState_Fail, state)
+}
+
 func TestExecutorSetRollback(t *testing.T) {
 	ctx := t.Context()
 	txe, tsv, db, closer := newTestTxExecutor(t, ctx)

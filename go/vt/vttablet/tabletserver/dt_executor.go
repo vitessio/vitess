@@ -18,6 +18,7 @@ package tabletserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -330,6 +331,13 @@ func (dte *DTExecutor) StartCommit(transactionID int64, dtid string) (querypb.St
 		return querypb.StartCommitState_Fail, err
 	}
 	if _, err = dte.te.commit(dte.ctx, conn); err != nil {
+		// A rejection by the active-commit gate happens before any COMMIT
+		// reaches MySQL and kills the connection, rolling back the state
+		// transition, so the outcome is a definite failure and vtgate can
+		// roll back the distributed transaction immediately.
+		if _, ok := errors.AsType[*commitNotAttempted](err); ok {
+			return querypb.StartCommitState_Fail, err
+		}
 		return querypb.StartCommitState_Unknown, err
 	}
 	return querypb.StartCommitState_Success, nil

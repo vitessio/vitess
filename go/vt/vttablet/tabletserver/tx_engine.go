@@ -342,6 +342,17 @@ func (te *TxEngine) commit(ctx context.Context, conn *StatefulConnection) (strin
 	return te.txPool.Commit(ctx, conn)
 }
 
+// commitNotAttempted wraps a rejection from the active-commit gate. It marks
+// that no COMMIT was sent to MySQL, so the transaction is deterministically
+// not committed.
+type commitNotAttempted struct {
+	cause error
+}
+
+func (e *commitNotAttempted) Error() string { return e.cause.Error() }
+func (e *commitNotAttempted) Cause() error  { return e.cause }
+func (e *commitNotAttempted) Unwrap() error { return e.cause }
+
 // addActiveCommit adds a commit to the active commit list. Returns a function that should be deferred
 // by the caller to remove the query from the active commit list on completion.
 func (te *TxEngine) addActiveCommit(ctx context.Context, conn *StatefulConnection) (func(), error) {
@@ -358,7 +369,7 @@ func (te *TxEngine) addActiveCommit(ctx context.Context, conn *StatefulConnectio
 
 		conn.Release(tx.TxKill)
 
-		return nil, err
+		return nil, &commitNotAttempted{cause: err}
 	}
 
 	return func() { te.activeCommits.Remove(qd) }, nil
