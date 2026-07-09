@@ -1908,9 +1908,7 @@ func TestTempTableCommandTracking(t *testing.T) {
 
 	// No temp tables -> the command leaves the connection unregistered.
 	c.ClientData = &vtgatepb.Session{}
-	ttc := vh.tempTableCommandStart(c)
-	require.Nil(t, ttc)
-	vh.tempTableCommandEnd(c, ttc)
+	vh.tempTableCommandEnd(c)
 	_, ok := vh.tempTableConns.Load(c)
 	require.False(t, ok)
 
@@ -1927,23 +1925,24 @@ func TestTempTableCommandTracking(t *testing.T) {
 			{Target: target, TabletAlias: alias, ReservedId: 43, TransactionId: 43},
 		},
 	}
-	vh.tempTableCommandEnd(c, vh.tempTableCommandStart(c))
+	vh.tempTableCommandEnd(c)
 	v, ok := vh.tempTableConns.Load(c)
 	require.True(t, ok)
 	registered := v.(*tempTableConn)
 	require.Len(t, registered.targets, 1)
 	require.Equal(t, int64(42), registered.targets[0].reservedID)
 
-	// A command in flight on a registered connection locks out the sweeper.
-	ttc = vh.tempTableCommandStart(c)
-	require.Same(t, registered, ttc)
-	require.False(t, ttc.mu.TryLock(), "command must lock out the sweeper")
-	vh.tempTableCommandEnd(c, ttc)
+	// Republishing the targets bumps the generation, so a sweep that
+	// snapshotted the previous targets discards its results instead of
+	// applying them to the new ones.
+	genBefore := registered.gen
+	vh.tempTableCommandEnd(c)
+	require.Greater(t, registered.gen, genBefore, "command end must supersede in-flight sweeps")
 
 	// The temp-table flag being cleared deregisters the connection and clears
 	// the published targets.
 	c.ClientData = &vtgatepb.Session{Options: &querypb.ExecuteOptions{}}
-	vh.tempTableCommandEnd(c, vh.tempTableCommandStart(c))
+	vh.tempTableCommandEnd(c)
 	_, ok = vh.tempTableConns.Load(c)
 	require.False(t, ok)
 	require.Empty(t, registered.targets)
@@ -1955,7 +1954,7 @@ func TestTempTableCommandTracking(t *testing.T) {
 			{Target: target, TabletAlias: alias, ReservedId: 43},
 		},
 	}
-	vh.tempTableCommandEnd(c, vh.tempTableCommandStart(c))
+	vh.tempTableCommandEnd(c)
 	_, ok = vh.tempTableConns.Load(c)
 	require.True(t, ok)
 	vh.stopTempTableHeartbeats(c)
@@ -1964,8 +1963,8 @@ func TestTempTableCommandTracking(t *testing.T) {
 }
 
 // TestTempTableHeartbeatSweep verifies that a sweep pings the registered
-// reserved connection with a "select 1", skips a connection whose command is
-// in flight, and evicts a reserved connection that no longer exists.
+// reserved connection, discards results from a superseded snapshot, and
+// evicts a reserved connection that no longer exists.
 func TestTempTableHeartbeatSweep(t *testing.T) {
 	vtg, sbc, ctx := createVtgateEnv(t)
 	vh := newVtgateHandler(vtg)
@@ -1991,12 +1990,13 @@ func TestTempTableHeartbeatSweep(t *testing.T) {
 	require.True(t, opts[len(opts)-1].GetReservedConnKeepAlive(),
 		"beats must be keepalive touches so mysqld's wait_timeout keeps counting only real user traffic")
 
-	// A connection with a command in flight is skipped, not delayed.
-	before = sbc.ExecCount.Load()
-	ttc.mu.Lock()
-	vh.sendTempTableHeartbeats(ctx)
-	ttc.mu.Unlock()
-	require.Equal(t, before, sbc.ExecCount.Load())
+	// A beat whose snapshot was superseded mid-flight (command end bumped
+	// the generation) discards its results instead of applying them.
+	staleTargets := slices.Clone(ttc.targets)
+	staleGen := ttc.gen
+	ttc.gen++
+	vh.beatTempTableConn(ctx, c, ttc, staleGen, staleTargets)
+	require.Len(t, ttc.targets, 1, "results for a superseded snapshot must be discarded")
 
 	// A reserved connection that no longer exists is evicted so it is not
 	// beaten (and warned about) on every sweep.

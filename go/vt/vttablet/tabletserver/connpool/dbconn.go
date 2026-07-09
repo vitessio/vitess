@@ -609,6 +609,16 @@ func (dbc *Conn) ConnCheck(ctx context.Context) error {
 	return nil
 }
 
+// PeerCheck performs a fast, non-blocking check that the MySQL server has
+// not closed its side of the connection (e.g. after wait_timeout). Nothing
+// is sent, so the server's idle timers are unaffected. Unlike ConnCheck it
+// never reconnects: callers that own connection state (temp tables,
+// settings) must observe the death instead of silently swapping the
+// connection out from under it.
+func (dbc *Conn) PeerCheck() error {
+	return dbc.conn.ConnCheck()
+}
+
 func (dbc *Conn) Reconnect(ctx context.Context) error {
 	err := dbc.conn.Reconnect(ctx)
 	if err != nil {

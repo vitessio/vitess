@@ -171,10 +171,25 @@ func (tp *TxPool) NewTxProps(immediateCaller *querypb.VTGateCallerID, effectiveC
 	}
 }
 
+// reservedKeepAlivePurpose is the purpose string KeepAliveReserved locks the
+// connection with. GetAndLock recognizes it to briefly wait out a keepalive
+// instead of failing the caller.
+const reservedKeepAlivePurpose = "for reserved connection keepalive"
+
 // GetAndLock fetches the connection associated to the connID and blocks it from concurrent use
 // You must call Unlock on TxConnection once done.
 func (tp *TxPool) GetAndLock(connID tx.ConnID, reason string) (*StatefulConnection, error) {
 	conn, err := tp.scp.GetAndLock(connID, reason)
+	// A keepalive holds the connection only for the microseconds it takes
+	// to check and refresh it, and it never issues queries or waits on the
+	// network — so a caller that collides with one briefly waits it out
+	// rather than failing the client's query (or release) with an in-use
+	// error. Bounded to ~10ms as a safety net; one retry is the norm.
+	for attempt := 0; err != nil && attempt < 100 &&
+		errors.Is(err, pools.ErrInUse) && strings.Contains(err.Error(), reservedKeepAlivePurpose); attempt++ {
+		time.Sleep(100 * time.Microsecond)
+		conn, err = tp.scp.GetAndLock(connID, reason)
+	}
 	if err != nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction %d: %v", connID, err)
 	}
@@ -189,7 +204,7 @@ func (tp *TxPool) GetAndLock(connID tx.ConnID, reason string) (*StatefulConnecti
 // that no longer exists returns the same "transaction %d: ..." error shape
 // as GetAndLock so callers can recognize that it is gone.
 func (tp *TxPool) KeepAliveReserved(reservedID tx.ConnID) error {
-	conn, err := tp.scp.GetAndLock(reservedID, "for reserved connection keepalive")
+	conn, err := tp.scp.GetAndLock(reservedID, reservedKeepAlivePurpose)
 	if err != nil {
 		// The pool's in-use error means the connection is alive and busy —
 		// exactly what a keepalive wants to hear.
@@ -197,6 +212,17 @@ func (tp *TxPool) KeepAliveReserved(reservedID tx.ConnID) error {
 			return nil
 		}
 		return vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction %d: %v", reservedID, err)
+	}
+	// Detect a peer-closed socket (e.g. mysqld reclaimed the connection at
+	// wait_timeout) with a non-blocking zero-byte read — nothing is sent,
+	// so mysqld's idle timers are unaffected. A dead connection must be
+	// released rather than refreshed: it occupies pool capacity, and
+	// keeping its expiry fresh would pin the zombie until the session's
+	// next command. The error carries the same "transaction %d: ended"
+	// shape as other gone-connection errors so callers stop beating it.
+	if err := conn.dbConn.Conn.PeerCheck(); err != nil {
+		conn.ReleaseString("reserved connection keepalive found it dead")
+		return vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction %d: ended by the MySQL server (connection check: %v)", reservedID, err)
 	}
 	// Unlock refreshes the connection's timers for non-transactional
 	// connections, which is the whole point of the keepalive.

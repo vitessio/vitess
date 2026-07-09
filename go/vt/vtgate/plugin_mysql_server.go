@@ -24,6 +24,7 @@ import (
 	"os"
 	"os/signal"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -141,8 +142,23 @@ type tempTableHeartbeatTarget struct {
 // whose mu it can TryLock, skipping those with a command in flight (whose own
 // execution keeps the reserved connections alive).
 type tempTableConn struct {
-	mu      sync.Mutex
+	// mu guards gen, targets, and closed. It is held only for the
+	// microseconds it takes to snapshot or replace the targets — never
+	// across a beat RPC — so foreground commands are never delayed by a
+	// slow keepalive, and keepalives are never starved by a long command.
+	mu sync.Mutex
+	// gen increments whenever the connection's own goroutine replaces the
+	// targets (command end, reset, close). A sweep snapshots targets and
+	// gen, sends its beats without holding mu, and applies the results only
+	// if gen is unchanged — results for a superseded snapshot are discarded.
+	gen     uint64
 	targets []tempTableHeartbeatTarget
+	// closed marks the connection as shutting down so no further beats
+	// start; beats tracks the in-flight ones so close can wait them out
+	// before the session's reserved connections are released. Add only
+	// happens under mu while !closed, so it cannot race Wait.
+	closed bool
+	beats  sync.WaitGroup
 }
 
 // vtgateHandler implements the Listener interface.
@@ -221,53 +237,52 @@ func tempTableHeartbeatTargets(session *vtgatepb.Session) []tempTableHeartbeatTa
 	return targets
 }
 
-// tempTableCommandStart must be called at the start of every client command.
-// If the connection is registered for temp-table heartbeats, it locks out the
-// background sweeper for the duration of the command so a keepalive can never
-// race the command on the same reserved connection at the tablet. The result
-// (which is nil for unregistered connections) must be passed to
-// tempTableCommandEnd once the command settles.
-func (vh *vtgateHandler) tempTableCommandStart(c *mysql.Conn) *tempTableConn {
+// tempTableCommandEnd must be called once a client command settles: it
+// republishes the session's keepalive targets (registering or deregistering
+// the connection as needed) and bumps the generation so any sweep started
+// against the previous targets discards its results.
+func (vh *vtgateHandler) tempTableCommandEnd(c *mysql.Conn) {
+	targets := tempTableHeartbeatTargets(vh.session(c))
 	v, ok := vh.tempTableConns.Load(c)
 	if !ok {
-		return nil
-	}
-	ttc := v.(*tempTableConn)
-	ttc.mu.Lock()
-	return ttc
-}
-
-// tempTableCommandEnd republishes the connection's temp-table heartbeat
-// targets from the session and releases the sweeper lock-out taken by
-// tempTableCommandStart.
-func (vh *vtgateHandler) tempTableCommandEnd(c *mysql.Conn, ttc *tempTableConn) {
-	targets := tempTableHeartbeatTargets(vh.session(c))
-	if ttc == nil {
 		if len(targets) == 0 {
 			return
+		}
+		// A session-level transaction timeout shorter than the heartbeat
+		// interval reclaims the reserved connection between beats: the
+		// keepalive cannot protect this session's temp tables. Surface that
+		// once, at registration.
+		session := vh.session(c)
+		if to := time.Duration(session.GetOptions().GetTransactionTimeout()) * time.Millisecond; to > 0 && to <= tempTableHeartbeatTime {
+			log.Warn("session transaction timeout is not above the temp-table heartbeat interval; its temporary tables may still be reclaimed between heartbeats",
+				slog.Duration("session_transaction_timeout", to),
+				slog.Duration("temp_table_heartbeat_time", tempTableHeartbeatTime))
 		}
 		// The session acquired temporary tables during this command: register
 		// the connection so the background sweeper keeps it alive.
 		vh.tempTableConns.Store(c, &tempTableConn{targets: targets})
 		return
 	}
+	ttc := v.(*tempTableConn)
+	ttc.mu.Lock()
 	defer ttc.mu.Unlock()
+	ttc.gen++
 	if len(targets) == 0 {
 		// The temporary tables are gone (session reset or reserved
-		// connections released): deregister. Clear the snapshot too so a
-		// sweep that already loaded the entry skips it.
+		// connections released): deregister.
 		ttc.targets = nil
 		vh.tempTableConns.Delete(c)
 		return
 	}
 	ttc.targets = targets
-	// Re-register in case the sweeper evicted the entry during the command.
+	// Re-register in case the sweeper deregistered the entry after evicting
+	// its last target during the command.
 	vh.tempTableConns.Store(c, ttc)
 }
 
 // stopTempTableHeartbeats deregisters the connection and waits out any beat
 // in flight, so the caller can safely release the session's reserved
-// connections afterwards.
+// connections afterwards without a beat racing the release at the tablet.
 func (vh *vtgateHandler) stopTempTableHeartbeats(c *mysql.Conn) {
 	v, ok := vh.tempTableConns.Load(c)
 	if !ok {
@@ -275,9 +290,12 @@ func (vh *vtgateHandler) stopTempTableHeartbeats(c *mysql.Conn) {
 	}
 	ttc := v.(*tempTableConn)
 	ttc.mu.Lock()
-	defer ttc.mu.Unlock()
+	ttc.closed = true
+	ttc.gen++
 	ttc.targets = nil
 	vh.tempTableConns.Delete(c)
+	ttc.mu.Unlock()
+	ttc.beats.Wait()
 }
 
 // startTempTableHeartbeat launches the background sweeper that keeps reserved
@@ -305,13 +323,31 @@ func (vh *vtgateHandler) startTempTableHeartbeat(ctx context.Context) {
 // sendTempTableHeartbeats pings the reserved connections of every registered
 // client connection, fanning out per connection so one slow tablet cannot
 // delay the keepalives of the others. It returns once all beats settle.
+// tempTableBeatConcurrency bounds how many connections are beaten at once,
+// so a sweep over many registered connections does not produce a goroutine
+// and RPC spike on every tick.
+const tempTableBeatConcurrency = 64
+
 func (vh *vtgateHandler) sendTempTableHeartbeats(ctx context.Context) {
 	var wg sync.WaitGroup
+	sem := make(chan struct{}, tempTableBeatConcurrency)
 	vh.tempTableConns.Range(func(key, value any) bool {
 		c := key.(*mysql.Conn)
 		ttc := value.(*tempTableConn)
+		ttc.mu.Lock()
+		if ttc.closed || len(ttc.targets) == 0 {
+			ttc.mu.Unlock()
+			return true
+		}
+		gen := ttc.gen
+		targets := slices.Clone(ttc.targets)
+		ttc.beats.Add(1)
+		ttc.mu.Unlock()
 		wg.Go(func() {
-			vh.beatTempTableConn(ctx, c, ttc)
+			defer ttc.beats.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			vh.beatTempTableConn(ctx, c, ttc, gen, targets)
 		})
 		return true
 	})
@@ -343,41 +379,29 @@ func tempTableBeatContext(ctx context.Context, c *mysql.Conn) context.Context {
 // for a client connection. Reserved connections that no longer exist are
 // evicted so they are not beaten (and warned about) on every sweep; the
 // session re-registers live ones at the end of its next command.
-func (vh *vtgateHandler) beatTempTableConn(ctx context.Context, c *mysql.Conn, ttc *tempTableConn) {
-	// A command in flight holds the lock, and its own execution keeps the
-	// reserved connections it touches alive, so skip this round rather than
-	// wait. This does mean a single command running longer than the tablet
-	// timeout can starve the keepalives of reserved connections on shards
-	// it does not touch. That trade is deliberate: beating a reserved
-	// connection the command is concurrently using fails the user's query
-	// with a tablet-side "connection in use" error, and vtgate cannot know
-	// mid-flight which targets a command will use — routing decides that
-	// downstream. Removing the trade needs a tablet-side keepalive that
-	// no-ops when the connection is busy instead of erroring.
-	if !ttc.mu.TryLock() {
-		return
-	}
-	defer ttc.mu.Unlock()
-	if len(ttc.targets) == 0 {
-		return
-	}
+// beatTempTableConn beats the given snapshot of a connection's keepalive
+// targets without holding the connection's mutex across the RPCs: commands
+// run concurrently with beats and are never delayed by them (on the tablet,
+// a keepalive that finds the reserved connection busy counts it as alive).
+// The results are applied only if gen still matches — a command end, reset,
+// or close that replaced the targets in the meantime supersedes them.
+func (vh *vtgateHandler) beatTempTableConn(ctx context.Context, c *mysql.Conn, ttc *tempTableConn, gen uint64, targets []tempTableHeartbeatTarget) {
 	ctx = tempTableBeatContext(ctx, c)
 	// Each target gets its own budget of half the heartbeat interval, and
 	// the targets are beaten concurrently: one hanging tablet must not eat
 	// a shared budget and starve the keepalives of the session's other
 	// reserved connections. At short heartbeat intervals half the interval
 	// would leave a sub-second budget that a momentarily slow (but healthy)
-	// tablet can miss, so the budget never drops below a floor; the budget
-	// also caps how long a foreground command arriving mid-beat can wait on
-	// the lock, and missing a tick because a round ran long is harmless
-	// (the ticker just skips). On tablets that predate the keepalive
-	// option, the beat executes as a real query, where a deadline expiring
-	// mid-execution kills only the query (KILL QUERY), so the reserved
-	// connection and its temp tables survive.
+	// tablet can miss, so the budget never drops below a floor; missing a
+	// tick because a round ran long is harmless (the ticker just skips).
+	// On tablets that predate the keepalive option, the beat executes as a
+	// real query, where a deadline expiring mid-execution kills only the
+	// query (KILL QUERY), so the reserved connection and its temp tables
+	// survive.
 	budget := max(tempTableHeartbeatTime/2, 2*time.Second)
-	errs := make([]error, len(ttc.targets))
+	errs := make([]error, len(targets))
 	var wg sync.WaitGroup
-	for i, t := range ttc.targets {
+	for i, t := range targets {
 		wg.Go(func() {
 			bctx, cancel := context.WithTimeout(ctx, budget)
 			defer cancel()
@@ -385,8 +409,8 @@ func (vh *vtgateHandler) beatTempTableConn(ctx context.Context, c *mysql.Conn, t
 		})
 	}
 	wg.Wait()
-	kept := make([]tempTableHeartbeatTarget, 0, len(ttc.targets))
-	for i, t := range ttc.targets {
+	kept := make([]tempTableHeartbeatTarget, 0, len(targets))
+	for i, t := range targets {
 		err := errs[i]
 		if err == nil {
 			if t.failures > 0 {
@@ -426,6 +450,13 @@ func (vh *vtgateHandler) beatTempTableConn(ctx context.Context, c *mysql.Conn, t
 				slog.Any("error", err))
 		}
 		kept = append(kept, t)
+	}
+	ttc.mu.Lock()
+	defer ttc.mu.Unlock()
+	if ttc.gen != gen {
+		// The targets were replaced while this round was in flight (command
+		// end, reset, or close): its results describe a superseded snapshot.
+		return
 	}
 	ttc.targets = kept
 	if len(kept) == 0 {
@@ -470,8 +501,7 @@ func (vh *vtgateHandler) ComResetConnection(c *mysql.Conn) {
 	// Lock out the temp-table heartbeat sweeper while the session is released;
 	// afterwards the session no longer holds temporary tables, so the
 	// connection is deregistered.
-	ttc := vh.tempTableCommandStart(c)
-	defer vh.tempTableCommandEnd(c, ttc)
+	defer vh.tempTableCommandEnd(c)
 
 	ctx := context.Background()
 	session := vh.session(c)
@@ -631,8 +661,7 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 
 	// Lock out the temp-table heartbeat sweeper for the duration of the
 	// command; once it settles, republish the session's heartbeat targets.
-	ttc := vh.tempTableCommandStart(c)
-	defer vh.tempTableCommandEnd(c, ttc)
+	defer vh.tempTableCommandEnd(c)
 
 	ctx = callinfo.MysqlCallInfo(ctx, c)
 
@@ -698,8 +727,7 @@ func (vh *vtgateHandler) ComQueryMulti(c *mysql.Conn, sql string, callback func(
 
 	// Lock out the temp-table heartbeat sweeper for the duration of the
 	// command; once it settles, republish the session's heartbeat targets.
-	ttc := vh.tempTableCommandStart(c)
-	defer vh.tempTableCommandEnd(c, ttc)
+	defer vh.tempTableCommandEnd(c)
 
 	ctx = callinfo.MysqlCallInfo(ctx, c)
 
@@ -886,8 +914,7 @@ func (vh *vtgateHandler) ComPrepare(c *mysql.Conn, query string) ([]*querypb.Fie
 
 	// Lock out the temp-table heartbeat sweeper for the duration of the
 	// command; once it settles, republish the session's heartbeat targets.
-	ttc := vh.tempTableCommandStart(c)
-	defer vh.tempTableCommandEnd(c, ttc)
+	defer vh.tempTableCommandEnd(c)
 
 	ctx = callinfo.MysqlCallInfo(ctx, c)
 
@@ -939,8 +966,7 @@ func (vh *vtgateHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareDat
 
 	// Lock out the temp-table heartbeat sweeper for the duration of the
 	// command; once it settles, republish the session's heartbeat targets.
-	ttc := vh.tempTableCommandStart(c)
-	defer vh.tempTableCommandEnd(c, ttc)
+	defer vh.tempTableCommandEnd(c)
 
 	ctx = callinfo.MysqlCallInfo(ctx, c)
 

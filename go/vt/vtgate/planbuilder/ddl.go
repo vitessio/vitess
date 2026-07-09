@@ -62,7 +62,34 @@ func (fk *fkContraint) FkWalk(node sqlparser.SQLNode) (kontinue bool, err error)
 // and which chooses which of the two to invoke at runtime.
 func buildGeneralDDLPlan(ctx context.Context, sql string, ddlStatement sqlparser.DDLStatement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, cfg dynamicconfig.DDL) (*planResult, error) {
 	if vschema.ShardDestination() != nil {
-		return buildByPassPlan(sql, vschema, true)
+		if !ddlStatement.IsTemporary() {
+			return buildByPassPlan(sql, vschema, true)
+		}
+		// A temporary-table DDL must not go through as a plain Send: it
+		// would run on an ordinary pooled connection, where the temp table
+		// outlives the query and leaks into whichever session uses the
+		// connection next. Route it through the DDL primitive so it runs on
+		// a reserved connection and marks the session as holding temp
+		// tables, exactly like the non-bypass path.
+		keyspace, err := vschema.SelectedKeyspace()
+		if err != nil {
+			return nil, err
+		}
+		send := &engine.Send{
+			Keyspace:          keyspace,
+			TargetDestination: vschema.ShardDestination(),
+			Query:             sql,
+			IsDDL:             true,
+		}
+		eddl := &engine.DDL{
+			Keyspace:        keyspace,
+			SQL:             sql,
+			DDL:             ddlStatement,
+			NormalDDL:       send,
+			Config:          cfg,
+			CreateTempTable: true,
+		}
+		return newPlanResult(eddl), nil
 	}
 	normalDDLPlan, onlineDDLPlan, err := buildDDLPlans(ctx, sql, ddlStatement, reservedVars, vschema, cfg)
 	if err != nil {

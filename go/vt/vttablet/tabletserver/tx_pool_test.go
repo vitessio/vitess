@@ -920,10 +920,57 @@ func TestTxPoolKeepAliveReserved(t *testing.T) {
 	require.NoError(t, txPool.KeepAliveReserved(id))
 	relocked.Unlock()
 
+	// A connection whose MySQL side is gone (e.g. mysqld reclaimed it at
+	// wait_timeout) must be released — it occupies pool capacity — and the
+	// keepalive reports it with the gone shape so callers stop beating it,
+	// all without waiting for the session's next command.
+	db.CloseAllConnections()
+	require.Eventually(t, func() bool {
+		return txPool.KeepAliveReserved(id) != nil
+	}, 30*time.Second, 10*time.Millisecond, "keepalive must detect the peer-closed connection")
+	_, err = txPool.GetAndLock(id, "for test")
+	require.ErrorContains(t, err, fmt.Sprintf("transaction %d: ", id), "the dead connection must have been released")
+
 	// A connection that no longer exists reports the gone shape.
-	relocked, err = txPool.GetAndLock(id, "for test")
+	conn2, err := txPool.scp.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
 	require.NoError(t, err)
-	relocked.ReleaseString("test")
-	err = txPool.KeepAliveReserved(id)
-	require.ErrorContains(t, err, fmt.Sprintf("transaction %d: ", id))
+	id2 := conn2.ReservedID()
+	conn2.ReleaseString("test")
+	err = txPool.KeepAliveReserved(id2)
+	require.ErrorContains(t, err, fmt.Sprintf("transaction %d: ", id2))
+}
+
+// TestTxPoolGetAndLockWaitsOutKeepAlive verifies that a caller colliding
+// with an in-flight keepalive briefly waits it out instead of failing with
+// an in-use error — a keepalive holds the connection only for microseconds
+// and a client query or release must not fail because of it. Other in-use
+// holders still fail fast.
+func TestTxPoolGetAndLockWaitsOutKeepAlive(t *testing.T) {
+	ctx := t.Context()
+	_, txPool, _, closer := setup(t)
+	defer closer()
+
+	conn, err := txPool.scp.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
+	require.NoError(t, err)
+	id := conn.ReservedID()
+	conn.Unlock()
+
+	// Hold the connection as a keepalive would, releasing shortly after: the
+	// foreground GetAndLock must wait it out and succeed.
+	held, err := txPool.scp.GetAndLock(id, reservedKeepAlivePurpose)
+	require.NoError(t, err)
+	go func() {
+		time.Sleep(2 * time.Millisecond)
+		held.Unlock()
+	}()
+	got, err := txPool.GetAndLock(id, "for query")
+	require.NoError(t, err, "a caller must wait out a keepalive hold, not fail")
+	got.Unlock()
+
+	// Any other holder still fails fast with the in-use error.
+	held, err = txPool.scp.GetAndLock(id, "for query")
+	require.NoError(t, err)
+	_, err = txPool.GetAndLock(id, "for another query")
+	require.ErrorContains(t, err, "in use: for query")
+	held.Release(tx.ConnRelease)
 }
