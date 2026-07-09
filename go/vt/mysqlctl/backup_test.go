@@ -523,7 +523,7 @@ func TestRestoreManifestMySQLVersionValidation(t *testing.T) {
 // skips the MySQL version compatibility check for mysqlshell backups only when
 // mysqlShellRestoreSkipVersionCheck is enabled.
 func TestFindBackupToRestoreMySQLShellSkipVersionCheck(t *testing.T) {
-	// 8.0.32 -> 8.0.31 is a downgrade, which is never version-compatible.
+	// 8.4.10 -> 8.0.36 is a downgrade, which is never version-compatible.
 	const (
 		backupVersion  = "mysqld  Ver 8.4.10"
 		restoreVersion = "mysqld  Ver 8.0.36"
