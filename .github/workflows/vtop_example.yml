@@ -46,6 +46,8 @@ jobs:
             end_to_end:
               - 'go/**/!(*_test).go'
               - 'go/vt/sidecardb/**/*.sql'
+              - 'go/mysql/collations/colldata/**'
+              - 'go/mysql/icuregex/internal/icudata/**'
               - 'test.go'
               - 'Makefile'
               - 'build.env'

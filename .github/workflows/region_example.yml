@@ -49,6 +49,8 @@ jobs:
           examples:
             - 'test/config.json'
             - 'go/**/!(*_test).go'
+            - 'go/mysql/collations/colldata/**'
+            - 'go/mysql/icuregex/internal/icudata/**'
             - 'test.go'
             - 'Makefile'
             - 'build.env'

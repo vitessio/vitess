@@ -62,6 +62,8 @@ jobs:
             - 'go/**/!(*_test).go'
             - 'go/test/endtoend/**'
             - 'go/vt/sidecardb/**/*.sql'
+            - 'go/mysql/collations/colldata/**'
+            - 'go/mysql/icuregex/internal/icudata/**'
             - 'test.go'
             - 'Makefile'
             - 'build.env'
