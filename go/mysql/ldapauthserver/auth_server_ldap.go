@@ -24,7 +24,7 @@ import (
 	"sync"
 	"time"
 
-	"gopkg.in/ldap.v2"
+	"github.com/go-ldap/ldap/v3"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/netutil"
@@ -219,7 +219,7 @@ type ServerConfig struct {
 // Client provides an interface we can mock
 type Client interface {
 	Connect(network string, config *ServerConfig) error
-	Close()
+	Close() error
 	Bind(string, string) error
 	Search(*ldap.SearchRequest) (*ldap.SearchResult, error)
 }
