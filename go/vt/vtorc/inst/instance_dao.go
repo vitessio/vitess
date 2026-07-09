@@ -230,6 +230,7 @@ func ReadTopologyInstanceBufferable(tabletAlias *topodatapb.TabletAlias, latency
 		RecordPrimaryHealthCheck(tabletAlias, true)
 	}
 	dh = &diskHealth{stalled: fs.DiskStalled, full: fs.DiskFull}
+	partialSuccess = true // FullStatus succeeded, even if disk-health forces a short-circuit.
 	if dh.stalled || dh.full {
 		// Always short-circuit when the tablet reports any disk-health
 		// issue. FullStatus returns only the disk flags in that case, so
