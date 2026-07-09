@@ -1583,18 +1583,25 @@ func (e *Executor) prepare(ctx context.Context, safeSession *econtext.SafeSessio
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 
 	if err != nil {
-		if stmt == nil || sqlparser.ASTToStatementType(stmt) != sqlparser.StmtShow {
+		if stmt == nil {
+			safeSession.ClearWarnings()
+			logStats.Error = err
+			return nil, 0, err
+		}
+		stmtType := sqlparser.ASTToStatementType(stmt)
+		if stmtType != sqlparser.StmtShow {
 			safeSession.ClearWarnings()
 		}
-		if stmt != nil {
-			// Attempt to build NULL field types for the statement in case planning fails,
-			// allowing the client to proceed with preparing the statement even without a valid execution plan.
-			// Hoping that an optimized plan can be built later when parameter values are available.
-			flds, paramCount, success := buildNullFieldTypes(stmt)
-			if success {
-				logStats.StmtType = sqlparser.ASTToStatementType(stmt).String()
-				return flds, paramCount, nil
-			}
+		if !preparableStatement(stmtType) {
+			return nil, 0, errUnsupportedPS()
+		}
+		// Attempt to build NULL field types for the statement in case planning fails,
+		// allowing the client to proceed with preparing the statement even without a valid execution plan.
+		// Hoping that an optimized plan can be built later when parameter values are available.
+		flds, paramCount, success := buildNullFieldTypes(stmt)
+		if success {
+			logStats.StmtType = stmtType.String()
+			return flds, paramCount, nil
 		}
 		logStats.Error = err
 		return nil, 0, err
@@ -1613,16 +1620,16 @@ func (e *Executor) prepare(ctx context.Context, safeSession *econtext.SafeSessio
 		safeSession.ClearWarnings()
 	}
 
+	if !preparableStatement(plan.QueryType) {
+		return nil, 0, errUnsupportedPS()
+	}
+
 	switch plan.QueryType {
 	case sqlparser.StmtSelect, sqlparser.StmtShow,
 		sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete:
 		// These return field information, fetched from the tablets below.
-	case sqlparser.StmtDDL, sqlparser.StmtBegin, sqlparser.StmtCommit, sqlparser.StmtRollback, sqlparser.StmtSet,
-		sqlparser.StmtUse, sqlparser.StmtOther, sqlparser.StmtAnalyze, sqlparser.StmtComment, sqlparser.StmtCommentOnly,
-		sqlparser.StmtExplain, sqlparser.StmtFlush, sqlparser.StmtKill:
-		return nil, 0, nil
 	default:
-		return nil, 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unrecognized prepare statement: %s", sql)
+		return nil, 0, nil
 	}
 
 	bindVars := prepareBindVars(plan.ParamsCount)
@@ -1730,6 +1737,26 @@ func prepareBindVars(paramsCount uint16) map[string]*querypb.BindVariable {
 		bindVars[parameterID] = &querypb.BindVariable{}
 	}
 	return bindVars
+}
+
+// preparableStatement reports whether MySQL permits the statement type in the
+// prepared statement protocol. MySQL rejects everything else with
+// ER_UNSUPPORTED_PS, and vitess must not be more permissive.
+func preparableStatement(stmtType sqlparser.StatementType) bool {
+	switch stmtType {
+	case sqlparser.StmtSelect, sqlparser.StmtShow,
+		sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete,
+		sqlparser.StmtDDL, sqlparser.StmtSet, sqlparser.StmtCommit, sqlparser.StmtRollback,
+		sqlparser.StmtOther, sqlparser.StmtAnalyze, sqlparser.StmtComment, sqlparser.StmtCommentOnly,
+		sqlparser.StmtExplain, sqlparser.StmtFlush, sqlparser.StmtKill:
+		return true
+	}
+	return false
+}
+
+func errUnsupportedPS() error {
+	return vterrors.NewErrorf(vtrpcpb.Code_UNIMPLEMENTED, vterrors.UnsupportedPS,
+		"This command is not supported in the prepared statement protocol yet")
 }
 
 // buildNullFieldTypes builds a list of NULL field types for the given statement.

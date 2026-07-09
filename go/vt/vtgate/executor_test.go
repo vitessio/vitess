@@ -41,6 +41,7 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/srvtopo/fakesrvtopo"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 
@@ -3109,6 +3110,35 @@ func TestExecuteRejectsStoredNonPreparableStatements(t *testing.T) {
 
 			_, err := executorExecSession(ctx, executor, session, "execute prep", nil)
 			require.ErrorContains(t, err, "This command is not supported in the prepared statement protocol yet")
+		})
+	}
+}
+
+func TestPrepareUnsupportedStatements(t *testing.T) {
+	// MySQL rejects these in the prepared statement protocol with
+	// ER_UNSUPPORTED_PS (1295); vitess must not be more permissive.
+	executor, _, _, _, ctx := createExecutorEnv(t)
+
+	queries := []string{
+		"begin",
+		"start transaction",
+		"use " + KsTestUnsharded,
+		"savepoint sp1",
+		"rollback to sp1",
+		"release savepoint sp1",
+		"lock tables main1 read",
+		"unlock tables",
+		"prepare p1 from 'select 1'",
+		"execute p1",
+		"deallocate prepare p1",
+	}
+	for _, sql := range queries {
+		t.Run(sql, func(t *testing.T) {
+			session := &vtgatepb.Session{TargetString: KsTestUnsharded}
+
+			_, _, err := executorPrepare(ctx, executor, session, sql)
+			require.ErrorContains(t, err, "not supported in the prepared statement protocol")
+			require.Equal(t, vterrors.UnsupportedPS, vterrors.ErrState(err))
 		})
 	}
 }
