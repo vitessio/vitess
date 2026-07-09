@@ -23,7 +23,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -157,14 +156,14 @@ func TestStaticAuthPlugin_Authenticate(t *testing.T) {
 				require.Error(t, err)
 				st, ok := status.FromError(err)
 				require.True(t, ok, "error should be a gRPC status error")
-				assert.Equal(t, tt.expectedCode, st.Code())
-				assert.Contains(t, st.Message(), tt.expectedErrMsg)
+				require.Equal(t, tt.expectedCode, st.Code())
+				require.Contains(t, st.Message(), tt.expectedErrMsg)
 			} else {
 				require.NoError(t, err)
-				assert.NotNil(t, newCtx)
+				require.NotNil(t, newCtx)
 
 				// Verify username is stored in context
-				assert.Equal(t, tt.username, StaticAuthUsernameFromContext(newCtx))
+				require.Equal(t, tt.username, StaticAuthUsernameFromContext(newCtx))
 			}
 		})
 	}
@@ -183,7 +182,7 @@ func TestStaticAuthPlugin_UppercaseHash(t *testing.T) {
 
 	newCtx, err := authenticate(t, plugin, "user1", "password")
 	require.NoError(t, err)
-	assert.Equal(t, "user1", StaticAuthUsernameFromContext(newCtx))
+	require.Equal(t, "user1", StaticAuthUsernameFromContext(newCtx))
 }
 
 // TestStaticAuthPlugin_StarPrefixedHash tests that a CachingSha2Password with
@@ -199,7 +198,7 @@ func TestStaticAuthPlugin_StarPrefixedHash(t *testing.T) {
 
 	newCtx, err := authenticate(t, plugin, "user1", "password")
 	require.NoError(t, err)
-	assert.Equal(t, "user1", StaticAuthUsernameFromContext(newCtx))
+	require.Equal(t, "user1", StaticAuthUsernameFromContext(newCtx))
 }
 
 // TestStaticAuthPlugin_DuplicateUsernameEntries tests that when multiple
@@ -248,10 +247,10 @@ func TestStaticAuthPlugin_DuplicateUsernameEntries(t *testing.T) {
 				require.Error(t, err)
 				st, ok := status.FromError(err)
 				require.True(t, ok, "error should be a gRPC status error")
-				assert.Equal(t, codes.PermissionDenied, st.Code())
+				require.Equal(t, codes.PermissionDenied, st.Code())
 			} else {
 				require.NoError(t, err)
-				assert.Equal(t, "user1", StaticAuthUsernameFromContext(newCtx))
+				require.Equal(t, "user1", StaticAuthUsernameFromContext(newCtx))
 			}
 		})
 	}
@@ -272,7 +271,7 @@ func TestStaticAuthPlugin_PlaintextTakesPrecedence(t *testing.T) {
 	t.Run("plaintext password matches", func(t *testing.T) {
 		newCtx, err := authenticate(t, plugin, "user1", "plain_password")
 		require.NoError(t, err)
-		assert.Equal(t, "user1", StaticAuthUsernameFromContext(newCtx))
+		require.Equal(t, "user1", StaticAuthUsernameFromContext(newCtx))
 	})
 
 	t.Run("hashed password is ignored", func(t *testing.T) {
@@ -280,7 +279,7 @@ func TestStaticAuthPlugin_PlaintextTakesPrecedence(t *testing.T) {
 		require.Error(t, err)
 		st, ok := status.FromError(err)
 		require.True(t, ok, "error should be a gRPC status error")
-		assert.Equal(t, codes.PermissionDenied, st.Code())
+		require.Equal(t, codes.PermissionDenied, st.Code())
 	})
 }
 
@@ -299,8 +298,8 @@ func TestStaticAuthPlugin_NoMetadata(t *testing.T) {
 	require.Error(t, err)
 	st, ok := status.FromError(err)
 	require.True(t, ok)
-	assert.Equal(t, codes.Unauthenticated, st.Code())
-	assert.Contains(t, st.Message(), "username and password must be provided")
+	require.Equal(t, codes.Unauthenticated, st.Code())
+	require.Contains(t, st.Message(), "username and password must be provided")
 }
 
 // TestStaticAuthPlugin_MissingCredentials tests that authentication fails with
@@ -345,8 +344,8 @@ func TestStaticAuthPlugin_MissingCredentials(t *testing.T) {
 			require.Error(t, err)
 			st, ok := status.FromError(err)
 			require.True(t, ok)
-			assert.Equal(t, codes.Unauthenticated, st.Code())
-			assert.Contains(t, st.Message(), "username and password must be provided")
+			require.Equal(t, codes.Unauthenticated, st.Code())
+			require.Contains(t, st.Message(), "username and password must be provided")
 		})
 	}
 }
@@ -392,10 +391,10 @@ func TestStaticAuthPluginInitializer(t *testing.T) {
 		staticPlugin, ok := plugin.(*StaticAuthPlugin)
 		require.True(t, ok)
 		require.Len(t, staticPlugin.entries, 2)
-		assert.Equal(t, "testuser", staticPlugin.entries[0].Username)
-		assert.Len(t, staticPlugin.entries[0].cachingSha2Password, 32)
-		assert.Equal(t, "plainuser", staticPlugin.entries[1].Username)
-		assert.Empty(t, staticPlugin.entries[1].cachingSha2Password)
+		require.Equal(t, "testuser", staticPlugin.entries[0].Username)
+		require.Len(t, staticPlugin.entries[0].cachingSha2Password, 32)
+		require.Equal(t, "plainuser", staticPlugin.entries[1].Username)
+		require.Empty(t, staticPlugin.entries[1].cachingSha2Password)
 	})
 
 	t.Run("missing file path", func(t *testing.T) {
@@ -404,7 +403,7 @@ func TestStaticAuthPluginInitializer(t *testing.T) {
 
 		_, err := staticAuthPluginInitializer()
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "grpc-auth-static-password-file not provided")
+		require.Contains(t, err.Error(), "grpc-auth-static-password-file not provided")
 	})
 
 	t.Run("non-existent file", func(t *testing.T) {
@@ -413,7 +412,7 @@ func TestStaticAuthPluginInitializer(t *testing.T) {
 
 		_, err := staticAuthPluginInitializer()
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to load static auth plugin")
+		require.Contains(t, err.Error(), "failed to load static auth plugin")
 	})
 
 	t.Run("invalid json", func(t *testing.T) {
@@ -421,7 +420,7 @@ func TestStaticAuthPluginInitializer(t *testing.T) {
 
 		_, err := staticAuthPluginInitializer()
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "fail to load static auth plugin")
+		require.Contains(t, err.Error(), "fail to load static auth plugin")
 	})
 
 	t.Run("invalid hash length", func(t *testing.T) {
@@ -434,7 +433,7 @@ func TestStaticAuthPluginInitializer(t *testing.T) {
 
 		_, err := staticAuthPluginInitializer()
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "invalid CachingSha2Password length")
+		require.Contains(t, err.Error(), "invalid CachingSha2Password length")
 	})
 
 	t.Run("invalid hex encoding", func(t *testing.T) {
@@ -447,6 +446,6 @@ func TestStaticAuthPluginInitializer(t *testing.T) {
 
 		_, err := staticAuthPluginInitializer()
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "invalid hex-encoded CachingSha2Password")
+		require.Contains(t, err.Error(), "invalid hex-encoded CachingSha2Password")
 	})
 }

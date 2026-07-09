@@ -149,10 +149,10 @@ func staticAuthPluginInitializer() (Authenticator, error) {
 		if entry.CachingSha2Password != "" {
 			hash, err := mysql.DecodePasswordHex(entry.CachingSha2Password)
 			if err != nil {
-				return nil, fmt.Errorf("fail to load static auth plugin: entry %d (user=%s) has an invalid hex-encoded CachingSha2Password: %v", i, entry.Username, err)
+				return nil, fmt.Errorf("failed to load static auth plugin: entry %d (user=%s) has an invalid hex-encoded CachingSha2Password: %v", i, entry.Username, err)
 			}
 			if len(hash) != sha256.Size {
-				return nil, fmt.Errorf("fail to load static auth plugin: entry %d (user=%s) has an invalid CachingSha2Password length: expected %d hex chars, got %d", i, entry.Username, sha256.Size*2, len(hash)*2)
+				return nil, fmt.Errorf("failed to load static auth plugin: entry %d (user=%s) has an invalid CachingSha2Password length: expected %d hex chars, got %d", i, entry.Username, sha256.Size*2, len(hash)*2)
 			}
 			authEntry.cachingSha2Password = hash
 		}
