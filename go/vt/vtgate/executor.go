@@ -1579,6 +1579,15 @@ func (e *Executor) Prepare(ctx context.Context, method string, safeSession *econ
 
 func (e *Executor) prepare(ctx context.Context, safeSession *econtext.SafeSession, sql string, logStats *logstats.LogStats) ([]*querypb.Field, uint16, error) {
 	stmtType := sqlparser.Preview(sql)
+	if stmtType == sqlparser.StmtUnknown {
+		// Preview only looks at the first keyword, so statements starting with
+		// a WITH clause come back as unknown. Classify those from the AST.
+		stmt, err := e.env.Parser().Parse(sql)
+		if err != nil {
+			return nil, 0, err
+		}
+		stmtType = sqlparser.ASTToStatementType(stmt)
+	}
 	logStats.StmtType = stmtType.String()
 
 	// Mysql warnings are scoped to the current session, but are
