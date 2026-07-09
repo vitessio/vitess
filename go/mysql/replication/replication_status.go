@@ -78,14 +78,18 @@ type ReplicationStatus struct {
 // fatalReplicationIOErrnos are the IO thread error codes (Last_IO_Errno) that
 // we treat as fatal: the replica has stopped replicating and cannot recover on
 // its own, so it needs operator intervention (e.g. a PRS/ERS) rather than time
-// to catch up. Currently the only such error is 1236,
-// ER_MASTER/SOURCE_FATAL_ERROR_READING_BINLOG, which the source raises when the
-// replica asks for binlog events the source no longer has. Comparing the
-// numeric errno (rather than matching Last_IO_Error text) is cheap and robust
-// across MySQL versions and the "master"/"source" message wording, which share
-// the same code. Additional fatal codes can be added here as they're identified.
+// to catch up. Currently the only such condition is the source raising fatal
+// error 1236 because the replica asks for binlog events the source no longer
+// has. Which code the replica records for it depends on the MySQL version:
+// since 8.0.26 Last_IO_Errno holds the server-side code 13114
+// (ER_SERVER_SOURCE_FATAL_ERROR_READING_BINLOG); older versions record 1236
+// (ER_MASTER_FATAL_ERROR_READING_BINLOG) directly. Comparing numeric errnos
+// (rather than matching Last_IO_Error text) is cheap and robust across the
+// "master"/"source" message wording changes. Additional fatal codes can be
+// added here as they're identified.
 var fatalReplicationIOErrnos = map[sqlerror.ErrorCode]bool{
-	sqlerror.ERMasterFatalReadingBinlog: true,
+	sqlerror.ERMasterFatalReadingBinlog:            true,
+	sqlerror.ERServerSourceFatalErrorReadingBinlog: true,
 }
 
 // Running returns true if both the IO and SQL threads are running.

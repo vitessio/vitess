@@ -72,8 +72,13 @@ func TestStatusHasFatalReplicationError(t *testing.T) {
 			want:        false,
 		},
 		{
-			name:        "fatal binlog read error",
+			name:        "fatal binlog read error pre 8.0.26",
 			lastIOErrno: uint32(sqlerror.ERMasterFatalReadingBinlog),
+			want:        true,
+		},
+		{
+			name:        "fatal binlog read error 8.0.26 and later",
+			lastIOErrno: uint32(sqlerror.ERServerSourceFatalErrorReadingBinlog),
 			want:        true,
 		},
 		{

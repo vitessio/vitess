@@ -320,6 +320,12 @@ const (
 
 	// server not available
 	ERServerIsntAvailable = ErrorCode(3168)
+
+	// ERServerSourceFatalErrorReadingBinlog is
+	// ER_SERVER_SOURCE_FATAL_ERROR_READING_BINLOG (MY-013114). Since MySQL
+	// 8.0.26 the replica records this server-side code in Last_IO_Errno when
+	// the source raises fatal error 1236; older versions record 1236 itself.
+	ERServerSourceFatalErrorReadingBinlog = ErrorCode(13114)
 )
 
 // HandlerErrorCode is for errors thrown by the handler, and which are then embedded in other errors.

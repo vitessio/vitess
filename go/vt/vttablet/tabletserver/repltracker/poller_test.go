@@ -63,8 +63,10 @@ func TestPollerReturnsFatalReplicationError(t *testing.T) {
 	mysqld := mysqlctl.NewFakeMysqlDaemon(nil)
 	poller.InitDBConfig(mysqld)
 
+	// MySQL 8.0.26+ records the server-side code 13114 in Last_IO_Errno
+	// while the message text still references the source's error 1236.
 	mysqld.LastIOError = "Got fatal error 1236 from source when reading data from binary log"
-	mysqld.LastIOErrno = uint32(sqlerror.ERMasterFatalReadingBinlog)
+	mysqld.LastIOErrno = uint32(sqlerror.ERServerSourceFatalErrorReadingBinlog)
 
 	lag, err := poller.Status()
 	require.ErrorContains(t, err, mysqld.LastIOError)
