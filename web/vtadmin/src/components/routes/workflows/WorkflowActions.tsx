@@ -39,7 +39,7 @@ interface CompleteMoveTablesOptions {
 
 const DefaultCompleteMoveTablesOptions: CompleteMoveTablesOptions = {
     keepRoutingRules: false,
-    renameTables: false,
+    renameTables: true,
 };
 
 interface CancelWorkflowOptions {
