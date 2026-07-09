@@ -11740,17 +11740,23 @@ func TestSetShardTabletControl(t *testing.T) {
 		{
 			name: "keyspace lock error",
 			setup: func(t *testing.T, tt *testcase) {
-				var cancel func()
-				tt.ctx, cancel = context.WithCancel(ctx)
 				tt.ts = memorytopo.NewServer(ctx, "zone1")
-				testutil.AddShards(tt.ctx, t, tt.ts, &vtctldatapb.Shard{
+				testutil.AddShards(ctx, t, tt.ts, &vtctldatapb.Shard{
 					Keyspace: "testkeyspace",
 					Name:     "-",
 					Shard:    &topodatapb.Shard{},
 				})
 
-				_, unlock, err := tt.ts.LockKeyspace(tt.ctx, "testkeyspace", "test lock")
+				_, unlock, err := tt.ts.LockKeyspace(ctx, "testkeyspace", "test lock")
 				require.NoError(t, err)
+
+				// The RPC below blocks trying to acquire the keyspace lock we
+				// already hold, so give it a short deadline instead of waiting
+				// out the default 45s topo.LockTimeout. The deadline only
+				// covers the RPC: even if it fires early, the lock acquisition
+				// still fails with an error, which is all this case asserts.
+				var cancel func()
+				tt.ctx, cancel = context.WithTimeout(ctx, 1*time.Second)
 				tt.teardown = func(t *testing.T, tt *testcase) {
 					var err error
 					unlock(&err)

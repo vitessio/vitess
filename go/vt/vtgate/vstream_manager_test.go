@@ -2576,7 +2576,7 @@ func TestVStreamManagerHealthCheckResponseHandling(t *testing.T) {
 				source.SetStreamHealthResponse(tc.hcRes)
 			}
 
-			vstreamCtx, vstreamCancel := context.WithTimeout(ctx, 5*time.Second)
+			vstreamCtx, vstreamCancel := context.WithTimeout(ctx, 1*time.Second)
 			defer vstreamCancel()
 
 			// SandboxConn's VStream implementation always waits for the context to timeout.

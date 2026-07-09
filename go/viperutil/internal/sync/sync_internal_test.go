@@ -80,7 +80,7 @@ func TestPersistConfig(t *testing.T) {
 	t.Run("basic", func(t *testing.T) {
 		v := New()
 
-		minPersistWaitInterval := 10 * time.Second
+		minPersistWaitInterval := 2 * time.Second
 		get := AdaptGetter("foo", func(v *viper.Viper) func(key string) int { return v.GetInt }, v)
 		fs, ch := setup(t, v, minPersistWaitInterval)
 
