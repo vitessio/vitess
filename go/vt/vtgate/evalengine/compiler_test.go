@@ -63,7 +63,8 @@ type Tracker struct {
 
 func NewTracker() *Tracker {
 	track := &Tracker{}
-	track.tbl = tablewriter.NewTable(&track.buf,
+	track.tbl = tablewriter.NewTable(
+		&track.buf,
 		tablewriter.WithAlignment(tw.Alignment{
 			tw.AlignLeft,
 			tw.AlignRight,
@@ -219,6 +220,39 @@ func TestCompilerSingle(t *testing.T) {
 			expression: "(128 - column0) * 3",
 			values:     []sqltypes.Value{sqltypes.NewFloat64(1)},
 			result:     "FLOAT64(381)",
+		},
+		{
+			expression: "ROUND(column0)",
+			values:     []sqltypes.Value{sqltypes.NewFloat64(2.5)},
+			result:     "FLOAT64(2)",
+		},
+		{
+			expression: "ROUND(column0)",
+			values:     []sqltypes.Value{sqltypes.NewFloat64(3.5)},
+			result:     "FLOAT64(4)",
+		},
+		{
+			expression: "ROUND(column0)",
+			values:     []sqltypes.Value{sqltypes.NewFloat64(-2.5)},
+			result:     "FLOAT64(-2)",
+		},
+		{
+			expression: "ROUND(column0, 2)",
+			values:     []sqltypes.Value{sqltypes.NewFloat64(0.125)},
+			result:     "FLOAT64(0.12)",
+		},
+		{
+			expression: "ROUND(column0, -1)",
+			values:     []sqltypes.Value{sqltypes.NewFloat64(25)},
+			result:     "FLOAT64(20)",
+		},
+		{
+			expression: "ROUND(2.5)",
+			result:     "DECIMAL(3)",
+		},
+		{
+			expression: "ROUND(-2.5)",
+			result:     "DECIMAL(-3)",
 		},
 		{
 			expression: "1.0e0 < column0",
