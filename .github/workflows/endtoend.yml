@@ -40,6 +40,8 @@ jobs:
           end_to_end:
             - 'go/**/!(*_test).go'
             - 'go/**/endtoend/**'
+            - 'go/mysql/collations/colldata/**'
+            - 'go/mysql/icuregex/internal/icudata/**'
             - 'test.go'
             - 'Makefile'
             - 'build.env'
