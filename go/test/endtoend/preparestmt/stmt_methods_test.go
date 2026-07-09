@@ -28,12 +28,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-<<<<<<< HEAD
 	"vitess.io/vitess/go/test/endtoend/cluster"
-||||||| parent of 0620ca7375 (vtgate: do not start an implicit transaction on prepare (#20538))
-=======
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
->>>>>>> 0620ca7375 (vtgate: do not start an implicit transaction on prepare (#20538))
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 )
@@ -220,7 +216,6 @@ func deleteRecord(t *testing.T, dbo *sql.DB) {
 
 	data := selectWhere(t, dbo, "id = ?", testingID)
 	assert.Equal(t, 0, len(data))
-
 }
 
 // updateRecord test update operation corresponds to the testingID.
@@ -240,7 +235,6 @@ func updateRecord(t *testing.T, dbo *sql.DB) {
 	// validate value of msg column in data
 	assert.Equal(t, updateData, data[0].Data)
 	assert.Equal(t, updateTextCol, data[0].TextCol)
-
 }
 
 // reconnectAndTest creates new connection with database and validate.
@@ -250,7 +244,6 @@ func reconnectAndTest(t *testing.T) {
 	defer dbo.Close()
 	data := selectWhere(t, dbo, "id = ?", testingID)
 	assert.Equal(t, 0, len(data))
-
 }
 
 // TestColumnParameter query database using column
