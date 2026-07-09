@@ -120,17 +120,17 @@ func registerPluginFlags(fs *pflag.FlagSet) {
 // tempTableHeartbeatTarget identifies one reserved connection that must be
 // kept alive because its session holds temporary tables. Target slices are
 // replaced wholesale under tempTableConn.mu, never mutated in place.
-// tempTableBeatMaxFailures is how many consecutive keepalive failures a
-// reserved connection may accumulate before the sweeper gives up on it.
-const tempTableBeatMaxFailures = 3
-
 type tempTableHeartbeatTarget struct {
 	target     *querypb.Target
 	alias      *topodatapb.TabletAlias
 	reservedID int64
-	// failures counts consecutive keepalive failures; it resets on success
-	// (and whenever a command's end hook republishes the targets — an
-	// active session re-earns its keepalives).
+	// failures counts consecutive keepalive failures. It only gates the
+	// transition logging (warn once when a target starts failing, note the
+	// recovery once when it stops): failures never evict a target — only a
+	// confirmed connection-closed error does — or a few seconds of network
+	// trouble would silently disable the keepalives of a live connection.
+	// It resets on success (and whenever a command's end hook republishes
+	// the targets).
 	failures int
 }
 
@@ -389,6 +389,12 @@ func (vh *vtgateHandler) beatTempTableConn(ctx context.Context, c *mysql.Conn, t
 	for i, t := range ttc.targets {
 		err := errs[i]
 		if err == nil {
+			if t.failures > 0 {
+				log.Info("temp-table connection heartbeat recovered",
+					slog.Int64("reserved_id", t.reservedID),
+					slog.String("tablet", topoproto.TabletAliasString(t.alias)),
+					slog.Int("failed_beats", t.failures))
+			}
 			t.failures = 0
 			kept = append(kept, t)
 			continue
@@ -404,24 +410,21 @@ func (vh *vtgateHandler) beatTempTableConn(ctx context.Context, c *mysql.Conn, t
 			continue
 		}
 		// Transient failure (e.g. slow or unreachable tablet): keep the
-		// target and retry on the next sweep — but not forever. A target
-		// that never succeeds (e.g. its tablet is gone and the alias no
-		// longer resolves) is unreachable for keepalive purposes, so give
-		// up on it rather than warn every sweep indefinitely; the session
-		// self-heals by re-reserving on its next query.
+		// target and retry on the next sweep — for as long as it takes.
+		// Only a confirmed connection-closed error may evict; a failure
+		// count must not, or a few seconds of network trouble would
+		// silently disable the keepalives of a live connection whose temp
+		// tables the tablet would then reclaim. To keep an unreachable
+		// tablet from producing a warning every sweep indefinitely, log on
+		// state transitions only: once when a target starts failing (and
+		// once above when it recovers).
 		t.failures++
-		if t.failures >= tempTableBeatMaxFailures {
-			log.Warn("temp-table connection keepalives keep failing, giving up on it",
+		if t.failures == 1 {
+			log.Warn("temp-table connection heartbeat failed, will keep retrying",
 				slog.Int64("reserved_id", t.reservedID),
 				slog.String("tablet", topoproto.TabletAliasString(t.alias)),
-				slog.Int("consecutive_failures", t.failures),
 				slog.Any("error", err))
-			continue
 		}
-		log.Warn("temp-table connection heartbeat failed",
-			slog.Int64("reserved_id", t.reservedID),
-			slog.String("tablet", topoproto.TabletAliasString(t.alias)),
-			slog.Any("error", err))
 		kept = append(kept, t)
 	}
 	ttc.targets = kept

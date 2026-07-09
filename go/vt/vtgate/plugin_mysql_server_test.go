@@ -2024,15 +2024,18 @@ func TestTempTableHeartbeatSweep(t *testing.T) {
 	require.Len(t, ttc2.targets, 1)
 	require.Equal(t, 0, ttc2.targets[0].failures)
 
-	// A target that keeps failing is eventually given up on, so an
-	// unreachable tablet is not warned about every sweep indefinitely.
-	sbc.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = tempTableBeatMaxFailures
-	for range tempTableBeatMaxFailures {
+	// Repeated failures never evict on their own — only a confirmed
+	// connection-closed error may — or transient network trouble would
+	// silently disable the keepalives of a live connection. The counter
+	// keeps accumulating to gate the transition logging.
+	sbc.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 4
+	for range 4 {
 		vh.sendTempTableHeartbeats(ctx)
 	}
-	require.Empty(t, ttc2.targets)
+	require.Len(t, ttc2.targets, 1)
+	require.Equal(t, 4, ttc2.targets[0].failures)
 	_, ok = vh.tempTableConns.Load(c2)
-	require.False(t, ok)
+	require.True(t, ok)
 }
 
 // TestTempTableBeatContext verifies that beats carry the client's caller
