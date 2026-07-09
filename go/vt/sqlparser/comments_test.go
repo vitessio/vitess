@@ -17,7 +17,6 @@ limitations under the License.
 package sqlparser
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -391,7 +390,7 @@ func TestIgnoreMaxPayloadSizeDirective(t *testing.T) {
 		t.Run(test.query, func(t *testing.T) {
 			stmt, _ := parser.Parse(test.query)
 			got := IgnoreMaxPayloadSizeDirective(stmt)
-			assert.Equalf(t, test.expected, got, fmt.Sprintf("IgnoreMaxPayloadSizeDirective(stmt) returned %v but expected %v", got, test.expected))
+			assert.Equalf(t, test.expected, got, "IgnoreMaxPayloadSizeDirective(stmt) returned %v but expected %v", got, test.expected)
 		})
 	}
 }
@@ -418,7 +417,7 @@ func TestIgnoreMaxMaxMemoryRowsDirective(t *testing.T) {
 		t.Run(test.query, func(t *testing.T) {
 			stmt, _ := parser.Parse(test.query)
 			got := IgnoreMaxMaxMemoryRowsDirective(stmt)
-			assert.Equalf(t, test.expected, got, fmt.Sprintf("IgnoreMaxPayloadSizeDirective(stmt) returned %v but expected %v", got, test.expected))
+			assert.Equalf(t, test.expected, got, "IgnoreMaxPayloadSizeDirective(stmt) returned %v but expected %v", got, test.expected)
 		})
 	}
 }
@@ -505,12 +504,12 @@ func TestGetPriorityFromStatement(t *testing.T) {
 		t.Run(testCase.query, func(t *testing.T) {
 			t.Parallel()
 			stmt, err := parser.Parse(testCase.query)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			qh, err := BuildQueryHints(stmt)
 			if testCase.expectedError != nil {
 				assert.ErrorIs(t, err, testCase.expectedError)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, testCase.expectedPriority, qh.Priority)
 			}
 		})
@@ -670,7 +669,7 @@ func TestSetMySQLSetVarValue(t *testing.T) {
 				comments: tt.comments,
 			}
 			newComments := c.SetMySQLSetVarValue(tt.key, tt.value)
-			require.EqualValues(t, tt.commentsWanted, newComments)
+			require.Equal(t, tt.commentsWanted, newComments)
 		})
 	}
 }
@@ -699,7 +698,7 @@ func TestQueryTimeout(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.query, func(t *testing.T) {
 			stmt, err := parser.Parse(tc.query)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			qh, _ := BuildQueryHints(stmt)
 			if tc.noTimeout {
 				assert.Nil(t, qh.Timeout)

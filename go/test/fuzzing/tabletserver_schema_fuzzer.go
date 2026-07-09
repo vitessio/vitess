@@ -76,5 +76,5 @@ func newTestLoadTable(tableName, comment string, db *fakesqldb.DB) (*schema.Tabl
 	}
 	defer conn.Recycle()
 
-	return schema.LoadTable(conn, "fakesqldb", tableName, "BASE_TABLE", comment, collations.MySQL8())
+	return schema.LoadTable(conn, "fakesqldb", tableName, "BASE_TABLE", comment, collations.MySQL8(), false)
 }

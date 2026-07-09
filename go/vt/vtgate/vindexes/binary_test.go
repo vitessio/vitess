@@ -101,7 +101,7 @@ func TestBinaryMap(t *testing.T) {
 	}}
 	for _, tcase := range tcases {
 		got, err := binOnlyVindex.Map(t.Context(), nil, []sqltypes.Value{tcase.in})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		out := []byte(got[0].(key.DestinationKeyspaceID))
 		assert.Equalf(t, tcase.out, out, "Map(%#v)", tcase.in)
 	}

@@ -48,7 +48,7 @@ func TestVtgateHealthCheck(t *testing.T) {
 	defer conn.Close()
 
 	qr := utils.Exec(t, conn, "show vitess_tablets")
-	assert.Equal(t, 3, len(qr.Rows), "wrong number of results from show")
+	assert.Len(t, qr.Rows, 3, "wrong number of results from show")
 }
 
 func TestVtgateReplicationStatusCheck(t *testing.T) {
@@ -64,7 +64,7 @@ func TestVtgateReplicationStatusCheck(t *testing.T) {
 	qr := utils.Exec(t, conn, "show vitess_replication_status like '%'")
 	expectNumRows := 2
 	numRows := len(qr.Rows)
-	assert.Equal(t, expectNumRows, numRows, fmt.Sprintf("wrong number of results from show vitess_replication_status. Expected %d, got %d", expectNumRows, numRows))
+	assert.Equal(t, expectNumRows, numRows, "wrong number of results from show vitess_replication_status. Expected %d, got %d", expectNumRows, numRows)
 
 	// Disable VTOrc(s) recoveries so that it doesn't immediately repair/restart replication.
 	for _, vtorcProcess := range clusterInstance.VTOrcProcesses {
@@ -94,7 +94,7 @@ func TestVtgateReplicationStatusCheck(t *testing.T) {
 	require.NoError(t, err)
 	expectNumRows = 2
 	numRows = len(qr.Rows)
-	assert.Equal(t, expectNumRows, numRows, fmt.Sprintf("wrong number of results from show vitess_replication_status, expected %d, got %d", expectNumRows, numRows))
+	assert.Equal(t, expectNumRows, numRows, "wrong number of results from show vitess_replication_status, expected %d, got %d", expectNumRows, numRows)
 	rawLag := res.Named().Rows[0]["ReplicationLag"] // Let's just look at the first row
 	lagInt, _ := rawLag.ToInt64()                   // Don't check the error as the value could be "NULL"
 	assert.True(t, rawLag.IsNull() || lagInt > 0, "replication lag should be NULL or greater than 0 but was: %s", rawLag.ToString())
@@ -113,7 +113,7 @@ func TestVtgateReplicationStatusCheckWithTabletTypeChange(t *testing.T) {
 	qr := utils.Exec(t, conn, "show vitess_replication_status like '%'")
 	expectNumRows := 2
 	numRows := len(qr.Rows)
-	assert.Equal(t, expectNumRows, numRows, fmt.Sprintf("wrong number of results from show vitess_replication_status. Expected %d, got %d", expectNumRows, numRows))
+	assert.Equal(t, expectNumRows, numRows, "wrong number of results from show vitess_replication_status. Expected %d, got %d", expectNumRows, numRows)
 
 	// change the RDONLY tablet to SPARE
 	rdOnlyTablet := clusterInstance.Keyspaces[0].Shards[0].Rdonly()
@@ -129,7 +129,7 @@ func TestVtgateReplicationStatusCheckWithTabletTypeChange(t *testing.T) {
 	qr = utils.Exec(t, conn, "show vitess_replication_status like '%'")
 	expectNumRows = 1
 	numRows = len(qr.Rows)
-	assert.Equal(t, expectNumRows, numRows, fmt.Sprintf("wrong number of results from show vitess_replication_status. Expected %d, got %d", expectNumRows, numRows))
+	assert.Equal(t, expectNumRows, numRows, "wrong number of results from show vitess_replication_status. Expected %d, got %d", expectNumRows, numRows)
 }
 
 func verifyVtgateVariables(t *testing.T, url string) {
@@ -149,7 +149,7 @@ func verifyVtgateVariables(t *testing.T, url string) {
 	assert.Contains(t, vschemaCountMap, "Reload", "Reload count should be present in vschemacount")
 
 	object := reflect.ValueOf(vschemaCountMap["Reload"])
-	assert.Greater(t, object.NumField(), 0, "Reload count should be greater than 0")
+	assert.Positive(t, object.NumField(), "Reload count should be greater than 0")
 	assert.NotContains(t, vschemaCountMap, "WatchError", "There should not be any WatchError in VschemaCount")
 	assert.NotContains(t, vschemaCountMap, "Parsing", "There should not be any Parsing in VschemaCount")
 	assert.Contains(t, resultMap, "HealthcheckConnections", "HealthcheckConnections count should be present in variables")
@@ -269,7 +269,7 @@ func TestReplicaTransactions(t *testing.T) {
 	err = replicaTablet.VttabletProcess.Setup()
 	require.NoError(t, err)
 	serving := replicaTablet.VttabletProcess.WaitForStatus("SERVING", 60*time.Second)
-	assert.Equal(t, serving, true, "Tablet did not become ready within a reasonable time")
+	assert.True(t, serving, "Tablet did not become ready within a reasonable time")
 	utils.AssertContainsError(t, readConn, fetchAllCustomers, "VT09032")
 	utils.Exec(t, readConn, "rollback")
 

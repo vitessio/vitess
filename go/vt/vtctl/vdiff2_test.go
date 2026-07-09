@@ -405,7 +405,7 @@ func TestGetStructNames(t *testing.T) {
 	}
 	got := getStructFieldNames(s{})
 	want := []string{"A", "B"}
-	require.EqualValues(t, want, got)
+	require.Equal(t, want, got)
 }
 
 func TestBuildProgressReport(t *testing.T) {

@@ -35,6 +35,7 @@ import (
 
 	"vitess.io/vitess/go/bytes2"
 	"vitess.io/vitess/go/mysql"
+	mysqlbinlog "vitess.io/vitess/go/mysql/binlog"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/replication"
@@ -811,7 +812,7 @@ func TestSidecarDBTables(t *testing.T) {
 		return nil
 	}, options)
 	require.NoError(t, err)
-	require.EqualValues(t, wantRowEvents, gotRowEvents)
+	require.Equal(t, wantRowEvents, gotRowEvents)
 	for k, v := range gotFieldEvents {
 		require.Equal(t, 1, v, "gotFieldEvents[%s] = %d", k, v)
 	}
@@ -2383,43 +2384,41 @@ func TestHeartbeat(t *testing.T) {
 	wg, ch := startStream(ctx, t, nil, "", nil)
 	defer wg.Wait()
 	evs := <-ch
-	require.Equal(t, 1, len(evs))
+	require.Len(t, evs, 1)
 	assert.Equal(t, binlogdatapb.VEventType_HEARTBEAT, evs[0].Type)
 	cancel()
 }
 
 func TestFullyThrottledTimeout(t *testing.T) {
-	ctx := t.Context()
 	origTimeout := fullyThrottledTimeout
 	origHeartbeatTime := HeartbeatTime
-	startingMetric := engine.errorCounts.Counts()[fullyThrottledMetricLabel]
-	defer func() {
+	t.Cleanup(func() {
 		fullyThrottledTimeout = origTimeout
 		HeartbeatTime = origHeartbeatTime
-	}()
+	})
 
 	fullyThrottledTimeout = 100 * time.Millisecond
 	HeartbeatTime = fullyThrottledTimeout * 15
-	waitTimer := time.NewTimer(HeartbeatTime)
-	defer waitTimer.Stop()
+
+	startingMetric := engine.errorCounts.Counts()[fullyThrottledMetricLabel]
+	ctx := t.Context()
+	wg, evs := startFullyThrottledStream(ctx, t, nil, "", nil) // Fully throttled
+
 	done := make(chan struct{})
 	go func() {
-		defer close(done)
-		wg, evs := startFullyThrottledStream(ctx, t, nil, "", nil) // Fully throttled
 		wg.Wait()
-		if !assert.Zero(t, len(evs)) {
-			return
-		}
+		close(done)
 	}()
 
 	select {
 	case <-done:
-		endingMetric := engine.errorCounts.Counts()[fullyThrottledMetricLabel]
-		require.Equal(t, startingMetric+1, endingMetric)
-		return
-	case <-waitTimer.C:
+	case <-time.After(HeartbeatTime):
 		require.FailNow(t, "fully throttled stall handler did not fire as expected")
 	}
+
+	require.Empty(t, evs)
+	endingMetric := engine.errorCounts.Counts()[fullyThrottledMetricLabel]
+	require.Equal(t, startingMetric+1, endingMetric)
 }
 
 func TestVStreamerThrottledCounts(t *testing.T) {
@@ -2431,7 +2430,7 @@ func TestVStreamerThrottledCounts(t *testing.T) {
 	defer wg.Wait()
 	defer cancel()
 
-	assert.Eventually(t, func() bool {
+	require.Eventually(t, func() bool {
 		return engine.throttledCounts.Get() > startingMetric
 	}, 30*time.Second, 50*time.Millisecond, "VStreamerThrottledCounts should increment while vstream is throttled")
 }
@@ -2846,4 +2845,151 @@ func TestUVStreamerNoCopyWithGTID(t *testing.T) {
 	err := uvs.init()
 	require.NoError(t, err)
 	require.Empty(t, uvs.plans, "Should not build table plans when startPos is set")
+}
+
+// TestMinimalSchemaEnumSetColumnTypeLifecycle follows the ENUM/SET column type
+// definitions captured for schema version tracking through their full
+// lifecycle (issue #20175): the marshalled schema is enriched with the full
+// type definition of every ENUM and SET column — including binary-collation
+// ones, which report as BINARY in field metadata and so must be matched by
+// name — and once the live schema diverges, getFields preserves the historical
+// definitions (whether the live column was modified or dropped) so that the
+// integer-to-string mappings for historical ROW events can still be built.
+func TestMinimalSchemaEnumSetColumnTypeLifecycle(t *testing.T) {
+	ctx := t.Context()
+	// The column attributes that the marshalled schema carries are only
+	// fetched when schema version tracking is enabled.
+	env.TabletEnv.Config().TrackSchemaVersions = true
+	defer func() { env.TabletEnv.Config().TrackSchemaVersions = false }()
+	const tableName = "enum_set_lifecycle"
+	execStatements(t, []string{
+		"create table " + tableName + "(id int, plan enum('free','standard') not null, " +
+			"roles set('admin','user') not null, " +
+			"bin_plan enum('gold','silver') collate utf8mb4_bin not null, " +
+			"bin_roles set('a','b') collate utf8mb4_bin not null, " +
+			"n int, primary key(id))",
+	})
+	defer execStatements(t, []string{"drop table " + tableName})
+	require.NoError(t, env.SchemaEngine.Reload(ctx))
+
+	// Phase 1: the marshalled schema carries the type definition of every
+	// ENUM/SET column and of nothing else. The binary-collation columns
+	// report as BINARY in field metadata, yet are still recorded.
+	blob, err := env.SchemaEngine.MarshalMinimalSchema()
+	require.NoError(t, err)
+	ms := &binlogdatapb.MinimalSchema{}
+	require.NoError(t, ms.UnmarshalVT(blob))
+
+	var table *binlogdatapb.MinimalTable
+	for _, mt := range ms.Tables {
+		if mt.Name == tableName {
+			table = mt
+			break
+		}
+	}
+	require.NotNil(t, table, "%s not found in marshalled schema", tableName)
+
+	fieldTypes := make(map[string]querypb.Type)
+	columnTypes := make(map[string]string)
+	for _, f := range table.Fields {
+		fieldTypes[f.Name] = f.Type
+		columnTypes[f.Name] = f.ColumnType
+	}
+	require.Equal(t, querypb.Type_BINARY, fieldTypes["bin_plan"], "binary-collation ENUM should report as BINARY in field metadata")
+	require.Equal(t, querypb.Type_BINARY, fieldTypes["bin_roles"], "binary-collation SET should report as BINARY in field metadata")
+	require.Equal(t, map[string]string{
+		"id":        "",
+		"plan":      "enum('free','standard')",
+		"roles":     "set('admin','user')",
+		"bin_plan":  "enum('gold','silver')",
+		"bin_roles": "set('a','b')",
+		"n":         "",
+	}, columnTypes)
+
+	// Phase 2: the live schema diverges — the regular columns' definitions
+	// change and the binary-collation columns are dropped. getFields must
+	// preserve the historical definitions in both cases: a still-existing
+	// column's live definition must not overwrite the tracked one, and a
+	// dropped column has no live definition to consult at all.
+	execStatements(t, []string{
+		"alter table " + tableName + " modify plan enum('free','basic','standard') not null, " +
+			"modify roles set('admin','ops','user') not null, " +
+			"drop column bin_plan, drop column bin_roles",
+	})
+
+	cp := env.Dbcfgs.DbaWithDB()
+	fields, err := getFields(ctx, cp, env.SchemaEngine, tableName, cp.DBName(), table.Fields)
+	require.NoError(t, err)
+
+	columnTypes = make(map[string]string)
+	for _, f := range fields {
+		columnTypes[f.Name] = f.ColumnType
+	}
+	require.Equal(t, "enum('free','standard')", columnTypes["plan"])
+	require.Equal(t, "set('admin','user')", columnTypes["roles"])
+	require.Equal(t, "enum('gold','silver')", columnTypes["bin_plan"])
+	require.Equal(t, "set('a','b')", columnTypes["bin_roles"])
+
+	// Phase 3: the integer-to-string mappings for a historical ROW event can
+	// be built from the preserved definitions. For the binary-collation
+	// columns the binlog TableMap metadata carries the real column type in
+	// the high byte.
+	metadata := make([]uint16, len(fields))
+	colIdx := make(map[string]int)
+	for i, f := range fields {
+		colIdx[f.Name] = i
+		switch f.Name {
+		case "bin_plan":
+			metadata[i] = mysqlbinlog.TypeEnum<<8 | 1
+		case "bin_roles":
+			metadata[i] = mysqlbinlog.TypeSet<<8 | 1
+		}
+	}
+	plan := &Plan{}
+	require.NoError(t, addEnumAndSetMappingstoPlan(env.SchemaEngine.Environment(), plan, fields, metadata))
+	assert.Equal(t, map[int]string{1: "free", 2: "standard"}, plan.EnumSetValuesMap[colIdx["plan"]])
+	assert.Equal(t, map[int]string{1: "admin", 2: "user"}, plan.EnumSetValuesMap[colIdx["roles"]])
+	assert.Equal(t, map[int]string{1: "gold", 2: "silver"}, plan.EnumSetValuesMap[colIdx["bin_plan"]])
+	assert.Equal(t, map[int]string{1: "a", 2: "b"}, plan.EnumSetValuesMap[colIdx["bin_roles"]])
+}
+
+// TestAddEnumAndSetMappingsActionableError confirms that when an ENUM/SET column
+// has no usable type definition (e.g. it was dropped and no tracked schema
+// version supplies it), the failure names the likely cause and the
+// --track-schema-versions requirement instead of an opaque empty value.
+func TestAddEnumAndSetMappingsActionableError(t *testing.T) {
+	cols := []*querypb.Field{
+		{Name: "plan", Type: querypb.Type_ENUM, ColumnType: ""},
+	}
+	metadata := []uint16{0}
+	err := addEnumAndSetMappingstoPlan(env.SchemaEngine.Environment(), &Plan{}, cols, metadata)
+	require.Error(t, err)
+	require.ErrorContains(t, err, "enum or set column plan does not have valid string values")
+	assert.ErrorContains(t, err, "--track-schema-versions")
+}
+
+// TestBuildSetStringValue64thMember verifies that a SET column with the maximum
+// of 64 members does not drop its 64th value when converted to a string. The
+// 64th member is stored as bit 1<<63 in the bitmap.
+func TestBuildSetStringValue64thMember(t *testing.T) {
+	// A 64-member SET, mapping keyed 1..64 as ParseEnumOrSetTokensMap builds it.
+	setValues := make(map[int]string, 64)
+	for i := 1; i <= 64; i++ {
+		setValues[i] = fmt.Sprintf("v%d", i)
+	}
+	plan := &streamerPlan{
+		Plan: &Plan{
+			Table: &Table{
+				Name:   "t",
+				Fields: []*querypb.Field{{Name: "s", Type: querypb.Type_SET}},
+			},
+			EnumSetValuesMap: map[int]map[int]string{0: setValues},
+		},
+	}
+
+	// A stored value with member 1 and member 64 set (member k -> bit k-1).
+	value := sqltypes.NewUint64(uint64(1)<<0 | uint64(1)<<63)
+	got, err := buildSetStringValue(env.SchemaEngine.Environment(), plan, 0, value)
+	require.NoError(t, err)
+	assert.Equal(t, "v1,v64", got.ToString())
 }

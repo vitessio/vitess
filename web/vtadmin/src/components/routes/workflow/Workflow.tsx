@@ -164,11 +164,15 @@ export const Workflow = () => {
 
             <ContentContainer>
                 <TabContainer>
-                    <Tab text="Streams" to="streams" count={streams.length} />
-                    <Tab text="Details" to="details" />
-                    <Tab text="VDiff" to="vdiff" />
-                    <Tab text="JSON" to="json" />
-                    <Tab text="JSON Tree" to="json_tree" />
+                    <Tab
+                        text="Streams"
+                        to={`/workflow/${clusterID}/${keyspace}/${name}/streams`}
+                        count={streams.length}
+                    />
+                    <Tab text="Details" to={`/workflow/${clusterID}/${keyspace}/${name}/details`} />
+                    <Tab text="VDiff" to={`/workflow/${clusterID}/${keyspace}/${name}/vdiff`} />
+                    <Tab text="JSON" to={`/workflow/${clusterID}/${keyspace}/${name}/json`} />
+                    <Tab text="JSON Tree" to={`/workflow/${clusterID}/${keyspace}/${name}/json_tree`} />
                 </TabContainer>
 
                 <Routes>

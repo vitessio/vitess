@@ -88,7 +88,7 @@ func TestParseQueryParamAsBool(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tt.expected, val)
 		})
 	}

@@ -113,9 +113,9 @@ const vschema = `{
 func assertResharding(t *testing.T, shard string, stats *buffer.VTGateBufferingStats) {
 	stopLabel := fmt.Sprintf("%s.%s", shard, "ReshardingComplete")
 
-	assert.Greater(t, stats.BufferFailoverDurationSumMs[shard], 0)
-	assert.Greater(t, stats.BufferRequestsBuffered[shard], 0)
-	assert.Greater(t, stats.BufferStops[stopLabel], 0)
+	assert.Positive(t, stats.BufferFailoverDurationSumMs[shard])
+	assert.Positive(t, stats.BufferRequestsBuffered[shard])
+	assert.Positive(t, stats.BufferStops[stopLabel])
 }
 
 func TestBufferResharding(t *testing.T) {
