@@ -30,6 +30,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path"
@@ -68,6 +69,8 @@ import (
 // The string we expect before the MySQL version number
 // in strings containing MySQL version information.
 const versionStringPrefix = "Ver "
+
+const replicaShutdownPreparationTimeout = 10 * time.Second
 
 // How many bytes from MySQL error log to sample for error messages
 const maxLogFileSampleSize = 4096
@@ -664,6 +667,20 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 		return fmt.Errorf("preflight_mysqld_shutdown hook failed: %v", hr.String())
 	}
 
+	preparationTimeout := replicaShutdownPreparationTimeout
+	if shutdownTimeout > 0 {
+		preparationTimeout = min(preparationTimeout, shutdownTimeout)
+	}
+	preparationCtx, cancelPreparation := context.WithTimeout(ctx, preparationTimeout)
+	replicaSafetyErr := mysqld.prepareReplicaForShutdown(preparationCtx)
+	cancelPreparation()
+	if replicaSafetyErr != nil {
+		log.Error(
+			"failed to make replica crash-safe before shutdown; continuing with shutdown",
+			slog.Any("error", replicaSafetyErr),
+		)
+	}
+
 	// try the mysqld shutdown hook, if any
 	h = hook.NewSimpleHook("mysqld_shutdown")
 	hr = h.ExecuteContext(ctx)
@@ -718,7 +735,7 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 			return err
 		}
 	}
-	return nil
+	return replicaSafetyErr
 }
 
 // StartAfterExit waits for a mysqld process that shut itself down (e.g. after a

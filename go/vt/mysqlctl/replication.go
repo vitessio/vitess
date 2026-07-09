@@ -24,6 +24,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"strconv"
 	"strings"
@@ -145,6 +146,37 @@ func (mysqld *Mysqld) StopIOThread(ctx context.Context) error {
 	defer conn.Recycle()
 
 	return mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.Conn.StopIOThreadCommand()})
+}
+
+func (mysqld *Mysqld) prepareReplicaForShutdown(ctx context.Context) error {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return vterrors.Wrap(err, "failed to connect to MySQL before shutdown")
+	}
+	defer conn.Recycle()
+
+	if _, err := conn.Conn.ShowReplicationStatus(); err != nil {
+		if err == mysql.ErrNotReplica {
+			return nil
+		}
+		return vterrors.Wrap(err, "failed to read replication status before shutdown")
+	}
+
+	// The SET protects writes that race an interrupted receiver stop, while the FLUSH
+	// makes the existing relay log durable. Stopping the receiver is then best effort.
+	if err := mysqld.executeSuperQueryListConn(ctx, conn, []string{
+		"SET GLOBAL sync_relay_log = 1",
+		"FLUSH RELAY LOGS",
+	}); err != nil {
+		return vterrors.Wrap(err, "failed to establish relay log durability fence before shutdown")
+	}
+	if err := mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.Conn.StopIOThreadCommand()}); err != nil {
+		log.Warn(
+			"failed to stop the replication receiver before shutdown; continuing because the relay log durability fence completed",
+			slog.Any("error", err),
+		)
+	}
+	return nil
 }
 
 // StopSQLThread stops a replica's SQL thread(s) only.
