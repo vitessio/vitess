@@ -38,7 +38,8 @@ jobs:
         token: ''
         filters: |
           end_to_end:
-            - 'go/**/*.go'
+            - 'go/**/!(*_test).go'
+            - 'go/**/endtoend/**'
             - 'test.go'
             - 'Makefile'
             - 'build.env'

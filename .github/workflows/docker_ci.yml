@@ -53,7 +53,8 @@ jobs:
           filters: |
             end_to_end:
               - 'test/config.json'
-              - 'go/**/*.go'
+              - 'go/**/!(*_test).go'
+              - 'go/test/endtoend/**'
               - 'test.go'
               - 'Makefile'
               - 'build.env'

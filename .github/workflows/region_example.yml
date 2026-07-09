@@ -48,7 +48,7 @@ jobs:
         filters: |
           examples:
             - 'test/config.json'
-            - 'go/**/*.go'
+            - 'go/**/!(*_test).go'
             - 'test.go'
             - 'Makefile'
             - 'build.env'

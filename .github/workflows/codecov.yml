@@ -48,14 +48,14 @@ jobs:
       id: changes
       with:
         token: ''
+        # With 'every', a file is relevant only if it matches all patterns: any
+        # path from the brace-list, and not an endtoend-only test file (those
+        # cannot be imported by unit tests).
+        predicate-quantifier: 'every'
         filters: |
           changed_files:
-            - .github/workflows/codecov.yml
-            - .github/actions/setup-mysql/action.yml
-            - 'go/**'
-            - go.mod
-            - go.sum
-            - Makefile
+            - '{.github/workflows/codecov.yml,.github/actions/setup-mysql/action.yml,go/**,go.mod,go.sum,Makefile}'
+            - '!go/test/endtoend/**/*_test.go'
 
     - name: Set up Go
       if: steps.mode.outputs.is_full_run == 'true' || steps.changes.outputs.changed_files == 'true'
