@@ -978,6 +978,274 @@ func TestMultiStatementOnSplitError(t *testing.T) {
 	}
 }
 
+// TestExecQueryStreamSurfacesMidStreamError exercises go/mysql/conn.go execQuery (text
+// protocol, single statement): when the handler streams rows successfully and then
+// returns an error, the client must receive the real SQL error (not EOF/2013), and the
+// connection must remain usable for a subsequent query.
+func TestExecQueryStreamSurfacesMidStreamError(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+
+	require.NoError(t, cConn.WriteComQuery("rows then error"))
+
+	handler := &testRun{err: sqlerror.NewSQLError(sqlerror.ERQueryInterrupted, sqlerror.SSQueryInterrupted, "context canceled")}
+	res := sConn.handleNextCommand(handler)
+	require.True(t, res, "mid-stream error must not tear down the connection")
+
+	_, _, _, err := cConn.ReadQueryResult(100, true)
+	require.ErrorContains(t, err, "context canceled")
+
+	// Connection must still be usable for the next query.
+	require.NoError(t, cConn.WriteComQuery("select rows"))
+	res = sConn.handleNextCommand(handler)
+	require.True(t, res, "subsequent query must be handled on a still-alive connection")
+	result, _, _, err := cConn.ReadQueryResult(100, true)
+	require.NoError(t, err)
+	require.True(t, result.Equal(selectRowsResult))
+}
+
+// TestExecQueryMultiStreamSurfacesMidStreamError exercises go/mysql/conn.go execQueryMulti
+// (text protocol, multi-statement). Same contract: mid-stream error reaches the client
+// as the real SQL error and the connection survives.
+func TestExecQueryMultiStreamSurfacesMidStreamError(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	sConn.multiQuery = true
+	sConn.Capabilities |= CapabilityClientMultiStatements
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+
+	require.NoError(t, cConn.WriteComQuery("rows then error"))
+
+	handler := &testRun{err: sqlerror.NewSQLError(sqlerror.ERQueryInterrupted, sqlerror.SSQueryInterrupted, "context canceled")}
+	res := sConn.handleNextCommand(handler)
+	require.True(t, res, "mid-stream error must not tear down the connection")
+
+	_, more, _, err := cConn.ReadQueryResult(100, true)
+	require.ErrorContains(t, err, "context canceled")
+	require.False(t, more, "no further results after an error packet")
+
+	require.NoError(t, cConn.WriteComQuery("select rows"))
+	res = sConn.handleNextCommand(handler)
+	require.True(t, res, "subsequent query must be handled on a still-alive connection")
+	result, _, _, err := cConn.ReadQueryResult(100, true)
+	require.NoError(t, err)
+	require.True(t, result.Equal(selectRowsResult))
+}
+
+// TestExecQueryMultiStreamErrorAfterFirstResultSet exercises execQueryMulti with
+// multiple result sets: the first statement streams a full result set successfully
+// (with the more-results flag set), and the second statement streams rows and then
+// fails mid-stream. The client must read the first result set cleanly, then receive
+// the real SQL error for the second, and the connection must survive.
+func TestExecQueryMultiStreamErrorAfterFirstResultSet(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	sConn.multiQuery = true
+	sConn.Capabilities |= CapabilityClientMultiStatements
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+
+	require.NoError(t, cConn.WriteComQuery("select rows; rows then error"))
+
+	handler := &testRun{err: sqlerror.NewSQLError(sqlerror.ERQueryInterrupted, sqlerror.SSQueryInterrupted, "context canceled")}
+	res := sConn.handleNextCommand(handler)
+	require.True(t, res, "mid-stream error must not tear down the connection")
+
+	// First result set arrives cleanly with the more-results flag set.
+	result, more, _, err := cConn.ReadQueryResult(100, true)
+	require.NoError(t, err)
+	require.True(t, result.Equal(selectRowsResult))
+	require.True(t, more, "more results must follow the first result set")
+
+	// Second result set streams rows and then fails: client sees the real error.
+	_, more, _, err = cConn.ReadQueryResult(100, true)
+	require.ErrorContains(t, err, "context canceled")
+	require.False(t, more, "no further results after an error packet")
+
+	// Connection must still be usable for the next query.
+	require.NoError(t, cConn.WriteComQuery("select rows"))
+	res = sConn.handleNextCommand(handler)
+	require.True(t, res, "subsequent query must be handled on a still-alive connection")
+	result, _, _, err = cConn.ReadQueryResult(100, true)
+	require.NoError(t, err)
+	require.True(t, result.Equal(selectRowsResult))
+}
+
+// TestExecQueryErrorAfterOKDoesNotDesyncProtocol guards against writing an ERR
+// packet after an OK packet has already terminated the result set. Appending a
+// second packet would leave a stale ERR queued for the next command. The
+// connection must be torn down instead.
+func TestExecQueryErrorAfterOKDoesNotDesyncProtocol(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+
+	require.NoError(t, cConn.WriteComQuery("ok then error"))
+
+	handler := &testRun{err: sqlerror.NewSQLError(sqlerror.ERQueryInterrupted, sqlerror.SSQueryInterrupted, "context canceled")}
+	res := sConn.handleNextCommand(handler)
+	require.False(t, res, "connection must be torn down when an error follows an OK-terminated result")
+
+	// The client must have seen the successful OK packet, not a stale ERR.
+	result, _, _, err := cConn.ReadQueryResult(100, true)
+	require.NoError(t, err)
+	require.EqualValues(t, 1, result.RowsAffected)
+}
+
+// TestExecQueryMultiErrorAfterOKDoesNotDesyncProtocol is the execQueryMulti variant
+// of the OK-then-error guard: when an OK packet has already terminated the last
+// result, do not append an ERR; tear the connection down instead.
+func TestExecQueryMultiErrorAfterOKDoesNotDesyncProtocol(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	sConn.multiQuery = true
+	sConn.Capabilities |= CapabilityClientMultiStatements
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+
+	require.NoError(t, cConn.WriteComQuery("ok then error"))
+
+	handler := &testRun{err: sqlerror.NewSQLError(sqlerror.ERQueryInterrupted, sqlerror.SSQueryInterrupted, "context canceled")}
+	res := sConn.handleNextCommand(handler)
+	require.False(t, res, "connection must be torn down when an error follows an OK-terminated result")
+
+	result, _, _, err := cConn.ReadQueryResult(100, true)
+	require.NoError(t, err)
+	require.EqualValues(t, 1, result.RowsAffected)
+}
+
+// TestHandleComStmtExecuteErrorAfterOKDoesNotDesyncProtocol is the binary-protocol
+// variant of the OK-then-error guard.
+func TestHandleComStmtExecuteErrorAfterOKDoesNotDesyncProtocol(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+
+	const stmtID uint32 = 1
+	sConn.PrepareData[stmtID] = &PrepareData{
+		StatementID: stmtID,
+		PrepareStmt: "insert into t -- ok then error",
+		ParamsCount: 0,
+		BindVars:    map[string]*querypb.BindVariable{},
+	}
+
+	cConn.sequence = 0
+	buf, pos := cConn.startEphemeralPacketWithHeader(10)
+	pos = writeByte(buf, pos, ComStmtExecute)
+	pos = writeUint32(buf, pos, stmtID)
+	pos = writeByte(buf, pos, 0) // cursor type
+	_ = writeUint32(buf, pos, 1) // iteration count
+	require.NoError(t, cConn.writeEphemeralPacket())
+
+	handler := &testRun{err: sqlerror.NewSQLError(sqlerror.ERQueryInterrupted, sqlerror.SSQueryInterrupted, "context canceled")}
+	res := sConn.handleNextCommand(handler)
+	require.False(t, res, "connection must be torn down when an error follows an OK-terminated result")
+
+	data, err := cConn.ReadPacket()
+	require.NoError(t, err)
+	require.NotEmpty(t, data)
+	require.NotEqualf(t, byte(ErrPacket), data[0], "client must not receive a stale ERR packet after an OK terminator")
+}
+
+// TestHandleComStmtExecuteSurfacesMidStreamError exercises go/mysql/conn.go
+// handleComStmtExecute (binary protocol). Same contract.
+func TestHandleComStmtExecuteSurfacesMidStreamError(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+
+	const stmtID uint32 = 1
+	sConn.PrepareData[stmtID] = &PrepareData{
+		StatementID: stmtID,
+		PrepareStmt: "select * from t where rows then error",
+		ParamsCount: 0,
+		BindVars:    map[string]*querypb.BindVariable{},
+	}
+
+	writeComStmtExecute := func() {
+		cConn.sequence = 0
+		buf, pos := cConn.startEphemeralPacketWithHeader(10)
+		pos = writeByte(buf, pos, ComStmtExecute)
+		pos = writeUint32(buf, pos, stmtID)
+		pos = writeByte(buf, pos, 0) // cursor type
+		_ = writeUint32(buf, pos, 1) // iteration count
+		require.NoError(t, cConn.writeEphemeralPacket())
+	}
+
+	writeComStmtExecute()
+
+	handler := &testRun{err: sqlerror.NewSQLError(sqlerror.ERQueryInterrupted, sqlerror.SSQueryInterrupted, "context canceled")}
+	res := sConn.handleNextCommand(handler)
+	require.True(t, res, "mid-stream error must not tear down the connection")
+
+	// Drain packets until we see the ERR packet; assert it carries the real
+	// error. Bounded by a read deadline and packet count so a regression that
+	// fails to emit ERR fails the test fast instead of stalling CI.
+	require.NoError(t, cConn.conn.SetReadDeadline(time.Now().Add(30*time.Second)))
+	var sawErr bool
+	for range 16 {
+		data, err := cConn.ReadPacket()
+		require.NoError(t, err)
+		require.NotEmpty(t, data)
+		if data[0] == ErrPacket {
+			sqlErr := ParseErrorPacket(data)
+			require.ErrorContains(t, sqlErr, "context canceled")
+			sawErr = true
+			break
+		}
+	}
+	require.True(t, sawErr, "client must receive the real error packet, not connection loss")
+
+	// Connection must still be usable for the next binary-protocol execution.
+	writeComStmtExecute()
+	// Switch to a non-error prepared statement to verify the round-trip works.
+	sConn.PrepareData[stmtID].PrepareStmt = "select rows"
+	res = sConn.handleNextCommand(handler)
+	require.True(t, res, "subsequent COM_STMT_EXECUTE must be handled on a still-alive connection")
+
+	// Read the full binary result of the follow-up execution and assert it is a
+	// real (non-error) response: every packet up to the result terminator must
+	// arrive without an ERR packet. The result set ends after two EOF packets
+	// (columns then rows, since CapabilityClientDeprecateEOF is off here).
+	// Bounded by a read deadline and packet count so a regression fails fast
+	// instead of stalling CI.
+	require.NoError(t, cConn.conn.SetReadDeadline(time.Now().Add(30*time.Second)))
+	var eofCount int
+	for range 16 {
+		data, err := cConn.ReadPacket()
+		require.NoError(t, err)
+		require.NotEmpty(t, data)
+		require.NotEqualf(t, byte(ErrPacket), data[0], "follow-up execution must return a result, not an error packet")
+		if cConn.isEOFPacket(data) {
+			eofCount++
+			if eofCount == 2 {
+				break
+			}
+		}
+	}
+	require.EqualValues(t, 2, eofCount, "follow-up binary result must terminate cleanly")
+}
+
 func TestInitDbAgainstWrongDbDoesNotDropConnection(t *testing.T) {
 	listener, sConn, cConn := createSocketPair(t)
 	sConn.Capabilities |= CapabilityClientMultiStatements
@@ -1278,7 +1546,19 @@ type testRun struct {
 }
 
 func (t testRun) ComStmtExecute(c *Conn, prepare *PrepareData, callback func(*sqltypes.Result) error) error {
-	panic("implement me")
+	if strings.Contains(prepare.PrepareStmt, "rows then error") {
+		if err := callback(selectRowsResult); err != nil {
+			return err
+		}
+		return t.err
+	}
+	if strings.Contains(prepare.PrepareStmt, "ok then error") {
+		if err := callback(&sqltypes.Result{RowsAffected: 1}); err != nil {
+			return err
+		}
+		return t.err
+	}
+	return callback(selectRowsResult)
 }
 
 func (t testRun) ComRegisterReplica(c *Conn, replicaHost string, replicaPort uint16, replicaUser string, replicaPassword string) error {
@@ -1294,6 +1574,18 @@ func (t testRun) ComBinlogDumpGTID(c *Conn, logFile string, logPos uint64, gtidS
 }
 
 func (t testRun) ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error {
+	if strings.Contains(query, "rows then error") {
+		if err := callback(selectRowsResult); err != nil {
+			return err
+		}
+		return t.err
+	}
+	if strings.Contains(query, "ok then error") {
+		if err := callback(&sqltypes.Result{RowsAffected: 1}); err != nil {
+			return err
+		}
+		return t.err
+	}
 	if strings.Contains(query, "error") {
 		return t.err
 	}

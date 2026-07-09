@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"strings"
 	"sync"
@@ -1344,16 +1345,20 @@ func (c *Conn) handleComStmtExecute(handler Handler, data []byte) (kontinue bool
 		}
 	} else {
 		if err != nil {
-			// We can't send an error in the middle of a stream.
-			// All we can do is abort the send, which will cause a 2013.
-			log.Error(fmt.Sprintf("Error in the middle of a stream to %s: %v", c, err))
-			return false
-		}
-
-		// Send the end packet only sendFinished is false (results were streamed).
-		// In this case the affectedRows and lastInsertID are always 0 since it
-		// was a read operation.
-		if !sendFinished {
+			// An OK packet already terminated the result; we cannot safely
+			// append an ERR without desynchronizing the protocol for the
+			// next command. Tear down the connection instead.
+			if sendFinished {
+				log.Error("Error after OK-terminated result", slog.String("connection", c.String()), slog.Any("error", err))
+				return false
+			}
+			if !c.writeErrorPacketFromErrorAndLog(err) {
+				return false
+			}
+		} else if !sendFinished {
+			// Send the end packet only sendFinished is false (results were streamed).
+			// In this case the affectedRows and lastInsertID are always 0 since it
+			// was a read operation.
 			if err := c.writeEndResult(false, 0, 0, handler.WarningCount(c)); err != nil {
 				log.Error(fmt.Sprintf("Error writing result to %s: %v", c, err))
 				return false
@@ -1574,10 +1579,17 @@ func (c *Conn) execQueryMulti(query string, handler Handler) execResult {
 	}
 
 	if err != nil {
-		// We can't send an error in the middle of a stream.
-		// All we can do is abort the send, which will cause a 2013.
-		log.Error(fmt.Sprintf("Error in the middle of a stream to %s: %v", c, err))
-		return connErr
+		// An OK packet already terminated the last result; we cannot safely
+		// append an ERR without desynchronizing the protocol for the next
+		// command. Tear down the connection instead.
+		if !needsEndPacket {
+			log.Error("Error after OK-terminated result", slog.String("connection", c.String()), slog.Any("error", err))
+			return connErr
+		}
+		if !c.writeErrorPacketFromErrorAndLog(err) {
+			return connErr
+		}
+		return execErr
 	}
 
 	// If we haven't sent the final packet for the last query, we should send that too.
@@ -1694,10 +1706,17 @@ func (c *Conn) execQuery(query string, handler Handler, more bool) execResult {
 		return execErr
 	}
 	if err != nil {
-		// We can't send an error in the middle of a stream.
-		// All we can do is abort the send, which will cause a 2013.
-		log.Error(fmt.Sprintf("Error in the middle of a stream to %s: %v", c, err))
-		return connErr
+		// An OK packet already terminated the result; we cannot safely
+		// append an ERR without desynchronizing the protocol for the
+		// next command. Tear down the connection instead.
+		if sendFinished {
+			log.Error("Error after OK-terminated result", slog.String("connection", c.String()), slog.Any("error", err))
+			return connErr
+		}
+		if !c.writeErrorPacketFromErrorAndLog(err) {
+			return connErr
+		}
+		return execErr
 	}
 
 	// Send the end packet only sendFinished is false (results were streamed).
