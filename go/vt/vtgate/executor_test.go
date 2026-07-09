@@ -2874,6 +2874,18 @@ func TestExecutorTruncateErrors(t *testing.T) {
 	assert.EqualError(t, err, "[BUG] unrecognized p [TRUNCATED]")
 }
 
+func TestPrepareDoesNotStartTransaction(t *testing.T) {
+	// MySQL does not start an implicit transaction for COM_STMT_PREPARE, even
+	// with autocommit disabled; the transaction starts at first execution.
+	executor, _, _, _, ctx := createExecutorEnv(t)
+
+	session := &vtgatepb.Session{TargetString: KsTestUnsharded, Autocommit: false}
+
+	_, _, err := executorPrepare(ctx, executor, session, "select id from main1 where id = ?")
+	require.NoError(t, err)
+	require.False(t, session.InTransaction)
+}
+
 func TestExecutorFlushStmt(t *testing.T) {
 	executor, _, _, _, _ := createExecutorEnv(t)
 
