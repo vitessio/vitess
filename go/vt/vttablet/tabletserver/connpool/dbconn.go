@@ -218,8 +218,16 @@ func (dbc *Conn) terminate(ctx context.Context, insideTxn bool, now time.Time) {
 	if insideTxn {
 		// we can't safely kill a query in a transaction, we need to kill the connection
 		_ = dbc.Kill(errMsg, time.Since(now))
-	} else {
-		_ = dbc.KillQuery(errMsg, time.Since(now))
+		return
+	}
+	// Outside a transaction we prefer KILL QUERY so the connection — and any
+	// reserved state on it (temp tables, settings) — survives the timeout.
+	// But KILL QUERY is the only thing that makes the blocked ExecuteFetch
+	// return; if it fails (e.g. the dba pool is exhausted), fall back to
+	// killing the connection, which closes the client socket and unblocks
+	// the call. Preserving the connection is best-effort; unblocking is not.
+	if err := dbc.KillQuery(errMsg, time.Since(now)); err != nil {
+		_ = dbc.Kill(errMsg, time.Since(now))
 	}
 }
 

@@ -960,7 +960,7 @@ func TestTxPoolGetAndLockWaitsOutKeepAlive(t *testing.T) {
 	held, err := txPool.scp.GetAndLock(id, reservedKeepAlivePurpose)
 	require.NoError(t, err)
 	go func() {
-		time.Sleep(2 * time.Millisecond)
+		time.Sleep(20 * time.Millisecond)
 		held.Unlock()
 	}()
 	got, err := txPool.GetAndLock(id, "for query")

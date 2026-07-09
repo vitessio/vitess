@@ -1962,6 +1962,79 @@ func TestTempTableCommandTracking(t *testing.T) {
 	require.False(t, ok)
 }
 
+// TestTempTableHeartbeatBucket verifies that a bucket sweep beats only the
+// connections that belong to it (by connection ID), so buckets can run on
+// independent goroutines without beating each other's connections.
+func TestTempTableHeartbeatBucket(t *testing.T) {
+	vtg, sbc, ctx := createVtgateEnv(t)
+	vh := newVtgateHandler(vtg)
+	tablet := sbc.Tablet()
+	target := &querypb.Target{Keyspace: tablet.Keyspace, Shard: tablet.Shard, TabletType: tablet.Type}
+
+	// Two connections in different buckets.
+	cA := &mysql.Conn{ConnectionID: tempTableBeatBuckets}     // bucket 0
+	cB := &mysql.Conn{ConnectionID: tempTableBeatBuckets + 1} // bucket 1
+	vh.tempTableConns.Store(cA, &tempTableConn{targets: []tempTableHeartbeatTarget{{target: target, alias: tablet.Alias, reservedID: 1}}})
+	vh.tempTableConns.Store(cB, &tempTableConn{targets: []tempTableHeartbeatTarget{{target: target, alias: tablet.Alias, reservedID: 2}}})
+
+	before := sbc.ExecCount.Load()
+	vh.sweepTempTableBucket(ctx, 0)
+	require.Equal(t, before+1, sbc.ExecCount.Load(), "bucket 0 must beat exactly its one connection")
+	vh.sweepTempTableBucket(ctx, 1)
+	require.Equal(t, before+2, sbc.ExecCount.Load(), "bucket 1 must beat its own connection")
+}
+
+// TestTempTableHeartbeatBucketIndependence proves that a bucket stalled on a
+// slow tablet does not delay another bucket's keepalives — the whole point
+// of running each bucket on its own goroutine. It would fail on a scheduler
+// that swept buckets sequentially.
+func TestTempTableHeartbeatBucketIndependence(t *testing.T) {
+	executor, sbc1, sbc2, _, ctx := createExecutorEnv(t)
+	vsm := newVStreamManager(executor.resolver.resolver, executor.serv, "aa")
+	vtg := newVTGate(executor, executor.resolver, vsm, nil, executor.scatterConn.gateway)
+	vh := newVtgateHandler(vtg)
+
+	t1, t2 := sbc1.Tablet(), sbc2.Tablet()
+	target1 := &querypb.Target{Keyspace: t1.Keyspace, Shard: t1.Shard, TabletType: t1.Type}
+	target2 := &querypb.Target{Keyspace: t2.Keyspace, Shard: t2.Shard, TabletType: t2.Type}
+
+	// Bucket 0's tablet blocks every beat; bucket 1's tablet is fast.
+	sbc1.ExecDelayResponse = 3 * time.Second
+	cA := &mysql.Conn{ConnectionID: tempTableBeatBuckets}     // bucket 0
+	cB := &mysql.Conn{ConnectionID: tempTableBeatBuckets + 1} // bucket 1
+	vh.tempTableConns.Store(cA, &tempTableConn{targets: []tempTableHeartbeatTarget{{target: target1, alias: t1.Alias, reservedID: 1}}})
+	vh.tempTableConns.Store(cB, &tempTableConn{targets: []tempTableHeartbeatTarget{{target: target2, alias: t2.Alias, reservedID: 2}}})
+
+	// Start bucket 0's sweep; it blocks on the slow tablet.
+	bucket0Done := make(chan struct{})
+	go func() {
+		vh.sweepTempTableBucket(ctx, 0)
+		close(bucket0Done)
+	}()
+	require.Eventually(t, func() bool { return sbc1.ExecCount.Load() >= 1 }, 30*time.Second, time.Millisecond,
+		"bucket 0's beat must be in flight on the slow tablet")
+
+	// Bucket 1's sweep must finish promptly despite bucket 0 being stalled.
+	bucket1Done := make(chan struct{})
+	go func() {
+		vh.sweepTempTableBucket(ctx, 1)
+		close(bucket1Done)
+	}()
+	select {
+	case <-bucket1Done:
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "bucket 1 sweep was delayed by a stalled bucket 0")
+	}
+	require.GreaterOrEqual(t, sbc2.ExecCount.Load(), int64(1), "bucket 1's connection must have been beaten")
+
+	// Bucket 0 is still blocked while bucket 1 has already finished.
+	select {
+	case <-bucket0Done:
+		require.Fail(t, "bucket 0 should still be stalled on the slow tablet")
+	default:
+	}
+}
+
 // TestTempTableHeartbeatSweep verifies that a sweep pings the registered
 // reserved connection, discards results from a superseded snapshot, and
 // evicts a reserved connection that no longer exists.
@@ -2092,14 +2165,19 @@ func TestComQueryTempTableHeartbeatRegistration(t *testing.T) {
 	_, ok := vh.tempTableConns.Load(c)
 	require.False(t, ok)
 
-	// A failed CREATE TEMPORARY TABLE must not register the connection or
-	// mark the session: there is no temp table to keep alive.
+	// A CREATE TEMPORARY TABLE whose RPC errors after the tablet reserved
+	// the connection (the tablet may have created the table before failing;
+	// the reserved id is returned with the error) marks the session and
+	// registers the reserved connection for heartbeats, so the maybe-created
+	// table is kept alive rather than reclaimed by the idle timeout.
 	sbclookup.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	err = vh.ComQuery(c, "create temporary table temp_t(id bigint)", func(*sqltypes.Result) error { return nil })
 	require.Error(t, err)
-	require.False(t, vh.session(c).GetOptions().GetHasCreatedTempTables())
+	require.True(t, vh.session(c).GetOptions().GetHasCreatedTempTables())
 	_, ok = vh.tempTableConns.Load(c)
-	require.False(t, ok)
+	require.True(t, ok)
+	// Clean up so the next successful create starts from a known state.
+	vh.stopTempTableHeartbeats(c)
 
 	// Creating a temporary table sets the session flag, reserves a
 	// connection, and registers it for heartbeats.

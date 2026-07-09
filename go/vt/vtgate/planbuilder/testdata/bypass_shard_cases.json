@@ -206,6 +206,24 @@
     }
   },
   {
+    "comment": "drop temporary table must route through the DDL primitive (no implicit commit), without reserving or marking",
+    "query": "drop temporary table if exists temp_t",
+    "plan": {
+      "Type": "DirectDDL",
+      "QueryType": "DDL",
+      "Original": "drop temporary table if exists temp_t",
+      "Instructions": {
+        "OperatorType": "DDL",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "Query": "drop temporary table if exists temp_t",
+        "TempTable": true
+      }
+    }
+  },
+  {
     "comment": "select bypass with query timeout hint",
     "query": "select /*vt+ QUERY_TIMEOUT_MS=100 */ count(*), col from user",
     "plan": {

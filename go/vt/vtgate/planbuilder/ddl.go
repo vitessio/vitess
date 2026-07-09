@@ -65,12 +65,15 @@ func buildGeneralDDLPlan(ctx context.Context, sql string, ddlStatement sqlparser
 		if !ddlStatement.IsTemporary() {
 			return buildByPassPlan(sql, vschema, true)
 		}
-		// A temporary-table DDL must not go through as a plain Send: it
-		// would run on an ordinary pooled connection, where the temp table
-		// outlives the query and leaks into whichever session uses the
-		// connection next. Route it through the DDL primitive so it runs on
-		// a reserved connection and marks the session as holding temp
-		// tables, exactly like the non-bypass path.
+		// A temporary-table DDL (CREATE or DROP) must not go through as a
+		// plain Send: buildByPassPlan sets IsDDL, which commits the open
+		// transaction (MySQL does not implicitly commit for temporary-table
+		// DDL), and a CREATE would run on an ordinary pooled connection
+		// where the temp table leaks into whichever session uses the
+		// connection next. Route it through the DDL primitive so it keeps
+		// the temporary-DDL transaction semantics and, for a CREATE, runs on
+		// a reserved connection and marks the session — exactly like the
+		// non-bypass path.
 		keyspace, err := vschema.SelectedKeyspace()
 		if err != nil {
 			return nil, err
@@ -79,15 +82,24 @@ func buildGeneralDDLPlan(ctx context.Context, sql string, ddlStatement sqlparser
 			Keyspace:          keyspace,
 			TargetDestination: vschema.ShardDestination(),
 			Query:             sql,
-			IsDDL:             true,
+			// Not IsDDL: a temporary-table create must not implicitly commit
+			// the open transaction (MySQL does not), and Send.commitIfDDL
+			// would commit it.
+			IsDDL: false,
+			// A temporary table lives on one reserved connection, so it must
+			// target exactly one shard: a multi-shard destination would fan
+			// the create out and could partially succeed, leaving temp
+			// tables on some shards that the session does not track. Require
+			// a single shard and fail clearly otherwise.
+			SingleShardOnly: true,
 		}
 		eddl := &engine.DDL{
-			Keyspace:        keyspace,
-			SQL:             sql,
-			DDL:             ddlStatement,
-			NormalDDL:       send,
-			Config:          cfg,
-			CreateTempTable: true,
+			Keyspace:     keyspace,
+			SQL:          sql,
+			DDL:          ddlStatement,
+			NormalDDL:    send,
+			Config:       cfg,
+			TempTableDDL: true,
 		}
 		return newPlanResult(eddl), nil
 	}
@@ -105,13 +117,13 @@ func buildGeneralDDLPlan(ctx context.Context, sql string, ddlStatement sqlparser
 	}
 
 	eddl := &engine.DDL{
-		Keyspace:        normalDDLPlan.Keyspace,
-		SQL:             normalDDLPlan.Query,
-		DDL:             ddlStatement,
-		NormalDDL:       normalDDLPlan,
-		OnlineDDL:       onlineDDLPlan,
-		Config:          cfg,
-		CreateTempTable: ddlStatement.IsTemporary(),
+		Keyspace:     normalDDLPlan.Keyspace,
+		SQL:          normalDDLPlan.Query,
+		DDL:          ddlStatement,
+		NormalDDL:    normalDDLPlan,
+		OnlineDDL:    onlineDDLPlan,
+		Config:       cfg,
+		TempTableDDL: ddlStatement.IsTemporary(),
 	}
 	tc := &tableCollector{}
 	for _, tbl := range ddlStatement.AffectedTables() {

@@ -184,11 +184,17 @@ func (tp *TxPool) GetAndLock(connID tx.ConnID, reason string) (*StatefulConnecti
 	// to check and refresh it, and it never issues queries or waits on the
 	// network — so a caller that collides with one briefly waits it out
 	// rather than failing the client's query (or release) with an in-use
-	// error. Bounded to ~10ms as a safety net; one retry is the norm.
-	for attempt := 0; err != nil && attempt < 100 &&
-		errors.Is(err, pools.ErrInUse) && strings.Contains(err.Error(), reservedKeepAlivePurpose); attempt++ {
-		time.Sleep(100 * time.Microsecond)
-		conn, err = tp.scp.GetAndLock(connID, reason)
+	// error. One retry is the norm; the deadline is deliberately generous
+	// (the critical section is CPU-only, so it outlasts even a heavy
+	// scheduler or GC stall) while still bounding the wait if something is
+	// truly wedged.
+	if err != nil && errors.Is(err, pools.ErrInUse) && strings.Contains(err.Error(), reservedKeepAlivePurpose) {
+		deadline := time.Now().Add(1 * time.Second)
+		for err != nil && time.Now().Before(deadline) &&
+			errors.Is(err, pools.ErrInUse) && strings.Contains(err.Error(), reservedKeepAlivePurpose) {
+			time.Sleep(100 * time.Microsecond)
+			conn, err = tp.scp.GetAndLock(connID, reason)
+		}
 	}
 	if err != nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction %d: %v", connID, err)

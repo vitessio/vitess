@@ -730,3 +730,55 @@ func executeWithTimeout(
 	require.WithinDuration(t, timeQuery, timeKill, 150*time.Millisecond)
 	require.WithinDuration(t, timeKill, timeDone, responseTime)
 }
+
+// TestDBExecOnceNotInTxnFallsBackToConnKill verifies that when KILL QUERY
+// fails, a non-transaction ExecOnce timeout falls back to killing the whole
+// connection: KILL QUERY is the only thing that makes the blocked
+// ExecuteFetch return, so if it fails the connection must be closed instead
+// or the call hangs forever after ctx expired.
+func TestDBExecOnceNotInTxnFallsBackToConnKill(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	connPool := newPool()
+	params := dbconfigs.New(db.ConnParams())
+	connPool.Open(params, params, params)
+	defer connPool.Close()
+	dbConn, err := newPooledConn(context.Background(), connPool, params)
+	if dbConn != nil {
+		defer dbConn.Close()
+	}
+	require.NoError(t, err)
+
+	query := "select 1"
+	db.AddQuery(query, &sqltypes.Result{})
+	db.SetBeforeFunc(query, func() {
+		// Outlasts the context deadline so the query is interrupted.
+		time.Sleep(1000 * time.Millisecond)
+	})
+	dbConn.killTimeout = 100 * time.Millisecond
+
+	// KILL QUERY is rejected, so terminate must fall back to killing the
+	// connection to unblock the call.
+	db.AddRejectedQuery("kill query "+fmt.Sprintf("%d", dbConn.conn.ID()), errors.New("kill query not permitted"))
+	var connKilled atomic.Bool
+	db.AddQueryPatternWithCallback(`kill \d+`, &sqltypes.Result{}, func(string) {
+		connKilled.Store(true)
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	// The call must return (not hang) once ctx expires, and the connection
+	// kill must have been attempted.
+	done := make(chan error, 1)
+	go func() {
+		_, execErr := dbConn.ExecOnce(ctx, query, 1, false, false /* insideTxn */)
+		done <- execErr
+	}()
+	select {
+	case <-done:
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "ExecOnce hung after ctx expired despite the KILL QUERY failure")
+	}
+	assert.True(t, connKilled.Load(), "connection kill must be attempted when KILL QUERY fails")
+}
