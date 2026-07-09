@@ -35,6 +35,13 @@ func (mlc *MockLdapClient) Bind(username, password string) error {
 	return nil
 }
 
+func (mlc *MockLdapClient) UnauthenticatedBind(username string) error {
+	if username != "testuser" && username != "" {
+		return fmt.Errorf("invalid unauthenticated username: %s", username)
+	}
+	return nil
+}
+
 func (mlc *MockLdapClient) Search(searchRequest *ldap.SearchRequest) (*ldap.SearchResult, error) {
 	return &ldap.SearchResult{}, nil
 }
@@ -52,4 +59,31 @@ func TestValidateClearText(t *testing.T) {
 
 	_, err = asl.validate("invaliduser", "invalidpass")
 	require.Error(t, err, "AuthServerLdap validated invalid credentials.")
+}
+
+func TestValidateEmptyPassword(t *testing.T) {
+	asl := &AuthServerLdap{
+		Client:         &MockLdapClient{},
+		User:           "testuser",
+		Password:       "testpass",
+		UserDnPattern:  "%s",
+		RefreshSeconds: 1,
+	}
+	_, err := asl.validate("testuser", "")
+	require.NoError(t, err)
+
+	_, err = asl.validate("invaliduser", "")
+	require.Error(t, err)
+}
+
+func TestGetGroupsAnonymous(t *testing.T) {
+	asl := &AuthServerLdap{
+		Client:         &MockLdapClient{},
+		User:           "",
+		Password:       "",
+		UserDnPattern:  "%s",
+		RefreshSeconds: 1,
+	}
+	_, err := asl.validate("testuser", "testpass")
+	require.NoError(t, err)
 }

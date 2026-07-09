@@ -124,7 +124,13 @@ func (asl *AuthServerLdap) validate(username, password string) (mysql.Getter, er
 		return nil, err
 	}
 	defer asl.Close()
-	if err := asl.Bind(fmt.Sprintf(asl.UserDnPattern, username), password); err != nil {
+	var err error
+	if password == "" {
+		err = asl.UnauthenticatedBind(fmt.Sprintf(asl.UserDnPattern, username))
+	} else {
+		err = asl.Bind(fmt.Sprintf(asl.UserDnPattern, username), password)
+	}
+	if err != nil {
 		return nil, err
 	}
 	groups, err := asl.getGroups(username)
@@ -136,7 +142,12 @@ func (asl *AuthServerLdap) validate(username, password string) (mysql.Getter, er
 
 // this needs to be passed an already connected client...should check for this
 func (asl *AuthServerLdap) getGroups(username string) ([]string, error) {
-	err := asl.Bind(asl.User, asl.Password)
+	var err error
+	if asl.Password == "" {
+		err = asl.UnauthenticatedBind(asl.User)
+	} else {
+		err = asl.Bind(asl.User, asl.Password)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -221,6 +232,7 @@ type Client interface {
 	Connect(network string, config *ServerConfig) error
 	Close() error
 	Bind(string, string) error
+	UnauthenticatedBind(string) error
 	Search(*ldap.SearchRequest) (*ldap.SearchResult, error)
 }
 
