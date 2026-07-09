@@ -18,6 +18,7 @@ package vtgate
 
 import (
 	"fmt"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -802,6 +803,28 @@ func TestUnionWithManyInfSchemaQueries(t *testing.T) {
                     TABLE_NAME = 'user'`)
 }
 
+// TestUnionInfSchemaQueriesOLAP streams a UNION of many information_schema
+// queries (OLAP workload). Each branch routes through routeInfoSchemaQuery,
+// which mutates the bindVars map in place; the parallel streaming Concatenate
+// path must hand each source its own copy, otherwise the sources race on the
+// shared map and crash vtgate with a concurrent map write.
+func TestUnionInfSchemaQueriesOLAP(t *testing.T) {
+	conn, closer := start(t)
+	defer closer()
+
+	utils.Exec(t, conn, "set workload='olap'")
+
+	selects := make([]string, 0, 16)
+	for i := range 16 {
+		selects = append(selects, fmt.Sprintf("select TABLE_SCHEMA, TABLE_NAME from INFORMATION_SCHEMA.TABLES where TABLE_SCHEMA = 'ionescu' and TABLE_NAME = 'table_%d'", i))
+	}
+	query := strings.Join(selects, " UNION ")
+
+	for range 100 {
+		utils.Exec(t, conn, query)
+	}
+}
+
 func TestTransactionsInStreamingMode(t *testing.T) {
 	conn, closer := start(t)
 	defer closer()
@@ -1285,6 +1308,42 @@ func TestQueryProcessedMetric(t *testing.T) {
 				assert.EqualValuesf(t, 1, getValue(updatedQT, metric)-getValue(initialQT, metric), "queryExecutionsByTable metric: %s", metric)
 			}
 			initialQP, initialQR, initialQT = updatedQP, updatedQR, updatedQT
+		})
+	}
+}
+
+// TestStreamingJoinQueryRoutes verifies that a join executed on the streaming
+// path issues the same number of shard routes as the buffered path. A previous
+// implementation labelled the output with a dedicated right-hand-side GetFields
+// query, which added one extra route per streamed join. The OLAP workload
+// forces streaming so the streaming join path is exercised.
+func TestStreamingJoinQueryRoutes(t *testing.T) {
+	conn, closer := start(t)
+	defer closer()
+
+	utils.Exec(t, conn, "set workload = olap")
+
+	tcases := []struct {
+		sql         string
+		queryMetric string
+		routes      float64
+	}{{
+		sql:         "select 1 from t1 a, t1 b",
+		queryMetric: "SELECT.Join.PRIMARY",
+		routes:      3,
+	}, {
+		sql:         "select count(*) from t1 a, t1 b",
+		queryMetric: "SELECT.Complex.PRIMARY",
+		routes:      6,
+	}}
+
+	initialQR := getQPMetric(t, "QueryRoutes")
+	for _, tc := range tcases {
+		t.Run(tc.sql, func(t *testing.T) {
+			utils.Exec(t, conn, tc.sql)
+			updatedQR := getQPMetric(t, "QueryRoutes")
+			assert.Equalf(t, tc.routes, getValue(updatedQR, tc.queryMetric)-getValue(initialQR, tc.queryMetric), "queryRoutes metric: %s", tc.queryMetric)
+			initialQR = updatedQR
 		})
 	}
 }

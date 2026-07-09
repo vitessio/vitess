@@ -19,12 +19,14 @@ package servenv
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"math"
 	"net"
 	"os"
 	"runtime"
 	"strconv"
+	"sync"
 	"time"
 
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
@@ -308,18 +310,21 @@ func interceptors() []grpc.ServerOption {
 	return interceptors.Build()
 }
 
-func serveGRPC() {
+// serveGRPC returns a stop function that terminates the ORCA metrics updater
+// goroutine, if one was started; it is a no-op otherwise.
+func serveGRPC() (stopOrcaUpdater func()) {
+	stopOrcaUpdater = func() {}
 	if grpccommon.EnableGRPCPrometheus() {
 		grpc_prometheus.Register(GRPCServer)
 		grpc_prometheus.EnableHandlingTimeHistogram()
 	}
 	// skip if not registered
 	if gRPCPort == 0 {
-		return
+		return stopOrcaUpdater
 	}
 
 	if gRPCEnableOrcaMetrics {
-		registerOrca()
+		stopOrcaUpdater = registerOrca()
 	}
 
 	// register reflection to support list calls :)
@@ -348,9 +353,14 @@ func serveGRPC() {
 	//       runs all OnRun() hooks after createGRPCServer() and before
 	//       serveGRPC(). If this was not the case, the binary would crash with
 	//       the error "grpc: Server.RegisterService after Server.Serve".
+	// Capture the server so the goroutine below does not read the GRPCServer
+	// global, which tests swap out between runs.
+	server := GRPCServer
 	go func() {
-		err := GRPCServer.Serve(listener)
-		if err != nil {
+		err := server.Serve(listener)
+		// Serve returns ErrServerStopped when Stop or GracefulStop was called
+		// before it started; that is a clean shutdown, not a startup failure.
+		if err != nil && !errors.Is(err, grpc.ErrServerStopped) {
 			log.Error(fmt.Sprintf("Failed to start grpc server: %v", err))
 			os.Exit(1)
 		}
@@ -358,12 +368,17 @@ func serveGRPC() {
 
 	OnTermSync(func() {
 		log.Info("Initiated graceful stop of gRPC server")
-		GRPCServer.GracefulStop()
+		server.GracefulStop()
 		log.Info("gRPC server stopped")
 	})
+
+	return stopOrcaUpdater
 }
 
-func registerOrca() {
+// registerOrca returns a stop function that terminates the metrics updater
+// goroutine and waits for it to exit, so that once it returns the goroutine
+// no longer touches any package state.
+func registerOrca() (stop func()) {
 	if err := orcaRegisterFunc(GRPCServer, orca.ServiceOptions{
 		// The minimum interval of orca is 30 seconds, unless we enable a testing flag.
 		MinReportingInterval:  30 * time.Second,
@@ -377,14 +392,30 @@ func registerOrca() {
 	GRPCServerMetricsRecorder.SetCPUUtilization(getCpuUsage())
 	GRPCServerMetricsRecorder.SetMemoryUtilization(getMemoryUsage())
 
+	// Capture the recorder so the goroutine below does not read the
+	// GRPCServerMetricsRecorder global, which tests swap out between runs.
+	recorder := GRPCServerMetricsRecorder
+	stopCh := make(chan struct{})
+	doneCh := make(chan struct{})
 	go func() {
+		defer close(doneCh)
 		ticker := time.NewTicker(30 * time.Second)
 		defer ticker.Stop()
-		for range ticker.C {
-			GRPCServerMetricsRecorder.SetCPUUtilization(getCpuUsage())
-			GRPCServerMetricsRecorder.SetMemoryUtilization(getMemoryUsage())
+		for {
+			select {
+			case <-ticker.C:
+				recorder.SetCPUUtilization(getCpuUsage())
+				recorder.SetMemoryUtilization(getMemoryUsage())
+			case <-stopCh:
+				return
+			}
 		}
 	}()
+
+	return sync.OnceFunc(func() {
+		close(stopCh)
+		<-doneCh
+	})
 }
 
 // GRPCCheckServiceMap returns if we should register a gRPC service
