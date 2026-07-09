@@ -18,11 +18,13 @@ package tabletserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/trace"
@@ -191,7 +193,7 @@ func (tp *TxPool) KeepAliveReserved(reservedID tx.ConnID) error {
 	if err != nil {
 		// The pool's in-use error means the connection is alive and busy —
 		// exactly what a keepalive wants to hear.
-		if strings.Contains(err.Error(), "in use:") {
+		if errors.Is(err, pools.ErrInUse) {
 			return nil
 		}
 		return vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction %d: %v", reservedID, err)

@@ -120,10 +120,18 @@ func registerPluginFlags(fs *pflag.FlagSet) {
 // tempTableHeartbeatTarget identifies one reserved connection that must be
 // kept alive because its session holds temporary tables. Target slices are
 // replaced wholesale under tempTableConn.mu, never mutated in place.
+// tempTableBeatMaxFailures is how many consecutive keepalive failures a
+// reserved connection may accumulate before the sweeper gives up on it.
+const tempTableBeatMaxFailures = 3
+
 type tempTableHeartbeatTarget struct {
 	target     *querypb.Target
 	alias      *topodatapb.TabletAlias
 	reservedID int64
+	// failures counts consecutive keepalive failures; it resets on success
+	// (and whenever a command's end hook republishes the targets — an
+	// active session re-earns its keepalives).
+	failures int
 }
 
 // tempTableConn coordinates a client connection's command goroutine with the
@@ -354,25 +362,34 @@ func (vh *vtgateHandler) beatTempTableConn(ctx context.Context, c *mysql.Conn, t
 		return
 	}
 	ctx = tempTableBeatContext(ctx, c)
-	// Bound the round to half the heartbeat interval: it caps how long a
-	// foreground command arriving mid-beat can wait on the lock, and it
-	// keeps a sweep from piling onto the next tick. With short heartbeat
-	// intervals, though, half the interval would leave a sub-second budget
-	// that a momentarily slow (but healthy) tablet can miss, so the budget
-	// never drops below a floor; missing a tick because a sweep ran long is
-	// harmless (the ticker just skips), while spurious beat failures burn
-	// the keepalive window for no reason. If the deadline instead expires
-	// while the select 1 is executing on the tablet, only the query is
-	// killed: reserved connections outside a transaction get KILL QUERY on
-	// timeout, so the connection and its temp tables survive and the next
-	// sweep retries.
+	// Each target gets its own budget of half the heartbeat interval, and
+	// the targets are beaten concurrently: one hanging tablet must not eat
+	// a shared budget and starve the keepalives of the session's other
+	// reserved connections. At short heartbeat intervals half the interval
+	// would leave a sub-second budget that a momentarily slow (but healthy)
+	// tablet can miss, so the budget never drops below a floor; the budget
+	// also caps how long a foreground command arriving mid-beat can wait on
+	// the lock, and missing a tick because a round ran long is harmless
+	// (the ticker just skips). On tablets that predate the keepalive
+	// option, the beat executes as a real query, where a deadline expiring
+	// mid-execution kills only the query (KILL QUERY), so the reserved
+	// connection and its temp tables survive.
 	budget := max(tempTableHeartbeatTime/2, 2*time.Second)
-	ctx, cancel := context.WithTimeout(ctx, budget)
-	defer cancel()
+	errs := make([]error, len(ttc.targets))
+	var wg sync.WaitGroup
+	for i, t := range ttc.targets {
+		wg.Go(func() {
+			bctx, cancel := context.WithTimeout(ctx, budget)
+			defer cancel()
+			errs[i] = vh.sendTempTableBeat(bctx, t)
+		})
+	}
+	wg.Wait()
 	kept := make([]tempTableHeartbeatTarget, 0, len(ttc.targets))
-	for _, t := range ttc.targets {
-		err := vh.sendTempTableBeat(ctx, t)
+	for i, t := range ttc.targets {
+		err := errs[i]
 		if err == nil {
+			t.failures = 0
 			kept = append(kept, t)
 			continue
 		}
@@ -387,15 +404,25 @@ func (vh *vtgateHandler) beatTempTableConn(ctx context.Context, c *mysql.Conn, t
 			continue
 		}
 		// Transient failure (e.g. slow or unreachable tablet): keep the
-		// target and retry on the next sweep.
+		// target and retry on the next sweep — but not forever. A target
+		// that never succeeds (e.g. its tablet is gone and the alias no
+		// longer resolves) is unreachable for keepalive purposes, so give
+		// up on it rather than warn every sweep indefinitely; the session
+		// self-heals by re-reserving on its next query.
+		t.failures++
+		if t.failures >= tempTableBeatMaxFailures {
+			log.Warn("temp-table connection keepalives keep failing, giving up on it",
+				slog.Int64("reserved_id", t.reservedID),
+				slog.String("tablet", topoproto.TabletAliasString(t.alias)),
+				slog.Int("consecutive_failures", t.failures),
+				slog.Any("error", err))
+			continue
+		}
 		log.Warn("temp-table connection heartbeat failed",
 			slog.Int64("reserved_id", t.reservedID),
 			slog.String("tablet", topoproto.TabletAliasString(t.alias)),
 			slog.Any("error", err))
 		kept = append(kept, t)
-	}
-	if len(kept) == len(ttc.targets) {
-		return
 	}
 	ttc.targets = kept
 	if len(kept) == 0 {

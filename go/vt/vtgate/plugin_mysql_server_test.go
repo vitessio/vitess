@@ -2015,8 +2015,24 @@ func TestTempTableHeartbeatSweep(t *testing.T) {
 	sbc.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	vh.sendTempTableHeartbeats(ctx)
 	require.Len(t, ttc2.targets, 1)
+	require.Equal(t, 1, ttc2.targets[0].failures)
 	_, ok = vh.tempTableConns.Load(c2)
 	require.True(t, ok)
+
+	// A successful beat resets the consecutive-failure count.
+	vh.sendTempTableHeartbeats(ctx)
+	require.Len(t, ttc2.targets, 1)
+	require.Equal(t, 0, ttc2.targets[0].failures)
+
+	// A target that keeps failing is eventually given up on, so an
+	// unreachable tablet is not warned about every sweep indefinitely.
+	sbc.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = tempTableBeatMaxFailures
+	for range tempTableBeatMaxFailures {
+		vh.sendTempTableHeartbeats(ctx)
+	}
+	require.Empty(t, ttc2.targets)
+	_, ok = vh.tempTableConns.Load(c2)
+	require.False(t, ok)
 }
 
 // TestTempTableBeatContext verifies that beats carry the client's caller
