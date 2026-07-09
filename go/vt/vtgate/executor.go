@@ -1578,17 +1578,29 @@ func (e *Executor) Prepare(ctx context.Context, method string, safeSession *econ
 }
 
 func (e *Executor) prepare(ctx context.Context, safeSession *econtext.SafeSession, sql string, logStats *logstats.LogStats) ([]*querypb.Field, uint16, error) {
-	stmtType := sqlparser.Preview(sql)
-	if stmtType == sqlparser.StmtUnknown {
-		// Preview only looks at the first keyword, so statements starting with
-		// a WITH clause come back as unknown. Classify those from the AST.
-		stmt, err := e.env.Parser().Parse(sql)
-		if err != nil {
-			return nil, 0, err
+	plan, vcursor, stmt, err := e.fetchOrCreatePlan(ctx, safeSession, sql, nil, false, true, logStats, false)
+	execStart := time.Now()
+	logStats.PlanTime = execStart.Sub(logStats.StartTime)
+
+	if err != nil {
+		if stmt == nil || sqlparser.ASTToStatementType(stmt) != sqlparser.StmtShow {
+			safeSession.ClearWarnings()
 		}
-		stmtType = sqlparser.ASTToStatementType(stmt)
+		if stmt != nil {
+			// Attempt to build NULL field types for the statement in case planning fails,
+			// allowing the client to proceed with preparing the statement even without a valid execution plan.
+			// Hoping that an optimized plan can be built later when parameter values are available.
+			flds, paramCount, success := buildNullFieldTypes(stmt)
+			if success {
+				logStats.StmtType = sqlparser.ASTToStatementType(stmt).String()
+				return flds, paramCount, nil
+			}
+		}
+		logStats.Error = err
+		return nil, 0, err
 	}
-	logStats.StmtType = stmtType.String()
+
+	logStats.StmtType = plan.QueryType.String()
 
 	// Mysql warnings are scoped to the current session, but are
 	// cleared when a "non-diagnostic statement" is executed:
@@ -1597,19 +1609,40 @@ func (e *Executor) prepare(ctx context.Context, safeSession *econtext.SafeSessio
 	// To emulate this behavior, clear warnings from the session
 	// for all statements _except_ SHOW, so that SHOW WARNINGS
 	// can actually return them.
-	if stmtType != sqlparser.StmtShow {
+	if plan.QueryType != sqlparser.StmtShow {
 		safeSession.ClearWarnings()
 	}
 
-	switch stmtType {
+	switch plan.QueryType {
 	case sqlparser.StmtSelect, sqlparser.StmtShow,
 		sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete:
-		return e.handlePrepare(ctx, safeSession, sql, logStats)
+		// These return field information, fetched from the tablets below.
 	case sqlparser.StmtDDL, sqlparser.StmtBegin, sqlparser.StmtCommit, sqlparser.StmtRollback, sqlparser.StmtSet,
-		sqlparser.StmtUse, sqlparser.StmtOther, sqlparser.StmtAnalyze, sqlparser.StmtComment, sqlparser.StmtExplain, sqlparser.StmtFlush, sqlparser.StmtKill:
+		sqlparser.StmtUse, sqlparser.StmtOther, sqlparser.StmtAnalyze, sqlparser.StmtComment, sqlparser.StmtCommentOnly,
+		sqlparser.StmtExplain, sqlparser.StmtFlush, sqlparser.StmtKill:
 		return nil, 0, nil
+	default:
+		return nil, 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unrecognized prepare statement: %s", sql)
 	}
-	return nil, 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unrecognized prepare statement: %s", sql)
+
+	bindVars := prepareBindVars(plan.ParamsCount)
+	if err := e.addNeededBindVars(vcursor, plan.BindVarNeeds, bindVars, safeSession); err != nil {
+		logStats.Error = err
+		return nil, 0, err
+	}
+
+	qr, err := plan.Instructions.GetFields(ctx, vcursor, bindVars)
+	logStats.ExecuteTime = time.Since(execStart)
+	if err != nil {
+		logStats.Error = err
+		plan.AddStats(1, time.Since(logStats.StartTime), logStats.ShardQueries, 0, 0, 1)
+		return nil, 0, err
+	}
+	logStats.RowsAffected = qr.RowsAffected
+
+	plan.AddStats(1, time.Since(logStats.StartTime), logStats.ShardQueries, qr.RowsAffected, uint64(len(qr.Rows)), 0)
+
+	return qr.Fields, plan.ParamsCount, nil
 }
 
 func (e *Executor) initVConfig(warnOnShardedOnly bool, pv plancontext.PlannerVersion) {
@@ -1697,46 +1730,6 @@ func prepareBindVars(paramsCount uint16) map[string]*querypb.BindVariable {
 		bindVars[parameterID] = &querypb.BindVariable{}
 	}
 	return bindVars
-}
-
-func (e *Executor) handlePrepare(ctx context.Context, safeSession *econtext.SafeSession, sql string, logStats *logstats.LogStats) ([]*querypb.Field, uint16, error) {
-	plan, vcursor, stmt, err := e.fetchOrCreatePlan(ctx, safeSession, sql, nil, false, true, logStats, false)
-	execStart := time.Now()
-	logStats.PlanTime = execStart.Sub(logStats.StartTime)
-
-	if err != nil {
-		if stmt != nil {
-			// Attempt to build NULL field types for the statement in case planning fails,
-			// allowing the client to proceed with preparing the statement even without a valid execution plan.
-			// Hoping that an optimized plan can be built later when parameter values are available.
-			flds, paramCount, success := buildNullFieldTypes(stmt)
-			if success {
-				return flds, paramCount, nil
-			}
-		}
-		logStats.Error = err
-		return nil, 0, err
-	}
-
-	bindVars := prepareBindVars(plan.ParamsCount)
-	err = e.addNeededBindVars(vcursor, plan.BindVarNeeds, bindVars, safeSession)
-	if err != nil {
-		logStats.Error = err
-		return nil, 0, err
-	}
-
-	qr, err := plan.Instructions.GetFields(ctx, vcursor, bindVars)
-	logStats.ExecuteTime = time.Since(execStart)
-	if err != nil {
-		logStats.Error = err
-		plan.AddStats(1, time.Since(logStats.StartTime), logStats.ShardQueries, 0, 0, 1)
-		return nil, 0, err
-	}
-	logStats.RowsAffected = qr.RowsAffected
-
-	plan.AddStats(1, time.Since(logStats.StartTime), logStats.ShardQueries, qr.RowsAffected, uint64(len(qr.Rows)), 0)
-
-	return qr.Fields, plan.ParamsCount, err
 }
 
 // buildNullFieldTypes builds a list of NULL field types for the given statement.
