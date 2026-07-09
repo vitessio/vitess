@@ -27,7 +27,7 @@ runs:
 
           for ip in "${ips[@]}"; do
             echo "Trying $host via $ip ..."
-            if curl -fsSL --connect-timeout 10 --resolve "$host:443:$ip" -o "$out" "$url"; then
+            if curl -fsSL --connect-timeout 10 --max-time 30 --retry 2 --retry-delay 2 --resolve "$host:443:$ip" -o "$out" "$url"; then
               echo "Succeeded via $ip"
               return 0
             fi
