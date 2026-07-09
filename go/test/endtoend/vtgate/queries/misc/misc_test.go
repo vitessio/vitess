@@ -928,3 +928,38 @@ func TestOlapInsertSelectMultiChunk(t *testing.T) {
 	mcmp.AssertMatches("select id, int_unsigned from all_types order by id",
 		`[[INT64(7) INT32(1)] [INT64(8) INT32(2)] [INT64(9) INT32(4)] [INT64(10) INT32(6)]]`)
 }
+
+// TestOlapErrorAfterFields verifies that a streamed (OLAP) query whose error
+// arrives mid result set - after the field packets were already sent, like a
+// recursive CTE aborting with ER_CTE_MAX_RECURSION_DEPTH while producing rows -
+// returns promptly. The tablet's streaming path used to try to drain the
+// already-terminated result set, blocking forever on the MySQL connection and
+// leaving the client waiting indefinitely.
+//
+// Unlike on main, the client sees the stream abort as a connection loss
+// (errno 2013) rather than the MySQL error itself, and the connection is not
+// reusable afterwards: delivering the real error mid stream needs the vtgate
+// protocol change from #20383, which is not backported to this release branch.
+// What this test pins down is only the tablet-side fix: the query must fail
+// fast instead of hanging.
+func TestOlapErrorAfterFields(t *testing.T) {
+	mcmp, closer := start(t)
+	t.Cleanup(closer)
+
+	utils.Exec(t, mcmp.VtConn, "set workload = olap")
+
+	query := "with recursive cte as (select 1 as n union all select n + 1 from cte) select * from cte"
+	errCh := make(chan error, 1)
+	go func() {
+		_, err := mcmp.VtConn.ExecuteFetch(query, 1000, false)
+		errCh <- err
+	}()
+
+	select {
+	case err := <-errCh:
+		require.Error(t, err)
+	case <-time.After(60 * time.Second):
+		require.FailNow(t, "the streamed query did not return",
+			"the tablet is stuck draining a result set that already ended with an error packet")
+	}
+}
