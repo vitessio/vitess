@@ -3970,7 +3970,16 @@ func TestPlayerStalls(t *testing.T) {
 				// row and the sleep only as long as needed: it must exceed
 				// vplayerProgressDeadline for the stall to be detected, with some
 				// margin so a late-firing timer can't miss the still-running query.
-				fmt.Sprintf("update t1 set val1 = concat(sleep (%d), val1)", int64(vplayerProgressDeadline.Seconds()+2)),
+				fmt.Sprintf("update t1 set val1 = concat(sleep (%d), val1)", int64(vplayerProgressDeadline.Seconds()+3)),
+				// These reach the binlog as soon as the update commits on the
+				// source, queue up behind the stalled update on the target, and
+				// block the vstreamer's relay log Send right as the target
+				// starts applying the update. That starts the stall-detection
+				// timer immediately, without depending on the vstreamer's ~1s
+				// heartbeat cadence to fill the relay log. They are never
+				// applied: the workflow errors out first.
+				"insert into t1(id, val1) values (2, 'bbb')",
+				"insert into t1(id, val1) values (3, 'ccc')",
 			},
 			expectQueries: true,
 			output: qh.Expect(
@@ -3978,7 +3987,7 @@ func TestPlayerStalls(t *testing.T) {
 				// This will cause a stall to be detected in the vplayer. This is
 				// what we want in the end, our improved error message (which also
 				// gets logged).
-				fmt.Sprintf("update t1 set val1 = concat(sleep (%d), val1)", int64(vplayerProgressDeadline.Seconds()+2)),
+				fmt.Sprintf("update t1 set val1 = concat(sleep (%d), val1)", int64(vplayerProgressDeadline.Seconds()+3)),
 				"/update _vt.vreplication set message=.*progress stalled.*",
 			),
 			postFunc: func() {
@@ -4017,6 +4026,11 @@ func TestPlayerStalls(t *testing.T) {
 				}()
 			},
 			postFunc: func() {
+				// Signal the preFunc goroutine to close the connection holding
+				// the row locks. Deferred so it also runs if the assertion
+				// below aborts the subtest: teardown deletes from the locked
+				// table and would otherwise hang until the test timeout.
+				defer func() { done <- struct{}{} }()
 				// Wait until a heartbeat recording attempt (or the position
 				// update it is part of) fails on the row locks held by the
 				// preFunc connection, rather than sleeping a fixed multiple of
@@ -4028,8 +4042,6 @@ func TestPlayerStalls(t *testing.T) {
 						strings.Contains(logMessage, "Lock wait timeout exceeded"),
 						"expected log message not found")
 				}, 30*time.Second, 100*time.Millisecond, "expected log message not found")
-				// Signal the preFunc goroutine to close the connection holding the row locks.
-				done <- struct{}{}
 				drainDBQueries()
 			},
 			// Nothing should get replicated because of the exclusing row locks
