@@ -190,6 +190,14 @@ func (mysqlctl *MysqlctlProcess) Stop() (err error) {
 		}
 		break
 	}
+	return mysqlctl.Kill()
+}
+
+// Kill kills the mysqld and any associated mysqld_safe processes without a
+// graceful shutdown. This is safe when the data directory is discarded right
+// after: nothing needs to be flushed, and it skips the semi-sync ack wait
+// that can stall a graceful shutdown of a primary for many seconds.
+func (mysqlctl *MysqlctlProcess) Kill() error {
 	pidFile := path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/mysql.pid", mysqlctl.TabletUID))
 	pidBytes, err := os.ReadFile(pidFile)
 	if err != nil {
@@ -203,8 +211,11 @@ func (mysqlctl *MysqlctlProcess) Stop() (err error) {
 	}
 	// We first need to try and kill any associated mysqld_safe process or
 	// else it will immediately restart the mysqld process when we kill it.
+	// The bracketed first characters keep the patterns from matching the
+	// command line of this pipeline's own sh process, which contains both
+	// the pattern and the tablet directory name.
 	mspidb, err := exec.Command("sh", "-c",
-		fmt.Sprintf("ps auxww | grep -E 'mysqld_safe|mariadbd-safe' | grep vt_%010d | awk '{print $2}'", mysqlctl.TabletUID)).Output()
+		fmt.Sprintf("ps auxww | grep -E '[m]ysqld_safe|[m]ariadbd-safe' | grep vt_%010d | awk '{print $2}'", mysqlctl.TabletUID)).Output()
 	if err != nil {
 		return err
 	}
