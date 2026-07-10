@@ -240,6 +240,39 @@ func TestUpdateMaxLagTickerLowTargetLag(t *testing.T) {
 	assert.Zero(t, throttlerImpl.throttlerRunning.Get())
 }
 
+// TestRestartHealthCheckStreamKeepsStateContextAlive verifies that restarting the
+// healthcheck stream, which is what updateHealthCheckCells does when the topology
+// cell list changes, does not cancel the state context. If it does,
+// healthChecksProcessor returns on ts.ctx.Done() and the throttler stops seeing
+// replication lag for the rest of the tablet's life.
+func TestRestartHealthCheckStreamKeepsStateContextAlive(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	defer resetTxThrottlerFactories()
+	mockHealthCheck := NewMockHealthCheck(mockCtrl)
+	mockHealthCheck.EXPECT().Subscribe("TxThrottler").AnyTimes()
+	mockHealthCheck.EXPECT().Close().AnyTimes()
+	healthCheckFactory = func(ctx context.Context, topoServer *topo.Server, cell, keyspace, shard string, cellsToWatch []string) (discovery.HealthCheck, error) {
+		return mockHealthCheck, nil
+	}
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	ts := &txThrottlerStateImpl{
+		ctx:    ctx,
+		cancel: cancel,
+	}
+	target := &querypb.Target{Cell: "cell1", Keyspace: "keyspace", Shard: "shard"}
+
+	require.NoError(t, ts.initHealthCheckStream(nil, target))
+	// updateHealthCheckCells restarts the stream by closing then re-initializing it.
+	ts.closeHealthCheckStream()
+	require.NoError(t, ts.initHealthCheckStream(nil, target))
+
+	assert.NoError(t, ts.ctx.Err())
+}
+
 func TestFetchKnownCells(t *testing.T) {
 	ctx := t.Context()
 	{

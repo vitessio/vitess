@@ -157,10 +157,11 @@ type txThrottlerStateImpl struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	healthCheck      discovery.HealthCheck
-	healthCheckChan  chan *discovery.TabletHealth
-	healthCheckCells []string
-	cellsFromTopo    bool
+	healthCheck       discovery.HealthCheck
+	healthCheckCancel context.CancelFunc
+	healthCheckChan   chan *discovery.TabletHealth
+	healthCheckCells  []string
+	cellsFromTopo     bool
 
 	// tabletTypes stores the tablet types for throttling
 	tabletTypes map[topodatapb.TabletType]bool
@@ -307,10 +308,16 @@ func newTxThrottlerState(txThrottler *txThrottler, config *tabletenv.TabletConfi
 }
 
 func (ts *txThrottlerStateImpl) initHealthCheckStream(topoServer *topo.Server, target *querypb.Target) (err error) {
-	ts.healthCheck, err = healthCheckFactory(ts.ctx, topoServer, target.Cell, target.Keyspace, target.Shard, ts.healthCheckCells)
+	// The healthcheck stream gets its own child context so that restarting it on a
+	// topology cell change (updateHealthCheckCells) does not cancel ts.ctx, which
+	// healthChecksProcessor and the rest of the state depend on for their lifetime.
+	hcCtx, hcCancel := context.WithCancel(ts.ctx)
+	ts.healthCheck, err = healthCheckFactory(hcCtx, topoServer, target.Cell, target.Keyspace, target.Shard, ts.healthCheckCells)
 	if err != nil {
+		hcCancel()
 		return err
 	}
+	ts.healthCheckCancel = hcCancel
 	ts.healthCheckChan = ts.healthCheck.Subscribe(txThrottlerHcName)
 	return nil
 }
@@ -319,7 +326,7 @@ func (ts *txThrottlerStateImpl) closeHealthCheckStream() {
 	if ts.healthCheck == nil {
 		return
 	}
-	ts.cancel()
+	ts.healthCheckCancel()
 	ts.healthCheck.Close()
 }
 
@@ -399,6 +406,9 @@ func (ts *txThrottlerStateImpl) deallocateResources() {
 	// Close healthcheck and topo watchers
 	ts.closeHealthCheckStream()
 	ts.healthCheck = nil
+
+	// Stop healthChecksProcessor, which runs for the lifetime of ts.ctx.
+	ts.cancel()
 
 	ts.done <- true
 	ts.waitForTermination.Wait()
