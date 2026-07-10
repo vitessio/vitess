@@ -60,11 +60,10 @@ type StaticAuthConfigEntry struct {
 	Username string
 	Password string
 	// CachingSha2Password is the hex-encoded SHA256(SHA256(password)) of the
-	// user's password, with an optional leading '*'. It is used only when
-	// Password is empty, allowing plaintext and hashed credentials to be mixed
-	// in the same configuration file. The value matches the CachingSha2Password
-	// field of the MySQL protocol's static auth server, so the same stored
-	// credential can be used to authenticate both MySQL and gRPC clients.
+	// user's password, with an optional leading '*'. When set, it takes
+	// precedence over Password, matching the behavior of the MySQL protocol's
+	// static auth server so the same stored credential can be used to
+	// authenticate both MySQL and gRPC clients.
 	CachingSha2Password string
 	// TODO (@rafael) Add authorization parameters
 }
@@ -93,14 +92,20 @@ func (sa *StaticAuthPlugin) Authenticate(ctx context.Context, fullMethod string)
 		}
 		username := md["username"][0]
 		password := md["password"][0]
+		// SHA256(SHA256(password)), computed lazily on the first entry that
+		// needs it so plaintext-only configurations never pay for the hashing.
+		var hashedPassword []byte
 		for _, authEntry := range sa.entries {
 			if username != authEntry.Username {
 				continue
 			}
-			if authEntry.Password == "" && len(authEntry.cachingSha2Password) > 0 {
-				stage1 := sha256.Sum256([]byte(password))
-				hashedPassword := sha256.Sum256(stage1[:])
-				if subtle.ConstantTimeCompare(hashedPassword[:], authEntry.cachingSha2Password) == 1 {
+			if len(authEntry.cachingSha2Password) > 0 {
+				if hashedPassword == nil {
+					stage1 := sha256.Sum256([]byte(password))
+					stage2 := sha256.Sum256(stage1[:])
+					hashedPassword = stage2[:]
+				}
+				if subtle.ConstantTimeCompare(hashedPassword, authEntry.cachingSha2Password) == 1 {
 					return newStaticAuthContext(ctx, username), nil
 				}
 			} else if subtle.ConstantTimeCompare([]byte(password), []byte(authEntry.Password)) == 1 {

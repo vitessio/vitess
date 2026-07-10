@@ -256,10 +256,10 @@ func TestStaticAuthPlugin_DuplicateUsernameEntries(t *testing.T) {
 	}
 }
 
-// TestStaticAuthPlugin_PlaintextTakesPrecedence tests that when an entry has
-// both Password and CachingSha2Password set, the plaintext Password is used
-// and the SHA256 hash is ignored.
-func TestStaticAuthPlugin_PlaintextTakesPrecedence(t *testing.T) {
+// TestStaticAuthPlugin_HashTakesPrecedence tests that when an entry has both
+// Password and CachingSha2Password set, the SHA256 hash is used and the
+// plaintext Password is ignored, matching the MySQL static auth server.
+func TestStaticAuthPlugin_HashTakesPrecedence(t *testing.T) {
 	plugin := newTestStaticAuthPlugin(t, []StaticAuthConfigEntry{
 		{
 			Username:            "user1",
@@ -268,14 +268,14 @@ func TestStaticAuthPlugin_PlaintextTakesPrecedence(t *testing.T) {
 		},
 	})
 
-	t.Run("plaintext password matches", func(t *testing.T) {
-		newCtx, err := authenticate(t, plugin, "user1", "plain_password")
+	t.Run("hashed password matches", func(t *testing.T) {
+		newCtx, err := authenticate(t, plugin, "user1", "hashed_password")
 		require.NoError(t, err)
 		require.Equal(t, "user1", StaticAuthUsernameFromContext(newCtx))
 	})
 
-	t.Run("hashed password is ignored", func(t *testing.T) {
-		_, err := authenticate(t, plugin, "user1", "hashed_password")
+	t.Run("plaintext password is ignored", func(t *testing.T) {
+		_, err := authenticate(t, plugin, "user1", "plain_password")
 		require.Error(t, err)
 		st, ok := status.FromError(err)
 		require.True(t, ok, "error should be a gRPC status error")
