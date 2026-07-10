@@ -89,7 +89,10 @@ func TestMain(m *testing.M) {
 		clusterInstance.VtTabletExtraArgs = []string{
 			"--heartbeat-interval", "250ms",
 			"--heartbeat-on-demand-duration", "5s",
-			"--migration-check-interval", "5s",
+			// With a 5s interval, every migration paid up to a full extra tick
+			// waiting for cut-over after the mandatory 5s test-suite DML window
+			// (vreplicationTestSuiteWaitSeconds) had already elapsed.
+			"--migration-check-interval", "1s",
 		}
 
 		if err := clusterInstance.StartTopo(); err != nil {
