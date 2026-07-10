@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"slices"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -797,6 +798,66 @@ func TestStreamExecuteCompat_StreamDispatchIsTotal(t *testing.T) {
 		err := qre.Stream(callback)
 		require.ErrorContains(t, err, "unexpected plan type",
 			"%s is not in Stream()'s dispatch tables and must not silently take the generic streaming path", id.String())
+	}
+}
+
+// Stream() must dispatch every plan type Execute() dispatches. Both
+// dispatchers are probed behaviorally with a synthetic plan per plan type, so
+// a plan type newly wired into Execute cannot pass this test without a Stream
+// dispatch decision: either Stream serves it, or the plan is recorded in
+// streamUnsupported below as a conscious gap. Only the connID==0 dispatch
+// tables are probed: inside a transaction Stream delegates dedicated plans to
+// txConnExec — Execute's own dispatcher — so those tables cannot drift apart.
+func TestStreamExecuteCompat_StreamDispatchCoversExecute(t *testing.T) {
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "")
+	defer tsv.StopService()
+	defer db.Close()
+
+	// Plan types Execute dispatches but Stream rejects.
+	streamUnsupported := map[planbuilder.PlanType]string{
+		// The planner never produces PlanInsertMessage (analyzeInsert always
+		// returns PlanInsert); Execute's dispatch entry for it is vestigial,
+		// and Stream rejects it like other planner-unreachable plan types.
+		planbuilder.PlanInsertMessage: "planner-unreachable, vestigial in Execute",
+	}
+
+	// probe reports whether the executor's dispatch tables rejected the plan
+	// type. Any other outcome — success, an execution error from the fake DB,
+	// or a panic from running a synthetic plan with no FullQuery/FullStmt —
+	// means the plan type was dispatched.
+	probe := func(id planbuilder.PlanType, run func(*QueryExecutor) error) (rejected bool) {
+		logStats := tabletenv.NewLogStats(ctx, "TestStreamDispatchCoversExecute", streamlog.NewQueryLogConfigForTest())
+		plan := &TabletPlan{Plan: &planbuilder.Plan{PlanID: id}, Rules: rules.New()}
+		qre := newQueryExec(ctx, tsv, "select 1 from test_table", 0, plan, logStats)
+		defer func() {
+			_ = recover()
+		}()
+		err := run(qre)
+		return err != nil && strings.Contains(err.Error(), "unexpected plan type")
+	}
+
+	for id := range planbuilder.NumPlans {
+		execRejected := probe(id, func(qre *QueryExecutor) error {
+			_, err := qre.Execute()
+			return err
+		})
+		streamRejected := probe(id, func(qre *QueryExecutor) error {
+			return qre.Stream(func(*sqltypes.Result) error { return nil })
+		})
+
+		if reason, ok := streamUnsupported[id]; ok {
+			require.False(t, execRejected,
+				"%s is listed as stream-unsupported but Execute rejects it too; remove the entry", id.String())
+			require.True(t, streamRejected,
+				"%s is listed as stream-unsupported (%s) but Stream dispatches it; remove the entry", id.String(), reason)
+			continue
+		}
+		if execRejected {
+			continue
+		}
+		require.False(t, streamRejected,
+			"%s is dispatched by Execute but rejected by Stream's dispatch tables", id.String())
 	}
 }
 

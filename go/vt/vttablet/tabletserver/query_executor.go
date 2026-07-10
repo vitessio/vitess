@@ -520,16 +520,17 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 	// Execute rejects unknown plan types, rather than sending its raw SQL to
 	// MySQL with none of the semantics its executor provides.
 	switch qre.plan.PlanID {
-	case p.PlanSelect, p.PlanSelectImpossible, p.PlanShow:
-		// Same case list as Execute. Only PlanSelect can actually carry the
-		// BvReplaceSchemaName marker — SHOW statements can't contain bind
-		// variables and an impossible-WHERE query can't reference
-		// :__vtschemaname — so the other two are here only for consistency
-		// and should eventually be dropped from both execution paths.
+	case p.PlanSelect, p.PlanSelectImpossible, p.PlanShow, p.PlanSelectLockFunc:
+		// Same case list as txConnExec. Only PlanSelect and PlanSelectLockFunc
+		// can actually carry the BvReplaceSchemaName marker — SHOW statements
+		// can't contain bind variables and an impossible-WHERE query can't
+		// reference :__vtschemaname — so the other two are here only for
+		// consistency and should eventually be dropped from both execution
+		// paths.
 		if qre.bindVars[sqltypes.BvReplaceSchemaName] != nil {
 			qre.bindVars[sqltypes.BvSchemaName] = sqltypes.StringBindVariable(qre.tsv.config.DB.DBName)
 		}
-	case p.PlanSelectLockFunc, p.PlanOtherRead, p.PlanOtherAdmin, p.PlanFlush, p.PlanCallProc:
+	case p.PlanOtherRead, p.PlanOtherAdmin, p.PlanFlush, p.PlanCallProc:
 		// Plain SQL statements with no bind-variable rewriting.
 	default:
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] %s unexpected plan type", qre.plan.PlanID.String())

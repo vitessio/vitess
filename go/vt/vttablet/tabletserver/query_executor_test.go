@@ -1486,6 +1486,65 @@ func TestReplaceSchemaName(t *testing.T) {
 	}
 }
 
+// A SELECT carrying a lock function can also reference an information_schema
+// table rewritten by vtgate, so both execution paths must resolve
+// :__vtschemaname before the query reaches MySQL. Lock functions require a
+// reserved connection, so both paths run on a transaction connection here.
+func TestReplaceSchemaNameSelectLockFunc(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+
+	queryFmt := "select get_lock('vt_lock', 10) from information_schema.`schema_name` where `schema_name` = %s"
+	inQuery := fmt.Sprintf(queryFmt, ":"+sqltypes.BvSchemaName)
+	wantQueryExec := fmt.Sprintf(queryFmt, fmt.Sprintf(
+		"'%s' limit %d",
+		db.Name(),
+		10001,
+	))
+	wantQueryStream := fmt.Sprintf(queryFmt, fmt.Sprintf(
+		"'%s'",
+		db.Name(),
+	))
+
+	ctx := t.Context()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+
+	db.AddQuery(wantQueryExec, &sqltypes.Result{
+		Fields: getTestTableFields(),
+	})
+
+	db.AddQuery(wantQueryStream, &sqltypes.Result{
+		Fields: getTestTableFields(),
+	})
+
+	target := tsv.sm.Target()
+
+	// Test non streaming execute.
+	{
+		txID := newTransaction(tsv, nil)
+		defer func() { _, _ = tsv.Rollback(ctx, target, txID) }()
+		qre := newTestQueryExecutor(ctx, tsv, inQuery, txID)
+		require.Equal(t, planbuilder.PlanSelectLockFunc, qre.plan.PlanID)
+		qre.bindVars[sqltypes.BvReplaceSchemaName] = sqltypes.NullBindVariable
+		_, err := qre.Execute()
+		require.NoError(t, err)
+		require.Contains(t, qre.bindVars, sqltypes.BvSchemaName)
+	}
+
+	// Test streaming execute.
+	{
+		txID := newTransaction(tsv, nil)
+		defer func() { _, _ = tsv.Rollback(ctx, target, txID) }()
+		qre := newTestQueryExecutorStreaming(ctx, tsv, inQuery, txID)
+		require.Equal(t, planbuilder.PlanSelectLockFunc, qre.plan.PlanID)
+		qre.bindVars[sqltypes.BvReplaceSchemaName] = sqltypes.NullBindVariable
+		err := qre.Stream(func(_ *sqltypes.Result) error { return nil })
+		require.NoError(t, err)
+		require.Contains(t, qre.bindVars, sqltypes.BvSchemaName)
+	}
+}
+
 // TestQueryExecutorStreamDML verifies that DML executed on the streaming path
 // (StreamExecute) runs through the same transactional machinery as Execute and
 // delivers its single result through the callback. Before the fix for #19561
