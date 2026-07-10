@@ -1607,6 +1607,56 @@ func TestQueryExecutorStreamDMLErrorStatsOnPermissionDenied(t *testing.T) {
 		"streamed DML rejected by checkPermissions must record per-table error stats like Execute")
 }
 
+// TestQueryExecutorStreamErrorStatsOnPermissionDenied verifies that a streamed
+// SELECT rejected by checkPermissions (a QRFail query rule) still records
+// per-table error stats, matching the non-streaming Execute path. Stream's
+// stats defer reads the named error return, so it observes the rejections from
+// the permission and request throttler checks even though they run before any
+// query execution; this test pins the defer being registered ahead of those
+// checks.
+func TestQueryExecutorStreamErrorStatsOnPermissionDenied(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+
+	query := "select * from test_table"
+
+	bannedAddr := "127.0.0.1"
+	bannedUser := "u2"
+
+	denyRule := rules.NewQueryRule("disable select", "disable select", rules.QRFail)
+	denyRule.SetIPCond(bannedAddr)
+	denyRule.SetUserCond(bannedUser)
+	denyRule.AddPlanCond(planbuilder.PlanSelect)
+	denyRule.AddTableCond("test_table")
+
+	rulesName := "denyListStreamSelectQRFail"
+	qrs := rules.New()
+	qrs.Add(denyRule)
+
+	callInfo := &fakecallinfo.FakeCallInfo{
+		Remote: bannedAddr,
+		User:   bannedUser,
+	}
+	ctx := callinfo.NewContext(t.Context(), callInfo)
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+	tsv.qe.queryRuleSources.UnRegisterSource(rulesName)
+	tsv.qe.queryRuleSources.RegisterSource(rulesName)
+	defer tsv.qe.queryRuleSources.UnRegisterSource(rulesName)
+	require.NoError(t, tsv.qe.queryRuleSources.SetRules(rulesName, qrs))
+
+	qre := newTestQueryExecutorStreaming(ctx, tsv, query, 0)
+	require.Equal(t, planbuilder.PlanSelect, qre.plan.PlanID)
+
+	errCountBefore := tsv.qe.queryErrorCounts.Counts()["test_table.Select"]
+	err := qre.Stream(func(*sqltypes.Result) error { return nil })
+	require.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
+
+	errCountAfter := tsv.qe.queryErrorCounts.Counts()["test_table.Select"]
+	assert.Equal(t, errCountBefore+1, errCountAfter,
+		"streamed SELECT rejected by checkPermissions must record per-table error stats like Execute")
+}
+
 // TestQueryExecutorStreamDMLAppliesQueryTimeout verifies that autocommit DML on
 // the streaming path runs under the query timeout, like the non-streaming
 // Execute path. StreamExecute leaves the request timeout unset when there is no
