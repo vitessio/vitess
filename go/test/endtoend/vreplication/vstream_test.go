@@ -1341,6 +1341,12 @@ func TestVStreamStopOnReshardFalse(t *testing.T) {
 func TestVStreamWithKeyspacesToWatch(t *testing.T) {
 	extraVTGateArgs = append(extraVTGateArgs, []string{
 		"--keyspaces-to-watch", defaultSourceKs,
+		// The harness starts vtgate before the keyspace has any tablets, and
+		// with --keyspaces-to-watch set, vtgate only becomes ready once the
+		// gateway's initial-tablet wait on the watched-but-empty keyspace
+		// gives up: the default 30s is a guaranteed dead wait here. The
+		// gateway keeps discovering tablets after this timeout either way.
+		"--gateway-initial-tablet-timeout", "2s",
 	}...)
 
 	testVStreamWithFailover(t, false)
