@@ -18,17 +18,12 @@ package planbuilder
 
 import (
 	"context"
-	"regexp"
-	"strings"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
-
-// regexParams checks that argument names are in the form v1, v2, v3...
-var regexParams = regexp.MustCompile(`^v\d+`)
 
 func prepareStmt(pStmt *sqlparser.PrepareStmt) (*planResult, error) {
 	prep := &engine.PrepareStmt{
@@ -39,9 +34,6 @@ func prepareStmt(pStmt *sqlparser.PrepareStmt) (*planResult, error) {
 		prep.Query = expr.Val
 	case *sqlparser.Variable:
 		prep.UserDefinedVariable = expr.Name.Lowered()
-	case *sqlparser.Argument:
-		udv, _ := strings.CutPrefix(expr.Name, sqlparser.UserDefinedVariableName)
-		prep.UserDefinedVariable = udv
 	default:
 		return nil, vterrors.VT13002("prepare statement should not have : %T", pStmt.Statement)
 	}
