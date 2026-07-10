@@ -241,10 +241,10 @@ type ClientImpl struct {
 	*ldap.Conn
 }
 
-// Connect calls ldap.Dial and then upgrades the connection to TLS
+// Connect calls ldap.DialURL and then upgrades the connection to TLS
 // This must be called before any other methods
 func (lci *ClientImpl) Connect(network string, config *ServerConfig) error {
-	conn, err := ldap.Dial(network, config.LdapServer)
+	conn, err := ldap.DialURL("ldap://" + config.LdapServer)
 	if err != nil {
 		return err
 	}
