@@ -681,6 +681,20 @@ func testVStreamCellFlag(t *testing.T) {
 					log.Info(fmt.Sprintf("%s:: remote error: %v", time.Now(), err))
 				}
 			})
+			if tc.expectError {
+				// The stream can never start since the cell has no tablets, so
+				// Recv would block until the full context timeout. The failed
+				// tablet pick is registered in vtgate's stats and is what we
+				// assert on anyway, so wait for it and end the stream early.
+				// getDebugVar is not usable here: it requires the var to exist,
+				// which it doesn't until the first failed pick is registered.
+				require.Eventually(t, func() bool {
+					body := getHTTPBody(t, fmt.Sprintf("http://localhost:%d/debug/vars", vc.ClusterConfig.vtgatePort))
+					val, _, _, err := jsonparser.Get(body, "TabletPickerNoTabletFoundErrorCount")
+					return err == nil && strings.Contains(string(val), nonExistingCell)
+				}, 10*time.Second, 100*time.Millisecond)
+				cancel()
+			}
 			wg.Wait()
 
 			if tc.expectError {
