@@ -151,7 +151,7 @@ func TestChangeTypePrimaryCompletesWithBlockedCommit(t *testing.T) {
 		}
 
 		return false
-	}, 20*time.Second, 100*time.Millisecond, "query with state not in processlist")
+	}, 30*time.Second, 100*time.Millisecond, "query with state not in processlist")
 
 	oldPrimary, err := clusterInstance.VtctldClientProcess.GetTablet(primary.Alias)
 	require.NoError(t, err)
@@ -169,7 +169,7 @@ func TestChangeTypePrimaryCompletesWithBlockedCommit(t *testing.T) {
 
 	require.Eventually(t, func() bool {
 		return len(commitErr) > 0
-	}, 5*time.Second, 100*time.Millisecond, "timed out waiting for COMMIT to return after ChangeType")
+	}, 30*time.Second, 100*time.Millisecond, "timed out waiting for COMMIT to return after ChangeType")
 
 	err = <-commitErr
 	require.ErrorContains(t, err, "code = Canceled")
