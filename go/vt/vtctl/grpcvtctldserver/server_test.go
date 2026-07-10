@@ -11548,14 +11548,15 @@ func TestSetShardTabletControl(t *testing.T) {
 	ctx := t.Context()
 
 	type testcase struct {
-		name      string
-		ctx       context.Context
-		ts        *topo.Server
-		setup     func(*testing.T, *testcase)
-		teardown  func(*testing.T, *testcase)
-		req       *vtctldatapb.SetShardTabletControlRequest
-		expected  *vtctldatapb.SetShardTabletControlResponse
-		shouldErr bool
+		name       string
+		ctx        context.Context
+		ts         *topo.Server
+		setup      func(*testing.T, *testcase)
+		teardown   func(*testing.T, *testcase)
+		req        *vtctldatapb.SetShardTabletControlRequest
+		expected   *vtctldatapb.SetShardTabletControlResponse
+		rpcTimeout time.Duration
+		shouldErr  bool
 	}
 
 	tests := []*testcase{
@@ -11740,22 +11741,21 @@ func TestSetShardTabletControl(t *testing.T) {
 		{
 			name: "keyspace lock error",
 			setup: func(t *testing.T, tt *testcase) {
-				var cancel func()
-				tt.ctx, cancel = context.WithCancel(ctx)
+				tt.ctx = ctx
 				tt.ts = memorytopo.NewServer(ctx, "zone1")
-				testutil.AddShards(tt.ctx, t, tt.ts, &vtctldatapb.Shard{
+				testutil.AddShards(ctx, t, tt.ts, &vtctldatapb.Shard{
 					Keyspace: "testkeyspace",
 					Name:     "-",
 					Shard:    &topodatapb.Shard{},
 				})
 
-				_, unlock, err := tt.ts.LockKeyspace(tt.ctx, "testkeyspace", "test lock")
+				_, unlock, err := tt.ts.LockKeyspace(ctx, "testkeyspace", "test lock")
 				require.NoError(t, err)
+
 				tt.teardown = func(t *testing.T, tt *testcase) {
 					var err error
 					unlock(&err)
 					require.NoError(t, err)
-					cancel()
 				}
 			},
 			req: &vtctldatapb.SetShardTabletControlRequest{
@@ -11764,7 +11764,13 @@ func TestSetShardTabletControl(t *testing.T) {
 				DeniedTables: []string{"t1"},
 				TabletType:   topodatapb.TabletType_REPLICA,
 			},
-			shouldErr: true,
+			// The RPC blocks trying to acquire the keyspace lock the setup
+			// already holds, so give it a short deadline instead of waiting
+			// out the default 45s topo.LockTimeout. The deadline is applied
+			// immediately around the RPC call, so it cannot expire during
+			// setup or server construction on a slow runner.
+			rpcTimeout: time.Second,
+			shouldErr:  true,
 		},
 	}
 	for _, tt := range tests {
@@ -11779,7 +11785,13 @@ func TestSetShardTabletControl(t *testing.T) {
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 				return NewVtctldServer(vtenv.NewTestEnv(), ts)
 			})
-			resp, err := vtctld.SetShardTabletControl(tt.ctx, tt.req)
+			rpcCtx := tt.ctx
+			if tt.rpcTimeout > 0 {
+				var cancel context.CancelFunc
+				rpcCtx, cancel = context.WithTimeout(rpcCtx, tt.rpcTimeout)
+				defer cancel()
+			}
+			resp, err := vtctld.SetShardTabletControl(rpcCtx, tt.req)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				return
