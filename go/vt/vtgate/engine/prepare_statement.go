@@ -90,7 +90,7 @@ func (p *PrepareStmt) TryStreamExecute(ctx context.Context, vcursor VCursor, bin
 }
 
 func (p *PrepareStmt) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return nil, vterrors.VT12001("prepare command on PREPARE statement")
+	return nil, vterrors.VT13001("GetFields is not supported for PREPARE")
 }
 
 // statementText returns the statement text to prepare, resolving it from the
@@ -143,7 +143,7 @@ func (d *DeallocateStmt) TryStreamExecute(ctx context.Context, vcursor VCursor, 
 }
 
 func (d *DeallocateStmt) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return nil, vterrors.VT12001("prepare command on DEALLOCATE PREPARE statement")
+	return nil, vterrors.VT13001("GetFields is not supported for DEALLOCATE PREPARE")
 }
 
 func (d *DeallocateStmt) description() PrimitiveDescription {
