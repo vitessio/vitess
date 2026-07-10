@@ -74,8 +74,8 @@ func TestStreamExecuteCompat_BuildStreamingAcceptsDML(t *testing.T) {
 	}
 }
 
-// Stream() handles plan types that Execute() handles.
-func TestStreamExecuteCompat_StreamMissingPlanTypes(t *testing.T) {
+// SELECT streams rows through the full TabletServer StreamExecute path.
+func TestStreamExecuteCompat_SelectViaTabletServer(t *testing.T) {
 	ctx := t.Context()
 	db, tsv := setupTabletServerTest(t, ctx, "")
 	defer tsv.StopService()
@@ -284,7 +284,8 @@ func TestStreamExecuteCompat_QueryTimeout(t *testing.T) {
 		"streaming queries are bounded by the caller's context deadline")
 }
 
-// ACL denial errors use "Select" (not "SelectStream") in streaming mode.
+// A streamed query denied by table ACLs reports the same error message as
+// buffered execution.
 func TestStreamExecuteCompat_ACLErrorFormat(t *testing.T) {
 	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int64())
 	tableacl.Register(aclName, &simpleacl.Factory{})
@@ -315,10 +316,7 @@ func TestStreamExecuteCompat_ACLErrorFormat(t *testing.T) {
 	err := qreStream.Stream(func(*sqltypes.Result) error { return nil })
 	require.Error(t, err)
 
-	assert.Contains(t, err.Error(), "Select command denied",
-		"ACL error should say 'Select command denied', got: %s", err.Error())
-	assert.NotContains(t, err.Error(), "SelectStream",
-		"ACL error should not contain 'SelectStream', got: %s", err.Error())
+	assert.EqualError(t, err, "Select command denied to user 'denied_user' for table 'test_table' (ACL check error)")
 }
 
 // Stream() handles PlanNextval via execNextval().
