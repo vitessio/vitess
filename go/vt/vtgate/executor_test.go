@@ -2910,6 +2910,52 @@ func TestPrepareDoesNotStartTransaction(t *testing.T) {
 	require.False(t, session.InTransaction)
 }
 
+func TestSQLPrepareDoesNotStartTransaction(t *testing.T) {
+	// MySQL does not start an implicit transaction for SQL-level PREPARE or
+	// DEALLOCATE PREPARE, even with autocommit disabled; the transaction
+	// starts when the prepared statement is executed. This must hold for
+	// failing statements too: their errors surface during execution, after
+	// the point where an implicit transaction would be started.
+	executor, _, _, _, ctx := createExecutorEnv(t)
+
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded, Autocommit: false})
+
+	tcases := []struct {
+		name    string
+		sql     string
+		wantErr string
+	}{{
+		name: "prepare",
+		sql:  "prepare prep from 'select id from main1 where id = ?'",
+	}, {
+		name:    "prepare with undefined user defined variable",
+		sql:     "prepare prep_udv from @undefined_stmt_text",
+		wantErr: "'undefined_stmt_text' user defined variable does not exists",
+	}, {
+		name:    "prepare with unplannable text",
+		sql:     "prepare prep_bad from 'wrong query syntax'",
+		wantErr: "syntax error",
+	}, {
+		name: "deallocate",
+		sql:  "deallocate prepare prep",
+	}, {
+		name:    "deallocate unknown",
+		sql:     "deallocate prepare prep_unknown",
+		wantErr: "Unknown prepared statement handler (prep_unknown) given to DEALLOCATE PREPARE",
+	}}
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			_, err := executorExecSession(ctx, executor, session, tcase.sql, nil)
+			if tcase.wantErr != "" {
+				require.ErrorContains(t, err, tcase.wantErr)
+			} else {
+				require.NoError(t, err)
+			}
+			require.False(t, session.InTransaction())
+		})
+	}
+}
+
 func TestExecutorFlushStmt(t *testing.T) {
 	executor, _, _, _, _ := createExecutorEnv(t)
 

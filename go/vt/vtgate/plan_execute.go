@@ -303,6 +303,11 @@ func planStartsImplicitTx(plan *engine.Plan, stmt sqlparser.Statement) bool {
 		// Transaction control statements are handled by handleTransactions and should not
 		// trigger an implicit transaction start.
 		return false
+	case sqlparser.StmtPrepare, sqlparser.StmtDeallocate:
+		// PREPARE only plans the statement text and DEALLOCATE PREPARE only
+		// removes session state; neither accesses table data. MySQL starts
+		// the transaction when the prepared statement is executed.
+		return false
 	default:
 		return true
 	}
