@@ -211,8 +211,6 @@ This alignment changes several observable behaviors that dashboards and query-ru
 
 Beyond observability, statements that previously failed or were mishandled over `workload=olap` connections now work: Online DDL and throttler administration statements (such as `SHOW VITESS_MIGRATIONS`), `LOAD`, DDL, savepoints, `SET`, and `UNLOCK TABLES` are all dispatched the same way as on the buffered path.
 
-This change is not backported. On release branches the streaming path is opt-in per connection, and the statistics alignment changes observable metrics.
-
 See [#20499](https://github.com/vitessio/vitess/pull/20499) for details.
 
 ### <a id="minor-changes-backup"/>Backup/Restore</a>
