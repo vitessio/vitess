@@ -2414,7 +2414,8 @@ func TestInsertSelectShardingCases(t *testing.T) {
 
 		// the query exec
 		`ResolveDestinations sks1 [value:"0"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
-		fmt.Sprintf(`ExecuteMultiShard sks1.-20: prefix values (:_c0_0) {_c0_0: %v} true true`, sqltypes.Int64BindVariable(1))})
+		fmt.Sprintf(`ExecuteMultiShard sks1.-20: prefix values (:_c0_0) {_c0_0: %v} true false`, sqltypes.Int64BindVariable(1)),
+	})
 
 	// sks1 and uks2
 	ins.Input = uRoute
@@ -2443,7 +2444,8 @@ func TestInsertSelectShardingCases(t *testing.T) {
 
 		// the query exec
 		`ResolveDestinations sks1 [value:"0"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
-		fmt.Sprintf(`ExecuteMultiShard sks1.-20: prefix values (:_c0_0) {_c0_0: %v} true true`, sqltypes.Int64BindVariable(1))})
+		fmt.Sprintf(`ExecuteMultiShard sks1.-20: prefix values (:_c0_0) {_c0_0: %v} true false`, sqltypes.Int64BindVariable(1)),
+	})
 
 	// uks1 and sks2
 	ins = newInsertSelect(
@@ -2480,7 +2482,8 @@ func TestInsertSelectShardingCases(t *testing.T) {
 
 		// the query exec
 		`ResolveDestinations uks1 [] Destinations:DestinationAllShards()`,
-		fmt.Sprintf(`ExecuteMultiShard uks1.0: prefix values (:_c0_0) {_c0_0: %v} true true`, sqltypes.Int64BindVariable(1))})
+		fmt.Sprintf(`ExecuteMultiShard uks1.0: prefix values (:_c0_0) {_c0_0: %v} true false`, sqltypes.Int64BindVariable(1)),
+	})
 
 	// uks1 and uks2
 	ins.Input = uRoute
@@ -2509,5 +2512,6 @@ func TestInsertSelectShardingCases(t *testing.T) {
 
 		// the query exec
 		`ResolveDestinations uks1 [] Destinations:DestinationAllShards()`,
-		fmt.Sprintf(`ExecuteMultiShard uks1.0: prefix values (:_c0_0) {_c0_0: %v} true true`, sqltypes.Int64BindVariable(1))})
+		fmt.Sprintf(`ExecuteMultiShard uks1.0: prefix values (:_c0_0) {_c0_0: %v} true false`, sqltypes.Int64BindVariable(1)),
+	})
 }
