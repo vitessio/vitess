@@ -273,6 +273,36 @@ func TestRestartHealthCheckStreamKeepsStateContextAlive(t *testing.T) {
 	assert.NoError(t, ts.ctx.Err())
 }
 
+// TestHealthChecksProcessorReturnsOnClosedChannel verifies that healthChecksProcessor
+// exits when its subscriber channel is closed (which is what HealthCheck.Close does
+// during teardown) instead of receiving the zero value and forwarding it to
+// StatsUpdate.
+func TestHealthChecksProcessorReturnsOnClosedChannel(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	ch := make(chan *discovery.TabletHealth)
+	ts := &txThrottlerStateImpl{
+		ctx:             ctx,
+		cancel:          cancel,
+		healthCheckChan: ch,
+	}
+
+	done := make(chan struct{})
+	go func() {
+		ts.healthChecksProcessor(nil, &querypb.Target{})
+		close(done)
+	}()
+
+	close(ch)
+
+	select {
+	case <-done:
+	case <-time.After(30 * time.Second):
+		require.Fail(t, "healthChecksProcessor did not return after its channel was closed")
+	}
+}
+
 func TestFetchKnownCells(t *testing.T) {
 	ctx := t.Context()
 	{

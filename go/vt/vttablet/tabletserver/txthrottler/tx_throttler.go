@@ -359,7 +359,10 @@ func (ts *txThrottlerStateImpl) healthChecksProcessor(topoServer *topo.Server, t
 			if err := ts.updateHealthCheckCells(topoServer, target); err != nil {
 				log.Error(fmt.Sprintf("txThrottler: failed to update cell list: %+v", err))
 			}
-		case th := <-ts.healthCheckChan:
+		case th, ok := <-ts.healthCheckChan:
+			if !ok {
+				return
+			}
 			ts.StatsUpdate(th)
 		}
 	}
@@ -403,12 +406,13 @@ outerloop:
 }
 
 func (ts *txThrottlerStateImpl) deallocateResources() {
+	// Stop healthChecksProcessor before closing the stream so it can't wake on the
+	// closed healthcheck channel. It runs for the lifetime of ts.ctx.
+	ts.cancel()
+
 	// Close healthcheck and topo watchers
 	ts.closeHealthCheckStream()
 	ts.healthCheck = nil
-
-	// Stop healthChecksProcessor, which runs for the lifetime of ts.ctx.
-	ts.cancel()
 
 	ts.done <- true
 	ts.waitForTermination.Wait()
