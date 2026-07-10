@@ -40,7 +40,13 @@ func TestBuiltinBackupWithZstdCompression(t *testing.T) {
 		ExternalDecompressorCmd: "zstd -d",
 	}
 
-	TestBackup(t, BuiltinBackup, "xbstream", 0, cDetails, []string{"TestReplicaBackup", "TestPrimaryBackup"})
+	// TestReplicaBackup covers the full compression surface of this variant:
+	// backup through the configured compressor and a complete replica2
+	// restore through the configured decompressor (asserted via restore
+	// stats in vtctlBackup). Everything TestPrimaryBackup adds on top
+	// (allow-primary gating, PRS, tablet deletion) is compression-agnostic
+	// and remains covered by TestBuiltinBackup under the default engine.
+	TestBackup(t, BuiltinBackup, "xbstream", 0, cDetails, []string{"TestReplicaBackup"})
 }
 
 func TestBuiltinBackupWithExternalZstdCompression(t *testing.T) {
@@ -53,7 +59,13 @@ func TestBuiltinBackupWithExternalZstdCompression(t *testing.T) {
 		ExternalDecompressorCmd: "zstd -d",
 	}
 
-	TestBackup(t, BuiltinBackup, "xbstream", 0, cDetails, []string{"TestReplicaBackup", "TestPrimaryBackup"})
+	// TestReplicaBackup covers the full compression surface of this variant:
+	// backup through the configured compressor and a complete replica2
+	// restore through the configured decompressor (asserted via restore
+	// stats in vtctlBackup). Everything TestPrimaryBackup adds on top
+	// (allow-primary gating, PRS, tablet deletion) is compression-agnostic
+	// and remains covered by TestBuiltinBackup under the default engine.
+	TestBackup(t, BuiltinBackup, "xbstream", 0, cDetails, []string{"TestReplicaBackup"})
 }
 
 func TestBuiltinBackupWithExternalZstdCompressionAndManifestedDecompressor(t *testing.T) {
@@ -67,7 +79,13 @@ func TestBuiltinBackupWithExternalZstdCompressionAndManifestedDecompressor(t *te
 		ManifestExternalDecompressorCmd: "zstd -d",
 	}
 
-	TestBackup(t, BuiltinBackup, "xbstream", 0, cDetails, []string{"TestReplicaBackup", "TestPrimaryBackup"})
+	// TestReplicaBackup covers the full compression surface of this variant:
+	// backup through the configured compressor and a complete replica2
+	// restore through the configured decompressor (asserted via restore
+	// stats in vtctlBackup). Everything TestPrimaryBackup adds on top
+	// (allow-primary gating, PRS, tablet deletion) is compression-agnostic
+	// and remains covered by TestBuiltinBackup under the default engine.
+	TestBackup(t, BuiltinBackup, "xbstream", 0, cDetails, []string{"TestReplicaBackup"})
 }
 
 // TestBuiltinBackupChunked uses a low chunk threshold and chunk size (4MiB each) to force
