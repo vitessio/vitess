@@ -1681,7 +1681,7 @@ func (vc *VCursorImpl) PlanPrepareStatement(ctx context.Context, query string) (
 }
 
 func (vc *VCursorImpl) ClearPrepareData(name string) {
-	delete(vc.SafeSession.PrepareStatement, name)
+	vc.SafeSession.ClearPrepareData(name)
 }
 
 func (vc *VCursorImpl) StorePrepareData(stmtName string, prepareData *vtgatepb.PrepareData) {

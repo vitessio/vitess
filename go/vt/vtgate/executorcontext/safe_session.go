@@ -1114,6 +1114,14 @@ func (session *SafeSession) GetPrepareData(name string) *vtgatepb.PrepareData {
 	return session.PrepareStatement[name]
 }
 
+// ClearPrepareData removes the prepared data information for the given key.
+func (session *SafeSession) ClearPrepareData(name string) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	delete(session.PrepareStatement, name)
+}
+
 func (session *SafeSession) Log(primitive engine.Primitive, target *querypb.Target, gateway srvtopo.Gateway, query string, begin bool, bv map[string]*querypb.BindVariable) {
 	session.logging.Log(primitive, target, gateway, query, begin, bv)
 }
