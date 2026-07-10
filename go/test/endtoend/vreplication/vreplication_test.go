@@ -1186,10 +1186,24 @@ func reshardCustomer3to1Merge(t *testing.T) { // to unsharded
 	})
 }
 
+// reshardOptions holds optional behavior changes for reshard.
+type reshardOptions struct {
+	// skipSwitchWritesErrorHandling skips the switch-writes error-handling
+	// subtest that reshard normally piggybacks onto workflows over the
+	// customer table. The vstream tests use it: the subtest asserts nothing
+	// about vstream, costs ~20s plus a known flake surface, and runs
+	// unchanged via the vreplication_basic and vreplication_cellalias shards.
+	skipSwitchWritesErrorHandling bool
+}
+
 func reshard(t *testing.T, ksName string, tableName string, workflow string, sourceShards string, targetShards string,
 	tabletIDBase int, counts map[string]int, dryRunResultSwitchReads, dryRunResultSwitchWrites []string, cells []*Cell, sourceCellOrAlias string,
-	autoIncrementStep int,
+	autoIncrementStep int, opts ...reshardOptions,
 ) {
+	var opt reshardOptions
+	if len(opts) > 0 {
+		opt = opts[0]
+	}
 	t.Run("reshard", func(t *testing.T) {
 		defaultCell := vc.Cells[vc.CellNames[0]]
 		if cells == nil {
@@ -1237,7 +1251,7 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 		if dryRunResultSwitchWrites != nil {
 			reshardAction(t, "SwitchTraffic", workflow, ksName, "", "", callNames, "primary", "--dry-run")
 		}
-		if tableName == "customer" {
+		if tableName == "customer" && !opt.skipSwitchWritesErrorHandling {
 			testSwitchWritesErrorHandling(t, sourceTablets, targetTablets, workflow, "reshard")
 		}
 		// Now let's confirm that it works as expected with an error.
