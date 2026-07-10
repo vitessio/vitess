@@ -79,6 +79,12 @@ const (
 	PlanShowMigrationLogs
 	PlanShowThrottledApps
 	PlanShowThrottlerStatus
+	// PlanSelectStream is deprecated and never produced by the planner. It
+	// survives only as a plan name in query rules: a rule using it matches
+	// the statement shapes that streamed reads carried before v25 (see
+	// MatchesSelectStreamRule), and only on the streaming path. To be
+	// removed in v26.
+	PlanSelectStream
 	NumPlans
 )
 
@@ -114,6 +120,7 @@ var planName = []string{
 	"ShowMigrationLogs",
 	"ShowThrottledApps",
 	"ShowThrottlerStatus",
+	"SelectStream",
 }
 
 func (pt PlanType) String() string {
@@ -141,6 +148,21 @@ func PlanByNameIC(s string) (pt PlanType, ok bool) {
 		}
 	}
 	return NumPlans, false
+}
+
+// MatchesSelectStreamRule reports whether a query rule using the deprecated
+// SelectStream plan name applies to a plan of this type on the streaming
+// path. Before v25 the streaming planner labeled every SELECT (including
+// lock-function, impossible-WHERE, and next-value selects), SHOW, UNION, and
+// EXPLAIN as SelectStream; these are the plan types those statements produce
+// today. To be removed in v26 along with PlanSelectStream.
+func (pt PlanType) MatchesSelectStreamRule() bool {
+	switch pt {
+	case PlanSelect, PlanSelectImpossible, PlanSelectLockFunc, PlanNextval,
+		PlanShow, PlanShowMigrations, PlanOtherRead:
+		return true
+	}
+	return false
 }
 
 // MarshalJSON returns a json string for PlanType.

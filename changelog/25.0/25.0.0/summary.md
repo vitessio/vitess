@@ -12,6 +12,7 @@
         - [VTOrc `--cell` flag is now required](#vtorc-cell-required)
     - **[Deprecations](#deprecations)**
         - [CLI Flags](#deprecated-cli-flags)
+        - [`SelectStream` plan name in query rules](#deprecated-selectstream-rule-plan)
 - **[Minor Changes](#minor-changes)**
     - **[VReplication](#minor-changes-vreplication)**
         - [Default data protection for `_reverse` workflow cancel/complete](#vreplication-reverse-workflow-data-protection)
@@ -71,6 +72,16 @@ The VTGate flag `--legacy-replication-lag-algorithm` is now deprecated and is a 
 The flag will be removed entirely in v26. This deprecation is tracked in https://github.com/vitessio/vitess/issues/18914.
 
 **Impact**: Remove any usage of the `--legacy-replication-lag-algorithm` flag from VTGate startup scripts or configuration.
+
+#### <a id="deprecated-selectstream-rule-plan"/>`SelectStream` plan name in query rules</a>
+
+The `SelectStream` query plan type no longer exists: statements served over the streaming path now produce the same plan types as buffered execution (`Select`, `Show`, `SelectLockFunc`, ...), so query rules keyed on those concrete plan names now apply to both execution paths.
+
+Existing rules files using `SelectStream` in a `Plans` condition keep loading and keep their pre-v25 behavior: they match only queries on the streaming path, for the statement shapes the streaming planner used to label `SelectStream` (`Select`, `SelectImpossible`, `SelectLockFunc`, `Nextval`, `Show`, `ShowMigrations`, `OtherRead`). VTTablet logs a deprecation warning when such a rule is loaded.
+
+The `SelectStream` plan name will be removed entirely in v26.
+
+**Impact**: Update query rules that use `SelectStream` to the concrete plan names listed above. Note that rules keyed on concrete plan names match on both execution paths, not only streamed queries.
 
 ## <a id="minor-changes"/>Minor Changes</a>
 

@@ -113,7 +113,7 @@ func TestFilterByPlan(t *testing.T) {
 	qrs.Add(qr3)
 	qrs.Add(qr4)
 
-	qrs1 := qrs.FilterByPlan("select", planbuilder.PlanSelect, "a")
+	qrs1 := qrs.FilterByPlan("select", []planbuilder.PlanType{planbuilder.PlanSelect}, "a")
 	want := compacted(`[{
 		"Description":"rule 1",
 		"Name":"r1",
@@ -146,7 +146,7 @@ func TestFilterByPlan(t *testing.T) {
 	got := marshalled(qrs1)
 	assert.Equalf(t, want, got, "qrs1:\n%s, want\n%s", got, want)
 
-	qrs1 = qrs.FilterByPlan("insert", planbuilder.PlanSelect, "a")
+	qrs1 = qrs.FilterByPlan("insert", []planbuilder.PlanType{planbuilder.PlanSelect}, "a")
 	want = compacted(`[{
 		"Description":"rule 2",
 		"Name":"r2",
@@ -161,7 +161,7 @@ func TestFilterByPlan(t *testing.T) {
 	assert.Equalf(t, want, got, "qrs1:\n%s, want\n%s", got, want)
 	{
 		// test multiple tables:
-		qrs1 := qrs.FilterByPlan("insert", planbuilder.PlanSelect, "a", "other_table")
+		qrs1 := qrs.FilterByPlan("insert", []planbuilder.PlanType{planbuilder.PlanSelect}, "a", "other_table")
 		want := compacted(`[{
 			"Description":"rule 2",
 			"Name":"r2",
@@ -177,7 +177,7 @@ func TestFilterByPlan(t *testing.T) {
 	}
 	{
 		// test multiple tables:
-		qrs1 := qrs.FilterByPlan("insert", planbuilder.PlanSelect, "other_table", "a")
+		qrs1 := qrs.FilterByPlan("insert", []planbuilder.PlanType{planbuilder.PlanSelect}, "other_table", "a")
 		want := compacted(`[{
 			"Description":"rule 2",
 			"Name":"r2",
@@ -192,11 +192,11 @@ func TestFilterByPlan(t *testing.T) {
 		assert.Equalf(t, want, got, "qrs1:\n%s, want\n%s", got, want)
 	}
 
-	qrs1 = qrs.FilterByPlan("insert", planbuilder.PlanSelect, "a")
+	qrs1 = qrs.FilterByPlan("insert", []planbuilder.PlanType{planbuilder.PlanSelect}, "a")
 	got = marshalled(qrs1)
 	assert.Equalf(t, want, got, "qrs1:\n%s, want\n%s", got, want)
 
-	qrs1 = qrs.FilterByPlan("select", planbuilder.PlanInsert, "a")
+	qrs1 = qrs.FilterByPlan("select", []planbuilder.PlanType{planbuilder.PlanInsert}, "a")
 	want = compacted(`[{
 		"Description":"rule 3",
 		"Name":"r3",
@@ -210,10 +210,10 @@ func TestFilterByPlan(t *testing.T) {
 	got = marshalled(qrs1)
 	assert.Equalf(t, want, got, "qrs1:\n%s, want\n%s", got, want)
 
-	qrs1 = qrs.FilterByPlan("sel", planbuilder.PlanInsert, "a")
+	qrs1 = qrs.FilterByPlan("sel", []planbuilder.PlanType{planbuilder.PlanInsert}, "a")
 	assert.Nil(t, qrs1.rules)
 
-	qrs1 = qrs.FilterByPlan("table", planbuilder.PlanInsert, "b")
+	qrs1 = qrs.FilterByPlan("table", []planbuilder.PlanType{planbuilder.PlanInsert}, "b")
 	want = compacted(`[{
 		"Description":"rule 4",
 		"Name":"r4",
@@ -225,7 +225,7 @@ func TestFilterByPlan(t *testing.T) {
 	qr5 := NewQueryRule("rule 5", "r5", QRFail)
 	qrs.Add(qr5)
 
-	qrs1 = qrs.FilterByPlan("sel", planbuilder.PlanInsert, "a")
+	qrs1 = qrs.FilterByPlan("sel", []planbuilder.PlanType{planbuilder.PlanInsert}, "a")
 	want = compacted(`[{
 		"Description":"rule 5",
 		"Name":"r5",
@@ -235,7 +235,7 @@ func TestFilterByPlan(t *testing.T) {
 	assert.Equalf(t, want, got, "qrs1:\n%s, want\n%s", got, want)
 
 	qrsnil1 := New()
-	qrsnil2 := qrsnil1.FilterByPlan("", planbuilder.PlanSelect, "a")
+	qrsnil2 := qrsnil1.FilterByPlan("", []planbuilder.PlanType{planbuilder.PlanSelect}, "a")
 	assert.Nil(t, qrsnil2.rules)
 }
 
@@ -547,10 +547,10 @@ func TestImport(t *testing.T) {
 	assert.Equalf(t, want, got, "qrs:\n%s, want\n%s", got, want)
 }
 
-// A rules file written before the SelectStream plan type was removed must keep
-// loading: the name is accepted as a deprecated alias for Select, so the rule
-// keeps matching streamed selects (which now plan as Select) instead of the
-// whole rules file failing to load.
+// A rules file using the deprecated SelectStream plan name must keep loading,
+// and the rule must match a plan only when PlanSelectStream is passed as one
+// of the filter ids — which the query engine does only for streaming-path
+// plans — never through a plan's real id alone.
 func TestSelectStreamPlanNameCompat(t *testing.T) {
 	qrs := New()
 	jsondata := `[{
@@ -562,11 +562,15 @@ func TestSelectStreamPlanNameCompat(t *testing.T) {
 	}]`
 	require.NoError(t, qrs.UnmarshalJSON([]byte(jsondata)))
 	require.Len(t, qrs.rules, 1)
-	assert.Equal(t, []planbuilder.PlanType{planbuilder.PlanSelect}, qrs.rules[0].plans)
+	require.Equal(t, []planbuilder.PlanType{planbuilder.PlanSelectStream}, qrs.rules[0].plans)
 
-	filtered := qrs.FilterByPlan("select * from a", planbuilder.PlanSelect, "a")
+	filtered := qrs.FilterByPlan("select * from a", []planbuilder.PlanType{planbuilder.PlanSelect}, "a")
+	require.Empty(t, filtered.rules,
+		"a SelectStream rule must not match a plan filtered by its real plan id alone")
+
+	filtered = qrs.FilterByPlan("select * from a", []planbuilder.PlanType{planbuilder.PlanSelect, planbuilder.PlanSelectStream}, "a")
 	require.Len(t, filtered.rules, 1)
-	assert.Equal(t, "block_streamed_select", filtered.rules[0].Name)
+	require.Equal(t, "block_streamed_select", filtered.rules[0].Name)
 }
 
 type ValidJSONCase struct {

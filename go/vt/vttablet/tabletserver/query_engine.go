@@ -387,7 +387,7 @@ func (qe *QueryEngine) getPlan(curSchema *currentSchema, sql string, noRowsLimit
 		return nil, err
 	}
 	plan := &TabletPlan{Plan: splan, Original: sql}
-	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, plan.PlanID, plan.TableNames()...)
+	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, []planbuilder.PlanType{plan.PlanID}, plan.TableNames()...)
 	plan.buildAuthorized()
 	if sqlparser.CachePlan(statement) {
 		return plan, nil
@@ -432,7 +432,15 @@ func (qe *QueryEngine) getStreamPlan(curSchema *currentSchema, sql string) (*Tab
 	}
 
 	plan := &TabletPlan{Plan: splan, Original: sql}
-	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, plan.PlanID, plan.TableNames()...)
+	// Rules using the deprecated SelectStream plan name keep matching the
+	// statement shapes streamed reads carried before v25, and only here on
+	// the streaming path; the planner never produces PlanSelectStream. To be
+	// removed in v26 along with the plan name.
+	ruleIDs := []planbuilder.PlanType{plan.PlanID}
+	if plan.PlanID.MatchesSelectStreamRule() {
+		ruleIDs = append(ruleIDs, planbuilder.PlanSelectStream)
+	}
+	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, ruleIDs, plan.TableNames()...)
 	plan.buildAuthorized()
 
 	if sqlparser.CachePlan(statement) {
@@ -486,7 +494,7 @@ func (qe *QueryEngine) GetMessageStreamPlan(name string) (*TabletPlan, error) {
 		return nil, err
 	}
 	plan := &TabletPlan{Plan: splan}
-	plan.Rules = qe.queryRuleSources.FilterByPlan("stream from "+name, plan.PlanID, plan.TableName().String())
+	plan.Rules = qe.queryRuleSources.FilterByPlan("stream from "+name, []planbuilder.PlanType{plan.PlanID}, plan.TableName().String())
 	plan.buildAuthorized()
 	return plan, nil
 }

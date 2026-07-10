@@ -26,6 +26,7 @@ import (
 	"regexp"
 	"slices"
 	"strconv"
+	"sync"
 	"time"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -159,13 +160,16 @@ func (qrs *Rules) MarshalJSON() ([]byte, error) {
 	return b.Bytes(), nil
 }
 
-// FilterByPlan creates a new Rules by prefiltering on the query and planId. This allows
-// us to create query plan specific Rules out of the original Rules. In the new rules,
-// query, plans and tableNames predicates are empty.
-func (qrs *Rules) FilterByPlan(query string, planid planbuilder.PlanType, tableNames ...string) (newqrs *Rules) {
+// FilterByPlan creates a new Rules by prefiltering on the query and plan ids.
+// This allows us to create query plan specific Rules out of the original
+// Rules. In the new rules, query, plans and tableNames predicates are empty.
+// A rule matches if any of the given plan ids satisfies its plan condition;
+// most plans carry a single id, the streaming path adds PlanSelectStream for
+// the shapes it labeled before v25.
+func (qrs *Rules) FilterByPlan(query string, planids []planbuilder.PlanType, tableNames ...string) (newqrs *Rules) {
 	var newrules []*Rule
 	for _, qr := range qrs.rules {
-		if newrule := qr.FilterByPlan(query, planid, tableNames); newrule != nil {
+		if newrule := qr.FilterByPlan(query, planids, tableNames); newrule != nil {
 			newrules = append(newrules, newrule)
 		}
 	}
@@ -461,15 +465,15 @@ Error:
 	return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid operator %v for type %T (%v)", op, value, value)
 }
 
-// FilterByPlan returns a new Rule if the query and planid match.
+// FilterByPlan returns a new Rule if the query and any of the plan ids match.
 // The new Rule will contain all the original constraints other
-// than the plan and query. If the plan and query don't match the Rule,
+// than the plan and query. If the plans and query don't match the Rule,
 // then it returns nil.
-func (qr *Rule) FilterByPlan(query string, planid planbuilder.PlanType, tableNames []string) (newqr *Rule) {
+func (qr *Rule) FilterByPlan(query string, planids []planbuilder.PlanType, tableNames []string) (newqr *Rule) {
 	if !reMatch(qr.query.Regexp, query) {
 		return nil
 	}
-	if !planMatch(qr.plans, planid) {
+	if !planMatch(qr.plans, planids) {
 		return nil
 	}
 	if !tableMatch(qr.tableNames, tableNames) {
@@ -525,11 +529,13 @@ func reMatch(re *regexp.Regexp, val string) bool {
 	return re == nil || re.MatchString(val)
 }
 
-func planMatch(plans []planbuilder.PlanType, plan planbuilder.PlanType) bool {
+func planMatch(plans []planbuilder.PlanType, planids []planbuilder.PlanType) bool {
 	if plans == nil {
 		return true
 	}
-	return slices.Contains(plans, plan)
+	return slices.ContainsFunc(planids, func(planid planbuilder.PlanType) bool {
+		return slices.Contains(plans, planid)
+	})
 }
 
 func tableMatch(tableNames []string, otherNames []string) bool {
@@ -926,19 +932,13 @@ func BuildQueryRule(ruleInfo map[string]any) (qr *Rule, err error) {
 				}
 				pt, ok := planbuilder.PlanByName(pv)
 				if !ok {
-					// The SelectStream plan type was removed when streamed
-					// reads unified onto their real plan types; a rule keyed
-					// on it now matches Select, which includes buffered
-					// execution. Rejecting the name instead would silently
-					// drop the operator's entire rules file at load time.
-					if pv != "SelectStream" {
-						return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid plan name: %s", pv)
-					}
+					return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid plan name: %s", pv)
+				}
+				if pt == planbuilder.PlanSelectStream {
 					// qr.Name may not be set yet (map iteration order), so
 					// read the name from the raw rule info.
 					name, _ := ruleInfo["Name"].(string)
-					log.Warn("query rule uses removed plan name SelectStream; treating it as Select, which also matches buffered queries", slog.String("rule", name))
-					pt = planbuilder.PlanSelect
+					warnSelectStreamDeprecated(name)
 				}
 				qr.AddPlanCond(pt)
 			}
@@ -975,6 +975,21 @@ func BuildQueryRule(ruleInfo map[string]any) (qr *Rule, err error) {
 		}
 	}
 	return qr, nil
+}
+
+// selectStreamDeprecationOnce limits the SelectStream deprecation warning to
+// one line per process: rule files are re-parsed on every file-watch or topo
+// update and may contain many SelectStream rules, and the warning is equally
+// actionable however often the name occurs.
+var selectStreamDeprecationOnce sync.Once
+
+func warnSelectStreamDeprecated(ruleName string) {
+	selectStreamDeprecationOnce.Do(func() {
+		log.Warn("query rule uses the deprecated SelectStream plan name, which will be removed in v26; "+
+			"it matches only queries on the streaming path, for the statement shapes streamed reads carried before v25; "+
+			"update rules to use concrete plan names (Select, SelectImpossible, SelectLockFunc, Nextval, Show, ShowMigrations, OtherRead)",
+			slog.String("rule", ruleName))
+	})
 }
 
 func buildBindVarCondition(bvc any) (name string, onAbsent, onMismatch bool, op Operator, value any, err error) {
