@@ -643,17 +643,7 @@ func isRetryableError(err error) bool {
 // isRetryableClusterEvent reports whether the error came from a tablet state
 // transition.
 func isRetryableClusterEvent(err error) bool {
-	root := vterrors.RootCause(err)
-	if root == nil {
-		return false
-	}
-
-	switch root.Error() {
-	case vterrors.NotServing, vterrors.ShuttingDown:
-		return true
-	default:
-		return false
-	}
+	return vterrors.RxOp.MatchString(err.Error())
 }
 
 // shutdownTransactions rolls back all open transactions that are idol.
