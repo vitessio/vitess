@@ -196,8 +196,11 @@ func (pp *TxPreparedPool) Forget(dtid string) {
 }
 
 // FetchAllForRollback removes prepared connections and returns them as a list.
-// Dtids whose redo commit started are kept as in-doubt reservations until the
-// pool is reopened and redo recovery rebuilds the prepared state from durable metadata.
+// Dtids whose redo commit started are kept as in-doubt reservations so that a
+// CommitPrepared arriving while the pool is closed gets an error instead of a
+// false "already committed". Open clears these reservations, so they do not
+// protect the window between reopening and redo recovery re-preparing the
+// transactions from durable metadata.
 func (pp *TxPreparedPool) FetchAllForRollback() []*StatefulConnection {
 	pp.mu.Lock()
 	defer pp.mu.Unlock()
