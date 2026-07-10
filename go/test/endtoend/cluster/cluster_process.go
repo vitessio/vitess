@@ -1059,13 +1059,24 @@ func (cluster *LocalProcessCluster) Teardown() {
 		log.Error(fmt.Sprintf("Error in vtadmin teardown: %v", err))
 	}
 
+	// On CI the data directory is discarded after the test run, so nothing
+	// needs to be flushed to disk and a graceful mysqld shutdown buys us
+	// nothing. Killing mysqld skips the shutdown ack wait that can stall a
+	// semi-sync primary for many seconds per cluster. Coverage runs still
+	// shut down gracefully so that the mysqlctl shutdown path stays exercised.
+	killMySQL := os.Getenv("CI") == "true" && !*isCoverage
+
 	var mysqlctlProcessList []*exec.Cmd
 	var mysqlctlTabletUIDs []int
 	for _, keyspace := range cluster.Keyspaces {
 		for _, shard := range keyspace.Shards {
 			for _, tablet := range shard.Vttablets {
 				if tablet.MysqlctlProcess.TabletUID > 0 {
-					if proc, err := tablet.MysqlctlProcess.StopProcess(); err != nil {
+					if killMySQL {
+						if err := tablet.MysqlctlProcess.Kill(); err != nil {
+							log.Error(fmt.Sprintf("Error in mysqlctl teardown: %v", err))
+						}
+					} else if proc, err := tablet.MysqlctlProcess.StopProcess(); err != nil {
 						log.Error(fmt.Sprintf("Error in mysqlctl teardown: %v", err))
 					} else {
 						mysqlctlProcessList = append(mysqlctlProcessList, proc)
