@@ -2779,6 +2779,30 @@ func TestExecutorPrepareExecute(t *testing.T) {
 		_, err := executorExecSession(t.Context(), executor, session, "prepare prep_user from ''", nil)
 		require.Error(t, err)
 	})
+
+	t.Run("execute prepared statement", func(t *testing.T) {
+		_, err := executorExecSession(t.Context(), executor, session, "prepare prep_exec from 'select * from user where id = ?'", nil)
+		require.NoError(t, err)
+		_, err = executorExecSession(t.Context(), executor, session, "set @exec_id = 1", nil)
+		require.NoError(t, err)
+		_, err = executorExecSession(t.Context(), executor, session, "execute prep_exec using @exec_id", nil)
+		require.NoError(t, err)
+	})
+
+	t.Run("deallocate prepared statement", func(t *testing.T) {
+		_, err := executorExecSession(t.Context(), executor, session, "prepare prep_dealloc from 'select 1'", nil)
+		require.NoError(t, err)
+		require.NotNil(t, session.PrepareStatement["prep_dealloc"])
+
+		_, err = executorExecSession(t.Context(), executor, session, "deallocate prepare prep_dealloc", nil)
+		require.NoError(t, err)
+		require.Nil(t, session.PrepareStatement["prep_dealloc"])
+	})
+
+	t.Run("deallocate unknown prepared statement", func(t *testing.T) {
+		_, err := executorExecSession(t.Context(), executor, session, "deallocate prepare prep_unknown", nil)
+		require.ErrorContains(t, err, "Unknown prepared statement handler (prep_unknown) given to DEALLOCATE PREPARE")
+	})
 }
 
 // TestExecutorSettingsInTwoPC tests that settings are supported for multi-shard atomic commit.

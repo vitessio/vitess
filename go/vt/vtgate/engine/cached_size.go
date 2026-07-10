@@ -245,6 +245,19 @@ func (cached *DMLWithInput) CachedSize(alloc bool) int64 {
 	return size
 }
 
+func (cached *DeallocateStmt) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(16)
+	}
+	// field Name string
+	size += hack.RuntimeAllocSize(int64(len(cached.Name)))
+	return size
+}
+
 func (cached *Delete) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -879,6 +892,23 @@ func (cached *PlanSwitcher) CachedSize(alloc bool) int64 {
 	if cc, ok := cached.Optimized.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
+	return size
+}
+
+func (cached *PrepareStmt) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Name string
+	size += hack.RuntimeAllocSize(int64(len(cached.Name)))
+	// field Query string
+	size += hack.RuntimeAllocSize(int64(len(cached.Query)))
+	// field UserDefinedVariable string
+	size += hack.RuntimeAllocSize(int64(len(cached.UserDefinedVariable)))
 	return size
 }
 
