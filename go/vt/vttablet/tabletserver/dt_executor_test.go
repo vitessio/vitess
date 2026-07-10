@@ -201,13 +201,11 @@ func TestTxExecutorRollbackPreparedCleansUpAfterSaveRedoFailure(t *testing.T) {
 	txid := newTxForPrep(ctx, tsv)
 
 	err := txe.Prepare(txid, "bb")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "is not supported")
+	require.ErrorContains(t, err, "is not supported")
 	require.Len(t, txe.te.preparedPool.conns, 1)
 
 	err = txe.RollbackPrepared("bb", txid)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "is not supported")
+	require.ErrorContains(t, err, "is not supported")
 	require.Empty(t, txe.te.preparedPool.conns)
 }
 
