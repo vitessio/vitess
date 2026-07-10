@@ -3931,6 +3931,12 @@ func TestPlayerStalls(t *testing.T) {
 
 	// A channel to communicate across goroutines.
 	done := make(chan struct{})
+	// Idempotent release of the row locks held by the heartbeat subtest's
+	// preFunc connection. postFunc releases them inline and again from a
+	// defer in case an assertion aborts the subtest first; the preFunc
+	// goroutine only receives once.
+	var releaseLocksOnce sync.Once
+	releaseLocks := func() { releaseLocksOnce.Do(func() { done <- struct{}{} }) }
 
 	testTimeout := vplayerProgressDeadline * 10
 
@@ -4026,11 +4032,10 @@ func TestPlayerStalls(t *testing.T) {
 				}()
 			},
 			postFunc: func() {
-				// Signal the preFunc goroutine to close the connection holding
-				// the row locks. Deferred so it also runs if the assertion
-				// below aborts the subtest: teardown deletes from the locked
-				// table and would otherwise hang until the test timeout.
-				defer func() { done <- struct{}{} }()
+				// Also release the row locks if the assertions below abort
+				// the subtest: teardown deletes from the locked table and
+				// would otherwise hang until the test timeout.
+				defer releaseLocks()
 				// Wait until a heartbeat recording attempt (or the position
 				// update it is part of) fails on the row locks held by the
 				// preFunc connection, rather than sleeping a fixed multiple of
@@ -4042,6 +4047,22 @@ func TestPlayerStalls(t *testing.T) {
 						strings.Contains(logMessage, "Lock wait timeout exceeded"),
 						"expected log message not found")
 				}, 30*time.Second, 100*time.Millisecond, "expected log message not found")
+				// The vplayer also records the failure in the vreplication
+				// record's message column, but that update is blocked by the
+				// same row locks and completes only after they are released.
+				// Wait for it to flow through globalDBQueries before draining,
+				// so it can't instead surface during teardown and fail the
+				// expected delete queries.
+				releaseLocks()
+				timeout := time.After(30 * time.Second)
+				for seen := false; !seen; {
+					select {
+					case got := <-globalDBQueries:
+						seen = strings.Contains(got, "update _vt.vreplication set message=")
+					case <-timeout:
+						require.Fail(t, "vplayer did not record the stall error in the vreplication record's message column")
+					}
+				}
 				drainDBQueries()
 			},
 			// Nothing should get replicated because of the exclusing row locks
