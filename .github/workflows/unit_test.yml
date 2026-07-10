@@ -137,6 +137,14 @@ jobs:
         if: steps.changes.outputs.unit_tests == 'true'
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
 
+      - name: Avoid the Oracle Cloud apt mirror
+        if: steps.changes.outputs.unit_tests == 'true' && matrix.arch == 'arm64'
+        run: |
+          # The Oracle Cloud regional apt mirror (e.g. us-sanjose-1-ad-1.clouds.ports.ubuntu.com)
+          # is extremely slow; point apt at the default Ubuntu ports archive instead.
+          sudo grep -rl '\.clouds\.ports\.ubuntu\.com' /etc/apt --include='*.list' --include='*.sources' \
+            | xargs -r sudo sed -i 's|https\?://[^/ ]*\.clouds\.ports\.ubuntu\.com|http://ports.ubuntu.com|g'
+
       - name: Tune the OS
         if: steps.changes.outputs.unit_tests == 'true'
         timeout-minutes: 5
