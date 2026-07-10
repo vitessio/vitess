@@ -1193,10 +1193,12 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 		var sourceTablets, targetTablets []*cluster.VttabletProcess
 
 		// Test multi-primary setups, like a Galera cluster, which have auto increment steps > 1.
-		for _, tablet := range tablets {
-			autoIncrementSetQuery := fmt.Sprintf("set @@session.auto_increment_increment = %d; set @@global.auto_increment_increment = %d",
-				autoIncrementStep, autoIncrementStep)
-			tablet.QueryTablet(autoIncrementSetQuery, "", false)
+		if autoIncrementStep > 1 {
+			for _, tablet := range tablets {
+				autoIncrementSetQuery := fmt.Sprintf("set @@session.auto_increment_increment = %d; set @@global.auto_increment_increment = %d",
+					autoIncrementStep, autoIncrementStep)
+				require.NoError(t, tablet.MultiQueryTabletWithDB(autoIncrementSetQuery, ""))
+			}
 		}
 		reshardAction(t, "Create", workflow, ksName, sourceShards, targetShards, sourceCellOrAlias, "replica,primary")
 
