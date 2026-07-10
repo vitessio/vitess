@@ -166,8 +166,17 @@ func (stc *ScatterConn) ExecuteMultiShard(
 		go stc.runLockQuery(ctx, session)
 	}
 
-	if session.Options != nil {
-		session.Options.FetchLastInsertId = fetchLastInsertID
+	// Build a per-call copy of the execute options carrying the requested
+	// FetchLastInsertId. Mutating the shared session options in place races
+	// with concurrent sources marshalling them (e.g. a streamed UNION runs
+	// each source through its own StreamExecuteMulti against the same session).
+	var callOptions *querypb.ExecuteOptions
+	// The explicit session.Session selector spells out why the nil check
+	// on the embedded session is needed.
+	//nolint:staticcheck // QF1008
+	if session != nil && session.Session != nil && session.Session.Options != nil {
+		callOptions = session.Session.Options.CloneVT()
+		callOptions.FetchLastInsertId = fetchLastInsertID
 	}
 
 	allErrors := stc.multiGoTransaction(
@@ -187,9 +196,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 			transactionID := info.transactionID
 			reservedID := info.reservedID
 
-			if session != nil && session.Session != nil {
-				opts = session.Options
-			}
+			opts = callOptions
 
 			if opts == nil && fetchLastInsertID {
 				opts = &querypb.ExecuteOptions{FetchLastInsertId: fetchLastInsertID}
@@ -398,8 +405,17 @@ func (stc *ScatterConn) StreamExecuteMulti(
 		return callback(reply)
 	}
 
-	if session.Options != nil {
-		session.Options.FetchLastInsertId = fetchLastInsertID
+	// Build a per-call copy of the execute options carrying the requested
+	// FetchLastInsertId. Mutating the shared session options in place races
+	// with concurrent sources marshalling them (e.g. a streamed UNION runs
+	// each source through its own StreamExecuteMulti against the same session).
+	var callOptions *querypb.ExecuteOptions
+	// The explicit session.Session selector spells out why the nil check
+	// on the embedded session is needed.
+	//nolint:staticcheck // QF1008
+	if session != nil && session.Session != nil && session.Session.Options != nil {
+		callOptions = session.Session.Options.CloneVT()
+		callOptions.FetchLastInsertId = fetchLastInsertID
 	}
 
 	allErrors := stc.multiGoTransaction(
@@ -418,9 +434,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 			transactionID := info.transactionID
 			reservedID := info.reservedID
 
-			if session != nil && session.Session != nil {
-				opts = session.Options
-			}
+			opts = callOptions
 
 			if opts == nil && fetchLastInsertID {
 				opts = &querypb.ExecuteOptions{FetchLastInsertId: fetchLastInsertID}

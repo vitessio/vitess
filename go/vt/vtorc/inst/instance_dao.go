@@ -168,7 +168,6 @@ func ReadTopologyInstanceBufferable(tabletAlias *topodatapb.TabletAlias, latency
 		}
 	}()
 
-	var waitGroup sync.WaitGroup
 	var tablet *topodatapb.Tablet
 	var fs *replicationdatapb.FullStatus
 	readingStartTime := time.Now()
@@ -367,7 +366,6 @@ func ReadTopologyInstanceBufferable(tabletAlias *topodatapb.TabletAlias, latency
 	}
 
 Cleanup:
-	waitGroup.Wait()
 	close(errorChan)
 	err = func() error {
 		if err != nil {
