@@ -352,12 +352,14 @@ func (vtgate *VtgateProcess) TearDown() error {
 
 	// We are not checking vtgate's exit code because it sometimes
 	// returns exit code 2, even though vtgate terminates cleanly.
+	// Since the exit result is ignored either way, a long wait for a
+	// graceful exit buys nothing: force-kill after a short grace period.
 	select {
 	case <-vtgate.exit:
 		vtgate.proc = nil
 		return nil
 
-	case <-time.After(30 * time.Second):
+	case <-time.After(5 * time.Second):
 		vtgate.proc.Process.Kill()
 		err := <-vtgate.exit
 		vtgate.proc = nil
