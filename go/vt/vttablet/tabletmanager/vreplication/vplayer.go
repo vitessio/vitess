@@ -347,6 +347,32 @@ func (vp *vplayer) applyStmtEvent(ctx context.Context, event *binlogdatapb.VEven
 	return fmt.Errorf("filter rules are not supported for SBR replication: %v", vp.vr.source.Filter.GetRules())
 }
 
+// bulkApplicableShapes scans a row event's changes and reports whether they
+// are all delete-shaped (Before image only) or all insert-shaped (After image
+// only). A single event can mix shapes: when only one side of an update passes
+// the source vstreamer's workflow filter (e.g. a sharding-key update that
+// moves rows across an in_keyrange boundary), only that side's image is
+// emitted, so one multi-row UPDATE can yield insert-shaped, delete-shaped and
+// update-shaped changes in the same event. The bulk DELETE/INSERT statements
+// assume a homogeneous event, so a mixed event must be applied per-change.
+func bulkApplicableShapes(rowChanges []*binlogdatapb.RowChange) (deletesOnly, insertsOnly bool) {
+	deletesOnly, insertsOnly = true, true
+	for _, change := range rowChanges {
+		switch {
+		case change.Before != nil && change.After == nil:
+			insertsOnly = false
+		case change.Before == nil && change.After != nil:
+			deletesOnly = false
+		default: // Update-shaped (both images) or empty.
+			return false, false
+		}
+		if !deletesOnly && !insertsOnly {
+			return false, false
+		}
+	}
+	return deletesOnly, insertsOnly
+}
+
 func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.RowEvent) error {
 	if err := vp.updateFKCheck(ctx, rowEvent.Flags); err != nil {
 		return err
@@ -368,17 +394,17 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 	}
 
 	if vp.batchMode && len(rowEvent.RowChanges) > 1 {
+		deletesOnly, insertsOnly := bulkApplicableShapes(rowEvent.RowChanges)
 		// If we have multiple delete row events for a table with a single PK column
 		// then we can perform a simple bulk DELETE using an IN clause.
-		if (rowEvent.RowChanges[0].Before != nil && rowEvent.RowChanges[0].After == nil) &&
-			tplan.MultiDelete != nil {
+		if deletesOnly && tplan.MultiDelete != nil {
 			_, err := tplan.applyBulkDeleteChanges(rowEvent.RowChanges, applyFunc, vp.vr.dbClient.maxBatchSize)
 			return err
 		}
 		// If we're done with the copy phase then we will be replicating all INSERTS
 		// regardless of the PK value and can use a single INSERT statment with
 		// multiple VALUES clauses.
-		if len(vp.copyState) == 0 && (rowEvent.RowChanges[0].Before == nil && rowEvent.RowChanges[0].After != nil) {
+		if len(vp.copyState) == 0 && insertsOnly {
 			_, err := tplan.applyBulkInsertChanges(rowEvent.RowChanges, applyFunc, vp.vr.dbClient.maxBatchSize)
 			return err
 		}

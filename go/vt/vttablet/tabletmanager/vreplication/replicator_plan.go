@@ -892,6 +892,14 @@ func (tp *TablePlan) applyBulkDeleteChanges(rowDeletes []*binlogdatapb.RowChange
 
 	pkVals := make([]sqltypes.Value, 0, len(rowDeletes))
 	for _, rowDelete := range rowDeletes {
+		// The caller must only route homogeneous delete-shaped events here: a
+		// nil Before image would panic in MakeRowTrusted, and any other shape
+		// would be silently applied as a DELETE.
+		if rowDelete.Before == nil {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
+				"vreplication: bulk-delete change for table %s has no Before image; a mixed row event must be applied per-change",
+				tp.TargetName)
+		}
 		vals := sqltypes.MakeRowTrusted(tp.Fields, rowDelete.Before)
 		addedSize := int64(len(vals[pkIndex].Raw()) + 2) // Plus 2 for the comma and space
 		if querySize+addedSize > maxQuerySize {
@@ -939,6 +947,14 @@ func (tp *TablePlan) applyBulkInsertChanges(rowInserts []*binlogdatapb.RowChange
 	limit := tp.maxRowJSONBytes()
 	newStmt := true
 	for _, rowInsert := range rowInserts {
+		// The caller must only route homogeneous insert-shaped events here: a
+		// nil After image would panic in MakeRowTrusted, and any other shape
+		// would be silently applied as an INSERT.
+		if rowInsert.After == nil {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
+				"vreplication: bulk-insert change for table %s has no After image; a mixed row event must be applied per-change",
+				tp.TargetName)
+		}
 		if limit > 0 {
 			if err := tp.checkInsertJSONRowSize(rowInsert.After, nil, nil, limit); err != nil {
 				return nil, err

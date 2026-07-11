@@ -22,6 +22,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/sqltypes"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 func TestRunWithRecover(t *testing.T) {
@@ -62,4 +67,56 @@ func TestRunWithRecover(t *testing.T) {
 		})
 		assert.NoError(t, err)
 	})
+}
+
+func TestBulkApplicableShapes(t *testing.T) {
+	row := func(id int64) *querypb.Row {
+		return sqltypes.RowToProto3([]sqltypes.Value{sqltypes.NewInt64(id)})
+	}
+	insert := func(id int64) *binlogdatapb.RowChange {
+		return &binlogdatapb.RowChange{After: row(id)}
+	}
+	del := func(id int64) *binlogdatapb.RowChange {
+		return &binlogdatapb.RowChange{Before: row(id)}
+	}
+	update := func(id int64) *binlogdatapb.RowChange {
+		return &binlogdatapb.RowChange{Before: row(id), After: row(id)}
+	}
+
+	testcases := []struct {
+		name            string
+		rowChanges      []*binlogdatapb.RowChange
+		wantDeletesOnly bool
+		wantInsertsOnly bool
+	}{{
+		name:            "all inserts",
+		rowChanges:      []*binlogdatapb.RowChange{insert(1), insert(2)},
+		wantInsertsOnly: true,
+	}, {
+		name:            "all deletes",
+		rowChanges:      []*binlogdatapb.RowChange{del(1), del(2)},
+		wantDeletesOnly: true,
+	}, {
+		name:       "insert then delete",
+		rowChanges: []*binlogdatapb.RowChange{insert(1), del(2)},
+	}, {
+		name:       "delete then insert",
+		rowChanges: []*binlogdatapb.RowChange{del(1), insert(2)},
+	}, {
+		name:       "insert then update",
+		rowChanges: []*binlogdatapb.RowChange{insert(1), update(2)},
+	}, {
+		name:       "update then delete",
+		rowChanges: []*binlogdatapb.RowChange{update(1), del(2)},
+	}, {
+		name:       "empty change",
+		rowChanges: []*binlogdatapb.RowChange{{}, insert(1)},
+	}}
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			deletesOnly, insertsOnly := bulkApplicableShapes(tc.rowChanges)
+			assert.Equal(t, tc.wantDeletesOnly, deletesOnly, "deletesOnly")
+			assert.Equal(t, tc.wantInsertsOnly, insertsOnly, "insertsOnly")
+		})
+	}
 }
