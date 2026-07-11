@@ -113,20 +113,15 @@ var (
 	}
 )
 
-// validateTableSelectionFlags ensures the table-selection flags are not
-// combined in contradictory ways that would otherwise be silently resolved:
-//   - --tables and --all-tables are mutually exclusive; specifying both would
-//     otherwise silently ignore --all-tables.
-//   - --exclude-tables only makes sense together with --all-tables; excluding
-//     tables from an explicitly provided --tables list is contradictory.
+// validateTableSelectionFlags rejects combining an explicit --tables list
+// with an effective --all-tables=true, which would otherwise silently ignore
+// --all-tables. An explicit --all-tables=false alongside --tables stays
+// valid so that automation can always emit boolean flags explicitly.
 //
 // See https://github.com/vitessio/vitess/issues/20566.
 func validateTableSelectionFlags(cmd *cobra.Command) error {
-	if cmd.Flags().Lookup("tables").Changed && cmd.Flags().Lookup("all-tables").Changed {
+	if cmd.Flags().Lookup("tables").Changed && createOptions.AllTables {
 		return errors.New("--tables and --all-tables are mutually exclusive")
-	}
-	if len(createOptions.ExcludeTables) > 0 && !createOptions.AllTables {
-		return errors.New("--exclude-tables can only be used together with --all-tables")
 	}
 	return nil
 }
