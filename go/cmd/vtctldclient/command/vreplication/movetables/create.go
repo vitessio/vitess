@@ -59,6 +59,9 @@ var (
 			if !cmd.Flags().Lookup("tables").Changed && !cmd.Flags().Lookup("all-tables").Changed {
 				return errors.New("tables or all-tables are required to specify which tables to move")
 			}
+			if err := validateTableSelectionFlags(cmd); err != nil {
+				return err
+			}
 			if err := common.ParseAndValidateCreateOptions(cmd); err != nil {
 				return err
 			}
@@ -109,6 +112,24 @@ var (
 		RunE: commandCreate,
 	}
 )
+
+// validateTableSelectionFlags ensures the table-selection flags are not
+// combined in contradictory ways that would otherwise be silently resolved:
+//   - --tables and --all-tables are mutually exclusive; specifying both would
+//     otherwise silently ignore --all-tables.
+//   - --exclude-tables only makes sense together with --all-tables; excluding
+//     tables from an explicitly provided --tables list is contradictory.
+//
+// See https://github.com/vitessio/vitess/issues/20566.
+func validateTableSelectionFlags(cmd *cobra.Command) error {
+	if cmd.Flags().Lookup("tables").Changed && cmd.Flags().Lookup("all-tables").Changed {
+		return errors.New("--tables and --all-tables are mutually exclusive")
+	}
+	if len(createOptions.ExcludeTables) > 0 && !createOptions.AllTables {
+		return errors.New("--exclude-tables can only be used together with --all-tables")
+	}
+	return nil
+}
 
 func commandCreate(cmd *cobra.Command, args []string) error {
 	format, err := common.GetOutputFormat(cmd)
