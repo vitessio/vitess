@@ -893,11 +893,13 @@ func (tp *TablePlan) applyBulkDeleteChanges(rowDeletes []*binlogdatapb.RowChange
 	pkVals := make([]sqltypes.Value, 0, len(rowDeletes))
 	for _, rowDelete := range rowDeletes {
 		// The caller must only route homogeneous delete-shaped events here: a
-		// nil Before image would panic in MakeRowTrusted, and any other shape
-		// would be silently applied as a DELETE.
-		if rowDelete.Before == nil {
+		// nil Before image would panic in MakeRowTrusted, and a change with an
+		// After image (an insert or update) would be silently applied as a
+		// DELETE, discarding that image. The Get accessors also make a nil
+		// change in the slice error instead of panicking.
+		if rowDelete.GetBefore() == nil || rowDelete.GetAfter() != nil {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
-				"vreplication: bulk-delete change for table %s has no Before image; a mixed row event must be applied per-change",
+				"vreplication: bulk-delete change for table %s is not delete-shaped (Before image only); a mixed row event must be applied per-change",
 				tp.TargetName)
 		}
 		vals := sqltypes.MakeRowTrusted(tp.Fields, rowDelete.Before)
@@ -948,11 +950,13 @@ func (tp *TablePlan) applyBulkInsertChanges(rowInserts []*binlogdatapb.RowChange
 	newStmt := true
 	for _, rowInsert := range rowInserts {
 		// The caller must only route homogeneous insert-shaped events here: a
-		// nil After image would panic in MakeRowTrusted, and any other shape
-		// would be silently applied as an INSERT.
-		if rowInsert.After == nil {
+		// nil After image would panic in MakeRowTrusted, and a change with a
+		// Before image (a delete or update) would be silently applied as an
+		// INSERT, discarding that image. The Get accessors also make a nil
+		// change in the slice error instead of panicking.
+		if rowInsert.GetAfter() == nil || rowInsert.GetBefore() != nil {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
-				"vreplication: bulk-insert change for table %s has no After image; a mixed row event must be applied per-change",
+				"vreplication: bulk-insert change for table %s is not insert-shaped (After image only); a mixed row event must be applied per-change",
 				tp.TargetName)
 		}
 		if limit > 0 {

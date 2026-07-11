@@ -1280,7 +1280,7 @@ func TestApplyBulkDeleteChanges(t *testing.T) {
 			executed = append(executed, sql)
 			return &sqltypes.Result{RowsAffected: 1}, nil
 		}, 1024)
-		require.ErrorContains(t, err, "no Before image")
+		require.ErrorContains(t, err, "not delete-shaped")
 		assert.Empty(t, executed)
 	})
 
@@ -1364,7 +1364,7 @@ func TestApplyBulkInsertChangesMixedShapes(t *testing.T) {
 			executed = append(executed, sql)
 			return &sqltypes.Result{RowsAffected: 1}, nil
 		}, 1024)
-		require.ErrorContains(t, err, "no After image")
+		require.ErrorContains(t, err, "not insert-shaped")
 		assert.Empty(t, executed)
 	})
 
