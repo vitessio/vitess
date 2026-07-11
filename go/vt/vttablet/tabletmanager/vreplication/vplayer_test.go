@@ -111,6 +111,9 @@ func TestBulkApplicableShapes(t *testing.T) {
 	}, {
 		name:       "empty change",
 		rowChanges: []*binlogdatapb.RowChange{{}, insert(1)},
+	}, {
+		name:       "nil change",
+		rowChanges: []*binlogdatapb.RowChange{insert(1), nil},
 	}}
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
