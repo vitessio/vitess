@@ -1262,6 +1262,68 @@ func TestApplyBulkDeleteChanges(t *testing.T) {
 		require.Len(t, executed, 1)
 		assert.Equal(t, "delete from t where id in (1, 2)", executed[0])
 	})
+
+	t.Run("insert-shaped change returns an error instead of panicking", func(t *testing.T) {
+		// A change with no Before image (an insert) riding in a bulk-delete
+		// event used to panic with a nil pointer dereference in MakeRowTrusted,
+		// killing the entire vttablet process.
+		tp := newTablePlan()
+		rowChanges := []*binlogdatapb.RowChange{
+			makeRowDelete(1, "a"),
+			{After: sqltypes.RowToProto3([]sqltypes.Value{
+				sqltypes.NewInt64(2),
+				sqltypes.NewVarChar("b"),
+			})},
+		}
+		var executed []string
+		_, err := tp.applyBulkDeleteChanges(rowChanges, func(sql string) (*sqltypes.Result, error) {
+			executed = append(executed, sql)
+			return &sqltypes.Result{RowsAffected: 1}, nil
+		}, 1024)
+		require.ErrorContains(t, err, "no Before image")
+		assert.Empty(t, executed)
+	})
+}
+
+func TestApplyBulkInsertChangesMixedShapes(t *testing.T) {
+	tp := &TablePlan{
+		TargetName:      "t",
+		BulkInsertFront: sqlparser.BuildParsedQuery("insert into t(c1, c2)"),
+		BulkInsertValues: sqlparser.BuildParsedQuery("(%a, %a)",
+			":a_c1", ":a_c2",
+		),
+		Fields: []*querypb.Field{
+			{Name: "c1", Type: querypb.Type_INT32},
+			{Name: "c2", Type: querypb.Type_VARCHAR},
+		},
+		FieldsToSkip:     map[string]bool{},
+		TablePlanBuilder: &tablePlanBuilder{stats: binlogplayer.NewStats()},
+	}
+	makeRow := func(id int, val string) *querypb.Row {
+		return sqltypes.RowToProto3([]sqltypes.Value{
+			sqltypes.NewInt64(int64(id)),
+			sqltypes.NewVarChar(val),
+		})
+	}
+
+	t.Run("delete-shaped change returns an error instead of panicking", func(t *testing.T) {
+		// A change with no After image (a delete) riding in a bulk-insert
+		// event used to panic with a nil pointer dereference in MakeRowTrusted,
+		// killing the entire vttablet process. This is what a mixed row event
+		// produced by a sharding-key update crossing an in_keyrange filter
+		// boundary looks like by the time it reaches the bulk-insert path.
+		rowChanges := []*binlogdatapb.RowChange{
+			{After: makeRow(1, "a")},
+			{Before: makeRow(2, "b")},
+		}
+		var executed []string
+		_, err := tp.applyBulkInsertChanges(rowChanges, func(sql string) (*sqltypes.Result, error) {
+			executed = append(executed, sql)
+			return &sqltypes.Result{RowsAffected: 1}, nil
+		}, 1024)
+		require.ErrorContains(t, err, "no After image")
+		assert.Empty(t, executed)
+	})
 }
 
 func TestMarshalJSONForSQL(t *testing.T) {
