@@ -358,12 +358,14 @@ func (vp *vplayer) applyStmtEvent(ctx context.Context, event *binlogdatapb.VEven
 func bulkApplicableShapes(rowChanges []*binlogdatapb.RowChange) (deletesOnly, insertsOnly bool) {
 	deletesOnly, insertsOnly = true, true
 	for _, change := range rowChanges {
+		// The Get accessors make a nil change classify as not bulk-applicable
+		// instead of panicking here, before the bulk helpers' guards run.
 		switch {
-		case change.Before != nil && change.After == nil:
+		case change.GetBefore() != nil && change.GetAfter() == nil:
 			insertsOnly = false
-		case change.Before == nil && change.After != nil:
+		case change.GetBefore() == nil && change.GetAfter() != nil:
 			deletesOnly = false
-		default: // Update-shaped (both images) or empty.
+		default: // Update-shaped (both images), empty, or nil.
 			return false, false
 		}
 		if !deletesOnly && !insertsOnly {
