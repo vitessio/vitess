@@ -37,6 +37,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 const failedToRecordHeartbeatMsg = "failed to record heartbeat"
@@ -355,24 +356,29 @@ func (vp *vplayer) applyStmtEvent(ctx context.Context, event *binlogdatapb.VEven
 // emitted, so one multi-row UPDATE can yield insert-shaped, delete-shaped and
 // update-shaped changes in the same event. The bulk DELETE/INSERT statements
 // assume a homogeneous event, so a mixed event must be applied per-change.
-func bulkApplicableShapes(rowChanges []*binlogdatapb.RowChange) (deletesOnly, insertsOnly bool) {
+// A change with no images at all (nil, or present but empty) is malformed --
+// the vstreamer never produces one -- and is rejected with an error rather
+// than being routed to either apply path: the per-change path would
+// dereference a nil change and silently treat an empty one as a no-op.
+func bulkApplicableShapes(tableName string, rowChanges []*binlogdatapb.RowChange) (deletesOnly, insertsOnly bool, err error) {
 	deletesOnly, insertsOnly = true, true
 	for _, change := range rowChanges {
-		// The Get accessors make a nil change classify as not bulk-applicable
-		// instead of panicking here, before the bulk helpers' guards run.
 		switch {
 		case change.GetBefore() != nil && change.GetAfter() == nil:
 			insertsOnly = false
 		case change.GetBefore() == nil && change.GetAfter() != nil:
 			deletesOnly = false
-		default: // Update-shaped (both images), empty, or nil.
-			return false, false
+		case change.GetBefore() == nil && change.GetAfter() == nil:
+			return false, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
+				"vreplication: malformed row change with no row images in event for table %s", tableName)
+		default: // Update-shaped (both images).
+			return false, false, nil
 		}
 		if !deletesOnly && !insertsOnly {
-			return false, false
+			return false, false, nil
 		}
 	}
-	return deletesOnly, insertsOnly
+	return deletesOnly, insertsOnly, nil
 }
 
 func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.RowEvent) error {
@@ -396,7 +402,10 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 	}
 
 	if vp.batchMode && len(rowEvent.RowChanges) > 1 {
-		deletesOnly, insertsOnly := bulkApplicableShapes(rowEvent.RowChanges)
+		deletesOnly, insertsOnly, err := bulkApplicableShapes(rowEvent.TableName, rowEvent.RowChanges)
+		if err != nil {
+			return err
+		}
 		// If we have multiple delete row events for a table with a single PK column
 		// then we can perform a simple bulk DELETE using an IN clause.
 		if deletesOnly && tplan.MultiDelete != nil {

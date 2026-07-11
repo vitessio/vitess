@@ -88,6 +88,7 @@ func TestBulkApplicableShapes(t *testing.T) {
 		rowChanges      []*binlogdatapb.RowChange
 		wantDeletesOnly bool
 		wantInsertsOnly bool
+		wantErr         string
 	}{{
 		name:            "all inserts",
 		rowChanges:      []*binlogdatapb.RowChange{insert(1), insert(2)},
@@ -109,15 +110,24 @@ func TestBulkApplicableShapes(t *testing.T) {
 		name:       "update then delete",
 		rowChanges: []*binlogdatapb.RowChange{update(1), del(2)},
 	}, {
+		// A change with no images (nil or empty) is malformed: neither apply
+		// path can handle it, so it must be rejected before routing.
 		name:       "empty change",
 		rowChanges: []*binlogdatapb.RowChange{{}, insert(1)},
+		wantErr:    "malformed row change",
 	}, {
 		name:       "nil change",
 		rowChanges: []*binlogdatapb.RowChange{insert(1), nil},
+		wantErr:    "malformed row change",
 	}}
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			deletesOnly, insertsOnly := bulkApplicableShapes(tc.rowChanges)
+			deletesOnly, insertsOnly, err := bulkApplicableShapes("t1", tc.rowChanges)
+			if tc.wantErr != "" {
+				require.ErrorContains(t, err, tc.wantErr)
+				return
+			}
+			require.NoError(t, err)
 			assert.Equal(t, tc.wantDeletesOnly, deletesOnly, "deletesOnly")
 			assert.Equal(t, tc.wantInsertsOnly, insertsOnly, "insertsOnly")
 		})
