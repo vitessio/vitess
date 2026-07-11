@@ -1283,6 +1283,49 @@ func TestApplyBulkDeleteChanges(t *testing.T) {
 		require.ErrorContains(t, err, "no Before image")
 		assert.Empty(t, executed)
 	})
+
+	t.Run("update-shaped change returns an error instead of being applied as a delete", func(t *testing.T) {
+		// A change with both images (an update) riding in a bulk-delete event
+		// passes a nil-Before check and is silently applied as a DELETE,
+		// discarding its After image. The guard must require the exact
+		// delete shape: Before image only.
+		tp := newTablePlan()
+		rowChanges := []*binlogdatapb.RowChange{
+			makeRowDelete(1, "a"),
+			{
+				Before: sqltypes.RowToProto3([]sqltypes.Value{
+					sqltypes.NewInt64(2),
+					sqltypes.NewVarChar("b"),
+				}),
+				After: sqltypes.RowToProto3([]sqltypes.Value{
+					sqltypes.NewInt64(2),
+					sqltypes.NewVarChar("c"),
+				}),
+			},
+		}
+		var executed []string
+		_, err := tp.applyBulkDeleteChanges(rowChanges, func(sql string) (*sqltypes.Result, error) {
+			executed = append(executed, sql)
+			return &sqltypes.Result{RowsAffected: 1}, nil
+		}, 1024)
+		require.ErrorContains(t, err, "not delete-shaped")
+		assert.Empty(t, executed)
+	})
+
+	t.Run("nil change returns an error instead of panicking", func(t *testing.T) {
+		tp := newTablePlan()
+		rowChanges := []*binlogdatapb.RowChange{
+			makeRowDelete(1, "a"),
+			nil,
+		}
+		var executed []string
+		_, err := tp.applyBulkDeleteChanges(rowChanges, func(sql string) (*sqltypes.Result, error) {
+			executed = append(executed, sql)
+			return &sqltypes.Result{RowsAffected: 1}, nil
+		}, 1024)
+		require.ErrorContains(t, err, "not delete-shaped")
+		assert.Empty(t, executed)
+	})
 }
 
 func TestApplyBulkInsertChangesMixedShapes(t *testing.T) {
@@ -1322,6 +1365,38 @@ func TestApplyBulkInsertChangesMixedShapes(t *testing.T) {
 			return &sqltypes.Result{RowsAffected: 1}, nil
 		}, 1024)
 		require.ErrorContains(t, err, "no After image")
+		assert.Empty(t, executed)
+	})
+
+	t.Run("update-shaped change returns an error instead of being applied as an insert", func(t *testing.T) {
+		// A change with both images (an update) riding in a bulk-insert event
+		// passes a nil-After check and is silently applied as an INSERT,
+		// discarding its Before image. The guard must require the exact
+		// insert shape: After image only.
+		rowChanges := []*binlogdatapb.RowChange{
+			{After: makeRow(1, "a")},
+			{Before: makeRow(2, "b"), After: makeRow(2, "c")},
+		}
+		var executed []string
+		_, err := tp.applyBulkInsertChanges(rowChanges, func(sql string) (*sqltypes.Result, error) {
+			executed = append(executed, sql)
+			return &sqltypes.Result{RowsAffected: 1}, nil
+		}, 1024)
+		require.ErrorContains(t, err, "not insert-shaped")
+		assert.Empty(t, executed)
+	})
+
+	t.Run("nil change returns an error instead of panicking", func(t *testing.T) {
+		rowChanges := []*binlogdatapb.RowChange{
+			{After: makeRow(1, "a")},
+			nil,
+		}
+		var executed []string
+		_, err := tp.applyBulkInsertChanges(rowChanges, func(sql string) (*sqltypes.Result, error) {
+			executed = append(executed, sql)
+			return &sqltypes.Result{RowsAffected: 1}, nil
+		}, 1024)
+		require.ErrorContains(t, err, "not insert-shaped")
 		assert.Empty(t, executed)
 	})
 }
