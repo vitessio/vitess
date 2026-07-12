@@ -175,8 +175,28 @@ func TestSetSuperReadOnlyMySQL(t *testing.T) {
 func TestSetSuperReadOnlyLockWaitTimeoutMySQL(t *testing.T) {
 	require.NotNil(t, mysqld)
 
+	// Restore the original read-only state even if an assertion fails mid-test,
+	// so tests that run after this one see the state they expect. t.Context()
+	// is already canceled by the time cleanup runs, so use a fresh context.
+	wasReadOnly, err := mysqld.IsReadOnly(t.Context())
+	require.NoError(t, err)
+	wasSuperReadOnly, err := mysqld.IsSuperReadOnly(t.Context())
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if wasSuperReadOnly {
+			_, err := mysqld.SetSuperReadOnly(ctx, true)
+			assert.NoError(t, err)
+			return
+		}
+		_, err := mysqld.SetSuperReadOnly(ctx, false)
+		assert.NoError(t, err)
+		assert.NoError(t, mysqld.SetReadOnly(ctx, wasReadOnly))
+	})
+
 	// Make sure the server is writable so the locking connection below can lock.
-	err := mysqld.SetReadOnly(t.Context(), false)
+	err = mysqld.SetReadOnly(t.Context(), false)
 	require.NoError(t, err)
 
 	// Hold an explicit table lock on a separate connection: enabling
@@ -211,9 +231,13 @@ func TestSetSuperReadOnlyLockWaitTimeoutMySQL(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, isSuperReadOnly, "super_read_only should be set to True")
 
-	// Restore the original value for the tests that follow.
+	// The reset function restores the previous value. The t.Cleanup above is
+	// what guarantees the final state for the tests that follow.
 	err = retFunc()
 	require.NoError(t, err)
+	isSuperReadOnly, err = mysqld.IsSuperReadOnly(t.Context())
+	require.NoError(t, err)
+	assert.False(t, isSuperReadOnly, "the reset function should have restored super_read_only to False")
 }
 
 func TestGetMysqlPort(t *testing.T) {
