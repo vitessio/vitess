@@ -2075,6 +2075,87 @@ func TestTempTableHeartbeatHealthyNotStarvedBySlowTablet(t *testing.T) {
 		"the slow tablet's connections should still be in flight while the healthy one is already done")
 }
 
+// TestTempTableHeartbeatMultiTargetNoStarvation proves that a session with a
+// stalled secondary reserved connection does not starve an unrelated healthy
+// session on the first session's fast tablet. Because each target is
+// scheduled under its own tablet, the slow secondary sits in the slow
+// tablet's pool and never occupies the fast tablet's.
+func TestTempTableHeartbeatMultiTargetNoStarvation(t *testing.T) {
+	executor, sbc1, sbc2, _, ctx := createExecutorEnv(t)
+	vsm := newVStreamManager(executor.resolver.resolver, executor.serv, "aa")
+	vtg := newVTGate(executor, executor.resolver, vsm, nil, executor.scatterConn.gateway)
+	vh := newVtgateHandler(vtg)
+
+	t1, t2 := sbc1.Tablet(), sbc2.Tablet()
+	target1 := &querypb.Target{Keyspace: t1.Keyspace, Shard: t1.Shard, TabletType: t1.Type}
+	target2 := &querypb.Target{Keyspace: t2.Keyspace, Shard: t2.Shard, TabletType: t2.Type}
+
+	// sbc2 (the secondary tablet) is slow.
+	sbc2.ExecDelayResponse = 3 * time.Second
+
+	// Enough multi-target sessions (fast conn on t1, slow one on t2) to
+	// saturate a per-tablet worker pool, plus a healthy t1-only session. On
+	// whole-connection grouping the multi sessions would each occupy a t1
+	// worker while blocked on their slow t2 target, starving the healthy
+	// t1-only session; scheduling each target under its own tablet keeps the
+	// slow t2 targets in t2's pool so t1 stays responsive.
+	const multiConns = 2 * tempTableBeatPerTabletConcurrency
+	for i := range multiConns {
+		mc := &mysql.Conn{ConnectionID: uint32((i + 1) * tempTableBeatBuckets)} // bucket 0
+		vh.tempTableConns.Store(mc, &tempTableConn{targets: []tempTableHeartbeatTarget{
+			{target: target1, alias: t1.Alias, reservedID: int64(2*i + 1)},
+			{target: target2, alias: t2.Alias, reservedID: int64(2*i + 2)},
+		}})
+	}
+	healthy := &mysql.Conn{ConnectionID: uint32((multiConns + 1) * tempTableBeatBuckets)}
+	vh.tempTableConns.Store(healthy, &tempTableConn{targets: []tempTableHeartbeatTarget{
+		{target: target1, alias: t1.Alias, reservedID: 999999},
+	}})
+
+	go vh.sweepTempTableBucket(ctx, 0)
+
+	// The fast tablet's targets — including the healthy session — must all be
+	// beaten promptly, without waiting on the slow t2 targets.
+	require.Eventually(t, func() bool { return sbc1.ExecCount.Load() >= int64(multiConns+1) }, 2*time.Second, time.Millisecond,
+		"the fast tablet's reserved connections must be beaten without waiting on a slow secondary tablet")
+	require.Less(t, sbc2.ExecCount.Load(), int64(multiConns), "the slow secondary targets should still be in flight")
+}
+
+// TestTempTableHeartbeatReservedIDCollision verifies that a beat result is
+// matched to its target by (tablet, reserved id), not reserved id alone —
+// reserved ids are only unique within a tablet, so a session reserved on two
+// tablets can hold the same id twice. A gone beat for one tablet must not
+// evict the other tablet's live target.
+func TestTempTableHeartbeatReservedIDCollision(t *testing.T) {
+	executor, sbc1, sbc2, _, ctx := createExecutorEnv(t)
+	vsm := newVStreamManager(executor.resolver.resolver, executor.serv, "aa")
+	vtg := newVTGate(executor, executor.resolver, vsm, nil, executor.scatterConn.gateway)
+	vh := newVtgateHandler(vtg)
+
+	t1, t2 := sbc1.Tablet(), sbc2.Tablet()
+	target1 := &querypb.Target{Keyspace: t1.Keyspace, Shard: t1.Shard, TabletType: t1.Type}
+	target2 := &querypb.Target{Keyspace: t2.Keyspace, Shard: t2.Shard, TabletType: t2.Type}
+
+	// One session with the SAME reserved id (5) on two different tablets.
+	c := &mysql.Conn{ConnectionID: 1}
+	vh.tempTableConns.Store(c, &tempTableConn{targets: []tempTableHeartbeatTarget{
+		{target: target1, alias: t1.Alias, reservedID: 5},
+		{target: target2, alias: t2.Alias, reservedID: 5},
+	}})
+
+	// Only t2's reserved connection is gone; t1's is healthy.
+	sbc2.EphemeralShardErr = vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction 5: not found")
+
+	vh.sendTempTableHeartbeats(ctx)
+
+	v, ok := vh.tempTableConns.Load(c)
+	require.True(t, ok, "the healthy t1 target must keep the connection registered")
+	remaining := v.(*tempTableConn).targets
+	require.Len(t, remaining, 1, "only the gone t2 target must be evicted")
+	require.True(t, topoproto.TabletAliasEqual(remaining[0].alias, t1.Alias),
+		"the surviving target must be t1's live reserved connection, not evicted by t2's gone id")
+}
+
 // TestTempTableHeartbeatSweep verifies that a sweep pings the registered
 // reserved connection, discards results from a superseded snapshot, and
 // evicts a reserved connection that no longer exists.
@@ -2104,12 +2185,18 @@ func TestTempTableHeartbeatSweep(t *testing.T) {
 		"beats must be keepalive touches so mysqld's wait_timeout keeps counting only real user traffic")
 
 	// A beat whose snapshot was superseded mid-flight (command end bumped
-	// the generation) discards its results instead of applying them.
-	staleTargets := slices.Clone(ttc.targets)
+	// the generation) discards its results instead of applying them: with a
+	// stale gen, an eviction-worthy error must not remove the target.
+	sbc.EphemeralShardErr = vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction 99: not found")
 	staleGen := ttc.gen
 	ttc.gen++
-	vh.beatTempTableConn(ctx, c, ttc, staleGen, staleTargets)
+	// beatTempTableTarget consumes one ttc.beats slot (the sweep adds it
+	// before dispatch), so add it here too.
+	ttc.beats.Add(1)
+	vh.beatTempTableTarget(ctx, tempTableBeatItem{c: c, ttc: ttc, gen: staleGen, target: ttc.targets[0]})
 	require.Len(t, ttc.targets, 1, "results for a superseded snapshot must be discarded")
+	sbc.EphemeralShardErr = nil
+	ttc.gen--
 
 	// A reserved connection that no longer exists is evicted so it is not
 	// beaten (and warned about) on every sweep.

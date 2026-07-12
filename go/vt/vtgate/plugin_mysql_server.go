@@ -179,6 +179,11 @@ type vtgateHandler struct {
 	// connections) alive. Entries are added and removed by the connection's
 	// own goroutine; the sweeper also evicts targets that no longer exist.
 	tempTableConns sync.Map
+	// tempTableBeatSem bounds the number of concurrent keepalive touch RPCs
+	// across the whole handler (every bucket and tablet), so a session
+	// reserved across many shards — whose targets all fall in one bucket —
+	// cannot launch a burst of one RPC per shard at once.
+	tempTableBeatSem chan struct{}
 
 	busyConnections atomic.Int32
 }
@@ -208,8 +213,9 @@ func (vmc *vtgateMySQLConnection) IngressBytes() uint64 {
 
 func newVtgateHandler(vtg *VTGate) *vtgateHandler {
 	return &vtgateHandler{
-		vtg:         vtg,
-		connections: make(map[uint32]*mysql.Conn),
+		vtg:              vtg,
+		connections:      make(map[uint32]*mysql.Conn),
+		tempTableBeatSem: make(chan struct{}, tempTableBeatGlobalConcurrency),
 	}
 }
 
@@ -361,24 +367,41 @@ func (vh *vtgateHandler) sendTempTableHeartbeats(ctx context.Context) {
 	}
 }
 
-// tempTableBeatPerTabletConcurrency bounds how many of a single tablet's
-// connections a bucket sweep beats at once. Concurrency across the whole
-// sweep is therefore bounded by (distinct tablets in the bucket) *
+// tempTableBeatPerTabletConcurrency bounds how many targets a bucket sweep
+// beats on a single tablet at once. Concurrency across the whole sweep is
+// therefore bounded by (distinct tablets in the bucket) *
 // tempTableBeatPerTabletConcurrency — a deployment has a bounded number of
-// tablets, so this caps goroutines and in-flight touch RPCs regardless of
-// how many client connections are registered.
+// tablets, so this caps goroutines and in-flight touch RPCs regardless of how
+// many client connections (or reserved shards per connection) are registered.
 const tempTableBeatPerTabletConcurrency = 8
 
-// sweepTempTableBucket beats the reserved connections of the registered
-// client connections in one bucket, grouped by tablet. Each tablet is beaten
-// on its own goroutine (with a bounded pool per tablet), so a slow or
-// unreachable tablet delays only its own connections' keepalives — never a
-// healthy tablet's. Otherwise a wave of connections pointing at a stalled
-// tablet could occupy every worker and let a healthy session's temporary
-// tables expire behind them. Each bucket also sweeps on its own goroutine,
-// so a slow bucket does not delay another bucket's keepalives.
+// tempTableBeatGlobalConcurrency bounds concurrent keepalive touch RPCs across
+// the whole handler, so even a session reserved across a very large number of
+// shards cannot launch one RPC per shard simultaneously.
+const tempTableBeatGlobalConcurrency = 128
+
+// tempTableBeatItem is a single reserved connection to beat: one target of
+// one client connection. Scheduling at target granularity (rather than whole
+// connections) means a session's slow reserved connection on one shard does
+// not hold up its healthy reserved connection on another, and each target
+// counts against its own tablet's concurrency cap.
+type tempTableBeatItem struct {
+	c      *mysql.Conn
+	ttc    *tempTableConn
+	gen    uint64
+	target tempTableHeartbeatTarget
+}
+
+// sweepTempTableBucket beats the reserved connections of the registered client
+// connections in one bucket, grouped by each reserved connection's own tablet.
+// Every tablet is beaten on its own goroutine (with a bounded pool per
+// tablet), so a slow or unreachable tablet delays only the keepalives of the
+// reserved connections on that tablet — never a healthy tablet's. Otherwise a
+// wave of connections pointing at a stalled tablet could occupy every worker
+// and let a healthy session's temporary tables expire behind them. Each bucket
+// also sweeps on its own goroutine, so a slow bucket does not delay another.
 func (vh *vtgateHandler) sweepTempTableBucket(ctx context.Context, bucket uint32) {
-	byTablet := make(map[string][]*mysql.Conn)
+	byTablet := make(map[string][]tempTableBeatItem)
 	vh.tempTableConns.Range(func(key, value any) bool {
 		c := key.(*mysql.Conn)
 		if c.ConnectionID%tempTableBeatBuckets != bucket {
@@ -386,13 +409,11 @@ func (vh *vtgateHandler) sweepTempTableBucket(ctx context.Context, bucket uint32
 		}
 		ttc := value.(*tempTableConn)
 		ttc.mu.Lock()
-		if !ttc.closed && len(ttc.targets) > 0 {
-			// Group by the connection's first reserved target's tablet. A
-			// session almost always holds a single reserved connection, so
-			// this is its tablet; a session reserved on several shards is
-			// grouped by the first and still beaten as a unit.
-			alias := topoproto.TabletAliasString(ttc.targets[0].alias)
-			byTablet[alias] = append(byTablet[alias], c)
+		if !ttc.closed {
+			for _, t := range ttc.targets {
+				alias := topoproto.TabletAliasString(t.alias)
+				byTablet[alias] = append(byTablet[alias], tempTableBeatItem{c: c, ttc: ttc, gen: ttc.gen, target: t})
+			}
 		}
 		ttc.mu.Unlock()
 		return true
@@ -402,19 +423,19 @@ func (vh *vtgateHandler) sweepTempTableBucket(ctx context.Context, bucket uint32
 	}
 
 	var wg sync.WaitGroup
-	for _, conns := range byTablet {
+	for _, items := range byTablet {
 		wg.Go(func() {
-			work := make(chan *mysql.Conn)
+			work := make(chan tempTableBeatItem)
 			var inner sync.WaitGroup
-			for range min(tempTableBeatPerTabletConcurrency, len(conns)) {
+			for range min(tempTableBeatPerTabletConcurrency, len(items)) {
 				inner.Go(func() {
-					for c := range work {
-						vh.beatOneTempTableConn(ctx, c)
+					for item := range work {
+						vh.beatTempTableTarget(ctx, item)
 					}
 				})
 			}
-			for _, c := range conns {
-				work <- c
+			for _, item := range items {
+				work <- item
 			}
 			close(work)
 			inner.Wait()
@@ -423,27 +444,107 @@ func (vh *vtgateHandler) sweepTempTableBucket(ctx context.Context, bucket uint32
 	wg.Wait()
 }
 
-// beatOneTempTableConn beats a single registered connection. The in-flight
-// beat is counted (via ttc.beats) only once a worker actually picks the
-// connection up, not while it waits in the queue, so closing a connection
-// waits out only its running beat — never work still queued behind the pool.
-func (vh *vtgateHandler) beatOneTempTableConn(ctx context.Context, c *mysql.Conn) {
-	v, ok := vh.tempTableConns.Load(c)
-	if !ok {
-		return
-	}
-	ttc := v.(*tempTableConn)
+// tempTableTargetIndex finds a target in ttc.targets by its identity. A
+// reserved id is only unique within a single tablet (each vttablet generates
+// its own), so a session reserved on two tablets can hold the same id twice;
+// matching on the tablet alias as well keeps a beat result for one tablet from
+// touching the other tablet's target. ttc.mu must be held.
+func tempTableTargetIndex(ttc *tempTableConn, target tempTableHeartbeatTarget) int {
+	return slices.IndexFunc(ttc.targets, func(t tempTableHeartbeatTarget) bool {
+		return t.reservedID == target.reservedID && topoproto.TabletAliasEqual(t.alias, target.alias)
+	})
+}
+
+// beatTempTableTarget beats a single reserved connection and applies the
+// result to its client connection's registration, evicting the target if the
+// reserved connection is gone.
+func (vh *vtgateHandler) beatTempTableTarget(ctx context.Context, item tempTableBeatItem) {
+	ttc := item.ttc
+	// Claim the beat under the lock: skip it — without an RPC or a beats slot
+	// — if the connection is closing or the snapshot is superseded. Counting
+	// the beat only when it actually runs (rather than at enqueue) means a
+	// closing connection waits out only beats already in flight, not the whole
+	// queue behind them, and stale queued items cost nothing.
 	ttc.mu.Lock()
-	if ttc.closed || len(ttc.targets) == 0 {
+	if ttc.closed || ttc.gen != item.gen || tempTableTargetIndex(ttc, item.target) < 0 {
 		ttc.mu.Unlock()
 		return
 	}
-	gen := ttc.gen
-	targets := slices.Clone(ttc.targets)
 	ttc.beats.Add(1)
 	ttc.mu.Unlock()
 	defer ttc.beats.Done()
-	vh.beatTempTableConn(ctx, c, ttc, gen, targets)
+
+	// Acquire a global slot so the total number of concurrent touch RPCs is
+	// bounded regardless of how many tablet groups run at once.
+	select {
+	case vh.tempTableBeatSem <- struct{}{}:
+		defer func() { <-vh.tempTableBeatSem }()
+	case <-ctx.Done():
+		return
+	}
+
+	// Bound the beat to half the heartbeat interval, with a floor: it caps how
+	// long a foreground command waits behind an in-flight beat, and at short
+	// intervals a sub-second budget would let a momentarily slow but healthy
+	// tablet miss. On tablets that predate the keepalive option the beat runs
+	// as a real query, where a deadline expiring mid-execution kills only the
+	// query (KILL QUERY), so the reserved connection and its temp tables
+	// survive.
+	budget := max(tempTableHeartbeatTime/2, 2*time.Second)
+	bctx, cancel := context.WithTimeout(tempTableBeatContext(ctx, item.c), budget)
+	err := vh.sendTempTableBeat(bctx, item.target)
+	cancel()
+
+	ttc.mu.Lock()
+	defer ttc.mu.Unlock()
+	if ttc.gen != item.gen {
+		// The targets were replaced while this beat was in flight (command
+		// end, reset, or close): this result describes a superseded snapshot.
+		return
+	}
+	idx := tempTableTargetIndex(ttc, item.target)
+	if idx < 0 {
+		return
+	}
+	if err == nil {
+		if ttc.targets[idx].failures > 0 {
+			log.Info("temp-table connection heartbeat recovered",
+				slog.Int64("reserved_id", item.target.reservedID),
+				slog.String("tablet", topoproto.TabletAliasString(item.target.alias)),
+				slog.Int("failed_beats", ttc.targets[idx].failures))
+		}
+		ttc.targets[idx].failures = 0
+		return
+	}
+	if wasConnectionClosed(err) {
+		// The reserved connection is gone (e.g. already reclaimed by the
+		// tablet): stop beating it. The session self-heals by re-reserving on
+		// its next query.
+		log.Warn("temp-table connection is gone, stopping its keepalives",
+			slog.Int64("reserved_id", item.target.reservedID),
+			slog.String("tablet", topoproto.TabletAliasString(item.target.alias)),
+			slog.Any("error", err))
+		ttc.targets = slices.Delete(ttc.targets, idx, idx+1)
+		if len(ttc.targets) == 0 {
+			vh.tempTableConns.Delete(item.c)
+		}
+		return
+	}
+	// Transient failure (e.g. slow or unreachable tablet): keep the target and
+	// retry on the next sweep — for as long as it takes. Only a confirmed
+	// connection-closed error may evict; a failure count must not, or a few
+	// seconds of network trouble would silently disable the keepalives of a
+	// live connection whose temp tables the tablet would then reclaim. To keep
+	// an unreachable tablet from producing a warning every sweep, log on state
+	// transitions only: once when a target starts failing, once when it
+	// recovers (above).
+	ttc.targets[idx].failures++
+	if ttc.targets[idx].failures == 1 {
+		log.Warn("temp-table connection heartbeat failed, will keep retrying",
+			slog.Int64("reserved_id", item.target.reservedID),
+			slog.String("tablet", topoproto.TabletAliasString(item.target.alias)),
+			slog.Any("error", err))
+	}
 }
 
 // tempTableBeatContext returns ctx carrying the client's caller identity,
@@ -465,96 +566,6 @@ func tempTableBeatContext(ctx context.Context, c *mysql.Conn) context.Context {
 			c.RemoteAddr().String(), /* component: running client process */
 			"VTGate MySQL Connector" /* subcomponent: part of the client */),
 		c.UserData.Get())
-}
-
-// beatTempTableConn sends one keepalive per reserved connection registered
-// for a client connection. Reserved connections that no longer exist are
-// evicted so they are not beaten (and warned about) on every sweep; the
-// session re-registers live ones at the end of its next command.
-// beatTempTableConn beats the given snapshot of a connection's keepalive
-// targets without holding the connection's mutex across the RPCs: commands
-// run concurrently with beats (on the tablet, a keepalive that finds the
-// reserved connection busy counts it as alive, and a command that collides
-// with a keepalive's microseconds-long hold waits it out).
-// The results are applied only if gen still matches — a command end, reset,
-// or close that replaced the targets in the meantime supersedes them.
-func (vh *vtgateHandler) beatTempTableConn(ctx context.Context, c *mysql.Conn, ttc *tempTableConn, gen uint64, targets []tempTableHeartbeatTarget) {
-	ctx = tempTableBeatContext(ctx, c)
-	// Each target gets its own budget of half the heartbeat interval, and
-	// the targets are beaten concurrently: one hanging tablet must not eat
-	// a shared budget and starve the keepalives of the session's other
-	// reserved connections. At short heartbeat intervals half the interval
-	// would leave a sub-second budget that a momentarily slow (but healthy)
-	// tablet can miss, so the budget never drops below a floor; missing a
-	// tick because a round ran long is harmless (the ticker just skips).
-	// On tablets that predate the keepalive option, the beat executes as a
-	// real query, where a deadline expiring mid-execution kills only the
-	// query (KILL QUERY), so the reserved connection and its temp tables
-	// survive.
-	budget := max(tempTableHeartbeatTime/2, 2*time.Second)
-	errs := make([]error, len(targets))
-	var wg sync.WaitGroup
-	for i, t := range targets {
-		wg.Go(func() {
-			bctx, cancel := context.WithTimeout(ctx, budget)
-			defer cancel()
-			errs[i] = vh.sendTempTableBeat(bctx, t)
-		})
-	}
-	wg.Wait()
-	kept := make([]tempTableHeartbeatTarget, 0, len(targets))
-	for i, t := range targets {
-		err := errs[i]
-		if err == nil {
-			if t.failures > 0 {
-				log.Info("temp-table connection heartbeat recovered",
-					slog.Int64("reserved_id", t.reservedID),
-					slog.String("tablet", topoproto.TabletAliasString(t.alias)),
-					slog.Int("failed_beats", t.failures))
-			}
-			t.failures = 0
-			kept = append(kept, t)
-			continue
-		}
-		if wasConnectionClosed(err) {
-			// The reserved connection is gone (e.g. already reclaimed by the
-			// tablet): stop beating it. The session self-heals by
-			// re-reserving on its next query.
-			log.Warn("temp-table connection is gone, stopping its keepalives",
-				slog.Int64("reserved_id", t.reservedID),
-				slog.String("tablet", topoproto.TabletAliasString(t.alias)),
-				slog.Any("error", err))
-			continue
-		}
-		// Transient failure (e.g. slow or unreachable tablet): keep the
-		// target and retry on the next sweep — for as long as it takes.
-		// Only a confirmed connection-closed error may evict; a failure
-		// count must not, or a few seconds of network trouble would
-		// silently disable the keepalives of a live connection whose temp
-		// tables the tablet would then reclaim. To keep an unreachable
-		// tablet from producing a warning every sweep indefinitely, log on
-		// state transitions only: once when a target starts failing (and
-		// once above when it recovers).
-		t.failures++
-		if t.failures == 1 {
-			log.Warn("temp-table connection heartbeat failed, will keep retrying",
-				slog.Int64("reserved_id", t.reservedID),
-				slog.String("tablet", topoproto.TabletAliasString(t.alias)),
-				slog.Any("error", err))
-		}
-		kept = append(kept, t)
-	}
-	ttc.mu.Lock()
-	defer ttc.mu.Unlock()
-	if ttc.gen != gen {
-		// The targets were replaced while this round was in flight (command
-		// end, reset, or close): its results describe a superseded snapshot.
-		return
-	}
-	ttc.targets = kept
-	if len(kept) == 0 {
-		vh.tempTableConns.Delete(c)
-	}
 }
 
 // sendTempTableBeat sends a keepalive touch for a single reserved
