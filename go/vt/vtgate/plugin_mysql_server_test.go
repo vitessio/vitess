@@ -2035,6 +2035,46 @@ func TestTempTableHeartbeatBucketIndependence(t *testing.T) {
 	}
 }
 
+// TestTempTableHeartbeatHealthyNotStarvedBySlowTablet proves that many
+// connections pointing at a slow/unreachable tablet do not delay a healthy
+// connection's keepalive in the same bucket — the P1 correctness property.
+// It would fail on a flat worker pool where the slow connections occupy
+// every worker.
+func TestTempTableHeartbeatHealthyNotStarvedBySlowTablet(t *testing.T) {
+	executor, sbc1, sbc2, _, ctx := createExecutorEnv(t)
+	vsm := newVStreamManager(executor.resolver.resolver, executor.serv, "aa")
+	vtg := newVTGate(executor, executor.resolver, vsm, nil, executor.scatterConn.gateway)
+	vh := newVtgateHandler(vtg)
+
+	t1, t2 := sbc1.Tablet(), sbc2.Tablet()
+	target1 := &querypb.Target{Keyspace: t1.Keyspace, Shard: t1.Shard, TabletType: t1.Type}
+	target2 := &querypb.Target{Keyspace: t2.Keyspace, Shard: t2.Shard, TabletType: t2.Type}
+
+	// Many connections on the slow tablet, all in bucket 0.
+	sbc1.ExecDelayResponse = 3 * time.Second
+	const slowConns = 4 * tempTableBeatPerTabletConcurrency
+	for i := range slowConns {
+		c := &mysql.Conn{ConnectionID: uint32((i + 1) * tempTableBeatBuckets)} // %buckets == 0
+		vh.tempTableConns.Store(c, &tempTableConn{targets: []tempTableHeartbeatTarget{{target: target1, alias: t1.Alias, reservedID: int64(i + 1)}}})
+	}
+	// One healthy connection on a different tablet, also in bucket 0.
+	healthy := &mysql.Conn{ConnectionID: uint32((slowConns + 1) * tempTableBeatBuckets)}
+	vh.tempTableConns.Store(healthy, &tempTableConn{targets: []tempTableHeartbeatTarget{{target: target2, alias: t2.Alias, reservedID: 999999}}})
+
+	sweepDone := make(chan struct{})
+	go func() {
+		vh.sweepTempTableBucket(ctx, 0)
+		close(sweepDone)
+	}()
+
+	// The healthy connection's tablet must be beaten promptly, well before
+	// the slow tablet's connections finish.
+	require.Eventually(t, func() bool { return sbc2.ExecCount.Load() >= 1 }, 2*time.Second, time.Millisecond,
+		"healthy connection must be beaten promptly, not starved behind the slow tablet")
+	require.Less(t, sbc1.ExecCount.Load(), int64(slowConns),
+		"the slow tablet's connections should still be in flight while the healthy one is already done")
+}
+
 // TestTempTableHeartbeatSweep verifies that a sweep pings the registered
 // reserved connection, discards results from a superseded snapshot, and
 // evicts a reserved connection that no longer exists.

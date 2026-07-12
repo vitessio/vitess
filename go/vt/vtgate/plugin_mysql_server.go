@@ -361,44 +361,65 @@ func (vh *vtgateHandler) sendTempTableHeartbeats(ctx context.Context) {
 	}
 }
 
-// tempTableBeatConcurrency bounds how many connections one bucket sweep
-// beats at once. It caps the goroutines and in-flight touch RPCs a single
-// bucket can produce (worst case across all buckets is
-// tempTableBeatBuckets * tempTableBeatConcurrency), independent of how many
-// connections are registered.
-const tempTableBeatConcurrency = 32
+// tempTableBeatPerTabletConcurrency bounds how many of a single tablet's
+// connections a bucket sweep beats at once. Concurrency across the whole
+// sweep is therefore bounded by (distinct tablets in the bucket) *
+// tempTableBeatPerTabletConcurrency — a deployment has a bounded number of
+// tablets, so this caps goroutines and in-flight touch RPCs regardless of
+// how many client connections are registered.
+const tempTableBeatPerTabletConcurrency = 8
 
 // sweepTempTableBucket beats the reserved connections of the registered
-// client connections in one bucket, through a bounded worker pool so a
-// bucket with many connections cannot spawn an unbounded number of
-// goroutines or RPCs. Each bucket sweeps on its own goroutine, so a bucket
-// full of slow tablets does not delay another bucket's keepalives.
+// client connections in one bucket, grouped by tablet. Each tablet is beaten
+// on its own goroutine (with a bounded pool per tablet), so a slow or
+// unreachable tablet delays only its own connections' keepalives — never a
+// healthy tablet's. Otherwise a wave of connections pointing at a stalled
+// tablet could occupy every worker and let a healthy session's temporary
+// tables expire behind them. Each bucket also sweeps on its own goroutine,
+// so a slow bucket does not delay another bucket's keepalives.
 func (vh *vtgateHandler) sweepTempTableBucket(ctx context.Context, bucket uint32) {
-	var conns []*mysql.Conn
-	vh.tempTableConns.Range(func(key, _ any) bool {
+	byTablet := make(map[string][]*mysql.Conn)
+	vh.tempTableConns.Range(func(key, value any) bool {
 		c := key.(*mysql.Conn)
-		if c.ConnectionID%tempTableBeatBuckets == bucket {
-			conns = append(conns, c)
+		if c.ConnectionID%tempTableBeatBuckets != bucket {
+			return true
 		}
+		ttc := value.(*tempTableConn)
+		ttc.mu.Lock()
+		if !ttc.closed && len(ttc.targets) > 0 {
+			// Group by the connection's first reserved target's tablet. A
+			// session almost always holds a single reserved connection, so
+			// this is its tablet; a session reserved on several shards is
+			// grouped by the first and still beaten as a unit.
+			alias := topoproto.TabletAliasString(ttc.targets[0].alias)
+			byTablet[alias] = append(byTablet[alias], c)
+		}
+		ttc.mu.Unlock()
 		return true
 	})
-	if len(conns) == 0 {
+	if len(byTablet) == 0 {
 		return
 	}
 
-	work := make(chan *mysql.Conn)
 	var wg sync.WaitGroup
-	for range min(tempTableBeatConcurrency, len(conns)) {
+	for _, conns := range byTablet {
 		wg.Go(func() {
-			for c := range work {
-				vh.beatOneTempTableConn(ctx, c)
+			work := make(chan *mysql.Conn)
+			var inner sync.WaitGroup
+			for range min(tempTableBeatPerTabletConcurrency, len(conns)) {
+				inner.Go(func() {
+					for c := range work {
+						vh.beatOneTempTableConn(ctx, c)
+					}
+				})
 			}
+			for _, c := range conns {
+				work <- c
+			}
+			close(work)
+			inner.Wait()
 		})
 	}
-	for _, c := range conns {
-		work <- c
-	}
-	close(work)
 	wg.Wait()
 }
 
