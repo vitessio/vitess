@@ -19,6 +19,7 @@ package vtgate
 import (
 	"context"
 	"fmt"
+	"hash/fnv"
 	"log/slog"
 	"net"
 	"os"
@@ -149,10 +150,10 @@ func newTempTableTargetKey(t tempTableHeartbeatTarget) tempTableTargetKey {
 
 // tempTableConn tracks the reserved connections the background heartbeat
 // sweeper keeps alive for one client connection. The connection's command
-// goroutine republishes the targets at the end of each command (bumping gen),
-// and the sweeper snapshots them under mu and beats them without holding mu
-// across the RPC, so a slow keepalive never blocks a foreground command and a
-// long command never starves the keepalives.
+// goroutine republishes the targets at the end of each command (bumping gen);
+// the sweeper snapshots them under mu and refreshes them (batched per tablet)
+// without holding mu across the RPC, so the sweeper's own lock never blocks a
+// foreground command and a long command never starves the keepalives.
 type tempTableConn struct {
 	// mu guards gen, targets, and closed. It is held only for the
 	// microseconds it takes to snapshot or replace the targets — never
@@ -328,13 +329,13 @@ func (vh *vtgateHandler) startTempTableHeartbeat(ctx context.Context) {
 			slog.Duration("temp_table_heartbeat_time", tempTableHeartbeatTime))
 		return
 	}
-	// Each connection is beaten once per heartbeat interval, but the work is
-	// spread across buckets (by connection ID) so a large number of
-	// registered connections produces a steady trickle of touch RPCs rather
-	// than a spike on every interval. Each bucket runs on its own goroutine,
-	// staggered by an offset, so a bucket full of slow or unreachable
-	// tablets delays only its own next round — never another bucket's
-	// keepalives or the overall schedule.
+	// Each tablet's reserved connections are refreshed once per heartbeat
+	// interval, but tablets are spread across buckets (by a hash of the tablet
+	// alias) so a large deployment produces a steady trickle of touch RPCs
+	// rather than a spike on every interval. Each bucket runs on its own
+	// goroutine, staggered by an offset, so a bucket full of slow or
+	// unreachable tablets delays only its own next round — never another
+	// bucket's keepalives or the overall schedule.
 	interval := tempTableHeartbeatTime / tempTableBeatBuckets
 	for bucket := range uint32(tempTableBeatBuckets) {
 		go func() {
@@ -358,31 +359,45 @@ func (vh *vtgateHandler) startTempTableHeartbeat(ctx context.Context) {
 	}
 }
 
-// sendTempTableHeartbeats pings the reserved connections of every registered
-// client connection, fanning out per connection so one slow tablet cannot
-// delay the keepalives of the others. It returns once all beats settle.
 // tempTableBeatBuckets is how many slices the heartbeat interval is divided
-// into: each registered connection belongs to one bucket (by connection ID)
-// and is beaten once per interval, on its bucket's tick. Staggering bounds
-// the instantaneous goroutine and RPC load without queueing one session's
-// keepalives behind another's slow tablet.
+// into: each tablet belongs to one bucket (by a hash of its alias) and all of
+// its reserved connections are refreshed once per interval, on its bucket's
+// tick, with a single batched touch RPC. Staggering bounds the instantaneous
+// goroutine and RPC load without queueing one tablet's keepalives behind
+// another tablet's slow one.
 const tempTableBeatBuckets = 16
+
+// tempTableBeatBudget returns how long a single tablet's batched touch may run
+// before it times out. It floors the budget at 2s so a momentarily slow but
+// healthy tablet is not cut off at short intervals, but it always stays below
+// the heartbeat interval: a bucket's sweep waits for its slowest tablet, so a
+// budget at or above the interval would let one unreachable tablet stretch the
+// keepalive cadence of the healthy tablets in its bucket beyond the interval —
+// possibly past a tablet timeout that the configured interval was supposed to
+// stay under. The 3/4 cap keeps a margin below the next tick.
+func tempTableBeatBudget(interval time.Duration) time.Duration {
+	budget := max(interval/2, 2*time.Second)
+	if capped := interval * 3 / 4; budget > capped {
+		budget = capped
+	}
+	return budget
+}
 
 // sendTempTableHeartbeats beats every registered connection (all buckets).
 // The background sweeper beats one bucket at a time instead; this form is
 // for tests and returns once all beats settle.
 func (vh *vtgateHandler) sendTempTableHeartbeats(ctx context.Context) {
+	// Sweep every bucket concurrently, mirroring the background sweeper's
+	// per-bucket goroutines, so a slow tablet in one bucket does not delay a
+	// healthy tablet in another.
+	var wg sync.WaitGroup
 	for bucket := range uint32(tempTableBeatBuckets) {
-		vh.sweepTempTableBucket(ctx, bucket)
+		wg.Go(func() {
+			vh.sweepTempTableBucket(ctx, bucket)
+		})
 	}
+	wg.Wait()
 }
-
-// tempTableBeatPerTabletConcurrency bounds how many targets a bucket sweep
-// beats on a single tablet at once. Concurrency across the whole sweep is
-// therefore bounded by (distinct tablets in the bucket) *
-// tempTableBeatPerTabletConcurrency — a deployment has a bounded number of
-// tablets, so this caps goroutines and in-flight touch RPCs regardless of how
-// many client connections (or reserved shards per connection) are registered.
 
 // tempTableBeatItem is one reserved connection to keep alive: one target of
 // one client connection. Items are grouped by tablet so all of a tablet's
@@ -392,6 +407,14 @@ type tempTableBeatItem struct {
 	ttc    *tempTableConn
 	gen    uint64
 	target tempTableHeartbeatTarget
+}
+
+// tempTableBeatBucketFor maps a tablet alias to a heartbeat bucket so all of a
+// tablet's reserved connections are swept together, once per interval.
+func tempTableBeatBucketFor(alias string) uint32 {
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(alias))
+	return h.Sum32() % tempTableBeatBuckets
 }
 
 // sweepTempTableBucket keeps alive the reserved connections of the registered
@@ -405,14 +428,18 @@ func (vh *vtgateHandler) sweepTempTableBucket(ctx context.Context, bucket uint32
 	byTablet := make(map[string][]tempTableBeatItem)
 	vh.tempTableConns.Range(func(key, value any) bool {
 		c := key.(*mysql.Conn)
-		if c.ConnectionID%tempTableBeatBuckets != bucket {
-			return true
-		}
 		ttc := value.(*tempTableConn)
 		ttc.mu.Lock()
 		if !ttc.closed {
 			for _, t := range ttc.targets {
 				alias := topoproto.TabletAliasString(t.alias)
+				// Bucket by the target's tablet, not the client connection, so
+				// every reserved connection on a tablet lands in the same
+				// bucket and the tablet gets exactly one batched touch per
+				// interval — never one per bucket it happens to appear in.
+				if tempTableBeatBucketFor(alias) != bucket {
+					continue
+				}
 				byTablet[alias] = append(byTablet[alias], tempTableBeatItem{c: c, ttc: ttc, gen: ttc.gen, target: t})
 			}
 		}
@@ -459,23 +486,19 @@ func (vh *vtgateHandler) beatTempTableTablet(ctx context.Context, items []tempTa
 		}
 	}()
 
-	// Bound the touch to half the heartbeat interval, with a floor: it caps
-	// how long a foreground command waits behind an in-flight beat, and at
-	// short intervals a sub-second budget would let a momentarily slow but
-	// healthy tablet miss. On tablets that predate the batch option the touch
-	// runs as a real query, where a deadline expiring mid-execution kills only
-	// the query (KILL QUERY), so the reserved connection and its temp tables
-	// survive. The batch carries the first connection's caller identity; the
-	// touch never reaches the tablet's ACL check, and on a not-yet-upgraded
-	// tablet only that first reserved connection is refreshed (the others
-	// resume once the tablet is upgraded).
+	// On tablets that predate the batch option the touch runs as a real query,
+	// where a deadline expiring mid-execution kills only the query (KILL
+	// QUERY), so the reserved connection and its temp tables survive. The batch
+	// carries the first connection's caller identity; the touch never reaches
+	// the tablet's ACL check, and on a not-yet-upgraded tablet only that first
+	// reserved connection is refreshed (the others resume once the tablet is
+	// upgraded).
 	primary := valid[0]
 	extra := make([]int64, 0, len(valid)-1)
 	for _, item := range valid[1:] {
 		extra = append(extra, item.target.reservedID)
 	}
-	budget := max(tempTableHeartbeatTime/2, 2*time.Second)
-	bctx, cancel := context.WithTimeout(tempTableBeatContext(ctx, primary.c), budget)
+	bctx, cancel := context.WithTimeout(tempTableBeatContext(ctx, primary.c), tempTableBeatBudget(tempTableHeartbeatTime))
 	gone, err := vh.sendTempTableBeat(bctx, primary.target, extra)
 	cancel()
 
@@ -548,14 +571,17 @@ func (vh *vtgateHandler) applyTempTableBeatResult(item tempTableBeatItem, gone b
 	}
 }
 
-// tempTableBeatContext returns ctx carrying the client's caller identity,
-// built exactly as the command path builds it: with
-// --queryserver-config-strict-table-acl the tablet rejects any query without
-// an immediate caller id ("missing caller id"), which would make every beat
-// fail (and not as a connection-closed error), so the reserved connection
-// would still be reclaimed. It also attributes the beats to the owning user
-// in the tablet's query logs. The identity fields on the connection are set
-// at authentication time and immutable after, so reading them from the
+// tempTableBeatContext returns ctx carrying a client connection's caller
+// identity, built exactly as the command path builds it. On an up-to-date
+// tablet a keepalive touch short-circuits before the ACL and query-log path,
+// so the identity is not used there; it matters only on a not-yet-upgraded
+// tablet, where the touch runs as a real query and
+// --queryserver-config-strict-table-acl would otherwise reject it as "missing
+// caller id". A tablet's batched touch carries the identity of the first of
+// its connections, so on such a tablet only that connection's reserved
+// connection (the one the real query runs against) is attributed and kept
+// alive until the tablet is upgraded. The identity fields on the connection
+// are set at authentication time and immutable after, so reading them from the
 // sweeper is safe.
 func tempTableBeatContext(ctx context.Context, c *mysql.Conn) context.Context {
 	if c.UserData == nil {
@@ -1695,8 +1721,13 @@ func newMysqlUnixSocket(address string, authServer mysql.AuthServer, handler mys
 }
 
 func (srv *mysqlServer) shutdownMysqlProtocolAndDrain() {
+	// Keep temp-table keepalives running until draining has finished. During
+	// the drain, existing client connections stay alive and serviceable, so
+	// cancelling the heartbeat any earlier could let their reserved
+	// connections — and temporary tables — be reclaimed by the tablet timeout
+	// before the clients disconnect.
 	if srv.heartbeatCancel != nil {
-		srv.heartbeatCancel()
+		defer srv.heartbeatCancel()
 	}
 	if srv.sigChan != nil {
 		signal.Stop(srv.sigChan)

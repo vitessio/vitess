@@ -27,6 +27,7 @@ import (
 	"path"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"testing/synctest"
@@ -1446,6 +1447,43 @@ func TestGracefulShutdown(t *testing.T) {
 	require.True(t, mysqlConn.IsMarkedForClose())
 }
 
+// TestShutdownDrainKeepsHeartbeatUntilDrained verifies that the temp-table
+// keepalive is not cancelled until draining has finished. During
+// --mysql-server-drain-onterm draining, existing client connections stay
+// serviceable, so cancelling their keepalives early could let their reserved
+// connections (and temp tables) be reclaimed by the tablet timeout.
+func TestShutdownDrainKeepsHeartbeatUntilDrained(t *testing.T) {
+	origDrain := mysqlDrainOnTerm
+	mysqlDrainOnTerm = true
+	t.Cleanup(func() { mysqlDrainOnTerm = origDrain })
+
+	vh := &vtgateHandler{connections: map[uint32]*mysql.Conn{}}
+	vh.connections[1] = &mysql.Conn{ConnectionID: 1}
+
+	// Record how many connections were still connected when the heartbeat was
+	// cancelled: it must be zero (drain already complete).
+	var connsAtCancel atomic.Int64
+	connsAtCancel.Store(-1)
+	srv := &mysqlServer{
+		vtgateHandle: vh,
+		heartbeatCancel: func() {
+			connsAtCancel.Store(int64(vh.numConnections()))
+		},
+	}
+
+	// The client disconnects partway through the drain loop.
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		vh.mu.Lock()
+		delete(vh.connections, 1)
+		vh.mu.Unlock()
+	}()
+
+	srv.shutdownMysqlProtocolAndDrain()
+	require.Equal(t, int64(0), connsAtCancel.Load(),
+		"the heartbeat must be cancelled only after all client connections have drained")
+}
+
 func TestComBinlogDumpGTID(t *testing.T) {
 	// Save and restore original flag values
 	originalBinlogDumpEnabled := enableBinlogDump.Get()
@@ -1988,18 +2026,27 @@ func TestTempTableHeartbeatBucket(t *testing.T) {
 	vh := newVtgateHandler(vtg)
 	tablet := sbc.Tablet()
 	target := &querypb.Target{Keyspace: tablet.Keyspace, Shard: tablet.Shard, TabletType: tablet.Type}
+	alias := topoproto.TabletAliasString(tablet.Alias)
+	tabletBucket := tempTableBeatBucketFor(alias)
 
-	// Two connections in different buckets.
-	cA := &mysql.Conn{ConnectionID: tempTableBeatBuckets}     // bucket 0
-	cB := &mysql.Conn{ConnectionID: tempTableBeatBuckets + 1} // bucket 1
+	// Two connections on the same tablet — both fall in the tablet's bucket,
+	// regardless of their connection ids, so the tablet is swept once.
+	cA := &mysql.Conn{ConnectionID: 1}
+	cB := &mysql.Conn{ConnectionID: 2}
 	vh.tempTableConns.Store(cA, &tempTableConn{targets: tempTargets(tempTableHeartbeatTarget{target: target, alias: tablet.Alias, reservedID: 1})})
 	vh.tempTableConns.Store(cB, &tempTableConn{targets: tempTargets(tempTableHeartbeatTarget{target: target, alias: tablet.Alias, reservedID: 2})})
 
+	// A different bucket does not beat the tablet.
 	before := sbc.ExecCount.Load()
-	vh.sweepTempTableBucket(ctx, 0)
-	require.Equal(t, before+1, sbc.ExecCount.Load(), "bucket 0 must beat exactly its one connection")
-	vh.sweepTempTableBucket(ctx, 1)
-	require.Equal(t, before+2, sbc.ExecCount.Load(), "bucket 1 must beat its own connection")
+	vh.sweepTempTableBucket(ctx, (tabletBucket+1)%tempTableBeatBuckets)
+	require.Equal(t, before, sbc.ExecCount.Load(), "a bucket that is not the tablet's must beat nothing")
+
+	// The tablet's bucket beats both its connections with a single batched RPC.
+	vh.sweepTempTableBucket(ctx, tabletBucket)
+	require.Equal(t, before+1, sbc.ExecCount.Load(), "the tablet's bucket must beat it with exactly one batched RPC")
+	opts := sbc.GetOptions()
+	require.NotEmpty(t, opts)
+	require.Len(t, opts[len(opts)-1].GetReservedConnKeepAliveIds(), 1, "the batch must carry the second reserved connection's id")
 }
 
 // TestTempTableHeartbeatBucketIndependence proves that a bucket stalled on a
@@ -2023,34 +2070,14 @@ func TestTempTableHeartbeatBucketIndependence(t *testing.T) {
 	vh.tempTableConns.Store(cA, &tempTableConn{targets: tempTargets(tempTableHeartbeatTarget{target: target1, alias: t1.Alias, reservedID: 1})})
 	vh.tempTableConns.Store(cB, &tempTableConn{targets: tempTargets(tempTableHeartbeatTarget{target: target2, alias: t2.Alias, reservedID: 2})})
 
-	// Start bucket 0's sweep; it blocks on the slow tablet.
-	bucket0Done := make(chan struct{})
-	go func() {
-		vh.sweepTempTableBucket(ctx, 0)
-		close(bucket0Done)
-	}()
+	// All buckets sweep concurrently. The slow tablet (t1) blocks its bucket's
+	// goroutine, but the healthy tablet (t2) is in another goroutine and must
+	// be beaten promptly regardless.
+	go vh.sendTempTableHeartbeats(ctx)
 	require.Eventually(t, func() bool { return sbc1.ExecCount.Load() >= 1 }, 30*time.Second, time.Millisecond,
-		"bucket 0's beat must be in flight on the slow tablet")
-
-	// Bucket 1's sweep must finish promptly despite bucket 0 being stalled.
-	bucket1Done := make(chan struct{})
-	go func() {
-		vh.sweepTempTableBucket(ctx, 1)
-		close(bucket1Done)
-	}()
-	select {
-	case <-bucket1Done:
-	case <-time.After(30 * time.Second):
-		require.FailNow(t, "bucket 1 sweep was delayed by a stalled bucket 0")
-	}
-	require.GreaterOrEqual(t, sbc2.ExecCount.Load(), int64(1), "bucket 1's connection must have been beaten")
-
-	// Bucket 0 is still blocked while bucket 1 has already finished.
-	select {
-	case <-bucket0Done:
-		require.Fail(t, "bucket 0 should still be stalled on the slow tablet")
-	default:
-	}
+		"the slow tablet's beat must be in flight")
+	require.Eventually(t, func() bool { return sbc2.ExecCount.Load() >= 1 }, 2*time.Second, time.Millisecond,
+		"the healthy tablet must be beaten promptly, not delayed by the stalled tablet")
 }
 
 // TestTempTableHeartbeatHealthyNotStarvedBySlowTablet proves that many
@@ -2079,18 +2106,12 @@ func TestTempTableHeartbeatHealthyNotStarvedBySlowTablet(t *testing.T) {
 	healthy := &mysql.Conn{ConnectionID: uint32((slowConns + 1) * tempTableBeatBuckets)}
 	vh.tempTableConns.Store(healthy, &tempTableConn{targets: tempTargets(tempTableHeartbeatTarget{target: target2, alias: t2.Alias, reservedID: 999999})})
 
-	sweepDone := make(chan struct{})
-	go func() {
-		vh.sweepTempTableBucket(ctx, 0)
-		close(sweepDone)
-	}()
+	go vh.sendTempTableHeartbeats(ctx)
 
-	// The healthy connection's tablet must be beaten promptly, well before
-	// the slow tablet's connections finish.
+	// The healthy connection's tablet (t2) must be beaten promptly, in its own
+	// bucket goroutine, while the slow tablet (t1) blocks its own.
 	require.Eventually(t, func() bool { return sbc2.ExecCount.Load() >= 1 }, 2*time.Second, time.Millisecond,
 		"healthy connection must be beaten promptly, not starved behind the slow tablet")
-	require.Less(t, sbc1.ExecCount.Load(), int64(slowConns),
-		"the slow tablet's connections should still be in flight while the healthy one is already done")
 }
 
 // TestTempTableHeartbeatMultiTargetNoStarvation proves that a session with a
@@ -2128,7 +2149,7 @@ func TestTempTableHeartbeatMultiTargetNoStarvation(t *testing.T) {
 	healthy := &mysql.Conn{ConnectionID: uint32((multiConns + 1) * tempTableBeatBuckets)}
 	vh.tempTableConns.Store(healthy, &tempTableConn{targets: tempTargets(tempTableHeartbeatTarget{target: target1, alias: t1.Alias, reservedID: 999999})})
 
-	go vh.sweepTempTableBucket(ctx, 0)
+	go vh.sendTempTableHeartbeats(ctx)
 
 	// The fast tablet's batched touch must run promptly on its own goroutine,
 	// without waiting on the slow t2 batch. Each tablet gets one batched RPC,
@@ -2172,6 +2193,59 @@ func TestTempTableHeartbeatReservedIDCollision(t *testing.T) {
 	require.Len(t, remaining, 1, "only the gone t2 target must be evicted")
 	require.True(t, topoproto.TabletAliasEqual(firstTempTarget(t, remaining).alias, t1.Alias),
 		"the surviving target must be t1's live reserved connection, not evicted by t2's gone id")
+}
+
+// TestTempTableBeatBudget verifies the per-tablet RPC budget stays strictly
+// below the heartbeat interval, so an unreachable tablet cannot stretch a
+// bucket's sweep past the interval and let a tablet timeout (which the
+// configured interval is meant to stay under) reclaim healthy connections in
+// that bucket. The 2s floor still applies when the interval is large enough.
+func TestTempTableBeatBudget(t *testing.T) {
+	cases := []struct {
+		interval time.Duration
+		want     time.Duration
+	}{
+		{1 * time.Second, 750 * time.Millisecond},  // capped at 3/4 interval
+		{2 * time.Second, 1500 * time.Millisecond}, // capped at 3/4 interval
+		{3 * time.Second, 2 * time.Second},         // 2s floor, below interval
+		{4 * time.Second, 2 * time.Second},         // 2s floor == interval/2
+		{10 * time.Second, 5 * time.Second},        // interval/2
+		{30 * time.Second, 15 * time.Second},       // interval/2
+	}
+	for _, tc := range cases {
+		got := tempTableBeatBudget(tc.interval)
+		require.Equal(t, tc.want, got, "budget for interval %s", tc.interval)
+		require.Less(t, got, tc.interval, "budget must stay below the interval for %s", tc.interval)
+	}
+}
+
+// TestTempTableHeartbeatBucketSweepWithinBudget verifies that a bucket sweep
+// containing an unreachable tablet still completes within the RPC budget —
+// which is below the interval — so a slow tablet cannot stretch the keepalive
+// cadence of the other tablets in its bucket past the interval.
+func TestTempTableHeartbeatBucketSweepWithinBudget(t *testing.T) {
+	origInterval := tempTableHeartbeatTime
+	tempTableHeartbeatTime = 1 * time.Second // budget = 750ms
+	t.Cleanup(func() { tempTableHeartbeatTime = origInterval })
+
+	vtg, sbc, ctx := createVtgateEnv(t)
+	vh := newVtgateHandler(vtg)
+	tablet := sbc.Tablet()
+	target := &querypb.Target{Keyspace: tablet.Keyspace, Shard: tablet.Shard, TabletType: tablet.Type}
+	alias := topoproto.TabletAliasString(tablet.Alias)
+
+	// The tablet blocks far longer than the budget, so the beat must time out.
+	sbc.ExecDelayResponse = 10 * time.Second
+	c := &mysql.Conn{ConnectionID: 1}
+	vh.tempTableConns.Store(c, &tempTableConn{targets: tempTargets(tempTableHeartbeatTarget{target: target, alias: tablet.Alias, reservedID: 1})})
+
+	start := time.Now()
+	vh.sweepTempTableBucket(ctx, tempTableBeatBucketFor(alias))
+	elapsed := time.Since(start)
+	require.Less(t, elapsed, tempTableHeartbeatTime,
+		"a bucket sweep with an unreachable tablet must complete within the interval, not stretch cadence")
+	require.GreaterOrEqual(t, elapsed, tempTableBeatBudget(tempTableHeartbeatTime),
+		"the beat should run until the budget before timing out")
 }
 
 // TestTempTableHeartbeatSweep verifies that a sweep pings the registered

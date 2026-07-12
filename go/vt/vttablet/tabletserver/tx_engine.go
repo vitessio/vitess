@@ -732,7 +732,7 @@ func (te *TxEngine) beginNewDbaConnection(ctx context.Context, settingsQuery str
 	// This is a fresh dba connection being set up; it is discarded whole on
 	// any failure, so an interruption may kill the connection.
 	if settingsQuery != "" {
-		if _, err = dbConn.ExecOnce(ctx, settingsQuery, 1, false, true /* insideTxn */); err != nil {
+		if _, err = dbConn.ExecOnce(ctx, settingsQuery, 1, false); err != nil {
 			// The caller bails out on any error, so close the fresh
 			// connection here or it leaks.
 			dbConn.Close()

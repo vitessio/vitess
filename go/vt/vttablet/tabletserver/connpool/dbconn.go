@@ -234,13 +234,21 @@ func (dbc *Conn) terminate(ctx context.Context, insideTxn bool, now time.Time) {
 // ExecOnce executes the specified query, but does not retry on connection
 // errors. Use it whenever the connection itself carries state a silent
 // reconnect would destroy (an open transaction, a reserved connection's temp
-// tables or settings). insideTxn controls what happens if ctx expires while
-// the query is executing: inside a transaction the whole connection is
-// killed, because a partially-executed transaction cannot be safely
-// continued; outside one only the query is killed (KILL QUERY), so the
-// session and its state survive the interruption.
-func (dbc *Conn) ExecOnce(ctx context.Context, query string, maxrows int, wantfields bool, insideTxn bool) (*sqltypes.Result, error) {
-	return dbc.execOnce(ctx, query, maxrows, wantfields, insideTxn)
+// tables or settings). If ctx expires while the query is executing, the whole
+// connection is killed, because a partially-executed transaction cannot be
+// safely continued. Callers holding a reserved connection outside a
+// transaction should use ExecOnceKeepConnOnTimeout instead.
+func (dbc *Conn) ExecOnce(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
+	return dbc.execOnce(ctx, query, maxrows, wantfields, true /* insideTxn */)
+}
+
+// ExecOnceKeepConnOnTimeout is like ExecOnce but, if ctx expires while the
+// query is executing, kills only the query (KILL QUERY) rather than the whole
+// connection — so a reserved connection's state (temp tables, settings)
+// survives the interruption. It must only be used when the connection is not
+// inside a transaction, where killing just the query is safe.
+func (dbc *Conn) ExecOnceKeepConnOnTimeout(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
+	return dbc.execOnce(ctx, query, maxrows, wantfields, false /* insideTxn */)
 }
 
 // FetchNext returns the next result set.
@@ -353,12 +361,37 @@ func (dbc *Conn) streamOnce(
 // StreamOnce executes the query and streams the results. But, does not retry
 // on connection errors. Use it whenever the connection itself carries state a
 // silent reconnect would destroy (an open transaction, a reserved
-// connection's temp tables or settings). insideTxn controls what happens if
-// ctx expires while the stream is executing: inside a transaction the whole
-// connection is killed, because a partially-executed transaction cannot be
-// safely continued; outside one only the query is killed (KILL QUERY), so
-// the session and its state survive the interruption.
+// connection's temp tables or settings). If ctx expires while the stream is
+// executing, the whole connection is killed, because a partially-executed
+// transaction cannot be safely continued. Callers holding a reserved
+// connection outside a transaction should use StreamOnceKeepConnOnTimeout.
 func (dbc *Conn) StreamOnce(
+	ctx context.Context,
+	query string,
+	callback func(*sqltypes.Result) error,
+	alloc func() *sqltypes.Result,
+	streamBufferSize int,
+	includedFields querypb.ExecuteOptions_IncludedFields,
+) error {
+	return dbc.streamOnceKill(ctx, query, callback, alloc, streamBufferSize, includedFields, true /* insideTxn */)
+}
+
+// StreamOnceKeepConnOnTimeout is like StreamOnce but, if ctx expires while the
+// stream is executing, kills only the query (KILL QUERY) rather than the whole
+// connection, so a reserved connection's state survives. It must only be used
+// when the connection is not inside a transaction.
+func (dbc *Conn) StreamOnceKeepConnOnTimeout(
+	ctx context.Context,
+	query string,
+	callback func(*sqltypes.Result) error,
+	alloc func() *sqltypes.Result,
+	streamBufferSize int,
+	includedFields querypb.ExecuteOptions_IncludedFields,
+) error {
+	return dbc.streamOnceKill(ctx, query, callback, alloc, streamBufferSize, includedFields, false /* insideTxn */)
+}
+
+func (dbc *Conn) streamOnceKill(
 	ctx context.Context,
 	query string,
 	callback func(*sqltypes.Result) error,

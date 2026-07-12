@@ -294,9 +294,12 @@ func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions, re
 	var conn *StatefulConnection
 	var err error
 	if reservedID != 0 {
-		conn, err = tp.scp.GetAndLock(reservedID, "start transaction on reserve conn")
+		// Use the TxPool wrapper (not tp.scp directly) so a BEGIN on a
+		// reserved connection that a keepalive touch is momentarily holding
+		// waits the touch out instead of failing with an in-use error.
+		conn, err = tp.GetAndLock(reservedID, "start transaction on reserve conn")
 		if err != nil {
-			return nil, "", "", vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction %d: %v", reservedID, err)
+			return nil, "", "", err
 		}
 		// Update conn timeout.
 		timeout := getTransactionTimeout(options, tp.env.Config(), options.GetWorkload())

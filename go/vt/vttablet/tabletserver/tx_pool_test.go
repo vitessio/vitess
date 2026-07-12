@@ -974,3 +974,31 @@ func TestTxPoolGetAndLockWaitsOutKeepAlive(t *testing.T) {
 	require.ErrorContains(t, err, "in use: for query")
 	held.Release(tx.ConnRelease)
 }
+
+// TestTxPoolBeginWaitsOutKeepAlive verifies that starting a transaction on a
+// reserved connection waits out an in-flight keepalive touch rather than
+// failing with an in-use error — Begin must go through the keepalive-aware
+// lock path, not the pool directly.
+func TestTxPoolBeginWaitsOutKeepAlive(t *testing.T) {
+	ctx := t.Context()
+	db, txPool, _, closer := setup(t)
+	defer closer()
+	db.AddQuery("begin", &sqltypes.Result{})
+
+	conn, err := txPool.scp.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
+	require.NoError(t, err)
+	id := conn.ReservedID()
+	conn.Unlock()
+
+	// Hold the reserved connection as a keepalive would, releasing shortly
+	// after: BEGIN must wait it out and succeed.
+	held, err := txPool.scp.GetAndLock(id, reservedKeepAlivePurpose)
+	require.NoError(t, err)
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		held.Unlock()
+	}()
+	txConn, _, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, id, nil)
+	require.NoError(t, err, "BEGIN must wait out a keepalive hold on the reserved connection, not fail")
+	txConn.Unlock()
+}

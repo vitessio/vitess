@@ -98,8 +98,15 @@ func (sc *StatefulConnection) Exec(ctx context.Context, query string, maxrows in
 	// Outside a transaction, a context deadline expiring mid-query kills only
 	// the query, not the connection: a reserved connection's state (temp
 	// tables, settings) survives the interruption, matching how non-stateful
-	// query timeouts behave.
-	r, err := sc.dbConn.Conn.ExecOnce(ctx, query, maxrows, wantfields, sc.IsInTransaction())
+	// query timeouts behave. Inside a transaction the whole connection is
+	// killed, since a partially-executed transaction cannot be continued.
+	var r *sqltypes.Result
+	var err error
+	if sc.IsInTransaction() {
+		r, err = sc.dbConn.Conn.ExecOnce(ctx, query, maxrows, wantfields)
+	} else {
+		r, err = sc.dbConn.Conn.ExecOnceKeepConnOnTimeout(ctx, query, maxrows, wantfields)
+	}
 	if err != nil {
 		if sqlerror.IsConnErr(err) {
 			select {
