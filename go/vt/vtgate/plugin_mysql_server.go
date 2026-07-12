@@ -320,7 +320,7 @@ func (vh *vtgateHandler) startTempTableHeartbeat(ctx context.Context) {
 	// tablets delays only its own next round — never another bucket's
 	// keepalives or the overall schedule.
 	interval := tempTableHeartbeatTime / tempTableBeatBuckets
-	for bucket := uint32(0); bucket < tempTableBeatBuckets; bucket++ {
+	for bucket := range uint32(tempTableBeatBuckets) {
 		go func() {
 			// Stagger the buckets across the interval.
 			select {
@@ -356,7 +356,7 @@ const tempTableBeatBuckets = 16
 // The background sweeper beats one bucket at a time instead; this form is
 // for tests and returns once all beats settle.
 func (vh *vtgateHandler) sendTempTableHeartbeats(ctx context.Context) {
-	for bucket := uint32(0); bucket < tempTableBeatBuckets; bucket++ {
+	for bucket := range uint32(tempTableBeatBuckets) {
 		vh.sweepTempTableBucket(ctx, bucket)
 	}
 }

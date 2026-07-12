@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -759,7 +760,7 @@ func TestDBExecOnceNotInTxnFallsBackToConnKill(t *testing.T) {
 
 	// KILL QUERY is rejected, so terminate must fall back to killing the
 	// connection to unblock the call.
-	db.AddRejectedQuery("kill query "+fmt.Sprintf("%d", dbConn.conn.ID()), errors.New("kill query not permitted"))
+	db.AddRejectedQuery("kill query "+strconv.FormatInt(dbConn.conn.ID(), 10), errors.New("kill query not permitted"))
 	var connKilled atomic.Bool
 	db.AddQueryPatternWithCallback(`kill \d+`, &sqltypes.Result{}, func(string) {
 		connKilled.Store(true)
