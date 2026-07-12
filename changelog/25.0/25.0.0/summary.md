@@ -11,6 +11,7 @@
         - [`--watch-replication-stream` flag removed](#vttablet-watch-replication-stream-removed)
         - [Snapshot Topology feature removed](#vtorc-snapshot-topology-removed)
         - [VTOrc `--cell` flag is now required](#vtorc-cell-required)
+        - [`BackupHandle` interface gains `Wait()` method](#backup-handle-wait-method)
     - **[Deprecations](#deprecations)**
         - [CLI Flags](#deprecated-cli-flags)
 - **[Minor Changes](#minor-changes)**
@@ -21,11 +22,14 @@
         - [New controls for cross-keyspace reads](#vtgate-cross-keyspace-reads)
         - [Streaming errors no longer surface as connection loss](#vtgate-streamexecute-real-errors)
         - [Temporary-table connections are kept alive with a heartbeat](#vtgate-temp-table-heartbeat)
+        - [SHA256-hashed passwords in the static gRPC auth plugin](#vtgate-grpc-static-auth-sha256)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
         - [Query timeouts no longer kill reserved connections outside transactions](#vttablet-reserved-conn-kill-query)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
+    - **[Backup/Restore](#minor-changes-backup)**
+        - [Chunked backup/restore for the builtinbackupengine](#backup-chunked-builtin)
     - **[General](#minor-changes-general)**
         - [Build version metadata now sourced from VCS stamping](#build-info-from-vcs)
 
@@ -87,6 +91,18 @@ The `--cell` VTOrc flag, [introduced in v24](../../24.0/24.0.0/summary.md#vtorc-
 **Impact**: VTOrc will fail to start with a `FAILED_PRECONDITION` error if `--cell` is empty.
 
 See [#20048](https://github.com/vitessio/vitess/pull/20048) for the removal and [#19047](https://github.com/vitessio/vitess/pull/19047) for the original `--cell` flag introduction.
+
+#### <a id="backup-handle-wait-method"/>`BackupHandle` interface gains `Wait()` method</a>
+
+The `backupstorage.BackupHandle` interface now requires a `Wait()` method. This method blocks until all pending asynchronous `AddFile` operations complete without finalizing the backup. It is idempotent and safe to call multiple times.
+
+**Impact**: Any out-of-tree or custom `BackupHandle` implementation will fail to compile until a `Wait()` method is added. For synchronous backends, a no-op implementation is sufficient:
+
+```go
+func (bh *MyBackupHandle) Wait() {}
+```
+
+See [#20167](https://github.com/vitessio/vitess/pull/20167) for details.
 
 ### <a id="deprecations"/>Deprecations</a>
 
@@ -172,6 +188,23 @@ Relatedly, `CREATE TEMPORARY TABLE` issued with an explicit tablet-type or shard
 
 See [#20320](https://github.com/vitessio/vitess/issues/20320) for details.
 
+#### <a id="vtgate-grpc-static-auth-sha256"/>SHA256-hashed passwords in the static gRPC auth plugin</a>
+
+The static gRPC authentication plugin (`--grpc-auth-static-password-file`) now accepts SHA256-hashed passwords in addition to plaintext ones. Each entry in the credentials file gains an optional `CachingSha2Password` field holding the hex-encoded `SHA256(SHA256(password))`, with an optional leading `*`. This is the same format the MySQL protocol's static auth server uses for its own `CachingSha2Password` field, so a single stored credential can authenticate a user on both the MySQL and gRPC endpoints, and existing `caching_sha2_password`-style hashes can be copied over verbatim.
+
+When an entry sets `CachingSha2Password`, it takes precedence over the plaintext `Password` field. A single credentials file may mix plaintext and hashed entries:
+
+```json
+[
+  {"Username": "user1", "Password": "plaintext_password"},
+  {"Username": "user2", "CachingSha2Password": "*49bbd275dd4bfb1170ced93e839a8ec1d5b86eab6acb0842502130a31702390d"}
+]
+```
+
+The hash is validated and hex-decoded once when the plugin loads. An entry whose `CachingSha2Password` is not valid hex, or does not decode to a 32-byte SHA256 digest, causes the plugin to fail to initialize. No new plugin or flag is introduced.
+
+See [#19250](https://github.com/vitessio/vitess/pull/19250) for details.
+
 ### <a id="minor-changes-vttablet"/>VTTablet</a>
 
 #### <a id="vttablet-consolidator-reject-on-cap"/>Consolidator Reject on Waiter Cap</a>
@@ -202,6 +235,21 @@ Two changes:
 Tablets that already have more tracked schema objects than the configured limit will reload fine — only new creations are gated. Operators who need to support more tables and views should increase the flag and ensure both vttablet and mysqld have enough memory to comfortably hold the larger schema.
 
 See [#19978](https://github.com/vitessio/vitess/issues/19978) for details.
+
+### <a id="minor-changes-backup"/>Backup/Restore</a>
+
+#### <a id="backup-chunked-builtin"/>Chunked backup/restore for the `builtinbackupengine`</a>
+
+The builtin backup engine now supports splitting large files into chunks for parallel backup and restore. This significantly improves restore throughput for keyspaces dominated by a small number of large InnoDB files, as individual chunks can be restored concurrently via parallel writes.
+
+Two new flags control chunking behavior:
+
+- `--builtinbackup-file-chunk-threshold` (default `0`, chunking disabled): files larger than this size in bytes are split into chunks during backup.
+- `--builtinbackup-file-chunk-size` (default `1073741824` / 1 GiB): the target size in bytes for each chunk.
+
+**Compatibility note:** Backups created with chunking enabled are **not restorable by older Vitess versions** that do not understand the `Chunks` field in the backup MANIFEST. Non-chunked backups (the default) remain fully compatible with older versions.
+
+See [#20167](https://github.com/vitessio/vitess/pull/20167) for details.
 
 ### <a id="minor-changes-general"/>General</a>
 
