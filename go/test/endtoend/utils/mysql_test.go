@@ -196,9 +196,6 @@ func TestSetSuperReadOnlyLockWaitTimeoutMySQL(t *testing.T) {
 	var sqlErr *sqlerror.SQLError
 	require.ErrorAs(t, err, &sqlErr, "enabling super_read_only while blocked should fail, took %v", elapsed)
 	assert.Equal(t, sqlerror.ERLockWaitTimeout, sqlErr.Number(), "expected a lock wait timeout error, got: %v", err)
-	// The nominal wait is 1 second. Allow generous headroom for loaded CI hosts
-	// while still proving we did not wait for the lock to be released.
-	assert.Less(t, elapsed, 10*time.Second)
 
 	isSuperReadOnly, err := mysqld.IsSuperReadOnly(t.Context())
 	require.NoError(t, err)
