@@ -32,6 +32,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/hook"
@@ -399,8 +400,23 @@ func (mysqld *Mysqld) SetSuperReadOnly(ctx context.Context, on bool, opts ...Set
 	lockWaitTimeoutSeconds := int64((options.lockWaitTimeout + time.Second - 1) / time.Second)
 	setTimeoutQuery := fmt.Sprintf("SET SESSION lock_wait_timeout = %d", lockWaitTimeoutSeconds)
 	if err := mysqld.executeSuperQueryListConn(ctx, conn, []string{setTimeoutQuery}); err != nil {
-		return nil, err
+		// Some servers don't know lock_wait_timeout. Proceed without a
+		// bound rather than return an error callers could mistake for
+		// super_read_only being unknown.
+		sqlErr, ok := errors.AsType[*sqlerror.SQLError](err)
+		if !ok || sqlErr.Number() != sqlerror.ERUnknownSystemVariable {
+			return nil, err
+		}
+
+		log.Warn("server does not know about lock_wait_timeout, continuing without bounding the lock wait", slog.Any("error", err))
+
+		if err := mysqld.executeSuperQueryListConn(ctx, conn, []string{query}); err != nil {
+			return nil, err
+		}
+
+		return resetFunc, nil
 	}
+
 	execErr := mysqld.executeSuperQueryListConn(ctx, conn, []string{query})
 	// Restore the session lock_wait_timeout even if the SET GLOBAL failed.
 	// For a session variable, DEFAULT is the corresponding global value.
