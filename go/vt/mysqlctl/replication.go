@@ -390,8 +390,7 @@ func (mysqld *Mysqld) execSetSuperReadOnly(ctx context.Context, on bool, options
 	}
 
 	// Pin a single connection so the session lock_wait_timeout applies to the
-	// SET GLOBAL statement, and restore it before the connection goes back to
-	// the pool.
+	// SET GLOBAL statement.
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
 		return err
@@ -417,13 +416,9 @@ func (mysqld *Mysqld) execSetSuperReadOnly(ctx context.Context, on bool, options
 	}
 
 	execErr := mysqld.executeSuperQueryListConn(ctx, conn, []string{query})
-	// Restore the session lock_wait_timeout even if the SET GLOBAL failed.
-	// For a session variable, DEFAULT is the corresponding global value.
-	if err := mysqld.executeSuperQueryListConn(ctx, conn, []string{"SET SESSION lock_wait_timeout = DEFAULT"}); err != nil {
-		// Close the connection so a modified session never returns to the pool.
-		log.Warn("failed to restore session lock_wait_timeout, discarding connection", slog.Any("error", err))
-		conn.Close()
-	}
+	// Discard the connection so the modified session never returns to the
+	// pool. Recycling a closed connection opens a replacement.
+	conn.Close()
 
 	return execErr
 }

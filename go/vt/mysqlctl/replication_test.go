@@ -784,14 +784,13 @@ func TestSetSuperReadOnlyLockWaitTimeout(t *testing.T) {
 		db.AddQuery("SELECT @@global.super_read_only", sqltypes.MakeTestResult(sqltypes.MakeTestFields("@@global.super_read_only", "int64"), "0"))
 		db.AddQuery("SET SESSION lock_wait_timeout = 1", &sqltypes.Result{})
 		db.AddQuery("SET GLOBAL super_read_only = 'ON'", &sqltypes.Result{})
-		db.AddQuery("SET SESSION lock_wait_timeout = DEFAULT", &sqltypes.Result{})
 
 		testMysqld := NewMysqld(dbc)
 		t.Cleanup(testMysqld.Close)
 		return db, testMysqld
 	}
 
-	t.Run("applies and restores the session lock_wait_timeout", func(t *testing.T) {
+	t.Run("applies the session lock_wait_timeout before enabling", func(t *testing.T) {
 		db, testMysqld := newTestMysqld(t)
 
 		resetFunc, err := testMysqld.SetSuperReadOnly(t.Context(), true, WithLockWaitTimeout(time.Second))
@@ -801,12 +800,9 @@ func TestSetSuperReadOnlyLockWaitTimeout(t *testing.T) {
 		queryLog := db.QueryLog()
 		setIdx := strings.Index(queryLog, "set session lock_wait_timeout = 1")
 		enableIdx := strings.Index(queryLog, "set global super_read_only = 'on'")
-		restoreIdx := strings.Index(queryLog, "set session lock_wait_timeout = default")
 		require.NotEqual(t, -1, setIdx, "expected the session lock_wait_timeout to be set, got queries: %s", queryLog)
 		require.NotEqual(t, -1, enableIdx, "expected super_read_only to be enabled, got queries: %s", queryLog)
-		require.NotEqual(t, -1, restoreIdx, "expected the session lock_wait_timeout to be restored, got queries: %s", queryLog)
 		assert.Less(t, setIdx, enableIdx, "lock_wait_timeout must be set before enabling super_read_only")
-		assert.Less(t, enableIdx, restoreIdx, "lock_wait_timeout must be restored after enabling super_read_only")
 	})
 
 	t.Run("rounds the timeout up to whole seconds", func(t *testing.T) {
@@ -832,14 +828,12 @@ func TestSetSuperReadOnlyLockWaitTimeout(t *testing.T) {
 		assert.NotContains(t, db.QueryLog(), "lock_wait_timeout")
 	})
 
-	t.Run("restores lock_wait_timeout when enabling fails", func(t *testing.T) {
+	t.Run("enabling failure still surfaces the error", func(t *testing.T) {
 		db, testMysqld := newTestMysqld(t)
 		db.AddRejectedQuery("SET GLOBAL super_read_only = 'ON'", sqlerror.NewSQLError(sqlerror.ERLockWaitTimeout, sqlerror.SSUnknownSQLState, "Lock wait timeout exceeded; try restarting transaction"))
 
 		_, err := testMysqld.SetSuperReadOnly(t.Context(), true, WithLockWaitTimeout(time.Second))
 		require.ErrorContains(t, err, "Lock wait timeout exceeded")
-
-		assert.Equal(t, 1, db.GetQueryCalledNum("SET SESSION lock_wait_timeout = DEFAULT"))
 	})
 
 	t.Run("reset function applies the lock_wait_timeout", func(t *testing.T) {
@@ -854,7 +848,6 @@ func TestSetSuperReadOnlyLockWaitTimeout(t *testing.T) {
 
 		assert.Equal(t, 1, db.GetQueryCalledNum("SET GLOBAL super_read_only = 'OFF'"))
 		assert.Equal(t, 2, db.GetQueryCalledNum("SET SESSION lock_wait_timeout = 1"), "the reset must bound its lock wait like the original call")
-		assert.Equal(t, 2, db.GetQueryCalledNum("SET SESSION lock_wait_timeout = DEFAULT"), "the reset must restore the session lock_wait_timeout")
 	})
 
 	t.Run("unknown lock_wait_timeout proceeds without a bound", func(t *testing.T) {
@@ -867,14 +860,5 @@ func TestSetSuperReadOnlyLockWaitTimeout(t *testing.T) {
 
 		assert.Equal(t, 1, db.GetQueryCalledNum("SET GLOBAL super_read_only = 'ON'"))
 		assert.NotContains(t, db.QueryLog(), "lock_wait_timeout = default", "must not restore a lock_wait_timeout that was never set")
-	})
-
-	t.Run("restore failure does not fail the operation", func(t *testing.T) {
-		db, testMysqld := newTestMysqld(t)
-		db.AddRejectedQuery("SET SESSION lock_wait_timeout = DEFAULT", errors.New("connection lost"))
-
-		resetFunc, err := testMysqld.SetSuperReadOnly(t.Context(), true, WithLockWaitTimeout(time.Second))
-		require.NoError(t, err)
-		assert.NotNil(t, resetFunc)
 	})
 }
