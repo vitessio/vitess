@@ -387,6 +387,10 @@ func (mysqld *Mysqld) execSetSuperReadOnly(ctx context.Context, on bool, options
 	}
 
 	if options.lockWaitTimeout <= 0 {
+		if options.lockWaitTimeout < 0 {
+			log.Warn("ignoring negative lock_wait_timeout, leaving the lock wait unbounded", slog.Duration("lock_wait_timeout", options.lockWaitTimeout))
+		}
+
 		return mysqld.ExecuteSuperQuery(ctx, query)
 	}
 
