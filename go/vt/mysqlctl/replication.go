@@ -62,7 +62,8 @@ type (
 // WithLockWaitTimeout sets the session lock_wait_timeout (rounded up to whole
 // seconds) for the SET GLOBAL super_read_only statement, bounding how long it
 // waits for metadata locks held by in-flight queries. By default the server's
-// value is left untouched.
+// value is left untouched. A zero or negative timeout is the same as omitting
+// the option: the server's value is left untouched and the wait is unbounded.
 func WithLockWaitTimeout(timeout time.Duration) SetSuperReadOnlyOption {
 	return func(options *setSuperReadOnlyOptions) {
 		options.lockWaitTimeout = timeout
