@@ -2947,3 +2947,43 @@ func addTabletServerSupportedQueries(db *fakesqldb.DB) {
 		}},
 	})
 }
+
+// TestReservedConnKeepAliveBatch verifies the batched keepalive touch:
+// reservedID plus the additional reserved_conn_keep_alive_ids are refreshed in
+// one Execute, nothing is sent to MySQL, and ids that no longer exist are
+// reported back as rows so the caller can stop refreshing them.
+func TestReservedConnKeepAliveBatch(t *testing.T) {
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "")
+	defer tsv.StopService()
+	defer db.Close()
+
+	db.AddQueryPattern("set sql_mode = ''", &sqltypes.Result{})
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+
+	// Reserve two connections.
+	s1, _, err := tsv.ReserveExecute(ctx, nil, &target, nil, "set sql_mode = ''", nil, 0, nil)
+	require.NoError(t, err)
+	s2, _, err := tsv.ReserveExecute(ctx, nil, &target, nil, "set sql_mode = ''", nil, 0, nil)
+	require.NoError(t, err)
+
+	// A batched keepalive touch over both live ids reports none gone and runs
+	// nothing on MySQL.
+	queryLogBefore := db.QueryLog()
+	opts := &querypb.ExecuteOptions{ReservedConnKeepAlive: true, ReservedConnKeepAliveIds: []int64{s2.ReservedID}}
+	res, err := tsv.Execute(ctx, nil, &target, "/* keepalive */ select 1", nil, 0, s1.ReservedID, opts)
+	require.NoError(t, err)
+	require.Empty(t, res.Rows, "no reserved connection is gone")
+	require.Equal(t, queryLogBefore, db.QueryLog(), "keepalive must not run anything on MySQL")
+
+	// Release one; the next batch reports it gone while the other stays alive.
+	require.NoError(t, tsv.Release(ctx, &target, 0, s2.ReservedID))
+	res, err = tsv.Execute(ctx, nil, &target, "/* keepalive */ select 1", nil, 0, s1.ReservedID, opts)
+	require.NoError(t, err)
+	require.Len(t, res.Rows, 1, "the released connection must be reported gone")
+	gone, err := res.Rows[0][0].ToInt64()
+	require.NoError(t, err)
+	require.Equal(t, s2.ReservedID, gone)
+
+	require.NoError(t, tsv.Release(ctx, &target, 0, s1.ReservedID))
+}

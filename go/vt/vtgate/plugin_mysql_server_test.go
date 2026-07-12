@@ -47,7 +47,6 @@ import (
 	"vitess.io/vitess/go/vt/tlstest"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtenv"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/binlogacl"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -1899,6 +1898,25 @@ func TestGracefulShutdownWithTransaction(t *testing.T) {
 // register only reserved shard sessions of a session that holds temporary
 // tables, lock out the sweeper while a command is in flight, and deregister
 // the connection once the temporary tables are gone.
+// tempTargets builds a keepalive target map from the given targets, for tests.
+func tempTargets(ts ...tempTableHeartbeatTarget) map[tempTableTargetKey]tempTableHeartbeatTarget {
+	m := make(map[tempTableTargetKey]tempTableHeartbeatTarget, len(ts))
+	for _, target := range ts {
+		m[newTempTableTargetKey(target)] = target
+	}
+	return m
+}
+
+// firstTempTarget returns the single target in a one-entry target map.
+func firstTempTarget(t *testing.T, targets map[tempTableTargetKey]tempTableHeartbeatTarget) tempTableHeartbeatTarget {
+	t.Helper()
+	require.Len(t, targets, 1)
+	for _, target := range targets {
+		return target
+	}
+	return tempTableHeartbeatTarget{}
+}
+
 func TestTempTableCommandTracking(t *testing.T) {
 	vh := &vtgateHandler{}
 	c := &mysql.Conn{ConnectionID: 7}
@@ -1930,7 +1948,7 @@ func TestTempTableCommandTracking(t *testing.T) {
 	require.True(t, ok)
 	registered := v.(*tempTableConn)
 	require.Len(t, registered.targets, 1)
-	require.Equal(t, int64(42), registered.targets[0].reservedID)
+	require.Equal(t, int64(42), firstTempTarget(t, registered.targets).reservedID)
 
 	// Republishing the targets bumps the generation, so a sweep that
 	// snapshotted the previous targets discards its results instead of
@@ -1974,8 +1992,8 @@ func TestTempTableHeartbeatBucket(t *testing.T) {
 	// Two connections in different buckets.
 	cA := &mysql.Conn{ConnectionID: tempTableBeatBuckets}     // bucket 0
 	cB := &mysql.Conn{ConnectionID: tempTableBeatBuckets + 1} // bucket 1
-	vh.tempTableConns.Store(cA, &tempTableConn{targets: []tempTableHeartbeatTarget{{target: target, alias: tablet.Alias, reservedID: 1}}})
-	vh.tempTableConns.Store(cB, &tempTableConn{targets: []tempTableHeartbeatTarget{{target: target, alias: tablet.Alias, reservedID: 2}}})
+	vh.tempTableConns.Store(cA, &tempTableConn{targets: tempTargets(tempTableHeartbeatTarget{target: target, alias: tablet.Alias, reservedID: 1})})
+	vh.tempTableConns.Store(cB, &tempTableConn{targets: tempTargets(tempTableHeartbeatTarget{target: target, alias: tablet.Alias, reservedID: 2})})
 
 	before := sbc.ExecCount.Load()
 	vh.sweepTempTableBucket(ctx, 0)
@@ -2002,8 +2020,8 @@ func TestTempTableHeartbeatBucketIndependence(t *testing.T) {
 	sbc1.ExecDelayResponse = 3 * time.Second
 	cA := &mysql.Conn{ConnectionID: tempTableBeatBuckets}     // bucket 0
 	cB := &mysql.Conn{ConnectionID: tempTableBeatBuckets + 1} // bucket 1
-	vh.tempTableConns.Store(cA, &tempTableConn{targets: []tempTableHeartbeatTarget{{target: target1, alias: t1.Alias, reservedID: 1}}})
-	vh.tempTableConns.Store(cB, &tempTableConn{targets: []tempTableHeartbeatTarget{{target: target2, alias: t2.Alias, reservedID: 2}}})
+	vh.tempTableConns.Store(cA, &tempTableConn{targets: tempTargets(tempTableHeartbeatTarget{target: target1, alias: t1.Alias, reservedID: 1})})
+	vh.tempTableConns.Store(cB, &tempTableConn{targets: tempTargets(tempTableHeartbeatTarget{target: target2, alias: t2.Alias, reservedID: 2})})
 
 	// Start bucket 0's sweep; it blocks on the slow tablet.
 	bucket0Done := make(chan struct{})
@@ -2052,14 +2070,14 @@ func TestTempTableHeartbeatHealthyNotStarvedBySlowTablet(t *testing.T) {
 
 	// Many connections on the slow tablet, all in bucket 0.
 	sbc1.ExecDelayResponse = 3 * time.Second
-	const slowConns = 4 * tempTableBeatPerTabletConcurrency
+	const slowConns = 32 // all in one batched RPC to the slow tablet
 	for i := range slowConns {
 		c := &mysql.Conn{ConnectionID: uint32((i + 1) * tempTableBeatBuckets)} // %buckets == 0
-		vh.tempTableConns.Store(c, &tempTableConn{targets: []tempTableHeartbeatTarget{{target: target1, alias: t1.Alias, reservedID: int64(i + 1)}}})
+		vh.tempTableConns.Store(c, &tempTableConn{targets: tempTargets(tempTableHeartbeatTarget{target: target1, alias: t1.Alias, reservedID: int64(i + 1)})})
 	}
 	// One healthy connection on a different tablet, also in bucket 0.
 	healthy := &mysql.Conn{ConnectionID: uint32((slowConns + 1) * tempTableBeatBuckets)}
-	vh.tempTableConns.Store(healthy, &tempTableConn{targets: []tempTableHeartbeatTarget{{target: target2, alias: t2.Alias, reservedID: 999999}}})
+	vh.tempTableConns.Store(healthy, &tempTableConn{targets: tempTargets(tempTableHeartbeatTarget{target: target2, alias: t2.Alias, reservedID: 999999})})
 
 	sweepDone := make(chan struct{})
 	go func() {
@@ -2099,26 +2117,26 @@ func TestTempTableHeartbeatMultiTargetNoStarvation(t *testing.T) {
 	// worker while blocked on their slow t2 target, starving the healthy
 	// t1-only session; scheduling each target under its own tablet keeps the
 	// slow t2 targets in t2's pool so t1 stays responsive.
-	const multiConns = 2 * tempTableBeatPerTabletConcurrency
+	const multiConns = 16
 	for i := range multiConns {
 		mc := &mysql.Conn{ConnectionID: uint32((i + 1) * tempTableBeatBuckets)} // bucket 0
-		vh.tempTableConns.Store(mc, &tempTableConn{targets: []tempTableHeartbeatTarget{
-			{target: target1, alias: t1.Alias, reservedID: int64(2*i + 1)},
-			{target: target2, alias: t2.Alias, reservedID: int64(2*i + 2)},
-		}})
+		vh.tempTableConns.Store(mc, &tempTableConn{targets: tempTargets(
+			tempTableHeartbeatTarget{target: target1, alias: t1.Alias, reservedID: int64(2*i + 1)},
+			tempTableHeartbeatTarget{target: target2, alias: t2.Alias, reservedID: int64(2*i + 2)},
+		)})
 	}
 	healthy := &mysql.Conn{ConnectionID: uint32((multiConns + 1) * tempTableBeatBuckets)}
-	vh.tempTableConns.Store(healthy, &tempTableConn{targets: []tempTableHeartbeatTarget{
-		{target: target1, alias: t1.Alias, reservedID: 999999},
-	}})
+	vh.tempTableConns.Store(healthy, &tempTableConn{targets: tempTargets(tempTableHeartbeatTarget{target: target1, alias: t1.Alias, reservedID: 999999})})
 
 	go vh.sweepTempTableBucket(ctx, 0)
 
-	// The fast tablet's targets — including the healthy session — must all be
-	// beaten promptly, without waiting on the slow t2 targets.
-	require.Eventually(t, func() bool { return sbc1.ExecCount.Load() >= int64(multiConns+1) }, 2*time.Second, time.Millisecond,
-		"the fast tablet's reserved connections must be beaten without waiting on a slow secondary tablet")
-	require.Less(t, sbc2.ExecCount.Load(), int64(multiConns), "the slow secondary targets should still be in flight")
+	// The fast tablet's batched touch must run promptly on its own goroutine,
+	// without waiting on the slow t2 batch. Each tablet gets one batched RPC,
+	// so ExecCount reflects RPCs, not targets; if t1 were serialized behind t2
+	// it would not start until t2's delay elapsed. ExecCount is atomic, so
+	// this read does not race the concurrent sweep.
+	require.Eventually(t, func() bool { return sbc1.ExecCount.Load() >= 1 }, 2*time.Second, time.Millisecond,
+		"the fast tablet's batched touch must run without waiting on the slow secondary tablet")
 }
 
 // TestTempTableHeartbeatReservedIDCollision verifies that a beat result is
@@ -2138,13 +2156,13 @@ func TestTempTableHeartbeatReservedIDCollision(t *testing.T) {
 
 	// One session with the SAME reserved id (5) on two different tablets.
 	c := &mysql.Conn{ConnectionID: 1}
-	vh.tempTableConns.Store(c, &tempTableConn{targets: []tempTableHeartbeatTarget{
-		{target: target1, alias: t1.Alias, reservedID: 5},
-		{target: target2, alias: t2.Alias, reservedID: 5},
-	}})
+	vh.tempTableConns.Store(c, &tempTableConn{targets: tempTargets(
+		tempTableHeartbeatTarget{target: target1, alias: t1.Alias, reservedID: 5},
+		tempTableHeartbeatTarget{target: target2, alias: t2.Alias, reservedID: 5},
+	)})
 
 	// Only t2's reserved connection is gone; t1's is healthy.
-	sbc2.EphemeralShardErr = vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction 5: not found")
+	sbc2.KeepAliveGoneIDs = map[int64]bool{5: true}
 
 	vh.sendTempTableHeartbeats(ctx)
 
@@ -2152,7 +2170,7 @@ func TestTempTableHeartbeatReservedIDCollision(t *testing.T) {
 	require.True(t, ok, "the healthy t1 target must keep the connection registered")
 	remaining := v.(*tempTableConn).targets
 	require.Len(t, remaining, 1, "only the gone t2 target must be evicted")
-	require.True(t, topoproto.TabletAliasEqual(remaining[0].alias, t1.Alias),
+	require.True(t, topoproto.TabletAliasEqual(firstTempTarget(t, remaining).alias, t1.Alias),
 		"the surviving target must be t1's live reserved connection, not evicted by t2's gone id")
 }
 
@@ -2166,9 +2184,7 @@ func TestTempTableHeartbeatSweep(t *testing.T) {
 	tablet := sbc.Tablet()
 	target := &querypb.Target{Keyspace: tablet.Keyspace, Shard: tablet.Shard, TabletType: tablet.Type}
 	c := &mysql.Conn{ConnectionID: 1}
-	ttc := &tempTableConn{targets: []tempTableHeartbeatTarget{
-		{target: target, alias: tablet.Alias, reservedID: 99},
-	}}
+	ttc := &tempTableConn{targets: tempTargets(tempTableHeartbeatTarget{target: target, alias: tablet.Alias, reservedID: 99})}
 	vh.tempTableConns.Store(c, ttc)
 
 	// A sweep pings the reserved connection.
@@ -2184,45 +2200,40 @@ func TestTempTableHeartbeatSweep(t *testing.T) {
 	require.True(t, opts[len(opts)-1].GetReservedConnKeepAlive(),
 		"beats must be keepalive touches so mysqld's wait_timeout keeps counting only real user traffic")
 
-	// A beat whose snapshot was superseded mid-flight (command end bumped
-	// the generation) discards its results instead of applying them: with a
-	// stale gen, an eviction-worthy error must not remove the target.
-	sbc.EphemeralShardErr = vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction 99: not found")
+	// A result whose snapshot was superseded mid-flight (command end bumped
+	// the generation) is discarded rather than applied: even a gone result
+	// with a stale gen must not evict the target.
+	staleTarget := firstTempTarget(t, ttc.targets)
 	staleGen := ttc.gen
 	ttc.gen++
-	// beatTempTableTarget consumes one ttc.beats slot (the sweep adds it
-	// before dispatch), so add it here too.
-	ttc.beats.Add(1)
-	vh.beatTempTableTarget(ctx, tempTableBeatItem{c: c, ttc: ttc, gen: staleGen, target: ttc.targets[0]})
+	vh.applyTempTableBeatResult(tempTableBeatItem{c: c, ttc: ttc, gen: staleGen, target: staleTarget}, true /* gone */, nil)
 	require.Len(t, ttc.targets, 1, "results for a superseded snapshot must be discarded")
-	sbc.EphemeralShardErr = nil
 	ttc.gen--
 
-	// A reserved connection that no longer exists is evicted so it is not
+	// A reserved connection the tablet reports gone is evicted so it is not
 	// beaten (and warned about) on every sweep.
-	sbc.EphemeralShardErr = vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction 99: not found")
+	sbc.KeepAliveGoneIDs = map[int64]bool{99: true}
 	vh.sendTempTableHeartbeats(ctx)
 	require.Empty(t, ttc.targets)
 	_, ok := vh.tempTableConns.Load(c)
 	require.False(t, ok)
+	sbc.KeepAliveGoneIDs = nil
 
 	// A transient failure keeps the target so it is retried on the next sweep.
 	c2 := &mysql.Conn{ConnectionID: 2}
-	ttc2 := &tempTableConn{targets: []tempTableHeartbeatTarget{
-		{target: target, alias: tablet.Alias, reservedID: 100},
-	}}
+	ttc2 := &tempTableConn{targets: tempTargets(tempTableHeartbeatTarget{target: target, alias: tablet.Alias, reservedID: 100})}
 	vh.tempTableConns.Store(c2, ttc2)
 	sbc.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	vh.sendTempTableHeartbeats(ctx)
 	require.Len(t, ttc2.targets, 1)
-	require.Equal(t, 1, ttc2.targets[0].failures)
+	require.Equal(t, 1, firstTempTarget(t, ttc2.targets).failures)
 	_, ok = vh.tempTableConns.Load(c2)
 	require.True(t, ok)
 
 	// A successful beat resets the consecutive-failure count.
 	vh.sendTempTableHeartbeats(ctx)
 	require.Len(t, ttc2.targets, 1)
-	require.Equal(t, 0, ttc2.targets[0].failures)
+	require.Equal(t, 0, firstTempTarget(t, ttc2.targets).failures)
 
 	// Repeated failures never evict on their own — only a confirmed
 	// connection-closed error may — or transient network trouble would
@@ -2233,7 +2244,7 @@ func TestTempTableHeartbeatSweep(t *testing.T) {
 		vh.sendTempTableHeartbeats(ctx)
 	}
 	require.Len(t, ttc2.targets, 1)
-	require.Equal(t, 4, ttc2.targets[0].failures)
+	require.Equal(t, 4, firstTempTarget(t, ttc2.targets).failures)
 	_, ok = vh.tempTableConns.Load(c2)
 	require.True(t, ok)
 }
@@ -2315,8 +2326,8 @@ func TestComQueryTempTableHeartbeatRegistration(t *testing.T) {
 	require.True(t, ok)
 	targets := v.(*tempTableConn).targets
 	require.Len(t, targets, 1)
-	require.NotZero(t, targets[0].reservedID)
-	require.Equal(t, topoproto.TabletAliasString(sbclookup.Tablet().Alias), topoproto.TabletAliasString(targets[0].alias))
+	require.NotZero(t, firstTempTarget(t, targets).reservedID)
+	require.Equal(t, topoproto.TabletAliasString(sbclookup.Tablet().Alias), topoproto.TabletAliasString(firstTempTarget(t, targets).alias))
 
 	// COM_RESET_CONNECTION releases the reserved connections, and the
 	// temporary tables and applied session settings die with them: the

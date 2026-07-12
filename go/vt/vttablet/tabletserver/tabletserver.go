@@ -916,20 +916,48 @@ func (tsv *TabletServer) Execute(ctx context.Context, session queryservice.Sessi
 		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] transactionID and reserveID must match if both are non-zero")
 	}
 
-	// A reserved-connection keepalive only touches the connection's tablet-side
+	// A reserved-connection keepalive only touches the connections' tablet-side
 	// idle timers: nothing is executed, and nothing is sent to MySQL, so
-	// mysqld's wait_timeout keeps counting only real user traffic.
+	// mysqld's wait_timeout keeps counting only real user traffic. reservedID
+	// plus any options.reserved_conn_keep_alive_ids are all refreshed in this
+	// one RPC; the result reports which of them no longer exist so the caller
+	// can stop refreshing them.
 	if options.GetReservedConnKeepAlive() {
 		if reservedID == 0 {
 			return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "reserved connection keepalive requires a reserved ID")
 		}
-		if err := tsv.te.txPool.KeepAliveReserved(reservedID); err != nil {
-			return nil, err
-		}
-		return &sqltypes.Result{}, nil
+		return tsv.keepAliveReservedConns(reservedID, options.GetReservedConnKeepAliveIds()), nil
 	}
 
 	return tsv.execute(ctx, target, sql, bindVariables, transactionID, reservedID, nil, options)
+}
+
+// keepAliveReservedConnsGoneField names the single column of the keepalive
+// result: each row is a reserved id that no longer exists on this tablet.
+var keepAliveReservedConnsGoneField = []*querypb.Field{{
+	Name: "gone_reserved_id",
+	Type: sqltypes.Int64,
+}}
+
+// keepAliveReservedConns refreshes the idle timers of the given reserved
+// connections without executing anything on them, and returns the ids that no
+// longer exist (each as a row) so the caller can stop refreshing them.
+func (tsv *TabletServer) keepAliveReservedConns(reservedID int64, additional []int64) *sqltypes.Result {
+	result := &sqltypes.Result{Fields: keepAliveReservedConnsGoneField}
+	seen := make(map[int64]struct{}, 1+len(additional))
+	for _, id := range append([]int64{reservedID}, additional...) {
+		if id == 0 {
+			continue
+		}
+		if _, dup := seen[id]; dup {
+			continue
+		}
+		seen[id] = struct{}{}
+		if err := tsv.te.txPool.KeepAliveReserved(id); err != nil {
+			result.Rows = append(result.Rows, sqltypes.Row{sqltypes.NewInt64(id)})
+		}
+	}
+	return result
 }
 
 func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, settings []string, options *querypb.ExecuteOptions) (result *sqltypes.Result, err error) {

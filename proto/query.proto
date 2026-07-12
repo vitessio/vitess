@@ -395,6 +395,16 @@ message ExecuteOptions {
   // Tablets that predate this field ignore it and execute the query
   // normally.
   bool reserved_conn_keep_alive = 22;
+
+  // reserved_conn_keep_alive_ids lists additional reserved connection ids to
+  // refresh in the same keepalive touch (the Execute's reserved_id is also
+  // refreshed), so a client can keep alive all of a tablet's reserved
+  // connections with a single RPC. Ignored unless reserved_conn_keep_alive is
+  // set. The touch reports back which of the ids no longer exist so the
+  // caller can stop refreshing them; see the Execute result documentation.
+  // Tablets that predate this field refresh only reserved_id — the others are
+  // kept alive once the tablet is upgraded.
+  repeated int64 reserved_conn_keep_alive_ids = 23;
 }
 
 // Field describes a single column returned by a query

@@ -1418,8 +1418,17 @@ type ExecuteOptions struct {
 	// Tablets that predate this field ignore it and execute the query
 	// normally.
 	ReservedConnKeepAlive bool `protobuf:"varint,22,opt,name=reserved_conn_keep_alive,json=reservedConnKeepAlive,proto3" json:"reserved_conn_keep_alive,omitempty"`
-	unknownFields         protoimpl.UnknownFields
-	sizeCache             protoimpl.SizeCache
+	// reserved_conn_keep_alive_ids lists additional reserved connection ids to
+	// refresh in the same keepalive touch (the Execute's reserved_id is also
+	// refreshed), so a client can keep alive all of a tablet's reserved
+	// connections with a single RPC. Ignored unless reserved_conn_keep_alive is
+	// set. The touch reports back which of the ids no longer exist so the
+	// caller can stop refreshing them; see the Execute result documentation.
+	// Tablets that predate this field refresh only reserved_id — the others are
+	// kept alive once the tablet is upgraded.
+	ReservedConnKeepAliveIds []int64 `protobuf:"varint,23,rep,packed,name=reserved_conn_keep_alive_ids,json=reservedConnKeepAliveIds,proto3" json:"reserved_conn_keep_alive_ids,omitempty"`
+	unknownFields            protoimpl.UnknownFields
+	sizeCache                protoimpl.SizeCache
 }
 
 func (x *ExecuteOptions) Reset() {
@@ -1585,6 +1594,13 @@ func (x *ExecuteOptions) GetReservedConnKeepAlive() bool {
 		return x.ReservedConnKeepAlive
 	}
 	return false
+}
+
+func (x *ExecuteOptions) GetReservedConnKeepAliveIds() []int64 {
+	if x != nil {
+		return x.ReservedConnKeepAliveIds
+	}
+	return nil
 }
 
 type isExecuteOptions_Timeout interface {
@@ -5854,7 +5870,7 @@ const file_query_proto_rawDesc = "" +
 	"\x0ebind_variables\x18\x02 \x03(\v2$.query.BoundQuery.BindVariablesEntryR\rbindVariables\x1aU\n" +
 	"\x12BindVariablesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12)\n" +
-	"\x05value\x18\x02 \x01(\v2\x13.query.BindVariableR\x05value:\x028\x01\"\xd9\r\n" +
+	"\x05value\x18\x02 \x01(\v2\x13.query.BindVariableR\x05value:\x028\x01\"\x99\x0e\n" +
 	"\x0eExecuteOptions\x12M\n" +
 	"\x0fincluded_fields\x18\x04 \x01(\x0e2$.query.ExecuteOptions.IncludedFieldsR\x0eincludedFields\x12*\n" +
 	"\x11client_found_rows\x18\x05 \x01(\bR\x0fclientFoundRows\x12:\n" +
@@ -5874,7 +5890,8 @@ const file_query_proto_rawDesc = "" +
 	"\x10in_dml_execution\x18\x13 \x01(\bR\x0einDmlExecution\x124\n" +
 	"\x13transaction_timeout\x18\x14 \x01(\x03H\x01R\x12transactionTimeout\x88\x01\x01\x12\x1b\n" +
 	"\tno_result\x18\x15 \x01(\bR\bnoResult\x127\n" +
-	"\x18reserved_conn_keep_alive\x18\x16 \x01(\bR\x15reservedConnKeepAlive\";\n" +
+	"\x18reserved_conn_keep_alive\x18\x16 \x01(\bR\x15reservedConnKeepAlive\x12>\n" +
+	"\x1creserved_conn_keep_alive_ids\x18\x17 \x03(\x03R\x18reservedConnKeepAliveIds\";\n" +
 	"\x0eIncludedFields\x12\x11\n" +
 	"\rTYPE_AND_NAME\x10\x00\x12\r\n" +
 	"\tTYPE_ONLY\x10\x01\x12\a\n" +

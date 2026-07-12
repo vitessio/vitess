@@ -140,6 +140,11 @@ type SandboxConn struct {
 	// this error will only happen once
 	EphemeralShardErr error
 
+	// KeepAliveGoneIDs, when set, makes a reserved-connection keepalive touch
+	// report the listed reserved ids as gone (as the real tablet would when a
+	// reserved connection no longer exists).
+	KeepAliveGoneIDs map[int64]bool
+
 	// if this is not nil, any calls will panic the tablet
 	panicThis any
 
@@ -339,6 +344,18 @@ func (sbc *SandboxConn) Execute(ctx context.Context, session queryservice.Sessio
 	}
 	if err := sbc.waitForExecDelay(ctx); err != nil {
 		return nil, err
+	}
+
+	if options.GetReservedConnKeepAlive() {
+		// Simulate the tablet's batched keepalive touch: return which of the
+		// touched reserved ids are gone.
+		result := &sqltypes.Result{Fields: []*querypb.Field{{Name: "gone_reserved_id", Type: sqltypes.Int64}}}
+		for _, id := range append([]int64{reservedID}, options.GetReservedConnKeepAliveIds()...) {
+			if sbc.KeepAliveGoneIDs[id] {
+				result.Rows = append(result.Rows, sqltypes.Row{sqltypes.NewInt64(id)})
+			}
+		}
+		return result, nil
 	}
 
 	stmt, _ := sbc.parser.Parse(query) // knowingly ignoring the error
