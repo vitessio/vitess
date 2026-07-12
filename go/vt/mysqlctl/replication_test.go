@@ -842,6 +842,21 @@ func TestSetSuperReadOnlyLockWaitTimeout(t *testing.T) {
 		assert.Equal(t, 1, db.GetQueryCalledNum("SET SESSION lock_wait_timeout = DEFAULT"))
 	})
 
+	t.Run("reset function applies the lock_wait_timeout", func(t *testing.T) {
+		db, testMysqld := newTestMysqld(t)
+		db.AddQuery("SET GLOBAL super_read_only = 'OFF'", &sqltypes.Result{})
+
+		resetFunc, err := testMysqld.SetSuperReadOnly(t.Context(), true, WithLockWaitTimeout(time.Second))
+		require.NoError(t, err)
+		require.NotNil(t, resetFunc)
+
+		require.NoError(t, resetFunc())
+
+		assert.Equal(t, 1, db.GetQueryCalledNum("SET GLOBAL super_read_only = 'OFF'"))
+		assert.Equal(t, 2, db.GetQueryCalledNum("SET SESSION lock_wait_timeout = 1"), "the reset must bound its lock wait like the original call")
+		assert.Equal(t, 2, db.GetQueryCalledNum("SET SESSION lock_wait_timeout = DEFAULT"), "the reset must restore the session lock_wait_timeout")
+	})
+
 	t.Run("unknown lock_wait_timeout proceeds without a bound", func(t *testing.T) {
 		db, testMysqld := newTestMysqld(t)
 		db.AddRejectedQuery("SET SESSION lock_wait_timeout = 1", sqlerror.NewSQLError(sqlerror.ERUnknownSystemVariable, sqlerror.SSUnknownSQLState, "Unknown system variable 'lock_wait_timeout'"))

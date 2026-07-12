@@ -343,16 +343,12 @@ func (mysqld *Mysqld) SetSuperReadOnly(ctx context.Context, on bool, opts ...Set
 	//  return function for switching `OFF` super_read_only
 	var resetFunc ResetSuperReadOnlyFunc
 	disableFunc := func() error {
-		query := "SET GLOBAL super_read_only = 'OFF'"
-		err := mysqld.ExecuteSuperQuery(context.Background(), query)
-		return err
+		return mysqld.execSetSuperReadOnly(context.Background(), false, options)
 	}
 
 	//  return function for switching `ON` super_read_only.
 	enableFunc := func() error {
-		query := "SET GLOBAL super_read_only = 'ON'"
-		err := mysqld.ExecuteSuperQuery(context.Background(), query)
-		return err
+		return mysqld.execSetSuperReadOnly(context.Background(), true, options)
 	}
 
 	superReadOnlyEnabled, err := mysqld.IsSuperReadOnly(ctx)
@@ -372,6 +368,16 @@ func (mysqld *Mysqld) SetSuperReadOnly(ctx context.Context, on bool, opts ...Set
 		resetFunc = enableFunc
 	}
 
+	if err := mysqld.execSetSuperReadOnly(ctx, on, options); err != nil {
+		return nil, err
+	}
+
+	return resetFunc, nil
+}
+
+// execSetSuperReadOnly runs the SET GLOBAL super_read_only statement, bounding
+// how long it waits for metadata locks when options carries a lockWaitTimeout.
+func (mysqld *Mysqld) execSetSuperReadOnly(ctx context.Context, on bool, options setSuperReadOnlyOptions) error {
 	query := "SET GLOBAL super_read_only = "
 	if on {
 		query += "'ON'"
@@ -380,10 +386,7 @@ func (mysqld *Mysqld) SetSuperReadOnly(ctx context.Context, on bool, opts ...Set
 	}
 
 	if options.lockWaitTimeout <= 0 {
-		if err := mysqld.ExecuteSuperQuery(ctx, query); err != nil {
-			return nil, err
-		}
-		return resetFunc, nil
+		return mysqld.ExecuteSuperQuery(ctx, query)
 	}
 
 	// Pin a single connection so the session lock_wait_timeout applies to the
@@ -391,7 +394,7 @@ func (mysqld *Mysqld) SetSuperReadOnly(ctx context.Context, on bool, opts ...Set
 	// the pool.
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer conn.Recycle()
 
@@ -405,16 +408,12 @@ func (mysqld *Mysqld) SetSuperReadOnly(ctx context.Context, on bool, opts ...Set
 		// super_read_only being unknown.
 		sqlErr, ok := errors.AsType[*sqlerror.SQLError](err)
 		if !ok || sqlErr.Number() != sqlerror.ERUnknownSystemVariable {
-			return nil, err
+			return err
 		}
 
 		log.Warn("server does not know about lock_wait_timeout, continuing without bounding the lock wait", slog.Any("error", err))
 
-		if err := mysqld.executeSuperQueryListConn(ctx, conn, []string{query}); err != nil {
-			return nil, err
-		}
-
-		return resetFunc, nil
+		return mysqld.executeSuperQueryListConn(ctx, conn, []string{query})
 	}
 
 	execErr := mysqld.executeSuperQueryListConn(ctx, conn, []string{query})
@@ -425,11 +424,8 @@ func (mysqld *Mysqld) SetSuperReadOnly(ctx context.Context, on bool, opts ...Set
 		log.Warn("failed to restore session lock_wait_timeout, discarding connection", slog.Any("error", err))
 		conn.Close()
 	}
-	if execErr != nil {
-		return nil, execErr
-	}
 
-	return resetFunc, nil
+	return execErr
 }
 
 // WaitSourcePos lets replicas wait for the given replication position to
