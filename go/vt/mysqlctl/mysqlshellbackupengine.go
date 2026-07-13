@@ -442,6 +442,15 @@ func (be *MySQLShellBackupEngine) ShouldStartMySQLAfterRestore() bool {
 	return false
 }
 
+// ShouldSkipVersionCheck returns whether the MySQL version compatibility check
+// should be skipped when restoring a mysql-shell backup. Because mysql-shell
+// performs a logical restore, its backups are not tied to the on-disk data
+// dictionary format the way physical backups are, so operators can opt out of
+// the version check via --mysql-shell-restore-skip-version-check.
+func (be *MySQLShellBackupEngine) ShouldSkipVersionCheck() bool {
+	return mysqlShellRestoreSkipVersionCheck
+}
+
 func (be *MySQLShellBackupEngine) Name() string { return mysqlShellBackupEngineName }
 
 // isObjectStoreFlags returns true if the given flags JSON string contains

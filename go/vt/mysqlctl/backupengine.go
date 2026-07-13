@@ -193,6 +193,9 @@ func (p *RestoreParams) IsIncrementalRecovery() bool {
 type RestoreEngine interface {
 	ExecuteRestore(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle) (*BackupManifest, error)
 	ShouldStartMySQLAfterRestore() bool
+	// ShouldSkipVersionCheck reports whether the MySQL version compatibility
+	// check should be skipped when restoring a backup created by this engine.
+	ShouldSkipVersionCheck() bool
 }
 
 // BackupRestoreEngine is a combination of BackupEngine and RestoreEngine.
@@ -570,8 +573,15 @@ func FindBackupToRestore(ctx context.Context, params RestoreParams, bhs []backup
 				}
 				bh := manifestHandleMap.Handle(bm)
 
-				// check if the backup can be used with this MySQL version.
-				skipVersionCheck := bm.BackupMethod == mysqlShellBackupEngineName && mysqlShellRestoreSkipVersionCheck
+				// check if the backup can be used with this MySQL version, unless
+				// the engine that created the backup opts out of the version check.
+				engineName := bm.BackupMethod
+				if engineName == "" {
+					// The builtin engine is the only one that ever left BackupMethod unset.
+					engineName = builtinBackupEngineName
+				}
+				re, ok := BackupRestoreEngineMap[engineName]
+				skipVersionCheck := ok && re.ShouldSkipVersionCheck()
 				if bm.MySQLVersion != "" && !skipVersionCheck {
 					if err := validateMySQLVersionUpgradeCompatible(mysqlVersion, bm.MySQLVersion, bm.UpgradeSafe); err != nil {
 						params.Logger.Warningf("Skipping backup %v/%v with incompatible MySQL version %v (upgrade safe: %v): %v", backupDir, bh.Name(), bm.MySQLVersion, bm.UpgradeSafe, err)

@@ -975,6 +975,12 @@ func (be *XtrabackupEngine) ShouldStartMySQLAfterRestore() bool {
 	return true
 }
 
+// ShouldSkipVersionCheck returns false: xtrabackup backups are physical and tied to
+// the on-disk data dictionary format, so the MySQL version check always applies.
+func (be *XtrabackupEngine) ShouldSkipVersionCheck() bool {
+	return false
+}
+
 func (be *XtrabackupEngine) Name() string { return xtrabackupEngineName }
 
 func init() {
