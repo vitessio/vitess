@@ -25,6 +25,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"net"
 	"strconv"
 	"strings"
@@ -404,7 +405,7 @@ func (mysqld *Mysqld) execSetSuperReadOnly(ctx context.Context, on bool, options
 
 	// lock_wait_timeout only supports whole seconds, so round up to keep
 	// sub-second timeouts from truncating to 0.
-	lockWaitTimeoutSeconds := int64((options.lockWaitTimeout + time.Second - 1) / time.Second)
+	lockWaitTimeoutSeconds := int64(math.Ceil(options.lockWaitTimeout.Seconds()))
 	setTimeoutQuery := fmt.Sprintf("SET SESSION lock_wait_timeout = %d", lockWaitTimeoutSeconds)
 	if err := mysqld.executeSuperQueryListConn(ctx, conn, []string{setTimeoutQuery}); err != nil {
 		// Some servers don't know lock_wait_timeout. Proceed without a
