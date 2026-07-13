@@ -333,6 +333,6 @@ func TestSemiSyncBlockDueToDisruption(t *testing.T) {
 func runCommandWithSudo(t *testing.T, args ...string) string {
 	cmd := exec.Command("sudo", args...)
 	out, err := cmd.CombinedOutput()
-	assert.NoError(t, err, string(out))
+	require.NoError(t, err, string(out))
 	return string(out)
 }

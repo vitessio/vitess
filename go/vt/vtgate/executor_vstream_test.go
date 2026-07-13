@@ -78,7 +78,7 @@ func TestVStreamSQLUnsharded(t *testing.T) {
 
 	results := make(chan *sqltypes.Result, 20)
 	go func() {
-		err := executor.StreamExecute(ctx, nil, "TestExecuteStream", econtext.NewAutocommitSession(&vtgatepb.Session{TargetString: KsTestUnsharded}), sql, nil, func(qr *sqltypes.Result) error {
+		err := executor.StreamExecute(ctx, nil, "TestExecuteStream", econtext.NewAutocommitSession(&vtgatepb.Session{TargetString: KsTestUnsharded}), sql, nil, false, func(qr *sqltypes.Result) error {
 			results <- qr
 			return nil
 		})
@@ -95,7 +95,7 @@ func TestVStreamSQLUnsharded(t *testing.T) {
 		select {
 		case qr := <-results:
 			if !fieldsValidated {
-				require.Equal(t, 2, len(qr.Fields))
+				require.Len(t, qr.Fields, 2)
 				fieldsValidated = true
 			}
 			for _, row := range qr.Rows {

@@ -20,12 +20,15 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/orca"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 func TestEmpty(t *testing.T) {
@@ -69,14 +72,22 @@ func TestOrcaRecorder(t *testing.T) {
 
 func TestReportedOrca(t *testing.T) {
 	// Set the port to enable gRPC server.
-	withTempVar(&gRPCPort, getFreePort())
-	withTempVar(&gRPCEnableOrcaMetrics, true)
-	withTempVar(&GRPCServerMetricsRecorder, nil)
+	t.Cleanup(withTempVar(&gRPCPort, getFreePort()))
+	t.Cleanup(withTempVar(&gRPCEnableOrcaMetrics, true))
+	t.Cleanup(withTempVar(&GRPCServerMetricsRecorder, nil))
+	t.Cleanup(withTempVar(&GRPCServer, (*grpc.Server)(nil)))
 
 	createGRPCServer()
 	assert.NotNil(t, GRPCServerMetricsRecorder, "GRPCServerMetricsRecorder should be initialized when gRPCEnableOrcaMetrics is false")
 
-	serveGRPC()
+	// Cleanups run last-in-first-out, so the updater goroutine is fully
+	// stopped before the withTempVar cleanups above restore the globals.
+	stopOrcaUpdater := serveGRPC()
+	t.Cleanup(stopOrcaUpdater)
+	// The method value binds the receiver now, so the cleanup stops this
+	// test's server no matter when the GRPCServer global gets restored.
+	t.Cleanup(GRPCServer.Stop)
+
 	serverMetrics := GRPCServerMetricsRecorder.ServerMetrics()
 	cpuUsage := serverMetrics.CPUUtilization
 	assert.GreaterOrEqualf(t, cpuUsage, float64(0), "CPU Utilization is not set %.2f", cpuUsage)
@@ -85,6 +96,92 @@ func TestReportedOrca(t *testing.T) {
 	memUsage := serverMetrics.MemUtilization
 	assert.GreaterOrEqualf(t, memUsage, float64(0), "Mem Utilization is not set %.2f", memUsage)
 	t.Logf("Memory utilization is %.2f", memUsage)
+}
+
+// TestGRPCServerSkipsIngressStatsByDefault verifies that servenv gRPC servers
+// do not record ingress bytes unless a binary opts in.
+func TestGRPCServerSkipsIngressStatsByDefault(t *testing.T) {
+	restore := withTempVar(&gRPCIngressStatsEnabled, false)
+	defer restore()
+
+	var ingressBytes uint64
+	runIngressStatsTestRPC(t, &ingressBytes)
+
+	assert.Zero(t, atomic.LoadUint64(&ingressBytes))
+}
+
+// TestEnableGRPCIngressStatsInstallsServerOption verifies that opt-in servers
+// attach inbound gRPC payload bytes to RPC contexts.
+func TestEnableGRPCIngressStatsInstallsServerOption(t *testing.T) {
+	restore := withTempVar(&gRPCIngressStatsEnabled, false)
+	defer restore()
+	EnableGRPCIngressStats()
+
+	var ingressBytes uint64
+	runIngressStatsTestRPC(t, &ingressBytes)
+
+	assert.Positive(t, atomic.LoadUint64(&ingressBytes))
+}
+
+type ingressStatsTestService interface {
+	Check(context.Context, *emptypb.Empty) (*emptypb.Empty, error)
+}
+
+type ingressStatsTestServer struct {
+	ingressBytes *uint64
+}
+
+func (s *ingressStatsTestServer) Check(ctx context.Context, _ *emptypb.Empty) (*emptypb.Empty, error) {
+	if ingressBytes, ok := GRPCIngressBytes(ctx); ok {
+		atomic.StoreUint64(s.ingressBytes, ingressBytes)
+	}
+	return &emptypb.Empty{}, nil
+}
+
+var ingressStatsTestServiceDesc = grpc.ServiceDesc{
+	ServiceName: "test.IngressStats",
+	HandlerType: (*ingressStatsTestService)(nil),
+	Methods: []grpc.MethodDesc{{
+		MethodName: "Check",
+		Handler: func(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
+			req := new(emptypb.Empty)
+			if err := dec(req); err != nil {
+				return nil, err
+			}
+			if interceptor == nil {
+				return srv.(ingressStatsTestService).Check(ctx, req)
+			}
+			info := &grpc.UnaryServerInfo{
+				Server:     srv,
+				FullMethod: "/test.IngressStats/Check",
+			}
+			handler := func(ctx context.Context, req any) (any, error) {
+				return srv.(ingressStatsTestService).Check(ctx, req.(*emptypb.Empty))
+			}
+			return interceptor(ctx, req, info, handler)
+		},
+	}},
+}
+
+func runIngressStatsTestRPC(t *testing.T, ingressBytes *uint64) {
+	t.Helper()
+
+	port := getFreePort()
+	t.Cleanup(withTempVar(&gRPCPort, port))
+	t.Cleanup(withTempVar(&gRPCBindAddress, "127.0.0.1"))
+	t.Cleanup(withTempVar(&GRPCServer, (*grpc.Server)(nil)))
+
+	createGRPCServer()
+	require.NotNil(t, GRPCServer)
+	GRPCServer.RegisterService(&ingressStatsTestServiceDesc, &ingressStatsTestServer{ingressBytes: ingressBytes})
+	serveGRPC()
+	t.Cleanup(GRPCServer.Stop)
+
+	conn, err := grpc.NewClient(fmt.Sprintf("127.0.0.1:%d", port), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	require.NoError(t, err)
+	t.Cleanup(func() { conn.Close() })
+
+	require.NoError(t, conn.Invoke(context.Background(), "/test.IngressStats/Check", &emptypb.Empty{}, &emptypb.Empty{}))
 }
 
 func getFreePort() int {

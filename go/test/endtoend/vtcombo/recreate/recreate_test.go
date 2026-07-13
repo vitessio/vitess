@@ -96,26 +96,26 @@ func TestMain(m *testing.M) {
 func TestDropAndRecreateWithSameShards(t *testing.T) {
 	ctx := t.Context()
 	conn, err := vtgateconn.Dial(ctx, grpcAddress)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	cur := conn.Session(ks1+"@primary", nil)
 
 	mysqlConnCountBefore, err := getMySQLConnectionCount(ctx, cur)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	_, err = cur.Execute(ctx, "DROP DATABASE "+ks1, nil, false)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	_, err = cur.Execute(ctx, "CREATE DATABASE "+ks1, nil, false)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	assertTabletsPresent(t)
 
 	// Check the connection count after the CREATE. There will be zero connections after the DROP as the database
 	// no longer exists, but after it gets recreated any open pools will be able to reestablish connections.
 	mysqlConnCountAfter, err := getMySQLConnectionCount(ctx, cur)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// Assert that we're not leaking mysql connections, but allow for some wiggle room due to transient connections
 	assert.InDelta(t, mysqlConnCountBefore, mysqlConnCountAfter, 5,
@@ -136,7 +136,7 @@ func assertTabletsPresent(t *testing.T) {
 	log.Info(fmt.Sprintf("Running vtctldclient with command: %v", tmpCmd.Args))
 
 	output, err := tmpCmd.CombinedOutput()
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	numPrimary, numReplica, numRdonly, numDash80, num80Dash := 0, 0, 0, 0, 0
 	lines := strings.SplitSeq(string(output), "\n")

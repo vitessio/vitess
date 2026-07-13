@@ -1,3 +1,19 @@
+/*
+Copyright 2026 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package workflow
 
 import (
@@ -19,12 +35,16 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/testfiles"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/etcd2topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	"vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
@@ -57,6 +77,53 @@ func TestResolveWorkflowKeepData(t *testing.T) {
 		keepData, warnings := resolveWorkflowKeepData("wf1_reverse", &keepDataValue)
 		require.True(t, keepData)
 		require.Empty(t, warnings)
+	})
+}
+
+// TestGetTenantClause confirms that the tenant column name and a VARCHAR tenant
+// id are escaped before they are interpolated into the filter SQL, so that a
+// value containing a quote (or a column name containing a backtick) cannot break
+// out of the literal/identifier and inject additional predicate.
+func TestGetTenantClause(t *testing.T) {
+	parser := sqlparser.NewTestParser()
+
+	newSchema := func(colName string, colType querypb.Type) *vindexes.KeyspaceSchema {
+		return &vindexes.KeyspaceSchema{
+			MultiTenantSpec: &vschema.MultiTenantSpec{
+				TenantIdColumnName: colName,
+				TenantIdColumnType: colType,
+			},
+		}
+	}
+
+	t.Run("int64 tenant id is used verbatim", func(t *testing.T) {
+		expr, err := getTenantClause(&vtctldata.WorkflowOptions{TenantId: "123"}, newSchema("tenant_id", sqltypes.Int64), parser)
+		require.NoError(t, err)
+		require.NotNil(t, expr)
+		require.Equal(t, "tenant_id = 123", sqlparser.String(*expr))
+	})
+
+	t.Run("varchar tenant id with a quote stays a single literal", func(t *testing.T) {
+		malicious := "acme' or '1'='1"
+		expr, err := getTenantClause(&vtctldata.WorkflowOptions{TenantId: malicious}, newSchema("tenant_id", sqltypes.VarChar), parser)
+		require.NoError(t, err)
+		require.NotNil(t, expr)
+		cmp, ok := (*expr).(*sqlparser.ComparisonExpr)
+		require.True(t, ok, "expected a single comparison, got %T: %s", *expr, sqlparser.String(*expr))
+		lit, ok := cmp.Right.(*sqlparser.Literal)
+		require.True(t, ok, "expected a string literal on the right, got %T", cmp.Right)
+		require.Equal(t, malicious, lit.Val)
+	})
+
+	t.Run("column name with a backtick is escaped as an identifier", func(t *testing.T) {
+		expr, err := getTenantClause(&vtctldata.WorkflowOptions{TenantId: "acme"}, newSchema("tenant`id", sqltypes.VarChar), parser)
+		require.NoError(t, err)
+		require.NotNil(t, expr)
+		cmp, ok := (*expr).(*sqlparser.ComparisonExpr)
+		require.True(t, ok, "expected a single comparison, got %T: %s", *expr, sqlparser.String(*expr))
+		col, ok := cmp.Left.(*sqlparser.ColName)
+		require.True(t, ok, "expected a column on the left, got %T", cmp.Left)
+		require.Equal(t, "tenant`id", col.Name.String())
 	})
 }
 
@@ -125,7 +192,7 @@ func TestCreateDefaultShardRoutingRules(t *testing.T) {
 			require.NoError(t, err)
 			require.Len(t, rules, len(tc.shards))
 			want := getExpectedRules(tc.sourceKeyspace, tc.targetKeyspace)
-			require.EqualValues(t, want, rules)
+			require.Equal(t, want, rules)
 		})
 	}
 }
@@ -143,7 +210,7 @@ func TestUpdateKeyspaceRoutingRule(t *testing.T) {
 	require.NoError(t, err)
 	rules, err := topotools.GetKeyspaceRoutingRules(ctx, ts)
 	require.NoError(t, err)
-	require.EqualValues(t, routes, rules)
+	require.Equal(t, routes, rules)
 }
 
 // TestConcurrentKeyspaceRoutingRulesUpdates runs multiple keyspace routing rules updates concurrently to test
@@ -187,6 +254,10 @@ func testConcurrentKeyspaceRoutingRulesUpdates(t *testing.T, ctx context.Context
 	shortCtx, cancel := context.WithTimeout(ctx, duration)
 	defer cancel()
 	log.Info(fmt.Sprintf("Starting %d concurrent updates", concurrency))
+	var (
+		updateMu  sync.Mutex
+		updateErr error
+	)
 	for i := range concurrency {
 		go func(id int) {
 			defer wg.Done()
@@ -195,21 +266,29 @@ func testConcurrentKeyspaceRoutingRulesUpdates(t *testing.T, ctx context.Context
 				case <-shortCtx.Done():
 					return
 				default:
-					update(t, ts, id)
+					if err := update(shortCtx, ts, id); err != nil {
+						updateMu.Lock()
+						if updateErr == nil {
+							updateErr = err
+						}
+						updateMu.Unlock()
+						return
+					}
 				}
 			}
 		}(i)
 	}
 	wg.Wait()
+	require.NoError(t, updateErr)
 	log.Info("All updates completed")
-	rules, err := ts.GetKeyspaceRoutingRules(ctx)
+	verifyCtx, verifyCancel := context.WithTimeout(ctx, 10*time.Second)
+	defer verifyCancel()
+	rules, err := ts.GetKeyspaceRoutingRules(verifyCtx)
 	require.NoError(t, err)
 	require.LessOrEqual(t, concurrency, len(rules.Rules))
 }
 
-func update(t *testing.T, ts *topo.Server, id int) {
-	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
+func update(ctx context.Context, ts *topo.Server, id int) error {
 	s := fmt.Sprintf("%d_%d", id, rand.IntN(math.MaxInt))
 	routes := make(map[string]string)
 	for _, tabletType := range tabletTypeSuffixes {
@@ -217,13 +296,26 @@ func update(t *testing.T, ts *topo.Server, id int) {
 		routes[from] = s + tabletType
 	}
 	err := updateKeyspaceRoutingRules(ctx, ts, "test", routes)
-	require.NoError(t, err)
+	if ctx.Err() != nil {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
 	got, err := topotools.GetKeyspaceRoutingRules(ctx, ts)
-	require.NoError(t, err)
+	if ctx.Err() != nil {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
 	for _, tabletType := range tabletTypeSuffixes {
 		from := fmt.Sprintf("from%s%s", s, tabletType)
-		require.Equal(t, s+tabletType, got[from])
+		if got[from] != s+tabletType {
+			return fmt.Errorf("routing rule %q = %q, want %q", from, got[from], s+tabletType)
+		}
 	}
+	return nil
 }
 
 // startEtcd starts an etcd subprocess, and waits for it to be ready.
@@ -231,11 +323,9 @@ func startEtcd(t *testing.T) string {
 	// Create a temporary directory.
 	dataDir := t.TempDir()
 
-	// Get our two ports to listen to.
-	port := testfiles.GoVtTopoEtcd2topoPort
 	name := "vitess_unit_test"
-	clientAddr := fmt.Sprintf("http://localhost:%v", port)
-	peerAddr := fmt.Sprintf("http://localhost:%v", port+1)
+	clientAddr := fmt.Sprintf("http://localhost:%v", testfiles.GoVtVtctlWorkflowPort)
+	peerAddr := fmt.Sprintf("http://localhost:%v", testfiles.GoVtVtctlWorkflowPeerPort)
 	initialCluster := fmt.Sprintf("%v=%v", name, peerAddr)
 	cmd := exec.Command("etcd",
 		"-name", name,
@@ -344,14 +434,18 @@ func TestLegacyBuildTargets(t *testing.T) {
 	defer env.close()
 	env.tmc.schema = schema
 
-	result1 := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"id|source|message|cell|tablet_types|workflow_type|workflow_sub_type|defer_secondary_keys",
-		"int64|varchar|varchar|varchar|varchar|int64|int64|int64"),
+	result1 := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"id|source|message|cell|tablet_types|workflow_type|workflow_sub_type|defer_secondary_keys",
+			"int64|varchar|varchar|varchar|varchar|int64|int64|int64",
+		),
 		"1|keyspace:\"source\" shard:\"-80\" filter:{rules:{match:\"t1\"} rules:{match:\"t2\"}}||||0|0|0",
 	)
-	result2 := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"id|source|message|cell|tablet_types|workflow_type|workflow_sub_type|defer_secondary_keys",
-		"int64|varchar|varchar|varchar|varchar|int64|int64|int64"),
+	result2 := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"id|source|message|cell|tablet_types|workflow_type|workflow_sub_type|defer_secondary_keys",
+			"int64|varchar|varchar|varchar|varchar|int64|int64|int64",
+		),
 		"1|keyspace:\"source\" shard:\"80-\" filter:{rules:{match:\"t1\"} rules:{match:\"t2\"}}||||0|0|0",
 		"2|keyspace:\"source\" shard:\"80-\" filter:{rules:{match:\"t3\"} rules:{match:\"t4\"}}||||0|0|0",
 	)
@@ -372,17 +466,17 @@ func TestLegacyBuildTargets(t *testing.T) {
 	assert.Len(t, t2.Sources, 2)
 	assert.Len(t, t1.Sources[1].Filter.Rules, 2)
 
-	assert.Equal(t, t1.Sources[1].Filter.Rules[0].Match, "t1")
-	assert.Equal(t, t1.Sources[1].Filter.Rules[1].Match, "t2")
-	assert.Equal(t, t1.Sources[1].Shard, "-80")
+	assert.Equal(t, "t1", t1.Sources[1].Filter.Rules[0].Match)
+	assert.Equal(t, "t2", t1.Sources[1].Filter.Rules[1].Match)
+	assert.Equal(t, "-80", t1.Sources[1].Shard)
 
 	assert.Len(t, t2.Sources[1].Filter.Rules, 2)
 	assert.Len(t, t2.Sources[2].Filter.Rules, 2)
 
-	assert.Equal(t, t2.Sources[1].Shard, "80-")
-	assert.Equal(t, t2.Sources[2].Shard, "80-")
-	assert.Equal(t, t2.Sources[1].Filter.Rules[0].Match, "t1")
-	assert.Equal(t, t2.Sources[1].Filter.Rules[1].Match, "t2")
-	assert.Equal(t, t2.Sources[2].Filter.Rules[0].Match, "t3")
-	assert.Equal(t, t2.Sources[2].Filter.Rules[1].Match, "t4")
+	assert.Equal(t, "80-", t2.Sources[1].Shard)
+	assert.Equal(t, "80-", t2.Sources[2].Shard)
+	assert.Equal(t, "t1", t2.Sources[1].Filter.Rules[0].Match)
+	assert.Equal(t, "t2", t2.Sources[1].Filter.Rules[1].Match)
+	assert.Equal(t, "t3", t2.Sources[2].Filter.Rules[0].Match)
+	assert.Equal(t, "t4", t2.Sources[2].Filter.Rules[1].Match)
 }

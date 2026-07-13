@@ -168,7 +168,6 @@ func ReadTopologyInstanceBufferable(tabletAlias *topodatapb.TabletAlias, latency
 		}
 	}()
 
-	var waitGroup sync.WaitGroup
 	var tablet *topodatapb.Tablet
 	var fs *replicationdatapb.FullStatus
 	readingStartTime := time.Now()
@@ -227,6 +226,22 @@ func ReadTopologyInstanceBufferable(tabletAlias *topodatapb.TabletAlias, latency
 	{
 		// We begin with a few operations we can run concurrently, and which do not depend on anything
 		instance.ServerID = uint(fs.ServerId)
+		if len(fs.ShardPeerHealth) > 0 {
+			// Ingestion is intentionally not gated on --emergency-reparent-on-primary-tablet-unreachable: it
+			// only runs when a tablet opts in via --track-shard-tablet-health (otherwise ShardPeerHealth
+			// is empty), and the recorded data also feeds the read-only /api/shard-tablet-health-quorum endpoint, so
+			// operators can inspect the live quorum view before enabling quorum ERS. The flag gates only
+			// where the data is acted upon (the matcher and the InvalidPrimary upgrade), not where it is
+			// stored.
+			//
+			// Use fs.TabletType (the tablet's current self-reported type from
+			// tm.Tablet().Type), not tablet.Type from VTOrc's topo snapshot,
+			// which can lag during promotions/demotions. EvaluatePrimaryQuorum
+			// only counts REPLICA/RDONLY observers, so a stale topo type in the
+			// exact failover window this feature guards could miscount a current
+			// PRIMARY as an observer or drop a newly demoted replica.
+			RecordShardPeerHealth(tabletAlias, fs.TabletType, tablet.Keyspace, tablet.Shard, fs.ShardPeerHealth, time.Now())
+		}
 		instance.TabletType = fs.TabletType
 		instance.Version = fs.Version
 		instance.ReadOnly = fs.ReadOnly
@@ -351,7 +366,6 @@ func ReadTopologyInstanceBufferable(tabletAlias *topodatapb.TabletAlias, latency
 	}
 
 Cleanup:
-	waitGroup.Wait()
 	close(errorChan)
 	err = func() error {
 		if err != nil {
@@ -406,6 +420,7 @@ Cleanup:
 
 // detectErrantGTIDs detects the errant GTIDs on an instance.
 func detectErrantGTIDs(instance *Instance, tablet *topodatapb.Tablet) (err error) {
+	tabletAliasString := topoproto.TabletAliasString(instance.InstanceAlias)
 	// If the tablet is not replicating from anyone, then it could be the previous primary.
 	// We should check for errant GTIDs by finding the difference with the shard's current primary.
 	primaryAlias, _, err := ReadShardPrimaryInformation(tablet.Keyspace, tablet.Shard)
@@ -416,6 +431,10 @@ func detectErrantGTIDs(instance *Instance, tablet *topodatapb.Tablet) (err error
 	// Check if the current tablet is the primary. If it is, then we don't need to
 	// run errant GTID detection on it.
 	if topoproto.TabletAliasEqual(primaryAlias, instance.InstanceAlias) {
+		// A primary cannot have errant GTIDs relative to itself; clear any
+		// value left over from before this tablet was promoted.
+		instance.GtidErrant = ""
+		currentErrantGTIDCount.Reset(tabletAliasString)
 		return nil
 	}
 
@@ -439,6 +458,7 @@ func detectErrantGTIDs(instance *Instance, tablet *topodatapb.Tablet) (err error
 		}
 	}
 
+	var errantGtidCount int64
 	if instance.ExecutedGtidSet != "" && instance.primaryExecutedGtidSet != "" {
 		// Compare primary & replica GTID sets, but ignore the sets that present the primary's UUID.
 		// This is because vtorc may pool primary and replica at an inconvenient timing,
@@ -469,10 +489,17 @@ func detectErrantGTIDs(instance *Instance, tablet *topodatapb.Tablet) (err error
 			errantGtidSet := redactedExecutedGtidSet.Difference(redactedPrimaryExecutedGtidSet)
 			if !errantGtidSet.Empty() {
 				instance.GtidErrant = errantGtidSet.String()
-				currentErrantGTIDCount.Set(topoproto.TabletAliasString(instance.InstanceAlias), errantGtidSet.Count())
+				errantGtidCount = errantGtidSet.Count()
 			}
 		}
 	}
+	// Always publish the result. Writing 0 / "" here is what allows the
+	// gauge and GtidErrant field to recover after errant GTIDs are
+	// reconciled or a transient race clears.
+	if errantGtidCount == 0 {
+		instance.GtidErrant = ""
+	}
+	currentErrantGTIDCount.Set(tabletAliasString, errantGtidCount)
 	return err
 }
 
@@ -1132,6 +1159,10 @@ func ForgetInstance(tabletAlias *topodatapb.TabletAlias) error {
 	// Remove this tablet from errant GTID count metric.
 	currentErrantGTIDCount.Reset(tabletAliasString)
 
+	// Drop any shard-peer health reports from this tablet so a deleted observer
+	// stops counting toward the quorum denominator immediately.
+	RemoveShardPeerObserver(tabletAliasString)
+
 	// Delete from the 'vitess_tablet' table.
 	_, err := db.ExecVTOrc(`DELETE FROM
 			vitess_tablet
@@ -1192,40 +1223,6 @@ func ForgetLongUnseenInstances() error {
 		_ = AuditOperation("forget-unseen", nil, fmt.Sprintf("Forgotten instances: %d", rows))
 	}
 	return err
-}
-
-// SnapshotTopologies records topology graph for all existing topologies
-func SnapshotTopologies() error {
-	writeFunc := func() error {
-		_, err := db.ExecVTOrc(`INSERT OR IGNORE
-			INTO database_instance_topology_history (
-				snapshot_unix_timestamp,
-				alias,
-				hostname,
-				port,
-				source_host,
-				source_port,
-				keyspace,
-				shard,
-				version
-			)
-			SELECT
-				STRFTIME('%s', 'now'),
-				vitess_tablet.alias, vitess_tablet.hostname, vitess_tablet.port,
-				database_instance.source_host, database_instance.source_port,
-				vitess_tablet.keyspace, vitess_tablet.shard, database_instance.version
-			FROM
-				vitess_tablet LEFT JOIN database_instance USING (alias, hostname, port)
-			`,
-		)
-		if err != nil {
-			log.Error(err.Error())
-			return err
-		}
-
-		return nil
-	}
-	return ExecDBWriteFunc(writeFunc)
 }
 
 func ExpireStaleInstanceBinlogCoordinates() error {

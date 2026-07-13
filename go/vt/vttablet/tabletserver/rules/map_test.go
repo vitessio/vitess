@@ -75,15 +75,15 @@ func TestMapSetRulesWithNil(t *testing.T) {
 
 	qri.RegisterSource(denyListQueryRules)
 	err := qri.SetRules(denyListQueryRules, denyRules)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	qrs, err := qri.Get(denyListQueryRules)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, denyRules, qrs, "denyListQueryRules")
 
 	qri.SetRules(denyListQueryRules, nil)
 
 	qrs, err = qri.Get(denyListQueryRules)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, New(), qrs, "denyListQueryRules")
 }
 
@@ -96,33 +96,33 @@ func TestMapGetSetQueryRules(t *testing.T) {
 
 	// Test if we can get a Rules without a predefined rule set name
 	qrs, err := qri.Get("Foo")
-	assert.Error(t, err, "GetRules shouldn't succeed with 'Foo' as the rule set name")
+	require.Error(t, err, "GetRules shouldn't succeed with 'Foo' as the rule set name")
 	assert.NotNil(t, qrs, "GetRules should always return empty Rules and never nil")
 	assert.Equal(t, New(), qrs, "Map contains only empty Rules at the beginning")
 
 	// Test if we can set a Rules without a predefined rule set name
 	err = qri.SetRules("Foo", New())
-	assert.Error(t, err, "SetRules shouldn't succeed with 'Foo' as the rule set name")
+	require.Error(t, err, "SetRules shouldn't succeed with 'Foo' as the rule set name")
 
 	// Test if we can successfully set Rules previously mocked into Map
 	err = qri.SetRules(denyListQueryRules, denyRules)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	err = qri.SetRules(denyListQueryRules, denyRules)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	err = qri.SetRules(customQueryRules, otherRules)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Test if we can successfully retrieve rules which been set
 	qrs, err = qri.Get(denyListQueryRules)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, denyRules, qrs, "denyListQueryRules")
 
 	qrs, err = qri.Get(denyListQueryRules)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, denyRules, qrs, "denyListQueryRules")
 
 	qrs, err = qri.Get(customQueryRules)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, otherRules, qrs, "customQueryRules")
 }
 

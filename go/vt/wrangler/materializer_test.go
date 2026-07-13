@@ -83,7 +83,7 @@ func TestMoveTablesNoRoutingRules(t *testing.T) {
 	require.NoError(t, err)
 	rr, err := env.wr.ts.GetRoutingRules(ctx)
 	require.NoError(t, err)
-	require.Equal(t, 0, len(rr.Rules))
+	require.Empty(t, rr.Rules)
 }
 
 func TestMigrateTables(t *testing.T) {
@@ -114,12 +114,12 @@ func TestMigrateTables(t *testing.T) {
 func requireExpectedVSchema(t *testing.T, vschema *vschemapb.SrvVSchema, sourceKeyspace, targetKeyspace string) {
 	t.Helper()
 
-	require.Equal(t, vschema.Keyspaces[sourceKeyspace], &vschemapb.Keyspace{})
-	require.Equal(t, vschema.Keyspaces[targetKeyspace], &vschemapb.Keyspace{
+	require.Equal(t, &vschemapb.Keyspace{}, vschema.Keyspaces[sourceKeyspace])
+	require.Equal(t, &vschemapb.Keyspace{
 		Tables: map[string]*vschemapb.Table{
 			"t1": {},
 		},
-	})
+	}, vschema.Keyspaces[targetKeyspace])
 
 	foundA, foundB := false, false
 	for _, r := range vschema.RoutingRules.Rules {
@@ -130,8 +130,8 @@ func requireExpectedVSchema(t *testing.T, vschema *vschemapb.SrvVSchema, sourceK
 			foundB = true
 		}
 	}
-	require.True(t, foundA, fmt.Sprintf("expected routing rule: t1 → %s.t1", sourceKeyspace))
-	require.True(t, foundB, fmt.Sprintf("expected routing rule: %s.t1 → %s.t1", targetKeyspace, sourceKeyspace))
+	require.True(t, foundA, "expected routing rule: t1 → %s.t1", sourceKeyspace)
+	require.True(t, foundB, "expected routing rule: %s.t1 → %s.t1", targetKeyspace, sourceKeyspace)
 }
 
 func TestMissingTables(t *testing.T) {
@@ -218,7 +218,7 @@ func TestMoveTablesAllAndExclude(t *testing.T) {
 			env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
 			err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "", "", "", tcase.allTables, tcase.excludeTables, true, false, "", false, false, "", defaultOnDDL, nil, false, false)
 			require.NoError(t, err)
-			require.EqualValues(t, tcase.want, targetTables(ctx, env))
+			require.Equal(t, tcase.want, targetTables(ctx, env))
 		})
 	}
 }
@@ -610,7 +610,7 @@ func TestCreateLookupVindexCreateDDL(t *testing.T) {
 
 		outms, _, _, err := env.wr.prepareCreateLookup(t.Context(), ms.SourceKeyspace, tcase.specs, false)
 		if tcase.err != "" {
-			assert.ErrorContainsf(t, err, tcase.err, "prepareCreateLookup(%s)", tcase.description)
+			require.ErrorContainsf(t, err, tcase.err, "prepareCreateLookup(%s)", tcase.description)
 			continue
 		}
 		require.NoError(t, err)
@@ -1085,7 +1085,7 @@ func TestCreateLookupVindexTargetVSchema(t *testing.T) {
 
 		_, _, got, err := env.wr.prepareCreateLookup(t.Context(), ms.SourceKeyspace, specs, false)
 		if tcase.err != "" {
-			assert.ErrorContainsf(t, err, tcase.err, "prepareCreateLookup(%s)", tcase.description)
+			require.ErrorContainsf(t, err, tcase.err, "prepareCreateLookup(%s)", tcase.description)
 			continue
 		}
 		require.NoError(t, err)
@@ -1499,11 +1499,11 @@ func TestStopAfterCopyFlag(t *testing.T) {
 
 	ms1, _, _, err := env.wr.prepareCreateLookup(t.Context(), ms.SourceKeyspace, specs, false)
 	require.NoError(t, err)
-	require.Equal(t, ms1.StopAfterCopy, true)
+	require.True(t, ms1.StopAfterCopy)
 
 	ms2, _, _, err := env.wr.prepareCreateLookup(t.Context(), ms.SourceKeyspace, specs, true)
 	require.NoError(t, err)
-	require.Equal(t, ms2.StopAfterCopy, false)
+	require.False(t, ms2.StopAfterCopy)
 }
 
 func TestCreateLookupVindexFailures(t *testing.T) {
@@ -1891,7 +1891,7 @@ func TestExternalizeVindex(t *testing.T) {
 
 		err := env.wr.ExternalizeVindex(t.Context(), tcase.input)
 		if tcase.err != "" {
-			assert.ErrorContainsf(t, err, tcase.err, "ExternalizeVindex(%s)", tcase.input)
+			require.ErrorContainsf(t, err, tcase.err, "ExternalizeVindex(%s)", tcase.input)
 			continue
 		}
 		require.NoError(t, err)
@@ -2217,8 +2217,8 @@ func TestMaterializerDeploySchema(t *testing.T) {
 	err := env.wr.Materialize(ctx, ms)
 	require.NoError(t, err)
 	env.tmc.verifyQueries(t)
-	require.Equal(t, env.tmc.getSchemaRequestCount(100), 1)
-	require.Equal(t, env.tmc.getSchemaRequestCount(200), 1)
+	require.Equal(t, 1, env.tmc.getSchemaRequestCount(100))
+	require.Equal(t, 1, env.tmc.getSchemaRequestCount(200))
 }
 
 func TestMaterializerCopySchema(t *testing.T) {
@@ -2255,8 +2255,8 @@ func TestMaterializerCopySchema(t *testing.T) {
 	err := env.wr.Materialize(ctx, ms)
 	require.NoError(t, err)
 	env.tmc.verifyQueries(t)
-	require.Equal(t, env.tmc.getSchemaRequestCount(100), 1)
-	require.Equal(t, env.tmc.getSchemaRequestCount(200), 1)
+	require.Equal(t, 1, env.tmc.getSchemaRequestCount(100))
+	require.Equal(t, 1, env.tmc.getSchemaRequestCount(200))
 }
 
 func TestMaterializerExplicitColumns(t *testing.T) {
@@ -2456,8 +2456,8 @@ func TestMaterializerNoDDL(t *testing.T) {
 	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
 	err := env.wr.Materialize(ctx, ms)
 	require.EqualError(t, err, "target table t1 does not exist and there is no create ddl defined")
-	require.Equal(t, env.tmc.getSchemaRequestCount(100), 0)
-	require.Equal(t, env.tmc.getSchemaRequestCount(200), 1)
+	require.Equal(t, 0, env.tmc.getSchemaRequestCount(100))
+	require.Equal(t, 1, env.tmc.getSchemaRequestCount(200))
 }
 
 func TestMaterializerNoSourcePrimary(t *testing.T) {

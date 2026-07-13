@@ -175,6 +175,42 @@ func TestConcatenate_WithErrors(t *testing.T) {
 	require.EqualError(t, err, strFailed)
 }
 
+// TestConcatenateStreamBindVarIsolation ensures the streaming execution paths
+// hand each source its own copy of the bindVars map, matching the buffered
+// paths. Sources such as the information_schema route mutate bindVars in place
+// while routing; without an isolated copy, concurrent sources race on the
+// shared map (and can crash vtgate with a concurrent map write).
+func TestConcatenateStreamBindVarIsolation(t *testing.T) {
+	newSources := func() []Primitive {
+		fake := r("id|col1|col2", "int64|varbinary|varbinary", "1|a1|b1", "2|a2|b2")
+		var sources []Primitive
+		for i := range 8 {
+			sources = append(sources, &fakePrimitive{
+				results:      []*sqltypes.Result{fake},
+				noLog:        true,
+				writeBindVar: fmt.Sprintf("src%d", i),
+			})
+		}
+		return sources
+	}
+
+	t.Run("parallel", func(t *testing.T) {
+		concatenate := NewConcatenate(newSources(), nil)
+		bindVars := map[string]*querypb.BindVariable{"orig": sqltypes.Int64BindVariable(1)}
+		_, err := wrapStreamExecute(concatenate, &noopVCursor{}, bindVars, true)
+		require.NoError(t, err)
+		require.Equal(t, map[string]*querypb.BindVariable{"orig": sqltypes.Int64BindVariable(1)}, bindVars)
+	})
+
+	t.Run("sequential", func(t *testing.T) {
+		concatenate := NewConcatenate(newSources(), nil)
+		bindVars := map[string]*querypb.BindVariable{"orig": sqltypes.Int64BindVariable(1)}
+		_, err := wrapStreamExecute(concatenate, &noopVCursor{inTx: true}, bindVars, true)
+		require.NoError(t, err)
+		require.Equal(t, map[string]*querypb.BindVariable{"orig": sqltypes.Int64BindVariable(1)}, bindVars)
+	})
+}
+
 func TestConcatenateTypes(t *testing.T) {
 	tests := []struct {
 		t1, t2   string

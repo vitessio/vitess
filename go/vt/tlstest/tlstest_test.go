@@ -273,7 +273,7 @@ func testNumberOfCertsWithOrWithoutCombining(t *testing.T, numCertsExpected int,
 		serverCA,
 		tls.VersionTLS12)
 	require.NoError(t, err)
-	assert.Equal(t, numCertsExpected, len(serverConfig.Certificates[0].Certificate))
+	assert.Len(t, serverConfig.Certificates[0].Certificate, numCertsExpected)
 }
 
 func TestNumberOfCertsWithoutCombining(t *testing.T) {

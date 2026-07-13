@@ -236,14 +236,14 @@ func CompareVitessAndMySQLResults(t TestingT, query string, vtConn *mysql.Conn, 
 	errStr := "Query (" + query + ") results mismatched.\nVitess Results:\n"
 	var errStrSb236 strings.Builder
 	for _, row := range vtQr.Rows {
-		errStrSb236.WriteString(fmt.Sprintf("%s\n", row))
+		fmt.Fprintf(&errStrSb236, "%s\n", row)
 	}
 	errStr += errStrSb236.String()
 	errStr += fmt.Sprintf("Vitess RowsAffected: %v\n", vtQr.RowsAffected)
 	errStr += "MySQL Results:\n"
 	var errStrSb241 strings.Builder
 	for _, row := range mysqlQr.Rows {
-		errStrSb241.WriteString(fmt.Sprintf("%s\n", row))
+		fmt.Fprintf(&errStrSb241, "%s\n", row)
 	}
 	errStr += errStrSb241.String()
 	errStr += fmt.Sprintf("MySQL RowsAffected: %v\n", mysqlQr.RowsAffected)
@@ -307,5 +307,8 @@ func compareVitessAndMySQLErrors(t TestingT, vtErr, mysqlErr error) {
 	if vtErr != nil && mysqlErr != nil || vtErr == nil && mysqlErr == nil {
 		return
 	}
+	// TestingT has no ErrorIs method, and this reports an error-vs-error mismatch
+	// (one side errored, the other did not) rather than an errors.Is/As check.
+	//nolint:testifylint
 	t.Errorf("Vitess and MySQL are not erroring the same way.\nVitess error: %v\nMySQL error: %v", vtErr, mysqlErr)
 }

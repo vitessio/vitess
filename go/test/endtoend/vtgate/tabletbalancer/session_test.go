@@ -160,7 +160,7 @@ func getServerID(t *testing.T, conn *mysql.Conn) int64 {
 
 	res, err := conn.ExecuteFetch("SELECT @@server_id", 1, false)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(res.Rows), "expected one row from server_id query")
+	require.Len(t, res.Rows, 1, "expected one row from server_id query")
 
 	serverID, err := res.Rows[0][0].ToInt64()
 	require.NoError(t, err)

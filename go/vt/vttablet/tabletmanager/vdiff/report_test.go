@@ -187,7 +187,7 @@ func TestGenRowDiff(t *testing.T) {
 
 			got, err := td.genRowDiff(tc.query, tc.row, tc.reportOptions)
 			require.NoError(t, err)
-			require.EqualValues(t, tc.want, got)
+			require.Equal(t, tc.want, got)
 		})
 	}
 }

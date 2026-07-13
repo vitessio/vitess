@@ -43,6 +43,9 @@ func (c *Conn) ExecuteStreamFetch(query string) (err error) {
 		return sqlerror.NewSQLError(sqlerror.CRCommandsOutOfSync, sqlerror.SSUnknownSQLState, "streaming query already in progress")
 	}
 
+	// Reset the OK packet captured from the previous streaming query.
+	c.streamOK = nil
+
 	// Send the query as a COM_QUERY packet.
 	if err := c.WriteComQuery(query); err != nil {
 		return err
@@ -55,7 +58,18 @@ func (c *Conn) ExecuteStreamFetch(query string) (err error) {
 		return err
 	}
 	if colNumber == 0 {
-		// OK packet, means no results. Save an empty Fields array.
+		// OK packet, means no results. Save an empty Fields array. The OK packet
+		// is the only place a no-resultset query's RowsAffected, InsertID, Info
+		// and status flags appear, so capture them for the caller, mirroring the
+		// Result the buffered ExecuteFetch path builds from the same packet.
+		c.streamOK = &sqltypes.Result{
+			RowsAffected:        packetOk.affectedRows,
+			InsertID:            packetOk.lastInsertID,
+			InsertIDChanged:     packetOk.lastInsertID > 0,
+			SessionStateChanges: packetOk.sessionStateData,
+			StatusFlags:         packetOk.statusFlags,
+			Info:                packetOk.info,
+		}
 		c.fields = make([]*querypb.Field, 0)
 		return nil
 	}
@@ -131,12 +145,23 @@ func (c *Conn) FetchNext(in []sqltypes.Value) ([]sqltypes.Value, error) {
 		c.fields = nil
 		return nil, nil
 	} else if isErrorPacket(data) {
-		// Error packet.
+		// An error packet terminates the result set: the server sends nothing
+		// further for this query. Mark the result done so a later CloseResult
+		// does not block reading packets that will never arrive.
+		c.fields = nil
 		return nil, ParseErrorPacket(data)
 	}
 
 	// Regular row.
 	return c.parseRow(data, c.fields, readLenEncStringAsBytes, in)
+}
+
+// StreamOKResult returns the OK-packet result of the streaming query started by
+// the most recent ExecuteStreamFetch when it returned no resultset (e.g. a CALL
+// of a procedure that performs DML), or nil when it returned a resultset. It is
+// meant to be consulted after the resultset (if any) has been fully fetched.
+func (c *Conn) StreamOKResult() *sqltypes.Result {
+	return c.streamOK
 }
 
 // CloseResult can be used to terminate a streaming query

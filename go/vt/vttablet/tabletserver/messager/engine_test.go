@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -118,7 +119,7 @@ func TestSubscribe(t *testing.T) {
 	// Error case.
 	want := "message table t3 not found"
 	_, err := engine.Subscribe(t.Context(), "t3", f1)
-	assert.EqualErrorf(t, err, want, "Subscribe: %v, want %s", err, want)
+	require.EqualErrorf(t, err, want, "Subscribe: %v, want %s", err, want)
 
 	// After close, Subscribe should return a closed channel.
 	engine.Close()
@@ -133,7 +134,7 @@ func TestEngineGenerate(t *testing.T) {
 	engine.schemaChanged(nil, []*schema.Table{meTableT1}, nil, nil, true)
 
 	_, err := engine.GetGenerator("t1")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	want := "message table t2 not found in schema"
 	_, err = engine.GetGenerator("t2")
 	assert.EqualErrorf(t, err, want, "engine.GenerateAckQuery(invalid): %v, want %s", err, want)

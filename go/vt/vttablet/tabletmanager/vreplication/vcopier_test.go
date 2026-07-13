@@ -827,7 +827,7 @@ func testPlayerCopyTables(t *testing.T) {
 			qr, err := env.Mysqld.FetchSuperQuery(ctx, query)
 			require.NoError(t, err)
 			require.NotNil(t, qr)
-			require.Equal(t, 1, len(qr.Rows))
+			require.Len(t, qr.Rows, 1)
 		})
 	}
 	cancel()

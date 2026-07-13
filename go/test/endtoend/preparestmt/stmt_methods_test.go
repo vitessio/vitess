@@ -28,7 +28,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 )
 
 // TestDMLNone tests that impossible query run without an error.
@@ -77,7 +79,7 @@ func TestSelectDatabase(t *testing.T) {
 	require.True(t, rows.Next(), "no rows found")
 	err = rows.Scan(&resultBytes)
 	require.NoError(t, err)
-	assert.Equal(t, string(resultBytes), "uks")
+	assert.Equal(t, "uks", string(resultBytes))
 }
 
 // TestInsertUpdateDelete validates all insert, update and
@@ -120,7 +122,7 @@ func TestInsertUpdateDelete(t *testing.T) {
 	// select data with id 1 and validate the data accordingly
 	// validate row count
 	data := selectWhere(t, dbo, "id = ?", testingID)
-	assert.Equal(t, 1, len(data))
+	assert.Len(t, data, 1)
 
 	// validate value of msg column in data
 	assert.Equal(t, fmt.Sprintf("%d21", testingID), data[0].Msg)
@@ -158,12 +160,12 @@ func testReplica(t *testing.T) {
 // testcount validates inserted rows count with expected count.
 func testcount(t *testing.T, dbo *sql.DB, except int) {
 	r, err := dbo.Query("SELECT count(1) FROM vt_prepare_stmt_test")
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	r.Next()
 	var i int
 	err = r.Scan(&i)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, except, i)
 }
 
@@ -211,7 +213,7 @@ func deleteRecord(t *testing.T, dbo *sql.DB) {
 	exec(t, dbo, "DELETE FROM vt_prepare_stmt_test WHERE id = ?;", testingID)
 
 	data := selectWhere(t, dbo, "id = ?", testingID)
-	assert.Equal(t, 0, len(data))
+	assert.Empty(t, data)
 }
 
 // updateRecord test update operation corresponds to the testingID.
@@ -226,7 +228,7 @@ func updateRecord(t *testing.T, dbo *sql.DB) {
 	// validate the updated value
 	// validate row count
 	data := selectWhere(t, dbo, "id = ?", testingID)
-	assert.Equal(t, 1, len(data))
+	assert.Len(t, data, 1)
 
 	// validate value of msg column in data
 	assert.Equal(t, updateData, data[0].Data)
@@ -239,7 +241,7 @@ func reconnectAndTest(t *testing.T) {
 	dbo := Connect(t)
 	defer dbo.Close()
 	data := selectWhere(t, dbo, "id = ?", testingID)
-	assert.Equal(t, 0, len(data))
+	assert.Empty(t, data)
 }
 
 // TestColumnParameter query database using column
@@ -265,7 +267,7 @@ func TestColumnParameter(t *testing.T) {
 	selectStmt := "SELECT COALESCE(?, id), msg FROM vt_prepare_stmt_test WHERE msg = ? LIMIT ?"
 
 	results1, err := dbo.Query(selectStmt, parameter1, message, 1)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	require.True(t, results1.Next())
 
 	results1.Scan(&param, &msg)
@@ -273,7 +275,7 @@ func TestColumnParameter(t *testing.T) {
 	assert.Equal(t, message, msg)
 
 	results2, err := dbo.Query(selectStmt, nil, message, 1)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	require.True(t, results2.Next())
 
 	results2.Scan(&recID, &msg)
@@ -305,7 +307,7 @@ type columns struct {
 
 func (c *columns) ToString() string {
 	buf := bytes.Buffer{}
-	buf.WriteString(fmt.Sprintf("|%s| \t |%s| \t |%s| \t |%s| \t |%s| \t |%s| \t |%s| \t |%s| \t |%s| \t |%s| \t |%s|",
+	fmt.Fprintf(&buf, "|%s| \t |%s| \t |%s| \t |%s| \t |%s| \t |%s| \t |%s| \t |%s| \t |%s| \t |%s| \t |%s|",
 		c.columnName,
 		c.dataType,
 		c.fullDataType,
@@ -316,7 +318,7 @@ func (c *columns) ToString() string {
 		getStringToString(c.columnDefault),
 		c.isNullable,
 		c.extra,
-		c.tableName))
+		c.tableName)
 	return buf.String()
 }
 
@@ -385,7 +387,7 @@ func TestSelectDBA(t *testing.T) {
 		assert.False(t, rec.datetimePrecision.Valid)
 		assert.False(t, rec.columnDefault.Valid)
 		assert.Equal(t, "NO", rec.isNullable)
-		assert.Equal(t, "", rec.extra)
+		assert.Empty(t, rec.extra)
 		assert.Equal(t, "a", rec.tableName)
 		rowCount++
 	}
@@ -484,36 +486,96 @@ func TestInsertTest(t *testing.T) {
 	assert.Equal(t, int64(1), ra)
 }
 
+type specializedPlanQuery struct {
+	query string
+	args  []any
+}
+
+// specializedPlanQueries are prepared queries whose baseline plan is a scatter
+// (or fails outright, in the window-function case) but whose specialized plan
+// targets a single shard once the equality predicates are known to point at the
+// same shard.
+var specializedPlanQueries = []specializedPlanQuery{{
+	query: `select 1 from t1 tbl1, t1 tbl2 where tbl1.id = ? and tbl2.id = ?`,
+	args:  []any{1, 1},
+}, {
+	query: `select 1 from t1 tbl1, t1 tbl2, t1 tbl3 where tbl1.id = ? and tbl2.id = ? and tbl3.id = ?`,
+	args:  []any{1, 1, 1},
+}, {
+	query: `select 1 from t1 tbl1, t1 tbl2, t1 tbl3, t1 tbl4 where tbl1.id = ? and tbl2.id = ? and tbl3.id = ? and tbl4.id = ?`,
+	args:  []any{1, 1, 1, 1},
+}, {
+	query: `SELECT e.id, e.name, s.age, ROW_NUMBER() OVER (PARTITION BY e.age ORDER BY s.name DESC) AS age_rank FROM t1 e, t1 s where e.id = ? and s.id = ?`,
+	args:  []any{1, 1},
+}}
+
+// streamingSpecializedPlanQueries mirror specializedPlanQueries with distinct
+// table aliases. The plan cache is keyed by query text and does not include the
+// workload, so reusing the OLTP query strings would let the plans cached by
+// TestSpecializedPlan satisfy the OLAP lookups here — masking whether the
+// streaming path builds the specialized plan itself. Distinct aliases yield the
+// same plan shapes under different cache keys, so the streaming path is forced
+// to build them.
+var streamingSpecializedPlanQueries = []specializedPlanQuery{{
+	query: `select 1 from t1 stbl1, t1 stbl2 where stbl1.id = ? and stbl2.id = ?`,
+	args:  []any{1, 1},
+}, {
+	query: `select 1 from t1 stbl1, t1 stbl2, t1 stbl3 where stbl1.id = ? and stbl2.id = ? and stbl3.id = ?`,
+	args:  []any{1, 1, 1},
+}, {
+	query: `select 1 from t1 stbl1, t1 stbl2, t1 stbl3, t1 stbl4 where stbl1.id = ? and stbl2.id = ? and stbl3.id = ? and stbl4.id = ?`,
+	args:  []any{1, 1, 1, 1},
+}, {
+	query: `SELECT se.id, se.name, ss.age, ROW_NUMBER() OVER (PARTITION BY se.age ORDER BY ss.name DESC) AS age_rank FROM t1 se, t1 ss where se.id = ? and ss.id = ?`,
+	args:  []any{1, 1},
+}}
+
 // TestSpecializedPlan tests the specialized plan generation for the query.
 func TestSpecializedPlan(t *testing.T) {
 	dbInfo.KeyspaceName = sks
 	dbo := Connect(t, "interpolateParams=false")
 	defer dbo.Close()
 
+	runAndValidateSpecializedPlans(t, dbo, dbo.Prepare, specializedPlanQueries)
+}
+
+// TestSpecializedPlanStreaming is the OLAP/streaming counterpart of
+// TestSpecializedPlan. Specialized plans are only built on the execute path, so
+// before https://github.com/vitessio/vitess/issues/19569 was fixed the
+// streaming path never built them and the window-function query failed with
+// "window functions are only supported for single-shard queries".
+func TestSpecializedPlanStreaming(t *testing.T) {
+	dbInfo.KeyspaceName = sks
+	dbo := Connect(t, "interpolateParams=false")
+	defer dbo.Close()
+
+	// Pin a single connection so the workload setting and the prepared
+	// statements share the same session.
+	conn, err := dbo.Conn(t.Context())
+	require.NoError(t, err)
+	defer conn.Close()
+
+	_, err = conn.ExecContext(t.Context(), "set workload = olap")
+	require.NoError(t, err)
+
+	runAndValidateSpecializedPlans(t, dbo, func(query string) (*sql.Stmt, error) {
+		return conn.PrepareContext(t.Context(), query)
+	}, streamingSpecializedPlanQueries)
+}
+
+// runAndValidateSpecializedPlans prepares and executes the supplied queries
+// using the supplied prepare function, asserts that the optimized branch was
+// taken for every execution, and validates the cached specialized plans.
+func runAndValidateSpecializedPlans(t *testing.T, dbo *sql.DB, prepare func(query string) (*sql.Stmt, error), queries []specializedPlanQuery) {
+	t.Helper()
+
 	oMap := getVarValue[map[string]any](t, "OptimizedQueryExecutions", clusterInstance.VtgateProcess.GetVars)
 	initExecCount := getVarValue[float64](t, "Passthrough", func() map[string]any {
 		return oMap
 	})
 
-	queries := []struct {
-		query string
-		args  []any
-	}{{
-		query: `select 1 from t1 tbl1, t1 tbl2 where tbl1.id = ? and tbl2.id = ?`,
-		args:  []any{1, 1},
-	}, {
-		query: `select 1 from t1 tbl1, t1 tbl2, t1 tbl3 where tbl1.id = ? and tbl2.id = ? and tbl3.id = ?`,
-		args:  []any{1, 1, 1},
-	}, {
-		query: `select 1 from t1 tbl1, t1 tbl2, t1 tbl3, t1 tbl4 where tbl1.id = ? and tbl2.id = ? and tbl3.id = ? and tbl4.id = ?`,
-		args:  []any{1, 1, 1, 1},
-	}, {
-		query: `SELECT e.id, e.name, s.age, ROW_NUMBER() OVER (PARTITION BY e.age ORDER BY s.name DESC) AS age_rank FROM t1 e, t1 s where e.id = ? and s.id = ?`,
-		args:  []any{1, 1},
-	}}
-
 	for _, q := range queries {
-		stmt, err := dbo.Prepare(q.query)
+		stmt, err := prepare(q.query)
 		require.NoError(t, err)
 
 		for range 5 {
@@ -568,7 +630,7 @@ func validateBaselineErrSpecializedPlan(t *testing.T, p map[string]any) {
 	require.EqualValues(t, "PlanSwitcher", pm["OperatorType"])
 	baselineErr := pm["BaselineErr"].(string)
 
-	require.EqualValues(t, "VT12001: unsupported: window functions are only supported for single-shard queries", baselineErr)
+	require.Equal(t, "VT12001: unsupported: window functions are only supported for single-shard queries", baselineErr)
 
 	pd, err := engine.PrimitiveDescriptionFromMap(plan.(map[string]any))
 	require.NoError(t, err)
@@ -636,4 +698,24 @@ func getVarValue[T any](t *testing.T, key string, varFunc func() map[string]any)
 	castValue, ok := value.(T)
 	assert.True(t, ok, "unexpected type, want: %T, got %T", new(T), value)
 	return castValue
+}
+
+// TestPrepareDoesNotStartTransaction verifies that preparing a statement does
+// not start an implicit transaction when autocommit is disabled. MySQL starts
+// the transaction at the first execution, not at prepare. The gRPC API is
+// used because it returns the session state, which the MySQL protocol does
+// not expose to clients.
+func TestPrepareDoesNotStartTransaction(t *testing.T) {
+	ctx := t.Context()
+	vtgateAddr := fmt.Sprintf("%s:%d", clusterInstance.Hostname, clusterInstance.VtgateProcess.GrpcPort)
+	vtConn, err := vtgateconn.Dial(ctx, vtgateAddr)
+	require.NoError(t, err)
+	t.Cleanup(vtConn.Close)
+
+	session := vtConn.SessionFromPb(&vtgatepb.Session{TargetString: uks, Autocommit: false})
+
+	_, paramsCount, err := session.Prepare(ctx, "select msg from vt_prepare_stmt_test where id = ?")
+	require.NoError(t, err)
+	require.EqualValues(t, 1, paramsCount)
+	require.False(t, session.SessionPb().InTransaction, "prepare must not start an implicit transaction")
 }

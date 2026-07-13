@@ -34,7 +34,7 @@ func TestUnescapeAt(t *testing.T) {
 
 	r, str = UnescapeAt(str[1:])
 	assert.Equal(t, rune(0x00010000), r)
-	assert.Equal(t, "", str)
+	assert.Empty(t, str)
 }
 
 func TestUnescapeAtRunes(t *testing.T) {

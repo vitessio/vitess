@@ -29,6 +29,8 @@ Flags:
       --buffer-min-time-between-failovers duration                       Minimum time between the end of a failover and the start of the next one (tracked per shard). Faster consecutive failovers will not trigger buffering. (default 1m0s)
       --buffer-size int                                                  Maximum number of buffered requests in flight (across all ongoing failovers). (default 1000)
       --buffer-window duration                                           Duration for how long a request should be buffered at most (should not be larger than --buffer-max-failover-duration). (default 10s)
+      --builtinbackup-file-chunk-size uint                               Size of each chunk (in bytes) when splitting large files for parallel backup/restore. (default 1073741824)
+      --builtinbackup-file-chunk-threshold uint                          Files larger than this size (in bytes) are split into chunks for parallel backup/restore. 0 disables chunking.
       --builtinbackup-file-read-buffer-size uint                         read files using an IO buffer of this many bytes. Golang defaults are used when set to 0.
       --builtinbackup-file-write-buffer-size uint                        write files using an IO buffer of this many bytes. Golang defaults are used when set to 0. (default 2097152)
       --builtinbackup-incremental-restore-path string                    the directory where incremental restore files, namely binlog files, are extracted to. In k8s environments, this should be set to a directory that is shared between the vttablet and mysqld pods. The path should exist. When empty, the default OS temp dir is assumed.
@@ -49,6 +51,7 @@ Flags:
       --config-type string                                               Config file type (omit to infer config type from file extension).
       --consolidator-cache-proto3-rows                                   If true, the consolidation leader pre-caches proto3-encoded rows so that waiters avoid redundant encoding work.
       --consolidator-query-waiter-cap int                                Configure the maximum number of clients allowed to wait on the consolidator.
+      --consolidator-reject-on-cap                                       If true, reject queries with a RESOURCE_EXHAUSTED error when the global consolidator waiter cap is exceeded, instead of falling back to independent execution. The cap is enforced globally across all consolidated queries, not per-query.
       --consolidator-stream-query-size int                               Configure the stream consolidator query size in bytes. Setting to 0 disables the stream consolidator. (default 2097152)
       --consolidator-stream-total-size int                               Configure the stream consolidator total size in bytes. Setting to 0 disables the stream consolidator. (default 134217728)
       --consul-auth-static-file string                                   JSON File to read the topos/tokens from.
@@ -181,7 +184,7 @@ Flags:
       --init-db-name-override string                                     (init parameter) override the name of the db used by vttablet. Without this flag, the db name defaults to vt_<keyspacename>
       --init-keyspace string                                             (init parameter) keyspace to use for this tablet
       --init-shard string                                                (init parameter) shard to use for this tablet
-      --init-tablet-type string                                          (init parameter) tablet type to use for this tablet. Valid values are: REPLICA, RDONLY, and SPARE. The default is REPLICA.
+      --init-tablet-type string                                          (init parameter) tablet type to use for this tablet. Valid values are: REPLICA, RDONLY, EXPERIMENTAL and SPARE. The default is REPLICA.
       --init-tablet-type-lookup                                          (Experimental, init parameter) if enabled, uses tablet alias to look up the tablet type from the existing topology record on restart and use that instead of init-tablet-type. This allows tablets to maintain their changed roles (e.g., RDONLY/DRAINED) across restarts. If disabled or if no topology record exists, init-tablet-type will be used.
       --init-tags StringMap                                              (init parameter) comma separated list of key:value pairs used to tag the tablet
       --init-timeout duration                                            (init parameter) timeout to use for the init phase. (default 1m0s)
@@ -347,6 +350,7 @@ Flags:
       --shard-sync-retry-delay duration                                  delay between retries of updates to keep the tablet and its shard record in sync (default 30s)
       --shutdown-grace-period duration                                   how long to wait for queries and transactions to complete during graceful shutdown. (default 3s)
       --skip-user-metrics                                                If true, user based stats are not recorded.
+      --slow-query-threshold duration                                    Mark vtgate queries as slow when their total execution time meets or exceeds this duration. 0 disables slow-query detection.
       --sql-max-length-errors int                                        truncate queries in error logs to the given length (default unlimited)
       --sql-max-length-ui int                                            truncate queries in debug UIs to the given length (default 512) (default 512)
       --srv-topo-cache-refresh duration                                  how frequently to refresh the topology for cached entries (default 1s)

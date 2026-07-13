@@ -223,14 +223,32 @@ func NewVarBinary(v string) Value {
 	return MakeTrusted(VarBinary, []byte(v))
 }
 
+// NewVarBinaryFromBytes builds a VarBinary Value, taking ownership of b
+// without copying it. The caller must not mutate b afterwards.
+func NewVarBinaryFromBytes(b []byte) Value {
+	return MakeTrusted(VarBinary, b)
+}
+
 // NewDate builds a Date value.
 func NewDate(v string) Value {
 	return MakeTrusted(Date, []byte(v))
 }
 
+// NewDateFromBytes builds a Date value, taking ownership of b without
+// copying it. The caller must not mutate b afterwards.
+func NewDateFromBytes(b []byte) Value {
+	return MakeTrusted(Date, b)
+}
+
 // NewTime builds a Time value.
 func NewTime(v string) Value {
 	return MakeTrusted(Time, []byte(v))
+}
+
+// NewTimeFromBytes builds a Time value, taking ownership of b without
+// copying it. The caller must not mutate b afterwards.
+func NewTimeFromBytes(b []byte) Value {
+	return MakeTrusted(Time, b)
 }
 
 // NewTimestamp builds a Timestamp value.
@@ -243,9 +261,21 @@ func NewDatetime(v string) Value {
 	return MakeTrusted(Datetime, []byte(v))
 }
 
+// NewDatetimeFromBytes builds a Datetime value, taking ownership of b
+// without copying it. The caller must not mutate b afterwards.
+func NewDatetimeFromBytes(b []byte) Value {
+	return MakeTrusted(Datetime, b)
+}
+
 // NewDecimal builds a Decimal value.
 func NewDecimal(v string) Value {
 	return MakeTrusted(Decimal, []byte(v))
+}
+
+// NewDecimalFromBytes builds a Decimal value, taking ownership of b without
+// copying it. The caller must not mutate b afterwards.
+func NewDecimalFromBytes(b []byte) Value {
+	return MakeTrusted(Decimal, b)
 }
 
 // NewIntegral builds an integral type from a string representation.
