@@ -3158,6 +3158,20 @@ func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
 	positionAlmostMostAdvanced.Combined.GTIDSet = positionAlmostMostAdvanced.Combined.GTIDSet.AddGTID(mysqlGTID3)
 	positionAlmostMostAdvanced.Executed.GTIDSet = positionAlmostMostAdvanced.Executed.GTIDSet.AddGTID(mysqlGTID1)
 
+	// same combined gtid set as positionMostAdvanced, but with a gap in the executed
+	// gtid set, as seen with multi-threaded (parallel) replication applies. the executed
+	// sets of positionMtsGaps and positionMostAdvanced are incomparable: neither
+	// contains the other
+	positionMtsGaps := &RelayLogPositions{
+		Combined: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+		Executed: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+	}
+	positionMtsGaps.Combined.GTIDSet = positionMtsGaps.Combined.GTIDSet.AddGTID(mysqlGTID1)
+	positionMtsGaps.Combined.GTIDSet = positionMtsGaps.Combined.GTIDSet.AddGTID(mysqlGTID2)
+	positionMtsGaps.Combined.GTIDSet = positionMtsGaps.Combined.GTIDSet.AddGTID(mysqlGTID3)
+	positionMtsGaps.Executed.GTIDSet = positionMtsGaps.Executed.GTIDSet.AddGTID(mysqlGTID1)
+	positionMtsGaps.Executed.GTIDSet = positionMtsGaps.Executed.GTIDSet.AddGTID(mysqlGTID3)
+
 	positionIntermediate1 := &RelayLogPositions{
 		Combined: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
 		Executed: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
@@ -3375,6 +3389,39 @@ func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
 				Alias: &topodatapb.TabletAlias{
 					Cell: "zone1",
 					Uid:  102,
+				},
+			},
+		}, {
+			// incomparable executed gtid sets at an equal combined position happen with
+			// multi-threaded replication applies and are not a split brain: split brain
+			// is a property of the received (combined) history only
+			name: "no split brain false positive on executed gtid skew at equal combined positions",
+			validCandidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": positionMostAdvanced,
+				"zone1-0000000101": positionMtsGaps,
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+			},
+			result: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
 				},
 			},
 		}, {

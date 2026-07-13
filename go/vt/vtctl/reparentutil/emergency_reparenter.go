@@ -514,10 +514,17 @@ func (erp *EmergencyReparenter) findMostAdvanced(
 	winningPosition := tabletPositions[0]
 
 	// We have already removed the tablets with errant GTIDs before calling this function. At this point our winning position must be a
-	// superset of all the other valid positions. If that is not the case, then we have a split brain scenario, and we should cancel the ERS
+	// superset of all the other valid positions. If any position is incomparable with it, then we have a split brain scenario, and we
+	// should cancel the ERS. Split brain is a property of the received (Combined) history only: at an equal Combined position the
+	// Executed positions can transiently be incomparable (multi-threaded apply gaps) without any divergence, so we do not compare those
 	for i, position := range tabletPositions {
-		if !winningPosition.AtLeast(position) {
+		if positionsIncomparable(winningPosition.Combined, position.Combined) {
 			return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "split brain detected between servers - %v and %v", winningPrimaryTablet.Alias, validTablets[i].Alias)
+		}
+		// The sort cannot guarantee a maximum at index 0 when the set contains incomparable positions, so also reject a winner
+		// that another candidate strictly dominates
+		if positionDominates(position.Combined, winningPosition.Combined) {
+			return nil, nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "candidate sorting error: %v has a more advanced position than the chosen candidate %v", validTablets[i].Alias, winningPrimaryTablet.Alias)
 		}
 	}
 
