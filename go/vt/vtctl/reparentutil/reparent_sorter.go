@@ -74,11 +74,10 @@ func (rs *reparentSorter) Less(i, j int) bool {
 	jPositions := rs.positions[j]
 	iPositions := rs.positions[i]
 
-	// sort by the combined positions first: whichever tablet has strictly more GTIDs wins.
-	// GTID sets are partially ordered, so a pair can also be incomparable (disjoint UUIDs);
-	// those fall through to the tiebreakers below to keep the result deterministic. this
-	// cannot make the sort a total order, so findMostAdvanced re-checks the winner for
-	// dominance after sorting.
+	// sort by dominance of the combined positions first. GTID positions are partially
+	// ordered, so a pair can also be incomparable (disjoint UUIDs); those fall through to
+	// the tiebreakers below to keep the sort deterministic. this can't make the sort a
+	// total order, so findMostAdvanced re-checks the winner after sorting.
 	if positionDominates(iPositions.Combined, jPositions.Combined) {
 		return true
 	}

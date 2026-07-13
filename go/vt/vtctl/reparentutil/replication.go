@@ -86,30 +86,22 @@ func (rlp *RelayLogPositions) IsZero() bool {
 	return rlp.Combined.IsZero()
 }
 
-// positionDominates reports whether a is strictly ahead of b in the GTID partial order:
-// a contains everything b has, and the two are not equal. This is the single definition of
-// "ahead-ness" shared by the reparent filter, the sorter, and the split-brain check, so the
-// partial-order handling lives in one place rather than being re-derived at each call site.
+// positionDominates returns true if position a is strictly ahead of position b, meaning
+// a contains everything b has, plus more.
 func positionDominates(a, b replication.Position) bool {
 	return a.AtLeast(b) && !a.Equal(b)
 }
 
-// positionsIncomparable reports whether neither position contains the other — the
-// partial-order case where both are maximal at once. In a single shard this only arises from
-// disjoint UUIDs (split-brain / errant GTIDs), never from ordinary replication lag.
+// positionsIncomparable returns true if neither position contains the other. Replication
+// lag alone can't cause this, it takes writes that no other tablet has seen (split brain
+// or errant GTIDs).
 func positionsIncomparable(a, b replication.Position) bool {
 	return !a.AtLeast(b) && !b.AtLeast(a)
 }
 
-// uniformCombined returns true when every candidate shares the same Combined position.
-// Applied to the output of filterToMostAdvancedCombined, a false result means the leading
-// group has incomparable maxima (suspected split-brain shape): a one-success short-circuit
-// in the relay-log-apply wait would silently drop a failed incomparable leader, bypassing
-// the split-brain check in findMostAdvanced.
-//
-// The equivalence "not uniform ⇒ incomparable maxima exist" holds only on a filtered set:
-// filterToMostAdvancedCombined removes every strictly-dominated candidate, so any surviving
-// pair is either equal or incomparable — comparable-but-unequal survivors cannot exist.
+// uniformCombined returns true when every candidate has the same Combined position. On the
+// output of filterToMostAdvancedCombined a false result means the leading candidates have
+// incomparable positions, as the filter already removed anything dominated.
 func uniformCombined(candidates map[string]*RelayLogPositions) bool {
 	var ref replication.Position
 	set := false
@@ -126,15 +118,11 @@ func uniformCombined(candidates map[string]*RelayLogPositions) bool {
 	return true
 }
 
-// filterToMostAdvancedCombined keeps only candidates whose Combined position is not strictly
-// dominated by another. Pairwise comparison against the full candidate set is required to
-// correctly handle partially-ordered GTID sets: when two candidates have disjoint UUIDs
-// neither dominates the other, so both must be kept; comparing against a single chosen max
-// would silently drop one incomparable maximum. uniformCombined relies on this full-set
-// comparison — do not narrow the inner loop to the survivors.
-//
-// The returned map shares the caller's RelayLogPositions structs so that later
-// reconciliation of the wait results is visible through both maps.
+// filterToMostAdvancedCombined returns the candidates that no other candidate dominates on
+// the Combined position. GTID positions are partially ordered, so each candidate is
+// compared against all of the others; two incomparable leaders don't dominate each other
+// and both must be kept, which uniformCombined relies on. The returned map shares the
+// caller's RelayLogPositions structs.
 func filterToMostAdvancedCombined(candidates map[string]*RelayLogPositions, logger logutil.Logger) map[string]*RelayLogPositions {
 	if len(candidates) == 0 {
 		return candidates

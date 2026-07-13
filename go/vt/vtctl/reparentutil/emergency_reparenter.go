@@ -81,13 +81,11 @@ type relayLogResult struct {
 type relayLogWaitResult struct {
 	// applied are the tablets that finished applying their relay logs.
 	applied []string
-	// failed are the tablets that could not apply their relay logs (RPC error, MySQL
+	// failed are the tablets that couldn't apply their relay logs (RPC error, MySQL
 	// error or timeout).
 	failed []string
-	// cancelled are the tablets we deliberately gave up waiting on: either a peer at the
-	// same received position already finished (requireAll=false), a peer already failed
-	// (requireAll=true), or the reparent was aborted. Nothing is known about their apply
-	// progress.
+	// cancelled are the tablets we stopped waiting on, because a peer finished or failed
+	// first, or the reparent was aborted. We know nothing about their apply progress.
 	cancelled []string
 }
 
@@ -295,25 +293,25 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	}
 
 	// One deadline covers all relay log waiting below, including the possible second wait
-	// after errant GTID detection, so the reparent spends at most WaitReplicasTimeout in
-	// total waiting for relay logs to apply
+	// after errant GTID detection, so we spend at most WaitReplicasTimeout in total
+	// waiting for relay logs to apply
 	relayLogCtx, relayLogCancel := context.WithTimeout(ctx, opts.WaitReplicasTimeout)
 	defer relayLogCancel()
 
-	// A candidate strictly behind the most-advanced received (Combined) position can never
-	// win the election, so for GTID-based shards there is no reason to let it hold up or
-	// fail the reparent while it applies its relay logs: we wait only on the leading
-	// candidates. Those share the same received position, so the first one to finish
-	// applying is enough. Candidates left out of the wait are still repointed to the new
-	// primary afterwards. For non-GTID-based shards (FilePos, MariaDB) the Combined
-	// position only reflects what is executed, so the filter is unsafe there: keep the
-	// previous behavior of waiting for every candidate and failing on any error.
+	// A candidate that is behind the most-advanced received (Combined) position was never
+	// going to win the election, so for GTID-based shards we only wait on the leading
+	// candidates. They all received the same changes, so the first one to finish applying
+	// is enough; the others are still repointed to the new primary afterwards, they just
+	// can't hold up or fail the reparent. For non-GTID-based shards (FilePos, MariaDB) the
+	// Combined position only reflects what is executed, so we keep the previous behaviour
+	// of waiting for every candidate and failing on any error.
 	waitCandidates := validCandidates
 	requireAll := true
 	if isGTIDBased {
 		waitCandidates = filterToMostAdvancedCombined(validCandidates, erp.logger)
-		// Incomparable leading positions are a suspected split brain: wait for all of the
-		// leaders so that a failed one is not dropped before findMostAdvanced can inspect it
+		// Leading candidates with incomparable positions are a suspected split brain:
+		// wait for all of them so a failed one isn't dropped before findMostAdvanced
+		// sees it
 		requireAll = !uniformCombined(waitCandidates)
 	}
 
@@ -334,9 +332,9 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		}
 
 		// If errant GTID detection removed every tablet that applied its relay logs, the
-		// surviving candidates may still have relay logs left to apply. Wait on the
-		// leading survivors before electing one, so that we never promote a tablet with
-		// received-but-unapplied transactions
+		// surviving candidates may still have relay logs to apply. Wait on the leading
+		// survivors before electing one; we never promote a tablet that hasn't applied
+		// everything it received
 		appliedSurvived := false
 		for _, alias := range waitResult.applied {
 			if _, ok := validCandidates[alias]; ok {
@@ -485,6 +483,12 @@ func (erp *EmergencyReparenter) restartReplicationOnStoppedReplicas(
 	return nil
 }
 
+// waitForAllRelayLogsToApply waits for the given candidates to apply their relay logs and
+// reports the per-tablet outcome. With requireAll any failure fails the whole wait;
+// without it the candidates all received the same changes, so the first one to finish
+// applying wins and the remaining waits are cancelled. When in requireAll=false mode we
+// deliberately don't wait for all candidates; keeping the historical name for now as this
+// has a single caller.
 func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 	ctx context.Context,
 	validCandidates map[string]*RelayLogPositions,
@@ -552,14 +556,14 @@ func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 		case res.err == nil:
 			result.applied = append(result.applied, res.alias)
 			if !requireAll && !weCancelled {
-				// one of the candidates finished applying. the others share its received
-				// position and cannot do better, so stop waiting on them
+				// one of the candidates finished applying. the others received the same
+				// changes and can't do better, so stop waiting on them
 				weCancelled = true
 				groupCancel()
 			}
 		case (weCancelled || ctx.Err() != nil) && isCancellationError(res.err):
-			// we gave up on this tablet on purpose (or the reparent was aborted); it did
-			// not fail
+			// we stopped waiting on this tablet on purpose (or the reparent was
+			// aborted), it didn't fail
 			result.cancelled = append(result.cancelled, res.alias)
 		default:
 			result.failed = append(result.failed, res.alias)
@@ -576,7 +580,10 @@ func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 		}
 	}
 
-	// an aborted reparent beats any per-tablet outcome
+	// an aborted reparent beats any per-tablet outcome. only an explicit cancellation
+	// counts as an abort here; a parent deadline expiry is indistinguishable from the
+	// relay log budget expiring (they usually share a deadline), so it keeps the timeout
+	// wording below instead
 	if ctxErr := ctx.Err(); errors.Is(ctxErr, context.Canceled) {
 		return result, vterrors.Wrapf(ctxErr, "emergency reparent aborted while waiting for relay logs to apply")
 	}
@@ -592,16 +599,15 @@ func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 
 // isCancellationError returns true if err is a context cancellation, either as the
 // sentinel error or as a gRPC code (server-side wrapping loses the sentinel). A deadline
-// expiry is not a cancellation: it is how a genuinely stuck tablet fails the wait.
+// expiry isn't a cancellation, that's how a genuinely stuck tablet fails the wait.
 func isCancellationError(err error) bool {
 	return errors.Is(err, context.Canceled) || vterrors.Code(err) == vtrpc.Code_CANCELED
 }
 
 // applyRelayLogsAndReconcile waits for the waitCandidates to apply their relay logs and
-// reconciles validCandidates with the outcome: tablets that failed to apply cannot be
-// promoted and are removed, tablets that finished get their Executed position bumped to
-// Combined so that findMostAdvanced prefers them over peers whose wait was cancelled
-// midway. Returns the reconciled candidates and the per-tablet wait outcome.
+// reconciles validCandidates with the outcome: failed tablets are removed as they can't be
+// promoted, and applied tablets get their Executed position bumped to Combined so the
+// sorter prefers them over peers whose wait we cancelled midway.
 func (erp *EmergencyReparenter) applyRelayLogsAndReconcile(
 	ctx context.Context,
 	waitCandidates map[string]*RelayLogPositions,
@@ -666,14 +672,14 @@ func (erp *EmergencyReparenter) findMostAdvanced(
 
 	// We have already removed the tablets with errant GTIDs before calling this function. At this point our winning position must be a
 	// superset of all the other valid positions. If any position is incomparable with it, then we have a split brain scenario, and we
-	// should cancel the ERS. Split brain is a property of the received (Combined) history only: at an equal Combined position the
-	// Executed positions can transiently be incomparable (multi-threaded apply gaps) without any divergence, so we do not compare those
+	// should cancel the ERS. Split brain is about divergent received history, so we only compare the Combined positions; the Executed
+	// positions can be transiently incomparable at an equal Combined position (multi-threaded apply gaps) without any divergence
 	for i, position := range tabletPositions {
 		if positionsIncomparable(winningPosition.Combined, position.Combined) {
 			return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "split brain detected between servers - %v and %v", winningPrimaryTablet.Alias, validTablets[i].Alias)
 		}
-		// The sort cannot guarantee a maximum at index 0 when the set contains incomparable positions, so also reject a winner
-		// that another candidate strictly dominates
+		// The sort can't guarantee a maximum at index 0 when some positions are incomparable, so also reject a winner that
+		// another candidate dominates. This is an invariant check that should never fire, not an expected path
 		if positionDominates(position.Combined, winningPosition.Combined) {
 			return nil, nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "candidate sorting error: %v has a more advanced position than the chosen candidate %v", validTablets[i].Alias, winningPrimaryTablet.Alias)
 		}
