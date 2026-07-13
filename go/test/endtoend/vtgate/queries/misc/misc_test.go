@@ -982,6 +982,37 @@ func TestJoinMixedCaseExpr(t *testing.T) {
 	mcmp.AssertMatches(`execute prep_pk`, `[[INT64(1)] [INT64(1)] [INT64(1)]]`)
 }
 
+// TestOlapInsertSelectMultiChunk runs an insert-select over the streaming
+// (OLAP) path where the scatter select delivers one chunk of rows per shard
+// stream. No chunk's insert may claim the session's autocommit approval: the
+// approval can be claimed only once per statement, so the first chunk's
+// single-shard insert would run as an autocommit and mark the session
+// 'autocommitted', and the next chunk's insert would then fail with VT13001
+// ("unexpected 'autocommitted' state in transaction").
+//
+// The shape of the statement matters to keep the bug reachable: the target
+// table differs from the source (a self-referencing insert-select is forced
+// onto the buffered path) and has no sequence and no owned lookup vindex
+// (those execute their own statements in between, which takes the approval
+// away and hides the bug), and the seed rows are chosen so that each source
+// shard's rows map to a single target shard, which is what makes a chunk's
+// insert eligible for autocommit.
+func TestOlapInsertSelectMultiChunk(t *testing.T) {
+	mcmp, closer := start(t)
+	t.Cleanup(closer)
+
+	// id1 1 and 2 live on shard -80 and their id2 values map to 80-;
+	// id1 4 and 6 live on shard 80- and their id2 values map to -80.
+	mcmp.Exec("insert into t1(id1, id2) values (1,7), (2,8), (4,9), (6,10)")
+
+	utils.Exec(t, mcmp.VtConn, "set workload = olap")
+	mcmp.Exec("insert into all_types(id, int_unsigned) select id2, id1 from t1")
+
+	utils.Exec(t, mcmp.VtConn, "set workload = oltp")
+	mcmp.AssertMatches("select id, int_unsigned from all_types order by id",
+		`[[INT64(7) INT32(1)] [INT64(8) INT32(2)] [INT64(9) INT32(4)] [INT64(10) INT32(6)]]`)
+}
+
 // TestOlapErrorAfterFields verifies that a streamed (OLAP) query whose error
 // arrives mid result set - after the field packets were already sent, like a
 // recursive CTE aborting with ER_CTE_MAX_RECURSION_DEPTH while producing rows -
