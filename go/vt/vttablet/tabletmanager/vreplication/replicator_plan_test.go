@@ -1281,6 +1281,7 @@ func TestApplyBulkDeleteChanges(t *testing.T) {
 			return &sqltypes.Result{RowsAffected: 1}, nil
 		}, 1024)
 		require.ErrorContains(t, err, "not delete-shaped")
+		assert.True(t, isUnrecoverableError(err), "error must be terminal")
 		assert.Empty(t, executed)
 	})
 
@@ -1309,6 +1310,7 @@ func TestApplyBulkDeleteChanges(t *testing.T) {
 			return &sqltypes.Result{RowsAffected: 1}, nil
 		}, 1024)
 		require.ErrorContains(t, err, "not delete-shaped")
+		assert.True(t, isUnrecoverableError(err), "error must be terminal")
 		assert.Empty(t, executed)
 	})
 
@@ -1324,6 +1326,7 @@ func TestApplyBulkDeleteChanges(t *testing.T) {
 			return &sqltypes.Result{RowsAffected: 1}, nil
 		}, 1024)
 		require.ErrorContains(t, err, "not delete-shaped")
+		assert.True(t, isUnrecoverableError(err), "error must be terminal")
 		assert.Empty(t, executed)
 	})
 }
@@ -1365,6 +1368,7 @@ func TestApplyBulkInsertChangesMixedShapes(t *testing.T) {
 			return &sqltypes.Result{RowsAffected: 1}, nil
 		}, 1024)
 		require.ErrorContains(t, err, "not insert-shaped")
+		assert.True(t, isUnrecoverableError(err), "error must be terminal")
 		assert.Empty(t, executed)
 	})
 
@@ -1383,6 +1387,7 @@ func TestApplyBulkInsertChangesMixedShapes(t *testing.T) {
 			return &sqltypes.Result{RowsAffected: 1}, nil
 		}, 1024)
 		require.ErrorContains(t, err, "not insert-shaped")
+		assert.True(t, isUnrecoverableError(err), "error must be terminal")
 		assert.Empty(t, executed)
 	})
 
@@ -1397,6 +1402,7 @@ func TestApplyBulkInsertChangesMixedShapes(t *testing.T) {
 			return &sqltypes.Result{RowsAffected: 1}, nil
 		}, 1024)
 		require.ErrorContains(t, err, "not insert-shaped")
+		assert.True(t, isUnrecoverableError(err), "error must be terminal")
 		assert.Empty(t, executed)
 	})
 }

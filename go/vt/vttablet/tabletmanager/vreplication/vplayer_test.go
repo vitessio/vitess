@@ -125,6 +125,10 @@ func TestBulkApplicableShapes(t *testing.T) {
 			deletesOnly, insertsOnly, err := bulkApplicableShapes("t1", tc.rowChanges)
 			if tc.wantErr != "" {
 				require.ErrorContains(t, err, tc.wantErr)
+				// A malformed event replays identically on every retry, so
+				// the workflow must transition to the Error state instead of
+				// retrying forever.
+				assert.True(t, isUnrecoverableError(err), "error must be terminal")
 				return
 			}
 			require.NoError(t, err)
