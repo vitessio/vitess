@@ -1314,6 +1314,25 @@ func TestApplyBulkDeleteChanges(t *testing.T) {
 		assert.Empty(t, executed)
 	})
 
+	t.Run("empty Before image returns an error instead of panicking", func(t *testing.T) {
+		// The malformed shape from issue #20360: a Before image that is
+		// present but has no column values. MakeRowTrusted returns an empty
+		// row and vals[pkIndex] used to panic with index out of range.
+		tp := newTablePlan()
+		rowChanges := []*binlogdatapb.RowChange{
+			makeRowDelete(1, "a"),
+			{Before: &querypb.Row{}},
+		}
+		var executed []string
+		_, err := tp.applyBulkDeleteChanges(rowChanges, func(sql string) (*sqltypes.Result, error) {
+			executed = append(executed, sql)
+			return &sqltypes.Result{RowsAffected: 1}, nil
+		}, 1024)
+		require.ErrorContains(t, err, "not delete-shaped")
+		assert.True(t, isUnrecoverableError(err), "error must be terminal")
+		assert.Empty(t, executed)
+	})
+
 	t.Run("nil change returns an error instead of panicking", func(t *testing.T) {
 		tp := newTablePlan()
 		rowChanges := []*binlogdatapb.RowChange{
@@ -1380,6 +1399,24 @@ func TestApplyBulkInsertChangesMixedShapes(t *testing.T) {
 		rowChanges := []*binlogdatapb.RowChange{
 			{After: makeRow(1, "a")},
 			{Before: makeRow(2, "b"), After: makeRow(2, "c")},
+		}
+		var executed []string
+		_, err := tp.applyBulkInsertChanges(rowChanges, func(sql string) (*sqltypes.Result, error) {
+			executed = append(executed, sql)
+			return &sqltypes.Result{RowsAffected: 1}, nil
+		}, 1024)
+		require.ErrorContains(t, err, "not insert-shaped")
+		assert.True(t, isUnrecoverableError(err), "error must be terminal")
+		assert.Empty(t, executed)
+	})
+
+	t.Run("empty After image returns an error instead of panicking", func(t *testing.T) {
+		// Mirror of the #20360 shape on the insert side: an After image that
+		// is present but has no column values used to panic with index out of
+		// range when the field loop indexed the empty row.
+		rowChanges := []*binlogdatapb.RowChange{
+			{After: makeRow(1, "a")},
+			{After: &querypb.Row{}},
 		}
 		var executed []string
 		_, err := tp.applyBulkInsertChanges(rowChanges, func(sql string) (*sqltypes.Result, error) {

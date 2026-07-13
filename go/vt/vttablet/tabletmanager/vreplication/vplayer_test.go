@@ -130,6 +130,22 @@ func TestBulkApplicableShapes(t *testing.T) {
 		name:       "nil change after mixed shapes",
 		rowChanges: []*binlogdatapb.RowChange{insert(1), del(2), nil},
 		wantErr:    "malformed row change",
+	}, {
+		// An image that is present but has no column values is the malformed
+		// shape from https://github.com/vitessio/vitess/issues/20360 and must
+		// be rejected rather than classified by the nil checks: MakeRowTrusted
+		// returns an empty row that later indexing panics on.
+		name:       "empty Before image",
+		rowChanges: []*binlogdatapb.RowChange{del(1), {Before: &querypb.Row{}}},
+		wantErr:    "malformed row change",
+	}, {
+		name:       "empty After image",
+		rowChanges: []*binlogdatapb.RowChange{insert(1), {After: &querypb.Row{}}},
+		wantErr:    "malformed row change",
+	}, {
+		name:       "update with empty After image",
+		rowChanges: []*binlogdatapb.RowChange{{Before: row(1), After: &querypb.Row{}}},
+		wantErr:    "malformed row change",
 	}}
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
