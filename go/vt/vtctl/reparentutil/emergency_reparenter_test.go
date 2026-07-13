@@ -3957,9 +3957,9 @@ func TestEmergencyReparenter_waitForAllRelayLogsToApply(t *testing.T) {
 		{
 			// the parent deadline expires while the only wait comes back with a
 			// cancellation-coded RPC error (server-side teardown racing the client
-			// deadline): every wait is classified as cancelled, none applied and none
-			// failed. this must be an error, never a success without a single applied
-			// candidate
+			// deadline). a deadline expiry is not an intentional cancellation: the
+			// tablet didn't finish in budget and counts as failed, and this must be an
+			// error, never a success without a single applied candidate
 			name: "requireAll false, deadline expiry with cancellation-coded waits is not a success",
 			tmc: &testutil.TabletManagerClient{
 				// the result arrives well after the parent deadline below
@@ -3999,8 +3999,72 @@ func TestEmergencyReparenter_waitForAllRelayLogsToApply(t *testing.T) {
 			errContains:         "all candidates failed to apply relay logs",
 			checkOutcome:        true,
 			wantApplied:         []string{},
-			wantFailed:          []string{},
-			wantCancelled:       []string{"zone1-0000000100"},
+			wantFailed:          []string{"zone1-0000000100"},
+			wantCancelled:       []string{},
+		},
+		{
+			// same shape in requireAll mode with a peer that applied: the
+			// cancellation-coded tablet never applied, so treating it as "cancelled"
+			// would let requireAll return success without waiting for everyone. it
+			// must be classified as failed and fail the wait
+			name: "requireAll true, deadline expiry with cancellation-coded waits still fails",
+			tmc: &testutil.TabletManagerClient{
+				// the failing result arrives well after the parent deadline below
+				WaitForPositionPostDelays: map[string]time.Duration{
+					"zone1-0000000101": time.Second,
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000100": {
+						"position1": nil,
+					},
+					"zone1-0000000101": {
+						"position1": vterrors.New(vtrpc.Code_CANCELED, "replication wait torn down"),
+					},
+				},
+			},
+			candidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": {},
+				"zone1-0000000101": {},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"zone1-0000000100": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: "position1",
+					},
+				},
+				"zone1-0000000101": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: "position1",
+					},
+				},
+			},
+			requireAll:          true,
+			waitReplicasTimeout: 30 * time.Second,
+			ctxTimeout:          200 * time.Millisecond,
+			shouldErr:           true,
+			errContains:         "could not apply all relay logs",
+			checkOutcome:        true,
+			wantApplied:         []string{"zone1-0000000100"},
+			wantFailed:          []string{"zone1-0000000101"},
+			wantCancelled:       []string{},
 		},
 		{
 			// a former primary has no relay logs to apply and is skipped: it must not

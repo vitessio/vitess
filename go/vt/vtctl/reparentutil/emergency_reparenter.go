@@ -575,9 +575,10 @@ func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 				weCancelled = true
 				groupCancel()
 			}
-		case (weCancelled || ctx.Err() != nil) && isCancellationError(res.err):
+		case (weCancelled || errors.Is(ctx.Err(), context.Canceled)) && isCancellationError(res.err):
 			// we stopped waiting on this tablet on purpose (or the reparent was
-			// aborted), it didn't fail
+			// explicitly aborted), it didn't fail. a parent deadline expiry is not
+			// intentional: the tablet didn't finish in budget and counts as failed below
 			result.cancelled = append(result.cancelled, res.alias)
 		default:
 			result.failed = append(result.failed, res.alias)
@@ -605,9 +606,8 @@ func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 		return result, vterrors.Wrapf(firstFailure, "could not apply all relay logs within the provided waitReplicasTimeout (%s)", waitReplicasTimeout)
 	}
 	if len(result.applied) == 0 {
-		// firstFailure is nil when the deadline expired and every wait came back with a
-		// cancellation error; fall back to the context error. This must never return
-		// success without a single applied candidate
+		// defensive fallbacks: this must never return success without a single applied
+		// candidate, even if a future classification change leaves firstFailure nil
 		err := firstFailure
 		if err == nil {
 			err = ctx.Err()
