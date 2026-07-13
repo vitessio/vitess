@@ -17,7 +17,11 @@ limitations under the License.
 package emergencyreparent
 
 import (
+	"fmt"
+	"strconv"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -27,6 +31,42 @@ import (
 	endtoendutils "vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 )
+
+// replicaStatusField returns the named field from `show replica status`, or an empty
+// string if the row or field is missing.
+func replicaStatusField(t *testing.T, tablet *cluster.Vttablet, field string) string {
+	res := utils.RunSQL(t.Context(), t, `show replica status`, tablet)
+	if len(res.Rows) != 1 {
+		return ""
+	}
+	for i, f := range res.Fields {
+		if f.Name == field {
+			return res.Rows[0][i].ToString()
+		}
+	}
+	return ""
+}
+
+// waitForReceivedPosition waits until the tablet has received (not necessarily applied)
+// everything in the given GTID set.
+func waitForReceivedPosition(t *testing.T, tablet *cluster.Vttablet, position string) {
+	require.Eventually(t, func() bool {
+		retrieved := strings.ReplaceAll(replicaStatusField(t, tablet, "Retrieved_Gtid_Set"), "\n", "")
+		if retrieved == "" {
+			return false
+		}
+		res := utils.RunSQL(t.Context(), t, fmt.Sprintf(`select gtid_subset('%s', concat(@@global.gtid_executed, ',', '%s'))`, position, retrieved), tablet)
+		return len(res.Rows) == 1 && res.Rows[0][0].ToString() == "1"
+	}, 30*time.Second, time.Second)
+}
+
+// waitForReplicationSource waits until the tablet's replication source is the given
+// tablet's mysqld.
+func waitForReplicationSource(t *testing.T, tablet, source *cluster.Vttablet) {
+	require.Eventually(t, func() bool {
+		return replicaStatusField(t, tablet, "Source_Port") == strconv.Itoa(source.MySQLPort)
+	}, 30*time.Second, time.Second)
+}
 
 // TestERSSucceedsWithLaggingSQLThreadReplica checks that a replica that has received all
 // changes but is lagging on applying them (stopped SQL thread) neither fails nor delays
@@ -51,6 +91,13 @@ func TestERSSucceedsWithLaggingSQLThreadReplica(t *testing.T) {
 	// Confirm that tablets[1] has indeed not applied the write.
 	res := utils.RunSQL(t.Context(), t, `select msg from vt_insert_test`, tablets[1])
 	assert.Len(t, res.Rows, 1)
+
+	// Make sure tablets[1] has received the write before ERS freezes the positions: the
+	// semi-sync ACK can come from the other replicas, so the insert returning doesn't
+	// guarantee it. Without this the test can degrade into filtering tablets[1] out
+	// instead of racing it against the applied replicas.
+	primaryPosition := strings.ReplaceAll(utils.RunSQL(t.Context(), t, `select @@global.gtid_executed`, tablets[0]).Rows[0][0].ToString(), "\n", "")
+	waitForReceivedPosition(t, tablets[1], primaryPosition)
 
 	// Kill the primary's vttablet (mysqld keeps running, so the replicas' IO threads stay
 	// connected). The lagging replica used to make ERS wait for its whole relay log
@@ -122,7 +169,10 @@ func TestERSFiltersReplicaBehindOnRelayLogReceipt(t *testing.T) {
 	require.NoError(t, err)
 
 	// tablets[1] was fully stopped when the reparent began, so it is repointed to the new
-	// primary but not started.
+	// primary but not started. The repoint of non-winning replicas completes
+	// asynchronously after ERS returns, so wait for it to land; otherwise START REPLICA
+	// races the in-flight CHANGE REPLICATION SOURCE.
+	waitForReplicationSource(t, tablets[1], newPrimary)
 	utils.CheckReplicationStatus(t.Context(), t, tablets[1], false, false)
 
 	// Once started, it catches up on everything through the new primary.

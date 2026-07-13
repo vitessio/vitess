@@ -44,10 +44,12 @@ import (
 	"vitess.io/vitess/go/vt/topotools/events"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/reparenttestutil"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 func TestNewEmergencyReparenter(t *testing.T) {
@@ -1534,6 +1536,123 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 			errShouldContain: "all candidates failed to apply relay logs",
 		},
 		{
+			// zone1-0000000100 and zone1-0000000101 both received GTIDs from a second
+			// uuid that the lagging zone1-0000000102 never saw. 101 fails its relay log
+			// wait and is removed from candidacy, but its received position must still
+			// corroborate those GTIDs, otherwise 100 would be falsely flagged errant and
+			// the behind 102 elected instead
+			name:       "failed leading candidate still corroborates errant GTID detection",
+			durability: policy.DurabilityNone,
+			emergencyReparentOps: EmergencyReparentOptions{
+				WaitReplicasTimeout: time.Millisecond * 50,
+			},
+			tmc: &testutil.TabletManagerClient{
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+				PromoteReplicaResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000100": {Result: "ok"},
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000101": nil,
+					"zone1-0000000102": nil,
+				},
+				StopReplicationAndGetStatusResults: map[string]struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Error      error
+				}{
+					"zone1-0000000100": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-100", "1-5"),
+							},
+						},
+					},
+					"zone1-0000000101": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-100", "1-5"),
+							},
+						},
+					},
+					"zone1-0000000102": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-100"),
+							},
+						},
+					},
+				},
+				// zone1-0000000101's configured result doesn't cover the position it is
+				// asked to wait for, so it fails the wait
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000100": {
+						getRelayLogPosition("1-100", "1-5"): nil,
+					},
+					"zone1-0000000101": {
+						getRelayLogPosition("1-10"): nil,
+					},
+					"zone1-0000000102": {
+						getRelayLogPosition("1-100"): nil,
+					},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						PrimaryAlias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Hostname: "applies relay logs, wins election",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Hostname: "fails to apply relay logs, corroborates as evidence",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  102,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Hostname: "behind on received relay logs",
+				},
+			},
+			shouldErr: false,
+			keyspace:  "testkeyspace",
+			shard:     "-",
+			cells:     []string{"zone1"},
+		},
+		{
 			name:       "requested primary-elect is not in tablet map",
 			durability: policy.DurabilityNone,
 			emergencyReparentOps: EmergencyReparentOptions{NewPrimaryAlias: &topodatapb.TabletAlias{
@@ -2691,7 +2810,8 @@ func TestEmergencyReparenterRestartsStoppedIOThreadsOnStopReplicationFailure(t *
 		},
 	})
 
-	testutil.AddTablets(ctx, t, ts, nil,
+	testutil.AddTablets(
+		ctx, t, ts, nil,
 		&topodatapb.Tablet{
 			Alias: &topodatapb.TabletAlias{
 				Cell: "zone1",
@@ -2835,7 +2955,8 @@ func TestEmergencyReparenterRestartsStoppedIOThreadsOnFailure(t *testing.T) {
 			},
 		})
 
-		testutil.AddTablets(ctx, t, ts, nil,
+		testutil.AddTablets(
+			ctx, t, ts, nil,
 			&topodatapb.Tablet{
 				Alias: &topodatapb.TabletAlias{
 					Cell: "zone1",
@@ -3376,9 +3497,16 @@ func TestEmergencyReparenter_waitForAllRelayLogsToApply(t *testing.T) {
 		statusMap  map[string]*replicationdatapb.StopReplicationStatus
 		requireAll bool
 		// cancelCtx runs the wait with an already-cancelled parent context.
-		cancelCtx   bool
+		cancelCtx bool
+		// ctxTimeout runs the wait with a parent context that expires after the given
+		// duration, like the shared relay log deadline does.
+		ctxTimeout  time.Duration
 		shouldErr   bool
 		errContains string
+		// waitReplicasTimeout overrides the default 50ms timeout. Cells that assert the
+		// per-tablet outcome and don't need the deadline to fire use a generous timeout,
+		// so a starved CI runner can't turn a cancelled tablet into a deadline failure.
+		waitReplicasTimeout time.Duration
 		// checkOutcome asserts the per-tablet outcome below. Left false for cells where
 		// goroutine scheduling makes the split between the sets nondeterministic.
 		checkOutcome  bool
@@ -3662,12 +3790,13 @@ func TestEmergencyReparenter_waitForAllRelayLogsToApply(t *testing.T) {
 					},
 				},
 			},
-			requireAll:    false,
-			shouldErr:     false,
-			checkOutcome:  true,
-			wantApplied:   []string{"zone1-0000000100"},
-			wantFailed:    []string{},
-			wantCancelled: []string{"zone1-0000000101"},
+			requireAll:          false,
+			waitReplicasTimeout: 30 * time.Second,
+			shouldErr:           false,
+			checkOutcome:        true,
+			wantApplied:         []string{"zone1-0000000100"},
+			wantFailed:          []string{},
+			wantCancelled:       []string{"zone1-0000000101"},
 		},
 		{
 			// a genuine failure before any success must be reported as failed even
@@ -3720,12 +3849,13 @@ func TestEmergencyReparenter_waitForAllRelayLogsToApply(t *testing.T) {
 					},
 				},
 			},
-			requireAll:    false,
-			shouldErr:     false,
-			checkOutcome:  true,
-			wantApplied:   []string{"zone1-0000000101"},
-			wantFailed:    []string{"zone1-0000000100"},
-			wantCancelled: []string{},
+			requireAll:          false,
+			waitReplicasTimeout: 30 * time.Second,
+			shouldErr:           false,
+			checkOutcome:        true,
+			wantApplied:         []string{"zone1-0000000101"},
+			wantFailed:          []string{"zone1-0000000100"},
+			wantCancelled:       []string{},
 		},
 		{
 			name: "requireAll false, all candidates fail",
@@ -3773,13 +3903,14 @@ func TestEmergencyReparenter_waitForAllRelayLogsToApply(t *testing.T) {
 					},
 				},
 			},
-			requireAll:    false,
-			shouldErr:     true,
-			errContains:   "all candidates failed to apply relay logs",
-			checkOutcome:  true,
-			wantApplied:   []string{},
-			wantFailed:    []string{"zone1-0000000100", "zone1-0000000101"},
-			wantCancelled: []string{},
+			requireAll:          false,
+			waitReplicasTimeout: 30 * time.Second,
+			shouldErr:           true,
+			errContains:         "all candidates failed to apply relay logs",
+			checkOutcome:        true,
+			wantApplied:         []string{},
+			wantFailed:          []string{"zone1-0000000100", "zone1-0000000101"},
+			wantCancelled:       []string{},
 		},
 		{
 			name: "requireAll false, aborted parent context",
@@ -3813,14 +3944,63 @@ func TestEmergencyReparenter_waitForAllRelayLogsToApply(t *testing.T) {
 					},
 				},
 			},
-			requireAll:    false,
-			cancelCtx:     true,
-			shouldErr:     true,
-			errContains:   "emergency reparent aborted while waiting for relay logs to apply",
-			checkOutcome:  true,
-			wantApplied:   []string{},
-			wantFailed:    []string{},
-			wantCancelled: []string{"zone1-0000000100"},
+			requireAll:          false,
+			waitReplicasTimeout: 30 * time.Second,
+			cancelCtx:           true,
+			shouldErr:           true,
+			errContains:         "emergency reparent aborted while waiting for relay logs to apply",
+			checkOutcome:        true,
+			wantApplied:         []string{},
+			wantFailed:          []string{},
+			wantCancelled:       []string{"zone1-0000000100"},
+		},
+		{
+			// the parent deadline expires while the only wait comes back with a
+			// cancellation-coded RPC error (server-side teardown racing the client
+			// deadline): every wait is classified as cancelled, none applied and none
+			// failed. this must be an error, never a success without a single applied
+			// candidate
+			name: "requireAll false, deadline expiry with cancellation-coded waits is not a success",
+			tmc: &testutil.TabletManagerClient{
+				// the result arrives well after the parent deadline below
+				WaitForPositionPostDelays: map[string]time.Duration{
+					"zone1-0000000100": time.Second,
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000100": {
+						"position1": vterrors.New(vtrpc.Code_CANCELED, "replication wait torn down"),
+					},
+				},
+			},
+			candidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": {},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"zone1-0000000100": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: "position1",
+					},
+				},
+			},
+			requireAll:          false,
+			waitReplicasTimeout: 30 * time.Second,
+			ctxTimeout:          200 * time.Millisecond,
+			shouldErr:           true,
+			errContains:         "all candidates failed to apply relay logs",
+			checkOutcome:        true,
+			wantApplied:         []string{},
+			wantFailed:          []string{},
+			wantCancelled:       []string{"zone1-0000000100"},
 		},
 		{
 			// a former primary has no relay logs to apply and is skipped: it must not
@@ -3883,12 +4063,13 @@ func TestEmergencyReparenter_waitForAllRelayLogsToApply(t *testing.T) {
 					},
 				},
 			},
-			requireAll:    false,
-			shouldErr:     false,
-			checkOutcome:  true,
-			wantApplied:   []string{"zone1-0000000101"},
-			wantFailed:    []string{},
-			wantCancelled: []string{"zone1-0000000102"},
+			requireAll:          false,
+			waitReplicasTimeout: 30 * time.Second,
+			shouldErr:           false,
+			checkOutcome:        true,
+			wantApplied:         []string{"zone1-0000000101"},
+			wantFailed:          []string{},
+			wantCancelled:       []string{"zone1-0000000102"},
 		},
 		{
 			// nothing to wait on at all (e.g. the former primary is the only candidate
@@ -3908,13 +4089,14 @@ func TestEmergencyReparenter_waitForAllRelayLogsToApply(t *testing.T) {
 					},
 				},
 			},
-			statusMap:     map[string]*replicationdatapb.StopReplicationStatus{},
-			requireAll:    false,
-			shouldErr:     false,
-			checkOutcome:  true,
-			wantApplied:   []string{},
-			wantFailed:    []string{},
-			wantCancelled: []string{},
+			statusMap:           map[string]*replicationdatapb.StopReplicationStatus{},
+			requireAll:          false,
+			waitReplicasTimeout: 30 * time.Second,
+			shouldErr:           false,
+			checkOutcome:        true,
+			wantApplied:         []string{},
+			wantFailed:          []string{},
+			wantCancelled:       []string{},
 		},
 		{
 			name: "requireAll true, no waiters and an aborted parent context",
@@ -3950,9 +4132,18 @@ func TestEmergencyReparenter_waitForAllRelayLogsToApply(t *testing.T) {
 				cellCtx, cancel = context.WithCancel(ctx)
 				cancel()
 			}
+			if tt.ctxTimeout != 0 {
+				var cancel context.CancelFunc
+				cellCtx, cancel = context.WithTimeout(cellCtx, tt.ctxTimeout)
+				defer cancel()
+			}
+			cellTimeout := waitReplicasTimeout
+			if tt.waitReplicasTimeout != 0 {
+				cellTimeout = tt.waitReplicasTimeout
+			}
 
 			erp := NewEmergencyReparenter(nil, tt.tmc, logger)
-			result, err := erp.waitForAllRelayLogsToApply(cellCtx, tt.candidates, tt.tabletMap, tt.statusMap, waitReplicasTimeout, tt.requireAll)
+			result, err := erp.waitForAllRelayLogsToApply(cellCtx, tt.candidates, tt.tabletMap, tt.statusMap, cellTimeout, tt.requireAll)
 			if tt.shouldErr {
 				require.Error(t, err)
 				if tt.errContains != "" {
@@ -3976,7 +4167,9 @@ func TestEmergencyReparenter_applyRelayLogsAndReconcile(t *testing.T) {
 	t.Parallel()
 
 	logger := logutil.NewMemoryLogger()
-	waitReplicasTimeout := 50 * time.Millisecond
+	// generous: no scenario here needs the deadline to fire, and a starved CI runner
+	// must not turn a cancelled tablet into a deadline failure
+	waitReplicasTimeout := 30 * time.Second
 
 	tabletMap := map[string]*topo.TabletInfo{}
 	for uid := 100; uid <= 103; uid++ {
@@ -7070,7 +7263,7 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 			validCandidates, isGtid, err := FindPositionsOfAllCandidates(tt.statusMap, tt.primaryStatusMap)
 			require.NoError(t, err)
 			require.True(t, isGtid)
-			candidates, err := erp.findErrantGTIDs(t.Context(), validCandidates, tt.statusMap, tt.tabletMap, 10*time.Second)
+			candidates, err := erp.findErrantGTIDs(t.Context(), validCandidates, tt.statusMap, tt.tabletMap, 10*time.Second, nil)
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)
 				return
@@ -7173,7 +7366,7 @@ func TestEmergencyReparenterFindErrantGTIDs_NilPosition(t *testing.T) {
 		"zone1-0000000104": nil,
 	}
 
-	candidates, err := erp.findErrantGTIDs(t.Context(), validCandidates, statusMap, tabletMap, 10*time.Second)
+	candidates, err := erp.findErrantGTIDs(t.Context(), validCandidates, statusMap, tabletMap, 10*time.Second, nil)
 	require.NoError(t, err)
 	require.Contains(t, candidates, "zone1-0000000102")
 }

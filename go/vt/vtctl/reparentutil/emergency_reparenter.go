@@ -315,6 +315,10 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		requireAll = !uniformCombined(waitCandidates)
 	}
 
+	// Keep the pre-wait candidates around: tablets that fail the wait are removed from
+	// candidacy, but their received positions still corroborate errant GTID detection
+	preWaitCandidates := validCandidates
+
 	var waitResult *relayLogWaitResult
 	validCandidates, waitResult, err = erp.applyRelayLogsAndReconcile(relayLogCtx, waitCandidates, validCandidates, tabletMap, stoppedReplicationSnapshot.statusMap, opts.WaitReplicasTimeout, requireAll)
 	if err != nil {
@@ -323,7 +327,17 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 
 	// For GTID based replication, we will run errant GTID detection.
 	if isGTIDBased {
-		validCandidates, err = erp.findErrantGTIDs(ctx, validCandidates, stoppedReplicationSnapshot.statusMap, tabletMap, opts.WaitReplicasTimeout)
+		// Failed waiters are only ever removed from a uniform leading group (a
+		// requireAll wait aborts on failure instead of removing anyone), so a failed
+		// tablet received exactly what the surviving leaders received, including every
+		// reparent journal entry: its evidence is max-journal-grade by construction
+		var failedEvidence []replication.Position
+		for _, alias := range waitResult.failed {
+			if pos := preWaitCandidates[alias]; pos != nil && !pos.IsZero() {
+				failedEvidence = append(failedEvidence, pos.Combined)
+			}
+		}
+		validCandidates, err = erp.findErrantGTIDs(ctx, validCandidates, stoppedReplicationSnapshot.statusMap, tabletMap, opts.WaitReplicasTimeout, failedEvidence)
 		if err != nil {
 			return err
 		}
@@ -591,7 +605,17 @@ func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 		return result, vterrors.Wrapf(firstFailure, "could not apply all relay logs within the provided waitReplicasTimeout (%s)", waitReplicasTimeout)
 	}
 	if len(result.applied) == 0 {
-		return result, vterrors.Wrapf(firstFailure, "all candidates failed to apply relay logs within the provided waitReplicasTimeout (%s)", waitReplicasTimeout)
+		// firstFailure is nil when the deadline expired and every wait came back with a
+		// cancellation error; fall back to the context error. This must never return
+		// success without a single applied candidate
+		err := firstFailure
+		if err == nil {
+			err = ctx.Err()
+		}
+		if err == nil {
+			err = vterrors.Errorf(vtrpc.Code_INTERNAL, "no relay log wait succeeded or failed")
+		}
+		return result, vterrors.Wrapf(err, "all candidates failed to apply relay logs within the provided waitReplicasTimeout (%s)", waitReplicasTimeout)
 	}
 
 	return result, nil
@@ -622,8 +646,7 @@ func (erp *EmergencyReparenter) applyRelayLogsAndReconcile(
 		return validCandidates, waitResult, err
 	}
 
-	reconciled := make(map[string]*RelayLogPositions, len(validCandidates))
-	maps.Copy(reconciled, validCandidates)
+	reconciled := maps.Clone(validCandidates)
 	for _, alias := range waitResult.failed {
 		erp.logger.Warningf("EmergencyReparent candidate %v failed to apply its relay logs and cannot be promoted; removing it from the valid candidates", alias)
 		delete(reconciled, alias)
@@ -1058,12 +1081,16 @@ func (erp *EmergencyReparenter) filterValidCandidates(validTablets []*topodatapb
 // findErrantGTIDs tries to find errant GTIDs for the valid candidates and returns the updated list of valid candidates.
 // This function does not actually return the identities of errant GTID tablets, if any. It only returns the identities of non-errant GTID tablets, which are eligible for promotion.
 // The caller of this function (ERS) will then choose from among the list of candidate tablets, based on higher-level criteria.
+// The extraEvidence positions belong to tablets that are no longer promotion candidates (they failed their relay log
+// wait) but whose received positions still corroborate GTIDs on the candidates; extra evidence can only reduce false
+// positives, a truly errant GTID is one that no other tablet has.
 func (erp *EmergencyReparenter) findErrantGTIDs(
 	ctx context.Context,
 	validCandidates map[string]*RelayLogPositions,
 	statusMap map[string]*replicationdatapb.StopReplicationStatus,
 	tabletMap map[string]*topo.TabletInfo,
 	waitReplicasTimeout time.Duration,
+	extraEvidence []replication.Position,
 ) (map[string]*RelayLogPositions, error) {
 	// First we need to collect the reparent journal length for all the candidates.
 	// This will tell us, which of the tablets are severly lagged, and haven't even seen all the primary promotions.
@@ -1114,7 +1141,7 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 			continue
 		}
 		// Store all the other candidate's positions so that we can run errant GTID detection using them.
-		otherPositions := make([]replication.Position, 0, len(maxLenCandidates)-1)
+		otherPositions := make([]replication.Position, 0, len(maxLenCandidates)-1+len(extraEvidence))
 		for _, otherCandidate := range maxLenCandidates {
 			if otherCandidate == candidate {
 				continue
@@ -1124,6 +1151,7 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 				otherPositions = append(otherPositions, otherPosition.Combined)
 			}
 		}
+		otherPositions = append(otherPositions, extraEvidence...)
 		// Run errant GTID detection and throw away any tablet that has errant GTIDs.
 		afterStatus := replication.ProtoToReplicationStatus(status.After)
 		errantGTIDs, err := replication.FindErrantGTIDs(afterStatus.RelayLogPosition, afterStatus.SourceUUID, otherPositions)
@@ -1137,6 +1165,9 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 		maxLenPositions = append(maxLenPositions, candidatePositions.Combined)
 		updatedValidCandidates[candidate] = validCandidates[candidate]
 	}
+
+	// The extra evidence positions also corroborate the lagged tablets below.
+	maxLenPositions = append(maxLenPositions, extraEvidence...)
 
 	// For all the other tablets, that are lagged enough that they haven't seen all the reparent journal entries,
 	// we run errant GTID detection by using the tablets with the maximum length of the reparent journal.
