@@ -35,6 +35,6 @@ func main() {
 	acl.RegisterFlags(rootCmd.PersistentFlags())
 	servenv.RegisterMySQLServerFlags(rootCmd.PersistentFlags())
 	if err := rootCmd.Execute(); err != nil {
-		log.Printf("%v", err)
+		log.Fatalf("%v", err)
 	}
 }
