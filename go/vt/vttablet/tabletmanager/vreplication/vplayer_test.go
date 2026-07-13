@@ -119,6 +119,17 @@ func TestBulkApplicableShapes(t *testing.T) {
 		name:       "nil change",
 		rowChanges: []*binlogdatapb.RowChange{insert(1), nil},
 		wantErr:    "malformed row change",
+	}, {
+		// Malformed changes must be detected even after the scan has already
+		// concluded the event is not bulk-applicable: an early exit would
+		// pass the unvalidated entry to the per-change path.
+		name:       "nil change after update",
+		rowChanges: []*binlogdatapb.RowChange{update(1), nil},
+		wantErr:    "malformed row change",
+	}, {
+		name:       "nil change after mixed shapes",
+		rowChanges: []*binlogdatapb.RowChange{insert(1), del(2), nil},
+		wantErr:    "malformed row change",
 	}}
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
