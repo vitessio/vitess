@@ -898,7 +898,7 @@ func (tp *TablePlan) applyBulkDeleteChanges(rowDeletes []*binlogdatapb.RowChange
 		// DELETE, discarding that image. The Get accessors also make a nil
 		// change in the slice error instead of panicking.
 		if rowDelete.GetBefore() == nil || rowDelete.GetAfter() != nil {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
+			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
 				"vreplication: bulk-delete change for table %s is not delete-shaped (Before image only); a mixed row event must be applied per-change",
 				tp.TargetName)
 		}
@@ -955,7 +955,7 @@ func (tp *TablePlan) applyBulkInsertChanges(rowInserts []*binlogdatapb.RowChange
 		// INSERT, discarding that image. The Get accessors also make a nil
 		// change in the slice error instead of panicking.
 		if rowInsert.GetAfter() == nil || rowInsert.GetBefore() != nil {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
+			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
 				"vreplication: bulk-insert change for table %s is not insert-shaped (After image only); a mixed row event must be applied per-change",
 				tp.TargetName)
 		}

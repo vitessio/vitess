@@ -369,7 +369,7 @@ func bulkApplicableShapes(tableName string, rowChanges []*binlogdatapb.RowChange
 		case change.GetBefore() == nil && change.GetAfter() != nil:
 			deletesOnly = false
 		case change.GetBefore() == nil && change.GetAfter() == nil:
-			return false, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
+			return false, false, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
 				"vreplication: malformed row change with no row images in event for table %s", tableName)
 		default: // Update-shaped (both images).
 			return false, false, nil
