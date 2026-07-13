@@ -19,7 +19,6 @@ package vtgate
 import (
 	"context"
 	"fmt"
-	"hash/fnv"
 	"log/slog"
 	"net"
 	"os"
@@ -330,35 +329,23 @@ func (vh *vtgateHandler) startTempTableHeartbeat(ctx context.Context) {
 			slog.Duration("temp_table_heartbeat_time", tempTableHeartbeatTime))
 		return
 	}
-	// Each tablet's reserved connections are refreshed once per heartbeat
-	// interval. Once per interval the registry is scanned a single time and
-	// every target is partitioned into its tablet's bucket (by a hash of the
-	// tablet alias); the buckets are then dispatched on their own goroutines,
-	// staggered across the interval, so a large deployment produces a steady
-	// trickle of touch RPCs rather than a spike, and a bucket full of slow or
-	// unreachable tablets delays only its own round. Scanning once (rather than
-	// once per bucket) keeps the per-interval work proportional to the number
-	// of registered sessions, not sessions times buckets.
-	stagger := tempTableHeartbeatTime / tempTableBeatBuckets
+	// Once per interval the registry is scanned a single time, every reserved
+	// connection is grouped by its tablet, and each tablet is touched right away
+	// on its own goroutine. Touching every tablet immediately after the single
+	// snapshot (rather than spreading tablets across the interval) is what bounds
+	// a connection's time-to-touch to one interval: a connection registered at
+	// any moment is picked up by the next snapshot, at most one interval later,
+	// and touched at once — never one interval to be seen plus a further delay
+	// before its turn. A slow or unreachable tablet delays only its own
+	// goroutine, and the touches are batched (one cheap RPC per tablet, to
+	// tablets vtgate already talks to), so touching them together is not a
+	// meaningful load spike. Scanning once keeps the per-interval work
+	// proportional to the number of registered sessions.
 	go func() {
 		ticker := time.NewTicker(tempTableHeartbeatTime)
 		defer ticker.Stop()
 		for {
-			byBucket := vh.snapshotTempTableBeats()
-			for bucket := range uint32(tempTableBeatBuckets) {
-				byTablet := byBucket[bucket]
-				if len(byTablet) == 0 {
-					continue
-				}
-				go func(bucket uint32, byTablet map[string][]tempTableBeatItem) {
-					select {
-					case <-ctx.Done():
-						return
-					case <-time.After(time.Duration(bucket) * stagger):
-					}
-					vh.beatTempTableByTablet(ctx, byTablet)
-				}(bucket, byTablet)
-			}
+			vh.sendTempTableHeartbeats(ctx)
 			select {
 			case <-ctx.Done():
 				return
@@ -368,11 +355,11 @@ func (vh *vtgateHandler) startTempTableHeartbeat(ctx context.Context) {
 	}()
 }
 
-// snapshotTempTableBeats scans the registry once and partitions every reserved
-// connection into (bucket, tablet), so the whole registry is locked once per
-// interval rather than once per bucket.
-func (vh *vtgateHandler) snapshotTempTableBeats() map[uint32]map[string][]tempTableBeatItem {
-	byBucket := make(map[uint32]map[string][]tempTableBeatItem)
+// snapshotTempTableBeats scans the registry once and groups every reserved
+// connection by its tablet, so the whole registry is locked once per interval
+// and each tablet can then be refreshed with a single batched touch RPC.
+func (vh *vtgateHandler) snapshotTempTableBeats() map[string][]tempTableBeatItem {
+	byTablet := make(map[string][]tempTableBeatItem)
 	vh.tempTableConns.Range(func(key, value any) bool {
 		c := key.(*mysql.Conn)
 		ttc := value.(*tempTableConn)
@@ -380,19 +367,13 @@ func (vh *vtgateHandler) snapshotTempTableBeats() map[uint32]map[string][]tempTa
 		if !ttc.closed {
 			for _, t := range ttc.targets {
 				alias := topoproto.TabletAliasString(t.alias)
-				bucket := tempTableBeatBucketFor(alias)
-				byTablet := byBucket[bucket]
-				if byTablet == nil {
-					byTablet = make(map[string][]tempTableBeatItem)
-					byBucket[bucket] = byTablet
-				}
 				byTablet[alias] = append(byTablet[alias], tempTableBeatItem{c: c, ttc: ttc, gen: ttc.gen, target: t})
 			}
 		}
 		ttc.mu.Unlock()
 		return true
 	})
-	return byBucket
+	return byTablet
 }
 
 // beatTempTableByTablet refreshes each tablet's reserved connections on its own
@@ -407,22 +388,14 @@ func (vh *vtgateHandler) beatTempTableByTablet(ctx context.Context, byTablet map
 	wg.Wait()
 }
 
-// tempTableBeatBuckets is how many slices the heartbeat interval is divided
-// into: each tablet belongs to one bucket (by a hash of its alias) and all of
-// its reserved connections are refreshed once per interval, on its bucket's
-// tick, with a single batched touch RPC. Staggering bounds the instantaneous
-// goroutine and RPC load without queueing one tablet's keepalives behind
-// another tablet's slow one.
-const tempTableBeatBuckets = 16
-
 // tempTableBeatBudget returns how long a single tablet's batched touch may run
 // before it times out. It floors the budget at 2s so a momentarily slow but
 // healthy tablet is not cut off at short intervals, but it always stays below
-// the heartbeat interval: a bucket's sweep waits for its slowest tablet, so a
-// budget at or above the interval would let one unreachable tablet stretch the
-// keepalive cadence of the healthy tablets in its bucket beyond the interval —
-// possibly past a tablet timeout that the configured interval was supposed to
-// stay under. The 3/4 cap keeps a margin below the next tick.
+// the heartbeat interval: the loop touches every tablet once per interval, so a
+// per-tablet budget at or above the interval would let an unreachable tablet's
+// touch still be in flight when the next interval's touch for that same tablet
+// should start, piling one round on the next. The 3/4 cap keeps a margin below
+// the next tick.
 func tempTableBeatBudget(interval time.Duration) time.Duration {
 	budget := max(interval/2, 2*time.Second)
 	if capped := interval * 3 / 4; budget > capped {
@@ -431,21 +404,13 @@ func tempTableBeatBudget(interval time.Duration) time.Duration {
 	return budget
 }
 
-// sendTempTableHeartbeats beats every registered connection (all buckets).
-// The background sweeper beats one bucket at a time instead; this form is
-// for tests and returns once all beats settle.
+// sendTempTableHeartbeats snapshots the registry once and refreshes every
+// tablet's reserved connections, each tablet on its own goroutine, returning
+// once all beats settle. The background heartbeat loop calls this once per
+// interval; snapshotting afresh and touching every tablet right away is what
+// bounds any connection's time-to-touch to one interval.
 func (vh *vtgateHandler) sendTempTableHeartbeats(ctx context.Context) {
-	// One snapshot, then beat every bucket concurrently, mirroring the
-	// background sweeper so a slow tablet in one bucket does not delay a
-	// healthy tablet in another.
-	byBucket := vh.snapshotTempTableBeats()
-	var wg sync.WaitGroup
-	for _, byTablet := range byBucket {
-		wg.Go(func() {
-			vh.beatTempTableByTablet(ctx, byTablet)
-		})
-	}
-	wg.Wait()
+	vh.beatTempTableByTablet(ctx, vh.snapshotTempTableBeats())
 }
 
 // tempTableBeatItem is one reserved connection to keep alive: one target of
@@ -456,25 +421,6 @@ type tempTableBeatItem struct {
 	ttc    *tempTableConn
 	gen    uint64
 	target tempTableHeartbeatTarget
-}
-
-// tempTableBeatBucketFor maps a tablet alias to a heartbeat bucket so all of a
-// tablet's reserved connections are swept together, once per interval.
-func tempTableBeatBucketFor(alias string) uint32 {
-	h := fnv.New32a()
-	_, _ = h.Write([]byte(alias))
-	return h.Sum32() % tempTableBeatBuckets
-}
-
-// sweepTempTableBucket keeps alive the reserved connections of the registered
-// client connections in one bucket, grouped by tablet. Each tablet is beaten
-// on its own goroutine with a single batched touch RPC, so the work is one RPC
-// per tablet regardless of how many connections (or reserved shards) point at
-// it, and a slow or unreachable tablet delays only its own reserved
-// connections — never a healthy tablet's. Each bucket also sweeps on its own
-// goroutine, so a slow bucket does not delay another.
-func (vh *vtgateHandler) sweepTempTableBucket(ctx context.Context, bucket uint32) {
-	vh.beatTempTableByTablet(ctx, vh.snapshotTempTableBeats()[bucket])
 }
 
 // beatTempTableTablet refreshes all of one tablet's reserved connections with a
