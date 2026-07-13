@@ -360,22 +360,22 @@ func (vp *vplayer) applyStmtEvent(ctx context.Context, event *binlogdatapb.VEven
 // the vstreamer never produces one -- and is rejected with an error rather
 // than being routed to either apply path: the per-change path would
 // dereference a nil change and silently treat an empty one as a no-op.
+// The scan visits every change, even once the event is already known not to
+// be bulk-applicable, so a malformed entry is detected regardless of its
+// position.
 func bulkApplicableShapes(tableName string, rowChanges []*binlogdatapb.RowChange) (deletesOnly, insertsOnly bool, err error) {
 	deletesOnly, insertsOnly = true, true
 	for _, change := range rowChanges {
 		switch {
+		case change.GetBefore() == nil && change.GetAfter() == nil:
+			return false, false, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+				"vreplication: malformed row change with no row images in event for table %s", tableName)
 		case change.GetBefore() != nil && change.GetAfter() == nil:
 			insertsOnly = false
 		case change.GetBefore() == nil && change.GetAfter() != nil:
 			deletesOnly = false
-		case change.GetBefore() == nil && change.GetAfter() == nil:
-			return false, false, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
-				"vreplication: malformed row change with no row images in event for table %s", tableName)
 		default: // Update-shaped (both images).
-			return false, false, nil
-		}
-		if !deletesOnly && !insertsOnly {
-			return false, false, nil
+			deletesOnly, insertsOnly = false, false
 		}
 	}
 	return deletesOnly, insertsOnly, nil
