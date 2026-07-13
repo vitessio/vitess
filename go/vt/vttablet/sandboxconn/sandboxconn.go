@@ -145,6 +145,11 @@ type SandboxConn struct {
 	// reserved connection no longer exists).
 	KeepAliveGoneIDs map[int64]bool
 
+	// KeepAliveUnsupported, when set, makes the connection behave like a tablet
+	// that predates the keepalive option: it ignores the option and runs the
+	// query, returning an ordinary result instead of the gone-id result.
+	KeepAliveUnsupported bool
+
 	// if this is not nil, any calls will panic the tablet
 	panicThis any
 
@@ -347,9 +352,18 @@ func (sbc *SandboxConn) Execute(ctx context.Context, session queryservice.Sessio
 	}
 
 	if options.GetReservedConnKeepAlive() {
+		if sbc.KeepAliveUnsupported {
+			// Simulate a tablet that predates the option: it ignores the option
+			// and runs the query, returning its own ordinary result (a row that
+			// must not be misparsed as a gone reserved id).
+			return &sqltypes.Result{
+				Fields: []*querypb.Field{{Name: "1", Type: sqltypes.Int64}},
+				Rows:   []sqltypes.Row{{sqltypes.NewInt64(1)}},
+			}, nil
+		}
 		// Simulate the tablet's batched keepalive touch: return which of the
 		// touched reserved ids are gone.
-		result := &sqltypes.Result{Fields: []*querypb.Field{{Name: "gone_reserved_id", Type: sqltypes.Int64}}}
+		result := &sqltypes.Result{Fields: []*querypb.Field{{Name: queryservice.ReservedConnKeepAliveGoneField, Type: sqltypes.Int64}}}
 		for _, id := range append([]int64{reservedID}, options.GetReservedConnKeepAliveIds()...) {
 			if sbc.KeepAliveGoneIDs[id] {
 				result.Rows = append(result.Rows, sqltypes.Row{sqltypes.NewInt64(id)})

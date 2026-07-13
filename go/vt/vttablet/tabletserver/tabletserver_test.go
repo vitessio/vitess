@@ -2967,18 +2967,19 @@ func TestReservedConnKeepAliveBatch(t *testing.T) {
 	s2, _, err := tsv.ReserveExecute(ctx, nil, &target, nil, "set sql_mode = ''", nil, 0, nil)
 	require.NoError(t, err)
 
-	// A batched keepalive touch over both live ids reports none gone and runs
-	// nothing on MySQL.
+	// A batched keepalive touch over both live ids (all ids in the list,
+	// reserved id 0 as vtgate sends it) reports none gone and runs nothing on
+	// MySQL.
 	queryLogBefore := db.QueryLog()
-	opts := &querypb.ExecuteOptions{ReservedConnKeepAlive: true, ReservedConnKeepAliveIds: []int64{s2.ReservedID}}
-	res, err := tsv.Execute(ctx, nil, &target, "/* keepalive */ select 1", nil, 0, s1.ReservedID, opts)
+	opts := &querypb.ExecuteOptions{ReservedConnKeepAlive: true, ReservedConnKeepAliveIds: []int64{s1.ReservedID, s2.ReservedID}}
+	res, err := tsv.Execute(ctx, nil, &target, "/* keepalive */ select 1", nil, 0, 0, opts)
 	require.NoError(t, err)
 	require.Empty(t, res.Rows, "no reserved connection is gone")
 	require.Equal(t, queryLogBefore, db.QueryLog(), "keepalive must not run anything on MySQL")
 
 	// Release one; the next batch reports it gone while the other stays alive.
 	require.NoError(t, tsv.Release(ctx, &target, 0, s2.ReservedID))
-	res, err = tsv.Execute(ctx, nil, &target, "/* keepalive */ select 1", nil, 0, s1.ReservedID, opts)
+	res, err = tsv.Execute(ctx, nil, &target, "/* keepalive */ select 1", nil, 0, 0, opts)
 	require.NoError(t, err)
 	require.Len(t, res.Rows, 1, "the released connection must be reported gone")
 	gone, err := res.Rows[0][0].ToInt64()

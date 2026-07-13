@@ -2046,7 +2046,7 @@ func TestTempTableHeartbeatBucket(t *testing.T) {
 	require.Equal(t, before+1, sbc.ExecCount.Load(), "the tablet's bucket must beat it with exactly one batched RPC")
 	opts := sbc.GetOptions()
 	require.NotEmpty(t, opts)
-	require.Len(t, opts[len(opts)-1].GetReservedConnKeepAliveIds(), 1, "the batch must carry the second reserved connection's id")
+	require.Len(t, opts[len(opts)-1].GetReservedConnKeepAliveIds(), 2, "the batch must carry both reserved connections' ids")
 }
 
 // TestTempTableHeartbeatBucketIndependence proves that a bucket stalled on a
@@ -2246,6 +2246,58 @@ func TestTempTableHeartbeatBucketSweepWithinBudget(t *testing.T) {
 		"a bucket sweep with an unreachable tablet must complete within the interval, not stretch cadence")
 	require.GreaterOrEqual(t, elapsed, tempTableBeatBudget(tempTableHeartbeatTime),
 		"the beat should run until the budget before timing out")
+}
+
+// TestTempTableHeartbeatOldTabletSafe verifies the mixed-version behavior: a
+// keepalive always carries reserved id 0 (all ids go in the batch list), so a
+// tablet predating the option runs the fallback query on a throwaway pooled
+// connection — never a reserved one — and its ordinary result is not misparsed
+// as a gone reserved id. The target therefore survives (it is just not kept
+// alive until the tablet is upgraded), and no reserved connection is at risk.
+func TestTempTableHeartbeatOldTabletSafe(t *testing.T) {
+	vtg, sbc, ctx := createVtgateEnv(t)
+	vh := newVtgateHandler(vtg)
+	tablet := sbc.Tablet()
+	target := &querypb.Target{Keyspace: tablet.Keyspace, Shard: tablet.Shard, TabletType: tablet.Type}
+
+	sbc.KeepAliveUnsupported = true // simulate an old tablet: runs the query, ordinary result
+	c := &mysql.Conn{ConnectionID: 1}
+	vh.tempTableConns.Store(c, &tempTableConn{targets: tempTargets(tempTableHeartbeatTarget{target: target, alias: tablet.Alias, reservedID: 7})})
+
+	vh.sendTempTableHeartbeats(ctx)
+
+	// The keepalive carried reserved id 0 (all ids in the list), so an old
+	// tablet's fallback never touches the reserved connection.
+	opts := sbc.GetOptions()
+	require.NotEmpty(t, opts)
+	require.True(t, opts[len(opts)-1].GetReservedConnKeepAlive())
+	require.Equal(t, []int64{7}, opts[len(opts)-1].GetReservedConnKeepAliveIds())
+
+	// The old tablet's ordinary result is not misparsed as a gone reserved id,
+	// so the target is not evicted.
+	v, ok := vh.tempTableConns.Load(c)
+	require.True(t, ok, "an old tablet's ordinary result must not be misparsed as a gone reserved id")
+	require.Len(t, v.(*tempTableConn).targets, 1)
+}
+
+// BenchmarkTempTableHeartbeatSnapshot measures the once-per-interval registry
+// scan at a high connection count, validating that the work is proportional to
+// the number of sessions rather than sessions times buckets.
+func BenchmarkTempTableHeartbeatSnapshot(b *testing.B) {
+	vh := &vtgateHandler{}
+	alias := &topodatapb.TabletAlias{Cell: "aa", Uid: 1}
+	target := &querypb.Target{Keyspace: "ks", Shard: "-", TabletType: topodatapb.TabletType_PRIMARY}
+	const conns = 10000
+	for i := range conns {
+		c := &mysql.Conn{ConnectionID: uint32(i + 1)}
+		vh.tempTableConns.Store(c, &tempTableConn{targets: tempTargets(
+			tempTableHeartbeatTarget{target: target, alias: alias, reservedID: int64(i + 1)},
+		)})
+	}
+	b.ResetTimer()
+	for range b.N {
+		_ = vh.snapshotTempTableBeats()
+	}
 }
 
 // TestTempTableHeartbeatSweep verifies that a sweep pings the registered

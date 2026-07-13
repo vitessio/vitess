@@ -921,12 +921,16 @@ func (tsv *TabletServer) Execute(ctx context.Context, session queryservice.Sessi
 	// mysqld's wait_timeout keeps counting only real user traffic. reservedID
 	// plus any options.reserved_conn_keep_alive_ids are all refreshed in this
 	// one RPC; the result reports which of them no longer exist so the caller
-	// can stop refreshing them.
+	// can stop refreshing them. Callers pass the ids to refresh in
+	// reserved_conn_keep_alive_ids and leave reservedID zero, so that a tablet
+	// predating this option runs the fallback query on a throwaway pooled
+	// connection instead of a reserved one.
 	if options.GetReservedConnKeepAlive() {
-		if reservedID == 0 {
-			return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "reserved connection keepalive requires a reserved ID")
+		ids := options.GetReservedConnKeepAliveIds()
+		if reservedID == 0 && len(ids) == 0 {
+			return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "reserved connection keepalive requires at least one reserved ID")
 		}
-		return tsv.keepAliveReservedConns(reservedID, options.GetReservedConnKeepAliveIds()), nil
+		return tsv.keepAliveReservedConns(reservedID, ids), nil
 	}
 
 	return tsv.execute(ctx, target, sql, bindVariables, transactionID, reservedID, nil, options)
@@ -935,7 +939,7 @@ func (tsv *TabletServer) Execute(ctx context.Context, session queryservice.Sessi
 // keepAliveReservedConnsGoneField names the single column of the keepalive
 // result: each row is a reserved id that no longer exists on this tablet.
 var keepAliveReservedConnsGoneField = []*querypb.Field{{
-	Name: "gone_reserved_id",
+	Name: queryservice.ReservedConnKeepAliveGoneField,
 	Type: sqltypes.Int64,
 }}
 

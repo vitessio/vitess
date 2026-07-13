@@ -1158,6 +1158,15 @@ func (qre *QueryExecutor) execProc(conn *StatefulConnection) (*sqltypes.Result, 
 	}
 	qr, err := qre.execStatefulConn(conn, sql, true)
 	if err != nil {
+		// A stored procedure can start a transaction that Vitess does not
+		// track. A reserved-connection timeout now kills only the query (KILL
+		// QUERY) and leaves the connection open, so a procedure that had begun
+		// a transaction before failing would leave mysqld in a transaction
+		// while Vitess believes the connection is idle — and the keepalive
+		// would hold it (and its locks) open indefinitely. Close the connection
+		// on any CALL error, mirroring the streaming path, so no untracked
+		// transaction survives.
+		conn.Close()
 		return nil, rewriteOUTParamError(err)
 	}
 	if !qr.IsMoreResultsExists() {

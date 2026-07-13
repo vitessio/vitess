@@ -18,6 +18,7 @@ package tabletserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand/v2"
@@ -47,6 +48,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
+	p "vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	eschema "vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -2366,4 +2368,36 @@ func (m mockTxThrottler) Close() {
 
 func (m mockTxThrottler) Throttle(priority int, workload string) (result bool) {
 	return m.throttle
+}
+
+// TestExecProcClosesConnOnError verifies that a failed CALL on a reserved
+// connection closes that connection. A stored procedure can start a
+// transaction that Vitess does not track; since a reserved-connection timeout
+// now kills only the query (KILL QUERY) and leaves the connection open, the
+// connection must be closed on any CALL error so no untracked transaction (and
+// its locks) survives to be kept alive by the heartbeat.
+func TestExecProcClosesConnOnError(t *testing.T) {
+	ctx := t.Context()
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+
+	// Reserve a connection. The real caller unlocks it after the CALL returns;
+	// once closed, Unlock releases it from the pool so shutdown can drain.
+	conn, err := tsv.te.txPool.scp.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
+	require.NoError(t, err)
+	defer conn.Unlock()
+	require.False(t, conn.IsClosed())
+
+	// A CALL that the server rejects.
+	query := "call test_proc()"
+	db.AddRejectedQuery(query, errors.New("procedure failed"))
+
+	qre := newTestQueryExecutor(ctx, tsv, query, conn.ReservedID())
+	require.Equal(t, p.PlanCallProc, qre.plan.PlanID)
+
+	_, err = qre.execProc(conn)
+	require.Error(t, err)
+	require.True(t, conn.IsClosed(), "a reserved connection must be closed when its CALL fails, so no untracked transaction survives")
 }
