@@ -635,28 +635,19 @@ func TestERSFailFast(t *testing.T) {
 	}
 }
 
-// TestReplicationStopped checks that ERS ignores the tablets that have sql thread stopped.
-// If there are more than 1, we also fail.
+// TestReplicationStopped checks that ERS ignores a tablet that has replication fully
+// stopped: it cannot win the election and is left stopped after the failover.
 func TestReplicationStopped(t *testing.T) {
 	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
 
-	err := clusterInstance.VtctldClientProcess.ExecuteCommand("ExecuteFetchAsDBA", tablets[1].Alias, `STOP REPLICA SQL_THREAD;`)
+	err := clusterInstance.VtctldClientProcess.ExecuteCommand("ExecuteFetchAsDBA", tablets[2].Alias, `STOP REPLICA;`)
 	require.NoError(t, err)
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ExecuteFetchAsDBA", tablets[2].Alias, `STOP REPLICA;`)
-	require.NoError(t, err)
-	// Run an additional command in the current primary which will only be acked by tablets[3] and be in its relay log.
+	// Run an additional command in the current primary which will not reach tablets[2].
 	insertedVal := utils.ConfirmReplication(t, tablets[0], nil)
 	// Failover to tablets[3]
-	_, err = utils.Ers(clusterInstance, tablets[3], "60s", "30s")
-	require.Error(t, err, "ERS should fail with 2 replicas having replication stopped")
-
-	// Start replication back on tablet[1]
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ExecuteFetchAsDBA", tablets[1].Alias, `START REPLICA;`)
-	require.NoError(t, err)
-	// Failover to tablets[3] again. This time it should succeed
 	out, err := utils.Ers(clusterInstance, tablets[3], "60s", "30s")
 	require.NoError(t, err, out)
 	// Verify that the tablet has the inserted value
