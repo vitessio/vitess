@@ -542,6 +542,12 @@ func TestStartReplication(t *testing.T) {
 	// START REPLICA.
 	err = mysqlctl.WaitForReplicationStart(t.Context(), mysqld, 30)
 	require.NoError(t, err)
+
+	// WaitForReplicationStart also returns nil when the threads are stopped
+	// without a recorded error, so check the running state directly.
+	status, err := mysqld.ReplicationStatus(t.Context())
+	require.NoError(t, err)
+	assert.True(t, status.Running(), "replication should be running, got IO state %v and SQL state %v", status.IOState, status.SQLState)
 }
 
 func TestStopReplication(t *testing.T) {
