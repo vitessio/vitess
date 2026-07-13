@@ -672,9 +672,7 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 		if tm.isPrimarySideSemiSyncEnabled(ctx) {
 			// Disable the primary side semi-sync to unblock the writes.
 			log.Info("disabling primary-side semi-sync to unblock stuck writes")
-			if err := tm.fixSemiSync(ctx, topodatapb.TabletType_REPLICA, SemiSyncActionSet); err != nil {
-				return nil, err
-			}
+
 			defer func() {
 				if finalErr != nil && revertPartialFailure && wasPrimary {
 					log.Info("reverting primary-side semi-sync to enabled")
@@ -687,6 +685,10 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 					}
 				}
 			}()
+
+			if err := tm.fixSemiSync(ctx, topodatapb.TabletType_REPLICA, SemiSyncActionSet); err != nil {
+				return nil, err
+			}
 		}
 	} else {
 		// If `force` is false, we're demoting this primary as part of a `PlannedReparentShard` operation,
@@ -716,15 +718,6 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 	// previous demotion, or because we are not primary anyway, this should be
 	// idempotent.
 	log.Info("enabling super_read_only")
-	if _, err := tm.MysqlDaemon.SetSuperReadOnly(ctx, true); err != nil {
-		if sqlErr, ok := errors.AsType[*sqlerror.SQLError](err); ok && sqlErr.Number() == sqlerror.ERUnknownSystemVariable {
-			log.Warn("server does not know about super_read_only, continuing anyway...")
-		} else {
-			return nil, err
-		}
-	} else {
-		log.Info("enabled super_read_only")
-	}
 
 	defer func() {
 		if finalErr != nil && revertPartialFailure && !wasReadOnly {
@@ -741,14 +734,22 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 		}
 	}()
 
+	if _, err := tm.MysqlDaemon.SetSuperReadOnly(ctx, true); err != nil {
+		if sqlErr, ok := errors.AsType[*sqlerror.SQLError](err); ok && sqlErr.Number() == sqlerror.ERUnknownSystemVariable {
+			log.Warn("server does not know about super_read_only, continuing anyway...")
+		} else {
+			return nil, err
+		}
+	} else {
+		log.Info("enabled super_read_only")
+	}
+
 	log.Info("checking primary-side semi-sync state")
 	// If we haven't disabled the primary side semi-sync so far, do it now.
 	if tm.isPrimarySideSemiSyncEnabled(ctx) {
 		// If using semi-sync, we need to disable primary-side.
 		log.Info("disabling primary-side semi-sync")
-		if err := tm.fixSemiSync(ctx, topodatapb.TabletType_REPLICA, SemiSyncActionSet); err != nil {
-			return nil, err
-		}
+
 		defer func() {
 			if finalErr != nil && revertPartialFailure && wasPrimary {
 				log.Info("reverting primary-side semi-sync to enabled")
@@ -761,6 +762,10 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 				}
 			}
 		}()
+
+		if err := tm.fixSemiSync(ctx, topodatapb.TabletType_REPLICA, SemiSyncActionSet); err != nil {
+			return nil, err
+		}
 	}
 
 	// Return the current replication position.

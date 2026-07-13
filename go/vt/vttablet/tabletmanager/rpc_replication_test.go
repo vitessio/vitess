@@ -400,6 +400,95 @@ func TestDemotePrimaryForceSemiSyncRollbackUsesDetachedContext(t *testing.T) {
 	require.ErrorIs(t, err, primaryStatusErr)
 }
 
+func TestDemotePrimarySetSuperReadOnlyErrorRunsRollback(t *testing.T) {
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "cell1")
+	tm := newTestTM(t, ts, 1, "ks", "0", nil)
+	err := tm.ChangeType(ctx, topodatapb.TabletType_PRIMARY, false)
+	require.NoError(t, err)
+
+	setSuperReadOnlyErr := errors.New("set super read only failed after applying change")
+	superReadOnly := false
+	mockCtrl := gomock.NewController(t)
+	mockMysqlDaemon := mysqlctlmock.NewMockMysqlDaemon(mockCtrl)
+	tm.MysqlDaemon = mockMysqlDaemon
+
+	gomock.InOrder(
+		mockMysqlDaemon.EXPECT().IsReadOnly(gomock.Any()).Return(false, nil),
+		mockMysqlDaemon.EXPECT().IsSemiSyncBlocked(gomock.Any()).Return(false, nil),
+		mockMysqlDaemon.EXPECT().SetSuperReadOnly(gomock.Any(), true).DoAndReturn(
+			func(context.Context, bool) (mysqlctl.ResetSuperReadOnlyFunc, error) {
+				superReadOnly = true
+				return nil, setSuperReadOnlyErr
+			},
+		),
+		mockMysqlDaemon.EXPECT().SetSuperReadOnly(gomock.Any(), false).DoAndReturn(
+			func(context.Context, bool) (mysqlctl.ResetSuperReadOnlyFunc, error) {
+				superReadOnly = false
+				return nil, nil
+			},
+		),
+		mockMysqlDaemon.EXPECT().SetReadOnly(gomock.Any(), false).Return(nil),
+	)
+
+	_, err = tm.demotePrimary(ctx, true /* revertPartialFailure */, false /* force */)
+	require.ErrorIs(t, err, setSuperReadOnlyErr)
+	assert.False(t, superReadOnly)
+}
+
+func TestDemotePrimarySemiSyncErrorRunsRollback(t *testing.T) {
+	tests := []struct {
+		name  string
+		force bool
+	}{
+		{name: "planned reparent"},
+		{name: "forced reparent", force: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := t.Context()
+			ts := memorytopo.NewServer(ctx, "cell1")
+			tm := newTestTM(t, ts, 1, "ks", "0", nil)
+			err := tm.ChangeType(ctx, topodatapb.TabletType_PRIMARY, false)
+			require.NoError(t, err)
+
+			setSemiSyncErr := errors.New("set semi-sync failed after applying change")
+			primarySemiSync := true
+			mockCtrl := gomock.NewController(t)
+			mockMysqlDaemon := mysqlctlmock.NewMockMysqlDaemon(mockCtrl)
+			tm.MysqlDaemon = mockMysqlDaemon
+
+			mockMysqlDaemon.EXPECT().IsReadOnly(gomock.Any()).Return(false, nil)
+			mockMysqlDaemon.EXPECT().IsSemiSyncBlocked(gomock.Any()).Return(tt.force, nil)
+			if !tt.force {
+				mockMysqlDaemon.EXPECT().SetSuperReadOnly(gomock.Any(), true).Return(nil, nil)
+			}
+			mockMysqlDaemon.EXPECT().SemiSyncEnabled(gomock.Any()).Return(true, true)
+			mockMysqlDaemon.EXPECT().SetSemiSyncEnabled(gomock.Any(), false, true).DoAndReturn(
+				func(context.Context, bool, bool) error {
+					primarySemiSync = false
+					return setSemiSyncErr
+				},
+			)
+			mockMysqlDaemon.EXPECT().SetSemiSyncEnabled(gomock.Any(), true, true).DoAndReturn(
+				func(context.Context, bool, bool) error {
+					primarySemiSync = true
+					return nil
+				},
+			)
+			if !tt.force {
+				mockMysqlDaemon.EXPECT().SetSuperReadOnly(gomock.Any(), false).Return(nil, nil)
+				mockMysqlDaemon.EXPECT().SetReadOnly(gomock.Any(), false).Return(nil)
+			}
+
+			_, err = tm.demotePrimary(ctx, true /* revertPartialFailure */, tt.force)
+			require.ErrorIs(t, err, setSemiSyncErr)
+			assert.True(t, primarySemiSync)
+		})
+	}
+}
+
 // TestDemotePrimaryWhenSemiSyncBecomesUnblockedBetweenChecks tests that demote primary
 // proceeds immediately when waiting sessions drops to 0 between the two checks.
 func TestDemotePrimaryWhenSemiSyncBecomesUnblockedBetweenChecks(t *testing.T) {
