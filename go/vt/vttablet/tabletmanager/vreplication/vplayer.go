@@ -366,6 +366,15 @@ func (vp *vplayer) applyStmtEvent(ctx context.Context, event *binlogdatapb.VEven
 func bulkApplicableShapes(tableName string, rowChanges []*binlogdatapb.RowChange) (deletesOnly, insertsOnly bool, err error) {
 	deletesOnly, insertsOnly = true, true
 	for _, change := range rowChanges {
+		// An image that is present but has no column values is the malformed
+		// shape from issue #20360: MakeRowTrusted returns an empty row that
+		// later indexing panics on, so it cannot be treated as either a
+		// usable or a missing image.
+		if (change.GetBefore() != nil && len(change.Before.Lengths) == 0) ||
+			(change.GetAfter() != nil && len(change.After.Lengths) == 0) {
+			return false, false, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+				"vreplication: malformed row change with an empty row image in event for table %s", tableName)
+		}
 		switch {
 		case change.GetBefore() == nil && change.GetAfter() == nil:
 			return false, false, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,

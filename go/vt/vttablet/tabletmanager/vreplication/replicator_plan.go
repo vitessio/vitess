@@ -893,11 +893,12 @@ func (tp *TablePlan) applyBulkDeleteChanges(rowDeletes []*binlogdatapb.RowChange
 	pkVals := make([]sqltypes.Value, 0, len(rowDeletes))
 	for _, rowDelete := range rowDeletes {
 		// The caller must only route homogeneous delete-shaped events here: a
-		// nil Before image would panic in MakeRowTrusted, and a change with an
-		// After image (an insert or update) would be silently applied as a
+		// nil Before image would panic in MakeRowTrusted, an empty one (the
+		// #20360 shape) would panic indexing vals[pkIndex], and a change with
+		// an After image (an insert or update) would be silently applied as a
 		// DELETE, discarding that image. The Get accessors also make a nil
 		// change in the slice error instead of panicking.
-		if rowDelete.GetBefore() == nil || rowDelete.GetAfter() != nil {
+		if len(rowDelete.GetBefore().GetLengths()) == 0 || rowDelete.GetAfter() != nil {
 			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
 				"vreplication: bulk-delete change for table %s is not delete-shaped (Before image only); a mixed row event must be applied per-change",
 				tp.TargetName)
@@ -950,11 +951,12 @@ func (tp *TablePlan) applyBulkInsertChanges(rowInserts []*binlogdatapb.RowChange
 	newStmt := true
 	for _, rowInsert := range rowInserts {
 		// The caller must only route homogeneous insert-shaped events here: a
-		// nil After image would panic in MakeRowTrusted, and a change with a
+		// nil After image would panic in MakeRowTrusted, an empty one would
+		// panic indexing the row in the field loop, and a change with a
 		// Before image (a delete or update) would be silently applied as an
 		// INSERT, discarding that image. The Get accessors also make a nil
 		// change in the slice error instead of panicking.
-		if rowInsert.GetAfter() == nil || rowInsert.GetBefore() != nil {
+		if len(rowInsert.GetAfter().GetLengths()) == 0 || rowInsert.GetBefore() != nil {
 			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
 				"vreplication: bulk-insert change for table %s is not insert-shaped (After image only); a mixed row event must be applied per-change",
 				tp.TargetName)
