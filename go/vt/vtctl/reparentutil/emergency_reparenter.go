@@ -18,7 +18,9 @@ package reparentutil
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"maps"
 	"sync"
 	"time"
 
@@ -67,6 +69,26 @@ type EmergencyReparentOptions struct {
 	// these details back out.
 	lockAction string
 	durability policy.Durabler
+}
+
+// relayLogResult is a single tablet's result from waiting on its relay logs to apply.
+type relayLogResult struct {
+	alias string
+	err   error
+}
+
+// relayLogWaitResult is the per-tablet outcome of waitForAllRelayLogsToApply.
+type relayLogWaitResult struct {
+	// applied are the tablets that finished applying their relay logs.
+	applied []string
+	// failed are the tablets that could not apply their relay logs (RPC error, MySQL
+	// error or timeout).
+	failed []string
+	// cancelled are the tablets we deliberately gave up waiting on: either a peer at the
+	// same received position already finished (requireAll=false), a peer already failed
+	// (requireAll=true), or the reparent was aborted. Nothing is known about their apply
+	// progress.
+	cancelled []string
 }
 
 // counters for Emergency Reparent Shard
@@ -272,8 +294,32 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no valid candidates for emergency reparent")
 	}
 
-	// Wait for all candidates to apply relay logs
-	if err = erp.waitForAllRelayLogsToApply(ctx, validCandidates, tabletMap, stoppedReplicationSnapshot.statusMap, opts.WaitReplicasTimeout); err != nil {
+	// One deadline covers all relay log waiting below, including the possible second wait
+	// after errant GTID detection, so the reparent spends at most WaitReplicasTimeout in
+	// total waiting for relay logs to apply
+	relayLogCtx, relayLogCancel := context.WithTimeout(ctx, opts.WaitReplicasTimeout)
+	defer relayLogCancel()
+
+	// A candidate strictly behind the most-advanced received (Combined) position can never
+	// win the election, so for GTID-based shards there is no reason to let it hold up or
+	// fail the reparent while it applies its relay logs: we wait only on the leading
+	// candidates. Those share the same received position, so the first one to finish
+	// applying is enough. Candidates left out of the wait are still repointed to the new
+	// primary afterwards. For non-GTID-based shards (FilePos, MariaDB) the Combined
+	// position only reflects what is executed, so the filter is unsafe there: keep the
+	// previous behavior of waiting for every candidate and failing on any error.
+	waitCandidates := validCandidates
+	requireAll := true
+	if isGTIDBased {
+		waitCandidates = filterToMostAdvancedCombined(validCandidates, erp.logger)
+		// Incomparable leading positions are a suspected split brain: wait for all of the
+		// leaders so that a failed one is not dropped before findMostAdvanced can inspect it
+		requireAll = !uniformCombined(waitCandidates)
+	}
+
+	var waitResult *relayLogWaitResult
+	validCandidates, waitResult, err = erp.applyRelayLogsAndReconcile(relayLogCtx, waitCandidates, validCandidates, tabletMap, stoppedReplicationSnapshot.statusMap, opts.WaitReplicasTimeout, requireAll)
+	if err != nil {
 		return err
 	}
 
@@ -285,6 +331,27 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		}
 		if len(validCandidates) == 0 {
 			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no valid candidates for emergency reparent: all candidates have errant GTIDs")
+		}
+
+		// If errant GTID detection removed every tablet that applied its relay logs, the
+		// surviving candidates may still have relay logs left to apply. Wait on the
+		// leading survivors before electing one, so that we never promote a tablet with
+		// received-but-unapplied transactions
+		appliedSurvived := false
+		for _, alias := range waitResult.applied {
+			if _, ok := validCandidates[alias]; ok {
+				appliedSurvived = true
+				break
+			}
+		}
+		if !appliedSurvived {
+			erp.logger.Warningf("no candidate that applied its relay logs survived errant GTID detection; waiting for the remaining candidates to apply their relay logs")
+			rewaitCandidates := filterToMostAdvancedCombined(validCandidates, erp.logger)
+			requireAll = !uniformCombined(rewaitCandidates)
+			validCandidates, _, err = erp.applyRelayLogsAndReconcile(relayLogCtx, rewaitCandidates, validCandidates, tabletMap, stoppedReplicationSnapshot.statusMap, opts.WaitReplicasTimeout, requireAll)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -424,9 +491,9 @@ func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 	tabletMap map[string]*topo.TabletInfo,
 	statusMap map[string]*replicationdatapb.StopReplicationStatus,
 	waitReplicasTimeout time.Duration,
-) error {
-	errCh := make(chan concurrency.Error)
-	defer close(errCh)
+	requireAll bool,
+) (*relayLogWaitResult, error) {
+	resultCh := make(chan relayLogResult, len(validCandidates))
 
 	groupCtx, groupCancel := context.WithTimeout(ctx, waitReplicasTimeout)
 	defer groupCancel()
@@ -458,30 +525,114 @@ func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 		}
 
 		go func(alias string, status *replicationdatapb.StopReplicationStatus) {
-			var err error
-			defer func() {
-				errCh <- concurrency.Error{
-					Err: err,
-				}
-			}()
-			err = WaitForRelayLogsToApply(groupCtx, erp.tmc, tabletMap[alias], status)
+			resultCh <- relayLogResult{
+				alias: alias,
+				err:   WaitForRelayLogsToApply(groupCtx, erp.tmc, tabletMap[alias], status),
+			}
 		}(candidate, status)
 
 		waiterCount++
 	}
 
-	errgroup := concurrency.ErrorGroup{
-		NumGoroutines:        waiterCount,
-		NumRequiredSuccesses: waiterCount,
-		NumAllowedErrors:     0,
-	}
-	rec := errgroup.Wait(groupCancel, errCh)
+	result := &relayLogWaitResult{}
 
-	if len(rec.Errors) != 0 {
-		return vterrors.Wrapf(rec.Error(), "could not apply all relay logs within the provided waitReplicasTimeout (%s)", waitReplicasTimeout)
+	// nothing to wait for. still fail if the reparent was aborted
+	if waiterCount == 0 {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return result, vterrors.Wrapf(ctxErr, "emergency reparent aborted while waiting for relay logs to apply")
+		}
+		return result, nil
 	}
 
-	return nil
+	var firstFailure error
+	weCancelled := false
+	for range waiterCount {
+		res := <-resultCh
+		switch {
+		case res.err == nil:
+			result.applied = append(result.applied, res.alias)
+			if !requireAll && !weCancelled {
+				// one of the candidates finished applying. the others share its received
+				// position and cannot do better, so stop waiting on them
+				weCancelled = true
+				groupCancel()
+			}
+		case (weCancelled || ctx.Err() != nil) && isCancellationError(res.err):
+			// we gave up on this tablet on purpose (or the reparent was aborted); it did
+			// not fail
+			result.cancelled = append(result.cancelled, res.alias)
+		default:
+			result.failed = append(result.failed, res.alias)
+			erp.logger.Warningf("EmergencyReparent candidate %v failed to apply relay logs: %v", res.alias, res.err)
+			if firstFailure == nil {
+				firstFailure = res.err
+				if requireAll {
+					// a single failure already fails the wait, no point waiting for the
+					// others
+					weCancelled = true
+					groupCancel()
+				}
+			}
+		}
+	}
+
+	// an aborted reparent beats any per-tablet outcome
+	if ctxErr := ctx.Err(); errors.Is(ctxErr, context.Canceled) {
+		return result, vterrors.Wrapf(ctxErr, "emergency reparent aborted while waiting for relay logs to apply")
+	}
+	if requireAll && firstFailure != nil {
+		return result, vterrors.Wrapf(firstFailure, "could not apply all relay logs within the provided waitReplicasTimeout (%s)", waitReplicasTimeout)
+	}
+	if len(result.applied) == 0 {
+		return result, vterrors.Wrapf(firstFailure, "all candidates failed to apply relay logs within the provided waitReplicasTimeout (%s)", waitReplicasTimeout)
+	}
+
+	return result, nil
+}
+
+// isCancellationError returns true if err is a context cancellation, either as the
+// sentinel error or as a gRPC code (server-side wrapping loses the sentinel). A deadline
+// expiry is not a cancellation: it is how a genuinely stuck tablet fails the wait.
+func isCancellationError(err error) bool {
+	return errors.Is(err, context.Canceled) || vterrors.Code(err) == vtrpc.Code_CANCELED
+}
+
+// applyRelayLogsAndReconcile waits for the waitCandidates to apply their relay logs and
+// reconciles validCandidates with the outcome: tablets that failed to apply cannot be
+// promoted and are removed, tablets that finished get their Executed position bumped to
+// Combined so that findMostAdvanced prefers them over peers whose wait was cancelled
+// midway. Returns the reconciled candidates and the per-tablet wait outcome.
+func (erp *EmergencyReparenter) applyRelayLogsAndReconcile(
+	ctx context.Context,
+	waitCandidates map[string]*RelayLogPositions,
+	validCandidates map[string]*RelayLogPositions,
+	tabletMap map[string]*topo.TabletInfo,
+	statusMap map[string]*replicationdatapb.StopReplicationStatus,
+	waitReplicasTimeout time.Duration,
+	requireAll bool,
+) (map[string]*RelayLogPositions, *relayLogWaitResult, error) {
+	waitResult, err := erp.waitForAllRelayLogsToApply(ctx, waitCandidates, tabletMap, statusMap, waitReplicasTimeout, requireAll)
+	if err != nil {
+		return validCandidates, waitResult, err
+	}
+
+	reconciled := make(map[string]*RelayLogPositions, len(validCandidates))
+	maps.Copy(reconciled, validCandidates)
+	for _, alias := range waitResult.failed {
+		erp.logger.Warningf("EmergencyReparent candidate %v failed to apply its relay logs and cannot be promoted; removing it from the valid candidates", alias)
+		delete(reconciled, alias)
+	}
+	for _, alias := range waitResult.applied {
+		if pos, ok := reconciled[alias]; ok {
+			erp.logger.Infof("EmergencyReparent candidate %v applied all of its received relay logs", alias)
+			pos.Executed = pos.Combined
+		}
+	}
+	for _, alias := range waitResult.cancelled {
+		erp.logger.Infof("EmergencyReparent candidate %v had its relay log wait cancelled after a peer finished applying; keeping its received position", alias)
+	}
+
+	return reconciled, waitResult, nil
 }
 
 // findMostAdvanced finds the intermediate source for ERS. We always choose the most advanced one from our valid candidates list. Further ties are broken by looking at the promotion rules.

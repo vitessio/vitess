@@ -820,13 +820,31 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 			errShouldContain: "no valid candidates for emergency reparent",
 		},
 		{
-			name:       "error waiting for relay logs to apply",
+			// all three candidates share the same received position: one of them
+			// applying its relay logs is enough for the reparent to proceed, even though
+			// another is slow and a third fails outright. this used to fail the whole ERS
+			name:       "relay log apply failures are tolerated when a peer at the same position applies",
 			durability: policy.DurabilityNone,
-			// one replica is going to take a minute to apply relay logs
 			emergencyReparentOps: EmergencyReparentOptions{
 				WaitReplicasTimeout: time.Millisecond * 50,
 			},
 			tmc: &testutil.TabletManagerClient{
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+				PromoteReplicaResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000100": {
+						Result: "ok",
+						Error:  nil,
+					},
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000101": nil,
+					"zone1-0000000102": nil,
+				},
 				StopReplicationAndGetStatusResults: map[string]struct {
 					StopStatus *replicationdatapb.StopReplicationStatus
 					Error      error
@@ -878,6 +896,12 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 				{
 					Keyspace: "testkeyspace",
 					Name:     "-",
+					Shard: &topodatapb.Shard{
+						PrimaryAlias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
 				},
 			},
 			tablets: []*topodatapb.Tablet{
@@ -888,6 +912,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					},
 					Keyspace: "testkeyspace",
 					Shard:    "-",
+					Hostname: "applies relay logs, wins election",
 				},
 				{
 					Alias: &topodatapb.TabletAlias{
@@ -908,11 +933,605 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					Hostname: "fails to apply relay logs",
 				},
 			},
+			shouldErr: false,
+			keyspace:  "testkeyspace",
+			shard:     "-",
+			cells:     []string{"zone1"},
+		},
+		{
+			// a candidate strictly behind on received relay logs cannot win the election,
+			// so ERS does not wait for it to apply: a lagger that would blow the
+			// wait-replicas-timeout no longer fails the reparent
+			name:       "lagging candidate is excluded from the relay log wait",
+			durability: policy.DurabilityNone,
+			emergencyReparentOps: EmergencyReparentOptions{
+				WaitReplicasTimeout: time.Millisecond * 50,
+			},
+			tmc: &testutil.TabletManagerClient{
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000100": nil,
+					"zone1-0000000101": nil,
+				},
+				PromoteReplicaResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000100": {Result: "ok"},
+					"zone1-0000000101": {Result: "ok"},
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000100": nil,
+					"zone1-0000000101": nil,
+					"zone1-0000000102": nil,
+				},
+				StopReplicationAndGetStatusResults: map[string]struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Error      error
+				}{
+					"zone1-0000000100": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-21"),
+							},
+						},
+					},
+					"zone1-0000000101": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-21"),
+							},
+						},
+					},
+					"zone1-0000000102": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-10"),
+							},
+						},
+					},
+				},
+				// the lagger would take a minute to apply its relay logs, well past the
+				// wait-replicas-timeout
+				WaitForPositionDelays: map[string]time.Duration{
+					"zone1-0000000102": time.Minute,
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000100": {
+						getRelayLogPosition("1-21"): nil,
+					},
+					"zone1-0000000101": {
+						getRelayLogPosition("1-21"): nil,
+					},
+					"zone1-0000000102": {
+						getRelayLogPosition("1-10"): nil,
+					},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						PrimaryAlias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  102,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Hostname: "lagging on received relay logs, excluded from the wait",
+				},
+			},
+			shouldErr: false,
+			keyspace:  "testkeyspace",
+			shard:     "-",
+			cells:     []string{"zone1"},
+		},
+		{
+			// when every candidate at the leading received position fails to apply its
+			// relay logs, there is no safe winner and the reparent must fail
+			name:       "all leading candidates fail to apply relay logs",
+			durability: policy.DurabilityNone,
+			emergencyReparentOps: EmergencyReparentOptions{
+				WaitReplicasTimeout: time.Millisecond * 50,
+			},
+			tmc: &testutil.TabletManagerClient{
+				StopReplicationAndGetStatusResults: map[string]struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Error      error
+				}{
+					"zone1-0000000100": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-21"),
+							},
+						},
+					},
+					"zone1-0000000101": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-21"),
+							},
+						},
+					},
+					"zone1-0000000102": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-10"),
+							},
+						},
+					},
+				},
+				// both leaders fail their waits: their configured results do not cover
+				// the position they are asked to wait for
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000100": {
+						getRelayLogPosition("1-10"): nil,
+					},
+					"zone1-0000000101": {
+						getRelayLogPosition("1-10"): nil,
+					},
+					"zone1-0000000102": {
+						getRelayLogPosition("1-10"): nil,
+					},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  102,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
 			shouldErr:        true,
 			keyspace:         "testkeyspace",
 			shard:            "-",
 			cells:            []string{"zone1"},
-			errShouldContain: "could not apply all relay logs within the provided waitReplicasTimeout",
+			errShouldContain: "all candidates failed to apply relay logs",
+		},
+		{
+			// preservation guard: for non-GTID-based shards the received position is not
+			// tracked separately from the executed one, so the leading-group filter and
+			// race are unsafe. every candidate is waited on and any failure fails the
+			// reparent, exactly as before. this cell also passes without the filter/race
+			// change; it guards against a future change racing non-GTID shards
+			name:       "non-GTID-based shards wait for every candidate",
+			durability: policy.DurabilityNone,
+			emergencyReparentOps: EmergencyReparentOptions{
+				WaitReplicasTimeout: time.Millisecond * 50,
+			},
+			tmc: &testutil.TabletManagerClient{
+				StopReplicationAndGetStatusResults: map[string]struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Error      error
+				}{
+					"zone1-0000000100": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								RelayLogPosition: "FilePos/mysql-bin.0001:100",
+							},
+						},
+					},
+					"zone1-0000000101": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								RelayLogPosition: "FilePos/mysql-bin.0001:100",
+							},
+						},
+					},
+					"zone1-0000000102": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								RelayLogPosition: "FilePos/mysql-bin.0001:10",
+							},
+						},
+					},
+				},
+				// one candidate fails its wait even though a peer at the same position
+				// succeeds: with requireAll semantics that is fatal
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000100": {
+						"FilePos/mysql-bin.0001:100": nil,
+					},
+					"zone1-0000000101": {
+						"FilePos/mysql-bin.0001:10": nil,
+					},
+					"zone1-0000000102": {
+						"FilePos/mysql-bin.0001:10": nil,
+					},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Hostname: "fails to apply relay logs",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  102,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+			shouldErr:        true,
+			keyspace:         "testkeyspace",
+			shard:            "-",
+			cells:            []string{"zone1"},
+			errShouldContain: "could not apply all relay logs",
+		},
+		{
+			// preservation guard: incomparable leading positions are a suspected split
+			// brain, so the one-success race is not safe: a failed leader must fail the
+			// wait instead of being silently dropped before the split brain check runs
+			name:       "incomparable leading positions wait for all leaders",
+			durability: policy.DurabilityNone,
+			emergencyReparentOps: EmergencyReparentOptions{
+				WaitReplicasTimeout: time.Millisecond * 50,
+			},
+			tmc: &testutil.TabletManagerClient{
+				StopReplicationAndGetStatusResults: map[string]struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Error      error
+				}{
+					"zone1-0000000100": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-21", "1-5"),
+							},
+						},
+					},
+					"zone1-0000000101": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-21", "", "1-5"),
+							},
+						},
+					},
+				},
+				// one of the incomparable leaders fails its wait
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000100": {
+						getRelayLogPosition("1-21", "1-5"): nil,
+					},
+					"zone1-0000000101": {
+						getRelayLogPosition("1-21"): nil,
+					},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Hostname: "incomparable position, fails to apply relay logs",
+				},
+			},
+			shouldErr:        true,
+			keyspace:         "testkeyspace",
+			shard:            "-",
+			cells:            []string{"zone1"},
+			errShouldContain: "could not apply all relay logs",
+		},
+		{
+			// the only candidate that applied its relay logs turns out to have errant
+			// GTIDs. the surviving candidates were never waited on, so ERS runs a second
+			// relay log wait on them before electing one
+			name:       "errant GTIDs on the applied candidate trigger a second relay log wait",
+			durability: policy.DurabilityNone,
+			emergencyReparentOps: EmergencyReparentOptions{
+				WaitReplicasTimeout: time.Millisecond * 50,
+			},
+			tmc: &testutil.TabletManagerClient{
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000102": nil,
+				},
+				PromoteReplicaResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000102": {Result: "ok"},
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000100": nil,
+					"zone1-0000000101": nil,
+				},
+				StopReplicationAndGetStatusResults: map[string]struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Error      error
+				}{
+					// zone1-0000000100 has GTIDs from a second uuid that no other
+					// candidate has seen: errant
+					"zone1-0000000100": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-100", "1-5"),
+							},
+						},
+					},
+					"zone1-0000000101": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-100"),
+							},
+						},
+					},
+					"zone1-0000000102": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-100"),
+							},
+						},
+					},
+				},
+				// in the second wait, zone1-0000000101 is slow, so zone1-0000000102 wins
+				// the race and the election
+				WaitForPositionDelays: map[string]time.Duration{
+					"zone1-0000000101": time.Minute,
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000100": {
+						getRelayLogPosition("1-100", "1-5"): nil,
+					},
+					"zone1-0000000101": {
+						getRelayLogPosition("1-100"): nil,
+					},
+					"zone1-0000000102": {
+						getRelayLogPosition("1-100"): nil,
+					},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						PrimaryAlias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Hostname: "errant GTIDs, applied first",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Hostname: "slow to apply relay logs",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  102,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Hostname: "wins the second relay log wait",
+				},
+			},
+			shouldErr: false,
+			keyspace:  "testkeyspace",
+			shard:     "-",
+			cells:     []string{"zone1"},
+		},
+		{
+			// same as above, but every survivor of errant GTID detection fails the
+			// second relay log wait: the reparent must fail rather than promote a tablet
+			// with received-but-unapplied transactions
+			name:       "errant GTIDs on the applied candidate and failing survivors fail the reparent",
+			durability: policy.DurabilityNone,
+			emergencyReparentOps: EmergencyReparentOptions{
+				WaitReplicasTimeout: time.Millisecond * 50,
+			},
+			tmc: &testutil.TabletManagerClient{
+				StopReplicationAndGetStatusResults: map[string]struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Error      error
+				}{
+					"zone1-0000000100": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-100", "1-5"),
+							},
+						},
+					},
+					"zone1-0000000101": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-100"),
+							},
+						},
+					},
+					"zone1-0000000102": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-100"),
+							},
+						},
+					},
+				},
+				// the survivors' configured results do not cover the position they are
+				// asked to wait for, so they both fail the second wait
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000100": {
+						getRelayLogPosition("1-100", "1-5"): nil,
+					},
+					"zone1-0000000101": {
+						getRelayLogPosition("1-10"): nil,
+					},
+					"zone1-0000000102": {
+						getRelayLogPosition("1-10"): nil,
+					},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Hostname: "errant GTIDs, applied first",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  102,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+			shouldErr:        true,
+			keyspace:         "testkeyspace",
+			shard:            "-",
+			cells:            []string{"zone1"},
+			errShouldContain: "all candidates failed to apply relay logs",
 		},
 		{
 			name:       "requested primary-elect is not in tablet map",
@@ -2174,7 +2793,9 @@ func TestEmergencyReparenterRestartsStoppedIOThreadsOnFailure(t *testing.T) {
 			StopReplicationAndGetStatus(gomock.Any(), tabletAliasMatcher(alreadyStoppedIO), replicationdatapb.StopReplicationMode_IOTHREADONLY).
 			Return(alreadyStoppedIOStatus, nil)
 
-		// Now simulate a replica that takes too long while applying relay logs.
+		// Now simulate every candidate taking too long while applying relay logs. A single
+		// candidate applying in time would let the reparent proceed, so all of them have
+		// to time out for ERS to abort during relay log application.
 		tmc.EXPECT().
 			WaitForPosition(gomock.Any(), tabletAliasMatcher(stoppedIOAlias), relayLogPosition).
 			DoAndReturn(func(ctx context.Context, tablet *topodatapb.Tablet, position string) error {
@@ -2186,7 +2807,10 @@ func TestEmergencyReparenterRestartsStoppedIOThreadsOnFailure(t *testing.T) {
 
 		tmc.EXPECT().
 			WaitForPosition(gomock.Any(), tabletAliasMatcher(alreadyStoppedIO), relayLogPosition).
-			Return(nil).
+			DoAndReturn(func(ctx context.Context, tablet *topodatapb.Tablet, position string) error {
+				<-ctx.Done()
+				return ctx.Err()
+			}).
 			Times(1)
 
 		// We expect the replica whose IO thread was stopped as part of the ERS (and only that replica,
@@ -2248,7 +2872,7 @@ func TestEmergencyReparenterRestartsStoppedIOThreadsOnFailure(t *testing.T) {
 			WaitReplicasTimeout: 50 * time.Millisecond,
 		})
 
-		require.ErrorContains(t, err, "could not apply all relay logs within the provided waitReplicasTimeout")
+		require.ErrorContains(t, err, "all candidates failed to apply relay logs within the provided waitReplicasTimeout")
 	})
 }
 
@@ -2750,7 +3374,17 @@ func TestEmergencyReparenter_waitForAllRelayLogsToApply(t *testing.T) {
 		candidates map[string]*RelayLogPositions
 		tabletMap  map[string]*topo.TabletInfo
 		statusMap  map[string]*replicationdatapb.StopReplicationStatus
-		shouldErr  bool
+		requireAll bool
+		// cancelCtx runs the wait with an already-cancelled parent context.
+		cancelCtx   bool
+		shouldErr   bool
+		errContains string
+		// checkOutcome asserts the per-tablet outcome below. Left false for cells where
+		// goroutine scheduling makes the split between the sets nondeterministic.
+		checkOutcome  bool
+		wantApplied   []string
+		wantFailed    []string
+		wantCancelled []string
 	}{
 		{
 			name: "all tablet pass",
@@ -2798,7 +3432,10 @@ func TestEmergencyReparenter_waitForAllRelayLogsToApply(t *testing.T) {
 					},
 				},
 			},
-			shouldErr: false,
+			requireAll:   true,
+			shouldErr:    false,
+			checkOutcome: true,
+			wantApplied:  []string{"zone1-0000000100", "zone1-0000000101"},
 		},
 		{
 			name: "one tablet fails",
@@ -2846,7 +3483,9 @@ func TestEmergencyReparenter_waitForAllRelayLogsToApply(t *testing.T) {
 					},
 				},
 			},
-			shouldErr: true,
+			requireAll:  true,
+			shouldErr:   true,
+			errContains: "could not apply all relay logs",
 		},
 		{
 			name: "multiple tablets fail",
@@ -2911,7 +3550,9 @@ func TestEmergencyReparenter_waitForAllRelayLogsToApply(t *testing.T) {
 					},
 				},
 			},
-			shouldErr: true,
+			requireAll:  true,
+			shouldErr:   true,
+			errContains: "could not apply all relay logs",
 		},
 		{
 			name: "one slow tablet",
@@ -2962,7 +3603,340 @@ func TestEmergencyReparenter_waitForAllRelayLogsToApply(t *testing.T) {
 					},
 				},
 			},
-			shouldErr: true,
+			requireAll:    true,
+			shouldErr:     true,
+			errContains:   "could not apply all relay logs",
+			checkOutcome:  true,
+			wantApplied:   []string{"zone1-0000000100"},
+			wantFailed:    []string{"zone1-0000000101"},
+			wantCancelled: []string{},
+		},
+		{
+			// the first candidate to finish applying cancels the remaining waits: the
+			// slow peer must end up cancelled, not failed at the group deadline
+			name: "requireAll false, first success cancels the remaining waits",
+			tmc: &testutil.TabletManagerClient{
+				WaitForPositionDelays: map[string]time.Duration{
+					"zone1-0000000101": time.Minute,
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000100": {
+						"position1": nil,
+					},
+					"zone1-0000000101": {
+						"position1": nil,
+					},
+				},
+			},
+			candidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": {},
+				"zone1-0000000101": {},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"zone1-0000000100": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: "position1",
+					},
+				},
+				"zone1-0000000101": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: "position1",
+					},
+				},
+			},
+			requireAll:    false,
+			shouldErr:     false,
+			checkOutcome:  true,
+			wantApplied:   []string{"zone1-0000000100"},
+			wantFailed:    []string{},
+			wantCancelled: []string{"zone1-0000000101"},
+		},
+		{
+			// a genuine failure before any success must be reported as failed even
+			// though a peer later succeeds and the wait as a whole passes
+			name: "requireAll false, genuine failure before a success",
+			tmc: &testutil.TabletManagerClient{
+				WaitForPositionDelays: map[string]time.Duration{
+					"zone1-0000000101": 10 * time.Millisecond,
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000100": {
+						"position2": nil, // asked to wait for "position1", fails instantly
+					},
+					"zone1-0000000101": {
+						"position1": nil,
+					},
+				},
+			},
+			candidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": {},
+				"zone1-0000000101": {},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"zone1-0000000100": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: "position1",
+					},
+				},
+				"zone1-0000000101": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: "position1",
+					},
+				},
+			},
+			requireAll:    false,
+			shouldErr:     false,
+			checkOutcome:  true,
+			wantApplied:   []string{"zone1-0000000101"},
+			wantFailed:    []string{"zone1-0000000100"},
+			wantCancelled: []string{},
+		},
+		{
+			name: "requireAll false, all candidates fail",
+			tmc: &testutil.TabletManagerClient{
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000100": {
+						"position2": nil,
+					},
+					"zone1-0000000101": {
+						"position2": nil,
+					},
+				},
+			},
+			candidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": {},
+				"zone1-0000000101": {},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"zone1-0000000100": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: "position1",
+					},
+				},
+				"zone1-0000000101": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: "position1",
+					},
+				},
+			},
+			requireAll:    false,
+			shouldErr:     true,
+			errContains:   "all candidates failed to apply relay logs",
+			checkOutcome:  true,
+			wantApplied:   []string{},
+			wantFailed:    []string{"zone1-0000000100", "zone1-0000000101"},
+			wantCancelled: []string{},
+		},
+		{
+			name: "requireAll false, aborted parent context",
+			tmc: &testutil.TabletManagerClient{
+				WaitForPositionDelays: map[string]time.Duration{
+					"zone1-0000000100": time.Minute,
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000100": {
+						"position1": nil,
+					},
+				},
+			},
+			candidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": {},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"zone1-0000000100": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: "position1",
+					},
+				},
+			},
+			requireAll:    false,
+			cancelCtx:     true,
+			shouldErr:     true,
+			errContains:   "emergency reparent aborted while waiting for relay logs to apply",
+			checkOutcome:  true,
+			wantApplied:   []string{},
+			wantFailed:    []string{},
+			wantCancelled: []string{"zone1-0000000100"},
+		},
+		{
+			// a former primary has no relay logs to apply and is skipped: it must not
+			// count as a finished candidate or cancel the race between the replicas
+			name: "requireAll false, former primary is skipped and does not short-circuit the race",
+			tmc: &testutil.TabletManagerClient{
+				WaitForPositionDelays: map[string]time.Duration{
+					"zone1-0000000102": time.Minute,
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000101": {
+						"position1": nil,
+					},
+					"zone1-0000000102": {
+						"position1": nil,
+					},
+				},
+			},
+			candidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": {},
+				"zone1-0000000101": {},
+				"zone1-0000000102": {},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+				"zone1-0000000102": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+					},
+				},
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				// zone1-0000000100 is intentionally absent: it was the primary
+				"zone1-0000000101": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: "position1",
+					},
+				},
+				"zone1-0000000102": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: "position1",
+					},
+				},
+			},
+			requireAll:    false,
+			shouldErr:     false,
+			checkOutcome:  true,
+			wantApplied:   []string{"zone1-0000000101"},
+			wantFailed:    []string{},
+			wantCancelled: []string{"zone1-0000000102"},
+		},
+		{
+			// nothing to wait on at all (e.g. the former primary is the only candidate
+			// at the leading position) is a success, not an error
+			name: "requireAll false, no candidates need to apply relay logs",
+			tmc:  &testutil.TabletManagerClient{},
+			candidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": {},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+			},
+			statusMap:     map[string]*replicationdatapb.StopReplicationStatus{},
+			requireAll:    false,
+			shouldErr:     false,
+			checkOutcome:  true,
+			wantApplied:   []string{},
+			wantFailed:    []string{},
+			wantCancelled: []string{},
+		},
+		{
+			name: "requireAll true, no waiters and an aborted parent context",
+			tmc:  &testutil.TabletManagerClient{},
+			candidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": {},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+			},
+			statusMap:   map[string]*replicationdatapb.StopReplicationStatus{},
+			requireAll:  true,
+			cancelCtx:   true,
+			shouldErr:   true,
+			errContains: "emergency reparent aborted while waiting for relay logs to apply",
 		},
 	}
 
@@ -2970,16 +3944,139 @@ func TestEmergencyReparenter_waitForAllRelayLogsToApply(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			erp := NewEmergencyReparenter(nil, tt.tmc, logger)
-			err := erp.waitForAllRelayLogsToApply(ctx, tt.candidates, tt.tabletMap, tt.statusMap, waitReplicasTimeout)
-			if tt.shouldErr {
-				assert.Error(t, err)
-				return
+			cellCtx := ctx
+			if tt.cancelCtx {
+				var cancel context.CancelFunc
+				cellCtx, cancel = context.WithCancel(ctx)
+				cancel()
 			}
 
-			assert.NoError(t, err)
+			erp := NewEmergencyReparenter(nil, tt.tmc, logger)
+			result, err := erp.waitForAllRelayLogsToApply(cellCtx, tt.candidates, tt.tabletMap, tt.statusMap, waitReplicasTimeout, tt.requireAll)
+			if tt.shouldErr {
+				require.Error(t, err)
+				if tt.errContains != "" {
+					require.ErrorContains(t, err, tt.errContains)
+				}
+			} else {
+				require.NoError(t, err)
+			}
+
+			if tt.checkOutcome {
+				require.NotNil(t, result)
+				assert.ElementsMatch(t, tt.wantApplied, result.applied, "applied mismatch")
+				assert.ElementsMatch(t, tt.wantFailed, result.failed, "failed mismatch")
+				assert.ElementsMatch(t, tt.wantCancelled, result.cancelled, "cancelled mismatch")
+			}
 		})
 	}
+}
+
+func TestEmergencyReparenter_applyRelayLogsAndReconcile(t *testing.T) {
+	t.Parallel()
+
+	logger := logutil.NewMemoryLogger()
+	waitReplicasTimeout := 50 * time.Millisecond
+
+	tabletMap := map[string]*topo.TabletInfo{}
+	for uid := 100; uid <= 103; uid++ {
+		alias := &topodatapb.TabletAlias{Cell: "zone1", Uid: uint32(uid)}
+		tabletMap[topoproto.TabletAliasString(alias)] = &topo.TabletInfo{
+			Tablet: &topodatapb.Tablet{Alias: alias},
+		}
+	}
+
+	// zone1-0000000100 applies its relay logs, zone1-0000000101 fails to,
+	// zone1-0000000102 is cancelled after 100 finishes, and zone1-0000000103 is a lagging
+	// candidate that is not waited on at all.
+	statusMap := map[string]*replicationdatapb.StopReplicationStatus{
+		"zone1-0000000100": {After: &replicationdatapb.Status{RelayLogPosition: "position1"}},
+		"zone1-0000000101": {After: &replicationdatapb.Status{RelayLogPosition: "position1"}},
+		"zone1-0000000102": {After: &replicationdatapb.Status{RelayLogPosition: "position1"}},
+	}
+	newCandidates := func(t *testing.T) map[string]*RelayLogPositions {
+		return map[string]*RelayLogPositions{
+			"zone1-0000000100": {
+				Combined: mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-10"),
+				Executed: mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"),
+			},
+			"zone1-0000000101": {
+				Combined: mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-10"),
+				Executed: mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-4"),
+			},
+			"zone1-0000000102": {
+				Combined: mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-10"),
+				Executed: mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6"),
+			},
+			"zone1-0000000103": {
+				Combined: mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-3"),
+				Executed: mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-3"),
+			},
+		}
+	}
+	waitCandidatesOf := func(candidates map[string]*RelayLogPositions) map[string]*RelayLogPositions {
+		return map[string]*RelayLogPositions{
+			"zone1-0000000100": candidates["zone1-0000000100"],
+			"zone1-0000000101": candidates["zone1-0000000101"],
+			"zone1-0000000102": candidates["zone1-0000000102"],
+		}
+	}
+
+	t.Run("applied bumped, failed removed, cancelled and unwaited untouched", func(t *testing.T) {
+		t.Parallel()
+
+		tmc := &testutil.TabletManagerClient{
+			WaitForPositionDelays: map[string]time.Duration{
+				"zone1-0000000102": time.Minute,
+			},
+			WaitForPositionResults: map[string]map[string]error{
+				"zone1-0000000100": {"position1": nil},
+				"zone1-0000000101": {"position2": nil}, // asked for "position1", fails
+				"zone1-0000000102": {"position1": nil},
+			},
+		}
+
+		candidates := newCandidates(t)
+		erp := NewEmergencyReparenter(nil, tmc, logger)
+		reconciled, waitResult, err := erp.applyRelayLogsAndReconcile(t.Context(), waitCandidatesOf(candidates), candidates, tabletMap, statusMap, waitReplicasTimeout, false)
+		require.NoError(t, err)
+		require.NotNil(t, waitResult)
+
+		assert.ElementsMatch(t, []string{"zone1-0000000100"}, waitResult.applied)
+		assert.ElementsMatch(t, []string{"zone1-0000000101"}, waitResult.failed)
+		assert.ElementsMatch(t, []string{"zone1-0000000102"}, waitResult.cancelled)
+
+		// the failed candidate is no longer promotable
+		assert.NotContains(t, reconciled, "zone1-0000000101")
+
+		// the applied candidate has fully executed what it received
+		assert.True(t, reconciled["zone1-0000000100"].Executed.Equal(reconciled["zone1-0000000100"].Combined))
+
+		// the cancelled and unwaited candidates keep their received positions
+		assert.True(t, reconciled["zone1-0000000102"].Executed.Equal(mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6")))
+		assert.True(t, reconciled["zone1-0000000103"].Executed.Equal(mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-3")))
+	})
+
+	t.Run("wait error leaves the candidates unmutated", func(t *testing.T) {
+		t.Parallel()
+
+		tmc := &testutil.TabletManagerClient{
+			WaitForPositionResults: map[string]map[string]error{
+				"zone1-0000000100": {"position1": nil},
+				"zone1-0000000101": {"position2": nil}, // asked for "position1", fails
+				"zone1-0000000102": {"position1": nil},
+			},
+		}
+
+		candidates := newCandidates(t)
+		erp := NewEmergencyReparenter(nil, tmc, logger)
+		reconciled, _, err := erp.applyRelayLogsAndReconcile(t.Context(), waitCandidatesOf(candidates), candidates, tabletMap, statusMap, waitReplicasTimeout, true)
+		require.ErrorContains(t, err, "could not apply all relay logs")
+
+		// on error the caller's candidates come back as-is: nothing removed, nothing bumped
+		assert.Len(t, reconciled, 4)
+		assert.True(t, reconciled["zone1-0000000100"].Executed.Equal(mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5")))
+	})
 }
 
 func TestEmergencyReparenterStats(t *testing.T) {
