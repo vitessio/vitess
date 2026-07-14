@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"io"
 	"maps"
-	"runtime"
+	"net/http"
 	"strconv"
 	"strings"
 	"sync"
@@ -37,13 +37,12 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/throttler"
 	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/test/vitesst"
+	"vitess.io/vitess/go/test/vitesst/throttler"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topotools"
-	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 
@@ -52,7 +51,6 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
-	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	throttlebase "vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 )
@@ -81,11 +79,29 @@ const (
 	BypassLagCheck              = true // temporary fix for flakiness seen only in CI when lag check is introduced
 	throttlerStatusThrottled    = tabletmanagerdatapb.CheckThrottlerResponseCode_APP_DENIED
 	throttlerStatusNotThrottled = tabletmanagerdatapb.CheckThrottlerResponseCode_OK
+
+	// binlogRowImageCnfPath is the file every tablet's mysqld reads its binlog
+	// row image settings from, when the test asks for them.
+	binlogRowImageCnfPath = "/vt/files/binlog_row_image.cnf"
 )
 
 func init() {
 	defaultRdonly = 0
 	defaultReplicas = 1
+}
+
+// binlogRowImageOptions returns the cluster options that give every tablet's
+// mysqld the given binlog_row_image mode, along with partial JSON values in
+// the images.
+func binlogRowImageOptions(mode string) *clusterOptions {
+	cnf := fmt.Sprintf("\nbinlog_row_image=%s\nbinlog_row_value_options=PARTIAL_JSON\n", mode)
+	return &clusterOptions{
+		tabletFiles: []vitesst.ContainerFile{{
+			Content:       []byte(cnf),
+			ContainerPath: binlogRowImageCnfPath,
+		}},
+		tabletEnv: map[string]string{"EXTRA_MY_CNF": binlogRowImageCnfPath},
+	}
 }
 
 // TestVReplicationDDLHandling tests the DDL handling in
@@ -113,7 +129,7 @@ func TestVReplicationDDLHandling(t *testing.T) {
 
 	verifyClusterHealth(t, vc)
 
-	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	vtgateConn := vc.GetVTGateConn(t)
 	defer vtgateConn.Close()
 	sourceTab = vc.getPrimaryTablet(t, defaultSourceKs, shard)
 	targetTab := vc.getPrimaryTablet(t, defaultTargetKs, shard)
@@ -133,7 +149,7 @@ func TestVReplicationDDLHandling(t *testing.T) {
 	// expectedAction is the specific action, e.g. ignore, that should have a count of 1. All other
 	// actions should have a count of 0. id is the stream ID to check.
 	checkOnDDLStats := func(expectedAction binlogdatapb.OnDDLAction, id int) {
-		jsVal, err := getDebugVar(t, targetTab.Port, []string{"VReplicationDDLActions"})
+		jsVal, err := getDebugVar(t, targetTab, []string{"VReplicationDDLActions"})
 		require.NoError(t, err)
 		require.NotEqual(t, "{}", jsVal)
 		// The JSON values look like this: {"onddl_test.MoveTables.3.IGNORE": 1}
@@ -223,9 +239,6 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 	cell := "zone1"
 	table := "customer"
 	shard := "0"
-	vc = NewVitessCluster(t, nil)
-	defer vc.TearDown()
-	defaultCell := vc.Cells[cell]
 	// To test vstreamer source throttling for the MoveTables operation
 	maxSourceTrxHistory := int64(5)
 	extraVTTabletArgs = []string{
@@ -235,6 +248,9 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 		fmt.Sprintf("%s=%d", "--vreplication-copy-phase-max-innodb-history-list-length", maxSourceTrxHistory),
 		parallelInsertWorkers,
 	}
+	vc = NewVitessCluster(t, nil)
+	defer vc.TearDown()
+	defaultCell := vc.Cells[cell]
 
 	_, err := vc.AddKeyspace(t, []*Cell{defaultCell}, defaultSourceKs, shard, initialProductVSchema, initialProductSchema, 0, 0, 100, nil)
 	require.NoError(t, err)
@@ -269,8 +285,6 @@ func TestBasicVreplicationWorkflow(t *testing.T) {
 }
 
 func TestVreplicationCopyParallel(t *testing.T) {
-	defaultSourceKsOpts["DBTypeVersion"] = "mysql-5.7"
-	defaultTargetKsOpts["DBTypeVersion"] = "mysql-5.7"
 	extraVTTabletArgs = []string{
 		parallelInsertWorkers,
 	}
@@ -284,24 +298,23 @@ func testBasicVreplicationWorkflow(t *testing.T, binlogRowImage string) {
 // If limited == true, we only run a limited set of workflows.
 func testVreplicationWorkflows(t *testing.T, limited bool, binlogRowImage string) {
 	var err error
-	vc = NewVitessCluster(t, nil)
+	var opts *clusterOptions
+	if binlogRowImage != "" {
+		// Run the e2e test with binlog_row_image=NOBLOB and
+		// binlog_row_value_options=PARTIAL_JSON.
+		opts = binlogRowImageOptions(binlogRowImage)
+	}
+	vc = NewVitessCluster(t, opts)
 	defer vc.TearDown()
 	// Keep the cluster processes minimal to deal with CI resource constraints
 	defaultReplicas = 0
 	defaultRdonly = 0
 	defer func() { defaultReplicas = 1 }()
 
-	if binlogRowImage != "" {
-		// Run the e2e test with binlog_row_image=NOBLOB and
-		// binlog_row_value_options=PARTIAL_JSON.
-		require.NoError(t, utils.SetBinlogRowImageOptions("noblob", true, vc.ClusterConfig.tmpDir))
-		defer utils.SetBinlogRowImageOptions("", false, vc.ClusterConfig.tmpDir)
-	}
-
 	defaultCell := vc.Cells[defaultCellName]
 	vc.AddKeyspace(t, []*Cell{defaultCell}, defaultSourceKs, "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, defaultSourceKsOpts)
 
-	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	vtgateConn := vc.GetVTGateConn(t)
 	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
 	insertInitialData(t)
@@ -399,8 +412,8 @@ func testVreplicationWorkflows(t *testing.T, limited bool, binlogRowImage string
 }
 
 func TestV2WorkflowsAcrossDBVersions(t *testing.T) {
-	defaultSourceKsOpts["DBTypeVersion"] = "mysql-5.7"
-	defaultTargetKsOpts["DBTypeVersion"] = "mysql-8.0"
+	defaultSourceKsOpts["DBTypeVersion"] = "mysql-8.0"
+	defaultTargetKsOpts["DBTypeVersion"] = "mysql-8.4"
 	testBasicVreplicationWorkflow(t, "")
 }
 
@@ -442,7 +455,7 @@ func TestVStreamFlushBinlog(t *testing.T) {
 	catchup(t, vc.getPrimaryTablet(t, defaultTargetKs, shard), workflow, "MoveTables")
 
 	// So far, we should not have rotated any binlogs
-	flushCount := int64(sourceTab.GetVars()["VStreamerFlushedBinlogs"].(float64))
+	flushCount := flushedBinlogs(t, sourceTab)
 	require.Equal(t, flushCount, int64(0), "VStreamerFlushedBinlogs should be 0")
 
 	// Generate a lot of binlog event bytes
@@ -459,7 +472,7 @@ func TestVStreamFlushBinlog(t *testing.T) {
 		require.Greater(t, res.RowsAffected, uint64(0))
 
 		if i%100 == 0 {
-			res, err := sourceTab.QueryTablet("show binary logs", defaultSourceKs, false)
+			res, err := sourceTab.QueryTabletWithDB(t.Context(), "show binary logs", "")
 			require.NoError(t, err)
 			require.NotNil(t, res)
 			require.Greater(t, len(res.Rows), 0)
@@ -476,14 +489,24 @@ func TestVStreamFlushBinlog(t *testing.T) {
 	// though we're opening up multiple result streams (1 per table).
 	runVDiffsSideBySide = false
 	vdiff(t, defaultTargetKs, workflow, defaultCellName, nil)
-	flushCount = int64(sourceTab.GetVars()["VStreamerFlushedBinlogs"].(float64))
+	flushCount = flushedBinlogs(t, sourceTab)
 	require.Equal(t, flushCount, int64(1), "VStreamerFlushedBinlogs should now be 1")
 
 	// Now if we do another vdiff, we should NOT rotate the binlogs again
 	// as we haven't been generating a lot of new binlog events.
 	vdiff(t, defaultTargetKs, workflow, defaultCellName, nil)
-	flushCount = int64(sourceTab.GetVars()["VStreamerFlushedBinlogs"].(float64))
+	flushCount = flushedBinlogs(t, sourceTab)
 	require.Equal(t, flushCount, int64(1), "VStreamerFlushedBinlogs should still be 1")
+}
+
+// flushedBinlogs returns the number of binlog rotations the tablet's vstreamer
+// has performed.
+func flushedBinlogs(t *testing.T, tablet *vitesst.Tablet) int64 {
+	vars, err := tablet.GetVars(t.Context())
+	require.NoError(t, err)
+	count, ok := vars["VStreamerFlushedBinlogs"].(float64)
+	require.True(t, ok, "VStreamerFlushedBinlogs is not published by tablet %s", tablet.Alias())
+	return int64(count)
 }
 
 // TestMoveTablesIgnoreSourceKeyspace confirms that we are able to
@@ -647,9 +670,10 @@ func testVStreamCellFlag(t *testing.T) {
 		{"", false},
 	}
 
+	vtgate := vc.Cells[defaultCellName].Vtgates[0]
 	for _, tc := range vstreamTestCases {
 		t.Run("VStreamCellsFlag/"+tc.cells, func(t *testing.T) {
-			conn, err := vtgateconn.Dial(ctx, fmt.Sprintf("localhost:%d", vc.ClusterConfig.vtgateGrpcPort))
+			conn, err := vtgate.DialVTGate(ctx)
 			require.NoError(t, err)
 			defer conn.Close()
 
@@ -687,7 +711,7 @@ func testVStreamCellFlag(t *testing.T) {
 				require.False(t, rowsReceived)
 
 				// if no tablet was found the tablet picker adds a key which includes the cell name to the vtgate TabletPickerNoTabletFoundErrorCount stat
-				pickerErrorStat, err := getDebugVar(t, vc.ClusterConfig.vtgatePort, []string{"TabletPickerNoTabletFoundErrorCount"})
+				pickerErrorStat, err := getDebugVar(t, vtgate, []string{"TabletPickerNoTabletFoundErrorCount"})
 				require.NoError(t, err)
 				require.Contains(t, pickerErrorStat, nonExistingCell)
 			} else {
@@ -705,16 +729,16 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	cells := []string{"zone1", "zone2"}
 	resetCompression := mainClusterConfig.enableGTIDCompression()
 	defer resetCompression()
-	vc = NewVitessCluster(t, &clusterOptions{cells: cells})
+
+	// Run the e2e test with binlog_row_image=NOBLOB and
+	// binlog_row_value_options=PARTIAL_JSON.
+	opts := binlogRowImageOptions("noblob")
+	opts.cells = cells
+	vc = NewVitessCluster(t, opts)
 	defer vc.TearDown()
 
 	shard := "0"
 	table := "product"
-
-	// Run the e2e test with binlog_row_image=NOBLOB and
-	// binlog_row_value_options=PARTIAL_JSON.
-	require.NoError(t, utils.SetBinlogRowImageOptions("noblob", true, vc.ClusterConfig.tmpDir))
-	defer utils.SetBinlogRowImageOptions("", false, vc.ClusterConfig.tmpDir)
 
 	cell1 := vc.Cells["zone1"]
 	cell2 := vc.Cells["zone2"]
@@ -732,17 +756,25 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 		testVStreamFrom(t, vtgate, table, 2)
 	})
 	shardCustomer(t, true, []*Cell{cell1, cell2}, "alias", false)
-	isTableInDenyList(t, vc, defaultSourceKs+"/0", "customer")
+	// The MoveTables workflow completed, so the source table is served from the
+	// target keyspace and is no longer denied on the source.
+	validateTableInDenyList(t, vc, defaultSourceKs+"/0", "customer", false)
 	// we tag along this test so as not to create the overhead of creating another cluster
 	testVStreamCellFlag(t)
 }
 
 // testVStreamFrom confirms that the "vstream * from" endpoint is serving data
-func testVStreamFrom(t *testing.T, vtgate *cluster.VtgateProcess, table string, expectedRowCount int) {
+func testVStreamFrom(t *testing.T, vtgate *vitesst.VTGate, table string, expectedRowCount int) {
 	ctx := t.Context()
+	addr, err := vtgate.MySQLAddr(ctx)
+	require.NoError(t, err)
+	host, portStr, ok := strings.Cut(addr, ":")
+	require.True(t, ok, "malformed vtgate address %q", addr)
+	port, err := strconv.Atoi(portStr)
+	require.NoError(t, err)
 	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: vtgate.MySQLServerPort,
+		Host: host,
+		Port: port,
 	}
 	ch := make(chan bool, 1)
 	go func() {
@@ -837,7 +869,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		// The wait in the next code block which checks that customer.dec80 is updated, also confirms that the
 		// blob-related dmls we execute here are vreplicated.
 		insertIntoBlobTable(t)
-		vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+		vtgateConn := vc.GetVTGateConn(t)
 		defer vtgateConn.Close()
 		// Confirm that the 0 scale decimal field, dec80, is replicated correctly
 		_, err = execVtgateQuery(vtgateConn, defaultSourceKs, "update customer set dec80 = 0")
@@ -869,13 +901,14 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		require.NoError(t, err)
 		waitForNoWorkflowLag(t, vc, defaultTargetKs, workflow)
 		dec80Replicated := false
-		for _, tablet := range []*cluster.VttabletProcess{customerTab1, customerTab2} {
+		targetDBName := "vt_" + defaultTargetKs
+		for _, tablet := range []*vitesst.Tablet{customerTab1, customerTab2} {
 			// Query the tablet's mysqld directly as the targets will have denied table entries.
-			dbc, err := tablet.TabletConn(defaultTargetKs, true)
+			dbc, err := vitesst.GetMySQLConn(t.Context(), tablet, targetDBName)
 			require.NoError(t, err)
 			defer dbc.Close()
 			if res := execQuery(t, dbc, "select cid from customer"); len(res.Rows) > 0 {
-				waitForQueryResult(t, dbc, tablet.DbName, "select distinct dec80 from customer", `[[DECIMAL(0)]]`)
+				waitForQueryResult(t, dbc, targetDBName, "select distinct dec80 from customer", `[[DECIMAL(0)]]`)
 				dec80Replicated = true
 			}
 		}
@@ -900,7 +933,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			tablet300 := custKs.Shards["80-"].Tablets["zone1-300"].Vttablet
 
 			totalInserts, totalUpdates, totalInsertQueries, totalUpdateQueries := 0, 0, 0, 0
-			for _, tab := range []*cluster.VttabletProcess{tablet200, tablet300} {
+			for _, tab := range []*vitesst.Tablet{tablet200, tablet300} {
 				insertCount, updateCount, insertQueries, updateQueries := getPartialMetrics(t, defaultSourceKs+".0.p2c.MoveTables.1", tab)
 				totalInserts += insertCount
 				totalUpdates += updateCount
@@ -920,22 +953,15 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		matchInsertQuery1 := "insert into customer(cid, `name`) values (:vtg1 /* INT64 */, :vtg2 /* VARCHAR */)"
 		assertQueryExecutesOnTablet(t, vtgateConn, productTab, defaultSourceKs, insertQuery1, matchInsertQuery1)
 
-		// FIXME for some reason, these inserts fails on mac, need to investigate, some
-		// vreplication bug because of case insensitiveness of table names on mac?
-		if runtime.GOOS == "linux" {
-			// Confirm that the backticking of table names in the routing rules works.
-			tbls := []string{"Lead", "Lead-1"}
-			for _, tbl := range tbls {
-				output, err := osExec(t, "mysql", []string{
-					"-u", "vtdba", "-P", strconv.Itoa(vc.ClusterConfig.vtgateMySQLPort),
-					"--host=127.0.0.1", "--default-character-set=utf8mb4", "-e", fmt.Sprintf("select * from `%s`", tbl),
-				})
-				if err != nil {
-					require.FailNow(t, output)
-				}
-				_, err = execVtgateQuery(vtgateConn, defaultSourceKs, fmt.Sprintf("update `%s` set name='xyz'", tbl))
-				require.NoError(t, err)
-			}
+		// Confirm that the backticking of table names in the routing rules works.
+		tbls := []string{"Lead", "Lead-1"}
+		for _, tbl := range tbls {
+			selectConn := vc.GetVTGateConn(t)
+			_, err := selectConn.ExecuteFetch(fmt.Sprintf("select * from `%s`", tbl), 1000, false)
+			selectConn.Close()
+			require.NoError(t, err)
+			_, err = execVtgateQuery(vtgateConn, defaultSourceKs, fmt.Sprintf("update `%s` set name='xyz'", tbl))
+			require.NoError(t, err)
 		}
 		doVDiff(t, ksWorkflow, "")
 		cellNames := getCellNames(cells)
@@ -954,7 +980,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		}
 		testSwitchTrafficPermissionChecks(t, workflowType, defaultSourceKs, shardNames, defaultTargetKs, workflow)
 
-		testSwitchWritesErrorHandling(t, []*cluster.VttabletProcess{productTab}, []*cluster.VttabletProcess{customerTab1, customerTab2},
+		testSwitchWritesErrorHandling(t, []*vitesst.Tablet{productTab}, []*vitesst.Tablet{customerTab1, customerTab2},
 			workflow, workflowType)
 
 		// Now let's confirm that it works as expected with an error.
@@ -1072,7 +1098,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 func validateRollupReplicates(t *testing.T) {
 	t.Run("validateRollupReplicates", func(t *testing.T) {
 		insertMoreProducts(t)
-		vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+		vtgateConn := vc.GetVTGateConn(t)
 		defer vtgateConn.Close()
 		waitForRowCount(t, vtgateConn, defaultSourceKs, "rollup", 1)
 		waitForQueryResult(t, vtgateConn, defaultSourceKs+":0", "select rollupname, kount from rollup",
@@ -1082,7 +1108,7 @@ func validateRollupReplicates(t *testing.T) {
 
 func reshardCustomer2to4Split(t *testing.T, cells []*Cell, sourceCellOrAlias string) {
 	t.Run("reshardCustomer2to4Split", func(t *testing.T) {
-		vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+		vtgateConn := vc.GetVTGateConn(t)
 		defer vtgateConn.Close()
 		counts := map[string]int{"zone1-600": 4, "zone1-700": 5, "zone1-800": 6, "zone1-900": 5}
 		reshard(t, defaultTargetKs, "customer", "c2c4", "-80,80-", "-40,40-80,80-c0,c0-",
@@ -1097,7 +1123,7 @@ func reshardCustomer2to4Split(t *testing.T, cells []*Cell, sourceCellOrAlias str
 
 func reshardMerchant2to3SplitMerge(t *testing.T) {
 	t.Run("reshardMerchant2to3SplitMerge", func(t *testing.T) {
-		vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+		vtgateConn := vc.GetVTGateConn(t)
 		defer vtgateConn.Close()
 		ksName := merchantKeyspace
 		counts := map[string]int{"zone1-1600": 0, "zone1-1700": 2, "zone1-1800": 0}
@@ -1142,7 +1168,7 @@ func reshardMerchant2to3SplitMerge(t *testing.T) {
 
 func reshardMerchant3to1Merge(t *testing.T) {
 	t.Run("reshardMerchant3to1Merge", func(t *testing.T) {
-		vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+		vtgateConn := vc.GetVTGateConn(t)
 		defer vtgateConn.Close()
 		ksName := merchantKeyspace
 		counts := map[string]int{"zone1-2000": 3}
@@ -1190,13 +1216,13 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 		require.NoError(t, vc.AddShards(t, cells, keyspace, targetShards, defaultReplicas, defaultRdonly, tabletIDBase, defaultTargetKsOpts))
 
 		tablets := vc.getVttabletsInKeyspace(t, defaultCell, ksName, "primary")
-		var sourceTablets, targetTablets []*cluster.VttabletProcess
+		var sourceTablets, targetTablets []*vitesst.Tablet
 
 		// Test multi-primary setups, like a Galera cluster, which have auto increment steps > 1.
 		for _, tablet := range tablets {
 			autoIncrementSetQuery := fmt.Sprintf("set @@session.auto_increment_increment = %d; set @@global.auto_increment_increment = %d",
 				autoIncrementStep, autoIncrementStep)
-			tablet.QueryTablet(autoIncrementSetQuery, "", false)
+			tablet.QueryTabletWithDB(t.Context(), autoIncrementSetQuery, "")
 		}
 		reshardAction(t, "Create", workflow, ksName, sourceShards, targetShards, sourceCellOrAlias, "replica,primary")
 
@@ -1238,7 +1264,7 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 
 func shardOrders(t *testing.T) {
 	t.Run("shardOrders", func(t *testing.T) {
-		vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+		vtgateConn := vc.GetVTGateConn(t)
 		defer vtgateConn.Close()
 		defaultCell := vc.Cells[vc.CellNames[0]]
 		workflow := "o2c"
@@ -1274,7 +1300,7 @@ func checkThatVDiffFails(t *testing.T, keyspace, workflow string) {
 
 func shardMerchant(t *testing.T) {
 	t.Run("shardMerchant", func(t *testing.T) {
-		vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+		vtgateConn := vc.GetVTGateConn(t)
 		defer vtgateConn.Close()
 		workflow := "p2m"
 		defaultCell := vc.Cells[vc.CellNames[0]]
@@ -1298,13 +1324,10 @@ func shardMerchant(t *testing.T) {
 		printRoutingRules(t, vc, "After merchant movetables")
 
 		// confirm that the backticking of keyspaces in the routing rules works
-		output, err := osExec(t, "mysql", []string{
-			"-u", "vtdba", "-P", strconv.Itoa(vc.ClusterConfig.vtgateMySQLPort),
-			"--host=" + vc.ClusterConfig.hostname, "--default-character-set=utf8mb4", "-e", "select * from merchant",
-		})
-		if err != nil {
-			require.FailNow(t, output)
-		}
+		selectConn := vc.GetVTGateConn(t)
+		_, err = selectConn.ExecuteFetch("select * from merchant", 1000, false)
+		selectConn.Close()
+		require.NoError(t, err)
 		moveTablesAction(t, "Complete", cell, workflow, defaultSourceKs, targetKs, tables)
 
 		waitForRowCountInTablet(t, merchantTab1, merchantKeyspace, "merchant", 1)
@@ -1363,10 +1386,10 @@ func materializeProduct(t *testing.T) {
 		productTablets := vc.getVttabletsInKeyspace(t, defaultCell, defaultSourceKs, "primary")
 		t.Run("throttle-app-product", func(t *testing.T) {
 			// Now, throttle the source side component (vstreamer), and insert some rows.
-			err := throttler.ThrottleKeyspaceApp(vc.VtctldClient, defaultSourceKs, sourceThrottlerAppName)
+			err := throttler.ThrottleKeyspaceApp(t.Context(), vc.Cluster, defaultSourceKs, sourceThrottlerAppName)
 			assert.NoError(t, err)
 			for _, tab := range productTablets {
-				status, err := throttler.GetThrottlerStatus(vc.VtctldClient, &cluster.Vttablet{Alias: tab.Name})
+				status, err := throttler.GetThrottlerStatus(t.Context(), vc.Cluster, tab)
 				assert.NoError(t, err)
 				assert.Contains(t, status.ThrottledApps, sourceThrottlerAppName.String())
 				// Wait for throttling to take effect (caching will expire by this time):
@@ -1375,7 +1398,7 @@ func materializeProduct(t *testing.T) {
 				}
 			}
 			for _, tab := range customerTablets {
-				status, err := throttler.GetThrottlerStatus(vc.VtctldClient, &cluster.Vttablet{Alias: tab.Name})
+				status, err := throttler.GetThrottlerStatus(t.Context(), vc.Cluster, tab)
 				assert.NoError(t, err)
 				if !waitForTabletThrottlingStatus(t, tab, targetThrottlerAppName, throttlerStatusNotThrottled) {
 					t.Logf("Throttler status: %v", status)
@@ -1397,12 +1420,12 @@ func materializeProduct(t *testing.T) {
 		})
 		t.Run("unthrottle-app-product", func(t *testing.T) {
 			// Unthrottle the vstreamer component, and expect the rows to show up.
-			err := throttler.UnthrottleKeyspaceApp(vc.VtctldClient, defaultSourceKs, sourceThrottlerAppName)
+			err := throttler.UnthrottleKeyspaceApp(t.Context(), vc.Cluster, defaultSourceKs, sourceThrottlerAppName)
 			assert.NoError(t, err)
 			for _, tab := range productTablets {
 				// Give time for unthrottling to take effect and for targets to fetch data.
 				if !waitForTabletThrottlingStatus(t, tab, sourceThrottlerAppName, throttlerStatusNotThrottled) {
-					status, err := throttler.GetThrottlerStatus(vc.VtctldClient, &cluster.Vttablet{Alias: tab.Name})
+					status, err := throttler.GetThrottlerStatus(t.Context(), vc.Cluster, tab)
 					assert.NoError(t, err)
 					assert.NotContains(t, status.ThrottledApps, sourceThrottlerAppName.String())
 					t.Logf("Throttler status: %v", status)
@@ -1416,10 +1439,10 @@ func materializeProduct(t *testing.T) {
 		t.Run("throttle-app-customer", func(t *testing.T) {
 			// Now, throttle vreplication on the target side (vplayer), and insert some
 			// more rows.
-			err := throttler.ThrottleKeyspaceApp(vc.VtctldClient, keyspace, targetThrottlerAppName)
+			err := throttler.ThrottleKeyspaceApp(t.Context(), vc.Cluster, keyspace, targetThrottlerAppName)
 			assert.NoError(t, err)
 			for _, tab := range customerTablets {
-				status, err := throttler.GetThrottlerStatus(vc.VtctldClient, &cluster.Vttablet{Alias: tab.Name})
+				status, err := throttler.GetThrottlerStatus(t.Context(), vc.Cluster, tab)
 				assert.NoError(t, err)
 				assert.Contains(t, status.ThrottledApps, targetThrottlerAppName.String())
 				// Wait for throttling to take effect (caching will expire by this time):
@@ -1429,7 +1452,7 @@ func materializeProduct(t *testing.T) {
 			}
 			for _, tab := range productTablets {
 				// Give time for unthrottling to take effect and for targets to fetch data.
-				status, err := throttler.GetThrottlerStatus(vc.VtctldClient, &cluster.Vttablet{Alias: tab.Name})
+				status, err := throttler.GetThrottlerStatus(t.Context(), vc.Cluster, tab)
 				assert.NoError(t, err)
 				if !waitForTabletThrottlingStatus(t, tab, sourceThrottlerAppName, throttlerStatusNotThrottled) {
 					t.Logf("Throttler status: %v", status)
@@ -1451,12 +1474,12 @@ func materializeProduct(t *testing.T) {
 		})
 		t.Run("unthrottle-app-customer", func(t *testing.T) {
 			// unthrottle on target tablets, and expect the rows to show up
-			err := throttler.UnthrottleKeyspaceApp(vc.VtctldClient, keyspace, targetThrottlerAppName)
+			err := throttler.UnthrottleKeyspaceApp(t.Context(), vc.Cluster, keyspace, targetThrottlerAppName)
 			assert.NoError(t, err)
 			// give time for unthrottling to take effect and for target to fetch data
 			for _, tab := range customerTablets {
 				if !waitForTabletThrottlingStatus(t, tab, targetThrottlerAppName, throttlerStatusNotThrottled) {
-					status, err := throttler.GetThrottlerStatus(vc.VtctldClient, &cluster.Vttablet{Alias: tab.Name})
+					status, err := throttler.GetThrottlerStatus(t.Context(), vc.Cluster, tab)
 					assert.NoError(t, err)
 					assert.NotContains(t, status.ThrottledApps, targetThrottlerAppName.String())
 					t.Logf("Throttler status: %v", status)
@@ -1469,7 +1492,7 @@ func materializeProduct(t *testing.T) {
 
 func materializeRollup(t *testing.T) {
 	t.Run("materializeRollup", func(t *testing.T) {
-		vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+		vtgateConn := vc.GetVTGateConn(t)
 		defer vtgateConn.Close()
 		workflow := "rollup"
 		applyVSchema(t, materializeSalesVSchema, defaultSourceKs)
@@ -1485,7 +1508,7 @@ func materializeRollup(t *testing.T) {
 
 func materializeSales(t *testing.T) {
 	t.Run("materializeSales", func(t *testing.T) {
-		vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+		vtgateConn := vc.GetVTGateConn(t)
 		defer vtgateConn.Close()
 		applyVSchema(t, materializeSalesVSchema, defaultSourceKs)
 		materialize(t, materializeSalesSpec)
@@ -1500,7 +1523,7 @@ func materializeSales(t *testing.T) {
 
 func materializeMerchantSales(t *testing.T) {
 	t.Run("materializeMerchantSales", func(t *testing.T) {
-		vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+		vtgateConn := vc.GetVTGateConn(t)
 		defer vtgateConn.Close()
 		workflow := "msales"
 		materialize(t, materializeMerchantSalesSpec)
@@ -1517,7 +1540,7 @@ func materializeMerchantSales(t *testing.T) {
 
 func materializeMerchantOrders(t *testing.T) {
 	t.Run("materializeMerchantOrders", func(t *testing.T) {
-		vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+		vtgateConn := vc.GetVTGateConn(t)
 		defer vtgateConn.Close()
 		workflow := "morders"
 		keyspace := merchantKeyspace
@@ -1536,14 +1559,16 @@ func materializeMerchantOrders(t *testing.T) {
 
 func checkVtgateHealth(t *testing.T, cell *Cell) {
 	for _, vtgate := range cell.Vtgates {
-		vtgateHealthURL := strings.ReplaceAll(vtgate.VerifyURL, "vars", "health")
-		assert.True(t, checkHealth(t, vtgateHealthURL), "Vtgate not healthy: ", vtgateHealthURL)
+		status, _, err := vtgate.MakeAPICall(t.Context(), "/debug/health")
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusOK, status, "Vtgate not healthy: ", vtgate.Name())
 	}
 }
 
 func checkTabletHealth(t *testing.T, tablet *Tablet) {
-	vttabletHealthURL := strings.ReplaceAll(tablet.Vttablet.VerifyURL, "debug/vars", "healthz")
-	assert.True(t, checkHealth(t, vttabletHealthURL), "Vttablet not healthy: ", vttabletHealthURL)
+	status, _, err := tablet.Vttablet.MakeAPICall(t.Context(), "/healthz")
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, status, "Vttablet not healthy: ", tablet.Name)
 }
 
 func iterateTablets(t *testing.T, cluster *VitessCluster, f func(t *testing.T, tablet *Tablet)) {
@@ -1599,8 +1624,39 @@ func waitForLowLag(t *testing.T, keyspace, workflow string) {
 	}
 }
 
-func catchup(t *testing.T, vttablet *cluster.VttabletProcess, workflow, info string) {
-	vttablet.WaitForVReplicationToCatchup(t, workflow, "vt_"+vttablet.Keyspace, sidecarDBName, maxWait)
+// catchup waits until the workflow's streams on the tablet have finished their
+// copy phase: every stream has a position and no copy state rows are left.
+func catchup(t *testing.T, vttablet *vitesst.Tablet, workflow, info string) {
+	t.Helper()
+	database := "vt_" + vttablet.Keyspace
+	queries := [3]string{
+		sqlparser.BuildParsedQuery(`select count(*) from %s.vreplication where workflow = "%s" and db_name = "%s" and pos = ''`,
+			sidecarDBIdentifier, workflow, database).Query,
+		sqlparser.BuildParsedQuery("select count(*) from information_schema.tables where table_schema='%s' and table_name='copy_state' limit 1",
+			sidecarDBName).Query,
+		sqlparser.BuildParsedQuery(`select count(*) from %s.copy_state where vrepl_id in (select id from %s.vreplication where workflow = "%s" and db_name = "%s" )`,
+			sidecarDBIdentifier, sidecarDBIdentifier, workflow, database).Query,
+	}
+	results := [3]string{"[INT64(0)]", "[INT64(1)]", "[INT64(0)]"}
+
+	ctx, cancel := context.WithTimeout(t.Context(), maxWait)
+	defer cancel()
+
+	for ind, query := range queries {
+		for {
+			qr, err := vttablet.QueryTabletWithDB(ctx, query, "")
+			require.NoError(t, err)
+			if qr != nil && len(qr.Rows) > 0 && fmt.Sprintf("%v", qr.Rows[0]) == results[ind] {
+				break
+			}
+			log.Info(fmt.Sprintf("In catchup: %s %+v", query, qr.Rows))
+			select {
+			case <-ctx.Done():
+				require.FailNowf(t, "catchup timed out", "workflow %s (%s), keyspace %s, query %s", workflow, info, database, query)
+			case <-time.After(500 * time.Millisecond):
+			}
+		}
+	}
 }
 
 func moveTablesAction(t *testing.T, action, cell, workflow, sourceKs, targetKs, tables string, extraFlags ...string) {
@@ -1613,20 +1669,18 @@ func moveTablesAction(t *testing.T, action, cell, workflow, sourceKs, targetKs, 
 		extraFlags = append(extraFlags, "--initialize-target-sequences")
 	case strings.ToLower(workflowActionComplete):
 		// Confirm that the timeseries stats have been maintained throughout the workflow.
+		// getVttabletsInKeyspace only returns the tablets that are serving.
 		cells := strings.Split(cell, ",")
-		targetTablets := make(map[string]*cluster.VttabletProcess)
+		targetTablets := make(map[string]*vitesst.Tablet)
 		for _, cell := range cells {
 			cellTargetTablets := vc.getVttabletsInKeyspace(t, vc.Cells[cell], targetKs, topodatapb.TabletType_PRIMARY.String())
 			maps.Copy(targetTablets, cellTargetTablets)
 		}
 		for _, targetTablet := range targetTablets {
-			if targetTablet.ServingStatus != vtadminpb.Tablet_SERVING.String() {
-				continue
-			}
-			lag, err := getDebugVar(t, targetTablet.Port, []string{"VReplicationLag"})
+			lag, err := getDebugVar(t, targetTablet, []string{"VReplicationLag"})
 			require.NoError(t, err)
 			require.NotEqual(t, "{}", lag)
-			qps, err := getDebugVar(t, targetTablet.Port, []string{"VReplicationQPS"})
+			qps, err := getDebugVar(t, targetTablet, []string{"VReplicationQPS"})
 			require.NoError(t, err)
 			require.NotEqual(t, "{}", qps)
 		}
@@ -1792,8 +1846,8 @@ func testSwitchTrafficPermissionChecks(t *testing.T, workflowType, sourceKeyspac
 	applyPrivileges := func(query string) {
 		for _, shard := range sourceShards {
 			primary := vc.getPrimaryTablet(t, sourceKeyspace, shard)
-			log.Info(fmt.Sprintf("Running permission query on %s: %s", primary.Name, query))
-			_, err := primary.QueryTablet(query, primary.Keyspace, false)
+			log.Info(fmt.Sprintf("Running permission query on %s: %s", primary.Alias(), query))
+			_, err := primary.QueryTabletWithDB(t.Context(), query, "")
 			require.NoError(t, err)
 		}
 	}
@@ -1858,9 +1912,9 @@ func testSwitchTrafficPermissionChecks(t *testing.T, workflowType, sourceKeyspac
 // The workflow MUST be migrating the customer table from the source to the
 // target keyspace AND the workflow must currently have reads switched but not
 // writes.
-func testSwitchWritesErrorHandling(t *testing.T, sourceTablets, targetTablets []*cluster.VttabletProcess, workflow, workflowType string) {
+func testSwitchWritesErrorHandling(t *testing.T, sourceTablets, targetTablets []*vitesst.Tablet, workflow, workflowType string) {
 	t.Run("validate switch writes error handling", func(t *testing.T) {
-		vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+		vtgateConn := vc.GetVTGateConn(t)
 		defer vtgateConn.Close()
 		require.NotZero(t, len(sourceTablets), "no source tablets provided")
 		require.NotZero(t, len(targetTablets), "no target tablets provided")
@@ -1870,13 +1924,13 @@ func testSwitchWritesErrorHandling(t *testing.T, sourceTablets, targetTablets []
 		var err error
 		sourceConns := make([]*mysql.Conn, len(sourceTablets))
 		for i, tablet := range sourceTablets {
-			sourceConns[i], err = tablet.TabletConn(tablet.Keyspace, true)
+			sourceConns[i], err = vitesst.GetMySQLConn(t.Context(), tablet, "vt_"+tablet.Keyspace)
 			require.NoError(t, err)
 			defer sourceConns[i].Close()
 		}
 		targetConns := make([]*mysql.Conn, len(targetTablets))
 		for i, tablet := range targetTablets {
-			targetConns[i], err = tablet.TabletConn(tablet.Keyspace, true)
+			targetConns[i], err = vitesst.GetMySQLConn(t.Context(), tablet, "vt_"+tablet.Keyspace)
 			require.NoError(t, err)
 			defer targetConns[i].Close()
 		}
@@ -2014,7 +2068,7 @@ func printSwitchWritesExtraDebug(t *testing.T, ksWorkflow, msg string) {
 		customerTab2 := custKs.Shards["80-"].Tablets["zone1-300"].Vttablet
 		productKs := vc.Cells[defaultCell.Name].Keyspaces[defaultSourceKs]
 		productTab := productKs.Shards["0"].Tablets["zone1-100"].Vttablet
-		tabs := []*cluster.VttabletProcess{productTab, customerTab1, customerTab2}
+		tabs := []*vitesst.Tablet{productTab, customerTab1, customerTab2}
 		queries := []string{
 			sqlparser.BuildParsedQuery("select  id, workflow, pos, stop_pos, cell, tablet_types, time_updated, transaction_timestamp, state, message from %s.vreplication", sidecarDBIdentifier).Query,
 			sqlparser.BuildParsedQuery("select * from %s.copy_state", sidecarDBIdentifier).Query,
@@ -2022,9 +2076,9 @@ func printSwitchWritesExtraDebug(t *testing.T, ksWorkflow, msg string) {
 		}
 		for _, tab := range tabs {
 			for _, query := range queries {
-				qr, err := tab.QueryTablet(query, "", false)
+				qr, err := tab.QueryTabletWithDB(t.Context(), query, "")
 				require.NoError(t, err)
-				log.Info(fmt.Sprintf("\nTablet:%s.%s.%s.%d\nQuery: %s\n%+v\n", tab.Cell, tab.Keyspace, tab.Shard, tab.TabletUID, query, qr.Rows))
+				log.Info(fmt.Sprintf("\nTablet:%s.%s.%s.%d\nQuery: %s\n%+v\n", tab.Cell, tab.Keyspace, tab.Shard, tab.UID, query, qr.Rows))
 			}
 		}
 		log.Info(fmt.Sprintf("------------------- END Extra debug info %s SwitchWrites %s", msg, ksWorkflow))
@@ -2039,8 +2093,8 @@ func printSwitchWritesExtraDebug(t *testing.T, ksWorkflow, msg string) {
 // Returns a db connection used for the transaction which you can use for follow-up
 // work, such as rolling it back directly or using the releaseInnoDBRowHistory call.
 func generateInnoDBRowHistory(t *testing.T, defaultSourceKs string, neededTrxHistory int64) *mysql.Conn {
-	dbConn1 := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
-	dbConn2 := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	dbConn1 := vc.GetVTGateConn(t)
+	dbConn2 := vc.GetVTGateConn(t)
 	execQuery(t, dbConn1, fmt.Sprintf("use `%s`", defaultSourceKs))
 	execQuery(t, dbConn2, fmt.Sprintf("use `%s`", defaultSourceKs))
 	offset := int64(1000)
@@ -2065,12 +2119,12 @@ func generateInnoDBRowHistory(t *testing.T, defaultSourceKs string, neededTrxHis
 
 // waitForInnoDBRowHistory waits for the history list length to be greater than the
 // expected length.
-func waitForInnoDBHistoryLength(t *testing.T, tablet *cluster.VttabletProcess, expectedLength int64) {
+func waitForInnoDBHistoryLength(t *testing.T, tablet *vitesst.Tablet, expectedLength int64) {
 	timer := time.NewTimer(defaultTimeout)
 	defer timer.Stop()
 	historyLen := int64(0)
 	for {
-		res, err := tablet.QueryTablet(historyLenQuery, tablet.Keyspace, false)
+		res, err := tablet.QueryTabletWithDB(t.Context(), historyLenQuery, "")
 		require.NoError(t, err)
 		require.NotNil(t, res)
 		require.Equal(t, 1, len(res.Rows))
@@ -2098,21 +2152,21 @@ func releaseInnoDBRowHistory(t *testing.T, dbConn *mysql.Conn) {
 // The tablet passed should be a target tablet for the given workflow while the keyspace
 // name provided should be the source keyspace as the target tablet stats note the stream's
 // source keyspace and shard.
-func confirmVReplicationThrottling(t *testing.T, tab *cluster.VttabletProcess, keyspace, workflow string, appname throttlerapp.Name) {
+func confirmVReplicationThrottling(t *testing.T, tab *vitesst.Tablet, keyspace, workflow string, appname throttlerapp.Name) {
 	const (
 		sleepTime = 5 * time.Second
 		zv        = int64(0)
 	)
 	time.Sleep(sleepTime) // To be sure that we accrue some lag
 
-	jsVal, err := getDebugVar(t, tab.Port, []string{"VReplicationThrottledCounts"})
+	jsVal, err := getDebugVar(t, tab, []string{"VReplicationThrottledCounts"})
 	require.NoError(t, err)
 	require.NotEqual(t, "{}", jsVal)
 	// The JSON value looks like this: {"cproduct.MoveTables.4.tablet.vstreamer": 2, "cproduct.MoveTables.4.tablet.vplayer": 4}
 	throttledCount := gjson.Get(jsVal, fmt.Sprintf(`%s\.*\.*\.tablet\.%s`, workflow, appname)).Int()
 	require.Greater(t, throttledCount, zv, "JSON value: %s", jsVal)
 
-	val, err := getDebugVar(t, tab.Port, []string{"VReplicationThrottledCountTotal"})
+	val, err := getDebugVar(t, tab, []string{"VReplicationThrottledCountTotal"})
 	require.NoError(t, err)
 	require.NotEqual(t, "", val)
 	throttledCountTotal, err := strconv.ParseInt(val, 10, 64)
@@ -2122,7 +2176,7 @@ func confirmVReplicationThrottling(t *testing.T, tab *cluster.VttabletProcess, k
 	// We do not calculate replication lag for the vcopier as it's not replicating
 	// events.
 	if appname != throttlerapp.VCopierName {
-		jsVal, err = getDebugVar(t, tab.Port, []string{"VReplicationLagSeconds"})
+		jsVal, err = getDebugVar(t, tab, []string{"VReplicationLagSeconds"})
 		require.NoError(t, err)
 		require.NotEqual(t, "{}", jsVal)
 		// The JSON value looks like this: {"product.0.cproduct.MoveTables.4": 6}
@@ -2132,7 +2186,7 @@ func confirmVReplicationThrottling(t *testing.T, tab *cluster.VttabletProcess, k
 		minLagSecs := int64(int64(sleepTime.Seconds()) - 1)
 		require.GreaterOrEqual(t, vreplLagSeconds, minLagSecs, "JSON value: %s", jsVal)
 
-		val, err = getDebugVar(t, tab.Port, []string{"VReplicationLagSecondsMax"})
+		val, err = getDebugVar(t, tab, []string{"VReplicationLagSecondsMax"})
 		require.NoError(t, err)
 		require.NotEqual(t, "", val)
 		vreplLagSecondsMax, err := strconv.ParseInt(val, 10, 64)

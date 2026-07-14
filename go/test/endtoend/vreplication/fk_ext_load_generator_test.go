@@ -25,12 +25,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/vitesst"
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -123,11 +122,8 @@ func (lg *SimpleLoadGenerator) GetRowCount(table string) (int, error) {
 }
 
 func (lg *SimpleLoadGenerator) getVtgateConn(ctx context.Context) (*mysql.Conn, error) {
-	vtParams := mysql.ConnParams{
-		Host:  lg.vc.ClusterConfig.hostname,
-		Port:  lg.vc.ClusterConfig.vtgateMySQLPort,
-		Uname: "vt_dba",
-	}
+	vtParams := lg.vc.VTParams("")
+	vtParams.Uname = "vt_dba"
 	conn, err := mysql.Connect(ctx, &vtParams)
 	return conn, err
 }
@@ -139,7 +135,7 @@ func (lg *SimpleLoadGenerator) getNumRows(vtgateConn *mysql.Conn, table string) 
 
 func (lg *SimpleLoadGenerator) WaitForAdditionalRows(count int) error {
 	t := lg.vc.t
-	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	vtgateConn := lg.vc.GetVTGateConn(t)
 	defer vtgateConn.Close()
 	numRowsStart := lg.getNumRows(vtgateConn, "parent")
 	shortCtx, cancel := context.WithTimeout(context.Background(), dataLoadTimeout)
@@ -164,7 +160,7 @@ func (lg *SimpleLoadGenerator) exec(query string) (*sqltypes.Result, error) {
 		// direct is expected to be used only for unsharded keyspaces to simulate an unmanaged keyspace
 		// that proxies to an external database.
 		primary := lg.vc.getPrimaryTablet(lg.vc.t, lg.keyspace, "0")
-		qr, err := primary.QueryTablet(query, lg.keyspace, true)
+		qr, err := primary.QueryTablet(lg.ctx, query)
 		require.NoError(lg.vc.t, err)
 		return qr, err
 	case "vtgate":
@@ -285,8 +281,6 @@ func (lg *SimpleLoadGenerator) Start() error {
 			lg.runCtx = nil
 			lg.runCtxCancel = nil
 		}()
-		t := lg.vc.t
-		var err error
 		log.Info("Load generator starting")
 		for i := 0; ; i++ {
 			if i%1000 == 0 {
@@ -310,9 +304,6 @@ func (lg *SimpleLoadGenerator) Start() error {
 				lg.update()
 			default: // 20% chance to delete
 				lg.delete()
-			}
-			if !assert.NoError(t, err) {
-				return
 			}
 			time.Sleep(1 * time.Millisecond)
 		}
@@ -464,7 +455,7 @@ func getTableT2Map(res *any, ks, tbl string) map[string]any {
 
 // waitForColumn waits for a table's column to be present in the vschema because vtgate's foreign key managed mode
 // expects the column to be present in the vschema before it can be used in a foreign key constraint.
-func waitForColumn(t *testing.T, vtgateProcess *cluster.VtgateProcess, ks, tbl, col string) error {
+func waitForColumn(t *testing.T, vtgate *vitesst.VTGate, ks, tbl, col string) error {
 	timeout := time.After(defaultTimeout)
 	for {
 		select {
@@ -472,7 +463,7 @@ func waitForColumn(t *testing.T, vtgateProcess *cluster.VtgateProcess, ks, tbl, 
 			return fmt.Errorf("schema tracking did not find column '%s' in table '%s'", col, tbl)
 		default:
 			time.Sleep(defaultTick)
-			res, err := vtgateProcess.ReadVSchema()
+			res, err := vtgate.ReadVSchema(t.Context())
 			require.NoError(t, err, res)
 			t2Map := getTableT2Map(res, ks, tbl)
 			authoritative, fieldPresent := t2Map["column_list_authoritative"]

@@ -21,9 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand/v2"
-	"net"
 	"slices"
-	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -33,8 +31,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
 
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/throttler"
+	"vitess.io/vitess/go/test/vitesst"
+	"vitess.io/vitess/go/test/vitesst/throttler"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/wrangler"
@@ -54,8 +52,8 @@ const (
 )
 
 var (
-	targetTab1, targetTab2, targetReplicaTab1, targetRdonlyTab1 *cluster.VttabletProcess
-	sourceTab, sourceReplicaTab, sourceRdonlyTab                *cluster.VttabletProcess
+	targetTab1, targetTab2, targetReplicaTab1, targetRdonlyTab1 *vitesst.Tablet
+	sourceTab, sourceReplicaTab, sourceRdonlyTab                *vitesst.Tablet
 
 	lastOutput          string
 	currentWorkflowType binlogdatapb.VReplicationWorkflowType
@@ -77,7 +75,7 @@ func createReshardWorkflow(t *testing.T, sourceShards, targetShards string) erro
 		"", workflowActionCreate, "", sourceShards, targetShards, defaultWorkflowExecOptions)
 	require.NoError(t, err)
 	require.NoError(t, waitForWorkflowState(vc, defaultKsWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String()))
-	confirmTablesHaveSecondaryKeys(t, []*cluster.VttabletProcess{targetTab1}, defaultTargetKs, "")
+	confirmTablesHaveSecondaryKeys(t, []*vitesst.Tablet{targetTab1}, defaultTargetKs, "")
 	catchup(t, targetTab1, defaultWorkflowName, "Reshard")
 	catchup(t, targetTab2, defaultWorkflowName, "Reshard")
 	doVDiff(t, defaultKsWorkflow, "")
@@ -92,7 +90,7 @@ func createMoveTablesWorkflow(t *testing.T, tables string) {
 		tables, workflowActionCreate, "", "", "", defaultWorkflowExecOptions)
 	require.NoError(t, err)
 	require.NoError(t, waitForWorkflowState(vc, defaultKsWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String()))
-	confirmTablesHaveSecondaryKeys(t, []*cluster.VttabletProcess{targetTab1}, defaultTargetKs, tables)
+	confirmTablesHaveSecondaryKeys(t, []*vitesst.Tablet{targetTab1}, defaultTargetKs, tables)
 	catchup(t, targetTab1, defaultWorkflowName, "MoveTables")
 	catchup(t, targetTab2, defaultWorkflowName, "MoveTables")
 	doVDiff(t, defaultKsWorkflow, "")
@@ -250,7 +248,7 @@ func tstWorkflowCancel(t *testing.T) error {
 	return tstWorkflowAction(t, workflowActionCancel, "", "")
 }
 
-func validateReadsRoute(t *testing.T, tabletType string, tablet *cluster.VttabletProcess) {
+func validateReadsRoute(t *testing.T, tabletType string, tablet *vitesst.Tablet) {
 	if tablet == nil {
 		return
 	}
@@ -367,15 +365,10 @@ func TestBasicV2Workflows(t *testing.T) {
 	testReshardV2Workflow(t)
 }
 
-func getVtctldGRPCURL() string {
-	return net.JoinHostPort("localhost", strconv.Itoa(vc.Vtctld.GrpcPort))
-}
-
 func applyShardRoutingRules(t *testing.T, rules string) {
-	output, err := osExec(t, "vtctldclient", []string{"--server", getVtctldGRPCURL(), "ApplyShardRoutingRules", "--rules", rules})
+	output, err := vc.VtctldClient.ExecuteCommandWithOutput("ApplyShardRoutingRules", "--rules", rules)
 	log.Info(fmt.Sprintf("ApplyShardRoutingRules err: %+v, output: %+v", err, output))
 	require.NoError(t, err, output)
-	require.NotNil(t, output)
 }
 
 /*
@@ -551,15 +544,6 @@ func testReshardV2Workflow(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, cnres.Rows, 1)
 	require.EqualValues(t, cres.Rows, cnres.Rows)
-	if debugMode {
-		// We expect the row count to differ in enterprise_customer because it is
-		// using a `where typ='enterprise'` filter. So the count is only for debug
-		// info.
-		ecres, err := execVtgateQuery(dataGenConn, defaultTargetKs, "select count(*) from enterprise_customer")
-		require.NoError(t, err)
-		t.Logf("Done inserting customer data. Record counts in customer: %s, customer_name: %s, enterprise_customer: %s",
-			cres.Rows[0][0].ToString(), cnres.Rows[0][0].ToString(), ecres.Rows[0][0].ToString())
-	}
 	// We also do a vdiff on the materialize workflows for good measure.
 	doVtctldclientVDiff(t, defaultTargetKs, "customer_name", "", nil)
 	doVtctldclientVDiff(t, defaultTargetKs, "enterprise_customer", "", nil)
@@ -569,15 +553,6 @@ func testMoveTablesV2Workflow(t *testing.T) {
 	vtgateConn, closeConn := getVTGateConn()
 	defer closeConn()
 	currentWorkflowType = binlogdatapb.VReplicationWorkflowType_MoveTables
-
-	materializeShow := func() {
-		if !debugMode {
-			return
-		}
-		output, err := vc.VtctldClient.ExecuteCommandWithOutput("materialize", "--target-keyspace", defaultTargetKs, "show", "--workflow=customer_name", "--compact", "--include-logs=false")
-		require.NoError(t, err)
-		t.Logf("Materialize show output: %s", output)
-	}
 
 	// Test basic forward and reverse flows.
 	setupTargetKeyspace(t)
@@ -621,7 +596,6 @@ func testMoveTablesV2Workflow(t *testing.T) {
 	materialize(t, materializeCustomerNameSpec)
 	// Create a second one to confirm that multiple ones get migrated correctly.
 	materialize(t, materializeCustomerTypeSpec)
-	materializeShow()
 
 	output, err = vc.VtctldClient.ExecuteCommandWithOutput(listAllArgs...)
 	require.NoError(t, err)
@@ -708,7 +682,7 @@ func testRestOfWorkflow(t *testing.T) {
 		Threshold:   throttlerConfig.Threshold * 5,
 		CustomQuery: throttlerConfig.Query,
 	}
-	res, err := throttler.UpdateThrottlerTopoConfigRaw(vc.VtctldClient, defaultTargetKs, req, nil, nil)
+	res, err := throttler.UpdateThrottlerTopoConfigRaw(t.Context(), vc.Cluster, defaultTargetKs, req, nil, nil)
 	require.NoError(t, err, res)
 
 	testPartialSwitches(t)
@@ -855,8 +829,8 @@ func setupMinimalCluster(t *testing.T) *VitessCluster {
 	return vc
 }
 
-func setupMinimalTargetKeyspace(t *testing.T) map[string]*cluster.VttabletProcess {
-	tablets := make(map[string]*cluster.VttabletProcess)
+func setupMinimalTargetKeyspace(t *testing.T) map[string]*vitesst.Tablet {
+	tablets := make(map[string]*vitesst.Tablet)
 	_, err := vc.AddKeyspace(t, []*Cell{vc.Cells["zone1"]}, defaultTargetKs, "-80,80-",
 		customerVSchema, customerSchema, defaultReplicas, defaultRdonly, 200, nil)
 	require.NoError(t, err)

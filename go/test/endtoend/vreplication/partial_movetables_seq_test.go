@@ -26,7 +26,7 @@ import (
 	"github.com/tidwall/gjson"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/vitesst"
 	"vitess.io/vitess/go/vt/log"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -115,7 +115,7 @@ type vrepTestCase struct {
 	workflows       map[string]*workflow
 
 	vc     *VitessCluster
-	vtgate *cluster.VtgateProcess
+	vtgate *vitesst.VTGate
 }
 
 func initPartialMoveTablesComplexTestCase(t *testing.T) *vrepTestCase {
@@ -210,7 +210,7 @@ func (tc *vrepTestCase) setupCluster() {
 	vc = tc.vc // for backward compatibility since vc is used globally in this package
 	require.NotNil(tc.t, tc.vc)
 	tc.setupKeyspaces([]string{"commerce", "seqSrc"})
-	tc.vtgateConn = getConnection(tc.t, tc.vc.ClusterConfig.hostname, tc.vc.ClusterConfig.vtgateMySQLPort)
+	tc.vtgateConn = tc.vc.GetVTGateConn(tc.t)
 }
 
 func (tc *vrepTestCase) initData() {
@@ -518,7 +518,7 @@ func TestPartialMoveTablesWithSequences(t *testing.T) {
 		require.Equal(t, halfCutoverShardRoutingRules, getShardRoutingRules(t))
 	})
 	vtgateConn.Close()
-	vtgateConn = getConnection(t, tc.vc.ClusterConfig.hostname, tc.vc.ClusterConfig.vtgateMySQLPort)
+	vtgateConn = tc.vc.GetVTGateConn(t)
 	defer vtgateConn.Close()
 
 	t.Run("Validate shard and tablet type routing", func(t *testing.T) {

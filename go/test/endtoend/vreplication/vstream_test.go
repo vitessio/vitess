@@ -20,11 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
-	"os/exec"
-	"path"
 	"slices"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -34,6 +30,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
@@ -45,6 +42,32 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
+
+// dialVStreamConn returns a gRPC client for the VStream API of the cluster's vtgate.
+func dialVStreamConn(t *testing.T, ctx context.Context, vc *VitessCluster) *vtgateconn.VTGateConn {
+	conn, err := vc.Cluster.VTGate().DialVTGate(ctx)
+	require.NoError(t, err)
+	return conn
+}
+
+// countRowStreamerQueryLogs returns the number of rowstreamer "Streaming rows for query:" lines
+// logged by the cluster's tablets, and how many of those lines mention the given query hint.
+func countRowStreamerQueryLogs(t *testing.T, ctx context.Context, vc *VitessCluster, hint string) (total int, withHint int) {
+	for _, tablet := range vc.Cluster.Tablets() {
+		logs, err := tablet.Logs(ctx)
+		require.NoError(t, err)
+		for line := range strings.SplitSeq(logs, "\n") {
+			if !strings.Contains(line, "Streaming rows for query:") {
+				continue
+			}
+			total++
+			if strings.Contains(line, hint) {
+				withHint++
+			}
+		}
+	}
+	return total, withHint
+}
 
 func TestVStreamWithTablesToSkipCopyFlag(t *testing.T) {
 	vc = NewVitessCluster(t, nil)
@@ -59,11 +82,7 @@ func TestVStreamWithTablesToSkipCopyFlag(t *testing.T) {
 	verifyClusterHealth(t, vc)
 
 	ctx := t.Context()
-	vstreamConn, err := vtgateconn.Dial(ctx, fmt.Sprintf("%s:%d", vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateGrpcPort))
-	if err != nil {
-		log.Error(fmt.Sprint(err))
-		os.Exit(1)
-	}
+	vstreamConn := dialVStreamConn(t, ctx, vc)
 	defer vstreamConn.Close()
 	vgtid := &binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{{
@@ -99,7 +118,7 @@ func TestVStreamWithTablesToSkipCopyFlag(t *testing.T) {
 	// present in the filter before running the VStream.
 	for range 10 {
 		id++
-		_, err = execVtgateQuery(vtgateConn, defaultSourceKs, fmt.Sprintf("insert into customer (cid, name) values (%d, 'customer%d')", id+100, id))
+		_, err := execVtgateQuery(vtgateConn, defaultSourceKs, fmt.Sprintf("insert into customer (cid, name) values (%d, 'customer%d')", id+100, id))
 		require.NoError(t, err)
 		_, err = execVtgateQuery(vtgateConn, defaultSourceKs, fmt.Sprintf("insert into product (pid, description) values (%d, 'description%d')", id+100, id))
 		require.NoError(t, err)
@@ -242,19 +261,8 @@ func TestVStreamWithTablesToSkipCopyFlag(t *testing.T) {
 	// Confirm that the copy phase queries used by the VStream did NOT include the MAX_EXECUTION_TIME
 	// query hint. Adding the hint forces unnecessary copy resume cycles for VStream clients that may
 	// not support resume well, or at all (see issue #20039).
-	logFiles := path.Join(vc.ClusterConfig.tmpDir, "*-vttablet-stderr.txt")
-	totalCmd := fmt.Sprintf("grep -h 'Streaming rows for query:' %s | wc -l", logFiles)
-	totalOut, err := exec.Command("bash", "-c", totalCmd).Output()
-	require.NoError(t, err)
-	totalCount, err := strconv.Atoi(strings.TrimSpace(string(totalOut)))
-	require.NoError(t, err)
+	totalCount, withHintCount := countRowStreamerQueryLogs(t, ctx, vc, "MAX_EXECUTION_TIME")
 	require.Greater(t, totalCount, 0, "expected at least one rowstreamer 'Streaming rows for query:' log line during copy phase")
-
-	withHintCmd := fmt.Sprintf("grep -h 'Streaming rows for query:' %s | grep -c MAX_EXECUTION_TIME || true", logFiles)
-	withHintOut, err := exec.Command("bash", "-c", withHintCmd).Output()
-	require.NoError(t, err)
-	withHintCount, err := strconv.Atoi(strings.TrimSpace(string(withHintOut)))
-	require.NoError(t, err)
 	require.Zero(t, withHintCount, "expected no VStream copy/sync queries to include MAX_EXECUTION_TIME hint")
 }
 
@@ -265,7 +273,8 @@ func TestVStreamWithTablesToSkipCopyFlag(t *testing.T) {
 // ENUM/SET in field metadata — which requires the historian to have recorded the column's type definition (issue #20175).
 func TestVStreamLaggingDDLRowEvents(t *testing.T) {
 	oldArgs := slices.Clone(extraVTTabletArgs)
-	extraVTTabletArgs = append(extraVTTabletArgs,
+	extraVTTabletArgs = append(
+		extraVTTabletArgs,
 		"--track-schema-versions",
 	)
 	defer func() {
@@ -290,8 +299,7 @@ func TestVStreamLaggingDDLRowEvents(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Minute)
 	defer cancel()
-	vstreamConn, err := vtgateconn.Dial(ctx, fmt.Sprintf("%s:%d", vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateGrpcPort))
-	require.NoError(t, err)
+	vstreamConn := dialVStreamConn(t, ctx, vc)
 	defer vstreamConn.Close()
 
 	filter := &binlogdatapb.Filter{
@@ -413,11 +421,7 @@ func testVStreamWithFailover(t *testing.T, failover bool) {
 		testVStreamFrom(t, vtgate, "product", 2)
 	})
 	ctx := t.Context()
-	vstreamConn, err := vtgateconn.Dial(ctx, fmt.Sprintf("%s:%d", vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateGrpcPort))
-	if err != nil {
-		log.Error(fmt.Sprint(err))
-		os.Exit(1)
-	}
+	vstreamConn := dialVStreamConn(t, ctx, vc)
 	defer vstreamConn.Close()
 	vgtid := &binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{{
@@ -593,14 +597,19 @@ const vschemaSharded = `
 `
 
 func insertRow(keyspace, table string, id int) {
-	vtgateConn := getConnectionNoError(vc.t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	params := vc.VTParams("")
 	// Due to race conditions this call is sometimes made after vtgates have shutdown. In that case just return.
-	if vtgateConn == nil {
+	if params.Host == "" {
 		return
 	}
+	vtgateConn, err := mysql.Connect(vc.t.Context(), &params)
+	if err != nil {
+		return
+	}
+	defer vtgateConn.Close()
 	vtgateConn.ExecuteFetch("use "+keyspace, 1000, false)
 	vtgateConn.ExecuteFetch("begin", 1000, false)
-	_, err := vtgateConn.ExecuteFetch(fmt.Sprintf("insert into %s (name) values ('%s%d')", table, table, id), 1000, false)
+	_, err = vtgateConn.ExecuteFetch(fmt.Sprintf("insert into %s (name) values ('%s%d')", table, table, id), 1000, false)
 	if err != nil {
 		log.Error(fmt.Sprintf("error inserting row %d: %v", id, err))
 	}
@@ -638,11 +647,7 @@ func testVStreamStopOnReshardFlag(t *testing.T, stopOnReshard bool, baseTabletID
 	vc.AddKeyspace(t, []*Cell{defaultCell}, "sharded", "-80,80-", vschemaSharded, schemaSharded, defaultReplicas, defaultRdonly, baseTabletID+200, nil)
 
 	ctx := t.Context()
-	vstreamConn, err := vtgateconn.Dial(ctx, fmt.Sprintf("%s:%d", vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateGrpcPort))
-	if err != nil {
-		log.Error(fmt.Sprint(err))
-		os.Exit(1)
-	}
+	vstreamConn := dialVStreamConn(t, ctx, vc)
 	defer vstreamConn.Close()
 	vgtid := &binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{{
@@ -681,7 +686,10 @@ func testVStreamStopOnReshardFlag(t *testing.T, stopOnReshard bool, baseTabletID
 	// stream events from the VStream API
 	var ne numEvents
 	go func() {
-		var reader vtgateconn.VStreamReader
+		var (
+			reader vtgateconn.VStreamReader
+			err    error
+		)
 		reader, err = vstreamConn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
 		if !assert.NoError(t, err) {
 			return
@@ -779,7 +787,7 @@ func testVStreamCopyMultiKeyspaceReshard(t *testing.T, baseTabletID int) numEven
 	_, err := vc.AddKeyspace(t, []*Cell{defaultCell}, "unsharded", "0", vschemaUnsharded, schemaUnsharded, defaultReplicas, defaultRdonly, baseTabletID+100, nil)
 	require.NoError(t, err)
 
-	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	vtgateConn := vc.GetVTGateConn(t)
 	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
 
@@ -787,11 +795,7 @@ func testVStreamCopyMultiKeyspaceReshard(t *testing.T, baseTabletID int) numEven
 	require.NoError(t, err)
 
 	ctx := t.Context()
-	vstreamConn, err := vtgateconn.Dial(ctx, fmt.Sprintf("%s:%d", vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateGrpcPort))
-	if err != nil {
-		log.Error(fmt.Sprint(err))
-		os.Exit(1)
-	}
+	vstreamConn := dialVStreamConn(t, ctx, vc)
 	defer vstreamConn.Close()
 	vgtid := &binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{{
@@ -942,12 +946,11 @@ func TestMultiVStreamsKeyspaceReshard(t *testing.T) {
 	err = vc.AddShards(t, []*Cell{defaultCell}, keyspace, newShards, defaultReplicas, defaultRdonly, baseTabletID+2000, defaultTargetKsOpts)
 	require.NoError(t, err)
 
-	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	vtgateConn := vc.GetVTGateConn(t)
 	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
 
-	vstreamConn, err := vtgateconn.Dial(ctx, fmt.Sprintf("%s:%d", vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateGrpcPort))
-	require.NoError(t, err)
+	vstreamConn := dialVStreamConn(t, ctx, vc)
 	defer vstreamConn.Close()
 
 	// Ensure that we're starting with a clean slate.
@@ -1141,12 +1144,11 @@ func TestMultiVStreamsKeyspaceStopOnReshard(t *testing.T) {
 	err = vc.AddShards(t, []*Cell{defaultCell}, keyspace, newShards, defaultReplicas, defaultRdonly, baseTabletID+2000, defaultTargetKsOpts)
 	require.NoError(t, err)
 
-	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	vtgateConn := vc.GetVTGateConn(t)
 	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
 
-	vstreamConn, err := vtgateconn.Dial(ctx, fmt.Sprintf("%s:%d", vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateGrpcPort))
-	require.NoError(t, err)
+	vstreamConn := dialVStreamConn(t, ctx, vc)
 	defer vstreamConn.Close()
 
 	// Ensure that we're starting with a clean slate.
@@ -1371,8 +1373,7 @@ func doVStream(t *testing.T, vc *VitessCluster, flags *vtgatepb.VStreamFlags) (n
 
 	numRowEvents = make(map[string]int)
 	numFieldEvents = make(map[string]int)
-	vstreamConn, err := vtgateconn.Dial(ctx, fmt.Sprintf("%s:%d", vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateGrpcPort))
-	require.NoError(t, err)
+	vstreamConn := dialVStreamConn(t, ctx, vc)
 	defer vstreamConn.Close()
 
 	done := false
@@ -1434,7 +1435,8 @@ func doVStream(t *testing.T, vc *VitessCluster, flags *vtgatepb.VStreamFlags) (n
 // ensures that the heartbeat events are received as expected by the client.
 func TestVStreamHeartbeats(t *testing.T) {
 	// Enable continuous heartbeats.
-	extraVTTabletArgs = append(extraVTTabletArgs,
+	extraVTTabletArgs = append(
+		extraVTTabletArgs,
 		"--heartbeat-enable",
 		"--heartbeat-interval", "1s",
 		"--heartbeat-on-demand-duration", "0",
@@ -1518,7 +1520,7 @@ func TestVStreamPushdownFilters(t *testing.T) {
 	verifyClusterHealth(t, vc)
 	insertInitialData(t)
 
-	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	vtgateConn := vc.GetVTGateConn(t)
 	defer vtgateConn.Close()
 
 	// Make sure that we get at least one paul row event in the copy phase.
@@ -1582,8 +1584,7 @@ func TestVStreamPushdownFilters(t *testing.T) {
 			Filter: "select * from customer where name = 'påul'",
 		}},
 	}
-	vstreamConn, err := vtgateconn.Dial(ctx, fmt.Sprintf("%s:%d", vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateGrpcPort))
-	require.NoError(t, err)
+	vstreamConn := dialVStreamConn(t, ctx, vc)
 	defer vstreamConn.Close()
 
 	// So we should have at least one paul row event in the copy phase, and

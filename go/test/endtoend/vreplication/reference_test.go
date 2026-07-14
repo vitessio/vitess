@@ -112,7 +112,7 @@ func TestReferenceTableMaterializationAndRouting(t *testing.T) {
 	defaultCell := vc.Cells[defaultCellName]
 	vc.AddKeyspace(t, []*Cell{defaultCell}, uks, "0", uksVSchema, uksSchema, defaultReplicas, defaultRdonly, 100, nil)
 	vc.AddKeyspace(t, []*Cell{defaultCell}, sks, "-80,80-", sksVSchema, sksSchema, defaultReplicas, defaultRdonly, 200, nil)
-	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	vtgateConn := vc.GetVTGateConn(t)
 
 	verifyClusterHealth(t, vc)
 	_, _, err = vtgateConn.ExecuteFetchMulti(initializeTables, 0, false)
@@ -129,7 +129,7 @@ func TestReferenceTableMaterializationAndRouting(t *testing.T) {
 	catchup(t, tabDash80, "wfMfg", "Materialize Manufacturer")
 	catchup(t, tab80Dash, "wfMfg", "Materialize Manufacturer")
 
-	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	vtgateConn = vc.GetVTGateConn(t)
 	defer vtgateConn.Close()
 	waitForRowCount(t, vtgateConn, sks, "cat", 3)
 	waitForRowCount(t, vtgateConn, sks, "mfg2", 4)
@@ -159,7 +159,7 @@ func TestReferenceTableMaterializationAndRouting(t *testing.T) {
 }
 
 func execRefQuery(t *testing.T, query string) {
-	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	vtgateConn := vc.GetVTGateConn(t)
 	defer vtgateConn.Close()
 	_, err := vtgateConn.ExecuteFetch(query, 0, false)
 	require.NoError(t, err)

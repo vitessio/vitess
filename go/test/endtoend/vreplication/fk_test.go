@@ -28,7 +28,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/vitesst"
 	"vitess.io/vitess/go/vt/log"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 
@@ -116,7 +116,7 @@ func TestFKWorkflow(t *testing.T) {
 	// Stop the source database server to simulate an error during replication phase
 	// This should cause recoverable errors that atomic workflows should retry
 	// as it is already out of copy phase.
-	err := sourceTab.DbServer.Stop()
+	err := sourceTab.Vttablet.StopMySQL(t.Context())
 	require.NoError(t, err)
 
 	// Give some time for the workflow to encounter errors and potentially retry
@@ -126,7 +126,7 @@ func TestFKWorkflow(t *testing.T) {
 	require.NoError(t, waitForWorkflowState(vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String()))
 
 	// Restart the source database to allow workflow to continue
-	err = sourceTab.DbServer.StartProvideInit(false)
+	err = sourceTab.Vttablet.StartMySQL(t.Context())
 	require.NoError(t, err)
 
 	err = vc.VtctldClient.ExecuteCommand("SetWritable", fmt.Sprintf("%s-%d", cellName, 100), "true")
@@ -181,7 +181,7 @@ func TestFKWorkflow(t *testing.T) {
 		require.Greater(t, t12Count, 1)
 		require.Equal(t, t11Count, t12Count)
 		// Check for the secondary key
-		confirmTablesHaveSecondaryKeys(t, []*cluster.VttabletProcess{targetTab}, targetKeyspace, "parent")
+		confirmTablesHaveSecondaryKeys(t, []*vitesst.Tablet{targetTab}, targetKeyspace, "parent")
 	}
 }
 
@@ -226,8 +226,9 @@ func init() {
 var ch = make(chan bool)
 
 type fkLoadSimulator struct {
-	t   *testing.T
-	ctx context.Context
+	t    *testing.T
+	ctx  context.Context
+	conn *mysql.Conn
 }
 
 func newFKLoadSimulator(t *testing.T, ctx context.Context) *fkLoadSimulator {
@@ -239,14 +240,16 @@ func newFKLoadSimulator(t *testing.T, ctx context.Context) *fkLoadSimulator {
 
 var indexCounter int = 100 // used to insert into t11 and t12
 func (ls *fkLoadSimulator) simulateLoad() {
-	t := ls.t
-	var err error
 	for i := 0; ; i++ {
 		if i%1000 == 0 {
 			log.Info(fmt.Sprintf("Load simulation iteration %d", i))
 		}
 		select {
 		case <-ls.ctx.Done():
+			if ls.conn != nil {
+				ls.conn.Close()
+				ls.conn = nil
+			}
 			ch <- true
 			return
 		default:
@@ -266,7 +269,6 @@ func (ls *fkLoadSimulator) simulateLoad() {
 			ls.exec(query)
 			indexCounter++
 		}
-		require.NoError(t, err)
 		time.Sleep(10 * time.Millisecond)
 	}
 }
@@ -283,7 +285,7 @@ func (ls *fkLoadSimulator) getNumRowsParent(vtgateConn *mysql.Conn) int {
 
 func (ls *fkLoadSimulator) waitForAdditionalRows(count int) {
 	t := ls.t
-	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	vtgateConn := vc.GetVTGateConn(t)
 	defer vtgateConn.Close()
 	numRowsStart := ls.getNumRowsParent(vtgateConn)
 	shortCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -346,9 +348,10 @@ func (ls *fkLoadSimulator) delete() {
 
 func (ls *fkLoadSimulator) exec(query string) *sqltypes.Result {
 	t := ls.t
-	vtgateConn, closeConn := getVTGateConn()
-	defer closeConn()
-	qr, err := execVtgateQuery(vtgateConn, "fksource", query)
+	if ls.conn == nil {
+		ls.conn = vc.GetVTGateConn(t)
+	}
+	qr, err := execVtgateQuery(ls.conn, "fksource", query)
 	require.NoError(t, err)
 	require.NotNil(t, qr)
 	return qr

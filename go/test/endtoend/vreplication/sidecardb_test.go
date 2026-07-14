@@ -21,6 +21,7 @@ import (
 	"strconv"
 	"testing"
 
+	"vitess.io/vitess/go/test/vitesst"
 	"vitess.io/vitess/go/vt/sidecardb"
 
 	"github.com/stretchr/testify/require"
@@ -78,6 +79,9 @@ func prs(t *testing.T, keyspace, shard string) {
 // TestSidecarDB launches a Vitess cluster and ensures that the expected sidecar tables are created. We also drop/alter
 // tables and ensure the next tablet init will recreate the sidecar database to the desired schema.
 func TestSidecarDB(t *testing.T) {
+	// The sidecar tables are read and modified through the _vt database, so the
+	// cluster has to use it as its sidecar database.
+	setSidecarDBName("_vt")
 	vc = NewVitessCluster(t, nil)
 	defer vc.TearDown()
 
@@ -89,8 +93,8 @@ func TestSidecarDB(t *testing.T) {
 	tablet101 := defaultCellName + "-101"
 	vc.AddKeyspace(t, []*Cell{cell1}, keyspace, "0", initialProductVSchema, initialProductSchema, 1, 0, 100, defaultSourceKsOpts)
 	shard0 := vc.Cells[defaultCellName].Keyspaces[keyspace].Shards[shard]
-	tablet100Port := shard0.Tablets[tablet100].Vttablet.Port
-	tablet101Port := shard0.Tablets[tablet101].Vttablet.Port
+	tablet100Process := shard0.Tablets[tablet100].Vttablet
+	tablet101Process := shard0.Tablets[tablet101].Vttablet
 	currentPrimary := tablet100
 
 	var expectedChanges100, expectedChanges101 int
@@ -100,8 +104,8 @@ func TestSidecarDB(t *testing.T) {
 		expectedChanges101 = 0
 		validateSidecarDBTables(t, tablet100, sidecarDBTables)
 		validateSidecarDBTables(t, tablet101, sidecarDBTables)
-		require.Equal(t, expectedChanges100, getNumExecutedDDLQueries(t, tablet100Port))
-		require.Equal(t, expectedChanges101, getNumExecutedDDLQueries(t, tablet101Port))
+		require.Equal(t, expectedChanges100, getNumExecutedDDLQueries(t, tablet100Process))
+		require.Equal(t, expectedChanges101, getNumExecutedDDLQueries(t, tablet101Process))
 	})
 
 	t.Run("modify schema, prs, and self heal on primary", func(t *testing.T) {
@@ -114,8 +118,8 @@ func TestSidecarDB(t *testing.T) {
 		expectedChanges101 += numChanges
 		validateSidecarDBTables(t, tablet100, sidecarDBTables)
 		validateSidecarDBTables(t, tablet101, sidecarDBTables)
-		require.Equal(t, expectedChanges100, getNumExecutedDDLQueries(t, tablet100Port))
-		require.Equal(t, expectedChanges101, getNumExecutedDDLQueries(t, tablet101Port))
+		require.Equal(t, expectedChanges100, getNumExecutedDDLQueries(t, tablet100Process))
+		require.Equal(t, expectedChanges101, getNumExecutedDDLQueries(t, tablet101Process))
 	})
 
 	t.Run("modify schema, prs, and self heal on new primary", func(t *testing.T) {
@@ -126,8 +130,8 @@ func TestSidecarDB(t *testing.T) {
 
 		validateSidecarDBTables(t, tablet100, sidecarDBTables)
 		validateSidecarDBTables(t, tablet101, sidecarDBTables)
-		require.Equal(t, expectedChanges100, getNumExecutedDDLQueries(t, tablet100Port))
-		require.Equal(t, expectedChanges101, getNumExecutedDDLQueries(t, tablet101Port))
+		require.Equal(t, expectedChanges100, getNumExecutedDDLQueries(t, tablet100Process))
+		require.Equal(t, expectedChanges101, getNumExecutedDDLQueries(t, tablet101Process))
 	})
 }
 
@@ -144,8 +148,8 @@ func modifySidecarDBSchema(t *testing.T, vc *VitessCluster, tabletID string, ddl
 	return len(ddls)
 }
 
-func getNumExecutedDDLQueries(t *testing.T, port int) int {
-	val, err := getDebugVar(t, port, []string{sidecardb.StatsKeyQueryCount})
+func getNumExecutedDDLQueries(t *testing.T, tablet *vitesst.Tablet) int {
+	val, err := getDebugVar(t, tablet, []string{sidecardb.StatsKeyQueryCount})
 	require.NoError(t, err)
 	i, err := strconv.Atoi(val)
 	require.NoError(t, err)

@@ -25,7 +25,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/test/vitesst"
 	"vitess.io/vitess/go/vt/log"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -141,7 +142,7 @@ func TestFKExt(t *testing.T) {
 	t.Run("Reshard keyspace from 2 shards to 3 shards", func(t *testing.T) {
 		tabletID := 500
 		require.NoError(t, vc.AddShards(t, []*Cell{defaultCell}, ks, threeShards, numReplicas, 0, tabletID, nil))
-		tablets := make(map[string]*cluster.VttabletProcess)
+		tablets := make(map[string]*vitesst.Tablet)
 		for i, shard := range strings.Split(threeShards, ",") {
 			tablets[shard] = vc.Cells[cellName].Keyspaces[keyspaceName].Shards[shard].Tablets[fmt.Sprintf("%s-%d", cellName, tabletID+i*100)].Vttablet
 		}
@@ -156,7 +157,7 @@ func TestFKExt(t *testing.T) {
 		tabletID := 800
 		shard := "0"
 		require.NoError(t, vc.AddShards(t, []*Cell{defaultCell}, ks, shard, numReplicas, 0, tabletID, nil))
-		tablets := make(map[string]*cluster.VttabletProcess)
+		tablets := make(map[string]*vitesst.Tablet)
 		tablets[shard] = vc.Cells[cellName].Keyspaces[keyspaceName].Shards[shard].Tablets[fmt.Sprintf("%s-%d", cellName, tabletID)].Vttablet
 		sqls := strings.SplitSeq(FKExtSourceSchema, "\n")
 		for sql := range sqls {
@@ -174,8 +175,8 @@ func TestFKExt(t *testing.T) {
 
 // checkRowCounts checks that the parent and child tables in the source and target shards have the same number of rows.
 func checkRowCounts(t *testing.T, keyspace string, sourceShards, targetShards []string) bool {
-	sourceTabs := make(map[string]*cluster.VttabletProcess)
-	targetTabs := make(map[string]*cluster.VttabletProcess)
+	sourceTabs := make(map[string]*vitesst.Tablet)
+	targetTabs := make(map[string]*vitesst.Tablet)
 	for _, shard := range sourceShards {
 		sourceTabs[shard] = vc.getPrimaryTablet(t, keyspace, shard)
 	}
@@ -183,8 +184,8 @@ func checkRowCounts(t *testing.T, keyspace string, sourceShards, targetShards []
 		targetTabs[shard] = vc.getPrimaryTablet(t, keyspace, shard)
 	}
 
-	getCount := func(tab *cluster.VttabletProcess, table string) (int64, error) {
-		qr, err := tab.QueryTablet("select count(*) from "+table, keyspace, true)
+	getCount := func(tab *vitesst.Tablet, table string) (int64, error) {
+		qr, err := tab.QueryTablet(t.Context(), "select count(*) from "+table)
 		if err != nil {
 			return 0, err
 		}
@@ -230,7 +231,7 @@ func compareRowCounts(t *testing.T, keyspace string, sourceShards, targetShards 
 	return nil
 }
 
-func doReshard(t *testing.T, keyspace, workflowName, sourceShards, targetShards string, targetTabs map[string]*cluster.VttabletProcess) {
+func doReshard(t *testing.T, keyspace, workflowName, sourceShards, targetShards string, targetTabs map[string]*vitesst.Tablet) {
 	rs := newReshard(vc, &reshardWorkflow{
 		workflowInfo: &workflowInfo{
 			vc:             vc,
@@ -269,7 +270,7 @@ func doReshard(t *testing.T, keyspace, workflowName, sourceShards, targetShards 
 }
 
 func areRowCountsEqual(t *testing.T) bool {
-	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	vtgateConn := vc.GetVTGateConn(t)
 	defer vtgateConn.Close()
 	parentRowCount := getRowCount(t, vtgateConn, "target2.parent")
 	childRowCount := getRowCount(t, vtgateConn, "target2.child")
@@ -316,8 +317,8 @@ func moveKeyspace(t *testing.T) {
 	doMoveTables(t, fkextConfig.target1KeyspaceName, fkextConfig.target2KeyspaceName, "move", "replica", targetTabs, false)
 }
 
-func newKeyspace(t *testing.T, keyspaceName, shards, vschema, schema string, tabletId, numReplicas int) map[string]*cluster.VttabletProcess {
-	tablets := make(map[string]*cluster.VttabletProcess)
+func newKeyspace(t *testing.T, keyspaceName, shards, vschema, schema string, tabletId, numReplicas int) map[string]*vitesst.Tablet {
+	tablets := make(map[string]*vitesst.Tablet)
 	cell := vc.Cells[fkextConfig.cell]
 	vtgate := cell.Vtgates[0]
 	vc.AddKeyspace(t, []*Cell{cell}, keyspaceName, shards, vschema, schema, numReplicas, 0, tabletId, nil)
@@ -328,7 +329,7 @@ func newKeyspace(t *testing.T, keyspaceName, shards, vschema, schema string, tab
 	return tablets
 }
 
-func doMoveTables(t *testing.T, sourceKeyspace, targetKeyspace, workflowName, tabletTypes string, targetTabs map[string]*cluster.VttabletProcess, atomicCopy bool) {
+func doMoveTables(t *testing.T, sourceKeyspace, targetKeyspace, workflowName, tabletTypes string, targetTabs map[string]*vitesst.Tablet, atomicCopy bool) {
 	mt := newMoveTables(vc, &moveTablesWorkflow{
 		workflowInfo: &workflowInfo{
 			vc:             vc,
@@ -384,11 +385,12 @@ WHERE TABLE_SCHEMA = '%s' AND REFERENCED_TABLE_NAME IS NOT NULL;
 // dropReplicaConstraints drops all foreign key constraints on replica tables for a given keyspace/shard.
 // We do this so that we can replay binlogs from a replica which is not doing cascades but just replaying
 // the binlogs created by the primary. This will confirm that vtgate is doing the cascades correctly.
-func dropReplicaConstraints(t *testing.T, keyspaceName string, tablet *cluster.VttabletProcess) {
+func dropReplicaConstraints(t *testing.T, keyspaceName string, tablet *vitesst.Tablet) {
+	ctx := t.Context()
 	var dropConstraints []string
-	require.Equal(t, "replica", strings.ToLower(tablet.TabletType))
+	require.Equal(t, "replica", strings.ToLower(tablet.Type()))
 	dbName := "vt_" + keyspaceName
-	qr, err := tablet.QueryTablet(fmt.Sprintf(getConstraintsQuery, dbName), keyspaceName, true)
+	qr, err := tablet.QueryTablet(ctx, fmt.Sprintf(getConstraintsQuery, dbName))
 	require.NoError(t, err)
 	for _, row := range qr.Rows {
 		constraintName := row[0].ToString()
@@ -406,5 +408,14 @@ func dropReplicaConstraints(t *testing.T, keyspaceName string, tablet *cluster.V
 	}
 	queries := append(prefixQueries, dropConstraints...)
 	queries = append(queries, suffixQueries...)
-	require.NoError(t, tablet.QueryTabletMultiple(queries, keyspaceName, true))
+
+	params, err := tablet.DBAConnParams(ctx, dbName)
+	require.NoError(t, err)
+	conn, err := mysql.Connect(ctx, &params)
+	require.NoError(t, err)
+	defer conn.Close()
+	for _, query := range queries {
+		_, err := conn.ExecuteFetch(query, 10000, true)
+		require.NoErrorf(t, err, "query %q on %s", query, tablet.Alias())
+	}
 }

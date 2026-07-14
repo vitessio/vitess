@@ -19,7 +19,6 @@ package vreplication
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -30,7 +29,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 
 	"vitess.io/vitess/go/json2"
-	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/vitesst"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/wrangler"
 
@@ -107,7 +106,7 @@ func TestVtctldclientCLI(t *testing.T) {
 		newShards := "-40,40-80"
 		require.NoError(t, vc.AddShards(t, []*Cell{cell}, targetKeyspace, newShards, 1, 0, 400, nil))
 		reshardWorkflowName := "reshard"
-		tablets := map[string]*cluster.VttabletProcess{
+		tablets := map[string]*vitesst.Tablet{
 			"-40":   targetKeyspace.Shards["-40"].Tablets["zone1-400"].Vttablet,
 			"40-80": targetKeyspace.Shards["40-80"].Tablets["zone1-500"].Vttablet,
 		}
@@ -135,7 +134,7 @@ func TestVtctldclientCLI(t *testing.T) {
 		require.NoError(t, vc.AddShards(t, []*Cell{cell}, targetKeyspace, newShards, 1, 0, 600, nil))
 		reshardWorkflowName := "reshard"
 
-		tablets := map[string]*cluster.VttabletProcess{
+		tablets := map[string]*vitesst.Tablet{
 			"80-c0": targetKeyspace.Shards["80-c0"].Tablets["zone1-600"].Vttablet,
 			"c0-":   targetKeyspace.Shards["c0-"].Tablets["zone1-700"].Vttablet,
 		}
@@ -193,12 +192,12 @@ func TestVtctldclientCLI(t *testing.T) {
 		rs.Start()
 		require.NoError(t, waitForWorkflowState(vc, fmt.Sprintf("%s.%s", keyspace, defaultWorkflowName), binlogdatapb.VReplicationWorkflowState_Running.String()))
 
-		res, err := targetTab1.QueryTablet("show tables", keyspace, true)
+		res, err := targetTab1.QueryTablet(t.Context(), "show tables")
 		require.NoError(t, err)
 		require.NotNil(t, res)
 		require.NotEmpty(t, res.Rows)
 
-		res, err = targetTab2.QueryTablet("show tables", keyspace, true)
+		res, err = targetTab2.QueryTablet(t.Context(), "show tables")
 		require.NoError(t, err)
 		require.NotNil(t, res)
 		require.NotEmpty(t, res.Rows)
@@ -208,12 +207,12 @@ func TestVtctldclientCLI(t *testing.T) {
 		defaultWorkflowNames := workflowList(keyspace)
 		require.Empty(t, defaultWorkflowNames)
 
-		res, err = targetTab1.QueryTablet("show tables", keyspace, true)
+		res, err = targetTab1.QueryTablet(t.Context(), "show tables")
 		require.NoError(t, err)
 		require.NotNil(t, res)
 		require.Empty(t, res.Rows)
 
-		res, err = targetTab2.QueryTablet("show tables", keyspace, true)
+		res, err = targetTab2.QueryTablet(t.Context(), "show tables")
 		require.NoError(t, err)
 		require.NotNil(t, res)
 		require.Empty(t, res.Rows)
@@ -221,7 +220,7 @@ func TestVtctldclientCLI(t *testing.T) {
 }
 
 // Tests several create flags and some complete flags and validates that some of them are set correctly for the workflow.
-func testMoveTablesFlags1(t *testing.T, mt *iMoveTables, sourceKeyspace, targetKeyspace, defaultWorkflowName string, targetTabs map[string]*cluster.VttabletProcess) {
+func testMoveTablesFlags1(t *testing.T, mt *iMoveTables, sourceKeyspace, targetKeyspace, defaultWorkflowName string, targetTabs map[string]*vitesst.Tablet) {
 	tables := "customer,customer2"
 	overrides := map[string]string{
 		"vreplication-net-read-timeout":        "6000",
@@ -264,16 +263,15 @@ func getMoveTablesShowResponse(mt *iMoveTables) *vtctldatapb.GetWorkflowsRespons
 }
 
 // Validates some of the flags created from the previous test.
-func testMoveTablesFlags2(t *testing.T, mt *iMoveTables, sourceKeyspace, targetKeyspace, defaultWorkflowName string, targetTabs map[string]*cluster.VttabletProcess) {
+func testMoveTablesFlags2(t *testing.T, mt *iMoveTables, sourceKeyspace, targetKeyspace, defaultWorkflowName string, targetTabs map[string]*vitesst.Tablet) {
 	ksWorkflow := fmt.Sprintf("%s.%s", targetKeyspace, defaultWorkflowName)
 	wf := (*mt).(iWorkflow)
 	(*mt).Start() // Need to start because we set auto-start to false.
 	require.NoError(t, waitForWorkflowState(vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Stopped.String()))
 	confirmNoRoutingRules(t)
 	for _, tab := range targetTabs {
-		alias := fmt.Sprintf("zone1-%d", tab.TabletUID)
 		query := fmt.Sprintf("update _vt.vreplication set source := replace(source, 'stop_after_copy:true', 'stop_after_copy:false') where db_name = 'vt_%s' and workflow = 'wf1'", targetKeyspace)
-		output, err := vc.VtctldClient.ExecuteCommandWithOutput("ExecuteFetchAsDBA", alias, query)
+		output, err := vc.VtctldClient.ExecuteCommandWithOutput("ExecuteFetchAsDBA", tab.Alias(), query)
 		require.NoError(t, err, output)
 	}
 	confirmNoRoutingRules(t)
@@ -394,10 +392,9 @@ func testMoveTablesFlags2(t *testing.T, mt *iMoveTables, sourceKeyspace, targetK
 }
 
 // Tests SwitchTraffic and Complete flags
-func testMoveTablesFlags3(t *testing.T, sourceKeyspace, targetKeyspace string, targetTabs map[string]*cluster.VttabletProcess) {
+func testMoveTablesFlags3(t *testing.T, sourceKeyspace, targetKeyspace string, targetTabs map[string]*vitesst.Tablet) {
 	for _, tab := range targetTabs {
-		alias := fmt.Sprintf("zone1-%d", tab.TabletUID)
-		output, err := vc.VtctldClient.ExecuteCommandWithOutput("ExecuteFetchAsDBA", alias, "drop table customer")
+		output, err := vc.VtctldClient.ExecuteCommandWithOutput("ExecuteFetchAsDBA", tab.Alias(), "drop table customer")
 		require.NoError(t, err, output)
 	}
 	createFlags := []string{}
@@ -464,7 +461,7 @@ func testWorkflowList(t *testing.T, sourceKeyspace, targetKeyspace string) {
 	require.EqualValues(t, wfNames, defaultWorkflowNames)
 }
 
-func testWorkflowUpdateConfig(t *testing.T, mt *iMoveTables, targetTabs map[string]*cluster.VttabletProcess, targetKeyspace, workflow string) {
+func testWorkflowUpdateConfig(t *testing.T, mt *iMoveTables, targetTabs map[string]*vitesst.Tablet, targetKeyspace, workflow string) {
 	updateConfig := func(t *testing.T, overrides map[string]string) error {
 		overridesCSV := mapToCSV(overrides)
 		_, err := vc.VtctldClient.ExecuteCommandWithOutput("workflow", "--keyspace", targetKeyspace, "update",
@@ -570,7 +567,7 @@ func createMoveTables(t *testing.T, sourceKeyspace, targetKeyspace, defaultWorkf
 
 // reshard helpers
 
-func splitShard(t *testing.T, keyspace, defaultWorkflowName, sourceShards, targetShards string, targetTabs map[string]*cluster.VttabletProcess) {
+func splitShard(t *testing.T, keyspace, defaultWorkflowName, sourceShards, targetShards string, targetTabs map[string]*vitesst.Tablet) {
 	overrides := map[string]string{
 		"vreplication-copy-phase-duration":     "10h11m12s",
 		"vreplication-experimental-flags":      "7",
@@ -608,9 +605,8 @@ func splitShard(t *testing.T, keyspace, defaultWorkflowName, sourceShards, targe
 	rs.Start()
 	require.NoError(t, waitForWorkflowState(vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Stopped.String()))
 	for _, tab := range targetTabs {
-		alias := fmt.Sprintf("zone1-%d", tab.TabletUID)
 		query := fmt.Sprintf("update _vt.vreplication set source := replace(source, 'stop_after_copy:true', 'stop_after_copy:false') where db_name = 'vt_%s' and workflow = '%s'", keyspace, defaultWorkflowName)
-		output, err := vc.VtctldClient.ExecuteCommandWithOutput("ExecuteFetchAsDBA", alias, query)
+		output, err := vc.VtctldClient.ExecuteCommandWithOutput("ExecuteFetchAsDBA", tab.Alias(), query)
 		require.NoError(t, err, output)
 	}
 	rs.Start()
@@ -1091,12 +1087,14 @@ func testOneRoutingRulesCommand(t *testing.T, typ string, rules string, validate
 					get := "Get" + typ
 					args = append(args, apply)
 					if tt.useFile {
-						tmpFile, err := os.CreateTemp("", tt.name+"_rules.json")
-						require.NoError(t, err)
-						defer os.Remove(tmpFile.Name())
-						_, err = tmpFile.WriteString(wantRules)
-						require.NoError(t, err)
-						args = append(args, "--rules-file", tmpFile.Name())
+						// vtctldclient reads the rules file where it runs, so the
+						// file belongs in the vtctld container.
+						rulesFile := fmt.Sprintf("/tmp/%s_rules.json", tt.name)
+						require.NoError(t, vc.Cluster.Vtctld().WriteFile(t.Context(), rulesFile, wantRules))
+						defer func() {
+							require.NoError(t, vc.Cluster.Vtctld().RemoveFile(t.Context(), rulesFile))
+						}()
+						args = append(args, "--rules-file", rulesFile)
 					} else {
 						args = append(args, "--rules", wantRules)
 					}

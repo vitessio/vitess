@@ -61,7 +61,7 @@ func TestMultipleConcurrentVDiffs(t *testing.T) {
 				return
 			default:
 				index += 1
-				vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+				vtgateConn := vc.GetVTGateConn(t)
 				q := fmt.Sprintf(query, tableName, index, index)
 				vtgateConn.ExecuteFetch(q, 1000, false)
 				vtgateConn.Close()
@@ -71,8 +71,6 @@ func TestMultipleConcurrentVDiffs(t *testing.T) {
 	}
 	targetTab := vc.Cells[cellName].Keyspaces[targetKeyspace].Shards["0"].Tablets[fmt.Sprintf("%s-%d", cellName, targetTabletId)].Vttablet
 	require.NotNil(t, targetTab)
-
-	time.Sleep(15 * time.Second) // wait for some rows to be inserted.
 
 	createWorkflow := func(workflowName, tables string) {
 		mt := newMoveTables(vc, &moveTablesWorkflow{

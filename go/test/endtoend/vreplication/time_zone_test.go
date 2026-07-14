@@ -22,19 +22,23 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/test/endtoend/cluster"
-
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/test/vitesst"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
+
+// timeZoneSQLPath is where the time zone SQL is placed inside a tablet container.
+const timeZoneSQLPath = "/tmp/tz.sql"
 
 // TestMoveTablesTZ tests the conversion of datetime based on the source timezone passed to the MoveTables workflow
 func TestMoveTablesTZ(t *testing.T) {
 	workflow := "tz"
 	ksWorkflow := fmt.Sprintf("%s.%s", defaultTargetKs, workflow)
 	ksReverseWorkflow := fmt.Sprintf("%s.%s_reverse", defaultSourceKs, workflow)
+
+	ctx := t.Context()
 
 	vc = NewVitessCluster(t, nil)
 	defer vc.TearDown()
@@ -44,7 +48,7 @@ func TestMoveTablesTZ(t *testing.T) {
 	cell1 := vc.Cells["zone1"]
 	vc.AddKeyspace(t, []*Cell{cell1}, defaultSourceKs, "0", initialProductVSchema, initialProductSchema, 0, 0, 100, defaultSourceKsOpts)
 
-	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	vtgateConn := vc.GetVTGateConn(t)
 	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
 
@@ -53,9 +57,14 @@ func TestMoveTablesTZ(t *testing.T) {
 	timeZoneSQL := string(timeZoneSQLBytes)
 
 	// it seems to take some time for the mysql server to load time zone info after the tables in mysql db have been populated
-	loadTimeZoneInfo := func(tab *cluster.VttabletProcess, sql, timezone string) {
-		err := tab.MultiQueryTabletWithDB(timeZoneSQL, "mysql")
+	loadTimeZoneInfo := func(tab *vitesst.Tablet, sql, timezone string) {
+		// The statements share session state, so they run on a single connection
+		// of the mysql client inside the tablet's container.
+		require.NoError(t, tab.WriteFile(ctx, timeZoneSQLPath, sql))
+		script := fmt.Sprintf("mysql --socket %s --user vt_dba mysql < %s", tab.MySQLSocket(), timeZoneSQLPath)
+		exitCode, output, err := tab.Exec(ctx, "bash", "-c", script)
 		require.NoError(t, err)
+		require.Equalf(t, 0, exitCode, "could not load time zone info: %s", output)
 		timer := time.NewTimer(1 * time.Minute)
 		for {
 			select {
@@ -63,7 +72,7 @@ func TestMoveTablesTZ(t *testing.T) {
 				require.Fail(t, "could not load time zone info")
 			default:
 			}
-			_, err = tab.QueryTablet(fmt.Sprintf("SET GLOBAL time_zone = '%s';", timezone), "", false)
+			_, err = tab.QueryTabletWithDB(ctx, fmt.Sprintf("SET GLOBAL time_zone = '%s';", timezone), "")
 			if err == nil {
 				timer.Stop()
 				return
@@ -112,11 +121,11 @@ func TestMoveTablesTZ(t *testing.T) {
 	doVDiff(t, ksWorkflow, "")
 
 	query := "select * from datze"
-	qrSourceUSPacific, err := productTab.QueryTablet(query, defaultSourceKs, true)
+	qrSourceUSPacific, err := productTab.QueryTablet(ctx, query)
 	require.NoError(t, err)
 	require.NotNil(t, qrSourceUSPacific)
 
-	qrTargetUTC, err := customerTab.QueryTablet(query, defaultTargetKs, true)
+	qrTargetUTC, err := customerTab.QueryTablet(ctx, query)
 	require.NoError(t, err)
 	require.NotNil(t, qrTargetUTC)
 
@@ -160,7 +169,7 @@ func TestMoveTablesTZ(t *testing.T) {
 
 	// user should be either running this query or have set their location in their driver to map from the time in Vitess/UTC to local
 	query = "select id, convert_tz(dt1, 'UTC', 'US/Pacific') dt1, convert_tz(dt2, 'UTC', 'US/Pacific') dt2, convert_tz(ts1, 'UTC', 'US/Pacific') ts1 from datze"
-	qrTargetUSPacific, err := customerTab.QueryTablet(query, defaultTargetKs, true)
+	qrTargetUSPacific, err := customerTab.QueryTablet(ctx, query)
 	require.NoError(t, err)
 	require.NotNil(t, qrTargetUSPacific)
 	require.Equal(t, len(qrSourceUSPacific.Rows), len(qrTargetUSPacific.Rows))
@@ -174,8 +183,8 @@ func TestMoveTablesTZ(t *testing.T) {
 	output, err = vc.VtctldClient.ExecuteCommandWithOutput("MoveTables", "--target-keyspace", defaultTargetKs, "SwitchTraffic", "--workflow", workflow)
 	require.NoError(t, err, output)
 
-	qr, err := productTab.QueryTablet(sqlparser.BuildParsedQuery("select * from %s.vreplication where workflow='%s_reverse'",
-		sidecarDBIdentifier, workflow).Query, "", false)
+	qr, err := productTab.QueryTabletWithDB(ctx, sqlparser.BuildParsedQuery("select * from %s.vreplication where workflow='%s_reverse'",
+		sidecarDBIdentifier, workflow).Query, "")
 	if err != nil {
 		return
 	}

@@ -25,7 +25,6 @@ import (
 	"github.com/tidwall/gjson"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
@@ -47,32 +46,19 @@ func insertInitialDataIntoExternalCluster(t *testing.T, conn *mysql.Conn) {
 }
 
 // TestMigrateUnsharded runs an e2e test for importing from an external cluster using the
-// vtctldclient Mount and Migrate commands.We have an anti-pattern in Vitess: vt executables
-// look for an environment variable VTDATAROOT for certain cluster parameters like the log
-// directory when they are created. Until this test we just needed a single cluster for e2e
-// tests. However now we need to create an external Vitess cluster. For this we need a
-// different VTDATAROOT and hence the VTDATAROOT env variable gets overwritten. Each time
-// we need to create vt processes in the "other" cluster we need to set the appropriate
-// VTDATAROOT.
+// vtctldclient Mount and Migrate commands. The external cluster is a second Vitess cluster
+// with its own topology server, sharing a network with the main cluster so that the main
+// cluster reaches the external topology server and its tablets.
 func TestMigrateUnsharded(t *testing.T) {
 	vc = NewVitessCluster(t, nil)
 	defer vc.TearDown()
 
-	oldDefaultReplicas := defaultReplicas
-	oldDefaultRdonly := defaultRdonly
-	defaultReplicas = 0
-	defaultRdonly = 0
-	defer func() {
-		defaultReplicas = oldDefaultReplicas
-		defaultRdonly = oldDefaultRdonly
-	}()
-
 	defaultCell := vc.Cells[vc.CellNames[0]]
 	_, err := vc.AddKeyspace(t, []*Cell{defaultCell}, defaultSourceKs, "0",
-		initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, nil)
+		initialProductVSchema, initialProductSchema, 0, 0, 100, nil)
 	require.NoError(t, err, "failed to create product keyspace")
 
-	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	vtgateConn := vc.GetVTGateConn(t)
 	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
 	insertInitialData(t)
@@ -83,6 +69,7 @@ func TestMigrateUnsharded(t *testing.T) {
 	extVc := NewVitessCluster(t, &clusterOptions{
 		cells:         extCells,
 		clusterConfig: externalClusterConfig,
+		network:       vc.Network,
 	})
 	defer extVc.TearDown()
 
@@ -93,7 +80,7 @@ func TestMigrateUnsharded(t *testing.T) {
 	require.NotNil(t, extVtgate)
 
 	verifyClusterHealth(t, extVc)
-	extVtgateConn := getConnection(t, extVc.ClusterConfig.hostname, extVc.ClusterConfig.vtgateMySQLPort)
+	extVtgateConn := extVc.GetVTGateConn(t)
 	insertInitialDataIntoExternalCluster(t, extVtgateConn)
 
 	targetPrimary := vc.getPrimaryTablet(t, defaultSourceKs, "0")
@@ -101,7 +88,7 @@ func TestMigrateUnsharded(t *testing.T) {
 	var output, expected string
 
 	t.Run("mount external cluster", func(t *testing.T) {
-		etcdHostPort := fmt.Sprintf("localhost:%d", extVc.ClusterConfig.topoPort)
+		etcdHostPort := extVc.Cluster.TopoAddress()
 		output, err := vc.VtctldClient.ExecuteCommandWithOutput("Mount", "register", "--name=ext1", "--topo-type=etcd2",
 			"--topo-server", etcdHostPort, "--topo-root=/vitess/global")
 		require.NoError(t, err, "Mount Register command failed with %s", output)
@@ -217,7 +204,7 @@ func TestMigrateSharded(t *testing.T) {
 	vc = setupCluster(t)
 	defer vc.TearDown()
 
-	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	vtgateConn := vc.GetVTGateConn(t)
 	defer vtgateConn.Close()
 
 	setupTargetKeyspace(t)
@@ -232,22 +219,19 @@ func TestMigrateSharded(t *testing.T) {
 	extVc := NewVitessCluster(t, &clusterOptions{
 		cells:         extCells,
 		clusterConfig: externalClusterConfig,
+		network:       vc.Network,
 	})
 	defer extVc.TearDown()
 
 	setupExtKeyspace(t, extVc, "rating", extCell)
-	err = cluster.WaitForHealthyShard(extVc.VtctldClient, "rating", "-80")
-	require.NoError(t, err)
-	err = cluster.WaitForHealthyShard(extVc.VtctldClient, "rating", "80-")
-	require.NoError(t, err)
 	verifyClusterHealth(t, extVc)
-	extVtgateConn := getConnection(t, extVc.ClusterConfig.hostname, extVc.ClusterConfig.vtgateMySQLPort)
+	extVtgateConn := extVc.GetVTGateConn(t)
 	defer extVtgateConn.Close()
 
 	currentWorkflowType = binlogdatapb.VReplicationWorkflowType_Migrate
 	var output string
 	if output, err = extVc.VtctldClient.ExecuteCommandWithOutput("Mount", "register", "--name=external", "--topo-type=etcd2",
-		fmt.Sprintf("--topo-server=localhost:%d", vc.ClusterConfig.topoPort), "--topo-root=/vitess/global"); err != nil {
+		"--topo-server="+vc.Cluster.TopoAddress(), "--topo-root=/vitess/global"); err != nil {
 		require.FailNow(t, "Mount command failed with %+v : %s\n", err, output)
 	}
 	ksWorkflow := "rating.e1"
@@ -271,8 +255,8 @@ func setupExtKeyspace(t *testing.T, vc *VitessCluster, ksName, cellName string) 
 	require.NoError(t, err)
 	vtgate := vc.Cells[cellName].Vtgates[0]
 	for _, shard := range shards {
-		err := cluster.WaitForHealthyShard(vc.VtctldClient, ksName, shard)
+		err := vc.Cluster.WaitForHealthyShard(t.Context(), ksName, shard, waitTimeout)
 		require.NoError(t, err)
-		require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", ksName, shard), numReplicas, waitTimeout))
+		require.NoError(t, waitForTabletsInShard(t.Context(), vtgate, fmt.Sprintf("%s.%s.replica", ksName, shard), numReplicas))
 	}
 }

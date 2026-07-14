@@ -19,8 +19,6 @@ package vreplication
 import (
 	"context"
 	"fmt"
-	"net"
-	"strconv"
 	"testing"
 	"time"
 
@@ -28,10 +26,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/log"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
-	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 )
 
 // TestVSchemaChangesUnderLoad tests vstreamer under a load of high binlog events and simultaneous multiple vschema changes
@@ -95,7 +93,7 @@ func TestVSchemaChangesUnderLoad(t *testing.T) {
 				Filter: "select * from customer",
 			}},
 		}
-		conn, err := vtgateconn.Dial(ctx, net.JoinHostPort("localhost", strconv.Itoa(vc.ClusterConfig.vtgateGrpcPort)))
+		conn, err := defaultCell.Vtgates[0].DialVTGate(ctx)
 		if !assert.NoError(t, err) {
 			return
 		}

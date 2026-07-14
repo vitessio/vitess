@@ -223,7 +223,7 @@ func testPartialMoveTablesBasic(t *testing.T, flavor workflowFlavor) {
 
 	// reset any existing vtgate connection state
 	vtgateConn.Close()
-	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	vtgateConn = vc.GetVTGateConn(t)
 	defer vtgateConn.Close()
 
 	// Global routing rules should be in place with everything going to
@@ -265,7 +265,7 @@ func testPartialMoveTablesBasic(t *testing.T, flavor workflowFlavor) {
 
 	// reset any existing vtgate connection state
 	vtgateConn.Close()
-	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	vtgateConn = vc.GetVTGateConn(t)
 	defer vtgateConn.Close()
 
 	// No shard targeting

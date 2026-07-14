@@ -21,7 +21,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/vitesst"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 )
 
@@ -63,8 +63,8 @@ create table t1(
 `,
 }
 
-func setupLookupVindexKeyspace(t *testing.T) map[string]*cluster.VttabletProcess {
-	tablets := make(map[string]*cluster.VttabletProcess)
+func setupLookupVindexKeyspace(t *testing.T) map[string]*vitesst.Tablet {
+	tablets := make(map[string]*vitesst.Tablet)
 	if _, err := vc.AddKeyspace(t, []*Cell{vc.Cells["zone1"]}, lookupClusterSpec.keyspaceName, "-80,80-",
 		lookupClusterSpec.vschema, lookupClusterSpec.schema, defaultReplicas, defaultRdonly, 200, nil); err != nil {
 		require.NoError(t, err)

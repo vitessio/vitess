@@ -76,7 +76,7 @@ func testShardedMaterialize(t *testing.T) {
 
 	vc.AddKeyspace(t, []*Cell{defaultCell}, ks2, "0", smVSchema, smSchema, defaultReplicas, defaultRdonly, 200, nil)
 
-	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	vtgateConn := vc.GetVTGateConn(t)
 	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
 	_, err = vtgateConn.ExecuteFetch(initDataQuery, 0, false)
@@ -187,7 +187,7 @@ func testMaterialize(t *testing.T) {
 
 	vc.AddKeyspace(t, []*Cell{defaultCell}, targetKs, "0", smMaterializeVSchemaTarget, smMaterializeSchemaTarget, defaultReplicas, defaultRdonly, 400, nil)
 
-	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	vtgateConn := vc.GetVTGateConn(t)
 	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
 
@@ -195,7 +195,7 @@ func testMaterialize(t *testing.T) {
 	require.NoError(t, err)
 
 	ks2Primary := vc.getPrimaryTablet(t, targetKs, shard)
-	_, err = ks2Primary.QueryTablet(customFunc, targetKs, true)
+	_, err = ks2Primary.QueryTablet(t.Context(), customFunc)
 	require.NoError(t, err)
 
 	testMaterializeWithNonExistentTable(t)
@@ -308,7 +308,7 @@ func TestReferenceTableMaterialize(t *testing.T) {
 	require.NoError(t, err)
 	_, err = vc.AddKeyspace(t, []*Cell{defaultCell}, "ks2", strings.Join(shards, ","), refTargetVSchema, "", 0, 0, 200, nil)
 	require.NoError(t, err)
-	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	vtgateConn := vc.GetVTGateConn(t)
 	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
 	_, err = vtgateConn.ExecuteFetch(initRef1DataQuery, 0, false)

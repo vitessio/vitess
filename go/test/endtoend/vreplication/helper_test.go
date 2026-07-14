@@ -22,11 +22,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io"
 	"math/rand/v2"
 	"net/http"
 	"os"
-	"os/exec"
 	"regexp"
 	"sort"
 	"strings"
@@ -47,17 +45,22 @@ import (
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/throttler"
+	"vitess.io/vitess/go/test/vitesst"
+	"vitess.io/vitess/go/test/vitesst/throttler"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+)
+
+type (
+	// debugVarsComponent is a cluster component whose /debug/vars the tests read.
+	debugVarsComponent interface {
+		MakeAPICall(ctx context.Context, path string) (int, string, error)
+	}
 )
 
 const (
@@ -114,30 +117,13 @@ func execQuery(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	return qr
 }
 
-func getConnectionNoError(t *testing.T, hostname string, port int) *mysql.Conn {
-	vtParams := mysql.ConnParams{
-		Host:  hostname,
-		Port:  port,
-		Uname: "vt_dba",
-	}
-	ctx := t.Context()
-	conn, err := mysql.Connect(ctx, &vtParams)
+// getConnectionNoError connects to the cluster's vtgate, returning nil when the
+// connection cannot be established.
+func getConnectionNoError(t *testing.T, vtParams mysql.ConnParams) *mysql.Conn {
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	if err != nil {
 		return nil
 	}
-	return conn
-}
-
-func getConnection(t *testing.T, hostname string, port int) *mysql.Conn {
-	vtParams := mysql.ConnParams{
-		Host:             hostname,
-		Port:             port,
-		Uname:            "vt_dba",
-		ConnectTimeoutMs: 1000,
-	}
-	ctx := t.Context()
-	conn, err := mysql.Connect(ctx, &vtParams)
-	require.NoErrorf(t, err, "error connecting to vtgate on %s:%d", hostname, port)
 	return conn
 }
 
@@ -192,8 +178,8 @@ func waitForQueryResult(t *testing.T, conn *mysql.Conn, database string, query s
 
 // waitForTabletThrottlingStatus waits for the tablet to return the provided HTTP code for
 // the provided app name in its self check.
-func waitForTabletThrottlingStatus(t *testing.T, tablet *cluster.VttabletProcess, throttlerApp throttlerapp.Name, wantCode tabletmanagerdatapb.CheckThrottlerResponseCode) bool {
-	_, ok := throttler.WaitForCheckThrottlerResult(t, vc.VtctldClient, &cluster.Vttablet{Alias: tablet.Name}, throttlerApp, nil, wantCode, defaultTimeout)
+func waitForTabletThrottlingStatus(t *testing.T, tablet *vitesst.Tablet, throttlerApp throttlerapp.Name, wantCode tabletmanagerdatapb.CheckThrottlerResponseCode) bool {
+	_, ok := throttler.WaitForCheckThrottlerResult(t.Context(), t, vc.Cluster, tablet, throttlerApp, nil, wantCode, defaultTimeout)
 	return ok
 }
 
@@ -260,7 +246,7 @@ func waitForRowCount(t *testing.T, conn *mysql.Conn, database string, table stri
 	}
 }
 
-func waitForRowCountInTablet(t *testing.T, vttablet *cluster.VttabletProcess, database string, table string, want int64) {
+func waitForRowCountInTablet(t *testing.T, vttablet *vitesst.Tablet, database string, table string, want int64) {
 	ctx, cancel := context.WithTimeout(t.Context(), defaultTimeout)
 	defer cancel()
 	ticker := time.NewTicker(defaultTick)
@@ -270,7 +256,7 @@ func waitForRowCountInTablet(t *testing.T, vttablet *cluster.VttabletProcess, da
 	timer := time.NewTimer(defaultTimeout)
 	defer timer.Stop()
 	for {
-		qr, err := vttablet.QueryTablet(query, database, true)
+		qr, err := vttablet.QueryTabletWithDB(ctx, query, tabletDBName(database))
 		require.NoError(t, err)
 		require.NotNil(t, qr)
 		row := qr.Named().Row()
@@ -278,19 +264,28 @@ func waitForRowCountInTablet(t *testing.T, vttablet *cluster.VttabletProcess, da
 		got := row.AsInt64("c", 0)
 		require.LessOrEqual(t, got, want)
 		if got == want {
-			log.Info(fmt.Sprintf("waitForRowCountInTablet: found %d rows in table %s on tablet %s", want, table, vttablet.Name))
+			log.Info(fmt.Sprintf("waitForRowCountInTablet: found %d rows in table %s on tablet %s", want, table, vttablet.Alias()))
 			return
 		}
 		select {
 		case <-ctx.Done():
 			require.FailNow(
 				t, fmt.Sprintf("table %q did not reach the expected number of rows (%d) on tablet %q before the timeout of %s; last seen result: %v",
-					table, want, vttablet.Name, defaultTimeout, qr.Rows),
+					table, want, vttablet.Alias(), defaultTimeout, qr.Rows),
 			)
 			return
 		case <-ticker.C:
 		}
 	}
+}
+
+// tabletDBName returns the name of the database a keyspace's tables live in on
+// a tablet's mysqld.
+func tabletDBName(keyspace string) string {
+	if keyspace == "" || keyspace == sidecarDBName {
+		return keyspace
+	}
+	return "vt_" + keyspace
 }
 
 // waitForSequenceValue queries the provided sequence name in the
@@ -326,29 +321,27 @@ func waitForSequenceValue(t *testing.T, conn *mysql.Conn, database, sequence str
 	}
 }
 
-func executeOnTablet(t *testing.T, conn *mysql.Conn, tablet *cluster.VttabletProcess, ksName string, query string, matchQuery string) (int, []byte, int, []byte) {
-	queryStatsURL := fmt.Sprintf("http://%s:%d/debug/query_stats", tablet.TabletHostname, tablet.Port)
-
-	count0, body0 := getQueryCount(t, queryStatsURL, matchQuery)
+func executeOnTablet(t *testing.T, conn *mysql.Conn, tablet *vitesst.Tablet, ksName string, query string, matchQuery string) (int, []byte, int, []byte) {
+	count0, body0 := getQueryCount(t, tablet, matchQuery)
 
 	qr, err := execVtgateQuery(conn, ksName, query)
 	require.NoError(t, err)
 	require.NotNil(t, qr)
 
-	count1, body1 := getQueryCount(t, queryStatsURL, matchQuery)
+	count1, body1 := getQueryCount(t, tablet, matchQuery)
 	return count0, body0, count1, body1
 }
 
-func assertQueryExecutesOnTablet(t *testing.T, conn *mysql.Conn, tablet *cluster.VttabletProcess, ksName string, query string, matchQuery string) {
+func assertQueryExecutesOnTablet(t *testing.T, conn *mysql.Conn, tablet *vitesst.Tablet, ksName string, query string, matchQuery string) {
 	t.Helper()
 	rr, err := vc.VtctldClient.ExecuteCommandWithOutput("GetRoutingRules")
 	require.NoError(t, err)
 	count0, body0, count1, body1 := executeOnTablet(t, conn, tablet, ksName, query, matchQuery)
-	require.Equalf(t, count0+1, count1, "query %q did not execute on destination %s (%s-%d);\ntried to match %q\nbefore:\n%s\n\nafter:\n%s\n\nrouting rules:\n%s\n\n",
-		query, ksName, tablet.Cell, tablet.TabletUID, matchQuery, body0, body1, rr)
+	require.Equalf(t, count0+1, count1, "query %q did not execute on destination %s (%s);\ntried to match %q\nbefore:\n%s\n\nafter:\n%s\n\nrouting rules:\n%s\n\n",
+		query, ksName, tablet.Alias(), matchQuery, body0, body1, rr)
 }
 
-func assertQueryDoesNotExecutesOnTablet(t *testing.T, conn *mysql.Conn, tablet *cluster.VttabletProcess, ksName string, query string, matchQuery string) {
+func assertQueryDoesNotExecutesOnTablet(t *testing.T, conn *mysql.Conn, tablet *vitesst.Tablet, ksName string, query string, matchQuery string) {
 	t.Helper()
 	count0, body0, count1, body1 := executeOnTablet(t, conn, tablet, ksName, query, matchQuery)
 	assert.Equalf(t, count0, count1, "query %q executed in target;\ntried to match %q\nbefore:\n%s\n\nafter:\n%s\n\n", query, matchQuery, body0, body1)
@@ -438,16 +431,17 @@ func waitForWorkflowState(vc *VitessCluster, ksWorkflow string, wantState string
 // an empty string for the tables and all tables in the target
 // keyspace will be checked. It checks for the expected state until
 // the timeout is reached.
-func confirmTablesHaveSecondaryKeys(t *testing.T, tablets []*cluster.VttabletProcess, ksName string, tables string) {
+func confirmTablesHaveSecondaryKeys(t *testing.T, tablets []*vitesst.Tablet, ksName string, tables string) {
 	require.NotNil(t, tablets)
 	require.NotNil(t, tablets[0])
+	ctx := t.Context()
 	var tableArr []string
 	if strings.TrimSpace(tables) != "" {
 		tableArr = strings.Split(tables, ",")
 	}
 	if len(tableArr) == 0 { // We don't specify any for Reshard.
 		// In this case we check all of them.
-		res, err := tablets[0].QueryTablet("show tables", ksName, true)
+		res, err := tablets[0].QueryTabletWithDB(ctx, "show tables", tabletDBName(ksName))
 		require.NoError(t, err)
 		require.NotNil(t, res)
 		for _, row := range res.Rows {
@@ -460,10 +454,7 @@ func confirmTablesHaveSecondaryKeys(t *testing.T, tablets []*cluster.VttabletPro
 		tablesWithoutSecondaryKeys := make([]string, 0)
 		for _, tablet := range tablets {
 			// Be sure that the schema is up to date.
-			err := vc.VtctldClient.ExecuteCommand("ReloadSchema", topoproto.TabletAliasString(&topodatapb.TabletAlias{
-				Cell: tablet.Cell,
-				Uid:  uint32(tablet.TabletUID),
-			}))
+			err := vc.VtctldClient.ExecuteCommand("ReloadSchema", tablet.Alias())
 			require.NoError(t, err)
 			for _, table := range tableArr {
 				if schema.IsInternalOperationTableName(table) {
@@ -471,7 +462,7 @@ func confirmTablesHaveSecondaryKeys(t *testing.T, tablets []*cluster.VttabletPro
 				}
 				table := strings.TrimSpace(table)
 				secondaryKeys := 0
-				res, err := tablet.QueryTablet("show create table "+sqlescape.EscapeID(table), ksName, true)
+				res, err := tablet.QueryTabletWithDB(ctx, "show create table "+sqlescape.EscapeID(table), tabletDBName(ksName))
 				require.NoError(t, err)
 				require.NotNil(t, res)
 				row := res.Named().Row()
@@ -505,36 +496,26 @@ func confirmTablesHaveSecondaryKeys(t *testing.T, tablets []*cluster.VttabletPro
 	}
 }
 
-func getHTTPBody(t *testing.T, url string) []byte {
-	resp, err := http.Get(url)
+func getQueryCount(t *testing.T, tablet *vitesst.Tablet, query string) (int, []byte) {
+	status, body, err := tablet.MakeAPICall(t.Context(), "/debug/query_stats")
 	require.NoError(t, err)
-	require.Equal(t, 200, resp.StatusCode)
-
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-	return body
-}
-
-func getQueryCount(t *testing.T, url string, query string) (int, []byte) {
-	body := getHTTPBody(t, url)
+	require.Equal(t, 200, status)
 
 	var queryStats []struct {
 		Query      string
 		QueryCount uint64
 	}
 
-	err := json.Unmarshal(body, &queryStats)
+	err = json.Unmarshal([]byte(body), &queryStats)
 	require.NoError(t, err)
 
 	for _, q := range queryStats {
 		if strings.Contains(q.Query, query) {
-			return int(q.QueryCount), body
+			return int(q.QueryCount), []byte(body)
 		}
 	}
 
-	return 0, body
+	return 0, []byte(body)
 }
 
 func validateDryRunResults(t *testing.T, output string, want []string) {
@@ -652,19 +633,13 @@ func printRoutingRules(t *testing.T, vc *VitessCluster, msg string) error {
 	return nil
 }
 
-func osExec(t *testing.T, command string, args []string) (string, error) {
-	cmd := exec.Command(command, args...)
-	output, err := cmd.CombinedOutput()
-	return string(output), err
-}
+func getDebugVar(t *testing.T, component debugVarsComponent, varPath []string) (string, error) {
+	log.Info("varPath: " + strings.Join(varPath, ":"))
+	status, body, err := component.MakeAPICall(t.Context(), "/debug/vars")
+	require.NoError(t, err)
+	require.Equal(t, 200, status)
 
-func getDebugVar(t *testing.T, port int, varPath []string) (string, error) {
-	var val []byte
-	var err error
-	url := fmt.Sprintf("http://localhost:%d/debug/vars", port)
-	log.Info(fmt.Sprintf("url: %s, varPath: %s", url, strings.Join(varPath, ":")))
-	body := getHTTPBody(t, url)
-	val, _, _, err = jsonparser.Get(body, varPath...)
+	val, _, _, err := jsonparser.Get([]byte(body), varPath...)
 	require.NoError(t, err)
 	return string(val), nil
 }
@@ -703,7 +678,7 @@ func confirmWorkflowHasCopiedNoData(t *testing.T, defaultTargetKs, workflow stri
 // newlines and whitespace removed so that we have predictable,
 // compact, and easy to compare results for tests.
 func getShardRoutingRules(t *testing.T) string {
-	output, err := osExec(t, "vtctldclient", []string{"--server", getVtctldGRPCURL(), "GetShardRoutingRules"})
+	output, err := vc.VtctldClient.ExecuteCommandWithOutput("GetShardRoutingRules")
 	log.Info(fmt.Sprintf("GetShardRoutingRules err: %+v, output: %+v", err, output))
 	require.Nilf(t, err, output)
 	require.NotNil(t, output)
@@ -735,9 +710,11 @@ func getShardRoutingRules(t *testing.T) string {
 	return output
 }
 
-func verifyCopyStateIsOptimized(t *testing.T, tablet *cluster.VttabletProcess) {
+func verifyCopyStateIsOptimized(t *testing.T, tablet *vitesst.Tablet) {
+	ctx := t.Context()
+
 	// Update information_schem with the latest data
-	_, err := tablet.QueryTablet(sqlparser.BuildParsedQuery("analyze table %s.copy_state", sidecarDBIdentifier).Query, "", false)
+	_, err := tablet.QueryTabletWithDB(ctx, sqlparser.BuildParsedQuery("analyze table %s.copy_state", sidecarDBIdentifier).Query, "")
 	require.NoError(t, err)
 
 	// Verify that there's no delete marked rows and we reset the auto-inc value.
@@ -747,7 +724,7 @@ func verifyCopyStateIsOptimized(t *testing.T, tablet *cluster.VttabletProcess) {
 	query := sqlparser.BuildParsedQuery("select data_free, auto_increment from information_schema.tables where table_schema='%s' and table_name='copy_state'", sidecarDBName).Query
 	var dataFree, autoIncrement int64
 	for {
-		res, err := tablet.QueryTablet(query, "", false)
+		res, err := tablet.QueryTabletWithDB(ctx, query, "")
 		require.NoError(t, err)
 		require.NotNil(t, res)
 		require.Equal(t, 1, len(res.Rows))
@@ -787,8 +764,9 @@ func getIntVal(t *testing.T, vars map[string]any, key string) int {
 	return int(i)
 }
 
-func getPartialMetrics(t *testing.T, key string, tab *cluster.VttabletProcess) (int, int, int, int) {
-	vars := tab.GetVars()
+func getPartialMetrics(t *testing.T, key string, tab *vitesst.Tablet) (int, int, int, int) {
+	vars, err := tab.GetVars(t.Context())
+	require.NoError(t, err)
 	insertKey := key + ".insert"
 	updateKey := key + ".insert"
 	cacheSizes := vars["VReplicationPartialQueryCacheSize"].(map[string]any)
@@ -805,8 +783,8 @@ func getPartialMetrics(t *testing.T, key string, tab *cluster.VttabletProcess) (
 }
 
 // check that the connection's binlog row image is set to NOBLOB
-func isBinlogRowImageNoBlob(t *testing.T, tablet *cluster.VttabletProcess) bool {
-	rs, err := tablet.QueryTablet("select @@global.binlog_row_image", "", false)
+func isBinlogRowImageNoBlob(t *testing.T, tablet *vitesst.Tablet) bool {
+	rs, err := tablet.QueryTabletWithDB(t.Context(), "select @@global.binlog_row_image", "")
 	require.NoError(t, err)
 	require.Equal(t, 1, len(rs.Rows))
 	mode := strings.ToLower(rs.Rows[0][0].ToString())
@@ -897,9 +875,7 @@ func (lg *loadGenerator) start() {
 						if err != nil {
 							sqlErr := err.(*sqlerror.SQLError)
 							if strings.Contains(strings.ToLower(err.Error()), "denied tables") {
-								if debugMode {
-									t.Logf("loadGenerator: denied tables error executing query: %d:%v", sqlErr.Number(), err)
-								}
+								t.Logf("loadGenerator: denied tables error executing query: %d:%v", sqlErr.Number(), err)
 								atomic.AddInt64(&deniedErrors, 1)
 							} else if strings.Contains(strings.ToLower(err.Error()), "ambiguous") {
 								// This can happen when a second keyspace is setup with the same tables, but
@@ -910,9 +886,7 @@ func (lg *loadGenerator) start() {
 							} else if strings.Contains(strings.ToLower(err.Error()), "not found") {
 								atomic.AddInt64(&tableNotFoundErrors, 1)
 							} else {
-								if debugMode {
-									t.Logf("loadGenerator: error executing query: %d:%v", sqlErr.Number(), err)
-								}
+								t.Logf("loadGenerator: error executing query: %d:%v", sqlErr.Number(), err)
 								atomic.AddInt64(&otherErrors, 1)
 							}
 						} else {
@@ -1051,8 +1025,8 @@ func confirmNoWorkflows(t *testing.T, keyspace string) {
 
 // getVReplicationConfig returns the vreplication config for one random workflow for a given tablet. Currently, this is
 // used when there is only one workflow, so we are using this simple method to get the config.
-func getVReplicationConfig(t *testing.T, tab *cluster.VttabletProcess) map[string]string {
-	configJson, err := getDebugVar(t, tab.Port, []string{"VReplicationConfig"})
+func getVReplicationConfig(t *testing.T, tab *vitesst.Tablet) map[string]string {
+	configJson, err := getDebugVar(t, tab, []string{"VReplicationConfig"})
 	require.NoError(t, err)
 
 	var config map[string]string
@@ -1086,7 +1060,7 @@ func mapToCSV(m map[string]string) string {
 }
 
 // validateOverrides validates that the given vttablets have the expected config overrides.
-func validateOverrides(t *testing.T, tabs map[string]*cluster.VttabletProcess, want map[string]string) {
+func validateOverrides(t *testing.T, tabs map[string]*vitesst.Tablet, want map[string]string) {
 	for _, tab := range tabs {
 		config := getVReplicationConfig(t, tab)
 		for k, v := range want {

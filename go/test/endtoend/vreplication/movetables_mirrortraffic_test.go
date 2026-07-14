@@ -26,6 +26,11 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
+// deniedTablesRule is the name of the query rule vttablet installs for the
+// tables denied on the source of a switched workflow. A query the rule rejects
+// fails with "disallowed due to rule: enforce denied tables".
+const deniedTablesRule = "enforce denied tables"
+
 func testMoveTablesMirrorTraffic(t *testing.T, flavor workflowFlavor) {
 	setSidecarDBName("_vt")
 	ogReplicas := defaultReplicas
@@ -167,7 +172,7 @@ func TestMoveTablesMirrorTraffic_AllowReads(t *testing.T) {
 
 	// Use shard-targeted queries to bypass vtgate routing rules and test
 	// vttablet-level denied tables behavior directly.
-	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	vtgateConn := vc.GetVTGateConn(t)
 	defer vtgateConn.Close()
 	_, err := vtgateConn.ExecuteFetch(fmt.Sprintf("use `%s:-80`", defaultTargetKs), 0, false)
 	require.NoError(t, err)
@@ -179,15 +184,15 @@ func TestMoveTablesMirrorTraffic_AllowReads(t *testing.T) {
 
 	// Test 2: INSERT should be blocked on denied tables
 	_, err = vtgateConn.ExecuteFetch("INSERT INTO customer(cid, name) VALUES (999, 'test')", 1, false)
-	require.Error(t, err, "INSERT should fail on denied table even with allow_reads=true")
+	require.ErrorContains(t, err, deniedTablesRule, "INSERT should fail on denied table even with allow_reads=true")
 
 	// Test 3: UPDATE should be blocked on denied tables
 	_, err = vtgateConn.ExecuteFetch("UPDATE customer SET name = 'test' WHERE cid = 1", 1, false)
-	require.Error(t, err, "UPDATE should fail on denied table even with allow_reads=true")
+	require.ErrorContains(t, err, deniedTablesRule, "UPDATE should fail on denied table even with allow_reads=true")
 
 	// Test 4: DELETE should be blocked on denied tables
 	_, err = vtgateConn.ExecuteFetch("DELETE FROM customer WHERE cid = 999", 1, false)
-	require.Error(t, err, "DELETE should fail on denied table even with allow_reads=true")
+	require.ErrorContains(t, err, deniedTablesRule, "DELETE should fail on denied table even with allow_reads=true")
 
 	// Clean up: switch traffic and verify mirror rules are removed
 	mt.SwitchReadsAndWrites()

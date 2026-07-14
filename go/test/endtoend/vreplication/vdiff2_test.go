@@ -19,8 +19,6 @@ package vreplication
 import (
 	"fmt"
 	"math"
-	"os/exec"
-	"path"
 	"runtime"
 	"strconv"
 	"strings"
@@ -36,7 +34,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/sqlescape"
-	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/vitesst"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 
@@ -125,9 +123,9 @@ var testCases = []*testCase{
 	},
 }
 
-func checkVDiffCountStat(t *testing.T, tablet *cluster.VttabletProcess, expectedCount int64) {
-	countStr, err := getDebugVar(t, tablet.Port, []string{"VDiffCount"})
-	require.NoError(t, err, "failed to get VDiffCount stat from %s-%d tablet: %v", tablet.Cell, tablet.TabletUID, err)
+func checkVDiffCountStat(t *testing.T, tablet *vitesst.Tablet, expectedCount int64) {
+	countStr, err := getDebugVar(t, tablet, []string{"VDiffCount"})
+	require.NoError(t, err, "failed to get VDiffCount stat from %s tablet: %v", tablet.Alias(), err)
 	count, err := strconv.Atoi(countStr)
 	require.NoError(t, err, "failed to convert VDiffCount stat string to int: %v", err)
 	require.Equal(t, expectedCount, int64(count), "expected VDiffCount stat to be %d but got %d", expectedCount, count)
@@ -200,8 +198,8 @@ func TestVDiff2(t *testing.T) {
 	statsTablet := vc.getPrimaryTablet(t, defaultTargetKs, targetShards[0])
 
 	// We diffed X rows so confirm that the global total is > 0.
-	countStr, err := getDebugVar(t, statsTablet.Port, []string{"VDiffRowsComparedTotal"})
-	require.NoError(t, err, "failed to get VDiffRowsComparedTotal stat from %s-%d tablet: %v", statsTablet.Cell, statsTablet.TabletUID, err)
+	countStr, err := getDebugVar(t, statsTablet, []string{"VDiffRowsComparedTotal"})
+	require.NoError(t, err, "failed to get VDiffRowsComparedTotal stat from %s tablet: %v", statsTablet.Alias(), err)
 	count, err := strconv.Atoi(countStr)
 	require.NoError(t, err, "failed to convert VDiffRowsComparedTotal stat string to int: %v", err)
 	require.Greater(t, count, 0, "expected VDiffRowsComparedTotal stat to be greater than 0 but got %d", count)
@@ -210,10 +208,10 @@ func TestVDiff2(t *testing.T) {
 	// is produced from controller info, should be empty. Controller cleanup on
 	// workflow completion can briefly lag the stats sampler, so poll.
 	require.Eventually(t, func() bool {
-		vdrc, err := getDebugVar(t, statsTablet.Port, []string{"VDiffRowsCompared"})
-		require.NoError(t, err, "failed to get VDiffRowsCompared stat from %s-%d tablet: %v", statsTablet.Cell, statsTablet.TabletUID, err)
+		vdrc, err := getDebugVar(t, statsTablet, []string{"VDiffRowsCompared"})
+		require.NoError(t, err, "failed to get VDiffRowsCompared stat from %s tablet: %v", statsTablet.Alias(), err)
 		return vdrc == "{}"
-	}, 30*time.Second, 500*time.Millisecond, "expected VDiffRowsCompared stat on %s-%d tablet to eventually be empty", statsTablet.Cell, statsTablet.TabletUID)
+	}, 30*time.Second, 500*time.Millisecond, "expected VDiffRowsCompared stat on %s tablet to eventually be empty", statsTablet.Alias())
 }
 
 func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, cells []*Cell) {
@@ -280,7 +278,7 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 
 		// Confirm that the customer table diff was restarted but not others.
 		tablet := vc.getPrimaryTablet(t, tc.targetKs, arrTargetShards[0])
-		stat, err := getDebugVar(t, tablet.Port, []string{"VDiffRestartedTableDiffsCount"})
+		stat, err := getDebugVar(t, tablet, []string{"VDiffRestartedTableDiffsCount"})
 		require.NoError(t, err, "failed to get VDiffRestartedTableDiffsCount stat: %v", err)
 		customerRestarts := gjson.Parse(stat).Get("customer").Int()
 		require.Greater(t, customerRestarts, int64(0), "expected VDiffRestartedTableDiffsCount stat to be greater than 0 for the customer table, got %d", customerRestarts)
@@ -304,8 +302,8 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 
 	// Confirm that the VDiffRowsCompared stat -- which is a running count of the rows
 	// compared by vdiff per table at the controller level -- works as expected.
-	vdrc, err := getDebugVar(t, statsTablet.Port, []string{"VDiffRowsCompared"})
-	require.NoError(t, err, "failed to get VDiffRowsCompared stat from %s-%d tablet: %v", statsTablet.Cell, statsTablet.TabletUID, err)
+	vdrc, err := getDebugVar(t, statsTablet, []string{"VDiffRowsCompared"})
+	require.NoError(t, err, "failed to get VDiffRowsCompared stat from %s tablet: %v", statsTablet.Alias(), err)
 	uuid, jsout, err := performVDiff2Action(t, ksWorkflow, allCellNames, "show", "last", false, "--verbose")
 	require.NoError(t, err)
 	expect := gjson.Get(jsout, "Reports.customer."+statsShard).Int()
@@ -366,11 +364,16 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 	checkVDiffCountStat(t, statsTablet, tc.vdiffCount)
 
 	// Confirm that VDiff queries did not use MAX_EXECUTION_TIME query hints using the logs.
-	grepCmd := fmt.Sprintf("grep 'Streaming rows for query:' %s | grep -c -v MAX_EXECUTION_TIME", path.Join(vc.ClusterConfig.tmpDir, "*-vttablet-stderr.txt"))
-	out, err := exec.Command("bash", "-c", grepCmd).Output()
-	require.NoError(t, err)
-	logcnt, err := strconv.Atoi(strings.TrimSpace(string(out)))
-	require.NoError(t, err)
+	logcnt := 0
+	for _, tablet := range vc.Cluster.Tablets() {
+		logs, err := tablet.Logs(t.Context())
+		require.NoError(t, err)
+		for line := range strings.SplitSeq(logs, "\n") {
+			if strings.Contains(line, "Streaming rows for query:") && !strings.Contains(line, "MAX_EXECUTION_TIME") {
+				logcnt++
+			}
+		}
+	}
 	require.Greater(t, logcnt, 0)
 }
 
@@ -453,7 +456,7 @@ func testCLIFlagHandling(t *testing.T, targetKs, workflowName string, cell *Cell
 		tablets := vc.getVttabletsInKeyspace(t, cell, targetKs, "PRIMARY")
 		require.Greater(t, len(tablets), 0, "no primary tablets found in keyspace %s", targetKs)
 		tablet := maps.Values(tablets)[0]
-		qres, err := tablet.QueryTablet(query, targetKs, false)
+		qres, err := tablet.QueryTabletWithDB(t.Context(), query, "")
 		require.NoError(t, err, "query %q failed: %v", query, err)
 		require.NotNil(t, qres, "query %q returned nil result", query) // Should never happen
 		require.Equal(t, 1, len(qres.Rows), "query %q returned %d rows, expected 1", query, len(qres.Rows))
@@ -532,7 +535,7 @@ func testNoOrphanedData(t *testing.T, keyspace, workflow string, shards []string
 		query := sqlparser.BuildParsedQuery("select vd.id as vdiff_id, vdt.vdiff_id as vdiff_table_id, vdl.vdiff_id as vdiff_log_id from %s.vdiff as vd inner join %s.vdiff_table as vdt on (vd.id = vdt.vdiff_id) inner join %s.vdiff_log as vdl on (vd.id = vdl.vdiff_id) where vd.keyspace = %s and vd.workflow = %s",
 			sidecarDBIdentifier, sidecarDBIdentifier, sidecarDBIdentifier, encodeString(keyspace), encodeString(workflow)).Query
 		for _, shard := range shards {
-			res, err := vc.getPrimaryTablet(t, keyspace, shard).QueryTablet(query, keyspace, false)
+			res, err := vc.getPrimaryTablet(t, keyspace, shard).QueryTabletWithDB(t.Context(), query, "")
 			require.NoError(t, err)
 			require.Equal(t, 0, len(res.Rows))
 		}
@@ -637,7 +640,7 @@ func testAutoRetryError(t *testing.T, tc *testCase, cells string) {
 		// Update the VDiff to simulate an ephemeral error having occurred.
 		for shard := range strings.SplitSeq(tc.targetShards, ",") {
 			tab := vc.getPrimaryTablet(t, tc.targetKs, shard)
-			res, err := tab.QueryTabletWithDB(sqlparser.BuildParsedQuery(sqlSimulateError, sidecarDBIdentifier, sidecarDBIdentifier, encodeString(uuid)).Query, "vt_"+tc.targetKs)
+			res, err := tab.QueryTabletWithDB(t.Context(), sqlparser.BuildParsedQuery(sqlSimulateError, sidecarDBIdentifier, sidecarDBIdentifier, encodeString(uuid)).Query, "vt_"+tc.targetKs)
 			require.NoError(t, err)
 			// Should have updated the vdiff record and at least one vdiff_table record.
 			require.GreaterOrEqual(t, int(res.RowsAffected), 2)
