@@ -195,7 +195,7 @@ func (c *Cluster) Start(ctx context.Context) (cleanup func(context.Context) erro
 // primaries, applies the schema, and then applies the vschema.
 func (c *Cluster) startKeyspace(ctx context.Context, kc *keyspaceConfig) error {
 	c.logf("creating keyspace %s", kc.name)
-	if err := c.vtctld.createKeyspace(ctx, kc.name, kc.durabilityPolicy); err != nil {
+	if err := c.vtctld.createKeyspace(ctx, kc.name, kc.durabilityPolicy, kc.sidecarDBName); err != nil {
 		return err
 	}
 

@@ -19,17 +19,17 @@ package orderby
 import (
 	"testing"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
-
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/test/vitesst"
 )
 
-func start(t *testing.T) (utils.MySQLCompare, func()) {
-	mcmp, err := utils.NewMySQLCompare(t, vtParams, mysqlParams)
+func start(t *testing.T) (vitesst.MySQLCompare, func()) {
+	mcmp, err := vitesst.NewMySQLCompare(t.Context(), t, vtParams, mysqlParams)
 	require.NoError(t, err)
 
 	deleteAll := func() {
-		_, _ = utils.ExecAllowError(t, mcmp.VtConn, "set workload = oltp")
+		_, _ = vitesst.ExecAllowError(t, mcmp.VtConn, "set workload = oltp")
 
 		tables := []string{"user"}
 		for _, table := range tables {

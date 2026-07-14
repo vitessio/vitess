@@ -17,24 +17,22 @@ limitations under the License.
 package readafterwrite
 
 import (
+	"context"
 	"flag"
+	"fmt"
 	"os"
 	"testing"
-
-	"vitess.io/vitess/go/test/endtoend/utils"
 
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
+	clusterInstance *vitesst.Cluster
 	vtParams        mysql.ConnParams
 	keyspaceName    = "ks"
-	cell            = "zone1"
-	hostname        = "localhost"
 	sqlSchema       = `
 	create table test(
 		id bigint,
@@ -52,7 +50,7 @@ CREATE TABLE test_vdx (
 `
 
 	vSchema = `
-		{	
+		{
 			"sharded":true,
 			"vindexes": {
 				"hash_index": {
@@ -71,7 +69,7 @@ CREATE TABLE test_vdx (
 				"unicode_vdx":{
 					"type": "unicode_loose_md5"
                 }
-			},	
+			},
 			"tables": {
 				"test":{
 					"column_vindexes": [
@@ -102,39 +100,34 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(cell, hostname)
-		defer clusterInstance.Teardown()
+		ctx := context.Background()
 
-		// Start topo server
-		if err := clusterInstance.StartTopo(); err != nil {
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithKeyspace(keyspaceName).
+				WithShardNames("-80", "80-").
+				WithReplicas(1).
+				WithSchema(sqlSchema).
+				WithVSchema(vSchema),
+			vitesst.WithVTTabletArgs("--queryserver-config-transaction-timeout", "5s"),
+			vitesst.WithVTGateArgs("--enable-system-settings", "--lock-heartbeat-time", "2s"),
+		)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-
-		// Start keyspace
-		keyspace := &cluster.Keyspace{
-			Name:      keyspaceName,
-			SchemaSQL: sqlSchema,
-			VSchema:   vSchema,
-		}
-		clusterInstance.VtTabletExtraArgs = []string{
-			"--queryserver-config-transaction-timeout", "5s",
-		}
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, false, clusterInstance.Cell); err != nil {
+		cleanup, err := cluster.Start(ctx)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
 
-		// Start vtgate
-		clusterInstance.VtGateExtraArgs = []string{"--lock-heartbeat-time", "2s"}
-		vtgateProcess := clusterInstance.NewVtgateInstance()
-		vtgateProcess.SysVarSetEnabled = true
-		if err := vtgateProcess.Setup(); err != nil {
-			return 1
-		}
-
-		vtParams = mysql.ConnParams{
-			Host: clusterInstance.Hostname,
-			Port: clusterInstance.VtgateMySQLPort,
-		}
+		clusterInstance = cluster
+		vtParams = cluster.VTParams(ctx, "")
 		return m.Run()
 	}()
 	os.Exit(exitCode)
@@ -145,7 +138,7 @@ func TestRAWSettings(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	utils.AssertMatches(t, conn, `select @@read_after_write_gtid, @@read_after_write_timeout, @@session_track_gtids`, `[[VARCHAR("") FLOAT64(0) VARCHAR("off")]]`)
-	utils.Exec(t, conn, `set read_after_write_gtid = 'some-gtid:1', read_after_write_timeout = 0.2, session_track_gtids = own_gtid`)
-	utils.AssertMatches(t, conn, `select @@read_after_write_gtid, @@read_after_write_timeout, @@session_track_gtids`, `[[VARCHAR("some-gtid:1") FLOAT64(0.2) VARCHAR("own_gtid")]]`)
+	vitesst.AssertMatches(t, conn, `select @@read_after_write_gtid, @@read_after_write_timeout, @@session_track_gtids`, `[[VARCHAR("") FLOAT64(0) VARCHAR("off")]]`)
+	vitesst.Exec(t, conn, `set read_after_write_gtid = 'some-gtid:1', read_after_write_timeout = 0.2, session_track_gtids = own_gtid`)
+	vitesst.AssertMatches(t, conn, `select @@read_after_write_gtid, @@read_after_write_timeout, @@session_track_gtids`, `[[VARCHAR("some-gtid:1") FLOAT64(0.2) VARCHAR("own_gtid")]]`)
 }

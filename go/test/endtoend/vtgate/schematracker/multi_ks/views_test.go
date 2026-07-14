@@ -17,26 +17,24 @@ limitations under the License.
 package multiks
 
 import (
+	"context"
 	_ "embed"
 	"flag"
 	"fmt"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
+	clusterInstance *vitesst.Cluster
 	vtParams        mysql.ConnParams
 	shardedKs       = "sks"
 	unshardedKs     = "uks"
-	cell            = "zone1"
 
 	//go:embed sschema.sql
 	shardedSchema string
@@ -55,60 +53,36 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(cell, "localhost")
-		defer clusterInstance.Teardown()
+		ctx := context.Background()
 
-		// Start topo server
-		err := clusterInstance.StartTopo()
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithVTGateArgs("--enable-views"),
+			vitesst.WithVTTabletArgs("--queryserver-enable-views"),
+			vitesst.WithKeyspace(shardedKs).
+				WithShardNames("-80", "80-").
+				WithSchema(shardedSchema).
+				WithVSchema(shardedVSchema),
+			vitesst.WithKeyspace(unshardedKs).
+				WithSchema(unshardedSchema).
+				WithVSchema(unshardedVSchema),
+		)
 		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-
-		// enable views tracking
-		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--enable-views")
-		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--queryserver-enable-views")
-
-		// Start sharded keyspace
-		cell := clusterInstance.Cell
-		sks := cluster.Keyspace{
-			Name:      shardedKs,
-			SchemaSQL: shardedSchema,
-			VSchema:   shardedVSchema,
-		}
-
-		err = clusterInstance.StartKeyspace(sks, []string{"-80", "80-"}, 0, false, cell)
+		cleanup, err := cluster.Start(ctx)
 		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
 
-		// Start unsharded keyspace
-		uks := cluster.Keyspace{
-			Name:      unshardedKs,
-			SchemaSQL: unshardedSchema,
-			VSchema:   unshardedVSchema,
-		}
-
-		err = clusterInstance.StartUnshardedKeyspace(uks, 0, false, cell)
-		if err != nil {
-			return 1
-		}
-
-		// Start vtgate
-		err = clusterInstance.StartVtgate()
-		if err != nil {
-			return 1
-		}
-
-		err = clusterInstance.WaitForVTGateAndVTTablets(1 * time.Minute)
-		if err != nil {
-			fmt.Println(err)
-			return 1
-		}
-
-		vtParams = mysql.ConnParams{
-			Host: clusterInstance.Hostname,
-			Port: clusterInstance.VtgateMySQLPort,
-		}
+		clusterInstance = cluster
+		vtParams = cluster.VTParams(ctx, "")
 		return m.Run()
 	}()
 	os.Exit(exitCode)
@@ -129,7 +103,7 @@ func TestViewQueries(t *testing.T) {
 		return ok
 	}
 
-	utils.WaitForVschemaCondition(t, clusterInstance.VtgateProcess, shardedKs, viewExists, "view cv3 not found")
+	vitesst.WaitForVschemaCondition(t, clusterInstance.VTGate(), shardedKs, viewExists, "view cv3 not found")
 
 	// Insert some data
 	insertData(t, conn)
@@ -224,8 +198,8 @@ func TestViewQueries(t *testing.T) {
 
 	for _, tc := range tcases {
 		t.Run(tc.name, func(t *testing.T) {
-			utils.Exec(t, conn, "use "+tc.defaultKs)
-			qr, err := utils.ExecAllowError(t, conn, tc.sql)
+			vitesst.Exec(t, conn, "use "+tc.defaultKs)
+			qr, err := vitesst.ExecAllowError(t, conn, tc.sql)
 			if tc.expErr != "" {
 				require.ErrorContains(t, err, tc.expErr)
 				return
@@ -240,14 +214,14 @@ func insertData(t *testing.T, conn *mysql.Conn) {
 	t.Helper()
 
 	// unsharded
-	utils.Exec(t, conn, "insert into uks.t(id, col) values(1, 1000)")
-	utils.Exec(t, conn, "insert into uks.t(id, col) values(2, 4000)")
-	utils.Exec(t, conn, "insert into u(id, col) values(1, 10)")
-	utils.Exec(t, conn, "insert into u(id, col) values(2, 20)")
+	vitesst.Exec(t, conn, "insert into uks.t(id, col) values(1, 1000)")
+	vitesst.Exec(t, conn, "insert into uks.t(id, col) values(2, 4000)")
+	vitesst.Exec(t, conn, "insert into u(id, col) values(1, 10)")
+	vitesst.Exec(t, conn, "insert into u(id, col) values(2, 20)")
 
 	// sharded
-	utils.Exec(t, conn, "insert into sks.t(id, col) values(1, 1000)")
-	utils.Exec(t, conn, "insert into sks.t(id, col) values(2, 4000)")
-	utils.Exec(t, conn, "insert into s(id, col) values(1, 100)")
-	utils.Exec(t, conn, "insert into s(id, col) values(2, 200)")
+	vitesst.Exec(t, conn, "insert into sks.t(id, col) values(1, 1000)")
+	vitesst.Exec(t, conn, "insert into sks.t(id, col) values(2, 4000)")
+	vitesst.Exec(t, conn, "insert into s(id, col) values(1, 100)")
+	vitesst.Exec(t, conn, "insert into s(id, col) values(2, 200)")
 }

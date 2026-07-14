@@ -17,6 +17,7 @@ limitations under the License.
 package mysqlvsvitess
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"testing"
@@ -24,16 +25,14 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
+	clusterInstance *vitesst.Cluster
 	vtParams        mysql.ConnParams
 	mysqlParams     mysql.ConnParams
 	keyspaceName    = "ks"
-	cell            = "test"
 	schemaSQL       = `create table t1(
 		id1 bigint,
 		id2 bigint,
@@ -64,47 +63,45 @@ var (
 
 func TestMain(m *testing.M) {
 	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(cell, "localhost")
-		defer clusterInstance.Teardown()
+		ctx := context.Background()
 
-		// Start topo server
-		err := clusterInstance.StartTopo()
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithKeyspace(keyspaceName).
+				WithShardNames("-80", "80-").
+				WithSchema(schemaSQL).
+				WithVSchema(vschema),
+			vitesst.WithVTGateArgs("--schema-change-signal", "--enable-system-settings=true"),
+			vitesst.WithVTTabletArgs("--queryserver-config-schema-change-signal"),
+		)
 		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-
-		// Start keyspace
-		keyspace := &cluster.Keyspace{
-			Name:      keyspaceName,
-			SchemaSQL: schemaSQL,
-			VSchema:   vschema,
-		}
-		clusterInstance.VtGateExtraArgs = []string{"--schema-change-signal"}
-		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal"}
-		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 0, false, clusterInstance.Cell)
+		cleanup, err := cluster.Start(ctx)
 		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
 
-		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--enable-system-settings=true")
-		// Start vtgate
-		err = clusterInstance.StartVtgate()
-		if err != nil {
-			return 1
-		}
-
-		vtParams = mysql.ConnParams{
-			Host: clusterInstance.Hostname,
-			Port: clusterInstance.VtgateMySQLPort,
-		}
+		clusterInstance = cluster
+		vtParams = cluster.VTParams(ctx, "")
 
 		// create mysql instance and connection parameters
-		conn, closer, err := utils.NewMySQL(clusterInstance, keyspaceName, schemaSQL)
+		conn, closer, err := vitesst.NewMySQL(ctx, cluster, keyspaceName, schemaSQL)
 		if err != nil {
 			fmt.Println(err)
 			return 1
 		}
-		defer closer()
+		defer func() {
+			if err := closer(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "mysql teardown:", err)
+			}
+		}()
 		mysqlParams = conn
 
 		return m.Run()
@@ -122,7 +119,7 @@ func TestCreateMySQL(t *testing.T) {
 	require.NoError(t, err)
 	defer vtConn.Close()
 
-	utils.ExecCompareMySQL(t, vtConn, mysqlConn, "insert into t1(id1, id2, id3) values (1, 1, 1), (2, 2, 2), (3, 3, 3)")
-	utils.AssertMatchesCompareMySQL(t, vtConn, mysqlConn, "select * from t1;", `[[INT64(1) INT64(1) INT64(1)] [INT64(2) INT64(2) INT64(2)] [INT64(3) INT64(3) INT64(3)]]`)
-	utils.AssertMatchesCompareMySQL(t, vtConn, mysqlConn, "select * from t1 order by id1 desc;", `[[INT64(3) INT64(3) INT64(3)] [INT64(2) INT64(2) INT64(2)] [INT64(1) INT64(1) INT64(1)]]`)
+	vitesst.ExecCompareMySQL(t, vtConn, mysqlConn, "insert into t1(id1, id2, id3) values (1, 1, 1), (2, 2, 2), (3, 3, 3)")
+	vitesst.AssertMatchesCompareMySQL(t, vtConn, mysqlConn, "select * from t1;", `[[INT64(1) INT64(1) INT64(1)] [INT64(2) INT64(2) INT64(2)] [INT64(3) INT64(3) INT64(3)]]`)
+	vitesst.AssertMatchesCompareMySQL(t, vtConn, mysqlConn, "select * from t1 order by id1 desc;", `[[INT64(3) INT64(3) INT64(3)] [INT64(2) INT64(2) INT64(2)] [INT64(1) INT64(1) INT64(1)]]`)
 }

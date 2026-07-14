@@ -91,6 +91,17 @@ func (g *VTGate) ReadVSchema(ctx context.Context) (*any, error) {
 	return &results, nil
 }
 
+// WriteConfig replaces the vtgate's watched config file, so the running
+// vtgate hot-reloads the new values. Poll /debug/config through MakeAPICall
+// to observe the reload.
+func (g *VTGate) WriteConfig(ctx context.Context, content string) error {
+	ctr := g.container()
+	if ctr == nil {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s has no container", g.name)
+	}
+	return writeContainerFile(ctx, ctr, vtgateConfigPath, content)
+}
+
 // Restart recreates the vtgate container behind this handle with the same
 // network alias. When extraArgs are given they replace the vtgate's previous
 // extra args, so tests can restart vtgate with new flags. Mapped host ports
@@ -183,6 +194,7 @@ func (c *Cluster) runVTGateContainer(ctx context.Context, name string, extraArgs
 	args := []string{"vtgate"}
 	args = append(args, c.topoFlags()...)
 	args = append(args,
+		"--config-file", vtgateConfigPath,
 		"--cell", c.cells[0],
 		"--cells-to-watch", strings.Join(c.cells, ","),
 		"--port", strconv.Itoa(vtgateHTTPPort),
@@ -198,7 +210,10 @@ func (c *Cluster) runVTGateContainer(ctx context.Context, name string, extraArgs
 	}
 	args = append(args, extraArgs...)
 
-	filesOpt, err := withContainerFiles(c.opts.vtgateFiles)
+	// The config file is staged world-writable: files are copied in as root,
+	// and WriteConfig overwrites this path by exec as the vitess user.
+	files := append([]ContainerFile{{Content: []byte("{}\n"), ContainerPath: vtgateConfigPath, Mode: 0o666}}, c.opts.vtgateFiles...)
+	filesOpt, err := withContainerFiles(files)
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "preparing files for %s", name)
 	}

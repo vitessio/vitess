@@ -17,24 +17,22 @@ limitations under the License.
 package orderby
 
 import (
+	"context"
 	_ "embed"
 	"flag"
 	"fmt"
 	"os"
 	"testing"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
-
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
+	clusterInstance *vitesst.Cluster
 	vtParams        mysql.ConnParams
 	mysqlParams     mysql.ConnParams
 	keyspaceName    = "ks_orderby"
-	cell            = "test_orderby"
 
 	//go:embed schema.sql
 	schemaSQL string
@@ -47,47 +45,46 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(cell, "localhost")
-		defer clusterInstance.Teardown()
+		ctx := context.Background()
 
-		// Start topo server
-		err := clusterInstance.StartTopo()
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithKeyspace(keyspaceName).
+				WithShardNames("-80", "80-").
+				WithReplicas(1).
+				WithRDOnly(1).
+				WithSchema(schemaSQL).
+				WithVSchema(vschema),
+			vitesst.WithVTGateArgs("--schema-change-signal=false", "--enable-system-settings=true"),
+		)
 		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-
-		// Start keyspace
-		keyspace := &cluster.Keyspace{
-			Name:      keyspaceName,
-			SchemaSQL: schemaSQL,
-			VSchema:   vschema,
-		}
-		clusterInstance.VtGateExtraArgs = []string{"--schema-change-signal" + "=false"}
-		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, true, clusterInstance.Cell)
+		cleanup, err := cluster.Start(ctx)
 		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
 
-		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--enable-system-settings=true")
-		// Start vtgate
-		err = clusterInstance.StartVtgate()
+		clusterInstance = cluster
+		vtParams = cluster.VTParams(ctx, "")
+
+		mysqlConn, closer, err := vitesst.NewMySQL(ctx, cluster, keyspaceName, schemaSQL)
 		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-
-		vtParams = mysql.ConnParams{
-			Host: clusterInstance.Hostname,
-			Port: clusterInstance.VtgateMySQLPort,
-		}
-
-		// create mysql instance and connection parameters
-		conn, closer, err := utils.NewMySQL(clusterInstance, keyspaceName, schemaSQL)
-		if err != nil {
-			fmt.Println(err)
-			return 1
-		}
-		defer closer()
-		mysqlParams = conn
+		defer func() {
+			if err := closer(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "mysql teardown:", err)
+			}
+		}()
+		mysqlParams = mysqlConn
 		return m.Run()
 	}()
 	os.Exit(exitCode)

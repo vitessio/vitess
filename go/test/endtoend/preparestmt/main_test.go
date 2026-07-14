@@ -17,11 +17,16 @@ limitations under the License.
 package preparestmt
 
 import (
+	"context"
 	"database/sql"
 	_ "embed"
+	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -29,7 +34,7 @@ import (
 	"github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 // tableData is a temporary structure to hold selected data.
@@ -63,15 +68,19 @@ func init() {
 }
 
 var (
-	clusterInstance       *cluster.LocalProcessCluster
-	dbInfo                DBInfo
-	hostname              = "localhost"
-	uks                   = "uks"
-	sks                   = "sks"
-	testingID             = 1
-	cell                  = "zone1"
-	mysqlAuthServerStatic = "mysql_auth_server_static.json"
-	jsonExample           = `{
+	clusterInstance *vitesst.Cluster
+	dbInfo          DBInfo
+	uks             = "uks"
+	sks             = "sks"
+	testingID       = 1
+	authServerFile  = "/vt/files/mysql_auth_server_static.json"
+	authServerJSON  = `{
+		"testuser1": {
+			"Password": "testpassword1",
+			"UserData": "vtgate client 1"
+		}
+	}`
+	jsonExample = `{
 		"quiz": {
 			"sport": {
 				"q1": {
@@ -126,66 +135,63 @@ var (
 func TestMain(m *testing.M) {
 	flag.Parse()
 
-	exitcode, err := func() (int, error) {
-		clusterInstance = cluster.NewCluster(cell, hostname)
-		defer clusterInstance.Teardown()
+	exitCode := func() int {
+		ctx := context.Background()
 
-		// Start topo server
-		if err := clusterInstance.StartTopo(); err != nil {
-			return 1, err
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithKeyspace(uks).
+				WithReplicas(1).
+				WithSchema(uSQLSchema).
+				WithVSchema(uVschema),
+			vitesst.WithKeyspace(sks).
+				WithSchema(sSQLSchema).
+				WithVSchema(sVschema),
+			vitesst.WithVTGateFiles(vitesst.ContainerFile{
+				Content:       []byte(authServerJSON),
+				ContainerPath: authServerFile,
+			}),
+			vitesst.WithVTGateArgs(
+				"--mysql-server-query-timeout", "1s",
+				"--mysql-auth-server-impl", "static",
+				"--mysql-auth-server-static-file", authServerFile,
+				"--pprof-http",
+				"--schema-change-signal=false",
+			),
+		)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
 		}
-
-		// create auth server config
-		SQLConfig := `{
-			"testuser1": {
-				"Password": "testpassword1",
-				"UserData": "vtgate client 1"
+		cleanup, err := cluster.Start(ctx)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
 			}
-		}`
-		if err := createConfig(mysqlAuthServerStatic, SQLConfig); err != nil {
-			return 1, err
+		}()
+
+		clusterInstance = cluster
+
+		addr, err := cluster.VTGate().MySQLAddr(ctx)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
 		}
-
-		// Start keyspace
-		cell := clusterInstance.Cell
-		ks := cluster.Keyspace{Name: uks, SchemaSQL: uSQLSchema, VSchema: uVschema}
-		if err := clusterInstance.StartUnshardedKeyspace(ks, 1, false, cell); err != nil {
-			return 1, err
+		host, portStr, _ := strings.Cut(addr, ":")
+		port, err := strconv.Atoi(portStr)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
 		}
+		dbInfo.Host = host
+		dbInfo.Port = uint(port)
 
-		ks = cluster.Keyspace{Name: sks, SchemaSQL: sSQLSchema, VSchema: sVschema}
-		if err := clusterInstance.StartKeyspace(ks, []string{"-"}, 0, false, cell); err != nil {
-			return 1, err
-		}
-
-		vtgateInstance := clusterInstance.NewVtgateInstance()
-		vtgateInstance.MySQLAuthServerImpl = "static"
-		// add extra arguments
-		vtgateInstance.ExtraArgs = []string{
-			"--mysql-server-query-timeout", "1s",
-			"--mysql-auth-server-static-file", clusterInstance.TmpDirectory + "/" + mysqlAuthServerStatic,
-			"--pprof-http",
-			"--schema-change-signal" + "=false",
-		}
-
-		// Start vtgate
-		if err := vtgateInstance.Setup(); err != nil {
-			return 1, err
-		}
-		// ensure it is torn down during cluster TearDown
-		clusterInstance.VtgateProcess = *vtgateInstance
-
-		dbInfo.Host = clusterInstance.Hostname
-		dbInfo.Port = uint(clusterInstance.VtgateMySQLPort)
-
-		return m.Run(), nil
+		return m.Run()
 	}()
-	if err != nil {
-		fmt.Printf("%v\n", err)
-		os.Exit(1)
-	} else {
-		os.Exit(exitcode)
-	}
+	os.Exit(exitCode)
 }
 
 // ConnectionString generates the connection string using dbinfo.
@@ -194,28 +200,42 @@ func (db DBInfo) ConnectionString(params ...string) string {
 		db.Port, db.KeyspaceName, strings.Join(append(db.Params, params...), "&"))
 }
 
-// createConfig creates a config file in TmpDir in vtdataroot and writes the given data.
-func createConfig(name, data string) error {
-	// creating new file
-	f, err := os.Create(clusterInstance.TmpDirectory + "/" + name)
-	if err != nil {
-		return err
-	}
-
-	if data == "" {
-		return nil
-	}
-
-	// write the given data
-	_, err = fmt.Fprint(f, data)
-	return err
-}
-
 // Connect will connect the vtgate through mysql protocol.
 func Connect(t testing.TB, params ...string) *sql.DB {
 	dbo, err := sql.Open("mysql", dbInfo.ConnectionString(params...))
 	require.Nil(t, err)
 	return dbo
+}
+
+// vtgateVars returns a function that fetches the vtgate's /debug/vars.
+func vtgateVars(t *testing.T) func() map[string]any {
+	return func() map[string]any {
+		vars, err := clusterInstance.VTGate().GetVars(t.Context())
+		require.NoError(t, err)
+		return vars
+	}
+}
+
+// vtgateQueryPlans returns a function that fetches the vtgate's query plans.
+func vtgateQueryPlans(t *testing.T) func() (map[string]any, error) {
+	return func() (map[string]any, error) {
+		status, body, err := clusterInstance.VTGate().MakeAPICall(t.Context(), "/debug/query_plans")
+		if err != nil {
+			return nil, err
+		}
+		if status != http.StatusOK {
+			return nil, fmt.Errorf("query plans returned status %d", status)
+		}
+		var results any
+		if err := json.Unmarshal([]byte(body), &results); err != nil {
+			return nil, err
+		}
+		output, ok := results.(map[string]any)
+		if !ok {
+			return nil, errors.New("result is not a map")
+		}
+		return output, nil
+	}
 }
 
 // execWithError executes the prepared query, and validates the error_code.

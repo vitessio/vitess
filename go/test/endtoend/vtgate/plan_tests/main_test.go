@@ -17,6 +17,7 @@ limitations under the License.
 package plan_tests
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -26,20 +27,18 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/test/vitesst"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
+	clusterInstance *vitesst.Cluster
 	vtParams        mysql.ConnParams
 	mysqlParams     mysql.ConnParams
 	uks             = "main"
 	sks             = "user"
-	cell            = "plantests"
 )
 
 func TestMain(m *testing.M) {
@@ -50,62 +49,51 @@ func TestMain(m *testing.M) {
 	uSQL := readFile("schemas/main.sql")
 
 	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(cell, "localhost")
-		defer clusterInstance.Teardown()
-
-		// Start topo server
-		err := clusterInstance.StartTopo()
-		if err != nil {
-			fmt.Println(err.Error())
-			return 1
-		}
-
-		// Start unsharded keyspace
-		uKeyspace := &cluster.Keyspace{
-			Name:      uks,
-			SchemaSQL: uSQL,
-			VSchema:   mainVs,
-		}
-		err = clusterInstance.StartUnshardedKeyspace(*uKeyspace, 0, false, clusterInstance.Cell)
-		if err != nil {
-			fmt.Println(err.Error())
-			return 1
-		}
-
-		// Start sharded keyspace
-		skeyspace := &cluster.Keyspace{
-			Name:      sks,
-			SchemaSQL: sSQL,
-			VSchema:   userVs,
-		}
-		err = clusterInstance.StartKeyspace(*skeyspace, []string{"-80", "80-"}, 0, false, clusterInstance.Cell)
-		if err != nil {
-			fmt.Println(err.Error())
-			return 1
-		}
+		ctx := context.Background()
 
 		// TODO: (@GuptaManan100/@systay): Also run the tests with normalizer on.
-		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
-			"--normalize-queries"+"=false",
-			"--schema-change-signal"+"=true",
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithKeyspace(uks).
+				WithSchema(uSQL).
+				WithVSchema(mainVs),
+			vitesst.WithKeyspace(sks).
+				WithShardNames("-80", "80-").
+				WithSchema(sSQL).
+				WithVSchema(userVs),
+			vitesst.WithVTGateArgs(
+				"--normalize-queries=false",
+				"--schema-change-signal=true",
+			),
 		)
-
-		// Start vtgate
-		err = clusterInstance.StartVtgate()
 		if err != nil {
 			fmt.Println(err.Error())
 			return 1
 		}
+		cleanup, err := cluster.Start(ctx)
+		if err != nil {
+			fmt.Println(err.Error())
+			return 1
+		}
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
 
-		vtParams = clusterInstance.GetVTParams(sks)
+		clusterInstance = cluster
+		vtParams = cluster.VTParams(ctx, "")
 
 		// create mysql instance and connection parameters
-		conn, closer, err := utils.NewMySQL(clusterInstance, sks, sSQL, uSQL)
+		conn, closer, err := vitesst.NewMySQL(ctx, cluster, sks, sSQL, uSQL)
 		if err != nil {
 			fmt.Println(err.Error())
 			return 1
 		}
-		defer closer()
+		defer func() {
+			if err := closer(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "mysql teardown:", err)
+			}
+		}()
 		mysqlParams = conn
 
 		return m.Run()
@@ -122,8 +110,8 @@ func readFile(filename string) string {
 	return string(schema)
 }
 
-func start(t *testing.T) (utils.MySQLCompare, func()) {
-	mcmp, err := utils.NewMySQLCompare(t, vtParams, mysqlParams)
+func start(t *testing.T) (vitesst.MySQLCompare, func()) {
+	mcmp, err := vitesst.NewMySQLCompare(t.Context(), t, vtParams, mysqlParams)
 	require.NoError(t, err)
 	return mcmp, func() {
 		mcmp.Close()
@@ -144,7 +132,7 @@ func splitSQL(querySQL ...string) ([]string, error) {
 	return sqls, nil
 }
 
-func loadSampleData(t *testing.T, mcmp utils.MySQLCompare) {
+func loadSampleData(t *testing.T, mcmp vitesst.MySQLCompare) {
 	sampleDataSQL := readFile("sampledata/user.sql")
 	insertSQL, err := splitSQL(sampleDataSQL)
 	if err != nil {

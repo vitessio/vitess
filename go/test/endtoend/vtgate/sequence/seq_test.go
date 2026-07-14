@@ -17,6 +17,7 @@ limitations under the License.
 package sequence
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -27,14 +28,11 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/sqlerror"
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 var (
-	clusterInstance    *cluster.LocalProcessCluster
-	cell               = "zone1"
-	hostname           = "localhost"
+	clusterInstance    *vitesst.Cluster
 	unshardedKs        = "uks"
 	unshardedSQLSchema = `
 	create table sequence_test(
@@ -173,39 +171,33 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(cell, hostname)
-		defer clusterInstance.Teardown()
+		ctx := context.Background()
 
-		// Start topo server
-		if err := clusterInstance.StartTopo(); err != nil {
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithKeyspace(unshardedKs).
+				WithSchema(unshardedSQLSchema).
+				WithVSchema(unshardedVSchema),
+			vitesst.WithKeyspace(shardedKeyspaceName).
+				WithShardNames("-80", "80-").
+				WithSchema(shardedSQLSchema).
+				WithVSchema(shardedVSchema),
+		)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-
-		// Start keyspace
-		cell := clusterInstance.Cell
-		uKeyspace := &cluster.Keyspace{
-			Name:      unshardedKs,
-			SchemaSQL: unshardedSQLSchema,
-			VSchema:   unshardedVSchema,
-		}
-		if err := clusterInstance.StartUnshardedKeyspace(*uKeyspace, 0, false, cell); err != nil {
+		cleanup, err := cluster.Start(ctx)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
 
-		sKeyspace := &cluster.Keyspace{
-			Name:      shardedKeyspaceName,
-			SchemaSQL: shardedSQLSchema,
-			VSchema:   shardedVSchema,
-		}
-		if err := clusterInstance.StartKeyspace(*sKeyspace, []string{"-80", "80-"}, 0, false, cell); err != nil {
-			return 1
-		}
-
-		// Start vtgate
-		if err := clusterInstance.StartVtgate(); err != nil {
-			return 1
-		}
-
+		clusterInstance = cluster
 		return m.Run()
 	}()
 	os.Exit(exitCode)
@@ -213,60 +205,57 @@ func TestMain(m *testing.M) {
 
 func TestSeq(t *testing.T) {
 	ctx := t.Context()
-	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
-	}
+	vtParams := clusterInstance.VTParams(ctx, "")
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
 
 	// Initialize seq table if needed
-	qr := utils.Exec(t, conn, "select count(*) from sequence_test_seq")
+	qr := vitesst.Exec(t, conn, "select count(*) from sequence_test_seq")
 	require.Len(t, qr.Rows, 1)
 	cnt, err := qr.Rows[0][0].ToInt()
 	require.NoError(t, err)
 	if cnt == 0 {
-		utils.Exec(t, conn, "insert into sequence_test_seq(id, next_id, cache) values(0,1,10)")
+		vitesst.Exec(t, conn, "insert into sequence_test_seq(id, next_id, cache) values(0,1,10)")
 	}
 
 	// Insert 4 values in the main table
-	utils.Exec(t, conn, "insert into sequence_test(val) values('a'), ('b') ,('c'), ('d')")
+	vitesst.Exec(t, conn, "insert into sequence_test(val) values('a'), ('b') ,('c'), ('d')")
 
 	// Test select calls to main table and verify expected id.
-	qr = utils.Exec(t, conn, "select id, val  from sequence_test where id=4")
+	qr = vitesst.Exec(t, conn, "select id, val  from sequence_test where id=4")
 	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(4) VARCHAR("d")]]`; got != want {
 		assert.Equalf(t, want, got, "select:\n%v want\n%v", got, want)
 	}
 
 	// Test next available seq id from cache
-	qr = utils.Exec(t, conn, "select next 1 values from sequence_test_seq")
+	qr = vitesst.Exec(t, conn, "select next 1 values from sequence_test_seq")
 	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(5)]]`; got != want {
 		assert.Equalf(t, want, got, "select:\n%v want\n%v", got, want)
 	}
 
 	// Test next_id from seq table which should be the increased by cache value(id+cache)
-	qr = utils.Exec(t, conn, "select next_id from sequence_test_seq")
+	qr = vitesst.Exec(t, conn, "select next_id from sequence_test_seq")
 	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(11)]]`; got != want {
 		assert.Equalf(t, want, got, "select:\n%v want\n%v", got, want)
 	}
 
 	// Test insert with no auto-inc
-	utils.Exec(t, conn, "insert into sequence_test(id, val) values(6, 'f')")
-	qr = utils.Exec(t, conn, "select * from sequence_test")
+	vitesst.Exec(t, conn, "insert into sequence_test(id, val) values(6, 'f')")
+	qr = vitesst.Exec(t, conn, "select * from sequence_test")
 	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(1) VARCHAR("a")] [INT64(2) VARCHAR("b")] [INT64(3) VARCHAR("c")] [INT64(4) VARCHAR("d")] [INT64(6) VARCHAR("f")]]`; got != want {
 		assert.Equalf(t, want, got, "select:\n%v want\n%v", got, want)
 	}
 
 	// Next insert will fail as we have corrupted the sequence
-	utils.Exec(t, conn, "begin")
+	vitesst.Exec(t, conn, "begin")
 	_, err = conn.ExecuteFetch("insert into sequence_test(val) values('g')", 1000, false)
-	utils.Exec(t, conn, "rollback")
+	vitesst.Exec(t, conn, "rollback")
 	want := "Duplicate entry"
 	assert.ErrorContainsf(t, err, want, "wrong insert: %v, must contain %s", err, want)
 
-	utils.Exec(t, conn, "DELETE FROM sequence_test_seq")
-	qr = utils.Exec(t, conn, "select * from sequence_test_seq")
+	vitesst.Exec(t, conn, "DELETE FROM sequence_test_seq")
+	qr = vitesst.Exec(t, conn, "select * from sequence_test_seq")
 	if got, want := fmt.Sprintf("%v", qr.Rows), `[]`; got != want {
 		assert.Equalf(t, want, got, "select:\n%v want\n%v", got, want)
 	}
@@ -274,11 +263,7 @@ func TestSeq(t *testing.T) {
 
 func TestDotTableSeq(t *testing.T) {
 	ctx := t.Context()
-	vtParams := mysql.ConnParams{
-		Host:   "localhost",
-		Port:   clusterInstance.VtgateMySQLPort,
-		DbName: shardedKeyspaceName,
-	}
+	vtParams := clusterInstance.VTParams(ctx, shardedKeyspaceName)
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -296,18 +281,14 @@ func TestDotTableSeq(t *testing.T) {
 
 func TestInsertAllDefaults(t *testing.T) {
 	ctx := t.Context()
-	vtParams := mysql.ConnParams{
-		Host:   "localhost",
-		Port:   clusterInstance.VtgateMySQLPort,
-		DbName: shardedKeyspaceName,
-	}
+	vtParams := clusterInstance.VTParams(ctx, shardedKeyspaceName)
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
 	// inserting into a table that has default values for all columns works well
-	utils.Exec(t, conn, `insert into allDefaults () values ()`)
-	result := utils.Exec(t, conn, `select * from uks.id_seq`)
+	vitesst.Exec(t, conn, `insert into allDefaults () values ()`)
+	result := vitesst.Exec(t, conn, `select * from uks.id_seq`)
 	assert.Equal(t, 1, len(result.Rows))
 
 	// inserting into a table that does not have default values for all columns fails
@@ -322,54 +303,50 @@ func TestLastInsertIDWithSequence(t *testing.T) {
 	ctx := t.Context()
 
 	t.Run("unsharded keyspace", func(t *testing.T) {
-		vtParams := mysql.ConnParams{
-			Host:   "localhost",
-			Port:   clusterInstance.VtgateMySQLPort,
-			DbName: unshardedKs,
-		}
+		vtParams := clusterInstance.VTParams(ctx, unshardedKs)
 		conn, err := mysql.Connect(ctx, &vtParams)
 		require.NoError(t, err)
 		defer conn.Close()
 
 		// Initialize seq table if needed
-		qr := utils.Exec(t, conn, "select count(*) from sequence_test_seq")
+		qr := vitesst.Exec(t, conn, "select count(*) from sequence_test_seq")
 		require.Len(t, qr.Rows, 1)
 		cnt, err := qr.Rows[0][0].ToInt()
 		require.NoError(t, err)
 		if cnt == 0 {
-			utils.Exec(t, conn, "insert into sequence_test_seq(id, next_id, cache) values(0,1,10)")
+			vitesst.Exec(t, conn, "insert into sequence_test_seq(id, next_id, cache) values(0,1,10)")
 		}
 
 		// Clean up (don't reinitialize sequence - vtgate caches values in memory)
-		utils.Exec(t, conn, "delete from sequence_test")
+		vitesst.Exec(t, conn, "delete from sequence_test")
 
 		// Insert a row - the sequence should generate an ID
-		utils.Exec(t, conn, "insert into sequence_test(val) values('test1')")
+		vitesst.Exec(t, conn, "insert into sequence_test(val) values('test1')")
 
 		// LAST_INSERT_ID() should return a non-zero sequence-generated value
-		qr = utils.Exec(t, conn, "select LAST_INSERT_ID()")
+		qr = vitesst.Exec(t, conn, "select LAST_INSERT_ID()")
 		require.Len(t, qr.Rows, 1, "should have one row")
 		firstID, err := qr.Rows[0][0].ToInt()
 		require.NoError(t, err)
 		assert.NotEqual(t, 0, firstID, "LAST_INSERT_ID() should not be 0 after INSERT with sequence")
 
 		// Insert another row
-		utils.Exec(t, conn, "insert into sequence_test(val) values('test2')")
+		vitesst.Exec(t, conn, "insert into sequence_test(val) values('test2')")
 
 		// LAST_INSERT_ID() should return the new sequence value
-		qr = utils.Exec(t, conn, "select LAST_INSERT_ID()")
+		qr = vitesst.Exec(t, conn, "select LAST_INSERT_ID()")
 		require.Len(t, qr.Rows, 1, "should have one row")
 		secondID, err := qr.Rows[0][0].ToInt()
 		require.NoError(t, err)
 		assert.Greater(t, secondID, firstID, "second LAST_INSERT_ID() value from sequence should be greater than the first")
 
 		// Verify the inserted rows have the expected LAST_INSERT_ID values.
-		qr = utils.Exec(t, conn, "select id from sequence_test where val = 'test1'")
+		qr = vitesst.Exec(t, conn, "select id from sequence_test where val = 'test1'")
 		require.Len(t, qr.Rows, 1, "should have one row")
 		firstInsertedID, err := qr.Rows[0][0].ToInt()
 		require.NoError(t, err)
 		assert.Equal(t, firstInsertedID, firstID, "first inserted row should have the first LAST_INSERT_ID value")
-		qr = utils.Exec(t, conn, "select id from sequence_test where val = 'test2'")
+		qr = vitesst.Exec(t, conn, "select id from sequence_test where val = 'test2'")
 		require.Len(t, qr.Rows, 1, "should have one row")
 		secondInsertedID, err := qr.Rows[0][0].ToInt()
 		require.NoError(t, err)
@@ -377,34 +354,30 @@ func TestLastInsertIDWithSequence(t *testing.T) {
 	})
 
 	t.Run("sharded keyspace", func(t *testing.T) {
-		vtParams := mysql.ConnParams{
-			Host:   "localhost",
-			Port:   clusterInstance.VtgateMySQLPort,
-			DbName: shardedKeyspaceName,
-		}
+		vtParams := clusterInstance.VTParams(ctx, shardedKeyspaceName)
 		conn, err := mysql.Connect(ctx, &vtParams)
 		require.NoError(t, err)
 		defer conn.Close()
 
 		// Clean up
-		utils.Exec(t, conn, "delete from allDefaults")
+		vitesst.Exec(t, conn, "delete from allDefaults")
 
 		// Get the current next_id from the sequence
-		qr := utils.Exec(t, conn, "select next_id from uks.id_seq")
+		qr := vitesst.Exec(t, conn, "select next_id from uks.id_seq")
 		require.Len(t, qr.Rows, 1, "should have one row in id_seq")
 
 		// Insert a row - the sequence should generate an ID
-		utils.Exec(t, conn, "insert into allDefaults(foo) values('bar')")
+		vitesst.Exec(t, conn, "insert into allDefaults(foo) values('bar')")
 
 		// LAST_INSERT_ID() should return the sequence-generated value
-		qr = utils.Exec(t, conn, "select LAST_INSERT_ID()")
+		qr = vitesst.Exec(t, conn, "select LAST_INSERT_ID()")
 		require.Len(t, qr.Rows, 1, "should have one row")
 		lastInsertID, err := qr.Rows[0][0].ToInt()
 		require.NoError(t, err)
 		assert.NotEqual(t, 0, lastInsertID, "LAST_INSERT_ID() should not be 0 after INSERT with sequence in sharded keyspace")
 
 		// Verify the inserted row has the same ID
-		qr = utils.Exec(t, conn, fmt.Sprintf("select id from allDefaults where id = %d", +lastInsertID))
+		qr = vitesst.Exec(t, conn, fmt.Sprintf("select id from allDefaults where id = %d", +lastInsertID))
 		require.Len(t, qr.Rows, 1, "should be able to find the row by the LAST_INSERT_ID value")
 		lastInsertedID, err := qr.Rows[0][0].ToInt()
 		require.NoError(t, err)
@@ -412,11 +385,7 @@ func TestLastInsertIDWithSequence(t *testing.T) {
 	})
 
 	t.Run("within transaction", func(t *testing.T) {
-		vtParams := mysql.ConnParams{
-			Host:   "localhost",
-			Port:   clusterInstance.VtgateMySQLPort,
-			DbName: unshardedKs,
-		}
+		vtParams := clusterInstance.VTParams(ctx, unshardedKs)
 		conn, err := mysql.Connect(ctx, &vtParams)
 		require.NoError(t, err)
 		defer conn.Close()
@@ -426,22 +395,22 @@ func TestLastInsertIDWithSequence(t *testing.T) {
 		// works correctly within a transaction regardless of the actual value.
 
 		// Start a transaction
-		utils.Exec(t, conn, "begin")
+		vitesst.Exec(t, conn, "begin")
 
 		// Insert a row
-		utils.Exec(t, conn, "insert into sequence_test(val) values('txtest')")
+		vitesst.Exec(t, conn, "insert into sequence_test(val) values('txtest')")
 
 		// LAST_INSERT_ID() should work within the transaction and return non-zero
-		qr := utils.Exec(t, conn, "select LAST_INSERT_ID()")
+		qr := vitesst.Exec(t, conn, "select LAST_INSERT_ID()")
 		require.Len(t, qr.Rows, 1, "should have one row")
 		lastInsertIDInTx, err := qr.Rows[0][0].ToInt()
 		require.NoError(t, err)
 		assert.NotEqual(t, 0, lastInsertIDInTx, "LAST_INSERT_ID() should not be 0 within transaction")
 
-		utils.Exec(t, conn, "commit")
+		vitesst.Exec(t, conn, "commit")
 
 		// LAST_INSERT_ID() should still return the same value after commit
-		qr = utils.Exec(t, conn, "select LAST_INSERT_ID()")
+		qr = vitesst.Exec(t, conn, "select LAST_INSERT_ID()")
 		require.Len(t, qr.Rows, 1, "should have one row")
 		lastInsertIDAfterCommit, err := qr.Rows[0][0].ToInt()
 		require.NoError(t, err)

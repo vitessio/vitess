@@ -26,7 +26,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/test/vitesst"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 	"vitess.io/vitess/go/vt/vtgate/simplifier"
@@ -64,7 +64,7 @@ func TestSimplifyResultsMismatchedQuery(t *testing.T) {
 			mcmp, closer := start(t)
 			defer closer()
 
-			mcmp.ExecAllowAndCompareError(simplified, utils.CompareOptions{})
+			mcmp.ExecAllowAndCompareError(simplified, vitesst.CompareOptions{})
 		})
 
 		fmt.Printf("final simplified query: %s\n", simplified)
@@ -77,12 +77,12 @@ func simplifyResultsMismatchedQuery(t *testing.T, query string) string {
 	mcmp, closer := start(t)
 	defer closer()
 
-	_, err := mcmp.ExecAllowAndCompareError(query, utils.CompareOptions{})
+	_, err := mcmp.ExecAllowAndCompareError(query, vitesst.CompareOptions{})
 	require.Errorf(t, err, "query (%s) does not error", query)
 	require.Containsf(t, err.Error(), "mismatched", "query (%s) does not error with results mismatched\nError: %v", query, err)
 
-	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "emp", clusterInstance.VtgateProcess.ReadVSchema))
-	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "dept", clusterInstance.VtgateProcess.ReadVSchema))
+	require.NoError(t, vitesst.WaitForAuthoritative(t, keyspaceName, "emp", func() (*any, error) { return clusterInstance.VTGate().ReadVSchema(t.Context()) }))
+	require.NoError(t, vitesst.WaitForAuthoritative(t, keyspaceName, "dept", func() (*any, error) { return clusterInstance.VTGate().ReadVSchema(t.Context()) }))
 
 	formal, err := vindexes.LoadFormal("svschema.json")
 	require.NoError(t, err)
@@ -102,7 +102,7 @@ func simplifyResultsMismatchedQuery(t *testing.T, query string) string {
 		vSchemaWrapper,
 		func(statement sqlparser.TableStatement) bool {
 			q := sqlparser.String(statement)
-			_, newErr := mcmp.ExecAllowAndCompareError(q, utils.CompareOptions{})
+			_, newErr := mcmp.ExecAllowAndCompareError(q, vitesst.CompareOptions{})
 			if newErr == nil {
 				return false
 			} else {

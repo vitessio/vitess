@@ -17,6 +17,7 @@ limitations under the License.
 package vtgate
 
 import (
+	"context"
 	_ "embed"
 	"flag"
 	"fmt"
@@ -25,16 +26,12 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
-
-	"vitess.io/vitess/go/vt/vtgate/planbuilder"
-
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
+	clusterInstance *vitesst.Cluster
 	vtParams        mysql.ConnParams
 	mysqlParams     mysql.ConnParams
 	shardedKs       = "ks"
@@ -71,89 +68,74 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(Cell, "localhost")
-		defer clusterInstance.Teardown()
+		ctx := context.Background()
 
-		// Start topo server
-		err := clusterInstance.StartTopo()
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithCells(Cell),
+			vitesst.WithVTGateArgs("--schema-change-signal"),
+			vitesst.WithVTTabletArgs("--queryserver-config-schema-change-signal"),
+			vitesst.WithKeyspace(shardedKs).
+				WithShardNames(shardedKsShards...).
+				WithSchema(shardedSchemaSQL).
+				WithVSchema(shardedVSchema),
+			vitesst.WithKeyspace(unshardedKs).
+				WithSchema(unshardedSchemaSQL).
+				WithVSchema(unshardedVSchema),
+			// This keyspace is used to test automatic addition of tables to global routing rules when
+			// there are multiple unsharded keyspaces.
+			vitesst.WithKeyspace(unsharded2Ks).
+				WithSchema(unsharded2SchemaSQL),
+		)
 		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-
-		// Start keyspace
-		sKs := &cluster.Keyspace{
-			Name:      shardedKs,
-			SchemaSQL: shardedSchemaSQL,
-			VSchema:   shardedVSchema,
-		}
-
-		clusterInstance.VtGateExtraArgs = []string{"--schema-change-signal"}
-		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal"}
-		err = clusterInstance.StartKeyspace(*sKs, shardedKsShards, 0, false, clusterInstance.Cell)
+		cleanup, err := cluster.Start(ctx)
 		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-
-		uKs := &cluster.Keyspace{
-			Name:      unshardedKs,
-			SchemaSQL: unshardedSchemaSQL,
-			VSchema:   unshardedVSchema,
-		}
-		err = clusterInstance.StartUnshardedKeyspace(*uKs, 0, false, clusterInstance.Cell)
-		if err != nil {
-			return 1
-		}
-
-		// This keyspace is used to test automatic addition of tables to global routing rules when
-		// there are multiple unsharded keyspaces.
-		uKs2 := &cluster.Keyspace{
-			Name:      unsharded2Ks,
-			SchemaSQL: unsharded2SchemaSQL,
-		}
-		err = clusterInstance.StartUnshardedKeyspace(*uKs2, 0, false, clusterInstance.Cell)
-		if err != nil {
-			return 1
-		}
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
 
 		// apply routing rules
-		err = clusterInstance.VtctldClientProcess.ApplyRoutingRules(routingRules)
-		if err != nil {
+		if err := cluster.Vtctld().ExecuteCommand(ctx, "ApplyRoutingRules", "--rules", routingRules); err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
 
-		err = clusterInstance.VtctldClientProcess.ExecuteCommand("RebuildVSchemaGraph")
-		if err != nil {
+		if err := cluster.Vtctld().ExecuteCommand(ctx, "RebuildVSchemaGraph"); err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
 
-		// Start vtgate
-		clusterInstance.VtGatePlannerVersion = planbuilder.Gen4 // enable Gen4 planner.
-		err = clusterInstance.StartVtgate()
-		if err != nil {
-			return 1
-		}
-		vtParams = mysql.ConnParams{
-			Host: clusterInstance.Hostname,
-			Port: clusterInstance.VtgateMySQLPort,
-		}
+		clusterInstance = cluster
+		vtParams = cluster.VTParams(ctx, "")
 
-		conn, closer, err := utils.NewMySQL(clusterInstance, shardedKs, shardedSchemaSQL)
+		conn, closer, err := vitesst.NewMySQL(ctx, cluster, shardedKs, shardedSchemaSQL)
 		if err != nil {
-			fmt.Println(err)
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-		defer closer()
+		defer func() {
+			if err := closer(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "comparison mysqld teardown:", err)
+			}
+		}()
 		mysqlParams = conn
 		return m.Run()
 	}()
 	os.Exit(exitCode)
 }
 
-func start(t *testing.T) (utils.MySQLCompare, func()) {
-	mcmp, err := utils.NewMySQLCompare(t, vtParams, mysqlParams)
+func start(t *testing.T) (vitesst.MySQLCompare, func()) {
+	mcmp, err := vitesst.NewMySQLCompare(t.Context(), t, vtParams, mysqlParams)
 	require.NoError(t, err)
 	deleteAll := func() {
-		_, _ = utils.ExecAllowError(t, mcmp.VtConn, "set workload = oltp")
+		_, _ = vitesst.ExecAllowError(t, mcmp.VtConn, "set workload = oltp")
 
 		tables := []string{"t1", "t2", "t3", "user_region", "region_tbl", "multicol_tbl", "t1_id2_idx", "t2_id4_idx", "u_a", "u_b"}
 		for _, table := range tables {

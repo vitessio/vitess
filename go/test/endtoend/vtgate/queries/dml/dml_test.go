@@ -22,7 +22,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/test/vitesst"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -34,46 +34,46 @@ func TestUniqueLookupDuplicateEntries(t *testing.T) {
 	defer closer()
 
 	// initial row
-	utils.Exec(t, mcmp.VtConn, "insert into s_tbl(id, num) values (1,10)")
-	utils.AssertMatches(t, mcmp.VtConn, "select id, num from s_tbl order by id", `[[INT64(1) INT64(10)]]`)
-	utils.AssertMatches(t, mcmp.VtConn, "select num, hex(keyspace_id) from num_vdx_tbl order by num", `[[INT64(10) VARCHAR("166B40B44ABA4BD6")]]`)
+	vitesst.Exec(t, mcmp.VtConn, "insert into s_tbl(id, num) values (1,10)")
+	vitesst.AssertMatches(t, mcmp.VtConn, "select id, num from s_tbl order by id", `[[INT64(1) INT64(10)]]`)
+	vitesst.AssertMatches(t, mcmp.VtConn, "select num, hex(keyspace_id) from num_vdx_tbl order by num", `[[INT64(10) VARCHAR("166B40B44ABA4BD6")]]`)
 
 	// insert duplicate row
-	utils.AssertContainsError(t, mcmp.VtConn, "insert into s_tbl(id, num) values (2,10)", "lookup.Create: target: sks.-80.primary: vttablet: "+
+	vitesst.AssertContainsError(t, mcmp.VtConn, "insert into s_tbl(id, num) values (2,10)", "lookup.Create: target: sks.-80.primary: vttablet: "+
 		"Duplicate entry '10' for key 'num_vdx_tbl.PRIMARY'")
-	utils.AssertMatches(t, mcmp.VtConn, "select id, num from s_tbl order by id", `[[INT64(1) INT64(10)]]`)
-	utils.AssertMatches(t, mcmp.VtConn, "select num, hex(keyspace_id) from num_vdx_tbl order by num", `[[INT64(10) VARCHAR("166B40B44ABA4BD6")]]`)
+	vitesst.AssertMatches(t, mcmp.VtConn, "select id, num from s_tbl order by id", `[[INT64(1) INT64(10)]]`)
+	vitesst.AssertMatches(t, mcmp.VtConn, "select num, hex(keyspace_id) from num_vdx_tbl order by num", `[[INT64(10) VARCHAR("166B40B44ABA4BD6")]]`)
 
 	// insert duplicate row in multi-row insert multi shard
-	utils.AssertContainsError(t, mcmp.VtConn, "insert into s_tbl(id, num) values (3,20), (4,20),(5,30)",
+	vitesst.AssertContainsError(t, mcmp.VtConn, "insert into s_tbl(id, num) values (3,20), (4,20),(5,30)",
 		"transaction rolled back to reverse changes of partial DML execution: target: sks.80-.primary: vttablet: "+
 			"Duplicate entry '20' for key 'num_vdx_tbl.PRIMARY'")
-	utils.AssertMatches(t, mcmp.VtConn, "select id, num from s_tbl order by id", `[[INT64(1) INT64(10)]]`)
-	utils.AssertMatches(t, mcmp.VtConn, "select num, hex(keyspace_id) from num_vdx_tbl order by num", `[[INT64(10) VARCHAR("166B40B44ABA4BD6")]]`)
+	vitesst.AssertMatches(t, mcmp.VtConn, "select id, num from s_tbl order by id", `[[INT64(1) INT64(10)]]`)
+	vitesst.AssertMatches(t, mcmp.VtConn, "select num, hex(keyspace_id) from num_vdx_tbl order by num", `[[INT64(10) VARCHAR("166B40B44ABA4BD6")]]`)
 
 	// insert duplicate row in multi-row insert - lookup single shard
-	utils.AssertContainsError(t, mcmp.VtConn, "insert into s_tbl(id, num) values (3,20), (4,20)",
+	vitesst.AssertContainsError(t, mcmp.VtConn, "insert into s_tbl(id, num) values (3,20), (4,20)",
 		"transaction rolled back to reverse changes of partial DML execution: lookup.Create: target: sks.80-.primary: vttablet: "+
 			"Duplicate entry '20' for key 'num_vdx_tbl.PRIMARY'")
-	utils.AssertMatches(t, mcmp.VtConn, "select id, num from s_tbl order by id", `[[INT64(1) INT64(10)]]`)
-	utils.AssertMatches(t, mcmp.VtConn, "select num, hex(keyspace_id) from num_vdx_tbl order by num", `[[INT64(10) VARCHAR("166B40B44ABA4BD6")]]`)
+	vitesst.AssertMatches(t, mcmp.VtConn, "select id, num from s_tbl order by id", `[[INT64(1) INT64(10)]]`)
+	vitesst.AssertMatches(t, mcmp.VtConn, "select num, hex(keyspace_id) from num_vdx_tbl order by num", `[[INT64(10) VARCHAR("166B40B44ABA4BD6")]]`)
 
 	// insert second row to test with limit update.
-	utils.Exec(t, mcmp.VtConn, "insert into s_tbl(id, num) values (10,100)")
-	utils.AssertMatches(t, mcmp.VtConn, "select id, num from s_tbl order by id", `[[INT64(1) INT64(10)] [INT64(10) INT64(100)]]`)
-	utils.AssertMatches(t, mcmp.VtConn, "select num, hex(keyspace_id) from num_vdx_tbl order by num", `[[INT64(10) VARCHAR("166B40B44ABA4BD6")] [INT64(100) VARCHAR("594764E1A2B2D98E")]]`)
+	vitesst.Exec(t, mcmp.VtConn, "insert into s_tbl(id, num) values (10,100)")
+	vitesst.AssertMatches(t, mcmp.VtConn, "select id, num from s_tbl order by id", `[[INT64(1) INT64(10)] [INT64(10) INT64(100)]]`)
+	vitesst.AssertMatches(t, mcmp.VtConn, "select num, hex(keyspace_id) from num_vdx_tbl order by num", `[[INT64(10) VARCHAR("166B40B44ABA4BD6")] [INT64(100) VARCHAR("594764E1A2B2D98E")]]`)
 
 	// update with limit 1 succeed.
-	utils.Exec(t, mcmp.VtConn, "update s_tbl set num = 30 order by id limit 1")
-	utils.AssertMatches(t, mcmp.VtConn, "select id, num from s_tbl order by id", `[[INT64(1) INT64(30)] [INT64(10) INT64(100)]]`)
-	utils.AssertMatches(t, mcmp.VtConn, "select num, hex(keyspace_id) from num_vdx_tbl order by num", `[[INT64(30) VARCHAR("166B40B44ABA4BD6")] [INT64(100) VARCHAR("594764E1A2B2D98E")]]`)
+	vitesst.Exec(t, mcmp.VtConn, "update s_tbl set num = 30 order by id limit 1")
+	vitesst.AssertMatches(t, mcmp.VtConn, "select id, num from s_tbl order by id", `[[INT64(1) INT64(30)] [INT64(10) INT64(100)]]`)
+	vitesst.AssertMatches(t, mcmp.VtConn, "select num, hex(keyspace_id) from num_vdx_tbl order by num", `[[INT64(30) VARCHAR("166B40B44ABA4BD6")] [INT64(100) VARCHAR("594764E1A2B2D98E")]]`)
 
 	// update to same value on multiple row should fail.
-	utils.AssertContainsError(t, mcmp.VtConn, "update s_tbl set num = 40 limit 2",
+	vitesst.AssertContainsError(t, mcmp.VtConn, "update s_tbl set num = 40 limit 2",
 		"lookup.Create: transaction rolled back to reverse changes of partial DML execution: target: sks.80-.primary: vttablet: "+
 			"rpc error: code = AlreadyExists desc = Duplicate entry '40' for key 'num_vdx_tbl.PRIMARY'")
-	utils.AssertMatches(t, mcmp.VtConn, "select id, num from s_tbl order by id", `[[INT64(1) INT64(30)] [INT64(10) INT64(100)]]`)
-	utils.AssertMatches(t, mcmp.VtConn, "select num, hex(keyspace_id) from num_vdx_tbl order by num", `[[INT64(30) VARCHAR("166B40B44ABA4BD6")] [INT64(100) VARCHAR("594764E1A2B2D98E")]]`)
+	vitesst.AssertMatches(t, mcmp.VtConn, "select id, num from s_tbl order by id", `[[INT64(1) INT64(30)] [INT64(10) INT64(100)]]`)
+	vitesst.AssertMatches(t, mcmp.VtConn, "select num, hex(keyspace_id) from num_vdx_tbl order by num", `[[INT64(30) VARCHAR("166B40B44ABA4BD6")] [INT64(100) VARCHAR("594764E1A2B2D98E")]]`)
 }
 
 // TestUniqueLookupDuplicateIgnore tests the insert ignore on lookup table.
@@ -82,15 +82,15 @@ func TestUniqueLookupDuplicateIgnore(t *testing.T) {
 	defer closer()
 
 	// initial row
-	utils.Exec(t, mcmp.VtConn, "insert into s_tbl(id, num) values (1,10)")
-	utils.AssertMatches(t, mcmp.VtConn, "select id, num from s_tbl order by id", `[[INT64(1) INT64(10)]]`)
-	utils.AssertMatches(t, mcmp.VtConn, "select num, hex(keyspace_id) from num_vdx_tbl order by num", `[[INT64(10) VARCHAR("166B40B44ABA4BD6")]]`)
+	vitesst.Exec(t, mcmp.VtConn, "insert into s_tbl(id, num) values (1,10)")
+	vitesst.AssertMatches(t, mcmp.VtConn, "select id, num from s_tbl order by id", `[[INT64(1) INT64(10)]]`)
+	vitesst.AssertMatches(t, mcmp.VtConn, "select num, hex(keyspace_id) from num_vdx_tbl order by num", `[[INT64(10) VARCHAR("166B40B44ABA4BD6")]]`)
 
 	// insert ignore duplicate row
-	qr := utils.Exec(t, mcmp.VtConn, "insert ignore into s_tbl(id, num) values (2,10)")
+	qr := vitesst.Exec(t, mcmp.VtConn, "insert ignore into s_tbl(id, num) values (2,10)")
 	assert.EqualValues(t, 0, qr.RowsAffected)
-	utils.AssertMatches(t, mcmp.VtConn, "select id, num from s_tbl order by id", `[[INT64(1) INT64(10)]]`)
-	utils.AssertMatches(t, mcmp.VtConn, "select num, hex(keyspace_id) from num_vdx_tbl order by num", `[[INT64(10) VARCHAR("166B40B44ABA4BD6")]]`)
+	vitesst.AssertMatches(t, mcmp.VtConn, "select id, num from s_tbl order by id", `[[INT64(1) INT64(10)]]`)
+	vitesst.AssertMatches(t, mcmp.VtConn, "select num, hex(keyspace_id) from num_vdx_tbl order by num", `[[INT64(10) VARCHAR("166B40B44ABA4BD6")]]`)
 
 	// insert duplicate row in multi-row insert - lookup single shard
 	// Current behavior does not work as expected—one of the rows should be inserted.
@@ -99,23 +99,20 @@ func TestUniqueLookupDuplicateIgnore(t *testing.T) {
 	// - If the row exists, it is inserted into the main table.
 	// - If the row does not exist, the main table insertion is skipped.
 	// Since the `col` column is null, the row is not inserted into the lookup table, causing the main table insertion to be ignored.
-	qr = utils.Exec(t, mcmp.VtConn, "insert ignore into s_tbl(id, num) values (3,20), (4,20)")
+	qr = vitesst.Exec(t, mcmp.VtConn, "insert ignore into s_tbl(id, num) values (3,20), (4,20)")
 	assert.EqualValues(t, 1, qr.RowsAffected)
-	utils.AssertMatches(t, mcmp.VtConn, "select id, num from s_tbl order by id", `[[INT64(1) INT64(10)] [INT64(3) INT64(20)]]`)
-	utils.AssertMatches(t, mcmp.VtConn, "select num, hex(keyspace_id) from num_vdx_tbl order by num", `[[INT64(10) VARCHAR("166B40B44ABA4BD6")] [INT64(20) VARCHAR("4EB190C9A2FA169C")]]`)
+	vitesst.AssertMatches(t, mcmp.VtConn, "select id, num from s_tbl order by id", `[[INT64(1) INT64(10)] [INT64(3) INT64(20)]]`)
+	vitesst.AssertMatches(t, mcmp.VtConn, "select num, hex(keyspace_id) from num_vdx_tbl order by num", `[[INT64(10) VARCHAR("166B40B44ABA4BD6")] [INT64(20) VARCHAR("4EB190C9A2FA169C")]]`)
 
 	// insert duplicate row in multi-row insert - vindex values are not null
-	qr = utils.Exec(t, mcmp.VtConn, "insert ignore into s_tbl(id, num, col) values (3,20, 30), (4,20, 40)")
+	qr = vitesst.Exec(t, mcmp.VtConn, "insert ignore into s_tbl(id, num, col) values (3,20, 30), (4,20, 40)")
 	assert.EqualValues(t, 0, qr.RowsAffected)
-	utils.AssertMatches(t, mcmp.VtConn, "select id, num, col from s_tbl order by id", `[[INT64(1) INT64(10) NULL] [INT64(3) INT64(20) NULL]]`)
-	utils.AssertMatches(t, mcmp.VtConn, "select num, hex(keyspace_id) from num_vdx_tbl order by num", `[[INT64(10) VARCHAR("166B40B44ABA4BD6")] [INT64(20) VARCHAR("4EB190C9A2FA169C")]]`)
-	utils.AssertMatches(t, mcmp.VtConn, "select col, hex(keyspace_id) from col_vdx_tbl order by col", `[[INT64(30) VARCHAR("4EB190C9A2FA169C")]]`)
+	vitesst.AssertMatches(t, mcmp.VtConn, "select id, num, col from s_tbl order by id", `[[INT64(1) INT64(10) NULL] [INT64(3) INT64(20) NULL]]`)
+	vitesst.AssertMatches(t, mcmp.VtConn, "select num, hex(keyspace_id) from num_vdx_tbl order by num", `[[INT64(10) VARCHAR("166B40B44ABA4BD6")] [INT64(20) VARCHAR("4EB190C9A2FA169C")]]`)
+	vitesst.AssertMatches(t, mcmp.VtConn, "select col, hex(keyspace_id) from col_vdx_tbl order by col", `[[INT64(30) VARCHAR("4EB190C9A2FA169C")]]`)
 }
 
 func TestMultiEqual(t *testing.T) {
-	if clusterInstance.HasPartialKeyspaces {
-		t.Skip("test uses multiple keyspaces, test framework only supports partial keyspace testing for a single keyspace")
-	}
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -323,17 +320,17 @@ func TestDeleteWithSubquery(t *testing.T) {
 		`[[INT64(1) INT64(1) INT64(4)] [INT64(1) INT64(2) INT64(2)] [INT64(2) INT64(3) INT64(5)]]`)
 
 	// delete with subquery from same table (fails on mysql) - subquery get's merged so fails for vitess
-	_, err := mcmp.ExecAllowAndCompareError(`delete from s_tbl where id in (select id from s_tbl)`, utils.CompareOptions{})
+	_, err := mcmp.ExecAllowAndCompareError(`delete from s_tbl where id in (select id from s_tbl)`, vitesst.CompareOptions{})
 	require.ErrorContains(t, err, "You can't specify target table 's_tbl' for update in FROM clause (errno 1093) (sqlstate HY000)")
 
 	// delete with subquery from same table (fails on mysql) - subquery not merged so passes for vitess
-	qr = utils.Exec(t, mcmp.VtConn, `delete from order_tbl where region_id in (select cust_no from order_tbl)`)
+	qr = vitesst.Exec(t, mcmp.VtConn, `delete from order_tbl where region_id in (select cust_no from order_tbl)`)
 	require.EqualValues(t, 1, qr.RowsAffected)
 
 	// check rows
-	utils.AssertMatches(t, mcmp.VtConn, `select id, col from s_tbl order by id`,
+	vitesst.AssertMatches(t, mcmp.VtConn, `select id, col from s_tbl order by id`,
 		`[[INT64(5) INT64(5)] [INT64(6) INT64(15)] [INT64(7) INT64(17)] [INT64(8) INT64(80)]]`)
-	utils.AssertMatches(t, mcmp.VtConn, `select region_id, oid, cust_no from order_tbl order by oid`,
+	vitesst.AssertMatches(t, mcmp.VtConn, `select region_id, oid, cust_no from order_tbl order by oid`,
 		`[[INT64(1) INT64(1) INT64(4)] [INT64(1) INT64(2) INT64(2)]]`)
 }
 
@@ -477,7 +474,7 @@ func TestDMLInUnique(t *testing.T) {
 
 	assertVExplainEquals := func(t *testing.T, conn *mysql.Conn, query, expected string) {
 		t.Helper()
-		qr := utils.Exec(t, conn, query)
+		qr := vitesst.Exec(t, conn, query)
 		// strip the first column from each row as it is not deterministic in a VExplain query
 		for i := range qr.Rows {
 			qr.Rows[i] = qr.Rows[i][1:]
@@ -526,7 +523,7 @@ func TestUpdateWithLargeRowsAsInput(t *testing.T) {
 	}
 
 	// Switch workload to OLAP
-	utils.Exec(t, mcmp.VtConn, `set workload = olap`)
+	vitesst.Exec(t, mcmp.VtConn, `set workload = olap`)
 
 	// Should also succeed in OLAP mode.
 	for _, query := range queries {
@@ -552,7 +549,7 @@ func TestDeleteWithLargeRowsAsInput(t *testing.T) {
 	// assert.EqualValues(t, 100, qr.RowsAffected)
 
 	// Switch workload to OLAP
-	utils.Exec(t, mcmp.VtConn, `set workload = olap`)
+	vitesst.Exec(t, mcmp.VtConn, `set workload = olap`)
 
 	// Should also succeed in OLAP mode
 	_ = mcmp.Exec(`delete t1 from t1 join t2 on t1.col = t2.col`)

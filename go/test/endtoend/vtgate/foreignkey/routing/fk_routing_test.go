@@ -17,23 +17,23 @@ limitations under the License.
 package routing
 
 import (
+	"context"
 	_ "embed"
 	"flag"
+	"fmt"
 	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
+	clusterInstance *vitesst.Cluster
 	sourceKs        = "sks" // Source keyspace
 	targetKs        = "tks" // Target keyspace
-	Cell            = "test"
 
 	//go:embed source_schema.sql
 	sourceSchema string
@@ -49,50 +49,38 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(Cell, "localhost")
-		defer clusterInstance.Teardown()
+		ctx := context.Background()
 
-		// Start topo server
-		err := clusterInstance.StartTopo()
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithKeyspace(sourceKs).
+				WithSchema(sourceSchema),
+			vitesst.WithKeyspace(targetKs).
+				WithSchema(targetSchema),
+		)
 		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		cleanup, err := cluster.Start(ctx)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
+
+		clusterInstance = cluster
+
+		if err := cluster.Vtctld().ExecuteCommand(ctx, "ApplyRoutingRules", "--rules", routingRules); err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
 
-		// Start source keyspace
-		sKs := &cluster.Keyspace{
-			Name:      sourceKs,
-			SchemaSQL: sourceSchema,
-		}
-
-		err = clusterInstance.StartUnshardedKeyspace(*sKs, 0, false, clusterInstance.Cell)
-		if err != nil {
-			return 1
-		}
-
-		// Start target keyspace
-		tKs := &cluster.Keyspace{
-			Name:      targetKs,
-			SchemaSQL: targetSchema,
-		}
-
-		err = clusterInstance.StartUnshardedKeyspace(*tKs, 0, false, clusterInstance.Cell)
-		if err != nil {
-			return 1
-		}
-
-		err = clusterInstance.VtctldClientProcess.ApplyRoutingRules(routingRules)
-		if err != nil {
-			return 1
-		}
-
-		err = clusterInstance.VtctldClientProcess.ExecuteCommand("RebuildVSchemaGraph")
-		if err != nil {
-			return 1
-		}
-
-		// Start vtgate
-		err = clusterInstance.StartVtgate()
-		if err != nil {
+		if err := cluster.Vtctld().ExecuteCommand(ctx, "RebuildVSchemaGraph"); err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
 
@@ -118,7 +106,7 @@ func TestMain(m *testing.M) {
 // where tables actually reside, preventing cross-keyspace relationships.
 func TestForeignKeyRoutingRules(t *testing.T) {
 	// Wait for schema tracking to complete
-	utils.WaitForVschemaCondition(t, clusterInstance.VtgateProcess, targetKs, func(t *testing.T, keyspace map[string]any) bool {
+	vitesst.WaitForVschemaCondition(t, clusterInstance.VTGate(), targetKs, func(t *testing.T, keyspace map[string]any) bool {
 		tables := keyspace["tables"].(map[string]any)
 		tbl := tables["t1"].(map[string]any)
 		return tbl["child_foreign_keys"] != nil
@@ -149,7 +137,7 @@ func TestForeignKeyRoutingRules(t *testing.T) {
 
 // getVSchemaFromVtgate fetches the vschema from vtgate using the same pattern as other tests
 func getVSchemaFromVtgate(t *testing.T) map[string]any {
-	vs, err := clusterInstance.VtgateProcess.ReadVSchema()
+	vs, err := clusterInstance.VTGate().ReadVSchema(t.Context())
 	require.NoError(t, err, "failed to read vschema from vtgate")
 	return convertToMap(*vs)
 }

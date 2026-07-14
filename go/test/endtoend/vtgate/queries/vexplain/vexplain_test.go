@@ -25,7 +25,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 func start(t *testing.T) (*mysql.Conn, func()) {
@@ -34,11 +34,11 @@ func start(t *testing.T) (*mysql.Conn, func()) {
 	require.NoError(t, err)
 
 	deleteAll := func() {
-		_, _ = utils.ExecAllowError(t, vtConn, "set workload = oltp")
+		_, _ = vitesst.ExecAllowError(t, vtConn, "set workload = oltp")
 
 		tables := []string{"user", "lookup", "lookup_unique"}
 		for _, table := range tables {
-			_, _ = utils.ExecAllowError(t, vtConn, "delete from "+table)
+			_, _ = vitesst.ExecAllowError(t, vtConn, "delete from "+table)
 		}
 	}
 
@@ -57,7 +57,7 @@ func TestVtGateVExplain(t *testing.T) {
 	assertVExplainEquals := func(t *testing.T, conn *mysql.Conn, query, expected string) {
 		t.Helper()
 
-		qr := utils.Exec(t, conn, query)
+		qr := vitesst.Exec(t, conn, query)
 
 		// strip the first column from each row as it is not deterministic in a VExplain query
 		for i := range qr.Rows {
@@ -67,7 +67,7 @@ func TestVtGateVExplain(t *testing.T) {
 		assert.NoError(t, sqltypes.RowsEqualsStr(expected, qr.Rows))
 	}
 
-	utils.AssertContainsError(t, conn,
+	vitesst.AssertContainsError(t, conn,
 		`vexplain queries insert into user (id,lookup,lookup_unique) values (4,'apa','foo'),(5,'apa','bar'),(6,'monkey','nobar')`,
 		"vexplain queries/all will actually run queries")
 
@@ -94,19 +94,19 @@ func TestVtGateVExplain(t *testing.T) {
 	assertVExplainEquals(t, conn, `vexplain /*vt+ EXECUTE_DML_QUERIES */ queries insert into user (id,lookup,lookup_unique) values (1,'apa','apa'),(3,'monkey','monkey')`, expected)
 
 	// Assert that the output of vexplain all doesn't have begin queries because they aren't explainable
-	utils.AssertMatchesNotContains(t, conn, `vexplain /*vt+ EXECUTE_DML_QUERIES */ all insert into user (id,lookup,lookup_unique) values (2,'apa','bandar')`, `begin`)
+	vitesst.AssertMatchesNotContains(t, conn, `vexplain /*vt+ EXECUTE_DML_QUERIES */ all insert into user (id,lookup,lookup_unique) values (2,'apa','bandar')`, `begin`)
 
 	expected = `[[INT32(0) VARCHAR("ks") VARCHAR("-40") VARCHAR("select lookup, keyspace_id from lookup where lookup in ('apa')")]` +
 		` [INT32(1) VARCHAR("ks") VARCHAR("-40") VARCHAR("select id from ` + "`user`" + ` where lookup = 'apa'")]]`
 	for _, mode := range []string{"oltp", "olap"} {
 		t.Run(mode, func(t *testing.T) {
-			utils.Exec(t, conn, "set workload = "+mode)
-			utils.AssertMatches(t, conn, `vexplain queries select id from user where lookup = "apa"`, expected)
+			vitesst.Exec(t, conn, "set workload = "+mode)
+			vitesst.AssertMatches(t, conn, `vexplain queries select id from user where lookup = "apa"`, expected)
 		})
 	}
 
 	// transaction explicitly started to no commit in the end.
-	utils.Exec(t, conn, "begin")
+	vitesst.Exec(t, conn, "begin")
 	expected = fmt.Sprintf(`[
 		[VARCHAR("ks") VARCHAR("-40") VARCHAR("begin")]
 		[VARCHAR("ks") VARCHAR("-40") VARCHAR("insert into lookup(lookup, id, keyspace_id) values ('apa', 4, %s'\xd2\xfd\x88g\xd5\\r-\xfe'), ('apa', 5, %s'p\xbb\x02<\x81\f\xa8z') on duplicate key update lookup = values(lookup), id = values(id), keyspace_id = values(keyspace_id)")]
@@ -130,7 +130,7 @@ func TestVtGateVExplain(t *testing.T) {
 	]`, binaryPrefix, binaryPrefix, binaryPrefix, binaryPrefix, binaryPrefix, binaryPrefix)
 	assertVExplainEquals(t, conn, `vexplain /*vt+ EXECUTE_DML_QUERIES */ queries insert into user (id,lookup,lookup_unique) values (4,'apa','foo'),(5,'apa','bar'),(6,'monkey','nobar')`, expected)
 
-	utils.Exec(t, conn, "rollback")
+	vitesst.Exec(t, conn, "rollback")
 }
 
 func TestVExplainPlan(t *testing.T) {
@@ -138,14 +138,14 @@ func TestVExplainPlan(t *testing.T) {
 	defer closer()
 
 	// the test infra is adding \ to the test output
-	utils.AssertMatchesContains(t, conn, `vexplain plan select id from user where lookup = "apa"`, `\"OperatorType\": \"VindexLookup\"`)
-	utils.AssertMatchesContains(t, conn, `vexplain plan insert into user (id,lookup,lookup_unique) values (4,'apa','foo'),(5,'apa','bar'),(6,'monkey','nobar')`, "Insert")
+	vitesst.AssertMatchesContains(t, conn, `vexplain plan select id from user where lookup = "apa"`, `\"OperatorType\": \"VindexLookup\"`)
+	vitesst.AssertMatchesContains(t, conn, `vexplain plan insert into user (id,lookup,lookup_unique) values (4,'apa','foo'),(5,'apa','bar'),(6,'monkey','nobar')`, "Insert")
 }
 
 func TestVExplainAll(t *testing.T) {
 	conn, closer := start(t)
 	defer closer()
 
-	utils.AssertMatchesContains(t, conn, `vexplain /*vt+ EXECUTE_DML_QUERIES */ all insert into user (id,lookup,lookup_unique) values (4,'apa','foo'),(5,'apa','bar'),(6,'monkey','nobar')`, "Insert", "mysql_explain_json")
-	utils.AssertMatchesContains(t, conn, `vexplain all select id from user where lookup = "apa"`, "mysql_explain_json", "ByDestination")
+	vitesst.AssertMatchesContains(t, conn, `vexplain /*vt+ EXECUTE_DML_QUERIES */ all insert into user (id,lookup,lookup_unique) values (4,'apa','foo'),(5,'apa','bar'),(6,'monkey','nobar')`, "Insert", "mysql_explain_json")
+	vitesst.AssertMatchesContains(t, conn, `vexplain all select id from user where lookup = "apa"`, "mysql_explain_json", "ByDestination")
 }

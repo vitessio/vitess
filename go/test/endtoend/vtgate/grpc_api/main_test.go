@@ -17,21 +17,19 @@ limitations under the License.
 package grpc_api
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
-	"path"
 	"testing"
 
-	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 var (
-	clusterInstance   *cluster.LocalProcessCluster
+	clusterInstance   *vitesst.Cluster
 	vtgateGrpcAddress string
-	hostname          = "localhost"
 	keyspaceName      = "ks"
-	cell              = "zone1"
 	sqlSchema         = `
 		create table test_table (
 			id bigint,
@@ -74,80 +72,63 @@ var (
 `
 )
 
+const (
+	grpcServerAuthStaticPath = "/vt/files/grpc_server_auth_static.json"
+	tableACLPath             = "/vt/files/table_acl.json"
+)
+
 func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitcode := func() int {
-		clusterInstance = cluster.NewCluster(cell, hostname)
-		defer clusterInstance.Teardown()
+		ctx := context.Background()
 
-		// Start topo server
-		if err := clusterInstance.StartTopo(); err != nil {
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithKeyspace(keyspaceName).
+				WithReplicas(1).
+				WithSchema(sqlSchema),
+			vitesst.WithVTGateArgs(
+				"--grpc-auth-mode", "static",
+				"--grpc-auth-static-password-file", grpcServerAuthStaticPath,
+				"--grpc-use-effective-callerid",
+				"--grpc-use-static-authentication-callerid",
+			),
+			vitesst.WithVTTabletArgs(
+				"--enforce-tableacl-config",
+				"--queryserver-config-strict-table-acl",
+				"--table-acl-config", tableACLPath,
+			),
+			vitesst.WithVTGateFiles(vitesst.ContainerFile{
+				Content:       []byte(grpcServerAuthStaticJSON),
+				ContainerPath: grpcServerAuthStaticPath,
+			}),
+			vitesst.WithTabletFiles(vitesst.ContainerFile{
+				Content:       []byte(tableACLJSON),
+				ContainerPath: tableACLPath,
+			}),
+		)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-
-		// Directory for authn / authz config files
-		authDirectory := path.Join(clusterInstance.TmpDirectory, "auth")
-		if err := os.Mkdir(authDirectory, 0o700); err != nil {
+		cleanup, err := cluster.Start(ctx)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
 
-		// Create grpc_server_auth_static.json file
-		grpcServerAuthStaticPath := path.Join(authDirectory, "grpc_server_auth_static.json")
-		if err := createFile(grpcServerAuthStaticPath, grpcServerAuthStaticJSON); err != nil {
+		clusterInstance = cluster
+		vtgateGrpcAddress, err = cluster.VTGate().GRPCAddr(ctx)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-
-		// Create table_acl.json file
-		tableACLPath := path.Join(authDirectory, "table_acl.json")
-		if err := createFile(tableACLPath, tableACLJSON); err != nil {
-			return 1
-		}
-
-		// Configure vtgate to use static auth
-		clusterInstance.VtGateExtraArgs = []string{
-			"--grpc-auth-mode", "static",
-			"--grpc-auth-static-password-file", grpcServerAuthStaticPath,
-			"--grpc-use-effective-callerid",
-			"--grpc-use-static-authentication-callerid",
-		}
-
-		// Configure vttablet to use table ACL
-		clusterInstance.VtTabletExtraArgs = []string{
-			"--enforce-tableacl-config",
-			"--queryserver-config-strict-table-acl",
-			"--table-acl-config", tableACLPath,
-		}
-
-		// Start keyspace
-		keyspace := &cluster.Keyspace{
-			Name:      keyspaceName,
-			SchemaSQL: sqlSchema,
-		}
-		if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false, clusterInstance.Cell); err != nil {
-			return 1
-		}
-
-		// Start vtgate
-		if err := clusterInstance.StartVtgate(); err != nil {
-			clusterInstance.VtgateProcess = cluster.VtgateProcess{}
-			return 1
-		}
-		vtgateGrpcAddress = fmt.Sprintf("%s:%d", clusterInstance.Hostname, clusterInstance.VtgateGrpcPort)
-
 		return m.Run()
 	}()
 	os.Exit(exitcode)
-}
-
-func createFile(path string, contents string) error {
-	f, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-	_, err = f.WriteString(contents)
-	if err != nil {
-		return err
-	}
-	return f.Close()
 }

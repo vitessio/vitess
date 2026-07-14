@@ -25,15 +25,15 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
-func start(t *testing.T) (utils.MySQLCompare, func()) {
-	mcmp, err := utils.NewMySQLCompare(t, vtParams, mysqlParams)
+func start(t *testing.T) (vitesst.MySQLCompare, func()) {
+	mcmp, err := vitesst.NewMySQLCompare(t.Context(), t, vtParams, mysqlParams)
 	require.NoError(t, err)
 
 	deleteAll := func() {
-		_, _ = utils.ExecAllowError(t, mcmp.VtConn, "set workload = oltp")
+		_, _ = vitesst.ExecAllowError(t, mcmp.VtConn, "set workload = oltp")
 
 		tables := []string{"t1", "t1_id2_idx", "t2", "t2_id4_idx", "user", "user_extra"}
 		for _, table := range tables {
@@ -119,12 +119,12 @@ func TestSubqueryInUpdate(t *testing.T) {
 
 	conn := mcmp.VtConn
 
-	utils.Exec(t, conn, `insert into t1(id1, id2) values (1, 10), (2, 20), (3, 30), (4, 40), (5, 50)`)
-	utils.Exec(t, conn, `insert into t2(id3, id4) values (1, 3), (2, 4)`)
-	utils.AssertMatches(t, conn, `SELECT id2, keyspace_id FROM t1_id2_idx WHERE id2 IN (2,10)`, `[[INT64(10) VARBINARY("\x16k@\xb4J\xbaK\xd6")]]`)
-	utils.Exec(t, conn, `update t1 set id2 = (select count(*) from t2) where id1 = 1`)
-	utils.AssertMatches(t, conn, `SELECT id2 FROM t1 WHERE id1 = 1`, `[[INT64(2)]]`)
-	utils.AssertMatches(t, conn, `SELECT id2, keyspace_id FROM t1_id2_idx WHERE id2 IN (2,10)`, `[[INT64(2) VARBINARY("\x16k@\xb4J\xbaK\xd6")]]`)
+	vitesst.Exec(t, conn, `insert into t1(id1, id2) values (1, 10), (2, 20), (3, 30), (4, 40), (5, 50)`)
+	vitesst.Exec(t, conn, `insert into t2(id3, id4) values (1, 3), (2, 4)`)
+	vitesst.AssertMatches(t, conn, `SELECT id2, keyspace_id FROM t1_id2_idx WHERE id2 IN (2,10)`, `[[INT64(10) VARBINARY("\x16k@\xb4J\xbaK\xd6")]]`)
+	vitesst.Exec(t, conn, `update t1 set id2 = (select count(*) from t2) where id1 = 1`)
+	vitesst.AssertMatches(t, conn, `SELECT id2 FROM t1 WHERE id1 = 1`, `[[INT64(2)]]`)
+	vitesst.AssertMatches(t, conn, `SELECT id2, keyspace_id FROM t1_id2_idx WHERE id2 IN (2,10)`, `[[INT64(2) VARBINARY("\x16k@\xb4J\xbaK\xd6")]]`)
 }
 
 func TestSubqueryInReference(t *testing.T) {
@@ -221,7 +221,7 @@ func TestSubqueries(t *testing.T) {
 	}
 
 	for idx, query := range queries {
-		mcmp.Run(fmt.Sprintf("%d %s", idx, query), func(mcmp *utils.MySQLCompare) {
+		mcmp.Run(fmt.Sprintf("%d %s", idx, query), func(mcmp *vitesst.MySQLCompare) {
 			mcmp.Exec(query)
 		})
 	}

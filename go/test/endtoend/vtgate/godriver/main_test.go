@@ -17,10 +17,10 @@ limitations under the License.
 package godriver
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
-	"strconv"
 	"testing"
 	"time"
 
@@ -29,16 +29,12 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
 
-	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/test/vitesst"
 	"vitess.io/vitess/go/vt/vitessdriver"
-
-	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
-	cell            = "zone1"
-	hostname        = "localhost"
+	clusterInstance *vitesst.Cluster
 	KeyspaceName    = "customer"
 	SchemaSQL       = `
 create table my_message(
@@ -89,46 +85,47 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(cell, hostname)
-		defer clusterInstance.Teardown()
+		ctx := context.Background()
 
-		// Start topo server
-		if err := clusterInstance.StartTopo(); err != nil {
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithKeyspace(KeyspaceName).
+				WithShardNames("-80", "80-").
+				WithReplicas(1).
+				WithSchema(SchemaSQL).
+				WithVSchema(VSchema),
+			vitesst.WithVTTabletArgs("--queryserver-config-transaction-timeout", "3s"),
+			vitesst.WithVTGateArgs("--warn-sharded-only=true"),
+		)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-
-		// Start keyspace
-		Keyspace := &cluster.Keyspace{
-			Name:      KeyspaceName,
-			SchemaSQL: SchemaSQL,
-			VSchema:   VSchema,
-		}
-		clusterInstance.VtTabletExtraArgs = []string{
-			"--queryserver-config-transaction-timeout", "3s",
-		}
-		if err := clusterInstance.StartKeyspace(*Keyspace, []string{"-80", "80-"}, 1, false, clusterInstance.Cell); err != nil {
-			log.Error(err.Error())
-			os.Exit(1)
+		cleanup, err := cluster.Start(ctx)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
 
-		// Start vtgate
-		clusterInstance.VtGateExtraArgs = []string{"--warn-sharded-only" + "=true"}
-		if err := clusterInstance.StartVtgate(); err != nil {
-			log.Error(err.Error())
-			os.Exit(1)
-			return 1
-		}
-
+		clusterInstance = cluster
 		return m.Run()
 	}()
 	os.Exit(exitCode)
 }
 
 func TestStreamMessaging(t *testing.T) {
+	ctx := t.Context()
+
+	grpcAddr, err := clusterInstance.VTGate().GRPCAddr(ctx)
+	require.NoError(t, err)
+
 	cnf := vitessdriver.Configuration{
 		Protocol: "grpc",
-		Address:  clusterInstance.Hostname + ":" + strconv.Itoa(clusterInstance.VtgateGrpcPort),
+		Address:  grpcAddr,
 		GRPCDialOptions: []grpc.DialOption{
 			grpc.WithDefaultCallOptions(),
 			grpc.WithKeepaliveParams(keepalive.ClientParameters{

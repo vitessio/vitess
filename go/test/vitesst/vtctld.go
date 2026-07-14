@@ -80,9 +80,13 @@ func (v *Vtctld) executeCommand(ctx context.Context, args ...string) (string, er
 	return output, nil
 }
 
-// createKeyspace creates a keyspace with the given durability policy.
-func (v *Vtctld) createKeyspace(ctx context.Context, keyspace, durabilityPolicy string) error {
-	args := []string{"CreateKeyspace", "--sidecar-db-name", sidecarDBName}
+// createKeyspace creates a keyspace with the given durability policy and
+// sidecar database name.
+func (v *Vtctld) createKeyspace(ctx context.Context, keyspace, durabilityPolicy, sidecar string) error {
+	if sidecar == "" {
+		sidecar = sidecarDBName
+	}
+	args := []string{"CreateKeyspace", "--sidecar-db-name", sidecar}
 	if durabilityPolicy != "" {
 		args = append(args, "--durability-policy", durabilityPolicy)
 	}

@@ -567,7 +567,7 @@ func TestSpecializedPlanStreaming(t *testing.T) {
 func runAndValidateSpecializedPlans(t *testing.T, dbo *sql.DB, prepare func(query string) (*sql.Stmt, error), queries []specializedPlanQuery) {
 	t.Helper()
 
-	oMap := getVarValue[map[string]any](t, "OptimizedQueryExecutions", clusterInstance.VtgateProcess.GetVars)
+	oMap := getVarValue[map[string]any](t, "OptimizedQueryExecutions", vtgateVars(t))
 	initExecCount := getVarValue[float64](t, "Passthrough", func() map[string]any {
 		return oMap
 	})
@@ -583,7 +583,7 @@ func runAndValidateSpecializedPlans(t *testing.T, dbo *sql.DB, prepare func(quer
 		}
 		require.NoError(t, stmt.Close())
 	}
-	oMap = getVarValue[map[string]any](t, "OptimizedQueryExecutions", clusterInstance.VtgateProcess.GetVars)
+	oMap = getVarValue[map[string]any](t, "OptimizedQueryExecutions", vtgateVars(t))
 	finalExecCount := getVarValue[float64](t, "Passthrough", func() map[string]any {
 		return oMap
 	})
@@ -592,12 +592,12 @@ func runAndValidateSpecializedPlans(t *testing.T, dbo *sql.DB, prepare func(quer
 	randomExec(t, dbo)
 
 	// Validate Join Query specialized plan.
-	p := getPlanWhenReady(t, queries[0].query, 100*time.Millisecond, clusterInstance.VtgateProcess.ReadQueryPlans)
+	p := getPlanWhenReady(t, queries[0].query, 100*time.Millisecond, vtgateQueryPlans(t))
 	require.NotNil(t, p, "plan not found")
 	validateJoinSpecializedPlan(t, p)
 
 	// Validate Window Function Query specialized plan with failing baseline plan.
-	p = getPlanWhenReady(t, queries[3].query, 100*time.Millisecond, clusterInstance.VtgateProcess.ReadQueryPlans)
+	p = getPlanWhenReady(t, queries[3].query, 100*time.Millisecond, vtgateQueryPlans(t))
 	require.NotNil(t, p, "plan not found")
 	validateBaselineErrSpecializedPlan(t, p)
 }

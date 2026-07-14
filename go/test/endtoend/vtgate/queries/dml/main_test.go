@@ -17,6 +17,7 @@ limitations under the License.
 package dml
 
 import (
+	"context"
 	_ "embed"
 	"flag"
 	"fmt"
@@ -26,18 +27,15 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/utils"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
+	clusterInstance *vitesst.Cluster
 	vtParams        mysql.ConnParams
 	mysqlParams     mysql.ConnParams
 	sKs             = "sks"
 	uKs             = "uks"
-	cell            = "test"
 
 	//go:embed sharded_schema.sql
 	sSchemaSQL string
@@ -69,69 +67,63 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(cell, "localhost")
-		defer clusterInstance.Teardown()
+		ctx := context.Background()
 
-		// Start topo server
-		err := clusterInstance.StartTopo()
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithKeyspace(uKs).
+				WithSchema(uSchemaSQL).
+				WithVSchema(uVSchema),
+			vitesst.WithKeyspace(sKs).
+				WithShardNames("-80", "80-").
+				WithSchema(sSchemaSQL).
+				WithVSchema(sVSchema).
+				WithTabletArgs(
+					"--queryserver-config-passthrough-dmls",
+					"--queryserver-config-max-result-size", "10",
+				),
+			vitesst.WithVTGateArgs("--vtgate-config-terse-errors", "--planner-version", "Gen4"),
+		)
 		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-
-		// Start unsharded keyspace
-		uKeyspace := &cluster.Keyspace{
-			Name:      uKs,
-			SchemaSQL: uSchemaSQL,
-			VSchema:   uVSchema,
-		}
-		err = clusterInstance.StartUnshardedKeyspace(*uKeyspace, 0, false, clusterInstance.Cell)
+		cleanup, err := cluster.Start(ctx)
 		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
 
-		// Start sharded keyspace
-		sKeyspace := &cluster.Keyspace{
-			Name:      sKs,
-			SchemaSQL: sSchemaSQL,
-			VSchema:   sVSchema,
-		}
-		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
-			"--queryserver-config-passthrough-dmls",
-			"--queryserver-config-max-result-size", "10")
-		err = clusterInstance.StartKeyspace(*sKeyspace, []string{"-80", "80-"}, 0, false, clusterInstance.Cell)
-		if err != nil {
-			return 1
-		}
+		clusterInstance = cluster
+		vtParams = cluster.VTParams(ctx, "")
 
-		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--vtgate-config-terse-errors")
-
-		// Start vtgate
-		clusterInstance.VtGatePlannerVersion = planbuilder.Gen4
-		err = clusterInstance.StartVtgate()
-		if err != nil {
-			return 1
-		}
-
-		vtParams = clusterInstance.GetVTParams(sKs)
 		// create mysql instance and connection parameters
-		conn, closer, err := utils.NewMySQL(clusterInstance, sKs, sSchemaSQL, uSchemaSQL)
+		conn, closer, err := vitesst.NewMySQL(ctx, cluster, sKs, sSchemaSQL, uSchemaSQL)
 		if err != nil {
-			fmt.Println(err)
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-		defer closer()
+		defer func() {
+			if err := closer(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "mysql teardown:", err)
+			}
+		}()
 		mysqlParams = conn
 		return m.Run()
 	}()
 	os.Exit(exitCode)
 }
 
-func start(t *testing.T) (utils.MySQLCompare, func()) {
-	mcmp, err := utils.NewMySQLCompare(t, vtParams, mysqlParams)
+func start(t *testing.T) (vitesst.MySQLCompare, func()) {
+	mcmp, err := vitesst.NewMySQLCompare(t.Context(), t, vtParams, mysqlParams)
 	require.NoError(t, err)
 
 	deleteAll := func() {
-		_, _ = utils.ExecAllowError(t, mcmp.VtConn, "set workload = oltp")
+		_, _ = vitesst.ExecAllowError(t, mcmp.VtConn, "set workload = oltp")
 
 		tables := []string{
 			"s_tbl", "num_vdx_tbl", "col_vdx_tbl", "user_tbl", "order_tbl", "oevent_tbl", "oextra_tbl",

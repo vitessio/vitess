@@ -17,26 +17,24 @@ limitations under the License.
 package viewroutingrules
 
 import (
+	"context"
 	_ "embed"
 	"flag"
 	"fmt"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
+	clusterInstance *vitesst.Cluster
 	vtParams        mysql.ConnParams
 	sourceKs        = "source_ks"
 	targetKs        = "target_ks"
-	cell            = "zone1"
 
 	//go:embed source_schema.sql
 	sourceSchema string
@@ -55,64 +53,46 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(cell, "localhost")
-		defer clusterInstance.Teardown()
+		ctx := context.Background()
 
-		// Start topo server.
-		err := clusterInstance.StartTopo()
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithVTGateArgs("--enable-views"),
+			vitesst.WithVTTabletArgs("--queryserver-enable-views"),
+			vitesst.WithKeyspace(sourceKs).
+				WithReplicas(1).
+				WithSchema(sourceSchema).
+				WithVSchema(sourceVSchema),
+			vitesst.WithKeyspace(targetKs).
+				WithShardNames("-80", "80-").
+				WithReplicas(1).
+				WithSchema(targetSchema).
+				WithVSchema(targetVSchema),
+		)
 		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-
-		// Enable views tracking.
-		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--enable-views")
-		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--queryserver-enable-views")
-
-		// Start source keyspace (unsharded, with 1 replica for tablet type routing test).
-		sks := cluster.Keyspace{
-			Name:      sourceKs,
-			SchemaSQL: sourceSchema,
-			VSchema:   sourceVSchema,
-		}
-		err = clusterInstance.StartUnshardedKeyspace(sks, 1, false, cell)
+		cleanup, err := cluster.Start(ctx)
 		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
 
-		// Start target keyspace (sharded, with 1 replica for tablet type routing test).
-		tks := cluster.Keyspace{
-			Name:      targetKs,
-			SchemaSQL: targetSchema,
-			VSchema:   targetVSchema,
-		}
-		err = clusterInstance.StartKeyspace(tks, []string{"-80", "80-"}, 1, false, cell)
-		if err != nil {
-			return 1
-		}
-
-		// Start vtgate.
-		err = clusterInstance.StartVtgate()
-		if err != nil {
-			return 1
-		}
-
-		err = clusterInstance.WaitForVTGateAndVTTablets(1 * time.Minute)
-		if err != nil {
-			fmt.Println(err)
-			return 1
-		}
-
-		vtParams = mysql.ConnParams{
-			Host: clusterInstance.Hostname,
-			Port: clusterInstance.VtgateMySQLPort,
-		}
+		clusterInstance = cluster
+		vtParams = cluster.VTParams(ctx, "")
 		return m.Run()
 	}()
 	os.Exit(exitCode)
 }
 
 func TestViewRoutingRules(t *testing.T) {
-	conn, err := mysql.Connect(t.Context(), &vtParams)
+	ctx := t.Context()
+	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
@@ -126,18 +106,18 @@ func TestViewRoutingRules(t *testing.T) {
 		_, ok = viewsMap["view1"]
 		return ok
 	}
-	utils.WaitForVschemaCondition(t, clusterInstance.VtgateProcess, sourceKs, viewExists, "source view1 not found")
-	utils.WaitForVschemaCondition(t, clusterInstance.VtgateProcess, targetKs, viewExists, "target view1 not found")
+	vitesst.WaitForVschemaCondition(t, clusterInstance.VTGate(), sourceKs, viewExists, "source view1 not found")
+	vitesst.WaitForVschemaCondition(t, clusterInstance.VTGate(), targetKs, viewExists, "target view1 not found")
 
 	// Insert different data in each keyspace so we can distinguish which one is being queried.
-	utils.Exec(t, conn, "insert into source_ks.t1(id, val) values(1, 'source_data')")
-	utils.Exec(t, conn, "insert into target_ks.t1(id, val) values(1, 'target_data')")
+	vitesst.Exec(t, conn, "insert into source_ks.t1(id, val) values(1, 'source_data')")
+	vitesst.Exec(t, conn, "insert into target_ks.t1(id, val) values(1, 'target_data')")
 
-	utils.AssertMatches(t, conn, "select * from source_ks.view1", `[[INT64(1) VARCHAR("source_data")]]`)
-	utils.AssertMatches(t, conn, "select * from target_ks.view1", `[[INT64(1) VARCHAR("target_data")]]`)
+	vitesst.AssertMatches(t, conn, "select * from source_ks.view1", `[[INT64(1) VARCHAR("source_data")]]`)
+	vitesst.AssertMatches(t, conn, "select * from target_ks.view1", `[[INT64(1) VARCHAR("target_data")]]`)
 
 	// Unqualified query should fail with ambiguous table error since view1 exists in both keyspaces.
-	_, err = utils.ExecAllowError(t, conn, "select * from view1")
+	_, err = vitesst.ExecAllowError(t, conn, "select * from view1")
 	require.Error(t, err)
 	require.ErrorContains(t, err, "ambiguous")
 
@@ -147,21 +127,21 @@ func TestViewRoutingRules(t *testing.T) {
 		{"from_table": "source_ks.view1", "to_tables": ["target_ks.view1"]},
 		{"from_table": "source_ks.view1@replica", "to_tables": ["target_ks.view1"]}
 	]}`
-	err = clusterInstance.VtctldClientProcess.ApplyRoutingRules(routingRules)
+	err = clusterInstance.Vtctld().ExecuteCommand(ctx, "ApplyRoutingRules", "--rules", routingRules)
 	require.NoError(t, err)
 	defer func() {
-		err := clusterInstance.VtctldClientProcess.ApplyRoutingRules("{}")
+		err := clusterInstance.Vtctld().ExecuteCommand(ctx, "ApplyRoutingRules", "--rules", "{}")
 		require.NoError(t, err)
 	}()
 
 	// After routing rules, all queries should return target data.
 
-	utils.AssertMatches(t, conn, "select * from view1", `[[INT64(1) VARCHAR("target_data")]]`)
-	utils.AssertMatches(t, conn, "select * from source_ks.view1", `[[INT64(1) VARCHAR("target_data")]]`)
+	vitesst.AssertMatches(t, conn, "select * from view1", `[[INT64(1) VARCHAR("target_data")]]`)
+	vitesst.AssertMatches(t, conn, "select * from source_ks.view1", `[[INT64(1) VARCHAR("target_data")]]`)
 
-	utils.Exec(t, conn, "use @replica")
-	utils.AssertMatches(t, conn, "select * from source_ks.view1", `[[INT64(1) VARCHAR("target_data")]]`)
+	vitesst.Exec(t, conn, "use @replica")
+	vitesst.AssertMatches(t, conn, "select * from source_ks.view1", `[[INT64(1) VARCHAR("target_data")]]`)
 
-	utils.Exec(t, conn, "use @primary")
-	utils.AssertMatches(t, conn, "select * from target_ks.view1", `[[INT64(1) VARCHAR("target_data")]]`)
+	vitesst.Exec(t, conn, "use @primary")
+	vitesst.AssertMatches(t, conn, "select * from target_ks.view1", `[[INT64(1) VARCHAR("target_data")]]`)
 }

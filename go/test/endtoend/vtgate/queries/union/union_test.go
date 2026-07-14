@@ -19,18 +19,18 @@ package union
 import (
 	"testing"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/test/vitesst"
 )
 
-func start(t *testing.T) (utils.MySQLCompare, func()) {
-	mcmp, err := utils.NewMySQLCompare(t, vtParams, mysqlParams)
+func start(t *testing.T) (vitesst.MySQLCompare, func()) {
+	mcmp, err := vitesst.NewMySQLCompare(t.Context(), t, vtParams, mysqlParams)
 	require.NoError(t, err)
 
 	deleteAll := func() {
-		_, _ = utils.ExecAllowError(t, mcmp.VtConn, "set workload = oltp")
+		_, _ = vitesst.ExecAllowError(t, mcmp.VtConn, "set workload = oltp")
 
 		tables := []string{"t1", "t1_id2_idx", "t2", "t2_id4_idx"}
 		for _, table := range tables {
@@ -54,8 +54,8 @@ func TestUnionDistinct(t *testing.T) {
 	mcmp.Exec("insert into t2(id3, id4) values (2, 3), (3, 4), (4,4), (5,5)")
 
 	for _, workload := range []string{"oltp", "olap"} {
-		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
-			utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
+		mcmp.Run(workload, func(mcmp *vitesst.MySQLCompare) {
+			vitesst.Exec(t, mcmp.VtConn, "set workload = "+workload)
 			mcmp.AssertMatches("select 1 union select null", "[[INT64(1)] [NULL]]")
 			mcmp.AssertMatches("select null union select null", "[[NULL]]")
 			mcmp.AssertMatches("select * from (select 1 as col union select 2) as t", "[[INT64(1)] [INT64(2)]]")
@@ -88,8 +88,8 @@ func TestUnionAll(t *testing.T) {
 	mcmp.Exec("insert into t2(id3, id4) values(3, 3), (4, 4)")
 
 	for _, workload := range []string{"oltp", "olap"} {
-		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
-			utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
+		mcmp.Run(workload, func(mcmp *vitesst.MySQLCompare) {
+			vitesst.Exec(t, mcmp.VtConn, "set workload = "+workload)
 			// union all between two selectuniqueequal
 			mcmp.AssertMatches("select id1 from t1 where id1 = 1 union all select id1 from t1 where id1 = 4", "[[INT64(1)]]")
 
@@ -118,7 +118,7 @@ func TestUnionAll(t *testing.T) {
 				"[[INT64(1) INT64(1)] [INT64(2) INT64(2)] [INT64(3) INT64(3)] [INT64(4) INT64(4)]]")
 		})
 	}
-	mcmp.Run("union push down", func(mcmp *utils.MySQLCompare) {
+	mcmp.Run("union push down", func(mcmp *vitesst.MySQLCompare) {
 		mcmp.Exec(`
 select sum(case when col = 1 then 1 else 0 end) 
 from (

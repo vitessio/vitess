@@ -1257,7 +1257,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "Uses go:embed schema/vschema files (sSchema.sql/sVschema.json/uSchema.sql/uVschema.json), one unsharded and one sharded keyspace; exercises the go-sql-driver prepared-statement path end to end and scrapes vtgate /debug/vars (GetVars) for the OptimizedQueryExecutions counter plus vtgate's query-plan cache (ReadQueryPlans) to assert plan caching/specialization. | cluster APIs: LocalProcessCluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartUnshardedKeyspace, LocalProcessCluster.StartKeyspace, LocalProcessCluster.NewVtgateInstance, VtgateProcess.Setup, VtgateProcess.GetVars, VtgateProcess.ReadQueryPlans, LocalProcessCluster.Teardown | external deps: mysql-auth-server-static config file written to TmpDirectory, vtgate --pprof-http flag | difficulty: medium",
    "old_shards": [
@@ -1289,9 +1289,9 @@
     "TestSpecializedPlanStreaming"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/preparestmt",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 12.587,
+   "status": "verified",
+   "verified_at_sha": "a268e5a35aebb62fa06d0f04b92f146c5e054638",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/preparestmt/",
    "wave": 1
   },
@@ -1698,7 +1698,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "Minimal test: starts a background stress load generator against vtgate MySQL port and immediately stops it; no assertions beyond Start/Stop succeeding without panics. Straightforward conn-based usage. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartUnshardedKeyspace, LocalProcessCluster.StartVtgate | external deps: go/test/stress package (background load generator connecting via mysql.ConnParams) | difficulty: easy",
    "old_shards": [],
@@ -1707,9 +1707,9 @@
     "TestSimpleStressTest"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/stress",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 9.446,
+   "status": "verified",
+   "verified_at_sha": "a268e5a35aebb62fa06d0f04b92f146c5e054638",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/stress/",
    "wave": 1
   },
@@ -2679,7 +2679,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "Single small test (TestCreateMySQL) that inserts/selects through vtgate and an independent raw mysqld and diffs results; --schema-change-signal and --enable-system-settings flags are exercised. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.VtGateExtraArgs, LocalProcessCluster.VtTabletExtraArgs, LocalProcessCluster.VtgateMySQLPort, LocalProcessCluster.Hostname | utils APIs: utils.NewMySQL, utils.ExecCompareMySQL, utils.AssertMatchesCompareMySQL | external deps: standalone reference mysqld spawned via utils.NewMySQL/NewMySQLWithMysqld for mysql-vs-vitess comparison | difficulty: medium",
    "old_shards": [
@@ -2696,9 +2696,9 @@
     "TestCreateMySQL"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/utils/mysqlvsvitess",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 12.332,
+   "status": "verified",
+   "verified_at_sha": "a268e5a35aebb62fa06d0f04b92f146c5e054638",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/utils/mysqlvsvitess/",
    "wave": 1
   },
@@ -3536,7 +3536,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "mixed",
    "notes": "Does not stand up any real cluster at all: it wires vtctldclient's command.Root against an in-process localvtctldclient fake gRPC server. Effectively a unit test masquerading as e2e; trivial to keep as-is or port unchanged. | difficulty: easy",
    "old_shards": [
@@ -3552,9 +3552,9 @@
     "TestApplySchema"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtctldclient",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 5,
+   "status": "verified",
+   "verified_at_sha": "a268e5a35aebb62fa06d0f04b92f146c5e054638",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtctldclient/",
    "wave": 1
   },
@@ -3570,7 +3570,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "Covers main_test.go (2-shard keyspace, routing rules), lookup_test.go (605 lines of pure conn-based lookup vindex query behavior, no process control) and misc_test.go (1354 lines, largest file, but also purely query/metrics based -- reads VtgateProcess.GetVars/VttabletProcess.GetVars, no kills/restarts). All three files share the same package-level cluster from main_test.go's TestMain. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartKeyspace, LocalProcessCluster.VtctldClientProcess.ApplyRoutingRules, LocalProcessCluster.VtctldClientProcess.ExecuteCommandWithOutput (RebuildVSchemaGraph), LocalProcessCluster.StartVtgate, LocalProcessCluster.GetVTParams, LocalProcessCluster.VtgateProcess.GetVars, VttabletProcess.GetVars, cluster.Vttablet | utils APIs: utils.Exec, utils.ExecAllowError, utils.AssertMatches, utils.AssertMatchesAny, utils.AssertContainsError, utils.AssertIsEmpty | external deps: embedded schema.sql/vschema.json via go:embed | difficulty: easy",
    "old_shards": [
@@ -3653,9 +3653,9 @@
     "TestMetricForExplain"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 17,
+   "status": "verified",
+   "verified_at_sha": "a268e5a35aebb62fa06d0f04b92f146c5e054638",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/",
    "wave": 1
   },
@@ -3668,7 +3668,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "Two of four tests are t.Skip'd (transaction+lookup-vindex interplay). Purely conn-based concurrency tests using goroutines/sync.WaitGroup against real innodb lock waits; relies on real MySQL lock_wait_timeout behavior. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartUnshardedKeyspace, LocalProcessCluster.StartKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.VtgateMySQLPort | utils APIs: utils.Exec, utils.AssertContainsError, utils.AssertMatches | external deps: embedded sharded_schema.sql/sharded_vschema.json (go:embed), vitess_sequence table | difficulty: easy",
    "old_shards": [
@@ -3688,9 +3688,9 @@
     "TestUpdateLookupUniqueVindex"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/concurrentdml",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 11.934,
+   "status": "verified",
+   "verified_at_sha": "a268e5a35aebb62fa06d0f04b92f146c5e054638",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/concurrentdml/",
    "wave": 1
   },
@@ -3740,7 +3740,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "Relies on VttabletProcess.GetConsolidations (a debug/vars-style query-consolidation counter scrape) plus `select sleep(2)` queries fired concurrently from two connections to prove query consolidation kicks in/out per the CONSOLIDATOR query directive; timing-sensitive but not process-control-heavy. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.Keyspaces[].Shards[].PrimaryTablet/Replica, VttabletProcess.GetConsolidations | utils APIs: utils.Exec | difficulty: medium",
    "old_shards": [
@@ -3762,9 +3762,9 @@
     "TestConsolidatorEnabledReplicasWithDirective"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/consolidator",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 23.504,
+   "status": "verified",
+   "verified_at_sha": "a268e5a35aebb62fa06d0f04b92f146c5e054638",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/consolidator/",
    "wave": 1
   },
@@ -3907,7 +3907,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "Verifies routing rules (embedded routing_rules.json) cause FK child/parent relationships to be scoped to the physically-routed keyspace only; reads vschema JSON back from vtgate's debug endpoint. | cluster APIs: NewCluster, StartTopo, StartUnshardedKeyspace, VtctldClientProcess.ApplyRoutingRules, VtctldClientProcess.ExecuteCommand, StartVtgate, VtgateProcess.ReadVSchema | utils APIs: utils.WaitForVschemaCondition | difficulty: medium",
    "old_shards": [
@@ -3924,9 +3924,9 @@
     "TestForeignKeyRoutingRules"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/foreignkey/routing",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 11.056,
+   "status": "verified",
+   "verified_at_sha": "a268e5a35aebb62fa06d0f04b92f146c5e054638",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/foreignkey/routing/",
    "wave": 1
   },
@@ -3983,7 +3983,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "1 sharded keyspace (4 static shards) + 2 unsharded keyspaces + routing rules mapping ks.t1000->ks.t1; --schema-change-signal / --queryserver-config-schema-change-signal enable live schema tracking that column_name_test.go and system_schema_test.go depend on via WaitForAuthoritative. | cluster APIs: NewCluster, StartTopo, StartKeyspace, StartUnshardedKeyspace, VtctldClientProcess.ApplyRoutingRules, VtctldClientProcess.ExecuteCommand, StartVtgate, VtGatePlannerVersion, VtGateExtraArgs, VtTabletExtraArgs, VtgateProcess | utils APIs: utils.Exec, utils.ExecAllowError, utils.AssertMatches, utils.AssertMatchesAny, utils.AssertMatchesNoOrder, utils.WaitForAuthoritative, utils.NewMySQL, utils.MySQLCompare | difficulty: medium",
    "old_shards": [
@@ -4030,9 +4030,9 @@
     "TestQuerySystemTables"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/gen4",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 18.208,
+   "status": "verified",
+   "verified_at_sha": "a268e5a35aebb62fa06d0f04b92f146c5e054638",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/gen4/",
    "wave": 1
   },
@@ -4046,7 +4046,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "Tests the Vitess message-queue feature (table comment 'vitess_message,...') via `stream * from my_message` over the vitessdriver gRPC streaming connection; needs grpc-api-host reachable from the test process with a real gRPC dial, not just a mysql-protocol port. | cluster APIs: NewCluster, StartTopo, StartKeyspace, VtTabletExtraArgs, StartVtgate, VtGateExtraArgs, VtgateGrpcPort | external deps: vitessdriver (grpc VTGate driver) with custom grpc keepalive params | difficulty: medium",
    "old_shards": [
@@ -4063,9 +4063,9 @@
     "TestStreamMessaging"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/godriver",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 8,
+   "status": "verified",
+   "verified_at_sha": "a268e5a35aebb62fa06d0f04b92f146c5e054638",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/godriver/",
    "wave": 1
   },
@@ -4080,7 +4080,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "vtgate uses --grpc-auth-mode static plus --grpc-use-effective-callerid/--grpc-use-static-authentication-callerid; vttablet enforces table ACLs; tests combine gRPC-level auth (static users) with effectiveCallerID-based table ACL checks, and separately test Prepare() over the gRPC vtgateconn API. | cluster APIs: NewCluster, StartTopo, TmpDirectory, StartUnshardedKeyspace, VtGateExtraArgs, VtTabletExtraArgs, StartVtgate, VtgateGrpcPort, DialVTGate | external deps: static gRPC auth JSON file written to clusterInstance.TmpDirectory (grpc_server_auth_static.json), table ACL JSON file written to clusterInstance.TmpDirectory (table_acl.json) | difficulty: medium",
    "old_shards": [
@@ -4105,9 +4105,9 @@
     "TestPrepareWithGRPCAPI"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/grpc_api",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 7.529,
+   "status": "verified",
+   "verified_at_sha": "a268e5a35aebb62fa06d0f04b92f146c5e054638",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/grpc_api/",
    "wave": 1
   },
@@ -4155,7 +4155,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "Despite the package name, main_test.go does not itself pin a MySQL flavor/version -- it relies on the surrounding CI/bootstrap environment providing MySQL 8.4 (or 8.0.16+) semantics for JSON functions, CHECK constraints, and function-valued column defaults; vtgate is started with --mysql-server-version=8.0.16-7 and --enable-system-settings=true. | cluster APIs: NewCluster, StartTopo, StartUnshardedKeyspace, VtGatePlannerVersion, VtGateExtraArgs, StartVtgate | utils APIs: utils.Exec, utils.AssertMatches | difficulty: easy",
    "old_shards": [
@@ -4178,9 +4178,9 @@
     "TestJsonFunctions"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/mysql84",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 8.698,
+   "status": "verified",
+   "verified_at_sha": "a268e5a35aebb62fa06d0f04b92f146c5e054638",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/mysql84/",
    "wave": 1
   },
@@ -4194,7 +4194,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "4-shard keyspace 'ks' with lookup and primary vindexes; tests partial multi-row insert failures and rollback semantics across oltp/olap and reserved-connection modes via `set sql_mode=''`. Purely conn-based, no process control. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.GetVTParams, LocalProcessCluster.Teardown | utils APIs: utils.Exec, utils.AssertContainsError, utils.AssertMatches | difficulty: easy",
    "old_shards": [
@@ -4222,9 +4222,9 @@
     "TestPartialVindexQueryFailureAutoCommitRollback"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/partialfailure",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 8.77,
+   "status": "verified",
+   "verified_at_sha": "a268e5a35aebb62fa06d0f04b92f146c5e054638",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/partialfailure/",
    "wave": 1
   },
@@ -4242,7 +4242,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "Two keyspaces (unsharded 'main', sharded 'user'); vtgate started with --normalize-queries=false and --schema-change-signal=true. Test-case definitions (select/filter/dml/reference cases + sample data) are loaded from planbuilder/testdata JSON/SQL files on the host filesystem, not embedded in the package, and each case is plan-verified via engine.PrimitiveDescription comparison. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartUnshardedKeyspace, LocalProcessCluster.StartKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.GetVTParams, LocalProcessCluster.Teardown, VtgateProcess.ReadVSchema | utils APIs: utils.NewMySQLCompare, utils.NewMySQL, utils.WaitForAuthoritative, utils.ExecTrace, MySQLCompare.ExecVitessAndMySQLDifferentQueries, MySQLCompare.ExecNoCompare, MySQLCompare.Run, MySQLCompare.AsT | external deps: reads local testdata files under vt/vtgate/planbuilder/testdata (vschema.json, sql, sample data, JSON test-case files) via os.ReadFile / relative host paths | difficulty: medium",
    "old_shards": [
@@ -4259,9 +4259,9 @@
     "TestE2ECases"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/plan_tests",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 17,
+   "status": "verified",
+   "verified_at_sha": "a268e5a35aebb62fa06d0f04b92f146c5e054638",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/plan_tests/",
    "wave": 1
   },
@@ -4408,7 +4408,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "Package name is 'misc' (shared with other test dirs) though directory is queries/derived. 2-shard keyspace ks_derived, vtgate --enable-system-settings=true; covers derived-table and CTE planning (order-by/limit removal, aggregation on RHS, column aliasing) purely via conn queries plus one WaitForAuthoritative call. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.Teardown, VtgateProcess.ReadVSchema | utils APIs: utils.NewMySQL, utils.NewMySQLCompare, utils.WaitForAuthoritative, utils.Exec, MySQLCompare.Exec, MySQLCompare.ExecAndIgnore, MySQLCompare.AssertMatches, MySQLCompare.AssertMatchesNoOrder, MySQLCompare.AssertMatchesAnyNoCompare | difficulty: easy",
    "old_shards": [
@@ -4439,9 +4439,9 @@
     "TestMain"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/queries/derived",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 11.978,
+   "status": "verified",
+   "verified_at_sha": "a268e5a35aebb62fa06d0f04b92f146c5e054638",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/queries/derived/",
    "wave": 1
   },
@@ -4457,7 +4457,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "One sharded (sks, 2 lookup/unique vindexes) and one unsharded (uks, sequence tables) keyspace; vttablet started with --queryserver-config-passthrough-dmls and small --queryserver-config-max-result-size=10 to force large-row DML paths; vtgate with --vtgate-config-terse-errors and explicit Gen4 planner version. Tests skip themselves when clusterInstance.HasPartialKeyspaces is set, a legacy-framework-specific flag the new harness would need an equivalent knob for (or these tests always run non-partial). | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartUnshardedKeyspace, LocalProcessCluster.StartKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.GetVTParams, LocalProcessCluster.Teardown, LocalProcessCluster.HasPartialKeyspaces | utils APIs: utils.NewMySQL, utils.NewMySQLCompare, utils.Exec, utils.ExecAllowError, utils.AssertMatches, utils.AssertContainsError, utils.ExecWithRowCount, MySQLCompare.Exec, MySQLCompare.ExecAndIgnore, MySQLCompare.AssertMatches, MySQLCompare.AssertMatchesAnyNoCompare, MySQLCompare.AssertContainsError, MySQLCompare.ExecAllowAndCompareError, MySQLCompare.Run | difficulty: medium",
    "old_shards": [
@@ -4507,9 +4507,9 @@
     "TestMain"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/queries/dml",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 17.785,
+   "status": "verified",
+   "verified_at_sha": "a268e5a35aebb62fa06d0f04b92f146c5e054638",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/queries/dml/",
    "wave": 1
   },
@@ -4525,7 +4525,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "Single test file, 2-shard keyspace ks_found_rows; verifies SQL_CALC_FOUND_ROWS semantics across oltp/olap. Purely conn-based aside from one WaitForAuthoritative wait. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.GetVTParams, LocalProcessCluster.Teardown, VtgateProcess.ReadVSchema | utils APIs: utils.NewMySQL, utils.NewMySQLCompare, utils.WaitForAuthoritative, utils.Exec, MySQLCompare.ExecAndIgnore, MySQLCompare.Exec, MySQLCompare.AssertFoundRowsValue | difficulty: easy",
    "old_shards": [
@@ -4544,9 +4544,9 @@
     "TestMain"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/queries/foundrows",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 11.07,
+   "status": "verified",
+   "verified_at_sha": "a268e5a35aebb62fa06d0f04b92f146c5e054638",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/queries/foundrows/",
    "wave": 1
   },
@@ -4563,7 +4563,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "2-shard keyspace 'ks'; TestMain applies a routing rule (t1000 -> t1) and calls RebuildVSchemaGraph via VtctldClientProcess before starting vtgate. Tests exercise information_schema/mysql/performance_schema/sys system-schema routing, FK metadata queries, and OLTP/OLAP field-Database consistency; several tests skip on HasPartialKeyspaces. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.GetVTParams, LocalProcessCluster.Teardown, LocalProcessCluster.HasPartialKeyspaces, VtctldClientProcess.ApplyRoutingRules, VtctldClientProcess.ExecuteCommand | utils APIs: utils.NewMySQL, utils.NewMySQLCompare, utils.ExecAllowError, utils.Exec, utils.AssertSingleRowIsReturned, utils.AssertResultIsEmpty, utils.AssertMatchesAny, utils.WaitForAuthoritative, MySQLCompare.ExecAndIgnore, MySQLCompare.AssertIsEmpty, MySQLCompare.AssertMatchesAny, MySQLCompare.ExecNoCompare, MySQLCompare.Exec | difficulty: medium",
    "old_shards": [
@@ -4595,9 +4595,9 @@
     "TestMain"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/queries/informationschema",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 9.783,
+   "status": "verified",
+   "verified_at_sha": "a268e5a35aebb62fa06d0f04b92f146c5e054638",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/queries/informationschema/",
    "wave": 1
   },
@@ -4652,7 +4652,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "Explicit RebuildVSchemaGraph via vtctldclient isn't called here (that's misc pkg); simple sharded lookup vindex test, olap/oltp workload toggling via SET workload, no process control. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartKeyspace, VtctldClientProcess.ExecuteCommand, LocalProcessCluster.StartVtgate, LocalProcessCluster.Teardown | utils APIs: utils.NewMySQL, utils.NewMySQLCompare, MySQLCompare.Exec, MySQLCompare.ExecAndIgnore, utils.ExecAllowError, utils.Exec, MySQLCompare.AssertMatches, MySQLCompare.AssertMatchesNoOrder, MySQLCompare.Run | difficulty: easy",
    "old_shards": [
@@ -4669,9 +4669,9 @@
     "TestLookupQueries"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/queries/lookup_queries",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 11.598,
+   "status": "verified",
+   "verified_at_sha": "a268e5a35aebb62fa06d0f04b92f146c5e054638",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/queries/lookup_queries/",
    "wave": 1
   },
@@ -4761,7 +4761,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "Starts vtgate with --mysql-server-multi-query-protocol and drives both a MySQL-protocol multi-statement path and a raw gRPC VTGate session (ExecuteMulti/StreamExecuteMulti) requiring gRPC dial to VtgateGrpcPort; needs framework to expose vtgate's gRPC endpoint directly, not just MySQL wire protocol. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.GetVTParams, cluster.DialVTGate, LocalProcessCluster.Teardown, clusterInstance.Hostname/VtgateGrpcPort | utils APIs: utils.NewMySQL, utils.NewMySQLCompare, MySQLCompare.ExecMulti, MySQLCompare.ExecMultiAllowError, utils.Exec, utils.CompareVitessAndMySQLResults, MySQLCompare.MySQLConn/VtConn | difficulty: medium",
    "old_shards": [
@@ -4780,9 +4780,9 @@
     "TestMultiQuery"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/queries/multi_query",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 11.549,
+   "status": "verified",
+   "verified_at_sha": "a268e5a35aebb62fa06d0f04b92f146c5e054638",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/queries/multi_query/",
    "wave": 1
   },
@@ -4795,7 +4795,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "Starts vtgate with --no-scatter=true and checks scatter queries are rejected unless ALLOW_SCATTER hint is used; plain conn-based test, no mysql-compare. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.GetVTParams, LocalProcessCluster.Teardown | utils APIs: utils.Exec, utils.ExecAllowError, mysql.Connect | difficulty: easy",
    "old_shards": [
@@ -4814,9 +4814,9 @@
     "TestFailsWhenForcedToScatter"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/queries/no_scatter",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 8.322,
+   "status": "verified",
+   "verified_at_sha": "a268e5a35aebb62fa06d0f04b92f146c5e054638",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/queries/no_scatter/",
    "wave": 1
   },
@@ -4851,7 +4851,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "Uses --schema-change-signal on vtgate/vttablet and --enable-system-settings; pure ORDER BY correctness tests including a big table-driven complex-order-by suite and an OLAP-streaming variant, no process control. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.GetVTParams, LocalProcessCluster.Teardown | utils APIs: utils.NewMySQL, utils.NewMySQLCompare, MySQLCompare.Exec/ExecAndIgnore/AssertMatches/ExecAllowAndCompareError/Run, utils.Exec, utils.ExecAllowError | difficulty: easy",
    "old_shards": [
@@ -4876,9 +4876,9 @@
     "TestOrderByComplex"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/queries/orderby",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 11.244,
+   "status": "verified",
+   "verified_at_sha": "a268e5a35aebb62fa06d0f04b92f146c5e054638",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/queries/orderby/",
    "wave": 1
   },
@@ -4892,7 +4892,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "StartKeyspace called with numReplicas=1 and withRDONLY=true (extra tablet types configured) and --schema-change-signal=false; otherwise trivial single-test package mirroring orderby without schema tracking enabled. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.Teardown | utils APIs: utils.NewMySQL, utils.NewMySQLCompare, MySQLCompare.Exec/ExecAndIgnore/AssertMatches, utils.ExecAllowError | difficulty: easy",
    "old_shards": [
@@ -4909,9 +4909,9 @@
     "TestSimpleOrderBy"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/queries/orderby/without_schematracker",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 10.272,
+   "status": "verified",
+   "verified_at_sha": "a268e5a35aebb62fa06d0f04b92f146c5e054638",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/queries/orderby/without_schematracker/",
    "wave": 1
   },
@@ -4953,7 +4953,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "TestMustFix/TestKnownFailures/TestRandom/TestSimplifyResultsMismatchedQuery are all t.Skip('Skip CI') and never run in CI; only TestBuggyQueries and TestRandomExprWithTables run for real (the latter is a pure in-process AST generator with no cluster interaction). simplifier_test.go loads a local svschema.json file via vindexes.LoadFormal, a relative host-file read, but only inside skipped tests. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.GetVTParams, LocalProcessCluster.Teardown | utils APIs: utils.NewMySQL, utils.NewMySQLCompare, MySQLCompare.Exec/ExecAllowAndCompareError, utils.WaitForAuthoritative, clusterInstance.VtgateProcess.ReadVSchema | difficulty: medium",
    "old_shards": [
@@ -4977,9 +4977,9 @@
     "TestSimplifyResultsMismatchedQuery"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/queries/random",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 11.588,
+   "status": "verified",
+   "verified_at_sha": "a268e5a35aebb62fa06d0f04b92f146c5e054638",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/queries/random/",
    "wave": 1
   },
@@ -5034,7 +5034,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "Uses --schema-change-signal and --enable-system-settings; pure subquery correctness tests against MySQL comparison, no process control or external deps. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.GetVTParams, LocalProcessCluster.Teardown | utils APIs: utils.NewMySQL, utils.NewMySQLCompare, MySQLCompare.Exec/ExecAndIgnore/AssertMatches/Run, utils.Exec, utils.ExecAllowError | difficulty: easy",
    "old_shards": [
@@ -5067,9 +5067,9 @@
     "TestProperTypesOfPullOutValue"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/queries/subquery",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 10.663,
+   "status": "verified",
+   "verified_at_sha": "a268e5a35aebb62fa06d0f04b92f146c5e054638",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/queries/subquery/",
    "wave": 1
   },
@@ -5124,7 +5124,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "Pure TPCH-style query comparison against mysql, no process control; uses utils.WaitForColumn to wait for schema tracking to pick up a column, which needs the schema-tracking capability available in the containerized vtgate. | cluster APIs: LocalProcessCluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.GetVTParams | utils APIs: utils.NewMySQL, utils.NewMySQLCompare, utils.ExecAllowError, utils.WaitForColumn, MySQLCompare.Exec, MySQLCompare.Run, MySQLCompare.ExecAndIgnore | difficulty: easy",
    "old_shards": [
@@ -5146,9 +5146,9 @@
     "TestTPCHQueries"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/queries/tpch",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 10.997,
+   "status": "verified",
+   "verified_at_sha": "a268e5a35aebb62fa06d0f04b92f146c5e054638",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/queries/tpch/",
    "wave": 1
   },
@@ -5160,7 +5160,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "cluster-per-test",
    "notes": "createCluster() spins up (and each caller tears down) a fresh cluster per test to vary vttablet's transaction-timeout flag; relies on wall-clock time.Sleep of 500ms-3s to let the tablet's background transaction killer fire, so containerized version needs equivalent deterministic or generously-timed transaction-timeout enforcement. | cluster APIs: LocalProcessCluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartUnshardedKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.GetVTParams, LocalProcessCluster.Teardown, LocalProcessCluster.VtTabletExtraArgs | utils APIs: utils.NewMySQL, utils.Exec, utils.ExecAllowError | destructive: clusterInstance.Teardown (full cluster teardown/re-create per test to vary --queryserver-config-transaction-timeout) | difficulty: medium",
    "old_shards": [
@@ -5177,9 +5177,9 @@
     "TestSmallerTimeout"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/queries/transaction_timeout",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 25.69,
+   "status": "verified",
+   "verified_at_sha": "a268e5a35aebb62fa06d0f04b92f146c5e054638",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/queries/transaction_timeout/",
    "wave": 1
   },
@@ -5193,7 +5193,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "Enables --schema-change-signal on vtgate/vttablet and --enable-system-settings; pure query-comparison tests (oltp/olap workload switch), no process control. | cluster APIs: LocalProcessCluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.GetVTParams, LocalProcessCluster.VtGateExtraArgs, LocalProcessCluster.VtTabletExtraArgs | utils APIs: utils.NewMySQL, utils.NewMySQLCompare, utils.ExecAllowError, utils.Exec, MySQLCompare.Exec, MySQLCompare.Run, MySQLCompare.AssertMatches, MySQLCompare.AssertMatchesNoOrder, MySQLCompare.ExecAndIgnore | difficulty: easy",
    "old_shards": [
@@ -5217,9 +5217,9 @@
     "TestUnion"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/queries/union",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 10.938,
+   "status": "verified",
+   "verified_at_sha": "a268e5a35aebb62fa06d0f04b92f146c5e054638",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/queries/union/",
    "wave": 1
   },
@@ -5232,7 +5232,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "4-shard sharded keyspace exercising vexplain queries/plan/all; output strings pin binary VARCHAR keyspace_id encodings and exact shard-routed SQL, so migrator must preserve identical hash-vindex shard boundaries and shard names (-40, 40-80, 80-c0, c0-). | cluster APIs: LocalProcessCluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.VtGatePlannerVersion | utils APIs: utils.Exec, utils.AssertMatches, utils.AssertContainsError, utils.AssertMatchesNotContains, utils.AssertMatchesContains | difficulty: easy",
    "old_shards": [
@@ -5253,9 +5253,9 @@
     "TestVExplainAll"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/queries/vexplain",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 8.933,
+   "status": "verified",
+   "verified_at_sha": "a268e5a35aebb62fa06d0f04b92f146c5e054638",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/queries/vexplain/",
    "wave": 1
   },
@@ -5269,7 +5269,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "Builds vtgate manually via NewVtgateInstance()+Setup() (not StartVtgate helper) to set SysVarSetEnabled and --lock-heartbeat-time; shard has 1 replica per shard (2 tablets/shard) though no reparent/failover is exercised, just session-var passthrough for read_after_write_gtid/timeout. | cluster APIs: LocalProcessCluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartKeyspace, LocalProcessCluster.NewVtgateInstance, VtgateProcess.Setup, VtgateProcess.SysVarSetEnabled | utils APIs: utils.AssertMatches, utils.Exec | difficulty: easy",
    "old_shards": [
@@ -5286,9 +5286,9 @@
     "TestRAWSettings"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/readafterwrite",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 13.14,
+   "status": "verified",
+   "verified_at_sha": "a268e5a35aebb62fa06d0f04b92f146c5e054638",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/readafterwrite/",
    "wave": 1
   },
@@ -5611,7 +5611,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "Polls vtgate's vschema via utils.WaitForVschemaCondition for a view to appear before running qualified/unqualified/ambiguous cross-keyspace view resolution cases across one sharded and one unsharded keyspace. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, VtGateExtraArgs (--enable-views), VtTabletExtraArgs (--queryserver-enable-views), LocalProcessCluster.StartKeyspace, LocalProcessCluster.StartUnshardedKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.WaitForVTGateAndVTTablets, LocalProcessCluster.Teardown | utils APIs: utils.WaitForVschemaCondition, utils.Exec, utils.ExecAllowError | difficulty: medium",
    "old_shards": [
@@ -5628,9 +5628,9 @@
     "TestViewQueries"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/schematracker/multi_ks",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 10.764,
+   "status": "verified",
+   "verified_at_sha": "a268e5a35aebb62fa06d0f04b92f146c5e054638",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/schematracker/multi_ks/",
    "wave": 1
   },
@@ -5645,7 +5645,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "Two unsharded keyspaces with explicit empty vschema tables rely entirely on routing rules plus the schema tracker for column info; polls vtgate vschema for tracked columns before exercising star-expansion in cross-keyspace joins. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartUnshardedKeyspace, VtctldClientProcess.ApplyRoutingRules, VtctldClientProcess.ExecuteCommand (RebuildVSchemaGraph), LocalProcessCluster.StartVtgate, LocalProcessCluster.WaitForVTGateAndVTTablets, LocalProcessCluster.Teardown | utils APIs: utils.WaitForVschemaCondition, utils.Exec, utils.ExecAllowError | difficulty: medium",
    "old_shards": [
@@ -5662,9 +5662,9 @@
     "TestRoutedTableColumnsAreAuthoritativeForStarExpansion"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/schematracker/multi_ks_routing",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 11.199,
+   "status": "verified",
+   "verified_at_sha": "a268e5a35aebb62fa06d0f04b92f146c5e054638",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/schematracker/multi_ks_routing/",
    "wave": 1
   },
@@ -5717,7 +5717,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "Exercises schema/view tracking end to end with a non-default sidecar DB name across two shards; includes per-shard connections via DbName suffixes like ':-80@primary' and `alter vschema ... add vindex` DDL through vtgate. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, cluster.Keyspace.SidecarDBName, VtGateExtraArgs (schema-change-signal, vschema-ddl-authorized-users, enable-views), VtTabletExtraArgs (schema-change-signal, enable-views), LocalProcessCluster.StartKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.WaitForVTGateAndVTTablets, LocalProcessCluster.Teardown | utils APIs: utils.Exec, utils.AssertMatchesWithTimeout, utils.AssertMatches, utils.WaitForColumn | external deps: custom sidecar database name (_vt_schema_tracker_metadata) via cluster.Keyspace.SidecarDBName | difficulty: medium",
    "old_shards": [
@@ -5744,9 +5744,9 @@
     "TestViewAndTable"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/schematracker/sharded",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 19.089,
+   "status": "verified",
+   "verified_at_sha": "a268e5a35aebb62fa06d0f04b92f146c5e054638",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/schematracker/sharded/",
    "wave": 1
   },
@@ -5800,7 +5800,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "TestCaseSensitiveSchemaTracking creates t1 and T1 as distinct tables, which only works on a case-sensitive filesystem; since the new framework runs mysqld inside a Linux container, this constraint is satisfied automatically regardless of host OS. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, cluster.Keyspace.SidecarDBName, VtTabletExtraArgs, LocalProcessCluster.StartUnshardedKeyspace, VtGateExtraArgs (schema-change-signal, vschema-ddl-authorized-users), LocalProcessCluster.StartVtgate, LocalProcessCluster.WaitForVTGateAndVTTablets, LocalProcessCluster.Teardown | utils APIs: utils.Exec, utils.AssertMatchesWithTimeout | external deps: custom sidecar database name, relies on a case-sensitive filesystem for MySQL table identifiers (test comment notes it doesn't work on Mac/Windows) | difficulty: medium",
    "old_shards": [
@@ -5823,9 +5823,9 @@
     "TestCaseSensitiveSchemaTracking"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/schematracker/unsharded",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 11.976,
+   "status": "verified",
+   "verified_at_sha": "a268e5a35aebb62fa06d0f04b92f146c5e054638",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/schematracker/unsharded/",
    "wave": 1
   },
@@ -5841,7 +5841,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "One source (unsharded) + one target (sharded -80/80-) keyspace, both with --enable-views on vtgate and vttablet. Polls the vtgate vschema HTTP endpoint via utils.WaitForVschemaCondition until views appear before applying routing rules; also exercises @replica vs @primary tablet-type routing of views. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartUnshardedKeyspace, LocalProcessCluster.StartKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.WaitForVTGateAndVTTablets, LocalProcessCluster.Teardown, VtctldClientProcess.ApplyRoutingRules | utils APIs: utils.WaitForVschemaCondition, utils.Exec, utils.AssertMatches, utils.ExecAllowError | difficulty: medium",
    "old_shards": [],
@@ -5850,9 +5850,9 @@
     "TestViewRoutingRules"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/schematracker/view_routing_rules",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 11.629,
+   "status": "verified",
+   "verified_at_sha": "a268e5a35aebb62fa06d0f04b92f146c5e054638",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/schematracker/view_routing_rules/",
    "wave": 1
   },
@@ -5866,7 +5866,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "Directly HTTP-GETs clusterInstance.VtgateProcess.VSchemaURL and JSON-decodes it (readVSchema helper) instead of using a utils wrapper; new framework must expose an equivalent reachable vschema debug endpoint. Uses fixed 2s time.Sleep after DDL to let schema-change-signal propagate rather than polling. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartUnshardedKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.WaitForVTGateAndVTTablets, LocalProcessCluster.Teardown, VtgateProcess.VSchemaURL | utils APIs: utils.Exec | difficulty: medium",
    "old_shards": [
@@ -5891,9 +5891,9 @@
     "TestTableOperationsStillWork"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/schematracker/viewsdisabled",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 11.423,
+   "status": "verified",
+   "verified_at_sha": "a268e5a35aebb62fa06d0f04b92f146c5e054638",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/schematracker/viewsdisabled/",
    "wave": 1
   },
@@ -5941,7 +5941,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "Unsharded + sharded keyspace both wired with vitess_sequence-comment tables and autoIncrement vschema config; tests next-value caching, LAST_INSERT_ID() across sharded/unsharded/transaction paths, dotted table names, and a deliberate duplicate-entry sequence corruption. Pure conn-level SQL, no process control. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartUnshardedKeyspace, LocalProcessCluster.StartKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.Teardown | utils APIs: utils.Exec | difficulty: easy",
    "old_shards": [
@@ -5963,9 +5963,9 @@
     "TestLastInsertIDWithSequence"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/sequence",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 11.881,
+   "status": "verified",
+   "verified_at_sha": "a268e5a35aebb62fa06d0f04b92f146c5e054638",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/sequence/",
    "wave": 1
   },
@@ -6222,7 +6222,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "TestVSchemaSQLAPIConcurrency spins up 1000 concurrent mysql.Conn to hammer ALTER VSCHEMA ADD/DROP TABLE and asserts vtgate.ErrStaleVSchema fires to prove no lost writes; needs many concurrent vtgate MySQL connections. schema-change-signal is disabled via extra vtgate flag. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartUnshardedKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.Teardown, LocalProcessCluster.VtGateExtraArgs (field) | utils APIs: utils.Exec, utils.AssertMatches | external deps: writes a vtgate --config-file JSON to os.TempDir(), read by the vtgate process at startup | difficulty: medium",
    "old_shards": [
@@ -6245,9 +6245,9 @@
     "TestVSchemaSQLAPIConcurrency"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/vschema",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 10.9,
+   "status": "verified",
+   "verified_at_sha": "a268e5a35aebb62fa06d0f04b92f146c5e054638",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/vschema/",
    "wave": 1
   },

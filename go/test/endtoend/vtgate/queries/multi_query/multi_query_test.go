@@ -17,7 +17,6 @@ limitations under the License.
 package multi_query
 
 import (
-	"fmt"
 	"io"
 	"testing"
 
@@ -25,8 +24,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/test/vitesst"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -76,8 +74,7 @@ func TestMultiQuery(t *testing.T) {
 	}
 
 	ctx := t.Context()
-	vtgateGrpcAddress := fmt.Sprintf("%s:%d", clusterInstance.Hostname, clusterInstance.VtgateGrpcPort)
-	vtgateConn, err := cluster.DialVTGate(ctx, t.Name(), vtgateGrpcAddress, "test_user", "")
+	vtgateConn, err := clusterInstance.VTGate().DialVTGate(ctx)
 	require.NoError(t, err)
 	for _, workload := range []string{"oltp", "olap"} {
 		t.Run(workload, func(t *testing.T) {
@@ -86,8 +83,8 @@ func TestMultiQuery(t *testing.T) {
 					t.Run("MySQL Protocol", func(t *testing.T) {
 						mcmp, closer := start(t)
 						defer closer()
-						utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
-						defer utils.Exec(t, mcmp.VtConn, `set workload = oltp`)
+						vitesst.Exec(t, mcmp.VtConn, "set workload = "+workload)
+						defer vitesst.Exec(t, mcmp.VtConn, `set workload = oltp`)
 
 						if !tt.errExpected {
 							mcmp.ExecMulti(tt.sql)
@@ -155,7 +152,7 @@ func TestMultiQuery(t *testing.T) {
 						}
 						require.EqualValues(t, len(results), len(mysqlRes))
 						for idx, result := range results {
-							err = utils.CompareVitessAndMySQLResults(t, "select 1", mcmp.VtConn, result, mysqlRes[idx], utils.CompareOptions{})
+							err = vitesst.CompareVitessAndMySQLResults(t, "select 1", mcmp.VtConn, result, mysqlRes[idx], vitesst.CompareOptions{})
 							require.NoError(t, err)
 						}
 					})

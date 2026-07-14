@@ -24,46 +24,44 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
+	clusterInstance *vitesst.Cluster
 	vtParams        mysql.ConnParams
 	uks             = "uks"
-	cell            = "test_misc"
 
 	//go:embed uschema.sql
 	uschemaSQL string
 )
 
 func createCluster(t *testing.T, vttabletArgs ...string) func() {
-	clusterInstance = cluster.NewCluster(cell, "localhost")
+	ctx := t.Context()
 
-	err := clusterInstance.StartTopo()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithKeyspace(uks).
+			WithSchema(uschemaSQL),
+		vitesst.WithVTTabletArgs(vttabletArgs...),
+	)
 	require.NoError(t, err)
 
-	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, vttabletArgs...)
-
-	ukeyspace := &cluster.Keyspace{
-		Name:      uks,
-		SchemaSQL: uschemaSQL,
-	}
-	err = clusterInstance.StartUnshardedKeyspace(*ukeyspace, 0, false, clusterInstance.Cell)
+	cleanup, err := cluster.Start(ctx)
 	require.NoError(t, err)
 
-	err = clusterInstance.StartVtgate()
-	require.NoError(t, err)
+	clusterInstance = cluster
+	vtParams = cluster.VTParams(ctx, "")
 
-	vtParams = clusterInstance.GetVTParams(uks)
-
-	_, closer, err := utils.NewMySQL(clusterInstance, uks, uschemaSQL)
+	_, closer, err := vitesst.NewMySQL(ctx, cluster, uks, uschemaSQL)
 	require.NoError(t, err)
 
 	return func() {
-		clusterInstance.Teardown()
-		closer()
+		if err := cleanup(ctx); err != nil {
+			t.Logf("cluster teardown: %v", err)
+		}
+		if err := closer(ctx); err != nil {
+			t.Logf("comparison mysqld teardown: %v", err)
+		}
 	}
 }
 
@@ -77,24 +75,24 @@ func TestTransactionTimeout(t *testing.T) {
 	defer conn.Close()
 
 	// No timeout set, transaction shouldn't timeout
-	utils.Exec(t, conn, "begin")
-	utils.Exec(t, conn, "insert into uks.unsharded(id1) values (1),(2),(3),(4),(sleep(0.5))")
-	utils.Exec(t, conn, "commit")
+	vitesst.Exec(t, conn, "begin")
+	vitesst.Exec(t, conn, "insert into uks.unsharded(id1) values (1),(2),(3),(4),(sleep(0.5))")
+	vitesst.Exec(t, conn, "commit")
 
 	// Set session transaction timeout
-	utils.Exec(t, conn, "set transaction_timeout=100")
+	vitesst.Exec(t, conn, "set transaction_timeout=100")
 
 	// Sleeping outside of query will allow the transaction killer to kill the transaction
-	utils.Exec(t, conn, "begin")
-	utils.Exec(t, conn, "insert into uks.unsharded(id1) values (1),(2),(3),(4),(5)")
+	vitesst.Exec(t, conn, "begin")
+	vitesst.Exec(t, conn, "insert into uks.unsharded(id1) values (1),(2),(3),(4),(5)")
 	time.Sleep(3 * time.Second)
-	_, err = utils.ExecAllowError(t, conn, "insert into uks.unsharded(id1) values (1),(2),(3),(4),(5)")
+	_, err = vitesst.ExecAllowError(t, conn, "insert into uks.unsharded(id1) values (1),(2),(3),(4),(5)")
 	require.ErrorContains(t, err, "Aborted")
 
 	// Sleeping in MySQL will cause a context timeout instead (different error)
-	utils.Exec(t, conn, "begin")
-	utils.Exec(t, conn, "insert into uks.unsharded(id1) values (1),(2),(3),(4),(5)")
-	_, err = utils.ExecAllowError(t, conn, "insert into uks.unsharded(id1) values (1),(2),(3),(4),(sleep(0.5))")
+	vitesst.Exec(t, conn, "begin")
+	vitesst.Exec(t, conn, "insert into uks.unsharded(id1) values (1),(2),(3),(4),(5)")
+	_, err = vitesst.ExecAllowError(t, conn, "insert into uks.unsharded(id1) values (1),(2),(3),(4),(sleep(0.5))")
 	require.ErrorContains(t, err, "Query execution was interrupted")
 
 	// Get new connection
@@ -102,13 +100,13 @@ func TestTransactionTimeout(t *testing.T) {
 	require.NoError(t, err)
 
 	// Set session transaction timeout to 0
-	utils.Exec(t, conn, "set transaction_timeout=0")
+	vitesst.Exec(t, conn, "set transaction_timeout=0")
 
 	// Should time out using tablet transaction timeout
-	utils.Exec(t, conn, "begin")
-	utils.Exec(t, conn, "insert into uks.unsharded(id1) values (1),(2),(3),(4),(5)")
-	utils.Exec(t, conn, "insert into uks.unsharded(id1) values (1),(2),(3),(4),(sleep(2))")
-	utils.Exec(t, conn, "commit")
+	vitesst.Exec(t, conn, "begin")
+	vitesst.Exec(t, conn, "insert into uks.unsharded(id1) values (1),(2),(3),(4),(5)")
+	vitesst.Exec(t, conn, "insert into uks.unsharded(id1) values (1),(2),(3),(4),(sleep(2))")
+	vitesst.Exec(t, conn, "commit")
 }
 
 func TestSmallerTimeout(t *testing.T) {
@@ -120,22 +118,22 @@ func TestSmallerTimeout(t *testing.T) {
 	require.NoError(t, err)
 
 	// Set session transaction timeout larger than tablet transaction timeout
-	utils.Exec(t, conn, "set transaction_timeout=2000")
+	vitesst.Exec(t, conn, "set transaction_timeout=2000")
 
 	// Transaction should get killed with lower timeout
-	utils.Exec(t, conn, "begin")
-	utils.Exec(t, conn, "insert into uks.unsharded(id1) values (1),(2),(3),(4),(5)")
+	vitesst.Exec(t, conn, "begin")
+	vitesst.Exec(t, conn, "insert into uks.unsharded(id1) values (1),(2),(3),(4),(5)")
 	time.Sleep(1500 * time.Millisecond)
-	_, err = utils.ExecAllowError(t, conn, "insert into uks.unsharded(id1) values (1),(2),(3),(4),(5)")
+	_, err = vitesst.ExecAllowError(t, conn, "insert into uks.unsharded(id1) values (1),(2),(3),(4),(5)")
 	require.ErrorContains(t, err, "Aborted")
 
 	// Set session transaction timeout smaller than tablet transaction timeout
-	utils.Exec(t, conn, "set transaction_timeout=250")
+	vitesst.Exec(t, conn, "set transaction_timeout=250")
 
 	// Session timeout should be used this time
-	utils.Exec(t, conn, "begin")
-	utils.Exec(t, conn, "insert into uks.unsharded(id1) values (1),(2),(3),(4),(5)")
+	vitesst.Exec(t, conn, "begin")
+	vitesst.Exec(t, conn, "insert into uks.unsharded(id1) values (1),(2),(3),(4),(5)")
 	time.Sleep(500 * time.Millisecond)
-	_, err = utils.ExecAllowError(t, conn, "insert into uks.unsharded(id1) values (1),(2),(3),(4),(5)")
+	_, err = vitesst.ExecAllowError(t, conn, "insert into uks.unsharded(id1) values (1),(2),(3),(4),(5)")
 	require.ErrorContains(t, err, "Aborted")
 }

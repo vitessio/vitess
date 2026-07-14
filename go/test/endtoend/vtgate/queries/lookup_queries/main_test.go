@@ -17,6 +17,7 @@ limitations under the License.
 package vtgate
 
 import (
+	"context"
 	_ "embed"
 	"flag"
 	"fmt"
@@ -25,22 +26,17 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
-
-	"vitess.io/vitess/go/vt/vtgate/planbuilder"
-
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
+	clusterInstance *vitesst.Cluster
 	vtParams        mysql.ConnParams
 	mysqlParams     mysql.ConnParams
 	shardedKs       = "ks"
 
 	shardedKsShards = []string{"-19a0", "19a0-20", "20-20c0", "20c0-"}
-	Cell            = "test"
 	//go:embed schema.sql
 	shardedSchemaSQL string
 
@@ -52,60 +48,59 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(Cell, "localhost")
-		defer clusterInstance.Teardown()
+		ctx := context.Background()
 
-		// Start topo server
-		err := clusterInstance.StartTopo()
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithKeyspace(shardedKs).
+				WithShardNames(shardedKsShards...).
+				WithSchema(shardedSchemaSQL).
+				WithVSchema(shardedVSchema),
+		)
 		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		cleanup, err := cluster.Start(ctx)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
+
+		clusterInstance = cluster
+
+		if err := cluster.Vtctld().ExecuteCommand(ctx, "RebuildVSchemaGraph"); err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
 
-		// Start keyspace
-		sKs := &cluster.Keyspace{
-			Name:      shardedKs,
-			SchemaSQL: shardedSchemaSQL,
-			VSchema:   shardedVSchema,
-		}
+		vtParams = cluster.VTParams(ctx, "")
 
-		err = clusterInstance.StartKeyspace(*sKs, shardedKsShards, 0, false, clusterInstance.Cell)
+		conn, closer, err := vitesst.NewMySQL(ctx, cluster, shardedKs, shardedSchemaSQL)
 		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-
-		err = clusterInstance.VtctldClientProcess.ExecuteCommand("RebuildVSchemaGraph")
-		if err != nil {
-			return 1
-		}
-
-		// Start vtgate
-		clusterInstance.VtGatePlannerVersion = planbuilder.Gen4 // enable Gen4 planner.
-		err = clusterInstance.StartVtgate()
-		if err != nil {
-			return 1
-		}
-		vtParams = mysql.ConnParams{
-			Host: clusterInstance.Hostname,
-			Port: clusterInstance.VtgateMySQLPort,
-		}
-
-		conn, closer, err := utils.NewMySQL(clusterInstance, shardedKs, shardedSchemaSQL)
-		if err != nil {
-			fmt.Println(err)
-			return 1
-		}
-		defer closer()
+		defer func() {
+			if err := closer(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "mysql teardown:", err)
+			}
+		}()
 		mysqlParams = conn
 		return m.Run()
 	}()
 	os.Exit(exitCode)
 }
 
-func start(t *testing.T) (utils.MySQLCompare, func()) {
-	mcmp, err := utils.NewMySQLCompare(t, vtParams, mysqlParams)
+func start(t *testing.T) (vitesst.MySQLCompare, func()) {
+	mcmp, err := vitesst.NewMySQLCompare(t.Context(), t, vtParams, mysqlParams)
 	require.NoError(t, err)
 	deleteAll := func() {
-		_, _ = utils.ExecAllowError(t, mcmp.VtConn, "set workload = oltp")
+		_, _ = vitesst.ExecAllowError(t, mcmp.VtConn, "set workload = oltp")
 
 		tables := []string{"user", "lookup"}
 		for _, table := range tables {
@@ -125,15 +120,15 @@ func TestLookupQueries(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
 
-	mcmp.Exec(`insert into user 
-    (id, lookup,   lookup_unique) values 
-	(1, 'apa',    'apa'), 
-	(2, 'apa',    'bandar'), 
+	mcmp.Exec(`insert into user
+    (id, lookup,   lookup_unique) values
+	(1, 'apa',    'apa'),
+	(2, 'apa',    'bandar'),
 	(3, 'monkey', 'monkey')`)
 
 	for _, workload := range []string{"olap", "oltp"} {
-		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
-			utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
+		mcmp.Run(workload, func(mcmp *vitesst.MySQLCompare) {
+			vitesst.Exec(t, mcmp.VtConn, "set workload = "+workload)
 
 			mcmp.AssertMatches("select id from user where lookup = 'apa'", "[[INT64(1)] [INT64(2)]]")
 			mcmp.AssertMatches("select id from user where lookup = 'not there'", "[]")

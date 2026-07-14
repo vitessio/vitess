@@ -17,24 +17,22 @@ limitations under the License.
 package multiksrouting
 
 import (
+	"context"
 	_ "embed"
 	"flag"
 	"fmt"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
+	clusterInstance *vitesst.Cluster
 	vtParams        mysql.ConnParams
-	cell            = "zone1"
 	ksA             = "ks_a"
 	ksB             = "ks_b"
 
@@ -55,54 +53,47 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(cell, "localhost")
-		defer clusterInstance.Teardown()
-
-		if err := clusterInstance.StartTopo(); err != nil {
-			fmt.Println(err)
-			return 1
-		}
+		ctx := context.Background()
 
 		// Two unsharded keyspaces, each with a single table on the tablet but
 		// an explicit empty vschema (the schema tracker is the only source of
 		// column info). The vschema is set explicitly rather than left to a
 		// default so the test always pins down the routing-rules-only +
 		// schema-tracker scenario regardless of vtctld defaults.
-		ka := &cluster.Keyspace{Name: ksA, SchemaSQL: schemaA, VSchema: emptyVSchema}
-		if err := clusterInstance.StartUnshardedKeyspace(*ka, 0, false, cell); err != nil {
-			fmt.Println(err)
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithKeyspace(ksA).
+				WithSchema(schemaA).
+				WithVSchema(emptyVSchema),
+			vitesst.WithKeyspace(ksB).
+				WithSchema(schemaB).
+				WithVSchema(emptyVSchema),
+		)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-		kb := &cluster.Keyspace{Name: ksB, SchemaSQL: schemaB, VSchema: emptyVSchema}
-		if err := clusterInstance.StartUnshardedKeyspace(*kb, 0, false, cell); err != nil {
-			fmt.Println(err)
+		cleanup, err := cluster.Start(ctx)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
+
+		if err := cluster.Vtctld().ExecuteCommand(ctx, "ApplyRoutingRules", "--rules", routingRules); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		if err := cluster.Vtctld().ExecuteCommand(ctx, "RebuildVSchemaGraph"); err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
 
-		if err := clusterInstance.VtctldClientProcess.ApplyRoutingRules(routingRules); err != nil {
-			fmt.Println(err)
-			return 1
-		}
-		if err := clusterInstance.VtctldClientProcess.ExecuteCommand("RebuildVSchemaGraph"); err != nil {
-			fmt.Println(err)
-			return 1
-		}
-
-		// vtgate runs with --schema-change-signal=true by default; the schema
-		// tracker is what populates columns for ks_a.table_a and ks_b.table_b.
-		if err := clusterInstance.StartVtgate(); err != nil {
-			fmt.Println(err)
-			return 1
-		}
-		if err := clusterInstance.WaitForVTGateAndVTTablets(time.Minute); err != nil {
-			fmt.Println(err)
-			return 1
-		}
-
-		vtParams = mysql.ConnParams{
-			Host: clusterInstance.Hostname,
-			Port: clusterInstance.VtgateMySQLPort,
-		}
+		clusterInstance = cluster
+		vtParams = cluster.VTParams(ctx, "")
 		return m.Run()
 	}()
 	os.Exit(exitCode)
@@ -133,7 +124,7 @@ func TestRoutedTableColumnsAreAuthoritativeForStarExpansion(t *testing.T) {
 	// authoritativeness bug we're actually testing.
 	waitForColumns := func(ks, tbl string, want int) {
 		t.Helper()
-		utils.WaitForVschemaCondition(t, clusterInstance.VtgateProcess, ks,
+		vitesst.WaitForVschemaCondition(t, clusterInstance.VTGate(), ks,
 			func(t *testing.T, keyspace map[string]any) bool {
 				tables, ok := keyspace["tables"].(map[string]any)
 				if !ok {
@@ -152,9 +143,9 @@ func TestRoutedTableColumnsAreAuthoritativeForStarExpansion(t *testing.T) {
 
 	// Seed two matching rows on each side so the JOINs actually return data
 	// and we can verify execution, not just planning.
-	utils.Exec(t, conn, "use @primary")
-	utils.Exec(t, conn, "insert into table_a (id, fk, name) values (1, 10, 'alice'), (2, 20, 'bob')")
-	utils.Exec(t, conn, "insert into table_b (id, label) values (10, 'ten'), (20, 'twenty')")
+	vitesst.Exec(t, conn, "use @primary")
+	vitesst.Exec(t, conn, "insert into table_a (id, fk, name) values (1, 10, 'alice'), (2, 20, 'bob')")
+	vitesst.Exec(t, conn, "insert into table_b (id, label) values (10, 'ten'), (20, 'twenty')")
 
 	tcases := []struct {
 		name   string
@@ -183,7 +174,7 @@ func TestRoutedTableColumnsAreAuthoritativeForStarExpansion(t *testing.T) {
 
 	for _, tc := range tcases {
 		t.Run(tc.name, func(t *testing.T) {
-			qr, err := utils.ExecAllowError(t, conn, tc.query)
+			qr, err := vitesst.ExecAllowError(t, conn, tc.query)
 			require.NoErrorf(t, err, "query failed: %s", tc.query)
 			require.Equalf(t, tc.expect, fmt.Sprintf("%v", qr.Rows), "unexpected result for %s", tc.query)
 		})

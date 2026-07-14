@@ -22,7 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 func start(t *testing.T) (*mysql.Conn, func()) {
@@ -32,7 +32,7 @@ func start(t *testing.T) (*mysql.Conn, func()) {
 	deleteAll := func() {
 		tables := []string{"music", "user"}
 		for _, table := range tables {
-			utils.Exec(t, vtConn, "delete from "+table)
+			vitesst.Exec(t, vtConn, "delete from "+table)
 		}
 	}
 
@@ -48,12 +48,12 @@ func TestFailsWhenForcedToScatter(t *testing.T) {
 	vtconn, closer := start(t)
 	defer closer()
 
-	utils.Exec(t, vtconn, "insert into music(id, user_id) values(1,1), (2,5), (3,1), (4,2), (5,3), (6,4), (7,5)")
-	utils.Exec(t, vtconn, "insert into user(id, name) values(1,'toto'), (2,'tata'), (3,'titi'), (4,'tete'), (5,'foo')")
+	vitesst.Exec(t, vtconn, "insert into music(id, user_id) values(1,1), (2,5), (3,1), (4,2), (5,3), (6,4), (7,5)")
+	vitesst.Exec(t, vtconn, "insert into user(id, name) values(1,'toto'), (2,'tata'), (3,'titi'), (4,'tete'), (5,'foo')")
 
-	_, err := utils.ExecAllowError(t, vtconn, "select * from user") // fails since we have disallowed scatter
+	_, err := vitesst.ExecAllowError(t, vtconn, "select * from user") // fails since we have disallowed scatter
 	require.ErrorContains(t, err, "plan includes scatter, which is disallowed")
 
-	_ = utils.Exec(t, vtconn, "select /*vt+ ALLOW_SCATTER */ * from user")          // passes thanks to the comment directive
-	_ = utils.Exec(t, vtconn, "vexplain select /*vt+ ALLOW_SCATTER */ * from user") // passes thanks to the comment directive
+	_ = vitesst.Exec(t, vtconn, "select /*vt+ ALLOW_SCATTER */ * from user")          // passes thanks to the comment directive
+	_ = vitesst.Exec(t, vtconn, "vexplain select /*vt+ ALLOW_SCATTER */ * from user") // passes thanks to the comment directive
 }

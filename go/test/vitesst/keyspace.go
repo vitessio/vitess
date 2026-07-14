@@ -53,6 +53,9 @@ type (
 		// durabilityPolicy is passed to CreateKeyspace.
 		durabilityPolicy string
 
+		// sidecarDBName overrides the keyspace's sidecar database name.
+		sidecarDBName string
+
 		// tabletArgs are appended to this keyspace's vttablet command lines,
 		// after cluster-wide vttablet args.
 		tabletArgs []string
@@ -156,6 +159,13 @@ func (kb *keyspaceBuilder) WithRDOnly(n int) *keyspaceBuilder {
 // WithDurabilityPolicy sets the durability policy passed to CreateKeyspace.
 func (kb *keyspaceBuilder) WithDurabilityPolicy(policy string) *keyspaceBuilder {
 	kb.config.durabilityPolicy = policy
+	return kb
+}
+
+// WithSidecarDBName overrides the keyspace's sidecar database name; the
+// default is "_vt".
+func (kb *keyspaceBuilder) WithSidecarDBName(name string) *keyspaceBuilder {
+	kb.config.sidecarDBName = name
 	return kb
 }
 

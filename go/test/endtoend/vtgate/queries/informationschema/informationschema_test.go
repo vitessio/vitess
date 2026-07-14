@@ -24,15 +24,15 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
-func start(t *testing.T) (utils.MySQLCompare, func()) {
-	mcmp, err := utils.NewMySQLCompare(t, vtParams, mysqlParams)
+func start(t *testing.T) (vitesst.MySQLCompare, func()) {
+	mcmp, err := vitesst.NewMySQLCompare(t.Context(), t, vtParams, mysqlParams)
 	require.NoError(t, err)
 
 	deleteAll := func() {
-		_, _ = utils.ExecAllowError(t, mcmp.VtConn, "set workload = oltp")
+		_, _ = vitesst.ExecAllowError(t, mcmp.VtConn, "set workload = oltp")
 
 		tables := []string{"t1", "t1_id2_idx", "t7_xxhash", "t7_xxhash_idx", "t7_fk"}
 		for _, table := range tables {
@@ -49,9 +49,6 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 }
 
 func TestDbNameOverride(t *testing.T) {
-	if clusterInstance.HasPartialKeyspaces {
-		t.Skip("test can randomly select one of the shards, and the shards are in different keyspaces")
-	}
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -63,21 +60,18 @@ func TestDbNameOverride(t *testing.T) {
 }
 
 func TestInformationSchemaQuery(t *testing.T) {
-	if clusterInstance.HasPartialKeyspaces {
-		t.Skip("test can randomly select one of the shards, and the shards are in different keyspaces")
-	}
 	mcmp, closer := start(t)
 	defer closer()
 
-	utils.AssertSingleRowIsReturned(t, mcmp.VtConn, "table_schema = 'ks'", "vt_ks")
-	utils.AssertSingleRowIsReturned(t, mcmp.VtConn, "table_schema = 'vt_ks'", "vt_ks")
-	utils.AssertResultIsEmpty(t, mcmp.VtConn, "table_schema = 'NONE'")
-	utils.AssertSingleRowIsReturned(t, mcmp.VtConn, "table_schema = 'performance_schema'", "performance_schema")
-	utils.AssertResultIsEmpty(t, mcmp.VtConn, "table_schema = 'PERFORMANCE_SCHEMA'")
-	utils.AssertSingleRowIsReturned(t, mcmp.VtConn, "table_schema = 'performance_schema' and table_name = 'users'", "performance_schema")
-	utils.AssertResultIsEmpty(t, mcmp.VtConn, "table_schema = 'performance_schema' and table_name = 'foo'")
-	utils.AssertSingleRowIsReturned(t, mcmp.VtConn, "table_schema = 'vt_ks' and table_name = 't1'", "vt_ks")
-	utils.AssertSingleRowIsReturned(t, mcmp.VtConn, "table_schema = 'ks' and table_name = 't1'", "vt_ks")
+	vitesst.AssertSingleRowIsReturned(t, mcmp.VtConn, "table_schema = 'ks'", "vt_ks")
+	vitesst.AssertSingleRowIsReturned(t, mcmp.VtConn, "table_schema = 'vt_ks'", "vt_ks")
+	vitesst.AssertResultIsEmpty(t, mcmp.VtConn, "table_schema = 'NONE'")
+	vitesst.AssertSingleRowIsReturned(t, mcmp.VtConn, "table_schema = 'performance_schema'", "performance_schema")
+	vitesst.AssertResultIsEmpty(t, mcmp.VtConn, "table_schema = 'PERFORMANCE_SCHEMA'")
+	vitesst.AssertSingleRowIsReturned(t, mcmp.VtConn, "table_schema = 'performance_schema' and table_name = 'users'", "performance_schema")
+	vitesst.AssertResultIsEmpty(t, mcmp.VtConn, "table_schema = 'performance_schema' and table_name = 'foo'")
+	vitesst.AssertSingleRowIsReturned(t, mcmp.VtConn, "table_schema = 'vt_ks' and table_name = 't1'", "vt_ks")
+	vitesst.AssertSingleRowIsReturned(t, mcmp.VtConn, "table_schema = 'ks' and table_name = 't1'", "vt_ks")
 }
 
 func TestInformationSchemaWithSubquery(t *testing.T) {
@@ -92,10 +86,10 @@ func TestInformationSchemaQueryGetsRoutedToTheRightTableAndKeyspace(t *testing.T
 	mcmp, closer := start(t)
 	defer closer()
 
-	utils.Exec(t, mcmp.VtConn, "insert into t1(id1, id2) values (1, 1), (2, 2), (3,3), (4,4)")
+	vitesst.Exec(t, mcmp.VtConn, "insert into t1(id1, id2) values (1, 1), (2, 2), (3,3), (4,4)")
 
-	_ = utils.Exec(t, mcmp.VtConn, "SELECT * FROM t1000") // test that the routed table is available to us
-	result := utils.Exec(t, mcmp.VtConn, "SELECT * FROM information_schema.tables WHERE table_schema = database() and table_name='t1000'")
+	_ = vitesst.Exec(t, mcmp.VtConn, "SELECT * FROM t1000") // test that the routed table is available to us
+	result := vitesst.Exec(t, mcmp.VtConn, "SELECT * FROM information_schema.tables WHERE table_schema = database() and table_name='t1000'")
 	assert.NotEmpty(t, result.Rows)
 }
 
@@ -117,7 +111,7 @@ func TestConnectWithSystemSchema(t *testing.T) {
 		mysqlConnParams := mysqlParams
 		mysqlConnParams.DbName = dbname
 
-		mcmp, err := utils.NewMySQLCompare(t, vtConnParams, mysqlConnParams)
+		mcmp, err := vitesst.NewMySQLCompare(t.Context(), t, vtConnParams, mysqlConnParams)
 		require.NoError(t, err)
 		defer func() {
 			mcmp.Close()
@@ -138,9 +132,6 @@ func TestUseSystemSchema(t *testing.T) {
 }
 
 func TestSystemSchemaQueryWithoutQualifier(t *testing.T) {
-	if clusterInstance.HasPartialKeyspaces {
-		t.Skip("partial keyspace detected, skipping test")
-	}
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -150,16 +141,16 @@ func TestSystemSchemaQueryWithoutQualifier(t *testing.T) {
 		"on c.table_schema = t.table_schema and c.table_name = t.table_name "+
 		"where t.table_schema = '%s' and c.table_schema = '%s' "+
 		"order by t.table_schema,t.table_name,c.column_name", keyspaceName, keyspaceName)
-	qr1 := utils.Exec(t, mcmp.VtConn, queryWithQualifier)
+	qr1 := vitesst.Exec(t, mcmp.VtConn, queryWithQualifier)
 
-	utils.Exec(t, mcmp.VtConn, "use information_schema")
+	vitesst.Exec(t, mcmp.VtConn, "use information_schema")
 	queryWithoutQualifier := fmt.Sprintf("select t.table_schema,t.table_name,c.column_name,c.column_type "+
 		"from tables t "+
 		"join columns c "+
 		"on c.table_schema = t.table_schema and c.table_name = t.table_name "+
 		"where t.table_schema = '%s' and c.table_schema = '%s' "+
 		"order by t.table_schema,t.table_name,c.column_name", keyspaceName, keyspaceName)
-	qr2 := utils.Exec(t, mcmp.VtConn, queryWithoutQualifier)
+	qr2 := vitesst.Exec(t, mcmp.VtConn, queryWithoutQualifier)
 	require.Equal(t, qr1, qr2)
 
 	ctx := t.Context()
@@ -169,24 +160,21 @@ func TestSystemSchemaQueryWithoutQualifier(t *testing.T) {
 	require.NoError(t, err)
 	defer conn2.Close()
 
-	qr3 := utils.Exec(t, conn2, queryWithoutQualifier)
+	qr3 := vitesst.Exec(t, conn2, queryWithoutQualifier)
 	require.Equal(t, qr2, qr3)
 }
 
 func TestSystemSchemaFieldDatabaseInOLAP(t *testing.T) {
-	if clusterInstance.HasPartialKeyspaces {
-		t.Skip("partial keyspace detected, skipping test")
-	}
 	mcmp, closer := start(t)
 	defer closer()
 
 	query := fmt.Sprintf("select * from information_schema.tables where table_schema = '%s' limit 1", keyspaceName)
 
-	utils.Exec(t, mcmp.VtConn, "set workload = oltp")
-	oltp := utils.Exec(t, mcmp.VtConn, query)
+	vitesst.Exec(t, mcmp.VtConn, "set workload = oltp")
+	oltp := vitesst.Exec(t, mcmp.VtConn, query)
 
-	utils.Exec(t, mcmp.VtConn, "set workload = olap")
-	olap := utils.Exec(t, mcmp.VtConn, query)
+	vitesst.Exec(t, mcmp.VtConn, "set workload = olap")
+	olap := vitesst.Exec(t, mcmp.VtConn, query)
 
 	require.Equal(t, len(oltp.Fields), len(olap.Fields))
 	for i := range oltp.Fields {
@@ -196,9 +184,6 @@ func TestSystemSchemaFieldDatabaseInOLAP(t *testing.T) {
 }
 
 func TestMultipleSchemaPredicates(t *testing.T) {
-	if clusterInstance.HasPartialKeyspaces {
-		t.Skip("test can randomly select one of the shards, and the shards are in different keyspaces")
-	}
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -207,7 +192,7 @@ func TestMultipleSchemaPredicates(t *testing.T) {
 		"join information_schema.columns c "+
 		"on c.table_schema = t.table_schema and c.table_name = t.table_name "+
 		"where t.table_schema = '%s' and c.table_schema = '%s' and c.table_schema = '%s' and c.table_schema = '%s'", keyspaceName, keyspaceName, keyspaceName, keyspaceName)
-	qr1 := utils.Exec(t, mcmp.VtConn, query)
+	qr1 := vitesst.Exec(t, mcmp.VtConn, query)
 	require.EqualValues(t, 4, len(qr1.Fields))
 
 	// test a query with two keyspace names
@@ -224,25 +209,26 @@ func TestMultipleSchemaPredicates(t *testing.T) {
 }
 
 func TestInfrSchemaAndUnionAll(t *testing.T) {
-	vtConnParams := clusterInstance.GetVTParams(keyspaceName)
-	vtConnParams.DbName = keyspaceName
+	vtConnParams := clusterInstance.VTParams(t.Context(), keyspaceName)
 	conn, err := mysql.Connect(t.Context(), &vtConnParams)
 	require.NoError(t, err)
 
 	for _, workload := range []string{"oltp", "olap"} {
 		t.Run(workload, func(t *testing.T) {
-			utils.Exec(t, conn, "set workload = "+workload)
-			utils.Exec(t, conn, "start transaction")
-			utils.Exec(t, conn, `select connection_id()`)
-			utils.Exec(t, conn, `(select 'corder' from t1 limit 1) union all (select 'customer' from t7_xxhash limit 1)`)
-			utils.Exec(t, conn, "rollback")
+			vitesst.Exec(t, conn, "set workload = "+workload)
+			vitesst.Exec(t, conn, "start transaction")
+			vitesst.Exec(t, conn, `select connection_id()`)
+			vitesst.Exec(t, conn, `(select 'corder' from t1 limit 1) union all (select 'customer' from t7_xxhash limit 1)`)
+			vitesst.Exec(t, conn, "rollback")
 		})
 	}
 }
 
 func TestInfoschemaTypes(t *testing.T) {
 	require.NoError(t,
-		utils.WaitForAuthoritative(t, "ks", "t1", clusterInstance.VtgateProcess.ReadVSchema))
+		vitesst.WaitForAuthoritative(t, "ks", "t1", func() (*any, error) {
+			return clusterInstance.VTGate().ReadVSchema(t.Context())
+		}))
 
 	mcmp, closer := start(t)
 	defer closer()
@@ -261,12 +247,14 @@ func TestInfoschemaTypes(t *testing.T) {
 func TestTypeORMQuery(t *testing.T) {
 	// This test checks that we can run queries similar to the ones that the TypeORM framework uses
 	require.NoError(t,
-		utils.WaitForAuthoritative(t, "ks", "t1", clusterInstance.VtgateProcess.ReadVSchema))
+		vitesst.WaitForAuthoritative(t, "ks", "t1", func() (*any, error) {
+			return clusterInstance.VTGate().ReadVSchema(t.Context())
+		}))
 
 	mcmp, closer := start(t)
 	defer closer()
 
-	utils.AssertMatchesAny(t, mcmp.VtConn, `SELECT kcu.TABLE_NAME, kcu.COLUMN_NAME, cols.DATA_TYPE
+	vitesst.AssertMatchesAny(t, mcmp.VtConn, `SELECT kcu.TABLE_NAME, kcu.COLUMN_NAME, cols.DATA_TYPE
 FROM (SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME
       FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
       WHERE kcu.TABLE_SCHEMA = 'ks'
@@ -291,7 +279,7 @@ FROM (SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME
 		`[[VARCHAR("t1") VARCHAR("id1") BLOB("bigint")] [VARCHAR("t7_xxhash") VARCHAR("uid") BLOB("varchar")]]`,
 	)
 
-	utils.AssertMatchesAny(t, mcmp.VtConn, `
+	vitesst.AssertMatchesAny(t, mcmp.VtConn, `
 SELECT *
 FROM INFORMATION_SCHEMA.COLUMNS
 WHERE TABLE_SCHEMA = 'ks' AND TABLE_NAME = 't1'
@@ -330,6 +318,6 @@ FROM
 ORDER BY
         c.table_name`
 
-	res := utils.Exec(t, mcmp.VtConn, query)
+	res := vitesst.Exec(t, mcmp.VtConn, query)
 	require.NotEmpty(t, res.Rows)
 }

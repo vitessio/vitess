@@ -22,8 +22,8 @@ import (
 	"flag"
 	"fmt"
 	"math/rand/v2"
+	"net/http"
 	"os"
-	"path"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -34,25 +34,26 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/test/vitesst"
 	"vitess.io/vitess/go/vt/vtgate"
 )
 
+// vtgateConfigPath is the config file each vtgate watches inside its
+// container. It is staged world-writable so setAuthorizedDDLUsers can rewrite
+// it as the unprivileged container user.
+const vtgateConfigPath = "/vt/files/vtgate.json"
+
 var (
-	clusterInstance *cluster.LocalProcessCluster
-	configFile      string
+	clusterInstance *vitesst.Cluster
 	vtParams        mysql.ConnParams
-	hostname        = "localhost"
 	keyspaceName    = "ks"
-	cell            = "zone1"
 	sqlSchema       = `
 		create table vt_user (
 			id bigint,
 			name varchar(64),
 			primary key (id)
 		) Engine=InnoDB;
-			
+
 		create table main (
 			id bigint,
 			val varchar(128),
@@ -65,44 +66,39 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitcode, err := func() (int, error) {
-		clusterInstance = cluster.NewCluster(cell, hostname)
-		defer clusterInstance.Teardown()
+		ctx := context.Background()
 
-		// Start topo server
-		if err := clusterInstance.StartTopo(); err != nil {
-			return 1, err
-		}
-
-		// List of users authorized to execute vschema ddl operations
-		timeNow := time.Now().Unix()
-		configFile = path.Join(os.TempDir(), fmt.Sprintf("vtgate-config-%d.json", timeNow))
-		err := writeConfig(configFile, map[string]string{
-			"vschema_ddl_authorized_users": "%",
-		})
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithKeyspace(keyspaceName).
+				WithSchema(sqlSchema),
+			vitesst.WithVTGateArgs("--schema-change-signal=false"),
+			vitesst.WithVTGateFiles(vitesst.ContainerFile{
+				Content:       []byte("{}\n"),
+				ContainerPath: vtgateConfigPath,
+				Mode:          0o666,
+			}),
+		)
 		if err != nil {
 			return 1, err
 		}
-		defer os.Remove(configFile)
-
-		clusterInstance.VtGateExtraArgs = []string{"--config-file=" + configFile, "--schema-change-signal=false"}
-
-		// Start keyspace
-		keyspace := &cluster.Keyspace{
-			Name:      keyspaceName,
-			SchemaSQL: sqlSchema,
+		cleanup, err := cluster.Start(ctx)
+		if err != nil {
+			return 1, err
 		}
-		if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 0, false, clusterInstance.Cell); err != nil {
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
+
+		clusterInstance = cluster
+		vtParams = cluster.VTParams(ctx, "")
+
+		// List of users authorized to execute vschema ddl operations.
+		if err := setAuthorizedDDLUsers(ctx, "%"); err != nil {
 			return 1, err
 		}
 
-		// Start vtgate
-		if err := clusterInstance.StartVtgate(); err != nil {
-			return 1, err
-		}
-		vtParams = mysql.ConnParams{
-			Host: clusterInstance.Hostname,
-			Port: clusterInstance.VtgateMySQLPort,
-		}
 		return m.Run(), nil
 	}()
 	if err != nil {
@@ -113,13 +109,27 @@ func TestMain(m *testing.M) {
 	}
 }
 
-func writeConfig(path string, cfg map[string]string) error {
-	file, err := os.Create(path)
-	if err != nil {
+// setAuthorizedDDLUsers rewrites the vtgate config file with the given list of
+// users authorized to execute vschema ddl operations, then waits for the
+// running vtgate to hot-reload the new value.
+func setAuthorizedDDLUsers(ctx context.Context, users string) error {
+	g := clusterInstance.VTGate()
+	content := fmt.Sprintf("{%q:%q}\n", "vschema_ddl_authorized_users", users)
+	if err := g.WriteConfig(ctx, content); err != nil {
 		return err
 	}
-	defer file.Close()
-	return json.NewEncoder(file).Encode(cfg)
+	_, _, err := g.MakeAPICallRetry(ctx, "/debug/config?format=json", 30*time.Second, func(status int, body string) bool {
+		if status != http.StatusOK {
+			return false
+		}
+		var cfg map[string]any
+		if err := json.Unmarshal([]byte(body), &cfg); err != nil {
+			return false
+		}
+		value, _ := cfg["vschema_ddl_authorized_users"].(string)
+		return value == users
+	})
+	return err
 }
 
 func TestVSchema(t *testing.T) {
@@ -129,51 +139,47 @@ func TestVSchema(t *testing.T) {
 	defer conn.Close()
 
 	// Test the empty database with no vschema
-	utils.Exec(t, conn, "insert into vt_user (id,name) values(1,'test1'), (2,'test2'), (3,'test3'), (4,'test4')")
+	vitesst.Exec(t, conn, "insert into vt_user (id,name) values(1,'test1'), (2,'test2'), (3,'test3'), (4,'test4')")
 
-	utils.AssertMatches(t, conn, "select id, name from vt_user order by id",
+	vitesst.AssertMatches(t, conn, "select id, name from vt_user order by id",
 		`[[INT64(1) VARCHAR("test1")] [INT64(2) VARCHAR("test2")] [INT64(3) VARCHAR("test3")] [INT64(4) VARCHAR("test4")]]`)
 
-	utils.AssertMatches(t, conn, "delete from vt_user", `[]`)
-	utils.AssertMatches(t, conn, "SHOW VSCHEMA TABLES", `[]`)
+	vitesst.AssertMatches(t, conn, "delete from vt_user", `[]`)
+	vitesst.AssertMatches(t, conn, "SHOW VSCHEMA TABLES", `[]`)
 
 	// Use the DDL to create an unsharded vschema and test again
 
 	// Create VSchema and do a Select to force update VSCHEMA
-	utils.Exec(t, conn, "begin")
-	utils.Exec(t, conn, "ALTER VSCHEMA ADD TABLE vt_user")
-	utils.Exec(t, conn, "select * from  vt_user")
-	utils.Exec(t, conn, "commit")
+	vitesst.Exec(t, conn, "begin")
+	vitesst.Exec(t, conn, "ALTER VSCHEMA ADD TABLE vt_user")
+	vitesst.Exec(t, conn, "select * from  vt_user")
+	vitesst.Exec(t, conn, "commit")
 
-	utils.Exec(t, conn, "begin")
-	utils.Exec(t, conn, "ALTER VSCHEMA ADD TABLE main")
-	utils.Exec(t, conn, "select * from  main")
-	utils.Exec(t, conn, "commit")
+	vitesst.Exec(t, conn, "begin")
+	vitesst.Exec(t, conn, "ALTER VSCHEMA ADD TABLE main")
+	vitesst.Exec(t, conn, "select * from  main")
+	vitesst.Exec(t, conn, "commit")
 
 	// Test Showing Tables
-	utils.AssertMatches(t, conn, "SHOW VSCHEMA TABLES", `[[VARCHAR("main")] [VARCHAR("vt_user")]]`)
+	vitesst.AssertMatches(t, conn, "SHOW VSCHEMA TABLES", `[[VARCHAR("main")] [VARCHAR("vt_user")]]`)
 
 	// Test Showing Vindexes
-	utils.AssertMatches(t, conn, "SHOW VSCHEMA VINDEXES", `[]`)
+	vitesst.AssertMatches(t, conn, "SHOW VSCHEMA VINDEXES", `[]`)
 
 	// Test DML operations
-	utils.Exec(t, conn, "insert into vt_user (id,name) values(1,'test1'), (2,'test2'), (3,'test3'), (4,'test4')")
-	utils.AssertMatches(t, conn, "select id, name from vt_user order by id",
+	vitesst.Exec(t, conn, "insert into vt_user (id,name) values(1,'test1'), (2,'test2'), (3,'test3'), (4,'test4')")
+	vitesst.AssertMatches(t, conn, "select id, name from vt_user order by id",
 		`[[INT64(1) VARCHAR("test1")] [INT64(2) VARCHAR("test2")] [INT64(3) VARCHAR("test3")] [INT64(4) VARCHAR("test4")]]`)
 
-	utils.AssertMatches(t, conn, "delete from vt_user", `[]`)
+	vitesst.AssertMatches(t, conn, "delete from vt_user", `[]`)
 
 	// Don't allow any users to modify the vschema via the SQL API
 	// in order to test that behavior.
-	writeConfig(configFile, map[string]string{
-		"vschema_ddl_authorized_users": "",
-	})
+	require.NoError(t, setAuthorizedDDLUsers(ctx, ""))
 	// Allow anyone to modify the vschema via the SQL API again when
 	// the test completes.
 	defer func() {
-		writeConfig(configFile, map[string]string{
-			"vschema_ddl_authorized_users": "%",
-		})
+		_ = setAuthorizedDDLUsers(context.Background(), "%")
 	}()
 	require.EventuallyWithT(t, func(t *assert.CollectT) {
 		_, err = conn.ExecuteFetch("ALTER VSCHEMA DROP TABLE main", 1000, false)
@@ -239,5 +245,5 @@ func TestVSchemaSQLAPIConcurrency(t *testing.T) {
 		_, _ = mysqlConns[i].ExecuteFetch("ALTER VSCHEMA DROP TABLE "+tableName, -1, false)
 	}
 	// Confirm that we're back to the initial state.
-	utils.AssertMatches(t, conn, "SHOW VSCHEMA TABLES", fmt.Sprintf("%v", initialVSchema.Rows))
+	vitesst.AssertMatches(t, conn, "SHOW VSCHEMA TABLES", fmt.Sprintf("%v", initialVSchema.Rows))
 }

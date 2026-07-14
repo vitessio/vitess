@@ -21,20 +21,20 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 func TestFoundRows(t *testing.T) {
-	mcmp, err := utils.NewMySQLCompare(t, vtParams, mysqlParams)
+	mcmp, err := vitesst.NewMySQLCompare(t.Context(), t, vtParams, mysqlParams)
 	require.NoError(t, err)
 	defer mcmp.Close()
 
 	_, _ = mcmp.ExecAndIgnore("delete from t2")
 	defer func() {
-		utils.Exec(t, mcmp.VtConn, "set workload = oltp")
+		vitesst.Exec(t, mcmp.VtConn, "set workload = oltp")
 		_, _ = mcmp.ExecAndIgnore("delete from t2")
 		// queries against lookup tables do not need to be executed against MySQL
-		_, _ = utils.ExecAllowError(t, mcmp.VtConn, "delete from t2_id4_idx")
+		_, _ = vitesst.ExecAllowError(t, mcmp.VtConn, "delete from t2_id4_idx")
 	}()
 
 	mcmp.Exec("insert into t2(id3,id4) values(1,2), (2,2), (3,3), (4,3), (5,3)")
@@ -42,7 +42,9 @@ func TestFoundRows(t *testing.T) {
 	// Wait for schema tracking to run and mark t2 as authoritative before we try out the queries.
 	// Some of the queries depend on schema tracking to run successfully to be able to replace the StarExpr
 	// in the select clause with the definitive column list.
-	err = utils.WaitForAuthoritative(t, keyspaceName, "t2", clusterInstance.VtgateProcess.ReadVSchema)
+	err = vitesst.WaitForAuthoritative(t, keyspaceName, "t2", func() (*any, error) {
+		return clusterInstance.VTGate().ReadVSchema(t.Context())
+	})
 	require.NoError(t, err)
 	runTests := func(workload string) {
 		mcmp.AssertFoundRowsValue("select * from t2", workload, 5)
@@ -54,6 +56,6 @@ func TestFoundRows(t *testing.T) {
 	}
 
 	runTests("oltp")
-	utils.Exec(t, mcmp.VtConn, "set workload = olap")
+	vitesst.Exec(t, mcmp.VtConn, "set workload = olap")
 	runTests("olap")
 }

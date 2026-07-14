@@ -19,17 +19,17 @@ package orderby
 import (
 	"testing"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
-
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/test/vitesst"
 )
 
-func start(t *testing.T) (utils.MySQLCompare, func()) {
-	mcmp, err := utils.NewMySQLCompare(t, vtParams, mysqlParams)
+func start(t *testing.T) (vitesst.MySQLCompare, func()) {
+	mcmp, err := vitesst.NewMySQLCompare(t.Context(), t, vtParams, mysqlParams)
 	require.NoError(t, err)
 
 	deleteAll := func() {
-		_, _ = utils.ExecAllowError(t, mcmp.VtConn, "set workload = oltp")
+		_, _ = vitesst.ExecAllowError(t, mcmp.VtConn, "set workload = oltp")
 
 		tables := []string{"t1", "t1_id2_idx", "t2", "t2_id4_idx"}
 		for _, table := range tables {
@@ -76,11 +76,11 @@ func TestOrderBy(t *testing.T) {
 	mcmp.AssertMatches("select id1, id2 from t4 order by reverse(id2) desc", `[[INT64(5) VARCHAR("test")] [INT64(8) VARCHAR("F")] [INT64(7) VARCHAR("e")] [INT64(6) VARCHAR("d")] [INT64(2) VARCHAR("Abc")] [INT64(4) VARCHAR("c")] [INT64(3) VARCHAR("b")] [INT64(1) VARCHAR("a")]]`)
 
 	defer func() {
-		utils.Exec(t, mcmp.VtConn, "set workload = oltp")
+		vitesst.Exec(t, mcmp.VtConn, "set workload = oltp")
 		_, _ = mcmp.ExecAndIgnore("delete from t4")
 	}()
 	// Test the same queries in streaming mode
-	utils.Exec(t, mcmp.VtConn, "set workload = olap")
+	vitesst.Exec(t, mcmp.VtConn, "set workload = olap")
 	mcmp.AssertMatches("select id1, id2 from t4 order by id2 desc", `[[INT64(5) VARCHAR("test")] [INT64(8) VARCHAR("F")] [INT64(7) VARCHAR("e")] [INT64(6) VARCHAR("d")] [INT64(4) VARCHAR("c")] [INT64(3) VARCHAR("b")] [INT64(2) VARCHAR("Abc")] [INT64(1) VARCHAR("a")]]`)
 	mcmp.AssertMatches("select id1, id2 from t4 order by id1 desc", `[[INT64(8) VARCHAR("F")] [INT64(7) VARCHAR("e")] [INT64(6) VARCHAR("d")] [INT64(5) VARCHAR("test")] [INT64(4) VARCHAR("c")] [INT64(3) VARCHAR("b")] [INT64(2) VARCHAR("Abc")] [INT64(1) VARCHAR("a")]]`)
 	mcmp.AssertMatches("select id1, id2 from t4 order by reverse(id2) desc", `[[INT64(5) VARCHAR("test")] [INT64(8) VARCHAR("F")] [INT64(7) VARCHAR("e")] [INT64(6) VARCHAR("d")] [INT64(2) VARCHAR("Abc")] [INT64(4) VARCHAR("c")] [INT64(3) VARCHAR("b")] [INT64(1) VARCHAR("a")]]`)
@@ -149,8 +149,8 @@ func TestOrderByComplex(t *testing.T) {
 	}
 
 	for _, query := range queries {
-		mcmp.Run(query, func(mcmp *utils.MySQLCompare) {
-			_, _ = mcmp.ExecAllowAndCompareError(query, utils.CompareOptions{})
+		mcmp.Run(query, func(mcmp *vitesst.MySQLCompare) {
+			_, _ = mcmp.ExecAllowAndCompareError(query, vitesst.CompareOptions{})
 		})
 	}
 }

@@ -21,15 +21,15 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
-func start(t *testing.T) (utils.MySQLCompare, func()) {
-	mcmp, err := utils.NewMySQLCompare(t, vtParams, mysqlParams)
+func start(t *testing.T) (vitesst.MySQLCompare, func()) {
+	mcmp, err := vitesst.NewMySQLCompare(t.Context(), t, vtParams, mysqlParams)
 	require.NoError(t, err)
 
 	deleteAll := func() {
-		_, _ = utils.ExecAllowError(t, mcmp.VtConn, "set workload = oltp")
+		_, _ = vitesst.ExecAllowError(t, mcmp.VtConn, "set workload = oltp")
 
 		tables := []string{"nation", "region", "part", "supplier", "partsupp", "customer", "orders", "lineitem"}
 		for _, table := range tables {
@@ -48,7 +48,7 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 func TestTPCHQueries(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
-	err := utils.WaitForColumn(t, clusterInstance.VtgateProcess, keyspaceName, "region", `R_COMMENT`)
+	err := vitesst.WaitForColumn(t, clusterInstance.VTGate(), keyspaceName, "region", `R_COMMENT`)
 	require.NoError(t, err)
 
 	insertQueries := []string{
@@ -227,7 +227,7 @@ from (select l.l_extendedprice * o.o_totalprice
 	}
 
 	for _, testcase := range testcases {
-		mcmp.Run(testcase.name, func(mcmp *utils.MySQLCompare) {
+		mcmp.Run(testcase.name, func(mcmp *vitesst.MySQLCompare) {
 			mcmp.Exec(testcase.query)
 		})
 	}

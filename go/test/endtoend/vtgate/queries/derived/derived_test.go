@@ -21,11 +21,11 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
-func start(t *testing.T) (utils.MySQLCompare, func()) {
-	mcmp, err := utils.NewMySQLCompare(t, vtParams, mysqlParams)
+func start(t *testing.T) (vitesst.MySQLCompare, func()) {
+	mcmp, err := vitesst.NewMySQLCompare(t.Context(), t, vtParams, mysqlParams)
 	require.NoError(t, err)
 
 	deleteAll := func() {
@@ -92,7 +92,9 @@ func TestDerivedTableColumns(t *testing.T) {
 func TestDerivedTablesWithLimit(t *testing.T) {
 	// We need full type info before planning this, so we wait for the schema tracker
 	require.NoError(t,
-		utils.WaitForAuthoritative(t, keyspaceName, "user", clusterInstance.VtgateProcess.ReadVSchema))
+		vitesst.WaitForAuthoritative(t, keyspaceName, "user", func() (*any, error) {
+			return clusterInstance.VTGate().ReadVSchema(t.Context())
+		}))
 
 	mcmp, closer := start(t)
 	defer closer()

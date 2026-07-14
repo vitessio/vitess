@@ -17,59 +17,52 @@ limitations under the License.
 package vtgate
 
 import (
+	"context"
 	"flag"
+	"fmt"
 	"os"
 	"testing"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
-
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
+	clusterInstance *vitesst.Cluster
 	vtParams        mysql.ConnParams
 	KeyspaceName    = "ks"
-	Cell            = "test"
 )
 
 func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(Cell, "localhost")
-		defer clusterInstance.Teardown()
+		ctx := context.Background()
 
-		// Start topo server
-		err := clusterInstance.StartTopo()
-		if err != nil {
-			return 1
-		}
-
-		// Start keyspace
-		keyspace := &cluster.Keyspace{
-			Name: KeyspaceName,
-		}
-		err = clusterInstance.StartUnshardedKeyspace(*keyspace, 0, false, clusterInstance.Cell)
-		if err != nil {
-			return 1
-		}
-
-		clusterInstance.VtGatePlannerVersion = querypb.ExecuteOptions_Gen4
-		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
-			"--enable-system-settings=true",
-			"--mysql-server-version"+"=8.0.16-7",
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithKeyspace(KeyspaceName),
+			vitesst.WithVTGateArgs(
+				"--enable-system-settings=true",
+				"--mysql-server-version=8.0.16-7",
+			),
 		)
-		// Start vtgate
-		err = clusterInstance.StartVtgate()
 		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-		vtParams = mysql.ConnParams{
-			Host: clusterInstance.Hostname,
-			Port: clusterInstance.VtgateMySQLPort,
+		cleanup, err := cluster.Start(ctx)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
 		}
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
+
+		clusterInstance = cluster
+		vtParams = cluster.VTParams(ctx, "")
 		return m.Run()
 	}()
 	os.Exit(exitCode)

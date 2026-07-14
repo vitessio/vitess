@@ -17,10 +17,14 @@ limitations under the License.
 package vtgate
 
 import (
+	"bufio"
 	"context"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -28,22 +32,20 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 type consolidatorTestCase struct {
 	tabletType           string
-	tabletProcess        *cluster.VttabletProcess
+	tablet               *vitesst.Tablet
 	query                string
 	expectConsolidations bool
 }
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
+	clusterInstance *vitesst.Cluster
 	vtParams        mysql.ConnParams
 	KeyspaceName    = "ks"
-	Cell            = "test"
 	SchemaSQL       = `create table t1(
 	id1 bigint,
 	id2 bigint,
@@ -68,42 +70,33 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(Cell, "localhost")
-		defer clusterInstance.Teardown()
+		ctx := context.Background()
 
-		// Start topo server
-		err := clusterInstance.StartTopo()
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithKeyspace(KeyspaceName).
+				WithReplicas(1).
+				WithSchema(SchemaSQL).
+				WithVSchema(VSchema),
+		)
 		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-
-		// Start keyspace
-		keyspace := &cluster.Keyspace{
-			Name:      KeyspaceName,
-			SchemaSQL: SchemaSQL,
-			VSchema:   VSchema,
-		}
-		if err := clusterInstance.StartKeyspace(
-			*keyspace,
-			[]string{"-"},
-			1, /*creates 1 replica tablet in addition to primary*/
-			false,
-			clusterInstance.Cell,
-		); err != nil {
+		cleanup, err := cluster.Start(ctx)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
 
-		// Start vtgate
-		if err := clusterInstance.StartVtgate(); err != nil {
-			return 1
-		}
+		clusterInstance = cluster
+		vtParams = cluster.VTParams(ctx, "")
 
-		vtParams = mysql.ConnParams{
-			Host: clusterInstance.Hostname,
-			Port: clusterInstance.VtgateMySQLPort,
-		}
-
-		conn, err := mysql.Connect(context.Background(), &vtParams)
+		conn, err := mysql.Connect(ctx, &vtParams)
 		if err != nil {
 			return 1
 		}
@@ -125,16 +118,17 @@ func TestMain(m *testing.M) {
 }
 
 func TestConsolidatorEnabledByDefault(t *testing.T) {
+	shard := clusterInstance.Keyspace(KeyspaceName).Shard("-")
 	testConsolidator(t, []consolidatorTestCase{
 		{
 			"@primary",
-			clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet().VttabletProcess,
+			shard.Primary(),
 			`select id2 from t1 where sleep(2) = 0 order by id1 asc limit 1`,
 			true,
 		},
 		{
 			"@replica",
-			clusterInstance.Keyspaces[0].Shards[0].Replica().VttabletProcess,
+			shard.Replicas()[0],
 			`select id2 from t1 where sleep(2) = 0 order by id1 asc limit 1`,
 			true,
 		},
@@ -142,16 +136,17 @@ func TestConsolidatorEnabledByDefault(t *testing.T) {
 }
 
 func TestConsolidatorEnabledWithDirective(t *testing.T) {
+	shard := clusterInstance.Keyspace(KeyspaceName).Shard("-")
 	testConsolidator(t, []consolidatorTestCase{
 		{
 			"@primary",
-			clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet().VttabletProcess,
+			shard.Primary(),
 			`select /*vt+ CONSOLIDATOR=enabled */ id2 from t1 where sleep(2) = 0 order by id1 asc limit 1`,
 			true,
 		},
 		{
 			"@replica",
-			clusterInstance.Keyspaces[0].Shards[0].Replica().VttabletProcess,
+			shard.Replicas()[0],
 			`select /*vt+ CONSOLIDATOR=enabled */ id2 from t1 where sleep(2) = 0 order by id1 asc limit 1`,
 			true,
 		},
@@ -159,16 +154,17 @@ func TestConsolidatorEnabledWithDirective(t *testing.T) {
 }
 
 func TestConsolidatorDisabledWithDirective(t *testing.T) {
+	shard := clusterInstance.Keyspace(KeyspaceName).Shard("-")
 	testConsolidator(t, []consolidatorTestCase{
 		{
 			"@primary",
-			clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet().VttabletProcess,
+			shard.Primary(),
 			`select /*vt+ CONSOLIDATOR=disabled */ id2 from t1 where sleep(2) = 0 order by id1 asc limit 1`,
 			false,
 		},
 		{
 			"@replica",
-			clusterInstance.Keyspaces[0].Shards[0].Replica().VttabletProcess,
+			shard.Replicas()[0],
 			`select /*vt+ CONSOLIDATOR=disabled */ id2 from t1 where sleep(2) = 0 order by id1 asc limit 1`,
 			false,
 		},
@@ -176,16 +172,17 @@ func TestConsolidatorDisabledWithDirective(t *testing.T) {
 }
 
 func TestConsolidatorEnabledReplicasWithDirective(t *testing.T) {
+	shard := clusterInstance.Keyspace(KeyspaceName).Shard("-")
 	testConsolidator(t, []consolidatorTestCase{
 		{
 			"@primary",
-			clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet().VttabletProcess,
+			shard.Primary(),
 			`select /*vt+ CONSOLIDATOR=enabled_replicas */ id2 from t1 where sleep(2) = 0 order by id1 asc limit 1`,
 			false,
 		},
 		{
 			"@replica",
-			clusterInstance.Keyspaces[0].Shards[0].Replica().VttabletProcess,
+			shard.Replicas()[0],
 			`select /*vt+ CONSOLIDATOR=enabled_replicas */ id2 from t1 where sleep(2) = 0 order by id1 asc limit 1`,
 			true,
 		},
@@ -198,13 +195,13 @@ func testConsolidator(t *testing.T, testCases []consolidatorTestCase) {
 			// Create a connection.
 			conn1, err := mysql.Connect(t.Context(), &vtParams)
 			require.NoError(t, err)
-			utils.Exec(t, conn1, "use "+testCase.tabletType)
+			vitesst.Exec(t, conn1, "use "+testCase.tabletType)
 			defer conn1.Close()
 
 			// Create another connection.
 			conn2, err := mysql.Connect(t.Context(), &vtParams)
 			require.NoError(t, err)
-			utils.Exec(t, conn2, "use "+testCase.tabletType)
+			vitesst.Exec(t, conn2, "use "+testCase.tabletType)
 			defer conn2.Close()
 
 			// Create a channel for query results.
@@ -213,12 +210,12 @@ func testConsolidator(t *testing.T, testCases []consolidatorTestCase) {
 
 			execAsync := func(conn *mysql.Conn, query string, qrCh chan *sqltypes.Result) {
 				go func() {
-					qrCh <- utils.Exec(t, conn, query)
+					qrCh <- vitesst.Exec(t, conn, query)
 				}()
 			}
 
 			// Check initial consolidations.
-			consolidations, err := testCase.tabletProcess.GetConsolidations()
+			consolidations, err := getConsolidations(t.Context(), testCase.tablet)
 			require.NoError(t, err, "Failed to get consolidations.")
 			count := consolidations[testCase.query]
 
@@ -233,7 +230,7 @@ func testConsolidator(t *testing.T, testCases []consolidatorTestCase) {
 			require.Empty(t, diff, "Expected query results to be equal but they are different.")
 
 			// Verify the query was (or was not) consolidated.
-			consolidations, err = testCase.tabletProcess.GetConsolidations()
+			consolidations, err = getConsolidations(t.Context(), testCase.tablet)
 			require.NoError(t, err, "Failed to get consolidations.")
 			if testCase.expectConsolidations {
 				require.Greater(
@@ -256,4 +253,41 @@ func testConsolidator(t *testing.T, testCases []consolidatorTestCase) {
 			}
 		})
 	}
+}
+
+// getConsolidations scrapes the tablet's /debug/consolidations endpoint and
+// returns each consolidated query mapped to its consolidation count.
+func getConsolidations(ctx context.Context, tablet *vitesst.Tablet) (map[string]int, error) {
+	status, body, err := tablet.MakeAPICall(ctx, "/debug/consolidations")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get consolidations: %v", err)
+	}
+	if status != http.StatusOK {
+		return nil, fmt.Errorf("failed to get consolidations: status %d", status)
+	}
+
+	result := make(map[string]int)
+
+	scanner := bufio.NewScanner(strings.NewReader(body))
+	for scanner.Scan() {
+		line := scanner.Text()
+		splits := strings.SplitN(line, ":", 2)
+		if len(splits) != 2 {
+			return nil, fmt.Errorf("failed to split consolidations line: %s", line)
+		}
+		// Discard "Length: [N]" lines.
+		if splits[0] == "Length" {
+			continue
+		}
+		countI, err := strconv.Atoi(splits[0])
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse consolidations count: %v", err)
+		}
+		result[strings.TrimSpace(splits[1])] = countI
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("failed to read consolidations: %v", err)
+	}
+
+	return result, nil
 }

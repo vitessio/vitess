@@ -27,7 +27,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 // this test uses the AST defined in the sqlparser package to randomly generate queries
@@ -35,12 +35,12 @@ import (
 // if true then execution will always stop on a "must fix" error: a results mismatched or EOF
 const stopOnMustFixError = false
 
-func start(t *testing.T) (utils.MySQLCompare, func()) {
-	mcmp, err := utils.NewMySQLCompare(t, vtParams, mysqlParams)
+func start(t *testing.T) (vitesst.MySQLCompare, func()) {
+	mcmp, err := vitesst.NewMySQLCompare(t.Context(), t, vtParams, mysqlParams)
 	require.NoError(t, err)
 
 	deleteAll := func() {
-		_, _ = utils.ExecAllowError(t, mcmp.VtConn, "set workload = oltp")
+		_, _ = vitesst.ExecAllowError(t, mcmp.VtConn, "set workload = oltp")
 
 		tables := []string{"emp", "dept"}
 		for _, table := range tables {
@@ -69,7 +69,7 @@ func helperTest(t *testing.T, query string) {
 		mcmp, closer := start(t)
 		defer closer()
 
-		result, err := mcmp.ExecAllowAndCompareError(query, utils.CompareOptions{})
+		result, err := mcmp.ExecAllowAndCompareError(query, vitesst.CompareOptions{})
 		fmt.Println(result)
 		fmt.Println(err)
 	})
@@ -78,8 +78,8 @@ func helperTest(t *testing.T, query string) {
 func TestMustFix(t *testing.T) {
 	t.Skip("Skip CI")
 
-	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "emp", clusterInstance.VtgateProcess.ReadVSchema))
-	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "dept", clusterInstance.VtgateProcess.ReadVSchema))
+	require.NoError(t, vitesst.WaitForAuthoritative(t, keyspaceName, "emp", func() (*any, error) { return clusterInstance.VTGate().ReadVSchema(t.Context()) }))
+	require.NoError(t, vitesst.WaitForAuthoritative(t, keyspaceName, "dept", func() (*any, error) { return clusterInstance.VTGate().ReadVSchema(t.Context()) }))
 
 	// results mismatched
 	helperTest(t, "select distinct case count(*) when 0 then -0 end from emp as tbl0, emp as tbl1 where 0")
@@ -153,8 +153,8 @@ func TestMustFix(t *testing.T) {
 func TestKnownFailures(t *testing.T) {
 	t.Skip("Skip CI")
 
-	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "emp", clusterInstance.VtgateProcess.ReadVSchema))
-	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "dept", clusterInstance.VtgateProcess.ReadVSchema))
+	require.NoError(t, vitesst.WaitForAuthoritative(t, keyspaceName, "emp", func() (*any, error) { return clusterInstance.VTGate().ReadVSchema(t.Context()) }))
+	require.NoError(t, vitesst.WaitForAuthoritative(t, keyspaceName, "dept", func() (*any, error) { return clusterInstance.VTGate().ReadVSchema(t.Context()) }))
 
 	// logs more stuff
 	// clusterInstance.EnableGeneralLog()
@@ -226,8 +226,8 @@ func TestRandom(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
 
-	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "emp", clusterInstance.VtgateProcess.ReadVSchema))
-	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "dept", clusterInstance.VtgateProcess.ReadVSchema))
+	require.NoError(t, vitesst.WaitForAuthoritative(t, keyspaceName, "emp", func() (*any, error) { return clusterInstance.VTGate().ReadVSchema(t.Context()) }))
+	require.NoError(t, vitesst.WaitForAuthoritative(t, keyspaceName, "dept", func() (*any, error) { return clusterInstance.VTGate().ReadVSchema(t.Context()) }))
 
 	// specify the schema (that is defined in schema.sql)
 	schemaTables := []tableT{
@@ -259,7 +259,7 @@ func TestRandom(t *testing.T) {
 		qg := newQueryGenerator(genConfig, 2, 2, 2, schemaTables)
 		qg.randomQuery()
 		query := sqlparser.String(qg.stmt)
-		_, vtErr := mcmp.ExecAllowAndCompareError(query, utils.CompareOptions{})
+		_, vtErr := mcmp.ExecAllowAndCompareError(query, vitesst.CompareOptions{})
 
 		// this assumes all queries are valid mysql queries
 		if vtErr != nil {
@@ -297,8 +297,8 @@ func TestBuggyQueries(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
 
-	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "emp", clusterInstance.VtgateProcess.ReadVSchema))
-	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "dept", clusterInstance.VtgateProcess.ReadVSchema))
+	require.NoError(t, vitesst.WaitForAuthoritative(t, keyspaceName, "emp", func() (*any, error) { return clusterInstance.VTGate().ReadVSchema(t.Context()) }))
+	require.NoError(t, vitesst.WaitForAuthoritative(t, keyspaceName, "dept", func() (*any, error) { return clusterInstance.VTGate().ReadVSchema(t.Context()) }))
 
 	mcmp.Exec("select sum(tbl1.sal) as caggr1 from emp as tbl0, emp as tbl1 group by tbl1.ename order by tbl1.ename asc")
 	mcmp.Exec("select count(*), count(*), count(*) from dept as tbl0, emp as tbl1 where tbl0.deptno = tbl1.deptno group by tbl1.empno order by tbl1.empno")

@@ -17,23 +17,28 @@ limitations under the License.
 package vtgate
 
 import (
+	"context"
 	_ "embed"
 	"flag"
+	"fmt"
 	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
+// vtgateConfigPath is the config file each vtgate watches inside its
+// container. It is staged world-writable so TestDynamicConfig can rewrite it
+// as the unprivileged container user.
+const vtgateConfigPath = "/vt/files/vtgate.json"
+
 var (
-	clusterInstance *cluster.LocalProcessCluster
+	clusterInstance *vitesst.Cluster
 	vtParams        mysql.ConnParams
 	KeyspaceName    = "ks"
-	Cell            = "test"
 
 	//go:embed schema.sql
 	SchemaSQL string
@@ -54,48 +59,51 @@ var (
 func TestMain(m *testing.M) {
 	flag.Parse()
 	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(Cell, "localhost")
-		defer clusterInstance.Teardown()
+		ctx := context.Background()
 
-		// Start topo server
-		err := clusterInstance.StartTopo()
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithVTTabletArgs(
+				"--queryserver-config-max-result-size", "100",
+				"--queryserver-config-terse-errors",
+			),
+			vitesst.WithVTGateArgs("--vschema-ddl-authorized-users", "%"),
+			vitesst.WithVTGateFiles(vitesst.ContainerFile{
+				Content:       []byte("{}\n"),
+				ContainerPath: vtgateConfigPath,
+				Mode:          0o666,
+			}),
+			vitesst.WithKeyspace(KeyspaceName).
+				WithShards(2).
+				WithReplicas(2).
+				WithSchema(SchemaSQL).
+				WithVSchema(VSchema),
+		)
 		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		cleanup, err := cluster.Start(ctx)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
+
+		if err := cluster.Vtctld().ExecuteCommand(ctx, "ApplyRoutingRules", "--rules", routingRules); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		if err := cluster.Vtctld().ExecuteCommand(ctx, "RebuildVSchemaGraph"); err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
 
-		// Start keyspace
-		keyspace := &cluster.Keyspace{
-			Name:      KeyspaceName,
-			SchemaSQL: SchemaSQL,
-			VSchema:   VSchema,
-		}
-		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
-			"--queryserver-config-max-result-size", "100",
-			"--queryserver-config-terse-errors")
-		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 2, false, clusterInstance.Cell)
-		if err != nil {
-			return 1
-		}
-
-		err = clusterInstance.VtctldClientProcess.ApplyRoutingRules(routingRules)
-		if err != nil {
-			return 1
-		}
-
-		_, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("RebuildVSchemaGraph")
-		if err != nil {
-			return 1
-		}
-
-		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
-			"--vschema-ddl-authorized-users", "%")
-		// Start vtgate
-		err = clusterInstance.StartVtgate()
-		if err != nil {
-			return 1
-		}
-
-		vtParams = clusterInstance.GetVTParams(KeyspaceName)
+		clusterInstance = cluster
+		vtParams = cluster.VTParams(ctx, "")
 
 		return m.Run()
 	}()
@@ -108,12 +116,12 @@ func start(t *testing.T) (*mysql.Conn, func()) {
 	require.NoError(t, err)
 
 	deleteAll := func() {
-		utils.Exec(t, conn, "use ks")
+		vitesst.Exec(t, conn, "use ks")
 		tables := []string{"t1", "t2", "vstream_test", "t3", "t4", "t6", "t7_xxhash", "t7_xxhash_idx", "t7_fk", "t8", "t9", "t9_id_to_keyspace_id_idx", "t10", "t10_id_to_keyspace_id_idx", "t1_id2_idx", "t2_id4_idx", "t3_id7_idx", "t4_id2_idx", "t5_null_vindex", "t6_id2_idx"}
 		for _, table := range tables {
-			_, _ = utils.ExecAllowError(t, conn, "delete from "+table)
+			_, _ = vitesst.ExecAllowError(t, conn, "delete from "+table)
 		}
-		utils.Exec(t, conn, "set workload = oltp")
+		vitesst.Exec(t, conn, "set workload = oltp")
 	}
 
 	deleteAll()

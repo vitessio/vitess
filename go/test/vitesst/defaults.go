@@ -85,6 +85,10 @@ const (
 	// config/init_db.sql.
 	imageInitDBPath = "/vt/config/init_db.sql"
 
+	// vtgateConfigPath is the vtgate config file inside its container. The
+	// vtgate watches it, so WriteConfig changes apply to the running process.
+	vtgateConfigPath = containerFilesDir + "/vtgate.json"
+
 	// customSQLMarker is the marker line in init_db.sql where custom SQL is
 	// spliced in.
 	customSQLMarker = "# {{custom_sql}}"
