@@ -130,14 +130,15 @@ func TestVStreamClientRestartsInterruptedCopy(t *testing.T) {
 	te.exec(t, "insert into customer.customer(id, email) values (1101, 'copy-a@domain.com'), (1102, 'copy-b@domain.com'), (1103, 'copy-c@domain.com')", nil)
 
 	interruptErr := errors.New("interrupt copy before final completion")
-	interruptedClient := te.newDefaultClient(t, t.Name(), []vstreamclient.TableConfig{{
-		Keyspace:        "customer",
-		Table:           "customer",
-		Query:           "select * from customer where id between 1100 and 1199",
-		MaxRowsPerFlush: 10,
-		DataType:        &Customer{},
-		FlushFn:         func(_ context.Context, _ []vstreamclient.Row, _ vstreamclient.FlushMeta) error { return nil },
-	}},
+	interruptedClient := te.newDefaultClient(
+		t, t.Name(), []vstreamclient.TableConfig{{
+			Keyspace:        "customer",
+			Table:           "customer",
+			Query:           "select * from customer where id between 1100 and 1199",
+			MaxRowsPerFlush: 10,
+			DataType:        &Customer{},
+			FlushFn:         func(_ context.Context, _ []vstreamclient.Row, _ vstreamclient.FlushMeta) error { return nil },
+		}},
 		vstreamclient.WithEventFunc(func(_ context.Context, ev *binlogdatapb.VEvent) error {
 			if ev.Keyspace != "" {
 				return interruptErr
@@ -212,8 +213,7 @@ func TestVStreamClientReplaysRowsWhenCheckpointWriteFails(t *testing.T) {
 	runCtx, cancelRun := context.WithTimeout(context.Background(), 2*time.Second)
 	err := failingClient.Run(runCtx)
 	cancelRun()
-	require.Error(t, err)
-	assert.ErrorContains(t, err, "unexpected number of rows affected")
+	require.ErrorIs(t, err, vstreamclient.ErrFenced)
 	assert.Equal(t, []*Customer{want}, firstRun)
 
 	var replayed []*Customer

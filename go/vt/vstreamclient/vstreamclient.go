@@ -27,6 +27,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/google/uuid"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
@@ -78,6 +80,11 @@ type clientConfig struct {
 	// vgtidStateKeyspace and vgtidStateTable are the keyspace and table where the last VGtid is stored
 	vgtidStateKeyspace string
 	vgtidStateTable    string
+
+	// ownerToken uniquely identifies this client instance in the state row. New claims it on startup,
+	// and checkpoint writes require it to still match, so of two clients running with the same stream
+	// name, the newest one wins and the older one fails fast with ErrFenced.
+	ownerToken string
 
 	// to avoid flushing too often, we will only flush if it has been at least minFlushDuration since the last flush.
 	// we're relying on heartbeat events to handle max duration between flushes, in case there are no other events.
@@ -158,6 +165,7 @@ func New(ctx context.Context, name string, conn *vtgateconn.VTGateConn, tables [
 			gracefulShutdownWaitDur:    DefaultGracefulShutdownWaitDur,
 			startupTimeout:             DefaultStartupTimeout,
 			heartbeatTimeoutMultiplier: DefaultHeartbeatTimeoutMultiplier,
+			ownerToken:                 uuid.NewString(),
 		},
 		session: conn.Session("", nil),
 		tables:  make(map[string]*TableConfig),
@@ -236,6 +244,13 @@ func New(ctx context.Context, name string, conn *vtgateconn.VTGateConn, tables [
 		return nil, err
 	}
 
+	// claim ownership before reading state, so a still-running client with the same stream name is
+	// fenced out before we decide where to resume from
+	err = claimStateOwnership(ctx, v.session, v.cfg.name, v.cfg.vgtidStateKeyspace, v.cfg.vgtidStateTable, v.cfg.ownerToken)
+	if err != nil {
+		return nil, err
+	}
+
 	storedVGtid, storedTableConfig, copyCompleted, err := getLatestVGtid(ctx, v.session, v.cfg.name, v.cfg.vgtidStateKeyspace, v.cfg.vgtidStateTable)
 	if err != nil {
 		return nil, err
@@ -247,14 +262,14 @@ func New(ctx context.Context, name string, conn *vtgateconn.VTGateConn, tables [
 	switch {
 	case useExplicitStartingVGtid:
 		// if the caller explicitly provided a starting point, prefer it over persisted state.
-		err = initStartingVGtid(ctx, v.session, v.cfg.name, v.cfg.vgtidStateKeyspace, v.cfg.vgtidStateTable, v.latestVgtid, v.tables)
+		err = initStartingVGtid(ctx, v.session, v.cfg.name, v.cfg.vgtidStateKeyspace, v.cfg.vgtidStateTable, v.cfg.ownerToken, v.latestVgtid, v.tables)
 		if err != nil {
 			return nil, err
 		}
 
 	case v.latestVgtid == nil:
 		// we need to bootstrap the stream, which means we need to create a new vgtid and store the table config
-		v.latestVgtid, err = initVGtid(ctx, v.session, v.cfg.name, v.cfg.vgtidStateKeyspace, v.cfg.vgtidStateTable, v.tables, v.shardsByKeyspace)
+		v.latestVgtid, err = initVGtid(ctx, v.session, v.cfg.name, v.cfg.vgtidStateKeyspace, v.cfg.vgtidStateTable, v.cfg.ownerToken, v.tables, v.shardsByKeyspace)
 		if err != nil {
 			return nil, err
 		}
@@ -269,7 +284,7 @@ func New(ctx context.Context, name string, conn *vtgateconn.VTGateConn, tables [
 
 		// since we have a vgtid, but the copy never completed, restart the copy from the beginning
 		if !copyCompleted {
-			v.latestVgtid, err = initVGtid(ctx, v.session, v.cfg.name, v.cfg.vgtidStateKeyspace, v.cfg.vgtidStateTable, v.tables, v.shardsByKeyspace)
+			v.latestVgtid, err = initVGtid(ctx, v.session, v.cfg.name, v.cfg.vgtidStateKeyspace, v.cfg.vgtidStateTable, v.cfg.ownerToken, v.tables, v.shardsByKeyspace)
 			if err != nil {
 				return nil, err
 			}

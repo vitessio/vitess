@@ -19,6 +19,7 @@ package vstreamclient
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"google.golang.org/protobuf/encoding/protojson"
@@ -27,6 +28,12 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 )
+
+// ErrFenced is returned (as the wrapped cause) when a checkpoint write affects no rows, meaning the
+// state row was deleted or another client using the same stream name claimed ownership after this
+// client started. The newest client wins; this client must stop so the two don't ping-pong the
+// checkpoint back and forth.
+var ErrFenced = errors.New("vstreamclient: state row missing or claimed by another client")
 
 type dbTableConfig struct {
 	Keyspace string
@@ -54,6 +61,7 @@ func initStateTable(ctx context.Context, session *vtgateconn.VTGateSession, keys
   latest_vgtid json,
   table_config json not null,
   copy_completed bool not null default false,
+  owner_token varbinary(36),
   created_at timestamp default current_timestamp,
   updated_at timestamp default current_timestamp on update current_timestamp,
   PRIMARY KEY (name)
@@ -71,7 +79,7 @@ func initStateTable(ctx context.Context, session *vtgateconn.VTGateSession, keys
 // starts from the beginning of the stream (empty gtid for each shard) and persist that along with the table config.
 // This will kick off a copy phase on the vttablet side, which will read all existing data and then transition to
 // streaming new changes.
-func initVGtid(ctx context.Context, session *vtgateconn.VTGateSession, name, keyspaceName, tableName string, tables map[string]*TableConfig, shardsByKeyspace map[string][]string) (*binlogdatapb.VGtid, error) {
+func initVGtid(ctx context.Context, session *vtgateconn.VTGateSession, name, keyspaceName, tableName, ownerToken string, tables map[string]*TableConfig, shardsByKeyspace map[string][]string) (*binlogdatapb.VGtid, error) {
 	vgtid, err := newVGtid(tables, shardsByKeyspace)
 	if err != nil {
 		return nil, err
@@ -82,17 +90,19 @@ func initVGtid(ctx context.Context, session *vtgateconn.VTGateSession, name, key
 		return nil, err
 	}
 
-	query := fmt.Sprintf(`insert into %s.%s (name, latest_vgtid, table_config) values (:name, :latest_vgtid, :table_config)
-on duplicate key update latest_vgtid = values(latest_vgtid), table_config = values(table_config)`,
+	query := fmt.Sprintf(
+		`insert into %s.%s (name, latest_vgtid, table_config, owner_token) values (:name, :latest_vgtid, :table_config, :owner_token)
+on duplicate key update latest_vgtid = values(latest_vgtid), table_config = values(table_config), owner_token = values(owner_token)`,
 		keyspaceName, tableName,
 	)
 	_, err = session.Execute(ctx, query, map[string]*querypb.BindVariable{
 		"name":         {Type: querypb.Type_VARBINARY, Value: []byte(name)},
 		"latest_vgtid": {Type: querypb.Type_JSON, Value: latestVgtidJSON},
 		"table_config": {Type: querypb.Type_JSON, Value: tablesJSON},
+		"owner_token":  {Type: querypb.Type_VARBINARY, Value: []byte(ownerToken)},
 	}, false)
 	if err != nil {
-		return nil, fmt.Errorf("vstreamclient: failed to get latest vgtid for %s.%s: %w", keyspaceName, tableName, err)
+		return nil, fmt.Errorf("vstreamclient: failed to initialize vgtid for %s.%s: %w", keyspaceName, tableName, err)
 	}
 
 	return vgtid, nil
@@ -102,20 +112,22 @@ on duplicate key update latest_vgtid = values(latest_vgtid), table_config = valu
 // that vgtid and the table config. Since they provided a vgtid, their intention isn't to start a copy phase, so we set
 // copy_completed to true, which means the stream will start from the provided vgtid and not attempt to do a copy phase,
 // either now or on restart.
-func initStartingVGtid(ctx context.Context, session *vtgateconn.VTGateSession, name, keyspaceName, tableName string, vgtid *binlogdatapb.VGtid, tables map[string]*TableConfig) error {
+func initStartingVGtid(ctx context.Context, session *vtgateconn.VTGateSession, name, keyspaceName, tableName, ownerToken string, vgtid *binlogdatapb.VGtid, tables map[string]*TableConfig) error {
 	latestVgtidJSON, tablesJSON, err := marshalState(vgtid, tables)
 	if err != nil {
 		return err
 	}
 
-	query := fmt.Sprintf(`insert into %s.%s (name, latest_vgtid, table_config, copy_completed) values (:name, :latest_vgtid, :table_config, true)
-on duplicate key update latest_vgtid = values(latest_vgtid), table_config = values(table_config), copy_completed = true`,
+	query := fmt.Sprintf(
+		`insert into %s.%s (name, latest_vgtid, table_config, copy_completed, owner_token) values (:name, :latest_vgtid, :table_config, true, :owner_token)
+on duplicate key update latest_vgtid = values(latest_vgtid), table_config = values(table_config), copy_completed = true, owner_token = values(owner_token)`,
 		keyspaceName, tableName,
 	)
 	_, err = session.Execute(ctx, query, map[string]*querypb.BindVariable{
 		"name":         {Type: querypb.Type_VARBINARY, Value: []byte(name)},
 		"latest_vgtid": {Type: querypb.Type_JSON, Value: latestVgtidJSON},
 		"table_config": {Type: querypb.Type_JSON, Value: tablesJSON},
+		"owner_token":  {Type: querypb.Type_VARBINARY, Value: []byte(ownerToken)},
 	}, false)
 	if err != nil {
 		return fmt.Errorf("vstreamclient: failed to initialize starting vgtid for %s.%s: %w", keyspaceName, tableName, err)
@@ -166,6 +178,24 @@ func newVGtid(tables map[string]*TableConfig, shardsByKeyspace map[string][]stri
 	return vgtid, nil
 }
 
+// claimStateOwnership stamps this client's owner token on the state row, fencing out any other
+// client that is still running with the same stream name: its next checkpoint write will no longer
+// match its own token and will fail with ErrFenced. It is a no-op when the state row doesn't exist
+// yet; the bootstrap insert stores the token instead.
+func claimStateOwnership(ctx context.Context, session *vtgateconn.VTGateSession, name, keyspaceName, tableName, ownerToken string) error {
+	query := fmt.Sprintf(`update %s.%s set owner_token = :owner_token where name = :name`, keyspaceName, tableName)
+
+	_, err := session.Execute(ctx, query, map[string]*querypb.BindVariable{
+		"owner_token": {Type: querypb.Type_VARBINARY, Value: []byte(ownerToken)},
+		"name":        {Type: querypb.Type_VARBINARY, Value: []byte(name)},
+	}, false)
+	if err != nil {
+		return fmt.Errorf("vstreamclient: failed to claim state ownership for %s.%s: %w", keyspaceName, tableName, err)
+	}
+
+	return nil
+}
+
 func getLatestVGtid(ctx context.Context, session *vtgateconn.VTGateSession, name, keyspaceName, tableName string) (*binlogdatapb.VGtid, map[string]*TableConfig, bool, error) {
 	query := fmt.Sprintf(`select latest_vgtid, table_config, copy_completed from %s.%s where name = :name`, keyspaceName, tableName)
 
@@ -214,26 +244,29 @@ func getLatestVGtid(ctx context.Context, session *vtgateconn.VTGateSession, name
 	return &latestVGtid, tables, copyCompleted, nil
 }
 
-func updateLatestVGtid(ctx context.Context, session *vtgateconn.VTGateSession, name, keyspaceName, tableName string, vgtid *binlogdatapb.VGtid, setCopyCompleted bool) error {
+func updateLatestVGtid(ctx context.Context, session *vtgateconn.VTGateSession, name, keyspaceName, tableName, ownerToken string, vgtid *binlogdatapb.VGtid, setCopyCompleted bool) error {
 	latestVgtid, err := protojson.Marshal(vgtid)
 	if err != nil {
 		return fmt.Errorf("vstreamclient: failed to marshal latest_vgtid: %w", err)
 	}
 
-	query := fmt.Sprintf(`update %s.%s set latest_vgtid = :latest_vgtid where name = :name`, keyspaceName, tableName)
+	// the owner_token predicate fences out this client once another client with the same stream
+	// name has claimed ownership: the update then affects no rows and we fail with ErrFenced
+	query := fmt.Sprintf(`update %s.%s set latest_vgtid = :latest_vgtid where name = :name and owner_token = :owner_token`, keyspaceName, tableName)
 	if setCopyCompleted {
-		query = fmt.Sprintf(`update %s.%s set latest_vgtid = :latest_vgtid, copy_completed = true where name = :name`, keyspaceName, tableName)
+		query = fmt.Sprintf(`update %s.%s set latest_vgtid = :latest_vgtid, copy_completed = true where name = :name and owner_token = :owner_token`, keyspaceName, tableName)
 	}
 	result, err := session.Execute(ctx, query, map[string]*querypb.BindVariable{
 		"latest_vgtid": {Type: querypb.Type_JSON, Value: latestVgtid},
 		"name":         {Type: querypb.Type_VARBINARY, Value: []byte(name)},
+		"owner_token":  {Type: querypb.Type_VARBINARY, Value: []byte(ownerToken)},
 	}, false)
 	if err != nil {
 		return fmt.Errorf("vstreamclient: failed to update latest_vgtid for %s.%s: %w", keyspaceName, tableName, err)
 	}
 
 	if result.RowsAffected != 1 {
-		return fmt.Errorf("vstreamclient: unexpected number of rows affected when setting latest_vgtid for %s.%s: %d", keyspaceName, tableName, result.RowsAffected)
+		return fmt.Errorf("%w: stream %s in %s.%s", ErrFenced, name, keyspaceName, tableName)
 	}
 
 	return nil
