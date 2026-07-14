@@ -19,7 +19,6 @@ package vtgate
 import (
 	"context"
 	"fmt"
-	"hash/fnv"
 	"log/slog"
 	"net"
 	"os"
@@ -378,67 +377,78 @@ func (vh *vtgateHandler) snapshotTempTableBeats() map[string][]tempTableBeatItem
 	return byTablet
 }
 
-// tempTableBeatSpreadThreshold is the tablet count above which a sweep spreads
-// its touches across a short window instead of firing them all at once. A
-// vtgate can hold reserved connections on thousands of shards, so touching
-// every tablet at the same instant would fire thousands of simultaneous RPCs
-// each tick; below this count the fanout is small enough to fire immediately.
-// Spreading is deliberately NOT done with a shared concurrency cap: a cap that
-// slow tablets could fill would queue healthy tablets behind them, and a large
-// partial outage could then push a healthy connection's gap past its tablet
-// timeout. Each tablet always runs on its own goroutine, so one slow tablet
-// never delays another — the spread only staggers when each tablet's own
-// goroutine fires its RPC.
-const tempTableBeatSpreadThreshold = 64
-
-// tempTableBeatJitterWindow is the span a large sweep spreads its per-tablet
-// touches over, so a vtgate holding reserved connections on many shards trickles
-// its keepalive RPCs instead of firing them all at once. It is a small fraction
-// of the interval, so a connection's worst-case gap grows only slightly (see
-// tempTableBeatWorstCaseGap).
-func tempTableBeatJitterWindow(interval time.Duration) time.Duration {
-	return interval / 8
-}
-
-// tempTableBeatJitter returns a tablet's stable offset within the spread window,
-// derived from its alias, so it fires at the same point in every sweep (keeping
-// its steady-state gap at one interval) while distinct tablets spread across the
-// window. It returns 0 when there are few enough tablets to fire immediately.
-func tempTableBeatJitter(alias string, tabletCount int, window time.Duration) time.Duration {
-	if tabletCount <= tempTableBeatSpreadThreshold || window <= 0 {
-		return 0
-	}
-	h := fnv.New32a()
-	_, _ = h.Write([]byte(alias))
-	// Scale the 32-bit hash into [0, window) via float to avoid overflowing the
-	// int64 duration for large windows; jitter needs no better precision.
-	return time.Duration(float64(window) * (float64(h.Sum32()) / (1 << 32)))
-}
+const (
+	// tempTableBeatHealthyConcurrency caps how many reachable (or not-yet-failed)
+	// tablets a sweep touches at once. Healthy tablets reply in well under a
+	// millisecond, so this rarely engages; it bounds the burst — of both gRPC
+	// calls and goroutines — when a large deployment's tablets are touched
+	// together each tick.
+	tempTableBeatHealthyConcurrency = 256
+	// tempTableBeatUnhealthyConcurrency caps how many failing tablets a sweep
+	// retries at once. A failing tablet's beat blocks for its whole budget, so a
+	// broad outage would otherwise keep thousands of gRPC calls and goroutines in
+	// flight. A failing tablet is unreachable, so its reserved connections are
+	// likely already reclaimed — retrying at a bounded rate loses nothing the
+	// outage had not already lost, and the healthy lane is never gated on it.
+	tempTableBeatUnhealthyConcurrency = 32
+)
 
 // beatTempTableByTablet refreshes each tablet's reserved connections on its own
-// goroutine — so a slow or unreachable tablet delays only its own connections,
-// never a healthy tablet's, regardless of how many tablets are unreachable. When
-// there are many tablets, each goroutine staggers its own RPC by a stable
-// per-tablet offset so the sweep trickles its RPCs rather than firing them all
-// at once; the stagger never gates one tablet on another.
+// goroutine, routed by the tablet's last-known health into two independent,
+// bounded lanes. Bounding each lane keeps the gRPC calls and goroutines in
+// flight bounded even during a broad outage; routing by health keeps a healthy
+// tablet from ever queuing behind failing ones — a failing tablet only competes
+// for the small unhealthy lane — so a large partial outage cannot push a healthy
+// connection's gap past its tablet timeout.
 func (vh *vtgateHandler) beatTempTableByTablet(ctx context.Context, byTablet map[string][]tempTableBeatItem) {
-	window := tempTableBeatJitterWindow(tempTableHeartbeatTime)
-	count := len(byTablet)
+	var healthy, failing [][]tempTableBeatItem
+	for _, items := range byTablet {
+		if tempTableBeatItemsFailing(items) {
+			failing = append(failing, items)
+		} else {
+			healthy = append(healthy, items)
+		}
+	}
 	var wg sync.WaitGroup
-	for alias, items := range byTablet {
-		delay := tempTableBeatJitter(alias, count, window)
+	wg.Go(func() { vh.beatTempTableLane(ctx, healthy, tempTableBeatHealthyConcurrency) })
+	wg.Go(func() { vh.beatTempTableLane(ctx, failing, tempTableBeatUnhealthyConcurrency) })
+	wg.Wait()
+}
+
+// beatTempTableLane touches a set of tablets, each on its own goroutine, with at
+// most concurrency in flight at once. Acquiring the slot before launching the
+// goroutine bounds both the outstanding goroutines and the outstanding RPCs the
+// lane holds open.
+func (vh *vtgateHandler) beatTempTableLane(ctx context.Context, tablets [][]tempTableBeatItem, concurrency int) {
+	sem := make(chan struct{}, concurrency)
+	var wg sync.WaitGroup
+	for _, items := range tablets {
+		select {
+		case <-ctx.Done():
+			wg.Wait()
+			return
+		case sem <- struct{}{}:
+		}
 		wg.Go(func() {
-			if delay > 0 {
-				select {
-				case <-ctx.Done():
-					return
-				case <-time.After(delay):
-				}
-			}
+			defer func() { <-sem }()
 			vh.beatTempTableTablet(ctx, items)
 		})
 	}
 	wg.Wait()
+}
+
+// tempTableBeatItemsFailing reports whether a tablet's last beat failed, so its
+// retry is routed to the bounded unhealthy lane. All of a tablet's reserved
+// connections share one batched beat and so fail together; a connection newly
+// added to a failing tablet still routes there, which is correct — the tablet is
+// unreachable.
+func tempTableBeatItemsFailing(items []tempTableBeatItem) bool {
+	for _, item := range items {
+		if item.target.failures > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // tempTableBeatBudget returns how long a single tablet's batched touch may run
@@ -457,15 +467,15 @@ func tempTableBeatBudget(interval time.Duration) time.Duration {
 	return budget
 }
 
-// tempTableBeatWorstCaseGap is the longest a reserved connection can go between
-// tablet-side refreshes: one interval to be seen by the next snapshot, plus the
-// spread window a large sweep staggers its touches over, plus one per-tablet RPC
-// round-trip, which the sweep bounds by the beat budget. The tablet resets the
-// connection's timer only when the touch reaches it and runs (acquire the
-// connection, PeerCheck, unlock), not when the sweep dispatches, so this — not
-// the interval alone — is the gap the workload timeout must exceed.
+// tempTableBeatWorstCaseGap is the longest a healthy reserved connection can go
+// between tablet-side refreshes: one interval to be seen by the next snapshot,
+// plus one per-tablet RPC round-trip, which the sweep bounds by the beat budget.
+// The tablet resets the connection's timer only when the touch reaches it and
+// runs (acquire the connection, PeerCheck, unlock), not when the sweep
+// dispatches, so this — not the interval alone — is the gap the workload timeout
+// must exceed.
 func tempTableBeatWorstCaseGap(interval time.Duration) time.Duration {
-	return interval + tempTableBeatJitterWindow(interval) + tempTableBeatBudget(interval)
+	return interval + tempTableBeatBudget(interval)
 }
 
 // sendTempTableHeartbeats snapshots the registry once and refreshes every

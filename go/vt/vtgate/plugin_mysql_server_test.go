@@ -51,6 +51,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate/binlogacl"
+	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -2187,15 +2188,32 @@ func TestTempTableHeartbeatHealthyNotStarvedBySlowTablet(t *testing.T) {
 		"healthy connection must be beaten promptly, not starved behind the slow tablet")
 }
 
-// TestTempTableHeartbeatManySlowTabletsDoNotStarveHealthy proves that a healthy
-// tablet is still refreshed on time even when far more than a concurrency cap's
-// worth of distinct tablets are slow or unreachable. Each tablet runs on its own
-// goroutine with no shared concurrency limit, so a large partial outage cannot
-// queue a healthy connection behind the slow ones and push its gap past the
-// tablet timeout. It would fail on a shared semaphore that slow tablets fill.
-func TestTempTableHeartbeatManySlowTabletsDoNotStarveHealthy(t *testing.T) {
+// storeFailingTempTablet adds a slow tablet to the healthcheck and registers a
+// reserved connection on it pre-marked as failing, so the sweep routes it to the
+// bounded unhealthy lane. It returns the tablet's sandboxconn.
+func storeFailingTempTablet(vh *vtgateHandler, hc *discovery.FakeHealthCheck, i int) *sandboxconn.SandboxConn {
+	slow := hc.AddTestTablet("aa", fmt.Sprintf("host-%d", i), int32(i+1), "slowks", fmt.Sprintf("s%d", i), topodatapb.TabletType_PRIMARY, true, 1, nil)
+	slow.ExecDelayResponse = 30 * time.Second
+	st := slow.Tablet()
+	c := &mysql.Conn{ConnectionID: uint32(1000 + i)}
+	vh.tempTableConns.Store(c, &tempTableConn{targets: tempTargets(tempTableHeartbeatTarget{
+		target:     &querypb.Target{Keyspace: st.Keyspace, Shard: st.Shard, TabletType: st.Type},
+		alias:      st.Alias,
+		reservedID: int64(1000 + i),
+		failures:   1, // already failing -> unhealthy lane
+	})})
+	return slow
+}
+
+// TestTempTableHeartbeatFailingTabletsDoNotStarveHealthy proves that a healthy
+// tablet is still refreshed on time even when far more failing tablets than the
+// unhealthy lane holds are saturating it. The healthy tablet is in the separate
+// healthy lane, so it is never queued behind the failing ones — a large partial
+// outage cannot push its gap past the tablet timeout. It would fail on a single
+// shared semaphore that failing tablets fill.
+func TestTempTableHeartbeatFailingTabletsDoNotStarveHealthy(t *testing.T) {
 	origInterval := tempTableHeartbeatTime
-	tempTableHeartbeatTime = 20 * time.Second // spread window 2.5s, budget 10s
+	tempTableHeartbeatTime = 20 * time.Second // budget 10s
 	t.Cleanup(func() { tempTableHeartbeatTime = origInterval })
 
 	executor, sbcHealthy, _, _, ctx := createExecutorEnv(t)
@@ -2204,22 +2222,13 @@ func TestTempTableHeartbeatManySlowTabletsDoNotStarveHealthy(t *testing.T) {
 	vh := newVtgateHandler(vtg)
 	hc := executor.scatterConn.gateway.hc.(*discovery.FakeHealthCheck)
 
-	// Far more distinct slow tablets than any per-sweep concurrency cap, each
-	// blocking every beat well past the budget.
-	const slowTablets = tempTableBeatSpreadThreshold + 6
-	for i := range slowTablets {
-		slow := hc.AddTestTablet("aa", fmt.Sprintf("host-%d", i), int32(i+1), "slowks", fmt.Sprintf("s%d", i), topodatapb.TabletType_PRIMARY, true, 1, nil)
-		slow.ExecDelayResponse = 30 * time.Second
-		st := slow.Tablet()
-		c := &mysql.Conn{ConnectionID: uint32(1000 + i)}
-		vh.tempTableConns.Store(c, &tempTableConn{targets: tempTargets(tempTableHeartbeatTarget{
-			target:     &querypb.Target{Keyspace: st.Keyspace, Shard: st.Shard, TabletType: st.Type},
-			alias:      st.Alias,
-			reservedID: int64(1000 + i),
-		})})
+	// Far more failing tablets than the unhealthy lane holds, each blocking past
+	// the budget, so the unhealthy lane stays saturated.
+	for i := range tempTableBeatUnhealthyConcurrency * 4 {
+		storeFailingTempTablet(vh, hc, i)
 	}
 
-	// One healthy tablet, on its own goroutine like every other.
+	// One healthy tablet.
 	th := sbcHealthy.Tablet()
 	cHealthy := &mysql.Conn{ConnectionID: 1}
 	vh.tempTableConns.Store(cHealthy, &tempTableConn{targets: tempTargets(tempTableHeartbeatTarget{
@@ -2234,11 +2243,56 @@ func TestTempTableHeartbeatManySlowTabletsDoNotStarveHealthy(t *testing.T) {
 	go func() { defer close(done); vh.sendTempTableHeartbeats(hbCtx) }()
 	t.Cleanup(func() { hbCancel(); <-done })
 
-	// The healthy tablet must be beaten within its spread window plus margin —
-	// well under the budget each slow tablet holds — so it is never queued
-	// behind the many slow tablets.
-	require.Eventually(t, func() bool { return sbcHealthy.ExecCount.Load() > before }, 7*time.Second, 5*time.Millisecond,
-		"the healthy tablet must be beaten without waiting on the slow tablets")
+	// The healthy tablet must be beaten promptly — well under the budget the
+	// failing tablets hold — because its healthy lane is independent of the
+	// saturated unhealthy lane.
+	require.Eventually(t, func() bool { return sbcHealthy.ExecCount.Load() > before }, 5*time.Second, 5*time.Millisecond,
+		"the healthy tablet must be beaten without waiting on the saturated unhealthy lane")
+}
+
+// TestTempTableHeartbeatBoundsInFlightBeats proves that a broad outage cannot
+// keep an unbounded number of beats in flight: no matter how many failing
+// tablets there are, the unhealthy lane holds at most its cap open at once. The
+// beats block past the budget, so within the budget window none complete and the
+// summed entry count of the failing tablets equals the beats actually in flight.
+func TestTempTableHeartbeatBoundsInFlightBeats(t *testing.T) {
+	origInterval := tempTableHeartbeatTime
+	tempTableHeartbeatTime = 20 * time.Second // budget 10s
+	t.Cleanup(func() { tempTableHeartbeatTime = origInterval })
+
+	executor, _, _, _, ctx := createExecutorEnv(t)
+	vsm := newVStreamManager(executor.resolver.resolver, executor.serv, "aa")
+	vtg := newVTGate(executor, executor.resolver, vsm, nil, executor.scatterConn.gateway)
+	vh := newVtgateHandler(vtg)
+	hc := executor.scatterConn.gateway.hc.(*discovery.FakeHealthCheck)
+
+	var conns []*sandboxconn.SandboxConn
+	for i := range tempTableBeatUnhealthyConcurrency * 4 {
+		conns = append(conns, storeFailingTempTablet(vh, hc, i))
+	}
+
+	done := make(chan struct{})
+	hbCtx, hbCancel := context.WithCancel(ctx)
+	go func() { defer close(done); vh.sendTempTableHeartbeats(hbCtx) }()
+	t.Cleanup(func() { hbCancel(); <-done })
+
+	// Each failing tablet increments its exec count on entry and then blocks past
+	// the budget, so before any beat completes the sum is the number in flight.
+	inFlight := func() int64 {
+		var n int64
+		for _, c := range conns {
+			n += c.ExecCount.Load()
+		}
+		return n
+	}
+	// The lane fills to its cap...
+	require.Eventually(t, func() bool { return inFlight() >= int64(tempTableBeatUnhealthyConcurrency) }, 5*time.Second, time.Millisecond,
+		"the unhealthy lane should fill to its cap")
+	// ...and never exceeds it, however many failing tablets are registered.
+	for range 50 {
+		require.LessOrEqual(t, inFlight(), int64(tempTableBeatUnhealthyConcurrency),
+			"beats in flight must never exceed the unhealthy lane cap")
+	}
 }
 
 // TestTempTableHeartbeatMultiTargetNoStarvation proves that a session with a
@@ -2342,33 +2396,11 @@ func TestTempTableBeatBudget(t *testing.T) {
 		require.Equal(t, tc.want, got, "budget for interval %s", tc.interval)
 		require.Less(t, got, tc.interval, "budget must stay below the interval for %s", tc.interval)
 		// The worst-case gap the workload timeout must clear is the interval
-		// plus the per-tablet spread window plus one RPC round-trip (bounded by
-		// the budget), not the interval alone, since the tablet refreshes the
-		// timer only on delivery.
-		require.Equal(t, tc.interval+tempTableBeatJitterWindow(tc.interval)+got, tempTableBeatWorstCaseGap(tc.interval),
+		// plus one RPC round-trip (bounded by the budget), not the interval
+		// alone, since the tablet refreshes the timer only on delivery.
+		require.Equal(t, tc.interval+got, tempTableBeatWorstCaseGap(tc.interval),
 			"worst-case gap for interval %s", tc.interval)
 	}
-}
-
-// TestTempTableBeatJitter verifies the per-tablet spread offset: none below the
-// spread threshold, and a stable offset within [0, window) above it — including
-// for large windows that would overflow a naive int64 hash*window product.
-func TestTempTableBeatJitter(t *testing.T) {
-	// Below the spread threshold, touches fire immediately (no stagger).
-	require.Zero(t, tempTableBeatJitter("aa-1", tempTableBeatSpreadThreshold, time.Second))
-
-	// Above the threshold, a stable offset within the window.
-	const window = 8 * time.Second
-	count := tempTableBeatSpreadThreshold + 1
-	for _, alias := range []string{"aa-1", "aa-2", "bb-9", "cell-12345"} {
-		d := tempTableBeatJitter(alias, count, window)
-		require.GreaterOrEqual(t, d, time.Duration(0))
-		require.Less(t, d, window, "jitter must stay within the window")
-		require.Equal(t, d, tempTableBeatJitter(alias, count, window), "jitter must be stable for an alias")
-	}
-
-	// A large window (which would overflow uint64 hash*window) stays bounded.
-	require.Less(t, tempTableBeatJitter("cell-99999", count, 90*time.Second), 90*time.Second)
 }
 
 // TestTempTableHeartbeatSweepWithinBudget verifies that a sweep containing an
