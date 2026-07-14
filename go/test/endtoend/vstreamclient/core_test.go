@@ -18,7 +18,6 @@ package vstreamclient
 
 import (
 	"context"
-	"fmt"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -273,59 +272,7 @@ func TestVStreamClientHandlesDDL(t *testing.T) {
 	}
 }
 
-// TestVStreamClientReuseBatchSlice verifies the opt-in batch reuse mode actually
-// reuses batch backing storage, which matters for allocation-sensitive consumers.
-func TestVStreamClientReuseBatchSlice(t *testing.T) {
-	te := newTestEnv(t)
-
-	batchPointers := make(chan string, 2)
-	newClient := func(t *testing.T) *vstreamclient.VStreamClient {
-		t.Helper()
-		return te.newDefaultClient(t, t.Name(), []vstreamclient.TableConfig{{
-			Keyspace:        "customer",
-			Table:           "customer",
-			Query:           "select * from customer where id between 1960 and 1969",
-			MaxRowsPerFlush: 2,
-			ReuseBatchSlice: true,
-			DataType:        &Customer{},
-			FlushFn: func(_ context.Context, rows []vstreamclient.Row, _ vstreamclient.FlushMeta) error {
-				pointer := ""
-				if len(rows) > 0 {
-					pointer = fmt.Sprintf("%p", &rows[0])
-				}
-				select {
-				case batchPointers <- pointer:
-				default:
-				}
-				return nil
-			},
-		}})
-	}
-
-	te.exec(t, "insert into customer.customer(id, email) values (1961, 'reuse-a@domain.com'), (1962, 'reuse-b@domain.com')", nil)
-	vstreamClient := newClient(t)
-	runCtx, cancelRun, runErrCh := te.runAsync(vstreamClient, 4*time.Second)
-	defer cancelRun()
-	var firstPointer string
-	select {
-	case firstPointer = <-batchPointers:
-	case <-time.After(3 * time.Second):
-		t.Fatal("timed out waiting for first batch flush")
-	}
-
-	te.exec(t, "insert into customer.customer(id, email) values (1963, 'reuse-c@domain.com'), (1964, 'reuse-d@domain.com')", nil)
-	var secondPointer string
-	select {
-	case secondPointer = <-batchPointers:
-	case <-time.After(3 * time.Second):
-		t.Fatal("timed out waiting for second batch flush")
-	}
-
-	cancelRun()
-	err := <-runErrCh
-	if err != nil && runCtx.Err() == nil {
-		t.Fatalf("failed to run vstreamclient: %v", err)
-	}
-
-	assert.Equal(t, firstPointer, secondPointer)
-}
+// The batch-reuse contract of ReuseBatchSlice is pinned deterministically by the unit test
+// TestResetBatch_ReuseBatchSlice in the vstreamclient package. An e2e version comparing batch
+// addresses across flushes can false-pass: without reuse, the previous batch is garbage by the
+// time the next one is allocated, so the allocator may legitimately return the same address.

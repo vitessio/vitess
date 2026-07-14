@@ -119,39 +119,52 @@ func TestVStreamClientGracefulShutdownChanStopsOnThresholdFlush(t *testing.T) {
 	}
 }
 
-// TestVStreamClientIgnoresNoOpTransactions verifies unrelated writes do not
-// trigger flushes for a filtered stream, which avoids noisy false-positive work.
+// TestVStreamClientIgnoresNoOpTransactions verifies transactions in the streamed keyspace whose
+// rows are all filtered out (here: a write to a table the stream doesn't match) still stream
+// BEGIN/VGTID/COMMIT events but never invoke FlushFn. The sentinel row is written after the no-op
+// transaction, so binlog order guarantees that once the sentinel arrives, any phantom delivery
+// from the no-op transaction would already have been observed.
 func TestVStreamClientIgnoresNoOpTransactions(t *testing.T) {
 	te := newTestEnv(t)
 
-	var flushCount atomic.Int32
-	vstreamClient := te.newDefaultClient(t, t.Name(), []vstreamclient.TableConfig{{
-		Keyspace:        "customer",
-		Table:           "customer",
-		Query:           "select * from customer where id between 2900 and 2999",
-		MaxRowsPerFlush: 10,
-		DataType:        &Customer{},
-		FlushFn: func(_ context.Context, _ []vstreamclient.Row, _ vstreamclient.FlushMeta) error {
-			flushCount.Add(1)
-			return nil
-		},
-	}})
-
-	runCtx, cancelRun, runErrCh := te.runAsync(vstreamClient, 2*time.Second)
-	defer cancelRun()
-
-	te.exec(t, "insert into accounting.customer(id, email) values (2901, 'unrelated@domain.com')", nil)
-
-	assert.Never(t, func() bool {
-		return flushCount.Load() > 0
-	}, 1500*time.Millisecond, 100*time.Millisecond)
-
-	cancelRun()
-	err := <-runErrCh
-	if err != nil && runCtx.Err() == nil {
-		t.Fatalf("failed to run vstreamclient: %v", err)
+	newClient := func(flushFn vstreamclient.FlushFunc) *vstreamclient.VStreamClient {
+		return te.newDefaultClient(t, t.Name(), []vstreamclient.TableConfig{{
+			Keyspace:        "customer",
+			Table:           "customer",
+			Query:           "select * from customer where id between 2900 and 2999",
+			MaxRowsPerFlush: 10,
+			DataType:        &Customer{},
+			FlushFn:         flushFn,
+		}})
 	}
-	assert.Zero(t, flushCount.Load())
+
+	// complete the copy phase first, so the writes below arrive through streaming
+	te.runUntilCopyCompleted(t, newClient(func(_ context.Context, _ []vstreamclient.Row, _ vstreamclient.FlushMeta) error { return nil }), t.Name())
+
+	var got []*Customer
+	var flushCalls atomic.Int32
+	var sentinelSeen atomic.Bool
+	sentinel := &Customer{ID: 2902, Email: "noop-sentinel@domain.com"}
+	client := newClient(func(_ context.Context, rows []vstreamclient.Row, _ vstreamclient.FlushMeta) error {
+		flushCalls.Add(1)
+		for _, row := range rows {
+			customer := row.Data.(*Customer)
+			got = append(got, customer)
+			if customer.ID == sentinel.ID {
+				sentinelSeen.Store(true)
+			}
+		}
+		return nil
+	})
+
+	// a no-op transaction for this stream: same keyspace, but a table the filter doesn't match
+	te.exec(t, "insert into customer.purchases(id, customer_id, note) values (2901, 2901, 'noop-tx')", nil)
+	te.exec(t, "insert into customer.customer(id, email) values(:id, :email)", customerBindVars(sentinel.ID, sentinel.Email))
+
+	te.runUntil(t, client, sentinelSeen.Load)
+
+	assert.Equal(t, []*Customer{sentinel}, got)
+	assert.Equal(t, int32(1), flushCalls.Load())
 }
 
 // TestVStreamClientGracefulShutdownClosesMultiTableClient verifies

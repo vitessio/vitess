@@ -550,7 +550,7 @@ func TestInitTables_SetsDefaults(t *testing.T) {
 	assert.Equal(t, DefaultMaxRowsPerFlush, cap(table.currentBatch))
 }
 
-func TestInitTables_RejectsDuplicateTables(t *testing.T) {
+func TestInitTables_AllowsSameTableAcrossKeyspaces(t *testing.T) {
 	v := &VStreamClient{
 		shardsByKeyspace: map[string][]string{"ks1": {"0"}, "ks2": {"0"}},
 		tables:           make(map[string]*TableConfig),
@@ -563,6 +563,20 @@ func TestInitTables_RejectsDuplicateTables(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, v.tables, qualifiedTableName("ks1", "t"))
 	assert.Contains(t, v.tables, qualifiedTableName("ks2", "t"))
+}
+
+func TestInitTables_RejectsDuplicateTables(t *testing.T) {
+	v := &VStreamClient{
+		shardsByKeyspace: map[string][]string{"ks1": {"0"}},
+		tables:           make(map[string]*TableConfig),
+	}
+
+	err := v.initTables([]TableConfig{
+		{Keyspace: "ks1", Table: "t", DataType: &testRowSmall{}, FlushFn: func(context.Context, []Row, FlushMeta) error { return nil }},
+		{Keyspace: "ks1", Table: "t", DataType: &testRowSmall{}, FlushFn: func(context.Context, []Row, FlushMeta) error { return nil }},
+	})
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "duplicate table ks1.t")
 }
 
 func TestInitTables_RejectsConflictingQueriesForSameTableAcrossKeyspaces(t *testing.T) {
