@@ -25,13 +25,11 @@
 package query
 
 import (
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
-
-	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
-
 	topodata "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpc "vitess.io/vitess/go/vt/proto/vtrpc"
 )
@@ -6367,99 +6365,97 @@ func file_query_proto_rawDescGZIP() []byte {
 	return file_query_proto_rawDescData
 }
 
-var (
-	file_query_proto_enumTypes = make([]protoimpl.EnumInfo, 13)
-	file_query_proto_msgTypes  = make([]protoimpl.MessageInfo, 70)
-	file_query_proto_goTypes   = []any{
-		(MySqlFlag)(0),                            // 0: query.MySqlFlag
-		(Flag)(0),                                 // 1: query.Flag
-		(Type)(0),                                 // 2: query.Type
-		(StartCommitState)(0),                     // 3: query.StartCommitState
-		(TransactionState)(0),                     // 4: query.TransactionState
-		(SchemaTableType)(0),                      // 5: query.SchemaTableType
-		(ExecuteOptions_IncludedFields)(0),        // 6: query.ExecuteOptions.IncludedFields
-		(ExecuteOptions_Workload)(0),              // 7: query.ExecuteOptions.Workload
-		(ExecuteOptions_TransactionIsolation)(0),  // 8: query.ExecuteOptions.TransactionIsolation
-		(ExecuteOptions_PlannerVersion)(0),        // 9: query.ExecuteOptions.PlannerVersion
-		(ExecuteOptions_Consolidator)(0),          // 10: query.ExecuteOptions.Consolidator
-		(ExecuteOptions_TransactionAccessMode)(0), // 11: query.ExecuteOptions.TransactionAccessMode
-		(StreamEvent_Statement_Category)(0),       // 12: query.StreamEvent.Statement.Category
-		(*Target)(nil),                            // 13: query.Target
-		(*VTGateCallerID)(nil),                    // 14: query.VTGateCallerID
-		(*EventToken)(nil),                        // 15: query.EventToken
-		(*Value)(nil),                             // 16: query.Value
-		(*BindVariable)(nil),                      // 17: query.BindVariable
-		(*BoundQuery)(nil),                        // 18: query.BoundQuery
-		(*ExecuteOptions)(nil),                    // 19: query.ExecuteOptions
-		(*Field)(nil),                             // 20: query.Field
-		(*Row)(nil),                               // 21: query.Row
-		(*QueryResult)(nil),                       // 22: query.QueryResult
-		(*QueryWarning)(nil),                      // 23: query.QueryWarning
-		(*StreamEvent)(nil),                       // 24: query.StreamEvent
-		(*ExecuteRequest)(nil),                    // 25: query.ExecuteRequest
-		(*ExecuteResponse)(nil),                   // 26: query.ExecuteResponse
-		(*ResultWithError)(nil),                   // 27: query.ResultWithError
-		(*StreamExecuteRequest)(nil),              // 28: query.StreamExecuteRequest
-		(*StreamExecuteResponse)(nil),             // 29: query.StreamExecuteResponse
-		(*BeginRequest)(nil),                      // 30: query.BeginRequest
-		(*BeginResponse)(nil),                     // 31: query.BeginResponse
-		(*CommitRequest)(nil),                     // 32: query.CommitRequest
-		(*CommitResponse)(nil),                    // 33: query.CommitResponse
-		(*RollbackRequest)(nil),                   // 34: query.RollbackRequest
-		(*RollbackResponse)(nil),                  // 35: query.RollbackResponse
-		(*PrepareRequest)(nil),                    // 36: query.PrepareRequest
-		(*PrepareResponse)(nil),                   // 37: query.PrepareResponse
-		(*CommitPreparedRequest)(nil),             // 38: query.CommitPreparedRequest
-		(*CommitPreparedResponse)(nil),            // 39: query.CommitPreparedResponse
-		(*RollbackPreparedRequest)(nil),           // 40: query.RollbackPreparedRequest
-		(*RollbackPreparedResponse)(nil),          // 41: query.RollbackPreparedResponse
-		(*CreateTransactionRequest)(nil),          // 42: query.CreateTransactionRequest
-		(*CreateTransactionResponse)(nil),         // 43: query.CreateTransactionResponse
-		(*StartCommitRequest)(nil),                // 44: query.StartCommitRequest
-		(*StartCommitResponse)(nil),               // 45: query.StartCommitResponse
-		(*SetRollbackRequest)(nil),                // 46: query.SetRollbackRequest
-		(*SetRollbackResponse)(nil),               // 47: query.SetRollbackResponse
-		(*ConcludeTransactionRequest)(nil),        // 48: query.ConcludeTransactionRequest
-		(*ConcludeTransactionResponse)(nil),       // 49: query.ConcludeTransactionResponse
-		(*ReadTransactionRequest)(nil),            // 50: query.ReadTransactionRequest
-		(*ReadTransactionResponse)(nil),           // 51: query.ReadTransactionResponse
-		(*UnresolvedTransactionsRequest)(nil),     // 52: query.UnresolvedTransactionsRequest
-		(*UnresolvedTransactionsResponse)(nil),    // 53: query.UnresolvedTransactionsResponse
-		(*BeginExecuteRequest)(nil),               // 54: query.BeginExecuteRequest
-		(*BeginExecuteResponse)(nil),              // 55: query.BeginExecuteResponse
-		(*BeginStreamExecuteRequest)(nil),         // 56: query.BeginStreamExecuteRequest
-		(*BeginStreamExecuteResponse)(nil),        // 57: query.BeginStreamExecuteResponse
-		(*MessageStreamRequest)(nil),              // 58: query.MessageStreamRequest
-		(*MessageStreamResponse)(nil),             // 59: query.MessageStreamResponse
-		(*MessageAckRequest)(nil),                 // 60: query.MessageAckRequest
-		(*MessageAckResponse)(nil),                // 61: query.MessageAckResponse
-		(*ReserveExecuteRequest)(nil),             // 62: query.ReserveExecuteRequest
-		(*ReserveExecuteResponse)(nil),            // 63: query.ReserveExecuteResponse
-		(*ReserveStreamExecuteRequest)(nil),       // 64: query.ReserveStreamExecuteRequest
-		(*ReserveStreamExecuteResponse)(nil),      // 65: query.ReserveStreamExecuteResponse
-		(*ReserveBeginExecuteRequest)(nil),        // 66: query.ReserveBeginExecuteRequest
-		(*ReserveBeginExecuteResponse)(nil),       // 67: query.ReserveBeginExecuteResponse
-		(*ReserveBeginStreamExecuteRequest)(nil),  // 68: query.ReserveBeginStreamExecuteRequest
-		(*ReserveBeginStreamExecuteResponse)(nil), // 69: query.ReserveBeginStreamExecuteResponse
-		(*ReleaseRequest)(nil),                    // 70: query.ReleaseRequest
-		(*ReleaseResponse)(nil),                   // 71: query.ReleaseResponse
-		(*StreamHealthRequest)(nil),               // 72: query.StreamHealthRequest
-		(*RealtimeStats)(nil),                     // 73: query.RealtimeStats
-		(*AggregateStats)(nil),                    // 74: query.AggregateStats
-		(*StreamHealthResponse)(nil),              // 75: query.StreamHealthResponse
-		(*TransactionMetadata)(nil),               // 76: query.TransactionMetadata
-		(*GetSchemaRequest)(nil),                  // 77: query.GetSchemaRequest
-		(*UDFInfo)(nil),                           // 78: query.UDFInfo
-		(*GetSchemaResponse)(nil),                 // 79: query.GetSchemaResponse
-		nil,                                       // 80: query.BoundQuery.BindVariablesEntry
-		(*StreamEvent_Statement)(nil),             // 81: query.StreamEvent.Statement
-		nil,                                       // 82: query.GetSchemaResponse.TableDefinitionEntry
-		(topodata.TabletType)(0),                  // 83: topodata.TabletType
-		(*vtrpc.CallerID)(nil),                    // 84: vtrpc.CallerID
-		(*vtrpc.RPCError)(nil),                    // 85: vtrpc.RPCError
-		(*topodata.TabletAlias)(nil),              // 86: topodata.TabletAlias
-	}
-)
+var file_query_proto_enumTypes = make([]protoimpl.EnumInfo, 13)
+var file_query_proto_msgTypes = make([]protoimpl.MessageInfo, 70)
+var file_query_proto_goTypes = []any{
+	(MySqlFlag)(0),                            // 0: query.MySqlFlag
+	(Flag)(0),                                 // 1: query.Flag
+	(Type)(0),                                 // 2: query.Type
+	(StartCommitState)(0),                     // 3: query.StartCommitState
+	(TransactionState)(0),                     // 4: query.TransactionState
+	(SchemaTableType)(0),                      // 5: query.SchemaTableType
+	(ExecuteOptions_IncludedFields)(0),        // 6: query.ExecuteOptions.IncludedFields
+	(ExecuteOptions_Workload)(0),              // 7: query.ExecuteOptions.Workload
+	(ExecuteOptions_TransactionIsolation)(0),  // 8: query.ExecuteOptions.TransactionIsolation
+	(ExecuteOptions_PlannerVersion)(0),        // 9: query.ExecuteOptions.PlannerVersion
+	(ExecuteOptions_Consolidator)(0),          // 10: query.ExecuteOptions.Consolidator
+	(ExecuteOptions_TransactionAccessMode)(0), // 11: query.ExecuteOptions.TransactionAccessMode
+	(StreamEvent_Statement_Category)(0),       // 12: query.StreamEvent.Statement.Category
+	(*Target)(nil),                            // 13: query.Target
+	(*VTGateCallerID)(nil),                    // 14: query.VTGateCallerID
+	(*EventToken)(nil),                        // 15: query.EventToken
+	(*Value)(nil),                             // 16: query.Value
+	(*BindVariable)(nil),                      // 17: query.BindVariable
+	(*BoundQuery)(nil),                        // 18: query.BoundQuery
+	(*ExecuteOptions)(nil),                    // 19: query.ExecuteOptions
+	(*Field)(nil),                             // 20: query.Field
+	(*Row)(nil),                               // 21: query.Row
+	(*QueryResult)(nil),                       // 22: query.QueryResult
+	(*QueryWarning)(nil),                      // 23: query.QueryWarning
+	(*StreamEvent)(nil),                       // 24: query.StreamEvent
+	(*ExecuteRequest)(nil),                    // 25: query.ExecuteRequest
+	(*ExecuteResponse)(nil),                   // 26: query.ExecuteResponse
+	(*ResultWithError)(nil),                   // 27: query.ResultWithError
+	(*StreamExecuteRequest)(nil),              // 28: query.StreamExecuteRequest
+	(*StreamExecuteResponse)(nil),             // 29: query.StreamExecuteResponse
+	(*BeginRequest)(nil),                      // 30: query.BeginRequest
+	(*BeginResponse)(nil),                     // 31: query.BeginResponse
+	(*CommitRequest)(nil),                     // 32: query.CommitRequest
+	(*CommitResponse)(nil),                    // 33: query.CommitResponse
+	(*RollbackRequest)(nil),                   // 34: query.RollbackRequest
+	(*RollbackResponse)(nil),                  // 35: query.RollbackResponse
+	(*PrepareRequest)(nil),                    // 36: query.PrepareRequest
+	(*PrepareResponse)(nil),                   // 37: query.PrepareResponse
+	(*CommitPreparedRequest)(nil),             // 38: query.CommitPreparedRequest
+	(*CommitPreparedResponse)(nil),            // 39: query.CommitPreparedResponse
+	(*RollbackPreparedRequest)(nil),           // 40: query.RollbackPreparedRequest
+	(*RollbackPreparedResponse)(nil),          // 41: query.RollbackPreparedResponse
+	(*CreateTransactionRequest)(nil),          // 42: query.CreateTransactionRequest
+	(*CreateTransactionResponse)(nil),         // 43: query.CreateTransactionResponse
+	(*StartCommitRequest)(nil),                // 44: query.StartCommitRequest
+	(*StartCommitResponse)(nil),               // 45: query.StartCommitResponse
+	(*SetRollbackRequest)(nil),                // 46: query.SetRollbackRequest
+	(*SetRollbackResponse)(nil),               // 47: query.SetRollbackResponse
+	(*ConcludeTransactionRequest)(nil),        // 48: query.ConcludeTransactionRequest
+	(*ConcludeTransactionResponse)(nil),       // 49: query.ConcludeTransactionResponse
+	(*ReadTransactionRequest)(nil),            // 50: query.ReadTransactionRequest
+	(*ReadTransactionResponse)(nil),           // 51: query.ReadTransactionResponse
+	(*UnresolvedTransactionsRequest)(nil),     // 52: query.UnresolvedTransactionsRequest
+	(*UnresolvedTransactionsResponse)(nil),    // 53: query.UnresolvedTransactionsResponse
+	(*BeginExecuteRequest)(nil),               // 54: query.BeginExecuteRequest
+	(*BeginExecuteResponse)(nil),              // 55: query.BeginExecuteResponse
+	(*BeginStreamExecuteRequest)(nil),         // 56: query.BeginStreamExecuteRequest
+	(*BeginStreamExecuteResponse)(nil),        // 57: query.BeginStreamExecuteResponse
+	(*MessageStreamRequest)(nil),              // 58: query.MessageStreamRequest
+	(*MessageStreamResponse)(nil),             // 59: query.MessageStreamResponse
+	(*MessageAckRequest)(nil),                 // 60: query.MessageAckRequest
+	(*MessageAckResponse)(nil),                // 61: query.MessageAckResponse
+	(*ReserveExecuteRequest)(nil),             // 62: query.ReserveExecuteRequest
+	(*ReserveExecuteResponse)(nil),            // 63: query.ReserveExecuteResponse
+	(*ReserveStreamExecuteRequest)(nil),       // 64: query.ReserveStreamExecuteRequest
+	(*ReserveStreamExecuteResponse)(nil),      // 65: query.ReserveStreamExecuteResponse
+	(*ReserveBeginExecuteRequest)(nil),        // 66: query.ReserveBeginExecuteRequest
+	(*ReserveBeginExecuteResponse)(nil),       // 67: query.ReserveBeginExecuteResponse
+	(*ReserveBeginStreamExecuteRequest)(nil),  // 68: query.ReserveBeginStreamExecuteRequest
+	(*ReserveBeginStreamExecuteResponse)(nil), // 69: query.ReserveBeginStreamExecuteResponse
+	(*ReleaseRequest)(nil),                    // 70: query.ReleaseRequest
+	(*ReleaseResponse)(nil),                   // 71: query.ReleaseResponse
+	(*StreamHealthRequest)(nil),               // 72: query.StreamHealthRequest
+	(*RealtimeStats)(nil),                     // 73: query.RealtimeStats
+	(*AggregateStats)(nil),                    // 74: query.AggregateStats
+	(*StreamHealthResponse)(nil),              // 75: query.StreamHealthResponse
+	(*TransactionMetadata)(nil),               // 76: query.TransactionMetadata
+	(*GetSchemaRequest)(nil),                  // 77: query.GetSchemaRequest
+	(*UDFInfo)(nil),                           // 78: query.UDFInfo
+	(*GetSchemaResponse)(nil),                 // 79: query.GetSchemaResponse
+	nil,                                       // 80: query.BoundQuery.BindVariablesEntry
+	(*StreamEvent_Statement)(nil),             // 81: query.StreamEvent.Statement
+	nil,                                       // 82: query.GetSchemaResponse.TableDefinitionEntry
+	(topodata.TabletType)(0),                  // 83: topodata.TabletType
+	(*vtrpc.CallerID)(nil),                    // 84: vtrpc.CallerID
+	(*vtrpc.RPCError)(nil),                    // 85: vtrpc.RPCError
+	(*topodata.TabletAlias)(nil),              // 86: topodata.TabletAlias
+}
 var file_query_proto_depIdxs = []int32{
 	83,  // 0: query.Target.tablet_type:type_name -> topodata.TabletType
 	2,   // 1: query.Value.type:type_name -> query.Type

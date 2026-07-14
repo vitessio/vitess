@@ -19,6 +19,7 @@ package vtgate
 import (
 	"context"
 	"fmt"
+	"hash/fnv"
 	"log/slog"
 	"net"
 	"os"
@@ -268,18 +269,19 @@ func (vh *vtgateHandler) tempTableCommandEnd(c *mysql.Conn) {
 		if len(targets) == 0 {
 			return
 		}
-		// A session-level transaction timeout at or below the heartbeat
-		// interval reclaims the reserved connection between beats: the
-		// keepalive cannot protect this session's temp tables. This is
-		// intentional — an explicit session-level timeout is a per-session
-		// choice that wins over the keepalive, unlike the global default,
-		// which the feature deliberately outlives. Surface it once, at
-		// registration.
+		// A session-level transaction timeout that does not exceed the worst-case
+		// keepalive gap — the interval plus one RPC round-trip — reclaims the
+		// reserved connection between beats: the keepalive cannot protect this
+		// session's temp tables. This is intentional — an explicit session-level
+		// timeout is a per-session choice that wins over the keepalive, unlike
+		// the global default, which the feature deliberately outlives. Surface it
+		// once, at registration.
 		session := vh.session(c)
-		if to := time.Duration(session.GetOptions().GetTransactionTimeout()) * time.Millisecond; to > 0 && to <= tempTableHeartbeatTime {
-			log.Warn("session transaction timeout is not above the temp-table heartbeat interval; its temporary tables may still be reclaimed between heartbeats",
+		if to := time.Duration(session.GetOptions().GetTransactionTimeout()) * time.Millisecond; to > 0 && to <= tempTableBeatWorstCaseGap(tempTableHeartbeatTime) {
+			log.Warn("session transaction timeout does not exceed the temp-table heartbeat interval plus one keepalive round-trip; its temporary tables may still be reclaimed between heartbeats",
 				slog.Duration("session_transaction_timeout", to),
-				slog.Duration("temp_table_heartbeat_time", tempTableHeartbeatTime))
+				slog.Duration("temp_table_heartbeat_time", tempTableHeartbeatTime),
+				slog.Duration("worst_case_keepalive_gap", tempTableBeatWorstCaseGap(tempTableHeartbeatTime)))
 		}
 		// The session acquired temporary tables during this command: register
 		// the connection so the background sweeper keeps it alive.
@@ -376,12 +378,63 @@ func (vh *vtgateHandler) snapshotTempTableBeats() map[string][]tempTableBeatItem
 	return byTablet
 }
 
+// tempTableBeatSpreadThreshold is the tablet count above which a sweep spreads
+// its touches across a short window instead of firing them all at once. A
+// vtgate can hold reserved connections on thousands of shards, so touching
+// every tablet at the same instant would fire thousands of simultaneous RPCs
+// each tick; below this count the fanout is small enough to fire immediately.
+// Spreading is deliberately NOT done with a shared concurrency cap: a cap that
+// slow tablets could fill would queue healthy tablets behind them, and a large
+// partial outage could then push a healthy connection's gap past its tablet
+// timeout. Each tablet always runs on its own goroutine, so one slow tablet
+// never delays another — the spread only staggers when each tablet's own
+// goroutine fires its RPC.
+const tempTableBeatSpreadThreshold = 64
+
+// tempTableBeatJitterWindow is the span a large sweep spreads its per-tablet
+// touches over, so a vtgate holding reserved connections on many shards trickles
+// its keepalive RPCs instead of firing them all at once. It is a small fraction
+// of the interval, so a connection's worst-case gap grows only slightly (see
+// tempTableBeatWorstCaseGap).
+func tempTableBeatJitterWindow(interval time.Duration) time.Duration {
+	return interval / 8
+}
+
+// tempTableBeatJitter returns a tablet's stable offset within the spread window,
+// derived from its alias, so it fires at the same point in every sweep (keeping
+// its steady-state gap at one interval) while distinct tablets spread across the
+// window. It returns 0 when there are few enough tablets to fire immediately.
+func tempTableBeatJitter(alias string, tabletCount int, window time.Duration) time.Duration {
+	if tabletCount <= tempTableBeatSpreadThreshold || window <= 0 {
+		return 0
+	}
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(alias))
+	// Scale the 32-bit hash into [0, window) via float to avoid overflowing the
+	// int64 duration for large windows; jitter needs no better precision.
+	return time.Duration(float64(window) * (float64(h.Sum32()) / (1 << 32)))
+}
+
 // beatTempTableByTablet refreshes each tablet's reserved connections on its own
-// goroutine, so a slow or unreachable tablet delays only its own connections.
+// goroutine — so a slow or unreachable tablet delays only its own connections,
+// never a healthy tablet's, regardless of how many tablets are unreachable. When
+// there are many tablets, each goroutine staggers its own RPC by a stable
+// per-tablet offset so the sweep trickles its RPCs rather than firing them all
+// at once; the stagger never gates one tablet on another.
 func (vh *vtgateHandler) beatTempTableByTablet(ctx context.Context, byTablet map[string][]tempTableBeatItem) {
+	window := tempTableBeatJitterWindow(tempTableHeartbeatTime)
+	count := len(byTablet)
 	var wg sync.WaitGroup
-	for _, items := range byTablet {
+	for alias, items := range byTablet {
+		delay := tempTableBeatJitter(alias, count, window)
 		wg.Go(func() {
+			if delay > 0 {
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(delay):
+				}
+			}
 			vh.beatTempTableTablet(ctx, items)
 		})
 	}
@@ -402,6 +455,17 @@ func tempTableBeatBudget(interval time.Duration) time.Duration {
 		budget = capped
 	}
 	return budget
+}
+
+// tempTableBeatWorstCaseGap is the longest a reserved connection can go between
+// tablet-side refreshes: one interval to be seen by the next snapshot, plus the
+// spread window a large sweep staggers its touches over, plus one per-tablet RPC
+// round-trip, which the sweep bounds by the beat budget. The tablet resets the
+// connection's timer only when the touch reaches it and runs (acquire the
+// connection, PeerCheck, unlock), not when the sweep dispatches, so this — not
+// the interval alone — is the gap the workload timeout must exceed.
+func tempTableBeatWorstCaseGap(interval time.Duration) time.Duration {
+	return interval + tempTableBeatJitterWindow(interval) + tempTableBeatBudget(interval)
 }
 
 // sendTempTableHeartbeats snapshots the registry once and refreshes every

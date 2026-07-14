@@ -48,7 +48,6 @@ import (
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
-	p "vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	eschema "vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -2395,7 +2394,7 @@ func TestExecProcClosesConnOnError(t *testing.T) {
 	db.AddRejectedQuery(query, errors.New("procedure failed"))
 
 	qre := newTestQueryExecutor(ctx, tsv, query, conn.ReservedID())
-	require.Equal(t, p.PlanCallProc, qre.plan.PlanID)
+	require.Equal(t, planbuilder.PlanCallProc, qre.plan.PlanID)
 
 	_, err = qre.execProc(conn)
 	require.Error(t, err)

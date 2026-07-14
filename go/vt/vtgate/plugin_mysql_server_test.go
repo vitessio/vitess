@@ -21,6 +21,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"os"
@@ -44,6 +45,7 @@ import (
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
+	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/tlstest"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -2185,6 +2187,60 @@ func TestTempTableHeartbeatHealthyNotStarvedBySlowTablet(t *testing.T) {
 		"healthy connection must be beaten promptly, not starved behind the slow tablet")
 }
 
+// TestTempTableHeartbeatManySlowTabletsDoNotStarveHealthy proves that a healthy
+// tablet is still refreshed on time even when far more than a concurrency cap's
+// worth of distinct tablets are slow or unreachable. Each tablet runs on its own
+// goroutine with no shared concurrency limit, so a large partial outage cannot
+// queue a healthy connection behind the slow ones and push its gap past the
+// tablet timeout. It would fail on a shared semaphore that slow tablets fill.
+func TestTempTableHeartbeatManySlowTabletsDoNotStarveHealthy(t *testing.T) {
+	origInterval := tempTableHeartbeatTime
+	tempTableHeartbeatTime = 20 * time.Second // spread window 2.5s, budget 10s
+	t.Cleanup(func() { tempTableHeartbeatTime = origInterval })
+
+	executor, sbcHealthy, _, _, ctx := createExecutorEnv(t)
+	vsm := newVStreamManager(executor.resolver.resolver, executor.serv, "aa")
+	vtg := newVTGate(executor, executor.resolver, vsm, nil, executor.scatterConn.gateway)
+	vh := newVtgateHandler(vtg)
+	hc := executor.scatterConn.gateway.hc.(*discovery.FakeHealthCheck)
+
+	// Far more distinct slow tablets than any per-sweep concurrency cap, each
+	// blocking every beat well past the budget.
+	const slowTablets = tempTableBeatSpreadThreshold + 6
+	for i := range slowTablets {
+		slow := hc.AddTestTablet("aa", fmt.Sprintf("host-%d", i), int32(i+1), "slowks", fmt.Sprintf("s%d", i), topodatapb.TabletType_PRIMARY, true, 1, nil)
+		slow.ExecDelayResponse = 30 * time.Second
+		st := slow.Tablet()
+		c := &mysql.Conn{ConnectionID: uint32(1000 + i)}
+		vh.tempTableConns.Store(c, &tempTableConn{targets: tempTargets(tempTableHeartbeatTarget{
+			target:     &querypb.Target{Keyspace: st.Keyspace, Shard: st.Shard, TabletType: st.Type},
+			alias:      st.Alias,
+			reservedID: int64(1000 + i),
+		})})
+	}
+
+	// One healthy tablet, on its own goroutine like every other.
+	th := sbcHealthy.Tablet()
+	cHealthy := &mysql.Conn{ConnectionID: 1}
+	vh.tempTableConns.Store(cHealthy, &tempTableConn{targets: tempTargets(tempTableHeartbeatTarget{
+		target:     &querypb.Target{Keyspace: th.Keyspace, Shard: th.Shard, TabletType: th.Type},
+		alias:      th.Alias,
+		reservedID: 1,
+	})})
+
+	before := sbcHealthy.ExecCount.Load()
+	done := make(chan struct{})
+	hbCtx, hbCancel := context.WithCancel(ctx)
+	go func() { defer close(done); vh.sendTempTableHeartbeats(hbCtx) }()
+	t.Cleanup(func() { hbCancel(); <-done })
+
+	// The healthy tablet must be beaten within its spread window plus margin —
+	// well under the budget each slow tablet holds — so it is never queued
+	// behind the many slow tablets.
+	require.Eventually(t, func() bool { return sbcHealthy.ExecCount.Load() > before }, 7*time.Second, 5*time.Millisecond,
+		"the healthy tablet must be beaten without waiting on the slow tablets")
+}
+
 // TestTempTableHeartbeatMultiTargetNoStarvation proves that a session with a
 // stalled secondary reserved connection does not starve an unrelated healthy
 // session on the first session's fast tablet. Because each target is
@@ -2285,7 +2341,34 @@ func TestTempTableBeatBudget(t *testing.T) {
 		got := tempTableBeatBudget(tc.interval)
 		require.Equal(t, tc.want, got, "budget for interval %s", tc.interval)
 		require.Less(t, got, tc.interval, "budget must stay below the interval for %s", tc.interval)
+		// The worst-case gap the workload timeout must clear is the interval
+		// plus the per-tablet spread window plus one RPC round-trip (bounded by
+		// the budget), not the interval alone, since the tablet refreshes the
+		// timer only on delivery.
+		require.Equal(t, tc.interval+tempTableBeatJitterWindow(tc.interval)+got, tempTableBeatWorstCaseGap(tc.interval),
+			"worst-case gap for interval %s", tc.interval)
 	}
+}
+
+// TestTempTableBeatJitter verifies the per-tablet spread offset: none below the
+// spread threshold, and a stable offset within [0, window) above it — including
+// for large windows that would overflow a naive int64 hash*window product.
+func TestTempTableBeatJitter(t *testing.T) {
+	// Below the spread threshold, touches fire immediately (no stagger).
+	require.Zero(t, tempTableBeatJitter("aa-1", tempTableBeatSpreadThreshold, time.Second))
+
+	// Above the threshold, a stable offset within the window.
+	const window = 8 * time.Second
+	count := tempTableBeatSpreadThreshold + 1
+	for _, alias := range []string{"aa-1", "aa-2", "bb-9", "cell-12345"} {
+		d := tempTableBeatJitter(alias, count, window)
+		require.GreaterOrEqual(t, d, time.Duration(0))
+		require.Less(t, d, window, "jitter must stay within the window")
+		require.Equal(t, d, tempTableBeatJitter(alias, count, window), "jitter must be stable for an alias")
+	}
+
+	// A large window (which would overflow uint64 hash*window) stays bounded.
+	require.Less(t, tempTableBeatJitter("cell-99999", count, 90*time.Second), 90*time.Second)
 }
 
 // TestTempTableHeartbeatSweepWithinBudget verifies that a sweep containing an
@@ -2314,6 +2397,42 @@ func TestTempTableHeartbeatSweepWithinBudget(t *testing.T) {
 		"a sweep with an unreachable tablet must complete within the interval, not stretch cadence")
 	require.GreaterOrEqual(t, elapsed, tempTableBeatBudget(tempTableHeartbeatTime),
 		"the beat should run until the budget before timing out")
+}
+
+// TestTempTableHeartbeatDelayedDelivery proves the timing that the worst-case
+// gap accounts for: the tablet refreshes the connection only when the beat is
+// delivered, not when the sweep dispatches it. A tablet that takes D (< budget)
+// to receive and run the touch still gets its connection refreshed, but only
+// after D — so the effective gap is the interval plus this RPC round-trip, which
+// is why the workload timeout must clear interval + budget, not just interval.
+func TestTempTableHeartbeatDelayedDelivery(t *testing.T) {
+	origInterval := tempTableHeartbeatTime
+	tempTableHeartbeatTime = 4 * time.Second // budget = 2s
+	t.Cleanup(func() { tempTableHeartbeatTime = origInterval })
+
+	vtg, sbc, ctx := createVtgateEnv(t)
+	vh := newVtgateHandler(vtg)
+	tablet := sbc.Tablet()
+	target := &querypb.Target{Keyspace: tablet.Keyspace, Shard: tablet.Shard, TabletType: tablet.Type}
+
+	// The tablet delays delivery by less than the budget: the refresh lands, but
+	// only after the delay.
+	const delay = 500 * time.Millisecond
+	sbc.ExecDelayResponse = delay
+	c := &mysql.Conn{ConnectionID: 1}
+	vh.tempTableConns.Store(c, &tempTableConn{targets: tempTargets(tempTableHeartbeatTarget{target: target, alias: tablet.Alias, reservedID: 1})})
+
+	start := time.Now()
+	vh.sendTempTableHeartbeats(ctx)
+	elapsed := time.Since(start)
+
+	require.GreaterOrEqual(t, elapsed, delay,
+		"the effective keepalive is delayed by the RPC round-trip, so the real gap is interval + RPC latency")
+	// The beat still succeeded within the budget: the target is kept, not failed.
+	v, ok := vh.tempTableConns.Load(c)
+	require.True(t, ok, "a beat delivered within the budget must keep the connection registered")
+	require.Zero(t, firstTempTarget(t, v.(*tempTableConn).targets).failures,
+		"a beat delivered within the budget must count as a successful refresh")
 }
 
 // TestTempTableHeartbeatOldTabletSafe verifies the mixed-version behavior: a
