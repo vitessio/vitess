@@ -61,6 +61,8 @@ var (
 	mysqlShellBackupShouldDrain = false
 	// disable redo logging and double write buffer
 	mysqlShellSpeedUpRestore = false
+	// skip the MySQL version compatibility check when restoring from a mysql-shell backup
+	mysqlShellRestoreSkipVersionCheck = false
 
 	// use when checking if we need to create the directory on the local filesystem or not.
 	knownObjectStoreParams = []string{"s3BucketName", "osBucketName", "azureContainerName"}
@@ -107,6 +109,7 @@ func registerMysqlShellBackupEngineFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&mysqlShellLoadFlags, "mysql-shell-load-flags", mysqlShellLoadFlags, "flags to pass to mysql shell load utility. This should be a JSON string")
 	fs.BoolVar(&mysqlShellBackupShouldDrain, "mysql-shell-should-drain", mysqlShellBackupShouldDrain, "decide if we should drain while taking a backup or continue to serving traffic")
 	fs.BoolVar(&mysqlShellSpeedUpRestore, "mysql-shell-speedup-restore", mysqlShellSpeedUpRestore, "speed up restore by disabling redo logging and double write buffer during the restore process")
+	fs.BoolVar(&mysqlShellRestoreSkipVersionCheck, "mysql-shell-restore-skip-version-check", mysqlShellRestoreSkipVersionCheck, "skip the MySQL version compatibility check when restoring from a mysql-shell backup")
 }
 
 // MySQLShellBackupEngine encapsulates the logic to implement the restoration
@@ -437,6 +440,15 @@ func (be *MySQLShellBackupEngine) ShouldDrainForBackup(req *tabletmanagerdatapb.
 // Since MySQL Shell operates on a live MySQL instance, there is no need to start it once the restore is completed
 func (be *MySQLShellBackupEngine) ShouldStartMySQLAfterRestore() bool {
 	return false
+}
+
+// ShouldSkipVersionCheck returns whether the MySQL version compatibility check
+// should be skipped when restoring a mysql-shell backup. Because mysql-shell
+// performs a logical restore, its backups are not tied to the on-disk data
+// dictionary format the way physical backups are, so operators can opt out of
+// the version check via --mysql-shell-restore-skip-version-check.
+func (be *MySQLShellBackupEngine) ShouldSkipVersionCheck() bool {
+	return mysqlShellRestoreSkipVersionCheck
 }
 
 func (be *MySQLShellBackupEngine) Name() string { return mysqlShellBackupEngineName }

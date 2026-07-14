@@ -205,9 +205,7 @@ func ParseBinaryJSONDiff(data []byte) (sqltypes.Value, error) {
 		// character set (e.g. vreplication always uses set names binary).
 		// The generated path will look like this: _utf8mb4'$.role'
 		diff.WriteString(sqlparser.Utf8mb4Str)
-		diff.WriteByte('\'')
-		diff.Write(path)
-		diff.WriteByte('\'')
+		diff.WriteString(sqltypes.EncodeStringSQL(string(path)))
 		if opType == jsonDiffOpRemove { // No value for remove
 			diff.WriteByte(')') // Close the JSON function
 			continue
