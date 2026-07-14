@@ -17,9 +17,18 @@ limitations under the License.
 package vitesst
 
 import (
+	"maps"
 	"os"
 	"strings"
 )
+
+// Image resolves the Docker image for Vitess components, for tests that run
+// extra containers from the same image. The VITESST_IMAGE environment
+// variable overrides everything; otherwise the image tag is derived from the
+// MySQL version (e.g. "vitesst:mysql84").
+func Image(mysqlVersion string) string {
+	return vitesstImage(mysqlVersion)
+}
 
 // vitesstImage resolves the Docker image for Vitess components. The
 // VITESST_IMAGE environment variable overrides everything; otherwise the
@@ -29,4 +38,10 @@ func vitesstImage(mysqlVersion string) string {
 		return image
 	}
 	return "vitesst:mysql" + strings.ReplaceAll(mysqlVersion, ".", "")
+}
+
+// mergeEnv overlays extra environment variables onto base.
+func mergeEnv(base, extra map[string]string) map[string]string {
+	maps.Copy(base, extra)
+	return base
 }

@@ -26,22 +26,24 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/test/vitesst"
 	"vitess.io/vitess/go/vt/dbconfigs"
-	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
-	"vitess.io/vitess/go/vt/vttest"
 	"vitess.io/vitess/go/vt/vttls"
 )
 
 func TestConnectUnamanagedMySQLRequiringSSLSuccess(t *testing.T) {
 	testUser := "vt_test_user"
-	cluster, cleanup, err := startMySQLWithSSLRequired(t, testUser)
+	connParams, cleanup, err := startMySQLWithSSLRequired(t, testUser)
 	require.NoError(t, err)
 	defer cleanup()
 
@@ -49,108 +51,124 @@ func TestConnectUnamanagedMySQLRequiringSSLSuccess(t *testing.T) {
 	tc1.Unmanaged = true
 	tc1.DB = &dbconfigs.DBConfigs{}
 
-	connParams := cluster.MySQLTCPConnParams()
 	connParams.Uname = testUser
 	connParams.Pass = "password"
 	tc1.DB.SetDbParams(connParams, mysql.ConnParams{}, mysql.ConnParams{})
 
-	tc1.DB.Host = "127.0.0.1"
+	tc1.DB.Host = connParams.Host
 	tc1.DB.Port = connParams.Port
 	tc1.DB.Socket = ""
 	tc1.DB.DBName = connParams.DbName
 	tc1.DB.App.User = testUser
 	tc1.DB.App.Password = "password"
 	tc1.DB.SslMode = vttls.Required
-	tc1.DB.SslCa = cluster.MySQLTCPConnParams().SslCa
-	tc1.DB.SslCert = cluster.MySQLTCPConnParams().SslCert
-	tc1.DB.SslKey = cluster.MySQLTCPConnParams().SslKey
+	tc1.DB.SslCa = connParams.SslCa
+	tc1.DB.SslCert = connParams.SslCert
+	tc1.DB.SslKey = connParams.SslKey
 
 	err = tc1.Verify()
 	require.NoError(t, err)
 }
 
-func startMySQLWithSSLRequired(t *testing.T, testUser string) (vttest.LocalCluster, func(), error) {
+func startMySQLWithSSLRequired(t *testing.T, testUser string) (mysql.ConnParams, func(), error) {
+	ctx := t.Context()
+
 	certDir := t.TempDir()
 	caFile, serverCertFile, serverKeyFile := createTestSSLCerts(t, certDir)
 
-	cfg := vttest.Config{
-		Topology: &vttestpb.VTTestTopology{
-			Keyspaces: []*vttestpb.Keyspace{
-				{
-					Name: "vttest",
-					Shards: []*vttestpb.Shard{
-						{
-							Name:           "0",
-							DbNameOverride: "vttest",
-						},
-					},
-				},
-			},
-		},
-		OnlyMySQL: true,
-		Charset:   "utf8mb4",
-		ExtraMyCnf: []string{
-			"[mysqld]",
-			"require_secure_transport=ON",
-			"ssl-ca=" + caFile,
-			"ssl-cert=" + serverCertFile,
-			"ssl-key=" + serverKeyFile,
-		},
-	}
+	caBytes, err := os.ReadFile(caFile)
+	require.NoError(t, err)
+	certBytes, err := os.ReadFile(serverCertFile)
+	require.NoError(t, err)
+	keyBytes, err := os.ReadFile(serverKeyFile)
+	require.NoError(t, err)
 
-	// Create a temporary .cnf file with the SSL configuration if provided
-	var tempCnfFilePath string
-	if len(cfg.ExtraMyCnf) > 0 {
-		tempCnfFile, cnfErr := os.CreateTemp(t.TempDir(), "mysql_ssl_config-*.cnf")
-		require.NoError(t, cnfErr)
-		defer tempCnfFile.Close()
+	const (
+		filesDir    = "/vt/files"
+		caPath      = filesDir + "/ssl-ca.pem"
+		certPath    = filesDir + "/ssl-cert.pem"
+		keyPath     = filesDir + "/ssl-key.pem"
+		cnfPath     = filesDir + "/secure.cnf"
+		initPath    = filesDir + "/init_db.sql"
+		dataRoot    = "/vt/vtdataroot"
+		mysqlUID    = 1
+		mysqlPort   = 3306
+		startupWait = 3 * time.Minute
+	)
 
-		for _, line := range cfg.ExtraMyCnf {
-			_, cnfErr = tempCnfFile.WriteString(line + "\n")
-			require.NoError(t, cnfErr)
-		}
-		require.NoError(t, tempCnfFile.Sync())
+	secureCnf := strings.Join([]string{
+		"[mysqld]",
+		"require_secure_transport=ON",
+		"mysql_native_password=ON",
+		"ssl-ca=" + caPath,
+		"ssl-cert=" + certPath,
+		"ssl-key=" + keyPath,
+		"",
+	}, "\n")
 
-		tempCnfFilePath = tempCnfFile.Name()
-		cfg.ExtraMyCnf = append(cfg.ExtraMyCnf, tempCnfFilePath)
-	}
+	initSQL := fmt.Sprintf(`# Bootstrap for the unmanaged SSL-required mysqld.
+SET GLOBAL super_read_only='OFF';
+# {{custom_sql}}
+CREATE DATABASE IF NOT EXISTS vttest;
+CREATE USER '%[1]s'@'%%' IDENTIFIED WITH mysql_native_password BY 'password';
+GRANT ALL ON *.* TO '%[1]s'@'%%';
+`, testUser)
 
-	cluster := vttest.LocalCluster{
-		Config: cfg,
-	}
-	err := cluster.Setup()
+	dataDir := fmt.Sprintf("%s/vt_%010d", dataRoot, mysqlUID)
+	socket := dataDir + "/mysql.sock"
+	script := fmt.Sprintf(
+		"mysqlctl --tablet-uid %d --mysql-port %d --log-format text init --init-db-sql-file %s && sleep infinity",
+		mysqlUID, mysqlPort, initPath,
+	)
+
+	probe := []string{"mysql", "--socket", socket, "-u", testUser, "-ppassword", "-e", "SELECT 1"}
+
+	ctr, err := testcontainers.Run(ctx, vitesst.Image("8.4"),
+		testcontainers.WithEntrypoint("bash", "-c", script),
+		testcontainers.WithEnv(map[string]string{"EXTRA_MY_CNF": cnfPath}),
+		testcontainers.WithExposedPorts(fmt.Sprintf("%d/tcp", mysqlPort)),
+		testcontainers.WithTmpfs(map[string]string{dataRoot: "uid=999,gid=999"}),
+		testcontainers.WithFiles(
+			testcontainers.ContainerFile{Reader: strings.NewReader(string(caBytes)), ContainerFilePath: caPath, FileMode: 0o644},
+			testcontainers.ContainerFile{Reader: strings.NewReader(string(certBytes)), ContainerFilePath: certPath, FileMode: 0o644},
+			testcontainers.ContainerFile{Reader: strings.NewReader(string(keyBytes)), ContainerFilePath: keyPath, FileMode: 0o644},
+			testcontainers.ContainerFile{Reader: strings.NewReader(secureCnf), ContainerFilePath: cnfPath, FileMode: 0o644},
+			testcontainers.ContainerFile{Reader: strings.NewReader(initSQL), ContainerFilePath: initPath, FileMode: 0o644},
+		),
+		testcontainers.WithWaitStrategyAndDeadline(startupWait,
+			wait.ForExec(probe).
+				WithStartupTimeout(startupWait).
+				WithPollInterval(100*time.Millisecond),
+		),
+	)
 	if err != nil {
-		return cluster, nil, err
+		return mysql.ConnParams{}, nil, err
 	}
 
 	cleanup := func() {
-		cluster.TearDown()
-		if tempCnfFilePath != "" {
-			_ = os.Remove(tempCnfFilePath)
-		}
+		_ = testcontainers.TerminateContainer(ctr)
 	}
 
-	connParams := cluster.MySQLConnParams()
-	conn, err := mysql.Connect(t.Context(), &connParams)
+	host, err := ctr.Host(ctx)
 	if err != nil {
 		cleanup()
-		return cluster, cleanup, err
+		return mysql.ConnParams{}, nil, err
 	}
-	defer conn.Close()
-
-	_, err = conn.ExecuteFetch(fmt.Sprintf(`CREATE USER '%v'@'%%' IDENTIFIED WITH mysql_native_password BY 'password'`, testUser), 1000, false)
+	mapped, err := ctr.MappedPort(ctx, fmt.Sprintf("%d/tcp", mysqlPort))
 	if err != nil {
 		cleanup()
-		return cluster, cleanup, err
+		return mysql.ConnParams{}, nil, err
 	}
 
-	_, err = conn.ExecuteFetch(fmt.Sprintf(`GRANT ALL ON *.* TO '%v'@'%%'`, testUser), 1000, false)
-	if err != nil {
-		cleanup()
-		return cluster, cleanup, err
+	connParams := mysql.ConnParams{
+		Host:    host,
+		Port:    int(mapped.Num()),
+		DbName:  "vttest",
+		SslCa:   caFile,
+		SslCert: serverCertFile,
+		SslKey:  serverKeyFile,
 	}
-
-	return cluster, cleanup, nil
+	return connParams, cleanup, nil
 }
 
 func createTestSSLCerts(t *testing.T, certDir string) (caFile, certFile, keyFile string) {

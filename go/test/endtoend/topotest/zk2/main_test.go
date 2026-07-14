@@ -17,6 +17,7 @@ limitations under the License.
 package zk2
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -28,17 +29,15 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/test/endtoend/cluster"
 	topoutils "vitess.io/vitess/go/test/endtoend/topotest/utils"
 	"vitess.io/vitess/go/test/endtoend/utils"
-	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/test/vitesst"
 	"vitess.io/vitess/go/vt/topo"
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
-	cell            = "zone1"
-	hostname        = "localhost"
+	clusterInstance *vitesst.Cluster
+	vtParams        mysql.ConnParams
 	KeyspaceName    = "customer"
 	SchemaSQL       = `
 CREATE TABLE t1 (
@@ -65,34 +64,33 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(cell, hostname)
-		defer clusterInstance.Teardown()
+		ctx := context.Background()
 
-		// Start topo server
-		clusterInstance.TopoFlavor = "zk2"
-		if err := clusterInstance.StartTopo(); err != nil {
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithTopo("zk2"),
+			vitesst.WithVTGateArgs("--srv-topo-cache-ttl", "30s"),
+			vitesst.WithKeyspace(KeyspaceName).
+				WithShardNames("0").
+				WithSchema(SchemaSQL).
+				WithVSchema(VSchema),
+		)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-
-		// Start keyspace
-		Keyspace := &cluster.Keyspace{
-			Name:      KeyspaceName,
-			SchemaSQL: SchemaSQL,
-			VSchema:   VSchema,
-		}
-		if err := clusterInstance.StartUnshardedKeyspace(*Keyspace, 0, false, clusterInstance.Cell); err != nil {
-			log.Error(err.Error())
-			os.Exit(1)
+		cleanup, err := cluster.Start(ctx)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
 
-		// Start vtgate
-		if err := clusterInstance.StartVtgate(); err != nil {
-			log.Error(err.Error())
-			os.Exit(1)
-			return 1
-		}
-
+		clusterInstance = cluster
+		vtParams = cluster.VTParams(ctx, "")
 		return m.Run()
 	}()
 	os.Exit(exitCode)
@@ -101,7 +99,9 @@ func TestMain(m *testing.M) {
 // TestNamedLocking tests that named locking works as intended.
 func TestNamedLocking(t *testing.T) {
 	// Create topo server connection.
-	ts, err := topo.OpenServer(*clusterInstance.TopoFlavorString(), clusterInstance.VtctldClientProcess.TopoGlobalAddress, clusterInstance.VtctldClientProcess.TopoGlobalRoot)
+	addr, err := clusterInstance.Topo().HTTPAddr(t.Context())
+	require.NoError(t, err)
+	ts, err := topo.OpenServer("zk2", addr, "/vitess/global")
 	require.NoError(t, err)
 
 	ctx := t.Context()
@@ -149,10 +149,6 @@ func TestNamedLocking(t *testing.T) {
 
 func TestTopoDownServingQuery(t *testing.T) {
 	ctx := t.Context()
-	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
-	}
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
@@ -161,7 +157,10 @@ func TestTopoDownServingQuery(t *testing.T) {
 
 	execMulti(t, conn, `insert into t1(c1, c2, c3, c4) values (300,100,300,'abc'); ;; insert into t1(c1, c2, c3, c4) values (301,101,301,'abcd');;`)
 	utils.AssertMatches(t, conn, `select c1,c2,c3 from t1`, `[[INT64(300) INT64(100) INT64(300)] [INT64(301) INT64(101) INT64(301)]]`)
-	clusterInstance.TopoProcess.TearDown(clusterInstance.Cell, clusterInstance.OriginalVTDATAROOT, clusterInstance.CurrentVTDATAROOT, true, *clusterInstance.TopoFlavorString())
+	require.NoError(t, clusterInstance.StopTopoProcess(ctx))
+	defer func() {
+		_ = clusterInstance.StartTopoProcess(context.WithoutCancel(ctx))
+	}()
 	time.Sleep(3 * time.Second)
 	utils.AssertMatches(t, conn, `select c1,c2,c3 from t1`, `[[INT64(300) INT64(100) INT64(300)] [INT64(301) INT64(101) INT64(301)]]`)
 }
@@ -169,7 +168,9 @@ func TestTopoDownServingQuery(t *testing.T) {
 // TestShardLocking tests that shard locking works as intended.
 func TestShardLocking(t *testing.T) {
 	// create topo server connection
-	ts, err := topo.OpenServer(*clusterInstance.TopoFlavorString(), clusterInstance.VtctldClientProcess.TopoGlobalAddress, clusterInstance.VtctldClientProcess.TopoGlobalRoot)
+	addr, err := clusterInstance.Topo().HTTPAddr(t.Context())
+	require.NoError(t, err)
+	ts, err := topo.OpenServer("zk2", addr, "/vitess/global")
 	require.NoError(t, err)
 
 	// Acquire a shard lock.
@@ -213,7 +214,9 @@ func TestShardLocking(t *testing.T) {
 // TestKeyspaceLocking tests that keyspace locking works as intended.
 func TestKeyspaceLocking(t *testing.T) {
 	// create topo server connection
-	ts, err := topo.OpenServer(*clusterInstance.TopoFlavorString(), clusterInstance.VtctldClientProcess.TopoGlobalAddress, clusterInstance.VtctldClientProcess.TopoGlobalRoot)
+	addr, err := clusterInstance.Topo().HTTPAddr(t.Context())
+	require.NoError(t, err)
+	ts, err := topo.OpenServer("zk2", addr, "/vitess/global")
 	require.NoError(t, err)
 
 	// Acquire a keyspace lock.

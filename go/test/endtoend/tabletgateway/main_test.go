@@ -17,22 +17,21 @@ limitations under the License.
 package healthcheck
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
 	"testing"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 var (
-	clusterInstance   *cluster.LocalProcessCluster
-	vtParams          mysql.ConnParams
-	keyspaceName      = "commerce"
-	vtgateGrpcAddress string
-	cell              = "zone1"
-	sqlSchema         = `create table product( 
+	clusterInstance *vitesst.Cluster
+	vtParams        mysql.ConnParams
+	keyspaceName    = "commerce"
+	sqlSchema       = `create table product(
 		sku varbinary(128),
 			description varbinary(128),
 			price bigint,
@@ -64,40 +63,34 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(cell, "localhost")
-		clusterInstance.VtTabletExtraArgs = []string{"--health-check-interval", "1s", "--shutdown-grace-period", "3s"}
-		defer clusterInstance.Teardown()
+		ctx := context.Background()
 
-		// Start topo server
-		err := clusterInstance.StartTopo()
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithVTTabletArgs("--health-check-interval", "1s", "--shutdown-grace-period", "3s"),
+			vitesst.WithVTOrc(),
+			vitesst.WithKeyspace(keyspaceName).
+				WithReplicas(1).
+				WithRDOnly(1).
+				WithSchema(sqlSchema).
+				WithVSchema(vSchema),
+		)
 		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-
-		// Start keyspace
-		keyspace := &cluster.Keyspace{
-			Name:      keyspaceName,
-			SchemaSQL: sqlSchema,
-			VSchema:   vSchema,
-		}
-		err = clusterInstance.StartUnshardedKeyspace(*keyspace, 1, true, clusterInstance.Cell)
+		cleanup, err := cluster.Start(ctx)
 		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
 
-		vtgateInstance := clusterInstance.NewVtgateInstance()
-		// Start vtgate
-		err = vtgateInstance.Setup()
-		if err != nil {
-			return 1
-		}
-		// ensure it is torn down during cluster TearDown
-		clusterInstance.VtgateProcess = *vtgateInstance
-		vtParams = mysql.ConnParams{
-			Host: clusterInstance.Hostname,
-			Port: clusterInstance.VtgateMySQLPort,
-		}
-		vtgateGrpcAddress = fmt.Sprintf("%s:%d", clusterInstance.Hostname, clusterInstance.VtgateGrpcPort)
+		clusterInstance = cluster
+		vtParams = cluster.VTParams(ctx, "")
 		return m.Run()
 	}()
 	os.Exit(exitCode)

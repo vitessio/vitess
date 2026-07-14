@@ -55,33 +55,29 @@ package encryptedtransport
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"io"
+	"net"
 	"os"
-	"os/exec"
 	"path"
+	"strings"
 	"testing"
-
-	"vitess.io/vitess/go/constants/sidecar"
-	"vitess.io/vitess/go/test/endtoend/encryption"
-
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/vitesst"
 	"vitess.io/vitess/go/vt/grpcclient"
-	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtgateservicepb "vitess.io/vitess/go/vt/proto/vtgateservice"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/tlstest"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var (
-	clusterInstance    *cluster.LocalProcessCluster
+	clusterInstance    *vitesst.Cluster
 	createVtInsertTest = `create table vt_insert_test (
 								id bigint auto_increment,
 								msg varchar(64),
@@ -91,7 +87,6 @@ var (
 	keyspace      = "test_keyspace"
 	hostname      = "localhost"
 	shardName     = "0"
-	cell          = "zone1"
 	certDirectory string
 	grpcCert      = ""
 	grpcKey       = ""
@@ -99,22 +94,48 @@ var (
 	grpcName      = ""
 )
 
+// containerCertDir is where the generated certificates and the table ACL
+// config are placed inside the Vitess containers.
+const containerCertDir = "/vt/files"
+
 func TestSecureTransport(t *testing.T) {
-	flag.Parse()
+	ctx := t.Context()
 
-	// initialize cluster
-	_, err := clusterSetUp(t)
-	require.Nil(t, err, "setup failed")
+	// create all certs
+	certDirectory = t.TempDir()
 
-	primaryTablet := *clusterInstance.Keyspaces[0].Shards[0].Vttablets[0]
-	replicaTablet := *clusterInstance.Keyspaces[0].Shards[0].Vttablets[1]
-
-	// creating table_acl_config.json file
-	tableACLConfigJSON := path.Join(certDirectory, "table_acl_config.json")
-	f, err := os.Create(tableACLConfigJSON)
+	err := createCA()
 	require.NoError(t, err)
 
-	_, err = f.WriteString(`{
+	err = createIntermediateCA("ca", "01", "vttablet-server", "vttablet server CA")
+	require.NoError(t, err)
+
+	err = createIntermediateCA("ca", "02", "vttablet-client", "vttablet client CA")
+	require.NoError(t, err)
+
+	err = createIntermediateCA("ca", "03", "vtgate-server", "vtgate server CA")
+	require.NoError(t, err)
+
+	err = createIntermediateCA("ca", "04", "vtgate-client", "vtgate client CA")
+	require.NoError(t, err)
+
+	err = createSignedCert("vttablet-server", "01", "vttablet-server-instance", "vttablet server instance")
+	require.NoError(t, err)
+
+	err = createSignedCert("vttablet-client", "01", "vttablet-client-1", "vttablet client 1")
+	require.NoError(t, err)
+
+	err = createSignedCert("vtgate-server", "01", "vtgate-server-instance", "localhost")
+	require.NoError(t, err)
+
+	err = createSignedCert("vtgate-client", "01", "vtgate-client-1", "vtgate client 1")
+	require.NoError(t, err)
+
+	err = createSignedCert("vtgate-client", "02", "vtgate-client-2", "vtgate client 2")
+	require.NoError(t, err)
+
+	// table ACL config keyed off the client certificate common name.
+	tableACLConfigJSON := `{
 	"table_groups": [
 	{
 		"table_names_or_prefixes": ["vt_insert_test"],
@@ -123,53 +144,65 @@ func TestSecureTransport(t *testing.T) {
 		"admins": ["vtgate client 1"]
 	}
   ]
-}`)
-	require.NoError(t, err)
-	err = f.Close()
+}`
+	tableACLContainerPath := containerCertDir + "/table_acl_config.json"
+
+	certFiles := shipCertFiles(t)
+
+	// vttablet serves with its server certificate and requires client
+	// certificates signed by the vttablet client CA, and enforces table ACLs.
+	// It also carries client certificates so tablets can reach each other's
+	// tabletmanager during reparents.
+	tabletArgs := []string{"--table-acl-config", tableACLContainerPath, "--queryserver-config-strict-table-acl"}
+	tabletArgs = append(tabletArgs, serverExtraArguments(containerCertDir, "vttablet-server-instance", "vttablet-client")...)
+	tabletArgs = append(tabletArgs, tmclientExtraArgs(containerCertDir, "vttablet-client-1")...)
+
+	clusterInstance, err = vitesst.NewCluster(
+		vitesst.WithoutVTGate(),
+		vitesst.WithVTOrc(),
+		vitesst.WithVTTabletArgs(tabletArgs...),
+		vitesst.WithTabletFiles(append(certFiles, vitesst.ContainerFile{
+			Content:       []byte(tableACLConfigJSON),
+			ContainerPath: tableACLContainerPath,
+		})...),
+		vitesst.WithVTCtldArgs(tmclientExtraArgs(containerCertDir, "vttablet-client-1")...),
+		vitesst.WithVTCtldFiles(certFiles...),
+		vitesst.WithVTGateFiles(certFiles...),
+		vitesst.WithKeyspace(keyspace).
+			WithShardNames(shardName).
+			WithReplicas(1).
+			WithSchema(createVtInsertTest),
+	)
 	require.NoError(t, err)
 
-	// start the tablets
-	for _, tablet := range []cluster.Vttablet{primaryTablet, replicaTablet} {
-		tablet.VttabletProcess.ExtraArgs = append(tablet.VttabletProcess.ExtraArgs, "--table-acl-config", tableACLConfigJSON, "--queryserver-config-strict-table-acl")
-		tablet.VttabletProcess.ExtraArgs = append(tablet.VttabletProcess.ExtraArgs, serverExtraArguments("vttablet-server-instance", "vttablet-client")...)
-		err = tablet.VttabletProcess.Setup()
+	cleanup, err := clusterInstance.Start(ctx)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		if err := cleanup(context.WithoutCancel(ctx)); err != nil {
+			fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+		}
+	})
+
+	shard := clusterInstance.Keyspace(keyspace).Shard(shardName)
+	primaryTablet := shard.Primary()
+	replicaTablet := shard.Replicas()[0]
+
+	for _, tablet := range []*vitesst.Tablet{primaryTablet, replicaTablet} {
+		err = clusterInstance.Vtctld().ExecuteCommand(ctx, "RunHealthCheck", tablet.Alias())
 		require.NoError(t, err)
 	}
 
-	// Shared flags.
-	vtctldClientArgs := []string{"--server", "internal"}
-	vtctldClientArgs = append(vtctldClientArgs, tmclientExtraArgs("vttablet-client-1")...)
-
-	// Reparenting.
-	vtctlInitArgs := append(vtctldClientArgs, "InitShardPrimary", "--force", "test_keyspace/0", primaryTablet.Alias)
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand(vtctlInitArgs...)
+	// Start vtgate, dialing tablets with client certificates and serving
+	// clients with its own server certificate.
+	vtgateArgs := tabletConnExtraArgs(containerCertDir, "vttablet-client-1")
+	vtgateArgs = append(vtgateArgs, serverExtraArguments(containerCertDir, "vtgate-server-instance", "vtgate-client")...)
+	_, err = clusterInstance.AddVTGate(ctx, vtgateArgs...)
 	require.NoError(t, err)
 
-	err = clusterInstance.StartVTOrc(cell, "test_keyspace")
-	require.NoError(t, err)
-
-	// Apply schema.
-	vtctlApplySchemaArgs := append(vtctldClientArgs, "ApplySchema", "--sql", createVtInsertTest, "test_keyspace")
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand(vtctlApplySchemaArgs...)
-	require.NoError(t, err)
-
-	for _, tablet := range []cluster.Vttablet{primaryTablet, replicaTablet} {
-		vtctlTabletArgs := append(vtctldClientArgs, "RunHealthCheck", tablet.Alias)
-		_, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(vtctlTabletArgs...)
-		require.NoError(t, err)
-	}
-
-	// Start vtgate.
-	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, tabletConnExtraArgs("vttablet-client-1")...)
-	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, serverExtraArguments("vtgate-server-instance", "vtgate-client")...)
-	err = clusterInstance.StartVtgate()
-	require.NoError(t, err)
-
-	grpcAddress := fmt.Sprintf("%s:%d", "localhost", clusterInstance.VtgateProcess.GrpcPort)
+	grpcAddress := vtgateGRPCAddress(ctx, t)
 
 	// 'vtgate client 1' is authorized to access vt_insert_test
 	setCreds(t, "vtgate-client-1", "vtgate-server")
-	ctx := t.Context()
 	request := getRequest("select * from vt_insert_test")
 	vc, err := getVitessClient(ctx, grpcAddress)
 	require.NoError(t, err)
@@ -193,20 +226,18 @@ func TestSecureTransport(t *testing.T) {
 
 	useEffectiveCallerID(ctx, t)
 	useEffectiveGroups(ctx, t)
-
-	clusterInstance.Teardown()
 }
 
 func useEffectiveCallerID(ctx context.Context, t *testing.T) {
 	// now restart vtgate in the mode where we don't use SSL
 	// for client connections, but we copy effective caller id
 	// into immediate caller id.
-	clusterInstance.VtGateExtraArgs = []string{"--grpc-use-effective-callerid"}
-	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, tabletConnExtraArgs("vttablet-client-1")...)
-	err := clusterInstance.RestartVtgate()
+	vtgateArgs := []string{"--grpc-use-effective-callerid"}
+	vtgateArgs = append(vtgateArgs, tabletConnExtraArgs(containerCertDir, "vttablet-client-1")...)
+	err := clusterInstance.VTGate().Restart(ctx, vtgateArgs...)
 	require.NoError(t, err)
 
-	grpcAddress := fmt.Sprintf("%s:%d", "localhost", clusterInstance.VtgateProcess.GrpcPort)
+	grpcAddress := vtgateGRPCAddress(ctx, t)
 
 	setSSLInfoEmpty()
 
@@ -250,12 +281,12 @@ func useEffectiveGroups(ctx context.Context, t *testing.T) {
 	// now restart vtgate in the mode where we don't use SSL
 	// for client connections, but we copy effective caller's groups
 	// into immediate caller id.
-	clusterInstance.VtGateExtraArgs = []string{"--grpc-use-effective-callerid", "--grpc-use-effective-groups"}
-	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, tabletConnExtraArgs("vttablet-client-1")...)
-	err := clusterInstance.RestartVtgate()
+	vtgateArgs := []string{"--grpc-use-effective-callerid", "--grpc-use-effective-groups"}
+	vtgateArgs = append(vtgateArgs, tabletConnExtraArgs(containerCertDir, "vttablet-client-1")...)
+	err := clusterInstance.VTGate().Restart(ctx, vtgateArgs...)
 	require.NoError(t, err)
 
-	grpcAddress := fmt.Sprintf("%s:%d", "localhost", clusterInstance.VtgateProcess.GrpcPort)
+	grpcAddress := vtgateGRPCAddress(ctx, t)
 
 	setSSLInfoEmpty()
 
@@ -297,155 +328,78 @@ func useEffectiveGroups(ctx context.Context, t *testing.T) {
 	assert.Contains(t, err.Error(), "for table 'vt_insert_test' (ACL check error)")
 }
 
-func clusterSetUp(t *testing.T) (int, error) {
-	var mysqlProcesses []*exec.Cmd
-	clusterInstance = cluster.NewCluster(cell, hostname)
+// shipCertFiles turns every generated certificate and key into a ContainerFile
+// placed under containerCertDir inside the Vitess containers.
+func shipCertFiles(t *testing.T) []vitesst.ContainerFile {
+	entries, err := os.ReadDir(certDirectory)
+	require.NoError(t, err)
 
-	// Start topo server
-	if err := clusterInstance.StartTopo(); err != nil {
-		return 1, err
+	var files []vitesst.ContainerFile
+	for _, entry := range entries {
+		if !strings.HasSuffix(entry.Name(), ".pem") {
+			continue
+		}
+		files = append(files, vitesst.ContainerFile{
+			HostPath:      path.Join(certDirectory, entry.Name()),
+			ContainerPath: containerCertDir + "/" + entry.Name(),
+		})
 	}
+	return files
+}
 
-	// create all certs
-	log.Info("Creating certificates")
-	certDirectory = path.Join(clusterInstance.TmpDirectory, "certs")
-	_ = encryption.CreateDirectory(certDirectory, 0o700)
-
-	err := encryption.ExecuteVttlstestCommand("--root", certDirectory, "CreateCA")
+// vtgateGRPCAddress returns the host-reachable gRPC address of the cluster's
+// vtgate as "localhost:port", so the vtgate server certificate common name
+// 'localhost' matches the dialed hostname.
+func vtgateGRPCAddress(ctx context.Context, t *testing.T) string {
+	t.Helper()
+	addr, err := clusterInstance.VTGate().GRPCAddr(ctx)
 	require.NoError(t, err)
+	_, port, ok := strings.Cut(addr, ":")
+	require.True(t, ok, "malformed vtgate grpc address %q", addr)
+	return net.JoinHostPort(hostname, port)
+}
 
-	err = createIntermediateCA("ca", "01", "vttablet-server", "vttablet server CA")
-	require.NoError(t, err)
-
-	err = createIntermediateCA("ca", "02", "vttablet-client", "vttablet client CA")
-	require.NoError(t, err)
-
-	err = createIntermediateCA("ca", "03", "vtgate-server", "vtgate server CA")
-	require.NoError(t, err)
-
-	err = createIntermediateCA("ca", "04", "vtgate-client", "vtgate client CA")
-	require.NoError(t, err)
-
-	err = createSignedCert("vttablet-server", "01", "vttablet-server-instance", "vttablet server instance")
-	require.NoError(t, err)
-
-	err = createSignedCert("vttablet-client", "01", "vttablet-client-1", "vttablet client 1")
-	require.NoError(t, err)
-
-	err = createSignedCert("vtgate-server", "01", "vtgate-server-instance", "localhost")
-	require.NoError(t, err)
-
-	err = createSignedCert("vtgate-client", "01", "vtgate-client-1", "vtgate client 1")
-	require.NoError(t, err)
-
-	err = createSignedCert("vtgate-client", "02", "vtgate-client-2", "vtgate client 2")
-	require.NoError(t, err)
-
-	for _, keyspaceStr := range []string{keyspace} {
-		KeyspacePtr := &cluster.Keyspace{Name: keyspaceStr}
-		keyspace := *KeyspacePtr
-		if err := clusterInstance.VtctldClientProcess.CreateKeyspace(keyspace.Name, sidecar.DefaultName, ""); err != nil {
-			return 1, err
-		}
-		shard := &cluster.Shard{
-			Name: shardName,
-		}
-		for range 2 {
-			// instantiate vttablet object with reserved ports
-			tablet := clusterInstance.NewVttabletInstance("replica", 0, cell)
-
-			// Start Mysqlctl process
-			mysqlctlProcess, err := cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
-			if err != nil {
-				return 1, err
-			}
-			tablet.MysqlctlProcess = *mysqlctlProcess
-			proc, err := tablet.MysqlctlProcess.StartProcess()
-			if err != nil {
-				return 1, err
-			}
-			mysqlProcesses = append(mysqlProcesses, proc)
-			// start vttablet process
-			tablet.VttabletProcess = cluster.VttabletProcessInstance(
-				tablet.HTTPPort,
-				tablet.GrpcPort,
-				tablet.TabletUID,
-				clusterInstance.Cell,
-				shardName,
-				keyspace.Name,
-				clusterInstance.VtctldProcess.Port,
-				tablet.Type,
-				clusterInstance.TopoProcess.Port,
-				clusterInstance.Hostname,
-				clusterInstance.TmpDirectory,
-				clusterInstance.VtTabletExtraArgs,
-				clusterInstance.DefaultCharset)
-			tablet.Alias = tablet.VttabletProcess.TabletPath
-			shard.Vttablets = append(shard.Vttablets, tablet)
-		}
-		keyspace.Shards = append(keyspace.Shards, *shard)
-		clusterInstance.Keyspaces = append(clusterInstance.Keyspaces, keyspace)
-	}
-	for _, proc := range mysqlProcesses {
-		if err := proc.Wait(); err != nil {
-			return 1, fmt.Errorf("mysql process Wait failed: %w", err)
-		}
-	}
-	return 0, nil
+func createCA() error {
+	tlstest.CreateCA(certDirectory)
+	return nil
 }
 
 func createIntermediateCA(ca string, serial string, name string, commonName string) error {
-	log.Info("Creating intermediate signed cert and key " + commonName)
-	tmpProcess := exec.Command(
-		"vttlstest",
-		"CreateIntermediateCA",
-		"--root", certDirectory,
-		"--parent", ca,
-		"--serial", serial,
-		"--common-name", commonName,
-		name)
-	return tmpProcess.Run()
+	tlstest.CreateIntermediateCA(certDirectory, ca, serial, name, commonName)
+	return nil
 }
 
 func createSignedCert(ca string, serial string, name string, commonName string) error {
-	log.Info("Creating signed cert and key " + commonName)
-	tmpProcess := exec.Command(
-		"vttlstest",
-		"CreateSignedCert",
-		"--root", certDirectory,
-		"--parent", ca,
-		"--serial", serial,
-		"--common-name", commonName,
-		name)
-	return tmpProcess.Run()
+	tlstest.CreateSignedCert(certDirectory, ca, serial, name, commonName)
+	return nil
 }
 
-func serverExtraArguments(name string, ca string) []string {
+func serverExtraArguments(dir string, name string, ca string) []string {
 	args := []string{
-		"--grpc-cert", certDirectory + "/" + name + "-cert.pem",
-		"--grpc-key", certDirectory + "/" + name + "-key.pem",
-		"--grpc-ca", certDirectory + "/" + ca + "-cert.pem",
+		"--grpc-cert", dir + "/" + name + "-cert.pem",
+		"--grpc-key", dir + "/" + name + "-key.pem",
+		"--grpc-ca", dir + "/" + ca + "-cert.pem",
 	}
 	return args
 }
 
-func tmclientExtraArgs(name string) []string {
+func tmclientExtraArgs(dir string, name string) []string {
 	ca := "vttablet-server"
 	args := []string{
-		"--tablet-manager-grpc-cert", certDirectory + "/" + name + "-cert.pem",
-		"--tablet-manager-grpc-key", certDirectory + "/" + name + "-key.pem",
-		"--tablet-manager-grpc-ca", certDirectory + "/" + ca + "-cert.pem",
+		"--tablet-manager-grpc-cert", dir + "/" + name + "-cert.pem",
+		"--tablet-manager-grpc-key", dir + "/" + name + "-key.pem",
+		"--tablet-manager-grpc-ca", dir + "/" + ca + "-cert.pem",
 		"--tablet-manager-grpc-server-name", "vttablet server instance",
 	}
 	return args
 }
 
-func tabletConnExtraArgs(name string) []string {
+func tabletConnExtraArgs(dir string, name string) []string {
 	ca := "vttablet-server"
 	args := []string{
-		"--tablet-grpc-cert", certDirectory + "/" + name + "-cert.pem",
-		"--tablet-grpc-key", certDirectory + "/" + name + "-key.pem",
-		"--tablet-grpc-ca", certDirectory + "/" + ca + "-cert.pem",
+		"--tablet-grpc-cert", dir + "/" + name + "-cert.pem",
+		"--tablet-grpc-key", dir + "/" + name + "-key.pem",
+		"--tablet-grpc-ca", dir + "/" + ca + "-cert.pem",
 		"--tablet-grpc-server-name", "vttablet server instance",
 	}
 	return args

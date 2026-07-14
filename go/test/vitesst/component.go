@@ -196,6 +196,32 @@ func (cp *component) Logs(ctx context.Context) (string, error) {
 	return string(content), nil
 }
 
+// StopContainer stops the component's container gracefully with SIGTERM,
+// killing it after the timeout.
+func (cp *component) StopContainer(ctx context.Context, timeout time.Duration) error {
+	ctr := cp.container()
+	if ctr == nil {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s has no container", cp.name)
+	}
+	return ctr.Stop(ctx, &timeout)
+}
+
+// StartContainer starts a stopped container and blocks until its readiness
+// wait passes again.
+func (cp *component) StartContainer(ctx context.Context) error {
+	ctr := cp.container()
+	if ctr == nil {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s has no container", cp.name)
+	}
+	return ctr.Start(ctx)
+}
+
+// IsRunning reports whether the component's container is running.
+func (cp *component) IsRunning() bool {
+	ctr := cp.container()
+	return ctr != nil && ctr.IsRunning()
+}
+
 // terminate tears the component's container down immediately.
 func (cp *component) terminate(ctx context.Context) error {
 	ctr := cp.setContainer(nil)

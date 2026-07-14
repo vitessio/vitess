@@ -170,7 +170,7 @@ func TestHealthCheckCacheWithTabletChurn(t *testing.T) {
 }
 
 func addTablet(ctx context.Context, t *testing.T, tabletType string) *vitesst.Tablet {
-	tablet, err := clusterInstance.AddTablet(ctx, keyspaceName, shards[0], tabletType)
+	tablet, err := clusterInstance.AddTablet(ctx, "", keyspaceName, shards[0], tabletType)
 	require.Nil(t, err)
 
 	name := fmt.Sprintf("%s.%s.%s", keyspaceName, shards[0], tabletType)

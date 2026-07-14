@@ -63,14 +63,11 @@ type (
 		// t.Logf.
 		logf func(format string, args ...any)
 
-		// etcd is the cluster's topology server.
-		etcd *component
+		// topo is the cluster's topology server.
+		topo *component
 
 		// vtctld is the cluster's control plane.
 		vtctld *Vtctld
-
-		// vtorc is present only when the test enabled VTOrc.
-		vtorc *VTOrc
 
 		// vtadmin is present only when the test enabled vtadmin.
 		vtadmin *VTAdmin
@@ -79,6 +76,8 @@ type (
 		mu           sync.Mutex
 		vtgates      []*VTGate
 		vtgateSeq    int
+		vtorcs       []*VTOrc
+		vtorcSeq     int
 		keyspaces    []*Keyspace
 		tablets      []*Tablet
 		logConsumers []*ringLogConsumer
@@ -139,14 +138,18 @@ func (c *Cluster) Start(ctx context.Context) (cleanup func(context.Context) erro
 		}
 	}()
 
-	c.logf("creating cluster network")
-	c.network, err = network.New(ctx, network.WithDriver("bridge"))
-	if err != nil {
-		return cleanup, vterrors.Wrapf(err, "creating cluster network")
+	if c.opts.borrowedNetwork != nil {
+		c.network = c.opts.borrowedNetwork
+	} else {
+		c.logf("creating cluster network")
+		c.network, err = network.New(ctx, network.WithDriver("bridge"))
+		if err != nil {
+			return cleanup, vterrors.Wrapf(err, "creating cluster network")
+		}
 	}
 
-	c.logf("starting etcd")
-	if err = c.startEtcd(ctx); err != nil {
+	c.logf("starting topo server")
+	if err = c.startTopo(ctx); err != nil {
 		return cleanup, err
 	}
 
@@ -176,15 +179,18 @@ func (c *Cluster) Start(ctx context.Context) (cleanup func(context.Context) erro
 	}
 
 	group, groupCtx := errgroup.WithContext(ctx)
-	group.Go(func() error {
-		c.logf("starting vtgate")
-		_, err := c.AddVTGate(groupCtx)
-		return err
-	})
+	if !c.opts.withoutVTGate {
+		group.Go(func() error {
+			c.logf("starting vtgate")
+			_, err := c.AddVTGate(groupCtx)
+			return err
+		})
+	}
 	if c.opts.vtorcEnabled {
 		group.Go(func() error {
 			c.logf("starting vtorc")
-			return c.startVTOrc(groupCtx)
+			_, err := c.AddVTOrc(groupCtx, "", c.opts.vtorcArgs...)
+			return err
 		})
 	}
 	if err = group.Wait(); err != nil {
@@ -259,7 +265,7 @@ func (c *Cluster) startKeyspace(ctx context.Context, kc *keyspaceConfig) error {
 		}
 
 		group.Go(func() error {
-			return c.startShard(groupCtx, shard, specs)
+			return c.startShard(groupCtx, shard, specs, kc.withoutPrimaryElection)
 		})
 	}
 	if err := group.Wait(); err != nil {
@@ -283,7 +289,7 @@ func (c *Cluster) startKeyspace(ctx context.Context, kc *keyspaceConfig) error {
 
 // startShard starts all of a shard's tablets concurrently, records them on
 // the Shard, and elects the first tablet as primary.
-func (c *Cluster) startShard(ctx context.Context, shard *Shard, specs []*TabletSpec) error {
+func (c *Cluster) startShard(ctx context.Context, shard *Shard, specs []*TabletSpec, withoutPrimaryElection bool) error {
 	tablets := make([]*Tablet, len(specs))
 
 	group, groupCtx := errgroup.WithContext(ctx)
@@ -312,7 +318,7 @@ func (c *Cluster) startShard(ctx context.Context, shard *Shard, specs []*TabletS
 	shard.mu.Lock()
 	for i, tablet := range tablets {
 		switch {
-		case i == 0:
+		case i == 0 && !withoutPrimaryElection:
 			shard.primary = tablet
 		case tablet.typ == "rdonly":
 			shard.rdonly = append(shard.rdonly, tablet)
@@ -321,6 +327,10 @@ func (c *Cluster) startShard(ctx context.Context, shard *Shard, specs []*TabletS
 		}
 	}
 	shard.mu.Unlock()
+
+	if withoutPrimaryElection {
+		return nil
+	}
 
 	c.logf("electing %s as primary of %s", tablets[0].Alias(), shard.Ref())
 	if err := c.vtctld.initializeShard(ctx, shard.Keyspace.Name, shard.Name, tablets[0].Alias()); err != nil {
@@ -400,9 +410,10 @@ func (c *Cluster) AddKeyspace(ctx context.Context, kb *keyspaceBuilder) (*Keyspa
 }
 
 // AddTablet starts one more tablet of the given kind ("replica" or "rdonly")
-// serving an existing shard on the running cluster. It joins as a replica of
-// the shard's primary and is recorded on the Shard.
-func (c *Cluster) AddTablet(ctx context.Context, keyspace, shard, tabletType string) (*Tablet, error) {
+// serving an existing shard on the running cluster, in the given cell (""
+// means the first cell). It joins as a replica of the shard's primary and is
+// recorded on the Shard.
+func (c *Cluster) AddTablet(ctx context.Context, cell, keyspace, shard, tabletType string) (*Tablet, error) {
 	ks := c.Keyspace(keyspace)
 	if ks == nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "keyspace %s does not exist", keyspace)
@@ -416,9 +427,12 @@ func (c *Cluster) AddTablet(ctx context.Context, keyspace, shard, tabletType str
 	uid := firstTabletUID + len(c.tablets)
 	c.mu.Unlock()
 
+	if cell == "" {
+		cell = c.cells[0]
+	}
 	spec := &TabletSpec{
 		UID:      uid,
-		Cell:     c.cells[0],
+		Cell:     cell,
 		Keyspace: keyspace,
 		Shard:    shard,
 		Type:     tabletType,
@@ -569,8 +583,10 @@ func (c *Cluster) terminate(ctx context.Context) error {
 
 	c.mu.Lock()
 	vtgates := c.vtgates
+	vtorcs := c.vtorcs
 	tablets := c.tablets
 	c.vtgates = nil
+	c.vtorcs = nil
 	c.tablets = nil
 	c.mu.Unlock()
 
@@ -578,9 +594,7 @@ func (c *Cluster) terminate(ctx context.Context) error {
 	for _, g := range vtgates {
 		group.Go(func() error { return g.terminate(ctx) })
 	}
-	if c.vtorc != nil {
-		vtorc := c.vtorc
-		c.vtorc = nil
+	for _, vtorc := range vtorcs {
 		group.Go(func() error { return vtorc.terminate(ctx) })
 	}
 	if c.vtadmin != nil {
@@ -596,18 +610,20 @@ func (c *Cluster) terminate(ctx context.Context) error {
 		c.vtctld = nil
 		group.Go(func() error { return vtctld.terminate(ctx) })
 	}
-	if c.etcd != nil {
-		etcd := c.etcd
-		c.etcd = nil
-		group.Go(func() error { return etcd.terminate(ctx) })
+	if c.topo != nil {
+		topo := c.topo
+		c.topo = nil
+		group.Go(func() error { return topo.terminate(ctx) })
 	}
 	err := group.Wait()
 
 	if c.network != nil {
 		nw := c.network
 		c.network = nil
-		if removeErr := nw.Remove(ctx); removeErr != nil && err == nil {
-			err = vterrors.Wrapf(removeErr, "removing cluster network")
+		if c.opts.borrowedNetwork == nil {
+			if removeErr := nw.Remove(ctx); removeErr != nil && err == nil {
+				err = vterrors.Wrapf(removeErr, "removing cluster network")
+			}
 		}
 	}
 	return err

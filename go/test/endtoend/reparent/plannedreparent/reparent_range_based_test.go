@@ -21,24 +21,23 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/reparent/utils"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 func TestReparentGracefulRangeBased(t *testing.T) {
 	ctx := t.Context()
 
-	utils.ShardName = "0000000000000000-ffffffffffffffff"
-	defer func() { utils.ShardName = "0" }()
+	ShardName = "0000000000000000-ffffffffffffffff"
+	defer func() { ShardName = "0" }()
 
-	clusterInstance := utils.SetupRangeBasedCluster(ctx, t)
-	defer utils.TeardownCluster(clusterInstance)
-	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+	clusterInstance := SetupRangeBasedCluster(ctx, t)
+	defer TeardownCluster(t, clusterInstance)
+	tablets := shardTablets(clusterInstance)
 
 	// Perform a graceful reparent operation
-	_, err := utils.Prs(t, clusterInstance, tablets[1])
+	_, err := Prs(t, clusterInstance, tablets[1])
 	require.NoError(t, err)
-	utils.ValidateTopology(t, clusterInstance, false)
-	utils.CheckPrimaryTablet(t, clusterInstance, tablets[1])
-	utils.ConfirmReplication(t, tablets[1], []*cluster.Vttablet{tablets[0]})
+	ValidateTopology(t, clusterInstance, false)
+	CheckPrimaryTablet(t, clusterInstance, tablets[1])
+	ConfirmReplication(t, tablets[1], []*vitesst.Tablet{tablets[0]})
 }

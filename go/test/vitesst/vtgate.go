@@ -115,19 +115,6 @@ func (g *VTGate) QueryLog(ctx context.Context) (string, error) {
 	return output, nil
 }
 
-// StopContainer stops the vtgate container gracefully with SIGTERM, killing
-// it after the timeout. The vtgate drains existing connections while it shuts
-// down.
-func (g *VTGate) StopContainer(ctx context.Context, timeout time.Duration) error {
-	return g.container().Stop(ctx, &timeout)
-}
-
-// IsRunning reports whether the vtgate container is running.
-func (g *VTGate) IsRunning() bool {
-	ctr := g.container()
-	return ctr != nil && ctr.IsRunning()
-}
-
 // Restart recreates the vtgate container behind this handle with the same
 // network alias. When extraArgs are given they replace the vtgate's previous
 // extra args, so tests can restart vtgate with new flags. Mapped host ports
@@ -254,7 +241,7 @@ func (c *Cluster) runVTGateContainer(ctx context.Context, name string, extraArgs
 			fmt.Sprintf("%d/tcp", vtgateMySQLPort),
 		),
 		network.WithNetwork([]string{name}, c.network),
-		testcontainers.WithEnv(map[string]string{"VTTEST": "endtoend"}),
+		testcontainers.WithEnv(mergeEnv(map[string]string{"VTTEST": "endtoend"}, c.opts.vtgateEnv)),
 		filesOpt,
 		testcontainers.WithLogConsumers(c.newLogConsumer(name)),
 		testcontainers.WithWaitStrategyAndDeadline(defaultStartupTimeout,

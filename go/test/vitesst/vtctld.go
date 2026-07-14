@@ -154,12 +154,18 @@ func (c *Cluster) startVtctld(ctx context.Context) error {
 	)
 	args = append(args, c.opts.vtctldArgs...)
 
+	filesOpt, err := withContainerFiles(c.opts.vtctldFiles)
+	if err != nil {
+		return vterrors.Wrapf(err, "preparing files for vtctld")
+	}
+
 	ctr, err := testcontainers.Run(ctx, c.image,
 		testcontainers.WithCmd(args...),
 		testcontainers.WithExposedPorts(
 			c.vtctld.httpPort,
 			fmt.Sprintf("%d/tcp", vtctldGRPCPort),
 		),
+		filesOpt,
 		network.WithNetwork([]string{c.vtctld.name}, c.network),
 		testcontainers.WithTmpfs(map[string]string{vtDataRoot: "uid=999,gid=999"}),
 		testcontainers.WithEnv(map[string]string{"VTTEST": "endtoend"}),
@@ -183,8 +189,8 @@ func (c *Cluster) startVtctld(ctx context.Context) error {
 func (c *Cluster) addCellInfo(ctx context.Context, cell string) error {
 	_, err := c.vtctld.executeCommand(ctx,
 		"AddCellInfo",
-		"--root", "/vitess/"+cell,
-		"--server-address", fmt.Sprintf("etcd:%d", etcdClientPort),
+		"--root", c.topoCellRoot(cell),
+		"--server-address", c.topoServerAddress(),
 		cell,
 	)
 	return vterrors.Wrapf(err, "adding cell %s", cell)

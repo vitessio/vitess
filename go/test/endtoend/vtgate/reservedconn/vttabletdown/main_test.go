@@ -17,24 +17,22 @@ limitations under the License.
 package vttabletdown
 
 import (
+	"context"
 	"flag"
+	"fmt"
 	"os"
 	"testing"
-
-	"vitess.io/vitess/go/test/endtoend/utils"
 
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
+	clusterInstance *vitesst.Cluster
 	vtParams        mysql.ConnParams
 	keyspaceName    = "ks"
-	cell            = "zone1"
-	hostname        = "localhost"
 	sqlSchema       = `create table test(id bigint primary key)Engine=InnoDB;`
 )
 
@@ -42,60 +40,62 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(cell, hostname)
-		defer clusterInstance.Teardown()
+		ctx := context.Background()
 
-		// Start topo server
-		if err := clusterInstance.StartTopo(); err != nil {
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithVTOrc(),
+			vitesst.WithKeyspace(keyspaceName).
+				WithReplicas(2).
+				WithSchema(sqlSchema),
+		)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-
-		// Start keyspace
-		keyspace := &cluster.Keyspace{
-			Name:      keyspaceName,
-			SchemaSQL: sqlSchema,
-		}
-		if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 2, false, clusterInstance.Cell); err != nil {
+		cleanup, err := cluster.Start(ctx)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
 
-		// Start vtgate
-		if err := clusterInstance.StartVtgate(); err != nil {
-			return 1
-		}
-
-		vtParams = mysql.ConnParams{
-			Host: clusterInstance.Hostname,
-			Port: clusterInstance.VtgateMySQLPort,
-		}
+		clusterInstance = cluster
+		vtParams = cluster.VTParams(ctx, "")
 		return m.Run()
 	}()
 	os.Exit(exitCode)
 }
 
 func TestVttabletDownServingChange(t *testing.T) {
-	conn, err := mysql.Connect(t.Context(), &vtParams)
+	ctx := t.Context()
+
+	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
-	utils.Exec(t, conn, "set default_week_format = 1")
-	_ = utils.Exec(t, conn, "select /*vt+ PLANNER=gen4 */ * from test")
+	vitesst.Exec(t, conn, "set default_week_format = 1")
+	_ = vitesst.Exec(t, conn, "select /*vt+ PLANNER=gen4 */ * from test")
 
 	// Disable VTOrc emergency reparents to prevent VTOrc from racing with the manual ERS below.
-	_, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetVtorcEmergencyReparent", "--disable", keyspaceName)
+	_, err = clusterInstance.Vtctld().ExecuteCommandWithOutput(ctx, "SetVtorcEmergencyReparent", "--disable", keyspaceName)
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		_, _ = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetVtorcEmergencyReparent", "--enable", keyspaceName)
+		cleanupCtx := context.WithoutCancel(ctx)
+		_, _ = clusterInstance.Vtctld().ExecuteCommandWithOutput(cleanupCtx, "SetVtorcEmergencyReparent", "--enable", keyspaceName)
 	})
 
-	primaryTablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
-	require.NoError(t,
-		primaryTablet.MysqlctlProcess.Stop())
+	shard := clusterInstance.Keyspace(keyspaceName).Shards()[0]
+	primaryTablet := shard.Primary()
+	require.NoError(t, primaryTablet.StopMySQL(ctx))
 	// kill vttablet process
-	_ = primaryTablet.VttabletProcess.TearDown()
+	_ = primaryTablet.StopVttablet(ctx)
 	require.NoError(t,
-		clusterInstance.VtctldClientProcess.ExecuteCommand("EmergencyReparentShard", "ks/0"))
+		clusterInstance.Vtctld().ExecuteCommand(ctx, "EmergencyReparentShard", shard.Ref()))
 
 	// This should work without any error.
-	_ = utils.Exec(t, conn, "select /*vt+ PLANNER=gen4 */ * from test")
+	_ = vitesst.Exec(t, conn, "select /*vt+ PLANNER=gen4 */ * from test")
 }

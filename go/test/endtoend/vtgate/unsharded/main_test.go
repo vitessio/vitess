@@ -19,28 +19,23 @@ package unsharded
 import (
 	"context"
 	"flag"
+	"fmt"
 	"os"
 	"testing"
 	"time"
-
-	"vitess.io/vitess/go/test/endtoend/utils"
-
-	"vitess.io/vitess/go/vt/log"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/vitesst"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
+	clusterInstance *vitesst.Cluster
 	vtParams        mysql.ConnParams
-	cell            = "zone1"
-	hostname        = "localhost"
 	KeyspaceName    = "customer"
 	SchemaSQL       = `
 CREATE TABLE t1 (
@@ -162,52 +157,43 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(cell, hostname)
-		defer clusterInstance.Teardown()
+		ctx := context.Background()
 
-		// Start topo server
-		if err := clusterInstance.StartTopo(); err != nil {
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithVTTabletArgs("--queryserver-config-transaction-timeout", "3s", "--queryserver-config-max-result-size", "30"),
+			vitesst.WithVTGateArgs("--warn-sharded-only=true"),
+			vitesst.WithKeyspace(KeyspaceName).
+				WithSchema(SchemaSQL).
+				WithVSchema(VSchema),
+		)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-
-		// Start keyspace
-		Keyspace := &cluster.Keyspace{
-			Name:      KeyspaceName,
-			SchemaSQL: SchemaSQL,
-			VSchema:   VSchema,
-		}
-		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-transaction-timeout", "3s", "--queryserver-config-max-result-size", "30"}
-		if err := clusterInstance.StartUnshardedKeyspace(*Keyspace, 0, false, clusterInstance.Cell); err != nil {
-			log.Error(err.Error())
-			os.Exit(1)
+		cleanup, err := cluster.Start(ctx)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
 
-		// Start vtgate
-		clusterInstance.VtGateExtraArgs = []string{"--warn-sharded-only" + "=true"}
-		if err := clusterInstance.StartVtgate(); err != nil {
-			log.Error(err.Error())
-			os.Exit(1)
-			return 1
-		}
+		clusterInstance = cluster
+		vtParams = cluster.VTParams(ctx, "")
 
 		// Also check we can create procedures through the vtgate.
-		vtParams = mysql.ConnParams{
-			Host: "localhost",
-			Port: clusterInstance.VtgateMySQLPort,
-		}
-		conn, err := mysql.Connect(context.Background(), &vtParams)
+		conn, err := mysql.Connect(ctx, &vtParams)
 		if err != nil {
-			log.Error(err.Error())
-			os.Exit(1)
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
 		defer conn.Close()
 
-		err = runCreateProcedures(conn)
-		if err != nil {
-			log.Error(err.Error())
-			os.Exit(1)
+		if err := runCreateProcedures(conn); err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
 
@@ -234,28 +220,28 @@ func TestSelectIntoAndLoadFrom(t *testing.T) {
 	require.Nil(t, err)
 	defer conn.Close()
 
-	defer utils.Exec(t, conn, `delete from t1`)
-	utils.Exec(t, conn, `insert into t1(c1, c2, c3, c4) values (300,100,300,'abc')`)
-	res := utils.Exec(t, conn, `select @@secure_file_priv;`)
+	defer vitesst.Exec(t, conn, `delete from t1`)
+	vitesst.Exec(t, conn, `insert into t1(c1, c2, c3, c4) values (300,100,300,'abc')`)
+	res := vitesst.Exec(t, conn, `select @@secure_file_priv;`)
 	directory := res.Rows[0][0].ToString()
 	query := `select * from t1 into outfile '` + directory + `x.txt'`
-	utils.Exec(t, conn, query)
+	vitesst.Exec(t, conn, query)
 	defer os.Remove(directory + `x.txt`)
 	query = `load data infile '` + directory + `x.txt' into table t1`
-	utils.AssertContainsError(t, conn, query, "Duplicate entry '300' for key 'PRIMARY'")
-	utils.Exec(t, conn, `delete from t1`)
-	utils.Exec(t, conn, query)
-	utils.AssertMatches(t, conn, `select c1,c2,c3 from t1`, `[[INT64(300) INT64(100) INT64(300)]]`)
+	vitesst.AssertContainsError(t, conn, query, "Duplicate entry '300' for key 'PRIMARY'")
+	vitesst.Exec(t, conn, `delete from t1`)
+	vitesst.Exec(t, conn, query)
+	vitesst.AssertMatches(t, conn, `select c1,c2,c3 from t1`, `[[INT64(300) INT64(100) INT64(300)]]`)
 	query = `select * from t1 into dumpfile '` + directory + `x1.txt'`
-	utils.Exec(t, conn, query)
+	vitesst.Exec(t, conn, query)
 	defer os.Remove(directory + `x1.txt`)
 	query = `select * from t1 into outfile '` + directory + `x2.txt' Fields terminated by ';' optionally enclosed by '"' escaped by '\t' lines terminated by '\n'`
-	utils.Exec(t, conn, query)
+	vitesst.Exec(t, conn, query)
 	defer os.Remove(directory + `x2.txt`)
 	query = `load data infile '` + directory + `x2.txt' replace into table t1 Fields terminated by ';' optionally enclosed by '"' escaped by '\t' lines terminated by '\n'`
-	utils.Exec(t, conn, query)
-	utils.AssertMatches(t, conn, `select c1,c2,c3 from t1`, `[[INT64(300) INT64(100) INT64(300)]]`)
-	utils.AssertMatches(t, conn, "show warnings", `[[VARCHAR("Warning") UINT16(1235) VARCHAR("use of feature that is only supported in unsharded mode: LOAD")]]`)
+	vitesst.Exec(t, conn, query)
+	vitesst.AssertMatches(t, conn, `select c1,c2,c3 from t1`, `[[INT64(300) INT64(100) INT64(300)]]`)
+	vitesst.AssertMatches(t, conn, "show warnings", `[[VARCHAR("Warning") UINT16(1235) VARCHAR("use of feature that is only supported in unsharded mode: LOAD")]]`)
 }
 
 func TestEmptyStatement(t *testing.T) {
@@ -263,11 +249,11 @@ func TestEmptyStatement(t *testing.T) {
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
-	defer utils.Exec(t, conn, `delete from t1`)
-	utils.AssertContainsError(t, conn, " \t; \n;", "Query was empty")
+	defer vitesst.Exec(t, conn, `delete from t1`)
+	vitesst.AssertContainsError(t, conn, " \t; \n;", "Query was empty")
 	execMulti(t, conn, `insert into t1(c1, c2, c3, c4) values (300,100,300,'abc');         ;; insert into t1(c1, c2, c3, c4) values (301,101,301,'abcd');;`)
 
-	utils.AssertMatches(t, conn, `select c1,c2,c3 from t1`, `[[INT64(300) INT64(100) INT64(300)] [INT64(301) INT64(101) INT64(301)]]`)
+	vitesst.AssertMatches(t, conn, `select c1,c2,c3 from t1`, `[[INT64(300) INT64(100) INT64(300)] [INT64(301) INT64(101) INT64(301)]]`)
 }
 
 func TestTopoDownServingQuery(t *testing.T) {
@@ -276,13 +262,16 @@ func TestTopoDownServingQuery(t *testing.T) {
 	require.Nil(t, err)
 	defer conn.Close()
 
-	defer utils.Exec(t, conn, `delete from t1`)
+	defer vitesst.Exec(t, conn, `delete from t1`)
 
 	execMulti(t, conn, `insert into t1(c1, c2, c3, c4) values (300,100,300,'abc'); ;; insert into t1(c1, c2, c3, c4) values (301,101,301,'abcd');;`)
-	utils.AssertMatches(t, conn, `select c1,c2,c3 from t1`, `[[INT64(300) INT64(100) INT64(300)] [INT64(301) INT64(101) INT64(301)]]`)
-	clusterInstance.TopoProcess.TearDown(clusterInstance.Cell, clusterInstance.OriginalVTDATAROOT, clusterInstance.CurrentVTDATAROOT, true, *clusterInstance.TopoFlavorString())
+	vitesst.AssertMatches(t, conn, `select c1,c2,c3 from t1`, `[[INT64(300) INT64(100) INT64(300)] [INT64(301) INT64(101) INT64(301)]]`)
+	require.NoError(t, clusterInstance.Topo().StopContainer(ctx, 30*time.Second))
+	t.Cleanup(func() {
+		require.NoError(t, clusterInstance.Topo().StartContainer(context.WithoutCancel(ctx)))
+	})
 	time.Sleep(3 * time.Second)
-	utils.AssertMatches(t, conn, `select c1,c2,c3 from t1`, `[[INT64(300) INT64(100) INT64(300)] [INT64(301) INT64(101) INT64(301)]]`)
+	vitesst.AssertMatches(t, conn, `select c1,c2,c3 from t1`, `[[INT64(300) INT64(100) INT64(300)] [INT64(301) INT64(101) INT64(301)]]`)
 }
 
 func TestInsertAllDefaults(t *testing.T) {
@@ -291,8 +280,8 @@ func TestInsertAllDefaults(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	utils.Exec(t, conn, `insert into allDefaults () values ()`)
-	utils.AssertMatches(t, conn, `select * from allDefaults`, "[[INT64(1) NULL]]")
+	vitesst.Exec(t, conn, `insert into allDefaults () values ()`)
+	vitesst.AssertMatches(t, conn, `select * from allDefaults`, "[[INT64(1) NULL]]")
 }
 
 func TestDDLUnsharded(t *testing.T) {
@@ -301,32 +290,28 @@ func TestDDLUnsharded(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	utils.Exec(t, conn, `create table tempt1(c1 BIGINT NOT NULL,c2 BIGINT NOT NULL,c3 BIGINT,c4 varchar(100),PRIMARY KEY (c1), UNIQUE KEY (c2),UNIQUE KEY (c3), UNIQUE KEY (c4))`)
+	vitesst.Exec(t, conn, `create table tempt1(c1 BIGINT NOT NULL,c2 BIGINT NOT NULL,c3 BIGINT,c4 varchar(100),PRIMARY KEY (c1), UNIQUE KEY (c2),UNIQUE KEY (c3), UNIQUE KEY (c4))`)
 	// Test that create view works and the output is as expected
-	utils.Exec(t, conn, `create view v1 as select * from tempt1`)
-	utils.Exec(t, conn, `insert into tempt1(c1, c2, c3, c4) values (300,100,300,'abc'),(30,10,30,'ac'),(3,0,3,'a')`)
-	utils.AssertMatches(t, conn, "select * from v1", `[[INT64(3) INT64(0) INT64(3) VARCHAR("a")] [INT64(30) INT64(10) INT64(30) VARCHAR("ac")] [INT64(300) INT64(100) INT64(300) VARCHAR("abc")]]`)
-	utils.Exec(t, conn, `drop view v1`)
-	utils.Exec(t, conn, `drop table tempt1`)
-	utils.AssertMatchesAny(t, conn, "show tables", `[[VARBINARY("allDefaults")] [VARBINARY("t1")]]`, `[[VARCHAR("allDefaults")] [VARCHAR("t1")]]`)
+	vitesst.Exec(t, conn, `create view v1 as select * from tempt1`)
+	vitesst.Exec(t, conn, `insert into tempt1(c1, c2, c3, c4) values (300,100,300,'abc'),(30,10,30,'ac'),(3,0,3,'a')`)
+	vitesst.AssertMatches(t, conn, "select * from v1", `[[INT64(3) INT64(0) INT64(3) VARCHAR("a")] [INT64(30) INT64(10) INT64(30) VARCHAR("ac")] [INT64(300) INT64(100) INT64(300) VARCHAR("abc")]]`)
+	vitesst.Exec(t, conn, `drop view v1`)
+	vitesst.Exec(t, conn, `drop table tempt1`)
+	vitesst.AssertMatchesAny(t, conn, "show tables", `[[VARBINARY("allDefaults")] [VARBINARY("t1")]]`, `[[VARCHAR("allDefaults")] [VARCHAR("t1")]]`)
 }
 
 func TestCallProcedure(t *testing.T) {
 	ctx := t.Context()
-	vtParams := mysql.ConnParams{
-		Host:   "localhost",
-		Port:   clusterInstance.VtgateMySQLPort,
-		Flags:  mysql.CapabilityClientMultiResults,
-		DbName: "@primary",
-	}
+	vtParams := clusterInstance.VTParams(ctx, "@primary")
+	vtParams.Flags = mysql.CapabilityClientMultiResults
 	time.Sleep(5 * time.Second)
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
-	qr := utils.Exec(t, conn, `CALL sp_insert()`)
+	qr := vitesst.Exec(t, conn, `CALL sp_insert()`)
 	require.EqualValues(t, 1, qr.RowsAffected)
 
-	utils.AssertMatches(t, conn, "show warnings", `[[VARCHAR("Warning") UINT16(1235) VARCHAR("'CALL' not supported in sharded mode")]]`)
+	vitesst.AssertMatches(t, conn, "show warnings", `[[VARCHAR("Warning") UINT16(1235) VARCHAR("'CALL' not supported in sharded mode")]]`)
 
 	err = conn.ExecuteFetchMultiDrain(`CALL sp_select()`)
 	require.ErrorContains(t, err, "Multi-Resultset not supported in stored procedure")
@@ -334,22 +319,22 @@ func TestCallProcedure(t *testing.T) {
 	err = conn.ExecuteFetchMultiDrain(`CALL sp_all()`)
 	require.ErrorContains(t, err, "Multi-Resultset not supported in stored procedure")
 
-	qr = utils.Exec(t, conn, `CALL sp_delete()`)
+	qr = vitesst.Exec(t, conn, `CALL sp_delete()`)
 	require.GreaterOrEqual(t, 1, int(qr.RowsAffected))
 
-	qr = utils.Exec(t, conn, `CALL sp_multi_dml()`)
+	qr = vitesst.Exec(t, conn, `CALL sp_multi_dml()`)
 	require.EqualValues(t, 1, qr.RowsAffected)
 
-	qr = utils.Exec(t, conn, `CALL sp_variable()`)
+	qr = vitesst.Exec(t, conn, `CALL sp_variable()`)
 	require.EqualValues(t, 1, qr.RowsAffected)
 
-	qr = utils.Exec(t, conn, `CALL in_parameter(42)`)
+	qr = vitesst.Exec(t, conn, `CALL in_parameter(42)`)
 	require.EqualValues(t, 1, qr.RowsAffected)
 
-	_ = utils.Exec(t, conn, `SET @foo = 123`)
-	qr = utils.Exec(t, conn, `CALL in_parameter(@foo)`)
+	_ = vitesst.Exec(t, conn, `SET @foo = 123`)
+	qr = vitesst.Exec(t, conn, `CALL in_parameter(@foo)`)
 	require.EqualValues(t, 1, qr.RowsAffected)
-	qr = utils.Exec(t, conn, "select * from allDefaults where id = 123")
+	qr = vitesst.Exec(t, conn, "select * from allDefaults where id = 123")
 	assert.NotEmpty(t, qr.Rows)
 
 	_, err = conn.ExecuteFetch(`CALL out_parameter(@foo)`, 100, true)
@@ -363,18 +348,18 @@ func TestTempTable(t *testing.T) {
 	require.NoError(t, err)
 	defer conn1.Close()
 
-	_ = utils.Exec(t, conn1, `create temporary table temp_t(id bigint primary key)`)
-	utils.AssertMatches(t, conn1, "show warnings", `[[VARCHAR("Warning") UINT16(1235) VARCHAR("'temporary table' not supported in sharded mode")]]`)
-	_ = utils.Exec(t, conn1, `insert into temp_t(id) values (1),(2),(3)`)
-	utils.AssertMatches(t, conn1, `select id from temp_t order by id`, `[[INT64(1)] [INT64(2)] [INT64(3)]]`)
-	utils.AssertMatches(t, conn1, `select count(table_id) from information_schema.innodb_temp_table_info`, `[[INT64(1)]]`)
+	_ = vitesst.Exec(t, conn1, `create temporary table temp_t(id bigint primary key)`)
+	vitesst.AssertMatches(t, conn1, "show warnings", `[[VARCHAR("Warning") UINT16(1235) VARCHAR("'temporary table' not supported in sharded mode")]]`)
+	_ = vitesst.Exec(t, conn1, `insert into temp_t(id) values (1),(2),(3)`)
+	vitesst.AssertMatches(t, conn1, `select id from temp_t order by id`, `[[INT64(1)] [INT64(2)] [INT64(3)]]`)
+	vitesst.AssertMatches(t, conn1, `select count(table_id) from information_schema.innodb_temp_table_info`, `[[INT64(1)]]`)
 
 	conn2, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn2.Close()
 
-	utils.AssertMatches(t, conn2, `select count(table_id) from information_schema.innodb_temp_table_info`, `[[INT64(1)]]`)
-	utils.AssertContainsError(t, conn2, `show create table temp_t`, `Table 'vt_customer.temp_t' doesn't exist (errno 1146) (sqlstate 42S02)`)
+	vitesst.AssertMatches(t, conn2, `select count(table_id) from information_schema.innodb_temp_table_info`, `[[INT64(1)]]`)
+	vitesst.AssertContainsError(t, conn2, `show create table temp_t`, `Table 'vt_customer.temp_t' doesn't exist (errno 1146) (sqlstate 42S02)`)
 }
 
 func TestReservedConnDML(t *testing.T) {
@@ -383,16 +368,16 @@ func TestReservedConnDML(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	utils.Exec(t, conn, `set default_week_format = 1`)
-	utils.Exec(t, conn, `begin`)
-	utils.Exec(t, conn, `insert into allDefaults () values ()`)
-	utils.Exec(t, conn, `commit`)
+	vitesst.Exec(t, conn, `set default_week_format = 1`)
+	vitesst.Exec(t, conn, `begin`)
+	vitesst.Exec(t, conn, `insert into allDefaults () values ()`)
+	vitesst.Exec(t, conn, `commit`)
 
 	time.Sleep(6 * time.Second)
 
-	utils.Exec(t, conn, `begin`)
-	utils.Exec(t, conn, `insert into allDefaults () values ()`)
-	utils.Exec(t, conn, `commit`)
+	vitesst.Exec(t, conn, `begin`)
+	vitesst.Exec(t, conn, `insert into allDefaults () values ()`)
+	vitesst.Exec(t, conn, `commit`)
 }
 
 func TestNumericPrecisionScale(t *testing.T) {
@@ -401,11 +386,11 @@ func TestNumericPrecisionScale(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	_ = utils.Exec(t, conn, "CREATE TABLE `a` (`one` bigint NOT NULL PRIMARY KEY) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4")
+	_ = vitesst.Exec(t, conn, "CREATE TABLE `a` (`one` bigint NOT NULL PRIMARY KEY) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4")
 	require.NoError(t, err)
-	defer utils.Exec(t, conn, "drop table `a`")
+	defer vitesst.Exec(t, conn, "drop table `a`")
 
-	qr := utils.Exec(t, conn, "select numeric_precision, numeric_scale from information_schema.columns where table_name = 'a'")
+	qr := vitesst.Exec(t, conn, "select numeric_precision, numeric_scale from information_schema.columns where table_name = 'a'")
 	require.Equal(t, 1, len(qr.Rows))
 
 	/*
@@ -434,8 +419,8 @@ func TestDeleteAlias(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	utils.Exec(t, conn, "delete t1 from t1 where c1 = 1")
-	utils.Exec(t, conn, "delete t.* from t1 t where t.c1 = 1")
+	vitesst.Exec(t, conn, "delete t1 from t1 where c1 = 1")
+	vitesst.Exec(t, conn, "delete t.* from t1 t where t.c1 = 1")
 }
 
 func TestFloatValueDefault(t *testing.T) {
@@ -443,9 +428,9 @@ func TestFloatValueDefault(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	utils.Exec(t, conn, `create table test_float_default (pos_f float default 2.1, neg_f float default -2.1);`)
-	defer utils.Exec(t, conn, `drop table test_float_default`)
-	utils.AssertMatchesAny(t, conn, "select table_name, column_name, column_default from information_schema.columns where table_name = 'test_float_default' order by column_default desc",
+	vitesst.Exec(t, conn, `create table test_float_default (pos_f float default 2.1, neg_f float default -2.1);`)
+	defer vitesst.Exec(t, conn, `drop table test_float_default`)
+	vitesst.AssertMatchesAny(t, conn, "select table_name, column_name, column_default from information_schema.columns where table_name = 'test_float_default' order by column_default desc",
 		`[[VARBINARY("test_float_default") VARCHAR("pos_f") BLOB("2.1")] [VARBINARY("test_float_default") VARCHAR("neg_f") BLOB("-2.1")]]`,
 		`[[VARCHAR("test_float_default") VARCHAR("pos_f") TEXT("2.1")] [VARCHAR("test_float_default") VARCHAR("neg_f") TEXT("-2.1")]]`)
 }
@@ -475,7 +460,7 @@ func TestMetricForExplain(t *testing.T) {
 	initialQT := getQPMetric(t, "QueryExecutionsByTable")
 
 	t.Run("explain t1", func(t *testing.T) {
-		utils.Exec(t, conn, "explain t1")
+		vitesst.Exec(t, conn, "explain t1")
 		updatedQP := getQPMetric(t, "QueryExecutions")
 		updatedQT := getQPMetric(t, "QueryExecutionsByTable")
 		assert.EqualValues(t, 1, getValue(updatedQP, "EXPLAIN.Passthrough.PRIMARY")-getValue(initialQP, "EXPLAIN.Passthrough.PRIMARY"))
@@ -483,7 +468,7 @@ func TestMetricForExplain(t *testing.T) {
 	})
 
 	t.Run("explain `select c1, c2 from t1`", func(t *testing.T) {
-		utils.ExecAllowError(t, conn, "explain `select c1, c2 from t1`")
+		vitesst.ExecAllowError(t, conn, "explain `select c1, c2 from t1`")
 		updatedQP := getQPMetric(t, "QueryExecutions")
 		updatedQT := getQPMetric(t, "QueryExecutionsByTable")
 		assert.EqualValues(t, 2, getValue(updatedQP, "EXPLAIN.Passthrough.PRIMARY")-getValue(initialQP, "EXPLAIN.Passthrough.PRIMARY"))
@@ -491,7 +476,7 @@ func TestMetricForExplain(t *testing.T) {
 	})
 
 	t.Run("explain select c1, c2 from t1", func(t *testing.T) {
-		utils.Exec(t, conn, "explain select c1, c2 from t1")
+		vitesst.Exec(t, conn, "explain select c1, c2 from t1")
 		updatedQP := getQPMetric(t, "QueryExecutions")
 		updatedQT := getQPMetric(t, "QueryExecutionsByTable")
 		assert.EqualValues(t, 3, getValue(updatedQP, "EXPLAIN.Passthrough.PRIMARY")-getValue(initialQP, "EXPLAIN.Passthrough.PRIMARY"))
@@ -502,7 +487,8 @@ func TestMetricForExplain(t *testing.T) {
 func getQPMetric(t *testing.T, metric string) map[string]any {
 	t.Helper()
 
-	vars := clusterInstance.VtgateProcess.GetVars()
+	vars, err := clusterInstance.VTGate().GetVars(t.Context())
+	require.NoError(t, err)
 	require.NotNil(t, vars)
 
 	qpVars, exists := vars[metric]

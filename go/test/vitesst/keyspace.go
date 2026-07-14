@@ -62,6 +62,10 @@ type (
 
 		// tabletSpec, when set, customizes each tablet's spec before start.
 		tabletSpec func(*TabletSpec)
+
+		// withoutPrimaryElection skips the automatic primary election, for
+		// tests that drive the election themselves.
+		withoutPrimaryElection bool
 	}
 
 	// keyspaceBuilder provides a fluent API for configuring a keyspace.
@@ -180,6 +184,14 @@ func (kb *keyspaceBuilder) WithTabletArgs(args ...string) *keyspaceBuilder {
 // before its container starts, for per-tablet extra args or files.
 func (kb *keyspaceBuilder) WithTabletSpec(fn func(*TabletSpec)) *keyspaceBuilder {
 	kb.config.tabletSpec = fn
+	return kb
+}
+
+// WithoutPrimaryElection skips the automatic primary election for this
+// keyspace's shards; Shard.Primary stays nil and the test drives the election
+// itself.
+func (kb *keyspaceBuilder) WithoutPrimaryElection() *keyspaceBuilder {
+	kb.config.withoutPrimaryElection = true
 	return kb
 }
 

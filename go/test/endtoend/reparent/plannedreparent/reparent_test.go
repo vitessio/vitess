@@ -29,103 +29,102 @@ import (
 
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/protoutil"
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/reparent/utils"
-	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/test/vitesst"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 )
 
 func TestPrimaryToSpareStateChangeImpossible(t *testing.T) {
-	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
-	defer utils.TeardownCluster(clusterInstance)
-	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+	clusterInstance := SetupReparentCluster(t, policy.DurabilitySemiSync)
+	defer TeardownCluster(t, clusterInstance)
+	tablets := shardTablets(clusterInstance)
 
 	// We cannot change a primary to spare
-	out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ChangeTabletType", tablets[0].Alias, "spare")
+	out, err := clusterInstance.Vtctld().ExecuteCommandWithOutput(t.Context(), "ChangeTabletType", tablets[0].Alias(), "spare")
 	require.Error(t, err, out)
 	require.Contains(t, out, "type change PRIMARY -> SPARE is not an allowed transition for ChangeTabletType")
 }
 
 func TestReparentCrossCell(t *testing.T) {
-	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
-	defer utils.TeardownCluster(clusterInstance)
-	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+	clusterInstance := SetupReparentCluster(t, policy.DurabilitySemiSync)
+	defer TeardownCluster(t, clusterInstance)
+	tablets := shardTablets(clusterInstance)
 
 	// Perform a graceful reparent operation to another cell.
-	_, err := utils.Prs(t, clusterInstance, tablets[3])
+	_, err := Prs(t, clusterInstance, tablets[3])
 	require.NoError(t, err)
 
-	utils.ValidateTopology(t, clusterInstance, false)
-	utils.CheckPrimaryTablet(t, clusterInstance, tablets[3])
+	ValidateTopology(t, clusterInstance, false)
+	CheckPrimaryTablet(t, clusterInstance, tablets[3])
 }
 
 func TestReparentGraceful(t *testing.T) {
-	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
-	defer utils.TeardownCluster(clusterInstance)
-	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+	clusterInstance := SetupReparentCluster(t, policy.DurabilitySemiSync)
+	defer TeardownCluster(t, clusterInstance)
+	tablets := shardTablets(clusterInstance)
 
 	// Run this to make sure it succeeds.
-	utils.WaitForReplicationToStart(t, clusterInstance, utils.KeyspaceName, utils.ShardName, len(tablets), true)
+	WaitForReplicationToStart(t, clusterInstance, KeyspaceName, ShardName, len(tablets), true)
 
 	// Perform a graceful reparent operation
-	utils.Prs(t, clusterInstance, tablets[1])
-	utils.ValidateTopology(t, clusterInstance, false)
-	utils.CheckPrimaryTablet(t, clusterInstance, tablets[1])
+	Prs(t, clusterInstance, tablets[1])
+	ValidateTopology(t, clusterInstance, false)
+	CheckPrimaryTablet(t, clusterInstance, tablets[1])
 
 	// A graceful reparent to the same primary should be idempotent.
-	utils.Prs(t, clusterInstance, tablets[1])
-	utils.ValidateTopology(t, clusterInstance, false)
-	utils.CheckPrimaryTablet(t, clusterInstance, tablets[1])
+	Prs(t, clusterInstance, tablets[1])
+	ValidateTopology(t, clusterInstance, false)
+	CheckPrimaryTablet(t, clusterInstance, tablets[1])
 
-	utils.ConfirmReplication(t, tablets[1], []*cluster.Vttablet{tablets[0], tablets[2], tablets[3]})
+	ConfirmReplication(t, tablets[1], []*vitesst.Tablet{tablets[0], tablets[2], tablets[3]})
 }
 
 // TestPRSWithDrainedLaggingTablet tests that PRS succeeds even if we have a lagging drained tablet
 func TestPRSWithDrainedLaggingTablet(t *testing.T) {
-	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
-	defer utils.TeardownCluster(clusterInstance)
-	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+	clusterInstance := SetupReparentCluster(t, policy.DurabilitySemiSync)
+	defer TeardownCluster(t, clusterInstance)
+	tablets := shardTablets(clusterInstance)
 
-	err := clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", tablets[1].Alias, "drained")
+	err := clusterInstance.Vtctld().ExecuteCommand(t.Context(), "ChangeTabletType", tablets[1].Alias(), "drained")
 	require.NoError(t, err)
 
-	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
+	ConfirmReplication(t, tablets[0], []*vitesst.Tablet{tablets[1], tablets[2], tablets[3]})
 
 	// make tablets[1 lag from the other tablets by setting the delay to a large number
-	utils.RunSQLs(t.Context(), t, []string{`stop replica`, `CHANGE REPLICATION SOURCE TO SOURCE_DELAY = 1999`, `start replica;`}, tablets[1])
+	RunSQLs(t.Context(), t, []string{`stop replica`, `CHANGE REPLICATION SOURCE TO SOURCE_DELAY = 1999`, `start replica;`}, tablets[1])
 
 	// insert another row in tablets[1
-	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[2], tablets[3]})
+	ConfirmReplication(t, tablets[0], []*vitesst.Tablet{tablets[2], tablets[3]})
 
 	// assert that there is indeed only 1 row in tablets[1
-	res := utils.RunSQL(t.Context(), t, `select msg from vt_insert_test`, tablets[1])
+	res := RunSQL(t.Context(), t, `select msg from vt_insert_test`, tablets[1])
 	assert.Equal(t, 1, len(res.Rows))
 
 	// Perform a graceful reparent operation
-	utils.Prs(t, clusterInstance, tablets[2])
-	utils.ValidateTopology(t, clusterInstance, false)
-	utils.CheckPrimaryTablet(t, clusterInstance, tablets[2])
+	Prs(t, clusterInstance, tablets[2])
+	ValidateTopology(t, clusterInstance, false)
+	CheckPrimaryTablet(t, clusterInstance, tablets[2])
 }
 
 func TestReparentReplicaOffline(t *testing.T) {
-	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
-	defer utils.TeardownCluster(clusterInstance)
-	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+	clusterInstance := SetupReparentCluster(t, policy.DurabilitySemiSync)
+	defer TeardownCluster(t, clusterInstance)
+	tablets := shardTablets(clusterInstance)
 	killTablet := tablets[3]
 
-	tabletInfo, err := clusterInstance.VtctldClientProcess.GetTablet(killTablet.Alias)
+	tabletInfo, err := getTablet(t.Context(), clusterInstance, killTablet.Alias())
 	require.NoError(t, err)
 	require.NotNil(t, tabletInfo.TabletStartTime)
 	require.Nil(t, tabletInfo.TabletShutdownTime)
 
-	// Gracefully kill one tablet so we seem offline. Use a SIGKILL-fallback delay of 30s, like kube.
+	// Gracefully kill one tablet so we seem offline.
 	startKillTime := time.Now()
-	killTablet.VttabletProcess.TearDownWithTimeout(60 * time.Second)
+	err = killTablet.StopVttablet(t.Context())
+	require.NoError(t, err)
 
 	// Confirm the tablet shutdown via the topo.
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		tabletInfo, err := clusterInstance.VtctldClientProcess.GetTablet(killTablet.Alias)
+		tabletInfo, err := getTablet(t.Context(), clusterInstance, killTablet.Alias())
 		require.NoError(c, err)
 
 		require.Nil(c, tabletInfo.TabletStartTime)
@@ -135,85 +134,83 @@ func TestReparentReplicaOffline(t *testing.T) {
 	}, time.Second, time.Second*31)
 
 	// Perform a graceful reparent operation.
-	out, err := utils.PrsWithTimeout(t, clusterInstance, tablets[1], false, "", "31s")
+	out, err := PrsWithTimeout(t, clusterInstance, tablets[1], false, "", "31s")
 	require.Error(t, err)
 
 	// Assert that PRS failed
 	assert.Contains(t, out, "rpc error: code = Unknown desc = tablet is shutdown")
-	utils.CheckPrimaryTablet(t, clusterInstance, tablets[0])
+	CheckPrimaryTablet(t, clusterInstance, tablets[0])
 }
 
 func TestReparentAvoid(t *testing.T) {
-	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
-	defer utils.TeardownCluster(clusterInstance)
-	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
-	utils.DeleteTablet(t, clusterInstance, tablets[2])
+	clusterInstance := SetupReparentCluster(t, policy.DurabilitySemiSync)
+	defer TeardownCluster(t, clusterInstance)
+	tablets := shardTablets(clusterInstance)
+	DeleteTablet(t, clusterInstance, tablets[2])
 
 	// Perform a reparent operation with avoid_tablet pointing to non-primary. It
 	// should succeed without doing anything.
-	_, err := utils.PrsAvoid(t, clusterInstance, tablets[1])
+	_, err := PrsAvoid(t, clusterInstance, tablets[1])
 	require.NoError(t, err)
 
-	utils.ValidateTopology(t, clusterInstance, false)
-	utils.CheckPrimaryTablet(t, clusterInstance, tablets[0])
+	ValidateTopology(t, clusterInstance, false)
+	CheckPrimaryTablet(t, clusterInstance, tablets[0])
 
 	// Perform a reparent operation with avoid_tablet pointing to primary.
-	_, err = utils.PrsAvoid(t, clusterInstance, tablets[0])
+	_, err = PrsAvoid(t, clusterInstance, tablets[0])
 	require.NoError(t, err)
-	utils.ValidateTopology(t, clusterInstance, false)
+	ValidateTopology(t, clusterInstance, false)
 
 	// tablets[1] is in the same cell and tablets[3] is in a different cell, so we must land on tablets[1]
-	utils.CheckPrimaryTablet(t, clusterInstance, tablets[1])
+	CheckPrimaryTablet(t, clusterInstance, tablets[1])
 
 	// If we kill the tablet in the same cell as primary then reparent --avoid-tablet will fail.
-	utils.StopTablet(t, tablets[0], true)
-	out, err := utils.PrsAvoid(t, clusterInstance, tablets[1])
+	StopTablet(t, tablets[0], true)
+	out, err := PrsAvoid(t, clusterInstance, tablets[1])
 	require.Error(t, err)
 	assert.Contains(t, out, "rpc error: code = Unknown desc = tablet is shutdown")
 
-	utils.ValidateTopology(t, clusterInstance, false)
-	utils.CheckPrimaryTablet(t, clusterInstance, tablets[1])
+	ValidateTopology(t, clusterInstance, false)
+	CheckPrimaryTablet(t, clusterInstance, tablets[1])
 
 	t.Run("Allow cross cell promotion", func(t *testing.T) {
-		utils.DeleteTablet(t, clusterInstance, tablets[0])
+		DeleteTablet(t, clusterInstance, tablets[0])
 		// Perform a graceful reparent operation and verify it fails because we have no replicas in the same cell as the primary.
-		out, err = utils.PrsAvoid(t, clusterInstance, tablets[1])
+		out, err = PrsAvoid(t, clusterInstance, tablets[1])
 		require.Error(t, err)
 		assert.Contains(t, out, "is not in the same cell as the previous primary")
 
 		// If we run PRS with allow cross cell promotion then it should succeed and should promote the replica in another cell.
-		_, err = utils.PrsAvoid(t, clusterInstance, tablets[1], "--allow-cross-cell-promotion")
+		_, err = PrsAvoid(t, clusterInstance, tablets[1], "--allow-cross-cell-promotion")
 		require.NoError(t, err)
-		utils.CheckPrimaryTablet(t, clusterInstance, tablets[3])
+		CheckPrimaryTablet(t, clusterInstance, tablets[3])
 	})
 }
 
 func TestReparentFromOutside(t *testing.T) {
-	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
-	defer utils.TeardownCluster(clusterInstance)
+	clusterInstance := SetupReparentCluster(t, policy.DurabilitySemiSync)
+	defer TeardownCluster(t, clusterInstance)
 	reparentFromOutside(t, clusterInstance, false)
 }
 
 func TestReparentFromOutsideWithNoPrimary(t *testing.T) {
-	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
-	defer utils.TeardownCluster(clusterInstance)
-	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+	clusterInstance := SetupReparentCluster(t, policy.DurabilitySemiSync)
+	defer TeardownCluster(t, clusterInstance)
+	tablets := shardTablets(clusterInstance)
 
 	reparentFromOutside(t, clusterInstance, true)
 
-	// FIXME: @Deepthi: is this needed, since we teardown the cluster, does this achieve any additional test coverage?
 	// We will have to restart mysql to avoid hanging/locks due to external Reparent
 	for _, tablet := range tablets {
-		log.Info(fmt.Sprintf("Restarting MySql for tablet %v", tablet.Alias))
-		err := tablet.MysqlctlProcess.Stop()
+		t.Logf("Restarting MySql for tablet %v", tablet.Alias())
+		err := tablet.StopMySQL(t.Context())
 		require.NoError(t, err)
-		tablet.MysqlctlProcess.InitMysql = false
-		err = tablet.MysqlctlProcess.Start()
+		err = tablet.StartMySQL(t.Context())
 		require.NoError(t, err)
 	}
 }
 
-func reparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProcessCluster, downPrimary bool) {
+func reparentFromOutside(t *testing.T, clusterInstance *vitesst.Cluster, downPrimary bool) {
 	// This test will start a primary and 3 replicas.
 	// Then:
 	// - one replica will be the new primary
@@ -222,7 +219,7 @@ func reparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProcessClus
 	// Args:
 	// downPrimary: kills the old primary first
 	ctx := t.Context()
-	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+	tablets := shardTablets(clusterInstance)
 
 	// now manually reparent 1 out of 2 tablets
 	// tablets[1 will be the new primary
@@ -231,114 +228,113 @@ func reparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProcessClus
 	if !downPrimary {
 		// commands to stop the current primary
 		demoteCommands := []string{"SET GLOBAL read_only = ON", "FLUSH TABLES WITH READ LOCK", "UNLOCK TABLES"}
-		utils.RunSQLs(ctx, t, demoteCommands, tablets[0])
+		RunSQLs(ctx, t, demoteCommands, tablets[0])
 
 		// Get the position of the old primary and wait for the new one to catch up.
-		err := utils.WaitForReplicationPosition(t, tablets[0], tablets[1])
+		err := WaitForReplicationPosition(t, tablets[0], tablets[1])
 		require.NoError(t, err)
 	}
 
 	// commands to convert a replica to be writable
 	promoteReplicaCommands := []string{"STOP REPLICA", "RESET REPLICA ALL", "SET GLOBAL read_only = OFF"}
-	utils.RunSQLs(ctx, t, promoteReplicaCommands, tablets[1])
+	RunSQLs(ctx, t, promoteReplicaCommands, tablets[1])
 
 	// Get primary position
-	_, gtID := cluster.GetPrimaryPosition(t, *tablets[1], utils.Hostname)
+	_, gtID := primaryPosition(t, tablets[1])
 
 	// tablets[0] will now be a replica of tablets[1
-	resetCmd, err := tablets[0].VttabletProcess.ResetBinaryLogsCommand()
+	resetCmd, err := resetBinaryLogsCommand(ctx, tablets[0])
 	require.NoError(t, err)
 	changeReplicationSourceCommands := []string{
 		resetCmd,
 		"RESET REPLICA",
 		fmt.Sprintf("SET GLOBAL gtid_purged = '%s'", gtID),
-		fmt.Sprintf("CHANGE REPLICATION SOURCE TO SOURCE_HOST='%s', SOURCE_PORT=%d, SOURCE_USER='vt_repl', GET_SOURCE_PUBLIC_KEY = 1, SOURCE_AUTO_POSITION = 1", utils.Hostname, tablets[1].MySQLPort),
+		fmt.Sprintf("CHANGE REPLICATION SOURCE TO SOURCE_HOST='%s', SOURCE_PORT=%d, SOURCE_USER='vt_repl', GET_SOURCE_PUBLIC_KEY = 1, SOURCE_AUTO_POSITION = 1", tablets[1].Name(), tabletMySQLPort),
 	}
-	utils.RunSQLs(ctx, t, changeReplicationSourceCommands, tablets[0])
+	RunSQLs(ctx, t, changeReplicationSourceCommands, tablets[0])
 
 	// Capture time when we made tablets[1 writable
 	baseTime := time.Now().UnixNano() / 1000000000
 
 	// tablets[2 will be a replica of tablets[1
-	resetCmd, err = tablets[2].VttabletProcess.ResetBinaryLogsCommand()
+	resetCmd, err = resetBinaryLogsCommand(ctx, tablets[2])
 	require.NoError(t, err)
 	changeReplicationSourceCommands = []string{
 		"STOP REPLICA",
 		resetCmd,
 		fmt.Sprintf("SET GLOBAL gtid_purged = '%s'", gtID),
-		fmt.Sprintf("CHANGE REPLICATION SOURCE TO SOURCE_HOST='%s', SOURCE_PORT=%d, SOURCE_USER='vt_repl', GET_SOURCE_PUBLIC_KEY = 1, SOURCE_AUTO_POSITION = 1", utils.Hostname, tablets[1].MySQLPort),
+		fmt.Sprintf("CHANGE REPLICATION SOURCE TO SOURCE_HOST='%s', SOURCE_PORT=%d, SOURCE_USER='vt_repl', GET_SOURCE_PUBLIC_KEY = 1, SOURCE_AUTO_POSITION = 1", tablets[1].Name(), tabletMySQLPort),
 		"START REPLICA",
 	}
-	utils.RunSQLs(ctx, t, changeReplicationSourceCommands, tablets[2])
+	RunSQLs(ctx, t, changeReplicationSourceCommands, tablets[2])
 
 	// To test the downPrimary, we kill the old primary first and delete its tablet record
 	if downPrimary {
-		err := tablets[0].VttabletProcess.TearDownWithTimeout(30 * time.Second)
+		err := tablets[0].StopVttablet(ctx)
 		require.NoError(t, err)
-		err = clusterInstance.VtctldClientProcess.ExecuteCommand("DeleteTablets",
-			"--allow-primary", tablets[0].Alias)
+		err = clusterInstance.Vtctld().ExecuteCommand(ctx, "DeleteTablets",
+			"--allow-primary", tablets[0].Alias())
 		require.NoError(t, err)
 	}
 
 	// update topology with the new server
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("TabletExternallyReparented",
-		tablets[1].Alias)
+	err = clusterInstance.Vtctld().ExecuteCommand(ctx, "TabletExternallyReparented",
+		tablets[1].Alias())
 	require.NoError(t, err)
 
-	utils.CheckReparentFromOutside(t, clusterInstance, tablets[1], downPrimary, baseTime)
+	CheckReparentFromOutside(t, clusterInstance, tablets[1], downPrimary, baseTime)
 
 	if !downPrimary {
-		err := tablets[0].VttabletProcess.TearDownWithTimeout(30 * time.Second)
+		err := tablets[0].StopVttablet(ctx)
 		require.NoError(t, err)
 	}
 }
 
 func TestReparentWithDownReplica(t *testing.T) {
-	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
-	defer utils.TeardownCluster(clusterInstance)
-	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+	clusterInstance := SetupReparentCluster(t, policy.DurabilitySemiSync)
+	defer TeardownCluster(t, clusterInstance)
+	tablets := shardTablets(clusterInstance)
 
 	ctx := t.Context()
 
-	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
+	ConfirmReplication(t, tablets[0], []*vitesst.Tablet{tablets[1], tablets[2], tablets[3]})
 
 	// Stop replica mysql Process
-	err := tablets[2].MysqlctlProcess.Stop()
+	err := tablets[2].StopMySQL(ctx)
 	require.NoError(t, err)
 
-	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[3]})
+	ConfirmReplication(t, tablets[0], []*vitesst.Tablet{tablets[1], tablets[3]})
 
 	// Perform a graceful reparent operation. It will fail as one tablet is down.
-	out, err := utils.Prs(t, clusterInstance, tablets[1])
+	out, err := Prs(t, clusterInstance, tablets[1])
 	require.Error(t, err)
 	// Assert that PRS failed
-	assert.Contains(t, out, "TabletManager.GetGlobalStatusVars on "+tablets[2].Alias)
+	assert.Contains(t, out, "TabletManager.GetGlobalStatusVars on "+canonicalAlias(tablets[2]))
 	// insert data into the old primary, check the connected replica works. The primary tablet shouldn't have changed.
-	insertVal := utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[3]})
+	insertVal := ConfirmReplication(t, tablets[0], []*vitesst.Tablet{tablets[1], tablets[3]})
 
 	// restart mysql on the old replica, should still be connecting to the old primary
-	tablets[2].MysqlctlProcess.InitMysql = false
-	err = tablets[2].MysqlctlProcess.Start()
+	err = tablets[2].StartMySQL(ctx)
 	require.NoError(t, err)
 
 	// Use the same PlannedReparentShard command to promote the new primary.
-	_, err = utils.Prs(t, clusterInstance, tablets[1])
+	_, err = Prs(t, clusterInstance, tablets[1])
 	require.NoError(t, err)
 
 	// We have to StartReplication on tablets[2] since the MySQL instance is restarted and does not have replication running
 	// We earlier used to rely on replicationManager to fix this but we have disabled it in our testing environment for latest versions of vttablet and vtctl.
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("StartReplication", tablets[2].Alias)
+	err = clusterInstance.Vtctld().ExecuteCommand(ctx, "StartReplication", tablets[2].Alias())
 	require.NoError(t, err)
 
 	// wait until it gets the data
-	err = utils.CheckInsertedValues(ctx, t, tablets[2], insertVal)
+	err = CheckInsertedValues(ctx, t, tablets[2], insertVal)
 	require.NoError(t, err)
 }
 
 func TestChangeTypeSemiSync(t *testing.T) {
-	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
-	defer utils.TeardownCluster(clusterInstance)
-	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+	clusterInstance := SetupReparentCluster(t, policy.DurabilitySemiSync)
+	defer TeardownCluster(t, clusterInstance)
+	tablets := shardTablets(clusterInstance)
 
 	ctx := t.Context()
 
@@ -346,109 +342,107 @@ func TestChangeTypeSemiSync(t *testing.T) {
 	primary, replica, rdonly1, rdonly2 := tablets[0], tablets[1], tablets[2], tablets[3]
 
 	// Updated rdonly tablet and set tablet type to rdonly
-	err := clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", rdonly1.Alias, "rdonly")
+	err := clusterInstance.Vtctld().ExecuteCommand(ctx, "ChangeTabletType", rdonly1.Alias(), "rdonly")
 	require.NoError(t, err)
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", rdonly2.Alias, "rdonly")
+	err = clusterInstance.Vtctld().ExecuteCommand(ctx, "ChangeTabletType", rdonly2.Alias(), "rdonly")
 	require.NoError(t, err)
 
-	utils.ValidateTopology(t, clusterInstance, true)
+	ValidateTopology(t, clusterInstance, true)
 
-	utils.CheckPrimaryTablet(t, clusterInstance, primary)
+	CheckPrimaryTablet(t, clusterInstance, primary)
 
 	// Stop replication on rdonly1, to make sure when we make it replica it doesn't start again.
 	// Note we do a similar test for replica -> rdonly below.
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("StopReplication", rdonly1.Alias)
+	err = clusterInstance.Vtctld().ExecuteCommand(ctx, "StopReplication", rdonly1.Alias())
 	require.NoError(t, err)
 
 	// Check semi-sync on replicas.
 	// The flag is only an indication of the value to use next time
 	// we turn replication on, so also check the status.
 	// rdonly1 is not replicating, so its status is off.
-	utils.CheckSemisyncEnabled(ctx, t, replica, true)
-	utils.CheckSemisyncEnabled(ctx, t, rdonly1, false)
-	utils.CheckSemisyncEnabled(ctx, t, rdonly2, false)
-	utils.CheckSemisyncStatus(ctx, t, replica, true)
-	utils.CheckSemisyncStatus(ctx, t, rdonly1, false)
-	utils.CheckSemisyncStatus(ctx, t, rdonly2, false)
+	CheckSemisyncEnabled(ctx, t, replica, true)
+	CheckSemisyncEnabled(ctx, t, rdonly1, false)
+	CheckSemisyncEnabled(ctx, t, rdonly2, false)
+	CheckSemisyncStatus(ctx, t, replica, true)
+	CheckSemisyncStatus(ctx, t, rdonly1, false)
+	CheckSemisyncStatus(ctx, t, rdonly2, false)
 
 	// Change replica to rdonly while replicating, should turn off semi-sync, and restart replication.
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", replica.Alias, "rdonly")
+	err = clusterInstance.Vtctld().ExecuteCommand(ctx, "ChangeTabletType", replica.Alias(), "rdonly")
 	require.NoError(t, err)
-	utils.CheckSemisyncEnabled(ctx, t, replica, false)
-	utils.CheckSemisyncStatus(ctx, t, replica, false)
+	CheckSemisyncEnabled(ctx, t, replica, false)
+	CheckSemisyncStatus(ctx, t, replica, false)
 
 	// Change rdonly1 to replica, should turn on semi-sync, and not start replication.
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", rdonly1.Alias, "replica")
+	err = clusterInstance.Vtctld().ExecuteCommand(ctx, "ChangeTabletType", rdonly1.Alias(), "replica")
 	require.NoError(t, err)
-	utils.CheckSemisyncEnabled(ctx, t, rdonly1, true)
-	utils.CheckSemisyncStatus(ctx, t, rdonly1, false)
-	utils.CheckReplicaStatus(ctx, t, rdonly1)
+	CheckSemisyncEnabled(ctx, t, rdonly1, true)
+	CheckSemisyncStatus(ctx, t, rdonly1, false)
+	CheckReplicaStatus(ctx, t, rdonly1)
 
 	// Now change from replica back to rdonly, make sure replication is still not enabled.
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", rdonly1.Alias, "rdonly")
+	err = clusterInstance.Vtctld().ExecuteCommand(ctx, "ChangeTabletType", rdonly1.Alias(), "rdonly")
 	require.NoError(t, err)
-	utils.CheckSemisyncEnabled(ctx, t, rdonly1, false)
-	utils.CheckSemisyncStatus(ctx, t, rdonly1, false)
-	utils.CheckReplicaStatus(ctx, t, rdonly1)
+	CheckSemisyncEnabled(ctx, t, rdonly1, false)
+	CheckSemisyncStatus(ctx, t, rdonly1, false)
+	CheckReplicaStatus(ctx, t, rdonly1)
 
 	// Change rdonly2 to replica, should turn on semi-sync, and restart replication.
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", rdonly2.Alias, "replica")
+	err = clusterInstance.Vtctld().ExecuteCommand(ctx, "ChangeTabletType", rdonly2.Alias(), "replica")
 	require.NoError(t, err)
-	utils.CheckSemisyncEnabled(ctx, t, rdonly2, true)
-	utils.CheckSemisyncStatus(ctx, t, rdonly2, true)
+	CheckSemisyncEnabled(ctx, t, rdonly2, true)
+	CheckSemisyncStatus(ctx, t, rdonly2, true)
 }
 
 // TestCrossCellDurability tests 2 things -
 // 1. When PRS is run with the cross_cell durability policy setup, then the semi-sync settings on all the tablets are as expected
 // 2. Bringing up a new vttablet should have its replication and semi-sync setup correctly without any manual intervention
 func TestCrossCellDurability(t *testing.T) {
-	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilityCrossCell)
-	defer utils.TeardownCluster(clusterInstance)
-	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+	clusterInstance := SetupReparentCluster(t, policy.DurabilityCrossCell)
+	defer TeardownCluster(t, clusterInstance)
+	tablets := shardTablets(clusterInstance)
 
-	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
+	ConfirmReplication(t, tablets[0], []*vitesst.Tablet{tablets[1], tablets[2], tablets[3]})
 
 	// When tablets[0] is the primary, the only tablet in a different cell is tablets[3].
 	// So the other two should have semi-sync turned off
-	utils.CheckSemiSyncSetupCorrectly(t, tablets[0], "ON")
-	utils.CheckSemiSyncSetupCorrectly(t, tablets[3], "ON")
-	utils.CheckSemiSyncSetupCorrectly(t, tablets[1], "OFF")
-	utils.CheckSemiSyncSetupCorrectly(t, tablets[2], "OFF")
+	CheckSemiSyncSetupCorrectly(t, tablets[0], "ON")
+	CheckSemiSyncSetupCorrectly(t, tablets[3], "ON")
+	CheckSemiSyncSetupCorrectly(t, tablets[1], "OFF")
+	CheckSemiSyncSetupCorrectly(t, tablets[2], "OFF")
 
 	// Run forced reparent operation, this should proceed unimpeded.
-	out, err := utils.Prs(t, clusterInstance, tablets[3])
+	out, err := Prs(t, clusterInstance, tablets[3])
 	require.NoError(t, err, out)
 
-	utils.ConfirmReplication(t, tablets[3], []*cluster.Vttablet{tablets[0], tablets[1], tablets[2]})
+	ConfirmReplication(t, tablets[3], []*vitesst.Tablet{tablets[0], tablets[1], tablets[2]})
 
 	// All the tablets will have semi-sync setup since tablets[3] is in Cell2 and all
 	// others are in Cell1, so all of them are eligible to send semi-sync ACKs
 	for _, tablet := range tablets {
-		utils.CheckSemiSyncSetupCorrectly(t, tablet, "ON")
+		CheckSemiSyncSetupCorrectly(t, tablet, "ON")
 	}
 
-	for i, supportsBackup := range []bool{false, true} {
+	for range 2 {
 		// Bring up a new replica tablet
 		// In this new tablet, we do not disable active reparents, otherwise replication will not be started.
-		newReplica := utils.StartNewVTTablet(t, clusterInstance, 300+i, supportsBackup)
-		// Add the tablet to the list of tablets in this shard
-		clusterInstance.Keyspaces[0].Shards[0].Vttablets = append(clusterInstance.Keyspaces[0].Shards[0].Vttablets, newReplica)
+		newReplica := StartNewVTTablet(t, clusterInstance)
 		// Check that we can replicate to it and semi-sync is setup correctly on it
-		utils.ConfirmReplication(t, tablets[3], []*cluster.Vttablet{tablets[0], tablets[1], tablets[2], newReplica})
-		utils.CheckSemiSyncSetupCorrectly(t, newReplica, "ON")
+		ConfirmReplication(t, tablets[3], []*vitesst.Tablet{tablets[0], tablets[1], tablets[2], newReplica})
+		CheckSemiSyncSetupCorrectly(t, newReplica, "ON")
 	}
 }
 
 // TestFullStatus tests that the RPC FullStatus works as intended.
 func TestFullStatus(t *testing.T) {
-	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
-	defer utils.TeardownCluster(clusterInstance)
-	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
-	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
+	clusterInstance := SetupReparentCluster(t, policy.DurabilitySemiSync)
+	defer TeardownCluster(t, clusterInstance)
+	tablets := shardTablets(clusterInstance)
+	ConfirmReplication(t, tablets[0], []*vitesst.Tablet{tablets[1], tablets[2], tablets[3]})
 
 	// Check that full status gives the correct result for a primary tablet
 	primaryTablet := tablets[0]
-	primaryStatusString, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("GetFullStatus", primaryTablet.Alias)
+	primaryStatusString, err := clusterInstance.Vtctld().ExecuteCommandWithOutput(t.Context(), "GetFullStatus", primaryTablet.Alias())
 	require.NoError(t, err)
 	primaryStatus := &replicationdatapb.FullStatus{}
 	opt := protojson.UnmarshalOptions{DiscardUnknown: true}
@@ -482,7 +476,7 @@ func TestFullStatus(t *testing.T) {
 	waitForFilePosition(t, clusterInstance, primaryTablet, replicaTablet, 5*time.Second)
 
 	// Check that full status gives the correct result for a replica tablet
-	replicaStatusString, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("GetFullStatus", replicaTablet.Alias)
+	replicaStatusString, err := clusterInstance.Vtctld().ExecuteCommandWithOutput(t.Context(), "GetFullStatus", replicaTablet.Alias())
 	require.NoError(t, err)
 	replicaStatus := &replicationdatapb.FullStatus{}
 	opt = protojson.UnmarshalOptions{DiscardUnknown: true}
@@ -509,8 +503,8 @@ func TestFullStatus(t *testing.T) {
 	assert.False(t, replicaStatus.ReplicationStatus.HasReplicationFilters)
 	assert.False(t, replicaStatus.ReplicationStatus.UsingGtid)
 	assert.True(t, replicaStatus.ReplicationStatus.AutoPosition)
-	assert.Equal(t, replicaStatus.ReplicationStatus.SourceHost, utils.Hostname)
-	assert.EqualValues(t, replicaStatus.ReplicationStatus.SourcePort, tablets[0].MySQLPort)
+	assert.Equal(t, replicaStatus.ReplicationStatus.SourceHost, tablets[0].Name())
+	assert.EqualValues(t, replicaStatus.ReplicationStatus.SourcePort, tabletMySQLPort)
 	assert.Equal(t, replicaStatus.ReplicationStatus.SourceUser, "vt_repl")
 	assert.Contains(t, replicaStatus.PrimaryStatus.String(), "vt-0000000102-bin")
 	assert.Equal(t, replicaStatus.GtidPurged, "MySQL56/")
@@ -532,8 +526,8 @@ func TestFullStatus(t *testing.T) {
 	assert.NotEmpty(t, replicaStatus.VersionComment)
 }
 
-func getFullStatus(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tablet *cluster.Vttablet) *replicationdatapb.FullStatus {
-	statusString, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("GetFullStatus", tablet.Alias)
+func getFullStatus(t *testing.T, clusterInstance *vitesst.Cluster, tablet *vitesst.Tablet) *replicationdatapb.FullStatus {
+	statusString, err := clusterInstance.Vtctld().ExecuteCommandWithOutput(t.Context(), "GetFullStatus", tablet.Alias())
 	require.NoError(t, err)
 	status := &replicationdatapb.FullStatus{}
 	opt := protojson.UnmarshalOptions{DiscardUnknown: true}
@@ -543,7 +537,7 @@ func getFullStatus(t *testing.T, clusterInstance *cluster.LocalProcessCluster, t
 }
 
 // waitForFilePosition waits for timeout to see if FilePositions align b/w primary and replica, to fix flakiness in tests due to race conditions where replica is still catching up
-func waitForFilePosition(t *testing.T, clusterInstance *cluster.LocalProcessCluster, primary *cluster.Vttablet, replica *cluster.Vttablet, timeout time.Duration) {
+func waitForFilePosition(t *testing.T, clusterInstance *vitesst.Cluster, primary *vitesst.Tablet, replica *vitesst.Tablet, timeout time.Duration) {
 	start := time.Now()
 	for {
 		primaryStatus := getFullStatus(t, clusterInstance, primary)

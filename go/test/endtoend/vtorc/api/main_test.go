@@ -17,55 +17,69 @@ limitations under the License.
 package api
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"testing"
+	"time"
 
-	"vitess.io/vitess/go/test/endtoend/vtorc/utils"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
-var clusterInfo *utils.VTOrcClusterInfo
+const (
+	keyspaceName = "ks"
+	shardName    = "0"
+	cell1        = "zone1"
+	cell2        = "zone2"
+)
+
+var clusterInstance *vitesst.Cluster
 
 func TestMain(m *testing.M) {
-	// setup cellInfos before creating the cluster
-	var cellInfos []*utils.CellInfo
-	cellInfos = append(cellInfos, &utils.CellInfo{
-		CellName:    utils.Cell1,
-		NumReplicas: 2,
-		NumRdonly:   1,
-		UIDBase:     100,
-	})
-	cellInfos = append(cellInfos, &utils.CellInfo{
-		CellName:    utils.Cell2,
-		NumReplicas: 0,
-		NumRdonly:   0,
-		UIDBase:     200,
-	})
-
 	exitcode, err := func() (int, error) {
-		var err error
-		clusterInfo, err = utils.CreateClusterAndStartTopo(cellInfos)
+		ctx := context.Background()
+
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithCells(cell1, cell2),
+			vitesst.WithoutVTGate(),
+			vitesst.WithVTOrc(),
+			vitesst.WithKeyspace(keyspaceName).
+				WithShardNames(shardName).
+				WithReplicas(1).
+				WithRDOnly(1).
+				WithoutPrimaryElection().
+				WithTabletSpec(func(spec *vitesst.TabletSpec) {
+					spec.Cell = cell1
+				}),
+		)
 		if err != nil {
 			return 1, err
 		}
+		cleanup, err := cluster.Start(ctx)
+		if err != nil {
+			return 1, err
+		}
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
+
+		// Clear super_read_only on every tablet so that writes issued directly
+		// against a replica's mysqld succeed, then let VTOrc elect the primary.
+		for _, tablet := range cluster.Tablets() {
+			if _, err := tablet.QueryTabletWithDB(ctx, "SET GLOBAL super_read_only = OFF", ""); err != nil {
+				return 1, err
+			}
+		}
+		if err := cluster.WaitForHealthyShard(ctx, keyspaceName, shardName, 60*time.Second); err != nil {
+			return 1, err
+		}
+
+		clusterInstance = cluster
 
 		return m.Run(), nil
 	}()
-
-	if clusterInfo != nil {
-		// stop vtorc first otherwise its logs get polluted
-		// with instances being unreachable triggering unnecessary operations
-		for _, vtorcProcess := range clusterInfo.ClusterInstance.VTOrcProcesses {
-			_ = vtorcProcess.TearDown()
-		}
-
-		for _, cellInfo := range clusterInfo.CellInfos {
-			utils.KillTablets(cellInfo.ReplicaTablets)
-			utils.KillTablets(cellInfo.RdonlyTablets)
-		}
-		clusterInfo.ClusterInstance.Keyspaces[0].Shards[0].Vttablets = nil
-		clusterInfo.ClusterInstance.Teardown()
-	}
 
 	if err != nil {
 		fmt.Printf("%v\n", err)

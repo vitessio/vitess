@@ -17,7 +17,10 @@ limitations under the License.
 package vitesst
 
 import (
+	"maps"
 	"slices"
+
+	"github.com/testcontainers/testcontainers-go"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -60,6 +63,25 @@ type (
 		// mysqlVersion selects the Docker image tag used for Vitess components.
 		mysqlVersion string
 
+		// topoFlavor selects the topology server: etcd2, consul, or zk2.
+		topoFlavor string
+
+		// tabletEnv is merged into every tablet container's environment.
+		tabletEnv map[string]string
+
+		// vtgateEnv is merged into every vtgate container's environment.
+		vtgateEnv map[string]string
+
+		// vtctldFiles are placed into the vtctld container before start.
+		vtctldFiles []ContainerFile
+
+		// withoutVTGate skips starting a vtgate during cluster start.
+		withoutVTGate bool
+
+		// borrowedNetwork, when set, is used instead of creating a network,
+		// and is not removed at teardown.
+		borrowedNetwork *testcontainers.DockerNetwork
+
 		// followLogs lists component name prefixes whose container logs are
 		// streamed to the cluster log as they arrive.
 		followLogs []string
@@ -94,6 +116,18 @@ type (
 	vtorcOption []string
 
 	mysqlVersionOption string
+
+	topoFlavorOption string
+
+	tabletEnvOption map[string]string
+
+	vtgateEnvOption map[string]string
+
+	vtctldFilesOption []ContainerFile
+
+	withoutVTGateOption struct{}
+
+	networkOption struct{ nw *testcontainers.DockerNetwork }
 )
 
 func (o cellsOption) apply(opts *clusterOptions) {
@@ -155,11 +189,79 @@ func WithMySQLVersion(version string) ClusterOption {
 	return mysqlVersionOption(version)
 }
 
+func (o topoFlavorOption) apply(opts *clusterOptions) {
+	opts.topoFlavor = string(o)
+}
+
+// WithTopo selects the topology server flavor: "etcd2" (the default),
+// "consul", or "zk2".
+func WithTopo(flavor string) ClusterOption {
+	return topoFlavorOption(flavor)
+}
+
+func (o tabletEnvOption) apply(opts *clusterOptions) {
+	if opts.tabletEnv == nil {
+		opts.tabletEnv = map[string]string{}
+	}
+	maps.Copy(opts.tabletEnv, o)
+}
+
+// WithTabletEnv merges environment variables into every tablet container,
+// e.g. EXTRA_MY_CNF for mysqld configuration snippets shipped through
+// WithTabletFiles.
+func WithTabletEnv(env map[string]string) ClusterOption {
+	return tabletEnvOption(env)
+}
+
+func (o vtgateEnvOption) apply(opts *clusterOptions) {
+	if opts.vtgateEnv == nil {
+		opts.vtgateEnv = map[string]string{}
+	}
+	maps.Copy(opts.vtgateEnv, o)
+}
+
+// WithVTGateEnv merges environment variables into every vtgate container.
+func WithVTGateEnv(env map[string]string) ClusterOption {
+	return vtgateEnvOption(env)
+}
+
+func (o vtctldFilesOption) apply(opts *clusterOptions) {
+	opts.vtctldFiles = append(opts.vtctldFiles, o...)
+}
+
+// WithVTCtldFiles places files into the vtctld container before it starts,
+// e.g. client certificates for talking to mTLS-required tablets.
+func WithVTCtldFiles(files ...ContainerFile) ClusterOption {
+	return vtctldFilesOption(files)
+}
+
+func (withoutVTGateOption) apply(opts *clusterOptions) {
+	opts.withoutVTGate = true
+}
+
+// WithoutVTGate skips starting a vtgate; tests that only exercise the control
+// plane or tablets use it. AddVTGate can still start one later.
+func WithoutVTGate() ClusterOption {
+	return withoutVTGateOption{}
+}
+
+func (o networkOption) apply(opts *clusterOptions) {
+	opts.borrowedNetwork = o.nw
+}
+
+// WithNetwork makes the cluster join a caller-created Docker network instead
+// of creating its own, so tests can attach sidecar containers the components
+// must reach. The caller owns the network's lifecycle.
+func WithNetwork(nw *testcontainers.DockerNetwork) ClusterOption {
+	return networkOption{nw: nw}
+}
+
 // newClusterOptions applies the options over the defaults.
 func newClusterOptions(opts []ClusterOption) *clusterOptions {
 	config := &clusterOptions{
 		cells:        []string{defaultCell},
 		mysqlVersion: defaultMySQLVersion,
+		topoFlavor:   defaultTopoImplementation,
 	}
 	for _, opt := range opts {
 		opt.apply(config)
@@ -195,6 +297,12 @@ func (config *clusterOptions) validate() error {
 	case "8.0", "8.4":
 	default:
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "unsupported MySQL version %q, supported versions are 8.0 and 8.4", config.mysqlVersion)
+	}
+
+	switch config.topoFlavor {
+	case "etcd2", "consul", "zk2":
+	default:
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "unsupported topo flavor %q, supported flavors are etcd2, consul and zk2", config.topoFlavor)
 	}
 
 	return nil

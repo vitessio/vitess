@@ -17,6 +17,7 @@ limitations under the License.
 package reparent
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -24,19 +25,82 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/tabletgateway/buffer"
+	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/test/vitesst"
 	"vitess.io/vitess/go/vt/log"
 )
 
 var (
 	demoteQueries  = []string{"SET GLOBAL read_only = ON", "FLUSH TABLES WITH READ LOCK", "UNLOCK TABLES"}
 	promoteQueries = []string{"STOP REPLICA", "RESET REPLICA ALL", "SET GLOBAL read_only = OFF"}
-
-	hostname = "localhost"
 )
 
-func failoverExternalReparenting(t *testing.T, clusterInstance *cluster.LocalProcessCluster, keyspaceUnshardedName string, reads, writes buffer.QueryEngine) {
+// queryTabletMultiple runs a sequence of statements on a single connection to
+// the tablet's mysqld, against the tablet's vt_<keyspace> database.
+func queryTabletMultiple(ctx context.Context, tablet *vitesst.Tablet, keyspace string, queries []string) error {
+	conn, err := vitesst.GetMySQLConn(ctx, tablet, "vt_"+keyspace)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	for _, query := range queries {
+		log.Info(fmt.Sprintf("Executing query %s (on %s)", query, tablet.Alias()))
+		if _, err := conn.ExecuteFetch(query, 1000, true); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// primaryPosition returns the tablet's current executed replication position.
+func primaryPosition(t *testing.T, tablet *vitesst.Tablet) replication.Position {
+	conn, err := vitesst.GetMySQLConn(t.Context(), tablet, "")
+	require.NoError(t, err)
+	defer conn.Close()
+
+	pos, err := conn.PrimaryPosition()
+	require.NoError(t, err)
+	return pos
+}
+
+// resetBinaryLogsCommand returns the version-appropriate command to reset the
+// tablet's binary logs.
+func resetBinaryLogsCommand(t *testing.T, tablet *vitesst.Tablet) string {
+	conn, err := vitesst.GetMySQLConn(t.Context(), tablet, "")
+	require.NoError(t, err)
+	defer conn.Close()
+
+	return conn.ResetBinaryLogsCommand()
+}
+
+// waitForReplicationPos waits for tabletB's replication position to catch up to
+// where tabletA is now.
+func waitForReplicationPos(t *testing.T, tabletA, tabletB *vitesst.Tablet, timeout time.Duration) {
+	ctx, cancel := context.WithTimeout(t.Context(), timeout)
+	defer cancel()
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+
+	replicationPosA := primaryPosition(t, tabletA)
+	for {
+		replicationPosB := primaryPosition(t, tabletB)
+		if replicationPosB.AtLeast(replicationPosA) {
+			return
+		}
+		msg := fmt.Sprintf("%s's replication position to catch up to %s's;currently at: %s, waiting to catch up to: %s", tabletB.Alias(), tabletA.Alias(), replicationPosB, replicationPosA)
+		select {
+		case <-ctx.Done():
+			assert.FailNowf(t, "Timeout waiting for condition '%s'", msg)
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
+func failoverExternalReparenting(t *testing.T, clusterInstance *vitesst.Cluster, keyspaceUnshardedName string, reads, writes QueryEngine) {
+	ctx := t.Context()
+
 	// Execute the failover.
 	reads.ExpectQueries(10)
 	writes.ExpectQueries(10)
@@ -44,15 +108,16 @@ func failoverExternalReparenting(t *testing.T, clusterInstance *cluster.LocalPro
 	start := time.Now()
 
 	// Demote Query
-	primary := clusterInstance.Keyspaces[0].Shards[0].Vttablets[0]
-	replica := clusterInstance.Keyspaces[0].Shards[0].Vttablets[1]
+	shard := clusterInstance.Keyspace(keyspaceUnshardedName).Shard("0")
+	primary := shard.Primary()
+	replica := shard.Replicas()[0]
 	oldPrimary := primary
 	newPrimary := replica
-	err := primary.VttabletProcess.QueryTabletMultiple(demoteQueries, keyspaceUnshardedName, true)
+	err := queryTabletMultiple(ctx, primary, keyspaceUnshardedName, demoteQueries)
 	require.NoError(t, err)
 
 	// Wait for replica to catch up to primary.
-	cluster.WaitForReplicationPos(t, primary, replica, false, time.Minute)
+	waitForReplicationPos(t, primary, replica, time.Minute)
 
 	duration := time.Since(start)
 	minUnavailabilityInS := 1.0
@@ -63,44 +128,41 @@ func failoverExternalReparenting(t *testing.T, clusterInstance *cluster.LocalPro
 	}
 
 	// Promote replica to new primary.
-	err = replica.VttabletProcess.QueryTabletMultiple(promoteQueries, keyspaceUnshardedName, true)
+	err = queryTabletMultiple(ctx, replica, keyspaceUnshardedName, promoteQueries)
 	require.NoError(t, err)
 
 	// Configure old primary to replicate from new primary.
 
-	_, gtID := cluster.GetPrimaryPosition(t, *newPrimary, hostname)
+	gtID := primaryPosition(t, newPrimary).String()
 
-	// Use 'localhost' as hostname because Travis CI worker hostnames
-	// are too long for MySQL replication.
-	resetCmd, err := oldPrimary.VttabletProcess.ResetBinaryLogsCommand()
-	require.NoError(t, err)
+	resetCmd := resetBinaryLogsCommand(t, oldPrimary)
 	changeSourceCommands := []string{
 		"STOP REPLICA",
 		resetCmd,
 		fmt.Sprintf("SET GLOBAL gtid_purged = '%s'", gtID),
-		fmt.Sprintf("CHANGE REPLICATION SOURCE TO SOURCE_HOST='%s', SOURCE_PORT=%d, SOURCE_USER='vt_repl', GET_SOURCE_PUBLIC_KEY = 1, SOURCE_AUTO_POSITION = 1", "localhost", newPrimary.MySQLPort),
+		fmt.Sprintf("CHANGE REPLICATION SOURCE TO SOURCE_HOST='%s', SOURCE_PORT=%d, SOURCE_USER='vt_repl', GET_SOURCE_PUBLIC_KEY = 1, SOURCE_AUTO_POSITION = 1", newPrimary.Name(), tabletMySQLPort),
 		"START REPLICA",
 	}
-	err = oldPrimary.VttabletProcess.QueryTabletMultiple(changeSourceCommands, keyspaceUnshardedName, true)
+	err = queryTabletMultiple(ctx, oldPrimary, keyspaceUnshardedName, changeSourceCommands)
 	require.NoError(t, err)
 
 	// Notify the new vttablet primary about the reparent.
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("TabletExternallyReparented", newPrimary.Alias)
+	err = clusterInstance.Vtctld().ExecuteCommand(ctx, "TabletExternallyReparented", newPrimary.Alias())
 	require.NoError(t, err)
 }
 
-func failoverPlannedReparenting(t *testing.T, clusterInstance *cluster.LocalProcessCluster, keyspaceUnshardedName string, reads, writes buffer.QueryEngine) {
+func failoverPlannedReparenting(t *testing.T, clusterInstance *vitesst.Cluster, keyspaceUnshardedName string, reads, writes QueryEngine) {
 	// Execute the failover.
 	reads.ExpectQueries(10)
 	writes.ExpectQueries(10)
 
-	err := clusterInstance.VtctldClientProcess.ExecuteCommand("PlannedReparentShard",
+	err := clusterInstance.Vtctld().ExecuteCommand(t.Context(), "PlannedReparentShard",
 		fmt.Sprintf("%s/%s", keyspaceUnshardedName, "0"),
-		"--new-primary", clusterInstance.Keyspaces[0].Shards[0].Vttablets[1].Alias)
+		"--new-primary", clusterInstance.Keyspace(keyspaceUnshardedName).Shard("0").Replicas()[0].Alias())
 	require.NoError(t, err)
 }
 
-func assertFailover(t *testing.T, shard string, stats *buffer.VTGateBufferingStats) {
+func assertFailover(t *testing.T, shard string, stats *VTGateBufferingStats) {
 	stopLabel := fmt.Sprintf("%s.%s", shard, "NewPrimarySeen")
 
 	assert.Greater(t, stats.BufferFailoverDurationSumMs[shard], 0)
@@ -113,7 +175,7 @@ func assertFailover(t *testing.T, shard string, stats *buffer.VTGateBufferingSta
 
 func TestBufferReparenting(t *testing.T) {
 	t.Run("TER without reserved connection", func(t *testing.T) {
-		bt := &buffer.BufferingTest{
+		bt := &BufferingTest{
 			Assert:      assertFailover,
 			Failover:    failoverExternalReparenting,
 			ReserveConn: false,
@@ -121,7 +183,7 @@ func TestBufferReparenting(t *testing.T) {
 		bt.Test(t)
 	})
 	t.Run("TER with reserved connection", func(t *testing.T) {
-		bt := &buffer.BufferingTest{
+		bt := &BufferingTest{
 			Assert:      assertFailover,
 			Failover:    failoverExternalReparenting,
 			ReserveConn: true,
@@ -129,7 +191,7 @@ func TestBufferReparenting(t *testing.T) {
 		bt.Test(t)
 	})
 	t.Run("PRS without reserved connections", func(t *testing.T) {
-		bt := &buffer.BufferingTest{
+		bt := &BufferingTest{
 			Assert:      assertFailover,
 			Failover:    failoverPlannedReparenting,
 			ReserveConn: false,
@@ -137,7 +199,7 @@ func TestBufferReparenting(t *testing.T) {
 		bt.Test(t)
 	})
 	t.Run("PRS with reserved connections", func(t *testing.T) {
-		bt := &buffer.BufferingTest{
+		bt := &BufferingTest{
 			Assert:      assertFailover,
 			Failover:    failoverPlannedReparenting,
 			ReserveConn: true,

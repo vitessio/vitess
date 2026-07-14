@@ -17,27 +17,20 @@ limitations under the License.
 package encryptedreplication
 
 import (
+	"context"
 	"flag"
-	"os"
-	"os/exec"
-	"path"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/constants/sidecar"
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/encryption"
-	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/test/vitesst"
+	"vitess.io/vitess/go/vt/tlstest"
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
-	keyspace        = "test_keyspace"
-	hostname        = "localhost"
-	shardName       = "0"
-	cell            = "zone1"
-	certDirectory   string
+	keyspace  = "test_keyspace"
+	shardName = "0"
 )
 
 // This test makes sure that we can use SSL replication with Vitess
@@ -50,139 +43,78 @@ func TestSecure(t *testing.T) {
 func testReplicationBase(t *testing.T, isClientCertPassed bool) {
 	flag.Parse()
 
-	// initialize cluster
-	_, err := initializeCluster(t)
-	require.Nil(t, err, "setup failed")
+	ctx := t.Context()
 
-	defer teardownCluster()
+	certDirectory := t.TempDir()
 
-	primaryTablet := *clusterInstance.Keyspaces[0].Shards[0].Vttablets[0]
-	replicaTablet := *clusterInstance.Keyspaces[0].Shards[0].Vttablets[1]
+	tlstest.CreateCA(certDirectory)
+	tlstest.CreateSignedCert(certDirectory, "ca", "01", "server", "Mysql Server")
+	tlstest.CreateSignedCert(certDirectory, "ca", "02", "client", "Mysql Client")
 
-	if isClientCertPassed {
-		replicaTablet.VttabletProcess.ExtraArgs = append(replicaTablet.VttabletProcess.ExtraArgs,
-			"--db-flags", "2048",
-			"--db-ssl-ca", path.Join(certDirectory, "ca-cert.pem"),
-			"--db-ssl-cert", path.Join(certDirectory, "client-cert.pem"),
-			"--db-ssl-key", path.Join(certDirectory, "client-key.pem"),
-		)
+	secureCnf := "require_secure_transport=true\n" +
+		"ssl-ca=/vt/files/ca-cert.pem\n" +
+		"ssl-cert=/vt/files/server-cert.pem\n" +
+		"ssl-key=/vt/files/server-key.pem\n"
+
+	tabletFiles := []vitesst.ContainerFile{
+		{Content: []byte(secureCnf), ContainerPath: "/vt/files/secure.cnf"},
+	}
+	for _, name := range []string{"ca-cert.pem", "server-cert.pem", "server-key.pem", "client-cert.pem", "client-key.pem"} {
+		tabletFiles = append(tabletFiles, vitesst.ContainerFile{
+			HostPath:      filepath.Join(certDirectory, name),
+			ContainerPath: "/vt/files/" + name,
+		})
 	}
 
-	// start the tablets
-	for _, tablet := range []cluster.Vttablet{primaryTablet, replicaTablet} {
-		_ = tablet.VttabletProcess.Setup()
-	}
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithoutVTGate(),
+		vitesst.WithTabletFiles(tabletFiles...),
+		vitesst.WithTabletEnv(map[string]string{"EXTRA_MY_CNF": "/vt/files/secure.cnf"}),
+		vitesst.WithKeyspace(keyspace).
+			WithShardNames(shardName).
+			WithReplicas(1).
+			WithoutPrimaryElection().
+			WithTabletSpec(func(spec *vitesst.TabletSpec) {
+				if isClientCertPassed && spec.Type == "replica" {
+					spec.ExtraArgs = append(spec.ExtraArgs,
+						"--db-flags", "2048",
+						"--db-ssl-ca", "/vt/files/ca-cert.pem",
+						"--db-ssl-cert", "/vt/files/client-cert.pem",
+						"--db-ssl-key", "/vt/files/client-key.pem",
+					)
+				}
+			}),
+	)
+	require.NoError(t, err, "setup failed")
+
+	cleanup, err := cluster.Start(ctx)
+	require.NoError(t, err, "setup failed")
+	defer func() {
+		cctx := context.WithoutCancel(ctx)
+		if t.Failed() {
+			cluster.DumpDiagnostics(cctx, t.Logf)
+		}
+		if err := cleanup(cctx); err != nil {
+			t.Logf("cluster teardown: %v", err)
+		}
+	}()
+
+	shard := cluster.Keyspace(keyspace).Shard(shardName)
+	primaryTablet := shard.Replicas()[0]
 
 	// Reparent using SSL (this will also check replication works)
-	err = clusterInstance.VtctldClientProcess.InitializeShard(keyspace, shardName, clusterInstance.Cell, primaryTablet.TabletUID)
+	err = cluster.Vtctld().ExecuteCommand(ctx,
+		"PlannedReparentShard",
+		keyspace+"/"+shardName,
+		"--wait-replicas-timeout", "31s",
+		"--new-primary", primaryTablet.Alias(),
+	)
 	if isClientCertPassed {
 		require.NoError(t, err)
 	} else {
 		require.Error(t, err)
 	}
 
-	err = clusterInstance.StartVTOrc(clusterInstance.Cell, keyspace)
+	_, err = cluster.AddVTOrc(ctx, "")
 	require.NoError(t, err)
-}
-
-func initializeCluster(t *testing.T) (int, error) {
-	var mysqlProcesses []*exec.Cmd
-	clusterInstance = cluster.NewCluster(cell, hostname)
-
-	// Start topo server
-	if err := clusterInstance.StartTopo(); err != nil {
-		return 1, err
-	}
-
-	// create certs directory
-	log.Info("Creating certificates")
-	certDirectory = path.Join(clusterInstance.TmpDirectory, "certs")
-	_ = encryption.CreateDirectory(certDirectory, 0o700)
-
-	err := encryption.ExecuteVttlstestCommand("CreateCA", "--root", certDirectory)
-	require.NoError(t, err)
-
-	err = encryption.ExecuteVttlstestCommand("CreateSignedCert", "--root", certDirectory, "--common-name", "Mysql Server", "--serial", "01", "server")
-	require.NoError(t, err)
-
-	err = encryption.ExecuteVttlstestCommand("CreateSignedCert", "--root", certDirectory, "--common-name", "Mysql Client", "--serial", "02", "client")
-	require.NoError(t, err)
-
-	extraMyCnf := path.Join(certDirectory, "secure.cnf")
-	f, err := os.Create(extraMyCnf)
-	require.NoError(t, err)
-
-	_, err = f.WriteString("require_secure_transport=" + "true\n")
-	require.NoError(t, err)
-	_, err = f.WriteString("ssl-ca=" + certDirectory + "/ca-cert.pem\n")
-	require.NoError(t, err)
-	_, err = f.WriteString("ssl-cert=" + certDirectory + "/server-cert.pem\n")
-	require.NoError(t, err)
-	_, err = f.WriteString("ssl-key=" + certDirectory + "/server-key.pem\n")
-	require.NoError(t, err)
-
-	err = f.Close()
-	require.NoError(t, err)
-
-	err = os.Setenv("EXTRA_MY_CNF", extraMyCnf)
-
-	require.NoError(t, err)
-
-	for _, keyspaceStr := range []string{keyspace} {
-		KeyspacePtr := &cluster.Keyspace{Name: keyspaceStr}
-		keyspace := *KeyspacePtr
-		if err := clusterInstance.VtctldClientProcess.CreateKeyspace(keyspace.Name, sidecar.DefaultName, ""); err != nil {
-			return 1, err
-		}
-		shard := &cluster.Shard{
-			Name: shardName,
-		}
-		for range 2 {
-			// instantiate vttablet object with reserved ports
-			tabletUID := clusterInstance.GetAndReserveTabletUID()
-			tablet := clusterInstance.NewVttabletInstance("replica", tabletUID, cell)
-
-			// Start Mysqlctl process
-			mysqlctlProcess, err := cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
-			if err != nil {
-				return 1, err
-			}
-			tablet.MysqlctlProcess = *mysqlctlProcess
-			proc, err := tablet.MysqlctlProcess.StartProcess()
-			if err != nil {
-				return 1, err
-			}
-			mysqlProcesses = append(mysqlProcesses, proc)
-			// start vttablet process
-			tablet.VttabletProcess = cluster.VttabletProcessInstance(
-				tablet.HTTPPort,
-				tablet.GrpcPort,
-				tablet.TabletUID,
-				clusterInstance.Cell,
-				shardName,
-				keyspace.Name,
-				clusterInstance.VtctldProcess.Port,
-				tablet.Type,
-				clusterInstance.TopoProcess.Port,
-				clusterInstance.Hostname,
-				clusterInstance.TmpDirectory,
-				clusterInstance.VtTabletExtraArgs,
-				clusterInstance.DefaultCharset)
-			tablet.Alias = tablet.VttabletProcess.TabletPath
-			shard.Vttablets = append(shard.Vttablets, tablet)
-		}
-		keyspace.Shards = append(keyspace.Shards, *shard)
-		clusterInstance.Keyspaces = append(clusterInstance.Keyspaces, keyspace)
-	}
-	for _, proc := range mysqlProcesses {
-		err := proc.Wait()
-		if err != nil {
-			return 1, err
-		}
-	}
-	return 0, nil
-}
-
-func teardownCluster() {
-	clusterInstance.Teardown()
 }

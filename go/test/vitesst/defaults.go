@@ -41,10 +41,6 @@ const (
 	// sidecarDBName is the sidecar database name passed to CreateKeyspace.
 	sidecarDBName = "_vt"
 
-	// etcdImage is the etcd Docker image. The version matches the etcd binary
-	// pinned by build.env.
-	etcdImage = "quay.io/coreos/etcd:v3.6.7"
-
 	// etcdClientPort is the etcd client port inside the container.
 	etcdClientPort = 2379
 

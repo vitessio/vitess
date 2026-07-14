@@ -135,7 +135,7 @@ func TestHealthCheckExternallyReparentNewTablet(t *testing.T) {
 
 	// add a new tablet
 	reparentTabletType := "rdonly"
-	tablet, err := clusterInstance.AddTablet(ctx, keyspaceName, shards[0], reparentTabletType)
+	tablet, err := clusterInstance.AddTablet(ctx, "", keyspaceName, shards[0], reparentTabletType)
 	require.NoError(t, err)
 
 	// promote the new tablet to the primary

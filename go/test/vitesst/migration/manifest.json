@@ -514,7 +514,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "Manually builds a second cell via TopoProcess.ManageTopoDir + AddCellInfo (not via a helper), then adds/removes a CellsAlias and restarts a manually-created vtgate instance to prove replica/rdonly routing depends on the alias; needs multi-cell topo support and ability to spin a second, independently-configured vtgate against the same cluster. | cluster APIs: LocalProcessCluster.NewCluster, LocalProcessCluster.StartTopo, TopoProcess.ManageTopoDir, VtctldClientProcess.AddCellInfo, VtctldClientProcess.ExecuteCommandWithOutput, VtctldClientProcess.ExecuteCommand, LocalProcessCluster.NewVttabletInstance, MysqlCtlProcessInstance, MysqlctlProcess.StartProcess, VttabletProcessInstance, VttabletProcess.Setup, VtctldClientProcess.InitializeShard, LocalProcessCluster.StartVTOrc, VtctldClientProcess.ApplySchema, VtctldClientProcess.ApplyVSchema, cluster.CheckSrvKeyspace, LocalProcessCluster.NewVtgateInstance, VtgateProcess.Setup/TearDown, VtgateProcess.WaitForStatusOfTabletInShard, LocalProcessCluster.ExecOnVTGate, cluster.ExecuteOnTablet | external deps: vtorc | destructive: vtgate restart (TearDown/Setup) with different TabletTypesToWait to observe alias routing changes | difficulty: medium",
    "old_shards": [
@@ -532,9 +532,9 @@
     "TestAddAliasWhileVtgateUp"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/cellalias",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 11.359,
+   "status": "verified",
+   "verified_at_sha": "0085bdf627f9fde08c74635fde51d171d63edec6",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/cellalias/",
    "wave": 3
   },
@@ -647,7 +647,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "cluster-per-test",
    "notes": "Generates a real CA + server cert via the vttlstest host binary and writes an EXTRA_MY_CNF requiring SSL replication; verifies InitializeShard succeeds only when the replica has client cert flags configured, i.e. asserts an error occurs when certs are absent -- container framework needs to expose per-tablet extra db-ssl-* flags and TLS material mounted into each mysqld container. | cluster APIs: LocalProcessCluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.GetAndReserveTabletUID, LocalProcessCluster.NewVttabletInstance, MysqlCtlProcessInstance, MysqlctlProcess.StartProcess, VttabletProcessInstance, VttabletProcess.Setup, VtctldClientProcess.CreateKeyspace, VtctldClientProcess.InitializeShard, LocalProcessCluster.StartVTOrc, LocalProcessCluster.Teardown | external deps: tlstest CLI (encryption.ExecuteVttlstestCommand -> vttlstest binary) for CA/cert generation, EXTRA_MY_CNF env var pointing at a generated secure.cnf requiring TLS replication, vtorc | difficulty: hard",
    "old_shards": [
@@ -663,9 +663,9 @@
     "TestSecure"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/encryption/encryptedreplication",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 41.851,
+   "status": "verified",
+   "verified_at_sha": "0085bdf627f9fde08c74635fde51d171d63edec6",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/encryption/encryptedreplication/",
    "wave": 3
   },
@@ -683,7 +683,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "cluster-per-test",
    "notes": "Extremely cert-heavy: builds 4 intermediate CAs and 5 leaf certs, writes a table ACL config keyed off client cert common name, and restarts vtgate twice to test effective-caller-id/effective-groups propagation from cert identity; also calls clusterInstance.Teardown() manually mid-test rather than via defer. | cluster APIs: LocalProcessCluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.NewVttabletInstance, MysqlCtlProcessInstance, MysqlctlProcess.StartProcess, VttabletProcessInstance, VttabletProcess.Setup, VtctldClientProcess.CreateKeyspace, VtctldClientProcess.ExecuteCommand, VtctldClientProcess.ExecuteCommandWithOutput, LocalProcessCluster.StartVTOrc, LocalProcessCluster.StartVtgate, LocalProcessCluster.RestartVtgate, LocalProcessCluster.Teardown, VtgateProcess.GrpcPort | external deps: vttlstest host binary invoked directly via os/exec (not the encryption helper) for a full CA chain (root/intermediate CAs for vttablet+vtgate server/client), table_acl_config.json written to disk and passed via --table-acl-config, direct gRPC dial to vtgate's VitessClient with mutual TLS, vtorc | destructive: vtgate restart twice (RestartVtgate) with different --grpc-use-effective-callerid/--grpc-use-effective-groups flags | difficulty: hard",
    "old_shards": [
@@ -699,9 +699,9 @@
     "TestSecureTransport"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/encryption/encryptedtransport",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 25.6,
+   "status": "verified",
+   "verified_at_sha": "0085bdf627f9fde08c74635fde51d171d63edec6",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/encryption/encryptedtransport/",
    "wave": 3
   },
@@ -715,7 +715,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "cluster-per-test",
    "notes": "Single test, no vttablet/vtgate/topo involved; only verifies that tabletenv.TabletConfig.Verify() succeeds when DB.SslMode=Required against a real SSL-only MySQL started via vttest.LocalCluster; migration mainly needs a way to stand up a bare MySQL with custom my.cnf, not the full cluster machinery. | external deps: vttest.LocalCluster (OnlyMySQL mode) instead of the endtoend cluster package, hand-generated self-signed CA + client cert/key via crypto/x509, ExtraMyCnf lines requiring TLS on the vttest MySQL instance, tabletenv.TabletConfig.Unmanaged + dbconfigs SSL verification path | difficulty: medium",
    "old_shards": [
@@ -731,9 +731,9 @@
     "TestConnectUnamanagedMySQLRequiringSSLSuccess"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/encryption/unmanagedsslcheck",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 16.4,
+   "status": "verified",
+   "verified_at_sha": "0085bdf627f9fde08c74635fde51d171d63edec6",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/encryption/unmanagedsslcheck/",
    "wave": 3
   },
@@ -747,7 +747,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "Pure control-plane test over VtctldClientProcess (CreateKeyspace/DeleteKeyspace/DeleteShards/GetSrvKeyspace/GetKeyspace/durability policy); needs a second cell created the same manual way as cellalias, and InitTablet to create a bare tablet record without a real running mysqld/vttablet (TestDeleteKeyspace creates 'tablet' records with fixed UID 100 purely as topo metadata). | cluster APIs: LocalProcessCluster.NewCluster, LocalProcessCluster.StartTopo, TopoProcess.ManageTopoDir, VtctldClientProcess.AddCellInfo, LocalProcessCluster.StartKeyspace, VtctldClientProcess.ExecuteCommand, LocalProcessCluster.StartVtgate, LocalProcessCluster.NewVtctldClientProcessInstance, VtctldClientProcess.ExecuteCommandWithOutput, VtctldClientProcess.GetKeyspace, VtctldClientProcess.GetSrvKeyspaces, VtctldClientProcess.CreateKeyspace, LocalProcessCluster.InitTablet, VtctldClientProcess.GetShardReplication | destructive: recursive DeleteShards/DeleteKeyspace which tears down tablets/shards mid-suite | difficulty: medium",
    "old_shards": [
@@ -774,9 +774,9 @@
     "TestKeyspaceToShardName"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/keyspace",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 17,
+   "status": "verified",
+   "verified_at_sha": "0085bdf627f9fde08c74635fde51d171d63edec6",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/keyspace/",
    "wave": 3
   },
@@ -1394,9 +1394,9 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "cluster-per-test",
-   "notes": "Heavy use of reparent/utils helper package (shared by all reparent/* packages) which wraps ERS/PRS invocation, replication checks and semi-sync checks; a migrator should port that helper once and reuse it. Several tests use real wall-clock sleeps (5s, 10s, 20s) and 30-60s waits tied to ERS/PRS timeout flags. | cluster APIs: reparent/utils.SetupReparentCluster, reparent/utils.TeardownCluster, reparent/utils.Ers, reparent/utils.ErsWithVtctldClient, reparent/utils.ErsIgnoreTablet, reparent/utils.Prs, reparent/utils.PrsWithTimeout, reparent/utils.StopTablet, reparent/utils.RestartTablet, reparent/utils.DeleteTablet, reparent/utils.ResurrectTablet, reparent/utils.ConfirmReplication, reparent/utils.ConfirmOldPrimaryIsHangingAround, reparent/utils.ValidateTopology, reparent/utils.GetNewPrimary, reparent/utils.CheckPrimaryTablet, reparent/utils.CheckInsertedValues, reparent/utils.CheckCountOfInsertedValues, reparent/utils.RunSQL/RunSQLs, reparent/utils.SemiSyncExtensionLoaded, reparent/utils.CheckSemiSyncSetupCorrectly, reparent/utils.CheckReplicationStatus, reparent/utils.WaitForQueryWithStateInProcesslist, reparent/utils.WaitForReplicationToStart, VttabletProcess.Stop/Resume (SIGSTOP/SIGCONT), VtctldClientProcess.GetTablet, VtctldClientProcess.ExecuteCommand (ChangeTabletType, StopReplication, StartReplication, ExecuteFetchAsDBA, GetShard), cluster.NewCluster, LocalProcessCluster.StartTopo, TopoProcess.ManageTopoDir, LocalProcessCluster.NewVttabletInstance, LocalProcessCluster.SetupCluster, VtctldClientProcessInstance, MysqlctlProcess.StartProcess, VttabletProcess.WaitForTabletStatuses, VtgateProcess.GetVars, LocalProcessCluster.StartVtgate | external deps: os/exec (mysqlctl process handles via TestERSForInitialization manual bring-up) | destructive: StopTablet (SIGKILL-style teardown), SIGSTOP/SIGCONT on primary vttablet process (VttabletProcess.Stop/Resume) to simulate an unresponsive primary, ERS forced failover, PRS, stop/start replica IO and SQL threads, DeleteTablet, ChangeTabletType | difficulty: hard",
+   "notes": "TestERSFailFast can flake under heavy host load: an ERS race (requiredSuccesses = n-1 cancels the second tablet mid-flight) surfaces a different error message. Green on a quiet host. | Heavy use of reparent/utils helper package (shared by all reparent/* packages) which wraps ERS/PRS invocation, replication checks and semi-sync checks; a migrator should port that helper once and reuse it. Several tests use real wall-clock sleeps (5s, 10s, 20s) and 30-60s waits tied to ERS/PRS timeout flags. | cluster APIs: reparent/utils.SetupReparentCluster, reparent/utils.TeardownCluster, reparent/utils.Ers, reparent/utils.ErsWithVtctldClient, reparent/utils.ErsIgnoreTablet, reparent/utils.Prs, reparent/utils.PrsWithTimeout, reparent/utils.StopTablet, reparent/utils.RestartTablet, reparent/utils.DeleteTablet, reparent/utils.ResurrectTablet, reparent/utils.ConfirmReplication, reparent/utils.ConfirmOldPrimaryIsHangingAround, reparent/utils.ValidateTopology, reparent/utils.GetNewPrimary, reparent/utils.CheckPrimaryTablet, reparent/utils.CheckInsertedValues, reparent/utils.CheckCountOfInsertedValues, reparent/utils.RunSQL/RunSQLs, reparent/utils.SemiSyncExtensionLoaded, reparent/utils.CheckSemiSyncSetupCorrectly, reparent/utils.CheckReplicationStatus, reparent/utils.WaitForQueryWithStateInProcesslist, reparent/utils.WaitForReplicationToStart, VttabletProcess.Stop/Resume (SIGSTOP/SIGCONT), VtctldClientProcess.GetTablet, VtctldClientProcess.ExecuteCommand (ChangeTabletType, StopReplication, StartReplication, ExecuteFetchAsDBA, GetShard), cluster.NewCluster, LocalProcessCluster.StartTopo, TopoProcess.ManageTopoDir, LocalProcessCluster.NewVttabletInstance, LocalProcessCluster.SetupCluster, VtctldClientProcessInstance, MysqlctlProcess.StartProcess, VttabletProcess.WaitForTabletStatuses, VtgateProcess.GetVars, LocalProcessCluster.StartVtgate | external deps: os/exec (mysqlctl process handles via TestERSForInitialization manual bring-up) | destructive: StopTablet (SIGKILL-style teardown), SIGSTOP/SIGCONT on primary vttablet process (VttabletProcess.Stop/Resume) to simulate an unresponsive primary, ERS forced failover, PRS, stop/start replica IO and SQL threads, DeleteTablet, ChangeTabletType | difficulty: hard",
    "old_shards": [
     {
      "args": [
@@ -1430,9 +1430,9 @@
     "TestReplicationStopped"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/reparent/emergencyreparent",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 333.9,
+   "status": "verified",
+   "verified_at_sha": "0085bdf627f9fde08c74635fde51d171d63edec6",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/reparent/emergencyreparent/",
    "wave": 3
   },
@@ -1452,9 +1452,9 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "cluster-per-test",
-   "notes": "TestSemiSyncBlockDueToDisruption is CI-skipped (checks $CI env var) and macOS-pfctl-specific; treat as non-portable rather than a priority migration target. TestBufferingWithMultipleDisruptions and TestErrorsInTransaction rely on sharded cluster setup and real concurrency via goroutines plus fixed sleeps (1s, 43s) tied to disruption timing. | cluster APIs: reparent/utils.SetupReparentCluster, reparent/utils.SetupShardedReparentCluster, reparent/utils.TeardownCluster, reparent/utils.Ers, reparent/utils.Prs, reparent/utils.StopTablet, reparent/utils.DeleteTablet, reparent/utils.ConfirmReplication, reparent/utils.ValidateTopology, reparent/utils.CheckPrimaryTablet, reparent/utils.GetNewPrimary, reparent/utils.RunSQL/RunSQLs, reparent/utils.SemiSyncExtensionLoaded, reparent/utils.GetInsertQuery, reparent/utils.GetInsertMultipleValuesQuery, reparent/utils.ShardName, reparent/utils.Prs/PrsWithTimeout, VtctldClientProcess.ExecuteCommand (ChangeTabletType, PlannedReparentShard), VttabletProcess.Setup, VTOrcProcess.TearDown, LocalProcessCluster.GetVTParams, cluster.Vttablet.MysqlctlProcess.Stop/Start | external deps: os/exec sudo invocations of pfctl and cp/mv on /etc/pf.conf (macOS packet filter) to simulate a network partition -- host-level firewall manipulation | destructive: StopTablet, ERS/PRS forced failover, tablet type changes, VTOrc teardown mid-test, unloading semi-sync MySQL plugins live, TestSemiSyncBlockDueToDisruption: simulated network partition between primary and replicas via host pf firewall rules | difficulty: hard",
+   "notes": "Runs on MySQL 8.0 (WithMySQLVersion): the tests issue stop slave/start slave, removed in 8.4. | TestSemiSyncBlockDueToDisruption is CI-skipped (checks $CI env var) and macOS-pfctl-specific; treat as non-portable rather than a priority migration target. TestBufferingWithMultipleDisruptions and TestErrorsInTransaction rely on sharded cluster setup and real concurrency via goroutines plus fixed sleeps (1s, 43s) tied to disruption timing. | cluster APIs: reparent/utils.SetupReparentCluster, reparent/utils.SetupShardedReparentCluster, reparent/utils.TeardownCluster, reparent/utils.Ers, reparent/utils.Prs, reparent/utils.StopTablet, reparent/utils.DeleteTablet, reparent/utils.ConfirmReplication, reparent/utils.ValidateTopology, reparent/utils.CheckPrimaryTablet, reparent/utils.GetNewPrimary, reparent/utils.RunSQL/RunSQLs, reparent/utils.SemiSyncExtensionLoaded, reparent/utils.GetInsertQuery, reparent/utils.GetInsertMultipleValuesQuery, reparent/utils.ShardName, reparent/utils.Prs/PrsWithTimeout, VtctldClientProcess.ExecuteCommand (ChangeTabletType, PlannedReparentShard), VttabletProcess.Setup, VTOrcProcess.TearDown, LocalProcessCluster.GetVTParams, cluster.Vttablet.MysqlctlProcess.Stop/Start | external deps: os/exec sudo invocations of pfctl and cp/mv on /etc/pf.conf (macOS packet filter) to simulate a network partition -- host-level firewall manipulation | destructive: StopTablet, ERS/PRS forced failover, tablet type changes, VTOrc teardown mid-test, unloading semi-sync MySQL plugins live, TestSemiSyncBlockDueToDisruption: simulated network partition between primary and replicas via host pf firewall rules | difficulty: hard",
    "old_shards": [
     {
      "args": [],
@@ -1479,9 +1479,9 @@
     "TestErrorsInTransaction"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/reparent/newfeaturetest",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 301.5,
+   "status": "verified",
+   "verified_at_sha": "0085bdf627f9fde08c74635fde51d171d63edec6",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/reparent/newfeaturetest/",
    "wave": 3
   },
@@ -1498,7 +1498,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "cluster-per-test",
    "notes": "TestReparentFromOutside/TestReparentFromOutsideWithNoPrimary manually run raw replication SQL (RESET REPLICA, CHANGE REPLICATION SOURCE TO ..., SET GLOBAL gtid_purged) against tablet mysqld sockets to simulate an external reparent tool, bypassing Vitess entirely -- exercises the mysqld direct-connection surface, not just vttablet RPCs. TestFullStatus/waitForFilePosition polls GetFullStatus every 100ms up to 5s; range-based test uses non-numeric shard names (0000000000000000-ffffffffffffffff). | cluster APIs: reparent/utils.SetupReparentCluster, reparent/utils.SetupRangeBasedCluster, reparent/utils.TeardownCluster, reparent/utils.Prs, reparent/utils.PrsAvoid, reparent/utils.PrsWithTimeout, reparent/utils.StopTablet, reparent/utils.DeleteTablet, reparent/utils.ConfirmReplication, reparent/utils.ValidateTopology, reparent/utils.CheckPrimaryTablet, reparent/utils.CheckReparentFromOutside, reparent/utils.RunSQLs, reparent/utils.WaitForReplicationPosition, reparent/utils.WaitForReplicationToStart, reparent/utils.CheckSemisyncEnabled/CheckSemisyncStatus/CheckReplicaStatus/CheckSemiSyncSetupCorrectly, reparent/utils.StartNewVTTablet, VtctldClientProcess.ExecuteCommandWithOutput (ChangeTabletType, GetFullStatus), VtctldClientProcess.ExecuteCommand (ChangeTabletType, StopReplication, TabletExternallyReparented, DeleteTablets, StartReplication), VtctldClientProcess.GetTablet, VttabletProcess.TearDownWithTimeout, VttabletProcess.ResetBinaryLogsCommand, cluster.GetPrimaryPosition, Vttablet.MysqlctlProcess.Stop/Start | destructive: graceful TearDownWithTimeout kills of tablets, PRS forced/avoid reparents, manual outside-Vitess primary promotion via raw SQL CHANGE REPLICATION SOURCE / TabletExternallyReparented, mysqlctl stop/start of a replica's mysqld, cross-cell promotion, DeleteTablet | difficulty: hard",
    "old_shards": [
@@ -1534,9 +1534,9 @@
     "TestFileNameFromPosition"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/reparent/plannedreparent",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 161.263,
+   "status": "verified",
+   "verified_at_sha": "0085bdf627f9fde08c74635fde51d171d63edec6",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/reparent/plannedreparent/",
    "wave": 3
   },
@@ -1662,7 +1662,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "Builds a 2-shard keyspace entirely by hand (not via StartKeyspace helper), deliberately applies two different table schemas per shard to exercise ValidateSchemaShard/ValidateSchemaKeyspace schema-diff reporting. No process kills; purely control-plane checks plus direct QueryTablet writes. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, VtctldClientProcess.CreateKeyspace, LocalProcessCluster.GetAndReserveTabletUID, LocalProcessCluster.GetAndReservePort, MysqlCtlProcessInstance, MysqlctlProcess.StartProcess, cluster.VttabletProcessInstance, VttabletProcess.Setup, VtctldClientProcess.InitializeShard, LocalProcessCluster.StartVTOrc, VttabletProcess.QueryTablet, VtctldClientProcess.ApplyVSchema, VtctldClientProcess.ExecuteCommand (SetWritable, Validate, ValidateSchemaShard, ValidateSchemaKeyspace, ValidateVersionShard, GetPermissions, ValidatePermissionsShard, ValidatePermissionsKeyspace, ReloadSchema) | difficulty: medium",
    "old_shards": [
@@ -1684,9 +1684,9 @@
     "TestShardedKeyspace"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/sharded",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 8.9,
+   "status": "verified",
+   "verified_at_sha": "0085bdf627f9fde08c74635fde51d171d63edec6",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/sharded/",
    "wave": 3
   },
@@ -1726,7 +1726,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "verifyVtgateVariables scrapes vtgate's HTTP /debug/vars-equivalent JSON endpoint and asserts on HealthcheckConnections/VtgateVSchemaCounts fields; a container framework needs to expose that vtgate HTTP port. Multiple fixed sleeps (2s) tied to a 1s tablet health-check-interval flag. TestStreamingRPCStuck opens a raw StreamExecute grpc stream via cluster.DialVTGate and deliberately stops reading mid-stream to assert PRS still proceeds -- needs low-level grpc vtgate client access, not just SQL conn. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartUnshardedKeyspace, LocalProcessCluster.NewVtgateInstance, VtgateProcess.Setup, VtgateProcess.VerifyURL, VttabletProcess.TearDown, VttabletProcess.Setup, VttabletProcess.WaitForStatus, VtctldClientProcess.ExecuteCommandWithOutput (ExecuteFetchAsDBA, ExecuteMultiFetchAsDBA), VtctldClientProcess.ChangeTabletType, VtctldClientProcess.ExecuteCommand (ChangeTabletType), VtctldClientProcess.PlannedReparentShard, cluster.DialVTGate, vtorc/utils.DisableGlobalRecoveries/EnableGlobalRecoveries, Keyspace.Shards[0].Replica/Rdonly, clusterInstance.VTOrcProcesses | utils APIs: utils.Exec, utils.AssertContainsError, utils.AssertContainsMultipleErrors | external deps: net/http GET against vtgate /debug/vars-style VerifyURL for JSON stat scraping | destructive: VttabletProcess.TearDown of a replica mid-test then restart it with new ServingStatus, ChangeTabletType RDONLY<->SPARE, stop/start replica IO+SQL threads via ExecuteFetchAsDBA/ExecuteMultiFetchAsDBA, PlannedReparentShard mid-stream to prove StreamExecute doesn't block it | difficulty: hard",
    "old_shards": [
@@ -1747,9 +1747,9 @@
     "TestStreamingRPCStuck"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/tabletgateway",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 35.101,
+   "status": "verified",
+   "verified_at_sha": "0085bdf627f9fde08c74635fde51d171d63edec6",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/tabletgateway/",
    "wave": 3
   },
@@ -1766,7 +1766,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "cluster-per-test",
    "notes": "Moved to wave 3: all cluster lifecycle lives in the shared tabletgateway/buffer helper package, which buffer/reshard (wave 3) also uses; both migrate together with the helper. | Each subtest (bt.Test) builds and tears down its own cluster; buffering assertions read vtgate's /debug/vars-style VerifyURL JSON. Failover path issues raw multi-statement SQL directly on tablet mysqld (STOP/RESET/CHANGE REPLICATION SOURCE) so the new framework must allow a raw SQL session to a specific tablet's mysqld. Timing-sensitive: a 1s minimum-unavailability sleep and background read/write threads running every 10ms. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartUnshardedKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.Teardown, VttabletProcess.QueryTabletMultiple, VttabletProcess.ResetBinaryLogsCommand, cluster.WaitForReplicationPos, cluster.GetPrimaryPosition, VtctldClientProcess.ExecuteCommand, VtgateProcess.VerifyURL | utils APIs: utils.Exec | destructive: TabletExternallyReparented (manual demote/promote via raw SQL then TER), PlannedReparentShard failover | difficulty: hard",
    "old_shards": [
@@ -1782,9 +1782,9 @@
     "TestBufferReparenting"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/tabletgateway/buffer/reparent",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 61.07,
+   "status": "verified",
+   "verified_at_sha": "0085bdf627f9fde08c74635fde51d171d63edec6",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/tabletgateway/buffer/reparent/",
    "wave": 3
   },
@@ -2112,9 +2112,9 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
-   "notes": "Manually builds keyspace/shard/tablet topology from scratch (bypassing StartUnshardedKeyspace/StartKeyspace) across two cells (primaries in zone1, replicas/rdonly in zone2) specifically to exercise the ConnForCell cache bug; tests validate GetTablets/ListAllTablets consistency and vtctld health/keyspaces HTTP endpoints. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, TopoProcess.ManageTopoDir, VtctldClientProcess.AddCellInfo, VtctldClientProcess.ExecuteCommandWithOutput, LocalProcessCluster.NewVttabletInstance, cluster.MysqlCtlProcessInstance, cluster.VttabletProcessInstance (manual low-level construction), VttabletProcess.Setup, VttabletProcess.TearDown, MysqlctlProcess.Stop, MysqlctlProcess.CleanupFiles, MysqlctlProcess.StartProcess, VtctldClientProcess.InitializeShard, LocalProcessCluster.StartVTOrc, VtctldClientProcess.ApplySchema, VtctldClientProcess.ApplyVSchema, VtctldClientProcess.ExecuteCommand(RebuildKeyspaceGraph, RunHealthCheck, DeleteTablets, DeleteCellInfo), VtctldClientProcess.TopoRootPath field mutation | external deps: os/exec direct process handles (mysqlctlProcess.StartProcess returns *exec.Cmd, test does proc.Wait() itself) | destructive: deleteTablet: TearDown + MysqlctlProcess.Stop + DeleteTablets for 4 replica/rdonly tablets, DeleteCellInfo --force for an entire cell, re-adding the same cell name at a different topo root path and re-provisioning fresh tablets under it | difficulty: hard",
+   "notes": "quarantine: passed on retry during wave 3. | Manually builds keyspace/shard/tablet topology from scratch (bypassing StartUnshardedKeyspace/StartKeyspace) across two cells (primaries in zone1, replicas/rdonly in zone2) specifically to exercise the ConnForCell cache bug; tests validate GetTablets/ListAllTablets consistency and vtctld health/keyspaces HTTP endpoints. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, TopoProcess.ManageTopoDir, VtctldClientProcess.AddCellInfo, VtctldClientProcess.ExecuteCommandWithOutput, LocalProcessCluster.NewVttabletInstance, cluster.MysqlCtlProcessInstance, cluster.VttabletProcessInstance (manual low-level construction), VttabletProcess.Setup, VttabletProcess.TearDown, MysqlctlProcess.Stop, MysqlctlProcess.CleanupFiles, MysqlctlProcess.StartProcess, VtctldClientProcess.InitializeShard, LocalProcessCluster.StartVTOrc, VtctldClientProcess.ApplySchema, VtctldClientProcess.ApplyVSchema, VtctldClientProcess.ExecuteCommand(RebuildKeyspaceGraph, RunHealthCheck, DeleteTablets, DeleteCellInfo), VtctldClientProcess.TopoRootPath field mutation | external deps: os/exec direct process handles (mysqlctlProcess.StartProcess returns *exec.Cmd, test does proc.Wait() itself) | destructive: deleteTablet: TearDown + MysqlctlProcess.Stop + DeleteTablets for 4 replica/rdonly tablets, DeleteCellInfo --force for an entire cell, re-adding the same cell name at a different topo root path and re-provisioning fresh tablets under it | difficulty: hard",
    "old_shards": [
     {
      "args": [
@@ -2132,9 +2132,9 @@
     "TestVtctldListAllTablets"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/topoconncache",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 22.0,
+   "status": "verified",
+   "verified_at_sha": "0085bdf627f9fde08c74635fde51d171d63edec6",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/topoconncache/",
    "wave": 3
   },
@@ -2148,7 +2148,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "Tests open a raw topo.Server client directly against TopoGlobalAddress/TopoGlobalRoot to exercise shard/keyspace/named locking semantics, independent of vtctld \u2014 the framework needs to expose the topo endpoint address/root, not just vtctldclient. TestTopoRestart tears down and re-Setup()s the consul process in a goroutine while polling queries, asserting reads survive a topo outage. | cluster APIs: cluster.NewCluster, LocalProcessCluster.TopoFlavor field, LocalProcessCluster.StartTopo, LocalProcessCluster.StartUnshardedKeyspace, LocalProcessCluster.StartVtgate, TopoProcess.TearDown, TopoProcess.Setup, VtctldClientProcess.TopoGlobalAddress/TopoGlobalRoot fields, topo.OpenServer direct topo client (LockShard/LockKeyspace/LockName, CheckShardLocked/CheckKeyspaceLocked/CheckNameLocked) | external deps: consul (TopoFlavor=\"consul\"), consul host binary process | destructive: kill and restart the consul topo server process mid-test while vtgate continues serving reads (TestTopoRestart) | difficulty: hard",
    "old_shards": [
@@ -2172,9 +2172,9 @@
     "TestNamedLocking"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/topotest/consul",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 27.373,
+   "status": "verified",
+   "verified_at_sha": "0085bdf627f9fde08c74635fde51d171d63edec6",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/topotest/consul/",
    "wave": 3
   },
@@ -2187,7 +2187,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "Same pattern and helper package (go/test/endtoend/topotest/utils.WaitForBoolValue) as the consul variant, plus TestLockingWithTTL exercising topo.WithTTL lock expiry. Uses the default etcd2 topo so no extra topo-flavor capability beyond restart is needed. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartUnshardedKeyspace, LocalProcessCluster.StartVtgate, TopoProcess.TearDown, TopoProcess.SetupEtcd, VtctldClientProcess.TopoGlobalAddress/TopoGlobalRoot fields, topo.OpenServer direct topo client (LockShard/LockKeyspace/LockName with topo.WithTTL) | utils APIs: utils.Exec, utils.AssertMatches | destructive: kill and restart the etcd2 topo server process mid-test while vtgate continues serving reads (TestTopoDownServingQuery) | difficulty: hard",
    "old_shards": [
@@ -2208,9 +2208,9 @@
     "TestNamedLocking"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/topotest/etcd2",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 22.0,
+   "status": "verified",
+   "verified_at_sha": "0085bdf627f9fde08c74635fde51d171d63edec6",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/topotest/etcd2/",
    "wave": 3
   },
@@ -2226,9 +2226,9 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
-   "notes": "Also tests named/shard/keyspace locking directly via topo.OpenServer + topo.LockName/LockShard/LockKeyspace API, exercised with goroutines and a fixed 100ms sleep to assert blocking; not a vtgate/vttablet behavior test, it's a topo-server behavior test that happens to use the e2e cluster for topo bootstrap. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo (TopoFlavor=zk2), LocalProcessCluster.StartUnshardedKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.Teardown, VtctldClientProcess.TopoGlobalAddress/TopoGlobalRoot, TopoProcess.TearDown | utils APIs: utils.Exec, utils.AssertMatches | external deps: zookeeper (zk2 topo flavor) | destructive: TopoProcess.TearDown (kills the topo server mid-test to prove serving continues without it) | difficulty: medium",
+   "notes": "The topo-down test now genuinely stops the zookeeper process (the process-level StopTopoProcess), which the previous harness did not do, so vtgate needs --srv-topo-cache-ttl 30s to serve from cache across the 3s outage window. | Also tests named/shard/keyspace locking directly via topo.OpenServer + topo.LockName/LockShard/LockKeyspace API, exercised with goroutines and a fixed 100ms sleep to assert blocking; not a vtgate/vttablet behavior test, it's a topo-server behavior test that happens to use the e2e cluster for topo bootstrap. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo (TopoFlavor=zk2), LocalProcessCluster.StartUnshardedKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.Teardown, VtctldClientProcess.TopoGlobalAddress/TopoGlobalRoot, TopoProcess.TearDown | utils APIs: utils.Exec, utils.AssertMatches | external deps: zookeeper (zk2 topo flavor) | destructive: TopoProcess.TearDown (kills the topo server mid-test to prove serving continues without it) | difficulty: medium",
    "old_shards": [
     {
      "args": [
@@ -2248,9 +2248,9 @@
     "TestKeyspaceLocking"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/topotest/zk2",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 13.0,
+   "status": "verified",
+   "verified_at_sha": "0085bdf627f9fde08c74635fde51d171d63edec6",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/topotest/zk2/",
    "wave": 3
   },
@@ -2714,7 +2714,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "Sleeps up to 15s polling for vault port to come up, then waits a fixed 30s for a token-renewal log line. Uses vault-cert.pem/vault-key.pem/ca.pem test fixtures and a shell setup script (vault-setup.sh) that must run against the Vault server to mint role/secret IDs. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.GetAndReservePort, LocalProcessCluster.NewVttabletInstance, LocalProcessCluster.SetupCluster, LocalProcessCluster.VtctldClientProcess.InitShardPrimary, LocalProcessCluster.StartVTOrc, LocalProcessCluster.StartVtgate, cluster.VtctldClientProcessInstance/ExecuteCommandWithOutput (SetKeyspaceDurabilityPolicy), cluster.VerifyRowsInTabletForTable, cluster.GetPasswordUpdateSQL, VttabletProcess.QueryTablet, VttabletProcess.Setup, MysqlctlProcess.StartProcess/InitDBFile/ExtraArgs, LocalProcessCluster.Teardown | utils APIs: utils.GetInitDBSQL | external deps: HashiCorp Vault server (downloaded host binary, spawned via os/exec, dev-mode TLS), vault-setup.sh bash script invoked via os/exec, TLS cert/key files (vault-cert.pem/vault-key.pem/ca.pem) shipped in repo, not generated at runtime, VAULT_ROLEID/VAULT_SECRETID/VAULT_ADDR/VAULT_CACERT env vars consumed by vttablet/vtgate, reads vttablet stderr log file from disk to detect 'Vault client status: token renewed' | difficulty: hard",
    "old_shards": [
@@ -2732,9 +2732,9 @@
     "TestVaultAuth"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vault",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 31.1,
+   "status": "verified",
+   "verified_at_sha": "0085bdf627f9fde08c74635fde51d171d63edec6",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vault/",
    "wave": 3
   },
@@ -5370,7 +5370,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "Single test disables VTOrc's automatic ERS via SetVtorcEmergencyReparent to avoid racing the manual EmergencyReparentShard call, then kills mysqld under the primary and runs ERS by hand; requires vtorc to be present and controllable even though this package's steady-state doesn't otherwise use it. | cluster APIs: LocalProcessCluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartUnshardedKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.VtctldClientProcess.ExecuteCommandWithOutput, LocalProcessCluster.VtctldClientProcess.ExecuteCommand, Keyspace.Shards[].PrimaryTablet, Tablet.MysqlctlProcess.Stop | utils APIs: utils.Exec | external deps: mysqlctl (process-level control of mysqld via MysqlctlProcess) | destructive: primaryTablet.MysqlctlProcess.Stop() (kills mysqld under the primary), EmergencyReparentShard via vtctldclient | difficulty: hard",
    "old_shards": [
@@ -5387,9 +5387,9 @@
     "TestMysqlDownServingChange"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/reservedconn/mysqldown",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 18.6,
+   "status": "verified",
+   "verified_at_sha": "0085bdf627f9fde08c74635fde51d171d63edec6",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/reservedconn/mysqldown/",
    "wave": 3
   },
@@ -5475,7 +5475,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "Single test stops mysqld independently of vttablet, kills the vttablet process, then runs a manual EmergencyReparentShard while VTOrc's own auto-ERS is disabled via SetVtorcEmergencyReparent to avoid a race; requires the new framework to control mysqld and vttablet as separate stoppable units. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartUnshardedKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.Teardown, VtctldClientProcess.ExecuteCommandWithOutput, VtctldClientProcess.ExecuteCommand, Shard.PrimaryTablet, MysqlctlProcess.Stop, VttabletProcess.TearDown | utils APIs: utils.Exec | external deps: mysqlctl (independent mysqld process control via MysqlctlProcess.Stop) | destructive: stop primary mysqld (MysqlctlProcess.Stop), kill primary vttablet process (VttabletProcess.TearDown), EmergencyReparentShard via vtctldclient, toggle VTOrc auto-ERS via SetVtorcEmergencyReparent | difficulty: hard",
    "old_shards": [
@@ -5492,9 +5492,9 @@
     "TestVttabletDownServingChange"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/reservedconn/vttabletdown",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 29,
+   "status": "verified",
+   "verified_at_sha": "0085bdf627f9fde08c74635fde51d171d63edec6",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/reservedconn/vttabletdown/",
    "wave": 3
   },
@@ -5762,7 +5762,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "TestMain reparents each shard's primary onto Vttablets[1] via InitializeShard before starting VTOrc, specifically to prove schema tracking follows whichever tablet ends up primary, not a hardcoded index. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, cluster.Keyspace.SidecarDBName, VtGateExtraArgs, VtTabletExtraArgs, LocalProcessCluster.StartKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.WaitForVTGateAndVTTablets, VtctldClientProcess.InitializeShard, LocalProcessCluster.StartVTOrc, LocalProcessCluster.Teardown | utils APIs: utils.Exec, utils.AssertMatchesWithTimeout | external deps: VTOrc process (StartVTOrc), custom sidecar database name | destructive: InitializeShard reparent on every shard, promoting the second vttablet as primary, before VTOrc is even started | difficulty: hard",
    "old_shards": [
@@ -5784,9 +5784,9 @@
     "TestAddColumn"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/schematracker/sharded_prs",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 16.6,
+   "status": "verified",
+   "verified_at_sha": "0085bdf627f9fde08c74635fde51d171d63edec6",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/schematracker/sharded_prs/",
    "wave": 3
   },
@@ -6005,9 +6005,9 @@
     "TestHealthCheckExternallyReparentNewTablet"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/tablet_healthcheck",
-   "runtime_sec": 14.35,
+   "runtime_sec": 14.74,
    "status": "verified",
-   "verified_at_sha": "52a8b887d37d80ea5e6a906ac8499fc1adecbb06",
+   "verified_at_sha": "0085bdf627f9fde08c74635fde51d171d63edec6",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/tablet_healthcheck/",
    "wave": 2
   },
@@ -6047,9 +6047,9 @@
     "TestHealthCheckCacheWithTabletChurn"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/tablet_healthcheck_cache",
-   "runtime_sec": 58.331,
+   "runtime_sec": 59.136,
    "status": "verified",
-   "verified_at_sha": "52a8b887d37d80ea5e6a906ac8499fc1adecbb06",
+   "verified_at_sha": "0085bdf627f9fde08c74635fde51d171d63edec6",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/tablet_healthcheck_cache/",
    "wave": 2
   },
@@ -6141,7 +6141,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "Covers stored procedures (CALL, IN/OUT params, multi-statement, definer), temp tables, DDL, and a QueryExecutions/QueryExecutionsByTable metrics check via VtgateProcess.GetVars() debug/vars scrape; several tests use fixed sleeps (3s, 5s, 6s) tied to --queryserver-config-transaction-timeout 3s rather than polling. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartUnshardedKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.Teardown, TopoProcess.TearDown, VtgateProcess.GetVars | utils APIs: utils.Exec, utils.AssertMatches, utils.AssertMatchesAny, utils.AssertContainsError | destructive: TopoProcess.TearDown mid-test (TestTopoDownServingQuery) to prove vtgate keeps serving already-resolved unsharded queries after the topo server goes away | difficulty: hard",
    "old_shards": [
@@ -6169,9 +6169,9 @@
     "TestMetricForExplain"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/unsharded",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 28.382,
+   "status": "verified",
+   "verified_at_sha": "0085bdf627f9fde08c74635fde51d171d63edec6",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/unsharded/",
    "wave": 3
   },
@@ -6316,7 +6316,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "mixed",
    "notes": "TestFullStatusConnectionPooling reassigns a tablet's HTTP/gRPC ports and calls VttabletProcess.Setup() again in place to simulate a restart while keeping the same UID; several subtests rely on 1s-30s eventually-polls against VTOrc's detection-analysis API and metrics rather than fixed sleeps. TestSemiSync/TestDurabilityPolicySetLater spin up a second, separate cluster (utils.SetupNewClusterSemiSync) rather than reusing the shared one. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, TopoProcess.ManageTopoDir, VtctldClientProcess.AddCellInfo, LocalProcessCluster.NewVttabletInstance, LocalProcessCluster.SetupCluster, VttabletProcess.Setup/TearDown/WaitForTabletStatuses/WaitForTabletTypes/Kill/QueryTablet/GetDBVar/Port/GrpcPort fields, MysqlctlProcess.StartProcess/Stop, LocalProcessCluster.NewVTOrcProcess, VTOrcProcess.Setup/TearDown/DisableGlobalRecoveries/EnableGlobalRecoveries, VtctldClientProcess.ExecuteCommandWithOutput (PlannedReparentShard, StopReplication, ChangeTabletType, SetKeyspaceDurabilityPolicy), topo.Server (Ts).LockKeyspace/GetKeyspace/UpdateKeyspace/GetTablet/UpdateTabletFields, cluster.FullStatus, LocalProcessCluster.GetAndReservePort, LocalProcessCluster.Teardown | external deps: direct topo.Server client (vtorc/utils.VTOrcClusterInfo.Ts), semi-sync plugin detection/toggling via raw mysql.Conn to a unix socket at $VTDATAROOT/vt_<uid>/mysql.sock | destructive: kills vttablet processes (VttabletProcess.Kill), changes tablet ports and restarts VttabletProcess.Setup to simulate a moved/restarted primary, forces topo tablet type mismatches directly via UpdateTabletFields (PRIMARY without promotion) to test VTOrc's reconciliation, STOP/START REPLICA and circular-replication misconfiguration, SetKeyspaceDurabilityPolicy changes mid-test | difficulty: hard",
    "old_shards": [
@@ -6350,9 +6350,9 @@
     "TestRecoveryDeadlocks"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtorc/general",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 212,
+   "status": "verified",
+   "verified_at_sha": "0085bdf627f9fde08c74635fde51d171d63edec6",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtorc/general/",
    "wave": 3
   },
@@ -6374,7 +6374,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "mixed",
    "notes": "Two tests are permanently skipped (t.Skip()) because the current ERS no longer implements lost-replica detection / promotion-lag checking, so they cover no live behavior. Heavy use of PermanentlyRemoveVttablet to retire a tablet whose mysqld was stopped so it isn't reused by later SetupVttabletsAndVTOrcs calls -- migration must preserve a similar retire-from-pool concept if tablets are reused across tests. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, TopoProcess.ManageTopoDir, VtctldClientProcess.AddCellInfo/InitializeShard/ExecuteCommand/ExecuteCommandWithOutput (StopReplication, StartReplication, DeleteTablets, SetVtorcEmergencyReparent), LocalProcessCluster.NewVttabletInstance, LocalProcessCluster.SetupCluster, VttabletProcess.Setup/TearDown/Kill/WaitForTabletStatuses/WaitForTabletTypes, MysqlctlProcess.StartProcess/Stop, LocalProcessCluster.NewVTOrcProcess, VTOrcProcess.Setup/TearDown/LogDir/LogFileName fields, LocalProcessCluster.Teardown | external deps: reads VTOrc's text log file directly off disk by path to compute recovery duration (recoveryDuration/parseLogTimestamp) | destructive: MysqlctlProcess.Stop / VttabletProcess.TearDown / VttabletProcess.Kill on the primary to simulate primary death, DeleteTablets --allow-primary on a torn-down primary, SetVtorcEmergencyReparent --disable/--enable to gate ERS, cross-cell replica startup and forced lag scenarios via ResetPrimaryLogs | difficulty: hard",
    "old_shards": [
@@ -6406,9 +6406,9 @@
     "TestDownPrimaryPromotionRuleWithLagCrossCenter"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtorc/primaryfailure",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 248.159,
+   "status": "verified",
+   "verified_at_sha": "0085bdf627f9fde08c74635fde51d171d63edec6",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtorc/primaryfailure/",
    "wave": 3
   },
@@ -6427,7 +6427,7 @@
    "dropped_tests": [],
    "honesty": null,
    "lifecycle": "cluster-per-test",
-   "notes": "Effectively a white-box integration test of vtorc/inst.ReadTopologyInstanceBufferable against a real MySQL/replica topology (checks binlog coordinates, GTID sets, semi-sync counters, heartbeat interval, etc.) rather than a black-box VTOrc-process test; cannot be ported as-is to a framework that only exposes VTOrc as an opaque container. | cluster APIs: utils.SetupNewClusterSemiSync (spins a whole new LocalProcessCluster), LocalProcessCluster.Teardown, VtctldClientProcess.TopoGlobalAddress/TopoImplementation/TopoGlobalRoot fields | external deps: in-process invocation of vtorc's own internal packages (servenv.ParseFlags, vtorc/config, vtorc/server.StartVTOrcDiscovery, vtorc/inst.ReadTopologyInstanceBufferable) linked directly into the test binary rather than driving a separate VTOrc process; mutates os.Args to fake CLI flags for servenv | destructive: injects an errant GTID by disabling recovery, stopping replication and setting GTID_NEXT, then restarting replication | difficulty: hard",
+   "notes": "Exception: white-box in-process vtorc test. inst.ReadTopologyInstanceBufferable runs in the test process and dials the raw topo tablet records (container aliases, container-internal ports), and asserts stored Hostname == localhost. Stored records must stay container-reachable for the cluster to function, so host-side in-process vtorc cannot work against containers. vtorc behavior itself is covered by the migrated vtorc/api, general, and primaryfailure suites. | Effectively a white-box integration test of vtorc/inst.ReadTopologyInstanceBufferable against a real MySQL/replica topology (checks binlog coordinates, GTID sets, semi-sync counters, heartbeat interval, etc.) rather than a black-box VTOrc-process test; cannot be ported as-is to a framework that only exposes VTOrc as an opaque container. | cluster APIs: utils.SetupNewClusterSemiSync (spins a whole new LocalProcessCluster), LocalProcessCluster.Teardown, VtctldClientProcess.TopoGlobalAddress/TopoImplementation/TopoGlobalRoot fields | external deps: in-process invocation of vtorc's own internal packages (servenv.ParseFlags, vtorc/config, vtorc/server.StartVTOrcDiscovery, vtorc/inst.ReadTopologyInstanceBufferable) linked directly into the test binary rather than driving a separate VTOrc process; mutates os.Args to fake CLI flags for servenv | destructive: injects an errant GTID by disabling recovery, stopping replication and setting GTID_NEXT, then restarting replication | difficulty: hard",
    "old_shards": [
     {
      "args": [],
@@ -6444,7 +6444,7 @@
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtorc/readtopologyinstance",
    "runtime_sec": null,
-   "status": "pending",
+   "status": "exception",
    "verified_at_sha": null,
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtorc/readtopologyinstance/",
    "wave": 3

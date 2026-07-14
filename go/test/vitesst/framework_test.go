@@ -150,6 +150,48 @@ func TestClusterBootstrap(t *testing.T) {
 	assert.NotEmpty(t, vars)
 }
 
+// bootstrapTopoFlavor proves a full cluster bring-up and a query round trip
+// on a non-default topology flavor.
+func bootstrapTopoFlavor(t *testing.T, flavor string) {
+	t.Helper()
+
+	c, err := vitesst.NewCluster(
+		vitesst.WithTopo(flavor),
+		vitesst.WithKeyspace("ks").WithSchema(selfTestSchema),
+	)
+	require.NoError(t, err)
+	cleanup, err := c.Start(t.Context())
+	t.Cleanup(func() {
+		ctx := context.WithoutCancel(t.Context())
+		if t.Failed() {
+			c.DumpDiagnostics(ctx, t.Logf)
+		}
+		if err := cleanup(ctx); err != nil {
+			t.Logf("cluster teardown: %v", err)
+		}
+	})
+	require.NoError(t, err)
+
+	conn := c.Connect(t)
+	defer conn.Close()
+	_, err = conn.ExecuteFetch("insert into ks.t1(id, val) values (1, 'one')", 1, false)
+	require.NoError(t, err)
+	qr, err := conn.ExecuteFetch("select val from ks.t1 where id = 1", 1, false)
+	require.NoError(t, err)
+	require.Len(t, qr.Rows, 1)
+	assert.Equal(t, "one", qr.Rows[0][0].ToString())
+}
+
+func TestClusterBootstrapConsul(t *testing.T) {
+	requireE2E(t)
+	bootstrapTopoFlavor(t, "consul")
+}
+
+func TestClusterBootstrapZookeeper(t *testing.T) {
+	requireE2E(t)
+	bootstrapTopoFlavor(t, "zk2")
+}
+
 func TestTabletProcessLifecycle(t *testing.T) {
 	requireE2E(t)
 

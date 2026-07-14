@@ -20,8 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
-	"path"
 	"strconv"
 	"strings"
 	"sync"
@@ -33,9 +31,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/protoutil"
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/vtorc/utils"
-	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/test/vitesst"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtorc/inst"
@@ -48,24 +44,20 @@ import (
 // verify replication is setup
 // verify that with multiple vtorc instances, we still only have 1 PlannedReparentShard call
 func TestPrimaryElection(t *testing.T) {
-	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
-	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, nil, cluster.VTOrcConfiguration{
-		PreventCrossCellFailover: true,
-	}, map[string]int{cluster.DefaultCell: 2}, "")
-	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
-	shard0 := &keyspace.Shards[0]
+	defer printVTOrcLogsOnFailure(t, clusterInfo)
+	clusterInfo.setupVttabletsAndVTOrcs(t, 2, 1, nil, true, 2, "")
 
-	primary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
+	primary := shardPrimaryTablet(t, clusterInfo, keyspaceName, shardName, clusterInfo.active)
 	assert.NotNil(t, primary, "should have elected a primary")
-	utils.CheckReplication(t, clusterInfo, primary, shard0.Vttablets, 10*time.Second)
+	checkReplication(t, clusterInfo, primary, clusterInfo.active, 10*time.Second)
 
-	for _, vttablet := range shard0.Vttablets {
-		if vttablet.Type == "rdonly" && primary.Alias == vttablet.Alias {
-			assert.Failf(t, "rdonly promoted", "Rdonly tablet promoted as primary - %v", primary.Alias)
+	for _, vttablet := range clusterInfo.active {
+		if vttablet.Type() == "rdonly" && primary.Alias() == vttablet.Alias() {
+			assert.Failf(t, "rdonly promoted", "Rdonly tablet promoted as primary - %v", primary.Alias())
 		}
 	}
 
-	res, err := utils.RunSQL(t, "select * from reparent_journal", primary, "_vt")
+	res, err := runSQL(t.Context(), t, "select * from reparent_journal", primary, "_vt")
 	require.NoError(t, err)
 	require.Len(t, res.Rows, 1, "There should only be 1 primary tablet which was elected")
 }
@@ -73,22 +65,20 @@ func TestPrimaryElection(t *testing.T) {
 // TestErrantGTIDOnPreviousPrimary tests that VTOrc is able to detect errant GTIDs on a previously demoted primary
 // if it has an errant GTID.
 func TestErrantGTIDOnPreviousPrimary(t *testing.T) {
-	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
-	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 3, 0, []string{"--change-tablets-with-errant-gtid-to-drained"}, cluster.VTOrcConfiguration{}, cluster.DefaultVtorcsByCell, "")
-	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
-	shard0 := &keyspace.Shards[0]
+	defer printVTOrcLogsOnFailure(t, clusterInfo)
+	clusterInfo.setupVttabletsAndVTOrcs(t, 3, 0, []string{"--change-tablets-with-errant-gtid-to-drained"}, false, 1, "")
 
 	// find primary from topo
-	curPrimary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
+	curPrimary := shardPrimaryTablet(t, clusterInfo, keyspaceName, shardName, clusterInfo.active)
 	assert.NotNil(t, curPrimary, "should have elected a primary")
-	vtOrcProcess := clusterInfo.ClusterInstance.VTOrcProcesses[0]
-	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.ElectNewPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
-	utils.WaitForSuccessfulPRSCount(t, vtOrcProcess, keyspace.Name, shard0.Name, 1)
+	vtOrcProcess := clusterInfo.vtorcs[0]
+	waitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.ElectNewPrimaryRecoveryName, keyspaceName, shardName, 1)
+	waitForSuccessfulPRSCount(t, vtOrcProcess, keyspaceName, shardName, 1)
 
-	var replica, otherReplica *cluster.Vttablet
-	for _, tablet := range shard0.Vttablets {
+	var replica, otherReplica *vitesst.Tablet
+	for _, tablet := range clusterInfo.active {
 		// we know we have only two tablets, so the "other" one must be the new primary
-		if tablet.Alias != curPrimary.Alias {
+		if tablet.Alias() != curPrimary.Alias() {
 			if replica == nil {
 				replica = tablet
 			} else {
@@ -98,22 +88,22 @@ func TestErrantGTIDOnPreviousPrimary(t *testing.T) {
 	}
 	require.NotNil(t, replica, "should be able to find a replica")
 	require.NotNil(t, otherReplica, "should be able to find 2nd replica")
-	utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{replica, otherReplica}, 15*time.Second)
+	checkReplication(t, clusterInfo, curPrimary, []*vitesst.Tablet{replica, otherReplica}, 15*time.Second)
 
 	// Disable global recoveries for the cluster.
-	vtOrcProcess.DisableGlobalRecoveries(t)
+	disableGlobalRecoveries(t, vtOrcProcess)
 
 	// Run PRS to promote a different replica.
-	output, err := clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(
+	output, err := clusterInfo.cluster.Vtctld().ExecuteCommandWithOutput(t.Context(),
 		"PlannedReparentShard",
-		fmt.Sprintf("%s/%s", keyspace.Name, shard0.Name),
-		"--new-primary", replica.Alias,
+		fmt.Sprintf("%s/%s", keyspaceName, shardName),
+		"--new-primary", replica.Alias(),
 	)
 	require.NoError(t, err, "error in PlannedReparentShard output - %s", output)
 
 	// Stop replicatin on the previous primary to simulate it not reparenting properly.
 	// Also insert an errant GTID on the previous primary.
-	err = utils.RunSQLs(t, []string{
+	err = runSQLs(t.Context(), t, []string{
 		"STOP REPLICA",
 		"RESET REPLICA ALL",
 		"set global read_only=OFF",
@@ -122,10 +112,10 @@ func TestErrantGTIDOnPreviousPrimary(t *testing.T) {
 	require.NoError(t, err)
 
 	// Wait for VTOrc to detect the errant GTID and change the tablet to a drained type.
-	vtOrcProcess.EnableGlobalRecoveries(t)
+	enableGlobalRecoveries(t, vtOrcProcess)
 
 	// Wait for the tablet to be drained.
-	utils.WaitForTabletType(t, curPrimary, "drained")
+	waitForTabletType(t, curPrimary, "drained")
 }
 
 // Cases to test:
@@ -133,17 +123,13 @@ func TestErrantGTIDOnPreviousPrimary(t *testing.T) {
 // verify rdonly is not elected, only replica
 // verify replication is setup
 func TestSingleKeyspace(t *testing.T) {
-	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
-	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 1, 1, []string{"--clusters-to-watch", "ks"}, cluster.VTOrcConfiguration{
-		PreventCrossCellFailover: true,
-	}, cluster.DefaultVtorcsByCell, "")
-	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
-	shard0 := &keyspace.Shards[0]
+	defer printVTOrcLogsOnFailure(t, clusterInfo)
+	clusterInfo.setupVttabletsAndVTOrcs(t, 1, 1, []string{"--clusters-to-watch", "ks"}, true, 1, "")
 
-	utils.CheckPrimaryTablet(t, clusterInfo, shard0.Vttablets[0], true)
-	utils.CheckReplication(t, clusterInfo, shard0.Vttablets[0], shard0.Vttablets[1:], 10*time.Second)
-	utils.WaitForSuccessfulRecoveryCount(t, clusterInfo.ClusterInstance.VTOrcProcesses[0], logic.ElectNewPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
-	utils.WaitForSuccessfulPRSCount(t, clusterInfo.ClusterInstance.VTOrcProcesses[0], keyspace.Name, shard0.Name, 1)
+	checkPrimaryTablet(t, clusterInfo, clusterInfo.active[0], true)
+	checkReplication(t, clusterInfo, clusterInfo.active[0], clusterInfo.active[1:], 10*time.Second)
+	waitForSuccessfulRecoveryCount(t, clusterInfo.vtorcs[0], logic.ElectNewPrimaryRecoveryName, keyspaceName, shardName, 1)
+	waitForSuccessfulPRSCount(t, clusterInfo.vtorcs[0], keyspaceName, shardName, 1)
 }
 
 // Cases to test:
@@ -151,17 +137,13 @@ func TestSingleKeyspace(t *testing.T) {
 // verify rdonly is not elected, only replica
 // verify replication is setup
 func TestKeyspaceShard(t *testing.T) {
-	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
-	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 1, 1, []string{"--clusters-to-watch", "ks/0"}, cluster.VTOrcConfiguration{
-		PreventCrossCellFailover: true,
-	}, cluster.DefaultVtorcsByCell, "")
-	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
-	shard0 := &keyspace.Shards[0]
+	defer printVTOrcLogsOnFailure(t, clusterInfo)
+	clusterInfo.setupVttabletsAndVTOrcs(t, 1, 1, []string{"--clusters-to-watch", "ks/0"}, true, 1, "")
 
-	utils.CheckPrimaryTablet(t, clusterInfo, shard0.Vttablets[0], true)
-	utils.CheckReplication(t, clusterInfo, shard0.Vttablets[0], shard0.Vttablets[1:], 10*time.Second)
-	utils.WaitForSuccessfulRecoveryCount(t, clusterInfo.ClusterInstance.VTOrcProcesses[0], logic.ElectNewPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
-	utils.WaitForSuccessfulPRSCount(t, clusterInfo.ClusterInstance.VTOrcProcesses[0], keyspace.Name, shard0.Name, 1)
+	checkPrimaryTablet(t, clusterInfo, clusterInfo.active[0], true)
+	checkReplication(t, clusterInfo, clusterInfo.active[0], clusterInfo.active[1:], 10*time.Second)
+	waitForSuccessfulRecoveryCount(t, clusterInfo.vtorcs[0], logic.ElectNewPrimaryRecoveryName, keyspaceName, shardName, 1)
+	waitForSuccessfulPRSCount(t, clusterInfo.vtorcs[0], keyspaceName, shardName, 1)
 }
 
 // Cases to test:
@@ -172,24 +154,20 @@ func TestKeyspaceShard(t *testing.T) {
 // 5. make instance A replicates from B and B from A, wait for repair
 // 6. disable recoveries and make sure the detected problems are set correctly.
 func TestVTOrcRepairs(t *testing.T) {
-	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
-	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 3, 0, []string{"--change-tablets-with-errant-gtid-to-drained"}, cluster.VTOrcConfiguration{
-		PreventCrossCellFailover: true,
-	}, cluster.DefaultVtorcsByCell, "")
-	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
-	shard0 := &keyspace.Shards[0]
+	defer printVTOrcLogsOnFailure(t, clusterInfo)
+	clusterInfo.setupVttabletsAndVTOrcs(t, 3, 0, []string{"--change-tablets-with-errant-gtid-to-drained"}, true, 1, "")
 
 	// find primary from topo
-	curPrimary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
+	curPrimary := shardPrimaryTablet(t, clusterInfo, keyspaceName, shardName, clusterInfo.active)
 	assert.NotNil(t, curPrimary, "should have elected a primary")
-	vtOrcProcess := clusterInfo.ClusterInstance.VTOrcProcesses[0]
-	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.ElectNewPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
-	utils.WaitForSuccessfulPRSCount(t, vtOrcProcess, keyspace.Name, shard0.Name, 1)
+	vtOrcProcess := clusterInfo.vtorcs[0]
+	waitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.ElectNewPrimaryRecoveryName, keyspaceName, shardName, 1)
+	waitForSuccessfulPRSCount(t, vtOrcProcess, keyspaceName, shardName, 1)
 
-	var replica, otherReplica *cluster.Vttablet
-	for _, tablet := range shard0.Vttablets {
+	var replica, otherReplica *vitesst.Tablet
+	for _, tablet := range clusterInfo.active {
 		// we know we have only two tablets, so the "other" one must be the new primary
-		if tablet.Alias != curPrimary.Alias {
+		if tablet.Alias() != curPrimary.Alias() {
 			if replica == nil {
 				replica = tablet
 			} else {
@@ -201,54 +179,54 @@ func TestVTOrcRepairs(t *testing.T) {
 	require.NotNil(t, otherReplica, "should be able to find 2nd replica")
 
 	// check replication is setup correctly
-	utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{replica, otherReplica}, 15*time.Second)
+	checkReplication(t, clusterInfo, curPrimary, []*vitesst.Tablet{replica, otherReplica}, 15*time.Second)
 
 	t.Run("PrimaryReadOnly", func(t *testing.T) {
 		// Make the current primary database read-only.
-		_, err := utils.RunSQL(t, "set global read_only=ON", curPrimary, "")
+		_, err := runSQL(t.Context(), t, "set global read_only=ON", curPrimary, "")
 		require.NoError(t, err)
 
 		// wait for repair
-		match := utils.WaitForReadOnlyValue(t, curPrimary, 0)
+		match := waitForReadOnlyValue(t, curPrimary, 0)
 		require.True(t, match)
-		utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.FixPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
+		waitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.FixPrimaryRecoveryName, keyspaceName, shardName, 1)
 	})
 
 	t.Run("ReplicaReadWrite", func(t *testing.T) {
 		// Make the replica database read-write.
-		_, err := utils.RunSQL(t, "set global read_only=OFF", replica, "")
+		_, err := runSQL(t.Context(), t, "set global read_only=OFF", replica, "")
 		require.NoError(t, err)
 
 		// wait for repair
-		match := utils.WaitForReadOnlyValue(t, replica, 1)
+		match := waitForReadOnlyValue(t, replica, 1)
 		require.True(t, match)
-		utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.FixReplicaRecoveryName, keyspace.Name, shard0.Name, 1)
+		waitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.FixReplicaRecoveryName, keyspaceName, shardName, 1)
 	})
 
 	t.Run("StopReplication", func(t *testing.T) {
 		// use vtctldclient to stop replication
-		_, err := clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("StopReplication", replica.Alias)
+		_, err := clusterInfo.cluster.Vtctld().ExecuteCommandWithOutput(t.Context(), "StopReplication", replica.Alias())
 		require.NoError(t, err)
 
 		// check replication is setup correctly
-		utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{replica, otherReplica}, 15*time.Second)
-		utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.FixReplicaRecoveryName, keyspace.Name, shard0.Name, 2)
+		checkReplication(t, clusterInfo, curPrimary, []*vitesst.Tablet{replica, otherReplica}, 15*time.Second)
+		waitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.FixReplicaRecoveryName, keyspaceName, shardName, 2)
 
 		// Stop just the IO thread on the replica
-		_, err = utils.RunSQL(t, "STOP REPLICA IO_THREAD", replica, "")
+		_, err = runSQL(t.Context(), t, "STOP REPLICA IO_THREAD", replica, "")
 		require.NoError(t, err)
 
 		// check replication is setup correctly
-		utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{replica, otherReplica}, 15*time.Second)
-		utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.FixReplicaRecoveryName, keyspace.Name, shard0.Name, 3)
+		checkReplication(t, clusterInfo, curPrimary, []*vitesst.Tablet{replica, otherReplica}, 15*time.Second)
+		waitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.FixReplicaRecoveryName, keyspaceName, shardName, 3)
 
 		// Stop just the SQL thread on the replica
-		_, err = utils.RunSQL(t, "STOP REPLICA SQL_THREAD", replica, "")
+		_, err = runSQL(t.Context(), t, "STOP REPLICA SQL_THREAD", replica, "")
 		require.NoError(t, err)
 
 		// check replication is setup correctly
-		utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{replica, otherReplica}, 15*time.Second)
-		utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.FixReplicaRecoveryName, keyspace.Name, shard0.Name, 4)
+		checkReplication(t, clusterInfo, curPrimary, []*vitesst.Tablet{replica, otherReplica}, 15*time.Second)
+		waitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.FixReplicaRecoveryName, keyspaceName, shardName, 4)
 	})
 
 	t.Run("ReplicationFromOtherReplica", func(t *testing.T) {
@@ -256,30 +234,30 @@ func TestVTOrcRepairs(t *testing.T) {
 		changeReplicationSourceCommands := []string{
 			"STOP REPLICA",
 			"RESET REPLICA ALL",
-			fmt.Sprintf("CHANGE REPLICATION SOURCE TO SOURCE_HOST='%s', SOURCE_PORT=%d, SOURCE_USER='vt_repl', GET_SOURCE_PUBLIC_KEY = 1, SOURCE_AUTO_POSITION = 1", utils.Hostname, otherReplica.MySQLPort),
+			fmt.Sprintf("CHANGE REPLICATION SOURCE TO SOURCE_HOST='%s', SOURCE_PORT=%d, SOURCE_USER='vt_repl', GET_SOURCE_PUBLIC_KEY = 1, SOURCE_AUTO_POSITION = 1", otherReplica.Name(), tabletMySQLPort),
 			"START REPLICA",
 		}
-		err := utils.RunSQLs(t, changeReplicationSourceCommands, replica, "")
+		err := runSQLs(t.Context(), t, changeReplicationSourceCommands, replica, "")
 		require.NoError(t, err)
 
 		// wait until the source port is set back correctly by vtorc
-		utils.CheckSourcePort(t, replica, curPrimary, 15*time.Second)
-		utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.FixReplicaRecoveryName, keyspace.Name, shard0.Name, 5)
+		checkSourcePort(t, replica, curPrimary, 15*time.Second)
+		waitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.FixReplicaRecoveryName, keyspaceName, shardName, 5)
 
 		// check that writes succeed
-		utils.VerifyWritesSucceed(t, clusterInfo, curPrimary, []*cluster.Vttablet{replica, otherReplica}, 15*time.Second)
+		verifyWritesSucceed(t, clusterInfo, curPrimary, []*vitesst.Tablet{replica, otherReplica}, 15*time.Second)
 	})
 
 	t.Run("Replication Misconfiguration", func(t *testing.T) {
-		_, err := utils.RunSQL(t, `SET @@global.replica_net_timeout=33`, replica, "")
+		_, err := runSQL(t.Context(), t, `SET @@global.replica_net_timeout=33`, replica, "")
 		require.NoError(t, err)
 
 		// wait until heart beat interval has been fixed by vtorc.
-		utils.CheckHeartbeatInterval(t, replica, 16.5, 15*time.Second)
-		utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.FixReplicaRecoveryName, keyspace.Name, shard0.Name, 6)
+		checkHeartbeatInterval(t, replica, 16.5, 15*time.Second)
+		waitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.FixReplicaRecoveryName, keyspaceName, shardName, 6)
 
 		// check that writes succeed
-		utils.VerifyWritesSucceed(t, clusterInfo, curPrimary, []*cluster.Vttablet{replica, otherReplica}, 15*time.Second)
+		verifyWritesSucceed(t, clusterInfo, curPrimary, []*vitesst.Tablet{replica, otherReplica}, 15*time.Second)
 	})
 
 	t.Run("CircularReplication", func(t *testing.T) {
@@ -287,63 +265,63 @@ func TestVTOrcRepairs(t *testing.T) {
 		changeReplicationSourceCommands := []string{
 			"STOP REPLICA",
 			"RESET REPLICA ALL",
-			fmt.Sprintf("CHANGE REPLICATION SOURCE TO SOURCE_HOST='%s', SOURCE_PORT=%d, SOURCE_USER='vt_repl', GET_SOURCE_PUBLIC_KEY = 1, SOURCE_AUTO_POSITION = 1", replica.VttabletProcess.TabletHostname, replica.MySQLPort),
+			fmt.Sprintf("CHANGE REPLICATION SOURCE TO SOURCE_HOST='%s', SOURCE_PORT=%d, SOURCE_USER='vt_repl', GET_SOURCE_PUBLIC_KEY = 1, SOURCE_AUTO_POSITION = 1", replica.Name(), tabletMySQLPort),
 			"START REPLICA",
 		}
-		err := utils.RunSQLs(t, changeReplicationSourceCommands, curPrimary, "")
+		err := runSQLs(t.Context(), t, changeReplicationSourceCommands, curPrimary, "")
 		require.NoError(t, err)
 
 		// wait for curPrimary to reach stable state
 		time.Sleep(1 * time.Second)
 
 		// wait for repair
-		err = utils.WaitForReplicationToStop(t, curPrimary)
+		err = waitForReplicationToStop(t.Context(), t, curPrimary)
 		require.NoError(t, err)
-		utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.RecoverPrimaryHasPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
+		waitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.RecoverPrimaryHasPrimaryRecoveryName, keyspaceName, shardName, 1)
 		// check that the writes still succeed
-		utils.VerifyWritesSucceed(t, clusterInfo, curPrimary, []*cluster.Vttablet{replica, otherReplica}, 10*time.Second)
+		verifyWritesSucceed(t, clusterInfo, curPrimary, []*vitesst.Tablet{replica, otherReplica}, 10*time.Second)
 	})
 
 	t.Run("Errant GTID Detected", func(t *testing.T) {
 		// insert an errant GTID in the replica
-		_, err := utils.RunSQL(t, "insert into vt_insert_test(id, msg) values (10173, 'test 178342')", replica, "vt_ks")
+		_, err := runSQL(t.Context(), t, "insert into vt_insert_test(id, msg) values (10173, 'test 178342')", replica, "vt_ks")
 		require.NoError(t, err)
 		// When VTOrc detects errant GTIDs, it should change the tablet to a drained type.
-		utils.WaitForTabletType(t, replica, "drained")
+		waitForTabletType(t, replica, "drained")
 	})
 
 	t.Run("Sets DetectedProblems metric correctly", func(t *testing.T) {
 		// Since we're using a boolean metric here, disable recoveries for now.
-		status, _, err := utils.MakeAPICall(t, vtOrcProcess, "/api/disable-global-recoveries")
+		status, _, err := makeAPICall(t, vtOrcProcess, "/api/disable-global-recoveries")
 		require.NoError(t, err)
 		require.Equal(t, 200, status)
 
 		// Make the current primary database read-only.
-		_, err = utils.RunSQL(t, "set global read_only=ON", curPrimary, "")
+		_, err = runSQL(t.Context(), t, "set global read_only=ON", curPrimary, "")
 		require.NoError(t, err)
 
 		// Wait for problems to be set.
-		utils.WaitForDetectedProblems(
+		waitForDetectedProblems(
 			t, vtOrcProcess,
 			string(inst.PrimaryIsReadOnly),
-			curPrimary.Alias,
-			keyspace.Name,
-			shard0.Name,
+			canonicalAlias(curPrimary),
+			keyspaceName,
+			shardName,
 			1,
 		)
 
 		// Enable recoveries.
-		status, _, err = utils.MakeAPICall(t, vtOrcProcess, "/api/enable-global-recoveries")
+		status, _, err = makeAPICall(t, vtOrcProcess, "/api/enable-global-recoveries")
 		require.NoError(t, err)
 		assert.Equal(t, 200, status)
 
 		// wait for detected problem to be cleared.
-		utils.WaitForDetectedProblems(
+		waitForDetectedProblems(
 			t, vtOrcProcess,
 			string(inst.PrimaryIsReadOnly),
-			curPrimary.Alias,
-			keyspace.Name,
-			shard0.Name,
+			canonicalAlias(curPrimary),
+			keyspaceName,
+			shardName,
 			0,
 		)
 	})
@@ -356,11 +334,9 @@ func TestVTOrcRepairs(t *testing.T) {
 		// to make it a primary and see that VTOrc detects the mismatch and promotes the tablet.
 
 		// Initially check that replication is working as intended
-		utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{replica, otherReplica}, 15*time.Second)
+		checkReplication(t, clusterInfo, curPrimary, []*vitesst.Tablet{replica, otherReplica}, 15*time.Second)
 
-		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-		defer cancel()
-		_, err := clusterInfo.Ts.UpdateTabletFields(ctx, replica.GetAlias(), func(tablet *topodatapb.Tablet) error {
+		err := updateTabletFields(t.Context(), clusterInfo.etcdAddr, replica.Cell, replica.UID, func(tablet *topodatapb.Tablet) error {
 			tablet.Type = topodatapb.TabletType_PRIMARY
 			tablet.PrimaryTermStartTime = protoutil.TimeToProto(time.Now())
 			return nil
@@ -369,46 +345,41 @@ func TestVTOrcRepairs(t *testing.T) {
 
 		// Wait for VTOrc to detect the mismatch and promote the tablet.
 		require.Eventuallyf(t, func() bool {
-			fs := cluster.FullStatus(t, replica, clusterInfo.ClusterInstance.Hostname)
-			return fs.TabletType == topodatapb.TabletType_PRIMARY
+			return fullStatusTabletType(t, replica) == topodatapb.TabletType_PRIMARY
 		}, 10*time.Second, 1*time.Second, "Primary tablet's display type didn't match the topo record")
 		// Also check that the replica gets promoted and can accept writes.
-		utils.CheckReplication(t, clusterInfo, replica, []*cluster.Vttablet{curPrimary, otherReplica}, 15*time.Second)
+		checkReplication(t, clusterInfo, replica, []*vitesst.Tablet{curPrimary, otherReplica}, 15*time.Second)
 	})
 }
 
 func TestRepairAfterTER(t *testing.T) {
 	// test fails intermittently on CI, skip until it can be fixed.
 	t.SkipNow()
-	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
-	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 0, nil, cluster.VTOrcConfiguration{
-		PreventCrossCellFailover: true,
-	}, cluster.DefaultVtorcsByCell, "")
-	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
-	shard0 := &keyspace.Shards[0]
+	defer printVTOrcLogsOnFailure(t, clusterInfo)
+	clusterInfo.setupVttabletsAndVTOrcs(t, 2, 0, nil, true, 1, "")
 
 	// find primary from topo
-	curPrimary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
+	curPrimary := shardPrimaryTablet(t, clusterInfo, keyspaceName, shardName, clusterInfo.active)
 	assert.NotNil(t, curPrimary, "should have elected a primary")
 
 	// TODO(deepthi): we should not need to do this, the DB should be created automatically
-	_, err := curPrimary.VttabletProcess.QueryTablet("create database IF NOT EXISTS vt_"+keyspace.Name, keyspace.Name, false)
+	_, err := runSQL(t.Context(), t, "create database IF NOT EXISTS vt_"+keyspaceName, curPrimary, "")
 	require.NoError(t, err)
 
-	var newPrimary *cluster.Vttablet
-	for _, tablet := range shard0.Vttablets {
+	var newPrimary *vitesst.Tablet
+	for _, tablet := range clusterInfo.active {
 		// we know we have only two tablets, so the "other" one must be the new primary
-		if tablet.Alias != curPrimary.Alias {
+		if tablet.Alias() != curPrimary.Alias() {
 			newPrimary = tablet
 			break
 		}
 	}
 
 	// TER to other tablet
-	_, err = clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("TabletExternallyReparented", newPrimary.Alias)
+	_, err = clusterInfo.cluster.Vtctld().ExecuteCommandWithOutput(t.Context(), "TabletExternallyReparented", newPrimary.Alias())
 	require.NoError(t, err)
 
-	utils.CheckReplication(t, clusterInfo, newPrimary, []*cluster.Vttablet{curPrimary}, 15*time.Second)
+	checkReplication(t, clusterInfo, newPrimary, []*vitesst.Tablet{curPrimary}, 15*time.Second)
 }
 
 // TestStalePrimary tests that an old primary that remains writable and of tablet type PRIMARY in the topo
@@ -416,20 +387,16 @@ func TestRepairAfterTER(t *testing.T) {
 func TestStalePrimary(t *testing.T) {
 	ctx := t.Context()
 
-	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
-	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 4, 0, []string{"--topo-information-refresh-duration", "1s"}, cluster.VTOrcConfiguration{
-		PreventCrossCellFailover: true,
-	}, cluster.DefaultVtorcsByCell, policy.DurabilitySemiSync)
-	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
-	shard0 := &keyspace.Shards[0]
+	defer printVTOrcLogsOnFailure(t, clusterInfo)
+	clusterInfo.setupVttabletsAndVTOrcs(t, 4, 0, []string{"--topo-information-refresh-duration", "1s"}, true, 1, policy.DurabilitySemiSync)
 
-	curPrimary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
+	curPrimary := shardPrimaryTablet(t, clusterInfo, keyspaceName, shardName, clusterInfo.active)
 	assert.NotNil(t, curPrimary, "should have elected a primary")
-	utils.CheckPrimaryTablet(t, clusterInfo, curPrimary, true)
+	checkPrimaryTablet(t, clusterInfo, curPrimary, true)
 
-	var badPrimary, healthyReplica *cluster.Vttablet
-	for _, tablet := range shard0.Vttablets {
-		if tablet.Alias == curPrimary.Alias {
+	var badPrimary, healthyReplica *vitesst.Tablet
+	for _, tablet := range clusterInfo.active {
+		if tablet.Alias() == curPrimary.Alias() {
 			continue
 		}
 
@@ -441,22 +408,22 @@ func TestStalePrimary(t *testing.T) {
 		healthyReplica = tablet
 	}
 
-	utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{badPrimary, healthyReplica}, 15*time.Second)
+	checkReplication(t, clusterInfo, curPrimary, []*vitesst.Tablet{badPrimary, healthyReplica}, 15*time.Second)
 
-	curPrimaryTopo, err := clusterInfo.Ts.GetTablet(ctx, curPrimary.GetAlias())
+	curPrimaryTopo, err := getTabletRecord(ctx, clusterInfo.cluster, curPrimary.Alias())
 	require.NoError(t, err, "expected to read current primary topo record")
 
 	curPrimaryTermStart := protoutil.TimeFromProto(curPrimaryTopo.PrimaryTermStartTime)
 	require.False(t, curPrimaryTermStart.IsZero(), "expected current primary term start time to be set")
 
-	err = utils.RunSQLs(t, []string{"SET GLOBAL read_only = OFF"}, badPrimary, "")
+	err = runSQLs(ctx, t, []string{"SET GLOBAL read_only = OFF"}, badPrimary, "")
 	require.NoError(t, err)
-	require.True(t, utils.WaitForReadOnlyValue(t, badPrimary, 0))
+	require.True(t, waitForReadOnlyValue(t, badPrimary, 0))
 
 	// We set the tablet's type in the topology to PRIMARY. This mimics the situation where during a demotion
 	// in a hypothetical ERS, the old primary starts running as a replica, but fails before updating the topology
 	// accordingly.
-	_, err = clusterInfo.Ts.UpdateTabletFields(ctx, badPrimary.GetAlias(), func(tablet *topodatapb.Tablet) error {
+	err = updateTabletFields(ctx, clusterInfo.etcdAddr, badPrimary.Cell, badPrimary.UID, func(tablet *topodatapb.Tablet) error {
 		tablet.Type = topodatapb.TabletType_PRIMARY
 		tablet.PrimaryTermStartTime = protoutil.TimeToProto(curPrimaryTermStart.Add(-1 * time.Minute))
 		return nil
@@ -465,18 +432,13 @@ func TestStalePrimary(t *testing.T) {
 
 	// Expect VTOrc to demote the stale primary to a read-only replica.
 	require.Eventuallyf(t, func() bool {
-		topoTablet, topoErr := clusterInfo.Ts.GetTablet(ctx, badPrimary.GetAlias())
+		topoTablet, topoErr := getTabletRecord(ctx, clusterInfo.cluster, badPrimary.Alias())
 		if topoErr != nil {
 			t.Logf("stale primary probe: topo error=%v", topoErr)
 			return false
 		}
 
-		readOnly, readErr := badPrimary.VttabletProcess.GetDBVar("read_only", "")
-		if readErr != nil {
-			t.Logf("stale primary probe: alias=%s topo=%v read_only error=%v", badPrimary.Alias, topoTablet.Type, readErr)
-			return false
-		}
-
+		readOnly := getDBVar(ctx, t, badPrimary, "read_only")
 		return topoTablet.Type == topodatapb.TabletType_REPLICA && readOnly == "ON"
 	}, 30*time.Second, time.Second, "expected demotion to REPLICA with read_only=ON")
 }
@@ -484,29 +446,24 @@ func TestStalePrimary(t *testing.T) {
 // TestSemiSync tests that semi-sync is setup correctly by vtorc if it is incorrectly set
 func TestSemiSync(t *testing.T) {
 	// stop any vtorc instance running due to a previous test.
-	utils.StopVTOrcs(t, clusterInfo)
-	newCluster := utils.SetupNewClusterSemiSync(t)
-	defer utils.PrintVTOrcLogsOnFailure(t, newCluster.ClusterInstance)
-	utils.StartVTOrcs(t, newCluster, nil, cluster.VTOrcConfiguration{
-		PreventCrossCellFailover: true,
-	}, cluster.DefaultVtorcsByCell)
+	clusterInfo.stopVTOrcs(t.Context())
+	newCluster := setupNewClusterSemiSync(t)
+	newCluster.startVTOrcs(t, nil, true, 1)
 	defer func() {
-		utils.StopVTOrcs(t, newCluster)
-		newCluster.ClusterInstance.Teardown()
+		printVTOrcLogsOnFailure(t, newCluster)
+		newCluster.teardown(context.WithoutCancel(t.Context()))
 	}()
-	keyspace := &newCluster.ClusterInstance.Keyspaces[0]
-	shard0 := &keyspace.Shards[0]
 
 	// find primary from topo
-	primary := utils.ShardPrimaryTablet(t, newCluster, keyspace, shard0)
+	primary := shardPrimaryTablet(t, newCluster, keyspaceName, shardName, newCluster.active)
 	assert.NotNil(t, primary, "should have elected a primary")
 
-	var replica1, replica2, rdonly *cluster.Vttablet
-	for _, tablet := range shard0.Vttablets {
-		if tablet.Alias == primary.Alias {
+	var replica1, replica2, rdonly *vitesst.Tablet
+	for _, tablet := range newCluster.active {
+		if tablet.Alias() == primary.Alias() {
 			continue
 		}
-		if tablet.Type == "rdonly" {
+		if tablet.Type() == "rdonly" {
 			rdonly = tablet
 		} else {
 			if replica1 == nil {
@@ -522,42 +479,42 @@ func TestSemiSync(t *testing.T) {
 	assert.NotNil(t, rdonly, "could not find rdonly tablet")
 
 	// check that the replication is setup correctly
-	utils.CheckReplication(t, newCluster, primary, []*cluster.Vttablet{rdonly, replica1, replica2}, 10*time.Second)
+	checkReplication(t, newCluster, primary, []*vitesst.Tablet{rdonly, replica1, replica2}, 10*time.Second)
 
-	semisyncType, err := utils.SemiSyncExtensionLoaded(t, replica1)
+	semisyncType, err := semiSyncExtensionLoaded(t.Context(), replica1)
 	require.NoError(t, err)
 	switch semisyncType {
 	case mysql.SemiSyncTypeSource:
-		_, err := utils.RunSQL(t, "SET GLOBAL rpl_semi_sync_replica_enabled = 0", replica1, "")
+		_, err := runSQL(t.Context(), t, "SET GLOBAL rpl_semi_sync_replica_enabled = 0", replica1, "")
 		require.NoError(t, err)
 	case mysql.SemiSyncTypeMaster:
-		_, err := utils.RunSQL(t, "SET GLOBAL rpl_semi_sync_slave_enabled = 0", replica1, "")
+		_, err := runSQL(t.Context(), t, "SET GLOBAL rpl_semi_sync_slave_enabled = 0", replica1, "")
 		require.NoError(t, err)
 	default:
 		require.Fail(t, "unexpected semi-sync type %v", semisyncType)
 	}
 
-	semisyncType, err = utils.SemiSyncExtensionLoaded(t, rdonly)
+	semisyncType, err = semiSyncExtensionLoaded(t.Context(), rdonly)
 	require.NoError(t, err)
 	switch semisyncType {
 	case mysql.SemiSyncTypeSource:
-		_, err := utils.RunSQL(t, "SET GLOBAL rpl_semi_sync_replica_enabled = 0", rdonly, "")
+		_, err := runSQL(t.Context(), t, "SET GLOBAL rpl_semi_sync_replica_enabled = 0", rdonly, "")
 		require.NoError(t, err)
 	case mysql.SemiSyncTypeMaster:
-		_, err := utils.RunSQL(t, "SET GLOBAL rpl_semi_sync_slave_enabled = 0", rdonly, "")
+		_, err := runSQL(t.Context(), t, "SET GLOBAL rpl_semi_sync_slave_enabled = 0", rdonly, "")
 		require.NoError(t, err)
 	default:
 		require.Fail(t, "unexpected semi-sync type %v", semisyncType)
 	}
 
-	semisyncType, err = utils.SemiSyncExtensionLoaded(t, primary)
+	semisyncType, err = semiSyncExtensionLoaded(t.Context(), primary)
 	require.NoError(t, err)
 	switch semisyncType {
 	case mysql.SemiSyncTypeSource:
-		_, err := utils.RunSQL(t, "SET GLOBAL rpl_semi_sync_source_enabled = 0", primary, "")
+		_, err := runSQL(t.Context(), t, "SET GLOBAL rpl_semi_sync_source_enabled = 0", primary, "")
 		require.NoError(t, err)
 	case mysql.SemiSyncTypeMaster:
-		_, err := utils.RunSQL(t, "SET GLOBAL rpl_semi_sync_master_enabled = 0", primary, "")
+		_, err := runSQL(t.Context(), t, "SET GLOBAL rpl_semi_sync_master_enabled = 0", primary, "")
 		require.NoError(t, err)
 	default:
 		require.Fail(t, "unexpected semi-sync type %v", semisyncType)
@@ -570,12 +527,11 @@ func TestSemiSync(t *testing.T) {
 			require.Fail(t, "timed out waiting for semi sync settings to be fixed")
 			return
 		default:
-			if utils.IsSemiSyncSetupCorrectly(t, replica1, "ON") &&
-				utils.IsSemiSyncSetupCorrectly(t, rdonly, "OFF") &&
-				utils.IsPrimarySemiSyncSetupCorrectly(t, primary, "ON") {
+			if isSemiSyncSetupCorrectly(t, replica1, "ON") &&
+				isSemiSyncSetupCorrectly(t, rdonly, "OFF") &&
+				isPrimarySemiSyncSetupCorrectly(t, primary, "ON") {
 				return
 			}
-			log.Warn("semi sync settings not fixed yet")
 			time.Sleep(1 * time.Second)
 		}
 	}
@@ -583,24 +539,20 @@ func TestSemiSync(t *testing.T) {
 
 // TestVTOrcWithPrs tests that VTOrc works fine even when PRS is called from vtctld
 func TestVTOrcWithPrs(t *testing.T) {
-	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
-	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 4, 0, nil, cluster.VTOrcConfiguration{
-		PreventCrossCellFailover: true,
-	}, cluster.DefaultVtorcsByCell, "")
-	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
-	shard0 := &keyspace.Shards[0]
+	defer printVTOrcLogsOnFailure(t, clusterInfo)
+	clusterInfo.setupVttabletsAndVTOrcs(t, 4, 0, nil, true, 1, "")
 
 	// find primary from topo
-	curPrimary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
+	curPrimary := shardPrimaryTablet(t, clusterInfo, keyspaceName, shardName, clusterInfo.active)
 	assert.NotNil(t, curPrimary, "should have elected a primary")
-	vtOrcProcess := clusterInfo.ClusterInstance.VTOrcProcesses[0]
-	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.ElectNewPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
-	utils.WaitForSuccessfulPRSCount(t, vtOrcProcess, keyspace.Name, shard0.Name, 1)
+	vtOrcProcess := clusterInfo.vtorcs[0]
+	waitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.ElectNewPrimaryRecoveryName, keyspaceName, shardName, 1)
+	waitForSuccessfulPRSCount(t, vtOrcProcess, keyspaceName, shardName, 1)
 
 	// find any replica tablet other than the current primary
-	var replica *cluster.Vttablet
-	for _, tablet := range shard0.Vttablets {
-		if tablet.Alias != curPrimary.Alias {
+	var replica *vitesst.Tablet
+	for _, tablet := range clusterInfo.active {
+		if tablet.Alias() != curPrimary.Alias() {
 			replica = tablet
 			break
 		}
@@ -608,197 +560,179 @@ func TestVTOrcWithPrs(t *testing.T) {
 	assert.NotNil(t, replica, "could not find any replica tablet")
 
 	// check that the replication is setup correctly before we failover
-	utils.CheckReplication(t, clusterInfo, curPrimary, shard0.Vttablets, 10*time.Second)
+	checkReplication(t, clusterInfo, curPrimary, clusterInfo.active, 10*time.Second)
 
-	output, err := clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(
+	output, err := clusterInfo.cluster.Vtctld().ExecuteCommandWithOutput(t.Context(),
 		"PlannedReparentShard",
-		fmt.Sprintf("%s/%s", keyspace.Name, shard0.Name),
+		fmt.Sprintf("%s/%s", keyspaceName, shardName),
 		"--wait-replicas-timeout", "31s",
-		"--new-primary", replica.Alias,
+		"--new-primary", replica.Alias(),
 	)
 	require.NoError(t, err, "error in PlannedReparentShard output - %s", output)
 
 	// check that the replica gets promoted
-	utils.CheckPrimaryTablet(t, clusterInfo, replica, true)
+	checkPrimaryTablet(t, clusterInfo, replica, true)
 	// Verify that VTOrc didn't run any other recovery
-	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.ElectNewPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
-	utils.WaitForSuccessfulPRSCount(t, vtOrcProcess, keyspace.Name, shard0.Name, 1)
-	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.RecoverDeadPrimaryRecoveryName, keyspace.Name, shard0.Name, 0)
-	utils.WaitForSuccessfulERSCount(t, vtOrcProcess, keyspace.Name, shard0.Name, 0)
-	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.FixPrimaryRecoveryName, keyspace.Name, shard0.Name, 0)
-	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.FixReplicaRecoveryName, keyspace.Name, shard0.Name, 0)
-	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.RecoverPrimaryHasPrimaryRecoveryName, keyspace.Name, shard0.Name, 0)
-	utils.VerifyWritesSucceed(t, clusterInfo, replica, shard0.Vttablets, 10*time.Second)
+	waitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.ElectNewPrimaryRecoveryName, keyspaceName, shardName, 1)
+	waitForSuccessfulPRSCount(t, vtOrcProcess, keyspaceName, shardName, 1)
+	waitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.RecoverDeadPrimaryRecoveryName, keyspaceName, shardName, 0)
+	waitForSuccessfulERSCount(t, vtOrcProcess, keyspaceName, shardName, 0)
+	waitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.FixPrimaryRecoveryName, keyspaceName, shardName, 0)
+	waitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.FixReplicaRecoveryName, keyspaceName, shardName, 0)
+	waitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.RecoverPrimaryHasPrimaryRecoveryName, keyspaceName, shardName, 0)
+	verifyWritesSucceed(t, clusterInfo, replica, clusterInfo.active, 10*time.Second)
 }
 
 // TestMultipleDurabilities tests that VTOrc works with 2 keyspaces having 2 different durability policies
 func TestMultipleDurabilities(t *testing.T) {
-	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
+	defer printVTOrcLogsOnFailure(t, clusterInfo)
 	// Setup a normal cluster and start vtorc
-	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 1, 1, nil, cluster.VTOrcConfiguration{}, cluster.DefaultVtorcsByCell, "")
+	clusterInfo.setupVttabletsAndVTOrcs(t, 1, 1, nil, false, 1, "")
 	// Setup a semi-sync cluster
-	utils.AddSemiSyncKeyspace(t, clusterInfo)
+	keyspaceSemiSync := addSemiSyncKeyspace(t, clusterInfo)
 
-	keyspaceNone := &clusterInfo.ClusterInstance.Keyspaces[0]
-	shardNone := &keyspaceNone.Shards[0]
-	utils.CheckPrimaryTablet(t, clusterInfo, shardNone.Vttablets[0], true)
-	utils.CheckReplication(t, clusterInfo, shardNone.Vttablets[0], shardNone.Vttablets[1:], 10*time.Second)
+	checkPrimaryTablet(t, clusterInfo, clusterInfo.active[0], true)
+	checkReplication(t, clusterInfo, clusterInfo.active[0], clusterInfo.active[1:], 10*time.Second)
 
-	keyspaceSemiSync := &clusterInfo.ClusterInstance.Keyspaces[1]
-	shardSemiSync := &keyspaceSemiSync.Shards[0]
 	// find primary from topo
-	primary := utils.ShardPrimaryTablet(t, clusterInfo, keyspaceSemiSync, shardSemiSync)
+	primary := shardPrimaryTablet(t, clusterInfo, keyspaceSemiSync.Name, shardName, keyspaceSemiSync.Shard(shardName).Tablets())
 	assert.NotNil(t, primary, "should have elected a primary")
 }
 
 // TestDrainedTablet tests that we don't forget drained tablets and they still show up in the vtorc output.
 func TestDrainedTablet(t *testing.T) {
-	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
+	defer printVTOrcLogsOnFailure(t, clusterInfo)
 
 	// Setup a normal cluster and start vtorc
-	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 0, nil, cluster.VTOrcConfiguration{}, cluster.DefaultVtorcsByCell, "")
-	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
-	shard0 := &keyspace.Shards[0]
+	clusterInfo.setupVttabletsAndVTOrcs(t, 2, 0, nil, false, 1, "")
 
 	// find primary from topo
-	curPrimary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
+	curPrimary := shardPrimaryTablet(t, clusterInfo, keyspaceName, shardName, clusterInfo.active)
 	assert.NotNil(t, curPrimary, "should have elected a primary")
-	vtOrcProcess := clusterInfo.ClusterInstance.VTOrcProcesses[0]
+	vtOrcProcess := clusterInfo.vtorcs[0]
 
 	// find any replica tablet other than the current primary
-	var replica *cluster.Vttablet
-	for _, tablet := range shard0.Vttablets {
-		if tablet.Alias != curPrimary.Alias {
+	var replica *vitesst.Tablet
+	for _, tablet := range clusterInfo.active {
+		if tablet.Alias() != curPrimary.Alias() {
 			replica = tablet
 			break
 		}
 	}
 	require.NotNil(t, replica, "could not find any replica tablet")
 
-	output, err := clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(
-		"ChangeTabletType", replica.Alias, "DRAINED",
+	output, err := clusterInfo.cluster.Vtctld().ExecuteCommandWithOutput(t.Context(),
+		"ChangeTabletType", replica.Alias(), "DRAINED",
 	)
 	require.NoError(t, err, "error in changing tablet type output - %s", output)
 
 	// Make sure VTOrc sees the drained tablets and doesn't forget them.
-	utils.WaitForDrainedTabletInVTOrc(t, vtOrcProcess, 1)
+	waitForDrainedTabletInVTOrc(t, vtOrcProcess, 1)
 
-	output, err = clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(
-		"ChangeTabletType", replica.Alias, "REPLICA",
+	output, err = clusterInfo.cluster.Vtctld().ExecuteCommandWithOutput(t.Context(),
+		"ChangeTabletType", replica.Alias(), "REPLICA",
 	)
 	require.NoError(t, err, "error in changing tablet type output - %s", output)
 
 	// We have no drained tablets anymore. Wait for VTOrc to have processed that.
-	utils.WaitForDrainedTabletInVTOrc(t, vtOrcProcess, 0)
+	waitForDrainedTabletInVTOrc(t, vtOrcProcess, 0)
 }
 
 // TestDurabilityPolicySetLater tests that VTOrc works even if the durability policy of the keyspace is
 // set after VTOrc has been started.
 func TestDurabilityPolicySetLater(t *testing.T) {
 	// stop any vtorc instance running due to a previous test.
-	utils.StopVTOrcs(t, clusterInfo)
-	newCluster := utils.SetupNewClusterSemiSync(t)
-	defer utils.PrintVTOrcLogsOnFailure(t, newCluster.ClusterInstance)
-	keyspace := &newCluster.ClusterInstance.Keyspaces[0]
-	shard0 := &keyspace.Shards[0]
+	clusterInfo.stopVTOrcs(t.Context())
+	newCluster := setupNewClusterSemiSync(t)
+	defer func() {
+		printVTOrcLogsOnFailure(t, newCluster)
+		newCluster.teardown(context.WithoutCancel(t.Context()))
+	}()
+
 	// Before starting VTOrc we explicity want to set the durability policy of the keyspace to an empty string
 	func() {
-		ctx, unlock, lockErr := newCluster.Ts.LockKeyspace(t.Context(), keyspace.Name, "TestDurabilityPolicySetLater")
+		ctx, unlock, lockErr := newCluster.ts.LockKeyspace(t.Context(), keyspaceName, "TestDurabilityPolicySetLater")
 		require.NoError(t, lockErr)
 		defer unlock(&lockErr)
-		ki, err := newCluster.Ts.GetKeyspace(ctx, keyspace.Name)
+		ki, err := newCluster.ts.GetKeyspace(ctx, keyspaceName)
 		require.NoError(t, err)
 		ki.DurabilityPolicy = ""
-		err = newCluster.Ts.UpdateKeyspace(ctx, ki)
+		err = newCluster.ts.UpdateKeyspace(ctx, ki)
 		require.NoError(t, err)
 	}()
 
 	// Verify that the durability policy is indeed empty
-	ki, err := newCluster.Ts.GetKeyspace(t.Context(), keyspace.Name)
+	ki, err := newCluster.ts.GetKeyspace(t.Context(), keyspaceName)
 	require.NoError(t, err)
 	require.Empty(t, ki.DurabilityPolicy)
 
 	// Now start the vtorc instances
-	utils.StartVTOrcs(t, newCluster, nil, cluster.VTOrcConfiguration{
-		PreventCrossCellFailover: true,
-	}, cluster.DefaultVtorcsByCell)
-	defer func() {
-		utils.StopVTOrcs(t, newCluster)
-		newCluster.ClusterInstance.Teardown()
-	}()
+	newCluster.startVTOrcs(t, nil, true, 1)
 
 	// Wait for some time to be sure that VTOrc has started.
 	// TODO(GuptaManan100): Once we have a debug page for VTOrc, use that instead
 	time.Sleep(30 * time.Second)
 
 	// Now set the correct durability policy
-	out, err := newCluster.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspace.Name, "--durability-policy=semi_sync")
+	out, err := newCluster.cluster.Vtctld().ExecuteCommandWithOutput(t.Context(), "SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
 	require.NoError(t, err, out)
 
 	// VTOrc should promote a new primary after seeing the durability policy change
-	primary := utils.ShardPrimaryTablet(t, newCluster, keyspace, shard0)
+	primary := shardPrimaryTablet(t, newCluster, keyspaceName, shardName, newCluster.active)
 	assert.NotNil(t, primary, "should have elected a primary")
-	utils.CheckReplication(t, newCluster, primary, shard0.Vttablets, 10*time.Second)
+	checkReplication(t, newCluster, primary, newCluster.active, 10*time.Second)
 }
 
 func TestFullStatusConnectionPooling(t *testing.T) {
-	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
-	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 4, 0, []string{
+	defer printVTOrcLogsOnFailure(t, clusterInfo)
+	clusterInfo.setupVttabletsAndVTOrcs(t, 4, 0, []string{
 		"--tablet-manager-grpc-concurrency" + "=1",
-	}, cluster.VTOrcConfiguration{
-		PreventCrossCellFailover: true,
-	}, cluster.DefaultVtorcsByCell, "")
-	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
-	shard0 := &keyspace.Shards[0]
-	vtorc := clusterInfo.ClusterInstance.VTOrcProcesses[0]
+	}, true, 1, "")
+	vtorc := clusterInfo.vtorcs[0]
 
 	// find primary from topo
-	curPrimary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
+	curPrimary := shardPrimaryTablet(t, clusterInfo, keyspaceName, shardName, clusterInfo.active)
 	assert.NotNil(t, curPrimary, "should have elected a primary")
-	vtOrcProcess := clusterInfo.ClusterInstance.VTOrcProcesses[0]
-	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.ElectNewPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
-	utils.WaitForSuccessfulPRSCount(t, vtOrcProcess, keyspace.Name, shard0.Name, 1)
+	vtOrcProcess := clusterInfo.vtorcs[0]
+	waitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.ElectNewPrimaryRecoveryName, keyspaceName, shardName, 1)
+	waitForSuccessfulPRSCount(t, vtOrcProcess, keyspaceName, shardName, 1)
 
 	// Kill the current primary.
-	_ = curPrimary.VttabletProcess.Kill()
+	_ = curPrimary.KillVttablet(t.Context())
 
 	// Wait until VTOrc notices the failure.
 	require.Eventually(t, func() bool {
-		status, resp, err := utils.MakeAPICall(t, vtorc, "/api/detection-analysis")
+		status, resp, err := makeAPICall(t, vtorc, "/api/detection-analysis")
 		return err == nil && status == 200 && strings.Contains(resp, "UnreachablePrimary")
 	}, 90*time.Second, time.Second, "timed out waiting for UnreachablePrimary analysis")
 
-	// Change the primaries ports and restart it.
-	curPrimary.VttabletProcess.Port = clusterInfo.ClusterInstance.GetAndReservePort()
-	curPrimary.VttabletProcess.GrpcPort = clusterInfo.ClusterInstance.GetAndReservePort()
-	err := curPrimary.VttabletProcess.Setup()
+	// Restart the primary's vttablet.
+	err := curPrimary.StartVttablet(t.Context())
 	require.NoError(t, err)
 
 	// See that VTOrc eventually reports no errors.
 	require.Eventually(t, func() bool {
-		status, resp, err := utils.MakeAPICall(t, vtorc, "/api/detection-analysis")
+		status, resp, err := makeAPICall(t, vtorc, "/api/detection-analysis")
 		return err == nil && status == 200 && strings.TrimSpace(resp) == "null"
 	}, 90*time.Second, time.Second, "timed out waiting for replication analysis to clear")
 
 	// REPEATED
 	// Kill the current primary.
-	_ = curPrimary.VttabletProcess.Kill()
+	_ = curPrimary.KillVttablet(t.Context())
 
 	// Wait until VTOrc notices the failure.
 	require.Eventually(t, func() bool {
-		status, resp, err := utils.MakeAPICall(t, vtorc, "/api/detection-analysis")
+		status, resp, err := makeAPICall(t, vtorc, "/api/detection-analysis")
 		return err == nil && status == 200 && strings.Contains(resp, "UnreachablePrimary")
 	}, 90*time.Second, time.Second, "timed out waiting for UnreachablePrimary analysis")
 
-	// Change the primaries ports back to original and restart it.
-	curPrimary.VttabletProcess.Port = curPrimary.HTTPPort
-	curPrimary.VttabletProcess.GrpcPort = curPrimary.GrpcPort
-	err = curPrimary.VttabletProcess.Setup()
+	// Restart the primary's vttablet again.
+	err = curPrimary.StartVttablet(t.Context())
 	require.NoError(t, err)
 
 	// See that VTOrc eventually reports no errors.
 	require.Eventually(t, func() bool {
-		status, resp, err := utils.MakeAPICall(t, vtorc, "/api/detection-analysis")
+		status, resp, err := makeAPICall(t, vtorc, "/api/detection-analysis")
 		return err == nil && status == 200 && strings.TrimSpace(resp) == "null"
 	}, 90*time.Second, time.Second, "timed out waiting for replication analysis to clear")
 }
@@ -807,26 +741,22 @@ func TestFullStatusConnectionPooling(t *testing.T) {
 // to semi_sync, VTOrc fixes ReplicaSemiSyncMustBeSet before PrimarySemiSyncMustBeSet.
 // This ordering is enforced by the AfterAnalyses/BeforeAnalyses dependencies.
 func TestSemiSyncRecoveryOrdering(t *testing.T) {
-	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
+	defer printVTOrcLogsOnFailure(t, clusterInfo)
 	// Start with durability "none" so no semi-sync is required initially.
-	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 0, nil, cluster.VTOrcConfiguration{
-		PreventCrossCellFailover: true,
-	}, cluster.DefaultVtorcsByCell, policy.DurabilityNone)
-	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
-	shard0 := &keyspace.Shards[0]
+	clusterInfo.setupVttabletsAndVTOrcs(t, 2, 0, nil, true, 1, policy.DurabilityNone)
 
 	// Wait for primary election and healthy replication.
-	primary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
+	primary := shardPrimaryTablet(t, clusterInfo, keyspaceName, shardName, clusterInfo.active)
 	assert.NotNil(t, primary, "should have elected a primary")
-	utils.CheckReplication(t, clusterInfo, primary, shard0.Vttablets, 10*time.Second)
+	checkReplication(t, clusterInfo, primary, clusterInfo.active, 10*time.Second)
 
-	vtorc := clusterInfo.ClusterInstance.VTOrcProcesses[0]
-	utils.WaitForSuccessfulRecoveryCount(t, vtorc, logic.ElectNewPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
+	vtorc := clusterInfo.vtorcs[0]
+	waitForSuccessfulRecoveryCount(t, vtorc, logic.ElectNewPrimaryRecoveryName, keyspaceName, shardName, 1)
 
 	// Change durability to semi_sync. VTOrc should detect that replicas and primary
 	// need semi-sync enabled, and fix them in the correct order.
-	out, err := clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(
-		"SetKeyspaceDurabilityPolicy", keyspace.Name, "--durability-policy="+policy.DurabilitySemiSync,
+	out, err := clusterInfo.cluster.Vtctld().ExecuteCommandWithOutput(t.Context(),
+		"SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy="+policy.DurabilitySemiSync,
 	)
 	require.NoError(t, err, out)
 
@@ -840,7 +770,7 @@ func TestSemiSyncRecoveryOrdering(t *testing.T) {
 	}
 
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
-		status, response, err := utils.MakeAPICall(t, vtorc, "/api/database-state")
+		status, response, err := makeAPICall(t, vtorc, "/api/database-state")
 		assert.NoError(c, err)
 		assert.Equal(c, 200, status)
 
@@ -896,29 +826,25 @@ func TestSemiSyncRecoveryOrdering(t *testing.T) {
 // the suppression bypass end-to-end.
 // See https://github.com/vitessio/vitess/issues/19921.
 func TestReplicationStoppedWithSemiSyncBlocked(t *testing.T) {
-	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
+	defer printVTOrcLogsOnFailure(t, clusterInfo)
 	// 2 REPLICA (semi-sync ackers) + 1 RDONLY (not an acker).
 	// The RDONLY is included to verify semi-sync acker detection
 	// is selective — only the REPLICA acker's replication is stopped.
-	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, nil, cluster.VTOrcConfiguration{
-		PreventCrossCellFailover: true,
-	}, cluster.DefaultVtorcsByCell, policy.DurabilitySemiSync)
-	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
-	shard0 := &keyspace.Shards[0]
+	clusterInfo.setupVttabletsAndVTOrcs(t, 2, 1, nil, true, 1, policy.DurabilitySemiSync)
 
-	primary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
+	primary := shardPrimaryTablet(t, clusterInfo, keyspaceName, shardName, clusterInfo.active)
 	require.NotNil(t, primary, "should have elected a primary")
-	vtorc := clusterInfo.ClusterInstance.VTOrcProcesses[0]
-	utils.WaitForSuccessfulRecoveryCount(t, vtorc, logic.ElectNewPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
+	vtorc := clusterInfo.vtorcs[0]
+	waitForSuccessfulRecoveryCount(t, vtorc, logic.ElectNewPrimaryRecoveryName, keyspaceName, shardName, 1)
 
 	// Identify the replica (acker) and rdonly (non-acker).
 	// One of the 2 replicas was elected primary, so 1 replica remains.
-	var replica, rdonly *cluster.Vttablet
-	for _, tablet := range shard0.Vttablets {
-		if tablet.Alias == primary.Alias {
+	var replica, rdonly *vitesst.Tablet
+	for _, tablet := range clusterInfo.active {
+		if tablet.Alias() == primary.Alias() {
 			continue
 		}
-		if tablet.Type == "rdonly" {
+		if tablet.Type() == "rdonly" {
 			rdonly = tablet
 		} else {
 			replica = tablet
@@ -927,22 +853,22 @@ func TestReplicationStoppedWithSemiSyncBlocked(t *testing.T) {
 	require.NotNil(t, replica, "should have a REPLICA tablet")
 	require.NotNil(t, rdonly, "should have an RDONLY tablet")
 
-	allNonPrimary := []*cluster.Vttablet{replica, rdonly}
-	utils.CheckReplication(t, clusterInfo, primary, allNonPrimary, 15*time.Second)
+	allNonPrimary := []*vitesst.Tablet{replica, rdonly}
+	checkReplication(t, clusterInfo, primary, allNonPrimary, 15*time.Second)
 
 	// Verify semi-sync acker status after VTOrc has had time to converge:
 	// replica ON, rdonly OFF.
 	assert.Eventually(t, func() bool {
-		return utils.IsSemiSyncSetupCorrectly(t, replica, "ON")
+		return isSemiSyncSetupCorrectly(t, replica, "ON")
 	}, 15*time.Second, 500*time.Millisecond, "REPLICA should be a semi-sync acker")
 	assert.Eventually(t, func() bool {
-		return utils.IsSemiSyncSetupCorrectly(t, rdonly, "OFF")
+		return isSemiSyncSetupCorrectly(t, rdonly, "OFF")
 	}, 15*time.Second, 500*time.Millisecond, "RDONLY should not be a semi-sync acker")
 
 	// Snapshot the FixReplica counter before stopping replication.
 	// VTOrc may have already incremented it during setup (e.g., for
 	// ReplicaSemiSyncMustBeSet under semi_sync durability).
-	fixReplicaCount := utils.GetSuccessfulRecoveryCount(t, vtorc, logic.FixReplicaRecoveryName, keyspace.Name, shard0.Name)
+	fixReplicaCount := getSuccessfulRecoveryCount(t, vtorc, logic.FixReplicaRecoveryName, keyspaceName, shardName)
 
 	// Stop replication on the semi-sync acker (REPLICA). VTOrc should
 	// detect ReplicationStopped and fix it. The GetDetectionAnalysis
@@ -956,7 +882,7 @@ func TestReplicationStoppedWithSemiSyncBlocked(t *testing.T) {
 	// deadlock scenario is covered by unit tests in analysis_dao_test.go
 	// (TestDeclaresBefore) and topology_recovery_test.go
 	// (TestRecheckPrimaryHealth).
-	_, err := utils.RunSQL(t, "STOP REPLICA", replica, "")
+	_, err := runSQL(t.Context(), t, "STOP REPLICA", replica, "")
 	require.NoError(t, err)
 
 	// Wait for VTOrc to record at least one new FixReplica recovery before
@@ -964,9 +890,9 @@ func TestReplicationStoppedWithSemiSyncBlocked(t *testing.T) {
 	// fix-replica recoveries (e.g., semi-sync related) can also increment
 	// this metric.
 	assert.Eventually(t, func() bool {
-		return utils.GetSuccessfulRecoveryCount(t, vtorc, logic.FixReplicaRecoveryName, keyspace.Name, shard0.Name) > fixReplicaCount
+		return getSuccessfulRecoveryCount(t, vtorc, logic.FixReplicaRecoveryName, keyspaceName, shardName) > fixReplicaCount
 	}, 30*time.Second, time.Second)
-	utils.CheckReplication(t, clusterInfo, primary, allNonPrimary, 30*time.Second)
+	checkReplication(t, clusterInfo, primary, allNonPrimary, 30*time.Second)
 }
 
 // TestRecoveryDeadlocks exercises the `BeforeAnalyses` suppression mechanism
@@ -1008,22 +934,18 @@ func TestReplicationStoppedWithSemiSyncBlocked(t *testing.T) {
 // not require sustained co-occurrence.
 func TestRecoveryDeadlocks(t *testing.T) {
 	t.Run("PrimaryIsReadOnly+PrimarySemiSyncBlocked", func(t *testing.T) {
-		defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
+		defer printVTOrcLogsOnFailure(t, clusterInfo)
 		disableSemiSyncOnAllTablets(t)
-		utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, nil, cluster.VTOrcConfiguration{
-			PreventCrossCellFailover: true,
-		}, cluster.DefaultVtorcsByCell, policy.DurabilitySemiSync)
-		keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
-		shard0 := &keyspace.Shards[0]
-		primary, replica, _ := waitForPrimaryAndPick(t, keyspace, shard0)
-		vtorc := clusterInfo.ClusterInstance.VTOrcProcesses[0]
-		utils.WaitForSuccessfulRecoveryCount(t, vtorc, logic.ElectNewPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
+		clusterInfo.setupVttabletsAndVTOrcs(t, 2, 1, nil, true, 1, policy.DurabilitySemiSync)
+		primary, replica, _ := waitForPrimaryAndPick(t)
+		vtorc := clusterInfo.vtorcs[0]
+		waitForSuccessfulRecoveryCount(t, vtorc, logic.ElectNewPrimaryRecoveryName, keyspaceName, shardName, 1)
 
-		fixPrimaryBefore := utils.GetSuccessfulRecoveryCount(t, vtorc, logic.FixPrimaryRecoveryName, keyspace.Name, shard0.Name)
-		ersBefore := utils.GetSuccessfulRecoveryCount(t, vtorc, logic.RecoverDeadPrimaryRecoveryName, keyspace.Name, shard0.Name)
+		fixPrimaryBefore := getSuccessfulRecoveryCount(t, vtorc, logic.FixPrimaryRecoveryName, keyspaceName, shardName)
+		ersBefore := getSuccessfulRecoveryCount(t, vtorc, logic.RecoverDeadPrimaryRecoveryName, keyspaceName, shardName)
 
 		// Stop the acker's IO thread so semi-sync ACKs cannot flow.
-		_, err := utils.RunSQL(t, "STOP REPLICA IO_THREAD", replica, "")
+		_, err := runSQL(t.Context(), t, "STOP REPLICA IO_THREAD", replica, "")
 		require.NoError(t, err)
 
 		// Issue a write that will block on the semi-sync wait. The connection
@@ -1037,83 +959,76 @@ func TestRecoveryDeadlocks(t *testing.T) {
 		// condition. The deadlock scenario is covered by unit tests in
 		// analysis_dao_test.go (TestDeclaresBefore) and
 		// topology_recovery_test.go (TestRecheckPrimaryHealth).
+		// The blocking write and the cleanup that unblocks it outlive the
+		// test body, so they run under a context that ignores the test's
+		// cancellation.
+		bgCtx := context.WithoutCancel(t.Context())
 		var wg sync.WaitGroup
 		wg.Go(func() {
-			_, _ = utils.RunSQL(t, "CREATE TABLE IF NOT EXISTS test_recovery_deadlocks (id INT PRIMARY KEY)", primary, "vt_ks")
+			_, _ = runSQL(bgCtx, t, "CREATE TABLE IF NOT EXISTS test_recovery_deadlocks (id INT PRIMARY KEY)", primary, "vt_ks")
 		})
 		t.Cleanup(func() {
 			// Defensively unblock the goroutine if the test fails before
 			// the cluster recovers naturally.
-			_, _ = utils.RunSQL(t, "SET GLOBAL super_read_only = OFF", primary, "")
-			_, _ = utils.RunSQL(t, "START REPLICA", replica, "")
+			_, _ = runSQL(bgCtx, t, "SET GLOBAL super_read_only = OFF", primary, "")
+			_, _ = runSQL(bgCtx, t, "START REPLICA", replica, "")
 			wg.Wait()
 		})
 
 		// Set the primary read-only while the write is hanging.
-		_, err = utils.RunSQL(t, "SET GLOBAL super_read_only = ON", primary, "")
+		_, err = runSQL(t.Context(), t, "SET GLOBAL super_read_only = ON", primary, "")
 		require.NoError(t, err)
 
 		// PrimaryIsReadOnly is detected within ~1 analysis cycle.
-		utils.WaitForDetectedProblems(t, vtorc, string(inst.PrimaryIsReadOnly), primary.Alias, keyspace.Name, shard0.Name, 1)
+		waitForDetectedProblems(t, vtorc, string(inst.PrimaryIsReadOnly), canonicalAlias(primary), keyspaceName, shardName, 1)
 
 		// fixPrimary must complete despite the shard-wide problem also being
 		// present. Pre-fix this counter never increments because
 		// recheckPrimaryHealth aborts the recovery mid-flight.
-		utils.WaitForSuccessfulRecoveryCount(t, vtorc, logic.FixPrimaryRecoveryName, keyspace.Name, shard0.Name, fixPrimaryBefore+1)
+		waitForSuccessfulRecoveryCount(t, vtorc, logic.FixPrimaryRecoveryName, keyspaceName, shardName, fixPrimaryBefore+1)
 
 		// ERS must not have been dispatched.
-		ersAfter := utils.GetSuccessfulRecoveryCount(t, vtorc, logic.RecoverDeadPrimaryRecoveryName, keyspace.Name, shard0.Name)
+		ersAfter := getSuccessfulRecoveryCount(t, vtorc, logic.RecoverDeadPrimaryRecoveryName, keyspaceName, shardName)
 		assert.Equal(t, ersBefore, ersAfter, "ERS should not have been dispatched")
 
 		// Primary should no longer be read-only.
-		assert.True(t, utils.WaitForReadOnlyValue(t, primary, 0))
+		assert.True(t, waitForReadOnlyValue(t, primary, 0))
 	})
 }
 
 // disableSemiSyncOnAllTablets clears `rpl_semi_sync_source_enabled` and
 // `rpl_semi_sync_replica_enabled` on every tablet's mysqld in the shared
-// cluster. Required before SetupVttabletsAndVTOrcs when the previous test
-// left a primary with semi-sync source on: vttablet's TearDown does not
-// disable semi-sync, and `cleanAndStartVttablet` issues a DROP DATABASE
-// before restarting vttablet, which hangs forever in the semi-sync wait
-// because no acker is connected.
+// cluster. Required before setupVttabletsAndVTOrcs when the previous test
+// left a primary with semi-sync source on: the tablet restart issues a DROP
+// DATABASE before restarting vttablet, which hangs forever in the semi-sync
+// wait because no acker is connected.
 //
-// Uses mysql.Connect directly (not utils.RunSQL) so that tablets whose
-// mysqld is not yet running (e.g., first subtest) are silently skipped
-// rather than failing the test.
+// Connects directly (not runSQL) so that tablets whose mysqld is not
+// reachable are silently skipped rather than failing the test.
 func disableSemiSyncOnAllTablets(t *testing.T) {
 	t.Helper()
-	for _, cellInfo := range clusterInfo.CellInfos {
-		all := append([]*cluster.Vttablet{}, cellInfo.ReplicaTablets...)
-		all = append(all, cellInfo.RdonlyTablets...)
-		for _, tablet := range all {
-			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-			params := mysql.ConnParams{
-				Uname:      "vt_dba",
-				UnixSocket: path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/mysql.sock", tablet.TabletUID)),
-			}
-			conn, err := mysql.Connect(ctx, &params)
-			cancel()
-			if err != nil {
-				continue
-			}
-			_, _ = conn.ExecuteFetch("SET GLOBAL rpl_semi_sync_source_enabled = 0, GLOBAL rpl_semi_sync_replica_enabled = 0", 1, false)
-			conn.Close()
+	ctx := t.Context()
+	for _, tablet := range append(append([]*vitesst.Tablet{}, clusterInfo.replicaPool...), clusterInfo.rdonlyPool...) {
+		conn := connectTablet(ctx, tablet, "")
+		if conn == nil {
+			continue
 		}
+		_, _ = conn.ExecuteFetch("SET GLOBAL rpl_semi_sync_source_enabled = 0, GLOBAL rpl_semi_sync_replica_enabled = 0", 1, false)
+		conn.Close()
 	}
 }
 
 // waitForPrimaryAndPick blocks until VTOrc has elected a primary and returns
 // it along with the surviving REPLICA (semi-sync acker) and RDONLY tablets.
-func waitForPrimaryAndPick(t *testing.T, keyspace *cluster.Keyspace, shard *cluster.Shard) (primary, replica, rdonly *cluster.Vttablet) {
+func waitForPrimaryAndPick(t *testing.T) (primary, replica, rdonly *vitesst.Tablet) {
 	t.Helper()
-	primary = utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard)
+	primary = shardPrimaryTablet(t, clusterInfo, keyspaceName, shardName, clusterInfo.active)
 	require.NotNil(t, primary, "should have elected a primary")
-	for _, tablet := range shard.Vttablets {
-		if tablet.Alias == primary.Alias {
+	for _, tablet := range clusterInfo.active {
+		if tablet.Alias() == primary.Alias() {
 			continue
 		}
-		if tablet.Type == "rdonly" {
+		if tablet.Type() == "rdonly" {
 			rdonly = tablet
 		} else {
 			replica = tablet

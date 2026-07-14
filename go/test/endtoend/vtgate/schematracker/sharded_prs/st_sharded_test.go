@@ -17,6 +17,8 @@ limitations under the License.
 package shardedprs
 
 import (
+	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -26,16 +28,14 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
+	clusterInstance *vitesst.Cluster
 	vtParams        mysql.ConnParams
 	KeyspaceName    = "ks"
 	sidecarDBName   = "_vt_schema_tracker_metadata" // custom sidecar database name for testing
-	Cell            = "test"
 	SchemaSQL       = `
 create table t2(
 	id3 bigint,
@@ -122,70 +122,96 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(Cell, "localhost")
-		defer clusterInstance.Teardown()
+		ctx := context.Background()
 
-		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--schema-change-signal")
-		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--queryserver-config-schema-change-signal")
-
-		// Start topo server
-		err := clusterInstance.StartTopo()
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithKeyspace(KeyspaceName).
+				WithShards(2).
+				WithReplicas(2).
+				WithSchema(SchemaSQL).
+				WithVSchema(VSchema).
+				WithSidecarDBName(sidecarDBName),
+			vitesst.WithVTGateArgs("--schema-change-signal"),
+			vitesst.WithVTTabletArgs("--queryserver-config-schema-change-signal"),
+		)
 		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-
-		// Start keyspace
-		keyspace := &cluster.Keyspace{
-			Name:          KeyspaceName,
-			SchemaSQL:     SchemaSQL,
-			VSchema:       VSchema,
-			SidecarDBName: sidecarDBName,
-		}
-		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 2, false, clusterInstance.Cell)
+		cleanup, err := cluster.Start(ctx)
 		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
 
-		// Start vtgate
-		err = clusterInstance.StartVtgate()
-		if err != nil {
-			return 1
-		}
-
-		err = clusterInstance.WaitForVTGateAndVTTablets(5 * time.Minute)
-		if err != nil {
-			fmt.Println(err)
-			return 1
-		}
-
-		// PRS on the second VTTablet of each shard
+		// PRS on the second VTTablet of each shard.
 		// This is supposed to change the primary tablet in the shards, meaning that a different tablet
 		// will be responsible for sending schema tracking updates.
-		for _, shard := range clusterInstance.Keyspaces[0].Shards {
-			err := clusterInstance.VtctldClientProcess.InitializeShard(KeyspaceName, shard.Name, Cell, shard.Vttablets[1].TabletUID)
+		for _, shard := range cluster.Keyspace(KeyspaceName).Shards() {
+			newPrimary := shard.Replicas()[0]
+			err := cluster.Vtctld().ExecuteCommand(ctx,
+				"PlannedReparentShard",
+				shard.Ref(),
+				"--wait-replicas-timeout", "31s",
+				"--new-primary", newPrimary.Alias(),
+			)
 			if err != nil {
-				fmt.Println(err)
+				fmt.Fprintln(os.Stderr, err)
+				return 1
+			}
+			if err := cluster.WaitForHealthyShard(ctx, KeyspaceName, shard.Name, 5*time.Minute); err != nil {
+				fmt.Fprintln(os.Stderr, err)
 				return 1
 			}
 		}
 
-		if err := clusterInstance.StartVTOrc(Cell, KeyspaceName); err != nil {
+		if _, err := cluster.AddVTOrc(ctx, ""); err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
 
-		err = clusterInstance.WaitForVTGateAndVTTablets(5 * time.Minute)
-		if err != nil {
-			fmt.Println(err)
+		if err := waitForVTGateHealthy(ctx, cluster, 5*time.Minute); err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
 
-		vtParams = mysql.ConnParams{
-			Host: clusterInstance.Hostname,
-			Port: clusterInstance.VtgateMySQLPort,
-		}
+		clusterInstance = cluster
+		vtParams = cluster.VTParams(ctx, "")
 		return m.Run()
 	}()
 	os.Exit(exitCode)
+}
+
+// waitForVTGateHealthy blocks until VTGate's healthcheck reports one serving
+// primary and the expected number of serving replicas for every shard.
+func waitForVTGateHealthy(ctx context.Context, c *vitesst.Cluster, timeout time.Duration) error {
+	shards := c.Keyspace(KeyspaceName).Shards()
+	_, _, err := c.VTGate().MakeAPICallRetry(ctx, "/debug/vars", timeout, func(status int, body string) bool {
+		if status != 200 {
+			return false
+		}
+		var vars struct {
+			HealthcheckConnections map[string]float64 `json:"HealthcheckConnections"`
+		}
+		if err := json.Unmarshal([]byte(body), &vars); err != nil {
+			return false
+		}
+		for _, shard := range shards {
+			if vars.HealthcheckConnections[KeyspaceName+"."+shard.Name+".primary"] != 1 {
+				return false
+			}
+			if vars.HealthcheckConnections[KeyspaceName+"."+shard.Name+".replica"] != float64(len(shard.Tablets())-1) {
+				return false
+			}
+		}
+		return true
+	})
+	return err
 }
 
 func TestAddColumn(t *testing.T) {
@@ -194,8 +220,8 @@ func TestAddColumn(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	_ = utils.Exec(t, conn, `alter table t2 add column aaa int`)
-	utils.AssertMatchesWithTimeout(t, conn,
+	_ = vitesst.Exec(t, conn, `alter table t2 add column aaa int`)
+	vitesst.AssertMatchesWithTimeout(t, conn,
 		"select aaa from t2", `[]`,
 		100*time.Millisecond,
 		30*time.Second,

@@ -31,62 +31,55 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/utils"
-	vtorcutils "vitess.io/vitess/go/test/endtoend/vtorc/utils"
+	"vitess.io/vitess/go/test/vitesst"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/proto/topodata"
 )
 
 func TestVtgateHealthCheck(t *testing.T) {
 	// Healthcheck interval on tablet is set to 1s, so sleep for 2s
 	time.Sleep(2 * time.Second)
-	verifyVtgateVariables(t, clusterInstance.VtgateProcess.VerifyURL)
+	verifyVtgateVariables(t, vtgateVarsURL(t))
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
-	qr := utils.Exec(t, conn, "show vitess_tablets")
+	qr := vitesst.Exec(t, conn, "show vitess_tablets")
 	assert.Equal(t, 3, len(qr.Rows), "wrong number of results from show")
 }
 
 func TestVtgateReplicationStatusCheck(t *testing.T) {
 	// Healthcheck interval on tablet is set to 1s, so sleep for 2s
 	time.Sleep(2 * time.Second)
-	verifyVtgateVariables(t, clusterInstance.VtgateProcess.VerifyURL)
+	verifyVtgateVariables(t, vtgateVarsURL(t))
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams) // VTGate
 	require.NoError(t, err)
 	defer conn.Close()
 
 	// Only returns rows for REPLICA and RDONLY tablets -- so should be 2 of them
-	qr := utils.Exec(t, conn, "show vitess_replication_status like '%'")
+	qr := vitesst.Exec(t, conn, "show vitess_replication_status like '%'")
 	expectNumRows := 2
 	numRows := len(qr.Rows)
 	assert.Equal(t, expectNumRows, numRows, fmt.Sprintf("wrong number of results from show vitess_replication_status. Expected %d, got %d", expectNumRows, numRows))
 
 	// Disable VTOrc(s) recoveries so that it doesn't immediately repair/restart replication.
-	for _, vtorcProcess := range clusterInstance.VTOrcProcesses {
-		vtorcutils.DisableGlobalRecoveries(t, vtorcProcess)
-	}
+	disableGlobalRecoveries(t, clusterInstance.VTOrc())
 	// Re-enable recoveries afterward as the cluster is re-used.
-	defer func() {
-		for _, vtorcProcess := range clusterInstance.VTOrcProcesses {
-			vtorcutils.EnableGlobalRecoveries(t, vtorcProcess)
-		}
-	}()
+	defer enableGlobalRecoveries(t, clusterInstance.VTOrc())
+
+	shard := clusterInstance.Keyspace(keyspaceName).Shards()[0]
 	// Stop replication on the non-PRIMARY tablets.
-	_, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ExecuteFetchAsDBA", clusterInstance.Keyspaces[0].Shards[0].Replica().Alias, "stop replica")
+	_, err = clusterInstance.Vtctld().ExecuteCommandWithOutput(ctx, "ExecuteFetchAsDBA", shard.Replicas()[0].Alias(), "stop replica")
 	require.NoError(t, err)
-	_, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ExecuteMultiFetchAsDBA", clusterInstance.Keyspaces[0].Shards[0].Rdonly().Alias, "stop replica")
+	_, err = clusterInstance.Vtctld().ExecuteCommandWithOutput(ctx, "ExecuteMultiFetchAsDBA", shard.RDOnly()[0].Alias(), "stop replica")
 	require.NoError(t, err)
 	// Restart replication afterward as the cluster is re-used.
 	defer func() {
-		_, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ExecuteFetchAsDBA", clusterInstance.Keyspaces[0].Shards[0].Replica().Alias, "start replica")
+		_, err = clusterInstance.Vtctld().ExecuteCommandWithOutput(ctx, "ExecuteFetchAsDBA", shard.Replicas()[0].Alias(), "start replica")
 		require.NoError(t, err)
 		// Testing ExecuteMultiFetchAsDBA by running multiple commands in a single call:
-		_, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ExecuteMultiFetchAsDBA", clusterInstance.Keyspaces[0].Shards[0].Rdonly().Alias, "start replica sql_thread; start replica io_thread;")
+		_, err = clusterInstance.Vtctld().ExecuteCommandWithOutput(ctx, "ExecuteMultiFetchAsDBA", shard.RDOnly()[0].Alias(), "start replica sql_thread; start replica io_thread;")
 		require.NoError(t, err)
 	}()
 	time.Sleep(2 * time.Second) // Build up some replication lag
@@ -103,30 +96,30 @@ func TestVtgateReplicationStatusCheck(t *testing.T) {
 func TestVtgateReplicationStatusCheckWithTabletTypeChange(t *testing.T) {
 	// Healthcheck interval on tablet is set to 1s, so sleep for 2s
 	time.Sleep(2 * time.Second)
-	verifyVtgateVariables(t, clusterInstance.VtgateProcess.VerifyURL)
+	verifyVtgateVariables(t, vtgateVarsURL(t))
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
 	// Only returns rows for REPLICA and RDONLY tablets -- so should be 2 of them
-	qr := utils.Exec(t, conn, "show vitess_replication_status like '%'")
+	qr := vitesst.Exec(t, conn, "show vitess_replication_status like '%'")
 	expectNumRows := 2
 	numRows := len(qr.Rows)
 	assert.Equal(t, expectNumRows, numRows, fmt.Sprintf("wrong number of results from show vitess_replication_status. Expected %d, got %d", expectNumRows, numRows))
 
 	// change the RDONLY tablet to SPARE
-	rdOnlyTablet := clusterInstance.Keyspaces[0].Shards[0].Rdonly()
-	err = clusterInstance.VtctldClientProcess.ChangeTabletType(rdOnlyTablet, topodata.TabletType_SPARE)
+	rdOnlyTablet := clusterInstance.Keyspace(keyspaceName).Shards()[0].RDOnly()[0]
+	err = clusterInstance.Vtctld().ExecuteCommand(ctx, "ChangeTabletType", rdOnlyTablet.Alias(), "spare")
 	require.NoError(t, err)
 	// Change it back to RDONLY afterward as the cluster is re-used.
 	defer func() {
-		err = clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", rdOnlyTablet.Alias, "rdonly")
+		err = clusterInstance.Vtctld().ExecuteCommand(ctx, "ChangeTabletType", rdOnlyTablet.Alias(), "rdonly")
 		require.NoError(t, err)
 	}()
 
 	// Only returns rows for REPLICA and RDONLY tablets -- so should be 1 of them since we updated 1 to spare
-	qr = utils.Exec(t, conn, "show vitess_replication_status like '%'")
+	qr = vitesst.Exec(t, conn, "show vitess_replication_status like '%'")
 	expectNumRows = 1
 	numRows = len(qr.Rows)
 	assert.Equal(t, expectNumRows, numRows, fmt.Sprintf("wrong number of results from show vitess_replication_status. Expected %d, got %d", expectNumRows, numRows))
@@ -157,6 +150,27 @@ func verifyVtgateVariables(t *testing.T, url string) {
 	healthCheckConnection := getMapFromJSON(resultMap, "HealthcheckConnections")
 	assert.NotEmpty(t, healthCheckConnection, "Atleast one healthy tablet needs to be present")
 	assert.True(t, isPrimaryTabletPresent(healthCheckConnection), "Atleast one primary tablet needs to be present")
+}
+
+// vtgateVarsURL returns the vtgate's host-reachable /debug/vars URL.
+func vtgateVarsURL(t *testing.T) string {
+	addr, err := clusterInstance.VTGate().HTTPAddr(t.Context())
+	require.NoError(t, err)
+	return "http://" + addr + "/debug/vars"
+}
+
+func disableGlobalRecoveries(t *testing.T, vtorc *vitesst.VTOrc) {
+	status, resp, err := vtorc.MakeAPICall(t.Context(), "/api/disable-global-recoveries")
+	require.NoError(t, err)
+	assert.Equal(t, 200, status)
+	assert.Equal(t, "Global recoveries disabled\n", resp)
+}
+
+func enableGlobalRecoveries(t *testing.T, vtorc *vitesst.VTOrc) {
+	status, resp, err := vtorc.MakeAPICall(t.Context(), "/api/enable-global-recoveries")
+	require.NoError(t, err)
+	assert.Equal(t, 200, status)
+	assert.Equal(t, "Global recoveries enabled\n", resp)
 }
 
 func retryNTimes(t *testing.T, maxRetries int, f func() bool) {
@@ -194,90 +208,89 @@ func TestReplicaTransactions(t *testing.T) {
 	fetchAllCustomers := "select id, email from customer"
 	checkCustomerRows := func(expectedRows int) func() bool {
 		return func() bool {
-			result := utils.Exec(t, readConn2, fetchAllCustomers)
+			result := vitesst.Exec(t, readConn2, fetchAllCustomers)
 			return len(result.Rows) == expectedRows
 		}
 	}
 
 	// point the replica connections to the replica target
-	utils.Exec(t, readConn, "use @replica")
-	utils.Exec(t, readConn2, "use @replica")
+	vitesst.Exec(t, readConn, "use @replica")
+	vitesst.Exec(t, readConn2, "use @replica")
 
 	// insert a row using primary
-	utils.Exec(t, writeConn, "insert into customer(id, email) values(1,'email1')")
+	vitesst.Exec(t, writeConn, "insert into customer(id, email) values(1,'email1')")
 
 	// we'll run this query a number of times, and then give up if the row count never reaches this value
 	retryNTimes(t, 10 /*maxRetries*/, checkCustomerRows(1))
 
 	// after a short pause, SELECT the data inside a tx on a replica
 	// begin transaction on replica
-	utils.Exec(t, readConn, "begin")
-	qr := utils.Exec(t, readConn, fetchAllCustomers)
+	vitesst.Exec(t, readConn, "begin")
+	qr := vitesst.Exec(t, readConn, fetchAllCustomers)
 	assert.Equal(t, `[[INT64(1) VARCHAR("email1")]]`, fmt.Sprintf("%v", qr.Rows), "select returned wrong result")
 
 	// insert more data on primary using a transaction
-	utils.Exec(t, writeConn, "begin")
-	utils.Exec(t, writeConn, "insert into customer(id, email) values(2,'email2')")
-	utils.Exec(t, writeConn, "commit")
+	vitesst.Exec(t, writeConn, "begin")
+	vitesst.Exec(t, writeConn, "insert into customer(id, email) values(2,'email2')")
+	vitesst.Exec(t, writeConn, "commit")
 
 	retryNTimes(t, 10 /*maxRetries*/, checkCustomerRows(2))
 
 	// replica doesn't see new row because it is in a transaction
-	qr2 := utils.Exec(t, readConn, fetchAllCustomers)
+	qr2 := vitesst.Exec(t, readConn, fetchAllCustomers)
 	assert.Equal(t, qr.Rows, qr2.Rows)
 
 	// replica should see new row after closing the transaction
-	utils.Exec(t, readConn, "commit")
+	vitesst.Exec(t, readConn, "commit")
 
-	qr3 := utils.Exec(t, readConn, fetchAllCustomers)
+	qr3 := vitesst.Exec(t, readConn, fetchAllCustomers)
 	assert.Equal(t, `[[INT64(1) VARCHAR("email1")] [INT64(2) VARCHAR("email2")]]`, fmt.Sprintf("%v", qr3.Rows), "we are not seeing the updates after closing the replica transaction")
 
 	// begin transaction on replica
-	utils.Exec(t, readConn, "begin")
+	vitesst.Exec(t, readConn, "begin")
 	// try to delete a row, should fail
-	utils.AssertContainsError(t, readConn, "delete from customer where id=1", "supported only for primary tablet type, current type: replica")
-	utils.Exec(t, readConn, "commit")
+	vitesst.AssertContainsError(t, readConn, "delete from customer where id=1", "supported only for primary tablet type, current type: replica")
+	vitesst.Exec(t, readConn, "commit")
 
 	// begin transaction on replica
-	utils.Exec(t, readConn, "begin")
+	vitesst.Exec(t, readConn, "begin")
 	// try to update a row, should fail
-	utils.AssertContainsError(t, readConn, "update customer set email='emailn' where id=1", "supported only for primary tablet type, current type: replica")
-	utils.Exec(t, readConn, "commit")
+	vitesst.AssertContainsError(t, readConn, "update customer set email='emailn' where id=1", "supported only for primary tablet type, current type: replica")
+	vitesst.Exec(t, readConn, "commit")
 
 	// begin transaction on replica
-	utils.Exec(t, readConn, "begin")
+	vitesst.Exec(t, readConn, "begin")
 	// try to insert a row, should fail
-	utils.AssertContainsError(t, readConn, "insert into customer(id, email) values(1,'email1')", "supported only for primary tablet type, current type: replica")
+	vitesst.AssertContainsError(t, readConn, "insert into customer(id, email) values(1,'email1')", "supported only for primary tablet type, current type: replica")
 	// call rollback just for fun
-	utils.Exec(t, readConn, "rollback")
+	vitesst.Exec(t, readConn, "rollback")
 
 	// start another transaction
-	utils.Exec(t, readConn, "begin")
-	utils.Exec(t, readConn, fetchAllCustomers)
+	vitesst.Exec(t, readConn, "begin")
+	vitesst.Exec(t, readConn, fetchAllCustomers)
 	// bring down the tablet and try to select again
-	replicaTablet := clusterInstance.Keyspaces[0].Shards[0].Replica()
+	replicaTablet := clusterInstance.Keyspace(keyspaceName).Shards()[0].Replicas()[0]
 	// this gives us a "signal: killed" error, ignore it
-	_ = replicaTablet.VttabletProcess.TearDown()
+	_ = replicaTablet.StopVttablet(ctx)
 	// Healthcheck interval on tablet is set to 1s, so sleep for 2s
 	time.Sleep(2 * time.Second)
-	utils.AssertContainsMultipleErrors(t, readConn, fetchAllCustomers, "VT15001", "is either down or nonexistent")
+	vitesst.AssertContainsMultipleErrors(t, readConn, fetchAllCustomers, "VT15001", "is either down or nonexistent")
 
 	// bring up the tablet again
 	// trying to use the same session/transaction should fail as the vtgate has
 	// been restarted and the session lost
-	replicaTablet.VttabletProcess.ServingStatus = "SERVING"
-	err = replicaTablet.VttabletProcess.Setup()
+	err = replicaTablet.StartVttablet(ctx)
 	require.NoError(t, err)
-	serving := replicaTablet.VttabletProcess.WaitForStatus("SERVING", 60*time.Second)
+	serving := replicaTablet.WaitForTabletStatus(ctx, 60*time.Second, "SERVING") == nil
 	assert.Equal(t, serving, true, "Tablet did not become ready within a reasonable time")
-	utils.AssertContainsError(t, readConn, fetchAllCustomers, "VT09032")
-	utils.Exec(t, readConn, "rollback")
+	vitesst.AssertContainsError(t, readConn, fetchAllCustomers, "VT09032")
+	vitesst.Exec(t, readConn, "rollback")
 
 	// create a new connection, should be able to query again
 	readConn, err = mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
-	utils.Exec(t, readConn, "begin")
-	qr4 := utils.Exec(t, readConn, fetchAllCustomers)
+	vitesst.Exec(t, readConn, "begin")
+	qr4 := vitesst.Exec(t, readConn, fetchAllCustomers)
 	assert.Equal(t, `[[INT64(1) VARCHAR("email1")] [INT64(2) VARCHAR("email2")]]`, fmt.Sprintf("%v", qr4.Rows), "we are not able to reconnect after restart")
 }
 
@@ -290,14 +303,14 @@ func TestStreamingRPCStuck(t *testing.T) {
 
 	// We want the table to have enough rows such that a streaming call returns multiple packets.
 	// Therefore, we insert one row and keep doubling it.
-	utils.Exec(t, vtConn, "insert into customer(email) values('testemail')")
+	vitesst.Exec(t, vtConn, "insert into customer(email) values('testemail')")
 	for range 15 {
 		// Double the number of rows in customer table.
-		utils.Exec(t, vtConn, "insert into customer (email) select email from customer")
+		vitesst.Exec(t, vtConn, "insert into customer (email) select email from customer")
 	}
 
 	// Connect to vtgate and run a streaming query.
-	vtgateConn, err := cluster.DialVTGate(ctx, t.Name(), vtgateGrpcAddress, "test_user", "")
+	vtgateConn, err := clusterInstance.VTGate().DialVTGate(ctx)
 	require.NoError(t, err)
 	stream, err := vtgateConn.Session("", &querypb.ExecuteOptions{}).StreamExecute(ctx, "select * from customer", map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
@@ -314,7 +327,13 @@ func TestStreamingRPCStuck(t *testing.T) {
 
 	// We simulate a misbehaving client that doesn't read from the stream anymore.
 	// This however shouldn't block PlannedReparentShard calls.
-	err = clusterInstance.VtctldClientProcess.PlannedReparentShard(keyspaceName, "0", clusterInstance.Keyspaces[0].Shards[0].Vttablets[1].Alias)
+	shard := clusterInstance.Keyspace(keyspaceName).Shards()[0]
+	err = clusterInstance.Vtctld().ExecuteCommand(ctx,
+		"PlannedReparentShard",
+		shard.Ref(),
+		"--new-primary", shard.Replicas()[0].Alias(),
+		"--wait-replicas-timeout", "30s",
+	)
 	require.NoError(t, err)
 }
 

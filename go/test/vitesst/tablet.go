@@ -27,6 +27,8 @@ import (
 	"time"
 
 	"github.com/moby/moby/api/types/container"
+	mobynetwork "github.com/moby/moby/api/types/network"
+	mobyclient "github.com/moby/moby/client"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/network"
 	"github.com/testcontainers/testcontainers-go/wait"
@@ -232,23 +234,6 @@ func (t *Tablet) KillContainer(ctx context.Context) error {
 	return t.container().Stop(ctx, &timeout)
 }
 
-// StopContainer stops the tablet container gracefully, killing it after the
-// timeout.
-func (t *Tablet) StopContainer(ctx context.Context, timeout time.Duration) error {
-	return t.container().Stop(ctx, &timeout)
-}
-
-// StartContainer starts a stopped tablet container and blocks until the
-// tablet reports a healthy state again.
-func (t *Tablet) StartContainer(ctx context.Context) error {
-	return t.container().Start(ctx)
-}
-
-// IsRunning reports whether the tablet container is running.
-func (t *Tablet) IsRunning() bool {
-	return t.container().IsRunning()
-}
-
 // WriteFile writes content to a path inside the tablet's running container,
 // including paths on the tmpfs data directory.
 func (t *Tablet) WriteFile(ctx context.Context, path, content string) error {
@@ -367,6 +352,66 @@ func (t *Tablet) StartVttablet(ctx context.Context, extraArgs ...string) error {
 func (t *Tablet) writeControlFile(ctx context.Context, path, content string) error {
 	if err := writeContainerFile(ctx, t.container(), path, content); err != nil {
 		return vterrors.Wrapf(err, "writing %s on %s", path, t.Alias())
+	}
+	return nil
+}
+
+// FreezeVttablet pauses the vttablet process with SIGSTOP, so it stays alive
+// but stops responding, without the supervisor restarting it.
+func (t *Tablet) FreezeVttablet(ctx context.Context) error {
+	script := fmt.Sprintf(`kill -STOP "$(cat %s)"`, supervisorPidFile)
+	if _, err := mustExec(ctx, t.container(), []string{"bash", "-c", script}); err != nil {
+		return vterrors.Wrapf(err, "freezing vttablet on %s", t.Alias())
+	}
+	return nil
+}
+
+// UnfreezeVttablet resumes a vttablet paused by FreezeVttablet.
+func (t *Tablet) UnfreezeVttablet(ctx context.Context) error {
+	script := fmt.Sprintf(`kill -CONT "$(cat %s)"`, supervisorPidFile)
+	if _, err := mustExec(ctx, t.container(), []string{"bash", "-c", script}); err != nil {
+		return vterrors.Wrapf(err, "unfreezing vttablet on %s", t.Alias())
+	}
+	return nil
+}
+
+// DisconnectNetwork detaches the tablet's container from the cluster network,
+// simulating a network partition. The container and its processes keep
+// running.
+func (t *Tablet) DisconnectNetwork(ctx context.Context) error {
+	cli, err := testcontainers.NewDockerClientWithOpts(ctx)
+	if err != nil {
+		return vterrors.Wrapf(err, "creating docker client")
+	}
+	defer cli.Close()
+
+	_, err = cli.NetworkDisconnect(ctx, t.cluster.network.ID, mobyclient.NetworkDisconnectOptions{
+		Container: t.container().GetContainerID(),
+		Force:     true,
+	})
+	if err != nil {
+		return vterrors.Wrapf(err, "disconnecting %s from the cluster network", t.Alias())
+	}
+	return nil
+}
+
+// ReconnectNetwork reattaches the tablet's container to the cluster network
+// with its original alias.
+func (t *Tablet) ReconnectNetwork(ctx context.Context) error {
+	cli, err := testcontainers.NewDockerClientWithOpts(ctx)
+	if err != nil {
+		return vterrors.Wrapf(err, "creating docker client")
+	}
+	defer cli.Close()
+
+	_, err = cli.NetworkConnect(ctx, t.cluster.network.ID, mobyclient.NetworkConnectOptions{
+		Container: t.container().GetContainerID(),
+		EndpointConfig: &mobynetwork.EndpointSettings{
+			Aliases: []string{t.name},
+		},
+	})
+	if err != nil {
+		return vterrors.Wrapf(err, "reconnecting %s to the cluster network", t.Alias())
 	}
 	return nil
 }
@@ -493,7 +538,7 @@ func (c *Cluster) startTablet(ctx context.Context, spec *TabletSpec) (*Tablet, e
 		),
 		network.WithNetwork([]string{alias}, c.network),
 		testcontainers.WithTmpfs(map[string]string{vtDataRoot: "uid=999,gid=999"}),
-		testcontainers.WithEnv(map[string]string{"VTTEST": "endtoend"}),
+		testcontainers.WithEnv(mergeEnv(map[string]string{"VTTEST": "endtoend"}, c.opts.tabletEnv)),
 		testcontainers.WithHostConfigModifier(func(hc *container.HostConfig) {
 			// An init process reaps the mysqld and vttablet processes the
 			// supervisor loop leaves behind when tests kill them.

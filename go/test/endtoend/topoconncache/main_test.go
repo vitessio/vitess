@@ -12,34 +12,26 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-
-This test cell aliases feature
-
-We start with no aliases and assert that vtgates can't route to replicas/rondly tablets.
-Then we add an alias, and these tablets should be routable
 */
 
 package topoconncache
 
 import (
+	"context"
 	"flag"
 	"fmt"
-	"net/http"
 	"os"
-	"os/exec"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
-	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
+	clusterInstance *vitesst.Cluster
 	cell1           = "zone1"
 	cell2           = "zone2"
-	vtorcCell       = cell1
-	hostname        = "localhost"
 	keyspaceName    = "ks"
 	tableName       = "test_table"
 	sqlSchema       = `
@@ -78,19 +70,10 @@ var (
 		  }
 		}
 `
-	shard1Primary *cluster.Vttablet
-	shard1Replica *cluster.Vttablet
-	shard1Rdonly  *cluster.Vttablet
-	shard2Primary *cluster.Vttablet
-	shard2Replica *cluster.Vttablet
-	shard2Rdonly  *cluster.Vttablet
-
-	shard1 cluster.Shard
-	shard2 cluster.Shard
 )
 
 /*
-	This end-to-end test validates the cache fix in topo/server.go inside ConnForCell.
+This end-to-end test validates the cache fix in topo/server.go inside ConnForCell.
 
 The issue was, if we delete and add back a cell with same name but at different path, the map of cells
 in server.go returned the connection object of the previous cell instead of newly-created one
@@ -102,132 +85,54 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitcode, err := func() (int, error) {
-		clusterInstance = cluster.NewCluster(cell1, hostname)
-		defer clusterInstance.Teardown()
-		clusterInstance.Keyspaces = append(clusterInstance.Keyspaces, cluster.Keyspace{
-			Name: keyspaceName,
-		})
+		ctx := context.Background()
 
-		// Start topo server
-		if err := clusterInstance.StartTopo(); err != nil {
-			return 1, err
-		}
-
-		// Adding another cell in the same cluster
-		err := clusterInstance.TopoProcess.ManageTopoDir("mkdir", "/vitess/"+cell2)
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithCells(cell1, cell2),
+			vitesst.WithoutVTGate(),
+			vitesst.WithVTOrc(),
+			vitesst.WithVTTabletArgs(commonTabletArg...),
+			vitesst.WithKeyspace(keyspaceName).
+				WithShardNames("-80", "80-").
+				WithReplicas(1).
+				WithRDOnly(1).
+				WithDurabilityPolicy("semi_sync").
+				WithSchema(fmt.Sprintf(sqlSchema, tableName)).
+				WithVSchema(fmt.Sprintf(vSchema, tableName)).
+				WithTabletSpec(func(spec *vitesst.TabletSpec) {
+					if spec.Type == "primary" {
+						spec.Cell = cell1
+					} else {
+						spec.Cell = cell2
+					}
+				}),
+		)
 		if err != nil {
 			return 1, err
 		}
-		err = clusterInstance.VtctldClientProcess.AddCellInfo(cell2)
+		cleanup, err := cluster.Start(ctx)
 		if err != nil {
 			return 1, err
 		}
-
-		vtctldClientProcess := cluster.VtctldClientProcessInstance(clusterInstance.VtctldProcess.GrpcPort, clusterInstance.TopoPort, "localhost", clusterInstance.TmpDirectory)
-		_, err = vtctldClientProcess.ExecuteCommandWithOutput("CreateKeyspace", keyspaceName, "--durability-policy=semi_sync")
-		if err != nil {
-			return 1, err
-		}
-
-		shard1Primary = clusterInstance.NewVttabletInstance("primary", 0, cell1)
-		shard1Replica = clusterInstance.NewVttabletInstance("replica", 0, cell2)
-		shard1Rdonly = clusterInstance.NewVttabletInstance("rdonly", 0, cell2)
-
-		shard2Primary = clusterInstance.NewVttabletInstance("primary", 0, cell1)
-		shard2Replica = clusterInstance.NewVttabletInstance("replica", 0, cell2)
-		shard2Rdonly = clusterInstance.NewVttabletInstance("rdonly", 0, cell2)
-
-		var mysqlProcs []*exec.Cmd
-		for _, tablet := range []*cluster.Vttablet{shard1Primary, shard1Replica, shard1Rdonly, shard2Primary, shard2Replica, shard2Rdonly} {
-			mysqlctlProcess, err := cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
-			if err != nil {
-				return 1, err
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
 			}
-			tablet.MysqlctlProcess = *mysqlctlProcess
-			tablet.VttabletProcess = cluster.VttabletProcessInstance(tablet.HTTPPort,
-				tablet.GrpcPort,
-				tablet.TabletUID,
-				tablet.Cell,
-				"",
-				keyspaceName,
-				clusterInstance.VtctldProcess.Port,
-				tablet.Type,
-				clusterInstance.TopoPort,
-				hostname,
-				clusterInstance.TmpDirectory,
-				commonTabletArg,
-				clusterInstance.DefaultCharset,
-			)
-			tablet.VttabletProcess.SupportsBackup = true
-			proc, err := tablet.MysqlctlProcess.StartProcess()
-			if err != nil {
-				return 1, err
-			}
-			mysqlProcs = append(mysqlProcs, proc)
-		}
-		for _, proc := range mysqlProcs {
-			if err := proc.Wait(); err != nil {
-				return 1, err
-			}
-		}
+		}()
 
-		shard1 = cluster.Shard{
-			Name:      "-80",
-			Vttablets: []*cluster.Vttablet{shard1Primary, shard1Replica, shard1Rdonly},
-		}
-		for idx := range shard1.Vttablets {
-			shard1.Vttablets[idx].VttabletProcess.Shard = shard1.Name
-		}
-		clusterInstance.Keyspaces[0].Shards = append(clusterInstance.Keyspaces[0].Shards, shard1)
+		clusterInstance = cluster
 
-		shard2 = cluster.Shard{
-			Name:      "80-",
-			Vttablets: []*cluster.Vttablet{shard2Primary, shard2Replica, shard2Rdonly},
-		}
-		for idx := range shard2.Vttablets {
-			shard2.Vttablets[idx].VttabletProcess.Shard = shard2.Name
-		}
-		clusterInstance.Keyspaces[0].Shards = append(clusterInstance.Keyspaces[0].Shards, shard2)
-
-		for _, tablet := range shard1.Vttablets {
-			if err := tablet.VttabletProcess.Setup(); err != nil {
-				return 1, err
-			}
-		}
-		if err := clusterInstance.VtctldClientProcess.InitializeShard(keyspaceName, shard1.Name, shard1Primary.Cell, shard1Primary.TabletUID); err != nil {
-			return 1, err
-		}
+		shard1 := cluster.Keyspace(keyspaceName).Shard("-80")
 
 		// run a health check on source replica so it responds to discovery
 		// (for binlog players) and on the source rdonlys (for workers)
-		for _, tablet := range []string{shard1Replica.Alias, shard1Rdonly.Alias} {
-			if err := clusterInstance.VtctldClientProcess.ExecuteCommand("RunHealthCheck", tablet); err != nil {
+		for _, tablet := range []*vitesst.Tablet{shard1.Replicas()[0], shard1.RDOnly()[0]} {
+			if err := cluster.Vtctld().ExecuteCommand(ctx, "RunHealthCheck", tablet.Alias()); err != nil {
 				return 1, err
 			}
 		}
 
-		for _, tablet := range shard2.Vttablets {
-			if err := tablet.VttabletProcess.Setup(); err != nil {
-				return 1, err
-			}
-		}
-
-		if err := clusterInstance.VtctldClientProcess.InitializeShard(keyspaceName, shard2.Name, shard2Primary.Cell, shard2Primary.TabletUID); err != nil {
-			return 1, err
-		}
-
-		if err := clusterInstance.StartVTOrc(vtorcCell, keyspaceName); err != nil {
-			return 1, err
-		}
-
-		if err := clusterInstance.VtctldClientProcess.ApplySchema(keyspaceName, fmt.Sprintf(sqlSchema, tableName)); err != nil {
-			return 1, err
-		}
-		if err := clusterInstance.VtctldClientProcess.ApplyVSchema(keyspaceName, fmt.Sprintf(vSchema, tableName)); err != nil {
-			return 1, err
-		}
-
-		_ = clusterInstance.VtctldClientProcess.ExecuteCommand("RebuildKeyspaceGraph", keyspaceName)
+		_ = cluster.Vtctld().ExecuteCommand(ctx, "RebuildKeyspaceGraph", keyspaceName)
 
 		return m.Run(), nil
 	}()
@@ -239,19 +144,18 @@ func TestMain(m *testing.M) {
 	}
 }
 
-func testURL(t *testing.T, url string, testCaseName string) {
-	statusCode := getStatusForURL(url)
+func testURL(t *testing.T, path string, testCaseName string) {
+	statusCode := getStatusForURL(t, path)
 	if got, want := statusCode, 200; got != want {
-		assert.Equalf(t, want, got, "\nurl: %v\nstatus code: %v \nwant %v for %s", url, got, want, testCaseName)
+		assert.Equalf(t, want, got, "\npath: %v\nstatus code: %v \nwant %v for %s", path, got, want, testCaseName)
 	}
 }
 
-// getStatusForUrl returns the status code for the URL
-func getStatusForURL(url string) int {
-	resp, err := http.Get(url)
+// getStatusForURL returns the status code for the vtctld HTTP path
+func getStatusForURL(t *testing.T, path string) int {
+	status, _, err := clusterInstance.Vtctld().MakeAPICall(t.Context(), path)
 	if err != nil {
 		return 0
 	}
-	defer resp.Body.Close()
-	return resp.StatusCode
+	return status
 }

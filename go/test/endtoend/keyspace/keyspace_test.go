@@ -17,9 +17,12 @@ limitations under the License.
 package sequence
 
 import (
+	"context"
 	"encoding/binary"
 	"flag"
+	"fmt"
 	"os"
+	"path"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -27,8 +30,11 @@ import (
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/json2"
-	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/vitesst"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/topo"
+	_ "vitess.io/vitess/go/vt/topo/etcd2topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -36,12 +42,11 @@ import (
 )
 
 var (
-	clusterForKSTest      *cluster.LocalProcessCluster
+	clusterForKSTest      *vitesst.Cluster
 	keyspaceShardedName   = "test_ks_sharded"
 	keyspaceUnshardedName = "test_ks_unsharded"
 	cell                  = "zone1"
 	cell2                 = "zone2"
-	hostname              = "localhost"
 	servedTypes           = map[topodatapb.TabletType]bool{topodatapb.TabletType_PRIMARY: true, topodatapb.TabletType_REPLICA: true, topodatapb.TabletType_RDONLY: true}
 	sqlSchema             = `create table vt_insert_test (
 								id bigint auto_increment,
@@ -89,50 +94,43 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterForKSTest = cluster.NewCluster(cell, hostname)
-		defer clusterForKSTest.Teardown()
+		ctx := context.Background()
 
-		// Start topo server
-		if err := clusterForKSTest.StartTopo(); err != nil {
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithCells(cell, cell2),
+			vitesst.WithKeyspace(keyspaceShardedName).
+				WithShardNames("-80", "80-").
+				WithReplicas(1).
+				WithSchema(sqlSchema).
+				WithVSchema(vSchema),
+			vitesst.WithKeyspace(keyspaceUnshardedName).
+				WithShardNames(keyspaceUnshardedName).
+				WithReplicas(1).
+				WithSchema(sqlSchema),
+		)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
+		cleanup, err := cluster.Start(ctx)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
 
-		if err := clusterForKSTest.TopoProcess.ManageTopoDir("mkdir", "/vitess/"+cell2); err != nil {
-			return 1
-		}
+		clusterForKSTest = cluster
 
-		if err := clusterForKSTest.VtctldClientProcess.AddCellInfo(cell2); err != nil {
+		if err := cluster.Vtctld().ExecuteCommand(ctx, "RebuildKeyspaceGraph", keyspaceShardedName); err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-
-		// Start sharded keyspace
-		cell := clusterForKSTest.Cell
-		keyspaceSharded := &cluster.Keyspace{
-			Name:      keyspaceShardedName,
-			SchemaSQL: sqlSchema,
-			VSchema:   vSchema,
-		}
-		if err := clusterForKSTest.StartKeyspace(*keyspaceSharded, []string{"-80", "80-"}, 1, false, cell); err != nil {
-			return 1
-		}
-		if err := clusterForKSTest.VtctldClientProcess.ExecuteCommand("RebuildKeyspaceGraph", keyspaceShardedName); err != nil {
-			return 1
-		}
-
-		// Start unsharded keyspace
-		keyspaceUnsharded := &cluster.Keyspace{
-			Name:      keyspaceUnshardedName,
-			SchemaSQL: sqlSchema,
-		}
-		if err := clusterForKSTest.StartKeyspace(*keyspaceUnsharded, []string{keyspaceUnshardedName}, 1, false, cell); err != nil {
-			return 1
-		}
-		if err := clusterForKSTest.VtctldClientProcess.ExecuteCommand("RebuildKeyspaceGraph", keyspaceUnshardedName); err != nil {
-			return 1
-		}
-
-		// Start vtgate
-		if err := clusterForKSTest.StartVtgate(); err != nil {
+		if err := cluster.Vtctld().ExecuteCommand(ctx, "RebuildKeyspaceGraph", keyspaceUnshardedName); err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
 
@@ -144,35 +142,35 @@ func TestMain(m *testing.M) {
 // TestDurabilityPolicyField tests that the DurabilityPolicy field of a keyspace can be set during creation, read and updated later
 // from vtctld server and the vtctl binary
 func TestDurabilityPolicyField(t *testing.T) {
-	vtctldClientProcess := clusterForKSTest.NewVtctldClientProcessInstance("localhost", clusterForKSTest.VtctldProcess.GrpcPort, clusterForKSTest.TmpDirectory)
+	ctx := t.Context()
 
-	out, err := vtctldClientProcess.ExecuteCommandWithOutput("CreateKeyspace", "ks_durability", "--durability-policy=semi_sync")
+	out, err := clusterForKSTest.Vtctld().ExecuteCommandWithOutput(ctx, "CreateKeyspace", "ks_durability", "--durability-policy=semi_sync")
 	require.NoError(t, err, out)
 	checkDurabilityPolicy(t, policy.DurabilitySemiSync)
 
-	out, err = vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", "ks_durability", "--durability-policy=none")
+	out, err = clusterForKSTest.Vtctld().ExecuteCommandWithOutput(ctx, "SetKeyspaceDurabilityPolicy", "ks_durability", "--durability-policy=none")
 	require.NoError(t, err, out)
 	checkDurabilityPolicy(t, policy.DurabilityNone)
 
-	out, err = vtctldClientProcess.ExecuteCommandWithOutput("DeleteKeyspace", "ks_durability")
+	out, err = clusterForKSTest.Vtctld().ExecuteCommandWithOutput(ctx, "DeleteKeyspace", "ks_durability")
 	require.NoError(t, err, out)
 
-	out, err = clusterForKSTest.VtctldClientProcess.ExecuteCommandWithOutput("CreateKeyspace", "--durability-policy=semi_sync", "ks_durability")
+	out, err = clusterForKSTest.Vtctld().ExecuteCommandWithOutput(ctx, "CreateKeyspace", "--durability-policy=semi_sync", "ks_durability")
 	require.NoError(t, err, out)
 	checkDurabilityPolicy(t, policy.DurabilitySemiSync)
 
-	out, err = clusterForKSTest.VtctldClientProcess.ExecuteCommandWithOutput("DeleteKeyspace", "ks_durability")
+	out, err = clusterForKSTest.Vtctld().ExecuteCommandWithOutput(ctx, "DeleteKeyspace", "ks_durability")
 	require.NoError(t, err, out)
 }
 
 func checkDurabilityPolicy(t *testing.T, durabilityPolicy string) {
-	ks, err := clusterForKSTest.VtctldClientProcess.GetKeyspace("ks_durability")
+	ks, err := getKeyspace(t, "ks_durability")
 	require.NoError(t, err)
 	require.Equal(t, ks.Keyspace.DurabilityPolicy, durabilityPolicy)
 }
 
 func TestGetSrvKeyspaceNames(t *testing.T) {
-	data, err := clusterForKSTest.VtctldClientProcess.ExecuteCommandWithOutput("GetSrvKeyspaceNames", cell)
+	data, err := clusterForKSTest.Vtctld().ExecuteCommandWithOutput(t.Context(), "GetSrvKeyspaceNames", cell)
 	require.Nil(t, err)
 
 	namesByCell := map[string]*vtctldatapb.GetSrvKeyspaceNamesResponse_NameList{}
@@ -212,145 +210,66 @@ func TestGetSrvKeyspacePartitions(t *testing.T) {
 }
 
 func TestShardNames(t *testing.T) {
-	output, err := clusterForKSTest.VtctldClientProcess.GetSrvKeyspaces(keyspaceShardedName, cell)
+	output, err := getSrvKeyspaces(t, keyspaceShardedName, cell)
 	require.NoError(t, err)
 	require.NotNil(t, output[cell], "no srvkeyspace for cell %s", cell)
 }
 
 func TestGetKeyspace(t *testing.T) {
-	_, err := clusterForKSTest.VtctldClientProcess.GetKeyspace(keyspaceUnshardedName)
+	_, err := getKeyspace(t, keyspaceUnshardedName)
 	require.Nil(t, err)
 }
 
 func TestDeleteKeyspace(t *testing.T) {
-	_ = clusterForKSTest.VtctldClientProcess.CreateKeyspace("test_delete_keyspace", sidecar.DefaultName, "")
-	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("CreateShard", "test_delete_keyspace/0")
-	_ = clusterForKSTest.InitTablet(&cluster.Vttablet{
-		Type:      "primary",
-		TabletUID: 100,
-		Cell:      "zone1",
-	}, "test_delete_keyspace", "0")
+	ctx := t.Context()
+	vtctld := clusterForKSTest.Vtctld()
+
+	_ = vtctld.ExecuteCommand(ctx, "CreateKeyspace", "test_delete_keyspace", "--sidecar-db-name", sidecar.DefaultName)
+	_ = vtctld.ExecuteCommand(ctx, "CreateShard", "test_delete_keyspace/0")
+	_ = initTablet(ctx, cell, 999, topodatapb.TabletType_PRIMARY, 0, "test_delete_keyspace", "0")
 
 	// Can't delete keyspace if there are shards present.
-	err := clusterForKSTest.VtctldClientProcess.ExecuteCommand("DeleteKeyspace", "test_delete_keyspace")
+	err := vtctld.ExecuteCommand(ctx, "DeleteKeyspace", "test_delete_keyspace")
 	require.Error(t, err)
 
 	// Can't delete shard if there are tablets present.
-	err = clusterForKSTest.VtctldClientProcess.ExecuteCommand("DeleteShards", "--even-if-serving", "test_delete_keyspace/0")
+	err = vtctld.ExecuteCommand(ctx, "DeleteShards", "--even-if-serving", "test_delete_keyspace/0")
 	require.Error(t, err)
 
 	// Use recursive DeleteShard to remove tablets.
-	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("DeleteShards", "--even-if-serving", "--recursive", "test_delete_keyspace/0")
+	_ = vtctld.ExecuteCommand(ctx, "DeleteShards", "--even-if-serving", "--recursive", "test_delete_keyspace/0")
 	// Now non-recursive DeleteKeyspace should work.
-	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("DeleteKeyspace", "test_delete_keyspace")
+	_ = vtctld.ExecuteCommand(ctx, "DeleteKeyspace", "test_delete_keyspace")
 
 	// Start over and this time use recursive DeleteKeyspace to do everything.
-	_ = clusterForKSTest.VtctldClientProcess.CreateKeyspace("test_delete_keyspace", sidecar.DefaultName, "")
-	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("CreateShard", "test_delete_keyspace/0")
-	_ = clusterForKSTest.InitTablet(&cluster.Vttablet{
-		Type:      "primary",
-		TabletUID: 100,
-		Cell:      "zone1",
-		HTTPPort:  1234,
-	}, "test_delete_keyspace", "0")
+	_ = vtctld.ExecuteCommand(ctx, "CreateKeyspace", "test_delete_keyspace", "--sidecar-db-name", sidecar.DefaultName)
+	_ = vtctld.ExecuteCommand(ctx, "CreateShard", "test_delete_keyspace/0")
+	_ = initTablet(ctx, cell, 999, topodatapb.TabletType_PRIMARY, 1234, "test_delete_keyspace", "0")
 
 	// Create the serving/replication entries and check that they exist,
 	//  so we can later check they're deleted.
-	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("RebuildKeyspaceGraph", "test_delete_keyspace")
-	_, _ = clusterForKSTest.VtctldClientProcess.GetShardReplication("test_delete_keyspace", "0", cell)
-	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("GetSrvKeyspace", cell, "test_delete_keyspace")
+	_ = vtctld.ExecuteCommand(ctx, "RebuildKeyspaceGraph", "test_delete_keyspace")
+	_, _ = vtctld.ExecuteCommandWithOutput(ctx, "GetShardReplication", "test_delete_keyspace/0", cell)
+	_ = vtctld.ExecuteCommand(ctx, "GetSrvKeyspace", cell, "test_delete_keyspace")
 
 	// Recursive DeleteKeyspace
-	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("DeleteKeyspace", "--recursive", "test_delete_keyspace")
+	_ = vtctld.ExecuteCommand(ctx, "DeleteKeyspace", "--recursive", "test_delete_keyspace")
 
 	// Check that everything is gone.
-	err = clusterForKSTest.VtctldClientProcess.ExecuteCommand("GetKeyspace", "test_delete_keyspace")
+	err = vtctld.ExecuteCommand(ctx, "GetKeyspace", "test_delete_keyspace")
 	require.Error(t, err)
-	err = clusterForKSTest.VtctldClientProcess.ExecuteCommand("GetShard", "test_delete_keyspace/0")
+	err = vtctld.ExecuteCommand(ctx, "GetShard", "test_delete_keyspace/0")
 	require.Error(t, err)
-	err = clusterForKSTest.VtctldClientProcess.ExecuteCommand("GetTablet", "zone1-0000000100")
+	err = vtctld.ExecuteCommand(ctx, "GetTablet", "zone1-0000000999")
 	require.Error(t, err)
-	_, err = clusterForKSTest.VtctldClientProcess.GetShardReplication("test_delete_keyspace", "0", cell)
+	_, err = vtctld.ExecuteCommandWithOutput(ctx, "GetShardReplication", "test_delete_keyspace/0", cell)
 	require.Error(t, err)
-	err = clusterForKSTest.VtctldClientProcess.ExecuteCommand("GetSrvKeyspace", cell, "test_delete_keyspace")
+	err = vtctld.ExecuteCommand(ctx, "GetSrvKeyspace", cell, "test_delete_keyspace")
 	require.Error(t, err)
-	ksMap, err := clusterForKSTest.VtctldClientProcess.GetSrvKeyspaces("test_delete_keyspace", cell)
+	ksMap, err := getSrvKeyspaces(t, "test_delete_keyspace", cell)
 	require.NoError(t, err)
 	require.Empty(t, ksMap[cell])
 }
-
-// TODO: Fix this test, not running in CI
-// TODO: (ajm188) if this test gets fixed, the flags need to be updated to comply with VEP-4 as well.
-// tells that in zone2 after deleting shard, there is no shard #264 and in zone1 there is only 1 #269
-/*func RemoveKeyspaceCell(t *testing.T) {
-	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("CreateKeyspace", "test_delete_keyspace_removekscell")
-	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("CreateShard", "test_delete_keyspace_removekscell/0")
-	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("CreateShard", "test_delete_keyspace_removekscell/1")
-	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("InitTablet", "--port=1234", "--bind-address=127.0.0.1", "-keyspace=test_delete_keyspace_removekscell", "--shard=0", "zone1-0000000100", "primary")
-	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("InitTablet", "--port=1234", "--bind-address=127.0.0.1", "-keyspace=test_delete_keyspace_removekscell", "--shard=1", "zone1-0000000101", "primary")
-	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("InitTablet", "--port=1234", "--bind-address=127.0.0.1", "-keyspace=test_delete_keyspace_removekscell", "--shard=0", "zone2-0000000100", "replica")
-	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("InitTablet", "--port=1234", "--bind-address=127.0.0.1", "-keyspace=test_delete_keyspace_removekscell", "--shard=1", "zone2-0000000101", "replica")
-
-	// Create the serving/replication entries and check that they exist,  so we can later check they're deleted.
-	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("RebuildKeyspaceGraph", "test_delete_keyspace_removekscell")
-	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("GetShardReplication", "zone2", "test_delete_keyspace_removekscell/0")
-	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("GetShardReplication", "zone2", "test_delete_keyspace_removekscell/1")
-	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("GetSrvKeyspace", "zone2", "test_delete_keyspace_removekscell")
-	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("GetSrvKeyspace", "zone1", "test_delete_keyspace_removekscell")
-
-	// Just remove the shard from one cell (including tablets),
-	// but leaving the global records and other cells/shards alone.
-	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("RemoveShardCell", "--recursive", "test_delete_keyspace_removekscell/0", "zone2")
-
-	//Check that the shard is gone from zone2.
-	srvKeyspaceZone2 := getSrvKeyspace(t, cell2, "test_delete_keyspace_removekscell")
-
-	for _, partition := range srvKeyspaceZone2.Partitions {
-		assert.Equal(t, len(partition.ShardReferences), 1)
-	}
-
-	srvKeyspaceZone1 := getSrvKeyspace(t, cell, "test_delete_keyspace_removekscell")
-	for _, partition := range srvKeyspaceZone1.Partitions {
-		assert.Equal(t, len(partition.ShardReferences), 2)
-	}
-
-	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("RebuildKeyspaceGraph", "test_delete_keyspace_removekscell")
-	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("GetKeyspace", "test_delete_keyspace_removekscell")
-	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("GetShard", "test_delete_keyspace_removekscell/0")
-
-	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("GetTablet", "zone1-0000000100")
-
-	err := clusterForKSTest.VtctldClientProcess.ExecuteCommand("GetTablet", "zone2-0000000100")
-	require.Error(t, err)
-
-	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("GetTablet", "zone2-0000000101")
-	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("GetShardReplication", "zone1", "test_delete_keyspace_removekscell/0")
-
-	err = clusterForKSTest.VtctldClientProcess.ExecuteCommand("GetShardReplication", "zone2", "test_delete_keyspace_removekscell/0")
-	require.Error(t, err)
-
-	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("GetShardReplication", "zone2", "test_delete_keyspace_removekscell/1")
-	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("GetSrvKeyspace", "zone2", "test_delete_keyspace_removekscell")
-
-	// Add it back to do another test.
-	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("InitTablet", "--port=1234", "--keyspace=test_delete_keyspace_removekscell", "--shard=0", "zone2-0000000100", "replica")
-	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("RebuildKeyspaceGraph", "test_delete_keyspace_removekscell")
-	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("GetShardReplication", "zone2", "test_delete_keyspace_removekscell/0")
-
-	// Now use RemoveKeyspaceCell to remove all shards.
-	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("RemoveKeyspaceCell", "-recursive", "test_delete_keyspace_removekscell", "zone2")
-	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("RebuildKeyspaceGraph", "test_delete_keyspace_removekscell")
-	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("GetShardReplication", "zone1", "test_delete_keyspace_removekscell/0")
-
-	err = clusterForKSTest.VtctldClientProcess.ExecuteCommand("GetShardReplication", "zone2", "test_delete_keyspace_removekscell/0")
-	require.Error(t, err)
-
-	err = clusterForKSTest.VtctldClientProcess.ExecuteCommand("GetShardReplication", "zone2", "test_delete_keyspace_removekscell/1")
-	require.Error(t, err)
-
-	// Clean up
-	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("DeleteKeyspace", "-recursive", "test_delete_keyspace_removekscell")
-} */
 
 func TestShardCountForAllKeyspaces(t *testing.T) {
 	testShardCountForKeyspace(t, keyspaceUnshardedName, 1)
@@ -423,11 +342,91 @@ func packKeyspaceID(keyspaceID uint64) []byte {
 }
 
 func getSrvKeyspace(t *testing.T, cell string, ksname string) *topodatapb.SrvKeyspace {
-	output, err := clusterForKSTest.VtctldClientProcess.GetSrvKeyspaces(ksname, cell)
+	output, err := getSrvKeyspaces(t, ksname, cell)
 	require.NoError(t, err)
 
 	srvKeyspace := output[cell]
 	require.NotNil(t, srvKeyspace, "no srvkeyspace for cell %s", cell)
 
 	return srvKeyspace
+}
+
+// getSrvKeyspaces returns a mapping of cell to srv keyspace for the given keyspace.
+func getSrvKeyspaces(t *testing.T, keyspace string, cells ...string) (map[string]*topodatapb.SrvKeyspace, error) {
+	args := append([]string{"GetSrvKeyspaces", keyspace}, cells...)
+	out, err := clusterForKSTest.Vtctld().ExecuteCommandWithOutput(t.Context(), args...)
+	if err != nil {
+		return nil, err
+	}
+
+	ksMap := map[string]*topodatapb.SrvKeyspace{}
+	err = json2.Unmarshal([]byte(out), &ksMap)
+	return ksMap, err
+}
+
+// getKeyspace fetches a keyspace record and parses the response.
+func getKeyspace(t *testing.T, keyspace string) (*vtctldatapb.Keyspace, error) {
+	data, err := clusterForKSTest.Vtctld().ExecuteCommandWithOutput(t.Context(), "GetKeyspace", keyspace)
+	if err != nil {
+		return nil, err
+	}
+
+	var ks vtctldatapb.Keyspace
+	if err := json2.UnmarshalPB([]byte(data), &ks); err != nil {
+		return nil, err
+	}
+	return &ks, nil
+}
+
+// initTablet creates a bare tablet record in the topology server, without a
+// running mysqld or vttablet. The record and its shard replication entry live
+// in the cell's own topo root, which the Vitess components reach through the
+// in-network cell address. That address is not reachable from the host, so the
+// shared etcd is opened at the cell's data root directly and the records are
+// written there.
+func initTablet(ctx context.Context, cell string, uid uint32, tabletType topodatapb.TabletType, httpPort int32, keyspace, shard string) error {
+	etcdAddr, err := clusterForKSTest.EtcdAddr(ctx)
+	if err != nil {
+		return err
+	}
+	ts, err := topo.OpenServer("etcd2", etcdAddr, "/vitess/"+cell)
+	if err != nil {
+		return err
+	}
+	defer ts.Close()
+
+	conn, err := ts.ConnForCell(ctx, topo.GlobalCell)
+	if err != nil {
+		return err
+	}
+
+	alias := &topodatapb.TabletAlias{
+		Cell: cell,
+		Uid:  uid,
+	}
+	tablet := &topodatapb.Tablet{
+		Alias:    alias,
+		Hostname: "localhost",
+		Type:     tabletType,
+		PortMap: map[string]int32{
+			"vt": httpPort,
+		},
+		Keyspace: keyspace,
+		Shard:    shard,
+	}
+
+	data, err := tablet.MarshalVT()
+	if err != nil {
+		return err
+	}
+	tabletPath := path.Join(topo.TabletsPath, topoproto.TabletAliasString(alias), topo.TabletFile)
+	if _, err := conn.Create(ctx, tabletPath, data); err != nil {
+		return err
+	}
+
+	return ts.UpdateShardReplicationFields(ctx, topo.GlobalCell, keyspace, shard,
+		func(sr *topodatapb.ShardReplication) error {
+			sr.Nodes = append(sr.Nodes, &topodatapb.ShardReplication_Node{TabletAlias: alias})
+			return nil
+		})
 }
