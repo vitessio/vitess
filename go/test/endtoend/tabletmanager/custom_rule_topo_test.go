@@ -43,10 +43,6 @@ const (
 		"TableNames" : ["t1"],
 		"Query" : "(select)|(SELECT)"
 	  }]`
-
-	// topoGlobalServerAddress is the topology server as reached from inside the
-	// cluster network, for vtctldclient commands that talk to it directly.
-	topoGlobalServerAddress = "etcd:2379"
 )
 
 func TestTopoCustomRule(t *testing.T) {
@@ -73,7 +69,8 @@ func TestTopoCustomRule(t *testing.T) {
 
 	err = rTablet.StopVttablet(ctx)
 	require.Nil(t, err, "error should be Nil")
-	err = rTablet.StartVttablet(ctx,
+	err = rTablet.StartVttablet(
+		ctx,
 		"--topocustomrule-path", topoCustomRulePath,
 	)
 	require.Nil(t, err, "error should be Nil")
@@ -121,9 +118,7 @@ func TestTopoCustomRule(t *testing.T) {
 // the topology server.
 func writeTopologyPath(t *testing.T, path, file string) error {
 	t.Helper()
-	return clusterInstance.Vtctld().ExecuteCommand(t.Context(),
-		"--server", "internal",
-		"--topo-global-server-address", topoGlobalServerAddress,
-		"WriteTopologyPath", path, file,
-	)
+	args := append([]string{"--server", "internal"}, clusterInstance.TopoFlags()...)
+	args = append(args, "WriteTopologyPath", path, file)
+	return clusterInstance.Vtctld().ExecuteCommand(t.Context(), args...)
 }

@@ -18,30 +18,37 @@ package tabletmanager
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
+	"slices"
 	"strconv"
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/sidecardb"
-
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/vitesst"
+	"vitess.io/vitess/go/vt/sidecardb"
+	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtorc/inst"
+
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	tabletpb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 	tmc "vitess.io/vitess/go/vt/vttablet/grpctmclient"
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
+	clusterInstance *vitesst.Cluster
 	tmClient        *tmc.Client
-	primaryTablet   cluster.Vttablet
-	replicaTablet   cluster.Vttablet
-	hostname        = "localhost"
+	primaryTablet   *vitesst.Tablet
+	replicaTablet   *vitesst.Tablet
 	keyspaceName    = "ks"
+	shardName       = "0"
 	cell            = "zone1"
 	sqlSchema       = `
 	create table t1(
@@ -73,39 +80,55 @@ var (
   }`
 )
 
+const (
+	// tabletMySQLPort is the mysqld port every tablet starts on inside its
+	// container.
+	tabletMySQLPort = 3306
+
+	// resurrectedMySQLPort is the port the primary's mysqld moves to when the
+	// tablet comes back up. Every tablet has a container to itself, so the port
+	// only has to be free inside that one container.
+	resurrectedMySQLPort = 3307
+)
+
 func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(cell, hostname)
-		defer clusterInstance.Teardown()
+		ctx := context.Background()
 
-		// Start topo server
-		err := clusterInstance.StartTopo()
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithCells(cell),
+			vitesst.WithoutVTGate(),
+			vitesst.WithVTOrc("--clusters-to-watch", keyspaceName),
+			vitesst.WithKeyspace(keyspaceName).
+				WithShardNames(shardName).
+				WithReplicas(1).
+				WithSchema(sqlSchema).
+				WithVSchema(vSchema),
+		)
 		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
 
-		// Start keyspace
-		keyspace := &cluster.Keyspace{
-			Name:      keyspaceName,
-			SchemaSQL: sqlSchema,
-			VSchema:   vSchema,
-		}
-
-		if err = clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false, clusterInstance.Cell); err != nil {
+		cleanup, err := cluster.Start(ctx)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-
-		// Collect table paths and ports
-		tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
-		for _, tablet := range tablets {
-			if tablet.Type == "primary" {
-				primaryTablet = *tablet
-			} else {
-				replicaTablet = *tablet
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
 			}
-		}
+		}()
+
+		clusterInstance = cluster
+
+		// Collect the tablets of the shard
+		shard := cluster.Keyspace(keyspaceName).Shard(shardName)
+		primaryTablet = shard.Primary()
+		replicaTablet = shard.Replicas()[0]
 
 		// create tablet manager client
 		tmClient = tmc.NewClient()
@@ -115,63 +138,105 @@ func TestMain(m *testing.M) {
 	os.Exit(exitCode)
 }
 
-func tmcGetReplicationStatus(ctx context.Context, tabletGrpcPort int) (*replicationdatapb.Status, error) {
-	vtablet := getTablet(tabletGrpcPort)
+func tmcGetReplicationStatus(ctx context.Context, tablet *vitesst.Tablet) (*replicationdatapb.Status, error) {
+	vtablet, err := tablet.TabletProto(ctx)
+	if err != nil {
+		return nil, err
+	}
 	return tmClient.ReplicationStatus(ctx, vtablet)
 }
 
-func getTablet(tabletGrpcPort int) *tabletpb.Tablet {
-	portMap := make(map[string]int32)
-	portMap["grpc"] = int32(tabletGrpcPort)
-	return &tabletpb.Tablet{Hostname: hostname, PortMap: portMap}
-}
-
-// resurrectTablet is used to resurrect the given tablet
-func resurrectTablet(t *testing.T, tab cluster.Vttablet) {
+// resurrectTablet is used to resurrect the given tablet on the given mysqld port
+func resurrectTablet(ctx context.Context, t *testing.T, tab *vitesst.Tablet, mysqlPort int) {
 	// initialize config again to regenerate the my.cnf file which has the port to use
-	_, err := tab.MysqlctlProcess.ExecuteCommandWithOutput(
-		"--tablet-uid", strconv.Itoa(tab.MysqlctlProcess.TabletUID),
-		"--mysql-port", strconv.Itoa(tab.MysqlctlProcess.MySQLPort),
+	exitCode, output, err := tab.Exec(ctx, "mysqlctl",
+		"--tablet-uid", strconv.Itoa(tab.UID),
+		"--mysql-port", strconv.Itoa(mysqlPort),
 		"init_config")
 	require.NoError(t, err)
+	require.Zero(t, exitCode, output)
 
-	tab.MysqlctlProcess.InitMysql = false
-	err = tab.MysqlctlProcess.Start()
+	err = tab.StartMySQL(ctx)
 	require.NoError(t, err)
 
 	// Start the tablet
-	tab.VttabletProcess.ServingStatus = "SERVING"
-	err = tab.VttabletProcess.Setup()
+	err = tab.StartVttablet(ctx)
 	require.NoError(t, err)
 }
 
 // stopTablet stops the tablet
-func stopTablet(t *testing.T, tab cluster.Vttablet) {
-	err := tab.VttabletProcess.TearDownWithTimeout(30 * time.Second)
+func stopTablet(ctx context.Context, t *testing.T, tab *vitesst.Tablet) {
+	err := tab.StopVttablet(ctx)
 	require.NoError(t, err)
-	err = tab.MysqlctlProcess.Stop()
+	err = tab.StopMySQL(ctx)
 	require.NoError(t, err)
 }
 
-func waitForSourcePort(ctx context.Context, t *testing.T, tablet cluster.Vttablet, expectedPort int32) error {
+// primaryDownAnalyses are the VTOrc analyses that report a primary as gone, any
+// of which makes VTOrc reparent the shard once recoveries are on again.
+var primaryDownAnalyses = []string{
+	string(inst.InvalidPrimary),
+	string(inst.DeadPrimary),
+	string(inst.DeadPrimaryWithoutReplicas),
+	string(inst.DeadPrimaryAndReplicas),
+	string(inst.DeadPrimaryAndSomeReplicas),
+	string(inst.UnreachablePrimary),
+	string(inst.UnreachablePrimaryWithLaggingReplicas),
+	string(inst.UnreachablePrimaryWithBrokenReplicas),
+	string(inst.PrimaryTabletDeleted),
+	string(inst.ClusterHasNoPrimary),
+}
+
+// waitForVTOrcToSeePrimaryAlive blocks until VTOrc has reached the given primary
+// again, so that recoveries turned back on cannot act on an analysis left over
+// from the time the primary was down.
+func waitForVTOrcToSeePrimaryAlive(ctx context.Context, vtorc *vitesst.VTOrc, tablet *vitesst.Tablet) error {
+	alias := topoproto.TabletAliasString(&tabletpb.TabletAlias{Cell: tablet.Cell, Uid: uint32(tablet.UID)})
+
+	_, _, err := vtorc.MakeAPICallRetry(ctx, "/api/detection-analysis", 60*time.Second, func(status int, body string) bool {
+		if status != http.StatusOK {
+			return false
+		}
+
+		var analyses []struct {
+			AnalyzedInstanceAlias string
+			Analysis              string
+		}
+		if err := json.Unmarshal([]byte(body), &analyses); err != nil {
+			return false
+		}
+		for _, analysis := range analyses {
+			if analysis.AnalyzedInstanceAlias == alias && slices.Contains(primaryDownAnalyses, analysis.Analysis) {
+				return false
+			}
+		}
+		return true
+	})
+	return err
+}
+
+func waitForSourcePort(ctx context.Context, tablet *vitesst.Tablet, expectedPort int32) error {
 	timeout := time.Now().Add(15 * time.Second)
 	for time.Now().Before(timeout) {
 		// Check that initially replication is setup correctly on the replica tablet
-		replicaStatus, err := tmcGetReplicationStatus(ctx, tablet.GrpcPort)
+		replicaStatus, err := tmcGetReplicationStatus(ctx, tablet)
 		if err == nil && replicaStatus.SourcePort == expectedPort {
 			return nil
 		}
 		time.Sleep(300 * time.Millisecond)
 	}
-	return fmt.Errorf("time out before source port became %v for %v", expectedPort, tablet.Alias)
+	return vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "time out before source port became %d for %s", expectedPort, tablet.Alias())
 }
 
-func getSidecarDBDDLQueryCount(tablet *cluster.VttabletProcess) (int64, error) {
-	vars := tablet.GetVars()
+func getSidecarDBDDLQueryCount(ctx context.Context, tablet *vitesst.Tablet) (int64, error) {
+	vars, err := tablet.GetVars(ctx)
+	if err != nil {
+		return 0, err
+	}
 	key := sidecardb.StatsKeyQueryCount
 	val, ok := vars[key]
 	if !ok {
-		return 0, fmt.Errorf("%s not found in debug/vars", key)
+		return 0, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "%s not found in debug/vars", key)
 	}
 	return int64(val.(float64)), nil
 }
@@ -179,39 +244,52 @@ func getSidecarDBDDLQueryCount(tablet *cluster.VttabletProcess) (int64, error) {
 func TestReplicationRepairAfterPrimaryTabletChange(t *testing.T) {
 	ctx := t.Context()
 	// Check that initially replication is setup correctly on the replica tablet
-	err := waitForSourcePort(ctx, t, replicaTablet, int32(primaryTablet.MySQLPort))
+	err := waitForSourcePort(ctx, replicaTablet, tabletMySQLPort)
 	require.NoError(t, err)
 
-	sidecarDDLCount, err := getSidecarDBDDLQueryCount(primaryTablet.VttabletProcess)
+	sidecarDDLCount, err := getSidecarDBDDLQueryCount(ctx, primaryTablet)
 	require.NoError(t, err)
 	// sidecar db should create all _vt tables when vttablet started
 	require.Greater(t, sidecarDDLCount, int64(0))
 
-	// Stop the primary tablet
-	stopTablet(t, primaryTablet)
-	// Change the MySQL port of the primary tablet
-	newMysqlPort := clusterInstance.GetAndReservePort()
-	primaryTablet.MySQLPort = newMysqlPort
-	primaryTablet.MysqlctlProcess.MySQLPort = newMysqlPort
-
-	// Start the primary tablet again
-	resurrectTablet(t, primaryTablet)
-
-	// Let replication manager repair replication
-	err = waitForSourcePort(ctx, t, replicaTablet, int32(newMysqlPort))
+	// The primary is taken down for maintenance and comes back on another port,
+	// so hold VTOrc off until it is up again. Left to run, VTOrc reads the
+	// shutdown primary as dead and promotes the replica, and the shard the test
+	// is about is gone.
+	vtorc := clusterInstance.VTOrc()
+	err = vtorc.DisableGlobalRecoveries(ctx)
 	require.NoError(t, err)
 
-	sidecarDDLCount, err = getSidecarDBDDLQueryCount(primaryTablet.VttabletProcess)
+	// Stop the primary tablet
+	stopTablet(ctx, t, primaryTablet)
+
+	// Start the primary tablet again, on a different MySQL port
+	resurrectTablet(ctx, t, primaryTablet, resurrectedMySQLPort)
+
+	err = waitForVTOrcToSeePrimaryAlive(ctx, vtorc, primaryTablet)
+	require.NoError(t, err)
+
+	err = vtorc.EnableGlobalRecoveries(ctx)
+	require.NoError(t, err)
+
+	// Let the replication be repaired against the primary's new port
+	err = waitForSourcePort(ctx, replicaTablet, resurrectedMySQLPort)
+	require.NoError(t, err)
+
+	sidecarDDLCount, err = getSidecarDBDDLQueryCount(ctx, primaryTablet)
 	require.NoError(t, err)
 	// sidecardb should find the desired _vt schema and not apply any new creates or upgrades when the tablet comes up again
 	require.Equal(t, sidecarDDLCount, int64(0))
 }
 
 func TestReparentJournalInfo(t *testing.T) {
-	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-	defer cancel()
-	for _, vttablet := range clusterInstance.Keyspaces[0].Shards[0].Vttablets {
-		length, err := tmClient.ReadReparentJournalInfo(ctx, getTablet(vttablet.GrpcPort))
+	for _, vttablet := range clusterInstance.Keyspace(keyspaceName).Shard(shardName).Tablets() {
+		tablet, err := vttablet.TabletProto(t.Context())
+		require.NoError(t, err)
+
+		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+		length, err := tmClient.ReadReparentJournalInfo(ctx, tablet)
+		cancel()
 		require.NoError(t, err)
 		require.EqualValues(t, 1, length)
 	}

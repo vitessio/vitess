@@ -50,6 +50,8 @@ import (
 )
 
 var (
+	topoFlavor = flag.String("topo-flavor", "etcd2", "choose a topo server from etcd2, zk2 or consul")
+
 	clusterInstance                  *vitesst.Cluster
 	tmClient                         *tmc.Client
 	primaryTabletParams              mysql.ConnParams
@@ -134,6 +136,7 @@ func TestMain(m *testing.M) {
 
 		cluster, err := vitesst.NewCluster(
 			vitesst.WithCells(cell),
+			vitesst.WithTopo(*topoFlavor),
 			vitesst.WithVTOrc("--clusters-to-watch", keyspaceName),
 			// List of users authorized to execute vschema ddl operations
 			vitesst.WithVTGateArgs(

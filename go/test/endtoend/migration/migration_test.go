@@ -177,40 +177,49 @@ func TestMigration(t *testing.T) {
 	err = clusterInstance.Vtctld().ExecuteCommand(ctx, "RebuildKeyspaceGraph", "commerce")
 	require.NoError(t, err)
 
-	_, err = clusterInstance.AddVTGate(ctx)
-	require.NoError(t, err)
-
 	migrate(ctx, t, "product", "commerce", []string{"product"})
 	migrate(ctx, t, "customer", "commerce", []string{"customer"})
 	migrate(ctx, t, "customer", "commerce", []string{"orders"})
 	vttablet := clusterInstance.Keyspace("commerce").Shards()[0].Primary()
+	startStreams(ctx, t, vttablet)
 	waitForVReplicationToCatchup(ctx, t, vttablet, 30*time.Second)
+
+	// vtgate starts once the streams are running, so it waits for the
+	// restarted primary of the commerce keyspace to be healthy.
+	_, err = clusterInstance.AddVTGate(ctx)
+	require.NoError(t, err)
 
 	testcases := []struct {
 		query  string
 		result *sqltypes.Result
 	}{{
 		query: "select * from product",
-		result: sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-			"pid|description",
-			"int64|varbinary"),
+		result: sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"pid|description",
+				"int64|varbinary",
+			),
 			"1|keyboard",
 			"2|monitor",
 		),
 	}, {
 		query: "select * from customer",
-		result: sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-			"cid|name",
-			"int64|varbinary"),
+		result: sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"cid|name",
+				"int64|varbinary",
+			),
 			"1|john",
 			"2|paul",
 			"3|ringo",
 		),
 	}, {
 		query: "select * from orders",
-		result: sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-			"oid|cid|mname|pid|price",
-			"int64|int64|int64|varchar|int64"),
+		result: sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"oid|cid|mname|pid|price",
+				"int64|int64|int64|varchar|int64",
+			),
 			"1|1|1|monoprice|10",
 			"2|1|2|newegg|15",
 		),
@@ -224,8 +233,10 @@ func TestMigration(t *testing.T) {
 	execQuery(t, conn, "use `commerce`")
 	for _, tcase := range testcases {
 		result := execQuery(t, conn, tcase.query)
-		// nil out the fields because they're too detailed.
+		// nil out the fields because they're too detailed, and the status
+		// flags because they carry the session's autocommit bit.
 		result.Fields = nil
+		result.StatusFlags = 0
 		tcase.result.Fields = nil
 		assert.Equal(t, tcase.result, result, tcase.query)
 	}
@@ -251,6 +262,18 @@ func migrate(ctx context.Context, t *testing.T, fromdb, toks string, tables []st
 	require.NoError(t, err)
 }
 
+// startStreams restarts vttablet so that its vreplication engine picks up the
+// rows inserted into _vt.vreplication. The engine loads its streams when it
+// opens, which happens once the tablet becomes the primary, so rows written
+// straight into the table afterwards are only seen by the next open.
+func startStreams(ctx context.Context, t *testing.T, vttablet *vitesst.Tablet) {
+	t.Helper()
+
+	require.NoError(t, vttablet.StopVttablet(ctx))
+	require.NoError(t, vttablet.StartVttablet(ctx))
+	require.NoError(t, vttablet.WaitForTabletType(ctx, 60*time.Second, "primary"))
+}
+
 func startCluster(ctx context.Context, t *testing.T) string {
 	cluster, err := vitesst.NewCluster(
 		vitesst.WithCells(cell),
@@ -263,7 +286,11 @@ func startCluster(ctx context.Context, t *testing.T) string {
 
 	cleanup, err := cluster.Start(ctx)
 	t.Cleanup(func() {
-		if err := cleanup(context.WithoutCancel(ctx)); err != nil {
+		cleanupCtx := context.WithoutCancel(ctx)
+		if t.Failed() {
+			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
+		}
+		if err := cleanup(cleanupCtx); err != nil {
 			t.Logf("cluster teardown: %v", err)
 		}
 	})

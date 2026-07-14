@@ -18,266 +18,121 @@ package clone
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"os"
-	"os/exec"
-	"path"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/mysql/capabilities"
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/utils"
-	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/vitesst"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
-	donorTablet     *cluster.Vttablet
-	recipientTablet *cluster.Vttablet
-	hostname        = "localhost"
-	cell            = "zone1"
+	clusterInstance   *vitesst.Cluster
+	donorTablet       *vitesst.Tablet
+	recipientTablet   *vitesst.Tablet
+	cell              = "zone1"
+	donorKeyspace     = "donor"
+	recipientKeyspace = "recipient"
+	shardName         = "0"
+
+	// cloneArgs give every vttablet the CLONE plugin and the credentials the
+	// recipient connects to the donor with.
+	cloneArgs = []string{
+		"--mysql-clone-enabled",
+		"--db-clone-user", "vt_clone",
+		"--db-clone-password", "",
+		"--db-clone-use-ssl=false",
+	}
+)
+
+const (
+	// cloneCnfPath is the clone plugin configuration the image carries; every
+	// mysqld picks it up through EXTRA_MY_CNF.
+	cloneCnfPath = "/vt/config/mycnf/clone.cnf"
+
+	// initCloneSQL creates the user MySQL CLONE operations connect to the
+	// donor with. BACKUP_ADMIN is required on the donor for clone operations.
+	initCloneSQL = `CREATE USER IF NOT EXISTS 'vt_clone'@'%';
+GRANT BACKUP_ADMIN ON *.* TO 'vt_clone'@'%';`
+
+	// cloneStatusQuery reads the outcome of the last clone on the recipient.
+	cloneStatusQuery = "SELECT STATE, ERROR_NO, ERROR_MESSAGE FROM performance_schema.clone_status ORDER BY ID DESC LIMIT 1"
+
+	// cloneWaitTimeout bounds how long the recipient may take to clone the
+	// donor, restart its mysqld and report completion.
+	cloneWaitTimeout = 5 * time.Minute
 )
 
 func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		// Check MySQL version first - skip entire test suite if not supported
-		versionStr, err := mysqlctl.GetVersionString()
+		ctx := context.Background()
+
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithCells(cell),
+			vitesst.WithoutVTGate(),
+			vitesst.WithTabletEnv(map[string]string{"EXTRA_MY_CNF": cloneCnfPath}),
+			vitesst.WithInitDBSQLExtra(initCloneSQL),
+			vitesst.WithVTTabletArgs(cloneArgs...),
+			// The donor keyspace holds the data the clone transfers.
+			vitesst.WithKeyspace(donorKeyspace).WithShardNames(shardName),
+			// The recipient keyspace has no primary, so its tablet stays an
+			// empty replica: nothing creates a database on its mysqld and
+			// nothing replicates into it before the clone runs.
+			vitesst.WithKeyspace(recipientKeyspace).WithShardNames(shardName).WithoutPrimaryElection(),
+		)
 		if err != nil {
-			log.Info(fmt.Sprintf("Skipping clone tests: unable to get MySQL version: %v", err))
-			return 0
+			fmt.Fprintln(os.Stderr, err)
+			return 1
 		}
-		log.Info("Detected MySQL version: " + versionStr)
 
-		flavor, version, err := mysqlctl.ParseVersionString(versionStr)
+		cleanup, err := cluster.Start(ctx)
 		if err != nil {
-			log.Info(fmt.Sprintf("Skipping clone tests: unable to parse MySQL version: %v", err))
-			return 0
-		}
-		log.Info(fmt.Sprintf("Parsed flavor: %v, version: %d.%d.%d", flavor, version.Major, version.Minor, version.Patch))
-
-		// Clone is only supported on MySQL 8.0.17+
-		if flavor != mysqlctl.FlavorMySQL && flavor != mysqlctl.FlavorPercona {
-			log.Info(fmt.Sprintf("Skipping clone tests: MySQL CLONE requires MySQL or Percona, got flavor: %v", flavor))
-			return 0
-		}
-		if version.Major < 8 || (version.Major == 8 && version.Minor == 0 && version.Patch < 17) {
-			log.Info(fmt.Sprintf("Skipping clone tests: MySQL CLONE requires version 8.0.17+, got: %d.%d.%d", version.Major, version.Minor, version.Patch))
-			return 0
-		}
-
-		// Verify clone capability using the clean version string
-		cleanVersion := fmt.Sprintf("%d.%d.%d", version.Major, version.Minor, version.Patch)
-		capableOf := mysql.ServerVersionCapableOf(cleanVersion)
-		if capableOf == nil {
-			log.Info("Skipping clone tests: unable to get capability checker for version " + cleanVersion)
-			return 0
-		}
-		hasClone, err := capableOf(capabilities.MySQLClonePluginFlavorCapability)
-		if err != nil || !hasClone {
-			log.Info(fmt.Sprintf("Skipping clone tests: MySQL version %s does not support CLONE plugin", cleanVersion))
-			return 0
-		}
-		log.Info(fmt.Sprintf("MySQL version %s supports CLONE plugin, proceeding with tests", cleanVersion))
-
-		// Setup EXTRA_MY_CNF for clone plugin
-		if err := setupExtraMyCnf(); err != nil {
-			log.Error(fmt.Sprintf("Failed to setup extra MySQL config: %v", err))
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-
-		clusterInstance = cluster.NewCluster(cell, hostname)
-		defer clusterInstance.Teardown()
-
-		// Start topo server
-		if err := clusterInstance.StartTopo(); err != nil {
-			log.Error(fmt.Sprintf("Failed to start topo: %v", err))
-			return 1
-		}
-
-		// Initialize cluster with 2 tablets for clone testing
-		if err := initClusterForClone(); err != nil {
-			log.Error(fmt.Sprintf("Failed to init cluster: %v", err))
-			return 1
-		}
-
-		// Clean up MySQL processes explicitly since we don't register them with the cluster
 		defer func() {
-			for _, tablet := range []*cluster.Vttablet{donorTablet, recipientTablet} {
-				if tablet != nil {
-					if err := tablet.MysqlctlProcess.Stop(); err != nil {
-						log.Error(fmt.Sprintf("Failed to stop MySQL for tablet %d: %v", tablet.TabletUID, err))
-					}
-				}
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
 			}
 		}()
+
+		clusterInstance = cluster
+		donorTablet = cluster.Keyspace(donorKeyspace).Shard(shardName).Primary()
+		recipientTablet = cluster.Keyspace(recipientKeyspace).Shard(shardName).Replicas()[0]
 
 		return m.Run()
 	}()
 	os.Exit(exitCode)
 }
 
-// setupExtraMyCnf sets EXTRA_MY_CNF to include clone plugin configuration
-func setupExtraMyCnf() error {
-	cloneCnfPath := path.Join(os.Getenv("VTROOT"), "config", "mycnf", "clone.cnf")
-	if _, err := os.Stat(cloneCnfPath); os.IsNotExist(err) {
-		return fmt.Errorf("clone.cnf not found at %s", cloneCnfPath)
-	}
-
-	// Check if EXTRA_MY_CNF is already set
-	existing := os.Getenv("EXTRA_MY_CNF")
-	if existing != "" {
-		// Append clone.cnf to existing
-		if err := os.Setenv("EXTRA_MY_CNF", existing+":"+cloneCnfPath); err != nil {
-			return fmt.Errorf("failed to set EXTRA_MY_CNF: %v", err)
-		}
-	} else {
-		if err := os.Setenv("EXTRA_MY_CNF", cloneCnfPath); err != nil {
-			return fmt.Errorf("failed to set EXTRA_MY_CNF: %v", err)
-		}
-	}
-
-	log.Info("Set EXTRA_MY_CNF to include clone plugin: " + os.Getenv("EXTRA_MY_CNF"))
-	return nil
-}
-
-// initClusterForClone sets up two MySQL instances for clone testing
-func initClusterForClone() error {
-	// Create a combined init file that includes clone user
-	initDBWithClone, err := createInitDBWithCloneUser()
-	if err != nil {
-		return fmt.Errorf("failed to create init DB with clone user: %v", err)
-	}
-	log.Info("Created combined init file at: " + initDBWithClone)
-
-	var mysqlCtlProcessList []*exec.Cmd
-
-	// Create donor tablet (will be the clone source)
-	donorTablet = &cluster.Vttablet{
-		TabletUID: clusterInstance.GetAndReserveTabletUID(),
-		HTTPPort:  clusterInstance.GetAndReservePort(),
-		GrpcPort:  clusterInstance.GetAndReservePort(),
-		MySQLPort: clusterInstance.GetAndReservePort(),
-		Type:      "primary",
-	}
-	donorTablet.Alias = fmt.Sprintf("%s-%010d", clusterInstance.Cell, donorTablet.TabletUID)
-
-	// Create recipient tablet (will receive cloned data)
-	recipientTablet = &cluster.Vttablet{
-		TabletUID: clusterInstance.GetAndReserveTabletUID(),
-		HTTPPort:  clusterInstance.GetAndReservePort(),
-		GrpcPort:  clusterInstance.GetAndReservePort(),
-		MySQLPort: clusterInstance.GetAndReservePort(),
-		Type:      "replica",
-	}
-	recipientTablet.Alias = fmt.Sprintf("%s-%010d", clusterInstance.Cell, recipientTablet.TabletUID)
-
-	// Start MySQL for both tablets with custom init file that includes clone user
-	for _, tablet := range []*cluster.Vttablet{donorTablet, recipientTablet} {
-		mysqlctlProcess, err := cluster.MysqlCtlProcessInstance(
-			tablet.TabletUID,
-			tablet.MySQLPort,
-			clusterInstance.TmpDirectory,
-		)
-		if err != nil {
-			return fmt.Errorf("failed to create mysqlctl for tablet %d: %v", tablet.TabletUID, err)
-		}
-		// Use our custom init file with clone user
-		mysqlctlProcess.InitDBFile = initDBWithClone
-		tablet.MysqlctlProcess = *mysqlctlProcess
-
-		proc, err := tablet.MysqlctlProcess.StartProcess()
-		if err != nil {
-			return fmt.Errorf("failed to start MySQL for tablet %d: %v", tablet.TabletUID, err)
-		}
-		mysqlCtlProcessList = append(mysqlCtlProcessList, proc)
-	}
-
-	// Wait for MySQL processes to be ready
-	for _, proc := range mysqlCtlProcessList {
-		if err := proc.Wait(); err != nil {
-			return fmt.Errorf("failed waiting for MySQL process: %v", err)
-		}
-	}
-	log.Info("MySQL processes started successfully")
-
-	// Note: We intentionally do NOT register tablets with shards/keyspaces
-	// because we only start MySQL processes (not vttablets). The standard
-	// Teardown would try to stop VttabletProcess which we never started.
-	// Instead, we clean up MySQL explicitly in TestMain.
-
-	return nil
-}
-
-// createInitDBWithCloneUser creates a combined init_db.sql that includes clone user setup.
-// It uses the official {{custom_sql}} marker in init_db.sql to inject the clone user SQL.
-func createInitDBWithCloneUser() (string, error) {
-	initDBPath := path.Join(os.Getenv("VTROOT"), "config", "init_db.sql")
-	initClonePath := path.Join(os.Getenv("VTROOT"), "config", "init_clone.sql")
-
-	initDB, err := os.ReadFile(initDBPath)
-	if err != nil {
-		return "", fmt.Errorf("failed to read init_db.sql: %v", err)
-	}
-
-	initClone, err := os.ReadFile(initClonePath)
-	if err != nil {
-		return "", fmt.Errorf("failed to read init_clone.sql: %v", err)
-	}
-
-	// Use the official {{custom_sql}} marker pattern to inject clone user SQL
-	combined, err := utils.GetInitDBSQL(string(initDB), string(initClone), "")
-	if err != nil {
-		return "", fmt.Errorf("failed to generate combined init SQL: %v", err)
-	}
-
-	// Write to temp file
-	combinedPath := path.Join(clusterInstance.TmpDirectory, "init_db_with_clone.sql")
-	if err := os.WriteFile(combinedPath, []byte(combined), 0o666); err != nil {
-		return "", fmt.Errorf("failed to write combined init SQL: %v", err)
-	}
-
-	return combinedPath, nil
-}
-
-// connectToTablet creates a MySQL connection to the given tablet
-func connectToTablet(ctx context.Context, tablet *cluster.Vttablet) (*mysql.Conn, error) {
-	socketPath := path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("vt_%010d", tablet.TabletUID), "mysql.sock")
-	params := mysql.ConnParams{
-		Uname:      "vt_dba",
-		UnixSocket: socketPath,
-	}
-	return mysql.Connect(ctx, &params)
-}
-
 // stopMysqldSafeForTablet stops mysqld_safe for a tablet without stopping
 // mysqld itself. This is used to exercise the case where MySQL finishes the
 // clone but cannot restart itself.
-func stopMysqldSafeForTablet(tablet *cluster.Vttablet) error {
-	mysqldSafePattern := fmt.Sprintf("mysqld_safe.*vt_%010d", tablet.TabletUID)
+func stopMysqldSafeForTablet(ctx context.Context, tablet *vitesst.Tablet) error {
+	mysqldSafePattern := fmt.Sprintf("mysqld_safe.*vt_%010d", tablet.UID)
 
-	output, err := exec.Command("pkill", "-9", "-f", mysqldSafePattern).CombinedOutput()
-	if exitErr, ok := errors.AsType[*exec.ExitError](err); ok && exitErr.ExitCode() == 1 {
-		// pkill exits 1 when no process matched. That is fine if the local
-		// MySQL install already starts mysqld directly.
-		return nil
+	exitCode, output, err := tablet.Exec(ctx, "pkill", "-9", "-f", mysqldSafePattern)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to stop mysqld_safe for tablet %s", tablet.Alias())
 	}
 
-	if err != nil {
-		return fmt.Errorf(
-			"failed to stop mysqld_safe for tablet %d: %w, output: %s",
-			tablet.TabletUID,
-			err,
+	// pkill exits 1 when no process matched. That is fine if the MySQL install
+	// in the image already starts mysqld directly.
+	if exitCode != 0 && exitCode != 1 {
+		return vterrors.Errorf(
+			vtrpcpb.Code_INTERNAL,
+			"failed to stop mysqld_safe for tablet %s: pkill exited %d, output: %s",
+			tablet.Alias(),
+			exitCode,
 			output,
 		)
 	}
@@ -285,19 +140,30 @@ func stopMysqldSafeForTablet(tablet *cluster.Vttablet) error {
 	return nil
 }
 
-// createMysqldForTablet creates a Mysqld instance for CloneExecutor
-func createMysqldForTablet(tablet *cluster.Vttablet) *mysqlctl.Mysqld {
-	socketPath := path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("vt_%010d", tablet.TabletUID), "mysql.sock")
+// waitForCloneResult polls the recipient until its last clone reaches a final
+// state and returns that row of performance_schema.clone_status. The recipient
+// is unreachable while it restarts its mysqld, so connection failures are part
+// of the wait.
+func waitForCloneResult(ctx context.Context, t *testing.T, tablet *vitesst.Tablet) []sqltypes.Value {
+	t.Helper()
 
-	dbcfgs := dbconfigs.NewTestDBConfigs(mysql.ConnParams{
-		UnixSocket: socketPath,
-		Uname:      "vt_dba",
-	}, mysql.ConnParams{
-		UnixSocket: socketPath,
-		Uname:      "vt_app",
-	}, "")
+	var row []sqltypes.Value
+	require.Eventuallyf(t, func() bool {
+		qr, err := tablet.QueryTabletWithDB(ctx, cloneStatusQuery, "")
+		if err != nil || len(qr.Rows) == 0 {
+			return false
+		}
 
-	return mysqlctl.NewMysqld(dbcfgs)
+		state := qr.Rows[0][0].ToString()
+		if state == "Not Started" || state == "In Progress" {
+			return false
+		}
+
+		row = qr.Rows[0]
+		return true
+	}, cloneWaitTimeout, time.Second, "clone on %s did not finish", tablet.Alias())
+
+	return row
 }
 
 // TestCloneRemote tests MySQL CLONE INSTANCE functionality
@@ -305,111 +171,88 @@ func TestCloneRemote(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 6*time.Minute)
 	defer cancel()
 
-	// Connect to donor and insert test data
-	donorConn, err := connectToTablet(ctx, donorTablet)
-	require.NoError(t, err, "Failed to connect to donor")
-	defer donorConn.Close()
+	t.Cleanup(func() {
+		if t.Failed() {
+			clusterInstance.DumpDiagnostics(context.WithoutCancel(ctx), t.Logf)
+		}
+	})
 
 	// Disable super_read_only so we can create test data
-	_, err = donorConn.ExecuteFetch("SET GLOBAL super_read_only = OFF", 0, false)
+	_, err := donorTablet.QueryTabletWithDB(ctx, "SET GLOBAL super_read_only = OFF", "")
 	require.NoError(t, err, "Failed to disable super_read_only")
-	_, err = donorConn.ExecuteFetch("SET GLOBAL read_only = OFF", 0, false)
+	_, err = donorTablet.QueryTabletWithDB(ctx, "SET GLOBAL read_only = OFF", "")
 	require.NoError(t, err, "Failed to disable read_only")
 
 	// Create test database and table on donor
-	_, err = donorConn.ExecuteFetch("CREATE DATABASE IF NOT EXISTS test_clone", 0, false)
+	_, err = donorTablet.QueryTabletWithDB(ctx, "CREATE DATABASE IF NOT EXISTS test_clone", "")
 	require.NoError(t, err, "Failed to create test database")
 
-	_, err = donorConn.ExecuteFetch(`
+	_, err = donorTablet.QueryTabletWithDB(ctx, `
 		CREATE TABLE IF NOT EXISTS test_clone.clone_test (
 			id INT AUTO_INCREMENT PRIMARY KEY,
 			msg VARCHAR(255)
 		) ENGINE=InnoDB
-	`, 0, false)
+	`, "")
 	require.NoError(t, err, "Failed to create test table")
 
 	// Insert test data
 	for i := 1; i <= 10; i++ {
-		_, err = donorConn.ExecuteFetch(fmt.Sprintf(
-			"INSERT INTO test_clone.clone_test (msg) VALUES ('test message %d')", i), 0, false)
+		_, err = donorTablet.QueryTabletWithDB(ctx, fmt.Sprintf(
+			"INSERT INTO test_clone.clone_test (msg) VALUES ('test message %d')", i,
+		), "")
 		require.NoError(t, err, "Failed to insert test data row %d", i)
 	}
 
 	// Verify donor has the data
-	qr, err := donorConn.ExecuteFetch("SELECT COUNT(*) FROM test_clone.clone_test", 1, false)
+	qr, err := donorTablet.QueryTabletWithDB(ctx, "SELECT COUNT(*) FROM test_clone.clone_test", "")
 	require.NoError(t, err, "Failed to count rows on donor")
 	require.Len(t, qr.Rows, 1)
 	require.Equal(t, "10", qr.Rows[0][0].ToString(), "Donor should have 10 rows")
 
 	// Pre-clone verification: ensure recipient does NOT have the test database
 	// This proves the clone actually transfers data, not that it was already there
-	recipientConnPreClone, err := connectToTablet(ctx, recipientTablet)
-	require.NoError(t, err, "Failed to connect to recipient for pre-clone check")
-	qr, err = recipientConnPreClone.ExecuteFetch("SHOW DATABASES LIKE 'test_clone'", 1, false)
+	qr, err = recipientTablet.QueryTabletWithDB(ctx, "SHOW DATABASES LIKE 'test_clone'", "")
 	require.NoError(t, err, "Failed to check for test_clone database on recipient")
 	require.Len(t, qr.Rows, 0, "Recipient should NOT have test_clone database before clone")
-	recipientConnPreClone.Close()
-
-	// Create Mysqld instance for recipient (needed by CloneExecutor)
-	recipientMysqld := createMysqldForTablet(recipientTablet)
-	defer recipientMysqld.Close()
-
-	// Keep the tablet my.cnf available for the recovery path. The clone stops
-	// mysqld, and this test expects mysqlctl to start mysqld again afterward.
-	recipientMycnf, err := mysqlctl.ReadMycnf(
-		mysqlctl.NewMycnf(uint32(recipientTablet.TabletUID), recipientTablet.MySQLPort),
-		30*time.Second,
-	)
-	require.NoError(t, err, "Failed to read recipient my.cnf")
 
 	// Stop only mysqld_safe. The mysqld process must stay alive for CLONE to
-	// run, but mysqld_safe should not restart it when CLONE finishes.
-	err = stopMysqldSafeForTablet(recipientTablet)
+	// run, but mysqld_safe should not restart it when CLONE finishes. The
+	// recipient's vttablet is then the one that starts mysqld again.
+	err = stopMysqldSafeForTablet(ctx, recipientTablet)
 	require.NoError(t, err, "Failed to stop recipient mysqld_safe")
 
-	// Enable MySQL CLONE for the test
-	mysqlctl.SetMySQLCloneEnabled(true)
-	defer mysqlctl.SetMySQLCloneEnabled(false)
+	// Execute the clone: the recipient's vttablet restores with MySQL CLONE
+	// from the donor tablet instead of from a backup.
+	err = recipientTablet.StopVttablet(ctx)
+	require.NoError(t, err, "Failed to stop recipient vttablet")
 
-	// Execute clone
-	executor := &mysqlctl.CloneExecutor{
-		DonorHost:     "127.0.0.1",
-		DonorPort:     donorTablet.MySQLPort,
-		DonorUser:     "vt_clone",
-		DonorPassword: "",
-		UseSSL:        false,
-	}
-
-	err = executor.ExecuteClone(ctx, recipientMysqld, recipientMycnf, 5*time.Minute)
-	require.NoError(t, err, "Clone operation failed")
-
-	// Connect to recipient and verify data
-	recipientConn, err := connectToTablet(ctx, recipientTablet)
-	require.NoError(t, err, "Failed to connect to recipient after clone")
-	defer recipientConn.Close()
+	restoreArgs := append([]string{
+		"--restore-with-clone",
+		"--clone-from-tablet", donorTablet.Alias(),
+	}, cloneArgs...)
+	err = recipientTablet.StartVttablet(ctx, restoreArgs...)
+	require.NoError(t, err, "Failed to start recipient vttablet with clone restore")
 
 	// Verify clone succeeded at MySQL level using performance_schema.clone_status
-	qr, err = recipientConn.ExecuteFetch(
-		"SELECT STATE, ERROR_NO, ERROR_MESSAGE FROM performance_schema.clone_status ORDER BY ID DESC LIMIT 1", 1, false)
-	require.NoError(t, err, "Failed to query clone_status")
-	require.Len(t, qr.Rows, 1, "Expected one clone_status row")
-	cloneState := qr.Rows[0][0].ToString()
-	cloneErrorNo := qr.Rows[0][1].ToString()
-	cloneErrorMsg := qr.Rows[0][2].ToString()
+	cloneRow := waitForCloneResult(ctx, t, recipientTablet)
+	require.Len(t, cloneRow, 3, "Expected one clone_status row")
+	cloneState := cloneRow[0].ToString()
+	cloneErrorNo := cloneRow[1].ToString()
+	cloneErrorMsg := cloneRow[2].ToString()
 	require.Equal(t, "Completed", cloneState, "Clone state should be Completed")
 	require.Equal(t, "0", cloneErrorNo, "Clone should have no error, got: %s", cloneErrorMsg)
 
 	// Verify recipient has the cloned data
-	qr, err = recipientConn.ExecuteFetch("SELECT COUNT(*) FROM test_clone.clone_test", 1, false)
+	qr, err = recipientTablet.QueryTabletWithDB(ctx, "SELECT COUNT(*) FROM test_clone.clone_test", "")
 	require.NoError(t, err, "Failed to count rows on recipient")
 	require.Len(t, qr.Rows, 1)
 	require.Equal(t, "10", qr.Rows[0][0].ToString(), "Recipient should have 10 rows after clone")
 
 	// Verify actual data content matches
-	donorData, err := donorConn.ExecuteFetch("SELECT id, msg FROM test_clone.clone_test ORDER BY id", 100, false)
+	donorData, err := donorTablet.QueryTabletWithDB(ctx, "SELECT id, msg FROM test_clone.clone_test ORDER BY id", "")
 	require.NoError(t, err)
 
-	recipientData, err := recipientConn.ExecuteFetch("SELECT id, msg FROM test_clone.clone_test ORDER BY id", 100, false)
+	recipientData, err := recipientTablet.QueryTabletWithDB(ctx, "SELECT id, msg FROM test_clone.clone_test ORDER BY id", "")
 	require.NoError(t, err)
 
 	require.Equal(t, len(donorData.Rows), len(recipientData.Rows), "Row counts should match")
@@ -418,6 +261,6 @@ func TestCloneRemote(t *testing.T) {
 		assert.Equal(t, donorData.Rows[i][1].ToString(), recipientData.Rows[i][1].ToString(), "Messages should match at row %d", i)
 	}
 
-	t.Logf("Clone test passed: successfully cloned 10 rows from donor (tablet %d) to recipient (tablet %d)",
-		donorTablet.TabletUID, recipientTablet.TabletUID)
+	t.Logf("Clone test passed: successfully cloned 10 rows from donor (tablet %s) to recipient (tablet %s)",
+		donorTablet.Alias(), recipientTablet.Alias())
 }
