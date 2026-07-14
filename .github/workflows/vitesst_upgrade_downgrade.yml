@@ -1,0 +1,248 @@
+name: Vitesst Upgrade Downgrade Tests
+
+on:
+  push:
+    branches:
+      - "main"
+      - "release-[0-9]+.[0-9]"
+    tags: "**"
+  pull_request:
+    branches: "**"
+
+concurrency:
+  group: format('{0}-{1}', ${{ github.ref }}, 'Vitesst Upgrade Downgrade Tests')
+  cancel-in-progress: true
+
+permissions: read-all
+
+# These tests run the same containerized end-to-end suites with Vitess
+# components built from two versions: the current commit (N) and the previous
+# release (N-1). Each tag group runs twice, once with vtgate at N-1 and the
+# rest at N, then once with vtgate at N and the rest at N-1. Component versions
+# are selected by the framework's per-component image environment variables, so
+# the test packages themselves are never edited.
+
+env:
+  GITHUB_PR_HEAD_SHA: "${{ github.event.pull_request.head.sha }}"
+
+jobs:
+  build-images:
+    name: Build vitesst images
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    outputs:
+      changed: ${{ steps.changes.outputs.end_to_end }}
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+
+      - name: Skip CI
+        run: |
+          if [[ "${{ contains(github.event.pull_request.labels.*.name, 'Skip CI') }}" == "true" ]]; then
+            echo "skipping CI due to the 'Skip CI' label"
+            exit 1
+          fi
+
+      - name: Check out code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: "false"
+
+      - name: Check for changes in relevant files
+        uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
+        id: changes
+        with:
+          token: ""
+          filters: |
+            end_to_end:
+              - 'go/**/*.go'
+              - 'go/vt/sidecardb/**/*.sql'
+              - 'go/test/vitesst/**'
+              - 'Makefile'
+              - 'build.env'
+              - 'go.sum'
+              - 'go.mod'
+              - 'proto/*.proto'
+              - 'tools/**'
+              - 'config/**'
+              - 'docker/utils/install_dependencies.sh'
+              - '.github/workflows/vitesst_upgrade_downgrade.yml'
+
+      - name: Set output with latest release branch
+        id: output-previous-release-ref
+        if: steps.changes.outputs.end_to_end == 'true'
+        run: |
+          previous_release_ref=$(./tools/get_previous_release.sh ${{ github.base_ref }} ${{ github.ref }})
+          echo $previous_release_ref
+          echo "previous_release_ref=${previous_release_ref}" >> $GITHUB_OUTPUT
+
+      - name: Set up Go
+        if: steps.changes.outputs.end_to_end == 'true'
+        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version-file: go.mod
+
+      - name: Set up Docker Buildx
+        if: steps.changes.outputs.end_to_end == 'true'
+        uses: docker/setup-buildx-action@8d2750c60ea24b2b1cbcdd0c2b71dbf0a01b3d55 # v3.12.0
+
+      # The current binaries are cross-compiled on the runner and copied into
+      # the image as its last layer, so the MySQL layers stay cached across
+      # source changes.
+      - name: Build current vitesst image
+        if: steps.changes.outputs.end_to_end == 'true'
+        run: |
+          make cross-install GOOS=linux GOARCH=amd64 PREFIX=${PWD}/.vitesst_install
+          docker buildx bake --load -f go/test/vitesst/docker-bake.hcl mysql84 \
+            --set '*.platform=linux/amd64' \
+            --set '*.cache-from=type=gha,scope=vitesst' \
+            --set '*.cache-to=type=gha,mode=max,scope=vitesst'
+
+      # The previous release predates the vitesst framework and its Dockerfile,
+      # so it is only a source of binaries. It is checked out into a sibling
+      # tree and cross-compiled into the current tree's build context, then the
+      # current tree's bake wraps those binaries in the image.
+      - name: Check out the previous release (${{ steps.output-previous-release-ref.outputs.previous_release_ref }})
+        if: steps.changes.outputs.end_to_end == 'true'
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ steps.output-previous-release-ref.outputs.previous_release_ref }}
+          persist-credentials: "false"
+          path: vitess-previous
+
+      - name: Build previous release vitesst image
+        if: steps.changes.outputs.end_to_end == 'true'
+        run: |
+          make -C vitess-previous cross-install GOOS=linux GOARCH=amd64 PREFIX=${PWD}/.vitesst_install_prev
+          make vitesst-image-ref BIN_DIR=.vitesst_install_prev/bin IMAGE_TAG=vitesst-previous:mysql84
+
+      - name: Save vitesst images
+        if: steps.changes.outputs.end_to_end == 'true'
+        run: |
+          docker save vitesst:mysql84 vitesst-previous:mysql84 | zstd -T0 -3 > vitesst-images.tar.zst
+
+      - name: Upload vitesst images
+        if: steps.changes.outputs.end_to_end == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: vitesst-upgrade-downgrade-images
+          path: vitesst-images.tar.zst
+          retention-days: 1
+
+  upgrade_downgrade_test:
+    name: Run Upgrade Downgrade Test (${{ matrix.name }})
+    needs: build-images
+    if: needs.build-images.outputs.changed == 'true'
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Query Serving (Queries)
+            id: query_serving_queries
+            packages: >-
+              vitess.io/vitess/go/test/endtoend/preparestmt
+              vitess.io/vitess/go/test/endtoend/vtgate/queries/aggregation
+              vitess.io/vitess/go/test/endtoend/vtgate/queries/derived
+              vitess.io/vitess/go/test/endtoend/vtgate/queries/foundrows
+              vitess.io/vitess/go/test/endtoend/vtgate/queries/informationschema
+              vitess.io/vitess/go/test/endtoend/vtgate/queries/misc
+              vitess.io/vitess/go/test/endtoend/vtgate/queries/multi_query
+              vitess.io/vitess/go/test/endtoend/vtgate/queries/no_scatter
+              vitess.io/vitess/go/test/endtoend/vtgate/queries/orderby
+              vitess.io/vitess/go/test/endtoend/vtgate/queries/timeout
+          - name: Query Serving (Queries 2)
+            id: query_serving_queries_2
+            packages: >-
+              vitess.io/vitess/go/test/endtoend/vtgate/queries/dml
+              vitess.io/vitess/go/test/endtoend/vtgate/queries/kill
+              vitess.io/vitess/go/test/endtoend/vtgate/queries/random
+              vitess.io/vitess/go/test/endtoend/vtgate/queries/reference
+              vitess.io/vitess/go/test/endtoend/vtgate/queries/subquery
+              vitess.io/vitess/go/test/endtoend/vtgate/queries/tpch
+              vitess.io/vitess/go/test/endtoend/vtgate/queries/union
+              vitess.io/vitess/go/test/endtoend/vtgate/queries/vexplain
+          - name: Query Serving (Schema)
+            id: query_serving_schema
+            packages: >-
+              vitess.io/vitess/go/test/endtoend/vtgate/schema
+              vitess.io/vitess/go/test/endtoend/vtgate/schematracker/sharded
+              vitess.io/vitess/go/test/endtoend/vtgate/schematracker/sharded_prs
+              vitess.io/vitess/go/test/endtoend/vtgate/schematracker/unsharded
+              vitess.io/vitess/go/test/endtoend/vtgate/schematracker/viewsdisabled
+              vitess.io/vitess/go/test/endtoend/vtgate/vschema
+          - name: Reparent
+            id: reparent
+            packages: >-
+              vitess.io/vitess/go/test/endtoend/reparent/emergencyreparent
+              vitess.io/vitess/go/test/endtoend/reparent/plannedreparent
+          - name: OnlineDDL Flow
+            id: onlineddl_flow
+            packages: >-
+              vitess.io/vitess/go/test/endtoend/onlineddl/flow
+          - name: Backups
+            id: backups
+            packages: >-
+              vitess.io/vitess/go/test/endtoend/backup/vtbackup
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+
+      - name: Check out code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: "false"
+
+      - name: Set up Go
+        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version-file: go.mod
+
+      - name: Download vitesst images
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          name: vitesst-upgrade-downgrade-images
+
+      - name: Load vitesst images
+        run: zstd -dc vitesst-images.tar.zst | docker load
+
+      # A component one version apart returns different error text, so the exact
+      # substring checks are relaxed to plain error assertions before running.
+      - name: Convert ErrorContains checks to Error checks
+        run: |
+          find ./go/test/endtoend -name '*.go' -exec sed -i 's/ErrorContains/Error/g' {} +
+          find ./go/test/endtoend -name '*.go' -exec sed -i 's/EqualError/Error/g' {} +
+
+      # vtgate at N-1, vttablet and vtctld at N.
+      - name: Run ${{ matrix.name }} tests (vtgate=N-1, vttablet=N, vtctld=N)
+        env:
+          VITESST_VTGATE_IMAGE: vitesst-previous:mysql84
+          VITESST_ARTIFACTS: ${{ github.workspace }}/vitesst-artifacts/vtgate-prev
+        run: |
+          go test -count=1 -timeout 40m -v ${{ matrix.packages }}
+
+      # vtgate at N, vttablet, vtctld, mysqlctl and mysqlctld at N-1. mysqlctl
+      # and mysqlctld ship inside the tablet image, so the vttablet override
+      # carries them too.
+      - name: Run ${{ matrix.name }} tests (vtgate=N, vttablet=N-1, vtctld=N-1)
+        env:
+          VITESST_VTTABLET_IMAGE: vitesst-previous:mysql84
+          VITESST_VTCTLD_IMAGE: vitesst-previous:mysql84
+          VITESST_ARTIFACTS: ${{ github.workspace }}/vitesst-artifacts/tablet-prev
+        run: |
+          go test -count=1 -timeout 40m -v ${{ matrix.packages }}
+
+      - name: Upload failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: vitesst-upgrade-downgrade-artifacts-${{ matrix.id }}
+          path: vitesst-artifacts
+          retention-days: 7
