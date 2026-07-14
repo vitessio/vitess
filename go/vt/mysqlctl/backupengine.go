@@ -667,7 +667,7 @@ func validateMySQLVersionUpgradeCompatible(to string, from string, upgradeSafe b
 	// has to be marked as upgrade safe.
 
 	// If something is across different LTS streams and not upgrade safe, we can't use it.
-	if !parsedFrom.isSameRelease(parsedTo) {
+	if !parsedFrom.IsSameRelease(parsedTo) {
 		if !upgradeSafe {
 			if parsedTo.atLeast(parsedFrom) {
 				return fmt.Errorf("running MySQL version %q is newer than backup MySQL version %q which is not safe to upgrade", to, from)
@@ -678,8 +678,8 @@ func validateMySQLVersionUpgradeCompatible(to string, from string, upgradeSafe b
 		// Alright, we're across different LTS streams and the backup is upgrade safe.
 		// We can only upgrade to the next LTS version.
 		for i, ltsVersion := range ltsVersions {
-			if parsedFrom.isSameRelease(ltsVersion) {
-				if i < len(ltsVersions)-1 && parsedTo.isSameRelease(ltsVersions[i+1]) {
+			if parsedFrom.IsSameRelease(ltsVersion) {
+				if i < len(ltsVersions)-1 && parsedTo.IsSameRelease(ltsVersions[i+1]) {
 					return nil
 				}
 				if parsedTo.atLeast(parsedFrom) {

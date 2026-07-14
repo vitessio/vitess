@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -38,6 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/semisyncmonitor"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -95,6 +97,43 @@ func (d *demotePrimaryStallQS) SetDemotePrimaryStalled(val bool) {
 func (d *demotePrimaryStallQS) IsServing() bool {
 	<-d.qsWaitChan
 	return false
+}
+
+func TestPrimaryStatusIncludesServerVersion(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "cell1")
+	tm := newTestTM(t, ts, 1, "ks", "0", nil)
+
+	err := tm.ChangeType(ctx, topodatapb.TabletType_PRIMARY, false)
+	require.NoError(t, err)
+
+	fakeMysqlDaemon := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
+	fakeMysqlDaemon.Version = "Ver 8.0.35"
+
+	status, err := tm.PrimaryStatus(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "Ver 8.0.35", status.ServerVersion)
+}
+
+func TestDemotePrimaryIncludesServerVersion(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "cell1")
+	tm := newTestTM(t, ts, 1, "ks", "0", nil)
+
+	err := tm.ChangeType(ctx, topodatapb.TabletType_PRIMARY, false)
+	require.NoError(t, err)
+
+	fakeMysqlDaemon := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
+	fakeMysqlDaemon.Version = "Ver 8.0.35"
+	fakeMysqlDaemon.DB().SetNeverFail(true)
+
+	tm.SemiSyncMonitor.Open()
+
+	status, err := tm.DemotePrimary(ctx, false)
+	require.NoError(t, err)
+	assert.Equal(t, "Ver 8.0.35", status.ServerVersion)
 }
 
 // TestDemotePrimaryStalled checks that if demote primary takes too long, then we mark it as stalled.
@@ -725,6 +764,215 @@ func TestSetReplicationSourceRecovery(t *testing.T) {
 		require.Equal(t, "mysql-new-primary", fakeMysqlDaemon.CurrentSourceHost)
 		require.EqualValues(t, 3306, fakeMysqlDaemon.CurrentSourcePort)
 		require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
+	})
+}
+
+func TestStopReplicationAndGetStatus_ServerVersion(t *testing.T) {
+	tests := []struct {
+		name            string
+		mode            replicationdatapb.StopReplicationMode
+		replicating     bool
+		ioRunning       bool
+		expectedQueries []string
+		stopIOErr       error
+		stopReplErr     error
+		afterStatusErr  bool
+		expectErr       string
+	}{
+		{
+			name:            "IOTHREADONLY success",
+			mode:            replicationdatapb.StopReplicationMode_IOTHREADONLY,
+			replicating:     true,
+			ioRunning:       true,
+			expectedQueries: []string{"STOP REPLICA IO_THREAD"},
+		},
+		{
+			name:        "IOTHREADONLY with IO thread already stopped",
+			mode:        replicationdatapb.StopReplicationMode_IOTHREADONLY,
+			replicating: false,
+			ioRunning:   false,
+		},
+		{
+			name:        "IOTHREADONLY with stopIOThread failure",
+			mode:        replicationdatapb.StopReplicationMode_IOTHREADONLY,
+			replicating: true,
+			ioRunning:   true,
+			stopIOErr:   errors.New("injected IO stop error"),
+			expectErr:   "stop io thread failed",
+		},
+		{
+			name:            "IOTHREADONLY with after-status failure",
+			mode:            replicationdatapb.StopReplicationMode_IOTHREADONLY,
+			replicating:     true,
+			ioRunning:       true,
+			expectedQueries: []string{"STOP REPLICA IO_THREAD"},
+			afterStatusErr:  true,
+			expectErr:       "acquiring replication status failed",
+		},
+		{
+			name:            "IOANDSQLTHREAD success",
+			mode:            replicationdatapb.StopReplicationMode_IOANDSQLTHREAD,
+			replicating:     true,
+			ioRunning:       true,
+			expectedQueries: []string{"STOP REPLICA"},
+		},
+		{
+			name:        "IOANDSQLTHREAD with replication not healthy",
+			mode:        replicationdatapb.StopReplicationMode_IOANDSQLTHREAD,
+			replicating: false,
+			ioRunning:   false,
+		},
+		{
+			name:            "IOANDSQLTHREAD with after-status failure",
+			mode:            replicationdatapb.StopReplicationMode_IOANDSQLTHREAD,
+			replicating:     true,
+			ioRunning:       true,
+			expectedQueries: []string{"STOP REPLICA"},
+			afterStatusErr:  true,
+			expectErr:       "acquiring replication status failed",
+		},
+		{
+			name:        "IOANDSQLTHREAD with stopReplication failure",
+			mode:        replicationdatapb.StopReplicationMode_IOANDSQLTHREAD,
+			replicating: true,
+			ioRunning:   true,
+			stopReplErr: errors.New("injected stop error"),
+			expectErr:   "stop replication failed",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+			fakeMysqlDaemon.Replicating = tc.replicating
+			fakeMysqlDaemon.IOThreadRunning = tc.ioRunning
+			fakeMysqlDaemon.Version = "Ver 8.0.35"
+
+			if tc.expectedQueries != nil {
+				fakeMysqlDaemon.ExpectedExecuteSuperQueryList = tc.expectedQueries
+			}
+			if tc.stopIOErr != nil {
+				fakeMysqlDaemon.ExecuteSuperQueryErrorMap = map[string]error{
+					"STOP REPLICA IO_THREAD": tc.stopIOErr,
+				}
+			}
+			if tc.stopReplErr != nil {
+				fakeMysqlDaemon.StopReplicationError = tc.stopReplErr
+			}
+			if tc.afterStatusErr {
+				// The callback fires during the stop query execution, which happens
+				// before the second ReplicationStatus call that fetches the "after" state.
+				fakeMysqlDaemon.ExecuteSuperQueryListCallback = func() {
+					fakeMysqlDaemon.ReplicationStatusError = errors.New("injected after-status error")
+				}
+			}
+
+			tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), fakeMysqlDaemon, nil)
+
+			resp, err := tm.StopReplicationAndGetStatus(t.Context(), tc.mode)
+			if tc.expectErr != "" {
+				require.ErrorContains(t, err, tc.expectErr)
+			} else {
+				require.NoError(t, err)
+			}
+
+			require.NotNil(t, resp.Status)
+			require.Equal(t, "Ver 8.0.35", resp.Status.Before.ServerVersion)
+			if resp.Status.After != nil {
+				require.Equal(t, "Ver 8.0.35", resp.Status.After.ServerVersion)
+			}
+		})
+	}
+}
+
+// countingVersionDaemon wraps a FakeMysqlDaemon to count GetVersionString calls
+// and optionally return an error, so we can assert the version cache behavior.
+type countingVersionDaemon struct {
+	*mysqlctl.FakeMysqlDaemon
+	calls   atomic.Int64
+	version string
+	err     error
+}
+
+func (d *countingVersionDaemon) GetVersionString(ctx context.Context) (string, error) {
+	d.calls.Add(1)
+	if d.err != nil {
+		return "", d.err
+	}
+	return d.version, nil
+}
+
+func TestGetMySQLVersionStringCache(t *testing.T) {
+	t.Run("caches within TTL", func(t *testing.T) {
+		daemon := &countingVersionDaemon{
+			FakeMysqlDaemon: newTestMysqlDaemon(t, 1),
+			version:         "Ver 8.0.35",
+		}
+		tm := &TabletManager{MysqlDaemon: daemon}
+
+		for range 5 {
+			require.Equal(t, "Ver 8.0.35", tm.getMySQLVersionString(t.Context()))
+		}
+		require.EqualValues(t, 1, daemon.calls.Load(), "should query mysqld only once within the TTL")
+	})
+
+	t.Run("refetches after TTL", func(t *testing.T) {
+		daemon := &countingVersionDaemon{
+			FakeMysqlDaemon: newTestMysqlDaemon(t, 1),
+			version:         "Ver 8.0.35",
+		}
+		tm := &TabletManager{MysqlDaemon: daemon}
+
+		require.Equal(t, "Ver 8.0.35", tm.getMySQLVersionString(t.Context()))
+		// Expire the cache by backdating the fetch time beyond the TTL.
+		tm.mysqlVersion.mu.Lock()
+		tm.mysqlVersion.fetchedAt = time.Now().Add(-2 * mysqlVersionCacheTTL)
+		tm.mysqlVersion.mu.Unlock()
+
+		require.Equal(t, "Ver 8.0.35", tm.getMySQLVersionString(t.Context()))
+		require.EqualValues(t, 2, daemon.calls.Load(), "should re-query mysqld after the TTL expires")
+	})
+
+	t.Run("error is not cached", func(t *testing.T) {
+		daemon := &countingVersionDaemon{
+			FakeMysqlDaemon: newTestMysqlDaemon(t, 1),
+			err:             errors.New("mysqld down"),
+		}
+		tm := &TabletManager{MysqlDaemon: daemon}
+
+		require.Equal(t, "", tm.getMySQLVersionString(t.Context()))
+		require.Equal(t, "", tm.getMySQLVersionString(t.Context()))
+		require.EqualValues(t, 2, daemon.calls.Load(), "should retry after an error rather than cache the empty result")
+	})
+
+	// Exercised under -race to prove the lock-drop-across-fetch design is sound.
+	// The lock is intentionally released during the fetch, so a cold-cache burst
+	// may fetch more than once; every caller must still observe the same value.
+	t.Run("concurrent callers are race-free and consistent", func(t *testing.T) {
+		daemon := &countingVersionDaemon{
+			FakeMysqlDaemon: newTestMysqlDaemon(t, 1),
+			version:         "Ver 8.0.35",
+		}
+		tm := &TabletManager{MysqlDaemon: daemon}
+
+		const goroutines = 20
+		var wg sync.WaitGroup
+		results := make([]string, goroutines)
+		wg.Add(goroutines)
+		for i := range goroutines {
+			go func() {
+				defer wg.Done()
+				results[i] = tm.getMySQLVersionString(t.Context())
+			}()
+		}
+		wg.Wait()
+
+		for _, r := range results {
+			require.Equal(t, "Ver 8.0.35", r)
+		}
+		// Cold-cache burst may fetch more than once, but far fewer than once per caller.
+		require.LessOrEqual(t, daemon.calls.Load(), int64(goroutines))
+		require.GreaterOrEqual(t, daemon.calls.Load(), int64(1))
 	})
 }
 

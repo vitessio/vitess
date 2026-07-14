@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools/events"
@@ -314,6 +315,7 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 		waitForAllTablets        bool
 		expectedStatusMap        map[string]*replicationdatapb.StopReplicationStatus
 		expectedPrimaryStatusMap map[string]*replicationdatapb.PrimaryStatus
+		expectedMysqlVersions    map[string]mysqlctl.ServerVersion
 		expectedTakingBackup     map[string]bool
 		expectedTabletsReachable []*topodatapb.Tablet
 		shouldErr                bool
@@ -864,6 +866,103 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 				"zone1-0000000100": {
 					Position: "primary-position-100",
 				},
+			},
+			expectedTabletsReachable: []*topodatapb.Tablet{{
+				Type: topodatapb.TabletType_REPLICA,
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			}, {
+				Type: topodatapb.TabletType_REPLICA,
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  101,
+				},
+			}},
+			shouldErr: false,
+		},
+		{
+			name:       "demoted primary reports MySQL version",
+			durability: policy.DurabilityNone,
+			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
+				demotePrimaryResults: map[string]*struct {
+					PrimaryStatus *replicationdatapb.PrimaryStatus
+					Err           error
+				}{
+					"zone1-0000000100": {
+						PrimaryStatus: &replicationdatapb.PrimaryStatus{
+							Position:      "primary-position-100",
+							ServerVersion: "Ver 8.0.35",
+						},
+					},
+				},
+				stopReplicationAndGetStatusResults: map[string]*struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Err        error
+				}{
+					"zone1-0000000100": {
+						Err: vterrors.ToGRPC(vterrors.Wrap(mysql.ErrNotReplica, "before status failed")),
+					},
+					"zone1-0000000101": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{
+								Position:      "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-5",
+								IoState:       int32(replication.ReplicationStateRunning),
+								SqlState:      int32(replication.ReplicationStateRunning),
+								ServerVersion: "Ver 8.0.35",
+							},
+							After: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-9"},
+						},
+					},
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Type: topodatapb.TabletType_PRIMARY,
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Type: topodatapb.TabletType_REPLICA,
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+			},
+			primaryAlias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			},
+			ignoredTablets: sets.New[string](),
+			expectedStatusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"zone1-0000000101": {
+					Before: &replicationdatapb.Status{
+						Position:      "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-5",
+						IoState:       int32(replication.ReplicationStateRunning),
+						SqlState:      int32(replication.ReplicationStateRunning),
+						ServerVersion: "Ver 8.0.35",
+					},
+					After: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-9"},
+				},
+			},
+			expectedTakingBackup: map[string]bool{"zone1-0000000101": false},
+			expectedPrimaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{
+				"zone1-0000000100": {
+					Position:      "primary-position-100",
+					ServerVersion: "Ver 8.0.35",
+				},
+			},
+			expectedMysqlVersions: map[string]mysqlctl.ServerVersion{
+				"zone1-0000000100": {Major: 8, Minor: 0, Patch: 35},
+				"zone1-0000000101": {Major: 8, Minor: 0, Patch: 35},
 			},
 			expectedTabletsReachable: []*topodatapb.Tablet{{
 				Type: topodatapb.TabletType_REPLICA,
@@ -1518,6 +1617,9 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 				assert.True(t, topoproto.IsTabletInList(tablet, tt.expectedTabletsReachable), "TabletsReached[%d] not found - %s", idx, topoproto.TabletAliasString(tablet.Alias))
 			}
 			assert.Equal(t, tt.expectedTakingBackup, res.tabletsBackupState)
+			if tt.expectedMysqlVersions != nil {
+				assert.Equal(t, tt.expectedMysqlVersions, res.mysqlVersions, "mysqlVersions mismatch")
+			}
 		})
 	}
 }

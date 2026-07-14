@@ -230,6 +230,11 @@ type TabletManager struct {
 	_lockTablesTimer      *time.Timer
 	// _isBackupRunning tells us whether there is a backup that is currently running
 	_isBackupRunning bool
+
+	// mysqlVersion caches the MySQL server version string. It has its own lock
+	// (not tm.mutex) so reads never contend with unrelated TabletManager
+	// operations. See getMySQLVersionString for why this is cached.
+	mysqlVersion mysqlVersionCache
 }
 
 // BuildTabletFromInput builds a tablet record from input parameters.
