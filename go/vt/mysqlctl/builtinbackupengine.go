@@ -1821,12 +1821,6 @@ func (be *BuiltinBackupEngine) ShouldStartMySQLAfterRestore() bool {
 	return true
 }
 
-// ShouldSkipVersionCheck returns false: builtin backups are physical and tied to
-// the on-disk data dictionary format, so the MySQL version check always applies.
-func (be *BuiltinBackupEngine) ShouldSkipVersionCheck() bool {
-	return false
-}
-
 func (be *BuiltinBackupEngine) Name() string { return builtinBackupEngineName }
 
 func getPrimaryPosition(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server, keyspace, shard string) (replication.Position, error) {
