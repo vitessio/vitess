@@ -597,34 +597,6 @@
       ],
       "Needs": []
     },
-    "vtgate_transaction_twopc_stress": {
-      "File": "unused.go",
-      "Packages": [
-        "vitess.io/vitess/go/test/endtoend/transaction/twopc/stress"
-      ],
-      "Args": [],
-      "Command": [],
-      "Manual": false,
-      "Shard": "vtgate_transaction",
-      "Tags": [],
-      "Needs": [],
-      "BuildTag": "debug2PC"
-    },
-    "vtgate_transaction_twopc_fuzz": {
-      "File": "unused.go",
-      "Packages": [
-        "vitess.io/vitess/go/test/endtoend/transaction/twopc/fuzz"
-      ],
-      "Args": [],
-      "Command": [],
-      "Manual": false,
-      "Shard": "vtgate_transaction",
-      "Tags": [],
-      "Needs": [
-        "larger-runner"
-      ],
-      "BuildTag": "debug2PC"
-    },
     "vtgate_foreignkey": {
       "File": "unused.go",
       "Packages": [

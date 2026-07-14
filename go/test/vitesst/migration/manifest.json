@@ -1660,7 +1660,7 @@
     "vtctldclient-exec",
     "schema-tracking"
    ],
-   "ci_shard": "default-3",
+   "ci_shard": "default-4",
    "dropped_tests": [],
    "honesty": "pass",
    "lifecycle": "shared-cluster",
@@ -1724,7 +1724,7 @@
     "grpc-api-host",
     "extra-args"
    ],
-   "ci_shard": "default-2",
+   "ci_shard": "default-3",
    "dropped_tests": [],
    "honesty": "pass",
    "lifecycle": "shared-cluster",
@@ -2110,7 +2110,7 @@
     "vtctldclient-exec",
     "tablet-process-control"
    ],
-   "ci_shard": "default-2",
+   "ci_shard": "default-3",
    "dropped_tests": [],
    "honesty": "pass",
    "lifecycle": "shared-cluster",
@@ -2359,7 +2359,7 @@
     "vtgate-restart",
     "extra-args"
    ],
-   "ci_shard": "default-3",
+   "ci_shard": "default-4",
    "dropped_tests": [],
    "honesty": "pass",
    "lifecycle": "shared-cluster",
@@ -2393,7 +2393,7 @@
     "vschema",
     "extra-args"
    ],
-   "ci_shard": "default-3",
+   "ci_shard": "default-4",
    "dropped_tests": [],
    "honesty": "pass",
    "lifecycle": "shared-cluster",
@@ -2596,7 +2596,7 @@
     "multi-keyspace",
     "add-tablet-live-shard"
    ],
-   "ci_shard": null,
+   "ci_shard": "default-1",
    "dropped_tests": [],
    "honesty": null,
    "lifecycle": "shared-cluster",
@@ -2616,9 +2616,9 @@
     "TestDisruptions"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/transaction/twopc/stress",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 235,
+   "status": "verified",
+   "verified_at_sha": "ac63528e27",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/transaction/twopc/stress/",
    "wave": 5
   },
@@ -3449,7 +3449,7 @@
     "bootstrap",
     "vtadmin-api (new capability: vtadmin process + HTTP API)"
    ],
-   "ci_shard": "default-3",
+   "ci_shard": "default-4",
    "dropped_tests": [],
    "honesty": "pass",
    "lifecycle": "shared-cluster",
@@ -3535,7 +3535,7 @@
    "capabilities": [
     "vtctldclient-exec"
    ],
-   "ci_shard": "default-3",
+   "ci_shard": "default-4",
    "dropped_tests": [],
    "honesty": "pass",
    "lifecycle": "mixed",
@@ -3704,7 +3704,7 @@
     "vtgate-restart",
     "tablet-process-control"
    ],
-   "ci_shard": "default-2",
+   "ci_shard": "default-3",
    "dropped_tests": [],
    "honesty": "pass",
    "lifecycle": "cluster-per-test",
@@ -3739,7 +3739,7 @@
     "vschema",
     "tablet-metrics"
    ],
-   "ci_shard": "default-1",
+   "ci_shard": "default-3",
    "dropped_tests": [],
    "honesty": "pass",
    "lifecycle": "shared-cluster",
@@ -4045,7 +4045,7 @@
     "grpc-api-host",
     "extra-args"
    ],
-   "ci_shard": "default-3",
+   "ci_shard": "default-4",
    "dropped_tests": [],
    "honesty": "pass",
    "lifecycle": "shared-cluster",
@@ -4079,7 +4079,7 @@
     "extra-args",
     "vschema"
    ],
-   "ci_shard": "default-3",
+   "ci_shard": "default-4",
    "dropped_tests": [],
    "honesty": "pass",
    "lifecycle": "shared-cluster",
@@ -4154,7 +4154,7 @@
     "extra-args",
     "bootstrap"
    ],
-   "ci_shard": "default-3",
+   "ci_shard": "default-4",
    "dropped_tests": [],
    "honesty": "pass",
    "lifecycle": "shared-cluster",
@@ -4193,7 +4193,7 @@
     "vschema",
     "extra-args"
    ],
-   "ci_shard": "default-3",
+   "ci_shard": "default-4",
    "dropped_tests": [],
    "honesty": "pass",
    "lifecycle": "shared-cluster",
@@ -4794,7 +4794,7 @@
     "vschema",
     "extra-args"
    ],
-   "ci_shard": "default-3",
+   "ci_shard": "default-4",
    "dropped_tests": [],
    "honesty": "pass",
    "lifecycle": "shared-cluster",
@@ -4824,7 +4824,7 @@
   "vitess.io/vitess/go/test/endtoend/vtgate/queries/normalize": {
    "blockers": [],
    "capabilities": [],
-   "ci_shard": "default-3",
+   "ci_shard": "default-4",
    "dropped_tests": [],
    "honesty": null,
    "lifecycle": null,
@@ -5084,7 +5084,7 @@
     "vtgate-restart",
     "querylog"
    ],
-   "ci_shard": "default-2",
+   "ci_shard": "default-3",
    "dropped_tests": [],
    "honesty": "pass",
    "lifecycle": "shared-cluster",
@@ -5231,7 +5231,7 @@
     "vschema",
     "vtctldclient-exec"
    ],
-   "ci_shard": "default-3",
+   "ci_shard": "default-4",
    "dropped_tests": [],
    "honesty": "pass",
    "lifecycle": "shared-cluster",
@@ -5301,7 +5301,7 @@
     "extra-args",
     "tablet-process-control"
    ],
-   "ci_shard": "default-2",
+   "ci_shard": "default-3",
    "dropped_tests": [],
    "honesty": "pass",
    "lifecycle": "shared-cluster",
@@ -5905,7 +5905,7 @@
     "sharded",
     "vschema"
    ],
-   "ci_shard": "default-3",
+   "ci_shard": "default-4",
    "dropped_tests": [],
    "honesty": "pass",
    "lifecycle": "shared-cluster",
@@ -6183,7 +6183,7 @@
     "sharded",
     "vschema"
    ],
-   "ci_shard": "default-3",
+   "ci_shard": "default-2",
    "dropped_tests": [],
    "honesty": "pass",
    "lifecycle": "shared-cluster",
@@ -6315,7 +6315,7 @@
     "semi-sync",
     "vtgate-restart"
    ],
-   "ci_shard": "default-1",
+   "ci_shard": "default-2",
    "dropped_tests": [],
    "honesty": "pass",
    "lifecycle": "mixed",

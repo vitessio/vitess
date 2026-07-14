@@ -21,25 +21,24 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"os"
-	"path"
-	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/syscallutil"
-	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/onlineddl"
 	twopcutil "vitess.io/vitess/go/test/endtoend/transaction/twopc/utils"
 	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/test/vitesst"
 	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 // idVals are the primary key values to use while creating insert queries that ensures all the three shards get an insert.
@@ -123,10 +122,10 @@ func TestSettings(t *testing.T) {
 			// cleanup all the old data.
 			conn, closer := start(t)
 			defer closer()
-			defer twopcutil.DeleteFile(twopcutil.DebugDelayCommitShard)
-			defer twopcutil.DeleteFile(twopcutil.DebugDelayCommitTime)
+			defer twopcutil.DeleteFileFromTablets(t, clusterInstance, keyspaceName, twopcutil.DebugDelayCommitShard)
+			defer twopcutil.DeleteFileFromTablets(t, clusterInstance, keyspaceName, twopcutil.DebugDelayCommitTime)
 			var wg sync.WaitGroup
-			twopcutil.RunMultiShardCommitWithDelay(t, conn, tt.commitDelayTime, &wg, tt.queries)
+			twopcutil.RunMultiShardCommitWithDelayOnTablets(t, clusterInstance, keyspaceName, conn, tt.commitDelayTime, &wg, tt.queries)
 			// Allow enough time for the commit to have started.
 			time.Sleep(1 * time.Second)
 			// Run the vttablet restart to ensure that the transaction needs to be redone.
@@ -212,10 +211,10 @@ func TestDisruptions(t *testing.T) {
 			// cleanup all the old data.
 			conn, closer := start(t)
 			defer closer()
-			defer twopcutil.DeleteFile(twopcutil.DebugDelayCommitShard)
-			defer twopcutil.DeleteFile(twopcutil.DebugDelayCommitTime)
+			defer twopcutil.DeleteFileFromTablets(t, clusterInstance, keyspaceName, twopcutil.DebugDelayCommitShard)
+			defer twopcutil.DeleteFileFromTablets(t, clusterInstance, keyspaceName, twopcutil.DebugDelayCommitTime)
 			var wg sync.WaitGroup
-			twopcutil.RunMultiShardCommitWithDelay(t, conn, tt.commitDelayTime, &wg, append([]string{"begin"}, getMultiShardInsertQueries()...))
+			twopcutil.RunMultiShardCommitWithDelayOnTablets(t, clusterInstance, keyspaceName, conn, tt.commitDelayTime, &wg, append([]string{"begin"}, getMultiShardInsertQueries()...))
 			// Allow enough time for the commit to have started.
 			time.Sleep(1 * time.Second)
 			writeCtx, writeCancel := context.WithCancel(t.Context())
@@ -257,20 +256,20 @@ func getMultiShardInsertQueries() []string {
 }
 
 func mergeShards(t *testing.T) error {
-	return twopcutil.RunReshard(t, clusterInstance, "TestDisruptions", keyspaceName, "40-80,80-", "40-")
+	return twopcutil.RunReshardWorkflow(t, clusterInstance, "TestDisruptions", keyspaceName, "40-80,80-", "40-")
 }
 
 func splitShardsBack(t *testing.T) {
 	t.Helper()
-	twopcutil.AddShards(t, clusterInstance, keyspaceName, []string{"40-80", "80-"})
-	err := twopcutil.RunReshard(t, clusterInstance, "TestDisruptions", keyspaceName, "40-", "40-80,80-")
+	twopcutil.AddShardsToKeyspace(t, clusterInstance, keyspaceName, []string{"40-80", "80-"})
+	err := twopcutil.RunReshardWorkflow(t, clusterInstance, "TestDisruptions", keyspaceName, "40-", "40-80,80-")
 	require.NoError(t, err)
 }
 
 // createShard creates a new shard in the keyspace that we'll use for Resharding.
 func createShard(t *testing.T) {
 	t.Helper()
-	twopcutil.AddShards(t, clusterInstance, keyspaceName, []string{"40-"})
+	twopcutil.AddShardsToKeyspace(t, clusterInstance, keyspaceName, []string{"40-"})
 }
 
 // threadToWrite is a helper function to write to the database in a loop.
@@ -292,10 +291,10 @@ func threadToWrite(t *testing.T, ctx context.Context, id int) {
 
 // reparentToFirstTablet reparents all the shards to first tablet being the primary.
 func reparentToFirstTablet(t *testing.T) {
-	ks := clusterInstance.Keyspaces[0]
-	for _, shard := range ks.Shards {
-		primary := shard.Vttablets[0]
-		err := clusterInstance.VtctldClientProcess.PlannedReparentShard(keyspaceName, shard.Name, primary.Alias)
+	ctx := t.Context()
+	for _, shard := range clusterInstance.Keyspace(keyspaceName).Shards() {
+		primary := shard.Tablets()[0]
+		err := clusterInstance.Vtctld().ExecuteCommand(ctx, "PlannedReparentShard", shard.Ref(), "--new-primary", primary.Alias())
 		require.NoError(t, err)
 	}
 }
@@ -306,100 +305,108 @@ Cluster Level Disruptions for the fuzzer
 
 // prsShard3 runs a PRS in shard 3 of the keyspace. It promotes the second tablet to be the new primary.
 func prsShard3(t *testing.T) error {
-	shard := clusterInstance.Keyspaces[0].Shards[2]
-	newPrimary := shard.Vttablets[1]
-	return clusterInstance.VtctldClientProcess.PlannedReparentShard(keyspaceName, shard.Name, newPrimary.Alias)
+	shard := clusterInstance.Keyspace(keyspaceName).Shards()[2]
+	newPrimary := shard.Tablets()[1]
+	return clusterInstance.Vtctld().ExecuteCommand(t.Context(), "PlannedReparentShard", shard.Ref(), "--new-primary", newPrimary.Alias())
 }
 
 // ersShard3 runs a ERS in shard 3 of the keyspace. It promotes the second tablet to be the new primary.
 func ersShard3(t *testing.T) error {
-	shard := clusterInstance.Keyspaces[0].Shards[2]
-	newPrimary := shard.Vttablets[1]
-	_, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("EmergencyReparentShard", fmt.Sprintf("%s/%s", keyspaceName, shard.Name), "--new-primary", newPrimary.Alias)
+	shard := clusterInstance.Keyspace(keyspaceName).Shards()[2]
+	newPrimary := shard.Tablets()[1]
+	_, err := clusterInstance.Vtctld().ExecuteCommandWithOutput(t.Context(), "EmergencyReparentShard", fmt.Sprintf("%s/%s", keyspaceName, shard.Name), "--new-primary", newPrimary.Alias())
 	return err
 }
 
 // vttabletRestartShard3 restarts the first vttablet of the third shard.
 func vttabletRestartShard3(t *testing.T) error {
-	shard := clusterInstance.Keyspaces[0].Shards[2]
-	tablet := shard.Vttablets[0]
-	_ = tablet.VttabletProcess.TearDownWithTimeout(2 * time.Second)
-	tablet.VttabletProcess.ServingStatus = "SERVING"
-	return tablet.VttabletProcess.Setup()
+	ctx := t.Context()
+	shard := clusterInstance.Keyspace(keyspaceName).Shards()[2]
+	tablet := shard.Tablets()[0]
+	_ = tablet.StopVttablet(ctx)
+	return tablet.StartVttablet(ctx)
 }
 
 // mysqlRestartShard3 restarts MySQL on the first tablet of the third shard.
 func mysqlRestartShard3(t *testing.T) error {
-	shard := clusterInstance.Keyspaces[0].Shards[2]
-	vttablets := shard.Vttablets
+	ctx := t.Context()
+	shard := clusterInstance.Keyspace(keyspaceName).Shards()[2]
+	vttablets := shard.Tablets()
 	tablet := vttablets[0]
-	log.Error(fmt.Sprintf("Restarting MySQL for - %v/%v tablet - %v", keyspaceName, shard.Name, tablet.Alias))
-	pidFile := path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/mysql.pid", tablet.TabletUID))
-	pidBytes, err := os.ReadFile(pidFile)
-	if err != nil {
-		// We can't read the file which means the PID file does not exist
-		// The server must have stopped
+	log.Error(fmt.Sprintf("Restarting MySQL for - %v/%v tablet - %v", keyspaceName, shard.Name, tablet.Alias()))
+	if err := tablet.KillMySQL(ctx); err != nil {
 		return err
 	}
-	pid, err := strconv.Atoi(strings.TrimSpace(string(pidBytes)))
-	if err != nil {
-		return err
-	}
-	return syscallutil.Kill(pid, syscall.SIGKILL)
+	return tablet.StartMySQL(ctx)
 }
 
 // moveTablesCancel runs a move tables command that we cancel in the end.
 func moveTablesCancel(t *testing.T) error {
+	ctx := t.Context()
 	workflow := "TestDisruptions"
-	mtw := cluster.NewMoveTables(t, clusterInstance, workflow, unshardedKeyspaceName, keyspaceName, "twopc_t1", []string{topodatapb.TabletType_REPLICA.String()})
+	moveTables := func(args ...string) (string, error) {
+		cmd := append([]string{"MoveTables", "--workflow=" + workflow, "--target-keyspace=" + unshardedKeyspaceName}, args...)
+		return clusterInstance.Vtctld().ExecuteCommandWithOutput(ctx, cmd...)
+	}
 	// Initiate MoveTables for twopc_t1.
-	output, err := mtw.Create()
+	output, err := moveTables("Create", "--source-keyspace="+keyspaceName, "--tables=twopc_t1",
+		"--tablet-types", topodatapb.TabletType_REPLICA.String())
 	require.NoError(t, err, output)
 	// Wait for vreplication to catchup. Should be very fast since we don't have a lot of rows.
-	mtw.WaitForVreplCatchup(10 * time.Second)
+	twopcutil.WaitForVreplCatchup(t, clusterInstance.Keyspace(unshardedKeyspaceName).Shards(), workflow, 10*time.Second)
 	// SwitchTraffic
-	output, err = mtw.SwitchReadsAndWrites()
+	output, err = moveTables("SwitchTraffic")
 	require.NoError(t, err, output)
-	output, err = mtw.ReverseReadsAndWrites()
+	output, err = moveTables("ReverseTraffic")
 	require.NoError(t, err, output)
-	output, err = mtw.Cancel()
+	output, err = moveTables("Cancel")
 	require.NoError(t, err, output)
 	return nil
 }
 
 // moveTablesComplete runs a move tables command that we complete in the end.
 func moveTablesComplete(t *testing.T) error {
+	ctx := t.Context()
 	workflow := "TestDisruptions"
-	mtw := cluster.NewMoveTables(t, clusterInstance, workflow, unshardedKeyspaceName, keyspaceName, "twopc_t1", []string{topodatapb.TabletType_REPLICA.String()})
+	moveTables := func(args ...string) (string, error) {
+		cmd := append([]string{"MoveTables", "--workflow=" + workflow, "--target-keyspace=" + unshardedKeyspaceName}, args...)
+		return clusterInstance.Vtctld().ExecuteCommandWithOutput(ctx, cmd...)
+	}
 	// Initiate MoveTables for twopc_t1.
-	output, err := mtw.Create()
+	output, err := moveTables("Create", "--source-keyspace="+keyspaceName, "--tables=twopc_t1",
+		"--tablet-types", topodatapb.TabletType_REPLICA.String())
 	require.NoError(t, err, output)
 	// Wait for vreplication to catchup. Should be very fast since we don't have a lot of rows.
-	mtw.WaitForVreplCatchup(10 * time.Second)
+	twopcutil.WaitForVreplCatchup(t, clusterInstance.Keyspace(unshardedKeyspaceName).Shards(), workflow, 10*time.Second)
 	// SwitchTraffic
-	output, err = mtw.SwitchReadsAndWrites()
+	output, err = moveTables("SwitchTraffic")
 	require.NoError(t, err, output)
-	output, err = mtw.Complete()
+	output, err = moveTables("Complete")
 	require.NoError(t, err, output)
 	return nil
 }
 
 // moveTablesReset moves the table back from the unsharded keyspace to sharded
 func moveTablesReset(t *testing.T) {
+	ctx := t.Context()
 	// We apply the vschema again because previous move tables would have removed the entry for `twopc_t1`.
-	err := clusterInstance.VtctldClientProcess.ApplyVSchema(keyspaceName, VSchema)
+	err := clusterInstance.Vtctld().ExecuteCommand(ctx, "ApplyVSchema", "--vschema", VSchema, keyspaceName)
 	require.NoError(t, err)
 	workflow := "TestDisruptions"
-	mtw := cluster.NewMoveTables(t, clusterInstance, workflow, keyspaceName, unshardedKeyspaceName, "twopc_t1", []string{topodatapb.TabletType_REPLICA.String()})
+	moveTables := func(args ...string) (string, error) {
+		cmd := append([]string{"MoveTables", "--workflow=" + workflow, "--target-keyspace=" + keyspaceName}, args...)
+		return clusterInstance.Vtctld().ExecuteCommandWithOutput(ctx, cmd...)
+	}
 	// Initiate MoveTables for twopc_t1.
-	output, err := mtw.Create()
+	output, err := moveTables("Create", "--source-keyspace="+unshardedKeyspaceName, "--tables=twopc_t1",
+		"--tablet-types", topodatapb.TabletType_REPLICA.String())
 	require.NoError(t, err, output)
 	// Wait for vreplication to catchup. Should be very fast since we don't have a lot of rows.
-	mtw.WaitForVreplCatchup(10 * time.Second)
+	twopcutil.WaitForVreplCatchup(t, clusterInstance.Keyspace(keyspaceName).Shards(), workflow, 10*time.Second)
 	// SwitchTraffic
-	output, err = mtw.SwitchReadsAndWrites()
+	output, err = moveTables("SwitchTraffic")
 	require.NoError(t, err, output)
-	output, err = mtw.Complete()
+	output, err = moveTables("Complete")
 	require.NoError(t, err, output)
 }
 
@@ -414,15 +421,44 @@ var count = 0
 
 // onlineDDL runs a DDL statement.
 func onlineDDL(t *testing.T) error {
-	output, err := clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(keyspaceName, orderedDDL[count%len(orderedDDL)], cluster.ApplySchemaParams{
-		DDLStrategy: "vitess --force-cut-over-after=1ms",
-	})
+	output, err := clusterInstance.Vtctld().ExecuteCommandWithOutput(t.Context(), "ApplySchema",
+		"--sql", orderedDDL[count%len(orderedDDL)],
+		"--ddl-strategy", "vitess --force-cut-over-after=1ms",
+		keyspaceName)
 	require.NoError(t, err)
 	count++
 	fmt.Println("uuid: ", output)
-	status := twopcutil.WaitForMigrationStatus(t, &vtParams, keyspaceName, clusterInstance.Keyspaces[0].Shards,
+	shards := clusterInstance.Keyspace(keyspaceName).Shards()
+	status := twopcutil.WaitForMigrationStatusOnShards(t, &vtParams, keyspaceName, shards,
 		strings.TrimSpace(output), 2*time.Minute, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
-	onlineddl.CheckMigrationStatus(t, &vtParams, clusterInstance.Keyspaces[0].Shards, strings.TrimSpace(output), status)
+	checkMigrationStatus(t, &vtParams, shards, strings.TrimSpace(output), status)
 	require.Equal(t, schema.OnlineDDLStatusComplete, status)
 	return nil
+}
+
+// checkMigrationStatus verifies that the migration indicated by given UUID has the given expected status
+func checkMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []*vitesst.Shard, uuid string, expectStatuses ...schema.OnlineDDLStatus) bool {
+	ksName := shards[0].Keyspace.Name
+	query, err := sqlparser.ParseAndBind(fmt.Sprintf("show vitess_migrations from %s like %%a", ksName),
+		sqltypes.StringBindVariable(uuid),
+	)
+	require.NoError(t, err)
+
+	r := onlineddl.VtgateExecQuery(t, vtParams, query, "")
+	fmt.Printf("# output for `%s`:\n", query)
+	onlineddl.PrintQueryResult(os.Stdout, r)
+
+	count := 0
+	for _, row := range r.Named().Rows {
+		if row["migration_uuid"].ToString() != uuid {
+			continue
+		}
+		for _, expectStatus := range expectStatuses {
+			if row["migration_status"].ToString() == string(expectStatus) {
+				count++
+				break
+			}
+		}
+	}
+	return assert.Equal(t, len(shards), count)
 }

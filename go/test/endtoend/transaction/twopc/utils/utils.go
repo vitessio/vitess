@@ -29,12 +29,14 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/test/vitesst"
 	"vitess.io/vitess/go/vt/log"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/schema"
 )
 
@@ -196,9 +198,26 @@ func WaitForResults(t *testing.T, vtParams *mysql.ConnParams, query string, resu
 }
 
 func WaitForMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, ks string, shards []cluster.Shard, uuid string, timeout time.Duration, expectStatuses ...schema.OnlineDDLStatus) schema.OnlineDDLStatus {
+	names := make([]string, 0, len(shards))
+	for _, shard := range shards {
+		names = append(names, shard.Name)
+	}
+	return waitForMigrationStatus(t, vtParams, ks, names, uuid, timeout, expectStatuses...)
+}
+
+// WaitForMigrationStatusOnShards waits for the migration to reach one of the expected statuses on all the given shards.
+func WaitForMigrationStatusOnShards(t *testing.T, vtParams *mysql.ConnParams, ks string, shards []*vitesst.Shard, uuid string, timeout time.Duration, expectStatuses ...schema.OnlineDDLStatus) schema.OnlineDDLStatus {
+	names := make([]string, 0, len(shards))
+	for _, shard := range shards {
+		names = append(names, shard.Name)
+	}
+	return waitForMigrationStatus(t, vtParams, ks, names, uuid, timeout, expectStatuses...)
+}
+
+func waitForMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, ks string, shards []string, uuid string, timeout time.Duration, expectStatuses ...schema.OnlineDDLStatus) schema.OnlineDDLStatus {
 	shardNames := map[string]bool{}
 	for _, shard := range shards {
-		shardNames[shard.Name] = true
+		shardNames[shard] = true
 	}
 	query := fmt.Sprintf("show vitess_migrations from %s like '%s'", ks, uuid)
 
@@ -295,6 +314,121 @@ func AddShards(t *testing.T, clusterInstance *cluster.LocalProcessCluster, keysp
 			err = vttablet.VttabletProcess.WaitForTabletStatuses([]string{"SERVING"})
 			require.NoError(t, err)
 		}
+	}
+}
+
+// RunReshardWorkflow reshards the keyspace from sourceShards to targetShards and removes the source shards
+// once the workflow completes. The target shards must already exist.
+func RunReshardWorkflow(t *testing.T, clusterInstance *vitesst.Cluster, workflowName, keyspaceName, sourceShards, targetShards string) error {
+	ctx := t.Context()
+	reshard := func(args ...string) (string, error) {
+		cmd := append([]string{"Reshard", "--workflow=" + workflowName, "--target-keyspace=" + keyspaceName}, args...)
+		return clusterInstance.Vtctld().ExecuteCommandWithOutput(ctx, cmd...)
+	}
+
+	// Initiate Reshard.
+	output, err := reshard("Create", "--source-shards="+sourceShards, "--target-shards="+targetShards)
+	require.NoError(t, err, output)
+	// Wait for vreplication to catchup. Should be very fast since we don't have a lot of rows.
+	WaitForVreplCatchup(t, keyspaceShards(clusterInstance, keyspaceName, strings.Split(targetShards, ",")), workflowName, 10*time.Second)
+	// SwitchTraffic
+	output, err = reshard("SwitchTraffic")
+	require.NoError(t, err, output)
+	output, err = reshard("Complete")
+	require.NoError(t, err, output)
+
+	// When Reshard completes, it has already deleted the source shards from the topo server.
+	// We just need to shutdown the vttablets, and remove them from the cluster.
+	removeShardsFromKeyspace(t, clusterInstance, keyspaceName, sourceShards)
+	return nil
+}
+
+// removeShardsFromKeyspace terminates the tablets of the given shards and drops the shards from the cluster.
+func removeShardsFromKeyspace(t *testing.T, clusterInstance *vitesst.Cluster, keyspaceName string, shards string) {
+	ctx := t.Context()
+	for shardName := range strings.SplitSeq(shards, ",") {
+		err := clusterInstance.RemoveShard(ctx, keyspaceName, shardName)
+		require.NoError(t, err)
+	}
+}
+
+// AddShardsToKeyspace starts the given shards on a running keyspace, each with a primary and two replicas,
+// and waits for all their tablets to serve.
+func AddShardsToKeyspace(t *testing.T, clusterInstance *vitesst.Cluster, keyspaceName string, shardNames []string) {
+	t.Helper()
+	ctx := t.Context()
+	for _, shardName := range shardNames {
+		shard, err := clusterInstance.AddShard(ctx, keyspaceName, shardName, 2, 0)
+		require.NoError(t, err)
+		for _, tablet := range shard.Tablets() {
+			err = tablet.WaitForTabletStatus(ctx, 2*time.Minute, "SERVING")
+			require.NoError(t, err)
+		}
+	}
+}
+
+// keyspaceShards returns the runtime handles of the named shards of a keyspace.
+func keyspaceShards(clusterInstance *vitesst.Cluster, keyspaceName string, shardNames []string) []*vitesst.Shard {
+	shards := make([]*vitesst.Shard, 0, len(shardNames))
+	for _, shardName := range shardNames {
+		if shard := clusterInstance.Keyspace(keyspaceName).Shard(shardName); shard != nil {
+			shards = append(shards, shard)
+		}
+	}
+	return shards
+}
+
+// WaitForVreplCatchup waits for a vreplication workflow to catch up on the primary of every given shard.
+func WaitForVreplCatchup(t *testing.T, shards []*vitesst.Shard, workflow string, timeToWait time.Duration) {
+	for _, shard := range shards {
+		primary := primaryTablet(t, shard)
+		waitForVReplicationToCatchup(t, primary, workflow, "vt_"+primary.Keyspace, timeToWait)
+	}
+}
+
+// primaryTablet returns the shard's current primary tablet as recorded in the topology server.
+func primaryTablet(t *testing.T, shard *vitesst.Shard) *vitesst.Tablet {
+	ctx := t.Context()
+	for _, tablet := range shard.Tablets() {
+		record, err := tablet.TabletProto(ctx)
+		if err != nil {
+			continue
+		}
+		if record.Type == topodatapb.TabletType_PRIMARY {
+			return tablet
+		}
+	}
+	require.FailNowf(t, "no primary tablet", "shard %s has no primary tablet", shard.Ref())
+	return nil
+}
+
+// waitForVReplicationToCatchup waits until the workflow has copied all of its rows on the given tablet.
+func waitForVReplicationToCatchup(t *testing.T, tablet *vitesst.Tablet, workflow, database string, duration time.Duration) {
+	queries := [3]string{
+		fmt.Sprintf(`select count(*) from %s.vreplication where workflow = "%s" and db_name = "%s" and pos = ''`,
+			sidecar.DefaultName, workflow, database),
+		fmt.Sprintf("select count(*) from information_schema.tables where table_schema='%s' and table_name='copy_state' limit 1",
+			sidecar.DefaultName),
+		fmt.Sprintf(`select count(*) from %s.copy_state where vrepl_id in (select id from %s.vreplication where workflow = "%s" and db_name = "%s")`,
+			sidecar.DefaultName, sidecar.DefaultName, workflow, database),
+	}
+	expected := [3]string{"[INT64(0)]", "[INT64(1)]", "[INT64(0)]"}
+
+	ctx := t.Context()
+	waitDuration := 500 * time.Millisecond
+	for idx, query := range queries {
+		for duration > 0 {
+			res, err := tablet.QueryTabletWithDB(ctx, query, "")
+			if err != nil {
+				log.Error(fmt.Sprintf("Error in vreplication catchup query - %v", err))
+			} else if len(res.Rows) > 0 && fmt.Sprintf("%v", res.Rows[0]) == expected[idx] {
+				break
+			}
+			time.Sleep(waitDuration)
+			duration -= waitDuration
+		}
+		require.Greaterf(t, duration, time.Duration(0),
+			"WaitForVReplicationToCatchup timed out for workflow %s, keyspace %s", workflow, database)
 	}
 }
 

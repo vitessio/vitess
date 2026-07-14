@@ -17,6 +17,7 @@ limitations under the License.
 package fuzz
 
 import (
+	"context"
 	_ "embed"
 	"flag"
 	"fmt"
@@ -26,19 +27,17 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/transaction/twopc/utils"
+	"vitess.io/vitess/go/test/vitesst"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 )
 
 var (
-	clusterInstance       *cluster.LocalProcessCluster
+	clusterInstance       *vitesst.Cluster
 	vtParams              mysql.ConnParams
 	vtgateGrpcAddress     string
 	keyspaceName          = "ks"
 	unshardedKeyspaceName = "uks"
-	cell                  = "zone1"
-	hostname              = "localhost"
 
 	//go:embed schema.sql
 	SchemaSQL string
@@ -51,57 +50,53 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitcode := func() int {
-		clusterInstance = cluster.NewCluster(cell, hostname)
-		defer clusterInstance.Teardown()
+		ctx := context.Background()
 
-		// Start topo server
-		if err := clusterInstance.StartTopo(); err != nil {
-			return 1
-		}
-
-		// Reserve vtGate port in order to pass it to vtTablet
-		clusterInstance.VtgateGrpcPort = clusterInstance.GetAndReservePort()
-
-		// Set extra args for twopc
-		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
-			"--transaction-mode", "TWOPC",
-			"--grpc-use-effective-callerid",
-			"--tablet-refresh-interval", "2s",
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithVTGateArgs(
+				"--transaction-mode", "TWOPC",
+				"--grpc-use-effective-callerid",
+				"--tablet-refresh-interval", "2s",
+			),
+			vitesst.WithVTTabletArgs(
+				"--twopc-abandon-age", "1",
+				"--migration-check-interval", "2s",
+			),
+			vitesst.WithKeyspace(keyspaceName).
+				WithShardNames("-40", "40-80", "80-").
+				WithReplicas(2).
+				WithSchema(SchemaSQL).
+				WithVSchema(VSchema).
+				WithDurabilityPolicy(policy.DurabilitySemiSync),
+			vitesst.WithKeyspace(unshardedKeyspaceName).
+				WithReplicas(2).
+				WithVSchema("{}").
+				WithDurabilityPolicy(policy.DurabilitySemiSync),
 		)
-		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
-			"--twopc-abandon-age", "1",
-			"--migration-check-interval", "2s",
-		)
-
-		// Start keyspace
-		cell := clusterInstance.Cell
-		keyspace := &cluster.Keyspace{
-			Name:             keyspaceName,
-			SchemaSQL:        SchemaSQL,
-			VSchema:          VSchema,
-			DurabilityPolicy: policy.DurabilitySemiSync,
-		}
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-40", "40-80", "80-"}, 2, false, cell); err != nil {
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-
-		// Start an unsharded keyspace
-		unshardedKeyspace := &cluster.Keyspace{
-			Name:             unshardedKeyspaceName,
-			SchemaSQL:        "",
-			VSchema:          "{}",
-			DurabilityPolicy: policy.DurabilitySemiSync,
-		}
-		if err := clusterInstance.StartUnshardedKeyspace(*unshardedKeyspace, 2, false, cell); err != nil {
+		cleanup, err := cluster.Start(ctx)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
 
-		// Start Vtgate
-		if err := clusterInstance.StartVtgate(); err != nil {
+		clusterInstance = cluster
+		vtParams = cluster.VTParams(ctx, "")
+
+		grpcAddr, err := cluster.VTGate().GRPCAddr(ctx)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-		vtParams = clusterInstance.GetVTParams("")
-		vtgateGrpcAddress = fmt.Sprintf("%s:%d", clusterInstance.Hostname, clusterInstance.VtgateGrpcPort)
+		vtgateGrpcAddress = grpcAddr
 
 		return m.Run()
 	}()

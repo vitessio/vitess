@@ -20,14 +20,11 @@ import (
 	"context"
 	"fmt"
 	"math/rand/v2"
-	"os"
-	"path"
 	"slices"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"testing"
 	"time"
 
@@ -35,8 +32,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/syscallutil"
-	"vitess.io/vitess/go/test/endtoend/cluster"
 	twopcutil "vitess.io/vitess/go/test/endtoend/transaction/twopc/utils"
 	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -459,44 +454,45 @@ Cluster Level Disruptions for the fuzzer
 */
 
 func prs(t *testing.T) {
-	shards := clusterInstance.Keyspaces[0].Shards
+	shards := clusterInstance.Keyspace(keyspaceName).Shards()
 	shard := shards[rand.IntN(len(shards))]
-	vttablets := shard.Vttablets
+	vttablets := shard.Tablets()
 	newPrimary := vttablets[rand.IntN(len(vttablets))]
-	log.Error(fmt.Sprintf("Running PRS for - %v/%v with new primary - %v", keyspaceName, shard.Name, newPrimary.Alias))
-	err := clusterInstance.VtctldClientProcess.PlannedReparentShard(keyspaceName, shard.Name, newPrimary.Alias)
+	log.Error(fmt.Sprintf("Running PRS for - %v/%v with new primary - %v", keyspaceName, shard.Name, newPrimary.Alias()))
+	err := clusterInstance.Vtctld().ExecuteCommand(t.Context(), "PlannedReparentShard", shard.Ref(),
+		"--new-primary", newPrimary.Alias(), "--wait-replicas-timeout", "30s")
 	if err != nil {
 		log.Error(fmt.Sprintf("error running PRS - %v", err))
 	}
 }
 
 func ers(t *testing.T) {
-	shards := clusterInstance.Keyspaces[0].Shards
+	shards := clusterInstance.Keyspace(keyspaceName).Shards()
 	shard := shards[rand.IntN(len(shards))]
-	vttablets := shard.Vttablets
+	vttablets := shard.Tablets()
 	newPrimary := vttablets[rand.IntN(len(vttablets))]
-	log.Error(fmt.Sprintf("Running ERS for - %v/%v with new primary - %v", keyspaceName, shard.Name, newPrimary.Alias))
-	_, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("EmergencyReparentShard", fmt.Sprintf("%s/%s", keyspaceName, shard.Name), "--new-primary", newPrimary.Alias)
+	log.Error(fmt.Sprintf("Running ERS for - %v/%v with new primary - %v", keyspaceName, shard.Name, newPrimary.Alias()))
+	_, err := clusterInstance.Vtctld().ExecuteCommandWithOutput(t.Context(), "EmergencyReparentShard", fmt.Sprintf("%s/%s", keyspaceName, shard.Name), "--new-primary", newPrimary.Alias())
 	if err != nil {
 		log.Error(fmt.Sprintf("error running ERS - %v", err))
 	}
 }
 
 func vttabletRestarts(t *testing.T) {
-	shards := clusterInstance.Keyspaces[0].Shards
+	ctx := t.Context()
+	shards := clusterInstance.Keyspace(keyspaceName).Shards()
 	shard := shards[rand.IntN(len(shards))]
-	vttablets := shard.Vttablets
+	vttablets := shard.Tablets()
 	tablet := vttablets[rand.IntN(len(vttablets))]
-	log.Error(fmt.Sprintf("Restarting vttablet for - %v/%v - %v", keyspaceName, shard.Name, tablet.Alias))
-	err := tablet.VttabletProcess.TearDown()
+	log.Error(fmt.Sprintf("Restarting vttablet for - %v/%v - %v", keyspaceName, shard.Name, tablet.Alias()))
+	err := tablet.StopVttablet(ctx)
 	if err != nil {
 		log.Error(fmt.Sprintf("error stopping vttablet - %v", err))
 		return
 	}
-	tablet.VttabletProcess.ServingStatus = "SERVING"
 	deadline := time.Now().Add(2 * time.Minute)
 	for {
-		err = tablet.VttabletProcess.Setup()
+		err = tablet.StartVttablet(ctx)
 		if err == nil {
 			return
 		}
@@ -504,7 +500,7 @@ func vttabletRestarts(t *testing.T) {
 		// We don't want to fail the test, so we retry setting up the vttablet.
 		log.Error(fmt.Sprintf("error restarting vttablet - %v", err))
 		if time.Now().After(deadline) {
-			log.Error(fmt.Sprintf("giving up restarting vttablet after timeout: %v", tablet.Alias))
+			log.Error(fmt.Sprintf("giving up restarting vttablet after timeout: %v", tablet.Alias()))
 			return
 		}
 		time.Sleep(1 * time.Second)
@@ -524,15 +520,16 @@ var (
 
 // onlineDDLFuzzer runs an online DDL statement while ignoring any errors for the fuzzer.
 func onlineDDLFuzzer(t *testing.T) {
-	output, err := clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(keyspaceName, orderedDDLFuzzer[count%len(orderedDDLFuzzer)], cluster.ApplySchemaParams{
-		DDLStrategy: "vitess --force-cut-over-after=1ms",
-	})
+	output, err := clusterInstance.Vtctld().ExecuteCommandWithOutput(t.Context(), "ApplySchema",
+		"--sql", orderedDDLFuzzer[count%len(orderedDDLFuzzer)],
+		"--ddl-strategy", "vitess --force-cut-over-after=1ms",
+		keyspaceName)
 	count++
 	if err != nil {
 		return
 	}
 	fmt.Println("Running online DDL with uuid: ", output)
-	twopcutil.WaitForMigrationStatus(t, &vtParams, keyspaceName, clusterInstance.Keyspaces[0].Shards,
+	twopcutil.WaitForMigrationStatusOnShards(t, &vtParams, keyspaceName, clusterInstance.Keyspace(keyspaceName).Shards(),
 		strings.TrimSpace(output), 2*time.Minute, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 }
 
@@ -540,6 +537,7 @@ var moveTablesCount int
 
 // moveTablesFuzzer runs a MoveTables workflow.
 func moveTablesFuzzer(t *testing.T) {
+	ctx := t.Context()
 	workflow := "TestTwoPCFuzzTest"
 	srcKeyspace := keyspaceName
 	targetKeyspace := unshardedKeyspaceName
@@ -547,31 +545,35 @@ func moveTablesFuzzer(t *testing.T) {
 		srcKeyspace = unshardedKeyspaceName
 		targetKeyspace = keyspaceName
 		// We apply the vschema again because previous move tables would have removed the entry for `twopc_fuzzer_update`.
-		err := clusterInstance.VtctldClientProcess.ApplyVSchema(keyspaceName, VSchema)
+		err := clusterInstance.Vtctld().ExecuteCommand(ctx, "ApplyVSchema", "--vschema", VSchema, keyspaceName)
 		require.NoError(t, err)
 	}
 	log.Error(fmt.Sprintf("MoveTables from - %v to %v", srcKeyspace, targetKeyspace))
-	mtw := cluster.NewMoveTables(t, clusterInstance, workflow, targetKeyspace, srcKeyspace, "twopc_fuzzer_update", []string{topodatapb.TabletType_REPLICA.String()})
+	moveTables := func(args ...string) (string, error) {
+		cmd := append([]string{"MoveTables", "--workflow=" + workflow, "--target-keyspace=" + targetKeyspace}, args...)
+		return clusterInstance.Vtctld().ExecuteCommandWithOutput(ctx, cmd...)
+	}
 	// Initiate MoveTables for twopc_fuzzer_update.
-	output, err := mtw.Create()
+	output, err := moveTables("Create", "--source-keyspace="+srcKeyspace, "--tables=twopc_fuzzer_update",
+		"--tablet-types", topodatapb.TabletType_REPLICA.String())
 	if err != nil {
 		log.Error(fmt.Sprintf("error creating MoveTables - %v, output - %v", err, output))
 		return
 	}
 	moveTablesCount++
 	// Wait for vreplication to catchup. Should be very fast since we don't have a lot of rows.
-	mtw.WaitForVreplCatchup(1 * time.Minute)
+	twopcutil.WaitForVreplCatchup(t, clusterInstance.Keyspace(targetKeyspace).Shards(), workflow, 1*time.Minute)
 	// SwitchTraffic
-	output, err = mtw.SwitchReadsAndWrites()
+	output, err = moveTables("SwitchTraffic")
 	assert.NoError(t, err, output)
-	output, err = mtw.Complete()
+	output, err = moveTables("Complete")
 	assert.NoError(t, err, output)
 }
 
 // reshardFuzzer runs a Reshard workflow.
 func reshardFuzzer(t *testing.T) {
 	var srcShards, targetShards string
-	shardCount := len(clusterInstance.Keyspaces[0].Shards)
+	shardCount := len(clusterInstance.Keyspace(keyspaceName).Shards())
 	if shardCount == 2 {
 		srcShards = "40-"
 		targetShards = "40-80,80-"
@@ -580,31 +582,26 @@ func reshardFuzzer(t *testing.T) {
 		targetShards = "40-"
 	}
 	log.Error(fmt.Sprintf("Reshard from - \"%v\" to \"%v\"", srcShards, targetShards))
-	twopcutil.AddShards(t, clusterInstance, keyspaceName, strings.Split(targetShards, ","))
-	err := twopcutil.RunReshard(t, clusterInstance, "TestTwoPCFuzzTest", keyspaceName, srcShards, targetShards)
+	twopcutil.AddShardsToKeyspace(t, clusterInstance, keyspaceName, strings.Split(targetShards, ","))
+	err := twopcutil.RunReshardWorkflow(t, clusterInstance, "TestTwoPCFuzzTest", keyspaceName, srcShards, targetShards)
 	require.NoError(t, err)
 }
 
 func mysqlRestarts(t *testing.T) {
-	shards := clusterInstance.Keyspaces[0].Shards
+	ctx := t.Context()
+	shards := clusterInstance.Keyspace(keyspaceName).Shards()
 	shard := shards[rand.IntN(len(shards))]
-	vttablets := shard.Vttablets
+	vttablets := shard.Tablets()
 	tablet := vttablets[rand.IntN(len(vttablets))]
-	log.Error(fmt.Sprintf("Restarting MySQL for - %v/%v tablet - %v", keyspaceName, shard.Name, tablet.Alias))
-	pidFile := path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/mysql.pid", tablet.TabletUID))
-	pidBytes, err := os.ReadFile(pidFile)
+	log.Error(fmt.Sprintf("Restarting MySQL for - %v/%v tablet - %v", keyspaceName, shard.Name, tablet.Alias()))
+	err := tablet.KillMySQL(ctx)
 	if err != nil {
-		// We can't read the file which means the PID file does not exist
-		// The server must have stopped
-		return
-	}
-	pid, err := strconv.Atoi(strings.TrimSpace(string(pidBytes)))
-	if err != nil {
-		log.Error(fmt.Sprintf("Error in conversion to integer: %v", err))
-		return
-	}
-	err = syscallutil.Kill(pid, syscall.SIGKILL)
-	if err != nil {
+		// The kill fails when the PID file is gone, which means the server has already stopped.
 		log.Error(fmt.Sprintf("Error in killing process: %v", err))
+		return
+	}
+	err = tablet.StartMySQL(ctx)
+	if err != nil {
+		log.Error(fmt.Sprintf("Error in starting mysqld: %v", err))
 	}
 }
