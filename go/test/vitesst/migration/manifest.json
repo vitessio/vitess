@@ -4274,7 +4274,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "Two sharded keyspaces each with a CFC (common-prefix cardinality) vindex, one plain one with md5 hash param; tests shard-fanout pruning for LIKE-prefix queries via explicit `use ks:shard` target switching. Purely conn-based. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.WaitForTabletsToHealthyInVtgate, LocalProcessCluster.GetVTParams, LocalProcessCluster.Teardown | utils APIs: utils.Exec | difficulty: easy",
    "old_shards": [
@@ -4295,9 +4295,9 @@
     "TestCFCInsert"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/prefixfanout",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 14.3,
+   "status": "verified",
+   "verified_at_sha": "0e965f3280ae2ef9da5b0c4db76624b7c9178c98",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/prefixfanout/",
    "wave": 0
   },
@@ -5906,7 +5906,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "Single tiny test asserting an IN query against a secondary vindex column returns empty; no control-plane operations beyond cluster bring-up. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.Teardown | utils APIs: utils.Exec, utils.ExecAllowError, utils.AssertMatches | difficulty: easy",
    "old_shards": [
@@ -5925,9 +5925,9 @@
     "TestInAgainstSecondaryVindex"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/sec_vind",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 8.7,
+   "status": "verified",
+   "verified_at_sha": "0e965f3280ae2ef9da5b0c4db76624b7c9178c98",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/sec_vind/",
    "wave": 0
   },
@@ -6184,7 +6184,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "Exercises hash/binary/binary_md5/xxhash/numeric/lookup/consistent_lookup vindex types and a wide multi-lookup-vindex table to check bindvar-name overlap; pure conn-level SQL, no process control or waits. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.Teardown | utils APIs: utils.Exec | difficulty: easy",
    "old_shards": [
@@ -6204,9 +6204,9 @@
     "TestVindexBindVarOverlap"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/vindex_bindvars",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 6.2,
+   "status": "verified",
+   "verified_at_sha": "0e965f3280ae2ef9da5b0c4db76624b7c9178c98",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/vindex_bindvars/",
    "wave": 0
   },

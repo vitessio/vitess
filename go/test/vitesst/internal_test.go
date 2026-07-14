@@ -107,6 +107,15 @@ func TestClusterOptionsValidation(t *testing.T) {
 	err = newClusterOptions([]ClusterOption{WithKeyspace("ks").WithShards(0)}).validate()
 	require.ErrorContains(t, err, "at least one shard")
 
+	err = newClusterOptions([]ClusterOption{WithKeyspace("ks").WithShards(2).WithShardNames("-80", "80-")}).validate()
+	require.ErrorContains(t, err, "both WithShards and WithShardNames")
+
+	err = newClusterOptions([]ClusterOption{WithKeyspace("ks").WithShardNames("-41", "")}).validate()
+	require.ErrorContains(t, err, "shard names must not be empty")
+
+	err = newClusterOptions([]ClusterOption{WithKeyspace("ks").WithShardNames("-41", "41-4180", "4180-")}).validate()
+	require.NoError(t, err)
+
 	config := newClusterOptions([]ClusterOption{
 		WithKeyspace("ks").WithShards(2).WithReplicas(1).WithRDOnly(1),
 		WithVTTabletArgs("--foo"),

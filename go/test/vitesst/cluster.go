@@ -199,9 +199,13 @@ func (c *Cluster) startKeyspace(ctx context.Context, kc *keyspaceConfig) error {
 		return err
 	}
 
-	shardNames, err := key.GenerateShardRanges(kc.shards, 0)
-	if err != nil {
-		return vterrors.Wrapf(err, "generating %d shard ranges for keyspace %s", kc.shards, kc.name)
+	shardNames := kc.shardNames
+	if len(shardNames) == 0 {
+		var err error
+		shardNames, err = key.GenerateShardRanges(kc.shards, 0)
+		if err != nil {
+			return vterrors.Wrapf(err, "generating %d shard ranges for keyspace %s", kc.shards, kc.name)
+		}
 	}
 
 	ks := &Keyspace{Name: kc.name}

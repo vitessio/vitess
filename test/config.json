@@ -1786,48 +1786,6 @@
         "limit-resources"
       ]
     },
-    "prefixfanout": {
-      "File": "unused.go",
-      "Packages": [
-        "vitess.io/vitess/go/test/endtoend/vtgate/prefixfanout"
-      ],
-      "Args": [],
-      "Command": [],
-      "Manual": false,
-      "Shard": "vtgate_vindex_heavy",
-      "Tags": [],
-      "Needs": [
-        "limit-resources"
-      ]
-    },
-    "vindex_bindvars": {
-      "File": "unused.go",
-      "Packages": [
-        "vitess.io/vitess/go/test/endtoend/vtgate/vindex_bindvars"
-      ],
-      "Args": [],
-      "Command": [],
-      "Manual": false,
-      "Shard": "vtgate_vindex_heavy",
-      "Tags": [],
-      "Needs": [
-        "limit-resources"
-      ]
-    },
-    "vindex_secondary": {
-      "File": "unused.go",
-      "Packages": [
-        "vitess.io/vitess/go/test/endtoend/vtgate/sec_vind"
-      ],
-      "Args": [],
-      "Command": [],
-      "Manual": false,
-      "Shard": "vtgate_vindex_heavy",
-      "Tags": [],
-      "Needs": [
-        "limit-resources"
-      ]
-    },
     "vttest_sample": {
       "File": "unused.go",
       "Packages": [

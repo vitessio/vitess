@@ -17,23 +17,24 @@ limitations under the License.
 package vtgate
 
 import (
+	"context"
 	_ "embed"
 	"flag"
+	"fmt"
 	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
+	clusterInstance *vitesst.Cluster
 	vtParams        mysql.ConnParams
 	KeyspaceName    = "ks"
-	Cell            = "test"
+
 	//go:embed schema.sql
 	SchemaSQL string
 
@@ -45,35 +46,31 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(Cell, "localhost")
-		defer clusterInstance.Teardown()
+		ctx := context.Background()
 
-		// Start topo server
-		err := clusterInstance.StartTopo()
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithKeyspace(KeyspaceName).
+				WithShards(2).
+				WithSchema(SchemaSQL).
+				WithVSchema(VSchema),
+		)
 		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-
-		// Start keyspace
-		keyspace := &cluster.Keyspace{
-			Name:      KeyspaceName,
-			SchemaSQL: SchemaSQL,
-			VSchema:   VSchema,
-		}
-		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 0, false, clusterInstance.Cell)
+		cleanup, err := cluster.Start(ctx)
 		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
 
-		// Start vtgate
-		err = clusterInstance.StartVtgate()
-		if err != nil {
-			return 1
-		}
-		vtParams = mysql.ConnParams{
-			Host: clusterInstance.Hostname,
-			Port: clusterInstance.VtgateMySQLPort,
-		}
+		clusterInstance = cluster
+		vtParams = cluster.VTParams(ctx, "")
 		return m.Run()
 	}()
 	os.Exit(exitCode)
@@ -85,11 +82,11 @@ func start(t *testing.T) (*mysql.Conn, func()) {
 	require.Nil(t, err)
 
 	deleteAll := func() {
-		_, _ = utils.ExecAllowError(t, conn, "set workload = oltp")
+		_, _ = vitesst.ExecAllowError(t, conn, "set workload = oltp")
 
 		tables := []string{"t1", "lookup_t1"}
 		for _, table := range tables {
-			_, _ = utils.ExecAllowError(t, conn, "delete from "+table)
+			_, _ = vitesst.ExecAllowError(t, conn, "delete from "+table)
 		}
 	}
 
@@ -105,5 +102,5 @@ func TestInAgainstSecondaryVindex(t *testing.T) {
 	conn, closer := start(t)
 	defer closer()
 
-	utils.AssertMatches(t, conn, `select 1 from t1 where c2 in ("abc")`, "[]")
+	vitesst.AssertMatches(t, conn, `select 1 from t1 where c2 in ("abc")`, "[]")
 }

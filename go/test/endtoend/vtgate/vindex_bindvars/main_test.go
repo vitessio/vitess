@@ -17,6 +17,7 @@ limitations under the License.
 package vtgate
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -26,12 +27,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
+	clusterInstance *vitesst.Cluster
 	vtParams        mysql.ConnParams
 	KeyspaceName    = "ks"
 	Cell            = "test"
@@ -266,35 +266,31 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(Cell, "localhost")
-		defer clusterInstance.Teardown()
+		ctx := context.Background()
 
-		// Start topo server
-		err := clusterInstance.StartTopo()
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithKeyspace(KeyspaceName).
+				WithShards(2).
+				WithSchema(SchemaSQL).
+				WithVSchema(VSchema),
+		)
 		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-
-		// Start keyspace
-		keyspace := &cluster.Keyspace{
-			Name:      KeyspaceName,
-			SchemaSQL: SchemaSQL,
-			VSchema:   VSchema,
-		}
-		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 0, false, clusterInstance.Cell)
+		cleanup, err := cluster.Start(ctx)
 		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
 
-		// Start vtgate
-		err = clusterInstance.StartVtgate()
-		if err != nil {
-			return 1
-		}
-		vtParams = mysql.ConnParams{
-			Host: clusterInstance.Hostname,
-			Port: clusterInstance.VtgateMySQLPort,
-		}
+		clusterInstance = cluster
+		vtParams = cluster.VTParams(ctx, "")
 		return m.Run()
 	}()
 	os.Exit(exitCode)
@@ -306,12 +302,12 @@ func TestVindexHexTypes(t *testing.T) {
 	require.Nil(t, err)
 	defer conn.Close()
 
-	utils.Exec(t, conn, "INSERT INTO thex (id, field) VALUES "+
+	vitesst.Exec(t, conn, "INSERT INTO thex (id, field) VALUES "+
 		"(0x01,1), "+
 		"(x'a5',2), "+
 		"(0x48656c6c6f20476f7068657221,3), "+
 		"(x'c26caa1a5eb94096d29a1bec',4)")
-	result := utils.Exec(t, conn, "select id, field from thex order by id")
+	result := vitesst.Exec(t, conn, "select id, field from thex order by id")
 
 	expected := "[[VARBINARY(\"\\x01\") INT64(1)] " +
 		"[VARBINARY(\"Hello Gopher!\") INT64(3)] " +
@@ -326,7 +322,7 @@ func TestVindexBindVarOverlap(t *testing.T) {
 	require.Nil(t, err)
 	defer conn.Close()
 
-	utils.Exec(t, conn, "INSERT INTO t1 (id, field, field2, field3, field4, field5, field6) VALUES "+
+	vitesst.Exec(t, conn, "INSERT INTO t1 (id, field, field2, field3, field4, field5, field6) VALUES "+
 		"(0,1,2,3,4,5,6), "+
 		"(1,2,3,4,5,6,7), "+
 		"(2,3,4,5,6,7,8), "+
@@ -348,7 +344,7 @@ func TestVindexBindVarOverlap(t *testing.T) {
 		"(18,19,20,21,22,23,24), "+
 		"(19,20,21,22,23,24,25), "+
 		"(20,21,22,23,24,25,26)")
-	result := utils.Exec(t, conn, "select id, field, field2, field3, field4, field5, field6 from t1 order by id")
+	result := vitesst.Exec(t, conn, "select id, field, field2, field3, field4, field5, field6 from t1 order by id")
 
 	expected := "[[INT64(0) INT64(1) INT64(2) INT64(3) INT64(4) INT64(5) INT64(6)] " +
 		"[INT64(1) INT64(2) INT64(3) INT64(4) INT64(5) INT64(6) INT64(7)] " +

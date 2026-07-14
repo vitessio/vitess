@@ -15,6 +15,7 @@ limitations under the License.
 package prefixfanout
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -24,14 +25,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
-	cell            = "zone1"
-	hostname        = "localhost"
+	clusterInstance *vitesst.Cluster
 
 	sKs     = "cfc_testing"
 	sSchema = `
@@ -110,46 +108,34 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(cell, hostname)
-		defer clusterInstance.Teardown()
+		ctx := context.Background()
 
-		// Start topo server
-		if err := clusterInstance.StartTopo(); err != nil {
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithKeyspace(sKs).
+				WithShardNames("-41", "41-4180", "4180-42", "42-").
+				WithSchema(sSchema).
+				WithVSchema(sVSchema),
+			vitesst.WithKeyspace(sKsMD5).
+				WithShardNames("-c2", "c2-c20a80", "c20a80-d0", "d0-").
+				WithSchema(sSchemaMD5).
+				WithVSchema(sVSchemaMD5),
+		)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-
-		// Start keyspace
-		sKeyspace := &cluster.Keyspace{
-			Name:      sKs,
-			SchemaSQL: sSchema,
-			VSchema:   sVSchema,
-		}
-		// cfc_testing
-		cell := clusterInstance.Cell
-		if err := clusterInstance.StartKeyspace(*sKeyspace, []string{"-41", "41-4180", "4180-42", "42-"}, 0, false, cell); err != nil {
+		cleanup, err := cluster.Start(ctx)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-		// cfc_testing_md5
-		if err := clusterInstance.StartKeyspace(
-			cluster.Keyspace{
-				Name:      sKsMD5,
-				SchemaSQL: sSchemaMD5,
-				VSchema:   sVSchemaMD5,
-			}, []string{"-c2", "c2-c20a80", "c20a80-d0", "d0-"}, 0, false, cell); err != nil {
-			return 1
-		}
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
 
-		// Start vtgate
-		// This waits for the vtgate process to be healthy
-		if err := clusterInstance.StartVtgate(); err != nil {
-			return 1
-		}
-
-		// Wait for the cluster to be running and healthy
-		if err := clusterInstance.WaitForTabletsToHealthyInVtgate(); err != nil {
-			return 1
-		}
-
+		clusterInstance = cluster
 		return m.Run()
 	}()
 	os.Exit(exitCode)
@@ -157,13 +143,13 @@ func TestMain(m *testing.M) {
 
 func TestCFCPrefixQueryNoHash(t *testing.T) {
 	ctx := t.Context()
-	vtParams := clusterInstance.GetVTParams(sKs)
+	vtParams := clusterInstance.VTParams(ctx, "")
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
 
-	utils.Exec(t, conn, "delete from t1")
-	defer utils.Exec(t, conn, "delete from t1")
+	vitesst.Exec(t, conn, "delete from t1")
+	defer vitesst.Exec(t, conn, "delete from t1")
 	// prepare the sentinel rows, i.e. every shard stores a row begins with letter A.
 	// hex ascii code of 'A' is 41. For a given primary key, e.g. 'AA' here, it should
 	// only legally belong to a single shard. We insert into all shards with different
@@ -171,21 +157,21 @@ func TestCFCPrefixQueryNoHash(t *testing.T) {
 	// following shard layout only "41-4180", "4180-42" should serve the rows staring with 'A'.
 	shards := []string{"-41", "41-4180", "4180-42", "42-"}
 	for i, s := range shards {
-		utils.Exec(t, conn, fmt.Sprintf("use `%s:%s`", sKs, s))
-		utils.Exec(t, conn, fmt.Sprintf("insert into t1 values('AA', 'shard-%d')", i))
+		vitesst.Exec(t, conn, fmt.Sprintf("use `%s:%s`", sKs, s))
+		vitesst.Exec(t, conn, fmt.Sprintf("insert into t1 values('AA', 'shard-%d')", i))
 	}
-	utils.Exec(t, conn, "use cfc_testing")
-	qr := utils.Exec(t, conn, "select c2 from t1 where c1 like 'A%' order by c2")
+	vitesst.Exec(t, conn, "use cfc_testing")
+	qr := vitesst.Exec(t, conn, "select c2 from t1 where c1 like 'A%' order by c2")
 	assert.Equal(t, 2, len(qr.Rows))
 	// should only target a subset of shards serving rows starting with 'A'.
 	assert.EqualValues(t, `[[VARCHAR("shard-1")] [VARCHAR("shard-2")]]`, fmt.Sprintf("%v", qr.Rows))
 	// should only target a subset of shards serving rows starting with 'AA',
 	// the shards to which 'AA' maps to.
-	qr = utils.Exec(t, conn, "select c2 from t1 where c1 like 'AA'")
+	qr = vitesst.Exec(t, conn, "select c2 from t1 where c1 like 'AA'")
 	assert.Equal(t, 1, len(qr.Rows))
 	assert.EqualValues(t, `[[VARCHAR("shard-1")]]`, fmt.Sprintf("%v", qr.Rows))
 	// fan out to all when there is no prefix
-	qr = utils.Exec(t, conn, "select c2 from t1 where c1 like '%A' order by c2")
+	qr = vitesst.Exec(t, conn, "select c2 from t1 where c1 like '%A' order by c2")
 	assert.Equal(t, 4, len(qr.Rows))
 	for i, r := range qr.Rows {
 		assert.Equal(t, fmt.Sprintf("shard-%d", i), r[0].ToString())
@@ -194,42 +180,42 @@ func TestCFCPrefixQueryNoHash(t *testing.T) {
 
 func TestCFCPrefixQueryWithHash(t *testing.T) {
 	ctx := t.Context()
-	vtParams := clusterInstance.GetVTParams(sKsMD5)
+	vtParams := clusterInstance.VTParams(ctx, "")
 
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
 
-	utils.Exec(t, conn, "delete from t2")
-	defer utils.Exec(t, conn, "delete from t2")
+	vitesst.Exec(t, conn, "delete from t2")
+	defer vitesst.Exec(t, conn, "delete from t2")
 
 	shards := []string{"-c2", "c2-c20a80", "c20a80-d0", "d0-"}
 	// same idea of sentinel rows as above. Even though each row legally belongs to
 	// only one shard, we insert into all shards with different info to test our fan out.
 	for i, s := range shards {
-		utils.Exec(t, conn, fmt.Sprintf("use `%s:%s`", sKsMD5, s))
-		utils.Exec(t, conn, fmt.Sprintf("insert into t2 values('12AX', 'shard-%d')", i))
-		utils.Exec(t, conn, fmt.Sprintf("insert into t2 values('12BX', 'shard-%d')", i))
-		utils.Exec(t, conn, fmt.Sprintf("insert into t2 values('27CX', 'shard-%d')", i))
+		vitesst.Exec(t, conn, fmt.Sprintf("use `%s:%s`", sKsMD5, s))
+		vitesst.Exec(t, conn, fmt.Sprintf("insert into t2 values('12AX', 'shard-%d')", i))
+		vitesst.Exec(t, conn, fmt.Sprintf("insert into t2 values('12BX', 'shard-%d')", i))
+		vitesst.Exec(t, conn, fmt.Sprintf("insert into t2 values('27CX', 'shard-%d')", i))
 	}
 
-	utils.Exec(t, conn, fmt.Sprintf("use `%s`", sKsMD5))
+	vitesst.Exec(t, conn, fmt.Sprintf("use `%s`", sKsMD5))
 	// The prefix is ('12', 'A')
 	// md5('12') -> c20ad4d76fe97759aa27a0c99bff6710
 	// md5('A') -> 7fc56270e7a70fa81a5935b72eacbe29
 	// so keyspace id is c20a7f, which means shards "c2-c20a80"
-	qr := utils.Exec(t, conn, "select c2 from t2 where c1 like '12A%' order by c2")
+	qr := vitesst.Exec(t, conn, "select c2 from t2 where c1 like '12A%' order by c2")
 	assert.Equal(t, 1, len(qr.Rows))
 	assert.Equal(t, `[[VARCHAR("shard-1")]]`, fmt.Sprintf("%v", qr.Rows))
 	// The prefix is ('12')
 	// md5('12') -> c20ad4d76fe97759aa27a0c99bff6710 so the corresponding
 	// so keyspace id is c20a, which means shards "c2-c20a80", "c20a80-d0"
-	qr = utils.Exec(t, conn, "select c2 from t2 where c1 like '12%' order by c2")
+	qr = vitesst.Exec(t, conn, "select c2 from t2 where c1 like '12%' order by c2")
 	assert.Equal(t, 4, len(qr.Rows))
 	assert.Equal(t, `[[VARCHAR("shard-1")] [VARCHAR("shard-1")] [VARCHAR("shard-2")] [VARCHAR("shard-2")]]`, fmt.Sprintf("%v", qr.Rows))
 	// in vschema the prefix length is defined as 2 bytes however only 1 byte
 	// is provided here so the query fans out to all.
-	qr = utils.Exec(t, conn, "select c2 from t2 where c1 like '2%' order by c2")
+	qr = vitesst.Exec(t, conn, "select c2 from t2 where c1 like '2%' order by c2")
 	assert.Equal(t, 4, len(qr.Rows))
 	assert.Equal(t, `[[VARCHAR("shard-0")] [VARCHAR("shard-1")] [VARCHAR("shard-2")] [VARCHAR("shard-3")]]`, fmt.Sprintf("%v", qr.Rows))
 }
@@ -237,26 +223,26 @@ func TestCFCPrefixQueryWithHash(t *testing.T) {
 func TestCFCInsert(t *testing.T) {
 	ctx := t.Context()
 
-	vtParams := clusterInstance.GetVTParams(sKs)
+	vtParams := clusterInstance.VTParams(ctx, "")
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
 
-	utils.Exec(t, conn, "delete from t1")
-	defer utils.Exec(t, conn, "delete from t1")
+	vitesst.Exec(t, conn, "delete from t1")
+	defer vitesst.Exec(t, conn, "delete from t1")
 
-	utils.Exec(t, conn, "insert into t1 (c1, c2) values ('AAA', 'BBB')")
-	qr := utils.Exec(t, conn, "select c2 from t1 where c1 like 'A%'")
+	vitesst.Exec(t, conn, "insert into t1 (c1, c2) values ('AAA', 'BBB')")
+	qr := vitesst.Exec(t, conn, "select c2 from t1 where c1 like 'A%'")
 	assert.Equal(t, 1, len(qr.Rows))
 	shards := []string{"-41", "4180-42", "42-"}
 	for _, s := range shards {
-		utils.Exec(t, conn, fmt.Sprintf("use `cfc_testing:%s`", s))
-		qr = utils.Exec(t, conn, "select * from t1")
+		vitesst.Exec(t, conn, fmt.Sprintf("use `cfc_testing:%s`", s))
+		qr = vitesst.Exec(t, conn, "select * from t1")
 		assert.Equal(t, 0, len(qr.Rows))
 	}
 	// 'AAA' belongs to 41-4180
-	utils.Exec(t, conn, "use `cfc_testing:41-4180`")
-	qr = utils.Exec(t, conn, "select c2 from t1")
+	vitesst.Exec(t, conn, "use `cfc_testing:41-4180`")
+	qr = vitesst.Exec(t, conn, "select c2 from t1")
 	assert.Equal(t, 1, len(qr.Rows))
 	assert.Equal(t, `[[VARCHAR("BBB")]]`, fmt.Sprintf("%v", qr.Rows))
 }

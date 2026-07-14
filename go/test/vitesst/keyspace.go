@@ -17,6 +17,7 @@ limitations under the License.
 package vitesst
 
 import (
+	"slices"
 	"sync"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -37,6 +38,10 @@ type (
 
 		// shards controls how many shard ranges are generated.
 		shards int
+
+		// shardNames, when set, are the explicit shard range names to use
+		// instead of generated uniform ranges.
+		shardNames []string
 
 		// replicas is the number of replica tablets per shard, excluding the
 		// primary and any rdonly tablets.
@@ -128,6 +133,13 @@ func (kb *keyspaceBuilder) WithShards(n int) *keyspaceBuilder {
 	return kb
 }
 
+// WithShardNames sets explicit shard range names (e.g. "-41", "41-4180",
+// "4180-"), for keyspaces whose tests depend on exact shard boundaries.
+func (kb *keyspaceBuilder) WithShardNames(names ...string) *keyspaceBuilder {
+	kb.config.shardNames = names
+	return kb
+}
+
 // WithReplicas sets the number of replica tablets per shard, in addition to
 // the primary. WithReplicas(1) gives each shard a primary and one replica.
 func (kb *keyspaceBuilder) WithReplicas(n int) *keyspaceBuilder {
@@ -166,6 +178,10 @@ func (kc *keyspaceConfig) validate() error {
 	switch {
 	case kc.name == "":
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "keyspace name cannot be empty")
+	case len(kc.shardNames) > 0 && kc.shards != defaultShards:
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "keyspace %s sets both WithShards and WithShardNames", kc.name)
+	case slices.Contains(kc.shardNames, ""):
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "keyspace %s shard names must not be empty", kc.name)
 	case kc.shards < 1:
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "keyspace %s needs at least one shard", kc.name)
 	case kc.replicas < 0:
