@@ -116,11 +116,17 @@ func NewCluster(opts ...ClusterOption) (*Cluster, error) {
 		logf:  logf,
 	}
 	c.vtctld = &Vtctld{component: component{
-		name:     "vtctld",
+		name:     c.name("vtctld"),
 		httpPort: fmt.Sprintf("%d/tcp", vtctldHTTPPort),
 		cluster:  c,
 	}}
 	return c, nil
+}
+
+// name returns a component's network alias, applying the cluster's name
+// prefix. Components address each other by these aliases.
+func (c *Cluster) name(base string) string {
+	return c.opts.namePrefix + base
 }
 
 // Start brings the whole cluster up. The returned cleanup tears everything
@@ -247,6 +253,7 @@ func (c *Cluster) startKeyspace(ctx context.Context, kc *keyspaceConfig) error {
 	c.mu.Unlock()
 
 	group, groupCtx := errgroup.WithContext(ctx)
+	cells := c.Cells()
 	cellIndex := 0
 	for _, shardName := range shardNames {
 		shard := &Shard{Name: shardName, Keyspace: ks}
@@ -266,7 +273,7 @@ func (c *Cluster) startKeyspace(ctx context.Context, kc *keyspaceConfig) error {
 
 			spec := &TabletSpec{
 				UID:      c.nextTabletUID(),
-				Cell:     c.cells[cellIndex%len(c.cells)],
+				Cell:     cells[cellIndex%len(cells)],
 				Keyspace: kc.name,
 				Shard:    shardName,
 				Type:     typ,
@@ -455,6 +462,7 @@ func (c *Cluster) AddShard(ctx context.Context, keyspace, shardName string, repl
 	ks.shards = append(ks.shards, shard)
 	ks.mu.Unlock()
 
+	cells := c.Cells()
 	specs := make([]*TabletSpec, 0, 1+replicas+rdonly)
 	for i := range 1 + replicas + rdonly {
 		typ := "replica"
@@ -467,7 +475,7 @@ func (c *Cluster) AddShard(ctx context.Context, keyspace, shardName string, repl
 
 		spec := &TabletSpec{
 			UID:      c.nextTabletUID(),
-			Cell:     c.cells[i%len(c.cells)],
+			Cell:     cells[i%len(cells)],
 			Keyspace: keyspace,
 			Shard:    shardName,
 			Type:     typ,
@@ -544,7 +552,7 @@ func (c *Cluster) AddTablet(ctx context.Context, cell, keyspace, shard, tabletTy
 	}
 
 	if cell == "" {
-		cell = c.cells[0]
+		cell = c.firstCell()
 	}
 	spec := &TabletSpec{
 		UID:      c.nextTabletUID(),
@@ -626,9 +634,41 @@ func (c *Cluster) Tablets() []*Tablet {
 
 // Cells returns the cluster's cell names.
 func (c *Cluster) Cells() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	out := make([]string, len(c.cells))
 	copy(out, c.cells)
 	return out
+}
+
+// firstCell returns the cell that components default to.
+func (c *Cluster) firstCell() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.cells[0]
+}
+
+// AddCell registers a new cell in the topology of the running cluster and adds
+// it to the cluster's cells, so later tablets round-robin over it too. A vtgate
+// only routes to the new cell's tablets when it watches the cell, which
+// AddVTGateSpec configures.
+func (c *Cluster) AddCell(ctx context.Context, cell string) error {
+	if cell == "" {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cell name must not be empty")
+	}
+	if slices.Contains(c.Cells(), cell) {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cell %s already exists", cell)
+	}
+
+	c.logf("adding cell %s", cell)
+	if err := c.addCellInfo(ctx, cell); err != nil {
+		return err
+	}
+
+	c.mu.Lock()
+	c.cells = append(c.cells, cell)
+	c.mu.Unlock()
+	return nil
 }
 
 // MySQLVersion returns the mysqld version detected from the image, e.g.

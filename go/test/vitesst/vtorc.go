@@ -19,6 +19,7 @@ package vitesst
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strconv"
 	"sync"
 
@@ -69,7 +70,7 @@ func (c *Cluster) VTOrcs() []*VTOrc {
 // ("" means the first cell), with optional extra arguments.
 func (c *Cluster) AddVTOrc(ctx context.Context, cell string, extraArgs ...string) (*VTOrc, error) {
 	if cell == "" {
-		cell = c.cells[0]
+		cell = c.firstCell()
 	}
 
 	c.mu.Lock()
@@ -77,9 +78,9 @@ func (c *Cluster) AddVTOrc(ctx context.Context, cell string, extraArgs ...string
 	c.vtorcSeq++
 	c.mu.Unlock()
 
-	name := "vtorc"
+	name := c.name("vtorc")
 	if index > 0 {
-		name = fmt.Sprintf("vtorc-%d", index+1)
+		name = c.name(fmt.Sprintf("vtorc-%d", index+1))
 	}
 
 	v := &VTOrc{
@@ -115,6 +116,30 @@ func (v *VTOrc) WriteConfig(ctx context.Context, content string) error {
 	return writeContainerFile(ctx, ctr, vtorcConfigPath, content)
 }
 
+// DisableGlobalRecoveries stops this VTOrc from running recoveries, so tests
+// can change the topology without VTOrc reacting to the intermediate states.
+func (v *VTOrc) DisableGlobalRecoveries(ctx context.Context) error {
+	return v.callRecoveriesAPI(ctx, "/api/disable-global-recoveries")
+}
+
+// EnableGlobalRecoveries lets this VTOrc run recoveries again.
+func (v *VTOrc) EnableGlobalRecoveries(ctx context.Context) error {
+	return v.callRecoveriesAPI(ctx, "/api/enable-global-recoveries")
+}
+
+// callRecoveriesAPI calls one of the global-recovery endpoints and checks that
+// VTOrc accepted the change.
+func (v *VTOrc) callRecoveriesAPI(ctx context.Context, path string) error {
+	status, body, err := v.MakeAPICall(ctx, path)
+	if err != nil {
+		return err
+	}
+	if status != http.StatusOK {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%s %s returned status %d: %s", v.name, path, status, body)
+	}
+	return nil
+}
+
 // Restart recreates the VTOrc container behind this handle with the same
 // network alias and a fresh config file. When extraArgs are given they
 // replace the previous extra args.
@@ -147,7 +172,8 @@ func (v *VTOrc) Restart(ctx context.Context, extraArgs ...string) error {
 func (c *Cluster) runVTOrcContainer(ctx context.Context, name, cell string, extraArgs []string) (testcontainers.Container, error) {
 	args := []string{"vtorc"}
 	args = append(args, c.topoFlags()...)
-	args = append(args,
+	args = append(
+		args,
 		"--cell", cell,
 		"--config-file", vtorcConfigPath,
 		"--port", strconv.Itoa(vtorcHTTPPort),
@@ -171,14 +197,16 @@ func (c *Cluster) runVTOrcContainer(ctx context.Context, name, cell string, extr
 		return nil, vterrors.Wrapf(err, "preparing files for %s", name)
 	}
 
-	return testcontainers.Run(ctx, c.image,
+	return testcontainers.Run(
+		ctx, c.image,
 		testcontainers.WithCmd(args...),
 		testcontainers.WithExposedPorts(fmt.Sprintf("%d/tcp", vtorcHTTPPort)),
 		network.WithNetwork([]string{name}, c.network),
 		testcontainers.WithEnv(map[string]string{"VTTEST": "endtoend"}),
 		filesOpt,
 		testcontainers.WithLogConsumers(c.newLogConsumer(name)),
-		testcontainers.WithWaitStrategyAndDeadline(defaultStartupTimeout,
+		testcontainers.WithWaitStrategyAndDeadline(
+			defaultStartupTimeout,
 			wait.ForHTTP("/debug/health").
 				WithPort(fmt.Sprintf("%d/tcp", vtorcHTTPPort)).
 				WithStartupTimeout(defaultStartupTimeout).

@@ -76,8 +76,9 @@ GRANT ALL ON *.* TO '%s'@'%%' WITH GRANT OPTION;
 	socket := tabletDirForUID(comparisonMySQLUID) + "/mysql.sock"
 	probe := []string{"mysql", "--socket", socket, "-u", dbaUser, "-e", "SELECT 1"}
 
-	name := "mysql-compare-" + dbName
-	ctr, err := testcontainers.Run(ctx, cluster.image,
+	name := cluster.name("mysql-compare-" + dbName)
+	ctr, err := testcontainers.Run(
+		ctx, cluster.image,
 		testcontainers.WithEntrypoint("bash", "-c", script),
 		testcontainers.WithExposedPorts(fmt.Sprintf("%d/tcp", tabletMySQLPort)),
 		testcontainers.WithTmpfs(map[string]string{vtDataRoot: "uid=999,gid=999"}),
@@ -87,7 +88,8 @@ GRANT ALL ON *.* TO '%s'@'%%' WITH GRANT OPTION;
 			FileMode:          0o644,
 		}),
 		testcontainers.WithLogConsumers(cluster.newLogConsumer(name)),
-		testcontainers.WithWaitStrategyAndDeadline(tabletStartupTimeout,
+		testcontainers.WithWaitStrategyAndDeadline(
+			tabletStartupTimeout,
 			wait.ForExec(probe).
 				WithStartupTimeout(tabletStartupTimeout).
 				WithPollInterval(defaultPollInterval),

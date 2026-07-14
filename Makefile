@@ -151,10 +151,10 @@ cross-install: cross-build
 	mkdir -p "$${PREFIX}/bin"
 	cp "${VTROOTBIN}/${GOOS}_${GOARCH}/"{mysqlctl,mysqlctld,vtorc,vtadmin,vtctld,vtctlclient,vtctldclient,vtgate,vttablet,vtbackup} "$${PREFIX}/bin/"
 
-# vitesst-images builds the vitesst e2e test images (vitesst:mysql80 and
-# vitesst:mysql84) from the current source tree. Binaries are cross-compiled
-# on the host for the Docker server architecture, so image rebuilds after
-# source changes only cost a COPY layer.
+# vitesst-images builds the vitesst e2e test images (vitesst:mysql80,
+# vitesst:mysql84 and vitesst:mariadb) from the current source tree. Binaries
+# are cross-compiled on the host for the Docker server architecture, so image
+# rebuilds after source changes only cost a COPY layer.
 # Usage: make vitesst-images
 vitesst-images:
 ifndef NOBANNER

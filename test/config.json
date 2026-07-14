@@ -629,23 +629,6 @@
       ],
       "Needs": []
     },
-    "vtgate_schema": {
-      "File": "unused.go",
-      "Packages": [
-        "vitess.io/vitess/go/test/endtoend/vtgate/schema"
-      ],
-      "Args": [
-        "-timeout",
-        "20m"
-      ],
-      "Command": [],
-      "Manual": false,
-      "Shard": "vtgate_schema",
-      "Tags": [
-        "upgrade_downgrade_query_serving_schema"
-      ],
-      "Needs": []
-    },
     "vtgate_transaction_twopc_stress": {
       "File": "unused.go",
       "Packages": [

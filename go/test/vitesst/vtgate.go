@@ -46,8 +46,17 @@ type (
 	VTGate struct {
 		component
 
-		argsMu    sync.Mutex
-		extraArgs []string
+		specMu sync.Mutex
+		spec   VTGateSpec
+	}
+
+	// VTGateSpec describes a vtgate to start. An empty Cell places it in the
+	// cluster's first cell, and an empty CellsToWatch makes it watch every
+	// cell of the cluster. CellsToWatch also accepts a cell alias.
+	VTGateSpec struct {
+		Cell         string
+		CellsToWatch []string
+		ExtraArgs    []string
 	}
 )
 
@@ -120,12 +129,12 @@ func (g *VTGate) QueryLog(ctx context.Context) (string, error) {
 // extra args, so tests can restart vtgate with new flags. Mapped host ports
 // change across a restart; use the address accessors to re-resolve them.
 func (g *VTGate) Restart(ctx context.Context, extraArgs ...string) error {
-	g.argsMu.Lock()
+	g.specMu.Lock()
 	if len(extraArgs) > 0 {
-		g.extraArgs = extraArgs
+		g.spec.ExtraArgs = extraArgs
 	}
-	args := g.extraArgs
-	g.argsMu.Unlock()
+	spec := g.spec
+	g.specMu.Unlock()
 
 	old := g.setContainer(nil)
 	if old != nil {
@@ -134,7 +143,7 @@ func (g *VTGate) Restart(ctx context.Context, extraArgs ...string) error {
 		}
 	}
 
-	ctr, err := g.cluster.runVTGateContainer(ctx, g.name, args)
+	ctr, err := g.cluster.runVTGateContainer(ctx, g.name, spec)
 	if err != nil {
 		return vterrors.Wrapf(err, "restarting %s", g.name)
 	}
@@ -162,22 +171,33 @@ func (c *Cluster) VTGates() []*VTGate {
 }
 
 // AddVTGate starts an additional vtgate with its own network alias for
-// multi-vtgate tests. The given extraArgs apply to it in place of the
-// cluster-wide vtgate args.
+// multi-vtgate tests, in the cluster's first cell and watching every cell. The
+// given extraArgs apply to it in place of the cluster-wide vtgate args.
 func (c *Cluster) AddVTGate(ctx context.Context, extraArgs ...string) (*VTGate, error) {
+	return c.AddVTGateSpec(ctx, VTGateSpec{ExtraArgs: extraArgs})
+}
+
+// AddVTGateSpec starts an additional vtgate with its own network alias, placed
+// in the spec's cell and watching the spec's cells.
+func (c *Cluster) AddVTGateSpec(ctx context.Context, spec VTGateSpec) (*VTGate, error) {
+	if spec.Cell == "" {
+		spec.Cell = c.firstCell()
+	}
+	if len(spec.CellsToWatch) == 0 {
+		spec.CellsToWatch = c.Cells()
+	}
+	if len(spec.ExtraArgs) == 0 {
+		spec.ExtraArgs = c.opts.vtgateArgs
+	}
+
 	c.mu.Lock()
 	index := c.vtgateSeq
 	c.vtgateSeq++
 	c.mu.Unlock()
 
-	name := "vtgate"
+	name := c.name("vtgate")
 	if index > 0 {
-		name = fmt.Sprintf("vtgate-%d", index+1)
-	}
-
-	args := c.opts.vtgateArgs
-	if len(extraArgs) > 0 {
-		args = extraArgs
+		name = c.name(fmt.Sprintf("vtgate-%d", index+1))
 	}
 
 	g := &VTGate{
@@ -186,10 +206,10 @@ func (c *Cluster) AddVTGate(ctx context.Context, extraArgs ...string) (*VTGate, 
 			httpPort: fmt.Sprintf("%d/tcp", vtgateHTTPPort),
 			cluster:  c,
 		},
-		extraArgs: args,
+		spec: spec,
 	}
 
-	ctr, err := c.runVTGateContainer(ctx, name, args)
+	ctr, err := c.runVTGateContainer(ctx, name, spec)
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "starting %s", name)
 	}
@@ -201,16 +221,17 @@ func (c *Cluster) AddVTGate(ctx context.Context, extraArgs ...string) (*VTGate, 
 	return g, nil
 }
 
-// runVTGateContainer starts one vtgate container with the given network alias
-// and extra args.
-func (c *Cluster) runVTGateContainer(ctx context.Context, name string, extraArgs []string) (testcontainers.Container, error) {
+// runVTGateContainer starts one vtgate container with the given network alias,
+// from a spec whose cell and watched cells are already resolved.
+func (c *Cluster) runVTGateContainer(ctx context.Context, name string, spec VTGateSpec) (testcontainers.Container, error) {
 	args := []string{"vtgate"}
 	args = append(args, c.topoFlags()...)
-	args = append(args,
+	args = append(
+		args,
 		"--config-file", vtgateConfigPath,
 		"--log-queries-to-file", vtgateQueryLogPath,
-		"--cell", c.cells[0],
-		"--cells-to-watch", strings.Join(c.cells, ","),
+		"--cell", spec.Cell,
+		"--cells-to-watch", strings.Join(spec.CellsToWatch, ","),
 		"--port", strconv.Itoa(vtgateHTTPPort),
 		"--grpc-port", strconv.Itoa(vtgateGRPCPort),
 		"--mysql-server-port", strconv.Itoa(vtgateMySQLPort),
@@ -220,10 +241,10 @@ func (c *Cluster) runVTGateContainer(ctx context.Context, name string, extraArgs
 		"--log-format", "text",
 		"--alsologtostderr",
 	)
-	if c.mysqlVersion != "" && !argsContain(extraArgs, "mysql-server-version") {
+	if c.mysqlVersion != "" && !argsContain(spec.ExtraArgs, "mysql-server-version") {
 		args = append(args, "--mysql-server-version", c.mysqlVersion+"-vitess")
 	}
-	args = append(args, extraArgs...)
+	args = append(args, spec.ExtraArgs...)
 
 	// The config file is staged world-writable: files are copied in as root,
 	// and WriteConfig overwrites this path by exec as the vitess user.
@@ -233,7 +254,8 @@ func (c *Cluster) runVTGateContainer(ctx context.Context, name string, extraArgs
 		return nil, vterrors.Wrapf(err, "preparing files for %s", name)
 	}
 
-	return testcontainers.Run(ctx, c.image,
+	return testcontainers.Run(
+		ctx, c.image,
 		testcontainers.WithCmd(args...),
 		testcontainers.WithExposedPorts(
 			fmt.Sprintf("%d/tcp", vtgateHTTPPort),
@@ -244,7 +266,8 @@ func (c *Cluster) runVTGateContainer(ctx context.Context, name string, extraArgs
 		testcontainers.WithEnv(mergeEnv(map[string]string{"VTTEST": "endtoend"}, c.opts.vtgateEnv)),
 		filesOpt,
 		testcontainers.WithLogConsumers(c.newLogConsumer(name)),
-		testcontainers.WithWaitStrategyAndDeadline(defaultStartupTimeout,
+		testcontainers.WithWaitStrategyAndDeadline(
+			defaultStartupTimeout,
 			wait.ForHTTP("/debug/vars").
 				WithPort(fmt.Sprintf("%d/tcp", vtgateHTTPPort)).
 				WithStartupTimeout(defaultStartupTimeout).

@@ -88,6 +88,9 @@ type (
 		// and is not removed at teardown.
 		borrowedNetwork *testcontainers.DockerNetwork
 
+		// namePrefix is prepended to every component's network alias.
+		namePrefix string
+
 		// followLogs lists component name prefixes whose container logs are
 		// streamed to the cluster log as they arrive.
 		followLogs []string
@@ -134,6 +137,8 @@ type (
 	withoutVTGateOption struct{}
 
 	networkOption struct{ nw *testcontainers.DockerNetwork }
+
+	namePrefixOption string
 )
 
 func (o cellsOption) apply(opts *clusterOptions) {
@@ -260,6 +265,18 @@ func (o networkOption) apply(opts *clusterOptions) {
 // must reach. The caller owns the network's lifecycle.
 func WithNetwork(nw *testcontainers.DockerNetwork) ClusterOption {
 	return networkOption{nw: nw}
+}
+
+func (o namePrefixOption) apply(opts *clusterOptions) {
+	opts.namePrefix = string(o)
+}
+
+// WithNamePrefix prepends a prefix to the network alias of every component of
+// the cluster, so that two clusters sharing one network through WithNetwork do
+// not collide. A cluster created with WithNamePrefix("ext-") reaches its
+// topology server at "ext-etcd:2379", which Cluster.TopoAddress returns.
+func WithNamePrefix(prefix string) ClusterOption {
+	return namePrefixOption(prefix)
 }
 
 // newClusterOptions applies the options over the defaults.

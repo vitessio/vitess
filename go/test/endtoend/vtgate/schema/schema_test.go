@@ -17,6 +17,7 @@ limitations under the License.
 package schema
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -31,15 +32,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 var (
-	clusterInstance       *cluster.LocalProcessCluster
-	hostname              = "localhost"
+	clusterInstance       *vitesst.Cluster
 	keyspaceName          = "ks"
-	cell                  = "zone1"
-	schemaChangeDirectory = ""
+	schemaChangeDirectory = "/vt/vtdataroot/schema_change_dir"
 	totalTableCount       = 4
 	createTable           = `
 		CREATE TABLE %s (
@@ -58,46 +57,39 @@ var (
 func TestMain(m *testing.M) {
 	flag.Parse()
 
-	exitcode, err := func() (int, error) {
-		clusterInstance = cluster.NewCluster(cell, hostname)
-		schemaChangeDirectory = path.Join("/tmp", fmt.Sprintf("schema_change_dir_%d", clusterInstance.GetAndReserveTabletUID()))
-		defer os.RemoveAll(schemaChangeDirectory)
-		defer clusterInstance.Teardown()
+	exitcode := func() int {
+		ctx := context.Background()
 
-		if _, err := os.Stat(schemaChangeDirectory); os.IsNotExist(err) {
-			_ = os.Mkdir(schemaChangeDirectory, 0o700)
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithoutVTGate(),
+			vitesst.WithVTCtldArgs(
+				"--schema-change-dir", schemaChangeDirectory,
+				"--schema-change-controller", "local",
+				"--schema-change-check-interval", "1s",
+			),
+			vitesst.WithKeyspace(keyspaceName).
+				WithShardNames("0", "1").
+				WithReplicas(1),
+		)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
 		}
+		cleanup, err := cluster.Start(ctx)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
 
-		clusterInstance.VtctldExtraArgs = []string{
-			"--schema-change-dir", schemaChangeDirectory,
-			"--schema-change-controller", "local",
-			"--schema-change-check-interval", "1s",
-		}
-
-		if err := clusterInstance.StartTopo(); err != nil {
-			return 1, err
-		}
-
-		// Start keyspace
-		cell := clusterInstance.Cell
-		keyspace := &cluster.Keyspace{
-			Name: keyspaceName,
-		}
-
-		if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 2, true, cell); err != nil {
-			return 1, err
-		}
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"1"}, 1, false, cell); err != nil {
-			return 1, err
-		}
-		return m.Run(), nil
+		clusterInstance = cluster
+		return m.Run()
 	}()
-	if err != nil {
-		fmt.Printf("%v\n", err)
-		os.Exit(1)
-	} else {
-		os.Exit(exitcode)
-	}
+	os.Exit(exitcode)
 }
 
 func TestSchemaChange(t *testing.T) {
@@ -109,10 +101,34 @@ func TestSchemaChange(t *testing.T) {
 	testApplySchemaBatch(t)
 	testUnsafeAllowForeignKeys(t)
 	testCreateInvalidView(t)
-	testCopySchemaShards(t, clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].VttabletProcess.TabletPath, 2)
+	testCopySchemaShards(t, shardTablet(t, "0", 0).Alias(), 2)
 	testCopySchemaShards(t, keyspaceName+"/0", 3)
 	testCopySchemaShardWithDifferentDB(t, 4)
 	testWithAutoSchemaFromChangeDir(t)
+}
+
+// shardTablet returns the tablet of the given shard at the given index, with
+// the shard's primary first.
+func shardTablet(t *testing.T, shardName string, index int) *vitesst.Tablet {
+	keyspace := clusterInstance.Keyspace(keyspaceName)
+	require.NotNil(t, keyspace)
+
+	shard := keyspace.Shard(shardName)
+	require.NotNil(t, shard)
+
+	tablets := shard.Tablets()
+	require.Greater(t, len(tablets), index)
+	return tablets[index]
+}
+
+// applySchema applies DDL to the keyspace with the direct strategy.
+func applySchema(t *testing.T, sql string) error {
+	return clusterInstance.Vtctld().ExecuteCommand(t.Context(),
+		"ApplySchema",
+		"--sql", sql,
+		"--ddl-strategy", "direct -allow-zero-in-date",
+		keyspaceName,
+	)
 }
 
 func testWithInitialSchema(t *testing.T) {
@@ -120,7 +136,7 @@ func testWithInitialSchema(t *testing.T) {
 	var sqlQuery string
 	for i := range totalTableCount {
 		sqlQuery = fmt.Sprintf(createTable, fmt.Sprintf("vt_select_test_%02d", i))
-		err := clusterInstance.VtctldClientProcess.ApplySchema(keyspaceName, sqlQuery)
+		err := applySchema(t, sqlQuery)
 		require.Nil(t, err)
 	}
 
@@ -128,21 +144,21 @@ func testWithInitialSchema(t *testing.T) {
 	checkTables(t, totalTableCount)
 
 	// Also match the vschema for those tablets
-	matchSchema(t, clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].VttabletProcess.TabletPath, clusterInstance.Keyspaces[0].Shards[1].Vttablets[0].VttabletProcess.TabletPath)
+	matchSchema(t, shardTablet(t, "0", 0).Alias(), shardTablet(t, "1", 0).Alias())
 }
 
 // testWithAlterSchema if we alter schema and then apply, the resultant schema should match across shards
 func testWithAlterSchema(t *testing.T) {
 	sqlQuery := fmt.Sprintf(alterTable, fmt.Sprintf("vt_select_test_%02d", 3), "msg")
-	err := clusterInstance.VtctldClientProcess.ApplySchema(keyspaceName, sqlQuery)
+	err := applySchema(t, sqlQuery)
 	require.Nil(t, err)
-	matchSchema(t, clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].VttabletProcess.TabletPath, clusterInstance.Keyspaces[0].Shards[1].Vttablets[0].VttabletProcess.TabletPath)
+	matchSchema(t, shardTablet(t, "0", 0).Alias(), shardTablet(t, "1", 0).Alias())
 }
 
 // testWithAlterDatabase tests that ALTER DATABASE is accepted by the validator.
 func testWithAlterDatabase(t *testing.T) {
 	sql := "create database alter_database_test; alter database alter_database_test default character set = utf8mb4; drop database alter_database_test"
-	err := clusterInstance.VtctldClientProcess.ApplySchema(keyspaceName, sql)
+	err := applySchema(t, sql)
 	assert.NoError(t, err)
 }
 
@@ -156,37 +172,48 @@ func testWithAlterDatabase(t *testing.T) {
 // See: https://github.com/vitessio/vitess/issues/1731#issuecomment-222914389
 func testWithDropCreateSchema(t *testing.T) {
 	dropCreateTable := fmt.Sprintf("DROP TABLE vt_select_test_%02d ;", 2) + fmt.Sprintf(createTable, fmt.Sprintf("vt_select_test_%02d", 2))
-	err := clusterInstance.VtctldClientProcess.ApplySchema(keyspaceName, dropCreateTable)
+	err := applySchema(t, dropCreateTable)
 	require.NoError(t, err)
 	checkTables(t, totalTableCount)
 }
 
 // testWithAutoSchemaFromChangeDir on putting sql file to schema change directory, it should apply that sql to all shards
 func testWithAutoSchemaFromChangeDir(t *testing.T) {
-	_ = os.Mkdir(path.Join(schemaChangeDirectory, keyspaceName), 0o700)
-	_ = os.Mkdir(path.Join(schemaChangeDirectory, keyspaceName, "input"), 0o700)
-	sqlFile := path.Join(schemaChangeDirectory, keyspaceName, "input/create_test_table_x.sql")
-	err := os.WriteFile(sqlFile, []byte("create table test_table_x (id int)"), 0o644)
+	ctx := t.Context()
+	vtctld := clusterInstance.Vtctld()
+
+	keyspaceDir := path.Join(schemaChangeDirectory, keyspaceName)
+	exitCode, output, err := vtctld.Exec(ctx, "mkdir", "-p", path.Join(keyspaceDir, "input"))
+	require.Nil(t, err)
+	require.Zero(t, exitCode, output)
+
+	sqlFile := path.Join(keyspaceDir, "input/create_test_table_x.sql")
+	err = vtctld.WriteFile(ctx, sqlFile, "create table test_table_x (id int)")
 	require.Nil(t, err)
 	timeout := time.Now().Add(10 * time.Second)
 	matchFoundAfterAutoSchemaApply := false
 	for time.Now().Before(timeout) {
-		if _, err := os.Stat(sqlFile); os.IsNotExist(err) {
+		exitCode, _, err := vtctld.Exec(ctx, "test", "-f", sqlFile)
+		require.Nil(t, err)
+		if exitCode != 0 {
 			matchFoundAfterAutoSchemaApply = true
 			checkTables(t, totalTableCount+1)
-			matchSchema(t, clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].VttabletProcess.TabletPath, clusterInstance.Keyspaces[0].Shards[1].Vttablets[0].VttabletProcess.TabletPath)
+			matchSchema(t, shardTablet(t, "0", 0).Alias(), shardTablet(t, "1", 0).Alias())
+			break
 		}
 	}
 	assert.True(t, matchFoundAfterAutoSchemaApply, "Auto schema is not consumed")
-	defer os.RemoveAll(path.Join(schemaChangeDirectory, keyspaceName))
+	defer func() {
+		require.Nil(t, vtctld.RemoveFile(ctx, keyspaceDir))
+	}()
 }
 
 // matchSchema schema for supplied tablets should match
 func matchSchema(t *testing.T, firstTablet string, secondTablet string) {
-	firstShardSchema, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("GetSchema", firstTablet)
+	firstShardSchema, err := clusterInstance.Vtctld().ExecuteCommandWithOutput(t.Context(), "GetSchema", firstTablet)
 	require.Nil(t, err)
 
-	secondShardSchema, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("GetSchema", secondTablet)
+	secondShardSchema, err := clusterInstance.Vtctld().ExecuteCommandWithOutput(t.Context(), "GetSchema", secondTablet)
 	require.Nil(t, err)
 
 	assert.Equal(t, firstShardSchema, secondShardSchema)
@@ -200,12 +227,12 @@ func matchSchema(t *testing.T, firstTablet string, secondTablet string) {
 // is the MySQL behavior the user expects.
 func testDropNonExistentTables(t *testing.T) {
 	dropNonExistentTable := "DROP TABLE nonexistent_table;"
-	output, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ApplySchema", "--sql", dropNonExistentTable, keyspaceName)
+	output, err := clusterInstance.Vtctld().ExecuteCommandWithOutput(t.Context(), "ApplySchema", "--sql", dropNonExistentTable, keyspaceName)
 	require.Error(t, err)
 	assert.True(t, strings.Contains(output, "Unknown table"))
 
 	dropIfExists := "DROP TABLE IF EXISTS nonexistent_table;"
-	err = clusterInstance.VtctldClientProcess.ApplySchema(keyspaceName, dropIfExists)
+	err = applySchema(t, dropIfExists)
 	require.Nil(t, err)
 
 	checkTables(t, totalTableCount)
@@ -216,7 +243,7 @@ func testDropNonExistentTables(t *testing.T) {
 func testCreateInvalidView(t *testing.T) {
 	for _, ddlStrategy := range []string{"direct", "direct -allow-zero-in-date"} {
 		createInvalidView := "CREATE OR REPLACE VIEW invalid_view AS SELECT * FROM nonexistent_table;"
-		output, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ApplySchema", "--ddl-strategy", ddlStrategy, "--sql", createInvalidView, keyspaceName)
+		output, err := clusterInstance.Vtctld().ExecuteCommandWithOutput(t.Context(), "ApplySchema", "--ddl-strategy", ddlStrategy, "--sql", createInvalidView, keyspaceName)
 		require.Error(t, err)
 		assert.Contains(t, output, "doesn't exist (errno 1146)")
 	}
@@ -225,25 +252,25 @@ func testCreateInvalidView(t *testing.T) {
 func testApplySchemaBatch(t *testing.T) {
 	{
 		sqls := "create table batch1(id int primary key);create table batch2(id int primary key);create table batch3(id int primary key);create table batch4(id int primary key);create table batch5(id int primary key);"
-		_, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ApplySchema", "--sql", sqls, "--batch-size", "2", keyspaceName)
+		_, err := clusterInstance.Vtctld().ExecuteCommandWithOutput(t.Context(), "ApplySchema", "--sql", sqls, "--batch-size", "2", keyspaceName)
 		require.NoError(t, err)
 		checkTables(t, totalTableCount+5)
 	}
 	{
 		sqls := "drop table batch1; drop table batch2; drop table batch3; drop table batch4; drop table batch5"
-		_, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ApplySchema", "--sql", sqls, keyspaceName)
+		_, err := clusterInstance.Vtctld().ExecuteCommandWithOutput(t.Context(), "ApplySchema", "--sql", sqls, keyspaceName)
 		require.NoError(t, err)
 		checkTables(t, totalTableCount)
 	}
 	{
 		sqls := "create table batch1(id int primary key);create table batch2(id int primary key);create table batch3(id int primary key);create table batch4(id int primary key);create table batch5(id int primary key);"
-		_, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ApplySchema", "--ddl-strategy", "direct --allow-zero-in-date", "--sql", sqls, "--batch-size", "2", keyspaceName)
+		_, err := clusterInstance.Vtctld().ExecuteCommandWithOutput(t.Context(), "ApplySchema", "--ddl-strategy", "direct --allow-zero-in-date", "--sql", sqls, "--batch-size", "2", keyspaceName)
 		require.NoError(t, err)
 		checkTables(t, totalTableCount+5)
 	}
 	{
 		sqls := "drop table batch1; drop table batch2; drop table batch3; drop table batch4; drop table batch5"
-		_, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ApplySchema", "--sql", sqls, keyspaceName)
+		_, err := clusterInstance.Vtctld().ExecuteCommandWithOutput(t.Context(), "ApplySchema", "--sql", sqls, keyspaceName)
 		require.NoError(t, err)
 		checkTables(t, totalTableCount)
 	}
@@ -255,17 +282,17 @@ func testUnsafeAllowForeignKeys(t *testing.T) {
 		create table t12 (id int primary key, i int, constraint f1201 foreign key (i) references t11 (id) on delete set null);
 	`
 	{
-		_, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ApplySchema", "--ddl-strategy", "direct --allow-zero-in-date", "--sql", sqls, keyspaceName)
+		_, err := clusterInstance.Vtctld().ExecuteCommandWithOutput(t.Context(), "ApplySchema", "--ddl-strategy", "direct --allow-zero-in-date", "--sql", sqls, keyspaceName)
 		assert.Error(t, err)
 		checkTables(t, totalTableCount)
 	}
 	{
-		_, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ApplySchema", "--ddl-strategy", "direct --unsafe-allow-foreign-keys --allow-zero-in-date", "--sql", sqls, keyspaceName)
+		_, err := clusterInstance.Vtctld().ExecuteCommandWithOutput(t.Context(), "ApplySchema", "--ddl-strategy", "direct --unsafe-allow-foreign-keys --allow-zero-in-date", "--sql", sqls, keyspaceName)
 		require.NoError(t, err)
 		checkTables(t, totalTableCount+2)
 	}
 	{
-		_, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ApplySchema", "--sql", "drop table t11, t12", keyspaceName)
+		_, err := clusterInstance.Vtctld().ExecuteCommandWithOutput(t.Context(), "ApplySchema", "--sql", "drop table t11, t12", keyspaceName)
 		require.NoError(t, err)
 		checkTables(t, totalTableCount)
 	}
@@ -273,13 +300,13 @@ func testUnsafeAllowForeignKeys(t *testing.T) {
 
 // checkTables checks the number of tables in the first two shards.
 func checkTables(t *testing.T, count int) {
-	checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[0].Vttablets[0], count)
-	checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[1].Vttablets[0], count)
+	checkTablesCount(t, shardTablet(t, "0", 0), count)
+	checkTablesCount(t, shardTablet(t, "1", 0), count)
 }
 
 // checkTablesCount checks the number of tables in the given tablet
-func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, count int) {
-	queryResult, err := tablet.VttabletProcess.QueryTablet("show tables;", keyspaceName, true)
+func checkTablesCount(t *testing.T, tablet *vitesst.Tablet, count int) {
+	queryResult, err := tablet.QueryTablet(t.Context(), "show tables;")
 	require.Nil(t, err)
 	assert.Equal(t, len(queryResult.Rows), count)
 }
@@ -287,30 +314,32 @@ func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, count int) {
 // testCopySchemaShards tests that schema from source is correctly applied to destination
 func testCopySchemaShards(t *testing.T, source string, shard int) {
 	addNewShard(t, shard)
-	// InitShardPrimary creates the db, but there shouldn't be any tables yet.
-	checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[shard].Vttablets[0], 0)
-	checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[shard].Vttablets[1], 0)
+	shardName := strconv.Itoa(shard)
+	// The primary election creates the db, but there shouldn't be any tables yet.
+	checkTablesCount(t, shardTablet(t, shardName, 0), 0)
+	checkTablesCount(t, shardTablet(t, shardName, 1), 0)
 	// Run the command twice to make sure it's idempotent.
 	for range 2 {
-		err := clusterInstance.VtctldClientProcess.ExecuteCommand("CopySchemaShard", source, fmt.Sprintf("%s/%d", keyspaceName, shard))
+		err := clusterInstance.Vtctld().ExecuteCommand(t.Context(), "CopySchemaShard", source, fmt.Sprintf("%s/%d", keyspaceName, shard))
 		require.Nil(t, err)
 	}
 	// shard2 primary should look the same as the replica we copied from
-	checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[shard].Vttablets[0], totalTableCount)
-	checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[shard].Vttablets[1], totalTableCount)
+	checkTablesCount(t, shardTablet(t, shardName, 0), totalTableCount)
+	checkTablesCount(t, shardTablet(t, shardName, 1), totalTableCount)
 
-	matchSchema(t, clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].VttabletProcess.TabletPath, clusterInstance.Keyspaces[0].Shards[shard].Vttablets[0].VttabletProcess.TabletPath)
+	matchSchema(t, shardTablet(t, "0", 0).Alias(), shardTablet(t, shardName, 0).Alias())
 }
 
 // testCopySchemaShardWithDifferentDB if we apply different schema to new shard, it should throw error
 func testCopySchemaShardWithDifferentDB(t *testing.T, shard int) {
 	addNewShard(t, shard)
-	checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[shard].Vttablets[0], 0)
-	checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[shard].Vttablets[1], 0)
+	shardName := strconv.Itoa(shard)
+	checkTablesCount(t, shardTablet(t, shardName, 0), 0)
+	checkTablesCount(t, shardTablet(t, shardName, 1), 0)
 	source := keyspaceName + "/0"
 
-	tabletAlias := clusterInstance.Keyspaces[0].Shards[shard].Vttablets[0].VttabletProcess.TabletPath
-	schema, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("GetSchema", tabletAlias)
+	tabletAlias := shardTablet(t, shardName, 0).Alias()
+	schema, err := clusterInstance.Vtctld().ExecuteCommandWithOutput(t.Context(), "GetSchema", tabletAlias)
 	require.Nil(t, err)
 
 	resultMap := make(map[string]any)
@@ -324,23 +353,20 @@ func testCopySchemaShardWithDifferentDB(t *testing.T, shard int) {
 	// (The different charset won't be corrected on the destination shard
 	//  because we use "CREATE DATABASE IF NOT EXISTS" and this doesn't fail if
 	//  there are differences in the options e.g. the character set.)
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ExecuteFetchAsDBA", "--json", tabletAlias, "ALTER DATABASE vt_ks CHARACTER SET latin1")
+	err = clusterInstance.Vtctld().ExecuteCommand(t.Context(), "ExecuteFetchAsDBA", "--json", tabletAlias, "ALTER DATABASE vt_ks CHARACTER SET latin1")
 	require.Nil(t, err)
 
-	output, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("CopySchemaShard", source, fmt.Sprintf("%s/%d", keyspaceName, shard))
+	output, err := clusterInstance.Vtctld().ExecuteCommandWithOutput(t.Context(), "CopySchemaShard", source, fmt.Sprintf("%s/%d", keyspaceName, shard))
 	require.Error(t, err)
 	assert.True(t, strings.Contains(output, "schemas are different"))
 
 	// shard2 primary should have the same number of tables. Only the db
 	// character set is different.
-	checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[shard].Vttablets[0], totalTableCount)
+	checkTablesCount(t, shardTablet(t, shardName, 0), totalTableCount)
 }
 
 // addNewShard adds a new shard dynamically
 func addNewShard(t *testing.T, shard int) {
-	keyspace := &cluster.Keyspace{
-		Name: keyspaceName,
-	}
-	err := clusterInstance.StartKeyspace(*keyspace, []string{strconv.Itoa(shard)}, 1, false, clusterInstance.Cell)
+	_, err := clusterInstance.AddShard(t.Context(), keyspaceName, strconv.Itoa(shard), 1, 0)
 	require.Nil(t, err)
 }

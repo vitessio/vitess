@@ -61,6 +61,10 @@ type (
 		baseKeyspace string
 		snapshotTime string
 
+		// image, when set, is the Docker image this keyspace's tablets run,
+		// instead of the cluster image.
+		image string
+
 		// tabletArgs are appended to this keyspace's vttablet command lines,
 		// after cluster-wide vttablet args.
 		tabletArgs []string
@@ -184,6 +188,14 @@ func (kb *keyspaceBuilder) WithSidecarDBName(name string) *keyspaceBuilder {
 func (kb *keyspaceBuilder) WithSnapshotOf(baseKeyspace, snapshotTime string) *keyspaceBuilder {
 	kb.config.baseKeyspace = baseKeyspace
 	kb.config.snapshotTime = snapshotTime
+	return kb
+}
+
+// WithImage runs this keyspace's tablets on the given Docker image instead of
+// the cluster image, e.g. Image("8.0") or "vitesst:mariadb" for a workflow
+// whose source keyspace runs an older MySQL or MariaDB than its target.
+func (kb *keyspaceBuilder) WithImage(image string) *keyspaceBuilder {
+	kb.config.image = image
 	return kb
 }
 

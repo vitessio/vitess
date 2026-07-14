@@ -67,7 +67,7 @@ func (v *Vtctld) executeCommand(ctx context.Context, args ...string) (string, er
 
 	cmd := append([]string{
 		"vtctldclient",
-		"--server", fmt.Sprintf("vtctld:%d", vtctldGRPCPort),
+		"--server", fmt.Sprintf("%s:%d", v.name, vtctldGRPCPort),
 	}, args...)
 
 	exitCode, output, err := containerExec(ctx, ctr, cmd)
@@ -92,7 +92,8 @@ func (v *Vtctld) createKeyspace(ctx context.Context, kc *keyspaceConfig) error {
 		args = append(args, "--durability-policy", kc.durabilityPolicy)
 	}
 	if kc.baseKeyspace != "" {
-		args = append(args,
+		args = append(
+			args,
 			"--type", "SNAPSHOT",
 			"--base-keyspace", kc.baseKeyspace,
 			"--snapshot-timestamp", kc.snapshotTime,
@@ -104,7 +105,8 @@ func (v *Vtctld) createKeyspace(ctx context.Context, kc *keyspaceConfig) error {
 
 // applySchema applies DDL to a keyspace.
 func (v *Vtctld) applySchema(ctx context.Context, keyspace, sql string) error {
-	return v.ExecuteCommand(ctx,
+	return v.ExecuteCommand(
+		ctx,
 		"ApplySchema",
 		"--sql", sql,
 		"--ddl-strategy", "direct -allow-zero-in-date",
@@ -119,7 +121,8 @@ func (v *Vtctld) applyVSchema(ctx context.Context, keyspace, vschema string) err
 
 // initializeShard elects the initial primary for a shard.
 func (v *Vtctld) initializeShard(ctx context.Context, keyspace, shard, primaryAlias string) error {
-	return v.ExecuteCommand(ctx,
+	return v.ExecuteCommand(
+		ctx,
 		"PlannedReparentShard",
 		keyspace+"/"+shard,
 		"--wait-replicas-timeout", "31s",
@@ -150,7 +153,8 @@ func (v *Vtctld) getShard(ctx context.Context, keyspace, shard string) (string, 
 func (c *Cluster) startVtctld(ctx context.Context) error {
 	args := []string{"vtctld"}
 	args = append(args, c.topoFlags()...)
-	args = append(args,
+	args = append(
+		args,
 		"--cell", c.cells[0],
 		"--service-map", "grpc-vtctl,grpc-vtctld",
 		"--port", strconv.Itoa(vtctldHTTPPort),
@@ -177,7 +181,8 @@ func (c *Cluster) startVtctld(ctx context.Context) error {
 		testcontainers.WithTmpfs(map[string]string{vtDataRoot: "uid=999,gid=999"}),
 		testcontainers.WithEnv(map[string]string{"VTTEST": "endtoend"}),
 		testcontainers.WithLogConsumers(c.newLogConsumer(c.vtctld.name)),
-		testcontainers.WithWaitStrategyAndDeadline(defaultStartupTimeout,
+		testcontainers.WithWaitStrategyAndDeadline(
+			defaultStartupTimeout,
 			wait.ForHTTP("/debug/vars").
 				WithPort(c.vtctld.httpPort).
 				WithStartupTimeout(defaultStartupTimeout).
@@ -199,10 +204,11 @@ func (c *Cluster) startVtctld(ctx context.Context) error {
 
 // addCellInfo registers a cell in the topology server.
 func (c *Cluster) addCellInfo(ctx context.Context, cell string) error {
-	_, err := c.vtctld.executeCommand(ctx,
+	_, err := c.vtctld.executeCommand(
+		ctx,
 		"AddCellInfo",
 		"--root", c.topoCellRoot(cell),
-		"--server-address", c.topoServerAddress(),
+		"--server-address", c.TopoAddress(),
 		cell,
 	)
 	return vterrors.Wrapf(err, "adding cell %s", cell)

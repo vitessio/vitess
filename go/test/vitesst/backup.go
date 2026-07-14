@@ -177,13 +177,14 @@ func (c *Cluster) StartVtbackup(ctx context.Context, spec VtbackupSpec) (*Vtback
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cluster has no backup storage, use WithBackupStorage")
 	}
 
-	name := fmt.Sprintf("vtbackup-%d", c.nextTabletUID())
+	name := c.name(fmt.Sprintf("vtbackup-%d", c.nextTabletUID()))
 	initDBPath := containerFilesDir + "/init_db.sql"
 
 	args := []string{"vtbackup"}
 	args = append(args, c.topoFlags()...)
 	args = append(args, c.backupFlags()...)
-	args = append(args,
+	args = append(
+		args,
 		"--init-keyspace", spec.Keyspace,
 		"--init-shard", spec.Shard,
 		"--init-db-sql-file", initDBPath,
@@ -203,7 +204,8 @@ func (c *Cluster) StartVtbackup(ctx context.Context, spec VtbackupSpec) (*Vtback
 		return nil, vterrors.Wrapf(err, "preparing files for %s", name)
 	}
 
-	ctr, err := testcontainers.Run(ctx, c.image,
+	ctr, err := testcontainers.Run(
+		ctx, c.image,
 		testcontainers.WithCmd(args...),
 		testcontainers.WithExposedPorts(fmt.Sprintf("%d/tcp", tabletMySQLPort)),
 		network.WithNetwork([]string{name}, c.network),

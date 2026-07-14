@@ -81,7 +81,7 @@ func (c *Cluster) VTAdmin() *VTAdmin {
 func (c *Cluster) startVTAdmin(ctx context.Context) error {
 	vtadmin := &VTAdmin{
 		component: component{
-			name:     "vtadmin",
+			name:     c.name("vtadmin"),
 			httpPort: fmt.Sprintf("%d/tcp", vtadminHTTPPort),
 			cluster:  c,
 		},
@@ -91,21 +91,21 @@ func (c *Cluster) startVTAdmin(ctx context.Context) error {
     "vtctlds": [
         {
             "host": {
-                "fqdn": "vtctld:%d",
-                "hostname": "vtctld:%d"
+                "fqdn": "%[1]s:%[2]d",
+                "hostname": "%[1]s:%[3]d"
             }
         }
     ],
     "vtgates": [
         {
             "host": {
-                "fqdn": "vtgate:%d",
-                "hostname": "vtgate:%d"
+                "fqdn": "%[4]s:%[5]d",
+                "hostname": "%[4]s:%[6]d"
             }
         }
     ]
 }
-`, vtctldHTTPPort, vtctldGRPCPort, vtgateHTTPPort, vtgateGRPCPort)
+`, c.vtctld.name, vtctldHTTPPort, vtctldGRPCPort, c.name("vtgate"), vtgateHTTPPort, vtgateGRPCPort)
 
 	rbacPath := containerFilesDir + "/vtadmin_rbac.yaml"
 	discoveryPath := containerFilesDir + "/vtadmin_discovery.json"
@@ -137,14 +137,16 @@ func (c *Cluster) startVTAdmin(ctx context.Context) error {
 	}
 	args = append(args, c.opts.vtadminArgs...)
 
-	ctr, err := testcontainers.Run(ctx, c.image,
+	ctr, err := testcontainers.Run(
+		ctx, c.image,
 		testcontainers.WithCmd(args...),
 		testcontainers.WithExposedPorts(vtadmin.httpPort),
 		network.WithNetwork([]string{vtadmin.name}, c.network),
 		testcontainers.WithEnv(map[string]string{"VTTEST": "endtoend"}),
 		filesOpt,
 		testcontainers.WithLogConsumers(c.newLogConsumer(vtadmin.name)),
-		testcontainers.WithWaitStrategyAndDeadline(defaultStartupTimeout,
+		testcontainers.WithWaitStrategyAndDeadline(
+			defaultStartupTimeout,
 			wait.ForListeningPort(vtadmin.httpPort).
 				WithStartupTimeout(defaultStartupTimeout).
 				WithPollInterval(defaultPollInterval),

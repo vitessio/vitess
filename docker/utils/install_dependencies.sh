@@ -200,6 +200,15 @@ mysql84)
 		)
 	fi
 	;;
+mariadb)
+	# Debian's own repositories carry MariaDB 10.11, the current long term
+	# release, so no extra apt source is needed.
+	PACKAGES=(
+		mariadb-server
+		mariadb-client
+		mariadb-backup
+	)
+	;;
 percona80)
 	PACKAGES=(
 		libperconaserverclient21

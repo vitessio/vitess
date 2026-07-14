@@ -19,10 +19,11 @@ limitations under the License.
 // container on a per-cluster Docker network, so tests are parallel-safe and
 // clean up after themselves even when they fail.
 //
-// The containers run prebuilt vitesst:mysql80 and vitesst:mysql84 Docker
-// images. Build them from the current source tree with `make vitesst-images`
-// before running tests so the containers use the code under test. The
-// VITESST_IMAGE environment variable overrides the image entirely.
+// The containers run the prebuilt vitesst:mysql80, vitesst:mysql84 and
+// vitesst:mariadb Docker images. Build them from the current source tree with
+// `make vitesst-images` before running tests so the containers use the code
+// under test. The VITESST_IMAGE environment variable overrides the image
+// entirely, and a keyspace's tablets take another image with WithImage.
 //
 // Test-scoped usage:
 //

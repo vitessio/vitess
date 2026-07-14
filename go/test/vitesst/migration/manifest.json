@@ -2529,8 +2529,9 @@
     "TestMain"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/transaction/twopc/fuzz",
-   "runtime_sec": null,
-   "status": "pending",
+   "quarantine_reason": "The migration is complete and faithful, but the reshard disruption cannot pass with this package's schema, on any framework. Reshard Create defaults to --defer-secondary-keys=true, so the target primary's copy phase runs `alter table twopc_fuzzer_insert drop key col`, which MySQL rejects with errno 1075 because `col` is auto_increment and is not the leading column of the primary key. Only errno 1091 is tolerated, so both streams stay at an empty position and the catchup wait times out. The same ALTER is rejected by stock mysql:8.0.42 and mysql:8.4, so this is not a container artifact. Upstream tracks it as vitessio/vitess#18965.",
+   "runtime_sec": 51,
+   "status": "quarantined",
    "verified_at_sha": null,
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/transaction/twopc/fuzz/",
    "wave": 5
@@ -3981,7 +3982,7 @@
     "compare-mysql",
     "multi-keyspace"
    ],
-   "ci_shard": "default-2",
+   "ci_shard": "default-3",
    "dropped_tests": [],
    "honesty": "pass",
    "lifecycle": "shared-cluster",
@@ -5032,7 +5033,7 @@
     "compare-mysql",
     "schema-tracking"
    ],
-   "ci_shard": "default-2",
+   "ci_shard": "default-3",
    "dropped_tests": [],
    "honesty": "pass",
    "lifecycle": "shared-cluster",
@@ -5535,7 +5536,7 @@
     "vtctldclient-exec",
     "multi-cell"
    ],
-   "ci_shard": null,
+   "ci_shard": "default-2",
    "dropped_tests": [],
    "honesty": null,
    "lifecycle": "shared-cluster",
@@ -5559,9 +5560,9 @@
     "TestSchemaChange"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/schema",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 26.6,
+   "status": "verified",
+   "verified_at_sha": "9da0e445be",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/schema/",
    "wave": 5
   },

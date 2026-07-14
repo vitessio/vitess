@@ -12,7 +12,7 @@
 #   --set *.cache-to=type=gha,mode=max,scope=vitesst-mysql84
 
 group "default" {
-  targets = ["mysql80", "mysql84"]
+  targets = ["mysql80", "mysql84", "mariadb"]
 }
 
 # MYSQL_VERSION pins must exist on cdn.mysql.com (the arm64 tarball path);
@@ -37,6 +37,19 @@ target "mysql84" {
     MYSQL_VERSION = "8.4.8"
   }
   tags = ["vitesst:mysql84"]
+}
+
+# MariaDB comes from Debian bookworm's own repositories, which carry the 10.11
+# long term release. Keyspaces select it with WithImage("vitesst:mariadb"), for
+# workflows that move data from MariaDB to MySQL.
+target "mariadb" {
+  context    = "."
+  dockerfile = "go/test/vitesst/Dockerfile"
+  args = {
+    FLAVOR     = "mariadb"
+    BASE_IMAGE = "debian:bookworm-slim"
+  }
+  tags = ["vitesst:mariadb"]
 }
 
 # Built on demand for the transaction/twopc suites, whose fault injection

@@ -73,21 +73,23 @@ func (c *Cluster) startTopo(ctx context.Context) error {
 // startEtcd starts the etcd topology server container.
 func (c *Cluster) startEtcd(ctx context.Context) error {
 	topo := &component{
-		name:     "etcd",
+		name:     c.name("etcd"),
 		httpPort: fmt.Sprintf("%d/tcp", etcdClientPort),
 		cluster:  c,
 	}
 
-	ctr, err := testcontainers.Run(ctx, etcdImage,
+	ctr, err := testcontainers.Run(
+		ctx, etcdImage,
 		testcontainers.WithCmd(
 			"etcd",
 			"--listen-client-urls", fmt.Sprintf("http://0.0.0.0:%d", etcdClientPort),
-			"--advertise-client-urls", fmt.Sprintf("http://etcd:%d", etcdClientPort),
+			"--advertise-client-urls", fmt.Sprintf("http://%s:%d", topo.name, etcdClientPort),
 		),
 		testcontainers.WithExposedPorts(topo.httpPort),
 		network.WithNetwork([]string{topo.name}, c.network),
 		testcontainers.WithLogConsumers(c.newLogConsumer(topo.name)),
-		testcontainers.WithWaitStrategyAndDeadline(defaultStartupTimeout,
+		testcontainers.WithWaitStrategyAndDeadline(
+			defaultStartupTimeout,
 			wait.ForHTTP("/health").
 				WithPort(topo.httpPort).
 				WithStartupTimeout(defaultStartupTimeout).
@@ -106,12 +108,13 @@ func (c *Cluster) startEtcd(ctx context.Context) error {
 // startConsul starts the consul topology server container.
 func (c *Cluster) startConsul(ctx context.Context) error {
 	topo := &component{
-		name:     "consul",
+		name:     c.name("consul"),
 		httpPort: fmt.Sprintf("%d/tcp", consulClientPort),
 		cluster:  c,
 	}
 
-	ctr, err := testcontainers.Run(ctx, consulImage,
+	ctr, err := testcontainers.Run(
+		ctx, consulImage,
 		testcontainers.WithCmd(
 			"agent", "-server", "-bootstrap-expect", "1",
 			"-bind", "0.0.0.0", "-client", "0.0.0.0",
@@ -119,7 +122,8 @@ func (c *Cluster) startConsul(ctx context.Context) error {
 		testcontainers.WithExposedPorts(topo.httpPort),
 		network.WithNetwork([]string{topo.name}, c.network),
 		testcontainers.WithLogConsumers(c.newLogConsumer(topo.name)),
-		testcontainers.WithWaitStrategyAndDeadline(defaultStartupTimeout,
+		testcontainers.WithWaitStrategyAndDeadline(
+			defaultStartupTimeout,
 			wait.ForHTTP("/v1/kv/?keys").
 				WithPort(topo.httpPort).
 				WithStartupTimeout(defaultStartupTimeout).
@@ -138,7 +142,7 @@ func (c *Cluster) startConsul(ctx context.Context) error {
 // startZookeeper starts the zookeeper topology server container.
 func (c *Cluster) startZookeeper(ctx context.Context) error {
 	topo := &component{
-		name:     "zk",
+		name:     c.name("zk"),
 		httpPort: fmt.Sprintf("%d/tcp", zkClientPort),
 		cluster:  c,
 	}
@@ -157,12 +161,14 @@ while true; do
   sleep 0.5
 done`
 
-	ctr, err := testcontainers.Run(ctx, zkImage,
+	ctr, err := testcontainers.Run(
+		ctx, zkImage,
 		testcontainers.WithEntrypoint("bash", "-c", script),
 		testcontainers.WithExposedPorts(topo.httpPort),
 		network.WithNetwork([]string{topo.name}, c.network),
 		testcontainers.WithLogConsumers(c.newLogConsumer(topo.name)),
-		testcontainers.WithWaitStrategyAndDeadline(defaultStartupTimeout,
+		testcontainers.WithWaitStrategyAndDeadline(
+			defaultStartupTimeout,
 			wait.ForListeningPort(topo.httpPort).
 				WithStartupTimeout(defaultStartupTimeout).
 				WithPollInterval(defaultPollInterval),
@@ -177,16 +183,17 @@ done`
 	return nil
 }
 
-// topoServerAddress is the topology server's client address as seen from
-// inside the cluster network.
-func (c *Cluster) topoServerAddress() string {
+// TopoAddress returns the topology server's client address as seen from
+// inside the cluster network, e.g. "ext-etcd:2379". Another cluster on the
+// same network reaches this cluster's topology server at that address.
+func (c *Cluster) TopoAddress() string {
 	switch c.opts.topoFlavor {
 	case "consul":
-		return fmt.Sprintf("consul:%d", consulClientPort)
+		return fmt.Sprintf("%s:%d", c.name("consul"), consulClientPort)
 	case "zk2":
-		return fmt.Sprintf("zk:%d", zkClientPort)
+		return fmt.Sprintf("%s:%d", c.name("zk"), zkClientPort)
 	default:
-		return fmt.Sprintf("etcd:%d", etcdClientPort)
+		return fmt.Sprintf("%s:%d", c.name("etcd"), etcdClientPort)
 	}
 }
 
@@ -210,7 +217,7 @@ func (c *Cluster) topoCellRoot(cell string) string {
 func (c *Cluster) topoFlags() []string {
 	return []string{
 		"--topo-implementation", c.opts.topoFlavor,
-		"--topo-global-server-address", c.topoServerAddress(),
+		"--topo-global-server-address", c.TopoAddress(),
 		"--topo-global-root", c.topoGlobalRoot(),
 	}
 }
