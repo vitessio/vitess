@@ -100,11 +100,6 @@ var (
 	mockSchema   = make(map[string]*mockTable)
 )
 
-type LogExpectation struct {
-	Type   string
-	Detail string
-}
-
 var heartbeatRe *regexp.Regexp
 
 // setFlag() sets a flag for a test in a non-racy way:
@@ -1214,6 +1209,7 @@ func deleteAllVReplicationStreams(t *testing.T) {
 	require.NoError(t, err, "failed to delete vreplication rows: %v", err)
 }
 
+<<<<<<< HEAD
 func expectLogsAndUnsubscribe(t *testing.T, logs []LogExpectation, logCh chan *VrLogStats) {
 	t.Helper()
 	defer vrLogStatsLogger.Unsubscribe(logCh)
@@ -1249,6 +1245,42 @@ func expectLogsAndUnsubscribe(t *testing.T, logs []LogExpectation, logCh chan *V
 	}
 }
 
+||||||| parent of 657662e78b (VReplication: Remove internal undocumented VRLog feature (#20467))
+func expectLogsAndUnsubscribe(t *testing.T, logs []LogExpectation, logCh chan *VrLogStats) {
+	t.Helper()
+	defer vrLogStatsLogger.Unsubscribe(logCh)
+	failed := false
+	for i, log := range logs {
+		if failed {
+			assert.Fail(t, "no logs received")
+			continue
+		}
+		select {
+		case got := <-logCh:
+			var match bool
+			match = (log.Type == got.Type)
+			if match {
+				if log.Detail[0] == '/' {
+					result, err := regexp.MatchString(log.Detail[1:], got.Detail)
+					if err != nil {
+						panic(err)
+					}
+					match = result
+				} else {
+					match = (got.Detail == log.Detail)
+				}
+			}
+
+			assert.True(t, match, "log:\n%v, does not match log %d:\n%q", got, i, log)
+		case <-time.After(5 * time.Second):
+			assert.Failf(t, "no logs received", "no logs received, expecting %s", log)
+			failed = true
+		}
+	}
+}
+
+=======
+>>>>>>> 657662e78b (VReplication: Remove internal undocumented VRLog feature (#20467))
 func shouldIgnoreQuery(query string) bool {
 	queriesToIgnore := []string{
 		"_vt.vreplication_log",   // ignore all selects, updates and inserts into this table
