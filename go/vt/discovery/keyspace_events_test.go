@@ -783,7 +783,10 @@ func TestGetMoveTablesStatusScopedToKeyspace(t *testing.T) {
 			wantState:    MoveTablesSwitched,
 		},
 		{
-			name: "shard-by-shard MoveTables with an unswitched denied shard",
+			// A shard routing rule keyed by this keyspace exists for a denied
+			// shard (-80), so the keyspace is referenced, the scan runs, and
+			// getMoveTablesStatus reports Switching for that combination.
+			name: "shard-by-shard MoveTables with a rule for a denied shard",
 			vs: &vschemapb.SrvVSchema{
 				ShardRoutingRules: &vschemapb.ShardRoutingRules{
 					Rules: []*vschemapb.ShardRoutingRule{
@@ -796,10 +799,12 @@ func TestGetMoveTablesStatusScopedToKeyspace(t *testing.T) {
 			wantState:    MoveTablesSwitching,
 		},
 		{
-			// -80 is switched: its shard routing rule is gone but its denied
-			// tables are still set. 80- has not started switching yet, so its
-			// rule still references the source keyspace.
-			name: "shard-by-shard MoveTables with all denied shards switched",
+			// The only denied shard (-80) has no rule keyed by this keyspace —
+			// the remaining rule is for 80-, which is not denied — so
+			// getMoveTablesStatus reports Switched. That 80- rule is also what
+			// keeps the keyspace referenced: the gate sees any rule naming the
+			// keyspace, not just rules for its denied shards.
+			name: "shard-by-shard MoveTables with no rule for the denied shard",
 			vs: &vschemapb.SrvVSchema{
 				ShardRoutingRules: &vschemapb.ShardRoutingRules{
 					Rules: []*vschemapb.ShardRoutingRule{
@@ -808,6 +813,25 @@ func TestGetMoveTablesStatusScopedToKeyspace(t *testing.T) {
 				},
 			},
 			deniedShards: []string{"-80"},
+			wantType:     MoveTablesShardByShard,
+			wantState:    MoveTablesSwitched,
+		},
+		{
+			// The create-time shape of a shard-by-shard migration
+			// (createDefaultShardRoutingRules): rules are keyed by the target
+			// keyspace and route back to the source, so the source keyspace is
+			// referenced only as a rule's to-keyspace. The gate must still run
+			// the scan for it.
+			name: "shard-by-shard MoveTables create-time reverse rules",
+			vs: &vschemapb.SrvVSchema{
+				ShardRoutingRules: &vschemapb.ShardRoutingRules{
+					Rules: []*vschemapb.ShardRoutingRule{
+						{FromKeyspace: "target", ToKeyspace: "source", Shard: "-80"},
+						{FromKeyspace: "target", ToKeyspace: "source", Shard: "80-"},
+					},
+				},
+			},
+			deniedShards: shards,
 			wantType:     MoveTablesShardByShard,
 			wantState:    MoveTablesSwitched,
 		},
