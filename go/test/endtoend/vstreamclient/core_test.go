@@ -156,13 +156,13 @@ func TestVStreamClientFlushesOnHeartbeat(t *testing.T) {
 	runCtx, cancelRun, runErrCh := te.runAsync(vstreamClient, 4*time.Second)
 	defer cancelRun()
 
-	firstFlush := <-flushes
+	firstFlush := recvOrFail(t, flushes, "first flush")
 	assert.Equal(t, []*Customer{{ID: 501, Email: "heartbeat-initial@domain.com"}}, firstFlush)
 
 	te.exec(t, "insert into customer.customer(id, email) values (502, 'heartbeat-late@domain.com')", nil)
 	insertedAt := time.Now()
 
-	secondFlush := <-flushes
+	secondFlush := recvOrFail(t, flushes, "second flush")
 	assert.Equal(t, []*Customer{{ID: 502, Email: "heartbeat-late@domain.com"}}, secondFlush)
 	assert.Greater(t, time.Since(insertedAt), time.Second)
 
@@ -202,7 +202,7 @@ func TestVStreamClientTransactionBoundaries(t *testing.T) {
 	te.exec(t, "insert into customer.customer(id, email) values (1301, 'tx-a@domain.com'), (1302, 'tx-b@domain.com')", nil)
 	te.exec(t, "commit", nil)
 
-	batch := <-flushes
+	batch := recvOrFail(t, flushes, "transaction flush")
 	assert.ElementsMatch(t, []*Customer{{ID: 1301, Email: "tx-a@domain.com"}, {ID: 1302, Email: "tx-b@domain.com"}}, batch)
 
 	cancelRun()
