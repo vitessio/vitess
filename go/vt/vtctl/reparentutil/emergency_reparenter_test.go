@@ -1536,6 +1536,245 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 			errShouldContain: "all candidates failed to apply relay logs",
 		},
 		{
+			// zone1-0000000101 is the only tablet that could send semi-sync ACKs to a
+			// promoted zone1-0000000100, and it fails its relay log wait with a real
+			// error. It must not be counted as a reachable acker: promoting 100 anyway
+			// would wedge it waiting for an ACK that may never come. ERS must refuse
+			name:       "sole semi-sync acker failing the relay log wait refuses the promotion",
+			durability: policy.DurabilitySemiSync,
+			emergencyReparentOps: EmergencyReparentOptions{
+				WaitReplicasTimeout: time.Millisecond * 50,
+			},
+			tmc: &testutil.TabletManagerClient{
+				// promotion fixtures are deliberately present: without the fix ERS
+				// wrongly promotes zone1-0000000100 and this cell must catch that as a
+				// wrong success, not as a missing-fixture error
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+				PromoteReplicaResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000100": {Result: "ok"},
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000101": nil,
+					"zone1-0000000102": nil,
+				},
+				StopReplicationAndGetStatusResults: map[string]struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Error      error
+				}{
+					"zone1-0000000100": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-21"),
+							},
+						},
+					},
+					"zone1-0000000101": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-21"),
+							},
+						},
+					},
+					"zone1-0000000102": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-21"),
+							},
+						},
+					},
+				},
+				// the rdonly is slow (cancelled by the race); the acker fails outright:
+				// its configured result doesn't cover the position it is asked for
+				WaitForPositionDelays: map[string]time.Duration{
+					"zone1-0000000102": time.Minute,
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000100": {
+						getRelayLogPosition("1-21"): nil,
+					},
+					"zone1-0000000101": {
+						getRelayLogPosition("1-10"): nil,
+					},
+					"zone1-0000000102": {
+						getRelayLogPosition("1-21"): nil,
+					},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Hostname: "applies relay logs, but has no reachable acker",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Hostname: "sole acker, fails its relay log wait",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  102,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_RDONLY,
+					Hostname: "rdonly, cannot ack",
+				},
+			},
+			shouldErr:        true,
+			keyspace:         "testkeyspace",
+			shard:            "-",
+			cells:            []string{"zone1"},
+			errShouldContain: "no valid candidates for emergency reparent",
+		},
+		{
+			// the mirror of the cell above: the sole acker zone1-0000000101 is only
+			// slow, so the race cancels its wait rather than failing it. A cancelled
+			// wait says nothing about the tablet, so it must still count as a reachable
+			// acker and the promotion must succeed
+			name:       "sole semi-sync acker cancelled by the race still counts",
+			durability: policy.DurabilitySemiSync,
+			emergencyReparentOps: EmergencyReparentOptions{
+				WaitReplicasTimeout: time.Millisecond * 50,
+			},
+			tmc: &testutil.TabletManagerClient{
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+				PromoteReplicaResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000100": {Result: "ok"},
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000101": nil,
+					"zone1-0000000102": nil,
+				},
+				StopReplicationAndGetStatusResults: map[string]struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Error      error
+				}{
+					"zone1-0000000100": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-21"),
+							},
+						},
+					},
+					"zone1-0000000101": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-21"),
+							},
+						},
+					},
+					"zone1-0000000102": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-21"),
+							},
+						},
+					},
+				},
+				// both peers are slow, so zone1-0000000100 wins the race and the others
+				// are cancelled, never failed
+				WaitForPositionDelays: map[string]time.Duration{
+					"zone1-0000000101": time.Minute,
+					"zone1-0000000102": time.Minute,
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000100": {
+						getRelayLogPosition("1-21"): nil,
+					},
+					"zone1-0000000101": {
+						getRelayLogPosition("1-21"): nil,
+					},
+					"zone1-0000000102": {
+						getRelayLogPosition("1-21"): nil,
+					},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						PrimaryAlias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Hostname: "applies relay logs, wins election",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Hostname: "sole acker, slow but healthy",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  102,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_RDONLY,
+					Hostname: "rdonly, cannot ack",
+				},
+			},
+			shouldErr: false,
+			keyspace:  "testkeyspace",
+			shard:     "-",
+			cells:     []string{"zone1"},
+		},
+		{
 			// zone1-0000000100 and zone1-0000000101 both received GTIDs from a second
 			// uuid that the lagging zone1-0000000102 never saw. 101 fails its relay log
 			// wait and is removed from candidacy, but its received position must still

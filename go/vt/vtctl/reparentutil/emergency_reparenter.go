@@ -325,6 +325,12 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		return err
 	}
 
+	// A tablet that failed its relay log wait returned a real error, so don't let it
+	// count as a reachable semi-sync acker in the forward-progress checks below either;
+	// promoting a primary whose only acker is broken would wedge it waiting for an ACK.
+	// Cancelled waits say nothing about the tablet and stay counted
+	stoppedReplicationSnapshot.reachableTablets = removeTabletsByAlias(stoppedReplicationSnapshot.reachableTablets, waitResult.failed)
+
 	// For GTID based replication, we will run errant GTID detection.
 	if isGTIDBased {
 		// Failed waiters are only ever removed from a uniform leading group (a
@@ -360,10 +366,12 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 			erp.logger.Warningf("no candidate that applied its relay logs survived errant GTID detection; waiting for the remaining candidates to apply their relay logs")
 			rewaitCandidates := filterToMostAdvancedCombined(validCandidates, erp.logger)
 			requireAll = !hasUniformCombinedPosition(rewaitCandidates)
-			validCandidates, _, err = erp.applyRelayLogsAndReconcile(relayLogCtx, rewaitCandidates, validCandidates, tabletMap, stoppedReplicationSnapshot.statusMap, opts.WaitReplicasTimeout, requireAll)
+			var rewaitResult *relayLogWaitResult
+			validCandidates, rewaitResult, err = erp.applyRelayLogsAndReconcile(relayLogCtx, rewaitCandidates, validCandidates, tabletMap, stoppedReplicationSnapshot.statusMap, opts.WaitReplicasTimeout, requireAll)
 			if err != nil {
 				return err
 			}
+			stoppedReplicationSnapshot.reachableTablets = removeTabletsByAlias(stoppedReplicationSnapshot.reachableTablets, rewaitResult.failed)
 		}
 	}
 
