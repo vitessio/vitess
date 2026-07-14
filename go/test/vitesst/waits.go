@@ -35,7 +35,7 @@ func (c *Cluster) WaitForHealthyShard(ctx context.Context, keyspace, shard strin
 
 	var lastErr error
 	for {
-		output, err := c.VtctldClient().GetShard(keyspace, shard)
+		output, err := c.Vtctld().getShard(ctx, keyspace, shard)
 		lastErr = err
 		if err == nil && shardHasPrimary(output) {
 			return nil

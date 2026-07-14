@@ -184,7 +184,7 @@ func (t *Tablet) QueryTabletWithDB(ctx context.Context, query, dbName string) (*
 // grpc/vt ports rewritten to host-reachable values, so tmclient calls from
 // the test process work unchanged.
 func (t *Tablet) TabletProto(ctx context.Context) (*topodatapb.Tablet, error) {
-	record, err := t.cluster.VtctldClient().GetTablet(t.Alias())
+	record, err := t.cluster.Vtctld().getTablet(ctx, t.Alias())
 	if err != nil {
 		return nil, err
 	}

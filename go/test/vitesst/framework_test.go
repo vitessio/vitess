@@ -23,6 +23,7 @@ limitations under the License.
 package vitesst_test
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"testing"
@@ -60,7 +61,7 @@ func requireE2E(t *testing.T) {
 func TestClusterBootstrap(t *testing.T) {
 	requireE2E(t)
 
-	c := vitesst.NewCluster(t,
+	c := vitesst.NewCluster(
 		vitesst.WithCells("zone1", "zone2"),
 		vitesst.WithKeyspace("uks").
 			WithReplicas(1).
@@ -70,6 +71,17 @@ func TestClusterBootstrap(t *testing.T) {
 			WithSchema(selfTestSchema).
 			WithVSchema(selfTestVSchema),
 	)
+	cleanup, err := c.Start(t.Context())
+	t.Cleanup(func() {
+		ctx := context.WithoutCancel(t.Context())
+		if t.Failed() {
+			c.DumpDiagnostics(ctx, t.Logf)
+		}
+		if err := cleanup(ctx); err != nil {
+			t.Logf("cluster teardown: %v", err)
+		}
+	})
+	require.NoError(t, err)
 
 	conn := c.Connect(t)
 	defer conn.Close()
@@ -78,7 +90,7 @@ func TestClusterBootstrap(t *testing.T) {
 	assert.Equal(t, c.MySQLVersion()+"-vitess", conn.ServerVersion)
 
 	// Unsharded keyspace serves reads and writes through vtgate.
-	_, err := conn.ExecuteFetch("insert into uks.t1(id, val) values (1, 'one')", 1, false)
+	_, err = conn.ExecuteFetch("insert into uks.t1(id, val) values (1, 'one')", 1, false)
 	require.NoError(t, err)
 	qr, err := conn.ExecuteFetch("select val from uks.t1 where id = 1", 1, false)
 	require.NoError(t, err)
@@ -140,18 +152,29 @@ func TestClusterBootstrap(t *testing.T) {
 func TestTabletProcessLifecycle(t *testing.T) {
 	requireE2E(t)
 
-	c := vitesst.NewCluster(t,
+	c := vitesst.NewCluster(
 		vitesst.WithKeyspace("ks").
 			WithReplicas(1).
 			WithSchema(selfTestSchema),
 	)
+	cleanup, err := c.Start(t.Context())
+	t.Cleanup(func() {
+		ctx := context.WithoutCancel(t.Context())
+		if t.Failed() {
+			c.DumpDiagnostics(ctx, t.Logf)
+		}
+		if err := cleanup(ctx); err != nil {
+			t.Logf("cluster teardown: %v", err)
+		}
+	})
+	require.NoError(t, err)
 	ctx := t.Context()
 
 	replica := c.Keyspace("ks").Shard("-").Replicas()[0]
 
 	// Stopping vttablet leaves mysqld and the container running.
 	require.NoError(t, replica.StopVttablet(ctx))
-	_, _, err := replica.MakeAPICall(ctx, "/debug/vars")
+	_, _, err = replica.MakeAPICall(ctx, "/debug/vars")
 	assert.Error(t, err, "vttablet HTTP endpoint should be down after StopVttablet")
 	_, err = replica.QueryTablet(ctx, "select 1")
 	assert.NoError(t, err, "mysqld should stay up after StopVttablet")
@@ -195,12 +218,23 @@ func TestTabletProcessLifecycle(t *testing.T) {
 func TestVTGateRestart(t *testing.T) {
 	requireE2E(t)
 
-	c := vitesst.NewCluster(t,
+	c := vitesst.NewCluster(
 		vitesst.WithKeyspace("ks").WithSchema(selfTestSchema),
 	)
+	cleanup, err := c.Start(t.Context())
+	t.Cleanup(func() {
+		ctx := context.WithoutCancel(t.Context())
+		if t.Failed() {
+			c.DumpDiagnostics(ctx, t.Logf)
+		}
+		if err := cleanup(ctx); err != nil {
+			t.Logf("cluster teardown: %v", err)
+		}
+	})
+	require.NoError(t, err)
 
 	conn := c.Connect(t)
-	_, err := conn.ExecuteFetch("insert into ks.t1(id, val) values (7, 'before-restart')", 1, false)
+	_, err = conn.ExecuteFetch("insert into ks.t1(id, val) values (7, 'before-restart')", 1, false)
 	require.NoError(t, err)
 	conn.Close()
 
@@ -220,13 +254,28 @@ func TestVTGateRestart(t *testing.T) {
 func TestNewMySQLComparison(t *testing.T) {
 	requireE2E(t)
 
-	c := vitesst.NewCluster(t,
+	c := vitesst.NewCluster(
 		vitesst.WithKeyspace("ks").WithSchema(selfTestSchema),
 	)
-
-	mysqlParams, closer, err := vitesst.NewMySQL(c, "ks", selfTestSchema)
+	cleanup, err := c.Start(t.Context())
+	t.Cleanup(func() {
+		ctx := context.WithoutCancel(t.Context())
+		if t.Failed() {
+			c.DumpDiagnostics(ctx, t.Logf)
+		}
+		if err := cleanup(ctx); err != nil {
+			t.Logf("cluster teardown: %v", err)
+		}
+	})
 	require.NoError(t, err)
-	t.Cleanup(closer)
+
+	mysqlParams, mysqlCleanup, err := vitesst.NewMySQL(t.Context(), c, "ks", selfTestSchema)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		if err := mysqlCleanup(context.WithoutCancel(t.Context())); err != nil {
+			t.Logf("comparison mysqld teardown: %v", err)
+		}
+	})
 
 	mysqlConn, err := mysql.Connect(t.Context(), &mysqlParams)
 	require.NoError(t, err)
@@ -236,7 +285,7 @@ func TestNewMySQLComparison(t *testing.T) {
 
 	// The ported MySQLCompare harness runs the same statement on both sides
 	// and compares results.
-	mcmp, err := vitesst.NewMySQLCompare(t, c.VTParams("ks"), mysqlParams)
+	mcmp, err := vitesst.NewMySQLCompare(t.Context(), t, c.VTParams(t.Context(), "ks"), mysqlParams)
 	require.NoError(t, err)
 	defer mcmp.Close()
 

@@ -146,8 +146,8 @@ func WithMySQLVersion(version string) ClusterOption {
 	return mysqlVersionOption(version)
 }
 
-// buildConfig applies the options over the defaults and validates the result.
-func buildConfig(opts []ClusterOption) (*clusterOptions, error) {
+// newClusterOptions applies the options over the defaults.
+func newClusterOptions(opts []ClusterOption) *clusterOptions {
 	config := &clusterOptions{
 		cells:        []string{defaultCell},
 		mysqlVersion: defaultMySQLVersion,
@@ -155,25 +155,29 @@ func buildConfig(opts []ClusterOption) (*clusterOptions, error) {
 	for _, opt := range opts {
 		opt.apply(config)
 	}
+	return config
+}
 
+// validate checks the applied configuration.
+func (config *clusterOptions) validate() error {
 	if len(config.keyspaces) == 0 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "at least one keyspace is required")
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "at least one keyspace is required")
 	}
 	if len(config.cells) == 0 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "at least one cell is required")
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "at least one cell is required")
 	}
 	if slices.Contains(config.cells, "") {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cell names must not be empty")
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cell names must not be empty")
 	}
 
 	seen := make(map[string]bool, len(config.keyspaces))
 	for i := range config.keyspaces {
 		ks := &config.keyspaces[i]
 		if err := ks.validate(); err != nil {
-			return nil, err
+			return err
 		}
 		if seen[ks.name] {
-			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "keyspace %s configured twice", ks.name)
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "keyspace %s configured twice", ks.name)
 		}
 		seen[ks.name] = true
 	}
@@ -181,8 +185,8 @@ func buildConfig(opts []ClusterOption) (*clusterOptions, error) {
 	switch config.mysqlVersion {
 	case "8.0", "8.4":
 	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "unsupported MySQL version %q, supported versions are 8.0 and 8.4", config.mysqlVersion)
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "unsupported MySQL version %q, supported versions are 8.0 and 8.4", config.mysqlVersion)
 	}
 
-	return config, nil
+	return nil
 }

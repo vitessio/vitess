@@ -24,9 +24,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
-	"testing"
 
-	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/network"
 	"golang.org/x/sync/errgroup"
@@ -40,7 +38,7 @@ type (
 	// Cluster represents a running Vitess cluster where every component runs
 	// in its own container on a per-cluster Docker network.
 	Cluster struct {
-		// opts keeps the validated cluster configuration.
+		// opts keeps the applied cluster configuration; Start validates it.
 		opts *clusterOptions
 
 		// network isolates this cluster's containers from parallel tests and
@@ -64,12 +62,11 @@ type (
 		// t.Logf.
 		logf func(format string, args ...any)
 
-		// etcd and vtctld are the cluster's control-plane components.
-		etcd   *component
-		vtctld *component
+		// etcd is the cluster's topology server.
+		etcd *component
 
-		// vtctldClient runs vtctldclient commands inside the vtctld container.
-		vtctldClient *VtctldClient
+		// vtctld is the cluster's control plane.
+		vtctld *Vtctld
 
 		// vtorc is present only when the test enabled VTOrc.
 		vtorc *VTOrc
@@ -84,57 +81,45 @@ type (
 	}
 )
 
-// NewCluster creates and starts a Vitess cluster scoped to the test: cleanup
-// is registered with t.Cleanup, and component logs are dumped when the test
-// fails. Requires at least one keyspace to be configured.
-func NewCluster(t testing.TB, opts ...ClusterOption) *Cluster {
-	t.Helper()
-
-	c, err := startCluster(context.Background(), t.Logf, opts...)
-	t.Cleanup(func() {
-		if c == nil {
-			return
-		}
-		if t.Failed() {
-			c.DumpDiagnostics(t.Logf)
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), terminateTimeout)
-		defer cancel()
-		if err := c.Terminate(ctx); err != nil {
-			t.Logf("terminating cluster: %v", err)
-		}
-	})
-	require.NoError(t, err, "starting vitesst cluster")
-
-	return c
-}
-
-// StartCluster creates and starts a Vitess cluster for the TestMain pattern.
-// The caller is responsible for calling Terminate. On error, everything
-// already started has been torn down.
-func StartCluster(ctx context.Context, opts ...ClusterOption) (*Cluster, error) {
+// NewCluster creates a Vitess cluster from the given options. Nothing runs
+// until Start is called. Requires at least one keyspace to be configured.
+func NewCluster(opts ...ClusterOption) *Cluster {
 	logf := func(format string, args ...any) {}
 	if os.Getenv("VITESST_DEBUG") != "" {
 		logf = func(format string, args ...any) {
 			fmt.Fprintf(os.Stderr, "vitesst: "+format+"\n", args...)
 		}
 	}
-	return startCluster(ctx, logf, opts...)
-}
 
-func startCluster(ctx context.Context, logf func(format string, args ...any), opts ...ClusterOption) (c *Cluster, err error) {
-	config, err := buildConfig(opts)
-	if err != nil {
-		return nil, err
-	}
-
-	c = &Cluster{
+	config := newClusterOptions(opts)
+	c := &Cluster{
 		opts:  config,
 		cells: config.cells,
 		image: vitesstImage(config.mysqlVersion),
 		logf:  logf,
 	}
-	c.vtctldClient = &VtctldClient{cluster: c}
+	c.vtctld = &Vtctld{component: component{
+		name:     "vtctld",
+		httpPort: fmt.Sprintf("%d/tcp", vtctldHTTPPort),
+		cluster:  c,
+	}}
+	return c
+}
+
+// Start brings the whole cluster up. The returned cleanup tears everything
+// down again; it is safe to call more than once, and bounds itself when the
+// given context has no deadline. It is non-nil even on error, so cleanup
+// registration and error handling can come in either order. On error,
+// everything already started has been torn down.
+func (c *Cluster) Start(ctx context.Context) (cleanup func(context.Context) error, err error) {
+	cleanup = c.terminate
+
+	if err := c.opts.validate(); err != nil {
+		return cleanup, err
+	}
+	if c.network != nil {
+		return cleanup, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cluster is already started")
+	}
 
 	// Tear down whatever came up when bootstrap fails part-way, so failed
 	// tests do not leak containers beyond what ryuk would reap later.
@@ -142,7 +127,7 @@ func startCluster(ctx context.Context, logf func(format string, args ...any), op
 		if err != nil {
 			cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), terminateTimeout)
 			defer cancel()
-			if cleanupErr := c.Terminate(cleanupCtx); cleanupErr != nil {
+			if cleanupErr := c.terminate(cleanupCtx); cleanupErr != nil {
 				c.logf("cleaning up after failed bootstrap: %v", cleanupErr)
 			}
 		}
@@ -151,36 +136,36 @@ func startCluster(ctx context.Context, logf func(format string, args ...any), op
 	c.logf("creating cluster network")
 	c.network, err = network.New(ctx, network.WithDriver("bridge"))
 	if err != nil {
-		return c, vterrors.Wrapf(err, "creating cluster network")
+		return cleanup, vterrors.Wrapf(err, "creating cluster network")
 	}
 
 	c.logf("starting etcd")
 	if err = c.startEtcd(ctx); err != nil {
-		return c, err
+		return cleanup, err
 	}
 
 	c.logf("starting vtctld")
 	if err = c.startVtctld(ctx); err != nil {
-		return c, err
+		return cleanup, err
 	}
 
 	if err = c.detectMySQLVersion(ctx); err != nil {
-		return c, err
+		return cleanup, err
 	}
 	if err = c.assembleInitDBSQL(ctx); err != nil {
-		return c, err
+		return cleanup, err
 	}
 
 	for _, cell := range c.cells {
 		c.logf("adding cell %s", cell)
 		if err = c.addCellInfo(ctx, cell); err != nil {
-			return c, err
+			return cleanup, err
 		}
 	}
 
-	for i := range config.keyspaces {
-		if err = c.startKeyspace(ctx, &config.keyspaces[i]); err != nil {
-			return c, err
+	for i := range c.opts.keyspaces {
+		if err = c.startKeyspace(ctx, &c.opts.keyspaces[i]); err != nil {
+			return cleanup, err
 		}
 	}
 
@@ -190,25 +175,25 @@ func startCluster(ctx context.Context, logf func(format string, args ...any), op
 		_, err := c.AddVTGate(groupCtx)
 		return err
 	})
-	if config.vtorcEnabled {
+	if c.opts.vtorcEnabled {
 		group.Go(func() error {
 			c.logf("starting vtorc")
 			return c.startVTOrc(groupCtx)
 		})
 	}
 	if err = group.Wait(); err != nil {
-		return c, err
+		return cleanup, err
 	}
 
 	c.logf("cluster is ready")
-	return c, nil
+	return cleanup, nil
 }
 
 // startKeyspace creates one keyspace in topology, starts its tablets, elects
 // primaries, applies the schema, and then applies the vschema.
 func (c *Cluster) startKeyspace(ctx context.Context, kc *keyspaceConfig) error {
 	c.logf("creating keyspace %s", kc.name)
-	if err := c.vtctldClient.CreateKeyspace(kc.name, kc.durabilityPolicy); err != nil {
+	if err := c.vtctld.createKeyspace(ctx, kc.name, kc.durabilityPolicy); err != nil {
 		return err
 	}
 
@@ -266,13 +251,13 @@ func (c *Cluster) startKeyspace(ctx context.Context, kc *keyspaceConfig) error {
 
 	if kc.schema != "" {
 		c.logf("applying schema to keyspace %s", kc.name)
-		if err := c.vtctldClient.ApplySchema(kc.name, kc.schema); err != nil {
+		if err := c.vtctld.applySchema(ctx, kc.name, kc.schema); err != nil {
 			return err
 		}
 	}
 	if kc.vschema != "" {
 		c.logf("applying vschema to keyspace %s", kc.name)
-		if err := c.vtctldClient.ApplyVSchema(kc.name, kc.vschema); err != nil {
+		if err := c.vtctld.applyVSchema(ctx, kc.name, kc.vschema); err != nil {
 			return err
 		}
 	}
@@ -321,7 +306,7 @@ func (c *Cluster) startShard(ctx context.Context, shard *Shard, specs []*TabletS
 	shard.mu.Unlock()
 
 	c.logf("electing %s as primary of %s", tablets[0].Alias(), shard.Ref())
-	if err := c.vtctldClient.InitializeShard(shard.Keyspace.Name, shard.Name, tablets[0].Alias()); err != nil {
+	if err := c.vtctld.initializeShard(ctx, shard.Keyspace.Name, shard.Name, tablets[0].Alias()); err != nil {
 		return vterrors.Wrapf(err, "electing primary for shard %s", shard.Ref())
 	}
 	return nil
@@ -411,11 +396,6 @@ func (c *Cluster) Tablets() []*Tablet {
 	return out
 }
 
-// VtctldClient returns the cluster's control-plane client.
-func (c *Cluster) VtctldClient() *VtctldClient {
-	return c.vtctldClient
-}
-
 // Cells returns the cluster's cell names.
 func (c *Cluster) Cells() []string {
 	out := make([]string, len(c.cells))
@@ -432,20 +412,20 @@ func (c *Cluster) MySQLVersion() string {
 // DumpDiagnostics writes the tail of every component's logs through logf,
 // and, when the VITESST_ARTIFACTS environment variable names a directory,
 // writes full logs and container state there for CI upload.
-func (c *Cluster) DumpDiagnostics(logf func(format string, args ...any)) {
+func (c *Cluster) DumpDiagnostics(ctx context.Context, logf func(format string, args ...any)) {
 	c.dumpLogs(logf)
 
 	dir := os.Getenv("VITESST_ARTIFACTS")
 	if dir == "" {
 		return
 	}
-	if err := c.writeArtifacts(dir); err != nil {
+	if err := c.writeArtifacts(ctx, dir); err != nil {
 		logf("writing artifacts to %s: %v", dir, err)
 	}
 }
 
 // writeArtifacts writes full component logs and mysqld error logs to dir.
-func (c *Cluster) writeArtifacts(dir string) error {
+func (c *Cluster) writeArtifacts(ctx context.Context, dir string) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
@@ -464,8 +444,6 @@ func (c *Cluster) writeArtifacts(dir string) error {
 		}
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), terminateTimeout)
-	defer cancel()
 	for _, tablet := range tablets {
 		if !tablet.IsRunning() {
 			continue
@@ -481,10 +459,10 @@ func (c *Cluster) writeArtifacts(dir string) error {
 	return nil
 }
 
-// Terminate tears down all of the cluster's containers and its network. It
+// terminate tears down all of the cluster's containers and its network. It
 // is safe to call more than once. When the given context has no deadline,
 // teardown is bounded so a wedged Docker daemon cannot hang the test binary.
-func (c *Cluster) Terminate(ctx context.Context) error {
+func (c *Cluster) terminate(ctx context.Context) error {
 	if _, ok := ctx.Deadline(); !ok {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, terminateTimeout)

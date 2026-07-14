@@ -88,32 +88,32 @@ func TestRingLogConsumer(t *testing.T) {
 	assert.Equal(t, fmt.Sprintf("[test] line-%d", logRingCapacity+9), dumped[len(dumped)-1])
 }
 
-func TestBuildConfigValidation(t *testing.T) {
-	_, err := buildConfig(nil)
+func TestClusterOptionsValidation(t *testing.T) {
+	err := newClusterOptions(nil).validate()
 	require.ErrorContains(t, err, "at least one keyspace")
 
-	_, err = buildConfig([]ClusterOption{WithKeyspace("ks"), WithMySQLVersion("5.7")})
+	err = newClusterOptions([]ClusterOption{WithKeyspace("ks"), WithMySQLVersion("5.7")}).validate()
 	require.ErrorContains(t, err, "unsupported MySQL version")
 
-	_, err = buildConfig([]ClusterOption{WithKeyspace("ks"), WithKeyspace("ks")})
+	err = newClusterOptions([]ClusterOption{WithKeyspace("ks"), WithKeyspace("ks")}).validate()
 	require.ErrorContains(t, err, "configured twice")
 
-	_, err = buildConfig([]ClusterOption{WithKeyspace("ks"), WithCells("zone1", "")})
+	err = newClusterOptions([]ClusterOption{WithKeyspace("ks"), WithCells("zone1", "")}).validate()
 	require.ErrorContains(t, err, "cell names must not be empty")
 
-	_, err = buildConfig([]ClusterOption{WithKeyspace("")})
+	err = newClusterOptions([]ClusterOption{WithKeyspace("")}).validate()
 	require.ErrorContains(t, err, "name cannot be empty")
 
-	_, err = buildConfig([]ClusterOption{WithKeyspace("ks").WithShards(0)})
+	err = newClusterOptions([]ClusterOption{WithKeyspace("ks").WithShards(0)}).validate()
 	require.ErrorContains(t, err, "at least one shard")
 
-	config, err := buildConfig([]ClusterOption{
+	config := newClusterOptions([]ClusterOption{
 		WithKeyspace("ks").WithShards(2).WithReplicas(1).WithRDOnly(1),
 		WithVTTabletArgs("--foo"),
 		WithVTGateArgs("--bar"),
 		WithVTCtldArgs("--baz"),
 	})
-	require.NoError(t, err)
+	require.NoError(t, config.validate())
 	require.Len(t, config.keyspaces, 1)
 	assert.Equal(t, 3, config.keyspaces[0].tabletsPerShard(), "primary + 1 replica + 1 rdonly")
 	assert.Equal(t, []string{"--foo"}, config.vttabletArgs)

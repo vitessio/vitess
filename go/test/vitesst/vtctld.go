@@ -20,22 +20,122 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/network"
 	"github.com/testcontainers/testcontainers-go/wait"
 
+	"google.golang.org/protobuf/encoding/protojson"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-// startVtctld starts the vtctld container.
-func (c *Cluster) startVtctld(ctx context.Context) error {
-	vtctld := &component{
-		name:     "vtctld",
-		httpPort: fmt.Sprintf("%d/tcp", vtctldHTTPPort),
-		cluster:  c,
+type (
+	// Vtctld is the runtime handle for the vtctld container. Control-plane
+	// commands run the vtctldclient CLI by exec inside it.
+	Vtctld struct {
+		component
+	}
+)
+
+// Vtctld returns the cluster's vtctld.
+func (c *Cluster) Vtctld() *Vtctld {
+	return c.vtctld
+}
+
+// ExecuteCommand runs a vtctldclient command, discarding its output.
+func (v *Vtctld) ExecuteCommand(ctx context.Context, args ...string) error {
+	_, err := v.ExecuteCommandWithOutput(ctx, args...)
+	return err
+}
+
+// ExecuteCommandWithOutput runs a vtctldclient command and returns its
+// combined output.
+func (v *Vtctld) ExecuteCommandWithOutput(ctx context.Context, args ...string) (string, error) {
+	return v.executeCommand(ctx, args...)
+}
+
+// executeCommand runs one vtctldclient invocation inside the vtctld container.
+func (v *Vtctld) executeCommand(ctx context.Context, args ...string) (string, error) {
+	ctr := v.container()
+	if ctr == nil {
+		return "", vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vtctld is not running")
 	}
 
+	cmd := append([]string{
+		"vtctldclient",
+		"--server", fmt.Sprintf("vtctld:%d", vtctldGRPCPort),
+	}, args...)
+
+	exitCode, output, err := containerExec(ctx, ctr, cmd)
+	if err != nil {
+		return "", err
+	}
+	if exitCode != 0 {
+		return output, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vtctldclient %s failed with exit code %d: %s", strings.Join(args, " "), exitCode, output)
+	}
+	return output, nil
+}
+
+// createKeyspace creates a keyspace with the given durability policy.
+func (v *Vtctld) createKeyspace(ctx context.Context, keyspace, durabilityPolicy string) error {
+	args := []string{"CreateKeyspace", "--sidecar-db-name", sidecarDBName}
+	if durabilityPolicy != "" {
+		args = append(args, "--durability-policy", durabilityPolicy)
+	}
+	args = append(args, keyspace)
+	return v.ExecuteCommand(ctx, args...)
+}
+
+// applySchema applies DDL to a keyspace.
+func (v *Vtctld) applySchema(ctx context.Context, keyspace, sql string) error {
+	return v.ExecuteCommand(ctx,
+		"ApplySchema",
+		"--sql", sql,
+		"--ddl-strategy", "direct -allow-zero-in-date",
+		keyspace,
+	)
+}
+
+// applyVSchema applies a VSchema JSON document to a keyspace.
+func (v *Vtctld) applyVSchema(ctx context.Context, keyspace, vschema string) error {
+	return v.ExecuteCommand(ctx, "ApplyVSchema", "--vschema", vschema, keyspace)
+}
+
+// initializeShard elects the initial primary for a shard.
+func (v *Vtctld) initializeShard(ctx context.Context, keyspace, shard, primaryAlias string) error {
+	return v.ExecuteCommand(ctx,
+		"PlannedReparentShard",
+		keyspace+"/"+shard,
+		"--wait-replicas-timeout", "31s",
+		"--new-primary", primaryAlias,
+	)
+}
+
+// getTablet fetches a tablet's topology record.
+func (v *Vtctld) getTablet(ctx context.Context, alias string) (*topodatapb.Tablet, error) {
+	output, err := v.ExecuteCommandWithOutput(ctx, "GetTablet", alias)
+	if err != nil {
+		return nil, err
+	}
+
+	tablet := &topodatapb.Tablet{}
+	if err := protojson.Unmarshal([]byte(output), tablet); err != nil {
+		return nil, vterrors.Wrapf(err, "parsing GetTablet %s output %q", alias, output)
+	}
+	return tablet, nil
+}
+
+// getShard fetches a shard's topology record as raw JSON.
+func (v *Vtctld) getShard(ctx context.Context, keyspace, shard string) (string, error) {
+	return v.ExecuteCommandWithOutput(ctx, "GetShard", keyspace+"/"+shard)
+}
+
+// startVtctld starts the vtctld container.
+func (c *Cluster) startVtctld(ctx context.Context) error {
 	args := []string{"vtctld"}
 	args = append(args, c.topoFlags()...)
 	args = append(args,
@@ -52,16 +152,16 @@ func (c *Cluster) startVtctld(ctx context.Context) error {
 	ctr, err := testcontainers.Run(ctx, c.image,
 		testcontainers.WithCmd(args...),
 		testcontainers.WithExposedPorts(
-			vtctld.httpPort,
+			c.vtctld.httpPort,
 			fmt.Sprintf("%d/tcp", vtctldGRPCPort),
 		),
-		network.WithNetwork([]string{vtctld.name}, c.network),
+		network.WithNetwork([]string{c.vtctld.name}, c.network),
 		testcontainers.WithTmpfs(map[string]string{vtDataRoot: "uid=999,gid=999"}),
 		testcontainers.WithEnv(map[string]string{"VTTEST": "endtoend"}),
-		testcontainers.WithLogConsumers(c.newLogConsumer(vtctld.name)),
+		testcontainers.WithLogConsumers(c.newLogConsumer(c.vtctld.name)),
 		testcontainers.WithWaitStrategyAndDeadline(defaultStartupTimeout,
 			wait.ForHTTP("/debug/vars").
-				WithPort(vtctld.httpPort).
+				WithPort(c.vtctld.httpPort).
 				WithStartupTimeout(defaultStartupTimeout).
 				WithPollInterval(defaultPollInterval),
 		),
@@ -70,14 +170,13 @@ func (c *Cluster) startVtctld(ctx context.Context) error {
 		return vterrors.Wrapf(err, "starting vtctld")
 	}
 
-	vtctld.setContainer(ctr)
-	c.vtctld = vtctld
+	c.vtctld.setContainer(ctr)
 	return nil
 }
 
 // addCellInfo registers a cell in the topology server.
 func (c *Cluster) addCellInfo(ctx context.Context, cell string) error {
-	_, err := c.vtctldClient.executeCommand(ctx,
+	_, err := c.vtctld.executeCommand(ctx,
 		"AddCellInfo",
 		"--root", "/vitess/"+cell,
 		"--server-address", fmt.Sprintf("etcd:%d", etcdClientPort),

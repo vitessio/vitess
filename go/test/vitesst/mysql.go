@@ -39,27 +39,26 @@ const comparisonMySQLUID = 1
 
 // NewMySQL starts a standalone mysqld container from the same image as the
 // cluster, for MySQL-comparison tests. It returns connection parameters and a
-// closer that terminates the container. The schema statements are applied to
+// cleanup that terminates the container. The schema statements are applied to
 // the given database before returning.
-func NewMySQL(cluster *Cluster, dbName string, schemaSQL ...string) (mysql.ConnParams, func(), error) {
-	ctx, cancel := context.WithTimeout(context.Background(), tabletStartupTimeout)
-	defer cancel()
-
-	params, closer, err := newMySQLContainer(ctx, cluster, dbName)
+func NewMySQL(ctx context.Context, cluster *Cluster, dbName string, schemaSQL ...string) (mysql.ConnParams, func(context.Context) error, error) {
+	params, cleanup, err := newMySQLContainer(ctx, cluster, dbName)
 	if err != nil {
 		return mysql.ConnParams{}, nil, err
 	}
 
 	if err := applySchema(ctx, params, schemaSQL); err != nil {
-		closer()
+		if cleanupErr := cleanup(ctx); cleanupErr != nil {
+			cluster.logf("cleaning up comparison mysqld: %v", cleanupErr)
+		}
 		return mysql.ConnParams{}, nil, err
 	}
 
-	return params, closer, nil
+	return params, cleanup, nil
 }
 
 // newMySQLContainer starts the standalone mysqld container.
-func newMySQLContainer(ctx context.Context, cluster *Cluster, dbName string) (mysql.ConnParams, func(), error) {
+func newMySQLContainer(ctx context.Context, cluster *Cluster, dbName string) (mysql.ConnParams, func(context.Context) error, error) {
 	initSQL := fmt.Sprintf(`SET GLOBAL super_read_only='OFF';
 CREATE DATABASE IF NOT EXISTS %s;
 CREATE USER '%s'@'%%';
@@ -97,24 +96,24 @@ GRANT ALL ON *.* TO '%s'@'%%' WITH GRANT OPTION;
 	if err != nil {
 		return mysql.ConnParams{}, nil, vterrors.Wrapf(err, "starting comparison mysqld")
 	}
+	cleanup := func(ctx context.Context) error {
+		return testcontainers.TerminateContainer(ctr, testcontainers.StopContext(ctx), testcontainers.StopTimeout(0))
+	}
 
-	closer := func() {
-		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), terminateTimeout)
-		defer cleanupCancel()
-		if err := testcontainers.TerminateContainer(ctr, testcontainers.StopContext(cleanupCtx), testcontainers.StopTimeout(0)); err != nil {
-			cluster.logf("terminating comparison mysqld: %v", err)
+	fail := func(err error) (mysql.ConnParams, func(context.Context) error, error) {
+		if cleanupErr := cleanup(ctx); cleanupErr != nil {
+			cluster.logf("cleaning up comparison mysqld: %v", cleanupErr)
 		}
+		return mysql.ConnParams{}, nil, vterrors.Wrapf(err, "resolving comparison mysqld address")
 	}
 
 	host, err := ctr.Host(ctx)
 	if err != nil {
-		closer()
-		return mysql.ConnParams{}, nil, vterrors.Wrapf(err, "resolving comparison mysqld host")
+		return fail(err)
 	}
 	mapped, err := ctr.MappedPort(ctx, fmt.Sprintf("%d/tcp", tabletMySQLPort))
 	if err != nil {
-		closer()
-		return mysql.ConnParams{}, nil, vterrors.Wrapf(err, "resolving comparison mysqld port")
+		return fail(err)
 	}
 
 	params := mysql.ConnParams{
@@ -123,7 +122,7 @@ GRANT ALL ON *.* TO '%s'@'%%' WITH GRANT OPTION;
 		Uname:  dbaUser,
 		DbName: dbName,
 	}
-	return params, closer, nil
+	return params, cleanup, nil
 }
 
 // applySchema splits each schemaSQL element into statements and applies them.
@@ -156,10 +155,7 @@ func applySchema(ctx context.Context, params mysql.ConnParams, schemaSQL []strin
 // VTParams returns connection parameters for the cluster's first vtgate. The
 // database name is set only when given, so unqualified tables resolve through
 // vtgate global routing by default.
-func (c *Cluster) VTParams(dbName string) mysql.ConnParams {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultOperationTimeout)
-	defer cancel()
-
+func (c *Cluster) VTParams(ctx context.Context, dbName string) mysql.ConnParams {
 	// Failures surface on stderr unconditionally: this runs in TestMain
 	// before any testing.T exists, and returning a zero ConnParams silently
 	// would make every test fail with opaque connection errors instead.
@@ -202,10 +198,8 @@ func (c *Cluster) Connect(t testing.TB) *mysql.Conn {
 func (c *Cluster) ConnectDB(t testing.TB, dbName string) *mysql.Conn {
 	t.Helper()
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultOperationTimeout)
-	defer cancel()
-
-	params := c.VTParams(dbName)
+	ctx := t.Context()
+	params := c.VTParams(ctx, dbName)
 	require.NotEmpty(t, params.Host, "no vtgate to connect to")
 
 	conn, err := mysql.Connect(ctx, &params)

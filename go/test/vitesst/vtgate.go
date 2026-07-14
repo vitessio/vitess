@@ -72,8 +72,8 @@ func (g *VTGate) DialVTGate(ctx context.Context) (*vtgateconn.VTGateConn, error)
 }
 
 // ReadVSchema fetches and decodes the vtgate's /debug/vschema.
-func (g *VTGate) ReadVSchema() (*any, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+func (g *VTGate) ReadVSchema(ctx context.Context) (*any, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
 	status, body, err := g.MakeAPICall(ctx, "/debug/vschema")

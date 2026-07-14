@@ -27,11 +27,22 @@ limitations under the License.
 // Test-scoped usage:
 //
 //	func TestSomething(t *testing.T) {
-//	    c := vitesst.NewCluster(t,
+//	    c := vitesst.NewCluster(
 //	        vitesst.WithKeyspace("ks").
 //	            WithSchema(`CREATE TABLE users (id INT PRIMARY KEY)`).
 //	            WithVSchema(`{"sharded": false, "tables": {"users": {}}}`),
 //	    )
+//	    cleanup, err := c.Start(t.Context())
+//	    t.Cleanup(func() {
+//	        ctx := context.WithoutCancel(t.Context())
+//	        if t.Failed() {
+//	            c.DumpDiagnostics(ctx, t.Logf)
+//	        }
+//	        if err := cleanup(ctx); err != nil {
+//	            t.Logf("cluster teardown: %v", err)
+//	        }
+//	    })
+//	    require.NoError(t, err)
 //
 //	    conn := c.Connect(t)
 //	    defer conn.Close()
@@ -39,27 +50,28 @@ limitations under the License.
 //	    vitesst.Exec(t, conn, "INSERT INTO ks.users (id) VALUES (1)")
 //	}
 //
-// NewCluster registers cleanup with t.Cleanup, and dumps per-component logs
-// when the test fails. The dominant one-cluster-per-package pattern uses
-// StartCluster from TestMain instead:
+// The dominant one-cluster-per-package pattern starts the cluster from
+// TestMain instead:
 //
 //	func TestMain(m *testing.M) {
 //	    exitCode := func() int {
-//	        c, err := vitesst.StartCluster(context.Background(),
+//	        ctx := context.Background()
+//	        c := vitesst.NewCluster(
 //	            vitesst.WithKeyspace("ks").WithSchema(schemaSQL),
 //	        )
+//	        cleanup, err := c.Start(ctx)
 //	        if err != nil {
 //	            fmt.Fprintln(os.Stderr, err)
 //	            return 1
 //	        }
 //	        defer func() {
-//	            if err := c.Terminate(context.Background()); err != nil {
+//	            if err := cleanup(ctx); err != nil {
 //	                fmt.Fprintln(os.Stderr, "cluster teardown:", err)
 //	            }
 //	        }()
 //
 //	        cluster = c
-//	        vtParams = c.VTParams("")
+//	        vtParams = c.VTParams(ctx, "")
 //	        return m.Run()
 //	    }()
 //	    os.Exit(exitCode)

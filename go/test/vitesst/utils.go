@@ -300,7 +300,7 @@ func WaitForVschemaCondition(
 		case <-timeout:
 			t.Fatalf("schema tracking did not met the condition within the time for keyspace: %s\n%s", ks, message)
 		default:
-			res, err := vtgate.ReadVSchema()
+			res, err := vtgate.ReadVSchema(t.Context())
 			require.NoError(t, err, res)
 			kss := convertToMap(*res)["keyspaces"]
 			ksMap := convertToMap(convertToMap(kss)[ks])
@@ -322,14 +322,14 @@ func WaitForTableDeletions(t *testing.T, vtgate *VTGate, ks, tbl string) {
 }
 
 // WaitForColumn waits for a table's column to be present
-func WaitForColumn(t TestingT, vtgate *VTGate, ks, tbl, col string) error {
+func WaitForColumn(t *testing.T, vtgate *VTGate, ks, tbl, col string) error {
 	timeout := time.After(60 * time.Second)
 	for {
 		select {
 		case <-timeout:
 			return fmt.Errorf("schema tracking did not find column '%s' in table '%s'", col, tbl)
 		default:
-			res, err := vtgate.ReadVSchema()
+			res, err := vtgate.ReadVSchema(t.Context())
 			require.NoError(t, err, res)
 			t2Map := getTableT2Map(res, ks, tbl)
 			authoritative, fieldPresent := t2Map["column_list_authoritative"]
@@ -423,7 +423,7 @@ func TimeoutAction(t *testing.T, timeout time.Duration, errMsg string, action fu
 func RunSQLs(t *testing.T, sqls []string, tablet *Tablet, db string) error {
 	// Get Connection
 	timeoutDuration := time.Duration(5 * len(sqls))
-	ctx, cancel := context.WithTimeout(context.Background(), timeoutDuration*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), timeoutDuration*time.Second)
 	defer cancel()
 	tabletParams, err := tablet.DBAConnParams(ctx, db)
 	require.NoError(t, err)
@@ -443,7 +443,7 @@ func RunSQLs(t *testing.T, sqls []string, tablet *Tablet, db string) error {
 // RunSQL is used to run a SQL statement on the given tablet
 func RunSQL(t *testing.T, sql string, tablet *Tablet, db string) (*sqltypes.Result, error) {
 	// Get Connection
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	tabletParams, err := tablet.DBAConnParams(ctx, db)
 	require.NoError(t, err)
@@ -456,8 +456,7 @@ func RunSQL(t *testing.T, sql string, tablet *Tablet, db string) (*sqltypes.Resu
 }
 
 // GetMySQLConn gets a MySQL connection for the given tablet
-func GetMySQLConn(tablet *Tablet, db string) (*mysql.Conn, error) {
-	ctx := context.Background()
+func GetMySQLConn(ctx context.Context, tablet *Tablet, db string) (*mysql.Conn, error) {
 	tabletParams, err := tablet.DBAConnParams(ctx, db)
 	if err != nil {
 		return nil, err

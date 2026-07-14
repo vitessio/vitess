@@ -40,8 +40,7 @@ type MySQLCompare struct {
 	MySQLConn, VtConn *mysql.Conn
 }
 
-func NewMySQLCompare(t TestingT, vtParams, mysqlParams mysql.ConnParams) (MySQLCompare, error) {
-	ctx := context.Background()
+func NewMySQLCompare(ctx context.Context, t TestingT, vtParams, mysqlParams mysql.ConnParams) (MySQLCompare, error) {
 	vtConn, err := mysql.Connect(ctx, &vtParams)
 	if err != nil {
 		return MySQLCompare{}, err

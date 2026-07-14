@@ -45,23 +45,24 @@ func TestMain(m *testing.M) {
 	exitCode := func() int {
 		ctx := context.Background()
 
-		cluster, err := vitesst.StartCluster(ctx,
+		cluster := vitesst.NewCluster(
 			vitesst.WithKeyspace(keyspaceName).
 				WithReplicas(1).
 				WithSchema(schemaSQL),
 		)
+		cleanup, err := cluster.Start(ctx)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
 		defer func() {
-			if err := cluster.Terminate(context.WithoutCancel(ctx)); err != nil {
+			if err := cleanup(ctx); err != nil {
 				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
 			}
 		}()
 
 		clusterInstance = cluster
-		vtParams = cluster.VTParams("")
+		vtParams = cluster.VTParams(ctx, "")
 		return m.Run()
 	}()
 	os.Exit(exitCode)
