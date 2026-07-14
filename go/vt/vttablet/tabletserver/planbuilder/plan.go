@@ -18,6 +18,7 @@ package planbuilder
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -191,12 +192,22 @@ func (plan *Plan) TableName() sqlparser.IdentifierCS {
 
 // TableNames returns the table names for all tables in the plan.
 func (plan *Plan) TableNames() (names []string) {
-	if len(plan.AllTables) == 0 {
-		tableName := plan.TableName()
-		return []string{tableName.String()}
-	}
 	for _, table := range plan.AllTables {
 		names = append(names, table.Name.String())
+	}
+	// AllTables only covers FROM-clause tables. A DDL statement carries its targets as
+	// bare TableNames on the DDL node itself, so they have to be collected separately.
+	if ddl, ok := plan.FullStmt.(sqlparser.DDLStatement); ok {
+		for _, table := range ddl.AffectedTables() {
+			name := table.Name.String()
+			if !slices.Contains(names, name) {
+				names = append(names, name)
+			}
+		}
+	}
+	if len(names) == 0 {
+		tableName := plan.TableName()
+		return []string{tableName.String()}
 	}
 	return names
 }

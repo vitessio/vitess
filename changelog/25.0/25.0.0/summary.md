@@ -25,6 +25,7 @@
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
+        - [Table-scoped query rules now match DDL](#vttablet-query-rules-ddl)
     - **[Backup/Restore](#minor-changes-backup)**
         - [Chunked backup/restore for the builtinbackupengine](#backup-chunked-builtin)
     - **[General](#minor-changes-general)**
@@ -197,6 +198,21 @@ Two changes:
 Tablets that already have more tracked schema objects than the configured limit will reload fine — only new creations are gated. Operators who need to support more tables and views should increase the flag and ensure both vttablet and mysqld have enough memory to comfortably hold the larger schema.
 
 See [#19978](https://github.com/vitessio/vitess/issues/19978) for details.
+
+#### <a id="vttablet-query-rules-ddl"/>Table-scoped query rules now match DDL</a>
+
+A query rule with a `TableNames` condition never matched DDL against those tables. The tablet's plan reported no table at all for a DDL statement, so every rule with a `TableNames` condition was filtered out before it could apply. Rules keyed only on `Plans` or `Query` matched DDL as expected, and table ACLs were never affected.
+
+Table-scoped rules now match DDL against the tables the statement affects — the target of a `CREATE`/`ALTER`/`TRUNCATE`, every table named in a `DROP`, and both sides of a `RENAME`. For `CREATE VIEW`, both the view and the tables it reads from match.
+
+This applies to every rule source, so two internal rules change behavior:
+
+- **Denied tables** (set on the source keyspace after a MoveTables `SwitchTraffic`): DDL issued through VTGate against a denied table is now rejected, where it previously executed.
+- **Online DDL cut-over buffering**: DDL issued through VTGate against a table being cut over is now buffered for the duration of the cut-over, where it previously executed.
+
+Vitess's own schema operations — the cut-over `RENAME`, source-table removal, and `ApplySchema` — do not go through the query engine and are unaffected.
+
+See [#20555](https://github.com/vitessio/vitess/issues/20555) for details.
 
 ### <a id="minor-changes-backup"/>Backup/Restore</a>
 
