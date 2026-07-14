@@ -43,6 +43,16 @@ var (
 	// receiving a shutdown signal, used if not explicitly set using WithGracefulShutdownChan or
 	// WithGracefulShutdownSignals. This can be safely modified if needed before calling New.
 	DefaultGracefulShutdownWaitDur = 5 * time.Second
+
+	// DefaultStartupTimeout is how long the client waits for the first event after Run starts before it
+	// shuts itself down with ErrStartupTimeout. This can be safely modified if needed before calling New.
+	DefaultStartupTimeout = 5 * time.Minute
+
+	// DefaultHeartbeatTimeoutMultiplier controls the liveness window as a multiple of the heartbeat
+	// interval: once the first event has been received, if no event (including heartbeats) is received
+	// for that window, the client shuts itself down with ErrHeartbeatTimeout. This can be safely
+	// modified if needed before calling New.
+	DefaultHeartbeatTimeoutMultiplier = 2
 )
 
 // Option is a function that can be used to configure a VStreamClient

@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/signal"
 	"slices"
@@ -28,7 +29,19 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+)
+
+var (
+	// ErrHeartbeatTimeout is returned by Run (as the wrapped cause) when the heartbeat monitor stops
+	// the stream because no events, including heartbeats, were received within the liveness window
+	// (the heartbeat interval times DefaultHeartbeatTimeoutMultiplier).
+	ErrHeartbeatTimeout = errors.New("vstreamclient: no events received within the heartbeat liveness window")
+
+	// ErrStartupTimeout is returned by Run (as the wrapped cause) when the stream never delivered a
+	// single event within DefaultStartupTimeout after Run started.
+	ErrStartupTimeout = errors.New("vstreamclient: no events received before the startup timeout")
 )
 
 // EventFunc is an optional callback function that can be registered for individual event types
@@ -111,18 +124,22 @@ func (r FlushReason) String() string {
 //   - Run is called on a client that was already used by a previous Run attempt
 //   - the underlying VStream recv loop fails
 //   - the context is canceled or times out while Run is still active
+//   - the client shuts itself down because no events were received; the returned error
+//     wraps ErrHeartbeatTimeout or ErrStartupTimeout, so callers can match with errors.Is
 //   - a registered event hook returns an error
 //   - row decoding or table lookup fails
 //   - FlushFn returns an error
 //   - checkpoint state updates fail
 func (v *VStreamClient) Run(ctx context.Context) error {
-	// make a cancelable context for GracefulShutdown to use, so it can signal the Run loop to exit
-	ctx, cancelRunCtxFn := context.WithCancel(ctx)
+	// make a cancelable context for GracefulShutdown to use, so it can signal the Run loop to exit.
+	// The cancel cause distinguishes monitor-initiated shutdowns (e.g. ErrHeartbeatTimeout) from
+	// ordinary context cancellation.
+	ctx, cancelRunCtxFn := context.WithCancelCause(ctx)
 	if !v.beginRun(cancelRunCtxFn) {
-		cancelRunCtxFn()
+		cancelRunCtxFn(nil)
 		return errors.New("vstreamclient: client is closed; create a new client for each Run attempt")
 	}
-	defer cancelRunCtxFn()
+	defer cancelRunCtxFn(nil)
 	defer v.endRun()
 
 	go v.listenForGracefulShutdown(ctx)
@@ -157,6 +174,13 @@ func (v *VStreamClient) Run(ctx context.Context) error {
 			return fmt.Errorf("vstreamclient: remote error: %w", io.ErrUnexpectedEOF)
 
 		default:
+			// if the recv failed because our own context was canceled with an explicit cause
+			// (e.g. the heartbeat monitor), surface that cause instead of the generic grpc error
+			if ctx.Err() != nil {
+				if cause := context.Cause(ctx); !errors.Is(cause, ctx.Err()) {
+					return fmt.Errorf("vstreamclient: stream canceled: %w", cause)
+				}
+			}
 			return fmt.Errorf("vstreamclient: remote error: %w", err)
 		}
 
@@ -200,12 +224,27 @@ func (v *VStreamClient) shouldExitRun(ctx context.Context) (bool, error) {
 	select {
 	// since any processing will likely be wasted, return early if the context is already done
 	case <-ctx.Done():
-		return true, ctx.Err()
+		return true, contextErr(ctx)
 
 	default:
 	}
 
 	return false, nil
+}
+
+// contextErr returns the context's cancel cause when it differs from ctx.Err() (e.g. the heartbeat
+// monitor canceled the run), and ctx.Err() otherwise. It returns nil if the context is not done.
+func contextErr(ctx context.Context) error {
+	err := ctx.Err()
+	if err == nil {
+		return nil
+	}
+
+	if cause := context.Cause(ctx); !errors.Is(cause, err) {
+		return cause
+	}
+
+	return err
 }
 
 func (v *VStreamClient) handleEvents(ctx context.Context, events []*binlogdatapb.VEvent) error {
@@ -377,10 +416,19 @@ func (v *VStreamClient) listenForGracefulShutdown(ctx context.Context) {
 // healthy startup does not self-cancel.
 // ********************************************************************************************************
 func (v *VStreamClient) monitorHeartbeat(ctx context.Context) {
-	const startupTimeout = 5 * time.Minute
-	const timeoutMultiplier = 2
+	// guard against zero values so a zero liveness window or startup timeout can never
+	// trigger an immediate shutdown
+	startupTimeout := v.cfg.startupTimeout
+	if startupTimeout <= 0 {
+		startupTimeout = DefaultStartupTimeout
+	}
+	timeoutMultiplier := v.cfg.heartbeatTimeoutMultiplier
+	if timeoutMultiplier <= 0 {
+		timeoutMultiplier = DefaultHeartbeatTimeoutMultiplier
+	}
 
 	heartbeatDur := time.Duration(v.cfg.flags.HeartbeatInterval) * time.Second
+	livenessWindow := heartbeatDur * time.Duration(timeoutMultiplier)
 	heartbeat := time.NewTicker(heartbeatDur)
 	defer heartbeat.Stop()
 
@@ -412,17 +460,28 @@ func (v *VStreamClient) monitorHeartbeat(ctx context.Context) {
 				continue
 			}
 
-			// if we haven't received an event in twice the heartbeat duration, we'll cancel the context, since
+			// if we haven't received an event within the liveness window, we'll cancel the context, since
 			// we're likely disconnected, and exit the goroutine
-			if tm.Sub(time.Unix(0, lastEventProcessedAtUnixNano)) > heartbeatDur*timeoutMultiplier {
-				v.GracefulShutdown(v.cfg.gracefulShutdownWaitDur)
+			if tm.Sub(time.Unix(0, lastEventProcessedAtUnixNano)) > livenessWindow {
+				log.Warn(
+					"vstreamclient: no events received within the liveness window, shutting down the stream",
+					slog.String("name", v.cfg.name),
+					slog.Duration("liveness_window", livenessWindow),
+					slog.Time("last_event_processed_at", time.Unix(0, lastEventProcessedAtUnixNano)),
+				)
+				v.gracefulShutdownWithCause(v.cfg.gracefulShutdownWaitDur, ErrHeartbeatTimeout)
 				return
 			}
 
 		case <-startupTimerChan:
 			// this is a sanity check to shutdown the client if we never receive a single event
 			if v.lastEventProcessedAtUnixNano.Load() == 0 && !v.isProcessingEvents.Load() {
-				v.GracefulShutdown(v.cfg.gracefulShutdownWaitDur)
+				log.Warn(
+					"vstreamclient: no events received since Run started, shutting down the stream",
+					slog.String("name", v.cfg.name),
+					slog.Duration("startup_timeout", startupTimeout),
+				)
+				v.gracefulShutdownWithCause(v.cfg.gracefulShutdownWaitDur, ErrStartupTimeout)
 				return
 			}
 			startupTimerChan = nil
@@ -449,7 +508,7 @@ func (v *VStreamClient) monitorHeartbeat(ctx context.Context) {
 // copy_completed to true in the state table.
 // ********************************************************************************************************
 func (v *VStreamClient) flush(ctx context.Context, isCopyCompleted bool) error {
-	if err := ctx.Err(); err != nil {
+	if err := contextErr(ctx); err != nil {
 		return fmt.Errorf("vstreamclient: context error before flush: %w", err)
 	}
 
@@ -472,7 +531,7 @@ func (v *VStreamClient) flush(ctx context.Context, isCopyCompleted bool) error {
 	for _, table := range v.tables {
 		// flush the rows to the database, chunked using the max batch size
 		for chunk := range slices.Chunk(table.currentBatch, table.MaxRowsPerFlush) {
-			if err := ctx.Err(); err != nil {
+			if err := contextErr(ctx); err != nil {
 				return fmt.Errorf("vstreamclient: context error during flush: %w", err)
 			}
 
