@@ -225,7 +225,7 @@ func (c *Cluster) AddVTGateSpec(ctx context.Context, spec VTGateSpec) (*VTGate, 
 // from a spec whose cell and watched cells are already resolved.
 func (c *Cluster) runVTGateContainer(ctx context.Context, name string, spec VTGateSpec) (testcontainers.Container, error) {
 	args := []string{"vtgate"}
-	args = append(args, c.topoFlags()...)
+	args = append(args, c.TopoFlags()...)
 	args = append(
 		args,
 		"--config-file", vtgateConfigPath,
@@ -255,7 +255,7 @@ func (c *Cluster) runVTGateContainer(ctx context.Context, name string, spec VTGa
 	}
 
 	return testcontainers.Run(
-		ctx, c.image,
+		ctx, c.vtgateImage(),
 		testcontainers.WithCmd(args...),
 		testcontainers.WithExposedPorts(
 			fmt.Sprintf("%d/tcp", vtgateHTTPPort),

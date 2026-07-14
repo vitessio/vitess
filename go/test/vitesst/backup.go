@@ -181,7 +181,7 @@ func (c *Cluster) StartVtbackup(ctx context.Context, spec VtbackupSpec) (*Vtback
 	initDBPath := containerFilesDir + "/init_db.sql"
 
 	args := []string{"vtbackup"}
-	args = append(args, c.topoFlags()...)
+	args = append(args, c.TopoFlags()...)
 	args = append(args, c.backupFlags()...)
 	args = append(
 		args,

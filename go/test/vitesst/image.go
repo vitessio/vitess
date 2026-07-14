@@ -40,6 +40,24 @@ func vitesstImage(mysqlVersion string) string {
 	return "vitesst:mysql" + strings.ReplaceAll(mysqlVersion, ".", "")
 }
 
+// vtgateImage returns the Docker image the cluster's vtgate containers run:
+// the VITESST_VTGATE_IMAGE override, or the cluster image.
+func (c *Cluster) vtgateImage() string {
+	if image := os.Getenv("VITESST_VTGATE_IMAGE"); image != "" {
+		return image
+	}
+	return c.image
+}
+
+// vtctldImage returns the Docker image the cluster's vtctld container runs:
+// the VITESST_VTCTLD_IMAGE override, or the cluster image.
+func (c *Cluster) vtctldImage() string {
+	if image := os.Getenv("VITESST_VTCTLD_IMAGE"); image != "" {
+		return image
+	}
+	return c.image
+}
+
 // mergeEnv overlays extra environment variables onto base.
 func mergeEnv(base, extra map[string]string) map[string]string {
 	maps.Copy(base, extra)

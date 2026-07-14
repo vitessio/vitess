@@ -83,6 +83,7 @@ func (c *Cluster) AddVTOrc(ctx context.Context, cell string, extraArgs ...string
 		name = c.name(fmt.Sprintf("vtorc-%d", index+1))
 	}
 
+	args := withVTOrcPollArgs(extraArgs)
 	v := &VTOrc{
 		component: component{
 			name:     name,
@@ -90,10 +91,10 @@ func (c *Cluster) AddVTOrc(ctx context.Context, cell string, extraArgs ...string
 			cluster:  c,
 		},
 		cell:      cell,
-		extraArgs: extraArgs,
+		extraArgs: args,
 	}
 
-	ctr, err := c.runVTOrcContainer(ctx, name, cell, extraArgs)
+	ctr, err := c.runVTOrcContainer(ctx, name, cell, args)
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "starting %s", name)
 	}
@@ -146,9 +147,27 @@ func (v *VTOrc) callRecoveriesAPI(ctx context.Context, path string) error {
 func (v *VTOrc) Restart(ctx context.Context, extraArgs ...string) error {
 	v.argsMu.Lock()
 	if len(extraArgs) > 0 {
-		v.extraArgs = extraArgs
+		v.extraArgs = withVTOrcPollArgs(extraArgs)
 	}
 	args := v.extraArgs
+	v.argsMu.Unlock()
+	return v.restart(ctx, args)
+}
+
+// RestartWithBuiltinConfig recreates the VTOrc container with no command-line
+// flags beyond the ones VTOrc needs to reach the cluster, so that every
+// configuration value reported by /api/config is VTOrc's own default.
+func (v *VTOrc) RestartWithBuiltinConfig(ctx context.Context) error {
+	v.argsMu.Lock()
+	v.extraArgs = nil
+	v.argsMu.Unlock()
+	return v.restart(ctx, nil)
+}
+
+// restart terminates the current container and runs a new one with the given
+// extra args.
+func (v *VTOrc) restart(ctx context.Context, args []string) error {
+	v.argsMu.Lock()
 	cell := v.cell
 	v.argsMu.Unlock()
 
@@ -167,11 +186,25 @@ func (v *VTOrc) Restart(ctx context.Context, extraArgs ...string) error {
 	return nil
 }
 
+// withVTOrcPollArgs returns the extra args with the poll intervals a test
+// cluster wants, tightened from VTOrc's defaults so recoveries happen quickly.
+// Args the caller already set are left alone.
+func withVTOrcPollArgs(extraArgs []string) []string {
+	args := make([]string, 0, len(extraArgs)+4)
+	if !argsContain(extraArgs, "instance-poll-time") {
+		args = append(args, "--instance-poll-time", "1s")
+	}
+	if !argsContain(extraArgs, "topo-information-refresh-duration") {
+		args = append(args, "--topo-information-refresh-duration", "3s")
+	}
+	return append(args, extraArgs...)
+}
+
 // runVTOrcContainer starts one VTOrc container with the given network alias,
 // cell, and extra args.
 func (c *Cluster) runVTOrcContainer(ctx context.Context, name, cell string, extraArgs []string) (testcontainers.Container, error) {
 	args := []string{"vtorc"}
-	args = append(args, c.topoFlags()...)
+	args = append(args, c.TopoFlags()...)
 	args = append(
 		args,
 		"--cell", cell,
@@ -180,12 +213,6 @@ func (c *Cluster) runVTOrcContainer(ctx context.Context, name, cell string, extr
 		"--log-format", "text",
 		"--alsologtostderr",
 	)
-	if !argsContain(extraArgs, "instance-poll-time") {
-		args = append(args, "--instance-poll-time", "1s")
-	}
-	if !argsContain(extraArgs, "topo-information-refresh-duration") {
-		args = append(args, "--topo-information-refresh-duration", "3s")
-	}
 	args = append(args, extraArgs...)
 
 	// The config file is staged world-writable: files are copied in as root,

@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"slices"
 	"strconv"
 	"strings"
@@ -576,7 +577,7 @@ func (c *Cluster) startTablet(ctx context.Context, spec *TabletSpec) (*Tablet, e
 		opts = append(opts, c.backupMount())
 	}
 
-	ctr, err := testcontainers.Run(ctx, c.keyspaceImage(spec.Keyspace), opts...)
+	ctr, err := testcontainers.Run(ctx, c.vttabletImage(spec.Keyspace), opts...)
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "starting tablet %s", t.Alias())
 	}
@@ -592,7 +593,7 @@ func (c *Cluster) vttabletBaseArgs(spec *TabletSpec, alias string) []string {
 		initTabletType = "rdonly"
 	}
 
-	args := c.topoFlags()
+	args := c.TopoFlags()
 	args = append(
 		args,
 		"--tablet-path", fmt.Sprintf("%s-%d", spec.Cell, spec.UID),
@@ -705,11 +706,15 @@ done
 	)
 }
 
-// keyspaceImage returns the Docker image a keyspace's tablets run: the one the
-// keyspace was configured with, or the cluster image.
-func (c *Cluster) keyspaceImage(keyspace string) string {
+// vttabletImage returns the Docker image a keyspace's tablets run: the one the
+// keyspace was configured with, then the VITESST_VTTABLET_IMAGE override, then
+// the cluster image. This image also carries mysqlctl and mysqlctld.
+func (c *Cluster) vttabletImage(keyspace string) string {
 	if kc := c.keyspaceConfig(keyspace); kc != nil && kc.image != "" {
 		return kc.image
+	}
+	if image := os.Getenv("VITESST_VTTABLET_IMAGE"); image != "" {
+		return image
 	}
 	return c.image
 }

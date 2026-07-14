@@ -152,7 +152,7 @@ func (v *Vtctld) getShard(ctx context.Context, keyspace, shard string) (string, 
 // startVtctld starts the vtctld container.
 func (c *Cluster) startVtctld(ctx context.Context) error {
 	args := []string{"vtctld"}
-	args = append(args, c.topoFlags()...)
+	args = append(args, c.TopoFlags()...)
 	args = append(
 		args,
 		"--cell", c.cells[0],
@@ -193,7 +193,7 @@ func (c *Cluster) startVtctld(ctx context.Context) error {
 		opts = append(opts, c.backupMount())
 	}
 
-	ctr, err := testcontainers.Run(ctx, c.image, opts...)
+	ctr, err := testcontainers.Run(ctx, c.vtctldImage(), opts...)
 	if err != nil {
 		return vterrors.Wrapf(err, "starting vtctld")
 	}

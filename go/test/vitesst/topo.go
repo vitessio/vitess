@@ -213,8 +213,11 @@ func (c *Cluster) topoCellRoot(cell string) string {
 	return "/vitess/" + cell
 }
 
-// topoFlags returns the topo flags shared by every Vitess component.
-func (c *Cluster) topoFlags() []string {
+// TopoFlags returns the topo flags shared by every Vitess component. A test
+// that runs a vtctldclient command against the topology server directly, with
+// "--server internal", passes them so the command reaches the same topology
+// server as the cluster, whatever its flavor.
+func (c *Cluster) TopoFlags() []string {
 	return []string{
 		"--topo-implementation", c.opts.topoFlavor,
 		"--topo-global-server-address", c.TopoAddress(),
