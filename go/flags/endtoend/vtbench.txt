@@ -62,6 +62,7 @@ Flags:
       --db-credentials-vault-tokenfile string                       Path to file containing Vault auth token; token can also be passed using VAULT_TOKEN environment variable
       --db-credentials-vault-ttl duration                           How long to cache DB credentials from the Vault server (default 30m0s)
       --deadline duration                                           Maximum duration for the test run (default 5 minutes) (default 5m0s)
+      --grpc-dial-concurrency-limit int                             Maximum concurrency of grpc dial operations. This should be less than the golang max thread limit of 10000. (default 1024)
       --grpc_auth_static_client_creds string                        When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
       --grpc_compression string                                     Which protocol to use for compressing gRPC. Default: nothing. Supported: snappy
       --grpc_enable_tracing                                         Enable gRPC tracing.
@@ -69,6 +70,8 @@ Flags:
       --grpc_initial_window_size int                                gRPC initial window size
       --grpc_keepalive_time duration                                After a duration of this time, if the client doesn't see any activity, it pings the server to see if the transport is still alive. (default 10s)
       --grpc_keepalive_timeout duration                             After having pinged for keepalive check, the client waits for a duration of Timeout and if no activity is seen even after that the connection is closed. (default 10s)
+      --grpc_max_message_recv_size int                              Maximum allowed RPC message size when receiving. If 0, defaults to grpc_max_message_size.
+      --grpc_max_message_send_size int                              Maximum allowed RPC message size when sending. If 0, defaults to grpc_max_message_size.
       --grpc_max_message_size int                                   Maximum allowed RPC message size. Larger messages will be rejected by gRPC with the error 'exceeding the max size'. (default 16777216)
       --grpc_prometheus                                             Enable gRPC monitoring with Prometheus.
   -h, --help                                                        help for vtbench

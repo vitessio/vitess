@@ -254,12 +254,17 @@ func calculateUploadPartSize(filesize int64) (partSizeBytes int64, err error) {
 	return
 }
 
+// Wait is part of the backupstorage.BackupHandle interface.
+func (bh *S3BackupHandle) Wait() {
+	bh.waitGroup.Wait()
+}
+
 // EndBackup is part of the backupstorage.BackupHandle interface.
 func (bh *S3BackupHandle) EndBackup(ctx context.Context) error {
 	if bh.readOnly {
 		return fmt.Errorf("EndBackup cannot be called on read-only backup")
 	}
-	bh.waitGroup.Wait()
+	bh.Wait()
 	return bh.Error()
 }
 
@@ -521,7 +526,8 @@ func (bs *S3BackupStorage) client() (*s3.Client, error) {
 
 		httpClient := &http.Client{Transport: bs.transport}
 
-		cfg, err := config.LoadDefaultConfig(context.Background(),
+		cfg, err := config.LoadDefaultConfig(
+			context.Background(),
 			config.WithRegion(region),
 			config.WithClientLogMode(logLevel),
 			config.WithHTTPClient(httpClient),
