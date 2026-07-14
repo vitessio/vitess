@@ -413,6 +413,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 				default:
 					// Do nothing special.
 				}
+				vs.vse.throttledCounts.Add(1)
 				curtime := time.Now().Unix()
 				if !throttledTime.CompareAndSwap(0, curtime) {
 					if curtime-throttledTime.Load() > int64(fullyThrottledTimeout.Seconds()) {
@@ -1132,7 +1133,17 @@ func getFields(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, t
 	}
 	for _, field := range fieldsCopy {
 		if colInfo, ok := extColInfos[field.Name]; ok {
-			field.ColumnType = colInfo.columnType
+			// A ColumnType that is already set comes from a tracked schema
+			// version and reflects the column's historical ENUM/SET definition;
+			// the live one may have diverged, so we must not overwrite it.
+			if field.ColumnType == "" {
+				field.ColumnType = colInfo.columnType
+			}
+			// The charset, however, is always taken from the live column: the
+			// historical collation is not persisted (the snapshot's field
+			// metadata carries the connection collation, not the column's), so
+			// the live collation is the best available approximation. It does
+			// not affect ENUM/SET value decoding, which only uses ColumnType.
 			field.Charset = uint32(colInfo.collationID)
 		}
 	}
@@ -1394,8 +1405,11 @@ func addEnumAndSetMappingstoPlan(env *vtenv.Environment, plan *Plan, cols []*que
 			begin := strings.Index(col.ColumnType, "(")
 			end := strings.LastIndex(col.ColumnType, ")")
 			if begin == -1 || end == -1 {
-				return fmt.Errorf("enum or set column %s does not have valid string values: %s",
-					col.Name, col.ColumnType)
+				return fmt.Errorf("enum or set column %s does not have valid string values: %q; "+
+					"the column's type definition is unavailable -- this usually means the column "+
+					"was dropped, and decoding historical rows for a dropped ENUM/SET column "+
+					"requires --track-schema-versions with a schema version retained from while "+
+					"the column still existed", col.Name, col.ColumnType)
 			}
 			var err error
 			plan.EnumSetValuesMap[i], err = vtschema.ParseEnumOrSetTokensMap(env, col.ColumnType[begin+1:end])
@@ -1464,8 +1478,10 @@ func buildSetStringValue(env *vtenv.Environment, plan *streamerPlan, colNum int,
 			plan.Table.Fields[colNum].Name, plan.Table.Name, iv)
 	}
 	idx := 1
-	// See what bits are set in the bitmap using bitmasks.
-	for b := uint64(1); b < 1<<63; b <<= 1 {
+	// See what bits are set in the bitmap using bitmasks. A SET can have up to
+	// 64 members, so we need to check all 64 bits, including bit 1<<63 for the
+	// 64th member. The loop terminates when the shift overflows back to 0.
+	for b := uint64(1); b != 0; b <<= 1 {
 		if iv&b > 0 { // This bit is set and the SET's string value needs to be provided.
 			strVal, ok := plan.EnumSetValuesMap[colNum][idx]
 			// When you insert values not found in the SET (which requires disabling STRICT mode) then

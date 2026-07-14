@@ -148,7 +148,7 @@ func TestOpen(t *testing.T) {
 		resources[i] = r
 		assert.EqualValues(t, 5-i-1, p.Available())
 		assert.Zero(t, p.Metrics.WaitCount())
-		assert.Zero(t, len(state.waits))
+		assert.Empty(t, state.waits)
 		assert.Zero(t, p.Metrics.WaitTime())
 		assert.EqualValues(t, i+1, state.lastID.Load())
 		assert.EqualValues(t, i+1, state.open.Load())
@@ -182,7 +182,7 @@ func TestOpen(t *testing.T) {
 	}
 	<-done
 	assert.EqualValues(t, 5, p.Metrics.WaitCount())
-	assert.Equal(t, 5, len(state.waits))
+	assert.Len(t, state.waits, 5)
 	// verify start times are monotonic increasing
 	for i := 1; i < len(state.waits); i++ {
 		assert.False(t, state.waits[i].Before(state.waits[i-1]), "Expecting monotonic increasing start times")
@@ -366,7 +366,7 @@ func TestShrinking(t *testing.T) {
 	assert.EqualValues(t, 2, p.Capacity())
 	assert.EqualValues(t, 2, p.Available())
 	assert.EqualValues(t, 1, p.Metrics.WaitCount())
-	assert.EqualValues(t, p.Metrics.WaitCount(), len(state.waits))
+	assert.Len(t, state.waits, int(p.Metrics.WaitCount()))
 	assert.EqualValues(t, 2, state.open.Load())
 
 	// Test race condition of SetCapacity with itself
@@ -1125,7 +1125,7 @@ func TestMaxIdleCount(t *testing.T) {
 				closedConn++
 			}
 		}
-		assert.EqualValues(t, expClosedConn, closedConn)
+		assert.Equal(t, expClosedConn, closedConn)
 		assert.EqualValues(t, expClosedConn, p.Metrics.IdleClosed())
 	}
 
@@ -1216,8 +1216,8 @@ func TestSlowCreateFail(t *testing.T) {
 		}
 		assert.Nil(t, <-ch)
 		assert.Nil(t, <-ch)
-		assert.Equalf(t, p.Capacity(), int64(2), "pool should not be out of capacity")
-		assert.Equalf(t, p.Available(), int64(2), "pool should not be out of availability")
+		assert.Equalf(t, int64(2), p.Capacity(), "pool should not be out of capacity")
+		assert.Equalf(t, int64(2), p.Available(), "pool should not be out of availability")
 
 		select {
 		case <-ch:
@@ -1258,7 +1258,7 @@ func TestTimeout(t *testing.T) {
 		newctx, cancel := context.WithTimeout(ctx, 10*time.Millisecond)
 		_, err = p.Get(newctx, setting)
 		cancel()
-		assert.EqualError(t, err, "connection pool timed out")
+		require.EqualError(t, err, "connection pool timed out")
 	}
 
 	// put the connection take was taken initially.
@@ -1308,7 +1308,7 @@ func TestMultiSettings(t *testing.T) {
 		resources[i] = r
 		assert.EqualValues(t, 5-i-1, p.Available())
 		assert.Zero(t, p.Metrics.WaitCount())
-		assert.Zero(t, len(state.waits))
+		assert.Empty(t, state.waits)
 		assert.Zero(t, p.Metrics.WaitTime())
 		assert.EqualValues(t, i+1, state.lastID.Load())
 		assert.EqualValues(t, i+1, state.open.Load())
@@ -1336,7 +1336,7 @@ func TestMultiSettings(t *testing.T) {
 	}
 	<-ch
 	assert.EqualValues(t, 5, p.Metrics.WaitCount())
-	assert.Equal(t, 5, len(state.waits))
+	assert.Len(t, state.waits, 5)
 	// verify start times are monotonic increasing
 	for i := 1; i < len(state.waits); i++ {
 		assert.False(t, state.waits[i].Before(state.waits[i-1]), "Expecting monotonic increasing start times")
@@ -1386,7 +1386,7 @@ func TestMultiSettingsWithReset(t *testing.T) {
 	for i := range 5 {
 		r, err = p.Get(ctx, settings[1]) // {foo}
 		require.NoError(t, err)
-		assert.Truef(t, r.Conn.setting == settings[1], "setting was not properly applied")
+		assert.Samef(t, r.Conn.setting, settings[1], "setting was not properly applied")
 		resources[i] = r
 	}
 	assert.EqualValues(t, 2, state.reset.Load()) // when setting was {bar} and getting for {foo}
@@ -1444,7 +1444,7 @@ func TestApplySettingsFailure(t *testing.T) {
 		r, err = p.Get(ctx, settings[1])
 		if err != nil {
 			failCount++
-			assert.EqualError(t, err, "ApplySetting failed")
+			require.EqualError(t, err, "ApplySetting failed")
 			continue
 		}
 		resources = append(resources, r)
@@ -1488,7 +1488,7 @@ func TestGetSpike(t *testing.T) {
 		resources[i] = r
 		assert.EqualValues(t, 5-i-1, p.Available())
 		assert.Zero(t, p.Metrics.WaitCount())
-		assert.Zero(t, len(state.waits))
+		assert.Empty(t, state.waits)
 		assert.Zero(t, p.Metrics.WaitTime())
 		assert.EqualValues(t, i+1, state.lastID.Load())
 		assert.EqualValues(t, i+1, state.open.Load())
@@ -1660,19 +1660,26 @@ func TestIdleTimeoutConnectionLeak(t *testing.T) {
 	// This should trigger the bug where connections get discarded
 	wg := sync.WaitGroup{}
 
-	for range 2 {
+	errs := make([]error, 2)
+	for i := range 2 {
 		wg.Go(func() {
 			getCtx, cancel := context.WithTimeout(t.Context(), 300*time.Millisecond)
 			defer cancel()
 
 			conn, err := p.Get(getCtx, nil)
-			require.NoError(t, err)
+			if err != nil {
+				errs[i] = err
+				return
+			}
 
 			p.put(conn)
 		})
 	}
 
 	wg.Wait()
+	for _, err := range errs {
+		require.NoError(t, err)
+	}
 
 	// Wait a moment for all reopening to complete
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
@@ -2069,7 +2076,7 @@ func TestCloseDoesNotHandOffToWaiters(t *testing.T) {
 	}()
 
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		assert.EqualValues(c, 1, p.wait.waiting())
+		assert.Equal(c, 1, p.wait.waiting())
 	}, time.Second, time.Millisecond)
 
 	closeDone := make(chan error, 1)
@@ -2339,7 +2346,7 @@ func TestTaintWakesWaiter(t *testing.T) {
 	}()
 
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		assert.EqualValues(c, 1, p.wait.waiting())
+		assert.Equal(c, 1, p.wait.waiting())
 	}, time.Second, time.Millisecond)
 
 	c.Taint()
@@ -2380,7 +2387,7 @@ func TestRecycleMaxLifetimeWakesWaiter(t *testing.T) {
 	}()
 
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		assert.EqualValues(c, 1, p.wait.waiting())
+		assert.Equal(c, 1, p.wait.waiting())
 	}, time.Second, time.Millisecond)
 
 	c.Recycle()

@@ -242,6 +242,13 @@ func (dbc *Conn) FetchNext(ctx context.Context, maxrows int, wantfields bool) (*
 	return res, err
 }
 
+// StreamOKResult returns the OK-packet result of the most recent streaming query
+// when it returned no resultset (e.g. a CALL of a procedure that performs DML),
+// or nil when it returned a resultset.
+func (dbc *Conn) StreamOKResult() *sqltypes.Result {
+	return dbc.conn.StreamOKResult()
+}
+
 // Stream executes the query and streams the results.
 func (dbc *Conn) Stream(ctx context.Context, query string, callback func(*sqltypes.Result) error, alloc func() *sqltypes.Result, streamBufferSize int, includedFields querypb.ExecuteOptions_IncludedFields) error {
 	span, ctx := trace.NewSpan(ctx, "DBConn.Stream")

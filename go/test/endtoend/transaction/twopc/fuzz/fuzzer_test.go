@@ -166,15 +166,15 @@ func (fz *fuzzer) verifyTransactionsWereAtomic(t *testing.T) {
 		shard1Val := getColValueForIdFromFuzzUpdate(t, conn, updateSet[0])
 		shard2Val := getColValueForIdFromFuzzUpdate(t, conn, updateSet[1])
 		shard3Val := getColValueForIdFromFuzzUpdate(t, conn, updateSet[2])
-		require.EqualValues(t, shard1Val, shard2Val)
-		require.EqualValues(t, shard3Val, shard2Val)
+		require.Equal(t, shard1Val, shard2Val)
+		require.Equal(t, shard3Val, shard2Val)
 
 		// Next we get the IDs from all the three shards for the given update set index.
 		shard1IDs := getThreadIDsForUpdateSetFromFuzzInsert(t, conn, updateSetIdx, 1)
 		shard2IDs := getThreadIDsForUpdateSetFromFuzzInsert(t, conn, updateSetIdx, 2)
 		shard3IDs := getThreadIDsForUpdateSetFromFuzzInsert(t, conn, updateSetIdx, 3)
-		require.EqualValues(t, shard1IDs, shard2IDs)
-		require.EqualValues(t, shard3IDs, shard2IDs)
+		require.Equal(t, shard1IDs, shard2IDs)
+		require.Equal(t, shard3IDs, shard2IDs)
 	}
 }
 
@@ -223,6 +223,23 @@ type fuzzer struct {
 	clusterDisruptions []func(t *testing.T)
 	// disruptionProbability is the chance for the disruption to happen. We check this every 100 milliseconds.
 	disruptionProbability []int
+
+	// mu guards err, the first error encountered by a fuzzer thread. Threads
+	// run in goroutines, so they record errors here instead of asserting; stop(),
+	// which runs on the test goroutine, asserts on the recorded error.
+	mu  sync.Mutex
+	err error
+}
+
+// recordError stores the first error encountered by a fuzzer thread and signals
+// all threads to stop.
+func (fz *fuzzer) recordError(err error) {
+	fz.mu.Lock()
+	if fz.err == nil {
+		fz.err = err
+	}
+	fz.mu.Unlock()
+	fz.shouldStop.Store(true)
 }
 
 // newFuzzer creates a new fuzzer struct.
@@ -246,6 +263,8 @@ func (fz *fuzzer) stop() {
 	fz.shouldStop.Store(true)
 	// Wait for the fuzzer thread to stop.
 	fz.wg.Wait()
+	// Surface any error a fuzzer thread recorded while running in its goroutine.
+	require.NoError(fz.t, fz.err)
 }
 
 // start starts running the fuzzer.
@@ -277,7 +296,10 @@ func (fz *fuzzer) runFuzzerThread(t *testing.T, threadId int) {
 			return
 		}
 		// Run an atomic transaction
-		fz.generateAndExecuteTransaction(t, threadId)
+		if err := fz.generateAndExecuteTransaction(t, threadId); err != nil {
+			fz.recordError(err)
+			return
+		}
 	}
 }
 
@@ -305,15 +327,18 @@ func (fz *fuzzer) initialize(t *testing.T, conn *mysql.Conn) {
 }
 
 // generateAndExecuteTransaction generates the queries of the transaction and then executes them.
-func (fz *fuzzer) generateAndExecuteTransaction(t *testing.T, threadId int) {
+func (fz *fuzzer) generateAndExecuteTransaction(t *testing.T, threadId int) error {
 	// Create a connection to the vtgate to run transactions.
 	ctx, cancel := context.WithTimeout(t.Context(), vtgateQueryTimeout)
 	defer cancel()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
+	if err != nil {
+		return err
+	}
 	defer conn.Close()
-	_, err = conn.ExecuteFetch(fmt.Sprintf("set @@query_timeout = %d", vtgateQueryTimeout.Milliseconds()), 0, false)
-	require.NoError(t, err)
+	if _, err := conn.ExecuteFetch(fmt.Sprintf("set @@query_timeout = %d", vtgateQueryTimeout.Milliseconds()), 0, false); err != nil {
+		return err
+	}
 	// randomly generate an update set to use and the value to increment it by.
 	updateSetVal := rand.IntN(fz.updateSets)
 	incrementVal := rand.Int32()
@@ -340,8 +365,9 @@ func (fz *fuzzer) generateAndExecuteTransaction(t *testing.T, threadId int) {
 	// We don't care about the following case of errors here as the transaction is aborted, which is what we ultimately wanted:
 	// target: ks.80-.primary: vttablet: rpc error: code = Aborted desc = transaction 1771351525769549550: in use: for query (CallerID: userData1) (errno 1317) (sqlstate 70100) during query: rollback
 	if finalCommand != "rollback" {
-		require.NoError(t, err)
+		assert.NoError(t, err)
 	}
+	return nil
 }
 
 func getUpdateQuery(incrementVal int32, id int) string {
@@ -559,7 +585,7 @@ func moveTablesFuzzer(t *testing.T) {
 	mtw.WaitForVreplCatchup(1 * time.Minute)
 	// SwitchTraffic
 	output, err = mtw.SwitchReadsAndWrites()
-	assert.NoError(t, err, output)
+	require.NoError(t, err, output)
 	output, err = mtw.Complete()
 	assert.NoError(t, err, output)
 }

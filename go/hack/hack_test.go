@@ -32,11 +32,11 @@ func TestByteToString(t *testing.T) {
 
 	v1 = []byte("")
 	s = String(v1)
-	assert.Equal(t, "", s)
+	assert.Empty(t, s)
 
 	v1 = nil
 	s = String(v1)
-	assert.Equal(t, "", s)
+	assert.Empty(t, s)
 }
 
 func TestStringToByte(t *testing.T) {

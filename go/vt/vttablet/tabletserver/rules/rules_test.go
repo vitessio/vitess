@@ -242,12 +242,12 @@ func TestFilterByPlan(t *testing.T) {
 func TestQueryRule(t *testing.T) {
 	qr := NewQueryRule("rule 1", "r1", QRFail)
 	err := qr.SetIPCond("123")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, qr.requestIP.MatchString("123"), "want match")
 	assert.False(t, qr.requestIP.MatchString("1234"), "want no match")
 	assert.False(t, qr.requestIP.MatchString("12"), "want no match")
 	err = qr.SetIPCond("[")
-	assert.Error(t, err, "want error")
+	require.Error(t, err, "want error")
 
 	qr.AddPlanCond(planbuilder.PlanSelect)
 	qr.AddPlanCond(planbuilder.PlanInsert)
@@ -263,9 +263,9 @@ func TestBindVarStruct(t *testing.T) {
 	qr := NewQueryRule("rule 1", "r1", QRFail)
 
 	err := qr.AddBindVarCond("b", false, true, QRNoOp, nil)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	err = qr.AddBindVarCond("a", true, false, QRNoOp, nil)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "a", qr.bindVarConds[1].name)
 	assert.True(t, qr.bindVarConds[1].onAbsent)
 	assert.False(t, qr.bindVarConds[1].onMismatch)
@@ -471,24 +471,24 @@ func TestAction(t *testing.T) {
 	}
 
 	action, cancelCtx, timeout, desc := qrs.GetAction("123", "user1", bv, mc)
-	assert.Equalf(t, action, QRFail, "expected fail, got %v", action)
+	assert.Equalf(t, QRFail, action, "expected fail, got %v", action)
 	assert.Equalf(t, timeout, time.Duration(0), "expected zero timeout")
-	assert.Equalf(t, desc, "rule 1", "want rule 1, got %s", desc)
+	assert.Equalf(t, "rule 1", desc, "want rule 1, got %s", desc)
 	assert.Nil(t, cancelCtx)
 
 	action, cancelCtx, timeout, desc = qrs.GetAction("1234", "user", bv, mc)
-	assert.Equalf(t, action, QRFailRetry, "want fail_retry, got: %s", action)
+	assert.Equalf(t, QRFailRetry, action, "want fail_retry, got: %s", action)
 	assert.Equalf(t, timeout, time.Duration(0), "expected zero timeout")
-	assert.Equalf(t, desc, "rule 2", "want rule 2, got %s", desc)
+	assert.Equalf(t, "rule 2", desc, "want rule 2, got %s", desc)
 	assert.Nil(t, cancelCtx)
 
 	action, _, _, _ = qrs.GetAction("1234", "user1", bv, mc)
-	assert.Equalf(t, action, QRContinue, "want continue, got %s", action)
+	assert.Equalf(t, QRContinue, action, "want continue, got %s", action)
 
 	bv["a"] = sqltypes.Uint64BindVariable(1)
 	action, _, _, desc = qrs.GetAction("1234", "user1", bv, mc)
-	assert.Equalf(t, action, QRFail, "want fail, got %s", action)
-	assert.Equalf(t, desc, "rule 3", "want rule 3, got %s", desc)
+	assert.Equalf(t, QRFail, action, "want fail, got %s", action)
+	assert.Equalf(t, "rule 3", desc, "want rule 3, got %s", desc)
 
 	// reset bound variable 'a' to 0 so it doesn't match rule 3
 	bv["a"] = sqltypes.Uint64BindVariable(0)
@@ -500,8 +500,8 @@ func TestAction(t *testing.T) {
 	newQrs.Add(qr4)
 
 	action, _, _, desc = newQrs.GetAction("1234", "user1", bv, mc)
-	assert.Equalf(t, action, QRFail, "want fail, got %s", action)
-	assert.Equalf(t, desc, "rule 4", "want rule 4, got %s", desc)
+	assert.Equalf(t, QRFail, action, "want fail, got %s", action)
+	assert.Equalf(t, "rule 4", desc, "want rule 4, got %s", desc)
 
 	qr5 := NewQueryRule("rule 5", "r4", QRFail)
 	qr5.SetLeadingCommentCond(".*leading.*")
@@ -509,8 +509,8 @@ func TestAction(t *testing.T) {
 	newQrs = qrs.Copy()
 	newQrs.Add(qr5)
 	action, _, _, desc = newQrs.GetAction("1234", "user1", bv, mc)
-	assert.Equalf(t, action, QRFail, "want fail, got %s", action)
-	assert.Equalf(t, desc, "rule 5", "want rule 5, got %s", desc)
+	assert.Equalf(t, QRFail, action, "want fail, got %s", action)
+	assert.Equalf(t, "rule 5", desc, "want rule 5, got %s", desc)
 }
 
 func TestImport(t *testing.T) {
@@ -650,9 +650,7 @@ func TestInvalidJSON(t *testing.T) {
 	for _, tcase := range invalidjsons {
 		qrs := New()
 		err := qrs.UnmarshalJSON([]byte(tcase.input))
-		if !assert.Errorf(t, err, "want error for case %q", tcase.input) {
-			continue
-		}
+		require.Errorf(t, err, "want error for case %q", tcase.input)
 		recvd := strings.Replace(err.Error(), "fatal: ", "", 1)
 		assert.Equalf(t, tcase.err, recvd, "invalid json: %s", tcase.input)
 	}

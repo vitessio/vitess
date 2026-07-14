@@ -46,7 +46,7 @@ func TestMultiStatement(t *testing.T) {
 	db := connectDB(t, vtParams, "multiStatements=True", "timeout=90s", "collation=utf8mb4_unicode_ci")
 
 	rows, err := db.QueryContext(ctx, "SELECT 1; SELECT 2; SELECT 3")
-	require.Nilf(t, err, "multiple statements should be executed without error, got %v", err)
+	require.NoErrorf(t, err, "multiple statements should be executed without error, got %v", err)
 	var count int
 	for rows.Next() || (rows.NextResultSet() && rows.Next()) {
 		var i int
@@ -61,7 +61,7 @@ func TestMultiStatement(t *testing.T) {
 	db = connectDB(t, vtParams, "multiStatements=False", "timeout=90s", "collation=utf8mb4_unicode_ci")
 
 	_, err = db.QueryContext(ctx, "SELECT 1; SELECT 2; SELECT 3")
-	require.NotNilf(t, err, "error expected, got nil error")
+	require.Errorf(t, err, "error expected, got nil error")
 	assert.Containsf(t, err.Error(), "Error 1149 (42000): Expected a single statement", "expected error, got %v", err)
 }
 
@@ -70,16 +70,16 @@ func TestLargeComment(t *testing.T) {
 	ctx := t.Context()
 
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nilf(t, err, "unable to connect mysql: %v", err)
+	require.NoErrorf(t, err, "unable to connect mysql: %v", err)
 	defer conn.Close()
 
 	// insert data with large comment
 	_, err = conn.ExecuteFetch("insert into vt_insert_test (id, msg, keyspace_id, data) values(1, 'large blob', 123, 'LLL') /* "+gofakeit.LetterN(4*1024*1024)+" */", 1, false)
-	require.Nilf(t, err, "insertion error: %v", err)
+	require.NoErrorf(t, err, "insertion error: %v", err)
 
 	qr, err := conn.ExecuteFetch("select * from vt_insert_test where id = 1", 1, false)
-	require.Nilf(t, err, "select error: %v", err)
-	assert.Equal(t, 1, len(qr.Rows))
+	require.NoErrorf(t, err, "select error: %v", err)
+	assert.Len(t, qr.Rows, 1)
 	assert.Equal(t, "BLOB(\"LLL\")", qr.Rows[0][3].String())
 }
 
@@ -88,16 +88,16 @@ func TestInsertLargerThenGrpcLimit(t *testing.T) {
 	ctx := t.Context()
 
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nilf(t, err, "unable to connect mysql: %v", err)
+	require.NoErrorf(t, err, "unable to connect mysql: %v", err)
 	defer conn.Close()
 
 	grpcLimit := os.Getenv("grpc-max-message-size")
 	limit, err := strconv.Atoi(grpcLimit)
-	require.Nilf(t, err, "int parsing error: %v", err)
+	require.NoErrorf(t, err, "int parsing error: %v", err)
 
 	// insert data with large blob
 	_, err = conn.ExecuteFetch("insert into vt_insert_test (id, msg, keyspace_id, data) values(2, 'huge blob', 123, '"+gofakeit.LetterN(uint(limit+1))+"')", 1, false)
-	require.NotNil(t, err, "error expected on insert")
+	require.Error(t, err, "error expected on insert")
 	assert.Contains(t, err.Error(), "trying to send message larger than max")
 }
 
@@ -106,11 +106,11 @@ func TestTimeout(t *testing.T) {
 	ctx := t.Context()
 
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nilf(t, err, "unable to connect mysql: %v", err)
+	require.NoErrorf(t, err, "unable to connect mysql: %v", err)
 	defer conn.Close()
 
 	_, err = conn.ExecuteFetch("SELECT SLEEP(5)", 1, false)
-	require.NotNilf(t, err, "quiry timeout error expected")
+	require.Errorf(t, err, "quiry timeout error expected")
 	mysqlErr, ok := err.(*sqlerror.SQLError)
 	require.Truef(t, ok, "invalid error type")
 	assert.Equal(t, sqlerror.ERQueryInterrupted, mysqlErr.Number(), err)
@@ -121,11 +121,11 @@ func TestInvalidField(t *testing.T) {
 	ctx := t.Context()
 
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nilf(t, err, "unable to connect mysql: %v", err)
+	require.NoErrorf(t, err, "unable to connect mysql: %v", err)
 	defer conn.Close()
 
 	_, err = conn.ExecuteFetch("SELECT invalid_field from vt_insert_test", 1, false)
-	require.NotNil(t, err, "invalid field error expected")
+	require.Error(t, err, "invalid field error expected")
 	mysqlErr, ok := err.(*sqlerror.SQLError)
 	require.Truef(t, ok, "invalid error type")
 	assert.Equal(t, sqlerror.ERBadFieldError, mysqlErr.Number(), err)
@@ -146,7 +146,7 @@ func TestWarnings(t *testing.T) {
 
 	qr, err = conn.ExecuteFetch("SHOW WARNINGS", 1, false)
 	require.NoError(t, err, "SHOW WARNINGS")
-	assert.EqualValues(t, 1, len(qr.Rows), "number of rows")
+	assert.Len(t, qr.Rows, 1, "number of rows")
 	assert.Contains(t, qr.Rows[0][0].String(), "VARCHAR(\"Warning\")", qr.Rows)
 	assert.Contains(t, qr.Rows[0][1].String(), "UINT16(1235)", qr.Rows)
 	assert.Contains(t, qr.Rows[0][2].String(), "'CALL' not supported in sharded mode", qr.Rows)
@@ -181,11 +181,11 @@ func TestSelectWithUnauthorizedUser(t *testing.T) {
 	tmpVtParam.Pass = "testpassword2"
 
 	conn, err := mysql.Connect(ctx, &tmpVtParam)
-	require.Nilf(t, err, "unable to connect to mysql: %v", err)
+	require.NoErrorf(t, err, "unable to connect to mysql: %v", err)
 	defer conn.Close()
 
 	_, err = conn.ExecuteFetch("SELECT * from vt_insert_test limit 1", 1, false)
-	require.NotNilf(t, err, "error expected, got nil")
+	require.Errorf(t, err, "error expected, got nil")
 	assert.Contains(t, err.Error(), "Select command denied to user")
 	assert.Contains(t, err.Error(), "for table 'vt_insert_test' (ACL check error)")
 }
@@ -209,7 +209,7 @@ func TestPartitionedTable(t *testing.T) {
 func connectDB(t *testing.T, vtParams mysql.ConnParams, params ...string) *sql.DB {
 	connectionStr := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?%s", vtParams.Uname, vtParams.Pass, vtParams.Host, vtParams.Port, keyspaceName, strings.Join(params, "&"))
 	db, err := sql.Open("mysql", connectionStr)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	return db
 }
 

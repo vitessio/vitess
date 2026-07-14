@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"math"
 	"strconv"
 	"strings"
@@ -28,6 +29,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -234,6 +236,26 @@ func (vp *vplayer) updateFKCheck(ctx context.Context, flags2 uint32) error {
 	return nil
 }
 
+// runWithRecover invokes fn and converts any panic into an error so the
+// caller's child goroutine doesn't crash the entire vttablet process. The
+// panic value and stack are logged with workflow context. Used to wrap
+// fetchAndApply's child goroutine bodies (#20360) which would otherwise
+// escape controller.runBlp's recover (that runs on a different goroutine).
+func runWithRecover(workflow, where string, fn func() error) (err error) {
+	defer func() {
+		if x := recover(); x != nil {
+			log.Error("caught panic",
+				slog.String("workflow", workflow),
+				slog.String("where", where),
+				slog.Any("panic", x),
+				slog.String("stack", string(tb.Stack(4))),
+			)
+			err = fmt.Errorf("panic in %s: %v", where, x)
+		}
+	}()
+	return fn()
+}
+
 // fetchAndApply performs the fetching and application of the binlogs.
 // This is done by two different threads. The fetcher thread pulls
 // events from the vstreamer and adds them to the relayLog.
@@ -254,18 +276,22 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 
 	streamErr := make(chan error, 1)
 	go func() {
-		vstreamOptions := &binlogdatapb.VStreamOptions{
-			ConfigOverrides: vp.vr.workflowConfig.Overrides,
-		}
-		streamErr <- vp.vr.sourceVStreamer.VStream(ctx, replication.EncodePosition(vp.startPos), nil,
-			vp.replicatorPlan.VStreamFilter, func(events []*binlogdatapb.VEvent) error {
-				return relay.Send(events)
-			}, vstreamOptions)
+		streamErr <- runWithRecover(vp.vr.WorkflowName, "vstream", func() error {
+			vstreamOptions := &binlogdatapb.VStreamOptions{
+				ConfigOverrides: vp.vr.workflowConfig.Overrides,
+			}
+			return vp.vr.sourceVStreamer.VStream(ctx, replication.EncodePosition(vp.startPos), nil,
+				vp.replicatorPlan.VStreamFilter, func(events []*binlogdatapb.VEvent) error {
+					return relay.Send(events)
+				}, vstreamOptions)
+		})
 	}()
 
 	applyErr := make(chan error, 1)
 	go func() {
-		applyErr <- vp.applyEvents(ctx, relay)
+		applyErr <- runWithRecover(vp.vr.WorkflowName, "applyEvents", func() error {
+			return vp.applyEvents(ctx, relay)
+		})
 	}()
 
 	select {

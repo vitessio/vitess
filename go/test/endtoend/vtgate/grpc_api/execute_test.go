@@ -89,7 +89,7 @@ func execTest(ctx context.Context, t *testing.T, workload string, vtSession *vtg
 
 			assert.Len(t, qr.Rows, tc.expRowCount)
 			assert.EqualValues(t, tc.expRowAffected, qr.RowsAffected)
-			assert.EqualValues(t, tc.expInTransaction, session.InTransaction)
+			assert.Equal(t, tc.expInTransaction, session.InTransaction)
 		})
 	}
 }

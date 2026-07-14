@@ -283,7 +283,7 @@ func TestVReplicationTimeUpdated(t *testing.T) {
 		qr, err := env.Mysqld.FetchSuperQuery(ctx, "select time_updated, transaction_timestamp, time_heartbeat from _vt.vreplication")
 		require.NoError(t, err)
 		require.NotNil(t, qr)
-		require.Equal(t, 1, len(qr.Rows))
+		require.Len(t, qr.Rows, 1)
 		row := qr.Named().Row()
 		timeUpdated, err := row.ToInt64("time_updated")
 		require.NoError(t, err)
@@ -1352,7 +1352,7 @@ func TestUnicode(t *testing.T) {
 
 	for _, tcases := range testcases {
 		_, err := conn.ExecuteFetch(tcases.input, 10000, false)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		expectDBClientQueries(t, tcases.output)
 		if tcases.table != "" {
 			customExpectData(t, tcases.table, tcases.data, func(ctx context.Context, query string) (*sqltypes.Result, error) {
@@ -2166,7 +2166,7 @@ func TestGTIDCompress(t *testing.T) {
 			qr, err := env.Mysqld.FetchSuperQuery(ctx, "select pos from _vt.vreplication where id = 1")
 			require.NoError(t, err)
 			require.NotNil(t, qr)
-			require.Equal(t, 1, len(qr.Rows))
+			require.Len(t, qr.Rows, 1)
 			gotGTID := qr.Rows[0][0].ToString()
 			pos, err := replication.DecodePosition(gotGTID)
 			if tCase.compress {
@@ -2330,16 +2330,16 @@ func TestPlayerStopAtOther(t *testing.T) {
 
 	vconn := &realDBClient{nolog: true}
 	err = vconn.Connect()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer vconn.Close()
 
 	// Insert the same row on the target and lock it.
 	_, err = vconn.ExecuteFetch("insert into t1 values(1, 'aaa')", 1)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	_, err = vconn.ExecuteFetch("begin", 1)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	_, err = vconn.ExecuteFetch("update t1 set val='bbb' where id=1", 1)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Start a VReplication where the first transaction updates the locked row.
 	// It will cause the apply to wait, which will cause the other two events
@@ -2531,14 +2531,14 @@ func TestPlayerLockErrors(t *testing.T) {
 
 	vconn := &realDBClient{nolog: true}
 	err := vconn.Connect()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer vconn.Close()
 
 	// Start a transaction and lock the second row.
 	_, err = vconn.ExecuteFetch("begin", 1)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	_, err = vconn.ExecuteFetch("update t1 set val='bbb' where id=2", 1)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	execStatements(t, []string{
 		"begin",
@@ -2613,14 +2613,14 @@ func TestPlayerCancelOnLock(t *testing.T) {
 
 	vconn := &realDBClient{nolog: true}
 	err := vconn.Connect()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer vconn.Close()
 
 	// Start a transaction and lock the row.
 	_, err = vconn.ExecuteFetch("begin", 1)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	_, err = vconn.ExecuteFetch("update t1 set val='bbb' where id=1", 1)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	execStatements(t, []string{
 		"begin",
@@ -2685,14 +2685,14 @@ func TestPlayerTransactions(t *testing.T) {
 
 	vconn := &realDBClient{nolog: true}
 	err := vconn.Connect()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer vconn.Close()
 
 	// Start a transaction and lock the row.
 	_, err = vconn.ExecuteFetch("begin", 1)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	_, err = vconn.ExecuteFetch("update t1 set val='bbb' where id=1", 1)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// create one transaction
 	execStatements(t, []string{
@@ -2787,14 +2787,14 @@ func TestPlayerRelayLogMaxSize(t *testing.T) {
 
 			vconn := &realDBClient{nolog: true}
 			err := vconn.Connect()
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			defer vconn.Close()
 
 			// Start a transaction and lock the row.
 			_, err = vconn.ExecuteFetch("begin", 1)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			_, err = vconn.ExecuteFetch("update t1 set val='bbb' where id=1", 1)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			// create one transaction
 			execStatements(t, []string{
@@ -3466,8 +3466,8 @@ func TestPlayerNoBlob(t *testing.T) {
 		}
 	}
 	stats := globalStats.controllers[int32(vrId)].blpStats
-	require.Equal(t, 2, len(stats.PartialQueryCount.Counts()))
-	require.Equal(t, 2, len(stats.PartialQueryCacheSize.Counts()))
+	require.Len(t, stats.PartialQueryCount.Counts(), 2)
+	require.Len(t, stats.PartialQueryCacheSize.Counts(), 2)
 	require.Equal(t, int64(2), stats.PartialQueryCacheSize.Counts()["insert"])
 	require.Equal(t, int64(3), stats.PartialQueryCount.Counts()["insert"])
 	require.Equal(t, int64(2), stats.PartialQueryCacheSize.Counts()["update"])
@@ -3917,10 +3917,11 @@ func TestPlayerStalls(t *testing.T) {
 		vttablet.DefaultVReplicationConfig.RetryDelay = oldRetryDelay
 	}()
 
-	// Shorten the deadline for the test.
-	vplayerProgressDeadline = 5 * time.Second
+	// Shorten the deadline for the test. It only needs to comfortably exceed
+	// the time a normal, non-stalled transaction takes to apply.
+	vplayerProgressDeadline = 2 * time.Second
 	// Shorten the time for a required heartbeat recording for the test.
-	vreplicationMinimumHeartbeatUpdateInterval = 5
+	vreplicationMinimumHeartbeatUpdateInterval = 2
 	// So each relay log batch will be a single statement transaction.
 	vttablet.DefaultVReplicationConfig.RelayLogMaxItems = 1
 
@@ -3930,6 +3931,12 @@ func TestPlayerStalls(t *testing.T) {
 
 	// A channel to communicate across goroutines.
 	done := make(chan struct{})
+	// Idempotent release of the row locks held by the heartbeat subtest's
+	// preFunc connection. postFunc releases them inline and again from a
+	// defer in case an assertion aborts the subtest first; the preFunc
+	// goroutine only receives once.
+	var releaseLocksOnce sync.Once
+	releaseLocks := func() { releaseLocksOnce.Do(func() { done <- struct{}{} }) }
 
 	testTimeout := vplayerProgressDeadline * 10
 
@@ -3961,24 +3968,41 @@ func TestPlayerStalls(t *testing.T) {
 		{
 			name: "stall in relay log IO",
 			input: []string{
-				"set @@session.binlog_format='STATEMENT'",                            // As we are using the sleep function in the query to simulate a stall
-				"insert into t1(id, val1) values (1, 'aaa'), (2, 'bbb'), (3, 'ccc')", // This should be the only query that gets replicated
-				// This will cause a stall in the vplayer.
-				fmt.Sprintf("update t1 set val1 = concat(sleep (%d), val1)", int64(vplayerProgressDeadline.Seconds()+5)),
+				"set @@session.binlog_format='STATEMENT'",    // As we are using the sleep function in the query to simulate a stall
+				"insert into t1(id, val1) values (1, 'aaa')", // This should be the only query that gets replicated
+				// This will cause a stall in the vplayer. MySQL evaluates SLEEP()
+				// once per affected row, and with STATEMENT format the statement
+				// is executed again on the target, so keep the table at a single
+				// row and the sleep only as long as needed: it must exceed
+				// vplayerProgressDeadline for the stall to be detected, with some
+				// margin so a late-firing timer can't miss the still-running query.
+				fmt.Sprintf("update t1 set val1 = concat(sleep (%d), val1)", int64(vplayerProgressDeadline.Seconds()+3)),
+				// These reach the binlog as soon as the update commits on the
+				// source, queue up behind the stalled update on the target, and
+				// block the vstreamer's relay log Send right as the target
+				// starts applying the update. That starts the stall-detection
+				// timer immediately, without depending on the vstreamer's ~1s
+				// heartbeat cadence to fill the relay log. They are never
+				// applied: the workflow errors out first.
+				"insert into t1(id, val1) values (2, 'bbb')",
+				"insert into t1(id, val1) values (3, 'ccc')",
 			},
 			expectQueries: true,
 			output: qh.Expect(
-				"insert into t1(id, val1) values (1, 'aaa'), (2, 'bbb'), (3, 'ccc')",
+				"insert into t1(id, val1) values (1, 'aaa')",
 				// This will cause a stall to be detected in the vplayer. This is
 				// what we want in the end, our improved error message (which also
 				// gets logged).
-				fmt.Sprintf("update t1 set val1 = concat(sleep (%d), val1)", int64(vplayerProgressDeadline.Seconds()+5)),
+				fmt.Sprintf("update t1 set val1 = concat(sleep (%d), val1)", int64(vplayerProgressDeadline.Seconds()+3)),
 				"/update _vt.vreplication set message=.*progress stalled.*",
 			),
 			postFunc: func() {
-				time.Sleep(vplayerProgressDeadline)
-				log.Flush()
-				require.Contains(t, logger.String(), relayLogIOStalledMsg, "expected log message not found")
+				// The log message is written asynchronously after the stalled
+				// workflow transitions to the error state, so poll for it.
+				require.EventuallyWithT(t, func(c *assert.CollectT) {
+					log.Flush()
+					assert.Contains(c, logger.String(), relayLogIOStalledMsg)
+				}, 30*time.Second, 100*time.Millisecond, "expected log message not found")
 				execStatements(t, []string{"set @@session.binlog_format='ROW'"})
 			},
 		},
@@ -4008,15 +4032,36 @@ func TestPlayerStalls(t *testing.T) {
 				}()
 			},
 			postFunc: func() {
-				// Sleep long enough that we fail to record the heartbeat.
-				to := time.Duration(int64(vreplicationMinimumHeartbeatUpdateInterval*2) * int64(time.Second))
-				time.Sleep(to)
-				// Signal the preFunc goroutine to close the connection holding the row locks.
-				done <- struct{}{}
-				log.Flush()
-				logMessage := logger.String()
-				if !strings.Contains(logMessage, failedToRecordHeartbeatMsg) {
-					require.Contains(t, logMessage, "Lock wait timeout exceeded", "expected log message not found")
+				// Also release the row locks if the assertions below abort
+				// the subtest: teardown deletes from the locked table and
+				// would otherwise hang until the test timeout.
+				defer releaseLocks()
+				// Wait until a heartbeat recording attempt (or the position
+				// update it is part of) fails on the row locks held by the
+				// preFunc connection, rather than sleeping a fixed multiple of
+				// the heartbeat interval.
+				require.EventuallyWithT(t, func(c *assert.CollectT) {
+					log.Flush()
+					logMessage := logger.String()
+					assert.True(c, strings.Contains(logMessage, failedToRecordHeartbeatMsg) ||
+						strings.Contains(logMessage, "Lock wait timeout exceeded"),
+						"expected log message not found")
+				}, 30*time.Second, 100*time.Millisecond, "expected log message not found")
+				// The vplayer also records the failure in the vreplication
+				// record's message column, but that update is blocked by the
+				// same row locks and completes only after they are released.
+				// Wait for it to flow through globalDBQueries before draining,
+				// so it can't instead surface during teardown and fail the
+				// expected delete queries.
+				releaseLocks()
+				timeout := time.After(30 * time.Second)
+				for seen := false; !seen; {
+					select {
+					case got := <-globalDBQueries:
+						seen = strings.Contains(got, "update _vt.vreplication set message=")
+					case <-timeout:
+						require.Fail(t, "vplayer did not record the stall error in the vreplication record's message column")
+					}
 				}
 				drainDBQueries()
 			},
@@ -4061,7 +4106,7 @@ func expectJSON(t *testing.T, table string, values [][]string, id int, exec func
 		require.Equal(t, qr.Rows[i][0].ToString(), row[0], "Id mismatch: want %s, got %s", qr.Rows[i][0].ToString(), row[0])
 		opts := jsondiff.DefaultConsoleOptions()
 		compare, s := jsondiff.Compare(qr.Rows[i][1].Raw(), []byte(row[1]), &opts)
-		require.Equal(t, compare, jsondiff.FullMatch, "Diff:\n%s\n", s)
+		require.Equal(t, jsondiff.FullMatch, compare, "Diff:\n%s\n", s)
 	}
 }
 

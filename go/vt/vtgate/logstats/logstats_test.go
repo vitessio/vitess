@@ -131,10 +131,10 @@ func TestLogStatsFormat(t *testing.T) {
 			t.Logf("got: %s", got)
 			var parsed map[string]any
 			err := json.Unmarshal([]byte(got), &parsed)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.NotNil(t, parsed)
 			formatted, err := json.Marshal(parsed)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, test.expected, string(formatted))
 		})
 	}

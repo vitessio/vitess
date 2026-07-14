@@ -315,7 +315,7 @@ func TestEvaluate(t *testing.T) {
 				Collation:   venv.CollationEnv().DefaultConnectionCharset(),
 				Environment: venv,
 			})
-			require.Nil(t, err)
+			require.NoError(t, err)
 			require.NotNil(t, sqltypesExpr)
 			env := NewExpressionEnv(t.Context(), map[string]*querypb.BindVariable{
 				"exp":                  sqltypes.Int64BindVariable(66),
@@ -372,7 +372,7 @@ func TestEvaluateTuple(t *testing.T) {
 				Collation:   venv.CollationEnv().DefaultConnectionCharset(),
 				Environment: venv,
 			})
-			require.Nil(t, err)
+			require.NoError(t, err)
 			require.NotNil(t, sqltypesExpr)
 
 			// When

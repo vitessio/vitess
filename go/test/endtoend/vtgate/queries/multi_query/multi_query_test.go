@@ -153,7 +153,7 @@ func TestMultiQuery(t *testing.T) {
 							require.Error(t, mysqlErr)
 							require.Error(t, vtErr)
 						}
-						require.EqualValues(t, len(results), len(mysqlRes))
+						require.Len(t, mysqlRes, len(results))
 						for idx, result := range results {
 							err = utils.CompareVitessAndMySQLResults(t, "select 1", mcmp.VtConn, result, mysqlRes[idx], utils.CompareOptions{})
 							require.NoError(t, err)

@@ -1084,9 +1084,9 @@ func TestVSchemaMirrorRules(t *testing.T) {
 	}
 
 	gotb, err := json.MarshalIndent(got, "", "  ")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	wantb, err := json.MarshalIndent(want, "", "  ")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, string(wantb), string(gotb), string(gotb))
 }
 
@@ -1195,7 +1195,7 @@ func TestChooseVindexForType(t *testing.T) {
 		// used for a vindex. If the test case provides an empty output
 		// value then we expect an error.
 		if tcase.out == "" {
-			assert.Error(t, err, "unexpectedly got a recommended vindex type of %s for input column type %v",
+			require.Error(t, err, "unexpectedly got a recommended vindex type of %s for input column type %v",
 				out, tcase.in)
 			continue
 		}
@@ -1297,10 +1297,10 @@ func TestFindBestColVindex(t *testing.T) {
 		require.NoError(t, err)
 		cv, err := FindBestColVindex(table)
 		if err != nil {
-			assert.EqualError(t, err, tcase.err, tcase.tablename)
+			require.EqualError(t, err, tcase.err, tcase.tablename)
 			continue
 		}
-		assert.NoError(t, err, tcase.tablename)
+		require.NoError(t, err, tcase.tablename)
 		assert.Equal(t, cv.Name, tcase.vindexname, tcase.tablename)
 	}
 }
@@ -1372,7 +1372,7 @@ func TestFindVindexForShardingError(t *testing.T) {
 	}
 	res, err := FindVindexForSharding(t1.Name.String(), t1.ColumnVindexes)
 	want := `could not find a vindex to use for sharding table t1`
-	assert.EqualErrorf(t, err, want, "FindVindexForSharding: %v, want %v", err, want)
+	require.EqualErrorf(t, err, want, "FindVindexForSharding: %v, want %v", err, want)
 	assert.Nilf(t, res, "FindVindexForSharding:\n got\n%v, want\n%v", res, nil)
 }
 
@@ -2539,7 +2539,7 @@ func TestBadSequence(t *testing.T) {
 	got := BuildVSchema(&bad, sqlparser.NewTestParser())
 	err := got.Keyspaces["sharded"].Error
 	want := "cannot resolve sequence invalid_seq: table invalid_seq not found"
-	assert.EqualErrorf(t, err, want, "BuildVSchema: %v, want %v", err, want)
+	require.EqualErrorf(t, err, want, "BuildVSchema: %v, want %v", err, want)
 	if t1 := got.Keyspaces["sharded"].Tables["t1"]; t1 != nil {
 		assert.Failf(t, "table t1 must not be present", "BuildVSchema: table t1 must not be present in the keyspace: %v", t1)
 	}
@@ -2585,7 +2585,7 @@ func TestBadSequenceName(t *testing.T) {
 	got := BuildVSchema(&bad, sqlparser.NewTestParser())
 	err := got.Keyspaces["sharded"].Error
 	want := "invalid table name: a.b.seq"
-	assert.ErrorContainsf(t, err, want, "BuildVSchema: %v, must contain %v", err, want)
+	require.ErrorContainsf(t, err, want, "BuildVSchema: %v, must contain %v", err, want)
 	if t1 := got.Keyspaces["sharded"].Tables["t1"]; t1 != nil {
 		assert.Failf(t, "table t1 must not be present", "BuildVSchema: table t1 must not be present in the keyspace: %v", t1)
 	}
@@ -2783,11 +2783,11 @@ func TestFindTableOrVindex(t *testing.T) {
 
 	_, _, err := vschema.FindTableOrVindex("", "t1", topodatapb.TabletType_PRIMARY)
 	wantErr := "ambiguous table reference: t1"
-	assert.EqualErrorf(t, err, wantErr, "FindTableOrVindex(\"\"): %v, want %s", err, wantErr)
+	require.EqualErrorf(t, err, wantErr, "FindTableOrVindex(\"\"): %v, want %s", err, wantErr)
 
 	_, _, err = vschema.FindTableOrVindex("", "none", topodatapb.TabletType_PRIMARY)
 	wantErr = "table none not found"
-	assert.EqualErrorf(t, err, wantErr, "FindTableOrVindex(\"\"): %v, want %s", err, wantErr)
+	require.EqualErrorf(t, err, wantErr, "FindTableOrVindex(\"\"): %v, want %s", err, wantErr)
 
 	got, _, err := vschema.FindTableOrVindex("", "ta", topodatapb.TabletType_PRIMARY)
 	require.NoError(t, err)
@@ -2809,7 +2809,7 @@ func TestFindTableOrVindex(t *testing.T) {
 
 	_, _, err = vschema.FindTableOrVindex("", "dup", topodatapb.TabletType_PRIMARY)
 	wantErr = "ambiguous vindex reference: dup"
-	assert.EqualErrorf(t, err, wantErr, "FindTableOrVindex(\"\"): %v, want %s", err, wantErr)
+	require.EqualErrorf(t, err, wantErr, "FindTableOrVindex(\"\"): %v, want %s", err, wantErr)
 
 	got, _, err = vschema.FindTableOrVindex("", "unqualified", topodatapb.TabletType_PRIMARY)
 	require.NoError(t, err)
@@ -2942,7 +2942,7 @@ func TestVSchemaPBJSON(t *testing.T) {
 	}
 `
 	var got vschemapb.Keyspace
-	assert.NoError(t, json2.UnmarshalPB([]byte(in), &got))
+	require.NoError(t, json2.UnmarshalPB([]byte(in), &got))
 	want := vschemapb.Keyspace{
 		Sharded:        true,
 		ForeignKeyMode: vschemapb.Keyspace_unmanaged,
@@ -3187,8 +3187,8 @@ func TestMultiColVindexPartialAllowed(t *testing.T) {
 	require.Len(t, table.ColumnVindexes, 2)
 	require.True(t, table.ColumnVindexes[0].IsUnique())
 	require.False(t, table.ColumnVindexes[1].IsUnique())
-	require.EqualValues(t, 1, table.ColumnVindexes[0].Cost())
-	require.EqualValues(t, 2, table.ColumnVindexes[1].Cost())
+	require.Equal(t, 1, table.ColumnVindexes[0].Cost())
+	require.Equal(t, 2, table.ColumnVindexes[1].Cost())
 }
 
 func TestMultiColVindexPartialNotAllowed(t *testing.T) {
@@ -3219,7 +3219,7 @@ func TestMultiColVindexPartialNotAllowed(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, table.ColumnVindexes, 1)
 	require.True(t, table.ColumnVindexes[0].IsUnique())
-	require.EqualValues(t, 1, table.ColumnVindexes[0].Cost())
+	require.Equal(t, 1, table.ColumnVindexes[0].Cost())
 }
 
 func TestSourceTableHasReferencedBy(t *testing.T) {
@@ -3258,10 +3258,10 @@ func TestSourceTableHasReferencedBy(t *testing.T) {
 	require.NoError(t, err)
 	src, err := vs.FindTable("unsharded", "src")
 	require.NoError(t, err)
-	require.Equal(t, src.ReferencedBy, map[string]*BaseTable{
+	require.Equal(t, map[string]*BaseTable{
 		"sharded1": ref1,
 		"sharded2": ref2,
-	})
+	}, src.ReferencedBy)
 }
 
 func TestReferenceTableAndSourceAreGloballyRoutable(t *testing.T) {

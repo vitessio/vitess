@@ -345,6 +345,7 @@ func executorStream(ctx context.Context, executor *Executor, sql string) (qr *sq
 		econtext.NewSafeSession(nil),
 		sql,
 		nil,
+		false,
 		func(qr *sqltypes.Result) error {
 			results <- qr
 			return nil
@@ -385,7 +386,7 @@ func assertQueries(t *testing.T, sbc *sandboxconn.SandboxConn, wantQueries []*qu
 
 func assertQueriesWithSavepoint(t *testing.T, sbc *sandboxconn.SandboxConn, wantQueries []*querypb.BoundQuery) {
 	t.Helper()
-	require.Equal(t, len(wantQueries), len(sbc.Queries), sbc.Queries)
+	require.Len(t, sbc.Queries, len(wantQueries), sbc.Queries)
 	savepointStore := make(map[string]string)
 	for idx, query := range sbc.Queries {
 		require.Equal(t, wantQueries[idx].BindVariables, query.BindVariables)

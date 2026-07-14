@@ -221,3 +221,51 @@ func TestFilterStatsByReplicationLagOneTabletMin(t *testing.T) {
 	// Reset to the default
 	testSetMinNumTablets(2)
 }
+
+// TestFilterStatsByReplicationLagNegativeMin verifies that a negative
+// min-number-serving-vttablets behaves like zero: the "keep at least N"
+// fallback never fires (i < negative is always false), so only low-lag tablets
+// are returned. This pins the behavior of the lazy minNumTablets read, which
+// reaches the negative value through a high-lag tablet.
+func TestFilterStatsByReplicationLagNegativeMin(t *testing.T) {
+	defer utils.EnsureNoLeaks(t)
+	testSetMinNumTablets(-1)
+	defer testSetMinNumTablets(2)
+
+	// One low-lag tablet and one with high (but not very high) lag.
+	ts1 := &TabletHealth{
+		Tablet:  topo.NewTablet(1, "cell", "host1"),
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 1},
+	}
+	ts2 := &TabletHealth{
+		Tablet:  topo.NewTablet(2, "cell", "host2"),
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 40 * 60},
+	}
+	got := FilterStatsByReplicationLag([]*TabletHealth{ts1, ts2})
+	want := []*TabletHealth{ts1}
+	mustMatch(t, want, got, "FilterStatsByReplicationLag")
+}
+
+// BenchmarkFilterStatsByReplicationLag measures the cost of filtering a shard's
+// worth of tablet health by replication lag, across a range of replica counts.
+// recomputeHealthy calls this on every non-trivial health update while holding
+// the healthcheck lock, so its cost bounds how long that lock is held.
+func BenchmarkFilterStatsByReplicationLag(b *testing.B) {
+	for _, n := range []int{1, 5, 20} {
+		b.Run(fmt.Sprintf("%d_tablets", n), func(b *testing.B) {
+			tablets := make([]*TabletHealth, n)
+			for i := range tablets {
+				tablets[i] = &TabletHealth{
+					Tablet:  topo.NewTablet(uint32(i+1), "cell", fmt.Sprintf("host-%d", i)),
+					Serving: true,
+					Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: uint32(i % 60)},
+				}
+			}
+			for b.Loop() {
+				_ = FilterStatsByReplicationLag(tablets)
+			}
+		})
+	}
+}

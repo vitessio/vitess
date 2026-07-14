@@ -316,7 +316,7 @@ func TestSendGetFields(t *testing.T) {
 			`ExecuteMultiShard ks.-20: dummy_query {} ks.20-: dummy_query {} false false`,
 		})
 		require.Nil(t, qr.Rows)
-		require.Equal(t, 4, len(qr.Fields))
+		require.Len(t, qr.Fields, 4)
 	})
 
 	vc.Rewind()

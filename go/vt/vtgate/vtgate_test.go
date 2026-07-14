@@ -67,7 +67,7 @@ func TestVTGateExecute(t *testing.T) {
 		nil,
 		false,
 	)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	want := *sandboxconn.SingleRowResult
 	want.StatusFlags = 0 // VTGate result set does not contain status flags in sqltypes.Result
@@ -193,7 +193,7 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 		nil,
 		false,
 	)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	wantQr := *sandboxconn.SingleRowResult
 	wantQr.StatusFlags = 0 // VTGate result set does not contain status flags in sqltypes.Result
 	utils.MustMatch(t, &wantQr, qr)
@@ -210,7 +210,7 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 		false,
 	)
 	want := "VT05003: unknown database 'invalid_keyspace' in vschema"
-	assert.EqualError(t, err, want)
+	require.EqualError(t, err, want)
 
 	// Valid keyspace/shard.
 	_, qr, err = vtg.Execute(
@@ -223,7 +223,7 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 		nil,
 		false,
 	)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	utils.MustMatch(t, &wantQr, qr)
 
 	// Invalid keyspace/shard.
@@ -254,6 +254,7 @@ func TestVTGateStreamExecute(t *testing.T) {
 		},
 		"select id from t1",
 		nil,
+		false,
 		func(r *sqltypes.Result) error {
 			qrs = append(qrs, r)
 			return nil
@@ -300,7 +301,7 @@ func TestVTGateBindVarError(t *testing.T) {
 	}, {
 		name: "StreamExecute",
 		f: func() error {
-			_, err := vtg.StreamExecute(ctx, nil, session, "", bindVars, func(_ *sqltypes.Result) error { return nil })
+			_, err := vtg.StreamExecute(ctx, nil, session, "", bindVars, false, func(_ *sqltypes.Result) error { return nil })
 			return err
 		},
 	}}
@@ -344,6 +345,7 @@ func testErrorPropagation(t *testing.T, ctx context.Context, vtg *VTGate, sbcs [
 		session,
 		"select id from t1",
 		nil,
+		false,
 		func(r *sqltypes.Result) error {
 			return nil
 		},
@@ -593,9 +595,9 @@ func TestMultiInternalSavepointVtGate(t *testing.T) {
 		"_user_id_1": sqltypes.Int64BindVariable(3),
 	}
 	assertQueriesWithSavepoint(t, sbc2, wantQ)
-	assert.Len(t, sbc3.Queries, 0)
+	assert.Empty(t, sbc3.Queries)
 	// internal savepoint should be removed.
-	assert.Len(t, session.Savepoints, 0)
+	assert.Empty(t, session.Savepoints)
 	sbc1.Queries = nil
 	sbc2.Queries = nil
 
@@ -613,7 +615,7 @@ func TestMultiInternalSavepointVtGate(t *testing.T) {
 	}}
 	assertQueriesWithSavepoint(t, sbc3, wantQ)
 	// internal savepoint should be removed.
-	assert.Len(t, session.Savepoints, 0)
+	assert.Empty(t, session.Savepoints)
 	sbc2.Queries = nil
 	sbc3.Queries = nil
 

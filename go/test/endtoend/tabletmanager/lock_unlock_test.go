@@ -33,11 +33,11 @@ func TestLockAndUnlock(t *testing.T) {
 	ctx := t.Context()
 
 	conn, err := mysql.Connect(ctx, &primaryTabletParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	replicaConn, err := mysql.Connect(ctx, &replicaTabletParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer replicaConn.Close()
 
 	// first make sure that our writes to the primary make it to the replica
@@ -47,20 +47,20 @@ func TestLockAndUnlock(t *testing.T) {
 
 	// now lock the replica
 	err = tmcLockTables(ctx, replicaTablet.GrpcPort)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	// make sure that writing to the primary does not show up on the replica while locked
 	utils.Exec(t, conn, "insert into t1(id, value) values(3,'c')")
 	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")] [VARCHAR("b")]]`)
 
 	// finally, make sure that unlocking the replica leads to the previous write showing up
 	err = tmcUnlockTables(ctx, replicaTablet.GrpcPort)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")] [VARCHAR("b")] [VARCHAR("c")]]`)
 
 	// Unlocking when we do not have a valid lock should lead to an exception being raised
 	err = tmcUnlockTables(ctx, replicaTablet.GrpcPort)
 	want := "tables were not locked"
-	assert.ErrorContains(t, err, want)
+	require.ErrorContains(t, err, want)
 
 	// Clean the table for further testing
 	utils.Exec(t, conn, "delete from t1")
@@ -71,28 +71,28 @@ func TestStartReplicationUntilAfter(t *testing.T) {
 	ctx := t.Context()
 
 	conn, err := mysql.Connect(ctx, &primaryTabletParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	replicaConn, err := mysql.Connect(ctx, &replicaTabletParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer replicaConn.Close()
 
 	// first we stop replication to the replica, so we can move forward step by step.
 	err = tmcStopReplication(ctx, replicaTablet.GrpcPort)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	utils.Exec(t, conn, "insert into t1(id, value) values(1,'a')")
 	pos1, err := tmcPrimaryPosition(ctx, primaryTablet.GrpcPort)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	utils.Exec(t, conn, "insert into t1(id, value) values(2,'b')")
 	pos2, err := tmcPrimaryPosition(ctx, primaryTablet.GrpcPort)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	utils.Exec(t, conn, "insert into t1(id, value) values(3,'c')")
 	pos3, err := tmcPrimaryPosition(ctx, primaryTablet.GrpcPort)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// Now, we'll resume stepwise position by position and make sure that we see the expected data
 	checkDataOnReplica(t, replicaConn, `[]`)
@@ -100,21 +100,21 @@ func TestStartReplicationUntilAfter(t *testing.T) {
 	// starts the mysql replication until
 	timeout := 10 * time.Second
 	err = tmcStartReplicationUntilAfter(ctx, replicaTablet.GrpcPort, pos1, timeout)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	// first row should be visible
 	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")]]`)
 
 	err = tmcStartReplicationUntilAfter(ctx, replicaTablet.GrpcPort, pos2, timeout)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")] [VARCHAR("b")]]`)
 
 	err = tmcStartReplicationUntilAfter(ctx, replicaTablet.GrpcPort, pos3, timeout)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")] [VARCHAR("b")] [VARCHAR("c")]]`)
 
 	// Strat replication to the replica
 	err = tmcStartReplication(ctx, replicaTablet.GrpcPort)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	// Clean the table for further testing
 	utils.Exec(t, conn, "delete from t1")
 }
@@ -124,11 +124,11 @@ func TestLockAndTimeout(t *testing.T) {
 	ctx := t.Context()
 
 	primaryConn, err := mysql.Connect(ctx, &primaryTabletParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer primaryConn.Close()
 
 	replicaConn, err := mysql.Connect(ctx, &replicaTabletParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer replicaConn.Close()
 
 	// first make sure that our writes to the primary make it to the replica
@@ -137,7 +137,7 @@ func TestLockAndTimeout(t *testing.T) {
 
 	// now lock the replica
 	err = tmcLockTables(ctx, replicaTablet.GrpcPort)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// make sure that writing to the primary does not show up on the replica while locked
 	utils.Exec(t, primaryConn, "insert into t1(id, value) values(2,'b')")

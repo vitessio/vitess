@@ -320,6 +320,7 @@ func (e *Executor) StreamExecute(
 	safeSession *econtext.SafeSession,
 	sql string,
 	bindVars map[string]*querypb.BindVariable,
+	prepared bool,
 	callback func(*sqltypes.Result) error,
 ) error {
 	span, ctx := trace.NewSpan(ctx, "executor.StreamExecute")
@@ -422,7 +423,7 @@ func (e *Executor) StreamExecute(
 		return err
 	}
 
-	err = e.newExecute(ctx, mysqlCtx, safeSession, sql, bindVars, false, logStats, resultHandler, srr.storeResultStats)
+	err = e.newExecute(ctx, mysqlCtx, safeSession, sql, bindVars, prepared, logStats, resultHandler, srr.storeResultStats)
 
 	logStats.Error = err
 	saveSessionStats(safeSession, srr.stmtType, srr.rowsAffected, srr.rowsReturned, err)
@@ -478,6 +479,11 @@ func (e *Executor) finalizeLogStats(logStats *logstats.LogStats, mysqlCtx vtgate
 	logStats.MarkSlowQuery(slowQueryThreshold)
 	if mysqlCtx != nil {
 		mysqlCtx.SetQueryWasSlow(logStats.SlowQuery)
+	}
+	if ingressBytes, ok := vtgateservice.IngressBytesFromContext(logStats.Ctx); ok {
+		logStats.IngressBytes = ingressBytes
+	} else if mysqlCtx != nil {
+		logStats.IngressBytes = mysqlCtx.IngressBytes()
 	}
 	if logStats.SlowQuery && logStats.StmtType != "" && logStats.PlanType != "" && logStats.TabletType != "" {
 		slowQueries.Add([]string{logStats.StmtType, logStats.PlanType, logStats.TabletType}, 1)
@@ -1556,12 +1562,6 @@ func (e *Executor) Prepare(ctx context.Context, method string, safeSession *econ
 }
 
 func (e *Executor) prepare(ctx context.Context, safeSession *econtext.SafeSession, sql string, logStats *logstats.LogStats) ([]*querypb.Field, uint16, error) {
-	// Start an implicit transaction if necessary.
-	if !safeSession.Autocommit && !safeSession.InTransaction() {
-		if err := e.txConn.Begin(ctx, safeSession, nil); err != nil {
-			return nil, 0, err
-		}
-	}
 	stmtType := sqlparser.Preview(sql)
 	logStats.StmtType = stmtType.String()
 

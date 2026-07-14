@@ -34,6 +34,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/stats/opentsdb"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 )
@@ -143,10 +144,12 @@ func prepareCluster(t *testing.T) {
 	// Vitess expects that the user has set the database into ReadWrite mode before calling
 	// TabletExternallyReparented
 	err = localCluster.VtctldClientProcess.ExecuteCommand(
-		"SetWritable", primary.Alias, "true")
+		"SetWritable", primary.Alias, "true",
+	)
 	require.NoError(t, err)
 	err = localCluster.VtctldClientProcess.ExecuteCommand(
-		"TabletExternallyReparented", primary.Alias)
+		"TabletExternallyReparented", primary.Alias,
+	)
 	require.NoError(t, err)
 	restore(t, replica1, "replica", "SERVING")
 }
@@ -234,7 +237,7 @@ func firstBackupTest(t *testing.T, removeBackup bool) {
 	}
 }
 
-func startVtBackup(t *testing.T, initialBackup bool, restartBeforeBackup, disableRedoLog bool) (*os.File, error) {
+func startVtBackup(t *testing.T, initialBackup bool, restartBeforeBackup, disableRedoLog bool, additionalArgs ...string) (*os.File, error) {
 	mysqlSocket, err := os.CreateTemp("", "vtbackup_test_mysql.sock")
 	require.NoError(t, err)
 	defer os.Remove(mysqlSocket.Name())
@@ -259,18 +262,30 @@ func startVtBackup(t *testing.T, initialBackup bool, restartBeforeBackup, disabl
 	if disableRedoLog {
 		extraArgs = append(extraArgs, "--disable-redo-log")
 	}
+	extraArgs = append(extraArgs, additionalArgs...)
 
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
+	verifyErrCh := make(chan error, 1)
 	if !initialBackup && disableRedoLog {
-		go verifyDisableEnableRedoLogs(ctx, t, mysqlSocket.Name())
+		go func() {
+			verifyErrCh <- verifyDisableEnableRedoLogs(ctx, mysqlSocket.Name())
+		}()
+	} else {
+		verifyErrCh <- nil
 	}
 
 	log.Info(fmt.Sprintf("starting backup tablet %s", time.Now()))
 	err = localCluster.StartVtbackup(newInitDBFile, initialBackup, keyspaceName, shardName, cell, extraArgs...)
+	// The backup is done (or failed); stop the redo-log monitor and collect its result.
+	cancel()
+	verifyErr := <-verifyErrCh
 	if err != nil {
 		return nil, err
+	}
+	if verifyErr != nil {
+		return nil, verifyErr
 	}
 
 	f, err := os.OpenFile(statsPath, os.O_RDONLY, 0)
@@ -289,7 +304,7 @@ func vtBackup(t *testing.T, initialBackup bool, restartBeforeBackup, disableRedo
 func verifyBackupCount(t *testing.T, shardKsName string, expected int) []string {
 	backups, err := listBackups(shardKsName)
 	require.NoError(t, err)
-	assert.Equalf(t, expected, len(backups), "invalid number of backups")
+	assert.Lenf(t, backups, expected, "invalid number of backups")
 	return backups
 }
 
@@ -441,7 +456,7 @@ func tearDown(t *testing.T, initMysql bool) {
 	}
 }
 
-func verifyDisableEnableRedoLogs(ctx context.Context, t *testing.T, mysqlSocket string) {
+func verifyDisableEnableRedoLogs(ctx context.Context, mysqlSocket string) error {
 	params := cluster.NewConnParams(0, dbPassword, mysqlSocket, keyspaceName)
 
 	for {
@@ -456,16 +471,20 @@ func verifyDisableEnableRedoLogs(ctx context.Context, t *testing.T, mysqlSocket 
 
 			// Check if server supports disable/enable redo log.
 			qr, err := conn.ExecuteFetch("SELECT 1 FROM performance_schema.global_status WHERE variable_name = 'innodb_redo_log_enabled'", 1, false)
-			require.NoError(t, err)
+			if err != nil {
+				return err
+			}
 			// If not, there's nothing to test.
 			if len(qr.Rows) == 0 {
-				return
+				return nil
 			}
 
 			// MY-013600
 			// https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference.html#error_er_ib_wrn_redo_disabled
 			qr, err = conn.ExecuteFetch("SELECT 1 FROM performance_schema.error_log WHERE data like '%InnoDB redo logging is disabled%'", 1, false)
-			require.NoError(t, err)
+			if err != nil {
+				return err
+			}
 			if len(qr.Rows) != 1 {
 				// Keep trying, possible we haven't disabled yet.
 				continue
@@ -474,18 +493,75 @@ func verifyDisableEnableRedoLogs(ctx context.Context, t *testing.T, mysqlSocket 
 			// MY-013601
 			// https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference.html#error_er_ib_wrn_redo_enabled
 			qr, err = conn.ExecuteFetch("SELECT 1 FROM performance_schema.error_log WHERE data like '%InnoDB redo logging is enabled%'", 1, false)
-			require.NoError(t, err)
+			if err != nil {
+				return err
+			}
 			if len(qr.Rows) != 1 {
 				// Keep trying, possible we haven't disabled yet.
 				continue
 			}
 
 			// Success
-			return
+			return nil
 		case <-ctx.Done():
-			require.Fail(t, "Failed to verify disable/enable redo log.")
+			return errors.New("failed to verify disable/enable redo log")
 		}
 	}
+}
+
+// TestVtBackupWithChunking verifies that the vtbackup binary accepts chunking
+// flags and produces a chunked backup. It then restores the chunked backup on
+// replica2 and verifies the data is intact.
+func TestVtBackupWithChunking(t *testing.T) {
+	// Chunked backups are a v25 feature; older vttablets can't restore them.
+	utils.SkipIfBinaryIsBelowVersion(t, 25, "vttablet")
+	prepareCluster(t)
+
+	_, err := primary.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)
+	require.NoError(t, err)
+	_, err = primary.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test1')", keyspaceName, true)
+	require.NoError(t, err)
+
+	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 1)
+
+	_, err = startVtBackup(
+		t, false, true, false,
+		"--builtinbackup-file-chunk-threshold", "4194304",
+		"--builtinbackup-file-chunk-size", "4194304",
+	)
+	require.NoError(t, err)
+
+	backups, err := listBackups(shardKsName)
+	require.NoError(t, err)
+	require.NotEmpty(t, backups)
+
+	backupLocation := path.Join(localCluster.VtbackupProcess.FileBackupStorageRoot, keyspaceName, shardName, backups[len(backups)-1])
+	manifestData, err := os.ReadFile(path.Join(backupLocation, "MANIFEST"))
+	require.NoError(t, err)
+
+	var manifest struct {
+		FileEntries []mysqlctl.FileEntry
+	}
+	require.NoError(t, json.Unmarshal(manifestData, &manifest))
+
+	chunkedFiles := 0
+	for _, fe := range manifest.FileEntries {
+		if len(fe.Chunks) > 0 {
+			chunkedFiles++
+			t.Logf("File %s: %d chunks", fe.Name, len(fe.Chunks))
+		}
+	}
+	assert.Positive(t, chunkedFiles, "expected at least one file with chunks in MANIFEST")
+
+	err = localCluster.InitTablet(replica2, keyspaceName, shardName)
+	require.NoError(t, err)
+	restore(t, replica2, "replica", "SERVING")
+	waitForRestoreComplete(t, replica2.VttabletProcess, 180*time.Second)
+	waitForReplicationToCatchup([]cluster.Vttablet{*replica2})
+	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 1)
+
+	removeBackups(t)
+	tearDown(t, true)
 }
 
 // This helper function wait for all replicas to catch-up the replication.
