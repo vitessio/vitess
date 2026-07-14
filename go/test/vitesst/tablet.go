@@ -249,11 +249,24 @@ func (t *Tablet) MySQLSocket() string {
 	return t.TabletDir() + "/mysql.sock"
 }
 
-// Remove terminates the tablet's container and removes the tablet from the
-// cluster's and its shard's bookkeeping. The topology record is untouched;
-// tests delete it through vtctldclient when needed.
+// Remove shuts the tablet's vttablet down, terminates its container and
+// removes the tablet from the cluster's and its shard's bookkeeping. The
+// topology record is untouched; tests delete it through vtctldclient when
+// needed.
+//
+// vttablet gets a chance to shut down gracefully because that is when it
+// prunes the hostname and ports from its own topology record. A record that
+// keeps them after the container is gone still advertises an address that
+// nothing answers, and the next tablet to start in the shard blocks
+// indefinitely initializing replication against it.
 func (t *Tablet) Remove(ctx context.Context) error {
 	c := t.cluster
+
+	if t.IsRunning() {
+		if err := t.StopVttablet(ctx); err != nil {
+			c.logf("shutting vttablet %s down before removing it: %v", t.Alias(), err)
+		}
+	}
 
 	c.mu.Lock()
 	c.tablets = slices.DeleteFunc(c.tablets, func(other *Tablet) bool { return other == t })
