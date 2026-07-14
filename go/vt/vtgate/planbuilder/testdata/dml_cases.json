@@ -5085,6 +5085,58 @@
     "skip_e2e": true
   },
   {
+    "comment": "update join with unqualified column resolved to internal operation table is blocked",
+    "query": "update main.unsharded_authoritative ua join main._vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_ gc on ua.col1 = gc.id set col3 = 2",
+    "plan": "VT09033: modification of internal table '_vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_' is not allowed",
+    "skip_e2e": true
+  },
+  {
+    "comment": "update join with unqualified column resolved to authoritative regular table is allowed",
+    "query": "update main.unsharded_authoritative ua join main._vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_ gc on ua.col1 = gc.id set col2 = 2",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "UPDATE",
+      "Original": "update main.unsharded_authoritative ua join main._vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_ gc on ua.col1 = gc.id set col2 = 2",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "Query": "update unsharded_authoritative as ua join _vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_ as gc on ua.col1 = gc.id set col2 = 2"
+      },
+      "TablesUsed": [
+        "main._vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+        "main.unsharded_authoritative"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "update join with unresolvable unqualified column is passed through",
+    "query": "update main.unsharded u join main._vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_ gc on u.id = gc.id set name = 'a'",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "UPDATE",
+      "Original": "update main.unsharded u join main._vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_ gc on u.id = gc.id set name = 'a'",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "Query": "update unsharded as u join _vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_ as gc on u.id = gc.id set `name` = 'a'"
+      },
+      "TablesUsed": [
+        "main._vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+        "main.unsharded"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
     "comment": "insert row values smaller than number of columns",
     "query": "insert into user(one, two, three, four) values (1, 2, 3)",
     "plan": "VT03006: column count does not match value count with the row",

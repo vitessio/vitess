@@ -46,7 +46,7 @@ func gen4UpdateStmtPlanner(
 		return nil, err
 	}
 
-	if err := rejectInternalTableDML(updStmt); err != nil {
+	if err := rejectInternalTableDML(updStmt, ctx.SemTable); err != nil {
 		return nil, err
 	}
 

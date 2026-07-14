@@ -41,7 +41,7 @@ func gen4InsertStmtPlanner(version querypb.ExecuteOptions_PlannerVersion, insStm
 	// insert query does not support table alias.
 	insStmt.Table.As = sqlparser.NewIdentifierCS("")
 
-	if err := rejectInternalTableDML(insStmt); err != nil {
+	if err := rejectInternalTableDML(insStmt, nil); err != nil {
 		return nil, err
 	}
 

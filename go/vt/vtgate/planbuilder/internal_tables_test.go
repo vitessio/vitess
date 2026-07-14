@@ -121,7 +121,7 @@ func TestRejectInternalTableDML(t *testing.T) {
 			stmt, err := parser.Parse(tt.query)
 			require.NoError(t, err)
 
-			err = rejectInternalTableDML(stmt)
+			err = rejectInternalTableDML(stmt, nil)
 			if tt.wantErr == "" {
 				require.NoError(t, err)
 				return

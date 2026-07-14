@@ -54,7 +54,7 @@ func gen4DeleteStmtPlanner(
 		return nil, err
 	}
 
-	if err := rejectInternalTableDML(deleteStmt); err != nil {
+	if err := rejectInternalTableDML(deleteStmt, nil); err != nil {
 		return nil, err
 	}
 

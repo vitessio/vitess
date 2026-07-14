@@ -22,6 +22,7 @@ import (
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type (
@@ -47,13 +48,15 @@ func isInternalOperationTableName(tableName string) bool {
 
 // rejectInternalTableDML returns an error when the supplied DML statement
 // would modify a Vitess internal operation table. Reading an internal table,
-// for example in a join, is allowed.
-func rejectInternalTableDML(stmt sqlparser.Statement) error {
+// for example in a join, is allowed. semTable carries schema knowledge when
+// the caller has run semantic analysis; nil means unqualified SET columns in
+// a multi-table UPDATE cannot be attributed and are passed through unchecked.
+func rejectInternalTableDML(stmt sqlparser.Statement, semTable *semantics.SemTable) error {
 	switch stmt := stmt.(type) {
 	case *sqlparser.Insert:
 		return rejectInternalDMLTables(dmlTables(stmt.Table))
 	case *sqlparser.Update:
-		return rejectInternalTableUpdate(stmt)
+		return rejectInternalTableUpdate(stmt, semTable)
 	case *sqlparser.Delete:
 		return rejectInternalTableDelete(stmt)
 	default:
@@ -63,10 +66,8 @@ func rejectInternalTableDML(stmt sqlparser.Statement) error {
 
 // rejectInternalTableUpdate returns an error when an UPDATE assigns a column
 // of a Vitess internal operation table. An UPDATE modifies only the tables
-// named in its SET clause. An unqualified column in a multi-table UPDATE
-// cannot be attributed to a table without schema knowledge, so it is passed
-// through unchecked.
-func rejectInternalTableUpdate(stmt *sqlparser.Update) error {
+// named in its SET clause.
+func rejectInternalTableUpdate(stmt *sqlparser.Update, semTable *semantics.SemTable) error {
 	tables := dmlTables(stmt.TableExprs...)
 
 	// A single-table UPDATE modifies its one table no matter how the SET
@@ -76,10 +77,16 @@ func rejectInternalTableUpdate(stmt *sqlparser.Update) error {
 	}
 
 	for _, updateExpr := range stmt.Exprs {
-		// An unqualified column belongs to whichever table defines it, which
-		// only the backend schema knows, so it is passed through unchecked.
 		qualifier := strings.ToLower(updateExpr.Name.Qualifier.Name.String())
 		if qualifier == "" {
+			// An unqualified column belongs to whichever table defines it.
+			// When schema tracking has made the other tables authoritative,
+			// the column can be attributed; otherwise it stays unresolved
+			// and is passed through unchecked.
+			name, ok := updateColumnTable(semTable, updateExpr.Name)
+			if ok && isInternalOperationTableName(name) {
+				return internalTableModificationError(name)
+			}
 			continue
 		}
 
@@ -91,6 +98,57 @@ func rejectInternalTableUpdate(stmt *sqlparser.Update) error {
 	}
 
 	return nil
+}
+
+// updateColumnTable resolves the table an unqualified SET column belongs to.
+// Schema knowledge is consulted directly rather than the analyzer's column
+// bindings because the single-unsharded-keyspace shortcut skips binding. A
+// table can own the column unless schema tracking has made its column list
+// authoritative and the column is absent. The resolution is conclusive only
+// when exactly one table can own the column.
+func updateColumnTable(semTable *semantics.SemTable, col *sqlparser.ColName) (string, bool) {
+	if semTable == nil {
+		return "", false
+	}
+
+	owner := ""
+	found := false
+	for _, table := range semTable.Tables {
+		if tableExcludesColumn(table, col) {
+			continue
+		}
+
+		if found {
+			return "", false
+		}
+		found = true
+
+		// A table without a vschema entry, such as a derived table, can own
+		// the column but cannot be an internal table, so it resolves to an
+		// empty name rather than to its alias.
+		if vtbl := table.GetVindexTable(); vtbl != nil {
+			owner = vtbl.Name.String()
+		}
+	}
+
+	return owner, found
+}
+
+// tableExcludesColumn reports whether table is known not to have col. Only a
+// table with an authoritative column list can rule the column out.
+func tableExcludesColumn(table semantics.TableInfo, col *sqlparser.ColName) bool {
+	vtbl := table.GetVindexTable()
+	if vtbl == nil || !vtbl.ColumnListAuthoritative {
+		return false
+	}
+
+	for _, column := range vtbl.Columns {
+		if col.Name.Equal(column.Name) {
+			return false
+		}
+	}
+
+	return true
 }
 
 // rejectInternalTableDelete returns an error when a DELETE removes rows from
