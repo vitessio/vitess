@@ -69,9 +69,12 @@ func waitForReplicationSource(t *testing.T, tablet, source *cluster.Vttablet) {
 }
 
 // TestERSSucceedsWithLaggingSQLThreadReplica checks that a replica that has received all
-// changes but is lagging on applying them (stopped SQL thread) neither fails nor delays
-// ERS: a peer that has applied everything is promoted instead, and the lagging replica is
-// repointed to the new primary and catches up afterwards.
+// changes but is lagging on applying them neither fails nor delays ERS: a peer that has
+// applied everything is promoted instead, and the lagging replica is repointed to the new
+// primary and catches up afterwards. tablets[3] is demoted to RDONLY so the lagging
+// replica is also the new primary's only possible semi-sync acker, proving the promoted
+// primary accepts writes while its acker is still behind on apply: semi-sync ACKs happen
+// at relay log receipt, not apply.
 func TestERSSucceedsWithLaggingSQLThreadReplica(t *testing.T) {
 	endtoendutils.SkipIfBinaryIsBelowVersion(t, 25, "vtctld")
 
@@ -79,11 +82,23 @@ func TestERSSucceedsWithLaggingSQLThreadReplica(t *testing.T) {
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
+	// With tablets[3] as RDONLY, the only candidates after the primary dies are
+	// tablets[1] (lagged) and tablets[2], and the only semi-sync acker for the promoted
+	// tablets[2] is the lagged tablets[1].
+	err := clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", tablets[3].Alias, "rdonly")
+	require.NoError(t, err)
+
 	utils.ConfirmReplication(t, tablets[0], tablets[1:])
 
-	// Stop the SQL thread on tablets[1]: it keeps receiving changes into its relay logs
-	// but stops applying them, like a replica lagging behind on a heavy write load.
-	utils.RunSQL(t.Context(), t, `STOP REPLICA SQL_THREAD`, tablets[1])
+	// Delay applies on tablets[1] by an hour: it keeps receiving changes into its relay
+	// logs (and keeps sending semi-sync ACKs) but stops applying them, like a replica
+	// lagging behind on a heavy write load. A delay outlives the post-ERS repoint, unlike
+	// a stopped SQL thread which ERS force-starts.
+	utils.RunSQLs(t.Context(), t, []string{
+		`STOP REPLICA SQL_THREAD`,
+		`CHANGE REPLICATION SOURCE TO SOURCE_DELAY = 3600`,
+		`START REPLICA SQL_THREAD`,
+	}, tablets[1])
 
 	// This write is received by every replica but applied only on tablets[2] and tablets[3].
 	insertedVal := utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[2], tablets[3]})
@@ -107,17 +122,30 @@ func TestERSSucceedsWithLaggingSQLThreadReplica(t *testing.T) {
 	out, err := utils.Ers(clusterInstance, nil, "120s", "30s")
 	require.NoError(t, err, out)
 
-	// The lagging replica must not win the election.
+	// The lagging replica must not win the election; tablets[2] is the only candidate
+	// that can.
 	newPrimary := utils.GetNewPrimary(t, clusterInstance)
-	require.NotEqual(t, tablets[1].Alias, newPrimary.Alias, "lagging replica must not be promoted")
+	require.Equal(t, tablets[2].Alias, newPrimary.Alias, "the lagged replica and the rdonly must not be promoted")
 	err = utils.CheckInsertedValues(t.Context(), t, newPrimary, insertedVal)
 	require.NoError(t, err)
 
-	// The lagging replica was replicating when the reparent began, so it is repointed to
-	// the new primary with a forced start and catches up. Wait for the data to arrive
-	// first: the repoint of non-winning replicas completes asynchronously after ERS
-	// returns.
+	// The new primary must accept writes while its only semi-sync acker, the repointed
+	// tablets[1], is still behind on apply: ACKs are sent at relay log receipt.
+	waitForReplicationSource(t, tablets[1], newPrimary)
+	availabilityVal := utils.ConfirmReplication(t, newPrimary, nil)
+	res = utils.RunSQL(t.Context(), t, `select msg from vt_insert_test`, tablets[1])
+	assert.Len(t, res.Rows, 1, "the acker must still be behind on apply when the write commits")
+
+	// Clear the apply delay (it survives the repoint) and tablets[1] catches up on
+	// everything through the new primary.
+	utils.RunSQLs(t.Context(), t, []string{
+		`STOP REPLICA`,
+		`CHANGE REPLICATION SOURCE TO SOURCE_DELAY = 0`,
+		`START REPLICA`,
+	}, tablets[1])
 	err = utils.CheckInsertedValues(t.Context(), t, tablets[1], insertedVal)
+	require.NoError(t, err)
+	err = utils.CheckInsertedValues(t.Context(), t, tablets[1], availabilityVal)
 	require.NoError(t, err)
 	utils.CheckReplicationStatus(t.Context(), t, tablets[1], true, true)
 
