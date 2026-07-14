@@ -171,7 +171,8 @@ func TestNew_RestartTableConfigMismatchErrors(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	conn, _ := newStateTestConn(t,
+	conn, _ := newStateTestConn(
+		t,
 		stateExecuteResponse{result: &sqltypes.Result{
 			Fields: []*querypb.Field{{Name: "shard", Type: querypb.Type_VARCHAR}},
 			Rows:   [][]sqltypes.Value{{sqltypes.NewVarBinary("ks/0")}},
@@ -195,6 +196,45 @@ func TestNew_RestartTableConfigMismatchErrors(t *testing.T) {
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "provided tables do not match stored tables")
 	assert.ErrorContains(t, err, "query changed")
+}
+
+func TestNew_ResumeThenIdleFlushSkipsCheckpointWrite(t *testing.T) {
+	vgtidJSON, err := protojson.Marshal(&binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/1"}},
+	})
+	require.NoError(t, err)
+
+	conn, impl := newStateTestConn(
+		t,
+		stateExecuteResponse{result: &sqltypes.Result{
+			Fields: []*querypb.Field{{Name: "shard", Type: querypb.Type_VARCHAR}},
+			Rows:   [][]sqltypes.Value{{sqltypes.NewVarBinary("ks/0")}},
+		}},
+		stateExecuteResponse{result: &sqltypes.Result{RowsAffected: 1}},
+		stateExecuteResponse{result: stateRowResult(
+			sqltypes.NewVarBinary(string(vgtidJSON)),
+			sqltypes.NewVarBinary(`{"ks.t":{"Keyspace":"ks","Table":"t","Query":"select * from t"}}`),
+			sqltypes.NewInt64(1),
+		)},
+	)
+
+	v, err := New(context.Background(), "stream", conn, []TableConfig{{
+		Keyspace:        "ks",
+		Table:           "t",
+		Query:           "select * from t",
+		MaxRowsPerFlush: 1,
+		DataType:        &testRowSmall{},
+		FlushFn:         func(context.Context, []Row, FlushMeta) error { return nil },
+	}}, WithStateTable("ks", "state"))
+	require.NoError(t, err)
+	queriesAfterNew := len(impl.queries)
+
+	// an idle stream after resume has no buffered rows and an unchanged vgtid, so a flush
+	// (e.g. triggered by a heartbeat after minFlushDuration) must not rewrite the checkpoint:
+	// MySQL reports RowsAffected=0 for a no-op update, which updateLatestVGtid treats as an error
+	err = v.flush(context.Background(), false)
+	require.NoError(t, err)
+	assert.Len(t, impl.queries, queriesAfterNew)
 }
 
 func TestUpdateLatestVGtid_MissingStateRowErrors(t *testing.T) {

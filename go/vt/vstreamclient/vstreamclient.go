@@ -268,6 +268,11 @@ func New(ctx context.Context, name string, conn *vtgateconn.VTGateConn, tables [
 		}
 	}
 
+	// every branch above leaves the state table holding exactly latestVgtid, so seed lastFlushedVgtid
+	// with it. Otherwise the first flush on an idle stream would issue a no-op update, which MySQL
+	// reports as RowsAffected=0 and updateLatestVGtid would treat as a missing state row.
+	v.lastFlushedVgtid = v.latestVgtid
+
 	return v, nil
 }
 
