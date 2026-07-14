@@ -151,6 +151,22 @@ func isExpectedRunStop(err error, runCtx context.Context) bool {
 		strings.Contains(msg, "error code: CANCEL")
 }
 
+// recvOrFail receives from ch or fails the test after a generous timeout. A bare channel receive
+// would block forever if the expected flush never happens, hanging the whole package until the go
+// test binary timeout kills it.
+func recvOrFail[T any](t *testing.T, ch <-chan T, what string) T {
+	t.Helper()
+
+	select {
+	case v := <-ch:
+		return v
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "timed out waiting for "+what)
+		var zero T
+		return zero
+	}
+}
+
 // rowCollector accumulates flushed rows behind a mutex. FlushFn runs on the goroutine that calls
 // Run, while tests poll and assert on the collected rows from the test goroutine, so appending to
 // and reading an unsynchronized slice is a data race.
