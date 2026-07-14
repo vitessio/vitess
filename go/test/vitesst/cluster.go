@@ -59,6 +59,9 @@ type (
 		// initDBSQL is the assembled init_db.sql content shipped to tablets.
 		initDBSQL string
 
+		// backupVolume is the Docker volume backing the shared backup storage.
+		backupVolume string
+
 		// logf receives framework progress messages; NewCluster wires it to
 		// t.Logf.
 		logf func(format string, args ...any)
@@ -73,11 +76,17 @@ type (
 		vtadmin *VTAdmin
 
 		// mu guards the mutable collections below.
-		mu           sync.Mutex
-		vtgates      []*VTGate
-		vtgateSeq    int
-		vtorcs       []*VTOrc
-		vtorcSeq     int
+		mu        sync.Mutex
+		vtgates   []*VTGate
+		vtgateSeq int
+		vtorcs    []*VTOrc
+		vtorcSeq  int
+		vtbackups []*Vtbackup
+
+		// tabletSeq hands out tablet UIDs. It never goes backwards, so a
+		// removed tablet's UID is not reused by a later one, whose alias and
+		// data directory would otherwise collide with a live tablet's.
+		tabletSeq    int
 		keyspaces    []*Keyspace
 		tablets      []*Tablet
 		logConsumers []*ringLogConsumer
@@ -148,6 +157,13 @@ func (c *Cluster) Start(ctx context.Context) (cleanup func(context.Context) erro
 		}
 	}
 
+	if c.opts.backupStorage {
+		c.logf("creating backup volume")
+		if err = c.createBackupVolume(ctx); err != nil {
+			return cleanup, err
+		}
+	}
+
 	c.logf("starting topo server")
 	if err = c.startTopo(ctx); err != nil {
 		return cleanup, err
@@ -212,7 +228,7 @@ func (c *Cluster) Start(ctx context.Context) (cleanup func(context.Context) erro
 // primaries, applies the schema, and then applies the vschema.
 func (c *Cluster) startKeyspace(ctx context.Context, kc *keyspaceConfig) error {
 	c.logf("creating keyspace %s", kc.name)
-	if err := c.vtctld.createKeyspace(ctx, kc.name, kc.durabilityPolicy, kc.sidecarDBName); err != nil {
+	if err := c.vtctld.createKeyspace(ctx, kc); err != nil {
 		return err
 	}
 
@@ -228,7 +244,6 @@ func (c *Cluster) startKeyspace(ctx context.Context, kc *keyspaceConfig) error {
 	ks := &Keyspace{Name: kc.name}
 	c.mu.Lock()
 	c.keyspaces = append(c.keyspaces, ks)
-	nextUID := firstTabletUID + len(c.tablets)
 	c.mu.Unlock()
 
 	group, groupCtx := errgroup.WithContext(ctx)
@@ -250,13 +265,12 @@ func (c *Cluster) startKeyspace(ctx context.Context, kc *keyspaceConfig) error {
 			}
 
 			spec := &TabletSpec{
-				UID:      nextUID,
+				UID:      c.nextTabletUID(),
 				Cell:     c.cells[cellIndex%len(c.cells)],
 				Keyspace: kc.name,
 				Shard:    shardName,
 				Type:     typ,
 			}
-			nextUID++
 			cellIndex++
 			if kc.tabletSpec != nil {
 				kc.tabletSpec(spec)
@@ -403,10 +417,116 @@ func (c *Cluster) AddKeyspace(ctx context.Context, kb *keyspaceBuilder) (*Keyspa
 	if c.Keyspace(kc.name) != nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "keyspace %s already exists", kc.name)
 	}
-	if err := c.startKeyspace(ctx, &kc); err != nil {
+
+	// Register the configuration so the keyspace's tablet args and schema are
+	// available to later AddShard and AddTablet calls.
+	c.mu.Lock()
+	c.opts.keyspaces = append(c.opts.keyspaces, kc)
+	config := &c.opts.keyspaces[len(c.opts.keyspaces)-1]
+	c.mu.Unlock()
+
+	if err := c.startKeyspace(ctx, config); err != nil {
 		return nil, err
 	}
 	return c.Keyspace(kc.name), nil
+}
+
+// AddShard starts a new shard on an existing keyspace of the running cluster:
+// its tablets (one primary plus the given replicas and rdonly tablets) and its
+// primary election. Resharding tests use it to bring up the target shards; the
+// schema reaches them through the reshard itself or a later ApplySchema, and
+// the vschema and routing rules stay with the test.
+func (c *Cluster) AddShard(ctx context.Context, keyspace, shardName string, replicas, rdonly int) (*Shard, error) {
+	ks := c.Keyspace(keyspace)
+	if ks == nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "keyspace %s does not exist", keyspace)
+	}
+	if ks.Shard(shardName) != nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "shard %s/%s already exists", keyspace, shardName)
+	}
+
+	kc := c.keyspaceConfig(keyspace)
+	if kc == nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "keyspace %s has no configuration", keyspace)
+	}
+
+	shard := &Shard{Name: shardName, Keyspace: ks}
+	ks.mu.Lock()
+	ks.shards = append(ks.shards, shard)
+	ks.mu.Unlock()
+
+	specs := make([]*TabletSpec, 0, 1+replicas+rdonly)
+	for i := range 1 + replicas + rdonly {
+		typ := "replica"
+		switch {
+		case i == 0:
+			typ = "primary"
+		case i > replicas:
+			typ = "rdonly"
+		}
+
+		spec := &TabletSpec{
+			UID:      c.nextTabletUID(),
+			Cell:     c.cells[i%len(c.cells)],
+			Keyspace: keyspace,
+			Shard:    shardName,
+			Type:     typ,
+		}
+		if kc.tabletSpec != nil {
+			kc.tabletSpec(spec)
+		}
+		specs = append(specs, spec)
+	}
+
+	c.logf("starting shard %s/%s", keyspace, shardName)
+	if err := c.startShard(ctx, shard, specs, false); err != nil {
+		return nil, err
+	}
+	return shard, nil
+}
+
+// nextTabletUID hands out the next tablet UID.
+func (c *Cluster) nextTabletUID() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	uid := firstTabletUID + c.tabletSeq
+	c.tabletSeq++
+	return uid
+}
+
+// RemoveShard terminates a shard's remaining tablets and drops it from the
+// cluster's bookkeeping, so a later AddShard can create the same shard again.
+// The topology record is untouched; tests delete it through vtctldclient.
+func (c *Cluster) RemoveShard(ctx context.Context, keyspace, shardName string) error {
+	ks := c.Keyspace(keyspace)
+	if ks == nil {
+		return nil
+	}
+	shard := ks.Shard(shardName)
+	if shard == nil {
+		return nil
+	}
+
+	for _, tablet := range shard.Tablets() {
+		if err := tablet.Remove(ctx); err != nil {
+			return vterrors.Wrapf(err, "removing tablet %s", tablet.Alias())
+		}
+	}
+
+	ks.mu.Lock()
+	ks.shards = slices.DeleteFunc(ks.shards, func(other *Shard) bool { return other == shard })
+	ks.mu.Unlock()
+	return nil
+}
+
+// keyspaceConfig returns the configuration a keyspace was created with.
+func (c *Cluster) keyspaceConfig(name string) *keyspaceConfig {
+	for i := range c.opts.keyspaces {
+		if c.opts.keyspaces[i].name == name {
+			return &c.opts.keyspaces[i]
+		}
+	}
+	return nil
 }
 
 // AddTablet starts one more tablet of the given kind ("replica" or "rdonly")
@@ -423,15 +543,11 @@ func (c *Cluster) AddTablet(ctx context.Context, cell, keyspace, shard, tabletTy
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "shard %s/%s does not exist", keyspace, shard)
 	}
 
-	c.mu.Lock()
-	uid := firstTabletUID + len(c.tablets)
-	c.mu.Unlock()
-
 	if cell == "" {
 		cell = c.cells[0]
 	}
 	spec := &TabletSpec{
-		UID:      uid,
+		UID:      c.nextTabletUID(),
 		Cell:     cell,
 		Keyspace: keyspace,
 		Shard:    shard,
@@ -584,9 +700,11 @@ func (c *Cluster) terminate(ctx context.Context) error {
 	c.mu.Lock()
 	vtgates := c.vtgates
 	vtorcs := c.vtorcs
+	vtbackups := c.vtbackups
 	tablets := c.tablets
 	c.vtgates = nil
 	c.vtorcs = nil
+	c.vtbackups = nil
 	c.tablets = nil
 	c.mu.Unlock()
 
@@ -596,6 +714,9 @@ func (c *Cluster) terminate(ctx context.Context) error {
 	}
 	for _, vtorc := range vtorcs {
 		group.Go(func() error { return vtorc.terminate(ctx) })
+	}
+	for _, vtbackup := range vtbackups {
+		group.Go(func() error { return vtbackup.terminate(ctx) })
 	}
 	if c.vtadmin != nil {
 		vtadmin := c.vtadmin
@@ -616,6 +737,10 @@ func (c *Cluster) terminate(ctx context.Context) error {
 		group.Go(func() error { return topo.terminate(ctx) })
 	}
 	err := group.Wait()
+
+	if removeErr := c.removeBackupVolume(ctx); removeErr != nil && err == nil {
+		err = removeErr
+	}
 
 	if c.network != nil {
 		nw := c.network

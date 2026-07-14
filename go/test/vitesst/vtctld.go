@@ -80,17 +80,25 @@ func (v *Vtctld) executeCommand(ctx context.Context, args ...string) (string, er
 	return output, nil
 }
 
-// createKeyspace creates a keyspace with the given durability policy and
-// sidecar database name.
-func (v *Vtctld) createKeyspace(ctx context.Context, keyspace, durabilityPolicy, sidecar string) error {
+// createKeyspace creates a keyspace from its configuration.
+func (v *Vtctld) createKeyspace(ctx context.Context, kc *keyspaceConfig) error {
+	sidecar := kc.sidecarDBName
 	if sidecar == "" {
 		sidecar = sidecarDBName
 	}
+
 	args := []string{"CreateKeyspace", "--sidecar-db-name", sidecar}
-	if durabilityPolicy != "" {
-		args = append(args, "--durability-policy", durabilityPolicy)
+	if kc.durabilityPolicy != "" {
+		args = append(args, "--durability-policy", kc.durabilityPolicy)
 	}
-	args = append(args, keyspace)
+	if kc.baseKeyspace != "" {
+		args = append(args,
+			"--type", "SNAPSHOT",
+			"--base-keyspace", kc.baseKeyspace,
+			"--snapshot-timestamp", kc.snapshotTime,
+		)
+	}
+	args = append(args, kc.name)
 	return v.ExecuteCommand(ctx, args...)
 }
 
@@ -145,13 +153,12 @@ func (c *Cluster) startVtctld(ctx context.Context) error {
 	args = append(args,
 		"--cell", c.cells[0],
 		"--service-map", "grpc-vtctl,grpc-vtctld",
-		"--backup-storage-implementation", "file",
-		"--file-backup-storage-root", vtDataRoot+"/backups",
 		"--port", strconv.Itoa(vtctldHTTPPort),
 		"--grpc-port", strconv.Itoa(vtctldGRPCPort),
 		"--log-format", "text",
 		"--alsologtostderr",
 	)
+	args = append(args, c.backupFlags()...)
 	args = append(args, c.opts.vtctldArgs...)
 
 	filesOpt, err := withContainerFiles(c.opts.vtctldFiles)
@@ -159,7 +166,7 @@ func (c *Cluster) startVtctld(ctx context.Context) error {
 		return vterrors.Wrapf(err, "preparing files for vtctld")
 	}
 
-	ctr, err := testcontainers.Run(ctx, c.image,
+	opts := []testcontainers.ContainerCustomizer{
 		testcontainers.WithCmd(args...),
 		testcontainers.WithExposedPorts(
 			c.vtctld.httpPort,
@@ -176,7 +183,12 @@ func (c *Cluster) startVtctld(ctx context.Context) error {
 				WithStartupTimeout(defaultStartupTimeout).
 				WithPollInterval(defaultPollInterval),
 		),
-	)
+	}
+	if c.opts.backupStorage {
+		opts = append(opts, c.backupMount())
+	}
+
+	ctr, err := testcontainers.Run(ctx, c.image, opts...)
 	if err != nil {
 		return vterrors.Wrapf(err, "starting vtctld")
 	}

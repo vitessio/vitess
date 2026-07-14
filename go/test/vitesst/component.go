@@ -196,6 +196,50 @@ func (cp *component) Logs(ctx context.Context) (string, error) {
 	return string(content), nil
 }
 
+// Exec runs a command inside the component's container and returns its exit
+// code and combined output. It blocks until the command exits.
+func (cp *component) Exec(ctx context.Context, cmd ...string) (int, string, error) {
+	ctr := cp.container()
+	if ctr == nil {
+		return 0, "", vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s has no container", cp.name)
+	}
+	return containerExec(ctx, ctr, cmd)
+}
+
+// ReadFile returns the contents of a file inside the component's container.
+func (cp *component) ReadFile(ctx context.Context, path string) (string, error) {
+	exitCode, output, err := cp.Exec(ctx, "cat", path)
+	if err != nil {
+		return "", err
+	}
+	if exitCode != 0 {
+		return "", vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "reading %s on %s: %s", path, cp.name, output)
+	}
+	return output, nil
+}
+
+// WriteFile writes content to a path inside the component's container,
+// including paths on tmpfs mounts.
+func (cp *component) WriteFile(ctx context.Context, path, content string) error {
+	ctr := cp.container()
+	if ctr == nil {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s has no container", cp.name)
+	}
+	if err := writeContainerFile(ctx, ctr, path, content); err != nil {
+		return vterrors.Wrapf(err, "writing %s on %s", path, cp.name)
+	}
+	return nil
+}
+
+// RemoveFile deletes a path inside the component's container, recursively when
+// it is a directory.
+func (cp *component) RemoveFile(ctx context.Context, path string) error {
+	if _, _, err := cp.Exec(ctx, "rm", "-rf", path); err != nil {
+		return vterrors.Wrapf(err, "removing %s on %s", path, cp.name)
+	}
+	return nil
+}
+
 // StopContainer stops the component's container gracefully with SIGTERM,
 // killing it after the timeout.
 func (cp *component) StopContainer(ctx context.Context, timeout time.Duration) error {

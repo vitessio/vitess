@@ -58,8 +58,10 @@ ENV VTDATAROOT=/vt/vtdataroot
 ENV PATH=/vt/bin:$PATH
 
 # /vt/files is the drop zone for files the framework and tests copy into
-# containers (init_db.sql, supervisor script, certs, ...).
-RUN mkdir -p /vt/vtdataroot /vt/files && chown vitess:vitess /vt/vtdataroot /vt/files
+# containers (init_db.sql, supervisor script, certs, ...). /vt/backups is the
+# mount point for the shared backup volume: it exists in the image, owned by
+# vitess, so a fresh volume inherits that ownership on first mount.
+RUN mkdir -p /vt/vtdataroot /vt/files /vt/backups && chown vitess:vitess /vt/vtdataroot /vt/files /vt/backups
 
 # Keep this last: it is the only layer that changes when sources change.
 COPY --chown=vitess:vitess ${BIN_DIR} /vt/bin

@@ -236,6 +236,13 @@ e2e_test: build
 	echo $$(date): Running endtoend tests
 	go test $(VT_GO_PARALLEL) ./go/.../endtoend/...
 
+# e2e_vitesst runs the containerized end-to-end tests. It builds the images
+# from the current source first, so the containers run the code under test.
+# Usage: make e2e_vitesst [PKG=./go/test/endtoend/vtgate/...]
+e2e_vitesst: vitesst-images
+	echo $$(date): Running vitesst endtoend tests
+	VITESST_E2E=1 go test -count=1 -timeout 60m $(or $(PKG),./go/test/vitesst/... ./go/test/endtoend/...)
+
 # Run the code coverage tools, compute aggregate.
 unit_test_cover: build dependency_check demo
 	source build.env && tools/run_codecov.sh $(COVERAGE_PACKAGES)

@@ -56,6 +56,11 @@ type (
 		// sidecarDBName overrides the keyspace's sidecar database name.
 		sidecarDBName string
 
+		// baseKeyspace and snapshotTime make this a snapshot keyspace of
+		// another keyspace at a point in time.
+		baseKeyspace string
+		snapshotTime string
+
 		// tabletArgs are appended to this keyspace's vttablet command lines,
 		// after cluster-wide vttablet args.
 		tabletArgs []string
@@ -170,6 +175,15 @@ func (kb *keyspaceBuilder) WithDurabilityPolicy(policy string) *keyspaceBuilder 
 // default is "_vt".
 func (kb *keyspaceBuilder) WithSidecarDBName(name string) *keyspaceBuilder {
 	kb.config.sidecarDBName = name
+	return kb
+}
+
+// WithSnapshotOf makes this a snapshot keyspace of another keyspace at the
+// given time (RFC 3339), for recovery tests. Its tablets restore from the base
+// keyspace's backups.
+func (kb *keyspaceBuilder) WithSnapshotOf(baseKeyspace, snapshotTime string) *keyspaceBuilder {
+	kb.config.baseKeyspace = baseKeyspace
+	kb.config.snapshotTime = snapshotTime
 	return kb
 }
 

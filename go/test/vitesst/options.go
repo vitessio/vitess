@@ -78,6 +78,12 @@ type (
 		// withoutVTGate skips starting a vtgate during cluster start.
 		withoutVTGate bool
 
+		// backupStorage gives the cluster a shared file backup storage volume.
+		backupStorage bool
+
+		// mysqlctld runs each tablet's mysqld under the mysqlctld daemon.
+		mysqlctld bool
+
 		// borrowedNetwork, when set, is used instead of creating a network,
 		// and is not removed at teardown.
 		borrowedNetwork *testcontainers.DockerNetwork

@@ -259,6 +259,125 @@ func TestTabletProcessLifecycle(t *testing.T) {
 	}, 60*time.Second, 500*time.Millisecond, "mysqld should recover after KillMySQL + StartMySQL")
 }
 
+// TestAddShard proves that resharding targets can join a keyspace on a
+// running cluster: new shards get their own tablets, an elected primary, and
+// the keyspace's schema, while the source shard keeps serving.
+func TestAddShard(t *testing.T) {
+	requireE2E(t)
+
+	c, err := vitesst.NewCluster(
+		vitesst.WithKeyspace("ks").
+			WithShardNames("0").
+			WithSchema(selfTestSchema).
+			WithVSchema(selfTestVSchema),
+	)
+	require.NoError(t, err)
+	cleanup, err := c.Start(t.Context())
+	t.Cleanup(func() {
+		ctx := context.WithoutCancel(t.Context())
+		if t.Failed() {
+			c.DumpDiagnostics(ctx, t.Logf)
+		}
+		if err := cleanup(ctx); err != nil {
+			t.Logf("cluster teardown: %v", err)
+		}
+	})
+	require.NoError(t, err)
+
+	ctx := t.Context()
+	conn := c.Connect(t)
+	defer conn.Close()
+	_, err = conn.ExecuteFetch("insert into ks.t1(id, val) values (1, 'source')", 1, false)
+	require.NoError(t, err)
+
+	var targets []*vitesst.Shard
+	for _, name := range []string{"-80", "80-"} {
+		shard, err := c.AddShard(ctx, "ks", name, 1, 0)
+		require.NoError(t, err)
+		require.NotNil(t, shard.Primary(), "shard %s should have an elected primary", name)
+		require.Len(t, shard.Replicas(), 1)
+		targets = append(targets, shard)
+	}
+	assert.Len(t, c.Keyspace("ks").Shards(), 3)
+
+	// A keyspace-wide DDL reaches every shard, including the new ones.
+	require.NoError(t, c.Vtctld().ExecuteCommand(ctx,
+		"ApplySchema", "--sql", "create table t2(id bigint primary key) Engine=InnoDB", "ks"))
+	for _, shard := range targets {
+		_, err = shard.Primary().QueryTablet(ctx, "select count(*) from t2")
+		require.NoError(t, err, "shard %s should carry the new table", shard.Name)
+	}
+
+	// The source shard keeps serving through vtgate.
+	qr, err := conn.ExecuteFetch("select val from ks.t1 where id = 1", 1, false)
+	require.NoError(t, err)
+	require.Len(t, qr.Rows, 1)
+	assert.Equal(t, "source", qr.Rows[0][0].ToString())
+}
+
+// TestBackupCycle proves the shared backup volume: vtctld takes a backup from
+// a replica, vtbackup takes another, both are listed, and a replica restores
+// from them.
+func TestBackupCycle(t *testing.T) {
+	requireE2E(t)
+
+	c, err := vitesst.NewCluster(
+		vitesst.WithBackupStorage(),
+		vitesst.WithKeyspace("ks").
+			WithReplicas(1).
+			WithSchema(selfTestSchema),
+	)
+	require.NoError(t, err)
+	cleanup, err := c.Start(t.Context())
+	t.Cleanup(func() {
+		ctx := context.WithoutCancel(t.Context())
+		if t.Failed() {
+			c.DumpDiagnostics(ctx, t.Logf)
+		}
+		if err := cleanup(ctx); err != nil {
+			t.Logf("cluster teardown: %v", err)
+		}
+	})
+	require.NoError(t, err)
+
+	ctx := t.Context()
+	conn := c.Connect(t)
+	defer conn.Close()
+	_, err = conn.ExecuteFetch("insert into ks.t1(id, val) values (1, 'backed-up')", 1, false)
+	require.NoError(t, err)
+
+	shard := c.Keyspace("ks").Shard("-")
+	replica := shard.Replicas()[0]
+
+	// vtctld takes a backup of the replica.
+	require.NoError(t, c.Vtctld().ExecuteCommand(ctx, "Backup", replica.Alias()))
+	backups, err := c.ListBackups(ctx, "ks", "-")
+	require.NoError(t, err)
+	require.Len(t, backups, 1, "vtctld Backup should store one backup")
+
+	// vtbackup takes another one, reading the same volume.
+	_, err = c.RunVtbackup(ctx, vitesst.VtbackupSpec{Keyspace: "ks", Shard: "-"})
+	require.NoError(t, err)
+	backups, err = c.ListBackups(ctx, "ks", "-")
+	require.NoError(t, err)
+	assert.Len(t, backups, 2, "vtbackup should store a second backup")
+
+	// Killing the container discards the tablet's tmpfs data, so its restart
+	// initializes a fresh mysqld and vttablet restores from the backup.
+	require.NoError(t, replica.KillContainer(ctx))
+	require.NoError(t, replica.StartContainer(ctx))
+
+	assert.Eventually(t, func() bool {
+		res, err := replica.QueryTablet(ctx, "select val from t1 where id = 1")
+		return err == nil && len(res.Rows) == 1 && res.Rows[0][0].ToString() == "backed-up"
+	}, 3*time.Minute, 2*time.Second, "replica should serve the restored row")
+
+	require.NoError(t, c.RemoveAllBackups(ctx, "ks", "-"))
+	backups, err = c.ListBackups(ctx, "ks", "-")
+	require.NoError(t, err)
+	assert.Empty(t, backups)
+}
+
 func TestVTGateRestart(t *testing.T) {
 	requireE2E(t)
 
