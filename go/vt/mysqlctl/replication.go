@@ -346,32 +346,19 @@ func (mysqld *Mysqld) SetSuperReadOnly(ctx context.Context, on bool, opts ...Set
 		opt(&options)
 	}
 
-	//  return function for switching `OFF` super_read_only
-	var resetFunc ResetSuperReadOnlyFunc
-	disableFunc := func() error {
-		return mysqld.execSetSuperReadOnly(context.Background(), false, options)
-	}
-
-	//  return function for switching `ON` super_read_only.
-	enableFunc := func() error {
-		return mysqld.execSetSuperReadOnly(context.Background(), true, options)
-	}
-
 	superReadOnlyEnabled, err := mysqld.IsSuperReadOnly(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	// If non-idempotent then set the right call-back.
-	// We are asked to turn on super_read_only but original value is false,
-	// therefore return disableFunc, that can be used as defer by caller.
-	if on && !superReadOnlyEnabled {
-		resetFunc = disableFunc
-	}
-	// We are asked to turn off super_read_only but original value is true,
-	// therefore return enableFunc, that can be used as defer by caller.
-	if !on && superReadOnlyEnabled {
-		resetFunc = enableFunc
+	// The reset function restores super_read_only to its original value, and
+	// only exists when this call actually changes it. It can be used as a
+	// defer by the caller.
+	var resetFunc ResetSuperReadOnlyFunc
+	if on != superReadOnlyEnabled {
+		resetFunc = func() error {
+			return mysqld.execSetSuperReadOnly(context.Background(), superReadOnlyEnabled, options)
+		}
 	}
 
 	if err := mysqld.execSetSuperReadOnly(ctx, on, options); err != nil {
