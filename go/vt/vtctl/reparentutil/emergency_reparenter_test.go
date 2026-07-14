@@ -3566,6 +3566,67 @@ func TestEmergencyReparenter_waitForRelayLogsToApply(t *testing.T) {
 			wantApplied:  []string{"zone1-0000000100", "zone1-0000000101"},
 		},
 		{
+			// requireAll's first genuine failure cancels the remaining waits: the peer
+			// must be classified as cancelled (kept as a candidate), never as failed
+			// (removed from candidacy)
+			name: "requireAll true, a failure cancels the remaining waits",
+			tmc: &testutil.TabletManagerClient{
+				WaitForPositionDelays: map[string]time.Duration{
+					"zone1-0000000101": time.Minute,
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000100": {
+						"position2": nil, // asked to wait for "position1", fails instantly
+					},
+					"zone1-0000000101": {
+						"position1": nil,
+					},
+				},
+			},
+			candidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": {},
+				"zone1-0000000101": {},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"zone1-0000000100": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: "position1",
+					},
+				},
+				"zone1-0000000101": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: "position1",
+					},
+				},
+			},
+			requireAll:          true,
+			waitReplicasTimeout: 30 * time.Second,
+			shouldErr:           true,
+			errContains:         "could not apply all relay logs",
+			checkOutcome:        true,
+			wantApplied:         []string{},
+			wantFailed:          []string{"zone1-0000000100"},
+			wantCancelled:       []string{"zone1-0000000101"},
+		},
+		{
 			name: "one tablet fails",
 			tmc: &testutil.TabletManagerClient{
 				WaitForPositionResults: map[string]map[string]error{

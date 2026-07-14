@@ -619,13 +619,6 @@ func (erp *EmergencyReparenter) waitForRelayLogsToApply(
 	return result, nil
 }
 
-// isCancellationError returns true if err is a context cancellation, either as the
-// sentinel error or as a gRPC code (server-side wrapping loses the sentinel). A deadline
-// expiry isn't a cancellation, that's how a genuinely stuck tablet fails the wait.
-func isCancellationError(err error) bool {
-	return errors.Is(err, context.Canceled) || vterrors.Code(err) == vtrpc.Code_CANCELED
-}
-
 // applyRelayLogsAndReconcile waits for the waitCandidates to apply their relay logs and
 // reconciles validCandidates with the outcome: failed tablets are removed as they can't be
 // promoted, and applied tablets get their Executed position bumped to Combined so the
