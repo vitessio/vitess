@@ -224,3 +224,61 @@ func TestERSFailsWhenNoCandidateAppliesRelayLogs(t *testing.T) {
 	err = utils.CheckInsertedValues(t.Context(), t, newPrimary, insertedVal)
 	require.NoError(t, err)
 }
+
+// TestERSExcludesErrantGTIDCandidateAndRewaits checks that a candidate with an errant GTID
+// is still detected and excluded even though the leading-group filter skipped waiting on
+// its peers: the errant tablet has the most-advanced received position, so it alone is
+// waited on and wins, errant GTID detection then removes it, and ERS waits on the
+// surviving candidates before electing one of them. An apply-lagged replica is in the mix
+// so the reparent also exercises the second wait's race (and fails on older builds, which
+// time out waiting for the lagged replica).
+func TestERSExcludesErrantGTIDCandidateAndRewaits(t *testing.T) {
+	endtoendutils.SkipIfBinaryIsBelowVersion(t, 25, "vtctld")
+
+	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
+	defer utils.TeardownCluster(clusterInstance)
+	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+
+	utils.ConfirmReplication(t, tablets[0], tablets[1:])
+
+	// Give tablets[2] an errant GTID: a direct binlogged write to its mysqld mints a GTID
+	// under its own server uuid that no other tablet has, which also makes its received
+	// position a strict superset of everyone else's.
+	utils.RunSQLs(t.Context(), t, []string{
+		`SET GLOBAL super_read_only = 0`,
+		`INSERT INTO vt_insert_test(id, msg) VALUES (999999, 'errant write')`,
+		`SET GLOBAL super_read_only = 1`,
+	}, tablets[2])
+
+	// Stop the SQL thread on tablets[1]: it keeps receiving but stops applying.
+	utils.RunSQL(t.Context(), t, `STOP REPLICA SQL_THREAD`, tablets[1])
+
+	// This write is received by every replica but applied only on tablets[2] and tablets[3].
+	insertedVal := utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[2], tablets[3]})
+
+	// Make sure tablets[1] has received the write before ERS freezes the positions.
+	primaryPosition := strings.ReplaceAll(utils.RunSQL(t.Context(), t, `select @@global.gtid_executed`, tablets[0]).Rows[0][0].ToString(), "\n", "")
+	waitForReceivedPosition(t, tablets[1], primaryPosition)
+
+	// Kill the primary's vttablet (mysqld keeps running).
+	utils.StopTablet(t, tablets[0], false)
+
+	out, err := utils.Ers(clusterInstance, nil, "120s", "30s")
+	require.NoError(t, err, out)
+
+	// The errant tablet had the most-advanced received position but must not win; the
+	// second wait races the survivors and tablets[3], the only one that can finish
+	// applying, must be elected.
+	newPrimary := utils.GetNewPrimary(t, clusterInstance)
+	require.Equal(t, tablets[3].Alias, newPrimary.Alias, "the errant and lagged tablets must not be promoted")
+	err = utils.CheckInsertedValues(t.Context(), t, newPrimary, insertedVal)
+	require.NoError(t, err)
+
+	// The lagged replica was repointed with a forced start and catches up.
+	err = utils.CheckInsertedValues(t.Context(), t, tablets[1], insertedVal)
+	require.NoError(t, err)
+
+	// The errant tablet's repoint is refused by the tablet-side errant GTID check, so it
+	// still points at the old primary's mysqld; recovering it is an operator decision.
+	require.Equal(t, strconv.Itoa(tablets[0].MySQLPort), replicaStatusField(t, tablets[2], "Source_Port"))
+}
