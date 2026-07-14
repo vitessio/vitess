@@ -27,7 +27,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/test/vitesst"
 
 	"vitess.io/vitess/go/mysql"
 )
@@ -41,12 +41,14 @@ func TestNormalizeAllFields(t *testing.T) {
 	normalizedInsertQuery := `insert into t1 values (:vtg1 /* INT64 */, :vtg2 /* VARCHAR */, :vtg3 /* VARCHAR */, :vtg4 /* HEXVAL */, :vtg5 /* HEXNUM */, :vtg6 /* DECIMAL(3,2) */, :vtg7 /* DECIMAL(3,2) */, :vtg8 /* INT64 */, :vtg9 /* VARCHAR */, :vtg10 /* VARCHAR */, :vtg11 /* VARCHAR */, :vtg12 /* VARCHAR */, point(:vtg13 /* INT64 */, :vtg14 /* INT64 */), :vtg15 /* BITNUM */, :vtg16 /* BITNUM */)`
 
 	selectQuery := "select * from t1"
-	utils.Exec(t, conn, insertQuery)
-	qr := utils.Exec(t, conn, selectQuery)
+	vitesst.Exec(t, conn, insertQuery)
+	qr := vitesst.Exec(t, conn, selectQuery)
 	assert.Equal(t, 1, len(qr.Rows), "wrong number of table rows, expected 1 but had %d. Results: %v", len(qr.Rows), qr.Rows)
 
 	// Now need to figure out the best way to check the normalized query in the planner cache...
-	results := getPlanCache(t, fmt.Sprintf("%s:%d", vtParams.Host, clusterInstance.VtgateProcess.Port))
+	vtgateHostPort, err := clusterInstance.VTGate().HTTPAddr(t.Context())
+	require.NoError(t, err)
+	results := getPlanCache(t, vtgateHostPort)
 	assert.Contains(t, results, normalizedInsertQuery)
 }
 

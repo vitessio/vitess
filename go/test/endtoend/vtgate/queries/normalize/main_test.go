@@ -17,20 +17,21 @@ limitations under the License.
 package normalize
 
 import (
+	"context"
 	_ "embed"
 	"flag"
+	"fmt"
 	"os"
 	"testing"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
+	clusterInstance *vitesst.Cluster
 	vtParams        mysql.ConnParams
 	keyspaceName    = "ks_normalize"
-	cell            = "test_normalize"
 
 	//go:embed schema.sql
 	schemaSQL string
@@ -42,34 +43,25 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(cell, "localhost")
-		defer clusterInstance.Teardown()
+		ctx := context.Background()
 
-		// Start topo server
-		err := clusterInstance.StartTopo()
+		cluster, err := vitesst.StartCluster(ctx,
+			vitesst.WithKeyspace(keyspaceName).
+				WithReplicas(1).
+				WithSchema(schemaSQL),
+		)
 		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
+		defer func() {
+			if err := cluster.Terminate(context.WithoutCancel(ctx)); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
 
-		// Start keyspace
-		keyspace := &cluster.Keyspace{
-			Name:      keyspaceName,
-			SchemaSQL: schemaSQL,
-		}
-		clusterInstance.VtGateExtraArgs = []string{}
-		clusterInstance.VtTabletExtraArgs = []string{}
-		err = clusterInstance.StartKeyspace(*keyspace, []string{"-"}, 1, false, clusterInstance.Cell)
-		if err != nil {
-			return 1
-		}
-
-		// Start vtgate
-		err = clusterInstance.StartVtgate()
-		if err != nil {
-			return 1
-		}
-
-		vtParams = clusterInstance.GetVTParams(keyspaceName)
+		clusterInstance = cluster
+		vtParams = cluster.VTParams("")
 		return m.Run()
 	}()
 	os.Exit(exitCode)

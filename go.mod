@@ -98,10 +98,12 @@ require (
 	github.com/kr/text v0.2.0
 	github.com/lmittmann/tint v1.1.3
 	github.com/mattn/go-isatty v0.0.22
+	github.com/moby/moby/api v1.54.2
 	github.com/nsf/jsondiff v0.0.0-20210926074059-1e845ec5d249
 	github.com/shirou/gopsutil/v4 v4.26.5
 	github.com/spf13/afero v1.15.0
 	github.com/spf13/jwalterweatherman v1.1.0
+	github.com/testcontainers/testcontainers-go v0.43.0
 	github.com/xlab/treeprint v1.2.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.44.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.44.0
@@ -114,15 +116,25 @@ require (
 )
 
 require (
+	dario.cat/mergo v1.0.2 // indirect
 	filippo.io/edwards25519 v1.2.0 // indirect
+	github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c // indirect
 	github.com/aws/aws-sdk-go-v2/service/signin v1.2.0 // indirect
+	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cilium/ebpf v0.21.0 // indirect
 	github.com/clipperhouse/displaywidth v0.11.0 // indirect
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
+	github.com/containerd/errdefs v1.0.0 // indirect
+	github.com/containerd/errdefs/pkg v0.3.0 // indirect
 	github.com/containerd/log v0.1.0 // indirect
+	github.com/containerd/platforms v0.2.1 // indirect
+	github.com/cpuguy83/dockercfg v0.3.2 // indirect
+	github.com/distribution/reference v0.6.0 // indirect
 	github.com/docker/cli v29.5.3+incompatible // indirect
 	github.com/docker/docker-credential-helpers v0.9.8 // indirect
+	github.com/docker/go-connections v0.7.0 // indirect
+	github.com/docker/go-units v0.5.0 // indirect
 	github.com/go-ini/ini v1.67.0 // indirect
 	github.com/goccy/go-json v0.10.6 // indirect
 	github.com/godbus/dbus/v5 v5.2.2 // indirect
@@ -130,7 +142,15 @@ require (
 	github.com/google/pprof v0.0.0-20250820193118-f64d9cf942d6 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0 // indirect
 	github.com/hashicorp/go-sockaddr v1.0.7 // indirect
+	github.com/magiconair/properties v1.8.10 // indirect
+	github.com/moby/docker-image-spec v1.3.1 // indirect
+	github.com/moby/go-archive v0.2.0 // indirect
+	github.com/moby/moby/client v0.4.1 // indirect
+	github.com/moby/patternmatcher v0.6.1 // indirect
+	github.com/moby/sys/sequential v0.6.0 // indirect
+	github.com/moby/sys/user v0.4.0 // indirect
 	github.com/moby/sys/userns v0.1.0 // indirect
+	github.com/moby/term v0.5.2 // indirect
 	github.com/olekukonko/cat v0.0.0-20250911104152-50322a0618f6 // indirect
 	github.com/olekukonko/errors v1.3.0 // indirect
 	github.com/olekukonko/ll v0.1.8 // indirect
@@ -141,7 +161,6 @@ require (
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.6.2 // indirect
-	gotest.tools/v3 v3.5.2 // indirect
 )
 
 require (
