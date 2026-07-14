@@ -19,8 +19,8 @@ package vstreamclient
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -101,12 +101,12 @@ func TestVStreamClientStreamsAndResumesFromShardedSource(t *testing.T) {
 	}
 
 	var firstRun []*Customer
-	te.runUntilTimeout(t, newClient(func(_ context.Context, rows []vstreamclient.Row, _ vstreamclient.FlushMeta) error {
+	te.runUntilCopyCompleted(t, newClient(func(_ context.Context, rows []vstreamclient.Row, _ vstreamclient.FlushMeta) error {
 		for _, row := range rows {
 			firstRun = append(firstRun, row.Data.(*Customer))
 		}
 		return nil
-	}), 3*time.Second)
+	}), streamName)
 	assert.ElementsMatch(t, firstBatch, firstRun)
 
 	vgtid := queryLatestVGtid(t, te.ctx, te.session, streamName)
@@ -119,11 +119,13 @@ func TestVStreamClientStreamsAndResumesFromShardedSource(t *testing.T) {
 	}
 
 	var secondRun []*Customer
-	te.runUntilTimeout(t, newClient(func(_ context.Context, rows []vstreamclient.Row, _ vstreamclient.FlushMeta) error {
+	var secondRunRows atomic.Int64
+	te.runUntil(t, newClient(func(_ context.Context, rows []vstreamclient.Row, _ vstreamclient.FlushMeta) error {
 		for _, row := range rows {
 			secondRun = append(secondRun, row.Data.(*Customer))
 		}
+		secondRunRows.Add(int64(len(rows)))
 		return nil
-	}), 3*time.Second)
+	}), func() bool { return secondRunRows.Load() >= int64(len(secondBatch)) })
 	assert.ElementsMatch(t, secondBatch, secondRun)
 }

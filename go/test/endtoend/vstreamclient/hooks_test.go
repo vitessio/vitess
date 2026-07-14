@@ -39,14 +39,15 @@ func TestVStreamClientEventHooks(t *testing.T) {
 	commitCount := 0
 	var rowTableNames []string
 
-	vstreamClient := te.newDefaultClient(t, t.Name(), []vstreamclient.TableConfig{{
-		Keyspace:        "customer",
-		Table:           "customer",
-		Query:           "select * from customer where id between 900 and 999",
-		MaxRowsPerFlush: 10,
-		DataType:        &Customer{},
-		FlushFn:         func(_ context.Context, _ []vstreamclient.Row, _ vstreamclient.FlushMeta) error { return nil },
-	}},
+	vstreamClient := te.newDefaultClient(
+		t, t.Name(), []vstreamclient.TableConfig{{
+			Keyspace:        "customer",
+			Table:           "customer",
+			Query:           "select * from customer where id between 900 and 999",
+			MaxRowsPerFlush: 10,
+			DataType:        &Customer{},
+			FlushFn:         func(_ context.Context, _ []vstreamclient.Row, _ vstreamclient.FlushMeta) error { return nil },
+		}},
 		vstreamclient.WithEventFunc(func(_ context.Context, ev *binlogdatapb.VEvent) error {
 			fieldCount++
 			assert.Equal(t, "customer.customer", ev.FieldEvent.TableName)
@@ -64,7 +65,7 @@ func TestVStreamClientEventHooks(t *testing.T) {
 	)
 
 	te.exec(t, "insert into customer.customer(id, email) values (901, 'event-hook@domain.com')", nil)
-	te.runUntilTimeout(t, vstreamClient, 2*time.Second)
+	te.runUntilCopyCompleted(t, vstreamClient, t.Name())
 
 	assert.Positive(t, fieldCount)
 	assert.Equal(t, 1, rowCount)
@@ -89,7 +90,8 @@ func TestVStreamClientFlushFnError(t *testing.T) {
 
 	te.exec(t, "insert into customer.customer(id, email) values (1001, 'flush-error@domain.com')", nil)
 
-	runCtx, cancelRun := context.WithTimeout(context.Background(), 2*time.Second)
+	// the run self-terminates on the flush error; the deadline is only a generous cap
+	runCtx, cancelRun := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancelRun()
 	err := vstreamClient.Run(runCtx)
 	require.Error(t, err)
@@ -103,20 +105,22 @@ func TestVStreamClientEventHookError(t *testing.T) {
 	te := newTestEnv(t)
 
 	hookErr := errors.New("field hook failed")
-	vstreamClient := te.newDefaultClient(t, t.Name(), []vstreamclient.TableConfig{{
-		Keyspace:        "customer",
-		Table:           "customer",
-		Query:           "select * from customer where id between 1700 and 1799",
-		MaxRowsPerFlush: 10,
-		DataType:        &Customer{},
-		FlushFn:         func(_ context.Context, _ []vstreamclient.Row, _ vstreamclient.FlushMeta) error { return nil },
-	}},
+	vstreamClient := te.newDefaultClient(
+		t, t.Name(), []vstreamclient.TableConfig{{
+			Keyspace:        "customer",
+			Table:           "customer",
+			Query:           "select * from customer where id between 1700 and 1799",
+			MaxRowsPerFlush: 10,
+			DataType:        &Customer{},
+			FlushFn:         func(_ context.Context, _ []vstreamclient.Row, _ vstreamclient.FlushMeta) error { return nil },
+		}},
 		vstreamclient.WithEventFunc(func(_ context.Context, _ *binlogdatapb.VEvent) error { return hookErr }, binlogdatapb.VEventType_FIELD),
 	)
 
 	te.exec(t, "insert into customer.customer(id, email) values (1701, 'hook-error@domain.com')", nil)
 
-	runCtx, cancelRun := context.WithTimeout(context.Background(), 2*time.Second)
+	// the run self-terminates on the hook error; the deadline is only a generous cap
+	runCtx, cancelRun := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancelRun()
 	err := vstreamClient.Run(runCtx)
 	require.Error(t, err)

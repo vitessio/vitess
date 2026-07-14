@@ -38,24 +38,25 @@ func TestVStreamClientDisambiguatesSameTableNames(t *testing.T) {
 	te := newTestEnv(t)
 	var gotFieldEvents []string
 	var gotRowEvents []string
-	vstreamClient := te.newDefaultClient(t, t.Name(), []vstreamclient.TableConfig{
-		{
-			Keyspace:        "customer",
-			Table:           "customer",
-			Query:           "select * from customer where id between 200 and 399",
-			MaxRowsPerFlush: 2,
-			DataType:        &Customer{},
-			FlushFn:         func(_ context.Context, _ []vstreamclient.Row, _ vstreamclient.FlushMeta) error { return nil },
+	vstreamClient := te.newDefaultClient(
+		t, t.Name(), []vstreamclient.TableConfig{
+			{
+				Keyspace:        "customer",
+				Table:           "customer",
+				Query:           "select * from customer where id between 200 and 399",
+				MaxRowsPerFlush: 2,
+				DataType:        &Customer{},
+				FlushFn:         func(_ context.Context, _ []vstreamclient.Row, _ vstreamclient.FlushMeta) error { return nil },
+			},
+			{
+				Keyspace:        "accounting",
+				Table:           "customer",
+				Query:           "select * from customer where id between 200 and 399",
+				MaxRowsPerFlush: 2,
+				DataType:        &Customer{},
+				FlushFn:         func(_ context.Context, _ []vstreamclient.Row, _ vstreamclient.FlushMeta) error { return nil },
+			},
 		},
-		{
-			Keyspace:        "accounting",
-			Table:           "customer",
-			Query:           "select * from customer where id between 200 and 399",
-			MaxRowsPerFlush: 2,
-			DataType:        &Customer{},
-			FlushFn:         func(_ context.Context, _ []vstreamclient.Row, _ vstreamclient.FlushMeta) error { return nil },
-		},
-	},
 		vstreamclient.WithEventFunc(func(_ context.Context, ev *binlogdatapb.VEvent) error {
 			gotFieldEvents = append(gotFieldEvents, fmt.Sprintf("%s:%s", ev.Keyspace, ev.FieldEvent.TableName))
 			return nil
@@ -75,7 +76,7 @@ func TestVStreamClientDisambiguatesSameTableNames(t *testing.T) {
 		"email": {Type: querypb.Type_VARCHAR, Value: []byte("multi-accounting@domain.com")},
 	})
 
-	te.runUntilTimeout(t, vstreamClient, 5*time.Second)
+	te.runUntilCopyCompleted(t, vstreamClient, t.Name())
 
 	assert.Contains(t, gotFieldEvents, "customer:customer.customer")
 	assert.Contains(t, gotFieldEvents, "accounting:accounting.customer")
@@ -94,34 +95,35 @@ func TestVStreamClientStreamsMultipleTablesInOneKeyspace(t *testing.T) {
 	var fieldTables []string
 	var rowTables []string
 	rowTableSeen := make(chan string, 4)
-	vstreamClient := te.newDefaultClient(t, t.Name(), []vstreamclient.TableConfig{
-		{
-			Keyspace:        "customer",
-			Table:           "customer",
-			Query:           "select * from customer where id between 1800 and 1899",
-			MaxRowsPerFlush: 10,
-			DataType:        &Customer{},
-			FlushFn: func(_ context.Context, rows []vstreamclient.Row, _ vstreamclient.FlushMeta) error {
-				for _, row := range rows {
-					gotCustomers = append(gotCustomers, row.Data.(*Customer))
-				}
-				return nil
+	vstreamClient := te.newDefaultClient(
+		t, t.Name(), []vstreamclient.TableConfig{
+			{
+				Keyspace:        "customer",
+				Table:           "customer",
+				Query:           "select * from customer where id between 1800 and 1899",
+				MaxRowsPerFlush: 10,
+				DataType:        &Customer{},
+				FlushFn: func(_ context.Context, rows []vstreamclient.Row, _ vstreamclient.FlushMeta) error {
+					for _, row := range rows {
+						gotCustomers = append(gotCustomers, row.Data.(*Customer))
+					}
+					return nil
+				},
+			},
+			{
+				Keyspace:        "customer",
+				Table:           "purchases",
+				Query:           "select * from `purchases` where id between 1800 and 1899",
+				MaxRowsPerFlush: 10,
+				DataType:        &Order{},
+				FlushFn: func(_ context.Context, rows []vstreamclient.Row, _ vstreamclient.FlushMeta) error {
+					for _, row := range rows {
+						gotOrders = append(gotOrders, row.Data.(*Order))
+					}
+					return nil
+				},
 			},
 		},
-		{
-			Keyspace:        "customer",
-			Table:           "purchases",
-			Query:           "select * from `purchases` where id between 1800 and 1899",
-			MaxRowsPerFlush: 10,
-			DataType:        &Order{},
-			FlushFn: func(_ context.Context, rows []vstreamclient.Row, _ vstreamclient.FlushMeta) error {
-				for _, row := range rows {
-					gotOrders = append(gotOrders, row.Data.(*Order))
-				}
-				return nil
-			},
-		},
-	},
 		vstreamclient.WithEventFunc(func(_ context.Context, ev *binlogdatapb.VEvent) error {
 			fieldTables = append(fieldTables, ev.FieldEvent.TableName)
 			return nil
@@ -138,7 +140,7 @@ func TestVStreamClientStreamsMultipleTablesInOneKeyspace(t *testing.T) {
 
 	te.exec(t, "insert into customer.customer(id, email) values (1801, 'multi-table@domain.com')", nil)
 	te.exec(t, "insert into customer.purchases(id, customer_id, note) values (1801, 1801, 'first-order')", nil)
-	te.runUntilTimeout(t, vstreamClient, 5*time.Second)
+	te.runUntilCopyCompleted(t, vstreamClient, t.Name())
 
 	assert.ElementsMatch(t, []string{"customer.customer", "customer.purchases"}, fieldTables)
 	assert.ElementsMatch(t, []string{"customer.customer", "customer.purchases"}, rowTables)
@@ -154,19 +156,20 @@ func TestVStreamClientBareTableNamesWithCustomFlags(t *testing.T) {
 	var fieldTables []string
 	var rowTables []string
 	var got []*Customer
-	vstreamClient := te.newDefaultClient(t, t.Name(), []vstreamclient.TableConfig{{
-		Keyspace:        "customer",
-		Table:           "customer",
-		Query:           "select * from customer where id between 2200 and 2299",
-		MaxRowsPerFlush: 10,
-		DataType:        &Customer{},
-		FlushFn: func(_ context.Context, rows []vstreamclient.Row, _ vstreamclient.FlushMeta) error {
-			for _, row := range rows {
-				got = append(got, row.Data.(*Customer))
-			}
-			return nil
-		},
-	}},
+	vstreamClient := te.newDefaultClient(
+		t, t.Name(), []vstreamclient.TableConfig{{
+			Keyspace:        "customer",
+			Table:           "customer",
+			Query:           "select * from customer where id between 2200 and 2299",
+			MaxRowsPerFlush: 10,
+			DataType:        &Customer{},
+			FlushFn: func(_ context.Context, rows []vstreamclient.Row, _ vstreamclient.FlushMeta) error {
+				for _, row := range rows {
+					got = append(got, row.Data.(*Customer))
+				}
+				return nil
+			},
+		}},
 		vstreamclient.WithFlags(&vtgatepb.VStreamFlags{HeartbeatInterval: 1, ExcludeKeyspaceFromTableName: true}),
 		vstreamclient.WithEventFunc(func(_ context.Context, ev *binlogdatapb.VEvent) error {
 			fieldTables = append(fieldTables, ev.FieldEvent.TableName)
@@ -179,7 +182,7 @@ func TestVStreamClientBareTableNamesWithCustomFlags(t *testing.T) {
 	)
 
 	te.exec(t, "insert into customer.customer(id, email) values (2201, 'bare-table@domain.com')", nil)
-	te.runUntilTimeout(t, vstreamClient, 2*time.Second)
+	te.runUntilCopyCompleted(t, vstreamClient, t.Name())
 
 	assert.Contains(t, fieldTables, "customer")
 	assert.Contains(t, rowTables, "customer")
@@ -191,24 +194,25 @@ func TestVStreamClientBareTableNamesWithCustomFlags(t *testing.T) {
 func TestVStreamClientBareTableNamesAmbiguousAcrossKeyspaces(t *testing.T) {
 	te := newTestEnv(t)
 
-	_, err := vstreamclient.New(te.ctx, t.Name(), te.conn, []vstreamclient.TableConfig{
-		{
-			Keyspace:        "customer",
-			Table:           "customer",
-			Query:           "select * from customer where id between 2300 and 2499",
-			MaxRowsPerFlush: 10,
-			DataType:        &Customer{},
-			FlushFn:         func(_ context.Context, _ []vstreamclient.Row, _ vstreamclient.FlushMeta) error { return nil },
+	_, err := vstreamclient.New(
+		te.ctx, t.Name(), te.conn, []vstreamclient.TableConfig{
+			{
+				Keyspace:        "customer",
+				Table:           "customer",
+				Query:           "select * from customer where id between 2300 and 2499",
+				MaxRowsPerFlush: 10,
+				DataType:        &Customer{},
+				FlushFn:         func(_ context.Context, _ []vstreamclient.Row, _ vstreamclient.FlushMeta) error { return nil },
+			},
+			{
+				Keyspace:        "accounting",
+				Table:           "customer",
+				Query:           "select * from customer where id between 2300 and 2499",
+				MaxRowsPerFlush: 10,
+				DataType:        &Customer{},
+				FlushFn:         func(_ context.Context, _ []vstreamclient.Row, _ vstreamclient.FlushMeta) error { return nil },
+			},
 		},
-		{
-			Keyspace:        "accounting",
-			Table:           "customer",
-			Query:           "select * from customer where id between 2300 and 2499",
-			MaxRowsPerFlush: 10,
-			DataType:        &Customer{},
-			FlushFn:         func(_ context.Context, _ []vstreamclient.Row, _ vstreamclient.FlushMeta) error { return nil },
-		},
-	},
 		vstreamclient.WithMinFlushDuration(500*time.Millisecond),
 		vstreamclient.WithHeartbeatSeconds(1),
 		vstreamclient.WithStateTable("commerce", "vstreams"),

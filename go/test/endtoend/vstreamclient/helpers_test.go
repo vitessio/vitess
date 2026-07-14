@@ -18,6 +18,7 @@ package vstreamclient
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"strconv"
 	"strings"
@@ -116,15 +117,65 @@ func (te *testEnv) execBackgroundAllowMissingColumn(t *testing.T, query string, 
 	require.NoError(t, err)
 }
 
-func (te *testEnv) runUntilTimeout(t *testing.T, client *vstreamclient.VStreamClient, timeout time.Duration) {
+// runUntil runs the client until condition reports true, then stops it with GracefulShutdown and
+// waits for Run to exit. GracefulShutdown flushes and checkpoints buffered work at the next safe
+// boundary before Run returns, so anything the condition observed (e.g. rows seen by FlushFn) is
+// durably checkpointed by the time runUntil returns — later clients with the same stream name
+// resume instead of replaying. The deadlines are generous so slow CI runners don't flake; fast
+// runs return as soon as the condition is met instead of burning a fixed wall-clock window.
+func (te *testEnv) runUntil(t *testing.T, client *vstreamclient.VStreamClient, condition func() bool) {
 	t.Helper()
 
-	runCtx, cancelRun := context.WithTimeout(context.Background(), timeout)
+	runCtx, cancelRun := context.WithCancel(context.Background())
 	defer cancelRun()
 
-	err := client.Run(runCtx)
-	if err != nil && !isExpectedRunStop(err, runCtx) {
-		t.Fatalf("failed to run vstreamclient: %v", err)
+	runErrCh := make(chan error, 1)
+	go func() {
+		runErrCh <- client.Run(runCtx)
+	}()
+
+	deadline := time.After(30 * time.Second)
+	for !condition() {
+		select {
+		case err := <-runErrCh:
+			require.NoError(t, err, "vstreamclient exited before the run condition was met")
+			require.FailNow(t, "vstreamclient exited cleanly before the run condition was met")
+		case <-deadline:
+			require.FailNow(t, "timed out waiting for the run condition")
+		case <-time.After(50 * time.Millisecond):
+		}
+	}
+
+	client.GracefulShutdown(15 * time.Second)
+	err := recvOrFail(t, runErrCh, "vstreamclient Run to exit")
+	if err != nil && !errors.Is(err, context.Canceled) && !isExpectedRunStop(err, runCtx) {
+		require.NoError(t, err, "failed to run vstreamclient")
+	}
+}
+
+// runUntilCopyCompleted runs the client until the stream's copy phase has been flushed and
+// checkpointed. The copy-completed flush writes buffered rows before persisting copy_completed,
+// so once the column reads true, all copy-phase rows have been delivered to FlushFn and the next
+// client with the same stream name will resume from the stored vgtid instead of re-copying.
+func (te *testEnv) runUntilCopyCompleted(t *testing.T, client *vstreamclient.VStreamClient, streamName string) {
+	t.Helper()
+
+	te.runUntil(t, client, te.copyCompleted(streamName))
+}
+
+// copyCompleted returns a condition that reports whether the stream's copy phase has been
+// checkpointed in the state table.
+func (te *testEnv) copyCompleted(streamName string) func() bool {
+	return func() bool {
+		result, err := te.session.Execute(te.qCtx, "select copy_completed from commerce.vstreams where name = :name", map[string]*querypb.BindVariable{
+			"name": {Type: querypb.Type_VARBINARY, Value: []byte(streamName)},
+		}, false)
+		if err != nil || len(result.Rows) == 0 {
+			return false
+		}
+
+		completed, err := result.Rows[0][0].ToBool()
+		return err == nil && completed
 	}
 }
 
