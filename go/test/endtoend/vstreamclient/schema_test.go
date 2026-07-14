@@ -59,7 +59,8 @@ type customerWithRemapColumns struct {
 func TestVStreamClientSchemaDriftFailsWithUnknownFields(t *testing.T) {
 	te := newTestEnv(t)
 	t.Cleanup(func() {
-		te.execBackground(t, "alter table customer.customer drop column strict_extra", nil)
+		// tolerate a missing column so an early test failure isn't masked by the cleanup
+		te.execBackgroundAllowMissingColumn(t, "alter table customer.customer drop column strict_extra", nil)
 	})
 
 	newClient := func() *vstreamclient.VStreamClient {
@@ -76,18 +77,14 @@ func TestVStreamClientSchemaDriftFailsWithUnknownFields(t *testing.T) {
 
 	te.exec(t, "insert into customer.customer(id, email) values (2501, 'strict-before@domain.com')", nil)
 
-	runCtx, cancelRun := context.WithTimeout(context.Background(), 2*time.Second)
-	err := newClient().Run(runCtx)
-	cancelRun()
-	if err != nil && runCtx.Err() == nil {
-		t.Fatalf("failed to run vstreamclient: %v", err)
-	}
+	te.runUntilCopyCompleted(t, newClient(), t.Name())
 
 	te.exec(t, "alter table customer.customer add column strict_extra varchar(64) null", nil)
 	te.exec(t, "insert into customer.customer(id, email, strict_extra) values (2502, 'strict-after@domain.com', 'extra')", nil)
 
-	runCtx, cancelRun = context.WithTimeout(context.Background(), 2*time.Second)
-	err = newClient().Run(runCtx)
+	// the run self-terminates on the strict schema mismatch; the deadline is only a generous cap
+	runCtx, cancelRun := context.WithTimeout(context.Background(), 30*time.Second)
+	err := newClient().Run(runCtx)
 	cancelRun()
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "not found in provided data type")
@@ -114,7 +111,8 @@ func TestVStreamClientJSONDecodeFailure(t *testing.T) {
 		FlushFn:         func(_ context.Context, _ []vstreamclient.Row, _ vstreamclient.FlushMeta) error { return nil },
 	}})
 
-	runCtx, cancelRun := context.WithTimeout(context.Background(), 2*time.Second)
+	// the run self-terminates on the JSON decode failure; the deadline is only a generous cap
+	runCtx, cancelRun := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancelRun()
 
 	err := vstreamClient.Run(runCtx)
@@ -142,13 +140,13 @@ func TestVStreamClientSchemaDriftFailsWhenProjectedColumnDropped(t *testing.T) {
 		},
 	}})
 
-	runCtx, cancelRun, runErrCh := te.runAsync(vstreamClient, 4*time.Second)
+	runCtx, cancelRun, runErrCh := te.runAsync(vstreamClient, 30*time.Second)
 	defer cancelRun()
 
 	te.exec(t, "insert into customer.customer(id, email, projected_col) values (3301, 'projected-before-drop@domain.com', 'before-drop')", nil)
 	assert.Eventually(t, func() bool {
 		return got.count() == 1
-	}, 3*time.Second, 50*time.Millisecond)
+	}, 30*time.Second, 50*time.Millisecond)
 	assert.Equal(t, []*customerWithProjectedString{{ID: 3301, Projected: "before-drop"}}, got.snapshot())
 
 	te.exec(t, "alter table customer.customer drop column projected_col", nil)
@@ -181,13 +179,13 @@ func TestVStreamClientSchemaDriftFailsWhenProjectedColumnRenamed(t *testing.T) {
 		},
 	}})
 
-	runCtx, cancelRun, runErrCh := te.runAsync(vstreamClient, 4*time.Second)
+	runCtx, cancelRun, runErrCh := te.runAsync(vstreamClient, 30*time.Second)
 	defer cancelRun()
 
 	te.exec(t, "insert into customer.customer(id, email, projected_col) values (3401, 'projected-before-rename@domain.com', 'before-rename')", nil)
 	assert.Eventually(t, func() bool {
 		return got.count() == 1
-	}, 3*time.Second, 50*time.Millisecond)
+	}, 30*time.Second, 50*time.Millisecond)
 	assert.Equal(t, []*customerWithProjectedString{{ID: 3401, Projected: "before-rename"}}, got.snapshot())
 
 	te.exec(t, "alter table customer.customer change column projected_col projected_col_renamed varchar(128) null", nil)
@@ -219,13 +217,13 @@ func TestVStreamClientSchemaDriftFailsWhenProjectedColumnTypeChanges(t *testing.
 		},
 	}})
 
-	runCtx, cancelRun, runErrCh := te.runAsync(vstreamClient, 4*time.Second)
+	runCtx, cancelRun, runErrCh := te.runAsync(vstreamClient, 30*time.Second)
 	defer cancelRun()
 
 	te.exec(t, `insert into customer.customer(id, email, projected_payload) values (3501, 'projected-before-type@domain.com', '{"source":"before-type"}')`, nil)
 	assert.Eventually(t, func() bool {
 		return got.count() == 1
-	}, 3*time.Second, 50*time.Millisecond)
+	}, 30*time.Second, 50*time.Millisecond)
 	assert.Equal(t, []*customerWithProjectedPayload{{ID: 3501, Payload: &customerPayload{Source: "before-type"}}}, got.snapshot())
 
 	te.exec(t, "update customer.customer set projected_payload = null where id = 3501", nil)
@@ -260,19 +258,19 @@ func TestVStreamClientRemapsFieldsAfterDDL(t *testing.T) {
 		},
 	}})
 
-	runCtx, cancelRun, runErrCh := te.runAsync(vstreamClient, 4*time.Second)
+	runCtx, cancelRun, runErrCh := te.runAsync(vstreamClient, 30*time.Second)
 	defer cancelRun()
 
 	te.exec(t, "insert into customer.customer(id, email, remap_a, remap_b) values (3601, 'remap-before@domain.com', 'A1', 'B1')", nil)
 	assert.Eventually(t, func() bool {
 		return got.count() == 1
-	}, 3*time.Second, 50*time.Millisecond)
+	}, 30*time.Second, 50*time.Millisecond)
 
 	te.exec(t, "alter table customer.customer modify column remap_b varchar(128) null after id, modify column remap_a varchar(128) null after remap_b", nil)
 	te.exec(t, "insert into customer.customer(id, email, remap_a, remap_b) values (3602, 'remap-after@domain.com', 'A2', 'B2')", nil)
 	assert.Eventually(t, func() bool {
 		return got.count() == 2
-	}, 3*time.Second, 50*time.Millisecond)
+	}, 30*time.Second, 50*time.Millisecond)
 	assert.Equal(t, []*customerWithRemapColumns{
 		{ID: 3601, Email: "remap-before@domain.com", RemapA: "A1", RemapB: "B1"},
 		{ID: 3602, Email: "remap-after@domain.com", RemapA: "A2", RemapB: "B2"},

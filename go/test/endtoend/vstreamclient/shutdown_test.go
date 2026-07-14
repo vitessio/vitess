@@ -38,14 +38,15 @@ func TestVStreamClientGracefulShutdownChanStopsActiveRun(t *testing.T) {
 
 	rowSeen := make(chan struct{}, 1)
 	shutdownCh := make(chan struct{})
-	vstreamClient := te.newDefaultClient(t, t.Name(), []vstreamclient.TableConfig{{
-		Keyspace:        "customer",
-		Table:           "customer",
-		Query:           "select * from customer where id between 2600 and 2699",
-		MaxRowsPerFlush: 10,
-		DataType:        &Customer{},
-		FlushFn:         func(_ context.Context, _ []vstreamclient.Row, _ vstreamclient.FlushMeta) error { return nil },
-	}},
+	vstreamClient := te.newDefaultClient(
+		t, t.Name(), []vstreamclient.TableConfig{{
+			Keyspace:        "customer",
+			Table:           "customer",
+			Query:           "select * from customer where id between 2600 and 2699",
+			MaxRowsPerFlush: 10,
+			DataType:        &Customer{},
+			FlushFn:         func(_ context.Context, _ []vstreamclient.Row, _ vstreamclient.FlushMeta) error { return nil },
+		}},
 		vstreamclient.WithMinFlushDuration(10*time.Second),
 		vstreamclient.WithHeartbeatSeconds(5),
 		vstreamclient.WithGracefulShutdownChan(shutdownCh, 6*time.Second),
@@ -60,12 +61,8 @@ func TestVStreamClientGracefulShutdownChanStopsActiveRun(t *testing.T) {
 
 	te.exec(t, "insert into customer.customer(id, email) values (2601, 'graceful-chan@domain.com')", nil)
 
-	runCtx, cancelRun, runErrCh := te.runAsync(vstreamClient, 5*time.Second)
-	select {
-	case <-rowSeen:
-	case <-time.After(3 * time.Second):
-		t.Fatal("timed out waiting for row event")
-	}
+	runCtx, cancelRun, runErrCh := te.runAsync(vstreamClient, 30*time.Second)
+	recvOrFail(t, rowSeen, "row event")
 	close(shutdownCh)
 
 	err := <-runErrCh
@@ -87,14 +84,15 @@ func TestVStreamClientGracefulShutdownChanStopsOnThresholdFlush(t *testing.T) {
 
 	rowSeen := make(chan struct{}, 1)
 	shutdownCh := make(chan struct{})
-	vstreamClient := te.newDefaultClient(t, t.Name(), []vstreamclient.TableConfig{{
-		Keyspace:        "customer",
-		Table:           "customer",
-		Query:           "select * from customer where id between 2650 and 2699",
-		MaxRowsPerFlush: 1,
-		DataType:        &Customer{},
-		FlushFn:         func(_ context.Context, _ []vstreamclient.Row, _ vstreamclient.FlushMeta) error { return nil },
-	}},
+	vstreamClient := te.newDefaultClient(
+		t, t.Name(), []vstreamclient.TableConfig{{
+			Keyspace:        "customer",
+			Table:           "customer",
+			Query:           "select * from customer where id between 2650 and 2699",
+			MaxRowsPerFlush: 1,
+			DataType:        &Customer{},
+			FlushFn:         func(_ context.Context, _ []vstreamclient.Row, _ vstreamclient.FlushMeta) error { return nil },
+		}},
 		vstreamclient.WithMinFlushDuration(10*time.Second),
 		vstreamclient.WithHeartbeatSeconds(5),
 		vstreamclient.WithGracefulShutdownChan(shutdownCh, 5*time.Second),
@@ -109,13 +107,9 @@ func TestVStreamClientGracefulShutdownChanStopsOnThresholdFlush(t *testing.T) {
 
 	te.exec(t, "insert into customer.customer(id, email) values (2651, 'threshold-shutdown@domain.com')", nil)
 
-	runCtx, cancelRun, runErrCh := te.runAsync(vstreamClient, time.Second)
+	runCtx, cancelRun, runErrCh := te.runAsync(vstreamClient, 30*time.Second)
 	defer cancelRun()
-	select {
-	case <-rowSeen:
-	case <-time.After(3 * time.Second):
-		t.Fatal("timed out waiting for row event")
-	}
+	recvOrFail(t, rowSeen, "row event")
 	close(shutdownCh)
 
 	err := <-runErrCh
@@ -169,24 +163,25 @@ func TestVStreamClientGracefulShutdownClosesMultiTableClient(t *testing.T) {
 	var rowTables []string
 	rowTableSeen := make(chan string, 4)
 	newClient := func() *vstreamclient.VStreamClient {
-		return te.newDefaultClient(t, t.Name(), []vstreamclient.TableConfig{
-			{
-				Keyspace:        "customer",
-				Table:           "customer",
-				Query:           "select * from customer where id between 1950 and 1959",
-				MaxRowsPerFlush: 100,
-				DataType:        &Customer{},
-				FlushFn:         func(_ context.Context, _ []vstreamclient.Row, _ vstreamclient.FlushMeta) error { return nil },
+		return te.newDefaultClient(
+			t, t.Name(), []vstreamclient.TableConfig{
+				{
+					Keyspace:        "customer",
+					Table:           "customer",
+					Query:           "select * from customer where id between 1950 and 1959",
+					MaxRowsPerFlush: 100,
+					DataType:        &Customer{},
+					FlushFn:         func(_ context.Context, _ []vstreamclient.Row, _ vstreamclient.FlushMeta) error { return nil },
+				},
+				{
+					Keyspace:        "customer",
+					Table:           "purchases",
+					Query:           "select * from purchases where id between 1950 and 1959",
+					MaxRowsPerFlush: 100,
+					DataType:        &Order{},
+					FlushFn:         func(_ context.Context, _ []vstreamclient.Row, _ vstreamclient.FlushMeta) error { return nil },
+				},
 			},
-			{
-				Keyspace:        "customer",
-				Table:           "purchases",
-				Query:           "select * from purchases where id between 1950 and 1959",
-				MaxRowsPerFlush: 100,
-				DataType:        &Order{},
-				FlushFn:         func(_ context.Context, _ []vstreamclient.Row, _ vstreamclient.FlushMeta) error { return nil },
-			},
-		},
 			vstreamclient.WithMinFlushDuration(10*time.Second),
 			vstreamclient.WithHeartbeatSeconds(5),
 			vstreamclient.WithEventFunc(func(_ context.Context, ev *binlogdatapb.VEvent) error {
@@ -204,9 +199,9 @@ func TestVStreamClientGracefulShutdownClosesMultiTableClient(t *testing.T) {
 	te.exec(t, "insert into customer.purchases(id, customer_id, note) values (1950, 1950, 'close-prime-order')", nil)
 
 	vstreamClient := newClient()
-	_, cancelRun, runErrCh := te.runAsync(vstreamClient, 5*time.Second)
+	_, cancelRun, runErrCh := te.runAsync(vstreamClient, 30*time.Second)
 	seen := map[string]bool{}
-	deadline := time.After(3 * time.Second)
+	deadline := time.After(30 * time.Second)
 	for !(seen["customer.customer"] && seen["customer.purchases"]) {
 		select {
 		case tableName := <-rowTableSeen:
@@ -229,31 +224,61 @@ func TestVStreamClientGracefulShutdownClosesMultiTableClient(t *testing.T) {
 	assert.ElementsMatch(t, []string{"customer.customer", "customer.purchases"}, rowTables)
 }
 
+// replayAfterShutdown inserts a sentinel row and runs a fresh client until the sentinel arrives.
+// Binlog order guarantees the tested row would be delivered before the sentinel, so once the
+// sentinel shows up, whether the tested row replayed is already decided — no timing window needed
+// for the negative cases.
+func replayAfterShutdown(t *testing.T, te *testEnv, newClient func(int, vstreamclient.FlushFunc, ...vstreamclient.Option) *vstreamclient.VStreamClient, sentinel *Customer) []*Customer {
+	t.Helper()
+
+	te.exec(t, "insert into customer.customer(id, email) values(:id, :email)", customerBindVars(sentinel.ID, sentinel.Email))
+
+	var replayed []*Customer
+	var sentinelSeen atomic.Bool
+	client := newClient(1, func(_ context.Context, rows []vstreamclient.Row, _ vstreamclient.FlushMeta) error {
+		for _, row := range rows {
+			customer := row.Data.(*Customer)
+			replayed = append(replayed, customer)
+			if customer.ID == sentinel.ID {
+				sentinelSeen.Store(true)
+			}
+		}
+		return nil
+	})
+
+	te.runUntil(t, client, sentinelSeen.Load)
+	return replayed
+}
+
 func TestVStreamClientGracefulShutdownReplayMatrix(t *testing.T) {
 	testCases := []struct {
 		name       string
 		streamName string
 		id         int64
-		run        func(t *testing.T, te *testEnv, newClient func(int, vstreamclient.FlushFunc, ...vstreamclient.Option) *vstreamclient.VStreamClient, want *Customer)
+		run        func(t *testing.T, te *testEnv, newClient func(int, vstreamclient.FlushFunc, ...vstreamclient.Option) *vstreamclient.VStreamClient, want, sentinel *Customer)
 	}{
 		{
 			name:       "before safe boundary replays",
 			streamName: "shutdown_before_boundary",
 			id:         3001,
-			run: func(t *testing.T, te *testEnv, newClient func(int, vstreamclient.FlushFunc, ...vstreamclient.Option) *vstreamclient.VStreamClient, want *Customer) {
+			run: func(t *testing.T, te *testEnv, newClient func(int, vstreamclient.FlushFunc, ...vstreamclient.Option) *vstreamclient.VStreamClient, want, sentinel *Customer) {
 				var client *vstreamclient.VStreamClient
 				flushCount := 0
-				client = newClient(10, func(_ context.Context, rows []vstreamclient.Row, _ vstreamclient.FlushMeta) error {
-					flushCount += len(rows)
-					return nil
-				},
+				client = newClient(
+					10, func(_ context.Context, rows []vstreamclient.Row, _ vstreamclient.FlushMeta) error {
+						flushCount += len(rows)
+						return nil
+					},
 					vstreamclient.WithEventFunc(func(_ context.Context, _ *binlogdatapb.VEvent) error {
+						// the hook runs on the event loop, so this GracefulShutdown call blocks
+						// event processing until the wait expires; the cancel therefore always
+						// lands before the transaction's COMMIT can trigger a flush
 						client.GracefulShutdown(100 * time.Millisecond)
 						return nil
 					}, binlogdatapb.VEventType_ROW),
 				)
 
-				runCtx, cancelRun, runErrCh := te.runAsync(client, 5*time.Second)
+				runCtx, cancelRun, runErrCh := te.runAsync(client, 30*time.Second)
 				defer cancelRun()
 				te.exec(t, "insert into customer.customer(id, email) values(:id, :email)", customerBindVars(want.ID, want.Email))
 
@@ -262,22 +287,16 @@ func TestVStreamClientGracefulShutdownReplayMatrix(t *testing.T) {
 				assert.ErrorIs(t, err, context.Canceled)
 				assert.Zero(t, flushCount)
 
-				var replayed []*Customer
-				te.runUntilTimeout(t, newClient(1, func(_ context.Context, rows []vstreamclient.Row, _ vstreamclient.FlushMeta) error {
-					for _, row := range rows {
-						replayed = append(replayed, row.Data.(*Customer))
-					}
-					return nil
-				}), 2*time.Second)
-				assert.Equal(t, []*Customer{want}, replayed)
+				replayed := replayAfterShutdown(t, te, newClient, sentinel)
+				assert.Equal(t, []*Customer{want, sentinel}, replayed)
 				_ = runCtx
 			},
 		},
 		{
 			name:       "after safe boundary does not replay",
 			streamName: "shutdown_after_boundary",
-			id:         3002,
-			run: func(t *testing.T, te *testEnv, newClient func(int, vstreamclient.FlushFunc, ...vstreamclient.Option) *vstreamclient.VStreamClient, want *Customer) {
+			id:         3011,
+			run: func(t *testing.T, te *testEnv, newClient func(int, vstreamclient.FlushFunc, ...vstreamclient.Option) *vstreamclient.VStreamClient, want, sentinel *Customer) {
 				flushSeen := make(chan struct{}, 1)
 				var active []*Customer
 				client := newClient(1, func(_ context.Context, rows []vstreamclient.Row, _ vstreamclient.FlushMeta) error {
@@ -291,16 +310,12 @@ func TestVStreamClientGracefulShutdownReplayMatrix(t *testing.T) {
 					return nil
 				})
 
-				runCtx, cancelRun, runErrCh := te.runAsync(client, 5*time.Second)
+				runCtx, cancelRun, runErrCh := te.runAsync(client, 30*time.Second)
 				defer cancelRun()
 				te.exec(t, "insert into customer.customer(id, email) values(:id, :email)", customerBindVars(want.ID, want.Email))
 
-				select {
-				case <-flushSeen:
-				case <-time.After(3 * time.Second):
-					t.Fatal("timed out waiting for flush")
-				}
-				go client.GracefulShutdown(2 * time.Second)
+				recvOrFail(t, flushSeen, "flush")
+				go client.GracefulShutdown(15 * time.Second)
 
 				err := <-runErrCh
 				if err != nil && !errors.Is(err, context.Canceled) && !isExpectedRunStop(err, runCtx) {
@@ -308,22 +323,17 @@ func TestVStreamClientGracefulShutdownReplayMatrix(t *testing.T) {
 				}
 				assert.Equal(t, []*Customer{want}, active)
 
-				var replayed []*Customer
-				te.runUntilTimeout(t, newClient(1, func(_ context.Context, rows []vstreamclient.Row, _ vstreamclient.FlushMeta) error {
-					for _, row := range rows {
-						replayed = append(replayed, row.Data.(*Customer))
-					}
-					return nil
-				}), 2*time.Second)
-				assert.Empty(t, replayed)
+				replayed := replayAfterShutdown(t, te, newClient, sentinel)
+				assert.Equal(t, []*Customer{sentinel}, replayed)
 			},
 		},
 		{
 			name:       "during slow flush does not replay",
 			streamName: "shutdown_slow_flush",
-			id:         3003,
-			run: func(t *testing.T, te *testEnv, newClient func(int, vstreamclient.FlushFunc, ...vstreamclient.Option) *vstreamclient.VStreamClient, want *Customer) {
+			id:         3021,
+			run: func(t *testing.T, te *testEnv, newClient func(int, vstreamclient.FlushFunc, ...vstreamclient.Option) *vstreamclient.VStreamClient, want, sentinel *Customer) {
 				flushStarted := make(chan struct{}, 1)
+				flushGate := make(chan struct{})
 				var client *vstreamclient.VStreamClient
 				var active []*Customer
 				client = newClient(1, func(_ context.Context, rows []vstreamclient.Row, _ vstreamclient.FlushMeta) error {
@@ -331,28 +341,26 @@ func TestVStreamClientGracefulShutdownReplayMatrix(t *testing.T) {
 					case flushStarted <- struct{}{}:
 					default:
 					}
-					time.Sleep(300 * time.Millisecond)
+					// block the flush until the test has issued GracefulShutdown, so the
+					// shutdown request lands while this flush is still in progress
+					<-flushGate
 					for _, row := range rows {
 						active = append(active, row.Data.(*Customer))
 					}
 					return nil
-				},
-					vstreamclient.WithEventFunc(func(_ context.Context, _ *binlogdatapb.VEvent) error {
-						go client.GracefulShutdown(2 * time.Second)
-						time.Sleep(50 * time.Millisecond)
-						return nil
-					}, binlogdatapb.VEventType_ROW),
-				)
+				})
 
-				runCtx, cancelRun, runErrCh := te.runAsync(client, 5*time.Second)
+				runCtx, cancelRun, runErrCh := te.runAsync(client, 30*time.Second)
 				defer cancelRun()
 				te.exec(t, "insert into customer.customer(id, email) values(:id, :email)", customerBindVars(want.ID, want.Email))
 
-				select {
-				case <-flushStarted:
-				case <-time.After(3 * time.Second):
-					t.Fatal("timed out waiting for slow flush")
-				}
+				recvOrFail(t, flushStarted, "slow flush start")
+				go client.GracefulShutdown(15 * time.Second)
+				// give the GracefulShutdown goroutine time to record the shutdown request before
+				// the flush resumes; if it ever lost this race, the case would degrade to
+				// "after safe boundary", which expects the same outcome
+				time.Sleep(500 * time.Millisecond)
+				close(flushGate)
 
 				err := <-runErrCh
 				if err != nil && !errors.Is(err, context.Canceled) && !isExpectedRunStop(err, runCtx) {
@@ -360,34 +368,29 @@ func TestVStreamClientGracefulShutdownReplayMatrix(t *testing.T) {
 				}
 				assert.Equal(t, []*Customer{want}, active)
 
-				var replayed []*Customer
-				te.runUntilTimeout(t, newClient(1, func(_ context.Context, rows []vstreamclient.Row, _ vstreamclient.FlushMeta) error {
-					for _, row := range rows {
-						replayed = append(replayed, row.Data.(*Customer))
-					}
-					return nil
-				}), 2*time.Second)
-				assert.Empty(t, replayed)
+				replayed := replayAfterShutdown(t, te, newClient, sentinel)
+				assert.Equal(t, []*Customer{sentinel}, replayed)
 			},
 		},
 		{
 			name:       "wait zero replays",
 			streamName: "shutdown_wait_zero",
-			id:         3004,
-			run: func(t *testing.T, te *testEnv, newClient func(int, vstreamclient.FlushFunc, ...vstreamclient.Option) *vstreamclient.VStreamClient, want *Customer) {
+			id:         3031,
+			run: func(t *testing.T, te *testEnv, newClient func(int, vstreamclient.FlushFunc, ...vstreamclient.Option) *vstreamclient.VStreamClient, want, sentinel *Customer) {
 				var client *vstreamclient.VStreamClient
 				flushCount := 0
-				client = newClient(10, func(_ context.Context, rows []vstreamclient.Row, _ vstreamclient.FlushMeta) error {
-					flushCount += len(rows)
-					return nil
-				},
+				client = newClient(
+					10, func(_ context.Context, rows []vstreamclient.Row, _ vstreamclient.FlushMeta) error {
+						flushCount += len(rows)
+						return nil
+					},
 					vstreamclient.WithEventFunc(func(_ context.Context, _ *binlogdatapb.VEvent) error {
 						client.GracefulShutdown(0)
 						return nil
 					}, binlogdatapb.VEventType_ROW),
 				)
 
-				runCtx, cancelRun, runErrCh := te.runAsync(client, 5*time.Second)
+				runCtx, cancelRun, runErrCh := te.runAsync(client, 30*time.Second)
 				defer cancelRun()
 				te.exec(t, "insert into customer.customer(id, email) values(:id, :email)", customerBindVars(want.ID, want.Email))
 
@@ -396,14 +399,8 @@ func TestVStreamClientGracefulShutdownReplayMatrix(t *testing.T) {
 				assert.ErrorIs(t, err, context.Canceled)
 				assert.Zero(t, flushCount)
 
-				var replayed []*Customer
-				te.runUntilTimeout(t, newClient(1, func(_ context.Context, rows []vstreamclient.Row, _ vstreamclient.FlushMeta) error {
-					for _, row := range rows {
-						replayed = append(replayed, row.Data.(*Customer))
-					}
-					return nil
-				}), 2*time.Second)
-				assert.Equal(t, []*Customer{want}, replayed)
+				replayed := replayAfterShutdown(t, te, newClient, sentinel)
+				assert.Equal(t, []*Customer{want, sentinel}, replayed)
 				_ = runCtx
 			},
 		},
@@ -413,7 +410,8 @@ func TestVStreamClientGracefulShutdownReplayMatrix(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			te := newTestEnv(t)
 			want := &Customer{ID: tc.id, Email: tc.streamName + "@domain.com"}
-			query := fmt.Sprintf("select * from customer where id between %d and %d", tc.id, tc.id)
+			sentinel := &Customer{ID: tc.id + 1, Email: tc.streamName + "-sentinel@domain.com"}
+			query := fmt.Sprintf("select * from customer where id between %d and %d", tc.id, tc.id+1)
 
 			newClient := func(maxRows int, flushFn vstreamclient.FlushFunc, opts ...vstreamclient.Option) *vstreamclient.VStreamClient {
 				return te.newDefaultClient(t, tc.streamName, []vstreamclient.TableConfig{{
@@ -429,8 +427,8 @@ func TestVStreamClientGracefulShutdownReplayMatrix(t *testing.T) {
 				}, opts...)...)
 			}
 
-			te.runUntilTimeout(t, newClient(1, func(_ context.Context, _ []vstreamclient.Row, _ vstreamclient.FlushMeta) error { return nil }), 2*time.Second)
-			tc.run(t, te, newClient, want)
+			te.runUntilCopyCompleted(t, newClient(1, func(_ context.Context, _ []vstreamclient.Row, _ vstreamclient.FlushMeta) error { return nil }), tc.streamName)
+			tc.run(t, te, newClient, want, sentinel)
 		})
 	}
 }

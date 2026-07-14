@@ -19,6 +19,7 @@ package vstreamclient
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -66,19 +67,21 @@ func TestVStreamClientResumesFromCheckpoint(t *testing.T) {
 		}
 		return nil
 	})
-	te.runUntilTimeout(t, firstClient, 2*time.Second)
+	te.runUntilCopyCompleted(t, firstClient, streamName)
 	assert.ElementsMatch(t, firstBatch, firstRunCustomers)
 
 	insertCustomers(secondBatch)
 
 	var secondRunCustomers []*Customer
+	var secondRunRows atomic.Int64
 	secondClient := newClient(func(_ context.Context, rows []vstreamclient.Row, _ vstreamclient.FlushMeta) error {
 		for _, row := range rows {
 			secondRunCustomers = append(secondRunCustomers, row.Data.(*Customer))
 		}
+		secondRunRows.Add(int64(len(rows)))
 		return nil
 	})
-	te.runUntilTimeout(t, secondClient, 2*time.Second)
+	te.runUntil(t, secondClient, func() bool { return secondRunRows.Load() >= int64(len(secondBatch)) })
 	assert.ElementsMatch(t, secondBatch, secondRunCustomers)
 }
 
@@ -99,7 +102,7 @@ func TestVStreamClientResumesUpdateDeleteFromCheckpoint(t *testing.T) {
 	}
 
 	te.exec(t, "insert into customer.customer(id, email) values (801, 'restart-update@domain.com'), (802, 'restart-delete@domain.com')", nil)
-	te.runUntilTimeout(t, newClient(func(_ context.Context, _ []vstreamclient.Row, _ vstreamclient.FlushMeta) error { return nil }), 2*time.Second)
+	te.runUntilCopyCompleted(t, newClient(func(_ context.Context, _ []vstreamclient.Row, _ vstreamclient.FlushMeta) error { return nil }), t.Name())
 
 	te.exec(t, "update customer.customer set email = 'restart-update-new@domain.com' where id = 801", nil)
 	te.exec(t, "delete from customer.customer where id = 802", nil)
@@ -110,14 +113,16 @@ func TestVStreamClientResumesUpdateDeleteFromCheckpoint(t *testing.T) {
 		Deleted bool
 	}
 	var got []mutation
+	var mutationsSeen atomic.Int64
 	client := newClient(func(_ context.Context, rows []vstreamclient.Row, _ vstreamclient.FlushMeta) error {
 		for _, row := range rows {
 			customer := row.Data.(*Customer)
 			got = append(got, mutation{ID: customer.ID, Email: customer.Email, Deleted: row.RowChange.After == nil})
 		}
+		mutationsSeen.Add(int64(len(rows)))
 		return nil
 	})
-	te.runUntilTimeout(t, client, 2*time.Second)
+	te.runUntil(t, client, func() bool { return mutationsSeen.Load() >= 2 })
 
 	assert.ElementsMatch(t, []mutation{{ID: 801, Email: "restart-update-new@domain.com", Deleted: false}, {ID: 802, Email: "restart-delete@domain.com", Deleted: true}}, got)
 }
@@ -147,7 +152,8 @@ func TestVStreamClientRestartsInterruptedCopy(t *testing.T) {
 		}, binlogdatapb.VEventType_COPY_COMPLETED),
 	)
 
-	runCtx, cancelRun := context.WithTimeout(context.Background(), 2*time.Second)
+	// the run self-terminates when the hook error fires; the deadline is only a generous cap
+	runCtx, cancelRun := context.WithTimeout(context.Background(), 30*time.Second)
 	err := interruptedClient.Run(runCtx)
 	cancelRun()
 	require.Error(t, err)
@@ -168,7 +174,7 @@ func TestVStreamClientRestartsInterruptedCopy(t *testing.T) {
 		},
 	}})
 
-	te.runUntilTimeout(t, restartedClient, 2*time.Second)
+	te.runUntilCopyCompleted(t, restartedClient, t.Name())
 	assert.ElementsMatch(t, []*Customer{{ID: 1101, Email: "copy-a@domain.com"}, {ID: 1102, Email: "copy-b@domain.com"}, {ID: 1103, Email: "copy-c@domain.com"}}, got)
 }
 
@@ -192,7 +198,7 @@ func TestVStreamClientReplaysRowsWhenCheckpointWriteFails(t *testing.T) {
 
 	// Finish the initial copy first so the replay we observe comes from a failed
 	// post-copy checkpoint write, not from an interrupted bootstrap copy.
-	te.runUntilTimeout(t, newClient(func(_ context.Context, _ []vstreamclient.Row, _ vstreamclient.FlushMeta) error { return nil }), 2*time.Second)
+	te.runUntilCopyCompleted(t, newClient(func(_ context.Context, _ []vstreamclient.Row, _ vstreamclient.FlushMeta) error { return nil }), streamName)
 
 	want := &Customer{ID: 1761, Email: "checkpoint-replay@domain.com"}
 	te.exec(t, "insert into customer.customer(id, email) values(:id, :email)", customerBindVars(want.ID, want.Email))
@@ -210,12 +216,15 @@ func TestVStreamClientReplaysRowsWhenCheckpointWriteFails(t *testing.T) {
 		return nil
 	})
 
-	runCtx, cancelRun := context.WithTimeout(context.Background(), 2*time.Second)
+	// the run self-terminates when the checkpoint write fails; the deadline is only a generous cap
+	runCtx, cancelRun := context.WithTimeout(context.Background(), 30*time.Second)
 	err := failingClient.Run(runCtx)
 	cancelRun()
 	require.ErrorIs(t, err, vstreamclient.ErrFenced)
 	assert.Equal(t, []*Customer{want}, firstRun)
 
+	// the failing FlushFn deleted the state row, so this client bootstraps a fresh copy that
+	// replays the flushed-but-uncheckpointed row
 	var replayed []*Customer
 	replayClient := newClient(func(_ context.Context, rows []vstreamclient.Row, _ vstreamclient.FlushMeta) error {
 		for _, row := range rows {
@@ -224,7 +233,7 @@ func TestVStreamClientReplaysRowsWhenCheckpointWriteFails(t *testing.T) {
 		return nil
 	})
 
-	te.runUntilTimeout(t, replayClient, 2*time.Second)
+	te.runUntilCopyCompleted(t, replayClient, streamName)
 	assert.Equal(t, []*Customer{want}, replayed)
 }
 
@@ -245,19 +254,27 @@ func TestVStreamClientStartingVGtidOverridesState(t *testing.T) {
 	}
 
 	te.exec(t, "insert into customer.customer(id, email) values (1501, 'override-a@domain.com')", nil)
-	te.runUntilTimeout(t, newClient(func(_ context.Context, _ []vstreamclient.Row, _ vstreamclient.FlushMeta) error { return nil }), 2*time.Second)
+	te.runUntilCopyCompleted(t, newClient(func(_ context.Context, _ []vstreamclient.Row, _ vstreamclient.FlushMeta) error { return nil }), t.Name())
 	vgtid1 := queryLatestVGtid(t, te.ctx, te.session, t.Name())
 
+	// this run advances the stored checkpoint past the second insert, so the replay below can
+	// only observe it because the explicit starting VGtid overrides stored state
 	te.exec(t, "insert into customer.customer(id, email) values (1502, 'override-b@domain.com')", nil)
-	te.runUntilTimeout(t, newClient(func(_ context.Context, _ []vstreamclient.Row, _ vstreamclient.FlushMeta) error { return nil }), 2*time.Second)
+	var advanceRows atomic.Int64
+	te.runUntil(t, newClient(func(_ context.Context, rows []vstreamclient.Row, _ vstreamclient.FlushMeta) error {
+		advanceRows.Add(int64(len(rows)))
+		return nil
+	}), func() bool { return advanceRows.Load() >= 1 })
 
 	var replayed []*Customer
-	te.runUntilTimeout(t, newClient(func(_ context.Context, rows []vstreamclient.Row, _ vstreamclient.FlushMeta) error {
+	var replayedRows atomic.Int64
+	te.runUntil(t, newClient(func(_ context.Context, rows []vstreamclient.Row, _ vstreamclient.FlushMeta) error {
 		for _, row := range rows {
 			replayed = append(replayed, row.Data.(*Customer))
 		}
+		replayedRows.Add(int64(len(rows)))
 		return nil
-	}, vstreamclient.WithStartingVGtid(vgtid1)), 2*time.Second)
+	}, vstreamclient.WithStartingVGtid(vgtid1)), func() bool { return replayedRows.Load() >= 1 })
 
 	assert.Equal(t, []*Customer{{ID: 1502, Email: "override-b@domain.com"}}, replayed)
 }
