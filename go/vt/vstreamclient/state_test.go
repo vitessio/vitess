@@ -178,6 +178,7 @@ func TestNew_RestartTableConfigMismatchErrors(t *testing.T) {
 			Rows:   [][]sqltypes.Value{{sqltypes.NewVarBinary("ks/0")}},
 		}},
 		stateExecuteResponse{result: &sqltypes.Result{RowsAffected: 1}},
+		stateExecuteResponse{result: &sqltypes.Result{RowsAffected: 1}},
 		stateExecuteResponse{result: stateRowResult(
 			sqltypes.NewVarBinary(string(vgtidJSON)),
 			sqltypes.NewVarBinary(`{"ks.t":{"Keyspace":"ks","Table":"t","Query":"select * from t where id < 10"}}`),
@@ -211,6 +212,7 @@ func TestNew_ResumeThenIdleFlushSkipsCheckpointWrite(t *testing.T) {
 			Rows:   [][]sqltypes.Value{{sqltypes.NewVarBinary("ks/0")}},
 		}},
 		stateExecuteResponse{result: &sqltypes.Result{RowsAffected: 1}},
+		stateExecuteResponse{result: &sqltypes.Result{RowsAffected: 1}},
 		stateExecuteResponse{result: stateRowResult(
 			sqltypes.NewVarBinary(string(vgtidJSON)),
 			sqltypes.NewVarBinary(`{"ks.t":{"Keyspace":"ks","Table":"t","Query":"select * from t"}}`),
@@ -237,14 +239,66 @@ func TestNew_ResumeThenIdleFlushSkipsCheckpointWrite(t *testing.T) {
 	assert.Len(t, impl.queries, queriesAfterNew)
 }
 
+func TestNew_ClaimsStateOwnershipBeforeReadingState(t *testing.T) {
+	vgtidJSON, err := protojson.Marshal(&binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/1"}},
+	})
+	require.NoError(t, err)
+
+	conn, impl := newStateTestConn(
+		t,
+		stateExecuteResponse{result: &sqltypes.Result{
+			Fields: []*querypb.Field{{Name: "shard", Type: querypb.Type_VARCHAR}},
+			Rows:   [][]sqltypes.Value{{sqltypes.NewVarBinary("ks/0")}},
+		}},
+		stateExecuteResponse{result: &sqltypes.Result{RowsAffected: 1}},
+		stateExecuteResponse{result: &sqltypes.Result{RowsAffected: 1}},
+		stateExecuteResponse{result: stateRowResult(
+			sqltypes.NewVarBinary(string(vgtidJSON)),
+			sqltypes.NewVarBinary(`{"ks.t":{"Keyspace":"ks","Table":"t","Query":"select * from t"}}`),
+			sqltypes.NewInt64(1),
+		)},
+	)
+
+	v, err := New(context.Background(), "stream", conn, []TableConfig{{
+		Keyspace:        "ks",
+		Table:           "t",
+		Query:           "select * from t",
+		MaxRowsPerFlush: 1,
+		DataType:        &testRowSmall{},
+		FlushFn:         func(context.Context, []Row, FlushMeta) error { return nil },
+	}}, WithStateTable("ks", "state"))
+	require.NoError(t, err)
+
+	// the ownership claim must run after the state table is created and before state is read,
+	// so a concurrent client with the same name is fenced before we decide where to resume
+	require.GreaterOrEqual(t, len(impl.queries), 4)
+	assert.Contains(t, impl.queries[2], "set owner_token = :owner_token")
+	claimToken := impl.bindVars[2]["owner_token"].Value
+	assert.NotEmpty(t, claimToken)
+	assert.Contains(t, impl.queries[3], "select latest_vgtid")
+
+	// checkpoint writes must carry the same token the client claimed with
+	v.latestVgtid = &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/2"}},
+	}
+	err = v.flush(context.Background(), false)
+	require.NoError(t, err)
+
+	lastIdx := len(impl.queries) - 1
+	assert.Contains(t, impl.queries[lastIdx], "owner_token = :owner_token")
+	assert.Equal(t, claimToken, impl.bindVars[lastIdx]["owner_token"].Value)
+}
+
 func TestUpdateLatestVGtid_MissingStateRowErrors(t *testing.T) {
 	session, impl := newStateTestSession(t, stateExecuteResponse{result: &sqltypes.Result{RowsAffected: 0}})
 
-	err := updateLatestVGtid(context.Background(), session, "stream", "ks", "state", &binlogdatapb.VGtid{}, false)
-	require.Error(t, err)
-	assert.ErrorContains(t, err, "unexpected number of rows affected")
+	err := updateLatestVGtid(context.Background(), session, "stream", "ks", "state", "token-a", &binlogdatapb.VGtid{}, false)
+	require.ErrorIs(t, err, ErrFenced)
 	require.Len(t, impl.queries, 1)
 	assert.NotContains(t, impl.queries[0], "copy_completed = true")
+	assert.Contains(t, impl.queries[0], "owner_token = :owner_token")
+	assert.Equal(t, []byte("token-a"), impl.bindVars[0]["owner_token"].Value)
 }
 
 func TestHandleEvents_FinalCopyCompletedPersistsCheckpointAndCopyCompletedTogether(t *testing.T) {
@@ -309,9 +363,9 @@ func TestHandleEvents_HeartbeatCheckpointsLatestVGtidWithoutRows(t *testing.T) {
 func TestUpdateLatestVGtid_CopyCompletedMissingStateRowErrors(t *testing.T) {
 	session, impl := newStateTestSession(t, stateExecuteResponse{result: &sqltypes.Result{RowsAffected: 0}})
 
-	err := updateLatestVGtid(context.Background(), session, "stream", "ks", "state", &binlogdatapb.VGtid{}, true)
-	require.Error(t, err)
-	assert.ErrorContains(t, err, "unexpected number of rows affected")
+	err := updateLatestVGtid(context.Background(), session, "stream", "ks", "state", "token-a", &binlogdatapb.VGtid{}, true)
+	require.ErrorIs(t, err, ErrFenced)
 	require.Len(t, impl.queries, 1)
 	assert.Contains(t, impl.queries[0], "copy_completed = true")
+	assert.Contains(t, impl.queries[0], "owner_token = :owner_token")
 }

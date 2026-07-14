@@ -565,7 +565,7 @@ func (v *VStreamClient) flush(ctx context.Context, isCopyCompleted bool) error {
 	// but skip the update if the vgtid hasn't changed and we're not setting copy_completed,
 	// because MySQL will return RowsAffected=0 for an UPDATE that doesn't change any columns
 	if isCopyCompleted || !proto.Equal(v.lastFlushedVgtid, v.latestVgtid) {
-		err := updateLatestVGtid(ctx, v.session, v.cfg.name, v.cfg.vgtidStateKeyspace, v.cfg.vgtidStateTable, v.latestVgtid, isCopyCompleted)
+		err := updateLatestVGtid(ctx, v.session, v.cfg.name, v.cfg.vgtidStateKeyspace, v.cfg.vgtidStateTable, v.cfg.ownerToken, v.latestVgtid, isCopyCompleted)
 		if err != nil {
 			return err
 		}

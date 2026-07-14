@@ -188,6 +188,8 @@ The state table:
     - latest VGtid
     - stored table configuration
     - whether the initial copy phase completed
+    - the owner token of the most recent client instance, used to fence out older clients running
+      with the same stream name
 
 ### 3. Run the stream
 
@@ -708,6 +710,19 @@ event.
 
 `WithStateTable(...)` requires an unsharded keyspace. This package intentionally stores its state in a user-owned Vitess
 table rather than in `_vt`.
+
+### Run only one client per stream name
+
+Two clients running with the same stream name would interleave checkpoint writes, so the checkpoint could move
+backwards and cause large replays. To prevent that, `New(...)` claims ownership of the state row with a unique owner
+token, and every checkpoint write requires the token to still match.
+
+The newest client wins: when a new client starts (for example during a rolling deploy), the previous client's next
+checkpoint write fails and its `Run(...)` returns an error wrapping `ErrFenced`, which you can match with `errors.Is`.
+Rows the fenced client flushed after the newer client read its starting checkpoint may be replayed by the newer
+client — the usual at-least-once contract applies.
+
+If you want multiple concurrent consumers, use a distinct stream name for each.
 
 ### Table configuration is part of state
 

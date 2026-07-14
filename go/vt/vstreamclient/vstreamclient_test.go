@@ -113,6 +113,9 @@ func (t *newTestVTGateImpl) Execute(_ context.Context, session *vtgatepb.Session
 
 	case strings.HasPrefix(query, "insert into "):
 		return session, &sqltypes.Result{RowsAffected: 1}, nil
+
+	case strings.HasPrefix(query, "update ") && strings.Contains(query, "set owner_token = :owner_token"):
+		return session, &sqltypes.Result{RowsAffected: 1}, nil
 	}
 
 	return nil, nil, fmt.Errorf("unexpected Execute call: %s", query)
