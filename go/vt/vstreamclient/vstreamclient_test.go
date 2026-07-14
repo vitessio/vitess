@@ -129,7 +129,7 @@ func newConstructorTestConn(t *testing.T) *vtgateconn.VTGateConn {
 	return conn
 }
 
-func setLifecycleState(v *VStreamClient, runUsed, runActive, shutdownRequested bool, cancelRunCtxFn context.CancelFunc) {
+func setLifecycleState(v *VStreamClient, runUsed, runActive, shutdownRequested bool, cancelRunCtxFn context.CancelCauseFunc) {
 	v.lifecycle.mu.Lock()
 	defer v.lifecycle.mu.Unlock()
 	v.lifecycle.runUsed = runUsed
@@ -195,24 +195,25 @@ func TestNew_ValidatesName(t *testing.T) {
 func TestNew_RejectsAmbiguousBareTableNamesAcrossKeyspaces(t *testing.T) {
 	conn := newConstructorTestConn(t)
 
-	_, err := New(context.Background(), "test-stream", conn, []TableConfig{
-		{
-			Keyspace:        "customer",
-			Table:           "customer",
-			Query:           "select * from customer where id between 1 and 10",
-			MaxRowsPerFlush: 1,
-			DataType:        &testRowSmall{},
-			FlushFn:         func(context.Context, []Row, FlushMeta) error { return nil },
+	_, err := New(
+		context.Background(), "test-stream", conn, []TableConfig{
+			{
+				Keyspace:        "customer",
+				Table:           "customer",
+				Query:           "select * from customer where id between 1 and 10",
+				MaxRowsPerFlush: 1,
+				DataType:        &testRowSmall{},
+				FlushFn:         func(context.Context, []Row, FlushMeta) error { return nil },
+			},
+			{
+				Keyspace:        "accounting",
+				Table:           "customer",
+				Query:           "select * from customer where id between 1 and 10",
+				MaxRowsPerFlush: 1,
+				DataType:        &testRowSmall{},
+				FlushFn:         func(context.Context, []Row, FlushMeta) error { return nil },
+			},
 		},
-		{
-			Keyspace:        "accounting",
-			Table:           "customer",
-			Query:           "select * from customer where id between 1 and 10",
-			MaxRowsPerFlush: 1,
-			DataType:        &testRowSmall{},
-			FlushFn:         func(context.Context, []Row, FlushMeta) error { return nil },
-		},
-	},
 		WithStateTable("commerce", "vstreams"),
 		WithFlags(&vtgatepb.VStreamFlags{HeartbeatInterval: 1, ExcludeKeyspaceFromTableName: true}),
 	)
@@ -621,8 +622,8 @@ func TestGracefulShutdown_BeforeRunDoesNothing(t *testing.T) {
 
 func TestGracefulShutdown_CancelsActiveRunAfterWait(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+		ctx, cancel := context.WithCancelCause(context.Background())
+		defer cancel(nil)
 
 		v := &VStreamClient{}
 		setLifecycleState(v, true, true, false, cancel)
@@ -651,8 +652,8 @@ func TestGracefulShutdown_CancelsActiveRunAfterWait(t *testing.T) {
 }
 
 func TestMonitorHeartbeat_DoesNotShutdownBeforeFirstEvent(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx, cancel := context.WithCancelCause(context.Background())
+	defer cancel(nil)
 
 	v := &VStreamClient{
 		cfg: clientConfig{
@@ -679,7 +680,7 @@ func TestMonitorHeartbeat_DoesNotShutdownBeforeFirstEvent(t *testing.T) {
 	assert.NoError(t, ctx.Err())
 	assert.False(t, v.isShutdownRequested())
 
-	cancel()
+	cancel(nil)
 	assert.Eventually(t, func() bool {
 		select {
 		case <-done:
@@ -693,8 +694,8 @@ func TestMonitorHeartbeat_DoesNotShutdownBeforeFirstEvent(t *testing.T) {
 }
 
 func TestMonitorHeartbeat_ShutsDownWhenHeartbeatStopsAfterFirstEvent(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx, cancel := context.WithCancelCause(context.Background())
+	defer cancel(nil)
 
 	v := &VStreamClient{
 		cfg: clientConfig{
@@ -720,5 +721,64 @@ func TestMonitorHeartbeat_ShutsDownWhenHeartbeatStopsAfterFirstEvent(t *testing.
 		}
 	}, 2*time.Second, 100*time.Millisecond)
 	assert.ErrorIs(t, ctx.Err(), context.Canceled)
+	require.ErrorIs(t, context.Cause(ctx), ErrHeartbeatTimeout)
 	assert.True(t, v.isShutdownRequested())
+}
+
+func TestMonitorHeartbeat_StartupTimeoutShutsDownWithCause(t *testing.T) {
+	ctx, cancel := context.WithCancelCause(context.Background())
+	defer cancel(nil)
+
+	v := &VStreamClient{
+		cfg: clientConfig{
+			flags:                      DefaultFlags(),
+			gracefulShutdownWaitDur:    0,
+			startupTimeout:             100 * time.Millisecond,
+			heartbeatTimeoutMultiplier: DefaultHeartbeatTimeoutMultiplier,
+		},
+	}
+	setLifecycleState(v, true, true, false, cancel)
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		v.monitorHeartbeat(ctx)
+	}()
+
+	assert.Eventually(t, func() bool {
+		select {
+		case <-done:
+			return true
+		default:
+			return false
+		}
+	}, 5*time.Second, 50*time.Millisecond)
+	require.ErrorIs(t, ctx.Err(), context.Canceled)
+	require.ErrorIs(t, context.Cause(ctx), ErrStartupTimeout)
+	assert.True(t, v.isShutdownRequested())
+}
+
+func TestShouldExitRun_SurfacesCancelCause(t *testing.T) {
+	v := &VStreamClient{}
+	setLifecycleState(v, true, true, true, nil)
+
+	ctx, cancel := context.WithCancelCause(context.Background())
+	cancel(ErrHeartbeatTimeout)
+
+	shouldExit, err := v.shouldExitRun(ctx)
+	assert.True(t, shouldExit)
+	require.ErrorIs(t, err, ErrHeartbeatTimeout)
+}
+
+func TestShouldExitRun_PlainCancelReturnsContextError(t *testing.T) {
+	v := &VStreamClient{}
+	setLifecycleState(v, true, true, true, nil)
+
+	ctx, cancel := context.WithCancelCause(context.Background())
+	cancel(nil)
+
+	shouldExit, err := v.shouldExitRun(ctx)
+	assert.True(t, shouldExit)
+	require.ErrorIs(t, err, context.Canceled)
+	require.NotErrorIs(t, err, ErrHeartbeatTimeout)
 }

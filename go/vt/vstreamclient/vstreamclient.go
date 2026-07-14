@@ -88,6 +88,12 @@ type clientConfig struct {
 	heartbeatSeconds int
 	timeLocation     *time.Location
 
+	// startupTimeout is how long the client waits for the first event after Run starts before shutting
+	// itself down. heartbeatTimeoutMultiplier controls the liveness window after the first event, as a
+	// multiple of the heartbeat interval.
+	startupTimeout             time.Duration
+	heartbeatTimeoutMultiplier int
+
 	// these fields configure how graceful shutdown is configured
 	gracefulShutdownChan    <-chan struct{}
 	gracefulShutdownSignals []os.Signal
@@ -102,7 +108,7 @@ type lifecycleState struct {
 	runUsed           bool
 	runActive         bool
 	shutdownRequested bool
-	cancelRunCtxFn    context.CancelFunc
+	cancelRunCtxFn    context.CancelCauseFunc
 
 	gracefulShutdownFlushChan chan struct{}
 	gracefulShutdownFlushOnce sync.Once
@@ -144,12 +150,14 @@ func New(ctx context.Context, name string, conn *vtgateconn.VTGateConn, tables [
 	// initialize the VStreamClient, with options and settings to be set later
 	v := &VStreamClient{
 		cfg: clientConfig{
-			name:                    name,
-			conn:                    conn,
-			minFlushDuration:        DefaultMinFlushDuration,
-			timeLocation:            time.UTC,
-			tabletType:              topodatapb.TabletType_REPLICA,
-			gracefulShutdownWaitDur: DefaultGracefulShutdownWaitDur,
+			name:                       name,
+			conn:                       conn,
+			minFlushDuration:           DefaultMinFlushDuration,
+			timeLocation:               time.UTC,
+			tabletType:                 topodatapb.TabletType_REPLICA,
+			gracefulShutdownWaitDur:    DefaultGracefulShutdownWaitDur,
+			startupTimeout:             DefaultStartupTimeout,
+			heartbeatTimeoutMultiplier: DefaultHeartbeatTimeoutMultiplier,
 		},
 		session: conn.Session("", nil),
 		tables:  make(map[string]*TableConfig),
@@ -299,13 +307,19 @@ func resolveLatestVGtid(explicit, stored *binlogdatapb.VGtid) (*binlogdatapb.VGt
 // GracefulShutdown closes the client immediately. As with any completed Run attempt,
 // call New(...) to create a fresh client before running again.
 func (v *VStreamClient) GracefulShutdown(wait time.Duration) {
+	v.gracefulShutdownWithCause(wait, nil)
+}
+
+// gracefulShutdownWithCause is the internal implementation of GracefulShutdown. The cause, if not nil,
+// is recorded as the cancel cause of the Run context, so Run can surface why the stream was stopped.
+func (v *VStreamClient) gracefulShutdownWithCause(wait time.Duration, cause error) {
 	cancelRunCtxFn, gracefulShutdownFlushChan, ok := v.requestShutdown()
 	if !ok {
 		return
 	}
 
 	if wait == 0 {
-		cancelRunCtxFn()
+		cancelRunCtxFn(cause)
 		return
 	}
 
@@ -314,10 +328,10 @@ func (v *VStreamClient) GracefulShutdown(wait time.Duration) {
 	case <-gracefulShutdownFlushChan:
 	}
 
-	cancelRunCtxFn()
+	cancelRunCtxFn(cause)
 }
 
-func (v *VStreamClient) beginRun(cancelRunCtxFn context.CancelFunc) bool {
+func (v *VStreamClient) beginRun(cancelRunCtxFn context.CancelCauseFunc) bool {
 	v.lifecycle.mu.Lock()
 	defer v.lifecycle.mu.Unlock()
 	if v.lifecycle.runUsed {
@@ -340,7 +354,7 @@ func (v *VStreamClient) endRun() {
 	v.lifecycle.cancelRunCtxFn = nil
 }
 
-func (v *VStreamClient) requestShutdown() (context.CancelFunc, <-chan struct{}, bool) {
+func (v *VStreamClient) requestShutdown() (context.CancelCauseFunc, <-chan struct{}, bool) {
 	v.lifecycle.mu.Lock()
 	defer v.lifecycle.mu.Unlock()
 	if !v.lifecycle.runActive || v.lifecycle.shutdownRequested || v.lifecycle.cancelRunCtxFn == nil {
