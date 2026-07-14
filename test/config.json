@@ -1180,6 +1180,18 @@
       "Tags": [],
       "Needs": []
     },
+    "mysql_utils": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/utils"
+      ],
+      "Args": [],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vtgate_queries",
+      "Tags": [],
+      "Needs": []
+    },
     "vtgate_kill": {
       "File": "unused.go",
       "Packages": [
