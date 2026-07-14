@@ -1,0 +1,5407 @@
+{
+ "generated_at_sha": "6c2a5de687b126105376e34ffb3cf969ad8a1141",
+ "packages": {
+  "vitess.io/vitess/go/test/endtoend/backup/clone": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [
+      "-timeout",
+      "30m"
+     ],
+     "entry": "backup_clone",
+     "needs": [],
+     "shard": "21",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestCloneBackup",
+    "TestMain",
+    "TestCloneRestore"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/backup/clone",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/backup/clone/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/backup/mysqlctld": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [
+      "-timeout",
+      "30m"
+     ],
+     "entry": "backup_mysqlctld",
+     "needs": [
+      "minio"
+     ],
+     "shard": "21",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestBackupMysqlctld",
+    "TestBackupMysqlctldWithlz4Compression"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/backup/mysqlctld",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/backup/mysqlctld/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/backup/pitr": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [
+      "-timeout",
+      "30m"
+     ],
+     "entry": "backup_pitr",
+     "needs": [],
+     "shard": "backup_pitr",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestIncrementalBackupAndRestoreToPos",
+    "TestIncrementalBackupAndRestoreToTimestamp",
+    "TestIncrementalBackupOnTwoTablets"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/backup/pitr",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/backup/pitr/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/backup/pitr_mysqlshell": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [
+      "-timeout",
+      "30m"
+     ],
+     "entry": "backup_pitr_mysqlshell",
+     "needs": [],
+     "shard": "backup_pitr_mysqlshell",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestIncrementalBackupAndRestoreToPos",
+    "TestIncrementalBackupAndRestoreToTimestamp"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/backup/pitr_mysqlshell",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/backup/pitr_mysqlshell/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/backup/pitr_xtrabackup": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [
+      "-timeout",
+      "30m"
+     ],
+     "entry": "backup_pitr_xtrabackup",
+     "needs": [
+      "xtrabackup"
+     ],
+     "shard": "backup_pitr_xtrabackup",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestIncrementalBackupAndRestoreToPos",
+    "TestIncrementalBackupAndRestoreToTimestamp"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/backup/pitr_xtrabackup",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/backup/pitr_xtrabackup/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/backup/s3": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [
+      "-timeout",
+      "30m"
+     ],
+     "entry": "backup_s3",
+     "needs": [
+      "minio"
+     ],
+     "shard": "21",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestExecuteBackupS3FailEachFileOnce",
+    "TestExecuteBackupS3FailEachFileTwice",
+    "TestExecuteRestoreS3FailEachFileOnce",
+    "TestExecuteRestoreS3FailEachFileTwice"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/backup/s3",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/backup/s3/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/backup/vtbackup": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [
+      "-timeout",
+      "20m"
+     ],
+     "entry": "backup_only",
+     "needs": [],
+     "shard": "vtbackup",
+     "tags": [
+      "upgrade_downgrade_backups"
+     ]
+    }
+   ],
+   "old_test_funcs": [
+    "TestFailingReplication",
+    "TestTabletInitialBackup",
+    "TestTabletBackupOnly",
+    "TestMain"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/backup/vtbackup",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/backup/vtbackup/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/backup/vtctlbackup": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [
+      "-timeout",
+      "30m"
+     ],
+     "entry": "backup",
+     "needs": [
+      "limit-resources"
+     ],
+     "shard": "vtctlbackup_sharded_clustertest_heavy",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestBuiltinBackup",
+    "TestBuiltinBackupWithZstdCompression",
+    "TestBuiltinBackupWithExternalZstdCompression",
+    "TestBuiltinBackupWithExternalZstdCompressionAndManifestedDecompressor"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/backup/vtctlbackup",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/backup/vtctlbackup/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/backup/xtrabackup": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [
+      "-timeout",
+      "30m"
+     ],
+     "entry": "backup_xtrabackup",
+     "needs": [
+      "xtrabackup"
+     ],
+     "shard": "xb_backup",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestBackupEngineSelector",
+    "TestRestoreAllowedBackupEngines",
+    "TestXtrabackup",
+    "TestXtrabackupWithZstdCompression",
+    "TestXtrabackupWithExternalZstdCompression",
+    "TestXtrabackupWithExternalZstdCompressionAndManifestedDecompressor",
+    "TestDoNotDemoteNewlyPromotedPrimaryIfReparentingDuringBackup"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/backup/xtrabackup",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/backup/xtrabackup/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/backup/xtrabackupstream": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [
+      "-run",
+      "XtrabackupStream",
+      "-timeout",
+      "30m"
+     ],
+     "entry": "backup_xtrabackup_xbstream",
+     "needs": [
+      "xtrabackup"
+     ],
+     "shard": "xb_backup",
+     "tags": []
+    },
+    {
+     "args": [
+      "-run",
+      "XtrabackupStreamWithlz4Compression",
+      "-timeout",
+      "30m"
+     ],
+     "entry": "backup_xtrabackup_xbstream_lz4",
+     "needs": [
+      "xtrabackup"
+     ],
+     "shard": "xb_backup",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestXtrabackupStream",
+    "TestXtrabackupStreamWithlz4Compression"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/backup/xtrabackupstream",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/backup/xtrabackupstream/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/binlogdump": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [],
+   "old_test_funcs": [
+    "TestBinlogDumpGTID_Streaming",
+    "TestBinlogDumpGTID_NoTarget",
+    "TestBinlogDumpGTID_LargeEvent",
+    "TestBinlogDumpGTID_FromSpecificPosition",
+    "TestBinlogDumpGTID_InvalidFormat",
+    "TestBinlogDumpGTID_FuturePosition",
+    "TestBinlogDumpGTID_NonBlockEOF",
+    "TestBinlogDumpGTID_NonBlockWithPendingEvents",
+    "TestBinlogDumpGTID_BlockingMode",
+    "TestBinlogDumpGTID_DirectGRPC",
+    "TestBinlogDumpGTID_EmptyGTIDStartsFromBeginning",
+    "TestBinlogDumpGTID_ShardTargeting",
+    "TestBinlogDumpGTID_VTGateGRPC_Streaming",
+    "TestBinlogDumpGTID_VTGateGRPC_RejectsFilename",
+    "TestBinlogDumpGTID_VTGateGRPC_RejectsNonDefaultPosition",
+    "TestBinlogDumpGTID_VTGateGRPC_RejectsPositionBelowMinimum",
+    "TestMain"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/binlogdump",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/binlogdump/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/cellalias": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "cellalias",
+     "needs": [],
+     "shard": "13",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestAlias",
+    "TestAddAliasWhileVtgateUp"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/cellalias",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/cellalias/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/clone": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [],
+   "old_test_funcs": [
+    "TestMain",
+    "TestCloneRemote"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/clone",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/clone/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/clustertest": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "clustertest",
+     "needs": [
+      "limit-resources"
+     ],
+     "shard": "vtctlbackup_sharded_clustertest_heavy",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestAddKeyspace",
+    "TestEtcdServer",
+    "TestMain",
+    "TestVtctldProcess",
+    "TestVtgateProcess",
+    "TestVttabletProcess",
+    "TestDeleteTablet"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/clustertest",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/clustertest/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/docker": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [],
+   "old_test_funcs": [
+    "TestMain",
+    "TestUnsharded",
+    "TestSharded",
+    "TestMysqlMaxCons",
+    "TestVtctldCommands",
+    "TestLargeNumberOfKeyspaces"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/docker",
+   "runtime_sec": null,
+   "status": "exception",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/docker/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/encryption/encryptedreplication": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "encrypted_replication",
+     "needs": [],
+     "shard": "12",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestSecure"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/encryption/encryptedreplication",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/encryption/encryptedreplication/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/encryption/encryptedtransport": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "encrypted_transport",
+     "needs": [],
+     "shard": "12",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestSecureTransport"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/encryption/encryptedtransport",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/encryption/encryptedtransport/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/encryption/unmanagedsslcheck": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "unmanaged_ssl_check",
+     "needs": [],
+     "shard": "12",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestConnectUnamanagedMySQLRequiringSSLSuccess"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/encryption/unmanagedsslcheck",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/encryption/unmanagedsslcheck/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/keyspace": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "keyspace",
+     "needs": [],
+     "shard": "12",
+     "tags": [
+      "site_test"
+     ]
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestDurabilityPolicyField",
+    "TestGetSrvKeyspaceNames",
+    "TestGetSrvKeyspacePartitions",
+    "TestShardNames",
+    "TestGetKeyspace",
+    "TestDeleteKeyspace",
+    "TestShardCountForAllKeyspaces",
+    "TestShardNameForAllKeyspaces",
+    "TestKeyspaceToShardName"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/keyspace",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/keyspace/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/messaging": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "messaging",
+     "needs": [],
+     "shard": "12",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestMessage",
+    "TestThreeColMessage",
+    "TestSpecificStreamingColsMessage",
+    "TestSharded",
+    "TestUnsharded",
+    "TestReparenting",
+    "TestConnection"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/messaging",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/messaging/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/migration": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [],
+   "old_test_funcs": [
+    "TestMigration"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/migration",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/migration/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/mysqlctl": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "mysqlctl",
+     "needs": [],
+     "shard": "12",
+     "tags": [
+      "site_test"
+     ]
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestRestart",
+    "TestAutoDetect"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/mysqlctl",
+   "runtime_sec": null,
+   "status": "exception",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/mysqlctl/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/mysqlctld": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "mysqlctld",
+     "needs": [],
+     "shard": "12",
+     "tags": [
+      "site_test"
+     ]
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestRestart",
+    "TestAutoDetect",
+    "TestVersionString",
+    "TestReadBinlogFilesTimestamps"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/mysqlctld",
+   "runtime_sec": null,
+   "status": "exception",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/mysqlctld/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/mysqlserver": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "mysql_server",
+     "needs": [
+      "consul"
+     ],
+     "shard": "mysql_server_vault",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestMultiStatement",
+    "TestLargeComment",
+    "TestInsertLargerThenGrpcLimit",
+    "TestTimeout",
+    "TestInvalidField",
+    "TestWarnings",
+    "TestSelectWithUnauthorizedUser",
+    "TestPartitionedTable"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/mysqlserver",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/mysqlserver/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/onlineddl/flow": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [
+      "-timeout",
+      "30m"
+     ],
+     "entry": "onlineddl_flow",
+     "needs": [],
+     "shard": "onlineddl_flow",
+     "tags": [
+      "upgrade_downgrade_onlineddl_flow"
+     ]
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestOnlineDDLFlow"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/onlineddl/flow",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/onlineddl/flow/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/onlineddl/revert": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [
+      "-timeout",
+      "30m"
+     ],
+     "entry": "onlineddl_revert",
+     "needs": [],
+     "shard": "onlineddl_revert",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestRevertSchemaChanges"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/onlineddl/revert",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/onlineddl/revert/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/onlineddl/scheduler": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [
+      "-timeout",
+      "30m"
+     ],
+     "entry": "onlineddl_scheduler",
+     "needs": [],
+     "shard": "onlineddl_scheduler",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestParseTableName",
+    "TestMain",
+    "TestSchedulerSchemaChanges",
+    "TestMigrationMetrics"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/onlineddl/scheduler",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/onlineddl/scheduler/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/onlineddl/vrepl": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [
+      "-timeout",
+      "30m"
+     ],
+     "entry": "onlineddl_vrepl",
+     "needs": [
+      "larger-runner",
+      "binlog-compression"
+     ],
+     "shard": "onlineddl_vrepl",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestVreplSchemaChanges"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/onlineddl/vrepl",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/onlineddl/vrepl/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/onlineddl/vrepl_stress": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [
+      "-timeout",
+      "30m"
+     ],
+     "entry": "onlineddl_vrepl_stress",
+     "needs": [
+      "larger-runner",
+      "binlog-compression"
+     ],
+     "shard": "onlineddl_vrepl_stress",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestVreplMiniStressSchemaChanges"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/onlineddl/vrepl_stress",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/onlineddl/vrepl_stress/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/onlineddl/vrepl_stress_suite": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [
+      "-timeout",
+      "30m"
+     ],
+     "entry": "onlineddl_vrepl_stress_suite",
+     "needs": [
+      "larger-runner",
+      "binlog-compression"
+     ],
+     "shard": "onlineddl_vrepl_stress_suite",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestVreplStressSchemaChanges"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/onlineddl/vrepl_stress_suite",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/onlineddl/vrepl_stress_suite/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/onlineddl/vrepl_suite": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [
+      "-timeout",
+      "30m"
+     ],
+     "entry": "onlineddl_vrepl_suite",
+     "needs": [
+      "larger-runner",
+      "binlog-compression"
+     ],
+     "shard": "onlineddl_vrepl_suite",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestVreplSuiteSchemaChanges"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/onlineddl/vrepl_suite",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/onlineddl/vrepl_suite/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/preparestmt": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "prepare_statement",
+     "needs": [],
+     "shard": "12",
+     "tags": [
+      "upgrade_downgrade_query_serving_queries"
+     ]
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestDMLNone",
+    "TestSelect",
+    "TestSelectDatabase",
+    "TestInsertUpdateDelete",
+    "TestAutoIncColumns",
+    "TestColumnParameter",
+    "TestWrongTableName",
+    "TestSelectDBA",
+    "TestSelectLock",
+    "TestShowColumns",
+    "TestBinaryColumn",
+    "TestInsertTest",
+    "TestSpecializedPlan",
+    "TestSpecializedPlanStreaming"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/preparestmt",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/preparestmt/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/recovery/unshardedrecovery": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "recovery",
+     "needs": [
+      "limit-resources"
+     ],
+     "shard": "vtctlbackup_sharded_clustertest_heavy",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestRecovery"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/recovery/unshardedrecovery",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/recovery/unshardedrecovery/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/recovery/xtrabackup": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "xb_recovery",
+     "needs": [
+      "xtrabackup"
+     ],
+     "shard": "xb_recovery",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestRecovery"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/recovery/xtrabackup",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/recovery/xtrabackup/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/reparent/emergencyreparent": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [
+      "-timeout",
+      "20m"
+     ],
+     "entry": "emergencyreparent",
+     "needs": [
+      "limit-resources"
+     ],
+     "shard": "ers_prs_newfeatures_heavy",
+     "tags": [
+      "upgrade_downgrade_reparent"
+     ]
+    }
+   ],
+   "old_test_funcs": [
+    "TestTrivialERS",
+    "TestReparentIgnoreReplicas",
+    "TestReparentDownPrimary",
+    "TestEmergencyReparentWithBlockedPrimary",
+    "TestReparentNoChoiceDownPrimary",
+    "TestSemiSyncSetupCorrectly",
+    "TestERSPromoteRdonly",
+    "TestERSPreventCrossCellPromotion",
+    "TestPullFromRdonly",
+    "TestNoReplicationStatusAndIOThreadStopped",
+    "TestERSForInitialization",
+    "TestRecoverWithMultipleFailures",
+    "TestERSFailFast",
+    "TestReplicationStopped"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/reparent/emergencyreparent",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/reparent/emergencyreparent/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/reparent/newfeaturetest": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "newfeatures",
+     "needs": [
+      "limit-resources"
+     ],
+     "shard": "ers_prs_newfeatures_heavy",
+     "tags": [
+      ""
+     ]
+    }
+   ],
+   "old_test_funcs": [
+    "TestRecoverWithMultipleVttabletFailures",
+    "TestSingleReplicaERS",
+    "TestTabletRestart",
+    "TestChangeTypeWithoutSemiSync",
+    "TestERSWithWriteInPromoteReplica",
+    "TestBufferingWithMultipleDisruptions",
+    "TestSemiSyncBlockDueToDisruption",
+    "TestErrorsInTransaction"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/reparent/newfeaturetest",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/reparent/newfeaturetest/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/reparent/plannedreparent": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [
+      "-timeout",
+      "20m"
+     ],
+     "entry": "plannedreparent",
+     "needs": [
+      "limit-resources"
+     ],
+     "shard": "ers_prs_newfeatures_heavy",
+     "tags": [
+      "upgrade_downgrade_reparent"
+     ]
+    }
+   ],
+   "old_test_funcs": [
+    "TestReparentGracefulRangeBased",
+    "TestPrimaryToSpareStateChangeImpossible",
+    "TestReparentCrossCell",
+    "TestReparentGraceful",
+    "TestPRSWithDrainedLaggingTablet",
+    "TestReparentReplicaOffline",
+    "TestReparentAvoid",
+    "TestReparentFromOutside",
+    "TestReparentFromOutsideWithNoPrimary",
+    "TestReparentWithDownReplica",
+    "TestChangeTypeSemiSync",
+    "TestCrossCellDurability",
+    "TestFullStatus",
+    "TestFileNameFromPosition"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/reparent/plannedreparent",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/reparent/plannedreparent/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/reparent/prscomplex": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "prscomplex",
+     "needs": [],
+     "shard": "vttablet_prscomplex",
+     "tags": [
+      ""
+     ]
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestAcquireSameConnID"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/reparent/prscomplex",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/reparent/prscomplex/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/reparent/prssettingspool": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "prssettingspool",
+     "needs": [],
+     "shard": "vttablet_prscomplex",
+     "tags": [
+      ""
+     ]
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestSettingsPoolWithTXAndPRS",
+    "TestSettingsPoolWithoutTXAndPRS"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/reparent/prssettingspool",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/reparent/prssettingspool/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/schemadiff/vrepl": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [
+      "-timeout",
+      "30m"
+     ],
+     "entry": "schemadiff_vrepl",
+     "needs": [
+      "binlog-compression"
+     ],
+     "shard": "schemadiff_vrepl",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestSchemadiffSchemaChanges",
+    "TestIgnoreAutoIncrementRegexp"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/schemadiff/vrepl",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/schemadiff/vrepl/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/sharded": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [
+      "-timeout",
+      "30m"
+     ],
+     "entry": "sharded",
+     "needs": [
+      "limit-resources"
+     ],
+     "shard": "vtctlbackup_sharded_clustertest_heavy",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestShardedKeyspace"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/sharded",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/sharded/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/stress": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [],
+   "old_test_funcs": [
+    "TestMain",
+    "TestSimpleStressTest"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/stress",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/stress/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/tabletgateway": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "tabletgateway",
+     "needs": [],
+     "shard": "15",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestVtgateHealthCheck",
+    "TestVtgateReplicationStatusCheck",
+    "TestVtgateReplicationStatusCheckWithTabletTypeChange",
+    "TestReplicaTransactions",
+    "TestStreamingRPCStuck"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/tabletgateway",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/tabletgateway/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/tabletgateway/buffer/reparent": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "tabletgateway_buffer_reparent",
+     "needs": [],
+     "shard": "13",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestBufferReparenting"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/tabletgateway/buffer/reparent",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/tabletgateway/buffer/reparent/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/tabletgateway/buffer/reshard": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "tabletgateway_buffer_reshard",
+     "needs": [],
+     "shard": "13",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestBufferResharding"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/tabletgateway/buffer/reshard",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/tabletgateway/buffer/reshard/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/tabletmanager": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [
+      "-timeout",
+      "20m"
+     ],
+     "entry": "tabletmanager",
+     "needs": [
+      "consul"
+     ],
+     "shard": "18",
+     "tags": [
+      "site_test"
+     ]
+    },
+    {
+     "args": [
+      "--topo-flavor=consul"
+     ],
+     "entry": "tabletmanager_consul",
+     "needs": [
+      "consul"
+     ],
+     "shard": "tabletmanager_consul",
+     "tags": [
+      "site_test"
+     ]
+    },
+    {
+     "args": [
+      "--topo-flavor=zk2"
+     ],
+     "entry": "tabletmanager_zk2",
+     "needs": [],
+     "shard": "docker_cluster",
+     "tags": [
+      "site_test"
+     ]
+    }
+   ],
+   "old_test_funcs": [
+    "TestTabletCommands",
+    "TestHook",
+    "TestShardReplicationFix",
+    "TestGetSchema",
+    "TestTopoCustomRule",
+    "TestLockAndUnlock",
+    "TestStartReplicationUntilAfter",
+    "TestLockAndTimeout",
+    "TestMain",
+    "TestQPS",
+    "TestTabletReshuffle",
+    "TestHealthCheck",
+    "TestHealthCheckSchemaChangeSignal",
+    "TestHealthCheckDrainedStateDoesNotShutdownQueryService",
+    "TestFallbackSecurityPolicy",
+    "TestDenyAllSecurityPolicy",
+    "TestReadOnlySecurityPolicy",
+    "TestEnsureDB",
+    "TestGRPCErrorCode_UNAVAILABLE",
+    "TestResetReplicationParameters",
+    "TestGetGlobalStatusVars",
+    "TestStopReplicationAndGetStatus",
+    "TestValidateVReplicationPermissions_SucceedsWithValidPermissions",
+    "TestValidateVReplicationPermissions_FailsWithoutSelectPermissions",
+    "TestValidateVReplicationPermissions_FailsWithoutInsertPermissions",
+    "TestValidateVReplicationPermissions_FailsWithoutUpdatePermissions",
+    "TestValidateVReplicationPermissions_FailsWithoutDeletePermissions",
+    "TestValidateVReplicationPermissions_FailsIfUserCantLogin"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/tabletmanager",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/tabletmanager/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/tabletmanager/primary": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "tabletmanager_primary",
+     "needs": [
+      "consul"
+     ],
+     "shard": "18",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestRepeatedInitShardPrimary",
+    "TestPrimaryRestartSetsPTSTimestamp"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/tabletmanager/primary",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/tabletmanager/primary/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/tabletmanager/replication_manager": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "tabletmanager_replication_manager",
+     "needs": [
+      "consul"
+     ],
+     "shard": "18",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestReplicationRepairAfterPrimaryTabletChange",
+    "TestReparentJournalInfo"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/tabletmanager/replication_manager",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/tabletmanager/replication_manager/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/tabletmanager/tablegc": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "tabletmanager_tablegc",
+     "needs": [],
+     "shard": "tabletmanager_tablegc",
+     "tags": [
+      "site_test"
+     ]
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestCapability",
+    "TestPopulateTable",
+    "TestHold",
+    "TestEvac",
+    "TestDrop",
+    "TestPurge",
+    "TestPurgeView",
+    "TestDropView"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/tabletmanager/tablegc",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/tabletmanager/tablegc/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/tabletmanager/throttler_topo": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "tabletmanager_throttler_topo",
+     "needs": [],
+     "shard": "tabletmanager_throttler_topo",
+     "tags": [
+      "site_test"
+     ]
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestInitialThrottler",
+    "TestThrottleViaApplySchema",
+    "TestThrottlerAfterMetricsCollected",
+    "TestLag",
+    "TestNoReplicas",
+    "TestCustomQuery",
+    "TestRestoreDefaultQuery",
+    "TestUpdateMetricThresholds",
+    "TestUpdateAppCheckedMetrics"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/tabletmanager/throttler_topo",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/tabletmanager/throttler_topo/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/topoconncache": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [
+      "-run",
+      "TestVtctldListAllTablets"
+     ],
+     "entry": "topo_connection_cache",
+     "needs": [],
+     "shard": "topo_connection_cache",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestVtctldListAllTablets"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/topoconncache",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/topoconncache/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/topotest/consul": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [
+      "--topo-flavor=consul"
+     ],
+     "entry": "topo_consul",
+     "needs": [
+      "consul"
+     ],
+     "shard": "vtgate_topo_consul",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestTopoRestart",
+    "TestShardLocking",
+    "TestKeyspaceLocking",
+    "TestNamedLocking"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/topotest/consul",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/topotest/consul/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/topotest/etcd2": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "topo_etcd2",
+     "needs": [],
+     "shard": "vtgate_topo_etcd",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestTopoDownServingQuery",
+    "TestShardLocking",
+    "TestKeyspaceLocking",
+    "TestLockingWithTTL",
+    "TestNamedLocking"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/topotest/etcd2",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/topotest/etcd2/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/topotest/zk2": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [
+      "--topo-flavor=zk2"
+     ],
+     "entry": "topo_zk2",
+     "needs": [],
+     "shard": "docker_cluster",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestNamedLocking",
+    "TestTopoDownServingQuery",
+    "TestShardLocking",
+    "TestKeyspaceLocking"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/topotest/zk2",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/topotest/zk2/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/transaction": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtgate_transaction",
+     "needs": [
+      "larger-runner"
+     ],
+     "shard": "vtgate_transaction",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestTransactionModes",
+    "TestTransactionIsolation",
+    "TestTransactionAccessModes",
+    "TestTransactionIsolationInTx"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/transaction",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/transaction/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/transaction/benchmark": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [],
+   "old_test_funcs": [
+    "TestMain"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/transaction/benchmark",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/transaction/benchmark/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/transaction/restart": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtgate_transaction_restart",
+     "needs": [],
+     "shard": "vtgate_transaction",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestStreamTxRestart"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/transaction/restart",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/transaction/restart/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/transaction/rollback": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtgate_transaction_rollback",
+     "needs": [],
+     "shard": "vtgate_transaction",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestTransactionRollBackWhenShutDown",
+    "TestErrorInAutocommitSession"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/transaction/rollback",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/transaction/rollback/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/transaction/single": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtgate_transaction_single",
+     "needs": [],
+     "shard": "vtgate_transaction",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestSingleOneWay",
+    "TestSingleReverseWay",
+    "TestSingleLookupDangleRow",
+    "TestLookupDangleRowLaterMultiDB",
+    "TestLookupDangleRowRecordInSameShard",
+    "TestMultiDbSecondRecordLookupDangle",
+    "TestNoRecordInTableNotFail",
+    "TestOnlyMultiShardWriteFail"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/transaction/single",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/transaction/single/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/transaction/twopc": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtgate_transaction_twopc",
+     "needs": [],
+     "shard": "vtgate_transaction",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestDynamicConfig",
+    "TestDTCommit",
+    "TestDTRollback",
+    "TestDTCommitDMLOnlyOnMM",
+    "TestDTCommitDMLOnlyOnRM",
+    "TestDTPrepareFailOnRM",
+    "TestDTResolveAfterMMCommit",
+    "TestDTResolveAfterRMPrepare",
+    "TestDTResolveDuringRMPrepare",
+    "TestDTResolveDuringRMCommit",
+    "TestDTResolveAfterTransactionRecord",
+    "TestReadingUnresolvedTransactions",
+    "TestDTSavepointWithVanilaMySQL",
+    "TestDTSavepoint",
+    "TestDTSavepointResolveAfterMMCommit",
+    "TestSemiSyncRequiredWithTwoPC",
+    "TestReadTransactionStatus",
+    "TestVindexes"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/transaction/twopc",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/transaction/twopc/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/transaction/twopc/fuzz": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtgate_transaction_twopc_fuzz",
+     "needs": [
+      "larger-runner"
+     ],
+     "shard": "vtgate_transaction",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestTwoPCFuzzTest",
+    "TestMain"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/transaction/twopc/fuzz",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/transaction/twopc/fuzz/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/transaction/twopc/metric": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtgate_transaction_twopc_metric",
+     "needs": [],
+     "shard": "vtgate_transaction",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestTransactionModeMetrics",
+    "TestVTGate2PCCommitMetricOnFailure",
+    "TestVTTablet2PCMetrics",
+    "TestVTTablet2PCMetricsFailCommitPrepared"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/transaction/twopc/metric",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/transaction/twopc/metric/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/transaction/twopc/stress": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtgate_transaction_twopc_stress",
+     "needs": [],
+     "shard": "vtgate_transaction",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestSettings",
+    "TestDisruptions"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/transaction/twopc/stress",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/transaction/twopc/stress/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/utils": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [],
+   "old_test_funcs": [
+    "TestMain",
+    "TestCheckFields",
+    "TestCreateMySQL",
+    "TestSetSuperReadOnlyMySQL",
+    "TestGetMysqlPort",
+    "TestGetServerID",
+    "TestReplicationStatus",
+    "TestPrimaryStatus",
+    "TestReplicationConfiguration",
+    "TestGTID",
+    "TestSetReplicationPosition",
+    "TestSetAndResetReplication",
+    "TestGetBinlogInformation",
+    "TestGetGTIDMode",
+    "TestBinaryLogs",
+    "TestGetPreviousGTIDs",
+    "TestSemiSyncEnabled",
+    "TestWaitForReplicationStart",
+    "TestStartReplication",
+    "TestStopReplication",
+    "TestStopSQLThread"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/utils",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/utils/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/utils/mysqlvsvitess": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "mysql_vs_vitess",
+     "needs": [],
+     "shard": "vtgate_queries",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestCreateMySQL"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/utils/mysqlvsvitess",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/utils/mysqlvsvitess/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vault": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vault",
+     "needs": [
+      "consul"
+     ],
+     "shard": "mysql_server_vault",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestVaultAuth"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vault",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vault/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/versionupgrade": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [
+      "-keep-data",
+      "-force-vtdataroot",
+      "/tmp/vtdataroot/vtroot_10901",
+      "-force-port-start",
+      "vtctlbackup_sharded_clustertest_heavy900",
+      "-force-base-tablet-uid",
+      "vtctlbackup_sharded_clustertest_heavy90"
+     ],
+     "entry": "upgrade",
+     "needs": [],
+     "shard": "28",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestShards",
+    "TestDeploySchema",
+    "TestTablesExist",
+    "TestTablesData"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/versionupgrade",
+   "runtime_sec": null,
+   "status": "exception",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/versionupgrade/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vreplication": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [
+      "-run",
+      "Materialize"
+     ],
+     "entry": "vreplication_materialize",
+     "needs": [
+      "larger-runner",
+      "limit-resources",
+      "binlog-compression"
+     ],
+     "shard": "vreplication_partial_movetables_and_materialize",
+     "tags": []
+    },
+    {
+     "args": [
+      "-run",
+      "TestReferenceTableMaterializationAndRouting"
+     ],
+     "entry": "vreplication_reference_table_materialization",
+     "needs": [
+      "larger-runner",
+      "limit-resources",
+      "binlog-compression"
+     ],
+     "shard": "vreplication_partial_movetables_and_materialize",
+     "tags": []
+    },
+    {
+     "args": [
+      "-run",
+      "CellAlias"
+     ],
+     "entry": "vreplication_cellalias",
+     "needs": [
+      "larger-runner",
+      "limit-resources",
+      "binlog-compression"
+     ],
+     "shard": "vreplication_cellalias",
+     "tags": []
+    },
+    {
+     "args": [
+      "-run",
+      "TestMoveTablesIgnoreSourceKeyspace"
+     ],
+     "entry": "vreplication_movetables_ignore_source_keyspace",
+     "needs": [
+      "larger-runner",
+      "limit-resources",
+      "binlog-compression"
+     ],
+     "shard": "vreplication_cellalias",
+     "tags": []
+    },
+    {
+     "args": [
+      "-run",
+      "MultiTenant"
+     ],
+     "entry": "vreplication_multi_tenant",
+     "needs": [
+      "larger-runner",
+      "limit-resources",
+      "binlog-compression"
+     ],
+     "shard": "vreplication_multi_tenant",
+     "tags": []
+    },
+    {
+     "args": [
+      "-run",
+      "PartialMoveTablesBasic"
+     ],
+     "entry": "vreplication_partial_movetables_basic",
+     "needs": [
+      "larger-runner",
+      "limit-resources",
+      "binlog-compression"
+     ],
+     "shard": "vreplication_partial_movetables_and_materialize",
+     "tags": []
+    },
+    {
+     "args": [
+      "-run",
+      "TestMultipleConcurrentVDiffs"
+     ],
+     "entry": "vdiff_multiple_movetables_test.go",
+     "needs": [
+      "larger-runner",
+      "limit-resources",
+      "binlog-compression"
+     ],
+     "shard": "vreplication_partial_movetables_and_materialize",
+     "tags": []
+    },
+    {
+     "args": [
+      "-run",
+      "TestMoveTablesBuffering"
+     ],
+     "entry": "vreplication_movetables_buffering",
+     "needs": [
+      "larger-runner",
+      "limit-resources",
+      "binlog-compression"
+     ],
+     "shard": "vreplication_cellalias",
+     "tags": []
+    },
+    {
+     "args": [
+      "-run",
+      "TestOnlineDDLVDiff"
+     ],
+     "entry": "vreplication_onlineddl_vdiff",
+     "needs": [
+      "larger-runner",
+      "limit-resources",
+      "binlog-compression"
+     ],
+     "shard": "vreplication_cellalias",
+     "tags": []
+    },
+    {
+     "args": [
+      "-run",
+      "TestVSchemaChangesUnderLoad"
+     ],
+     "entry": "vreplication_vschema_load",
+     "needs": [
+      "larger-runner",
+      "limit-resources",
+      "binlog-compression"
+     ],
+     "shard": "vreplication_cellalias",
+     "tags": []
+    },
+    {
+     "args": [
+      "-run",
+      "TestMoveTablesMirrorTraffic"
+     ],
+     "entry": "vreplication_movetables_mirror_traffic",
+     "needs": [
+      "larger-runner",
+      "limit-resources",
+      "binlog-compression"
+     ],
+     "shard": "vreplication_cellalias",
+     "tags": []
+    },
+    {
+     "args": [
+      "-run",
+      "TestVReplicationDDLHandling"
+     ],
+     "entry": "vreplication_ddl_handling",
+     "needs": [
+      "larger-runner",
+      "limit-resources",
+      "binlog-compression"
+     ],
+     "shard": "vreplication_cellalias",
+     "tags": []
+    },
+    {
+     "args": [
+      "-run",
+      "TestSidecarDB"
+     ],
+     "entry": "sidecardb",
+     "needs": [
+      "binlog-compression"
+     ],
+     "shard": "schemadiff_vrepl",
+     "tags": []
+    },
+    {
+     "args": [
+      "-run",
+      "TestBasicVreplicationWorkflow",
+      "-timeout",
+      "20m"
+     ],
+     "entry": "vreplication_basic",
+     "needs": [
+      "larger-runner",
+      "limit-resources",
+      "binlog-compression"
+     ],
+     "shard": "vreplication_basic",
+     "tags": []
+    },
+    {
+     "args": [
+      "-run",
+      "TestVreplicationCopyParallel",
+      "-timeout",
+      "20m"
+     ],
+     "entry": "vreplication_copy_parallel",
+     "needs": [
+      "larger-runner",
+      "limit-resources",
+      "binlog-compression"
+     ],
+     "shard": "vreplication_copy_parallel",
+     "tags": []
+    },
+    {
+     "args": [
+      "-run",
+      "TestVreplicationCopyThrottling"
+     ],
+     "entry": "vreplication_copy_throttling",
+     "needs": [
+      "larger-runner",
+      "limit-resources",
+      "binlog-compression"
+     ],
+     "shard": "vreplication_copy_parallel",
+     "tags": []
+    },
+    {
+     "args": [
+      "-run",
+      "TestPartialMoveTablesWithSequences"
+     ],
+     "entry": "vreplication_partial_movetables_sequences",
+     "needs": [
+      "larger-runner",
+      "limit-resources",
+      "binlog-compression"
+     ],
+     "shard": "vreplication_partial_movetables_and_materialize",
+     "tags": []
+    },
+    {
+     "args": [
+      "-run",
+      "TestSequenceResetOnSwitchTraffic"
+     ],
+     "entry": "vreplication_sequence_reset_on_switch_traffic",
+     "needs": [
+      "larger-runner",
+      "limit-resources",
+      "binlog-compression"
+     ],
+     "shard": "vreplication_partial_movetables_and_materialize",
+     "tags": []
+    },
+    {
+     "args": [
+      "-run",
+      "TestVStreamFlushBinlog"
+     ],
+     "entry": "vstream_flush_binlog",
+     "needs": [
+      "larger-runner",
+      "limit-resources",
+      "binlog-compression"
+     ],
+     "shard": "vreplication_basic",
+     "tags": []
+    },
+    {
+     "args": [
+      "-run",
+      "TestMultiVStreamsKeyspace",
+      "-timeout",
+      "15m"
+     ],
+     "entry": "multi_vstreams_keyspace_reshard",
+     "needs": [],
+     "shard": "vstream",
+     "tags": []
+    },
+    {
+     "args": [
+      "-run",
+      "VStreamFailover"
+     ],
+     "entry": "vstream_failover",
+     "needs": [],
+     "shard": "vstream",
+     "tags": []
+    },
+    {
+     "args": [
+      "-run",
+      "VStreamStopOnReshardTrue"
+     ],
+     "entry": "vstream_stoponreshard_true",
+     "needs": [],
+     "shard": "vstream",
+     "tags": []
+    },
+    {
+     "args": [
+      "-run",
+      "VStreamStopOnReshardFalse"
+     ],
+     "entry": "vstream_stoponreshard_false",
+     "needs": [],
+     "shard": "vstream",
+     "tags": []
+    },
+    {
+     "args": [
+      "-run",
+      "VStreamWithKeyspacesToWatch"
+     ],
+     "entry": "vstream_with_keyspaces_to_watch",
+     "needs": [],
+     "shard": "vstream",
+     "tags": []
+    },
+    {
+     "args": [
+      "-run",
+      "TestVStreamCopyMultiKeyspaceReshard",
+      "-timeout",
+      "15m"
+     ],
+     "entry": "vstream_copy_multi_keyspace_reshard",
+     "needs": [],
+     "shard": "vstream",
+     "tags": []
+    },
+    {
+     "args": [
+      "-run",
+      "TestVStreamHeartbeats"
+     ],
+     "entry": "vstream_heartbeats",
+     "needs": [],
+     "shard": "vstream",
+     "tags": []
+    },
+    {
+     "args": [
+      "-run",
+      "TestVStreamLaggingDDLRowEvents"
+     ],
+     "entry": "vstream_lagging_ddl_row_events",
+     "needs": [],
+     "shard": "vstream",
+     "tags": []
+    },
+    {
+     "args": [
+      "-run",
+      "TestVStreamPushdownFilters"
+     ],
+     "entry": "vstream_pushdown_filters",
+     "needs": [],
+     "shard": "vstream",
+     "tags": []
+    },
+    {
+     "args": [
+      "-run",
+      "TestVStreamWithTablesToSkipCopyFlag"
+     ],
+     "entry": "vstream_with_tables_to_skip_copy_flag",
+     "needs": [],
+     "shard": "vstream",
+     "tags": []
+    },
+    {
+     "args": [
+      "-run",
+      "TestReplicationStress"
+     ],
+     "entry": "vreplication_performance",
+     "needs": [
+      "larger-runner",
+      "limit-resources",
+      "binlog-compression"
+     ],
+     "shard": "vreplication_v2",
+     "tags": []
+    },
+    {
+     "args": [
+      "-run",
+      "TestSwitchReadsWritesInAnyOrder",
+      "-timeout",
+      "30m"
+     ],
+     "entry": "vreplication_switch_traffic_order",
+     "needs": [
+      "larger-runner",
+      "limit-resources",
+      "binlog-compression"
+     ],
+     "shard": "vreplication_v2",
+     "tags": []
+    },
+    {
+     "args": [
+      "-run",
+      "TestBasicV2Workflows",
+      "-timeout",
+      "30m"
+     ],
+     "entry": "vreplication_v2",
+     "needs": [
+      "larger-runner",
+      "limit-resources",
+      "binlog-compression"
+     ],
+     "shard": "vreplication_v2",
+     "tags": []
+    },
+    {
+     "args": [
+      "-run",
+      "TestGlobalRouting",
+      "-timeout",
+      "30m"
+     ],
+     "entry": "global_routing",
+     "needs": [
+      "limit-resources",
+      "binlog-compression"
+     ],
+     "shard": "vreplication_v2",
+     "tags": []
+    },
+    {
+     "args": [
+      "-run",
+      "TestFKWorkflow"
+     ],
+     "entry": "vreplication_fk",
+     "needs": [
+      "larger-runner",
+      "limit-resources",
+      "binlog-compression"
+     ],
+     "shard": "vreplication_cellalias",
+     "tags": []
+    },
+    {
+     "args": [
+      "-run",
+      "TestFKExt"
+     ],
+     "entry": "vreplication_foreign_key_stress",
+     "needs": [
+      "larger-runner",
+      "limit-resources",
+      "binlog-compression"
+     ],
+     "shard": "vreplication_foreign_key_stress",
+     "tags": []
+    },
+    {
+     "args": [
+      "-run",
+      "TestV2WorkflowsAcrossDBVersions",
+      "-timeout",
+      "20m"
+     ],
+     "entry": "vreplication_across_db_versions",
+     "needs": [
+      "larger-runner",
+      "limit-resources",
+      "binlog-compression"
+     ],
+     "shard": "vreplication_across_db_versions",
+     "tags": []
+    },
+    {
+     "args": [
+      "-run",
+      "TestMoveTablesMariaDBToMySQL",
+      "-timeout",
+      "20m"
+     ],
+     "entry": "vreplication_mariadb_to_mysql",
+     "needs": [
+      "limit-resources",
+      "binlog-compression"
+     ],
+     "shard": "vreplication_mariadb_to_mysql",
+     "tags": []
+    },
+    {
+     "args": [
+      "-run",
+      "TestMigrate",
+      "-timeout",
+      "30m"
+     ],
+     "entry": "vreplication_migrate",
+     "needs": [
+      "larger-runner",
+      "limit-resources",
+      "binlog-compression"
+     ],
+     "shard": "vreplication_migrate",
+     "tags": []
+    },
+    {
+     "args": [
+      "-run",
+      "TestVDiff2",
+      "-timeout",
+      "30m"
+     ],
+     "entry": "vdiff2",
+     "needs": [
+      "limit-resources",
+      "binlog-compression"
+     ],
+     "shard": "vreplication_vdiff2",
+     "tags": []
+    },
+    {
+     "args": [
+      "-run",
+      "TestVtctldclientCLI",
+      "-timeout",
+      "20m"
+     ],
+     "entry": "vreplication_vtctldclient_cli",
+     "needs": [
+      "limit-resources",
+      "binlog-compression"
+     ],
+     "shard": "vreplication_vtctldclient_movetables_tz",
+     "tags": []
+    },
+    {
+     "args": [
+      "-run",
+      "TestMoveTablesTZ"
+     ],
+     "entry": "vreplication_movetables_tz",
+     "needs": [
+      "limit-resources",
+      "binlog-compression"
+     ],
+     "shard": "vreplication_vtctldclient_movetables_tz",
+     "tags": []
+    },
+    {
+     "args": [
+      "-run",
+      "TestLookupVindex"
+     ],
+     "entry": "loopkup_index",
+     "needs": [
+      "limit-resources",
+      "binlog-compression"
+     ],
+     "shard": "vreplication_vtctldclient_movetables_tz",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestFKExt",
+    "TestFKWorkflow",
+    "TestGlobalRouting",
+    "TestLookupVindex",
+    "TestMaterialize",
+    "TestReferenceTableMaterialize",
+    "TestMigrateUnsharded",
+    "TestMigrateSharded",
+    "TestMoveTablesBuffering",
+    "TestMoveTablesMirrorTraffic",
+    "TestMoveTablesMirrorTraffic_AllowReads",
+    "TestMultiTenantSimple",
+    "TestMultiTenantSharded",
+    "TestMultiTenantComplex",
+    "TestSequenceResetOnSwitchTraffic",
+    "TestPartialMoveTablesWithSequences",
+    "TestPartialMoveTablesBasic",
+    "TestReplicationStress",
+    "TestReferenceTableMaterializationAndRouting",
+    "TestBasicV2Workflows",
+    "TestSwitchReadsWritesInAnyOrder",
+    "TestSidecarDB",
+    "TestMoveTablesTZ",
+    "TestVDiff2",
+    "TestMultipleConcurrentVDiffs",
+    "TestOnlineDDLVDiff",
+    "TestVReplicationDDLHandling",
+    "TestVreplicationCopyThrottling",
+    "TestBasicVreplicationWorkflow",
+    "TestVreplicationCopyParallel",
+    "TestV2WorkflowsAcrossDBVersions",
+    "TestMoveTablesMariaDBToMySQL",
+    "TestVStreamFlushBinlog",
+    "TestMoveTablesIgnoreSourceKeyspace",
+    "TestCellAliasVreplicationWorkflow",
+    "TestVtctldclientCLI",
+    "TestVSchemaChangesUnderLoad",
+    "TestVStreamWithTablesToSkipCopyFlag",
+    "TestVStreamLaggingDDLRowEvents",
+    "TestMultiVStreamsKeyspaceReshard",
+    "TestMultiVStreamsKeyspaceStopOnReshard",
+    "TestVStreamFailover",
+    "TestVStreamStopOnReshardTrue",
+    "TestVStreamStopOnReshardFalse",
+    "TestVStreamWithKeyspacesToWatch",
+    "TestVStreamCopyMultiKeyspaceReshard",
+    "TestVStreamHeartbeats",
+    "TestVStreamPushdownFilters"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vreplication",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vreplication/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtadmin": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtadmin",
+     "needs": [],
+     "shard": "15",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestVtadminAPIs"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtadmin",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtadmin/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtcombo": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vttest_sample",
+     "needs": [],
+     "shard": "docker_cluster",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestStandalone"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtcombo",
+   "runtime_sec": null,
+   "status": "exception",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtcombo/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtcombo/recreate": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtcombo_recreate",
+     "needs": [],
+     "shard": "docker_cluster",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestDropAndRecreateWithSameShards"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtcombo/recreate",
+   "runtime_sec": null,
+   "status": "exception",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtcombo/recreate/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtctldclient": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtctldclient",
+     "needs": [],
+     "shard": "15",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestApplySchema"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtctldclient",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtctldclient/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtgate",
+     "needs": [
+      "limit-resources"
+     ],
+     "shard": "vtgate_general_heavy",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestUnownedLookupInsertNull",
+    "TestLookupUniqueWithAutocommit",
+    "TestUnownedLookupInsertChecksKeyspaceIdsAreMatching",
+    "TestUnownedLookupSelectNull",
+    "TestConsistentLookup",
+    "TestDMLScatter",
+    "TestDMLIn",
+    "TestConsistentLookupMultiInsert",
+    "TestHashLookupMultiInsertIgnore",
+    "TestConsistentLookupUpdate",
+    "TestSelectMultiEqualLookup",
+    "TestSelectNullLookup",
+    "TestUnicodeLooseMD5CaseInsensitive",
+    "TestJoinWithPredicateAndJoinOnDifferentVindex",
+    "TestMain",
+    "TestInsertOnDuplicateKey",
+    "TestInsertNeg",
+    "TestSelectNull",
+    "TestDoStatement",
+    "TestShowColumns",
+    "TestShowTables",
+    "TestCastConvert",
+    "TestCompositeIN",
+    "TestSavepointInTx",
+    "TestSavepointOutsideTx",
+    "TestSavepointAdditionalCase",
+    "TestExplainPassthrough",
+    "TestXXHash",
+    "TestShowTablesWithWhereClause",
+    "TestOffsetAndLimitWithOLAP",
+    "TestSwitchBetweenOlapAndOltp",
+    "TestFoundRowsOnDualQueries",
+    "TestUseStmtInOLAP",
+    "TestInsertStmtInOLAP",
+    "TestShardTargetedDMLInOLAP",
+    "TestShardTargetedDMLInOLAPRecordsTabletStats",
+    "TestShardTargetedFailedDMLInOLAPRecordsErrorStats",
+    "TestCreateIndex",
+    "TestVersions",
+    "TestFlush",
+    "TestFlushLock",
+    "TestShowVariables",
+    "TestShowVGtid",
+    "TestShowGtid",
+    "TestDeleteAlias",
+    "TestFunctionInDefault",
+    "TestRenameFieldsOnOLAP",
+    "TestSelectEqualUniqueOuterJoinRightPredicate",
+    "TestSQLSelectLimit",
+    "TestSQLSelectLimitWithPlanCache",
+    "TestSavepointInReservedConn",
+    "TestUnionWithManyInfSchemaQueries",
+    "TestTransactionsInStreamingMode",
+    "TestCharsetIntro",
+    "TestFilterAfterLeftJoin",
+    "TestFilterWithINAfterLeftJoin",
+    "TestDescribeVindex",
+    "TestEmptyQuery",
+    "TestJoinWithMergedRouteWithPredicate",
+    "TestRowCountExceed",
+    "TestDDLTargeted",
+    "TestTabletTargeting",
+    "TestDynamicConfig",
+    "TestLookupErrorMetric",
+    "TestQueryProcessedMetric",
+    "TestMetricForExplain"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/concurrentdml": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtgate_concurrentdml",
+     "needs": [],
+     "shard": "vtgate_concurrentdml",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestInsertIgnoreOnLookupUniqueVindex",
+    "TestOpenTxBlocksInSerial",
+    "TestOpenTxBlocksInConcurrent",
+    "TestUpdateLookupUniqueVindex"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/concurrentdml",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/concurrentdml/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/connectiondrain": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtgate_connectiondrain",
+     "needs": [
+      "limit-resources"
+     ],
+     "shard": "vtgate_general_heavy",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestConnectionDrainCloseConnections",
+    "TestConnectionDrainOnTermTimeout"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/connectiondrain",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/connectiondrain/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/consolidator": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "consolidator",
+     "needs": [
+      "limit-resources"
+     ],
+     "shard": "vtgate_general_heavy",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestConsolidatorEnabledByDefault",
+    "TestConsolidatorEnabledWithDirective",
+    "TestConsolidatorDisabledWithDirective",
+    "TestConsolidatorEnabledReplicasWithDirective"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/consolidator",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/consolidator/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/createdb_plugin": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtgate_dbddlplugin",
+     "needs": [
+      "limit-resources"
+     ],
+     "shard": "vtgate_general_heavy",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestDBDDLPlugin"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/createdb_plugin",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/createdb_plugin/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/errors_as_warnings": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "errs_as_warns",
+     "needs": [
+      "limit-resources"
+     ],
+     "shard": "vtgate_general_heavy",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestScatterErrsAsWarns"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/errors_as_warnings",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/errors_as_warnings/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/foreignkey": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtgate_foreignkey",
+     "needs": [],
+     "shard": "vtgate_foreignkey_stress",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestFkFuzzTest",
+    "TestInsertWithFK",
+    "TestDeleteWithFK",
+    "TestUpdateWithFK",
+    "TestVstreamForFKBinLog",
+    "TestFkScenarios",
+    "TestFkQueries",
+    "TestShowVschemaKeyspaces",
+    "TestFkOneCase",
+    "TestCyclicFks",
+    "TestReplace",
+    "TestReplaceExplicit",
+    "TestReplaceWithFK",
+    "TestInsertWithFKOnDup",
+    "TestDDLFk",
+    "TestForeignKeyWithKeyspaceQualifier",
+    "TestRestrictFkOnNonStandardKey",
+    "TestMain"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/foreignkey",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/foreignkey/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/foreignkey/routing": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtgate_foreignkey_routing",
+     "needs": [],
+     "shard": "vtgate_foreignkey_stress",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestForeignKeyRoutingRules"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/foreignkey/routing",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/foreignkey/routing/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/foreignkey/stress": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [
+      "-timeout",
+      "30m"
+     ],
+     "entry": "vtgate_foreignkey_stress",
+     "needs": [],
+     "shard": "vtgate_foreignkey_stress",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestInitialSetup",
+    "TestStressFK"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/foreignkey/stress",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/foreignkey/stress/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/gen4": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtgate_gen4",
+     "needs": [],
+     "shard": "vtgate_gen4",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestColumnNames",
+    "TestOrderBy",
+    "TestCorrelatedExistsSubquery",
+    "TestGroupBy",
+    "TestJoinBindVars",
+    "TestDistinctAggregationFunc",
+    "TestDistinct",
+    "TestSubQueries",
+    "TestSubQueriesOnOuterJoinOnCondition",
+    "TestHashJoin",
+    "TestMultiColumnVindex",
+    "TestFanoutVindex",
+    "TestSubShardVindex",
+    "TestSubShardVindexDML",
+    "TestOuterJoin",
+    "TestUsingJoin",
+    "TestInsertFunction",
+    "TestGTIDFunctions",
+    "TestFilterOnLeftOuterJoin",
+    "TestPercentageAndUnderscore",
+    "TestDualJoinQueries",
+    "TestMain",
+    "TestDbNameOverride",
+    "TestInformationSchemaQuery",
+    "TestInformationSchemaWithSubquery",
+    "TestInformationSchemaQueryGetsRoutedToTheRightTableAndKeyspace",
+    "TestFKConstraintUsingInformationSchema",
+    "TestConnectWithSystemSchema",
+    "TestUseSystemSchema",
+    "TestSystemSchemaQueryWithoutQualifier",
+    "TestMultipleSchemaPredicates",
+    "TestQuerySystemTables"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/gen4",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/gen4/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/godriver": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtgate_godriver",
+     "needs": [],
+     "shard": "vtgate_godriver",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestStreamMessaging"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/godriver",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/godriver/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/grpc_api": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtgate_grpc_api",
+     "needs": [
+      "limit-resources"
+     ],
+     "shard": "vtgate_general_heavy",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestEffectiveCallerIDWithAccess",
+    "TestEffectiveCallerIDWithNoAccess",
+    "TestAuthenticatedUserWithAccess",
+    "TestAuthenticatedUserNoAccess",
+    "TestUnauthenticatedUser",
+    "TestTransactionsWithGRPCAPI",
+    "TestMain",
+    "TestPrepareWithGRPCAPI"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/grpc_api",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/grpc_api/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/keyspace_watches": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtgate_watchkeyspace",
+     "needs": [],
+     "shard": "vtgate_topo",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestRoutingWithKeyspacesToWatch",
+    "TestVSchemaDDLWithKeyspacesToWatch"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/keyspace_watches",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/keyspace_watches/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/mysql84": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtgate_mysql84",
+     "needs": [],
+     "shard": "mysql84",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestFunctionInDefault",
+    "TestCheckConstraint",
+    "TestValueDefault",
+    "TestVersionCommentWorks",
+    "TestSystemVariables",
+    "TestUseSystemAndUserVariables",
+    "TestJsonFunctions"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/mysql84",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/mysql84/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/partialfailure": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtgate_transaction_partial_exec",
+     "needs": [],
+     "shard": "vtgate_transaction",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestPartialQueryFailureExplicitTx",
+    "TestPartialVindexQueryFailureExplicitTx",
+    "TestPartialQueryFailureNoAutoCommit",
+    "TestPartialVindexQueryFailureNoAutoCommit",
+    "TestPartialQueryFailureAutoCommit",
+    "TestPartialVindexQueryFailureAutoCommit",
+    "TestPartialQueryFailureRollback",
+    "TestPartialVindexQueryFailureRollback",
+    "TestPartialQueryFailureNoAutoCommitRollback",
+    "TestPartialVindexQueryFailureNoAutoCommitRollback",
+    "TestPartialQueryFailureAutoCommitRollback",
+    "TestPartialVindexQueryFailureAutoCommitRollback"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/partialfailure",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/partialfailure/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/plan_tests": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtgate_plantests",
+     "needs": [],
+     "shard": "vtgate_plantests",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestE2ECases"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/plan_tests",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/plan_tests/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/prefixfanout": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "prefixfanout",
+     "needs": [
+      "limit-resources"
+     ],
+     "shard": "vtgate_vindex_heavy",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestCFCPrefixQueryNoHash",
+    "TestCFCPrefixQueryWithHash",
+    "TestCFCInsert"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/prefixfanout",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/prefixfanout/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/queries/aggregation": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtgate_queries_aggregation",
+     "needs": [],
+     "shard": "vtgate_queries",
+     "tags": [
+      "upgrade_downgrade_query_serving_queries"
+     ]
+    }
+   ],
+   "old_test_funcs": [
+    "TestAggrWithLimit",
+    "TestAggregateTypes",
+    "TestGroupBy",
+    "TestEqualFilterOnScatter",
+    "TestNullPredicateFilterOnScatter",
+    "TestAggrOnJoin",
+    "TestNotEqualFilterOnScatter",
+    "TestLessFilterOnScatter",
+    "TestLessEqualFilterOnScatter",
+    "TestGreaterFilterOnScatter",
+    "TestGreaterEqualFilterOnScatter",
+    "TestGroupByOnlyFullGroupByOff",
+    "TestAggOnTopOfLimit",
+    "TestEmptyTableAggr",
+    "TestOrderByCount",
+    "TestAggregateAnyValue",
+    "TestAggregateLeftJoin",
+    "TestScalarAggregate",
+    "TestAggregationRandomOnAnAggregatedValue",
+    "TestBuggyQueries",
+    "TestMinMaxAcrossJoins",
+    "TestComplexAggregation",
+    "TestJoinAggregation",
+    "TestJoinAggregationEmptyLeft",
+    "TestGroupConcatAggregation",
+    "TestDistinctAggregation",
+    "TestHavingQueries",
+    "TestJsonAggregation",
+    "TestDistinct",
+    "TestDistinctIt",
+    "TestWindowFunctionWithGroupByError",
+    "TestDistinctWindowLimitShardTruncation",
+    "TestMain"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/queries/aggregation",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/queries/aggregation/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/queries/benchmark": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [],
+   "old_test_funcs": [
+    "TestMain"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/queries/benchmark",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/queries/benchmark/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/queries/derived": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtgate_queries_derived",
+     "needs": [],
+     "shard": "vtgate_queries",
+     "tags": [
+      "upgrade_downgrade_query_serving_queries"
+     ]
+    }
+   ],
+   "old_test_funcs": [
+    "TestCTEWithOrderByLimit",
+    "TestCTEAggregationOnRHS",
+    "TestCTERemoveInnerOrderBy",
+    "TestCTEWithHaving",
+    "TestCTEColumns",
+    "TestCTEAggregationsInUnion",
+    "TestDerivedTableWithOrderByLimit",
+    "TestDerivedAggregationOnRHS",
+    "TestDerivedRemoveInnerOrderBy",
+    "TestDerivedTableWithHaving",
+    "TestDerivedTableColumns",
+    "TestDerivedTablesWithLimit",
+    "TestDerivedTableColumnAliasWithJoin",
+    "TestMain"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/queries/derived",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/queries/derived/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/queries/dml": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtgate_queries_insert",
+     "needs": [],
+     "shard": "vtgate_queries",
+     "tags": [
+      "upgrade_downgrade_query_serving_queries_2"
+     ]
+    }
+   ],
+   "old_test_funcs": [
+    "TestUniqueLookupDuplicateEntries",
+    "TestUniqueLookupDuplicateIgnore",
+    "TestMultiEqual",
+    "TestMultiTableDelete",
+    "TestDeleteWithLimit",
+    "TestUpdateWithLimit",
+    "TestMultiTableUpdate",
+    "TestDeleteWithSubquery",
+    "TestMultiTargetDelete",
+    "TestMultiTargetDeleteMore",
+    "TestMultiTargetUpdate",
+    "TestMultiTargetNonLiteralUpdate",
+    "TestDMLInUnique",
+    "TestUpdateWithLargeRowsAsInput",
+    "TestDeleteWithLargeRowsAsInput",
+    "TestSimpleInsertSelect",
+    "TestInsertOnDup",
+    "TestFailureInsertSelect",
+    "TestAutoIncInsertSelect",
+    "TestAutoIncInsertSelectOlapMode",
+    "TestUnownedVindexInsertSelect",
+    "TestUnownedVindexInsertSelectOlapMode",
+    "TestLookupCasesIncInsertSelect",
+    "TestLookupCasesIncInsertSelectOlapMode",
+    "TestIgnoreInsertSelect",
+    "TestIgnoreInsertSelectOlapMode",
+    "TestInsertSelectUnshardedUsingSharded",
+    "TestRedactDupError",
+    "TestMixedCases",
+    "TestInsertAlias",
+    "TestInsertJson",
+    "TestInsertIgnoreNullAndInsertNull",
+    "TestMain"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/queries/dml",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/queries/dml/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/queries/foundrows": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtgate_queries_foundrows",
+     "needs": [],
+     "shard": "vtgate_queries",
+     "tags": [
+      "upgrade_downgrade_query_serving_queries"
+     ]
+    }
+   ],
+   "old_test_funcs": [
+    "TestFoundRows",
+    "TestMain"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/queries/foundrows",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/queries/foundrows/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/queries/informationschema": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtgate_queries_informationschema",
+     "needs": [],
+     "shard": "vtgate_queries",
+     "tags": [
+      "upgrade_downgrade_query_serving_queries"
+     ]
+    }
+   ],
+   "old_test_funcs": [
+    "TestDbNameOverride",
+    "TestInformationSchemaQuery",
+    "TestInformationSchemaWithSubquery",
+    "TestInformationSchemaQueryGetsRoutedToTheRightTableAndKeyspace",
+    "TestFKConstraintUsingInformationSchema",
+    "TestConnectWithSystemSchema",
+    "TestUseSystemSchema",
+    "TestSystemSchemaQueryWithoutQualifier",
+    "TestSystemSchemaFieldDatabaseInOLAP",
+    "TestMultipleSchemaPredicates",
+    "TestInfrSchemaAndUnionAll",
+    "TestInfoschemaTypes",
+    "TestTypeORMQuery",
+    "TestJoinWithSingleShardQueryOnRHS",
+    "TestMain"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/queries/informationschema",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/queries/informationschema/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/queries/kill": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtgate_kill",
+     "needs": [],
+     "shard": "vtgate_queries",
+     "tags": [
+      "upgrade_downgrade_query_serving_queries_2"
+     ]
+    }
+   ],
+   "old_test_funcs": [
+    "TestKillOwnConnection",
+    "TestKillDifferentConnection",
+    "TestKillOwnQuery",
+    "TestKillDifferentConnectionQuery",
+    "TestKillOnHungQuery",
+    "TestKillStmtOnHugeData",
+    "TestMain"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/queries/kill",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/queries/kill/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/queries/lookup_queries": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtgate_queries_lookup_queries",
+     "needs": [],
+     "shard": "vtgate_queries",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestLookupQueries"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/queries/lookup_queries",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/queries/lookup_queries/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/queries/misc": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtgate_queries_misc",
+     "needs": [],
+     "shard": "vtgate_queries",
+     "tags": [
+      "upgrade_downgrade_query_serving_queries"
+     ]
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestBitVals",
+    "TestTimeFunctionWithPrecision",
+    "TestHexVals",
+    "TestDateTimeTimestampVals",
+    "TestInvalidDateTimeTimestampVals",
+    "TestIntervalWithMathFunctions",
+    "TestCast",
+    "TestSetAndGetLastInsertID",
+    "TestSetAndGetLastInsertIDWithInsertUnsharded",
+    "TestSetAndGetLastInsertIDWithInsert",
+    "TestVindexHints",
+    "TestOuterJoinWithPredicate",
+    "TestHighNumberOfParams",
+    "TestPreparedStatementInOLAP",
+    "TestSlowQueryStatusFlagsComQueryOKOnlyOLAPEndToEnd",
+    "TestPrepareStatements",
+    "TestBuggyOuterJoin",
+    "TestLeftJoinUsingUnsharded",
+    "TestAnalyze",
+    "TestTransactionModeVar",
+    "TestAliasesInOuterJoinQueries",
+    "TestJoinTypes",
+    "TestAlterTableWithView",
+    "TestStraightJoin",
+    "TestFailingOuterJoinInOLAP",
+    "TestColumnAliases",
+    "TestHandleNullableColumn",
+    "TestEnumSetVals",
+    "TestTimeZones",
+    "TestSemiJoin",
+    "TestTabletTypeRouting",
+    "TestJoinMixedCaseExpr"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/queries/misc",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/queries/misc/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/queries/multi_query": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtgate_queries_multi_query",
+     "needs": [],
+     "shard": "vtgate_queries",
+     "tags": [
+      "upgrade_downgrade_query_serving_queries"
+     ]
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestMultiQuery"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/queries/multi_query",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/queries/multi_query/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/queries/no_scatter": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtgate_queries_no_scatter",
+     "needs": [],
+     "shard": "vtgate_queries",
+     "tags": [
+      "upgrade_downgrade_query_serving_queries"
+     ]
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestFailsWhenForcedToScatter"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/queries/no_scatter",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/queries/no_scatter/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/queries/normalize": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [],
+   "old_test_funcs": [
+    "TestMain",
+    "TestNormalizeAllFields"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/queries/normalize",
+   "runtime_sec": null,
+   "status": "verified",
+   "verified_at_sha": "6c2a5de687b126105376e34ffb3cf969ad8a1141",
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/queries/normalize/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/queries/orderby": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [
+      "-timeout",
+      "20m"
+     ],
+     "entry": "vtgate_queries_orderby",
+     "needs": [],
+     "shard": "vtgate_queries",
+     "tags": [
+      "upgrade_downgrade_query_serving_queries"
+     ]
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestSimpleOrderBy",
+    "TestQueryWithDBQualifier",
+    "TestOrderBy",
+    "TestOrderByComplex"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/queries/orderby",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/queries/orderby/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/queries/orderby/without_schematracker": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtgate_queries_orderby_without_schematracker",
+     "needs": [],
+     "shard": "vtgate_queries",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestSimpleOrderBy"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/queries/orderby/without_schematracker",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/queries/orderby/without_schematracker/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/queries/prevent_cross_keyspace_reads": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [],
+   "old_test_funcs": [
+    "TestMain",
+    "TestPreventCrossKeyspaceReadsVSchemaSetting",
+    "TestPreventCrossKeyspaceReadsUnqualifiedTables",
+    "TestPreventCrossKeyspaceReadsVSchemaSettingUnion",
+    "TestPreventCrossKeyspaceReadsVTGateFlag"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/queries/prevent_cross_keyspace_reads",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/queries/prevent_cross_keyspace_reads/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/queries/random": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtgate_queries_random",
+     "needs": [],
+     "shard": "vtgate_queries",
+     "tags": [
+      "upgrade_downgrade_query_serving_queries_2"
+     ]
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestRandomExprWithTables",
+    "TestMustFix",
+    "TestKnownFailures",
+    "TestRandom",
+    "TestBuggyQueries",
+    "TestSimplifyResultsMismatchedQuery"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/queries/random",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/queries/random/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/queries/reference": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtgate_queries_reference",
+     "needs": [],
+     "shard": "vtgate_queries",
+     "tags": [
+      "upgrade_downgrade_query_serving_queries_2"
+     ]
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestReferenceRouting",
+    "TestMultiReferenceQuery",
+    "TestDMLReferenceUsingShardedKS"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/queries/reference",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/queries/reference/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/queries/subquery": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [
+      "-timeout",
+      "20m"
+     ],
+     "entry": "vtgate_queries_subquery",
+     "needs": [],
+     "shard": "vtgate_queries",
+     "tags": [
+      "upgrade_downgrade_query_serving_queries_2"
+     ]
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestSubqueriesHasValues",
+    "TestNotINQueries",
+    "TestSubqueriesExists",
+    "TestQueryAndSubQWithLimit",
+    "TestSubQueryOnTopOfSubQuery",
+    "TestSubqueryInINClause",
+    "TestSubqueryInUpdate",
+    "TestSubqueryInReference",
+    "TestSubqueryInAggregation",
+    "TestSubqueryInDerivedTable",
+    "TestSubqueries",
+    "TestProperTypesOfPullOutValue"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/queries/subquery",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/queries/subquery/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/queries/timeout": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtgate_queries_timeout",
+     "needs": [],
+     "shard": "vtgate_queries",
+     "tags": [
+      "upgrade_downgrade_query_serving_queries"
+     ]
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestQueryTimeoutWithDual",
+    "TestQueryTimeoutWithTables",
+    "TestQueryTimeoutWithShardTargeting",
+    "TestQueryTimeoutWithoutVTGateDefault",
+    "TestOverallQueryTimeout"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/queries/timeout",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/queries/timeout/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/queries/tpch": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [
+      "-timeout",
+      "20m"
+     ],
+     "entry": "vtgate_queries_tpch",
+     "needs": [],
+     "shard": "vtgate_queries",
+     "tags": [
+      "upgrade_downgrade_query_serving_queries_2"
+     ]
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestTPCHQueries"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/queries/tpch",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/queries/tpch/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/queries/transaction_timeout": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtgate_transaction_timeout",
+     "needs": [],
+     "shard": "vtgate_transaction",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestTransactionTimeout",
+    "TestSmallerTimeout"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/queries/transaction_timeout",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/queries/transaction_timeout/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/queries/union": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [
+      "-timeout",
+      "20m"
+     ],
+     "entry": "vtgate_queries_union",
+     "needs": [],
+     "shard": "vtgate_queries",
+     "tags": [
+      "upgrade_downgrade_query_serving_queries_2"
+     ]
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestUnionDistinct",
+    "TestUnionAll",
+    "TestUnion"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/queries/union",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/queries/union/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/queries/vexplain": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtgate_queries_vexplain",
+     "needs": [],
+     "shard": "vtgate_queries",
+     "tags": [
+      "upgrade_downgrade_query_serving_queries_2"
+     ]
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestVtGateVExplain",
+    "TestVExplainPlan",
+    "TestVExplainAll"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/queries/vexplain",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/queries/vexplain/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/readafterwrite": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtgate_readafterwrite",
+     "needs": [],
+     "shard": "vtgate_readafterwrite",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestRAWSettings"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/readafterwrite",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/readafterwrite/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/reservedconn": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtgate_setstatement",
+     "needs": [],
+     "shard": "vtgate_reservedconn",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestLockUnlock",
+    "TestLocksDontIntersect",
+    "TestLocksIntersect",
+    "TestLocksAreExplicitlyReleaseAndRegrab",
+    "TestLocksAreReleasedWhenConnectionIsClosed",
+    "TestLocksBlockEachOther",
+    "TestLocksBlocksWithTx",
+    "TestLocksWithTxFailure",
+    "TestLocksWithTxOngoingAndReleaseLock",
+    "TestLocksWithTxOngoingAndLockFails",
+    "TestLocksKeepLockConnectionActive",
+    "TestLocksResetLockOnTimeout",
+    "TestLockWaitOnConnTimeoutWithTxNext",
+    "TestMain",
+    "TestSetSysVarSingle",
+    "TestSetSystemVariable",
+    "TestSetSystemVarWithTxFailure",
+    "TestSetSystemVarWithConnectionTimeout",
+    "TestSetSystemVariableAndThenSuccessfulTx",
+    "TestSetSystemVariableAndThenSuccessfulAutocommitDML",
+    "TestSetSystemVariableWithAutocommitDisabled",
+    "TestStartTxAndSetSystemVariableAndThenSuccessfulCommit",
+    "TestSetSystemVarAutocommitWithConnError",
+    "TestSetSystemVarInTxWithConnError",
+    "TestEnableSystemSettings",
+    "TestSystemVariableType",
+    "TestSysvarSocket",
+    "TestReservedConnInStreaming",
+    "TestUnifiedOlapAndOltp",
+    "TestSysVarTxIsolation",
+    "TestSysVarInnodbWaitTimeout",
+    "TestImplicitTxOnAutocommitOff",
+    "TestSetUDV",
+    "TestMysqlDumpInitialLog",
+    "TestUserDefinedVariableResolvedAtTablet"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/reservedconn",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/reservedconn/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/reservedconn/mysqldown": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtgate_reserved_conn3",
+     "needs": [],
+     "shard": "vtgate_reservedconn",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestMysqlDownServingChange"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/reservedconn/mysqldown",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/reservedconn/mysqldown/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/reservedconn/servingchange": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtgate_reserved_conn1",
+     "needs": [],
+     "shard": "vtgate_reservedconn",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestServingChange",
+    "TestServingChangeStreaming"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/reservedconn/servingchange",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/reservedconn/servingchange/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/reservedconn/tabletchange": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtgate_reserved_conn2",
+     "needs": [],
+     "shard": "vtgate_reservedconn",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestTabletChange",
+    "TestTabletChangeStreaming"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/reservedconn/tabletchange",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/reservedconn/tabletchange/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/reservedconn/vttabletdown": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtgate_reserved_conn4",
+     "needs": [],
+     "shard": "vtgate_reservedconn",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestVttabletDownServingChange"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/reservedconn/vttabletdown",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/reservedconn/vttabletdown/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/reuseport": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [],
+   "old_test_funcs": [
+    "TestMain",
+    "TestReusePort"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/reuseport",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/reuseport/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/schema": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [
+      "-timeout",
+      "20m"
+     ],
+     "entry": "vtgate_schema",
+     "needs": [],
+     "shard": "vtgate_schema",
+     "tags": [
+      "upgrade_downgrade_query_serving_schema"
+     ]
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestSchemaChange"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/schema",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/schema/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/schematracker/loadkeyspace": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtgate_schematracker_loadkeyspace",
+     "needs": [],
+     "shard": "vtgate_schema_tracker",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestLoadKeyspaceWithNoTablet",
+    "TestNoInitialKeyspace"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/schematracker/loadkeyspace",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/schematracker/loadkeyspace/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/schematracker/multi_ks": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtgate_schematracker_multi_ks",
+     "needs": [],
+     "shard": "vtgate_schema_tracker",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestViewQueries"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/schematracker/multi_ks",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/schematracker/multi_ks/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/schematracker/multi_ks_routing": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtgate_schematracker_multi_ks_routing",
+     "needs": [],
+     "shard": "vtgate_schema_tracker",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestRoutedTableColumnsAreAuthoritativeForStarExpansion"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/schematracker/multi_ks_routing",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/schematracker/multi_ks_routing/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/schematracker/restarttablet": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtgate_schematracker_restarttablet",
+     "needs": [],
+     "shard": "vtgate_schema_tracker",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestVSchemaTrackerInit",
+    "TestVSchemaTrackerKeyspaceReInit"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/schematracker/restarttablet",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/schematracker/restarttablet/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/schematracker/sharded": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [
+      "-timeout",
+      "20m"
+     ],
+     "entry": "vtgate_schematracker_sharded",
+     "needs": [],
+     "shard": "vtgate_schema_tracker",
+     "tags": [
+      "upgrade_downgrade_query_serving_schema"
+     ]
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestNewTable",
+    "TestAmbiguousColumnJoin",
+    "TestInitAndUpdate",
+    "TestDMLOnNewTable",
+    "TestNewView",
+    "TestViewAndTable"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/schematracker/sharded",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/schematracker/sharded/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/schematracker/sharded_prs": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [
+      "-timeout",
+      "20m"
+     ],
+     "entry": "vtgate_schematracker_sharded_prs",
+     "needs": [],
+     "shard": "vtgate_schema_tracker",
+     "tags": [
+      "upgrade_downgrade_query_serving_schema"
+     ]
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestAddColumn"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/schematracker/sharded_prs",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/schematracker/sharded_prs/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/schematracker/unsharded": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [
+      "-timeout",
+      "20m"
+     ],
+     "entry": "vtgate_schematracker_unsharded",
+     "needs": [],
+     "shard": "vtgate_schema_tracker",
+     "tags": [
+      "upgrade_downgrade_query_serving_schema"
+     ]
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestNewUnshardedTable",
+    "TestCaseSensitiveSchemaTracking"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/schematracker/unsharded",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/schematracker/unsharded/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/schematracker/view_routing_rules": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [],
+   "old_test_funcs": [
+    "TestMain",
+    "TestViewRoutingRules"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/schematracker/view_routing_rules",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/schematracker/view_routing_rules/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/schematracker/viewsdisabled": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [
+      "-timeout",
+      "20m"
+     ],
+     "entry": "vtgate_schematracker_viewsdisabled",
+     "needs": [],
+     "shard": "vtgate_schema_tracker",
+     "tags": [
+      "upgrade_downgrade_query_serving_schema"
+     ]
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestVSchemaDoesNotIncludeViews",
+    "TestViewOperationsWithViewsDisabled",
+    "TestSchemaTrackingWithViewsDisabled",
+    "TestTableOperationsStillWork"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/schematracker/viewsdisabled",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/schematracker/viewsdisabled/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/sec_vind": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vindex_secondary",
+     "needs": [
+      "limit-resources"
+     ],
+     "shard": "vtgate_vindex_heavy",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestInAgainstSecondaryVindex"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/sec_vind",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/sec_vind/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/sequence": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtgate_sequence",
+     "needs": [
+      "limit-resources"
+     ],
+     "shard": "vtgate_general_heavy",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestSeq",
+    "TestDotTableSeq",
+    "TestInsertAllDefaults",
+    "TestLastInsertIDWithSequence"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/sequence",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/sequence/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/tablet_healthcheck": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtgate_tablet_healthcheck",
+     "needs": [
+      "limit-resources"
+     ],
+     "shard": "vtgate_general_heavy",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestHealthCheckExternallyReparentNewTablet"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/tablet_healthcheck",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/tablet_healthcheck/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/tablet_healthcheck_cache": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [
+      "-timeout",
+      "45m"
+     ],
+     "entry": "vtgate_tablet_healthcheck_cache",
+     "needs": [],
+     "shard": "vtgate_tablet_healthcheck_cache",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestHealthCheckCacheWithTabletChurn"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/tablet_healthcheck_cache",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/tablet_healthcheck_cache/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/tabletbalancer": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtgate_tabletbalancer",
+     "needs": [
+      "limit-resources"
+     ],
+     "shard": "vtgate_general_heavy",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestCellModeBalancer",
+    "TestPreferCell",
+    "TestRandomModeBalancer",
+    "TestRandomModeWithCellFiltering",
+    "TestDeprecatedEnableBalancerFlag",
+    "TestMain",
+    "TestSessionModeBalancer",
+    "TestSessionModeRemoveTablet"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/tabletbalancer",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/tabletbalancer/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/trace": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [],
+   "old_test_funcs": [
+    "TestMain",
+    "TestVTSpanContextComQuery",
+    "TestVTSpanContextPreparedStatement",
+    "TestVTSpanContextValidTraceComQuery",
+    "TestVTSpanContextValidTracePreparedStatement"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/trace",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/trace/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/unsharded": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtgate_unsharded",
+     "needs": [],
+     "shard": "vtgate_unsharded",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestSelectIntoAndLoadFrom",
+    "TestEmptyStatement",
+    "TestTopoDownServingQuery",
+    "TestInsertAllDefaults",
+    "TestDDLUnsharded",
+    "TestCallProcedure",
+    "TestTempTable",
+    "TestReservedConnDML",
+    "TestNumericPrecisionScale",
+    "TestDeleteAlias",
+    "TestFloatValueDefault",
+    "TestMetricForExplain"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/unsharded",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/unsharded/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/vindex_bindvars": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vindex_bindvars",
+     "needs": [
+      "limit-resources"
+     ],
+     "shard": "vtgate_vindex_heavy",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestVindexHexTypes",
+    "TestVindexBindVarOverlap"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/vindex_bindvars",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/vindex_bindvars/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtgate/vschema": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [
+      "-timeout",
+      "20m"
+     ],
+     "entry": "vtgate_vschema",
+     "needs": [],
+     "shard": "vtgate_vschema",
+     "tags": [
+      "upgrade_downgrade_query_serving_schema"
+     ]
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestVSchema",
+    "TestVSchemaSQLAPIConcurrency"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/vschema",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/vschema/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtorc/api": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtorc_api",
+     "needs": [
+      "memory-check"
+     ],
+     "shard": "vtorc",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestAPIEndpoints",
+    "TestDynamicConfigs",
+    "TestMain"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtorc/api",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtorc/api/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtorc/general": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtorc_general",
+     "needs": [
+      "memory-check"
+     ],
+     "shard": "vtorc",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestPrimaryElection",
+    "TestErrantGTIDOnPreviousPrimary",
+    "TestSingleKeyspace",
+    "TestKeyspaceShard",
+    "TestVTOrcRepairs",
+    "TestRepairAfterTER",
+    "TestStalePrimary",
+    "TestSemiSync",
+    "TestVTOrcWithPrs",
+    "TestMultipleDurabilities",
+    "TestDrainedTablet",
+    "TestDurabilityPolicySetLater",
+    "TestFullStatusConnectionPooling",
+    "TestSemiSyncRecoveryOrdering",
+    "TestReplicationStoppedWithSemiSyncBlocked",
+    "TestRecoveryDeadlocks"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtorc/general",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtorc/general/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtorc/primaryfailure": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtorc_primary_failure",
+     "needs": [
+      "larger-runner",
+      "memory-check"
+     ],
+     "shard": "vtorc",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestDownPrimary",
+    "TestDownPrimary_KeyspaceEmergencyReparentDisabled",
+    "TestDownPrimaryBeforeVTOrc",
+    "TestDeletedPrimaryTablet",
+    "TestDeadPrimaryRecoversImmediately",
+    "TestCrossDataCenterFailure",
+    "TestCrossDataCenterFailureError",
+    "TestLostRdonlyOnPrimaryFailure",
+    "TestPromotionLagSuccess",
+    "TestPromotionLagFailure",
+    "TestDownPrimaryPromotionRule",
+    "TestDownPrimaryPromotionRuleWithLag",
+    "TestDownPrimaryPromotionRuleWithLagCrossCenter"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtorc/primaryfailure",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtorc/primaryfailure/",
+   "wave": null
+  },
+  "vitess.io/vitess/go/test/endtoend/vtorc/readtopologyinstance": {
+   "blockers": [],
+   "capabilities": [],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": null,
+   "notes": "",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "vtorc_readtopologyinstance",
+     "needs": [
+      "memory-check"
+     ],
+     "shard": "vtorc",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestReadTopologyInstanceBufferable"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/vtorc/readtopologyinstance",
+   "runtime_sec": null,
+   "status": "pending",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtorc/readtopologyinstance/",
+   "wave": null
+  }
+ }
+}

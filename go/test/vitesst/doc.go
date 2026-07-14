@@ -27,11 +27,12 @@ limitations under the License.
 // Test-scoped usage:
 //
 //	func TestSomething(t *testing.T) {
-//	    c := vitesst.NewCluster(
+//	    c, err := vitesst.NewCluster(
 //	        vitesst.WithKeyspace("ks").
 //	            WithSchema(`CREATE TABLE users (id INT PRIMARY KEY)`).
 //	            WithVSchema(`{"sharded": false, "tables": {"users": {}}}`),
 //	    )
+//	    require.NoError(t, err)
 //	    cleanup, err := c.Start(t.Context())
 //	    t.Cleanup(func() {
 //	        ctx := context.WithoutCancel(t.Context())
@@ -56,9 +57,13 @@ limitations under the License.
 //	func TestMain(m *testing.M) {
 //	    exitCode := func() int {
 //	        ctx := context.Background()
-//	        c := vitesst.NewCluster(
+//	        c, err := vitesst.NewCluster(
 //	            vitesst.WithKeyspace("ks").WithSchema(schemaSQL),
 //	        )
+//	        if err != nil {
+//	            fmt.Fprintln(os.Stderr, err)
+//	            return 1
+//	        }
 //	        cleanup, err := c.Start(ctx)
 //	        if err != nil {
 //	            fmt.Fprintln(os.Stderr, err)

@@ -61,7 +61,7 @@ func requireE2E(t *testing.T) {
 func TestClusterBootstrap(t *testing.T) {
 	requireE2E(t)
 
-	c := vitesst.NewCluster(
+	c, err := vitesst.NewCluster(
 		vitesst.WithCells("zone1", "zone2"),
 		vitesst.WithKeyspace("uks").
 			WithReplicas(1).
@@ -71,6 +71,7 @@ func TestClusterBootstrap(t *testing.T) {
 			WithSchema(selfTestSchema).
 			WithVSchema(selfTestVSchema),
 	)
+	require.NoError(t, err)
 	cleanup, err := c.Start(t.Context())
 	t.Cleanup(func() {
 		ctx := context.WithoutCancel(t.Context())
@@ -152,11 +153,12 @@ func TestClusterBootstrap(t *testing.T) {
 func TestTabletProcessLifecycle(t *testing.T) {
 	requireE2E(t)
 
-	c := vitesst.NewCluster(
+	c, err := vitesst.NewCluster(
 		vitesst.WithKeyspace("ks").
 			WithReplicas(1).
 			WithSchema(selfTestSchema),
 	)
+	require.NoError(t, err)
 	cleanup, err := c.Start(t.Context())
 	t.Cleanup(func() {
 		ctx := context.WithoutCancel(t.Context())
@@ -218,9 +220,10 @@ func TestTabletProcessLifecycle(t *testing.T) {
 func TestVTGateRestart(t *testing.T) {
 	requireE2E(t)
 
-	c := vitesst.NewCluster(
+	c, err := vitesst.NewCluster(
 		vitesst.WithKeyspace("ks").WithSchema(selfTestSchema),
 	)
+	require.NoError(t, err)
 	cleanup, err := c.Start(t.Context())
 	t.Cleanup(func() {
 		ctx := context.WithoutCancel(t.Context())
@@ -254,9 +257,10 @@ func TestVTGateRestart(t *testing.T) {
 func TestNewMySQLComparison(t *testing.T) {
 	requireE2E(t)
 
-	c := vitesst.NewCluster(
+	c, err := vitesst.NewCluster(
 		vitesst.WithKeyspace("ks").WithSchema(selfTestSchema),
 	)
+	require.NoError(t, err)
 	cleanup, err := c.Start(t.Context())
 	t.Cleanup(func() {
 		ctx := context.WithoutCancel(t.Context())

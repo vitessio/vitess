@@ -45,11 +45,15 @@ func TestMain(m *testing.M) {
 	exitCode := func() int {
 		ctx := context.Background()
 
-		cluster := vitesst.NewCluster(
+		cluster, err := vitesst.NewCluster(
 			vitesst.WithKeyspace(keyspaceName).
 				WithReplicas(1).
 				WithSchema(schemaSQL),
 		)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
 		cleanup, err := cluster.Start(ctx)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)

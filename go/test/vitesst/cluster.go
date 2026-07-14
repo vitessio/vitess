@@ -81,9 +81,15 @@ type (
 	}
 )
 
-// NewCluster creates a Vitess cluster from the given options. Nothing runs
-// until Start is called. Requires at least one keyspace to be configured.
-func NewCluster(opts ...ClusterOption) *Cluster {
+// NewCluster creates a Vitess cluster from the given options, validating
+// them. Nothing runs until Start is called. Requires at least one keyspace to
+// be configured.
+func NewCluster(opts ...ClusterOption) (*Cluster, error) {
+	config := newClusterOptions(opts)
+	if err := config.validate(); err != nil {
+		return nil, err
+	}
+
 	logf := func(format string, args ...any) {}
 	if os.Getenv("VITESST_DEBUG") != "" {
 		logf = func(format string, args ...any) {
@@ -91,7 +97,6 @@ func NewCluster(opts ...ClusterOption) *Cluster {
 		}
 	}
 
-	config := newClusterOptions(opts)
 	c := &Cluster{
 		opts:  config,
 		cells: config.cells,
@@ -103,7 +108,7 @@ func NewCluster(opts ...ClusterOption) *Cluster {
 		httpPort: fmt.Sprintf("%d/tcp", vtctldHTTPPort),
 		cluster:  c,
 	}}
-	return c
+	return c, nil
 }
 
 // Start brings the whole cluster up. The returned cleanup tears everything
@@ -114,9 +119,6 @@ func NewCluster(opts ...ClusterOption) *Cluster {
 func (c *Cluster) Start(ctx context.Context) (cleanup func(context.Context) error, err error) {
 	cleanup = c.terminate
 
-	if err := c.opts.validate(); err != nil {
-		return cleanup, err
-	}
 	if c.network != nil {
 		return cleanup, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cluster is already started")
 	}
