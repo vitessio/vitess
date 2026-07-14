@@ -50,7 +50,7 @@ func TestNormalizeAlphabetically(t *testing.T) {
 	parser := NewTestParser()
 	for _, tc := range testcases {
 		normalized, err := parser.NormalizeAlphabetically(tc.in)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, tc.out, normalized)
 	}
 }
@@ -178,7 +178,7 @@ func TestQueryMatchesTemplates(t *testing.T) {
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
 			match, err := parser.QueryMatchesTemplates(tc.q, tc.tmpl)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tc.out, match)
 		})
 	}

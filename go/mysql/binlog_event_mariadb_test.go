@@ -82,7 +82,7 @@ func TestMariadbStandaloneBinlogEventGTID(t *testing.T) {
 	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbStandaloneGTIDEvent)}
 	want := replication.MariadbGTID{Domain: 0, Server: 62344, Sequence: 9}
 	got, hasBegin, _, _, err := input.GTID(f)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.False(t, hasBegin)
 	assert.Equal(t, want, got)
 }
@@ -94,7 +94,7 @@ func TestMariadbBinlogEventGTID(t *testing.T) {
 	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbBeginGTIDEvent)}
 	want := replication.MariadbGTID{Domain: 0, Server: 62344, Sequence: 10}
 	got, hasBegin, _, _, err := input.GTID(f)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, hasBegin)
 	assert.Equal(t, want, got)
 }
@@ -109,7 +109,7 @@ func TestMariadbBinlogEventFormat(t *testing.T) {
 		HeaderSizes:       mariadbFormatEvent[76 : len(mariadbFormatEvent)-5],
 	}
 	got, err := input.Format()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, want, got)
 }
 
@@ -123,7 +123,7 @@ func TestMariadbBinlogEventChecksumFormat(t *testing.T) {
 		HeaderSizes:       mariadbChecksumFormatEvent[76 : len(mariadbChecksumFormatEvent)-5],
 	}
 	got, err := input.Format()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, want, got)
 }
 
@@ -156,7 +156,7 @@ func TestMariaDBSemiSyncAck(t *testing.T) {
 	{
 		c := Conn{ExpectSemiSyncIndicator: false}
 		buf, semiSyncAckRequested, err := c.AnalyzeSemiSyncAckRequest(mariadbInsertEvent)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		e := NewMariadbBinlogEventWithSemiSyncInfo(buf, semiSyncAckRequested)
 
 		assert.False(t, e.IsSemiSyncAckRequested())
@@ -165,7 +165,7 @@ func TestMariaDBSemiSyncAck(t *testing.T) {
 	{
 		c := Conn{ExpectSemiSyncIndicator: true}
 		buf, semiSyncAckRequested, err := c.AnalyzeSemiSyncAckRequest(mariadbSemiSyncNoAckInsertEvent)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		e := NewMariadbBinlogEventWithSemiSyncInfo(buf, semiSyncAckRequested)
 
 		assert.False(t, e.IsSemiSyncAckRequested())
@@ -174,7 +174,7 @@ func TestMariaDBSemiSyncAck(t *testing.T) {
 	{
 		c := Conn{ExpectSemiSyncIndicator: true}
 		buf, semiSyncAckRequested, err := c.AnalyzeSemiSyncAckRequest(mariadbSemiSyncAckInsertEvent)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		e := NewMariadbBinlogEventWithSemiSyncInfo(buf, semiSyncAckRequested)
 
 		assert.True(t, e.IsSemiSyncAckRequested())

@@ -192,7 +192,7 @@ func TestLookupUnicodeLooseMD5HashVerify(t *testing.T) {
 	// Test query fail.
 	vc.mustFail = true
 	_, err = lnu.Verify(t.Context(), vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
-	assert.EqualError(t, err, "lookup.Verify: execute failed", "lookupNonUnique(query fail)")
+	require.EqualError(t, err, "lookup.Verify: execute failed", "lookupNonUnique(query fail)")
 	vc.mustFail = false
 
 	// writeOnly true should always yield true.
@@ -267,7 +267,7 @@ func TestLookupUnicodeLooseMD5HashCreate(t *testing.T) {
 	// Test query fail.
 	vc.mustFail = true
 	err = lnu.(Lookup).Create(t.Context(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(10)}}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")}, false)
-	assert.EqualError(t, err, "lookup.Create: execute failed", "lookupNonUnique(query fail)")
+	require.EqualError(t, err, "lookup.Create: execute failed", "lookupNonUnique(query fail)")
 	vc.mustFail = false
 
 	// Test column mismatch.
@@ -368,7 +368,7 @@ func TestLookupUnicodeLooseMD5HashDelete(t *testing.T) {
 	// Test query fail.
 	vc.mustFail = true
 	err = lnu.(Lookup).Delete(t.Context(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, []byte("\x16k@\xb4J\xbaK\xd6"))
-	assert.EqualError(t, err, "lookup.Delete: execute failed", "lookupNonUnique(query fail)")
+	require.EqualError(t, err, "lookup.Delete: execute failed", "lookupNonUnique(query fail)")
 	vc.mustFail = false
 
 	// Test column count fail.

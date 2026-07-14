@@ -207,7 +207,7 @@ func TestInitializeTargetSequences(t *testing.T) {
 			env.tmc.expectUpdateSequenceTablesRequest(100, tc.updateSeqTableRequest)
 
 			err = sw.initializeTargetSequences(ctx, sequencesByBackingTable)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			// Expect the requests to be cleared.
 			assert.Emptyf(t, env.tmc.updateSequenceTablesRequests, "expected no remaining UpdateSequenceTables requests")
@@ -726,7 +726,7 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 			}
-			require.EqualValues(t, tc.want, got)
+			require.Equal(t, tc.want, got)
 		})
 	}
 }

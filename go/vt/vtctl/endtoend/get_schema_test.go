@@ -183,7 +183,7 @@ func TestGetSchema(t *testing.T) {
 	require.NoError(t, err)
 
 	events := logger.Events
-	assert.Equal(t, 1, len(events), "expected 1 event from GetSchema")
+	assert.Len(t, events, 1, "expected 1 event from GetSchema")
 	val := events[0].Value
 
 	actual := &tabletmanagerdatapb.SchemaDefinition{}
@@ -224,7 +224,7 @@ func TestGetSchema(t *testing.T) {
 	require.NoError(t, err)
 
 	events = logger.Events
-	assert.Equal(t, 1, len(events), "expected 1 event from GetSchema")
+	assert.Len(t, events, 1, "expected 1 event from GetSchema")
 	val = events[0].Value
 
 	actual = &tabletmanagerdatapb.SchemaDefinition{}

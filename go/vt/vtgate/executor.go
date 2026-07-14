@@ -480,6 +480,11 @@ func (e *Executor) finalizeLogStats(logStats *logstats.LogStats, mysqlCtx vtgate
 	if mysqlCtx != nil {
 		mysqlCtx.SetQueryWasSlow(logStats.SlowQuery)
 	}
+	if ingressBytes, ok := vtgateservice.IngressBytesFromContext(logStats.Ctx); ok {
+		logStats.IngressBytes = ingressBytes
+	} else if mysqlCtx != nil {
+		logStats.IngressBytes = mysqlCtx.IngressBytes()
+	}
 	if logStats.SlowQuery && logStats.StmtType != "" && logStats.PlanType != "" && logStats.TabletType != "" {
 		slowQueries.Add([]string{logStats.StmtType, logStats.PlanType, logStats.TabletType}, 1)
 	}
@@ -1557,12 +1562,6 @@ func (e *Executor) Prepare(ctx context.Context, method string, safeSession *econ
 }
 
 func (e *Executor) prepare(ctx context.Context, safeSession *econtext.SafeSession, sql string, logStats *logstats.LogStats) ([]*querypb.Field, uint16, error) {
-	// Start an implicit transaction if necessary.
-	if !safeSession.Autocommit && !safeSession.InTransaction() {
-		if err := e.txConn.Begin(ctx, safeSession, nil); err != nil {
-			return nil, 0, err
-		}
-	}
 	stmtType := sqlparser.Preview(sql)
 	logStats.StmtType = stmtType.String()
 

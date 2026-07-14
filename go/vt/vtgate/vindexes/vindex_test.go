@@ -81,12 +81,12 @@ func init() {
 
 func TestVindexMap(t *testing.T) {
 	ge, err := createRegionVindex(t, "region_experimental", "f1,f2", 1)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	got, err := Map(t.Context(), ge, nil, [][]sqltypes.Value{{
 		sqltypes.NewInt64(1), sqltypes.NewInt64(1),
 	}})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	want := []key.ShardDestination{
 		key.DestinationKeyspaceID([]byte("\x01\x16k@\xb4J\xbaK\xd6")),
@@ -94,12 +94,12 @@ func TestVindexMap(t *testing.T) {
 	assert.Equal(t, want, got)
 
 	hash, err := CreateVindex("hash", "hash", nil)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	require.Empty(t, hash.(ParamValidating).UnknownParams())
 	got, err = Map(t.Context(), hash, nil, [][]sqltypes.Value{{
 		sqltypes.NewInt64(1),
 	}})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	want = []key.ShardDestination{
 		key.DestinationKeyspaceID([]byte("\x16k@\xb4J\xbaK\xd6")),
 	}
@@ -108,7 +108,7 @@ func TestVindexMap(t *testing.T) {
 
 func TestVindexVerify(t *testing.T) {
 	ge, err := createRegionVindex(t, "region_experimental", "f1,f2", 1)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	require.Empty(t, ge.(ParamValidating).UnknownParams())
 
 	got, err := Verify(t.Context(), ge, nil, [][]sqltypes.Value{{
@@ -116,20 +116,20 @@ func TestVindexVerify(t *testing.T) {
 	}}, [][]byte{
 		[]byte("\x01\x16k@\xb4J\xbaK\xd6"),
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	want := []bool{true}
 	assert.Equal(t, want, got)
 
 	hash, err := CreateVindex("hash", "hash", nil)
 	require.Empty(t, hash.(ParamValidating).UnknownParams())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	got, err = Verify(t.Context(), hash, nil, [][]sqltypes.Value{{
 		sqltypes.NewInt64(1),
 	}}, [][]byte{
 		[]byte("\x16k@\xb4J\xbaK\xd6"),
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, want, got)
 }
 

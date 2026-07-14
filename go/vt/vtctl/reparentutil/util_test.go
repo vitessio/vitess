@@ -1541,12 +1541,12 @@ zone1-0000000100 is not a replica`,
 			actual, err := ElectNewPrimary(ctx, tt.tmc, tt.shardInfo, tt.tabletMap, tt.innodbBufferPoolData, options, logger)
 			if len(tt.errContains) > 0 {
 				for _, errC := range tt.errContains {
-					assert.ErrorContains(t, err, errC)
+					require.ErrorContains(t, err, errC)
 				}
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			utils.MustMatch(t, tt.expected, actual)
 		})
 	}
@@ -2064,9 +2064,9 @@ func TestGetValidCandidatesAndPositionsAsList(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			tabletRes, posRes, err := getValidCandidatesAndPositionsAsList(test.validCandidates, test.tabletMap)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.ElementsMatch(t, test.tabletRes, tabletRes)
-			assert.Equal(t, len(tabletRes), len(posRes))
+			assert.Len(t, posRes, len(tabletRes))
 			for i, tablet := range tabletRes {
 				assert.Equal(t, test.validCandidates[topoproto.TabletAliasString(tablet.Alias)], posRes[i])
 			}
@@ -2275,7 +2275,7 @@ func TestRestrictValidCandidates(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			res, err := restrictValidCandidates(test.validCandidates, test.tabletMap)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, res, test.result)
 		})
 	}
@@ -2531,7 +2531,7 @@ func Test_getTabletsWithPromotionRules(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			res := getTabletsWithPromotionRules(durability, tt.tablets, tt.rule)
-			require.EqualValues(t, tt.filteredTablets, res)
+			require.Equal(t, tt.filteredTablets, res)
 		})
 	}
 }
@@ -2633,7 +2633,7 @@ func TestGetBackupCandidates(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			res := GetBackupCandidates(tt.in, tt.status)
-			require.EqualValues(t, tt.expected, res)
+			require.Equal(t, tt.expected, res)
 		})
 	}
 }

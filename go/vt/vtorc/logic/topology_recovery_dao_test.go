@@ -55,7 +55,7 @@ func TestTopologyRecovery(t *testing.T) {
 		topologyRecovery, err = writeTopologyRecovery(topologyRecovery)
 		require.NoError(t, err)
 		// The ID field should be populated after the insert
-		require.Greater(t, topologyRecovery.ID, int64(0))
+		require.Positive(t, topologyRecovery.ID)
 	})
 
 	t.Run("read recoveries", func(t *testing.T) {
@@ -63,7 +63,7 @@ func TestTopologyRecovery(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, recoveries, 1)
 		// Assert that the ID field matches the one that we just wrote
-		require.EqualValues(t, topologyRecovery.ID, recoveries[0].ID)
+		require.Equal(t, topologyRecovery.ID, recoveries[0].ID)
 	})
 }
 
@@ -130,7 +130,7 @@ func TestExpireTableData(t *testing.T) {
 				return nil
 			})
 			require.NoError(t, err)
-			require.EqualValues(t, tt.expectedRowCount, rowsCount)
+			require.Equal(t, tt.expectedRowCount, rowsCount)
 		})
 	}
 }
@@ -159,10 +159,10 @@ func TestInsertRecoveryDetection(t *testing.T) {
 	require.Len(t, rows, 1)
 	tabletAlias, err := topoproto.ParseTabletAlias(rows[0]["alias"].String)
 	require.NoError(t, err)
-	require.EqualValues(t, da.AnalyzedInstanceAlias, tabletAlias)
+	require.Equal(t, da.AnalyzedInstanceAlias, tabletAlias)
 	require.EqualValues(t, da.Analysis, rows[0]["analysis"].String)
-	require.EqualValues(t, keyspace, rows[0]["keyspace"].String)
-	require.EqualValues(t, shard, rows[0]["shard"].String)
-	require.EqualValues(t, strconv.Itoa(int(da.RecoveryId)), rows[0]["detection_id"].String)
-	require.NotEqual(t, "", rows[0]["detection_timestamp"].String)
+	require.Equal(t, keyspace, rows[0]["keyspace"].String)
+	require.Equal(t, shard, rows[0]["shard"].String)
+	require.Equal(t, strconv.Itoa(int(da.RecoveryId)), rows[0]["detection_id"].String)
+	require.NotEmpty(t, rows[0]["detection_timestamp"].String)
 }

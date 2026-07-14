@@ -49,7 +49,13 @@ var (
 )
 
 func mysqlBase64Encode(in []byte) []byte {
-	newlines := len(in) / mysqlBase64InLineLength
+	// A newline is only written after a full 57 byte block that has more
+	// input following it, so an input that is an exact multiple of 57
+	// bytes gets one newline less than len(in)/57.
+	newlines := 0
+	if len(in) > 0 {
+		newlines = (len(in) - 1) / mysqlBase64InLineLength
+	}
 	encoded := make([]byte, base64.StdEncoding.EncodedLen(len(in))+newlines)
 	out := encoded
 	for len(in) > mysqlBase64InLineLength {

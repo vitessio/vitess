@@ -97,7 +97,7 @@ func TestStartBuildTabletFromInput(t *testing.T) {
 	tabletHostname = ""
 	gotTablet, err = BuildTabletFromInput(alias, port, grpcport, nil, collations.MySQL8())
 	require.NoError(t, err)
-	assert.NotEqual(t, "", gotTablet.Hostname)
+	assert.NotEmpty(t, gotTablet.Hostname)
 
 	// Canonicalize shard name and compute keyrange.
 	tabletHostname = "foo"
@@ -207,7 +207,7 @@ func TestStartCreateKeyspaceShard(t *testing.T) {
 	defer tm.Stop()
 
 	assert.Equal(t, "replica", statsTabletType.Get())
-	assert.Equal(t, 1, len(statsTabletTypeCount.Counts()))
+	assert.Len(t, statsTabletTypeCount.Counts(), 1)
 	assert.Equal(t, int64(1), statsTabletTypeCount.Counts()["replica"])
 
 	_, err := ts.GetShard(ctx, "ks", "0")
@@ -512,7 +512,7 @@ func TestStartFixesReplicationData(t *testing.T) {
 	require.NoError(t, err)
 	sri, err = ts.GetShardReplication(ctx, cell, "ks", "0")
 	require.NoError(t, err)
-	assert.Equal(t, 0, len(sri.Nodes))
+	assert.Empty(t, sri.Nodes)
 
 	// An initTablet will recreate the shard replication data.
 	err = tm.initTablet(t.Context())
@@ -544,7 +544,7 @@ func TestStartDoesNotUpdateReplicationDataForTabletInWrongShard(t *testing.T) {
 
 	tablets, err := ts.FindAllTabletAliasesInShard(ctx, "ks", "-d0")
 	require.NoError(t, err)
-	assert.Equal(t, 0, len(tablets))
+	assert.Empty(t, tablets)
 }
 
 func TestCheckTabletTypeResets(t *testing.T) {
