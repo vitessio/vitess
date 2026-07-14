@@ -17,26 +17,22 @@ limitations under the License.
 package reservedconn
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
 	"testing"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-
 	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
+	clusterInstance *vitesst.Cluster
 	vtParams        mysql.ConnParams
 	keyspaceName    = "ks"
-	cell            = "zone1"
-	hostname        = "localhost"
 	sqlSchema       = `
 	create table test(
 		id bigint,
@@ -104,38 +100,40 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(cell, hostname)
-		defer clusterInstance.Teardown()
+		ctx := context.Background()
 
-		// Start topo server
-		if err := clusterInstance.StartTopo(); err != nil {
-			return 1
-		}
-
-		// Start keyspace
-		keyspace := &cluster.Keyspace{
-			Name:      keyspaceName,
-			SchemaSQL: sqlSchema,
-			VSchema:   vSchema,
-		}
-		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-transaction-timeout", "5s"}
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, false, clusterInstance.Cell); err != nil {
-			return 1
-		}
-
-		// Start vtgate
 		// This test requires setting the mysql-server-version vtgate flag
 		// to 5.7 regardless of the actual MySQL version used for the tests.
-		clusterInstance.VtGateExtraArgs = []string{"--lock-heartbeat-time", "2s", "--mysql-server-version", "5.7.0"}
-		clusterInstance.VtGatePlannerVersion = querypb.ExecuteOptions_Gen4
-		if err := clusterInstance.StartVtgate(); err != nil {
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithVTTabletArgs("--queryserver-config-transaction-timeout", "5s"),
+			vitesst.WithVTGateArgs(
+				"--lock-heartbeat-time", "2s",
+				"--mysql-server-version", "5.7.0",
+				"--mysql-server-socket-path", "/tmp/mysql.sock",
+			),
+			vitesst.WithKeyspace(keyspaceName).
+				WithShardNames("-80", "80-").
+				WithReplicas(1).
+				WithSchema(sqlSchema).
+				WithVSchema(vSchema),
+		)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-
-		vtParams = mysql.ConnParams{
-			Host: clusterInstance.Hostname,
-			Port: clusterInstance.VtgateMySQLPort,
+		cleanup, err := cluster.Start(ctx)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
 		}
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
+
+		clusterInstance = cluster
+		vtParams = cluster.VTParams(ctx, "")
 		return m.Run()
 	}()
 	os.Exit(exitCode)
@@ -143,15 +141,15 @@ func TestMain(m *testing.M) {
 
 func assertIsEmpty(t *testing.T, conn *mysql.Conn, query string) {
 	t.Helper()
-	qr := utils.Exec(t, conn, query)
+	qr := vitesst.Exec(t, conn, query)
 	assert.Empty(t, qr.Rows)
 }
 
 func assertResponseMatch(t *testing.T, conn *mysql.Conn, query1, query2 string) {
-	qr1 := utils.Exec(t, conn, query1)
+	qr1 := vitesst.Exec(t, conn, query1)
 	got1 := fmt.Sprintf("%v", qr1.Rows)
 
-	qr2 := utils.Exec(t, conn, query2)
+	qr2 := vitesst.Exec(t, conn, query2)
 	got2 := fmt.Sprintf("%v", qr2.Rows)
 
 	assert.Equal(t, got1, got2)

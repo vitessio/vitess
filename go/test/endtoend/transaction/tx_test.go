@@ -17,6 +17,7 @@ limitations under the License.
 package transaction
 
 import (
+	"context"
 	_ "embed"
 	"flag"
 	"fmt"
@@ -26,17 +27,14 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/test/vitesst"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
+	clusterInstance *vitesst.Cluster
 	vtParams        mysql.ConnParams
 	keyspaceName    = "ks"
-	cell            = "zone1"
-	hostname        = "localhost"
 
 	//go:embed schema.sql
 	SchemaSQL string
@@ -49,37 +47,33 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitcode, err := func() (int, error) {
-		clusterInstance = cluster.NewCluster(cell, hostname)
-		defer clusterInstance.Teardown()
+		ctx := context.Background()
 
-		// Reserve vtGate port in order to pass it to vtTablet
-		clusterInstance.VtgateGrpcPort = clusterInstance.GetAndReservePort()
-		// Set extra tablet args for twopc
-		clusterInstance.VtTabletExtraArgs = []string{
-			"--twopc-abandon-age", "3600",
-		}
-
-		// Start topo server
-		if err := clusterInstance.StartTopo(); err != nil {
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithVTTabletArgs("--twopc-abandon-age", "3600"),
+			vitesst.WithKeyspace(keyspaceName).
+				WithShardNames("-80", "80-").
+				WithReplicas(1).
+				WithSchema(SchemaSQL).
+				WithVSchema(VSchema).
+				WithDurabilityPolicy(policy.DurabilitySemiSync),
+		)
+		if err != nil {
 			return 1, err
 		}
 
-		// Start keyspace
-		keyspace := &cluster.Keyspace{
-			Name:             keyspaceName,
-			SchemaSQL:        SchemaSQL,
-			VSchema:          VSchema,
-			DurabilityPolicy: policy.DurabilitySemiSync,
-		}
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, false, clusterInstance.Cell); err != nil {
+		cleanup, err := cluster.Start(ctx)
+		if err != nil {
 			return 1, err
 		}
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
 
-		// Starting Vtgate in default MULTI transaction mode
-		if err := clusterInstance.StartVtgate(); err != nil {
-			return 1, err
-		}
-		vtParams = clusterInstance.GetVTParams(keyspaceName)
+		clusterInstance = cluster
+		vtParams = cluster.VTParams(ctx, "")
 
 		return m.Run(), nil
 	}()
@@ -99,40 +93,40 @@ func TestTransactionModes(t *testing.T) {
 	defer conn.Close()
 
 	// set transaction mode to SINGLE.
-	utils.Exec(t, conn, "set transaction_mode = 'single'")
+	vitesst.Exec(t, conn, "set transaction_mode = 'single'")
 
 	// Insert targeted to multiple tables should fail as Transaction mode is SINGLE
-	utils.Exec(t, conn, "begin")
-	utils.Exec(t, conn, "insert into twopc_user(user_id, name) values(1,'john')")
+	vitesst.Exec(t, conn, "begin")
+	vitesst.Exec(t, conn, "insert into twopc_user(user_id, name) values(1,'john')")
 	_, err = conn.ExecuteFetch("insert into twopc_user(user_id, name) values(6,'vick')", 1000, false)
 	want := "multi-db transaction attempted"
 	require.Error(t, err)
 	require.Contains(t, err.Error(), want)
-	utils.Exec(t, conn, "rollback")
+	vitesst.Exec(t, conn, "rollback")
 
 	// set transaction mode to TWOPC.
-	utils.Exec(t, conn, "set transaction_mode = 'twopc'")
+	vitesst.Exec(t, conn, "set transaction_mode = 'twopc'")
 
 	// Insert targeted to multiple db should PASS with TWOPC trx mode
-	utils.Exec(t, conn, "begin")
-	utils.Exec(t, conn, "insert into twopc_user(user_id, name) values(3,'mark')")
-	utils.Exec(t, conn, "insert into twopc_user(user_id, name) values(4,'doug')")
-	utils.Exec(t, conn, "insert into twopc_lookup(name, id) values('Tim',7)")
-	utils.Exec(t, conn, "commit")
+	vitesst.Exec(t, conn, "begin")
+	vitesst.Exec(t, conn, "insert into twopc_user(user_id, name) values(3,'mark')")
+	vitesst.Exec(t, conn, "insert into twopc_user(user_id, name) values(4,'doug')")
+	vitesst.Exec(t, conn, "insert into twopc_lookup(name, id) values('Tim',7)")
+	vitesst.Exec(t, conn, "commit")
 
 	// Verify the values are present
-	utils.AssertMatches(t, conn, "select user_id from twopc_user where name='mark'", `[[INT64(3)]]`)
-	utils.AssertMatches(t, conn, "select name from twopc_lookup where id=3", `[[VARCHAR("mark")]]`)
+	vitesst.AssertMatches(t, conn, "select user_id from twopc_user where name='mark'", `[[INT64(3)]]`)
+	vitesst.AssertMatches(t, conn, "select name from twopc_lookup where id=3", `[[VARCHAR("mark")]]`)
 
 	// DELETE from multiple tables using TWOPC transaction mode
-	utils.Exec(t, conn, "begin")
-	utils.Exec(t, conn, "delete from twopc_user where user_id = 3")
-	utils.Exec(t, conn, "delete from twopc_lookup where id = 3")
-	utils.Exec(t, conn, "commit")
+	vitesst.Exec(t, conn, "begin")
+	vitesst.Exec(t, conn, "delete from twopc_user where user_id = 3")
+	vitesst.Exec(t, conn, "delete from twopc_lookup where id = 3")
+	vitesst.Exec(t, conn, "commit")
 
 	// VERIFY that values are deleted
-	utils.AssertMatches(t, conn, "select user_id from twopc_user where user_id=3", `[]`)
-	utils.AssertMatches(t, conn, "select name from twopc_lookup where id=3", `[]`)
+	vitesst.AssertMatches(t, conn, "select user_id from twopc_user where user_id=3", `[]`)
+	vitesst.AssertMatches(t, conn, "select name from twopc_lookup where id=3", `[]`)
 }
 
 // TestTransactionIsolation tests transaction isolation level.
@@ -144,8 +138,8 @@ func TestTransactionIsolation(t *testing.T) {
 	defer conn.Close()
 
 	// inserting some data.
-	utils.Exec(t, conn, "insert into test(id, msg) values (1,'v1'), (2, 'v2')")
-	defer utils.Exec(t, conn, "delete from test")
+	vitesst.Exec(t, conn, "insert into test(id, msg) values (1,'v1'), (2, 'v2')")
+	defer vitesst.Exec(t, conn, "delete from test")
 
 	conn1, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
@@ -157,16 +151,16 @@ func TestTransactionIsolation(t *testing.T) {
 
 	// on connection 1 change the isolation level to read-committed.
 	// start a transaction and read the data for id = 1.
-	utils.Exec(t, conn1, "set transaction isolation level read committed")
-	utils.Exec(t, conn1, "begin")
-	utils.AssertMatches(t, conn1, "select id, msg from test where id = 1", `[[INT64(1) VARCHAR("v1")]]`)
+	vitesst.Exec(t, conn1, "set transaction isolation level read committed")
+	vitesst.Exec(t, conn1, "begin")
+	vitesst.AssertMatches(t, conn1, "select id, msg from test where id = 1", `[[INT64(1) VARCHAR("v1")]]`)
 
 	// change the value of msg for id = 1 on connection 2.
-	utils.Exec(t, conn2, "update test set msg = 'foo' where id = 1")
+	vitesst.Exec(t, conn2, "update test set msg = 'foo' where id = 1")
 
 	// new value should be reflected on connection 1 within the open transaction.
-	utils.AssertMatches(t, conn1, "select id, msg from test where id = 1", `[[INT64(1) VARCHAR("foo")]]`)
-	utils.Exec(t, conn1, "rollback")
+	vitesst.AssertMatches(t, conn1, "select id, msg from test where id = 1", `[[INT64(1) VARCHAR("foo")]]`)
+	vitesst.Exec(t, conn1, "rollback")
 }
 
 func TestTransactionAccessModes(t *testing.T) {
@@ -180,27 +174,27 @@ func TestTransactionAccessModes(t *testing.T) {
 	defer conn.Close()
 
 	// start a transaction with read-only characteristic.
-	utils.Exec(t, conn, "start transaction read only")
-	_, err = utils.ExecAllowError(t, conn, "insert into test(id, msg) values (42,'foo')")
+	vitesst.Exec(t, conn, "start transaction read only")
+	_, err = vitesst.ExecAllowError(t, conn, "insert into test(id, msg) values (42,'foo')")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Cannot execute statement in a READ ONLY transaction")
-	utils.Exec(t, conn, "rollback")
+	vitesst.Exec(t, conn, "rollback")
 
 	// trying autocommit, this should pass as transaction characteristics are limited to single transaction.
-	utils.Exec(t, conn, "insert into test(id, msg) values (42,'foo')")
+	vitesst.Exec(t, conn, "insert into test(id, msg) values (42,'foo')")
 
 	// target replica
-	utils.Exec(t, conn, "use `ks@replica`")
+	vitesst.Exec(t, conn, "use `ks@replica`")
 	// start a transaction with read-only characteristic.
-	utils.Exec(t, conn, "start transaction read only")
-	utils.Exec(t, conn, "select * from test")
+	vitesst.Exec(t, conn, "start transaction read only")
+	vitesst.Exec(t, conn, "select * from test")
 
 	// start a transaction with read-write characteristic. This should fail
-	utils.Exec(t, conn, "start transaction read write")
-	_, err = utils.ExecAllowError(t, conn, "select connection_id()")
+	vitesst.Exec(t, conn, "start transaction read write")
+	_, err = vitesst.ExecAllowError(t, conn, "select connection_id()")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "cannot start read write transaction on a read only tablet")
-	utils.Exec(t, conn, "rollback")
+	vitesst.Exec(t, conn, "rollback")
 }
 
 // TestTransactionIsolationInTx tests transaction isolation level inside transaction
@@ -212,20 +206,20 @@ func TestTransactionIsolationInTx(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	utils.Exec(t, conn, "set transaction isolation level read committed")
-	utils.Exec(t, conn, "begin")
-	utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("READ-COMMITTED")]]`)
-	utils.Exec(t, conn, "commit")
+	vitesst.Exec(t, conn, "set transaction isolation level read committed")
+	vitesst.Exec(t, conn, "begin")
+	vitesst.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("READ-COMMITTED")]]`)
+	vitesst.Exec(t, conn, "commit")
 
-	utils.Exec(t, conn, "set transaction isolation level serializable")
-	utils.Exec(t, conn, "begin")
-	utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("SERIALIZABLE")]]`)
-	utils.Exec(t, conn, "commit")
+	vitesst.Exec(t, conn, "set transaction isolation level serializable")
+	vitesst.Exec(t, conn, "begin")
+	vitesst.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("SERIALIZABLE")]]`)
+	vitesst.Exec(t, conn, "commit")
 
-	utils.Exec(t, conn, "set transaction isolation level read committed")
-	utils.Exec(t, conn, "begin")
-	utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("READ-COMMITTED")]]`)
-	utils.Exec(t, conn, "commit")
+	vitesst.Exec(t, conn, "set transaction isolation level read committed")
+	vitesst.Exec(t, conn, "begin")
+	vitesst.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("READ-COMMITTED")]]`)
+	vitesst.Exec(t, conn, "commit")
 }
 
 func start(t *testing.T) func() {
@@ -234,7 +228,7 @@ func start(t *testing.T) func() {
 		require.NoError(t, err)
 		tables := []string{"test", "twopc_user"}
 		for _, table := range tables {
-			_, _ = utils.ExecAllowError(t, conn, "delete from "+table)
+			_, _ = vitesst.ExecAllowError(t, conn, "delete from "+table)
 		}
 		conn.Close()
 	}

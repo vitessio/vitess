@@ -17,6 +17,7 @@ limitations under the License.
 package kill
 
 import (
+	"context"
 	_ "embed"
 	"flag"
 	"fmt"
@@ -29,16 +30,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/utils"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
+	clusterInstance *vitesst.Cluster
 	vtParams        mysql.ConnParams
-	cell            = "zone1"
-	hostname        = "localhost"
 	ks              = "ks"
 
 	//go:embed schema.sql
@@ -52,39 +49,39 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(cell, hostname)
-		defer clusterInstance.Teardown()
+		ctx := context.Background()
 
-		// Start topo server
-		if err := clusterInstance.StartTopo(); err != nil {
-			return 1
-		}
-
-		// Start keyspace
-		keyspace := &cluster.Keyspace{
-			Name:      ks,
-			SchemaSQL: schema,
-			VSchema:   vschema,
-		}
 		var maxGrpcSize int64 = 256 * 1024 * 1024
-		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
-			"--queryserver-config-max-result-size", "10000000",
-			"--grpc-max-message-size", strconv.FormatInt(maxGrpcSize, 10))
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 0, false, clusterInstance.Cell); err != nil {
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithKeyspace(ks).
+				WithShardNames("-80", "80-").
+				WithSchema(schema).
+				WithVSchema(vschema),
+			vitesst.WithVTTabletArgs(
+				"--queryserver-config-max-result-size", "10000000",
+				"--grpc-max-message-size", strconv.FormatInt(maxGrpcSize, 10)),
+			vitesst.WithVTGateArgs(
+				"--grpc-max-message-size", strconv.FormatInt(maxGrpcSize, 10),
+				"--max-memory-rows", "999999",
+				"--allow-kill-statement"),
+		)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-
-		// Start vtgate
-		clusterInstance.VtGatePlannerVersion = planbuilder.Gen4
-		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
-			"--grpc-max-message-size", strconv.FormatInt(maxGrpcSize, 10),
-			"--max-memory-rows", "999999",
-			"--allow-kill-statement")
-		if err := clusterInstance.StartVtgate(); err != nil {
+		cleanup, err := cluster.Start(ctx)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
 
-		vtParams = clusterInstance.GetVTParams(ks)
+		clusterInstance = cluster
+		vtParams = cluster.VTParams(ctx, "")
 
 		return m.Run()
 	}()
@@ -108,22 +105,22 @@ func setupData(t *testing.T, huge bool) {
 	r4 := getRandomString(40)
 
 	for i := 0; i < initialRow; i += 4 {
-		utils.Exec(t, conn, fmt.Sprintf("insert into test(id, msg, extra) values (%d, '%s', '%s'),(%d, '%s', '%s'),(%d, '%s', '%s'),(%d, '%s', '%s')",
+		vitesst.Exec(t, conn, fmt.Sprintf("insert into test(id, msg, extra) values (%d, '%s', '%s'),(%d, '%s', '%s'),(%d, '%s', '%s'),(%d, '%s', '%s')",
 			i, r1, r2,
 			i+1, r2, r3,
 			i+2, r3, r4,
 			i+3, r4, r1))
 	}
 	if !huge {
-		utils.AssertMatches(t, conn, `select count(*), min(id), max(id) from test`, `[[INT64(4) INT64(0) INT64(3)]]`)
+		vitesst.AssertMatches(t, conn, `select count(*), min(id), max(id) from test`, `[[INT64(4) INT64(0) INT64(3)]]`)
 		return
 	}
 
-	utils.AssertMatches(t, conn, `select count(*), min(id), max(id) from test`, `[[INT64(10000) INT64(0) INT64(9999)]]`)
+	vitesst.AssertMatches(t, conn, `select count(*), min(id), max(id) from test`, `[[INT64(10000) INT64(0) INT64(9999)]]`)
 	for i := 1; i < multiplier; i = i << 1 {
-		utils.Exec(t, conn, fmt.Sprintf("insert into test(id, msg, extra) select id+%d, msg, extra from test", (initialRow+1)*i))
+		vitesst.Exec(t, conn, fmt.Sprintf("insert into test(id, msg, extra) select id+%d, msg, extra from test", (initialRow+1)*i))
 	}
-	utils.AssertMatches(t, conn, `select count(*), min(id), max(id) from test`, `[[INT64(320000) INT64(0) INT64(319999)]]`)
+	vitesst.AssertMatches(t, conn, `select count(*), min(id), max(id) from test`, `[[INT64(320000) INT64(0) INT64(319999)]]`)
 }
 
 func dropData(t *testing.T) {
@@ -131,9 +128,9 @@ func dropData(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	utils.Exec(t, conn, "drop table if exists test")
-	utils.Exec(t, conn, "drop table if exists test_idx")
-	utils.ExecMulti(t, conn, schema)
+	vitesst.Exec(t, conn, "drop table if exists test")
+	vitesst.Exec(t, conn, "drop table if exists test_idx")
+	vitesst.ExecMulti(t, conn, schema)
 }
 
 func getRandomString(size int) string {

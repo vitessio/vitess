@@ -12,7 +12,6 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-R442
 */
 
 package mysqlserver
@@ -20,8 +19,6 @@ package mysqlserver
 import (
 	"database/sql"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -192,18 +189,15 @@ func TestSelectWithUnauthorizedUser(t *testing.T) {
 
 // TestPartitionedTable validates that partitioned tables are recognized by schema engine
 func TestPartitionedTable(t *testing.T) {
-	tablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
+	ctx := t.Context()
+
+	tablet := clusterInstance.Keyspace(keyspaceName).Shard("-").Primary()
 
 	// Partitioned table already created, check if vttablet knows about it
-	url := fmt.Sprintf("http://localhost:%d/schemaz", tablet.HTTPPort)
-	resp, err := http.Get(url)
+	_, body, err := tablet.MakeAPICall(ctx, "/schemaz")
 	require.NoError(t, err)
 
-	body, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	assert.Contains(t, string(body), "vt_partition_test")
+	assert.Contains(t, body, "vt_partition_test")
 }
 
 func connectDB(t *testing.T, vtParams mysql.ConnParams, params ...string) *sql.DB {
@@ -211,21 +205,4 @@ func connectDB(t *testing.T, vtParams mysql.ConnParams, params ...string) *sql.D
 	db, err := sql.Open("mysql", connectionStr)
 	require.Nil(t, err)
 	return db
-}
-
-// createConfig create file in to Tmp dir in vtdataroot and write the given data.
-func createConfig(name, data string) error {
-	// creating new file
-	f, err := os.Create(clusterInstance.TmpDirectory + name)
-	if err != nil {
-		return err
-	}
-
-	if data == "" {
-		return nil
-	}
-
-	// write the given data
-	_, err = fmt.Fprint(f, data)
-	return err
 }

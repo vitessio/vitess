@@ -17,6 +17,7 @@ limitations under the License.
 package misc
 
 import (
+	"context"
 	_ "embed"
 	"flag"
 	"os"
@@ -27,16 +28,13 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	rutils "vitess.io/vitess/go/test/endtoend/reparent/utils"
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
+	clusterInstance *vitesst.Cluster
 	vtParams        mysql.ConnParams
 	keyspaceName    = "ks"
-	cell            = "test"
 
 	//go:embed schema.sql
 	schemaSQL string
@@ -46,47 +44,42 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(cell, "localhost")
-		defer clusterInstance.Teardown()
+		ctx := context.Background()
 
-		// Start topo server
-		err := clusterInstance.StartTopo()
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithKeyspace(keyspaceName).
+				WithReplicas(1).
+				WithSchema(schemaSQL),
+			vitesst.WithVTTabletArgs(
+				"--queryserver-config-query-timeout=9000s",
+				"--queryserver-config-pool-size=3",
+				"--queryserver-config-stream-pool-size=3",
+				"--queryserver-config-transaction-cap=2",
+				"--queryserver-config-transaction-timeout=20s",
+				"--shutdown-grace-period=3s",
+				"--queryserver-config-schema-change-signal=false",
+			),
+			vitesst.WithVTGateArgs(
+				"--planner-version=gen4",
+				"--mysql-default-workload=olap",
+				"--schema-change-signal=false",
+			),
+		)
 		if err != nil {
 			return 1
 		}
-
-		// Start keyspace
-		keyspace := &cluster.Keyspace{
-			Name:      keyspaceName,
-			SchemaSQL: schemaSQL,
-		}
-		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
-			"--queryserver-config-query-timeout=9000s",
-			"--queryserver-config-pool-size=3",
-			"--queryserver-config-stream-pool-size=3",
-			"--queryserver-config-transaction-cap=2",
-			"--queryserver-config-transaction-timeout=20s",
-			"--shutdown-grace-period"+"=3s",
-			"--queryserver-config-schema-change-signal=false")
-		err = clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false, clusterInstance.Cell)
+		cleanup, err := cluster.Start(ctx)
 		if err != nil {
 			return 1
 		}
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				os.Stderr.WriteString("cluster teardown: " + err.Error() + "\n")
+			}
+		}()
 
-		// Start vtgate
-		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
-			"--planner-version=gen4",
-			"--mysql-default-workload"+"=olap",
-			"--schema-change-signal"+"=false")
-		err = clusterInstance.StartVtgate()
-		if err != nil {
-			return 1
-		}
-
-		vtParams = mysql.ConnParams{
-			Host: clusterInstance.Hostname,
-			Port: clusterInstance.VtgateMySQLPort,
-		}
+		clusterInstance = cluster
+		vtParams = cluster.VTParams(ctx, "")
 		return m.Run()
 	}()
 	os.Exit(exitCode)
@@ -110,19 +103,20 @@ func TestAcquireSameConnID(t *testing.T) {
 	defer conn.Close()
 
 	// start a reserved connection
-	utils.Exec(t, conn, "set sql_mode=''")
-	_ = utils.Exec(t, conn, "select connection_id()")
+	vitesst.Exec(t, conn, "set sql_mode=''")
+	_ = vitesst.Exec(t, conn, "select connection_id()")
 
 	// restart the mysql to trigger reconnect on next query.
-	primTablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
-	err = primTablet.MysqlctlProcess.Stop()
+	shard := clusterInstance.Keyspace(keyspaceName).Shard("-")
+	primTablet := shard.Primary()
+	err = primTablet.StopMySQL(ctx)
 	require.NoError(t, err)
-	err = primTablet.MysqlctlProcess.StartProvideInit(false)
+	err = primTablet.StartMySQL(ctx)
 	require.NoError(t, err)
 
 	go func() {
 		// this will trigger reconnect with a new connection id, which will be lower than the origin connection id.
-		_, _ = utils.ExecAllowError(t, conn, "select connection_id(), sleep(4000)")
+		_, _ = vitesst.ExecAllowError(t, conn, "select connection_id(), sleep(4000)")
 	}()
 	time.Sleep(5 * time.Second)
 
@@ -133,14 +127,14 @@ func TestAcquireSameConnID(t *testing.T) {
 		conn2, err = mysql.Connect(ctx, &vtParams)
 		require.NoError(t, err)
 
-		utils.Exec(t, conn2, "set sql_mode=''")
+		vitesst.Exec(t, conn2, "set sql_mode=''")
 		// ReserveExecute
-		_, err = utils.ExecAllowError(t, conn2, "select connection_id()")
+		_, err = vitesst.ExecAllowError(t, conn2, "select connection_id()")
 		if err != nil {
 			totalErrCount++
 		}
 		// Execute
-		_, err = utils.ExecAllowError(t, conn2, "select connection_id()")
+		_, err = vitesst.ExecAllowError(t, conn2, "select connection_id()")
 		if err != nil {
 			totalErrCount++
 		}
@@ -150,6 +144,8 @@ func TestAcquireSameConnID(t *testing.T) {
 	assert.Less(t, totalErrCount, 10, "MySQL restart can cause some errors, but not too many.")
 
 	// prs should happen without any error.
-	text, err := rutils.Prs(t, clusterInstance, clusterInstance.Keyspaces[0].Shards[0].Replica())
+	replica := shard.Replicas()[0]
+	text, err := clusterInstance.Vtctld().ExecuteCommandWithOutput(ctx,
+		"PlannedReparentShard", shard.Ref(), "--new-primary", replica.Alias())
 	require.NoError(t, err, text)
 }

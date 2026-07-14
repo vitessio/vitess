@@ -24,6 +24,7 @@ import (
 	"github.com/testcontainers/testcontainers-go/network"
 	"github.com/testcontainers/testcontainers-go/wait"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -59,6 +60,15 @@ func (c *Cluster) startEtcd(ctx context.Context) error {
 	etcd.setContainer(ctr)
 	c.etcd = etcd
 	return nil
+}
+
+// EtcdAddr returns the host-reachable "host:port" of the topology server's
+// etcd client port.
+func (c *Cluster) EtcdAddr(ctx context.Context) (string, error) {
+	if c.etcd == nil {
+		return "", vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "etcd is not running")
+	}
+	return c.etcd.HTTPAddr(ctx)
 }
 
 // topoServerAddress is the etcd client address as seen from inside the

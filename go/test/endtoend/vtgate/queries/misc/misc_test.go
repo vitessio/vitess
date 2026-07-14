@@ -17,11 +17,11 @@ limitations under the License.
 package misc
 
 import (
+	"context"
 	"database/sql"
 	_ "embed"
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -33,11 +33,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
-func start(t *testing.T) (utils.MySQLCompare, func()) {
-	mcmp, err := utils.NewMySQLCompare(t, vtParams, mysqlParams)
+func start(t *testing.T) (vitesst.MySQLCompare, func()) {
+	mcmp, err := vitesst.NewMySQLCompare(t.Context(), t, vtParams, mysqlParams)
 	require.NoError(t, err)
 
 	deleteAll := func() {
@@ -102,11 +102,11 @@ func TestInvalidDateTimeTimestampVals(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
 
-	_, err := mcmp.ExecAllowAndCompareError(`select date'2022'`, utils.CompareOptions{})
+	_, err := mcmp.ExecAllowAndCompareError(`select date'2022'`, vitesst.CompareOptions{})
 	require.Error(t, err)
-	_, err = mcmp.ExecAllowAndCompareError(`select time'12:34:56:78'`, utils.CompareOptions{})
+	_, err = mcmp.ExecAllowAndCompareError(`select time'12:34:56:78'`, vitesst.CompareOptions{})
 	require.Error(t, err)
-	_, err = mcmp.ExecAllowAndCompareError(`select timestamp'2022'`, utils.CompareOptions{})
+	_, err = mcmp.ExecAllowAndCompareError(`select timestamp'2022'`, vitesst.CompareOptions{})
 	require.Error(t, err)
 }
 
@@ -137,14 +137,14 @@ func TestCast(t *testing.T) {
 // TestSetAndGetLastInsertID tests that the last_insert_id function works as intended when used with different arguments.
 func TestSetAndGetLastInsertID(t *testing.T) {
 	notZero := 1
-	checkQuery := func(i string, workload string, tx bool, mcmp utils.MySQLCompare) {
+	checkQuery := func(i string, workload string, tx bool, mcmp vitesst.MySQLCompare) {
 		for _, val := range []int{notZero, 0, notZero * 2} {
 			query := fmt.Sprintf(i, val)
 			name := fmt.Sprintf("%s - %s", workload, query)
 			if tx {
 				name = "tx - " + name
 			}
-			mcmp.Run(name, func(mcmp *utils.MySQLCompare) {
+			mcmp.Run(name, func(mcmp *vitesst.MySQLCompare) {
 				mcmp.Exec(query)
 				mcmp.Exec("select last_insert_id()")
 				t := mcmp.AsT()
@@ -206,7 +206,7 @@ func TestSetAndGetLastInsertIDWithInsertUnsharded(t *testing.T) {
 		return i
 	}
 
-	runTests := func(mcmp *utils.MySQLCompare) {
+	runTests := func(mcmp *vitesst.MySQLCompare) {
 		for _, test := range tests {
 			lastInsertID := getVal()
 			query := fmt.Sprintf(test, lastInsertID)
@@ -221,7 +221,7 @@ func TestSetAndGetLastInsertIDWithInsertUnsharded(t *testing.T) {
 	}
 
 	for _, workload := range []string{"olap", "oltp"} {
-		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
+		mcmp.Run(workload, func(mcmp *vitesst.MySQLCompare) {
 			_, err := mcmp.VtConn.ExecuteFetch("set workload = "+workload, 1, false)
 			require.NoError(t, err)
 			runTests(mcmp)
@@ -258,7 +258,7 @@ func TestSetAndGetLastInsertIDWithInsert(t *testing.T) {
 		return i
 	}
 
-	runTests := func(mcmp *utils.MySQLCompare) {
+	runTests := func(mcmp *vitesst.MySQLCompare) {
 		for _, test := range tests {
 			query := fmt.Sprintf(test, getVal(), getVal())
 			mcmp.Exec(query)
@@ -267,7 +267,7 @@ func TestSetAndGetLastInsertIDWithInsert(t *testing.T) {
 	}
 
 	for _, workload := range []string{"olap", "oltp"} {
-		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
+		mcmp.Run(workload, func(mcmp *vitesst.MySQLCompare) {
 			_, err := mcmp.VtConn.ExecuteFetch("set workload = "+workload, 1, false)
 			require.NoError(t, err)
 			runTests(mcmp)
@@ -443,7 +443,8 @@ func TestSlowQueryStatusFlagsComQueryOKOnlyOLAPEndToEnd(t *testing.T) {
 func vtgateMetricValue(t *testing.T, metric, key string) float64 {
 	t.Helper()
 
-	vars := clusterInstance.VtgateProcess.GetVars()
+	vars, err := clusterInstance.VTGate().GetVars(t.Context())
+	require.NoError(t, err)
 	require.NotNil(t, vars)
 
 	values, ok := vars[metric].(map[string]any)
@@ -461,11 +462,11 @@ func assertQueryLogLineContains(t *testing.T, queryMarker string, substrings ...
 	t.Helper()
 
 	assert.Eventually(t, func() bool {
-		data, err := os.ReadFile(clusterInstance.VtgateProcess.FileToLogQueries)
+		data, err := clusterInstance.VTGate().QueryLog(t.Context())
 		if err != nil {
 			return false
 		}
-		for line := range strings.SplitSeq(string(data), "\n") {
+		for line := range strings.SplitSeq(data, "\n") {
 			if !strings.Contains(line, queryMarker) {
 				continue
 			}
@@ -484,7 +485,7 @@ func assertQueryLogLineContains(t *testing.T, queryMarker string, substrings ...
 func assertVtgateMetricsLineContains(t *testing.T, metric string, substrings ...string) {
 	t.Helper()
 
-	status, metrics, err := clusterInstance.VtgateProcess.MakeAPICall("metrics")
+	status, metrics, err := clusterInstance.VTGate().MakeAPICall(t.Context(), "/metrics")
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, status)
 	assert.Contains(t, metrics, metric)
@@ -528,12 +529,12 @@ func TestPrepareStatements(t *testing.T) {
 	mcmp.AssertMatchesNoOrder(`execute prep_in_pk using @id1, @id2`, `[[INT64(0) INT64(0)] [INT64(1) INT64(0)]]`)
 
 	// Fail by providing wrong number of arguments
-	_, err := mcmp.ExecAllowAndCompareError(`execute prep_in_pk using @id1, @id1, @id`, utils.CompareOptions{})
+	_, err := mcmp.ExecAllowAndCompareError(`execute prep_in_pk using @id1, @id1, @id`, vitesst.CompareOptions{})
 	incorrectCount := "VT03025: Incorrect arguments to EXECUTE"
 	assert.ErrorContains(t, err, incorrectCount)
-	_, err = mcmp.ExecAllowAndCompareError(`execute prep_in_pk using @id1`, utils.CompareOptions{})
+	_, err = mcmp.ExecAllowAndCompareError(`execute prep_in_pk using @id1`, vitesst.CompareOptions{})
 	assert.ErrorContains(t, err, incorrectCount)
-	_, err = mcmp.ExecAllowAndCompareError(`execute prep_in_pk`, utils.CompareOptions{})
+	_, err = mcmp.ExecAllowAndCompareError(`execute prep_in_pk`, vitesst.CompareOptions{})
 	assert.ErrorContains(t, err, incorrectCount)
 
 	mcmp.Exec(`prepare prep_art from 'select 1+?, 10/?'`)
@@ -542,10 +543,10 @@ func TestPrepareStatements(t *testing.T) {
 	// We are not matching types and precision with mysql at the moment, so not comparing with `mcmp`
 	// This is because of the difference in how MySQL executes a raw query with literal values and
 	// the PREPARE/EXEC way that is missing type info at the PREPARE stage
-	utils.AssertMatches(t, mcmp.VtConn, `execute prep_art using @x1, @x1`, `[[INT64(2) DECIMAL(10.0000)]]`)
-	utils.AssertMatches(t, mcmp.VtConn, `execute prep_art using @x2, @x2`, `[[DECIMAL(3.0) DECIMAL(5.0000)]]`)
-	utils.AssertMatches(t, mcmp.VtConn, `execute prep_art using @x3, @x3`, `[[FLOAT64(1) NULL]]`)
-	utils.AssertMatches(t, mcmp.VtConn, `execute prep_art using @x4, @x4`, `[[DECIMAL(10000000000000000000000000000) DECIMAL(0.0000)]]`)
+	vitesst.AssertMatches(t, mcmp.VtConn, `execute prep_art using @x1, @x1`, `[[INT64(2) DECIMAL(10.0000)]]`)
+	vitesst.AssertMatches(t, mcmp.VtConn, `execute prep_art using @x2, @x2`, `[[DECIMAL(3.0) DECIMAL(5.0000)]]`)
+	vitesst.AssertMatches(t, mcmp.VtConn, `execute prep_art using @x3, @x3`, `[[FLOAT64(1) NULL]]`)
+	vitesst.AssertMatches(t, mcmp.VtConn, `execute prep_art using @x4, @x4`, `[[DECIMAL(10000000000000000000000000000) DECIMAL(0.0000)]]`)
 
 	mcmp.Exec(`select 1+1, 10/1 from t1 limit 1`)
 	mcmp.Exec(`select 1+2.0, 10/2.0 from t1 limit 1`)
@@ -553,10 +554,10 @@ func TestPrepareStatements(t *testing.T) {
 	mcmp.Exec(`select 1+9999999999999999999999999999, 10/9999999999999999999999999999 from t1 limit 1`)
 
 	mcmp.Exec("deallocate prepare prep_art")
-	_, err = mcmp.ExecAllowAndCompareError(`execute prep_art using @id1, @id1`, utils.CompareOptions{})
+	_, err = mcmp.ExecAllowAndCompareError(`execute prep_art using @id1, @id1`, vitesst.CompareOptions{})
 	assert.ErrorContains(t, err, "VT09011: Unknown prepared statement handler (prep_art) given to EXECUTE")
 
-	_, err = mcmp.ExecAllowAndCompareError("deallocate prepare prep_art", utils.CompareOptions{})
+	_, err = mcmp.ExecAllowAndCompareError("deallocate prepare prep_art", vitesst.CompareOptions{})
 	assert.ErrorContains(t, err, "VT09011: Unknown prepared statement handler (prep_art) given to DEALLOCATE PREPARE")
 }
 
@@ -573,8 +574,8 @@ func TestLeftJoinUsingUnsharded(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
 
-	utils.Exec(t, mcmp.VtConn, "insert into uks.unsharded(id1) values (1),(2),(3),(4),(5)")
-	utils.Exec(t, mcmp.VtConn, "select * from uks.unsharded as A left join uks.unsharded as B using(id1)")
+	vitesst.Exec(t, mcmp.VtConn, "insert into uks.unsharded(id1) values (1),(2),(3),(4),(5)")
+	vitesst.Exec(t, mcmp.VtConn, "select * from uks.unsharded as A left join uks.unsharded as B using(id1)")
 }
 
 // TestAnalyze executes different analyze statement and validates that they run successfully.
@@ -583,11 +584,11 @@ func TestAnalyze(t *testing.T) {
 	defer closer()
 
 	for _, workload := range []string{"olap", "oltp"} {
-		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
-			utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
-			utils.Exec(t, mcmp.VtConn, "analyze table t1")
-			utils.Exec(t, mcmp.VtConn, "analyze table uks.unsharded")
-			utils.Exec(t, mcmp.VtConn, "analyze table mysql.user")
+		mcmp.Run(workload, func(mcmp *vitesst.MySQLCompare) {
+			vitesst.Exec(t, mcmp.VtConn, "set workload = "+workload)
+			vitesst.Exec(t, mcmp.VtConn, "analyze table t1")
+			vitesst.Exec(t, mcmp.VtConn, "analyze table uks.unsharded")
+			vitesst.Exec(t, mcmp.VtConn, "analyze table mysql.user")
 		})
 	}
 }
@@ -614,11 +615,11 @@ func TestTransactionModeVar(t *testing.T) {
 	}}
 
 	for _, tcase := range tcases {
-		mcmp.Run(tcase.setStmt, func(mcmp *utils.MySQLCompare) {
+		mcmp.Run(tcase.setStmt, func(mcmp *vitesst.MySQLCompare) {
 			if tcase.setStmt != "" {
-				utils.Exec(t, mcmp.VtConn, tcase.setStmt)
+				vitesst.Exec(t, mcmp.VtConn, tcase.setStmt)
 			}
-			utils.AssertMatches(t, mcmp.VtConn, "select @@transaction_mode", tcase.expRes)
+			vitesst.AssertMatches(t, mcmp.VtConn, "select @@transaction_mode", tcase.expRes)
 		})
 	}
 }
@@ -701,8 +702,8 @@ func TestJoinTypes(t *testing.T) {
 	mcmp.Exec("insert into all_types(id) values (1)")
 
 	for _, mode := range []string{"oltp", "olap"} {
-		mcmp.Run(mode, func(mcmp *utils.MySQLCompare) {
-			utils.Exec(t, mcmp.VtConn, "set workload = "+mode)
+		mcmp.Run(mode, func(mcmp *vitesst.MySQLCompare) {
+			vitesst.Exec(t, mcmp.VtConn, "set workload = "+mode)
 			// No result from the RHS, but the RHS uses LHS's values in a few places
 			// There used to be instances where the query sent to vttablet looked like this:
 			//
@@ -714,7 +715,7 @@ func TestJoinTypes(t *testing.T) {
 
 			for _, column := range columns {
 				query := fmt.Sprintf("select t1.id1 as t0, tbl.%s+tbl.id+t1.id1 as col from t1 join all_types tbl where tbl.id > 90", column)
-				mcmp.Run(column, func(mcmp *utils.MySQLCompare) {
+				mcmp.Run(column, func(mcmp *vitesst.MySQLCompare) {
 					mcmp.ExecWithColumnCompare(query)
 				})
 			}
@@ -730,7 +731,7 @@ func TestAlterTableWithView(t *testing.T) {
 	mcmp.Exec(`use ks_misc`)
 	mcmp.Exec(`create view v1 as select * from t1`)
 	var viewDef string
-	utils.WaitForVschemaCondition(t, clusterInstance.VtgateProcess, keyspaceName, func(t *testing.T, ksMap map[string]any) bool {
+	vitesst.WaitForVschemaCondition(t, clusterInstance.VTGate(), keyspaceName, func(t *testing.T, ksMap map[string]any) bool {
 		views, ok := ksMap["views"]
 		if !ok {
 			return false
@@ -761,7 +762,7 @@ func TestAlterTableWithView(t *testing.T) {
 		viewDef = newView.(string)
 		return true
 	}
-	utils.WaitForVschemaCondition(t, clusterInstance.VtgateProcess, keyspaceName, waitForChange, "Waiting for alter view")
+	vitesst.WaitForVschemaCondition(t, clusterInstance.VTGate(), keyspaceName, waitForChange, "Waiting for alter view")
 
 	mcmp.AssertMatches("select * from v1", `[[INT64(1) INT64(1) NULL]]`)
 
@@ -769,7 +770,7 @@ func TestAlterTableWithView(t *testing.T) {
 	mcmp.Exec(`alter table t1 drop column test`)
 	mcmp.Exec(`alter view v1 as select * from t1`)
 
-	utils.WaitForVschemaCondition(t, clusterInstance.VtgateProcess, keyspaceName, waitForChange, "Waiting for alter view")
+	vitesst.WaitForVschemaCondition(t, clusterInstance.VTGate(), keyspaceName, waitForChange, "Waiting for alter view")
 
 	mcmp.AssertMatches("select * from v1", `[[INT64(1) INT64(1)]]`)
 }
@@ -817,7 +818,7 @@ func TestFailingOuterJoinInOLAP(t *testing.T) {
 	mcmp.Exec("insert into t1(id1, id2) values (1,2), (5, 42)")
 	mcmp.Exec("insert into tbl(id, unq_col, nonunq_col) values (1,2,3), (2,5,3)")
 
-	utils.Exec(t, mcmp.VtConn, "set workload = olap")
+	vitesst.Exec(t, mcmp.VtConn, "set workload = olap")
 
 	// This query was
 	mcmp.Exec("select t1.id1 from t1 left join tbl on t1.id2 = tbl.nonunq_col")
@@ -833,7 +834,9 @@ func TestColumnAliases(t *testing.T) {
 
 func TestHandleNullableColumn(t *testing.T) {
 	require.NoError(t,
-		utils.WaitForAuthoritative(t, keyspaceName, "tbl", clusterInstance.VtgateProcess.ReadVSchema))
+		vitesst.WaitForAuthoritative(t, keyspaceName, "tbl", func() (*any, error) {
+			return clusterInstance.VTGate().ReadVSchema(t.Context())
+		}))
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -847,7 +850,9 @@ func TestHandleNullableColumn(t *testing.T) {
 func TestEnumSetVals(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
-	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "tbl_enum_set", clusterInstance.VtgateProcess.ReadVSchema))
+	require.NoError(t, vitesst.WaitForAuthoritative(t, keyspaceName, "tbl_enum_set", func() (*any, error) {
+		return clusterInstance.VTGate().ReadVSchema(t.Context())
+	}))
 
 	mcmp.Exec("insert into tbl_enum_set(id, enum_col, set_col) values (1, 'medium', 'a,b,e'), (2, 'small', 'e,f,g'), (3, 'large', 'c'), (4, 'xsmall', 'a,b'), (5, 'medium', 'a,d')")
 
@@ -876,12 +881,12 @@ func TestTimeZones(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Set the initial time zone and get the time
-			utils.Exec(t, conn, "set time_zone = '+00:00'")
-			rs1 := utils.Exec(t, conn, "select now()")
+			vitesst.Exec(t, conn, "set time_zone = '+00:00'")
+			rs1 := vitesst.Exec(t, conn, "select now()")
 
 			// Set the target time zone and get the time
-			utils.Exec(t, conn, fmt.Sprintf("set time_zone = '%s'", tc.targetTZ))
-			rs2 := utils.Exec(t, conn, "select now()")
+			vitesst.Exec(t, conn, fmt.Sprintf("set time_zone = '%s'", tc.targetTZ))
+			rs2 := vitesst.Exec(t, conn, "select now()")
 
 			// Parse the times from the query result
 			layout := "2006-01-02 15:04:05" // MySQL default datetime format
@@ -913,8 +918,8 @@ func TestSemiJoin(t *testing.T) {
 
 	// Test that the semi join works as intended
 	for _, mode := range []string{"oltp", "olap"} {
-		mcmp.Run(mode, func(mcmp *utils.MySQLCompare) {
-			utils.Exec(t, mcmp.VtConn, "set workload = "+mode)
+		mcmp.Run(mode, func(mcmp *vitesst.MySQLCompare) {
+			vitesst.Exec(t, mcmp.VtConn, "set workload = "+mode)
 
 			mcmp.Exec("select id1, id2 from t1 where exists (select id from tbl where nonunq_col = t1.id2) order by id1")
 		})
@@ -935,11 +940,11 @@ func TestTabletTypeRouting(t *testing.T) {
 	"to_tables": ["uks.unknown"]
 	}
 ]}`
-	err := clusterInstance.VtctldClientProcess.ApplyRoutingRules(routingRules)
+	err := clusterInstance.Vtctld().ExecuteCommand(t.Context(), "ApplyRoutingRules", "--rules", routingRules)
 	require.NoError(t, err)
 	defer func() {
 		// Clear the routing rules after the test.
-		err = clusterInstance.VtctldClientProcess.ApplyRoutingRules("{}")
+		err = clusterInstance.Vtctld().ExecuteCommand(context.WithoutCancel(t.Context()), "ApplyRoutingRules", "--rules", "{}")
 		require.NoError(t, err)
 	}()
 
@@ -950,12 +955,12 @@ func TestTabletTypeRouting(t *testing.T) {
 
 	vtConn := mcmp.VtConn
 	// We first verify that querying the primary tablet goes to the t1 table.
-	utils.Exec(t, vtConn, "use ks_misc@primary")
-	utils.AssertMatches(t, vtConn, "select * from ks_misc.t1", `[[INT64(0) INT64(0)]]`)
+	vitesst.Exec(t, vtConn, "use ks_misc@primary")
+	vitesst.AssertMatches(t, vtConn, "select * from ks_misc.t1", `[[INT64(0) INT64(0)]]`)
 	// Now we change the connection's target
-	utils.Exec(t, vtConn, "use ks_misc@replica")
+	vitesst.Exec(t, vtConn, "use ks_misc@replica")
 	// We verify that the replica-side query is redirected to uks by the routing rule.
-	_, err = utils.ExecAllowError(t, vtConn, "select * from ks_misc.t1")
+	_, err = vitesst.ExecAllowError(t, vtConn, "select * from ks_misc.t1")
 	require.Error(t, err)
 	require.ErrorContains(t, err, "uks")
 	require.ErrorContains(t, err, "replica")

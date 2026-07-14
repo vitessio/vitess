@@ -26,6 +26,10 @@ FROM ${BASE_IMAGE}
 
 ARG FLAVOR=mysql84
 
+# Directory of prebuilt Vitess binaries relative to the build context. The
+# debug2pc bake target points it at a tree built with -tags debug2PC.
+ARG BIN_DIR=".vitesst_install/bin"
+
 # MySQL version passed to install_dependencies.sh. Empty uses the script's
 # default; the bake file pins versions that exist on cdn.mysql.com, since the
 # arm64 tarball for the script's default can rotate off the CDN.
@@ -58,6 +62,6 @@ ENV PATH=/vt/bin:$PATH
 RUN mkdir -p /vt/vtdataroot /vt/files && chown vitess:vitess /vt/vtdataroot /vt/files
 
 # Keep this last: it is the only layer that changes when sources change.
-COPY --chown=vitess:vitess .vitesst_install/bin /vt/bin
+COPY --chown=vitess:vitess ${BIN_DIR} /vt/bin
 
 USER vitess

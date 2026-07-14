@@ -17,6 +17,7 @@ limitations under the License.
 package mysqlserver
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -24,17 +25,15 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 var (
-	clusterInstance       *cluster.LocalProcessCluster
+	clusterInstance       *vitesst.Cluster
 	vtParams              mysql.ConnParams
-	hostname              = "localhost"
 	keyspaceName          = "test_keyspace"
-	tableACLConfig        = "/table_acl_config.json"
-	mysqlAuthServerStatic = "/mysql_auth_server_static.json"
-	cell                  = "zone1"
+	tableACLConfig        = "/vt/files/table_acl_config.json"
+	mysqlAuthServerStatic = "/vt/files/mysql_auth_server_static.json"
 	sqlSchema             = `create table vt_insert_test (
 		id bigint auto_increment,
 		msg varchar(64),
@@ -69,15 +68,8 @@ func TestMain(m *testing.M) {
 	}
 
 	exitcode, err := func() (int, error) {
-		clusterInstance = cluster.NewCluster(cell, hostname)
-		defer clusterInstance.Teardown()
+		ctx := context.Background()
 
-		// Start topo server
-		if err := clusterInstance.StartTopo(); err != nil {
-			return 1, err
-		}
-
-		// create acl config
 		ACLConfig := `{
 			"table_groups": [
 				{
@@ -88,11 +80,7 @@ func TestMain(m *testing.M) {
 				}
 			]
 		}`
-		if err := createConfig(tableACLConfig, ACLConfig); err != nil {
-			return 1, err
-		}
 
-		// create auth server config
 		SQLConfig := `{
 			"testuser1": {
 				"Password": "testpassword1",
@@ -103,47 +91,53 @@ func TestMain(m *testing.M) {
 				"UserData": "vtgate client 2"
 			}
 		}`
-		if err := createConfig(mysqlAuthServerStatic, SQLConfig); err != nil {
+
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithKeyspace(keyspaceName).
+				WithSchema(sqlSchema).
+				WithReplicas(1),
+			vitesst.WithVTGateArgs(
+				"--vschema-ddl-authorized-users=%",
+				"--mysql-server-query-timeout", "1s",
+				"--mysql-auth-server-impl", "static",
+				"--mysql-auth-server-static-file", mysqlAuthServerStatic,
+				"--mysql-server-version", "8.0.16-7",
+				"--warn-sharded-only=true",
+			),
+			vitesst.WithVTGateFiles(vitesst.ContainerFile{
+				Content:       []byte(SQLConfig),
+				ContainerPath: mysqlAuthServerStatic,
+			}),
+			vitesst.WithVTTabletArgs(
+				"--table-acl-config", tableACLConfig,
+				"--queryserver-config-strict-table-acl",
+			),
+			vitesst.WithTabletFiles(vitesst.ContainerFile{
+				Content:       []byte(ACLConfig),
+				ContainerPath: tableACLConfig,
+			}),
+		)
+		if err != nil {
 			return 1, err
 		}
-
-		clusterInstance.VtGateExtraArgs = []string{
-			"--vschema-ddl-authorized-users=%",
-			"--mysql-server-query-timeout", "1s",
-			"--mysql-auth-server-impl", "static",
-			"--mysql-auth-server-static-file", clusterInstance.TmpDirectory + mysqlAuthServerStatic,
-			"--mysql-server-version", "8.0.16-7",
-			"--warn-sharded-only" + "=true",
-		}
-
-		clusterInstance.VtTabletExtraArgs = []string{
-			"--table-acl-config", clusterInstance.TmpDirectory + tableACLConfig,
-			"--queryserver-config-strict-table-acl",
-		}
-
-		// Start keyspace
-		keyspace := &cluster.Keyspace{
-			Name:      keyspaceName,
-			SchemaSQL: sqlSchema,
-		}
-		if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false, clusterInstance.Cell); err != nil {
+		cleanup, err := cluster.Start(ctx)
+		if err != nil {
 			return 1, err
 		}
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
 
-		// Start vtgate
-		if err := clusterInstance.StartVtgate(); err != nil {
-			return 1, err
-		}
+		clusterInstance = cluster
 
-		vtParams = mysql.ConnParams{
-			Host:  clusterInstance.Hostname,
-			Port:  clusterInstance.VtgateMySQLPort,
-			Uname: "testuser1",
-			Pass:  "testpassword1",
-		}
+		vtParams = cluster.VTParams(ctx, "")
+		vtParams.Uname = "testuser1"
+		vtParams.Pass = "testpassword1"
 
-		primaryTabletProcess := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet().VttabletProcess
-		if _, err := primaryTabletProcess.QueryTablet(createProcSQL, keyspaceName, true); err != nil {
+		primaryTablet := cluster.Keyspace(keyspaceName).Shard("-").Primary()
+		if _, err := primaryTablet.QueryTablet(ctx, createProcSQL); err != nil {
 			return 1, err
 		}
 

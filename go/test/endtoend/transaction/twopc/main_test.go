@@ -33,27 +33,29 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/test/endtoend/cluster"
 	twopcutil "vitess.io/vitess/go/test/endtoend/transaction/twopc/utils"
+	"vitess.io/vitess/go/test/vitesst"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 )
 
+// vtgateConfigPath is the config file the vtgate watches inside its container.
+// It is staged world-writable so the running vtgate hot-reloads the
+// transaction mode when a test rewrites it.
+const vtgateConfigPath = "/vt/files/vtgate.json"
+
 var (
-	clusterInstance   *cluster.LocalProcessCluster
+	clusterInstance   *vitesst.Cluster
 	mysqlParams       mysql.ConnParams
 	vtParams          mysql.ConnParams
 	vtgateGrpcAddress string
 	keyspaceName      = "ks"
-	cell              = "zone1"
-	hostname          = "localhost"
 	sidecarDBName     = "vt_ks"
 
 	//go:embed schema.sql
@@ -67,66 +69,66 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitcode := func() int {
-		clusterInstance = cluster.NewCluster(cell, hostname)
-		defer clusterInstance.Teardown()
+		ctx := context.Background()
 
-		// Start topo server
-		if err := clusterInstance.StartTopo(); err != nil {
-			return 1
-		}
-
-		// Reserve vtGate port in order to pass it to vtTablet
-		clusterInstance.VtgateGrpcPort = clusterInstance.GetAndReservePort()
-
-		// Set extra args for twopc
-		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
-			"--grpc-use-effective-callerid",
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithVTGateArgs("--grpc-use-effective-callerid"),
+			vitesst.WithVTGateFiles(vitesst.ContainerFile{
+				Content:       []byte(`{"transaction_mode":"TWOPC"}` + "\n"),
+				ContainerPath: vtgateConfigPath,
+				Mode:          0o666,
+			}),
+			vitesst.WithVTTabletArgs(
+				"--twopc-abandon-age", "1",
+				"--queryserver-config-transaction-cap", "3",
+				"--queryserver-config-transaction-timeout", "400s",
+				"--queryserver-config-query-timeout", "9000s",
+			),
+			vitesst.WithVTAdmin(),
+			vitesst.WithKeyspace(keyspaceName).
+				WithShardNames("-40", "40-80", "80-").
+				WithReplicas(2).
+				WithSchema(SchemaSQL).
+				WithVSchema(VSchema).
+				WithSidecarDBName(sidecarDBName).
+				WithDurabilityPolicy(policy.DurabilitySemiSync),
 		)
-		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
-			"--twopc-abandon-age", "1",
-			"--queryserver-config-transaction-cap", "3",
-			"--queryserver-config-transaction-timeout", "400s",
-			"--queryserver-config-query-timeout", "9000s",
-		)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		cleanup, err := cluster.Start(ctx)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
 
-		// Start keyspace
-		keyspace := &cluster.Keyspace{
-			Name:             keyspaceName,
-			SchemaSQL:        SchemaSQL,
-			VSchema:          VSchema,
-			SidecarDBName:    sidecarDBName,
-			DurabilityPolicy: policy.DurabilitySemiSync,
-		}
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-40", "40-80", "80-"}, 2, false, clusterInstance.Cell); err != nil {
-			return 1
-		}
+		clusterInstance = cluster
+		vtParams = cluster.VTParams(ctx, "")
 
-		// Start Vtgate
-		if err := clusterInstance.StartVtgate(); err != nil {
+		grpcAddr, err := cluster.VTGate().GRPCAddr(ctx)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-		clusterInstance.VtgateProcess.Config.TransactionMode = "TWOPC"
-		if err := clusterInstance.VtgateProcess.RewriteConfiguration(); err != nil {
-			return 1
-		}
-		if err := clusterInstance.VtgateProcess.WaitForConfig(`"transaction_mode":"TWOPC"`); err != nil {
-			return 1
-		}
-		vtParams = clusterInstance.GetVTParams(keyspaceName)
-		vtgateGrpcAddress = fmt.Sprintf("%s:%d", clusterInstance.Hostname, clusterInstance.VtgateGrpcPort)
-
-		clusterInstance.NewVTAdminProcess()
-		if err := clusterInstance.VtadminProcess.Setup(); err != nil {
-			return 1
-		}
+		vtgateGrpcAddress = grpcAddr
 
 		// create mysql instance and connection parameters
-		conn, closer, err := utils.NewMySQL(clusterInstance, keyspaceName, SchemaSQL)
+		conn, closer, err := vitesst.NewMySQL(ctx, cluster, keyspaceName, SchemaSQL)
 		if err != nil {
-			fmt.Println(err)
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-		defer closer()
+		defer func() {
+			if err := closer(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "comparison mysqld teardown:", err)
+			}
+		}()
 		mysqlParams = conn
 
 		return m.Run()
@@ -158,8 +160,8 @@ func cleanup(t *testing.T) {
 	sm.reset()
 }
 
-func startWithMySQL(t *testing.T) (utils.MySQLCompare, func()) {
-	mcmp, err := utils.NewMySQLCompare(t, vtParams, mysqlParams)
+func startWithMySQL(t *testing.T) (vitesst.MySQLCompare, func()) {
+	mcmp, err := vitesst.NewMySQLCompare(t.Context(), t, vtParams, mysqlParams)
 	require.NoError(t, err)
 
 	deleteAll := func() {

@@ -249,6 +249,48 @@ func (t *Tablet) IsRunning() bool {
 	return t.container().IsRunning()
 }
 
+// WriteFile writes content to a path inside the tablet's running container,
+// including paths on the tmpfs data directory.
+func (t *Tablet) WriteFile(ctx context.Context, path, content string) error {
+	if err := writeContainerFile(ctx, t.container(), path, content); err != nil {
+		return vterrors.Wrapf(err, "writing %s on %s", path, t.Alias())
+	}
+	return nil
+}
+
+// RemoveFile deletes a path inside the tablet's running container.
+func (t *Tablet) RemoveFile(ctx context.Context, path string) error {
+	if _, err := mustExec(ctx, t.container(), []string{"rm", "-f", path}); err != nil {
+		return vterrors.Wrapf(err, "removing %s on %s", path, t.Alias())
+	}
+	return nil
+}
+
+// Remove terminates the tablet's container and removes the tablet from the
+// cluster's and its shard's bookkeeping. The topology record is untouched;
+// tests delete it through vtctldclient when needed.
+func (t *Tablet) Remove(ctx context.Context) error {
+	c := t.cluster
+
+	c.mu.Lock()
+	c.tablets = slices.DeleteFunc(c.tablets, func(other *Tablet) bool { return other == t })
+	c.mu.Unlock()
+
+	if ks := c.Keyspace(t.Keyspace); ks != nil {
+		if sh := ks.Shard(t.Shard); sh != nil {
+			sh.mu.Lock()
+			sh.replicas = slices.DeleteFunc(sh.replicas, func(other *Tablet) bool { return other == t })
+			sh.rdonly = slices.DeleteFunc(sh.rdonly, func(other *Tablet) bool { return other == t })
+			if sh.primary == t {
+				sh.primary = nil
+			}
+			sh.mu.Unlock()
+		}
+	}
+
+	return t.terminate(ctx)
+}
+
 // StopVttablet gracefully stops the vttablet process inside the live
 // container, leaving mysqld and the container running.
 func (t *Tablet) StopVttablet(ctx context.Context) error {
@@ -505,6 +547,7 @@ func (c *Cluster) vttabletBaseArgs(spec *TabletSpec, alias string) []string {
 		"--service-map", "grpc-queryservice,grpc-tabletmanager,grpc-updatestream,grpc-throttler",
 		"--db-charset", "utf8mb4",
 		"--log-format", "text",
+		"--alsologtostderr",
 	)
 	return args
 }

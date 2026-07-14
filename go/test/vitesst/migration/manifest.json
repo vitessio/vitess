@@ -473,7 +473,7 @@
    "dropped_tests": [],
    "honesty": null,
    "lifecycle": "shared-cluster",
-   "notes": "Uses raw MySQL wire protocol (WriteComBinlogDumpGTID/ReadPacket) against both vtgate MySQL port and direct vttablet gRPC and vtgate gRPC BinlogDumpGTID; several tests rely on time.Sleep for stream startup and generous timeouts (5-30s) for eventual packet arrival; benchmark file directly touches mysqld socket file, bypassing vttablet entirely. | cluster APIs: LocalProcessCluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartUnshardedKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.Teardown, VtctldClientProcess.GetTablet, cluster.GetPrimaryPosition, Shard.PrimaryTablet | external deps: direct unix-socket mysql connection using VTDATAROOT env path, direct gRPC dial to vttablet via tabletconn.GetDialer | difficulty: hard",
+   "notes": "Not migrated: reverted to the old framework files. Never in test/config.json. Two upstream issues: the username-pipe binlog target form (vt_repl|target) never populates the vtgate session target on this checkout, and TestBinlogDumpGTID_LargeEvent depends on a 50-packet cap that container startup binlog volume exceeds. Needs an upstream test fix before migration. | Uses raw MySQL wire protocol (WriteComBinlogDumpGTID/ReadPacket) against both vtgate MySQL port and direct vttablet gRPC and vtgate gRPC BinlogDumpGTID; several tests rely on time.Sleep for stream startup and generous timeouts (5-30s) for eventual packet arrival; benchmark file directly touches mysqld socket file, bypassing vttablet entirely. | cluster APIs: LocalProcessCluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartUnshardedKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.Teardown, VtctldClientProcess.GetTablet, cluster.GetPrimaryPosition, Shard.PrimaryTablet | external deps: direct unix-socket mysql connection using VTDATAROOT env path, direct gRPC dial to vttablet via tabletconn.GetDialer | difficulty: hard",
    "old_shards": [],
    "old_test_funcs": [
     "TestBinlogDumpGTID_Streaming",
@@ -496,7 +496,7 @@
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/binlogdump",
    "runtime_sec": null,
-   "status": "pending",
+   "status": "quarantined",
    "verified_at_sha": null,
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/binlogdump/",
    "wave": 2
@@ -583,7 +583,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "Spans 5 files sharing one TestMain cluster; exercises vtctld and vttablet HTTP surfaces (/api/keyspaces, /debug/health, /debug/vars, tablet status HTML page containing '</html>'), vtgate /debug/vars JSON shape (VtgateVSchemaCounts, HealthcheckConnections), and vtctldclient ExecuteFetchAsDBA/App multi-statement rejection semantics. | cluster APIs: LocalProcessCluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartUnshardedKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.StartKeyspace, VtgateProcess.TearDown/Setup, LocalProcessCluster.WaitForTabletsToHealthyInVtgate, VtctldClientProcess.ExecuteCommandWithOutput, TopoProcess.Host/Port, VtctldClientProcess.GrpcPort, VtgateProcess.VerifyURL, Shard.PrimaryTablet, VtctldClientProcess.ExecuteCommandWithOutput(\"DeleteTablets\") | utils APIs: utils.Exec | external deps: direct etcd client (clientv3) queries against the topo server, vtctld and vttablet HTTP /debug endpoints (health, vars, status page HTML) | destructive: vtgate restart (TearDown/Setup) to add a dynamically-created sharded keyspace, DeleteTablets on the primary tablet at the end | difficulty: medium",
    "old_shards": [
@@ -607,9 +607,9 @@
     "TestDeleteTablet"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/clustertest",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 14.393,
+   "status": "verified",
+   "verified_at_sha": "52a8b887d37d80ea5e6a906ac8499fc1adecbb06",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/clustertest/",
    "wave": 2
   },
@@ -792,7 +792,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "Message-queue (vitess_message table) semantics tested via raw gRPC MessageStream against vtgate, with real-time client-count assertions scraped from vttablet /debug/vars and generous sleeps (1s-10s) to account for message-stream-grace-period and epoch/jitter backoff timing; TestReparenting proves stream failover across a PlannedReparentShard, a genuinely timing-sensitive, hard scenario. | cluster APIs: LocalProcessCluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartUnshardedKeyspace, LocalProcessCluster.StartKeyspace, LocalProcessCluster.StartVtgate, Keyspace.Shards[].PrimaryTablet/Vttablets, VtctldClientProcess.ExecuteCommand(\"PlannedReparentShard\"), VtctldClientProcess.ExecuteCommand(\"Validate\"), cluster.ExecuteQueriesUsingVtgate | utils APIs: utils.Exec | external deps: vttablet /debug/vars HTTP endpoint scraped for Messages.<table>.ClientCount | destructive: PlannedReparentShard twice (promote replica, then promote back) mid-test while grpc message streams are open | difficulty: hard",
    "old_shards": [
@@ -815,9 +815,9 @@
     "TestConnection"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/messaging",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 73.005,
+   "status": "verified",
+   "verified_at_sha": "52a8b887d37d80ea5e6a906ac8499fc1adecbb06",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/messaging/",
    "wave": 2
   },
@@ -924,7 +924,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "TestMain writes two JSON config files (table ACL, mysql auth server static) into clusterInstance.TmpDirectory and points VtGateExtraArgs/VtTabletExtraArgs at those host paths; a container framework needs a way to inject config files into the vtgate/vttablet containers rather than a shared tmp dir. grpc-max-message-size is set via an env var read back inside a test (os.Getenv), and TestTimeout relies on '--mysql-server-query-timeout 1s' plus SLEEP(5). | cluster APIs: LocalProcessCluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartUnshardedKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.Teardown, VttabletProcess.QueryTablet, Shard.PrimaryTablet | external deps: table-acl-config file written to TmpDirectory, mysql-auth-server-static config file written to TmpDirectory, HTTP scrape of tablet /schemaz debug page | difficulty: medium",
    "old_shards": [
@@ -950,9 +950,9 @@
     "TestPartitionedTable"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/mysqlserver",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 10.467,
+   "status": "verified",
+   "verified_at_sha": "52a8b887d37d80ea5e6a906ac8499fc1adecbb06",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/mysqlserver/",
    "wave": 2
   },
@@ -1549,7 +1549,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "//go:embed schema.sql for keyspace schema. TestAcquireSameConnID has a fixed 5s sleep to let a reconnect race happen and loops 100 connections to try to trigger a connection-ID collision bug; timing-sensitive and somewhat flaky-prone by construction. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartUnshardedKeyspace, LocalProcessCluster.StartVtgate, reparent/utils.Prs, Keyspace.PrimaryTablet/Replica, Vttablet.MysqlctlProcess.Stop/StartProvideInit | utils APIs: utils.Exec, utils.ExecAllowError | destructive: mysqlctl Stop/StartProvideInit(false) restart of primary's mysqld to force a reconnect mid-test | difficulty: hard",
    "old_shards": [
@@ -1568,9 +1568,9 @@
     "TestAcquireSameConnID"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/reparent/prscomplex",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 27.551,
+   "status": "verified",
+   "verified_at_sha": "52a8b887d37d80ea5e6a906ac8499fc1adecbb06",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/reparent/prscomplex/",
    "wave": 2
   },
@@ -1582,7 +1582,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "//go:embed schema.sql. Tests reserved-connection settings-pool behavior surviving a PRS; straightforward connection-based assertions plus vtctldclient PRS control-plane calls. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartUnshardedKeyspace, LocalProcessCluster.StartVtgate, reparent/utils.Prs, reparent/utils.WaitForTabletToBeServing | utils APIs: utils.Exec | destructive: PRS between two replicas twice per test (setup + reset) | difficulty: medium",
    "old_shards": [
@@ -1602,9 +1602,9 @@
     "TestSettingsPoolWithoutTXAndPRS"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/reparent/prssettingspool",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 28.248,
+   "status": "verified",
+   "verified_at_sha": "52a8b887d37d80ea5e6a906ac8499fc1adecbb06",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/reparent/prssettingspool/",
    "wave": 2
   },
@@ -1768,7 +1768,7 @@
    "dropped_tests": [],
    "honesty": null,
    "lifecycle": "cluster-per-test",
-   "notes": "Each subtest (bt.Test) builds and tears down its own cluster; buffering assertions read vtgate's /debug/vars-style VerifyURL JSON. Failover path issues raw multi-statement SQL directly on tablet mysqld (STOP/RESET/CHANGE REPLICATION SOURCE) so the new framework must allow a raw SQL session to a specific tablet's mysqld. Timing-sensitive: a 1s minimum-unavailability sleep and background read/write threads running every 10ms. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartUnshardedKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.Teardown, VttabletProcess.QueryTabletMultiple, VttabletProcess.ResetBinaryLogsCommand, cluster.WaitForReplicationPos, cluster.GetPrimaryPosition, VtctldClientProcess.ExecuteCommand, VtgateProcess.VerifyURL | utils APIs: utils.Exec | destructive: TabletExternallyReparented (manual demote/promote via raw SQL then TER), PlannedReparentShard failover | difficulty: hard",
+   "notes": "Moved to wave 3: all cluster lifecycle lives in the shared tabletgateway/buffer helper package, which buffer/reshard (wave 3) also uses; both migrate together with the helper. | Each subtest (bt.Test) builds and tears down its own cluster; buffering assertions read vtgate's /debug/vars-style VerifyURL JSON. Failover path issues raw multi-statement SQL directly on tablet mysqld (STOP/RESET/CHANGE REPLICATION SOURCE) so the new framework must allow a raw SQL session to a specific tablet's mysqld. Timing-sensitive: a 1s minimum-unavailability sleep and background read/write threads running every 10ms. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartUnshardedKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.Teardown, VttabletProcess.QueryTabletMultiple, VttabletProcess.ResetBinaryLogsCommand, cluster.WaitForReplicationPos, cluster.GetPrimaryPosition, VtctldClientProcess.ExecuteCommand, VtgateProcess.VerifyURL | utils APIs: utils.Exec | destructive: TabletExternallyReparented (manual demote/promote via raw SQL then TER), PlannedReparentShard failover | difficulty: hard",
    "old_shards": [
     {
      "args": [],
@@ -1786,7 +1786,7 @@
    "status": "pending",
    "verified_at_sha": null,
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/tabletgateway/buffer/reparent/",
-   "wave": 2
+   "wave": 3
   },
   "vitess.io/vitess/go/test/endtoend/tabletgateway/buffer/reshard": {
    "blockers": [],
@@ -2264,7 +2264,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "Plain conn-level tests of transaction_mode (single/twopc), isolation levels, read-only/read-write transaction characteristics, and target-replica routing (`use ks@replica`). VtTabletExtraArgs sets --twopc-abandon-age; DurabilityPolicy set to semi-sync for the keyspace. | cluster APIs: cluster.NewCluster, LocalProcessCluster.GetAndReservePort, LocalProcessCluster.StartTopo, LocalProcessCluster.StartKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.GetVTParams, LocalProcessCluster.Teardown | utils APIs: utils.Exec, utils.ExecAllowError, utils.AssertMatches | difficulty: easy",
    "old_shards": [
@@ -2286,9 +2286,9 @@
     "TestTransactionIsolationInTx"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/transaction",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 7.329,
+   "status": "verified",
+   "verified_at_sha": "52a8b887d37d80ea5e6a906ac8499fc1adecbb06",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/transaction/",
    "wave": 2
   },
@@ -2302,7 +2302,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "Go benchmark (b.N loop), 4-shard keyspace with custom SidecarDBName vt_ks, semi-sync durability policy. No process control, pure conn-based inserts comparing twopc vs multi commit modes. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.GetVTParams, LocalProcessCluster.Teardown | utils APIs: twopcutil.ClearOutTable | difficulty: easy",
    "old_shards": [],
@@ -2310,9 +2310,9 @@
     "TestMain"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/transaction/benchmark",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 9.213,
+   "status": "verified",
+   "verified_at_sha": "52a8b887d37d80ea5e6a906ac8499fc1adecbb06",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/transaction/benchmark/",
    "wave": 2
   },
@@ -2328,7 +2328,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "--shutdown-grace-period=0s tablet arg, --mysql-default-workload=olap vtgate arg. Test kills mysqld under an open streaming transaction and asserts the client sees a connection error rather than silently continuing (regression test for reconnect-during-stream bug). | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartUnshardedKeyspace, LocalProcessCluster.StartVtgate, Shard.PrimaryTablet, Tablet.MysqlctlProcess.Stop, Tablet.MysqlctlProcess.StartProvideInit | utils APIs: utils.Exec, utils.ExecAllowError | external deps: mysqlctl (host binary/process controlling mysqld) | destructive: MysqlctlProcess.Stop() then StartProvideInit(false) to kill and restart the underlying mysqld mid-stream-transaction | difficulty: hard",
    "old_shards": [
@@ -2345,9 +2345,9 @@
     "TestStreamTxRestart"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/transaction/restart",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 19.772,
+   "status": "verified",
+   "verified_at_sha": "52a8b887d37d80ea5e6a906ac8499fc1adecbb06",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/transaction/restart/",
    "wave": 2
   },
@@ -2361,7 +2361,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "VtGateExtraArgs sets --onterm-timeout 1s to make the restart-triggered graceful shutdown fast. Also covers autocommit-session error handling (duplicate key on an autocommit insert still commits prior statements). | cluster APIs: cluster.NewCluster, LocalProcessCluster.GetAndReservePort, LocalProcessCluster.StartTopo, LocalProcessCluster.StartUnshardedKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.RestartVtgate, LocalProcessCluster.GetVTParams | utils APIs: utils.Exec | destructive: LocalProcessCluster.RestartVtgate() mid-transaction to force rollback of an in-flight open transaction | difficulty: medium",
    "old_shards": [
@@ -2379,9 +2379,9 @@
     "TestErrorInAutocommitSession"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/transaction/rollback",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 7.153,
+   "status": "verified",
+   "verified_at_sha": "52a8b887d37d80ea5e6a906ac8499fc1adecbb06",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/transaction/rollback/",
    "wave": 2
   },
@@ -2395,7 +2395,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "Pure conn-level SINGLE-transaction-mode semantics around lookup vindex dangling rows and cross-shard write detection; VtGatePlannerVersion=Gen4, VtGateExtraArgs=[--transaction-mode SINGLE]. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.GetVTParams | utils APIs: utils.Exec, utils.AssertMatches, utils.AssertContainsError | difficulty: easy",
    "old_shards": [
@@ -2419,9 +2419,9 @@
     "TestOnlyMultiShardWriteFail"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/transaction/single",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 7.311,
+   "status": "verified",
+   "verified_at_sha": "52a8b887d37d80ea5e6a906ac8499fc1adecbb06",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/transaction/single/",
    "wave": 2
   },
@@ -2448,7 +2448,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "Central twopc correctness suite: DT commit/rollback/prepare-fail/resolve-after-crash scenarios validated by diffing vstream binlog events against expectations, transaction status/warning introspection (`show transaction status`, `show unresolved transactions`), vindex (lookup/consistent-lookup) interplay with 2PC, and a semi-sync-is-required-for-2PC check that flips DurabilityPolicy via SetKeyspaceDurabilityPolicy + PRS. Heavy on exact string-matching of generated SQL in redo_statement rows, fragile to any planner rewrite changes. | cluster APIs: cluster.NewCluster, LocalProcessCluster.GetAndReservePort, LocalProcessCluster.StartTopo, LocalProcessCluster.StartKeyspace, LocalProcessCluster.StartVtgate, VtgateProcess.Config.TransactionMode, VtgateProcess.RewriteConfiguration, VtgateProcess.WaitForConfig, LocalProcessCluster.NewVTAdminProcess, VtadminProcess.Setup, VtadminProcess.MakeAPICallRetry, VtctldClientProcess.ExecuteCommandWithOutput, VtctldClientProcess.PlannedReparentShard, Shard.FindPrimaryTablet/Vttablets, cluster.DialVTGate, grpctmclient.NewClient (direct TabletManagerClient RPCs: GetUnresolvedTransactions, GetTransactionInfo), utils.NewMySQL/NewMySQLCompare (side mysqld comparison) | utils APIs: utils.Exec, utils.ExecAllowError, utils.AssertMatches, utils.MySQLCompare, twopcutil.ClearOutTable, twopcutil.WriteTestCommunicationFile, twopcutil.DeleteFile, twopcutil.RunMultiShardCommitWithDelay, twopcutil.WaitForResults | external deps: vtadmin process, host filesystem file-drop fault injection under $VTDATAROOT (debug commit-delay files), raw grpctmclient TabletManagerClient RPCs bypassing vtctld | destructive: PlannedReparentShard (multiple, including flipping durability policy then PRS to enforce semi-sync requirement) | difficulty: hard",
    "old_shards": [
@@ -2482,10 +2482,10 @@
     "TestVindexes"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/transaction/twopc",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
-   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/transaction/twopc/",
+   "runtime_sec": 116.27,
+   "status": "verified",
+   "verified_at_sha": "52a8b887d37d80ea5e6a906ac8499fc1adecbb06",
+   "verify_cmd": "VITESST_IMAGE=vitesst:mysql84-debug2pc go test -count=1 -timeout 30m -v ./go/test/endtoend/transaction/twopc/",
    "wave": 2
   },
   "vitess.io/vitess/go/test/endtoend/transaction/twopc/fuzz": {
@@ -2549,7 +2549,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "Scrapes /debug/vars-style JSON via VtgateProcess.GetVars / VttabletProcess.GetVars for CommitModeTimings, CommitUnresolved, CommitPreparedFail, UnresolvedTransaction gauges; uses magic caller-ID fault injection strings (MMCommitted_FailNow, RMCommit_-40_FailNow, CP_80-_R/NR) same as the parent twopc package to force specific 2PC failure points and assert the resulting metric deltas. | cluster APIs: cluster.NewCluster, LocalProcessCluster.GetAndReservePort, LocalProcessCluster.StartTopo, LocalProcessCluster.StartKeyspace, LocalProcessCluster.StartVtgate, cluster.DialVTGate, VtgateProcess.GetVars, Shard.FindPrimaryTablet().VttabletProcess.GetVars, Tablet.RestartOnlyTablet, VtctldClientProcess.ExecuteCommandWithOutput (DistributedTransaction conclude) | utils APIs: twopcutil.ClearOutTable, twopcutil.ToWarn | destructive: Tablet.RestartOnlyTablet() to force an unresolved-transaction scenario for metrics verification | difficulty: medium",
    "old_shards": [
@@ -2569,10 +2569,10 @@
     "TestVTTablet2PCMetricsFailCommitPrepared"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/transaction/twopc/metric",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
-   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/transaction/twopc/metric/",
+   "runtime_sec": 29,
+   "status": "verified",
+   "verified_at_sha": "52a8b887d37d80ea5e6a906ac8499fc1adecbb06",
+   "verify_cmd": "VITESST_IMAGE=vitesst:mysql84-debug2pc go test -count=1 -timeout 30m -v ./go/test/endtoend/transaction/twopc/metric/",
    "wave": 2
   },
   "vitess.io/vitess/go/test/endtoend/transaction/twopc/stress": {
@@ -3450,7 +3450,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "Single trivial test hitting api/keyspaces on vtadmin's HTTP API. Deliberately sets a non-RFC3986 cluster ID (local_test, contains underscore) to exercise gRPC name resolver edge cases -- worth preserving that detail. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartUnshardedKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.NewVTAdminProcess, VtadminProcess.Setup/ClusterID, VtadminProcess.MakeAPICallRetry, LocalProcessCluster.Teardown | external deps: vtadmin process/API server (separate binary+HTTP API) | difficulty: medium",
    "old_shards": [
@@ -3467,9 +3467,9 @@
     "TestVtadminAPIs"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtadmin",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 7.951,
+   "status": "verified",
+   "verified_at_sha": "52a8b887d37d80ea5e6a906ac8499fc1adecbb06",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtadmin/",
    "wave": 2
   },
@@ -3705,7 +3705,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "cluster-per-test",
    "notes": "Each test builds its own cluster via setupCluster(t). TestConnectionDrainCloseConnections and TestConnectionDrainOnTermTimeout are timing-sensitive (rely on wall-clock sleeps of several seconds and a long-running `select sleep(40)` query) to assert connection draining vs onterm-timeout behavior. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartUnshardedKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.GetVTParams, LocalProcessCluster.VtgateProcess.Terminate, LocalProcessCluster.VtgateProcess.IsShutdown, LocalProcessCluster.Teardown | utils APIs: utils.ExecAllowError | external deps: embedded schema.sql (go:embed) | destructive: VtgateProcess.Terminate() (SIGTERM) mid-test, then polling IsShutdown() | difficulty: hard",
    "old_shards": [
@@ -3725,9 +3725,9 @@
     "TestConnectionDrainOnTermTimeout"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/connectiondrain",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 55,
+   "status": "verified",
+   "verified_at_sha": "52a8b887d37d80ea5e6a906ac8499fc1adecbb06",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/connectiondrain/",
    "wave": 2
   },
@@ -3780,7 +3780,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "Exercises the DBDDL noop plugin: CREATE DATABASE / DROP DATABASE from a client race against a 300ms-delayed StartUnshardedKeyspace/teardown goroutine; relies on precise process-level start/stop timing. | cluster APIs: NewCluster, StartTopo, StartKeyspace, StartUnshardedKeyspace, NewVtgateInstance, VtgateProcess.Setup, VttabletProcess.TearDown, MysqlctlProcess.StopProcess, MysqlctldProcess.Stop, VtctldClientProcess.ExecuteCommand, Teardown | utils APIs: utils.Exec, utils.AssertMatches | external deps: mysqlctl/mysqlctld process control, dbddl-plugin=noop vtgate flag | destructive: stops mysqlctl/mysqlctld for a dynamically-created keyspace, tears down vttablet mid-test, deletes and recreates a keyspace at runtime (DeleteKeyspace --recursive) | difficulty: hard",
    "old_shards": [
@@ -3799,9 +3799,9 @@
     "TestDBDDLPlugin"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/createdb_plugin",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 75.212,
+   "status": "verified",
+   "verified_at_sha": "52a8b887d37d80ea5e6a906ac8499fc1adecbb06",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/createdb_plugin/",
    "wave": 2
   },
@@ -3814,7 +3814,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "Test is skipped when clusterInstance.HasPartialKeyspaces is true; asserts on exact warning-text substrings that come from vttablet/vtgate internals, so the container framework must surface the same error strings. | cluster APIs: NewCluster, StartTopo, StartKeyspace, StartVtgate, GetVTParams, HasPartialKeyspaces, Keyspaces[].Shards[].Replica, MysqlctlProcess.Stop | utils APIs: utils.Exec, utils.AssertMatches | destructive: stops mysqld on a replica tablet mid-test to force a NOT_SERVING/no-healthy-tablet warning | difficulty: medium",
    "old_shards": [
@@ -3833,9 +3833,9 @@
     "TestScatterErrsAsWarns"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/errors_as_warnings",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 12.543,
+   "status": "verified",
+   "verified_at_sha": "52a8b887d37d80ea5e6a906ac8499fc1adecbb06",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/errors_as_warnings/",
    "wave": 2
   },
@@ -4123,7 +4123,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "cluster-per-test",
    "notes": "Both tests start an independent cluster via createCluster(); TestVSchemaDDLWithKeyspacesToWatch asserts that with --keyspaces-to-watch set, the topo server is forced read-only so 'alter vschema create vindex' fails with a specific error string. | cluster APIs: NewCluster, StartTopo, TmpDirectory, StartUnshardedKeyspace, VtGateExtraArgs, StartVtgate, Teardown | external deps: mysql_auth_server_static.json config file written to clusterInstance.TmpDirectory | difficulty: medium",
    "old_shards": [
@@ -4140,9 +4140,9 @@
     "TestVSchemaDDLWithKeyspacesToWatch"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/keyspace_watches",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 12.6,
+   "status": "verified",
+   "verified_at_sha": "52a8b887d37d80ea5e6a906ac8499fc1adecbb06",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/keyspace_watches/",
    "wave": 2
   },
@@ -4314,7 +4314,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "2-shard keyspace ks_aggr, vtgate started with --schema-change-signal, --enable-system-settings=true; TestScalarAggregate mutates VtGateExtraArgs and calls RestartVtgate mid-test then restores it in a defer, so the harness needs a vtgate-restart-with-new-flags capability. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.RestartVtgate, LocalProcessCluster.GetVTParams, LocalProcessCluster.Teardown | utils APIs: utils.NewMySQL, utils.NewMySQLCompare, utils.WaitForAuthoritative, utils.Exec, utils.ExecAllowError, MySQLCompare.Exec, MySQLCompare.ExecAndIgnore, MySQLCompare.ExecAllowError, MySQLCompare.ExecNoCompare, MySQLCompare.ExecAllowAndCompareError, MySQLCompare.AssertMatches, MySQLCompare.AssertMatchesNoOrder, MySQLCompare.Run | destructive: clusterInstance.RestartVtgate() in TestScalarAggregate to flip --schema-change-signal off/on and reload vtParams | difficulty: medium",
    "old_shards": [
@@ -4364,9 +4364,9 @@
     "TestMain"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/queries/aggregation",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 72.453,
+   "status": "verified",
+   "verified_at_sha": "52a8b887d37d80ea5e6a906ac8499fc1adecbb06",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/queries/aggregation/",
    "wave": 2
   },
@@ -4612,7 +4612,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "2-shard keyspace 'ks'; vttablet/vtgate started with large --grpc-max-message-size and vtgate --allow-kill-statement, --max-memory-rows 999999. Loads up to 320k rows (setupData huge=true) to force long-running scatter queries then races KILL/KILL QUERY against them from a second connection with goroutines + time.After polling loops (up to 5s); timing-sensitive and must reliably interrupt server-side query execution, not just close the client socket. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.GetVTParams, LocalProcessCluster.Teardown | utils APIs: utils.Exec, utils.AssertMatches, utils.ExecAllowError, utils.ExecMulti, utils.ExecWithRowCount | destructive: KILL <connection_id> / KILL QUERY <connection_id> issued over a second connection to abort another connection's in-flight query or the connection itself, exercised concurrently via goroutines and time-based polling | difficulty: hard",
    "old_shards": [
@@ -4636,9 +4636,9 @@
     "TestMain"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/queries/kill",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 14.957,
+   "status": "verified",
+   "verified_at_sha": "52a8b887d37d80ea5e6a906ac8499fc1adecbb06",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/queries/kill/",
    "wave": 2
   },
@@ -4693,7 +4693,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "Uses --enable-views, --slow-query-threshold, --queryserver-config-max-result-size, and scrapes vtgate /metrics (Prometheus-format) plus expvar GetVars() for slow-query counters; TestAlterTableWithView does a real time.Sleep(10s) and polls schema tracker state via WaitForVschemaCondition; TestTabletTypeRouting depends on uks keyspace having 0 replicas to produce a 'no healthy tablet' signal, so replica-count-zero topology must be preserved. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartUnshardedKeyspace, LocalProcessCluster.StartKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.GetVTParams, VtgateProcess.GetVars, VtgateProcess.MakeAPICall, VtgateProcess.ReadVSchema, VtgateProcess.FileToLogQueries, VtctldClientProcess.ApplyRoutingRules, LocalProcessCluster.Teardown | utils APIs: utils.NewMySQL, utils.NewMySQLCompare, MySQLCompare.Exec/ExecAndIgnore/AssertMatches/AssertMatchesNoOrder/AssertMatchesNoCompare/ExecAllowAndCompareError/ExecVitessAndMySQLDifferentQueries/ExecWithColumnCompare/VExplain/AsT, utils.Exec, utils.ExecAllowError, utils.WaitForVschemaCondition, utils.WaitForAuthoritative, utils.AssertMatches | external deps: reads local log file (VtgateProcess.FileToLogQueries) directly off disk | difficulty: hard",
    "old_shards": [
@@ -4743,9 +4743,9 @@
     "TestJoinMixedCaseExpr"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/queries/misc",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 35,
+   "status": "verified",
+   "verified_at_sha": "52a8b887d37d80ea5e6a906ac8499fc1adecbb06",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/queries/misc/",
    "wave": 2
   },
@@ -4924,7 +4924,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "Two unsharded keyspaces (ks1 has prevent_cross_keyspace_reads:true in vschema); one subtest mutates global vtgate flags and restarts vtgate mid-test-run, then restores in t.Cleanup \u2014 framework must support in-place vtgate process restart with new flags while keeping the same port/connection identity. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartUnshardedKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.RestartVtgate, clusterInstance.VtGateExtraArgs, LocalProcessCluster.Teardown | utils APIs: mysql.Connect, utils.ExecAllowError, utils.Exec | destructive: RestartVtgate with new --prevent-cross-keyspace-reads flag, then RestartVtgate again in cleanup to revert flags | difficulty: medium",
    "old_shards": [],
@@ -4936,9 +4936,9 @@
     "TestPreventCrossKeyspaceReadsVTGateFlag"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/queries/prevent_cross_keyspace_reads",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 13.023,
+   "status": "verified",
+   "verified_at_sha": "52a8b887d37d80ea5e6a906ac8499fc1adecbb06",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/queries/prevent_cross_keyspace_reads/",
    "wave": 2
   },
@@ -5085,7 +5085,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "One test (TestQueryTimeoutWithoutVTGateDefault) mutates clusterInstance.VtGateExtraArgs and calls RestartVtgate mid-suite, which permanently changes vtgate flags for any tests that run after it in the same binary; timing assumes sleep()-based query duration control (tablet query-timeout 2s, tx-timeout 3s, pool-timeout 2s, vtgate query-timeout 100ms) so needs generous/deterministic timing knobs in the container framework. | cluster APIs: LocalProcessCluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartUnshardedKeyspace, LocalProcessCluster.StartKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.RestartVtgate, LocalProcessCluster.GetVTParams, LocalProcessCluster.VtTabletExtraArgs, LocalProcessCluster.VtGateExtraArgs | utils APIs: utils.NewMySQL, utils.NewMySQLCompare, utils.ExecAllowError, utils.Exec, MySQLCompare.ExecAndIgnore, MySQLCompare.Close | destructive: LocalProcessCluster.RestartVtgate (mid-test vtgate restart with different --query-timeout flag) | difficulty: medium",
    "old_shards": [
@@ -5108,9 +5108,9 @@
     "TestOverallQueryTimeout"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/queries/timeout",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 54.314,
+   "status": "verified",
+   "verified_at_sha": "52a8b887d37d80ea5e6a906ac8499fc1adecbb06",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/queries/timeout/",
    "wave": 2
   },
@@ -5302,7 +5302,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "get_lock/sysvar/udv tests rely on wall-clock sleeps (1-12s) tied to --lock-heartbeat-time=2s and tablet reserved-connection timeouts, plus in-band mysqld connection kills via a raw 'kill <id>' admin query issued straight to the tablet (QueryTablet) rather than any vtctld API \u2014 needs an equivalent direct-tablet-admin-query capability in the container framework. | cluster APIs: LocalProcessCluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.VtGatePlannerVersion, LocalProcessCluster.HasPartialKeyspaces, Keyspace.Shards[].PrimaryTablet, Tablet.VttabletProcess.QueryTablet | utils APIs: utils.Exec, utils.ExecAllowError, utils.AssertMatches, utils.AssertMatchesAny, utils.AssertContains, utils.AssertContainsError | destructive: VttabletProcess.QueryTablet(\"kill <connection_id>\") to forcibly break the underlying mysqld connection under a reserved/transactional session | difficulty: medium",
    "old_shards": [
@@ -5352,9 +5352,9 @@
     "TestUserDefinedVariableResolvedAtTablet"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/reservedconn",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 50.6,
+   "status": "verified",
+   "verified_at_sha": "52a8b887d37d80ea5e6a906ac8499fc1adecbb06",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/reservedconn/",
    "wave": 2
   },
@@ -5404,7 +5404,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "Keyspace started with rdonly tablets (replica count 1, rdonly=true) two shards; test spins in a retry loop on ExecAllowError until reserved connections are established on rdonly before flipping tablet types, so migrator must preserve @rdonly/@primary target syntax and tablet-type routing semantics; olap-streaming variant checks mid-stream error surfaces as an ERR packet without killing the connection. | cluster APIs: LocalProcessCluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.VtctldClientProcess.ExecuteCommand, Keyspace.Shards[].Rdonly, Keyspace.Shards[].Replica | utils APIs: utils.Exec, utils.ExecAllowError | destructive: ChangeTabletType (rdonly<->replica) via vtctldclient, used to make/remove serving tablets mid-test, PingTablet via vtctldclient | difficulty: medium",
    "old_shards": [
@@ -5422,9 +5422,9 @@
     "TestServingChangeStreaming"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/reservedconn/servingchange",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 10,
+   "status": "verified",
+   "verified_at_sha": "52a8b887d37d80ea5e6a906ac8499fc1adecbb06",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/reservedconn/servingchange/",
    "wave": 2
   },
@@ -5439,7 +5439,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "Simple PRS-during-reserved-connection test (oltp and olap/streaming variants); expects the vtgate reserved connection to transparently follow the new primary after PlannedReparentShard, needs generous timeouts since this is timing-sensitive around gRPC/replication convergence. | cluster APIs: LocalProcessCluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.VtctldClientProcess.ExecuteCommand | utils APIs: utils.Exec, utils.ExecAllowError | destructive: PlannedReparentShard via vtctldclient (primary failover mid-test) | difficulty: medium",
    "old_shards": [
@@ -5457,9 +5457,9 @@
     "TestTabletChangeStreaming"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/reservedconn/tabletchange",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 9.384,
+   "status": "verified",
+   "verified_at_sha": "52a8b887d37d80ea5e6a906ac8499fc1adecbb06",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/reservedconn/tabletchange/",
    "wave": 2
   },
@@ -5512,7 +5512,7 @@
    "dropped_tests": [],
    "honesty": null,
    "lifecycle": "cluster-per-test",
-   "notes": "//go:build !windows. Manually constructs a second VtgateProcess with cluster.VtgateProcessInstance reusing the first vtgate's port, disabling the unix socket path since it doesn't support multiplexing; verifies traffic fails over to the surviving process after the first is torn down. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartUnshardedKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.GetVTParams, LocalProcessCluster.GetAndReservePort, cluster.VtgateProcessInstance, VtgateProcess.Setup, VtgateProcess.TearDown, VtgateProcess.IsShutdown, LocalProcessCluster.Teardown | utils APIs: utils.ExecAllowError | external deps: SO_REUSEPORT dual-bind of two vtgate processes on the same host:port (--reuse-port) | destructive: kill first vtgate process (VtgateProcess.TearDown) while a second vtgate keeps serving on the same port | difficulty: hard",
+   "notes": "Exception: tests SO_REUSEPORT with two vtgates sharing one network namespace, which is same-host process semantics a container-per-component framework does not reproduce. | //go:build !windows. Manually constructs a second VtgateProcess with cluster.VtgateProcessInstance reusing the first vtgate's port, disabling the unix socket path since it doesn't support multiplexing; verifies traffic fails over to the surviving process after the first is torn down. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartUnshardedKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.GetVTParams, LocalProcessCluster.GetAndReservePort, cluster.VtgateProcessInstance, VtgateProcess.Setup, VtgateProcess.TearDown, VtgateProcess.IsShutdown, LocalProcessCluster.Teardown | utils APIs: utils.ExecAllowError | external deps: SO_REUSEPORT dual-bind of two vtgate processes on the same host:port (--reuse-port) | destructive: kill first vtgate process (VtgateProcess.TearDown) while a second vtgate keeps serving on the same port | difficulty: hard",
    "old_shards": [],
    "old_test_funcs": [
     "TestMain",
@@ -5520,7 +5520,7 @@
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/reuseport",
    "runtime_sec": null,
-   "status": "pending",
+   "status": "exception",
    "verified_at_sha": null,
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/reuseport/",
    "wave": 2
@@ -5577,7 +5577,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "cluster-per-test",
    "notes": "TestLoadKeyspaceWithNoTablet waits up to 5 minutes for a schema-tracking timeout log line to appear after tearing down every tablet; TestNoInitialKeyspace tears down vtgate specifically to flush buffered logs before reading them. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartUnshardedKeyspace, VtTabletExtraArgs, VttabletProcess.TearDown, VttabletProcess.GetStatus, LocalProcessCluster.StartVtgate, VtGateExtraArgs, VtgateProcess.LogDir, VtgateProcess.TearDown, LocalProcessCluster.Teardown | utils APIs: utils.TimeoutAction | external deps: direct host-file reads of vtgate's stderr log (path.Join(logDir, \"vtgate-stderr.txt\")) | destructive: tear down all vttablets before starting vtgate (to simulate 'no tablet' scenario), tear down vtgate to flush logs before reading them | difficulty: hard",
    "old_shards": [
@@ -5594,9 +5594,9 @@
     "TestNoInitialKeyspace"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/schematracker/loadkeyspace",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 58.2,
+   "status": "verified",
+   "verified_at_sha": "52a8b887d37d80ea5e6a906ac8499fc1adecbb06",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/schematracker/loadkeyspace/",
    "wave": 2
   },
@@ -5681,7 +5681,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "TestVSchemaTrackerKeyspaceReInit restarts the primary tablet 5 times and after each restart polls vtgate's raw VSchemaURL HTTP endpoint until the vschema JSON matches the pre-restart snapshot exactly. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, VtGateExtraArgs, LocalProcessCluster.StartUnshardedKeyspace, Shard.PrimaryTablet, VttabletProcess.ExtraArgs, Vttablet.RestartOnlyTablet, LocalProcessCluster.StartVtgate, LocalProcessCluster.WaitForVTGateAndVTTablets, VttabletProcess.TearDownWithTimeout, VttabletProcess.Setup, LocalProcessCluster.WaitForTabletsToHealthyInVtgate, LocalProcessCluster.Teardown, VtgateProcess.VSchemaURL | utils APIs: utils.AssertMatchesWithTimeout, utils.AssertMatches | external deps: raw net/http GET against vtgate's VSchemaURL debug endpoint instead of a wrapped helper | destructive: restart primary vttablet once in TestMain (RestartOnlyTablet), tear down and re-Setup the primary vttablet 5 times in a loop mid-test | difficulty: hard",
    "old_shards": [
@@ -5699,9 +5699,9 @@
     "TestVSchemaTrackerKeyspaceReInit"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/schematracker/restarttablet",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 75.363,
+   "status": "verified",
+   "verified_at_sha": "52a8b887d37d80ea5e6a906ac8499fc1adecbb06",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/schematracker/restarttablet/",
    "wave": 2
   },
@@ -5986,7 +5986,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "Relies on a fixed 3s sleep after TabletExternallyReparented/SetWritable instead of polling, and expects `show vitess_tablets` to reflect the new primary; sets --health-check-interval 1s and a 1h --tablet-refresh-interval to prove healthcheck (not refresh) drives the primary switch. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.GetAndReservePort, cluster.MysqlCtlProcessInstanceOptionalInit, MysqlctlProcess.StartProcess, MysqlctlProcess.Stop, MysqlctlProcess.CleanupFiles, cluster.VttabletProcessInstance, VttabletProcess.Setup, VttabletProcess.WaitForStatus, VttabletProcess.TearDown, VtctldClientProcess.ExecuteCommand(TabletExternallyReparented/SetWritable/DeleteTablets) | external deps: mysqlctl (spawns extra mysqld via mysqlctl process outside StartKeyspace) | destructive: manually adds a 9999-UID rdonly tablet then forces it primary via TabletExternallyReparented, SetWritable true, deletes/tears down the old primary tablet (VttabletProcess.TearDown + MysqlctlProcess.Stop + CleanupFiles) and DeleteTablets | difficulty: hard",
    "old_shards": [
@@ -6005,9 +6005,9 @@
     "TestHealthCheckExternallyReparentNewTablet"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/tablet_healthcheck",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 14.35,
+   "status": "verified",
+   "verified_at_sha": "52a8b887d37d80ea5e6a906ac8499fc1adecbb06",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/tablet_healthcheck/",
    "wave": 2
   },
@@ -6027,7 +6027,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "Sleeps a full tabletRefreshInterval (5s) each churn iteration to let the topology watcher prune the deleted tablet from vtgate's healthcheck cache; asserts exact row counts from `show vitess_tablets` across 5 churn cycles - timing-sensitive. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.GetAndReservePort, cluster.MysqlCtlProcessInstanceOptionalInit, MysqlctlProcess.StartProcess, MysqlctlProcess.Stop, MysqlctlProcess.CleanupFiles, cluster.VttabletProcessInstance, VttabletProcess.Setup, VttabletProcess.WaitForStatus, VttabletProcess.TearDown, VtgateProcess.WaitForStatusOfTabletInShard, VtctldClientProcess.ExecuteCommand(DeleteTablets) | external deps: mysqlctl (extra ad-hoc tablet processes) | destructive: repeated (5x) add-then-delete of a churn tablet (kill vttablet/mysqld, cleanup files, DeleteTablets) while asserting healthcheck-cache row counts via `show vitess_tablets` | difficulty: hard",
    "old_shards": [
@@ -6047,9 +6047,9 @@
     "TestHealthCheckCacheWithTabletChurn"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/tablet_healthcheck_cache",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 58.331,
+   "status": "verified",
+   "verified_at_sha": "52a8b887d37d80ea5e6a906ac8499fc1adecbb06",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/tablet_healthcheck_cache/",
    "wave": 2
   },
@@ -6068,7 +6068,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "mixed",
    "notes": "Each balancer test starts a brand-new vtgate process with a specific --vtgate-balancer-mode/--balancer-vtgate-cells flag combo and inspects @@server_id per query to attribute routing to specific tablets/cells; TestSessionModeRemoveTablet kills a tablet and polls (1ms interval, 10ms timeout - likely a bug/very tight) for the session to migrate. | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, TopoProcess.ManageTopoDir, VtctldClientProcess.AddCellInfo, VtctldClientProcess.ExecuteCommand(AddCellsAlias), LocalProcessCluster.StartUnshardedKeyspace, LocalProcessCluster.GetAndReserveTabletUID, LocalProcessCluster.GetAndReservePort, cluster.MysqlCtlProcessInstance, MysqlctlProcess.Start, cluster.VttabletProcessInstance, VttabletProcess.Setup, VttabletProcess.QueryTablet, VttabletProcess.Kill, cluster.VtgateProcessInstance, VtgateProcess.Setup, VtgateProcess.TearDown, VtgateProcess.WaitForStatus, VtgateProcess.WaitForStatusOfTabletInShard | external deps: mysqlctl (extra cell2 tablets) | destructive: VttabletProcess.Kill on a live replica mid-test (TestSessionModeRemoveTablet) to verify session-balancer failover | difficulty: hard",
    "old_shards": [
@@ -6093,9 +6093,9 @@
     "TestSessionModeRemoveTablet"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/tabletbalancer",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 16.044,
+   "status": "verified",
+   "verified_at_sha": "52a8b887d37d80ea5e6a906ac8499fc1adecbb06",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/tabletbalancer/",
    "wave": 2
   },
@@ -6111,7 +6111,7 @@
    ],
    "ci_shard": null,
    "dropped_tests": [],
-   "honesty": null,
+   "honesty": "pass",
    "lifecycle": "shared-cluster",
    "notes": "Verifies VT_SPAN_CONTEXT (W3C traceparent) propagation via query comments over both COM_QUERY and prepared-statement paths, both invalid (expect a stderr warning, polled via log grep) and valid (expect a span with matching trace ID exported to the in-test OTLP collector, polled with 30s/500ms Eventually since the batch exporter flushes on a 5s timer). | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartUnshardedKeyspace, LocalProcessCluster.GetAndReservePort, LocalProcessCluster.StartVtgate, LocalProcessCluster.GetVTParams, LocalProcessCluster.Teardown, VtgateProcess.ErrorLog | utils APIs: utils.Exec | external deps: in-process OTLP gRPC trace collector (custom grpc.Server the test spins up and points vtgate at via --tracer opentelemetry/--otel-endpoint) | difficulty: hard",
    "old_shards": [],
@@ -6123,9 +6123,9 @@
     "TestVTSpanContextValidTracePreparedStatement"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/trace",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 20.0,
+   "status": "verified",
+   "verified_at_sha": "52a8b887d37d80ea5e6a906ac8499fc1adecbb06",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/trace/",
    "wave": 2
   },

@@ -59,6 +59,7 @@ func (c *Cluster) startVTOrc(ctx context.Context) error {
 		"--instance-poll-time", "1s",
 		"--topo-information-refresh-duration", "3s",
 		"--log-format", "text",
+		"--alsologtostderr",
 	)
 	args = append(args, c.opts.vtorcArgs...)
 

@@ -17,6 +17,7 @@ limitations under the License.
 package connectiondrain
 
 import (
+	"context"
 	_ "embed"
 	"flag"
 	"os"
@@ -26,8 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 var (
@@ -38,32 +38,36 @@ var (
 	schemaSQL string
 )
 
+// drainTimeout is the grace period given to docker stop. It exceeds the
+// vtgate --onterm-timeout of 30s so the vtgate always decides when to exit:
+// either after draining its connections or after reaching its own timeout.
+const drainTimeout = time.Minute
+
 func TestMain(m *testing.M) {
 	flag.Parse()
 	os.Exit(m.Run())
 }
 
-func setupCluster(t *testing.T) (*cluster.LocalProcessCluster, mysql.ConnParams) {
-	clusterInstance := cluster.NewCluster(cell, "localhost")
+func setupCluster(t *testing.T) (*vitesst.Cluster, mysql.ConnParams) {
+	ctx := t.Context()
 
-	// Start topo server
-	err := clusterInstance.StartTopo()
+	clusterInstance, err := vitesst.NewCluster(
+		vitesst.WithCells(cell),
+		vitesst.WithKeyspace(keyspaceName).
+			WithSchema(schemaSQL),
+		vitesst.WithVTGateArgs("--mysql-server-drain-onterm", "--onterm-timeout", "30s"),
+	)
 	require.NoError(t, err)
 
-	// Start keyspace
-	keyspace := &cluster.Keyspace{
-		Name:      keyspaceName,
-		SchemaSQL: schemaSQL,
-	}
-	err = clusterInstance.StartUnshardedKeyspace(*keyspace, 0, false, clusterInstance.Cell)
+	cleanup, err := clusterInstance.Start(ctx)
 	require.NoError(t, err)
+	t.Cleanup(func() {
+		if err := cleanup(context.WithoutCancel(ctx)); err != nil {
+			t.Logf("cluster teardown: %v", err)
+		}
+	})
 
-	// Start vtgate
-	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--mysql-server-drain-onterm", "--onterm-timeout", "30s")
-	err = clusterInstance.StartVtgate()
-	require.NoError(t, err)
-
-	vtParams := clusterInstance.GetVTParams(keyspaceName)
+	vtParams := clusterInstance.VTParams(ctx, "")
 	return clusterInstance, vtParams
 }
 
@@ -72,11 +76,11 @@ func start(t *testing.T, vtParams mysql.ConnParams) (*mysql.Conn, func()) {
 	require.NoError(t, err)
 
 	deleteAll := func() {
-		_, _ = utils.ExecAllowError(t, vtConn, "set workload = oltp")
+		_, _ = vitesst.ExecAllowError(t, vtConn, "set workload = oltp")
 
 		tables := []string{"t1"}
 		for _, table := range tables {
-			_, _ = utils.ExecAllowError(t, vtConn, "delete from "+table)
+			_, _ = vitesst.ExecAllowError(t, vtConn, "delete from "+table)
 		}
 	}
 
@@ -90,7 +94,6 @@ func start(t *testing.T, vtParams mysql.ConnParams) (*mysql.Conn, func()) {
 
 func TestConnectionDrainCloseConnections(t *testing.T) {
 	clusterInstance, vtParams := setupCluster(t)
-	defer clusterInstance.Teardown()
 
 	vtConn, closer := start(t, vtParams)
 	defer closer()
@@ -110,8 +113,10 @@ func TestConnectionDrainCloseConnections(t *testing.T) {
 
 	// Tearing down vtgate here, from there on vtConn should still be able to conclude in-flight transaction and
 	// execute queries with idle connections. However, no new connections are allowed.
-	err = clusterInstance.VtgateProcess.Terminate()
-	require.NoError(t, err)
+	vtgate := clusterInstance.VTGate()
+	go func() {
+		_ = vtgate.StopContainer(context.WithoutCancel(t.Context()), drainTimeout)
+	}()
 
 	// Give enough time to vtgate to receive and start processing the SIGTERM signal
 	time.Sleep(2 * time.Second)
@@ -138,7 +143,7 @@ func TestConnectionDrainCloseConnections(t *testing.T) {
 	vtConn2.Close()
 
 	// vtgate should still be running
-	require.False(t, clusterInstance.VtgateProcess.IsShutdown())
+	require.True(t, vtgate.IsRunning())
 
 	// This connection should still be allowed
 	_, err = vtConn.ExecuteFetch("select id1 from t1", 1, false)
@@ -149,12 +154,11 @@ func TestConnectionDrainCloseConnections(t *testing.T) {
 	time.Sleep(10 * time.Second)
 
 	// By now the vtgate should have shutdown on its own and without reaching --onterm-timeout
-	require.True(t, clusterInstance.VtgateProcess.IsShutdown())
+	require.False(t, vtgate.IsRunning())
 }
 
 func TestConnectionDrainOnTermTimeout(t *testing.T) {
 	clusterInstance, vtParams := setupCluster(t)
-	defer clusterInstance.Teardown()
 
 	// Connect to vtgate again, this should work
 	vtConn, err := mysql.Connect(t.Context(), &vtParams)
@@ -168,8 +172,12 @@ func TestConnectionDrainOnTermTimeout(t *testing.T) {
 	}()
 
 	// Tearing down vtgate here, we want to reach the onterm-timeout of 30s
-	err = clusterInstance.VtgateProcess.Terminate()
-	require.NoError(t, err)
+	vtgate := clusterInstance.VTGate()
+	stopped := make(chan struct{})
+	go func() {
+		_ = vtgate.StopContainer(context.WithoutCancel(t.Context()), drainTimeout)
+		close(stopped)
+	}()
 
 	// Run a busy query that returns only after the onterm-timeout is reached, this should fail when we reach the timeout
 	_, err = vtConn.ExecuteFetch("select sleep(40)", 1, false)
@@ -180,5 +188,6 @@ func TestConnectionDrainOnTermTimeout(t *testing.T) {
 	require.Error(t, err)
 
 	// By now vtgate will be shutdown becaused it reached its onterm-timeout, despite idle connections still being opened
-	require.True(t, clusterInstance.VtgateProcess.IsShutdown())
+	<-stopped
+	require.False(t, vtgate.IsRunning())
 }

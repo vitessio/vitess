@@ -14,26 +14,26 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package misc
+package restart
 
 import (
+	"context"
 	_ "embed"
 	"flag"
+	"fmt"
 	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
+	clusterInstance *vitesst.Cluster
 	vtParams        mysql.ConnParams
 	keyspaceName    = "ks"
-	cell            = "test"
 
 	//go:embed schema.sql
 	schemaSQL string
@@ -43,41 +43,32 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(cell, "localhost")
-		defer clusterInstance.Teardown()
+		ctx := context.Background()
 
-		// Start topo server
-		err := clusterInstance.StartTopo()
-		if err != nil {
-			return 1
-		}
-
-		// Start keyspace
-		keyspace := &cluster.Keyspace{
-			Name:      keyspaceName,
-			SchemaSQL: schemaSQL,
-		}
-		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
-			"--shutdown-grace-period"+"=0s",
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithKeyspace(keyspaceName).
+				WithReplicas(1).
+				WithSchema(schemaSQL),
+			vitesst.WithVTTabletArgs("--shutdown-grace-period=0s"),
+			vitesst.WithVTGateArgs("--planner-version=gen4", "--mysql-default-workload=olap"),
 		)
-		err = clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false, clusterInstance.Cell)
 		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-
-		// Start vtgate
-		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
-			"--planner-version=gen4",
-			"--mysql-default-workload"+"=olap")
-		err = clusterInstance.StartVtgate()
+		cleanup, err := cluster.Start(ctx)
 		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
 
-		vtParams = mysql.ConnParams{
-			Host: clusterInstance.Hostname,
-			Port: clusterInstance.VtgateMySQLPort,
-		}
+		clusterInstance = cluster
+		vtParams = cluster.VTParams(ctx, "")
 		return m.Run()
 	}()
 	os.Exit(exitCode)
@@ -93,21 +84,21 @@ func TestStreamTxRestart(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	utils.Exec(t, conn, "begin")
+	vitesst.Exec(t, conn, "begin")
 	// BeginStreamExecute
-	_ = utils.Exec(t, conn, "select connection_id()")
+	_ = vitesst.Exec(t, conn, "select connection_id()")
 
 	// StreamExecute
-	_ = utils.Exec(t, conn, "select connection_id()")
+	_ = vitesst.Exec(t, conn, "select connection_id()")
 
 	// restart the mysql to terminate all the existing connections.
-	primTablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
-	err = primTablet.MysqlctlProcess.Stop()
+	primTablet := clusterInstance.Keyspace(keyspaceName).Shards()[0].Primary()
+	err = primTablet.StopMySQL(ctx)
 	require.NoError(t, err)
-	err = primTablet.MysqlctlProcess.StartProvideInit(false)
+	err = primTablet.StartMySQL(ctx)
 	require.NoError(t, err)
 
 	// query should return connection error
-	_, err = utils.ExecAllowError(t, conn, "select connection_id()")
+	_, err = vitesst.ExecAllowError(t, conn, "select connection_id()")
 	require.Error(t, err)
 }

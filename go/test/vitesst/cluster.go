@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 
@@ -70,6 +71,9 @@ type (
 
 		// vtorc is present only when the test enabled VTOrc.
 		vtorc *VTOrc
+
+		// vtadmin is present only when the test enabled vtadmin.
+		vtadmin *VTAdmin
 
 		// mu guards the mutable collections below.
 		mu           sync.Mutex
@@ -185,6 +189,13 @@ func (c *Cluster) Start(ctx context.Context) (cleanup func(context.Context) erro
 	}
 	if err = group.Wait(); err != nil {
 		return cleanup, err
+	}
+
+	if c.opts.vtadminEnabled {
+		c.logf("starting vtadmin")
+		if err = c.startVTAdmin(ctx); err != nil {
+			return cleanup, err
+		}
 	}
 
 	c.logf("cluster is ready")
@@ -372,6 +383,87 @@ GRANT PROXY ON ''@'' TO '%[1]s'@'%%' WITH GRANT OPTION;
 	return pieces[0] + custom + customSQLMarker + pieces[1], nil
 }
 
+// AddKeyspace creates and starts an additional keyspace on the running
+// cluster: topology record, tablets, primary election, schema, and vschema.
+func (c *Cluster) AddKeyspace(ctx context.Context, kb *keyspaceBuilder) (*Keyspace, error) {
+	kc := kb.config
+	if err := kc.validate(); err != nil {
+		return nil, err
+	}
+	if c.Keyspace(kc.name) != nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "keyspace %s already exists", kc.name)
+	}
+	if err := c.startKeyspace(ctx, &kc); err != nil {
+		return nil, err
+	}
+	return c.Keyspace(kc.name), nil
+}
+
+// AddTablet starts one more tablet of the given kind ("replica" or "rdonly")
+// serving an existing shard on the running cluster. It joins as a replica of
+// the shard's primary and is recorded on the Shard.
+func (c *Cluster) AddTablet(ctx context.Context, keyspace, shard, tabletType string) (*Tablet, error) {
+	ks := c.Keyspace(keyspace)
+	if ks == nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "keyspace %s does not exist", keyspace)
+	}
+	sh := ks.Shard(shard)
+	if sh == nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "shard %s/%s does not exist", keyspace, shard)
+	}
+
+	c.mu.Lock()
+	uid := firstTabletUID + len(c.tablets)
+	c.mu.Unlock()
+
+	spec := &TabletSpec{
+		UID:      uid,
+		Cell:     c.cells[0],
+		Keyspace: keyspace,
+		Shard:    shard,
+		Type:     tabletType,
+	}
+	tablet, err := c.startTablet(ctx, spec)
+	if err != nil {
+		return nil, err
+	}
+
+	c.mu.Lock()
+	c.tablets = append(c.tablets, tablet)
+	c.mu.Unlock()
+
+	sh.mu.Lock()
+	if tabletType == "rdonly" {
+		sh.rdonly = append(sh.rdonly, tablet)
+	} else {
+		sh.replicas = append(sh.replicas, tablet)
+	}
+	sh.mu.Unlock()
+	return tablet, nil
+}
+
+// RemoveKeyspace terminates any remaining tablets of a keyspace and drops it
+// from the cluster's bookkeeping, so AddKeyspace can provision the same name
+// again. The topology record is untouched; tests delete it through
+// vtctldclient when needed.
+func (c *Cluster) RemoveKeyspace(ctx context.Context, name string) error {
+	ks := c.Keyspace(name)
+	if ks == nil {
+		return nil
+	}
+
+	for _, tablet := range ks.Tablets() {
+		if err := tablet.Remove(ctx); err != nil {
+			return vterrors.Wrapf(err, "removing tablet %s", tablet.Alias())
+		}
+	}
+
+	c.mu.Lock()
+	c.keyspaces = slices.DeleteFunc(c.keyspaces, func(other *Keyspace) bool { return other == ks })
+	c.mu.Unlock()
+	return nil
+}
+
 // Keyspace returns the runtime handle for a keyspace, or nil.
 func (c *Cluster) Keyspace(name string) *Keyspace {
 	c.mu.Lock()
@@ -490,6 +582,11 @@ func (c *Cluster) terminate(ctx context.Context) error {
 		vtorc := c.vtorc
 		c.vtorc = nil
 		group.Go(func() error { return vtorc.terminate(ctx) })
+	}
+	if c.vtadmin != nil {
+		vtadmin := c.vtadmin
+		c.vtadmin = nil
+		group.Go(func() error { return vtadmin.terminate(ctx) })
 	}
 	for _, tablet := range tablets {
 		group.Go(func() error { return tablet.terminate(ctx) })

@@ -17,23 +17,21 @@ limitations under the License.
 package messaging
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
 	"testing"
 
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 var (
-	clusterInstance      *cluster.LocalProcessCluster
-	shard0Primary        *cluster.Vttablet
-	shard0Replica        *cluster.Vttablet
-	shard1Primary        *cluster.Vttablet
-	lookupPrimary        *cluster.Vttablet
-	hostname             = "localhost"
-	cell                 = "zone1"
+	clusterInstance      *vitesst.Cluster
+	shard0Primary        *vitesst.Tablet
+	shard0Replica        *vitesst.Tablet
+	shard1Primary        *vitesst.Tablet
+	lookupPrimary        *vitesst.Tablet
 	userKeyspace         = "user"
 	lookupKeyspace       = "lookup"
 	createShardedMessage = `create table sharded_message(
@@ -106,52 +104,42 @@ var (
 func TestMain(m *testing.M) {
 	flag.Parse()
 
-	exitcode, err := func() (int, error) {
-		clusterInstance = cluster.NewCluster(cell, hostname)
-		defer clusterInstance.Teardown()
+	exitCode := func() int {
+		ctx := context.Background()
 
-		// Start topo server
-		if err := clusterInstance.StartTopo(); err != nil {
-			return 1, err
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithKeyspace(lookupKeyspace).
+				WithReplicas(1).
+				WithSchema(createUnshardedMessage).
+				WithVSchema(lookupVschema),
+			vitesst.WithKeyspace(userKeyspace).
+				WithShardNames("-80", "80-").
+				WithReplicas(1).
+				WithSchema(createShardedMessage).
+				WithVSchema(userVschema),
+		)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
 		}
+		cleanup, err := cluster.Start(ctx)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
 
-		// Start unsharded keyspace
-		cell := clusterInstance.Cell
-		keyspace := cluster.Keyspace{
-			Name:      lookupKeyspace,
-			SchemaSQL: createUnshardedMessage,
-			VSchema:   lookupVschema,
-		}
-		if err := clusterInstance.StartUnshardedKeyspace(keyspace, 1, false, cell); err != nil {
-			return 1, err
-		}
+		clusterInstance = cluster
+		shard0Primary = cluster.Keyspace(userKeyspace).Shard("-80").Primary()
+		shard1Primary = cluster.Keyspace(userKeyspace).Shard("80-").Primary()
+		lookupPrimary = cluster.Keyspace(lookupKeyspace).Shard("-").Primary()
+		shard0Replica = cluster.Keyspace(userKeyspace).Shard("-80").Replicas()[0]
 
-		// Start sharded keyspace
-		keyspace = cluster.Keyspace{
-			Name:      userKeyspace,
-			SchemaSQL: createShardedMessage,
-			VSchema:   userVschema,
-		}
-		if err := clusterInstance.StartKeyspace(keyspace, []string{"-80", "80-"}, 1, false, cell); err != nil {
-			return 1, err
-		}
-
-		// Start vtgate
-		if err := clusterInstance.StartVtgate(); err != nil {
-			return 1, err
-		}
-
-		shard0Primary = clusterInstance.Keyspaces[1].Shards[0].PrimaryTablet()
-		shard1Primary = clusterInstance.Keyspaces[1].Shards[1].PrimaryTablet()
-		lookupPrimary = clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
-		shard0Replica = clusterInstance.Keyspaces[1].Shards[0].Vttablets[1]
-
-		return m.Run(), nil
+		return m.Run()
 	}()
-	if err != nil {
-		fmt.Printf("%v\n", err)
-		os.Exit(1)
-	} else {
-		os.Exit(exitcode)
-	}
+	os.Exit(exitCode)
 }

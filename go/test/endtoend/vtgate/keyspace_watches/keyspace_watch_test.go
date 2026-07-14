@@ -21,24 +21,21 @@ Test the vtgate's ability to route while watching a subset of keyspaces.
 package keyspacewatches
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
-	"os"
 	"testing"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
+const authServerStaticPath = "/vt/files/mysql_auth_server_static.json"
+
 var (
-	vtParams              mysql.ConnParams
 	keyspaceUnshardedName = "ks1"
-	cell                  = "zone1"
-	hostname              = "localhost"
-	mysqlAuthServerStatic = "mysql_auth_server_static.json"
 	sqlSchema             = `
 	create table keyspaces_to_watch_test(
 		id BIGINT NOT NULL,
@@ -49,85 +46,56 @@ var (
 	vschemaDDLError = "Error 1105 (HY000): cannot update VSchema as the topology server connection is read-only"
 )
 
-// createConfig creates a config file in TmpDir in vtdataroot and writes the given data.
-func createConfig(clusterInstance *cluster.LocalProcessCluster, name, data string) error {
-	// creating new file
-	f, err := os.Create(clusterInstance.TmpDirectory + "/" + name)
-	if err != nil {
-		return err
-	}
-
-	if data == "" {
-		return nil
-	}
-
-	// write the given data
-	_, err = fmt.Fprint(f, data)
-	return err
-}
-
-func createCluster(extraVTGateArgs []string) (*cluster.LocalProcessCluster, int) {
-	clusterInstance := cluster.NewCluster(cell, hostname)
-
-	// Start topo server
-	if err := clusterInstance.StartTopo(); err != nil {
-		return nil, 1
-	}
-
-	// create auth server config
+func createCluster(ctx context.Context, extraVTGateArgs ...string) (*vitesst.Cluster, func(context.Context) error, error) {
 	SQLConfig := `{
 		"testuser1": {
 			"Password": "testpassword1",
 			"UserData": "vtgate client 1"
 		}
 	}`
-	if err := createConfig(clusterInstance, mysqlAuthServerStatic, SQLConfig); err != nil {
-		return nil, 1
-	}
-
-	// Start keyspace
-	keyspace := &cluster.Keyspace{
-		Name:      keyspaceUnshardedName,
-		SchemaSQL: sqlSchema,
-	}
-	if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false, clusterInstance.Cell); err != nil {
-		return nil, 1
-	}
 
 	vtGateArgs := []string{
-		"--mysql-auth-server-static-file", clusterInstance.TmpDirectory + "/" + mysqlAuthServerStatic,
+		"--mysql-auth-server-impl", "static",
+		"--mysql-auth-server-static-file", authServerStaticPath,
 		"--keyspaces-to-watch", keyspaceUnshardedName,
 	}
+	vtGateArgs = append(vtGateArgs, extraVTGateArgs...)
 
-	if extraVTGateArgs != nil {
-		vtGateArgs = append(vtGateArgs, extraVTGateArgs...)
+	clusterInstance, err := vitesst.NewCluster(
+		vitesst.WithVTGateArgs(vtGateArgs...),
+		vitesst.WithVTGateFiles(vitesst.ContainerFile{
+			Content:       []byte(SQLConfig),
+			ContainerPath: authServerStaticPath,
+			Mode:          0o644,
+		}),
+		vitesst.WithKeyspace(keyspaceUnshardedName).
+			WithReplicas(1).
+			WithSchema(sqlSchema),
+	)
+	if err != nil {
+		return nil, nil, err
 	}
-	clusterInstance.VtGateExtraArgs = vtGateArgs
-
-	// Start vtgate
-	if err := clusterInstance.StartVtgate(); err != nil {
-		return nil, 1
+	cleanup, err := clusterInstance.Start(ctx)
+	if err != nil {
+		return nil, nil, err
 	}
-	vtParams = mysql.ConnParams{
-		Host: clusterInstance.Hostname,
-		Port: clusterInstance.VtgateMySQLPort,
-	}
-	return clusterInstance, 0
+	return clusterInstance, cleanup, nil
 }
 
 func TestRoutingWithKeyspacesToWatch(t *testing.T) {
-	clusterInstance, exitCode := createCluster(nil)
-	defer clusterInstance.Teardown()
+	ctx := t.Context()
+	clusterInstance, cleanup, err := createCluster(ctx)
+	require.NoError(t, err)
+	defer func() {
+		if err := cleanup(context.WithoutCancel(ctx)); err != nil {
+			t.Logf("cluster teardown: %v", err)
+		}
+	}()
 
-	if exitCode != 0 {
-		os.Exit(exitCode)
-	}
+	addr, err := clusterInstance.VTGate().MySQLAddr(ctx)
+	require.NoError(t, err)
 
-	dsn := fmt.Sprintf(
-		"testuser1:testpassword1@tcp(%s:%v)/",
-		clusterInstance.Hostname,
-		clusterInstance.VtgateMySQLPort,
-	)
+	dsn := fmt.Sprintf("testuser1:testpassword1@tcp(%s)/", addr)
 	db, err := sql.Open("mysql", dsn)
 	require.Nil(t, err)
 	defer db.Close()
@@ -138,21 +106,19 @@ func TestRoutingWithKeyspacesToWatch(t *testing.T) {
 }
 
 func TestVSchemaDDLWithKeyspacesToWatch(t *testing.T) {
-	extraVTGateArgs := []string{
-		"--vschema-ddl-authorized-users", "%",
-	}
-	clusterInstance, exitCode := createCluster(extraVTGateArgs)
-	defer clusterInstance.Teardown()
+	ctx := t.Context()
+	clusterInstance, cleanup, err := createCluster(ctx, "--vschema-ddl-authorized-users", "%")
+	require.NoError(t, err)
+	defer func() {
+		if err := cleanup(context.WithoutCancel(ctx)); err != nil {
+			t.Logf("cluster teardown: %v", err)
+		}
+	}()
 
-	if exitCode != 0 {
-		os.Exit(exitCode)
-	}
+	addr, err := clusterInstance.VTGate().MySQLAddr(ctx)
+	require.NoError(t, err)
 
-	dsn := fmt.Sprintf(
-		"testuser1:testpassword1@tcp(%s:%v)/",
-		clusterInstance.Hostname,
-		clusterInstance.VtgateMySQLPort,
-	)
+	dsn := fmt.Sprintf("testuser1:testpassword1@tcp(%s)/", addr)
 	db, err := sql.Open("mysql", dsn)
 	require.Nil(t, err)
 	defer db.Close()

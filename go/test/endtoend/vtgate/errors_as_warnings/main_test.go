@@ -17,27 +17,25 @@ limitations under the License.
 package vtgate
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
 	"strings"
 	"testing"
 
-	"vitess.io/vitess/go/mysql/sqlerror"
-	"vitess.io/vitess/go/test/endtoend/utils"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
+	clusterInstance *vitesst.Cluster
 	vtParams        mysql.ConnParams
 	KeyspaceName    = "ks"
-	Cell            = "test"
 	SchemaSQL       = `create table t1(
 	id1 bigint,
 	id2 bigint,
@@ -69,40 +67,38 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(Cell, "localhost")
-		defer clusterInstance.Teardown()
+		ctx := context.Background()
 
-		// Start topo server
-		err := clusterInstance.StartTopo()
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithKeyspace(KeyspaceName).
+				WithShardNames("-80", "80-").
+				WithReplicas(1).
+				WithSchema(SchemaSQL).
+				WithVSchema(VSchema),
+		)
 		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-
-		// Start keyspace
-		keyspace := &cluster.Keyspace{
-			Name:      KeyspaceName,
-			SchemaSQL: SchemaSQL,
-			VSchema:   VSchema,
-		}
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, false, clusterInstance.Cell); err != nil {
+		cleanup, err := cluster.Start(ctx)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
 
-		// Start vtgate
-		if err := clusterInstance.StartVtgate(); err != nil {
-			return 1
-		}
-
-		vtParams = clusterInstance.GetVTParams(KeyspaceName)
+		clusterInstance = cluster
+		vtParams = cluster.VTParams(ctx, "")
 		return m.Run()
 	}()
 	os.Exit(exitCode)
 }
 
 func TestScatterErrsAsWarns(t *testing.T) {
-	if clusterInstance.HasPartialKeyspaces {
-		t.Skip("test kills primary on source shard, but query will be on target shard so it will be skipped")
-	}
 	oltp, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer oltp.Close()
@@ -111,10 +107,10 @@ func TestScatterErrsAsWarns(t *testing.T) {
 	require.NoError(t, err)
 	defer olap.Close()
 
-	utils.Exec(t, oltp, `insert into t1(id1, id2) values (1, 1), (2, 2), (3, 3), (4, 4), (5, 5)`)
+	vitesst.Exec(t, oltp, `insert into t1(id1, id2) values (1, 1), (2, 2), (3, 3), (4, 4), (5, 5)`)
 	defer func() {
-		utils.Exec(t, oltp, "use @primary")
-		utils.Exec(t, oltp, `delete from t1`)
+		vitesst.Exec(t, oltp, "use @primary")
+		vitesst.Exec(t, oltp, `delete from t1`)
 	}()
 
 	query1 := `select /*vt+ SCATTER_ERRORS_AS_WARNINGS */ id1 from t1`
@@ -123,7 +119,7 @@ func TestScatterErrsAsWarns(t *testing.T) {
 
 	// stop the mysql on one tablet, query will fail at vttablet level
 	require.NoError(t,
-		clusterInstance.Keyspaces[0].Shards[0].Replica().MysqlctlProcess.Stop())
+		clusterInstance.Keyspace(KeyspaceName).Shards()[0].Replicas()[0].StopMySQL(t.Context()))
 
 	modes := []struct {
 		conn *mysql.Conn
@@ -136,8 +132,8 @@ func TestScatterErrsAsWarns(t *testing.T) {
 	for _, mode := range modes {
 		t.Run(mode.m, func(t *testing.T) {
 			// connection setup
-			utils.Exec(t, mode.conn, "use @replica")
-			utils.Exec(t, mode.conn, "set workload = "+mode.m)
+			vitesst.Exec(t, mode.conn, "use @replica")
+			vitesst.Exec(t, mode.conn, "set workload = "+mode.m)
 
 			expectedWarnings := []string{
 				"operation not allowed in state NOT_SERVING",
@@ -146,9 +142,9 @@ func TestScatterErrsAsWarns(t *testing.T) {
 				"no healthy tablet",
 				"mysql.sock: connect: no such file or directory",
 			}
-			utils.AssertMatches(t, mode.conn, query1, `[[INT64(4)]]`)
+			vitesst.AssertMatches(t, mode.conn, query1, `[[INT64(4)]]`)
 			assertContainsOneOf(t, mode.conn, showQ, expectedWarnings...)
-			utils.AssertMatches(t, mode.conn, query2, `[[INT64(4)]]`)
+			vitesst.AssertMatches(t, mode.conn, query2, `[[INT64(4)]]`)
 			assertContainsOneOf(t, mode.conn, showQ, expectedWarnings...)
 
 			// invalid_field should throw error and not warning
@@ -162,7 +158,7 @@ func TestScatterErrsAsWarns(t *testing.T) {
 
 func assertContainsOneOf(t *testing.T, conn *mysql.Conn, query string, expected ...string) {
 	t.Helper()
-	qr := utils.Exec(t, conn, query)
+	qr := vitesst.Exec(t, conn, query)
 	got := fmt.Sprintf("%v", qr.Rows)
 	for _, s := range expected {
 		if strings.Contains(got, s) {

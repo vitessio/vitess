@@ -64,6 +64,7 @@ _test/
 /bin/
 /vtdataroot/
 /.vitesst_install/
+/.vitesst_install_debug2pc/
 /vthook/
 venv
 

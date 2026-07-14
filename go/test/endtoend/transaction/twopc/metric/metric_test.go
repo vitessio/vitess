@@ -26,15 +26,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/test/endtoend/cluster"
 	twopcutil "vitess.io/vitess/go/test/endtoend/transaction/twopc/utils"
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/test/vitesst"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 )
 
 // TestTransactionModes tests transactions using twopc mode
 func TestTransactionModeMetrics(t *testing.T) {
+	ctx := t.Context()
 	conn, closer := start(t)
 	defer closer()
 
@@ -74,14 +74,14 @@ func TestTransactionModeMetrics(t *testing.T) {
 		want: commitMetric{TotalCount: 1, MultiCount: 1, TwoPCCount: 1},
 	}}
 
-	initial := getCommitMetric(t)
-	utils.Exec(t, conn, "set transaction_mode = multi")
+	initial := getCommitMetric(ctx, t)
+	vitesst.Exec(t, conn, "set transaction_mode = multi")
 	for _, tc := range tcases {
 		t.Run(tc.name, func(t *testing.T) {
 			for _, stmt := range tc.stmts {
-				utils.Exec(t, conn, stmt)
+				vitesst.Exec(t, conn, stmt)
 			}
-			updatedMetric := getCommitMetric(t)
+			updatedMetric := getCommitMetric(ctx, t)
 			assert.EqualValues(t, tc.want.TotalCount, updatedMetric.TotalCount-initial.TotalCount, "TotalCount")
 			assert.EqualValues(t, tc.want.SingleCount, updatedMetric.SingleCount-initial.SingleCount, "SingleCount")
 			assert.EqualValues(t, tc.want.MultiCount, updatedMetric.MultiCount-initial.MultiCount, "MultiCount")
@@ -90,13 +90,13 @@ func TestTransactionModeMetrics(t *testing.T) {
 		})
 	}
 
-	utils.Exec(t, conn, "set transaction_mode = twopc")
+	vitesst.Exec(t, conn, "set transaction_mode = twopc")
 	for _, tc := range tcases {
 		t.Run(tc.name, func(t *testing.T) {
 			for _, stmt := range tc.stmts {
-				utils.Exec(t, conn, stmt)
+				vitesst.Exec(t, conn, stmt)
 			}
-			updatedMetric := getCommitMetric(t)
+			updatedMetric := getCommitMetric(ctx, t)
 			assert.EqualValues(t, tc.want.TotalCount, updatedMetric.TotalCount-initial.TotalCount, "TotalCount")
 			assert.EqualValues(t, tc.want.SingleCount, updatedMetric.SingleCount-initial.SingleCount, "SingleCount")
 			assert.Zero(t, updatedMetric.MultiCount-initial.MultiCount, "MultiCount")
@@ -110,14 +110,15 @@ func TestTransactionModeMetrics(t *testing.T) {
 func TestVTGate2PCCommitMetricOnFailure(t *testing.T) {
 	defer cleanup(t)
 
-	initialCount := getVarValue[float64](t, "CommitUnresolved", clusterInstance.VtgateProcess.GetVars)
+	ctx := t.Context()
 
-	vtgateConn, err := cluster.DialVTGate(t.Context(), t.Name(), vtgateGrpcAddress, "dt_user", "")
+	initialCount := getVarValue[float64](ctx, t, "CommitUnresolved", clusterInstance.VTGate().GetVars)
+
+	vtgateConn, err := clusterInstance.VTGate().DialVTGate(ctx)
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
 	conn := vtgateConn.Session("", nil)
-	ctx := t.Context()
 
 	_, err = conn.Execute(ctx, "begin", nil, false)
 	require.NoError(t, err)
@@ -129,7 +130,7 @@ func TestVTGate2PCCommitMetricOnFailure(t *testing.T) {
 	_, err = conn.Execute(newCtx, "commit", nil, false)
 	require.ErrorContains(t, err, "Fail After MM commit")
 
-	updatedCount := getVarValue[float64](t, "CommitUnresolved", clusterInstance.VtgateProcess.GetVars)
+	updatedCount := getVarValue[float64](ctx, t, "CommitUnresolved", clusterInstance.VTGate().GetVars)
 	assert.EqualValues(t, 1, updatedCount-initialCount, "CommitUnresolved")
 
 	waitForResolve(ctx, t, conn, 5*time.Second)
@@ -146,7 +147,7 @@ func TestVTGate2PCCommitMetricOnFailure(t *testing.T) {
 	_, err = conn.Execute(newCtx, "commit", nil, false)
 	require.ErrorContains(t, err, "Fail During RM commit")
 
-	updatedCount = getVarValue[float64](t, "CommitUnresolved", clusterInstance.VtgateProcess.GetVars)
+	updatedCount = getVarValue[float64](ctx, t, "CommitUnresolved", clusterInstance.VTGate().GetVars)
 	assert.EqualValues(t, 2, updatedCount-initialCount, "CommitUnresolved")
 
 	waitForResolve(ctx, t, conn, 5*time.Second)
@@ -156,7 +157,7 @@ func TestVTGate2PCCommitMetricOnFailure(t *testing.T) {
 func TestVTTablet2PCMetrics(t *testing.T) {
 	defer cleanup(t)
 
-	vtgateConn, err := cluster.DialVTGate(t.Context(), t.Name(), vtgateGrpcAddress, "dt_user", "")
+	vtgateConn, err := clusterInstance.VTGate().DialVTGate(t.Context())
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
@@ -186,7 +187,7 @@ func TestVTTablet2PCMetrics(t *testing.T) {
 	waitForResolve(ctx, t, conn, 5*time.Second)
 
 	// at least 1 unresolved transaction should be seen by the gauge.
-	unresolvedCount := getUnresolvedTxCount(t)
+	unresolvedCount := getUnresolvedTxCount(ctx, t)
 	assert.Greater(t, unresolvedCount, 1.0)
 
 	// after next ticker should be become zero.
@@ -197,7 +198,7 @@ func TestVTTablet2PCMetrics(t *testing.T) {
 			assert.Fail(t, "unresolved transaction not reduced to zero within the time limit")
 			return
 		case <-time.After(500 * time.Millisecond):
-			unresolvedCount = getUnresolvedTxCount(t)
+			unresolvedCount = getUnresolvedTxCount(ctx, t)
 			if unresolvedCount == 0 {
 				return
 			}
@@ -210,12 +211,15 @@ func TestVTTablet2PCMetrics(t *testing.T) {
 func TestVTTablet2PCMetricsFailCommitPrepared(t *testing.T) {
 	defer cleanup(t)
 
-	vtgateConn, err := cluster.DialVTGate(t.Context(), t.Name(), vtgateGrpcAddress, "dt_user", "")
+	ctx := t.Context()
+
+	vtgateConn, err := clusterInstance.VTGate().DialVTGate(ctx)
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
 	conn := vtgateConn.Session("", nil)
-	ctx := t.Context()
+
+	shardPrimary := clusterInstance.Keyspace(keyspaceName).Shard("80-").Primary()
 
 	newCtx := callerid.NewContext(ctx, callerid.NewEffectiveCallerID("CP_80-_R", "", ""), nil)
 	execute(t, newCtx, conn, "begin")
@@ -227,7 +231,7 @@ func TestVTTablet2PCMetricsFailCommitPrepared(t *testing.T) {
 	dtidRetryable := getDTIDFromWarnings(ctx, t, conn)
 	require.NotEmpty(t, dtidRetryable)
 
-	cpFail := getVarValue[map[string]any](t, "CommitPreparedFail", clusterInstance.Keyspaces[0].Shards[2].FindPrimaryTablet().VttabletProcess.GetVars)
+	cpFail := getVarValue[map[string]any](ctx, t, "CommitPreparedFail", shardPrimary.GetVars)
 	require.EqualValues(t, 1, cpFail["Retryable"])
 	require.Nil(t, cpFail["NonRetryable"])
 
@@ -241,13 +245,13 @@ func TestVTTablet2PCMetricsFailCommitPrepared(t *testing.T) {
 	dtidNonRetryable := getDTIDFromWarnings(ctx, t, conn)
 	require.NotEmpty(t, dtidNonRetryable)
 
-	cpFail = getVarValue[map[string]any](t, "CommitPreparedFail", clusterInstance.Keyspaces[0].Shards[2].FindPrimaryTablet().VttabletProcess.GetVars)
+	cpFail = getVarValue[map[string]any](ctx, t, "CommitPreparedFail", shardPrimary.GetVars)
 	require.EqualValues(t, 1, cpFail["Retryable"]) // old counter value
 	require.EqualValues(t, 1, cpFail["NonRetryable"])
 
 	// restart to trigger unresolved transactions
-	err = clusterInstance.Keyspaces[0].Shards[2].FindPrimaryTablet().RestartOnlyTablet()
-	require.NoError(t, err)
+	require.NoError(t, shardPrimary.StopVttablet(ctx))
+	require.NoError(t, shardPrimary.StartVttablet(ctx))
 
 	// dtid with retryable error should be resolved.
 	waitForDTIDResolve(ctx, t, conn, dtidRetryable, 5*time.Second)
@@ -258,7 +262,7 @@ func TestVTTablet2PCMetricsFailCommitPrepared(t *testing.T) {
 	require.NotZero(t, qr.Rows, "should remain unresolved")
 
 	// running conclude transaction for it.
-	out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(
+	out, err := clusterInstance.Vtctld().ExecuteCommandWithOutput(ctx,
 		"DistributedTransaction", "conclude", "--dtid", dtidNonRetryable)
 	require.NoError(t, err)
 	require.Contains(t, out, "Successfully concluded the distributed transaction")
@@ -275,10 +279,10 @@ func execute(t *testing.T, ctx context.Context, conn *vtgateconn.VTGateSession, 
 	require.NoError(t, err)
 }
 
-func getUnresolvedTxCount(t *testing.T) float64 {
+func getUnresolvedTxCount(ctx context.Context, t *testing.T) float64 {
 	unresolvedCount := 0.0
-	for _, shard := range clusterInstance.Keyspaces[0].Shards {
-		unresolvedTx := getVarValue[map[string]any](t, "UnresolvedTransaction", shard.FindPrimaryTablet().VttabletProcess.GetVars)
+	for _, shard := range clusterInstance.Keyspace(keyspaceName).Shards() {
+		unresolvedTx := getVarValue[map[string]any](ctx, t, "UnresolvedTransaction", shard.Primary().GetVars)
 		if mmCount, exists := unresolvedTx["MetadataManager"]; exists {
 			unresolvedCount += mmCount.(float64)
 		}
@@ -296,10 +300,11 @@ type commitMetric struct {
 	TwoPCCount  float64
 }
 
-func getCommitMetric(t *testing.T) commitMetric {
+func getCommitMetric(ctx context.Context, t *testing.T) commitMetric {
 	t.Helper()
 
-	vars := clusterInstance.VtgateProcess.GetVars()
+	vars, err := clusterInstance.VTGate().GetVars(ctx)
+	require.NoError(t, err)
 	require.NotNil(t, vars)
 
 	cm := commitMetric{}
@@ -337,10 +342,11 @@ func getCommitMetric(t *testing.T) commitMetric {
 	return cm
 }
 
-func getVarValue[T any](t *testing.T, key string, varFunc func() map[string]any) T {
+func getVarValue[T any](ctx context.Context, t *testing.T, key string, varFunc func(context.Context) (map[string]any, error)) T {
 	t.Helper()
 
-	vars := varFunc()
+	vars, err := varFunc(ctx)
+	require.NoError(t, err)
 	require.NotNil(t, vars)
 
 	value, exists := vars[key]

@@ -38,3 +38,18 @@ target "mysql84" {
   }
   tags = ["vitesst:mysql84"]
 }
+
+# Built on demand for the transaction/twopc suites, whose fault injection
+# needs binaries compiled with -tags debug2PC:
+#   make vitesst-images-debug2pc
+target "mysql84-debug2pc" {
+  context    = "."
+  dockerfile = "go/test/vitesst/Dockerfile"
+  args = {
+    FLAVOR        = "mysql84"
+    BASE_IMAGE    = "debian:trixie-slim"
+    MYSQL_VERSION = "8.4.8"
+    BIN_DIR       = ".vitesst_install_debug2pc/bin"
+  }
+  tags = ["vitesst:mysql84-debug2pc"]
+}

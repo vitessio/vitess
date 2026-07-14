@@ -24,11 +24,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
-func start(t *testing.T) (utils.MySQLCompare, func()) {
-	mcmp, err := utils.NewMySQLCompare(t, vtParams, mysqlParams)
+func start(t *testing.T) (vitesst.MySQLCompare, func()) {
+	mcmp, err := vitesst.NewMySQLCompare(t.Context(), t, vtParams, mysqlParams)
 	require.NoError(t, err)
 
 	deleteAll := func() {
@@ -50,24 +50,24 @@ func TestQueryTimeoutWithDual(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
 
-	_, err := utils.ExecAllowError(t, mcmp.VtConn, "select sleep(0.04) from dual")
+	_, err := vitesst.ExecAllowError(t, mcmp.VtConn, "select sleep(0.04) from dual")
 	assert.NoError(t, err)
-	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select sleep(0.24) from dual")
+	_, err = vitesst.ExecAllowError(t, mcmp.VtConn, "select sleep(0.24) from dual")
 	assert.Error(t, err)
-	_, err = utils.ExecAllowError(t, mcmp.VtConn, "set @@session.query_timeout=20")
+	_, err = vitesst.ExecAllowError(t, mcmp.VtConn, "set @@session.query_timeout=20")
 	require.NoError(t, err)
-	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select sleep(0.04) from dual")
+	_, err = vitesst.ExecAllowError(t, mcmp.VtConn, "select sleep(0.04) from dual")
 	assert.Error(t, err)
-	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select sleep(0.01) from dual")
+	_, err = vitesst.ExecAllowError(t, mcmp.VtConn, "select sleep(0.01) from dual")
 	assert.NoError(t, err)
-	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=500 */ sleep(0.24) from dual")
+	_, err = vitesst.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=500 */ sleep(0.24) from dual")
 	assert.NoError(t, err)
-	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=10 */ sleep(0.04) from dual")
+	_, err = vitesst.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=10 */ sleep(0.04) from dual")
 	assert.Error(t, err)
-	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=15 */ sleep(0.001) from dual")
+	_, err = vitesst.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=15 */ sleep(0.001) from dual")
 	assert.NoError(t, err)
 	// infinite query timeout overriding all defaults
-	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=0 */ sleep(5) from dual")
+	_, err = vitesst.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=0 */ sleep(5) from dual")
 	assert.NoError(t, err)
 }
 
@@ -76,26 +76,26 @@ func TestQueryTimeoutWithTables(t *testing.T) {
 	defer closer()
 
 	// unsharded
-	utils.Exec(t, mcmp.VtConn, "insert /*vt+ QUERY_TIMEOUT_MS=1000 */ into uks.unsharded(id1) values (1),(2),(3),(4),(5)")
+	vitesst.Exec(t, mcmp.VtConn, "insert /*vt+ QUERY_TIMEOUT_MS=1000 */ into uks.unsharded(id1) values (1),(2),(3),(4),(5)")
 	for range 12 {
-		utils.Exec(t, mcmp.VtConn, "insert /*vt+ QUERY_TIMEOUT_MS=2000 */ into uks.unsharded(id1) select id1+5 from uks.unsharded")
+		vitesst.Exec(t, mcmp.VtConn, "insert /*vt+ QUERY_TIMEOUT_MS=2000 */ into uks.unsharded(id1) select id1+5 from uks.unsharded")
 	}
 
-	utils.Exec(t, mcmp.VtConn, "select count(*) from uks.unsharded where id1 > 31")
-	utils.Exec(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=100 */ count(*) from uks.unsharded where id1 > 31")
+	vitesst.Exec(t, mcmp.VtConn, "select count(*) from uks.unsharded where id1 > 31")
+	vitesst.Exec(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=100 */ count(*) from uks.unsharded where id1 > 31")
 
 	// the query usually takes more than 5ms to return. So this should fail.
-	_, err := utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=1 */ count(*) from uks.unsharded where id1 > 31")
+	_, err := vitesst.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=1 */ count(*) from uks.unsharded where id1 > 31")
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "context deadline exceeded")
 	assert.ErrorContains(t, err, "(errno 1317) (sqlstate 70100)")
 
 	// sharded
-	utils.Exec(t, mcmp.VtConn, "insert /*vt+ QUERY_TIMEOUT_MS=1000 */ into ks_misc.t1(id1, id2) values (1,2),(2,4),(3,6),(4,8),(5,10)")
+	vitesst.Exec(t, mcmp.VtConn, "insert /*vt+ QUERY_TIMEOUT_MS=1000 */ into ks_misc.t1(id1, id2) values (1,2),(2,4),(3,6),(4,8),(5,10)")
 
 	// sleep take in seconds, so 0.1 is 100ms
-	utils.Exec(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=500 */ sleep(0.1) from t1 where id1 = 1")
-	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=20 */ sleep(0.1) from t1 where id1 = 1")
+	vitesst.Exec(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=500 */ sleep(0.1) from t1 where id1 = 1")
+	_, err = vitesst.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=20 */ sleep(0.1) from t1 where id1 = 1")
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "DeadlineExceeded")
 	assert.ErrorContains(t, err, "(errno 1317) (sqlstate 70100)")
@@ -107,11 +107,11 @@ func TestQueryTimeoutWithShardTargeting(t *testing.T) {
 	defer closer()
 
 	// shard targeting to -80 shard.
-	utils.Exec(t, mcmp.VtConn, "use `ks_misc/-80`")
+	vitesst.Exec(t, mcmp.VtConn, "use `ks_misc/-80`")
 
 	// insert some data
 	// Fix: Increased query timeout from 100ms to 1000ms to prevent timeout errors on slow runners.
-	utils.Exec(t, mcmp.VtConn, "insert /*vt+ QUERY_TIMEOUT_MS=1000 */ into t1(id1, id2) values (1,2),(3,4),(4,5),(5,6)")
+	vitesst.Exec(t, mcmp.VtConn, "insert /*vt+ QUERY_TIMEOUT_MS=1000 */ into t1(id1, id2) values (1,2),(3,4),(4,5),(5,6)")
 
 	queries := []string{
 		"insert /*vt+ QUERY_TIMEOUT_MS=1 */ into t1(id1, id2) values (6,sleep(5))",
@@ -122,7 +122,7 @@ func TestQueryTimeoutWithShardTargeting(t *testing.T) {
 
 	for _, query := range queries {
 		t.Run(query, func(t *testing.T) {
-			_, err := utils.ExecAllowError(t, mcmp.VtConn, query)
+			_, err := vitesst.ExecAllowError(t, mcmp.VtConn, query)
 			// the error message can be different based on VTGate or VTTABLET or grpc error.
 			assert.ErrorContains(t, err, "(errno 1317) (sqlstate 70100)")
 		})
@@ -130,52 +130,52 @@ func TestQueryTimeoutWithShardTargeting(t *testing.T) {
 }
 
 func TestQueryTimeoutWithoutVTGateDefault(t *testing.T) {
+	ctx := t.Context()
+
 	// disable query timeout
-	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
-		"--query-timeout", "0")
 	require.NoError(t,
-		clusterInstance.RestartVtgate())
+		clusterInstance.VTGate().Restart(ctx, "--query-timeout", "0"))
 
 	// update vtgate params
-	vtParams = clusterInstance.GetVTParams(keyspaceName)
+	vtParams = clusterInstance.VTParams(ctx, "")
 
 	mcmp, closer := start(t)
 	defer closer()
 
 	// tablet query timeout of 2s
-	_, err := utils.ExecAllowError(t, mcmp.VtConn, "select sleep(5) from dual")
+	_, err := vitesst.ExecAllowError(t, mcmp.VtConn, "select sleep(5) from dual")
 	assert.Error(t, err)
 
 	// infinite timeout using query hint
-	utils.Exec(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=0 */ sleep(5) from dual")
+	vitesst.Exec(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=0 */ sleep(5) from dual")
 
 	// checking again without query hint, tablet query timeout of 2s should be applied
-	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select sleep(5) from dual")
+	_, err = vitesst.ExecAllowError(t, mcmp.VtConn, "select sleep(5) from dual")
 	assert.Error(t, err)
 
 	// set timeout of 20ms
-	utils.Exec(t, mcmp.VtConn, "set query_timeout=20")
+	vitesst.Exec(t, mcmp.VtConn, "set query_timeout=20")
 
 	// query timeout of 20ms should be applied
-	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select sleep(1) from dual")
+	_, err = vitesst.ExecAllowError(t, mcmp.VtConn, "select sleep(1) from dual")
 	assert.Error(t, err)
 
 	// infinite timeout using query hint will override session timeout.
-	utils.Exec(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=0 */ sleep(5) from dual")
+	vitesst.Exec(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=0 */ sleep(5) from dual")
 
 	// open second session
-	conn2, err := mysql.Connect(t.Context(), &vtParams)
+	conn2, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn2.Close()
 
 	// tablet query timeout of 2s should be applied, as session timeout is not set on this connection.
-	utils.Exec(t, conn2, "select sleep(1) from dual")
-	_, err = utils.ExecAllowError(t, conn2, "select sleep(5) from dual")
+	vitesst.Exec(t, conn2, "select sleep(1) from dual")
+	_, err = vitesst.ExecAllowError(t, conn2, "select sleep(5) from dual")
 	assert.Error(t, err)
 
 	// reset session on first connection, tablet query timeout of 2s should be applied.
-	utils.Exec(t, mcmp.VtConn, "set query_timeout=0")
-	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select sleep(5) from dual")
+	vitesst.Exec(t, mcmp.VtConn, "set query_timeout=0")
+	_, err = vitesst.ExecAllowError(t, mcmp.VtConn, "select sleep(5) from dual")
 	assert.Error(t, err)
 }
 
@@ -190,7 +190,7 @@ func TestOverallQueryTimeout(t *testing.T) {
 	// After inserting the rows above, if we run the following query, we will end up doing join on vtgate
 	// that issues one select query on the left side and 2 on the right side. The queries on the right side
 	// take 2 and 3 seconds each to run. If we have an overall timeout for 4 seconds, then it should fail.
-	_, err := utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=4000 */ sleep(u2.id2), u1.id2 from t1 u1 join t1 u2 where u1.id2 = u2.id1")
+	_, err := vitesst.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=4000 */ sleep(u2.id2), u1.id2 from t1 u1 join t1 u2 where u1.id2 = u2.id1")
 	assert.Error(t, err)
 	// We can get two different error messages based on whether it is coming from vttablet or vtgate
 	deadLineExceeded := "DeadlineExceeded desc"
@@ -199,14 +199,14 @@ func TestOverallQueryTimeout(t *testing.T) {
 	}
 
 	// Let's also check that setting the session variable also works.
-	utils.Exec(t, mcmp.VtConn, "set query_timeout=4000")
-	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select sleep(u2.id2), u1.id2 from t1 u1 join t1 u2 where u1.id2 = u2.id1")
+	vitesst.Exec(t, mcmp.VtConn, "set query_timeout=4000")
+	_, err = vitesst.ExecAllowError(t, mcmp.VtConn, "select sleep(u2.id2), u1.id2 from t1 u1 join t1 u2 where u1.id2 = u2.id1")
 	assert.Error(t, err)
 	if !strings.Contains(err.Error(), "Query execution was interrupted, maximum statement execution time exceeded") {
 		assert.ErrorContains(t, err, deadLineExceeded)
 	}
 
 	// Increasing the timeout should pass the query.
-	utils.Exec(t, mcmp.VtConn, "set query_timeout=10000")
-	_ = utils.Exec(t, mcmp.VtConn, "select sleep(u2.id2), u1.id2 from t1 u1 join t1 u2 where u1.id2 = u2.id1")
+	vitesst.Exec(t, mcmp.VtConn, "set query_timeout=10000")
+	_ = vitesst.Exec(t, mcmp.VtConn, "select sleep(u2.id2), u1.id2 from t1 u1 join t1 u2 where u1.id2 = u2.id1")
 }

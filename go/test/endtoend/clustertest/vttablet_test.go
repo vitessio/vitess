@@ -18,10 +18,6 @@ limitations under the License.
 package clustertest
 
 import (
-	"encoding/json"
-	"fmt"
-	"io"
-	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -29,16 +25,13 @@ import (
 )
 
 func TestVttabletProcess(t *testing.T) {
-	firstTabletPort := clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].HTTPPort
-	testURL(t, fmt.Sprintf("http://localhost:%d/debug/vars/", firstTabletPort), "tablet debug var url")
-	resp, err := http.Get(fmt.Sprintf("http://localhost:%d/debug/vars", firstTabletPort))
+	ctx := t.Context()
+	tablet := clusterInstance.Keyspaces()[0].Shards()[0].Tablets()[0]
+	status, _, err := tablet.MakeAPICall(ctx, "/debug/vars/")
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	assert.Equal(t, 200, status)
 
-	resultMap := make(map[string]any)
-	respByte, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-	err = json.Unmarshal(respByte, &resultMap)
+	resultMap, err := tablet.GetVars(ctx)
 	require.NoError(t, err)
 	if got, want := resultMap["TabletKeyspace"], "commerce"; got != want {
 		assert.Equalf(t, want, got, "select:\n%v want\n%v for %s", got, want, "Keyspace of tablet should match")
@@ -46,8 +39,9 @@ func TestVttabletProcess(t *testing.T) {
 }
 
 func TestDeleteTablet(t *testing.T) {
-	primary := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
+	ctx := t.Context()
+	primary := clusterInstance.Keyspaces()[0].Shards()[0].Primary()
 	require.NotNil(t, primary)
-	_, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("DeleteTablets", "--allow-primary", primary.Alias)
+	_, err := clusterInstance.Vtctld().ExecuteCommandWithOutput(ctx, "DeleteTablets", "--allow-primary", primary.Alias())
 	require.NoError(t, err)
 }

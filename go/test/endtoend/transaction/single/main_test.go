@@ -14,9 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package vtgate
+package single
 
 import (
+	"context"
 	_ "embed"
 	"flag"
 	"fmt"
@@ -26,16 +27,13 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/utils"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
+	clusterInstance *vitesst.Cluster
 	vtParams        mysql.ConnParams
 	KeyspaceName    = "ks"
-	Cell            = "test"
 
 	//go:embed schema.sql
 	SchemaSQL string
@@ -48,35 +46,32 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(Cell, "localhost")
-		defer clusterInstance.Teardown()
+		ctx := context.Background()
 
-		// Start topo server
-		err := clusterInstance.StartTopo()
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithKeyspace(KeyspaceName).
+				WithShardNames("-80", "80-").
+				WithSchema(SchemaSQL).
+				WithVSchema(VSchema),
+			vitesst.WithVTGateArgs("--transaction-mode", "SINGLE"),
+		)
 		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-
-		// Start keyspace
-		keyspace := &cluster.Keyspace{
-			Name:      KeyspaceName,
-			SchemaSQL: SchemaSQL,
-			VSchema:   VSchema,
-		}
-		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 0, false, clusterInstance.Cell)
+		cleanup, err := cluster.Start(ctx)
 		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
 
-		// Start vtgate
-		clusterInstance.VtGatePlannerVersion = planbuilder.Gen4
-		clusterInstance.VtGateExtraArgs = []string{"--transaction-mode", "SINGLE"}
-		err = clusterInstance.StartVtgate()
-		if err != nil {
-			return 1
-		}
-
-		vtParams = clusterInstance.GetVTParams(KeyspaceName)
+		clusterInstance = cluster
+		vtParams = cluster.VTParams(ctx, "")
 		return m.Run()
 	}()
 	os.Exit(exitCode)
@@ -87,20 +82,20 @@ func TestSingleOneWay(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 	defer func() {
-		utils.Exec(t, conn, `delete from txn_unique_constraints where txn_id = 'txn1'`)
-		utils.Exec(t, conn, `delete from txn_unique_constraints where txn_id = 'txn3'`)
+		vitesst.Exec(t, conn, `delete from txn_unique_constraints where txn_id = 'txn1'`)
+		vitesst.Exec(t, conn, `delete from txn_unique_constraints where txn_id = 'txn3'`)
 	}()
 
-	utils.Exec(t, conn, `begin`)
-	utils.Exec(t, conn, `INSERT INTO txn_unique_constraints(id, txn_id, unique_constraint) VALUES (UUID(), 'txn1', 'txn_info_txn_id_txn1')`)
-	utils.Exec(t, conn, `INSERT INTO txn_unique_constraints(id, txn_id, unique_constraint) VALUES (UUID(), 'txn1', 'txn_info_mti_mc___mti1_mc1')`)
-	utils.Exec(t, conn, `commit`)
+	vitesst.Exec(t, conn, `begin`)
+	vitesst.Exec(t, conn, `INSERT INTO txn_unique_constraints(id, txn_id, unique_constraint) VALUES (UUID(), 'txn1', 'txn_info_txn_id_txn1')`)
+	vitesst.Exec(t, conn, `INSERT INTO txn_unique_constraints(id, txn_id, unique_constraint) VALUES (UUID(), 'txn1', 'txn_info_mti_mc___mti1_mc1')`)
+	vitesst.Exec(t, conn, `commit`)
 
-	utils.Exec(t, conn, `begin`)
-	utils.Exec(t, conn, `INSERT INTO txn_unique_constraints(id, txn_id, unique_constraint) VALUES (UUID(), 'txn3', 'txn_info_txn_id_txn3')`)
+	vitesst.Exec(t, conn, `begin`)
+	vitesst.Exec(t, conn, `INSERT INTO txn_unique_constraints(id, txn_id, unique_constraint) VALUES (UUID(), 'txn3', 'txn_info_txn_id_txn3')`)
 	// should fail with duplicate key error and not with multi-db transaction
-	utils.AssertContainsError(t, conn, `INSERT INTO txn_unique_constraints(id, txn_id, unique_constraint) VALUES (UUID(), 'txn3', 'txn_info_mti_mc___mti1_mc1')`, `Duplicate entry 'txn_info_mti_mc___mti1_mc1'`)
-	utils.Exec(t, conn, `rollback`)
+	vitesst.AssertContainsError(t, conn, `INSERT INTO txn_unique_constraints(id, txn_id, unique_constraint) VALUES (UUID(), 'txn3', 'txn_info_mti_mc___mti1_mc1')`, `Duplicate entry 'txn_info_mti_mc___mti1_mc1'`)
+	vitesst.Exec(t, conn, `rollback`)
 }
 
 func TestSingleReverseWay(t *testing.T) {
@@ -108,20 +103,20 @@ func TestSingleReverseWay(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 	defer func() {
-		utils.Exec(t, conn, `delete from txn_unique_constraints where txn_id = 'txn1'`)
-		utils.Exec(t, conn, `delete from txn_unique_constraints where txn_id = 'txn3'`)
+		vitesst.Exec(t, conn, `delete from txn_unique_constraints where txn_id = 'txn1'`)
+		vitesst.Exec(t, conn, `delete from txn_unique_constraints where txn_id = 'txn3'`)
 	}()
 
-	utils.Exec(t, conn, `begin`)
-	utils.Exec(t, conn, `INSERT INTO txn_unique_constraints(id, txn_id, unique_constraint) VALUES (UUID(), 'txn3', 'txn_info_txn_id_txn3')`)
-	utils.Exec(t, conn, `INSERT INTO txn_unique_constraints(id, txn_id, unique_constraint) VALUES (UUID(), 'txn3', 'txn_info_mti_mc___mti1_mc1')`)
-	utils.Exec(t, conn, `commit`)
+	vitesst.Exec(t, conn, `begin`)
+	vitesst.Exec(t, conn, `INSERT INTO txn_unique_constraints(id, txn_id, unique_constraint) VALUES (UUID(), 'txn3', 'txn_info_txn_id_txn3')`)
+	vitesst.Exec(t, conn, `INSERT INTO txn_unique_constraints(id, txn_id, unique_constraint) VALUES (UUID(), 'txn3', 'txn_info_mti_mc___mti1_mc1')`)
+	vitesst.Exec(t, conn, `commit`)
 
-	utils.Exec(t, conn, `begin`)
-	utils.Exec(t, conn, `INSERT INTO txn_unique_constraints(id, txn_id, unique_constraint) VALUES (UUID(), 'txn1', 'txn_info_txn_id_txn1')`)
+	vitesst.Exec(t, conn, `begin`)
+	vitesst.Exec(t, conn, `INSERT INTO txn_unique_constraints(id, txn_id, unique_constraint) VALUES (UUID(), 'txn1', 'txn_info_txn_id_txn1')`)
 	// should fail with duplicate key error and not with multi-db transaction
-	utils.AssertContainsError(t, conn, `INSERT INTO txn_unique_constraints(id, txn_id, unique_constraint) VALUES (UUID(), 'txn1', 'txn_info_mti_mc___mti1_mc1')`, `Duplicate entry 'txn_info_mti_mc___mti1_mc1'`)
-	utils.Exec(t, conn, `rollback`)
+	vitesst.AssertContainsError(t, conn, `INSERT INTO txn_unique_constraints(id, txn_id, unique_constraint) VALUES (UUID(), 'txn1', 'txn_info_mti_mc___mti1_mc1')`, `Duplicate entry 'txn_info_mti_mc___mti1_mc1'`)
+	vitesst.Exec(t, conn, `rollback`)
 }
 
 func TestSingleLookupDangleRow(t *testing.T) {
@@ -129,18 +124,18 @@ func TestSingleLookupDangleRow(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 	defer func() {
-		utils.Exec(t, conn, `delete from txn_unique_constraints where txn_id = 'txn3'`)
+		vitesst.Exec(t, conn, `delete from txn_unique_constraints where txn_id = 'txn3'`)
 	}()
 
 	// insert a dangling row in lookup table
-	utils.Exec(t, conn, `INSERT INTO uniqueConstraint_vdx(unique_constraint, keyspace_id) VALUES ('txn_info_mti_mc___mti1_mc1', 'J\xda\xf0p\x0e\xcc(\x8fਁ\xa7P\x86\xa5=')`)
+	vitesst.Exec(t, conn, `INSERT INTO uniqueConstraint_vdx(unique_constraint, keyspace_id) VALUES ('txn_info_mti_mc___mti1_mc1', 'J\xda\xf0p\x0e\xcc(\x8fਁ\xa7P\x86\xa5=')`)
 
-	utils.Exec(t, conn, `begin`)
+	vitesst.Exec(t, conn, `begin`)
 	// should succeed by validating that the original row does not exist for the unique_constraint, so this should succeed.
-	utils.Exec(t, conn, `INSERT INTO txn_unique_constraints(id, txn_id, unique_constraint) VALUES (UUID(), 'txn3', 'txn_info_mti_mc___mti1_mc1')`)
-	utils.Exec(t, conn, `commit`)
+	vitesst.Exec(t, conn, `INSERT INTO txn_unique_constraints(id, txn_id, unique_constraint) VALUES (UUID(), 'txn3', 'txn_info_mti_mc___mti1_mc1')`)
+	vitesst.Exec(t, conn, `commit`)
 
-	utils.AssertMatches(t, conn, `select txn_id, unique_constraint from txn_unique_constraints where txn_id = 'txn3'`, `[[VARCHAR("txn3") VARCHAR("txn_info_mti_mc___mti1_mc1")]]`)
+	vitesst.AssertMatches(t, conn, `select txn_id, unique_constraint from txn_unique_constraints where txn_id = 'txn3'`, `[[VARCHAR("txn3") VARCHAR("txn_info_mti_mc___mti1_mc1")]]`)
 }
 
 func TestLookupDangleRowLaterMultiDB(t *testing.T) {
@@ -148,23 +143,23 @@ func TestLookupDangleRowLaterMultiDB(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 	defer func() {
-		utils.Exec(t, conn, `delete from uniqueConstraint_vdx where unique_constraint = 'foo'`)
-		utils.Exec(t, conn, `delete from uniqueConstraint_vdx where unique_constraint = 'bar'`)
+		vitesst.Exec(t, conn, `delete from uniqueConstraint_vdx where unique_constraint = 'foo'`)
+		vitesst.Exec(t, conn, `delete from uniqueConstraint_vdx where unique_constraint = 'bar'`)
 	}()
 
 	// insert a dangling row in lookup table
-	utils.Exec(t, conn, `INSERT INTO uniqueConstraint_vdx(unique_constraint, keyspace_id) VALUES ('foo', 'J\xda\xf0p\x0e\xcc(\x8fਁ\xa7P\x86\xa5=')`)
-	utils.Exec(t, conn, `INSERT INTO uniqueConstraint_vdx(unique_constraint, keyspace_id) VALUES ('bar', '\x86\xc8\xc5\x1ac\xfb\x8c+6\xe4\x1f\x03\xd8ϝB')`)
+	vitesst.Exec(t, conn, `INSERT INTO uniqueConstraint_vdx(unique_constraint, keyspace_id) VALUES ('foo', 'J\xda\xf0p\x0e\xcc(\x8fਁ\xa7P\x86\xa5=')`)
+	vitesst.Exec(t, conn, `INSERT INTO uniqueConstraint_vdx(unique_constraint, keyspace_id) VALUES ('bar', '\x86\xc8\xc5\x1ac\xfb\x8c+6\xe4\x1f\x03\xd8ϝB')`)
 	//
-	utils.Exec(t, conn, `begin`)
+	vitesst.Exec(t, conn, `begin`)
 	// should succeed by validating that the original row does not exist for the unique_constraint, so this should succeed.
-	utils.Exec(t, conn, `INSERT INTO txn_unique_constraints(id, txn_id, unique_constraint) VALUES (UUID(), 'txn1', 'foo')`)
+	vitesst.Exec(t, conn, `INSERT INTO txn_unique_constraints(id, txn_id, unique_constraint) VALUES (UUID(), 'txn1', 'foo')`)
 	// this fails as it starts a transaction on another shard. so complete transaction is aborted.
-	utils.AssertContainsError(t, conn, `INSERT INTO txn_unique_constraints(id, txn_id, unique_constraint) VALUES (UUID(), 'txn3', 'bar')`, `multi-db transaction attempted`)
-	utils.Exec(t, conn, `commit`)
+	vitesst.AssertContainsError(t, conn, `INSERT INTO txn_unique_constraints(id, txn_id, unique_constraint) VALUES (UUID(), 'txn3', 'bar')`, `multi-db transaction attempted`)
+	vitesst.Exec(t, conn, `commit`)
 
 	// this row should not exist.
-	utils.AssertMatches(t, conn, `select txn_id from txn_unique_constraints where txn_id = 'txn1' and unique_constraint = 'foo'`, `[]`)
+	vitesst.AssertMatches(t, conn, `select txn_id from txn_unique_constraints where txn_id = 'txn1' and unique_constraint = 'foo'`, `[]`)
 }
 
 func TestLookupDangleRowRecordInSameShard(t *testing.T) {
@@ -172,17 +167,17 @@ func TestLookupDangleRowRecordInSameShard(t *testing.T) {
 	defer cleanup()
 
 	// insert a dangling row in lookup table
-	utils.Exec(t, conn, `INSERT INTO uniqueConstraint_vdx(unique_constraint, keyspace_id) VALUES ('foo', 'J\xda\xf0p\x0e\xcc(\x8fਁ\xa7P\x86\xa5=')`)
-	utils.Exec(t, conn, `INSERT INTO uniqueConstraint_vdx(unique_constraint, keyspace_id) VALUES ('bar', '\x86\xc8\xc5\x1ac\xfb\x8c+6\xe4\x1f\x03\xd8ϝB')`)
+	vitesst.Exec(t, conn, `INSERT INTO uniqueConstraint_vdx(unique_constraint, keyspace_id) VALUES ('foo', 'J\xda\xf0p\x0e\xcc(\x8fਁ\xa7P\x86\xa5=')`)
+	vitesst.Exec(t, conn, `INSERT INTO uniqueConstraint_vdx(unique_constraint, keyspace_id) VALUES ('bar', '\x86\xc8\xc5\x1ac\xfb\x8c+6\xe4\x1f\x03\xd8ϝB')`)
 	//
-	utils.Exec(t, conn, `begin`)
+	vitesst.Exec(t, conn, `begin`)
 	// should succeed by validating that the original row does not exist for the unique_constraint, so this should succeed.
-	utils.Exec(t, conn, `INSERT INTO txn_unique_constraints(id, txn_id, unique_constraint) VALUES (UUID(), 'txn1', 'foo')`)
+	vitesst.Exec(t, conn, `INSERT INTO txn_unique_constraints(id, txn_id, unique_constraint) VALUES (UUID(), 'txn1', 'foo')`)
 	// this also passes as it goes to same shard (no multi-shard transaction).
-	utils.Exec(t, conn, `INSERT INTO txn_unique_constraints(id, txn_id, unique_constraint) VALUES (UUID(), 'txn1', 'bar')`)
-	utils.Exec(t, conn, `commit`)
+	vitesst.Exec(t, conn, `INSERT INTO txn_unique_constraints(id, txn_id, unique_constraint) VALUES (UUID(), 'txn1', 'bar')`)
+	vitesst.Exec(t, conn, `commit`)
 
-	utils.AssertMatches(t, conn, `select txn_id, unique_constraint from txn_unique_constraints where txn_id = 'txn1' order by unique_constraint`, `[[VARCHAR("txn1") VARCHAR("bar")] [VARCHAR("txn1") VARCHAR("foo")]]`)
+	vitesst.AssertMatches(t, conn, `select txn_id, unique_constraint from txn_unique_constraints where txn_id = 'txn1' order by unique_constraint`, `[[VARCHAR("txn1") VARCHAR("bar")] [VARCHAR("txn1") VARCHAR("foo")]]`)
 }
 
 func TestMultiDbSecondRecordLookupDangle(t *testing.T) {
@@ -190,27 +185,27 @@ func TestMultiDbSecondRecordLookupDangle(t *testing.T) {
 	defer cleanup()
 
 	// insert a dangling row in lookup table
-	utils.Exec(t, conn, `INSERT INTO uniqueConstraint_vdx(unique_constraint, keyspace_id) VALUES ('bar', '\x86\xc8\xc5\x1ac\xfb\x8c+6\xe4\x1f\x03\xd8ϝB')`)
+	vitesst.Exec(t, conn, `INSERT INTO uniqueConstraint_vdx(unique_constraint, keyspace_id) VALUES ('bar', '\x86\xc8\xc5\x1ac\xfb\x8c+6\xe4\x1f\x03\xd8ϝB')`)
 
-	utils.Exec(t, conn, `begin`)
+	vitesst.Exec(t, conn, `begin`)
 	// normal query goes to -80.
-	utils.Exec(t, conn, `INSERT INTO txn_unique_constraints(id, txn_id, unique_constraint) VALUES (UUID(), 'txn1', 'foo')`)
+	vitesst.Exec(t, conn, `INSERT INTO txn_unique_constraints(id, txn_id, unique_constraint) VALUES (UUID(), 'txn1', 'foo')`)
 	// dangling row query goes to -80 (where tx already exists). actual query goes to 80- so multi-shard transaction error.
-	utils.AssertContainsError(t, conn, `INSERT INTO txn_unique_constraints(id, txn_id, unique_constraint) VALUES (UUID(), 'txn3', 'txn_info_txn_id_txn1')`, `multi-db transaction attempted`)
-	utils.Exec(t, conn, `commit`)
+	vitesst.AssertContainsError(t, conn, `INSERT INTO txn_unique_constraints(id, txn_id, unique_constraint) VALUES (UUID(), 'txn3', 'txn_info_txn_id_txn1')`, `multi-db transaction attempted`)
+	vitesst.Exec(t, conn, `commit`)
 
 	// no row should exist.
-	utils.AssertMatches(t, conn, `select txn_id from txn_unique_constraints`, `[]`)
+	vitesst.AssertMatches(t, conn, `select txn_id from txn_unique_constraints`, `[]`)
 
-	utils.Exec(t, conn, `begin`)
+	vitesst.Exec(t, conn, `begin`)
 	// normal query goes to -80
-	utils.Exec(t, conn, `INSERT INTO txn_unique_constraints(id, txn_id, unique_constraint) VALUES (UUID(), 'txn1', 'foo')`)
+	vitesst.Exec(t, conn, `INSERT INTO txn_unique_constraints(id, txn_id, unique_constraint) VALUES (UUID(), 'txn1', 'foo')`)
 	// dangling row query goes to 80- (no issue there). actual query goes to 80- so multi-shard transaction error.
-	utils.AssertContainsError(t, conn, `INSERT INTO txn_unique_constraints(id, txn_id, unique_constraint) VALUES (UUID(), 'txn3', 'bar')`, `multi-db transaction attempted`)
-	utils.Exec(t, conn, `commit`)
+	vitesst.AssertContainsError(t, conn, `INSERT INTO txn_unique_constraints(id, txn_id, unique_constraint) VALUES (UUID(), 'txn3', 'bar')`, `multi-db transaction attempted`)
+	vitesst.Exec(t, conn, `commit`)
 
 	// no row should exist.
-	utils.AssertMatches(t, conn, `select txn_id from txn_unique_constraints`, `[]`)
+	vitesst.AssertMatches(t, conn, `select txn_id from txn_unique_constraints`, `[]`)
 }
 
 // TestNoRecordInTableNotFail test that vindex lookup query creates a transaction on one shard say x.
@@ -221,14 +216,14 @@ func TestNoRecordInTableNotFail(t *testing.T) {
 	conn, cleanup := setup(t)
 	defer cleanup()
 
-	utils.AssertMatches(t, conn, `select @@transaction_mode`, `[[VARCHAR("SINGLE")]]`)
+	vitesst.AssertMatches(t, conn, `select @@transaction_mode`, `[[VARCHAR("SINGLE")]]`)
 	// Need to run this test multiple times as shards are picked randomly for Impossible query.
 	// After the fix it is not random if a shard session already exists then it reuses that same shard session.
 	for range 100 {
-		utils.Exec(t, conn, `begin`)
-		utils.Exec(t, conn, `INSERT INTO t1(id, txn_id) VALUES (1, "t1")`)
-		utils.Exec(t, conn, `SELECT * FROM t2 WHERE id = 1`)
-		utils.Exec(t, conn, `rollback`)
+		vitesst.Exec(t, conn, `begin`)
+		vitesst.Exec(t, conn, `INSERT INTO t1(id, txn_id) VALUES (1, "t1")`)
+		vitesst.Exec(t, conn, `SELECT * FROM t2 WHERE id = 1`)
+		vitesst.Exec(t, conn, `rollback`)
 	}
 }
 
@@ -241,32 +236,32 @@ func TestOnlyMultiShardWriteFail(t *testing.T) {
 
 	// basic test to check that multi-shard transaction is not allowed.
 	t.Run("insert-select-insert fail", func(t *testing.T) {
-		utils.Exec(t, conn, `begin`)
-		utils.Exec(t, conn, `INSERT INTO t1(id, txn_id) VALUES (1, "a")`)
+		vitesst.Exec(t, conn, `begin`)
+		vitesst.Exec(t, conn, `INSERT INTO t1(id, txn_id) VALUES (1, "a")`)
 		// read is ok on another shard.
-		utils.Exec(t, conn, `select * from t1 where txn_id = "b"`)
+		vitesst.Exec(t, conn, `select * from t1 where txn_id = "b"`)
 		// write on it will fail.
-		_, err := utils.ExecAllowError(t, conn, `INSERT INTO t1(id, txn_id) VALUES (2, "b")`)
+		_, err := vitesst.ExecAllowError(t, conn, `INSERT INTO t1(id, txn_id) VALUES (2, "b")`)
 		require.ErrorContains(t, err, "multi-db transaction attempted")
-		utils.Exec(t, conn, `rollback`)
+		vitesst.Exec(t, conn, `rollback`)
 	})
 
 	// test with select query on different shards and one write query.
 	t.Run("select-select-insert pass", func(t *testing.T) {
-		utils.Exec(t, conn, `begin`)
-		utils.Exec(t, conn, `select * from t1 where txn_id = "a"`)
-		utils.Exec(t, conn, `select * from t1 where txn_id = "b"`)
-		utils.Exec(t, conn, `INSERT INTO t1(id, txn_id) VALUES (1, "a")`)
-		utils.Exec(t, conn, `commit`)
+		vitesst.Exec(t, conn, `begin`)
+		vitesst.Exec(t, conn, `select * from t1 where txn_id = "a"`)
+		vitesst.Exec(t, conn, `select * from t1 where txn_id = "b"`)
+		vitesst.Exec(t, conn, `INSERT INTO t1(id, txn_id) VALUES (1, "a")`)
+		vitesst.Exec(t, conn, `commit`)
 	})
 
 	// test with one write query and multiple select.
 	t.Run("insert-select-select pass", func(t *testing.T) {
-		utils.Exec(t, conn, `begin`)
-		utils.Exec(t, conn, `INSERT INTO t1(id, txn_id) VALUES (2, "b")`)
-		utils.Exec(t, conn, `select * from t1 where txn_id in ("a", "b", "c")`)
-		utils.Exec(t, conn, `select * from t1 where txn_id in ("d", "e", "f")`)
-		utils.Exec(t, conn, `commit`)
+		vitesst.Exec(t, conn, `begin`)
+		vitesst.Exec(t, conn, `INSERT INTO t1(id, txn_id) VALUES (2, "b")`)
+		vitesst.Exec(t, conn, `select * from t1 where txn_id in ("a", "b", "c")`)
+		vitesst.Exec(t, conn, `select * from t1 where txn_id in ("d", "e", "f")`)
+		vitesst.Exec(t, conn, `commit`)
 	})
 }
 
@@ -280,11 +275,11 @@ func setup(t *testing.T) (*mysql.Conn, func()) {
 		"t1", "t1_id_vdx", "t2", "t2_id_vdx",
 	}
 	cleanup := func() {
-		utils.Exec(t, conn, "set transaction_mode=multi")
+		vitesst.Exec(t, conn, "set transaction_mode=multi")
 		for _, table := range tables {
-			utils.Exec(t, conn, fmt.Sprintf("delete from %s /* cleanup */", table))
+			vitesst.Exec(t, conn, fmt.Sprintf("delete from %s /* cleanup */", table))
 		}
-		utils.Exec(t, conn, "set transaction_mode=single")
+		vitesst.Exec(t, conn, "set transaction_mode=single")
 	}
 	cleanup()
 	return conn, cleanup

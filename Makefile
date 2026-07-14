@@ -163,6 +163,13 @@ endif
 	${MAKE} cross-install GOOS=linux GOARCH=$$(docker version --format '{{.Server.Arch}}') PREFIX=${PWD}/.vitesst_install
 	docker buildx bake --load -f go/test/vitesst/docker-bake.hcl
 
+# vitesst-images-debug2pc builds the vitesst image variant whose binaries
+# carry the debug2PC build tag, for the transaction/twopc fault-injection
+# suites. Run with VITESST_IMAGE=vitesst:mysql84-debug2pc.
+vitesst-images-debug2pc:
+	EXTRA_BUILD_TAGS=debug2PC ${MAKE} cross-install GOOS=linux GOARCH=$$(docker version --format '{{.Server.Arch}}') PREFIX=${PWD}/.vitesst_install_debug2pc
+	docker buildx bake --load -f go/test/vitesst/docker-bake.hcl mysql84-debug2pc
+
 # Install local install the binaries needed to run vitess locally
 # Usage: make install-local PREFIX=/path/to/install/root
 install-local: build

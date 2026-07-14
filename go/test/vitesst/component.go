@@ -175,6 +175,27 @@ func (cp *component) GetMetrics(ctx context.Context) (string, error) {
 	return body, nil
 }
 
+// Logs returns the component's full container log from the Docker daemon,
+// stdout and stderr interleaved, oldest first.
+func (cp *component) Logs(ctx context.Context) (string, error) {
+	ctr := cp.container()
+	if ctr == nil {
+		return "", vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s has no container", cp.name)
+	}
+
+	rc, err := ctr.Logs(ctx)
+	if err != nil {
+		return "", vterrors.Wrapf(err, "reading %s logs", cp.name)
+	}
+	defer rc.Close()
+
+	content, err := io.ReadAll(rc)
+	if err != nil {
+		return "", vterrors.Wrapf(err, "reading %s logs", cp.name)
+	}
+	return string(content), nil
+}
+
 // terminate tears the component's container down immediately.
 func (cp *component) terminate(ctx context.Context) error {
 	ctr := cp.setContainer(nil)

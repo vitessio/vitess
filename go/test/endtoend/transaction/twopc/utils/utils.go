@@ -33,6 +33,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/test/vitesst"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
 )
@@ -40,6 +41,10 @@ import (
 const (
 	DebugDelayCommitShard = "VT_DELAY_COMMIT_SHARD"
 	DebugDelayCommitTime  = "VT_DELAY_COMMIT_TIME"
+
+	// containerVTDataRoot is the VTDATAROOT path inside tablet containers, where
+	// debug-mode vttablets poll for the commit-delay coordination files.
+	containerVTDataRoot = "/vt/vtdataroot"
 )
 
 // ClearOutTable deletes everything from a table. Sometimes the table might have more rows than allowed in a single delete query,
@@ -117,6 +122,51 @@ func RunMultiShardCommitWithDelay(t *testing.T, conn *mysql.Conn, commitDelayTim
 // DeleteFile deletes the file specified.
 func DeleteFile(fileName string) {
 	_ = os.Remove(path.Join(os.Getenv("VTDATAROOT"), fileName))
+}
+
+// WriteTestCommunicationFileToTablets writes content to fileName in the data
+// directory of every shard primary in the keyspace. Debug-mode vttablets poll
+// these files to coordinate commit delays during tests.
+func WriteTestCommunicationFileToTablets(t *testing.T, clusterInstance *vitesst.Cluster, keyspace, fileName, content string) {
+	// Delete the file just to make sure it doesn't exist before we write to it.
+	DeleteFileFromTablets(t, clusterInstance, keyspace, fileName)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	for _, shard := range clusterInstance.Keyspace(keyspace).Shards() {
+		err := shard.Primary().WriteFile(ctx, path.Join(containerVTDataRoot, fileName), content)
+		require.NoError(t, err)
+	}
+}
+
+// DeleteFileFromTablets removes fileName from the data directory of every shard
+// primary in the keyspace.
+func DeleteFileFromTablets(t *testing.T, clusterInstance *vitesst.Cluster, keyspace, fileName string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	for _, shard := range clusterInstance.Keyspace(keyspace).Shards() {
+		err := shard.Primary().RemoveFile(ctx, path.Join(containerVTDataRoot, fileName))
+		require.NoError(t, err)
+	}
+}
+
+// RunMultiShardCommitWithDelayOnTablets runs a multi shard commit and configures
+// the shard primaries to wait for commitDelayTime seconds in the commit phase.
+func RunMultiShardCommitWithDelayOnTablets(t *testing.T, clusterInstance *vitesst.Cluster, keyspace string, conn *mysql.Conn, commitDelayTime string, wg *sync.WaitGroup, queries []string) {
+	// Run all the queries to start the transaction.
+	for _, query := range queries {
+		utils.Exec(t, conn, query)
+	}
+	// We want to delay the commit on one of the shards to simulate slow commits on a shard.
+	WriteTestCommunicationFileToTablets(t, clusterInstance, keyspace, DebugDelayCommitShard, "80-")
+	WriteTestCommunicationFileToTablets(t, clusterInstance, keyspace, DebugDelayCommitTime, commitDelayTime)
+	// We will execute a commit in a go routine, because we know it will take some time to complete.
+	// While the commit is ongoing, we would like to run the disruption.
+	wg.Go(func() {
+		_, err := utils.ExecAllowError(t, conn, "commit")
+		if err != nil {
+			log.Error(fmt.Sprintf("Error in commit - %v", err))
+		}
+	})
 }
 
 // WaitForResults waits for the results of the query to be as expected.

@@ -18,8 +18,6 @@ package clustertest
 
 import (
 	"fmt"
-	"net"
-	"strconv"
 	"testing"
 	"time"
 
@@ -28,8 +26,12 @@ import (
 )
 
 func TestEtcdServer(t *testing.T) {
+	ctx := t.Context()
+	etcdAddr, err := clusterInstance.EtcdAddr(ctx)
+	require.NoError(t, err)
+
 	// Confirm the basic etcd cluster health.
-	etcdHealthURL := fmt.Sprintf("http://%s:%d/health", clusterInstance.Hostname, clusterInstance.TopoPort)
+	etcdHealthURL := fmt.Sprintf("http://%s/health", etcdAddr)
 	testURL(t, etcdHealthURL, "generic etcd health url")
 
 	// Confirm that we have a working topo server by looking for some
@@ -40,7 +42,7 @@ func TestEtcdServer(t *testing.T) {
 		clientv3.WithLimit(1),
 	}
 	cli, err := clientv3.New(clientv3.Config{
-		Endpoints:   []string{net.JoinHostPort(clusterInstance.TopoProcess.Host, strconv.Itoa(clusterInstance.TopoProcess.Port))},
+		Endpoints:   []string{etcdAddr},
 		DialTimeout: 5 * time.Second,
 	})
 	require.NoError(t, err)

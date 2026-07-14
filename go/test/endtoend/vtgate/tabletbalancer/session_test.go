@@ -24,14 +24,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 // TestSessionModeBalancer tests the "session" mode routes each session consistently to the same tablet.
 func TestSessionModeBalancer(t *testing.T) {
-	vtgateProcess, vtParams, _, _ := setupCluster(t)
-	defer vtgateProcess.TearDown()
+	vtParams, _, _ := setupCluster(t)
 
 	// Create 2 session connections that route to different tablets
 	conns := createSessionConnections(t, &vtParams, 2)
@@ -44,8 +42,8 @@ func TestSessionModeBalancer(t *testing.T) {
 
 // TestSessionModeRemoveTablet tests that when a tablet is killed, connections switch to remaining tablets
 func TestSessionModeRemoveTablet(t *testing.T) {
-	vtgateProcess, vtParams, replicaTablets, aliases := setupCluster(t)
-	defer vtgateProcess.TearDown()
+	ctx := t.Context()
+	vtParams, replicaTablets, aliases := setupCluster(t)
 
 	// Create 2 connections to different tablets
 	conns := createSessionConnections(t, &vtParams, 2)
@@ -54,12 +52,12 @@ func TestSessionModeRemoveTablet(t *testing.T) {
 	}
 
 	// Find the first replica tablet that one of our connections is using
-	var tabletToKill *cluster.Vttablet
+	var tabletToKill *vitesst.Tablet
 	var affectedConn *mysql.Conn
 	var killedServerID int64
 
 	for _, tablet := range replicaTablets {
-		tabletServerID := aliases[tablet.Alias]
+		tabletServerID := aliases[tablet.Alias()]
 
 		// Check if any connection is using this tablet
 		for conn, connServerID := range conns {
@@ -83,8 +81,8 @@ func TestSessionModeRemoveTablet(t *testing.T) {
 	require.NotNil(t, tabletToKill, "Should find a tablet to kill")
 
 	// Kill the tablet immediately
-	err := tabletToKill.VttabletProcess.Kill()
-	require.Error(t, err)
+	err := tabletToKill.KillVttablet(ctx)
+	require.NoError(t, err)
 
 	// Wait for the connection to switch to a new tablet and update the map
 	require.Eventually(t, func() bool {
@@ -101,57 +99,41 @@ func TestSessionModeRemoveTablet(t *testing.T) {
 }
 
 // setupCluster sets up a cluster with a vtgate using the session balancer.
-func setupCluster(t *testing.T) (*cluster.VtgateProcess, mysql.ConnParams, []*cluster.Vttablet, map[string]int64) {
+func setupCluster(t *testing.T) (mysql.ConnParams, []*vitesst.Tablet, map[string]int64) {
 	t.Helper()
 
+	ctx := t.Context()
+
 	// Start vtgate in cell1 with session mode
-	vtgateProcess := cluster.VtgateProcessInstance(
-		clusterInstance.GetAndReservePort(),
-		clusterInstance.GetAndReservePort(),
-		clusterInstance.GetAndReservePort(),
-		cell1,
-		fmt.Sprintf("%s,%s", cell1, cell2),
-		clusterInstance.Hostname,
-		replicaStr,
-		clusterInstance.TopoProcess.Port,
-		clusterInstance.TmpDirectory,
-		[]string{
-			"--vtgate-balancer-mode", "session",
-		},
-		plancontext.PlannerVersion(0),
+	vtgate, err := clusterInstance.AddVTGate(ctx,
+		"--vtgate-balancer-mode", "session",
 	)
-	require.NoError(t, vtgateProcess.Setup())
-	require.True(t, vtgateProcess.WaitForStatus())
+	require.NoError(t, err)
 
-	vtParams := mysql.ConnParams{
-		Host: clusterInstance.Hostname,
-		Port: vtgateProcess.MySQLServerPort,
-	}
+	vtParams := vtgateParams(t, ctx, vtgate)
 
-	allTablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
-	shardName := clusterInstance.Keyspaces[0].Shards[0].Name
+	shard := clusterInstance.Keyspace(keyspaceName).Shards()[0]
+	allTablets := shard.Tablets()
+	shardName := shard.Name
 	replicaTablets := replicaTablets(allTablets)
 
-	conn, err := mysql.Connect(t.Context(), &vtParams)
+	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
 	// Wait for tablets to be discovered
-	err = vtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", keyspaceName, shardName), 1, 30*time.Second)
-	require.NoError(t, err)
+	waitForTablets(t, ctx, vtgate, fmt.Sprintf("%s.%s.primary", keyspaceName, shardName), 1)
+	waitForTablets(t, ctx, vtgate, fmt.Sprintf("%s.%s.replica", keyspaceName, shardName), len(replicaTablets))
 
-	err = vtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shardName), len(replicaTablets), 30*time.Second)
-	require.NoError(t, err)
-
-	aliases := mapTabletAliasToMySQLServerID(t, allTablets)
+	aliases := mapTabletAliasToMySQLServerID(t, ctx, allTablets)
 
 	// Insert test data
 	testValue := fmt.Sprintf("session_test_%d", time.Now().UnixNano())
 	_, err = conn.ExecuteFetch(fmt.Sprintf("INSERT INTO balancer_test (value) VALUES ('%s')", testValue), 1, false)
 	require.NoError(t, err)
-	waitForReplication(t, replicaTablets, testValue)
+	waitForReplication(t, ctx, replicaTablets, testValue)
 
-	return vtgateProcess, vtParams, replicaTablets, aliases
+	return vtParams, replicaTablets, aliases
 }
 
 // getServerID returns the server ID that the connection is currently routing to.

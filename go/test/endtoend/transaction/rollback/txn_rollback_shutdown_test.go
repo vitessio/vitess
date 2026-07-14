@@ -17,6 +17,7 @@ limitations under the License.
 package rollback
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -26,16 +27,13 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
+	clusterInstance *vitesst.Cluster
 	vtParams        mysql.ConnParams
 	keyspaceName    = "ks"
-	cell            = "zone1"
-	hostname        = "localhost"
 	sqlSchema       = `
 	create table buffer(
 		id BIGINT NOT NULL,
@@ -48,35 +46,32 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(cell, hostname)
-		defer clusterInstance.Teardown()
+		ctx := context.Background()
 
-		// Reserve vtGate port in order to pass it to vtTablet
-		clusterInstance.VtgateGrpcPort = clusterInstance.GetAndReservePort()
-
-		// Start topo server
-		err := clusterInstance.StartTopo()
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithKeyspace(keyspaceName).
+				WithReplicas(1).
+				WithSchema(sqlSchema),
+			// Set a short onterm timeout so the test goes faster.
+			vitesst.WithVTGateArgs("--onterm-timeout", "1s"),
+		)
 		if err != nil {
-			panic(err)
+			fmt.Fprintln(os.Stderr, err)
+			return 1
 		}
-
-		// Start keyspace
-		keyspace := &cluster.Keyspace{
-			Name:      keyspaceName,
-			SchemaSQL: sqlSchema,
-		}
-		err = clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false, clusterInstance.Cell)
+		cleanup, err := cluster.Start(ctx)
 		if err != nil {
-			panic(err)
+			fmt.Fprintln(os.Stderr, err)
+			return 1
 		}
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
 
-		// Set a short onterm timeout so the test goes faster.
-		clusterInstance.VtGateExtraArgs = []string{"--onterm-timeout", "1s"}
-		err = clusterInstance.StartVtgate()
-		if err != nil {
-			panic(err)
-		}
-		vtParams = clusterInstance.GetVTParams(keyspaceName)
+		clusterInstance = cluster
+		vtParams = cluster.VTParams(ctx, "")
 		return m.Run()
 	}()
 	os.Exit(exitCode)
@@ -88,29 +83,29 @@ func TestTransactionRollBackWhenShutDown(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	utils.Exec(t, conn, "insert into buffer(id, msg) values(3,'mark')")
-	utils.Exec(t, conn, "insert into buffer(id, msg) values(4,'doug')")
+	vitesst.Exec(t, conn, "insert into buffer(id, msg) values(3,'mark')")
+	vitesst.Exec(t, conn, "insert into buffer(id, msg) values(4,'doug')")
 
 	// start an incomplete transaction
-	utils.Exec(t, conn, "begin")
-	utils.Exec(t, conn, "insert into buffer(id, msg) values(33,'mark')")
+	vitesst.Exec(t, conn, "begin")
+	vitesst.Exec(t, conn, "insert into buffer(id, msg) values(33,'mark')")
 
 	// Enforce a restart to enforce rollback
-	if err = clusterInstance.RestartVtgate(); err != nil {
+	if err = clusterInstance.VTGate().Restart(ctx); err != nil {
 		assert.NoError(t, err)
 	}
 
 	want := ""
 
 	// Make a new mysql connection to vtGate
-	vtParams = clusterInstance.GetVTParams(keyspaceName)
+	vtParams = clusterInstance.VTParams(ctx, "")
 	conn2, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn2.Close()
 
-	vtParams = clusterInstance.GetVTParams(keyspaceName)
+	vtParams = clusterInstance.VTParams(ctx, "")
 	// Verify that rollback worked
-	qr := utils.Exec(t, conn2, "select id from buffer where msg='mark'")
+	qr := vitesst.Exec(t, conn2, "select id from buffer where msg='mark'")
 	got := fmt.Sprintf("%v", qr.Rows)
 	want = `[[INT64(3)]]`
 	assert.Equal(t, want, got)
@@ -122,16 +117,16 @@ func TestErrorInAutocommitSession(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	utils.Exec(t, conn, "set autocommit=true")
-	utils.Exec(t, conn, "insert into buffer(id, msg) values(1,'foo')")
+	vitesst.Exec(t, conn, "set autocommit=true")
+	vitesst.Exec(t, conn, "insert into buffer(id, msg) values(1,'foo')")
 	_, err = conn.ExecuteFetch("insert into buffer(id, msg) values(1,'bar')", 1, true)
 	require.Error(t, err) // this should fail with duplicate error
-	utils.Exec(t, conn, "insert into buffer(id, msg) values(2,'baz')")
+	vitesst.Exec(t, conn, "insert into buffer(id, msg) values(2,'baz')")
 
 	conn2, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn2.Close()
-	result := utils.Exec(t, conn2, "select * from buffer order by id")
+	result := vitesst.Exec(t, conn2, "select * from buffer order by id")
 
 	// if we have properly working autocommit code, both the successful inserts should be visible to a second
 	// connection, even if we have not done an explicit commit

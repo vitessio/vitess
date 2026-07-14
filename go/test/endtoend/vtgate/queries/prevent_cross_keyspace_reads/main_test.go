@@ -17,21 +17,22 @@ limitations under the License.
 package preventcrosskeyspacereads
 
 import (
+	"context"
 	_ "embed"
 	"flag"
+	"fmt"
 	"os"
 	"testing"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
+	clusterInstance *vitesst.Cluster
 	vtParams        mysql.ConnParams
 	ks1Name         = "ks1"
 	ks2Name         = "ks2"
-	cell            = "test"
 
 	//go:embed ks1_schema.sql
 	ks1SchemaSQL string
@@ -50,48 +51,35 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(cell, "localhost")
-		defer clusterInstance.Teardown()
+		ctx := context.Background()
 
-		// Start topo server
-		err := clusterInstance.StartTopo()
+		cluster, err := vitesst.NewCluster(
+			// ks1 has prevent_cross_keyspace_reads: true in vschema.
+			vitesst.WithKeyspace(ks1Name).
+				WithSchema(ks1SchemaSQL).
+				WithVSchema(ks1VSchema),
+			// ks2 has no cross-keyspace join restriction.
+			vitesst.WithKeyspace(ks2Name).
+				WithSchema(ks2SchemaSQL).
+				WithVSchema(ks2VSchema),
+		)
 		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-
-		// Start ks1 (has prevent_cross_keyspace_reads: true in vschema)
-		ks1 := &cluster.Keyspace{
-			Name:      ks1Name,
-			SchemaSQL: ks1SchemaSQL,
-			VSchema:   ks1VSchema,
-		}
-		err = clusterInstance.StartUnshardedKeyspace(*ks1, 0, false, cell)
+		cleanup, err := cluster.Start(ctx)
 		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
 
-		// Start ks2 (no cross-keyspace join restriction)
-		ks2 := &cluster.Keyspace{
-			Name:      ks2Name,
-			SchemaSQL: ks2SchemaSQL,
-			VSchema:   ks2VSchema,
-		}
-		err = clusterInstance.StartUnshardedKeyspace(*ks2, 0, false, cell)
-		if err != nil {
-			return 1
-		}
-
-		// Start vtgate
-		err = clusterInstance.StartVtgate()
-		if err != nil {
-			return 1
-		}
-
-		vtParams = mysql.ConnParams{
-			Host: clusterInstance.Hostname,
-			Port: clusterInstance.VtgateMySQLPort,
-		}
-
+		clusterInstance = cluster
+		vtParams = cluster.VTParams(ctx, "")
 		return m.Run()
 	}()
 	os.Exit(exitCode)

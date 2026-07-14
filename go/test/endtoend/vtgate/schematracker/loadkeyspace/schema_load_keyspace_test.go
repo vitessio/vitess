@@ -17,31 +17,25 @@ limitations under the License.
 package loadkeyspace
 
 import (
-	"os"
-	"path"
+	"context"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
-
-	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
-	hostname        = "localhost"
-	keyspaceName    = "ks"
-	cell            = "zone1"
-	sqlSchema       = `
+	keyspaceName = "ks"
+	sqlSchema    = `
 		create table vt_user (
 			id bigint,
 			name varchar(64),
 			primary key (id)
 		) Engine=InnoDB;
-			
+
 		create table main (
 			id bigint,
 			val varchar(128),
@@ -57,70 +51,63 @@ var (
 )
 
 func TestLoadKeyspaceWithNoTablet(t *testing.T) {
-	var err error
+	ctx := t.Context()
 
-	clusterInstance = cluster.NewCluster(cell, hostname)
-	defer clusterInstance.Teardown()
-
-	// Start topo server
-	err = clusterInstance.StartTopo()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithKeyspace(keyspaceName).
+			WithSchema(sqlSchema),
+		vitesst.WithVTTabletArgs("--queryserver-config-schema-change-signal"),
+	)
 	require.NoError(t, err)
-
-	// create keyspace
-	keyspace := &cluster.Keyspace{
-		Name:      keyspaceName,
-		SchemaSQL: sqlSchema,
-	}
-	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--queryserver-config-schema-change-signal")
-	err = clusterInstance.StartUnshardedKeyspace(*keyspace, 0, false, clusterInstance.Cell)
+	cleanup, err := cluster.Start(ctx)
+	t.Cleanup(func() {
+		require.NoError(t, cleanup(context.WithoutCancel(ctx)))
+	})
 	require.NoError(t, err)
 
 	// teardown vttablets
-	for _, vttablet := range clusterInstance.Keyspaces[0].Shards[0].Vttablets {
-		err = vttablet.VttabletProcess.TearDown()
-		require.NoError(t, err)
-		utils.TimeoutAction(t, 1*time.Minute, "timeout - teardown of VTTablet", func() bool {
-			return vttablet.VttabletProcess.GetStatus() == ""
-		})
+	for _, tablet := range cluster.Keyspace(keyspaceName).Tablets() {
+		require.NoError(t, tablet.Remove(ctx))
 	}
 
 	// Start vtgate with the schema-change-signal flag
-	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--schema-change-signal")
-	err = clusterInstance.StartVtgate()
+	vtgate, err := cluster.AddVTGate(ctx, "--schema-change-signal")
 	require.NoError(t, err)
 
 	// After starting VTGate we need to leave enough time for resolveAndLoadKeyspace to reach
 	// the schema tracking timeout (5 seconds).
-	utils.TimeoutAction(t, 5*time.Minute, "timeout - could not find 'Unable to get initial schema reload' in 'vtgate-stderr.txt'", func() bool {
-		logDir := clusterInstance.VtgateProcess.LogDir
-		all, _ := os.ReadFile(path.Join(logDir, "vtgate-stderr.txt"))
-		return strings.Contains(string(all), "Unable to get initial schema reload")
+	vitesst.TimeoutAction(t, 5*time.Minute, "timeout - could not find 'Unable to get initial schema reload' in vtgate logs", func() bool {
+		logs, err := vtgate.Logs(t.Context())
+		return err == nil && strings.Contains(logs, "Unable to get initial schema reload")
 	})
 }
 
 func TestNoInitialKeyspace(t *testing.T) {
-	var err error
+	ctx := t.Context()
 
-	clusterInstance = cluster.NewCluster(cell, hostname)
-	defer clusterInstance.Teardown()
-
-	// Start topo server
-	err = clusterInstance.StartTopo()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithKeyspace(keyspaceName),
+	)
 	require.NoError(t, err)
+	cleanup, err := cluster.Start(ctx)
+	t.Cleanup(func() {
+		require.NoError(t, cleanup(context.WithoutCancel(ctx)))
+	})
+	require.NoError(t, err)
+
+	// remove the keyspace so vtgate has none to load
+	for _, tablet := range cluster.Keyspace(keyspaceName).Tablets() {
+		require.NoError(t, tablet.Remove(ctx))
+	}
+	require.NoError(t, cluster.Vtctld().ExecuteCommand(ctx, "DeleteKeyspace", "--recursive", keyspaceName))
 
 	// Start vtgate with the schema-change-signal flag
-	clusterInstance.VtGateExtraArgs = []string{"--schema-change-signal"}
-	err = clusterInstance.StartVtgate()
+	vtgate, err := cluster.AddVTGate(ctx, "--schema-change-signal")
 	require.NoError(t, err)
 
-	logDir := clusterInstance.VtgateProcess.LogDir
-
-	// teardown vtgate to flush logs
-	err = clusterInstance.VtgateProcess.TearDown()
-	require.NoError(t, err)
-
-	// check stderr logs
-	all, err := os.ReadFile(path.Join(logDir, "vtgate-stderr.txt"))
-	require.NoError(t, err)
-	require.Contains(t, string(all), "No keyspace to load")
+	// check logs
+	vitesst.TimeoutAction(t, 5*time.Minute, "timeout - could not find 'No keyspace to load' in vtgate logs", func() bool {
+		logs, err := vtgate.Logs(t.Context())
+		return err == nil && strings.Contains(logs, "No keyspace to load")
+	})
 }

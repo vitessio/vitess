@@ -89,6 +89,10 @@ const (
 	// vtgate watches it, so WriteConfig changes apply to the running process.
 	vtgateConfigPath = containerFilesDir + "/vtgate.json"
 
+	// vtgateQueryLogPath is where vtgate writes its query log inside the
+	// container.
+	vtgateQueryLogPath = containerFilesDir + "/vtgate_querylog.txt"
+
 	// customSQLMarker is the marker line in init_db.sql where custom SQL is
 	// spliced in.
 	customSQLMarker = "# {{custom_sql}}"

@@ -19,26 +19,27 @@ This adds sharded keyspace dynamically in this test only and test sql insert, se
 package clustertest
 
 import (
+	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/utils"
-	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
-var testKeyspace = &cluster.Keyspace{
-	Name: "kstest",
-	SchemaSQL: `create table vt_user (
+var (
+	addKeyspaceName   = "kstest"
+	addKeyspaceSchema = `create table vt_user (
 id bigint,
 name varchar(64),
 primary key (id)
-) Engine=InnoDB`,
-	VSchema: `{
+) Engine=InnoDB`
+	addKeyspaceVSchema = `{
  "sharded": true,
  "vindexes": {
    "hash_index": {
@@ -55,32 +56,42 @@ primary key (id)
      ]
    }
  }
-}`,
-}
+}`
+)
 
 func TestAddKeyspace(t *testing.T) {
-	cell := clusterInstance.Cell
-	if err := clusterInstance.StartKeyspace(*testKeyspace, []string{"-80", "80-"}, 0, false, cell); err != nil {
-		log.Error(fmt.Sprintf("failed to AddKeyspace %v: %v", *testKeyspace, err))
-		require.NoError(t, err)
-	}
-	// Restart vtgate process
-	_ = clusterInstance.VtgateProcess.TearDown()
-	_ = clusterInstance.VtgateProcess.Setup()
-	clusterInstance.WaitForTabletsToHealthyInVtgate()
-
 	ctx := t.Context()
-	vtParams := mysql.ConnParams{
-		Host: clusterInstance.Hostname,
-		Port: clusterInstance.VtgateMySQLPort,
-	}
+
+	_, err := clusterInstance.AddKeyspace(ctx,
+		vitesst.WithKeyspace(addKeyspaceName).
+			WithShardNames("-80", "80-").
+			WithSchema(addKeyspaceSchema).
+			WithVSchema(addKeyspaceVSchema),
+	)
+	require.NoError(t, err)
+
+	require.NoError(t, clusterInstance.VTGate().Restart(ctx))
+	vtParams = clusterInstance.VTParams(ctx, "")
+
+	require.Eventually(t, func() bool {
+		vschema, err := clusterInstance.VTGate().ReadVSchema(ctx)
+		if err != nil {
+			return false
+		}
+		encoded, err := json.Marshal(vschema)
+		if err != nil {
+			return false
+		}
+		return strings.Contains(string(encoded), addKeyspaceName)
+	}, 30*time.Second, 100*time.Millisecond)
+
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
-	utils.Exec(t, conn, "insert into vt_user(id, name) values(1,'name1')")
+	vitesst.Exec(t, conn, "insert into vt_user(id, name) values(1,'name1')")
 
-	qr := utils.Exec(t, conn, "select id, name from vt_user")
+	qr := vitesst.Exec(t, conn, "select id, name from vt_user")
 	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(1) VARCHAR("name1")]]`; got != want {
 		assert.Equalf(t, want, got, "select:\n%v want\n%v", got, want)
 	}

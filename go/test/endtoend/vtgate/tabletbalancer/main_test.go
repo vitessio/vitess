@@ -17,17 +17,18 @@ limitations under the License.
 package tabletbalancer
 
 import (
+	"context"
 	_ "embed"
 	"flag"
 	"fmt"
 	"os"
 	"testing"
 
-	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
+	clusterInstance *vitesst.Cluster
 	cell1           = "zone1"
 	cell2           = "zone2"
 	keyspaceName    = "ks"
@@ -47,89 +48,40 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(cell1, "localhost")
-		defer clusterInstance.Teardown()
+		ctx := context.Background()
 
-		// Start topo server
-		if err := clusterInstance.StartTopo(); err != nil {
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithCells(cell1, cell2),
+			vitesst.WithKeyspace(keyspaceName).
+				WithReplicas(5).
+				WithSchema(schemaSQL).
+				WithVSchema(vSchema),
+		)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-
-		// Add second cell
-		if err := clusterInstance.TopoProcess.ManageTopoDir("mkdir", "/vitess/"+cell2); err != nil {
+		cleanup, err := cluster.Start(ctx)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-		if err := clusterInstance.VtctldClientProcess.AddCellInfo(cell2); err != nil {
-			return 1
-		}
-
-		// Start keyspace with tablets in cell1 (using standard method)
-		keyspace := &cluster.Keyspace{
-			Name:      keyspaceName,
-			SchemaSQL: schemaSQL,
-			VSchema:   vSchema,
-		}
-
-		// Start with 2 replicas (3 total tablets including primary)
-		if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 2, false, clusterInstance.Cell); err != nil {
-			return 1
-		}
-
-		// Now manually add tablets to cell2 to simulate multi-cell setup
-		shard := clusterInstance.Keyspaces[0].Shards[0]
-		for range 3 {
-			tabletUID := clusterInstance.GetAndReserveTabletUID()
-			tablet := &cluster.Vttablet{
-				TabletUID: tabletUID,
-				Type:      "replica",
-				HTTPPort:  clusterInstance.GetAndReservePort(),
-				GrpcPort:  clusterInstance.GetAndReservePort(),
-				MySQLPort: clusterInstance.GetAndReservePort(),
-				Cell:      cell2,
-				Alias:     fmt.Sprintf("%s-%010d", cell2, tabletUID),
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
 			}
+		}()
 
-			// Start Mysqlctl process for this tablet
-			mysqlctlProcess, err := cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
-			if err != nil {
-				return 1
-			}
-			tablet.MysqlctlProcess = *mysqlctlProcess
-			if err := tablet.MysqlctlProcess.Start(); err != nil {
-				return 1
-			}
-
-			// Initialize vttablet
-			tablet.VttabletProcess = cluster.VttabletProcessInstance(
-				tablet.HTTPPort,
-				tablet.GrpcPort,
-				tablet.TabletUID,
-				cell2,
-				shard.Name,
-				keyspaceName,
-				clusterInstance.VtctldProcess.Port,
-				tablet.Type,
-				clusterInstance.TopoProcess.Port,
-				clusterInstance.Hostname,
-				clusterInstance.TmpDirectory,
-				clusterInstance.VtTabletExtraArgs,
-				clusterInstance.DefaultCharset)
-
-			// Start vttablet
-			if err := tablet.VttabletProcess.Setup(); err != nil {
-				return 1
-			}
-
-			shard.Vttablets = append(shard.Vttablets, tablet)
-		}
-
-		clusterInstance.Keyspaces[0].Shards[0] = shard
+		clusterInstance = cluster
 
 		// we need to create an alias to make sure that we'll use both cells at all, even with cells_to_watch
 		allCells := fmt.Sprintf("%s,%s", cell1, cell2)
-		clusterInstance.VtctldClientProcess.ExecuteCommand("AddCellsAlias",
+		if err := cluster.Vtctld().ExecuteCommand(ctx, "AddCellsAlias",
 			"--cells", allCells,
-			"combined_cells")
+			"combined_cells"); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
 
 		return m.Run()
 	}()

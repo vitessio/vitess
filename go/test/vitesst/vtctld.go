@@ -150,6 +150,7 @@ func (c *Cluster) startVtctld(ctx context.Context) error {
 		"--port", strconv.Itoa(vtctldHTTPPort),
 		"--grpc-port", strconv.Itoa(vtctldGRPCPort),
 		"--log-format", "text",
+		"--alsologtostderr",
 	)
 	args = append(args, c.opts.vtctldArgs...)
 

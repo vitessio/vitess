@@ -40,16 +40,13 @@ import (
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
+	clusterInstance *vitesst.Cluster
 	vtParams        mysql.ConnParams
 	collector       *otlpCollector
-	cell            = "zone1"
-	hostname        = "localhost"
 	keyspaceName    = "ks"
 
 	schemaSQL = `CREATE TABLE t1 (id BIGINT NOT NULL PRIMARY KEY) ENGINE=InnoDB;`
@@ -133,52 +130,52 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(cell, hostname)
-		defer clusterInstance.Teardown()
+		ctx := context.Background()
 
-		if err := clusterInstance.StartTopo(); err != nil {
-			fmt.Fprintf(os.Stderr, "StartTopo: %v\n", err)
-			return 1
-		}
-
-		keyspace := &cluster.Keyspace{
-			Name:      keyspaceName,
-			SchemaSQL: schemaSQL,
-			VSchema:   vschema,
-		}
-		if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 0, false, cell); err != nil {
-			fmt.Fprintf(os.Stderr, "StartUnshardedKeyspace: %v\n", err)
-			return 1
-		}
-
-		// Start a minimal OTLP collector that records exported spans.
-		collectorPort := clusterInstance.GetAndReservePort()
-		lis, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", collectorPort))
+		// Start a minimal OTLP collector that records exported spans. It binds
+		// on all host interfaces so the vtgate container can reach it through
+		// host.docker.internal.
+		lis, err := net.Listen("tcp", ":0")
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "collector listen on port %d: %v\n", collectorPort, err)
+			fmt.Fprintf(os.Stderr, "collector listen: %v\n", err)
 			return 1
 		}
 		collector = &otlpCollector{
 			srv:  grpc.NewServer(),
-			port: collectorPort,
+			port: lis.Addr().(*net.TCPAddr).Port,
 		}
 		collectortracepb.RegisterTraceServiceServer(collector.srv, collector)
 		go func() { _ = collector.srv.Serve(lis) }()
 		defer collector.srv.GracefulStop()
 
-		// Start vtgate with OpenTelemetry tracing pointed at our collector.
-		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
-			"--tracer", "opentelemetry",
-			"--otel-insecure",
-			"--otel-endpoint", fmt.Sprintf("localhost:%d", collector.port),
-			"--tracing-sampling-rate", "1.0",
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithKeyspace(keyspaceName).
+				WithSchema(schemaSQL).
+				WithVSchema(vschema),
+			vitesst.WithVTGateArgs(
+				"--tracer", "opentelemetry",
+				"--otel-insecure",
+				"--otel-endpoint", fmt.Sprintf("host.docker.internal:%d", collector.port),
+				"--tracing-sampling-rate", "1.0",
+			),
 		)
-		if err := clusterInstance.StartVtgate(); err != nil {
-			fmt.Fprintf(os.Stderr, "StartVtgate: %v\n", err)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
+		cleanup, err := cluster.Start(ctx)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
 
-		vtParams = clusterInstance.GetVTParams(keyspaceName)
+		clusterInstance = cluster
+		vtParams = cluster.VTParams(ctx, "")
 		return m.Run()
 	}()
 	os.Exit(exitCode)
@@ -189,9 +186,9 @@ const warnSubstring = "Unable to parse VT_SPAN_CONTEXT"
 // vtgateWarningCount returns the number of VT_SPAN_CONTEXT warnings in vtgate's stderr log.
 func vtgateWarningCount(t *testing.T) int {
 	t.Helper()
-	data, err := os.ReadFile(clusterInstance.VtgateProcess.ErrorLog)
+	logs, err := clusterInstance.VTGate().Logs(t.Context())
 	require.NoError(t, err)
-	return strings.Count(string(data), warnSubstring)
+	return strings.Count(logs, warnSubstring)
 }
 
 // buildCarrier creates a valid base64-encoded VT_SPAN_CONTEXT carrier for
@@ -213,7 +210,7 @@ func TestVTSpanContextComQuery(t *testing.T) {
 	before := vtgateWarningCount(t)
 
 	// Send a query with an invalid VT_SPAN_CONTEXT via COM_QUERY.
-	qr := utils.Exec(t, conn, "/*VT_SPAN_CONTEXT=invalid*/SELECT 1")
+	qr := vitesst.Exec(t, conn, "/*VT_SPAN_CONTEXT=invalid*/SELECT 1")
 	require.Len(t, qr.Rows, 1)
 
 	assert.Eventually(t, func() bool {
@@ -227,7 +224,9 @@ func TestVTSpanContextComQuery(t *testing.T) {
 //
 // Reproduces https://github.com/vitessio/vitess/issues/19942
 func TestVTSpanContextPreparedStatement(t *testing.T) {
-	connStr := fmt.Sprintf("@tcp(%s:%d)/%s", hostname, clusterInstance.VtgateMySQLPort, keyspaceName)
+	addr, err := clusterInstance.VTGate().MySQLAddr(t.Context())
+	require.NoError(t, err)
+	connStr := fmt.Sprintf("@tcp(%s)/%s", addr, keyspaceName)
 	db, err := sql.Open("mysql", connStr)
 	require.NoError(t, err)
 	defer db.Close()
@@ -261,7 +260,7 @@ func TestVTSpanContextValidTraceComQuery(t *testing.T) {
 
 	before := vtgateWarningCount(t)
 
-	qr := utils.Exec(t, conn, fmt.Sprintf("/*VT_SPAN_CONTEXT=%s*/SELECT 1", carrier))
+	qr := vitesst.Exec(t, conn, fmt.Sprintf("/*VT_SPAN_CONTEXT=%s*/SELECT 1", carrier))
 	require.Len(t, qr.Rows, 1)
 
 	// The OTLP batch exporter flushes on a timer (default 5s).
@@ -286,7 +285,9 @@ func TestVTSpanContextValidTracePreparedStatement(t *testing.T) {
 	traceparent := fmt.Sprintf("00-%s-%s-01", traceID, spanID)
 	carrier := buildCarrier(traceparent)
 
-	connStr := fmt.Sprintf("@tcp(%s:%d)/%s?interpolateParams=false", hostname, clusterInstance.VtgateMySQLPort, keyspaceName)
+	addr, err := clusterInstance.VTGate().MySQLAddr(t.Context())
+	require.NoError(t, err)
+	connStr := fmt.Sprintf("@tcp(%s)/%s?interpolateParams=false", addr, keyspaceName)
 	db, err := sql.Open("mysql", connStr)
 	require.NoError(t, err)
 	defer db.Close()

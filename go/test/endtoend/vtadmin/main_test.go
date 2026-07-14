@@ -17,20 +17,22 @@ limitations under the License.
 package vtadmin
 
 import (
-	_ "embed"
+	"context"
 	"flag"
+	"fmt"
+	"net/http"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
+	clusterInstance *vitesst.Cluster
 	uks             = "uks"
-	cell            = "test_misc"
 
 	uschemaSQL = `
 create table u_a
@@ -54,39 +56,30 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(cell, "localhost")
-		defer clusterInstance.Teardown()
+		ctx := context.Background()
 
-		// Start topo server
-		err := clusterInstance.StartTopo()
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithKeyspace(uks).
+				WithSchema(uschemaSQL),
+			vitesst.WithVTAdmin(),
+			vitesst.WithVTAdminClusterID("local_test"),
+		)
 		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-
-		// Start Unsharded keyspace
-		ukeyspace := &cluster.Keyspace{
-			Name:      uks,
-			SchemaSQL: uschemaSQL,
-		}
-		err = clusterInstance.StartUnshardedKeyspace(*ukeyspace, 0, false, clusterInstance.Cell)
+		cleanup, err := cluster.Start(ctx)
 		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
 
-		err = clusterInstance.StartVtgate()
-		if err != nil {
-			return 1
-		}
-
-		clusterInstance.NewVTAdminProcess()
-		// Override the default cluster ID to include an underscore to
-		// exercise the gRPC name resolver handling of non-RFC3986 schemes.
-		clusterInstance.VtadminProcess.ClusterID = "local_test"
-		err = clusterInstance.VtadminProcess.Setup()
-		if err != nil {
-			return 1
-		}
-
+		clusterInstance = cluster
 		return m.Run()
 	}()
 	os.Exit(exitCode)
@@ -96,7 +89,11 @@ func TestMain(m *testing.M) {
 func TestVtadminAPIs(t *testing.T) {
 	// Test the vtadmin APIs
 	t.Run("keyspaces api", func(t *testing.T) {
-		resp := clusterInstance.VtadminProcess.MakeAPICallRetry(t, "api/keyspaces")
+		_, resp, err := clusterInstance.VTAdmin().MakeAPICallRetry(t.Context(), "/api/keyspaces", 10*time.Second,
+			func(status int, body string) bool {
+				return status == http.StatusOK
+			})
+		require.NoError(t, err)
 		require.Contains(t, resp, uks)
 	})
 }

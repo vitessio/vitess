@@ -40,13 +40,17 @@ var oneTableOutput = `+---+
 `
 
 func TestVtctldProcess(t *testing.T) {
-	url := fmt.Sprintf("http://%s:%d/api/keyspaces/", clusterInstance.Hostname, clusterInstance.VtctldHTTPPort)
+	ctx := t.Context()
+	vtctldAddr, err := clusterInstance.Vtctld().HTTPAddr(ctx)
+	require.NoError(t, err)
+
+	url := fmt.Sprintf("http://%s/api/keyspaces/", vtctldAddr)
 	testURL(t, url, "keyspace url")
 
-	healthCheckURL := fmt.Sprintf("http://%s:%d/debug/health", clusterInstance.Hostname, clusterInstance.VtctldHTTPPort)
+	healthCheckURL := fmt.Sprintf("http://%s/debug/health", vtctldAddr)
 	testURL(t, healthCheckURL, "vtctld health check url")
 
-	url = fmt.Sprintf("http://%s:%d/api/topodata/", clusterInstance.Hostname, clusterInstance.VtctldHTTPPort)
+	url = fmt.Sprintf("http://%s/api/topodata/", vtctldAddr)
 	testTopoDataAPI(t, url)
 
 	testGetTablets(t)
@@ -74,12 +78,13 @@ func testTopoDataAPI(t *testing.T, url string) {
 	children := reflect.ValueOf(resultMap["Children"])
 	childrenGot := fmt.Sprintf("%s", children)
 	assert.Contains(t, childrenGot, "global")
-	assert.Contains(t, childrenGot, clusterInstance.Cell)
+	assert.Contains(t, childrenGot, cell)
 }
 
 func testGetTablets(t *testing.T) {
+	ctx := t.Context()
 	// first w/o any filters, aside from cell
-	result, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("GetTablets", "--cell", clusterInstance.Cell)
+	result, err := clusterInstance.Vtctld().ExecuteCommandWithOutput(ctx, "GetTablets", "--cell", cell)
 	require.NoError(t, err)
 
 	tablets := getAllTablets()
@@ -97,11 +102,11 @@ func testGetTablets(t *testing.T) {
 
 	// now filtering with the first keyspace and tablet type of primary, in
 	// addition to the cell
-	result, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(
+	result, err = clusterInstance.Vtctld().ExecuteCommandWithOutput(ctx,
 		"GetTablets",
-		"--keyspace", clusterInstance.Keyspaces[0].Name,
+		"--keyspace", clusterInstance.Keyspaces()[0].Name,
 		"--tablet-type", "primary",
-		"--cell", clusterInstance.Cell,
+		"--cell", cell,
 	)
 	require.NoError(t, err)
 
@@ -109,22 +114,22 @@ func testGetTablets(t *testing.T) {
 	tabletsFromCMD = strings.Split(result, "\n")
 	// We don't count the final newline with nothing after it (it becomes an empty
 	// line at the end of the slice)
-	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), len(tabletsFromCMD)-1)
+	assert.Equal(t, len(clusterInstance.Keyspaces()[0].Shards()), len(tabletsFromCMD)-1)
 }
 
 func testTabletStatus(t *testing.T) {
-	resp, err := http.Get(fmt.Sprintf("http://%s:%d", clusterInstance.Hostname, clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].HTTPPort))
+	ctx := t.Context()
+	tablet := clusterInstance.Keyspaces()[0].Shards()[0].Tablets()[0]
+	_, result, err := tablet.MakeAPICall(ctx, "/")
 	require.NoError(t, err)
-	defer resp.Body.Close()
-	respByte, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-	result := string(respByte)
 	log.Info(fmt.Sprintf("Tablet status response: %v", result))
 	assert.True(t, strings.Contains(result, `/debug/health`))
 	assert.True(t, strings.Contains(result, `</html>`))
 }
 
 func testExecuteAsDba(t *testing.T) {
+	ctx := t.Context()
+	tablet := clusterInstance.Keyspaces()[0].Shards()[0].Tablets()[0]
 	tcases := []struct {
 		query     string
 		result    string
@@ -161,7 +166,7 @@ func testExecuteAsDba(t *testing.T) {
 	}
 	for _, tcase := range tcases {
 		t.Run(tcase.query, func(t *testing.T) {
-			result, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ExecuteFetchAsDBA", clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].Alias, tcase.query)
+			result, err := clusterInstance.Vtctld().ExecuteCommandWithOutput(ctx, "ExecuteFetchAsDBA", tablet.Alias(), tcase.query)
 			if tcase.expectErr {
 				assert.Error(t, err)
 			} else {
@@ -173,17 +178,19 @@ func testExecuteAsDba(t *testing.T) {
 }
 
 func testExecuteAsApp(t *testing.T) {
-	result, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ExecuteFetchAsApp", clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].Alias, `SELECT 1 AS a`)
+	ctx := t.Context()
+	tablet := clusterInstance.Keyspaces()[0].Shards()[0].Tablets()[0]
+	result, err := clusterInstance.Vtctld().ExecuteCommandWithOutput(ctx, "ExecuteFetchAsApp", tablet.Alias(), `SELECT 1 AS a`)
 	require.NoError(t, err)
 	assert.Equal(t, result, oneTableOutput)
 }
 
 func getAllTablets() []string {
 	tablets := make([]string, 0)
-	for _, ks := range clusterInstance.Keyspaces {
-		for _, shard := range ks.Shards {
-			for _, tablet := range shard.Vttablets {
-				tablets = append(tablets, tablet.Alias)
+	for _, ks := range clusterInstance.Keyspaces() {
+		for _, shard := range ks.Shards() {
+			for _, tablet := range shard.Tablets() {
+				tablets = append(tablets, fmt.Sprintf("%s-%010d", tablet.Cell, tablet.UID))
 			}
 		}
 	}

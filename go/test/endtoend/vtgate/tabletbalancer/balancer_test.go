@@ -17,7 +17,9 @@ limitations under the License.
 package tabletbalancer
 
 import (
+	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -26,66 +28,46 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/vitesst"
 	"vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 var replicaStr = strings.ToLower(topodata.TabletType_REPLICA.String())
 
 // TestCellModeBalancer tests the default "cell" mode which shuffles tablets in the local cell
 func TestCellModeBalancer(t *testing.T) {
+	ctx := t.Context()
+
 	// Start vtgate in cell1 with cell mode (default)
-	vtgateProcess := cluster.VtgateProcessInstance(
-		clusterInstance.GetAndReservePort(),
-		clusterInstance.GetAndReservePort(),
-		clusterInstance.GetAndReservePort(),
-		cell1,
-		fmt.Sprintf("%s,%s", cell1, cell2), // watch both cells but should only use local
-		clusterInstance.Hostname,
-		replicaStr,
-		clusterInstance.TopoProcess.Port,
-		clusterInstance.TmpDirectory,
-		[]string{
-			"--vtgate-balancer-mode", "cell",
-		},
-		plancontext.PlannerVersion(0),
+	vtgate, err := clusterInstance.AddVTGate(ctx,
+		"--vtgate-balancer-mode", "cell",
 	)
-	require.NoError(t, vtgateProcess.Setup())
-	defer vtgateProcess.TearDown()
+	require.NoError(t, err)
 
-	// Verify vtgate started successfully
-	require.True(t, vtgateProcess.WaitForStatus())
+	vtParams := vtgateParams(t, ctx, vtgate)
 
-	vtParams := mysql.ConnParams{
-		Host: clusterInstance.Hostname,
-		Port: vtgateProcess.MySQLServerPort,
-	}
-
-	allTablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
-	shardName := clusterInstance.Keyspaces[0].Shards[0].Name
+	shard := clusterInstance.Keyspace(keyspaceName).Shards()[0]
+	allTablets := shard.Tablets()
+	shardName := shard.Name
 	replicaTablets := replicaTablets(allTablets)
 
-	conn, err := mysql.Connect(t.Context(), &vtParams)
+	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
 	// Wait for tablets to be discovered
-	err = vtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", keyspaceName, shardName), 1, 30*time.Second)
-	require.NoError(t, err)
-
-	err = vtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shardName), len(replicaTablets), 30*time.Second)
-	require.NoError(t, err)
+	waitForTablets(t, ctx, vtgate, fmt.Sprintf("%s.%s.primary", keyspaceName, shardName), 1)
+	waitForTablets(t, ctx, vtgate, fmt.Sprintf("%s.%s.replica", keyspaceName, shardName), len(replicaTablets))
 
 	// Fetch a map of server_id to tablet alias for later verification
-	aliases := mapTabletAliasToMySQLServerID(t, clusterInstance.Keyspaces[0].Shards[0].Vttablets)
+	aliases := mapTabletAliasToMySQLServerID(t, ctx, allTablets)
 
 	// Insert test data
 	_, err = conn.ExecuteFetch("INSERT INTO balancer_test (value) VALUES ('cell_mode_test')", 1, false)
 	require.NoError(t, err)
 
 	// wait for replication
-	waitForReplication(t, replicaTablets, "cell_mode_test")
+	waitForReplication(t, ctx, replicaTablets, "cell_mode_test")
 
 	// Execute queries against replicas - cell mode should route to local cell only
 	counts := executeReplicaQueries(t, conn, 100)
@@ -94,14 +76,14 @@ func TestCellModeBalancer(t *testing.T) {
 	cell1Count := 0
 	cell2Count := 0
 	for _, tablet := range replicaTablets {
-		count := counts[aliases[tablet.Alias]]
+		count := counts[aliases[tablet.Alias()]]
 
 		switch tablet.Cell {
 		case cell1:
-			assert.Greater(t, count, 0, "Expected local cell tablet %s to receive queries", tablet.Alias)
+			assert.Greater(t, count, 0, "Expected local cell tablet %s to receive queries", tablet.Alias())
 			cell1Count += count
 		case cell2:
-			assert.Equal(t, 0, count, "Expected remote cell tablet %s to receive NO queries in cell mode", tablet.Alias)
+			assert.Equal(t, 0, count, "Expected remote cell tablet %s to receive NO queries in cell mode", tablet.Alias())
 			cell2Count += count
 		}
 	}
@@ -112,58 +94,39 @@ func TestCellModeBalancer(t *testing.T) {
 
 // TestPreferCell tests the "prefer-cell" mode which maintains cell affinity while balancing load
 func TestPreferCell(t *testing.T) {
+	ctx := t.Context()
+
 	// Start vtgate in cell1 with prefer-cell mode
-	vtgateProcess := cluster.VtgateProcessInstance(
-		clusterInstance.GetAndReservePort(),
-		clusterInstance.GetAndReservePort(),
-		clusterInstance.GetAndReservePort(),
-		cell1,
-		fmt.Sprintf("%s,%s", cell1, cell2), // watch both cells
-		clusterInstance.Hostname,
-		replicaStr,
-		clusterInstance.TopoProcess.Port,
-		clusterInstance.TmpDirectory,
-		[]string{
-			"--vtgate-balancer-mode", "prefer-cell",
-			"--balancer-vtgate-cells", fmt.Sprintf("%s,%s", cell1, cell2),
-		},
-		plancontext.PlannerVersion(0),
+	vtgate, err := clusterInstance.AddVTGate(ctx,
+		"--vtgate-balancer-mode", "prefer-cell",
+		"--balancer-vtgate-cells", fmt.Sprintf("%s,%s", cell1, cell2),
 	)
-	require.NoError(t, vtgateProcess.Setup())
-	defer vtgateProcess.TearDown()
+	require.NoError(t, err)
 
-	// Verify vtgate started successfully
-	require.True(t, vtgateProcess.WaitForStatus())
+	vtParams := vtgateParams(t, ctx, vtgate)
 
-	vtParams := mysql.ConnParams{
-		Host: clusterInstance.Hostname,
-		Port: vtgateProcess.MySQLServerPort,
-	}
-
-	allTablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
-	shardName := clusterInstance.Keyspaces[0].Shards[0].Name
+	shard := clusterInstance.Keyspace(keyspaceName).Shards()[0]
+	allTablets := shard.Tablets()
+	shardName := shard.Name
 	replicaTablets := replicaTablets(allTablets)
 
-	conn, err := mysql.Connect(t.Context(), &vtParams)
+	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
 	// Wait for tablets to be discovered
-	err = vtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", keyspaceName, shardName), 1, 30*time.Second)
-	require.NoError(t, err)
-
-	err = vtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shardName), len(replicaTablets), 30*time.Second)
-	require.NoError(t, err)
+	waitForTablets(t, ctx, vtgate, fmt.Sprintf("%s.%s.primary", keyspaceName, shardName), 1)
+	waitForTablets(t, ctx, vtgate, fmt.Sprintf("%s.%s.replica", keyspaceName, shardName), len(replicaTablets))
 
 	// Fetch a map of server_id to tablet alias for later verification
-	aliases := mapTabletAliasToMySQLServerID(t, clusterInstance.Keyspaces[0].Shards[0].Vttablets)
+	aliases := mapTabletAliasToMySQLServerID(t, ctx, allTablets)
 
 	// Insert test data
 	_, err = conn.ExecuteFetch("INSERT INTO balancer_test (value) VALUES ('flow_mode_test')", 1, false)
 	require.NoError(t, err)
 
 	// wait for replication
-	waitForReplication(t, replicaTablets, "flow_mode_test")
+	waitForReplication(t, ctx, replicaTablets, "flow_mode_test")
 
 	// Execute queries against replicas - prefer-cell mode supports cross-cell routing
 	counts := executeReplicaQueries(t, conn, 100)
@@ -172,7 +135,7 @@ func TestPreferCell(t *testing.T) {
 	cell1Count := 0
 	cell2Count := 0
 	for _, tablet := range replicaTablets {
-		count := counts[aliases[tablet.Alias]]
+		count := counts[aliases[tablet.Alias()]]
 
 		switch tablet.Cell {
 		case cell1:
@@ -188,57 +151,38 @@ func TestPreferCell(t *testing.T) {
 
 // TestRandomModeBalancer tests the "random" mode which uniformly distributes load
 func TestRandomModeBalancer(t *testing.T) {
+	ctx := t.Context()
+
 	// Start vtgate in cell1 with random mode
-	vtgateProcess := cluster.VtgateProcessInstance(
-		clusterInstance.GetAndReservePort(),
-		clusterInstance.GetAndReservePort(),
-		clusterInstance.GetAndReservePort(),
-		cell1,
-		fmt.Sprintf("%s,%s", cell1, cell2), // watch both cells
-		clusterInstance.Hostname,
-		replicaStr,
-		clusterInstance.TopoProcess.Port,
-		clusterInstance.TmpDirectory,
-		[]string{
-			"--vtgate-balancer-mode", "random",
-		},
-		plancontext.PlannerVersion(0),
+	vtgate, err := clusterInstance.AddVTGate(ctx,
+		"--vtgate-balancer-mode", "random",
 	)
-	require.NoError(t, vtgateProcess.Setup())
-	defer vtgateProcess.TearDown()
+	require.NoError(t, err)
 
-	// Verify vtgate started successfully
-	require.True(t, vtgateProcess.WaitForStatus())
+	vtParams := vtgateParams(t, ctx, vtgate)
 
-	vtParams := mysql.ConnParams{
-		Host: clusterInstance.Hostname,
-		Port: vtgateProcess.MySQLServerPort,
-	}
-
-	allTablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
-	shardName := clusterInstance.Keyspaces[0].Shards[0].Name
+	shard := clusterInstance.Keyspace(keyspaceName).Shards()[0]
+	allTablets := shard.Tablets()
+	shardName := shard.Name
 	replicaTablets := replicaTablets(allTablets)
 
-	conn, err := mysql.Connect(t.Context(), &vtParams)
+	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
 	// Wait for tablets to be discovered
-	err = vtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", keyspaceName, shardName), 1, 30*time.Second)
-	require.NoError(t, err)
-
-	err = vtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shardName), len(replicaTablets), 30*time.Second)
-	require.NoError(t, err)
+	waitForTablets(t, ctx, vtgate, fmt.Sprintf("%s.%s.primary", keyspaceName, shardName), 1)
+	waitForTablets(t, ctx, vtgate, fmt.Sprintf("%s.%s.replica", keyspaceName, shardName), len(replicaTablets))
 
 	// Fetch a map of server_id to tablet alias for later verification
-	aliases := mapTabletAliasToMySQLServerID(t, clusterInstance.Keyspaces[0].Shards[0].Vttablets)
+	aliases := mapTabletAliasToMySQLServerID(t, ctx, allTablets)
 
 	// Insert test data
 	_, err = conn.ExecuteFetch("INSERT INTO balancer_test (value) VALUES ('random_mode_test')", 1, false)
 	require.NoError(t, err)
 
 	// wait for replication
-	waitForReplication(t, replicaTablets, "random_mode_test")
+	waitForReplication(t, ctx, replicaTablets, "random_mode_test")
 
 	// Execute queries against replicas - random mode distributes uniformly
 	numQueries := 500
@@ -252,11 +196,11 @@ func TestRandomModeBalancer(t *testing.T) {
 
 	// Verify each replica got roughly equal queries
 	for _, tablet := range replicaTablets {
-		count := counts[aliases[tablet.Alias]]
-		assert.Greater(t, count, 0, "Expected replica %s to receive queries", tablet.Alias)
+		count := counts[aliases[tablet.Alias()]]
+		assert.Greater(t, count, 0, "Expected replica %s to receive queries", tablet.Alias())
 		assert.InDelta(t, expectedPerReplica, count, float64(tolerance),
 			"Expected replica %s to receive ~%d queries (±%d), got %d",
-			tablet.Alias, expectedPerReplica, tolerance, count)
+			tablet.Alias(), expectedPerReplica, tolerance, count)
 
 		switch tablet.Cell {
 		case cell1:
@@ -273,58 +217,39 @@ func TestRandomModeBalancer(t *testing.T) {
 
 // TestRandomModeWithCellFiltering tests random mode with cell filtering via balancer-vtgate-cells
 func TestRandomModeWithCellFiltering(t *testing.T) {
+	ctx := t.Context()
+
 	// Start vtgate in cell1 with random mode but filter to only cell1 tablets
-	vtgateProcess := cluster.VtgateProcessInstance(
-		clusterInstance.GetAndReservePort(),
-		clusterInstance.GetAndReservePort(),
-		clusterInstance.GetAndReservePort(),
-		cell1,
-		fmt.Sprintf("%s,%s", cell1, cell2), // watch both cells
-		clusterInstance.Hostname,
-		replicaStr,
-		clusterInstance.TopoProcess.Port,
-		clusterInstance.TmpDirectory,
-		[]string{
-			"--vtgate-balancer-mode", "random",
-			"--balancer-vtgate-cells", cell1, // only consider cell1 tablets
-		},
-		plancontext.PlannerVersion(0),
+	vtgate, err := clusterInstance.AddVTGate(ctx,
+		"--vtgate-balancer-mode", "random",
+		"--balancer-vtgate-cells", cell1, // only consider cell1 tablets
 	)
-	require.NoError(t, vtgateProcess.Setup())
-	defer vtgateProcess.TearDown()
+	require.NoError(t, err)
 
-	// Verify vtgate started successfully
-	require.True(t, vtgateProcess.WaitForStatus())
+	vtParams := vtgateParams(t, ctx, vtgate)
 
-	vtParams := mysql.ConnParams{
-		Host: clusterInstance.Hostname,
-		Port: vtgateProcess.MySQLServerPort,
-	}
-
-	allTablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
-	shardName := clusterInstance.Keyspaces[0].Shards[0].Name
+	shard := clusterInstance.Keyspace(keyspaceName).Shards()[0]
+	allTablets := shard.Tablets()
+	shardName := shard.Name
 	replicaTablets := replicaTablets(allTablets)
 
-	conn, err := mysql.Connect(t.Context(), &vtParams)
+	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
 	// Wait for tablets to be discovered
-	err = vtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", keyspaceName, shardName), 1, 30*time.Second)
-	require.NoError(t, err)
-
-	err = vtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shardName), len(replicaTablets), 30*time.Second)
-	require.NoError(t, err)
+	waitForTablets(t, ctx, vtgate, fmt.Sprintf("%s.%s.primary", keyspaceName, shardName), 1)
+	waitForTablets(t, ctx, vtgate, fmt.Sprintf("%s.%s.replica", keyspaceName, shardName), len(replicaTablets))
 
 	// Fetch a map of server_id to tablet alias for later verification
-	aliases := mapTabletAliasToMySQLServerID(t, clusterInstance.Keyspaces[0].Shards[0].Vttablets)
+	aliases := mapTabletAliasToMySQLServerID(t, ctx, allTablets)
 
 	// Insert test data
 	_, err = conn.ExecuteFetch("INSERT INTO balancer_test (value) VALUES ('random_filtered_test')", 1, false)
 	require.NoError(t, err)
 
 	// wait for replication
-	waitForReplication(t, replicaTablets, "random_filtered_test")
+	waitForReplication(t, ctx, replicaTablets, "random_filtered_test")
 
 	// Execute queries against replicas - random mode with cell filtering
 	numQueries := 200
@@ -335,13 +260,13 @@ func TestRandomModeWithCellFiltering(t *testing.T) {
 	cell2Count := 0
 
 	for _, tablet := range replicaTablets {
-		count := counts[aliases[tablet.Alias]]
+		count := counts[aliases[tablet.Alias()]]
 		switch tablet.Cell {
 		case cell1:
-			assert.Greater(t, count, 0, "Expected cell1 replica %s to receive queries", tablet.Alias)
+			assert.Greater(t, count, 0, "Expected cell1 replica %s to receive queries", tablet.Alias())
 			cell1Count += count
 		case cell2:
-			assert.Equal(t, 0, count, "Expected cell2 replica %s to receive NO queries (filtered out)", tablet.Alias)
+			assert.Equal(t, 0, count, "Expected cell2 replica %s to receive NO queries (filtered out)", tablet.Alias())
 			cell2Count += count
 		}
 	}
@@ -353,58 +278,39 @@ func TestRandomModeWithCellFiltering(t *testing.T) {
 
 // TestDeprecatedEnableBalancerFlag tests backward compatibility with --enable-balancer flag
 func TestDeprecatedEnableBalancerFlag(t *testing.T) {
+	ctx := t.Context()
+
 	// Start vtgate with deprecated --enable-balancer flag
-	vtgateProcess := cluster.VtgateProcessInstance(
-		clusterInstance.GetAndReservePort(),
-		clusterInstance.GetAndReservePort(),
-		clusterInstance.GetAndReservePort(),
-		cell1,
-		fmt.Sprintf("%s,%s", cell1, cell2),
-		clusterInstance.Hostname,
-		replicaStr,
-		clusterInstance.TopoProcess.Port,
-		clusterInstance.TmpDirectory,
-		[]string{
-			"--enable-balancer",
-			"--balancer-vtgate-cells", fmt.Sprintf("%s,%s", cell1, cell2),
-		},
-		plancontext.PlannerVersion(0),
+	vtgate, err := clusterInstance.AddVTGate(ctx,
+		"--enable-balancer",
+		"--balancer-vtgate-cells", fmt.Sprintf("%s,%s", cell1, cell2),
 	)
-	require.NoError(t, vtgateProcess.Setup())
-	defer vtgateProcess.TearDown()
+	require.NoError(t, err)
 
-	// Verify vtgate started successfully (should map to prefer-cell mode)
-	require.True(t, vtgateProcess.WaitForStatus())
+	vtParams := vtgateParams(t, ctx, vtgate)
 
-	vtParams := mysql.ConnParams{
-		Host: clusterInstance.Hostname,
-		Port: vtgateProcess.MySQLServerPort,
-	}
-
-	allTablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
-	shardName := clusterInstance.Keyspaces[0].Shards[0].Name
+	shard := clusterInstance.Keyspace(keyspaceName).Shards()[0]
+	allTablets := shard.Tablets()
+	shardName := shard.Name
 	replicaTablets := replicaTablets(allTablets)
 
-	conn, err := mysql.Connect(t.Context(), &vtParams)
+	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
 	// Wait for tablets to be discovered
-	err = vtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", keyspaceName, shardName), 1, 30*time.Second)
-	require.NoError(t, err)
-
-	err = vtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shardName), len(replicaTablets), 30*time.Second)
-	require.NoError(t, err)
+	waitForTablets(t, ctx, vtgate, fmt.Sprintf("%s.%s.primary", keyspaceName, shardName), 1)
+	waitForTablets(t, ctx, vtgate, fmt.Sprintf("%s.%s.replica", keyspaceName, shardName), len(replicaTablets))
 
 	// Fetch a map of server_id to tablet alias for later verification
-	aliases := mapTabletAliasToMySQLServerID(t, clusterInstance.Keyspaces[0].Shards[0].Vttablets)
+	aliases := mapTabletAliasToMySQLServerID(t, ctx, allTablets)
 
 	// Insert test data
 	_, err = conn.ExecuteFetch("INSERT INTO balancer_test (value) VALUES ('deprecated_flag_test')", 1, false)
 	require.NoError(t, err)
 
 	// wait for replication
-	waitForReplication(t, replicaTablets, "deprecated_flag_test")
+	waitForReplication(t, ctx, replicaTablets, "deprecated_flag_test")
 
 	// Execute queries against replicas - deprecated flag should behave like prefer-cell mode
 	counts := executeReplicaQueries(t, conn, 100)
@@ -413,7 +319,7 @@ func TestDeprecatedEnableBalancerFlag(t *testing.T) {
 	cell1Count := 0
 	cell2Count := 0
 	for _, tablet := range replicaTablets {
-		count := counts[aliases[tablet.Alias]]
+		count := counts[aliases[tablet.Alias()]]
 		switch tablet.Cell {
 		case cell1:
 			cell1Count += count
@@ -427,6 +333,44 @@ func TestDeprecatedEnableBalancerFlag(t *testing.T) {
 }
 
 // Helper functions for e2e testing of balancer modes
+
+// vtgateParams returns MySQL connection parameters for the given vtgate.
+func vtgateParams(t *testing.T, ctx context.Context, vtgate *vitesst.VTGate) mysql.ConnParams {
+	t.Helper()
+
+	addr, err := vtgate.MySQLAddr(ctx)
+	require.NoError(t, err)
+
+	host, portStr, ok := strings.Cut(addr, ":")
+	require.True(t, ok, "malformed vtgate mysql address %q", addr)
+
+	port, err := strconv.Atoi(portStr)
+	require.NoError(t, err)
+
+	return mysql.ConnParams{
+		Host: host,
+		Port: port,
+	}
+}
+
+// waitForTablets waits until the vtgate healthcheck reports the expected number
+// of endpoints for the named target (keyspace.shard.tablettype).
+func waitForTablets(t *testing.T, ctx context.Context, vtgate *vitesst.VTGate, name string, count int) {
+	t.Helper()
+
+	require.Eventually(t, func() bool {
+		vars, err := vtgate.GetVars(ctx)
+		if err != nil {
+			return false
+		}
+		conns, ok := vars["HealthcheckConnections"].(map[string]any)
+		if !ok {
+			return false
+		}
+		value, ok := conns[name].(float64)
+		return ok && int(value) == count
+	}, 30*time.Second, 300*time.Millisecond)
+}
 
 // executeReplicaQueries executes queries against replicas and verifies they succeed
 func executeReplicaQueries(t *testing.T, conn *mysql.Conn, numQueries int) map[int64]int {
@@ -456,17 +400,17 @@ func executeReplicaQueries(t *testing.T, conn *mysql.Conn, numQueries int) map[i
 	return counts
 }
 
-func mapTabletAliasToMySQLServerID(t *testing.T, tablets []*cluster.Vttablet) map[string]int64 {
+func mapTabletAliasToMySQLServerID(t *testing.T, ctx context.Context, tablets []*vitesst.Tablet) map[string]int64 {
 	aliases := make(map[string]int64)
 
 	for _, tablet := range tablets {
-		id, err := tablet.VttabletProcess.QueryTablet("SELECT @@server_id", tablet.VttabletProcess.Keyspace, false)
+		id, err := tablet.QueryTablet(ctx, "SELECT @@server_id")
 		require.NoError(t, err)
 		require.Equal(t, 1, len(id.Rows), "expected one row for server_id query")
 
 		serverID, err := id.Rows[0][0].ToInt64()
 		assert.NoError(t, err)
-		aliases[tablet.Alias] = serverID
+		aliases[tablet.Alias()] = serverID
 	}
 
 	assert.Equal(t, len(aliases), 6, "expected six tablet aliases, got: %d", len(aliases))
@@ -474,11 +418,11 @@ func mapTabletAliasToMySQLServerID(t *testing.T, tablets []*cluster.Vttablet) ma
 	return aliases
 }
 
-func waitForReplication(t *testing.T, replicaTablets []*cluster.Vttablet, value string) {
+func waitForReplication(t *testing.T, ctx context.Context, replicaTablets []*vitesst.Tablet, value string) {
 	require.Eventually(t, func() bool {
 		query := fmt.Sprintf("SELECT count(*) FROM balancer_test WHERE value = '%s'", value)
 		for _, replica := range replicaTablets {
-			res, err := replica.VttabletProcess.QueryTablet(query, replica.VttabletProcess.Keyspace, true)
+			res, err := replica.QueryTablet(ctx, query)
 			if err != nil || len(res.Rows) == 0 {
 				return false
 			}
@@ -490,10 +434,10 @@ func waitForReplication(t *testing.T, replicaTablets []*cluster.Vttablet, value 
 	}, 15*time.Second, 500*time.Millisecond)
 }
 
-func replicaTablets(allTablets []*cluster.Vttablet) []*cluster.Vttablet {
-	var replicaTablets []*cluster.Vttablet
+func replicaTablets(allTablets []*vitesst.Tablet) []*vitesst.Tablet {
+	var replicaTablets []*vitesst.Tablet
 	for _, tablet := range allTablets {
-		if tablet.Type == replicaStr {
+		if tablet.Type() == replicaStr {
 			replicaTablets = append(replicaTablets, tablet)
 		}
 	}

@@ -17,6 +17,7 @@ limitations under the License.
 package transaction
 
 import (
+	"context"
 	_ "embed"
 	"flag"
 	"fmt"
@@ -26,19 +27,16 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
 	twopcutil "vitess.io/vitess/go/test/endtoend/transaction/twopc/utils"
+	"vitess.io/vitess/go/test/vitesst"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 )
 
 var (
-	clusterInstance   *cluster.LocalProcessCluster
-	vtParams          mysql.ConnParams
-	vtgateGrpcAddress string
-	keyspaceName      = "ks"
-	cell              = "zone1"
-	hostname          = "localhost"
-	sidecarDBName     = "vt_ks"
+	clusterInstance *vitesst.Cluster
+	vtParams        mysql.ConnParams
+	keyspaceName    = "ks"
+	sidecarDBName   = "vt_ks"
 
 	//go:embed schema.sql
 	SchemaSQL string
@@ -51,46 +49,42 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitcode := func() int {
-		clusterInstance = cluster.NewCluster(cell, hostname)
-		defer clusterInstance.Teardown()
+		ctx := context.Background()
 
-		// Start topo server
-		if err := clusterInstance.StartTopo(); err != nil {
-			return 1
-		}
-
-		// Reserve vtGate port in order to pass it to vtTablet
-		clusterInstance.VtgateGrpcPort = clusterInstance.GetAndReservePort()
-
-		// Set extra args for twopc
-		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
-			"--transaction-mode", "TWOPC",
-			"--grpc-use-effective-callerid",
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithVTGateArgs(
+				"--transaction-mode", "TWOPC",
+				"--grpc-use-effective-callerid",
+			),
+			vitesst.WithVTTabletArgs(
+				"--twopc-abandon-age", "1",
+				"--queryserver-config-transaction-cap", "100",
+			),
+			vitesst.WithKeyspace(keyspaceName).
+				WithShardNames("-40", "40-80", "80-").
+				WithReplicas(2).
+				WithSchema(SchemaSQL).
+				WithVSchema(VSchema).
+				WithSidecarDBName(sidecarDBName).
+				WithDurabilityPolicy(policy.DurabilitySemiSync),
 		)
-		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
-			"--twopc-abandon-age", "1",
-			"--queryserver-config-transaction-cap", "100",
-		)
-
-		// Start keyspace
-		cell := clusterInstance.Cell
-		keyspace := &cluster.Keyspace{
-			Name:             keyspaceName,
-			SchemaSQL:        SchemaSQL,
-			VSchema:          VSchema,
-			SidecarDBName:    sidecarDBName,
-			DurabilityPolicy: policy.DurabilitySemiSync,
-		}
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-40", "40-80", "80-"}, 2, false, cell); err != nil {
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-
-		// Start Vtgate
-		if err := clusterInstance.StartVtgate(); err != nil {
+		cleanup, err := cluster.Start(ctx)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-		vtParams = clusterInstance.GetVTParams(keyspaceName)
-		vtgateGrpcAddress = fmt.Sprintf("%s:%d", clusterInstance.Hostname, clusterInstance.VtgateGrpcPort)
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
+
+		clusterInstance = cluster
+		vtParams = cluster.VTParams(ctx, "")
 
 		return m.Run()
 	}()

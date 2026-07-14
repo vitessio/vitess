@@ -17,6 +17,7 @@ limitations under the License.
 package aggregation
 
 import (
+	"context"
 	"fmt"
 	"math/rand/v2"
 	"slices"
@@ -27,18 +28,20 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
-func start(t *testing.T) (utils.MySQLCompare, func()) {
+func start(t *testing.T) (vitesst.MySQLCompare, func()) {
 	// ensure that the vschema and the tables have been created before running any tests
-	_ = utils.WaitForAuthoritative(t, keyspaceName, "t1", clusterInstance.VtgateProcess.ReadVSchema)
+	_ = vitesst.WaitForAuthoritative(t, keyspaceName, "t1", func() (*any, error) {
+		return clusterInstance.VTGate().ReadVSchema(t.Context())
+	})
 
-	mcmp, err := utils.NewMySQLCompare(t, vtParams, mysqlParams)
+	mcmp, err := vitesst.NewMySQLCompare(t.Context(), t, vtParams, mysqlParams)
 	require.NoError(t, err)
 
 	deleteAll := func() {
-		_, _ = utils.ExecAllowError(t, mcmp.VtConn, "set workload = oltp")
+		_, _ = vitesst.ExecAllowError(t, mcmp.VtConn, "set workload = oltp")
 
 		tables := []string{
 			"t3",
@@ -101,10 +104,10 @@ func TestAggregateTypes(t *testing.T) {
 	mcmp.AssertMatches("select val1 as a, count(*) from aggr_test group by a order by a", `[[VARCHAR("a") INT64(2)] [VARCHAR("b") INT64(1)] [VARCHAR("c") INT64(2)] [VARCHAR("d") INT64(1)] [VARCHAR("e") INT64(2)]]`)
 	mcmp.AssertMatches("select val1 as a, count(*) from aggr_test group by a order by 2, a", `[[VARCHAR("b") INT64(1)] [VARCHAR("d") INT64(1)] [VARCHAR("a") INT64(2)] [VARCHAR("c") INT64(2)] [VARCHAR("e") INT64(2)]]`)
 	mcmp.AssertMatches("select sum(val1) from aggr_test", `[[FLOAT64(0)]]`)
-	mcmp.Run("Average for sharded keyspaces", func(mcmp *utils.MySQLCompare) {
+	mcmp.Run("Average for sharded keyspaces", func(mcmp *vitesst.MySQLCompare) {
 		mcmp.AssertMatches("select avg(val1) from aggr_test", `[[FLOAT64(0)]]`)
 	})
-	mcmp.Run("Average with group by without selecting the grouped columns", func(mcmp *utils.MySQLCompare) {
+	mcmp.Run("Average with group by without selecting the grouped columns", func(mcmp *vitesst.MySQLCompare) {
 		mcmp.AssertMatches("select avg(val2) from aggr_test group by val1 order by val1", `[[DECIMAL(1.0000)] [DECIMAL(1.0000)] [DECIMAL(3.5000)] [NULL] [DECIMAL(1.0000)]]`)
 	})
 }
@@ -117,7 +120,7 @@ func TestGroupBy(t *testing.T) {
 	// run queries in both workloads
 	workloads := []string{"oltp", "olap"}
 	for _, workload := range workloads {
-		utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
+		vitesst.Exec(t, mcmp.VtConn, "set workload = "+workload)
 		// test ordering and group by int column
 		mcmp.AssertMatches("select id6, id7, count(*) k from t3 group by id6, id7 order by k", `[[INT64(3) INT64(6) INT64(1)] [INT64(2) INT64(4) INT64(2)] [INT64(1) INT64(2) INT64(3)]]`)
 		mcmp.AssertMatches("select id6+id7, count(*) k from t3 group by id6+id7 order by k", `[[INT64(9) INT64(1)] [INT64(6) INT64(2)] [INT64(3) INT64(3)]]`)
@@ -133,8 +136,8 @@ func TestEqualFilterOnScatter(t *testing.T) {
 
 	workloads := []string{"oltp", "olap"}
 	for _, workload := range workloads {
-		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
-			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = '%s'", workload))
+		mcmp.Run(workload, func(mcmp *vitesst.MySQLCompare) {
+			vitesst.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = '%s'", workload))
 
 			mcmp.AssertMatches("select count(*) as a from aggr_test having 1 = 1", `[[INT64(5)]]`)
 			mcmp.AssertMatches("select count(*) as a from aggr_test having a = 5", `[[INT64(5)]]`)
@@ -164,8 +167,8 @@ func TestNullPredicateFilterOnScatter(t *testing.T) {
 
 	workloads := []string{"oltp", "olap"}
 	for _, workload := range workloads {
-		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
-			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = '%s'", workload))
+		mcmp.Run(workload, func(mcmp *vitesst.MySQLCompare) {
+			vitesst.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = '%s'", workload))
 
 			// Group 'a' has sum(val2) = NULL, so the predicate evaluates to NULL
 			// and the group is filtered out. Group 'b' has sum(val2) = 30.
@@ -231,7 +234,7 @@ func TestAggrOnJoin(t *testing.T) {
 	mcmp.AssertMatches("select a.val1 from aggr_test a join t3 t on a.val2 = t.id7 group by a.val1 having count(*) = 4",
 		`[[VARCHAR("a")]]`)
 
-	mcmp.Run("Average in join for sharded", func(mcmp *utils.MySQLCompare) {
+	mcmp.Run("Average in join for sharded", func(mcmp *vitesst.MySQLCompare) {
 		mcmp.AssertMatches(`select avg(a1.val2), avg(a2.val2) from aggr_test a1 join aggr_test a2 on a1.val2 = a2.id join t3 t on a2.val2 = t.id7`,
 			"[[DECIMAL(1.5000) DECIMAL(1.0000)]]")
 
@@ -248,8 +251,8 @@ func TestNotEqualFilterOnScatter(t *testing.T) {
 
 	workloads := []string{"oltp", "olap"}
 	for _, workload := range workloads {
-		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
-			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = '%s'", workload))
+		mcmp.Run(workload, func(mcmp *vitesst.MySQLCompare) {
+			vitesst.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = '%s'", workload))
 
 			mcmp.AssertMatches("select count(*) as a from aggr_test having a != 5", `[]`)
 			mcmp.AssertMatches("select count(*) as a from aggr_test having 5 != a", `[]`)
@@ -272,8 +275,8 @@ func TestLessFilterOnScatter(t *testing.T) {
 
 	workloads := []string{"oltp", "olap"}
 	for _, workload := range workloads {
-		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
-			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = '%s'", workload))
+		mcmp.Run(workload, func(mcmp *vitesst.MySQLCompare) {
+			vitesst.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = '%s'", workload))
 			mcmp.AssertMatches("select count(*) as a from aggr_test having a < 10", `[[INT64(5)]]`)
 			mcmp.AssertMatches("select count(*) as a from aggr_test having 1 < a", `[[INT64(5)]]`)
 			mcmp.AssertMatches("select count(*) as a from aggr_test having a < a", `[]`)
@@ -295,8 +298,8 @@ func TestLessEqualFilterOnScatter(t *testing.T) {
 
 	workloads := []string{"oltp", "olap"}
 	for _, workload := range workloads {
-		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
-			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = '%s'", workload))
+		mcmp.Run(workload, func(mcmp *vitesst.MySQLCompare) {
+			vitesst.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = '%s'", workload))
 
 			mcmp.AssertMatches("select count(*) as a from aggr_test having a <= 10", `[[INT64(5)]]`)
 			mcmp.AssertMatches("select count(*) as a from aggr_test having 1 <= a", `[[INT64(5)]]`)
@@ -319,8 +322,8 @@ func TestGreaterFilterOnScatter(t *testing.T) {
 
 	workloads := []string{"oltp", "olap"}
 	for _, workload := range workloads {
-		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
-			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = '%s'", workload))
+		mcmp.Run(workload, func(mcmp *vitesst.MySQLCompare) {
+			vitesst.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = '%s'", workload))
 
 			mcmp.AssertMatches("select count(*) as a from aggr_test having a > 1", `[[INT64(5)]]`)
 			mcmp.AssertMatches("select count(*) as a from aggr_test having 1 > a", `[]`)
@@ -343,8 +346,8 @@ func TestGreaterEqualFilterOnScatter(t *testing.T) {
 
 	workloads := []string{"oltp", "olap"}
 	for _, workload := range workloads {
-		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
-			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = '%s'", workload))
+		mcmp.Run(workload, func(mcmp *vitesst.MySQLCompare) {
+			vitesst.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = '%s'", workload))
 
 			mcmp.AssertMatches("select count(*) as a from aggr_test having a >= 1", `[[INT64(5)]]`)
 			mcmp.AssertMatches("select count(*) as a from aggr_test having 1 >= a", `[]`)
@@ -378,8 +381,8 @@ func TestAggOnTopOfLimit(t *testing.T) {
 	mcmp.Exec("insert into aggr_test(id, val1, val2) values(1,'a',6), (2,'a',1), (3,'b',1), (4,'c',3), (5,'c',4), (6,'b',null), (7,null,2), (8,null,null)")
 
 	for _, workload := range []string{"oltp", "olap"} {
-		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
-			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = '%s'", workload))
+		mcmp.Run(workload, func(mcmp *vitesst.MySQLCompare) {
+			vitesst.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = '%s'", workload))
 			mcmp.AssertMatches("select count(*) from (select id, val1 from aggr_test where val2 < 4 limit 2) as x", "[[INT64(2)]]")
 			mcmp.AssertMatches("select count(val1) from (select id, val1 from aggr_test where val2 < 4 order by val1 desc limit 2) as x", "[[INT64(2)]]")
 			mcmp.AssertMatches("select count(*) from (select id, val1 from aggr_test where val2 is null limit 2) as x", "[[INT64(2)]]")
@@ -387,7 +390,7 @@ func TestAggOnTopOfLimit(t *testing.T) {
 			mcmp.AssertMatches("select count(val2) from (select id, val2 from aggr_test where val2 is null limit 2) as x", "[[INT64(0)]]")
 			mcmp.AssertMatches("select val1, count(*) from (select id, val1 from aggr_test where val2 < 4 order by val1 limit 2) as x group by val1", `[[NULL INT64(1)] [VARCHAR("a") INT64(1)]]`)
 			mcmp.AssertMatchesNoOrder("select val1, count(val2) from (select val1, val2 from aggr_test limit 8) as x group by val1", `[[NULL INT64(1)] [VARCHAR("a") INT64(2)] [VARCHAR("b") INT64(1)] [VARCHAR("c") INT64(2)]]`)
-			mcmp.Run("Average in sharded query", func(mcmp *utils.MySQLCompare) {
+			mcmp.Run("Average in sharded query", func(mcmp *vitesst.MySQLCompare) {
 				mcmp.AssertMatches("select avg(val2) from (select id, val2 from aggr_test where val2 is null limit 2) as x", "[[NULL]]")
 				mcmp.AssertMatchesNoOrder("select val1, avg(val2) from (select val1, val2 from aggr_test limit 8) as x group by val1", `[[NULL DECIMAL(2.0000)] [VARCHAR("a") DECIMAL(3.5000)] [VARCHAR("b") DECIMAL(1.0000)] [VARCHAR("c") DECIMAL(3.5000)]]`)
 			})
@@ -398,7 +401,7 @@ func TestAggOnTopOfLimit(t *testing.T) {
 			mcmp.AssertMatches("select count(val1), sum(id) from (select id, val1 from aggr_test where val2 is null limit 2) as x", "[[INT64(1) DECIMAL(14)]]")
 			mcmp.AssertMatches("select count(val2), sum(val2) from (select id, val2 from aggr_test where val2 is null limit 2) as x", "[[INT64(0) NULL]]")
 			mcmp.AssertMatches("select val1, count(*), sum(id) from (select id, val1 from aggr_test where val2 < 4 order by val1 limit 2) as x group by val1", `[[NULL INT64(1) DECIMAL(7)] [VARCHAR("a") INT64(1) DECIMAL(2)]]`)
-			mcmp.Run("Average in sharded query", func(mcmp *utils.MySQLCompare) {
+			mcmp.Run("Average in sharded query", func(mcmp *vitesst.MySQLCompare) {
 				mcmp.AssertMatches("select count(*), sum(val1), avg(val1) from (select id, val1 from aggr_test where val2 < 4 order by val1 desc limit 2) as x", "[[INT64(2) FLOAT64(0) FLOAT64(0)]]")
 				mcmp.AssertMatches("select count(val1), sum(id), avg(id) from (select id, val1 from aggr_test where val2 < 4 order by val1 desc limit 2) as x", "[[INT64(2) DECIMAL(7) DECIMAL(3.5000)]]")
 				mcmp.AssertMatchesNoOrder("select val1, count(val2), sum(val2), avg(val2) from (select val1, val2 from aggr_test limit 8) as x group by val1",
@@ -413,13 +416,13 @@ func TestEmptyTableAggr(t *testing.T) {
 	defer closer()
 
 	for _, workload := range []string{"oltp", "olap"} {
-		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
-			utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
+		mcmp.Run(workload, func(mcmp *vitesst.MySQLCompare) {
+			vitesst.Exec(t, mcmp.VtConn, "set workload = "+workload)
 			mcmp.AssertMatches(" select count(*) from t1 inner join t2 on (t1.t1_id = t2.id) where t1.value = 'foo'", "[[INT64(0)]]")
 			mcmp.AssertMatches(" select count(*) from t2 inner join t1 on (t1.t1_id = t2.id) where t1.value = 'foo'", "[[INT64(0)]]")
 			mcmp.AssertMatches(" select t1.`name`, count(*) from t2 inner join t1 on (t1.t1_id = t2.id) where t1.value = 'foo' group by t1.`name`", "[]")
 			mcmp.AssertMatches(" select t1.`name`, count(*) from t1 inner join t2 on (t1.t1_id = t2.id) where t1.value = 'foo' group by t1.`name`", "[]")
-			mcmp.Run("Average in sharded query", func(mcmp *utils.MySQLCompare) {
+			mcmp.Run("Average in sharded query", func(mcmp *vitesst.MySQLCompare) {
 				mcmp.AssertMatches(" select count(t1.value) from t2 inner join t1 on (t1.t1_id = t2.id) where t1.value = 'foo'", "[[INT64(0)]]")
 				mcmp.AssertMatches(" select avg(t1.value) from t2 inner join t1 on (t1.t1_id = t2.id) where t1.value = 'foo'", "[[NULL]]")
 			})
@@ -429,12 +432,12 @@ func TestEmptyTableAggr(t *testing.T) {
 	mcmp.Exec("insert into t1(t1_id, `name`, `value`, shardkey) values(1,'a1','foo',100), (2,'b1','foo',200), (3,'c1','foo',300), (4,'a1','foo',100), (5,'b1','bar',200)")
 
 	for _, workload := range []string{"oltp", "olap"} {
-		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
-			utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
+		mcmp.Run(workload, func(mcmp *vitesst.MySQLCompare) {
+			vitesst.Exec(t, mcmp.VtConn, "set workload = "+workload)
 			mcmp.AssertMatches(" select count(*) from t1 inner join t2 on (t1.t1_id = t2.id) where t1.value = 'foo'", "[[INT64(0)]]")
 			mcmp.AssertMatches(" select count(*) from t2 inner join t1 on (t1.t1_id = t2.id) where t1.value = 'foo'", "[[INT64(0)]]")
 			mcmp.AssertMatches(" select t1.`name`, count(*) from t2 inner join t1 on (t1.t1_id = t2.id) where t1.value = 'foo' group by t1.`name`", "[]")
-			mcmp.Run("Average in sharded query", func(mcmp *utils.MySQLCompare) {
+			mcmp.Run("Average in sharded query", func(mcmp *vitesst.MySQLCompare) {
 				mcmp.AssertMatches(" select count(t1.value) from t2 inner join t1 on (t1.t1_id = t2.id) where t1.value = 'foo'", "[[INT64(0)]]")
 				mcmp.AssertMatches(" select avg(t1.value) from t2 inner join t1 on (t1.t1_id = t2.id) where t1.value = 'foo'", "[[NULL]]")
 				mcmp.AssertMatches(" select t1.`name`, count(*) from t1 inner join t2 on (t1.t1_id = t2.id) where t1.value = 'foo' group by t1.`name`", "[]")
@@ -481,7 +484,7 @@ func TestAggregateLeftJoin(t *testing.T) {
 	mcmp.AssertMatches("SELECT sum(t2.shardkey) FROM t1 LEFT JOIN t2 ON t1.t1_id = t2.id", `[[DECIMAL(1)]]`)
 	mcmp.AssertMatches("SELECT count(*) FROM t2 LEFT JOIN t1 ON t1.t1_id = t2.id WHERE IFNULL(t1.name, 'NOTSET') = 'r'", `[[INT64(1)]]`)
 
-	mcmp.Run("Average in sharded query", func(mcmp *utils.MySQLCompare) {
+	mcmp.Run("Average in sharded query", func(mcmp *vitesst.MySQLCompare) {
 		mcmp.AssertMatches("SELECT avg(t1.shardkey) FROM t1 LEFT JOIN t2 ON t1.t1_id = t2.id", `[[DECIMAL(0.5000)]]`)
 		mcmp.AssertMatches("SELECT avg(t2.shardkey) FROM t1 LEFT JOIN t2 ON t1.t1_id = t2.id", `[[DECIMAL(1.0000)]]`)
 		aggregations := []string{
@@ -514,21 +517,22 @@ func TestAggregateLeftJoin(t *testing.T) {
 
 // TestScalarAggregate tests validates that only count is returned and no additional field is returned.gst
 func TestScalarAggregate(t *testing.T) {
+	ctx := t.Context()
+
 	// disable schema tracking to have weight_string column added to query send down to mysql.
-	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--schema-change-signal"+"=false")
 	require.NoError(t,
-		clusterInstance.RestartVtgate())
+		clusterInstance.VTGate().Restart(ctx, "--enable-system-settings=true", "--schema-change-signal=false"))
 
 	// update vtgate params
-	vtParams = clusterInstance.GetVTParams(keyspaceName)
+	vtParams = clusterInstance.VTParams(ctx, "")
 
 	defer func() {
 		// roll it back
-		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--schema-change-signal")
+		rollbackCtx := context.WithoutCancel(ctx)
 		require.NoError(t,
-			clusterInstance.RestartVtgate())
+			clusterInstance.VTGate().Restart(rollbackCtx, "--schema-change-signal", "--enable-system-settings=true"))
 		//  update vtgate params
-		vtParams = clusterInstance.GetVTParams(keyspaceName)
+		vtParams = clusterInstance.VTParams(rollbackCtx, "")
 	}()
 
 	mcmp, closer := start(t)
@@ -536,7 +540,7 @@ func TestScalarAggregate(t *testing.T) {
 
 	mcmp.Exec("insert into aggr_test(id, val1, val2) values(1,'a',1), (2,'A',1), (3,'b',1), (4,'c',3), (5,'c',4)")
 	mcmp.AssertMatches("select count(distinct val1) from aggr_test", `[[INT64(3)]]`)
-	mcmp.Run("Average in sharded query", func(mcmp *utils.MySQLCompare) {
+	mcmp.Run("Average in sharded query", func(mcmp *vitesst.MySQLCompare) {
 		mcmp.AssertMatches("select avg(val1) from aggr_test", `[[FLOAT64(0)]]`)
 	})
 }
@@ -595,7 +599,7 @@ func TestComplexAggregation(t *testing.T) {
 	mcmp.Exec(`SELECT shardkey + MIN(t1_id)+MAX(t1_id) FROM t1 GROUP BY shardkey`)
 	mcmp.Exec(`SELECT name+COUNT(t1_id)+1 FROM t1 GROUP BY name`)
 	mcmp.Exec(`SELECT COUNT(*)+shardkey+MIN(t1_id)+1+MAX(t1_id)*SUM(t1_id)+1+name FROM t1 GROUP BY shardkey, name`)
-	mcmp.Run("Average in sharded query", func(mcmp *utils.MySQLCompare) {
+	mcmp.Run("Average in sharded query", func(mcmp *vitesst.MySQLCompare) {
 		mcmp.Exec(`SELECT COUNT(t1_id)+MAX(shardkey)+AVG(t1_id) FROM t1`)
 	})
 }
@@ -715,7 +719,7 @@ func TestDistinctAggregation(t *testing.T) {
 	}}
 
 	for _, tc := range tcases {
-		mcmp.Run(tc.query, func(mcmp *utils.MySQLCompare) {
+		mcmp.Run(tc.query, func(mcmp *vitesst.MySQLCompare) {
 			_, err := mcmp.ExecAllowError(tc.query)
 			if tc.expectedErr == "" {
 				require.NoError(t, err)
@@ -801,8 +805,8 @@ func TestHavingQueries(t *testing.T) {
 	}
 
 	for _, query := range queries {
-		mcmp.Run(query, func(mcmp *utils.MySQLCompare) {
-			mcmp.ExecAllowAndCompareError(query, utils.CompareOptions{})
+		mcmp.Run(query, func(mcmp *vitesst.MySQLCompare) {
+			mcmp.ExecAllowAndCompareError(query, vitesst.CompareOptions{})
 		})
 	}
 }

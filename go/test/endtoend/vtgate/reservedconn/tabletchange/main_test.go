@@ -17,37 +17,33 @@ limitations under the License.
 package tabletchange
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
 	"testing"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
-
 	"github.com/stretchr/testify/assert"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
+	clusterInstance *vitesst.Cluster
 	vtParams        mysql.ConnParams
 	keyspaceName    = "ks"
-	cell            = "zone1"
-	hostname        = "localhost"
 	sqlSchema       = `create table test(id bigint primary key)Engine=InnoDB;`
 
 	vSchema = `
-		{	
+		{
 			"sharded":true,
 			"vindexes": {
 				"hash_index": {
 					"type": "hash"
 				}
-			},	
+			},
 			"tables": {
 				"test":{
 					"column_vindexes": [
@@ -66,35 +62,35 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(cell, hostname)
-		defer clusterInstance.Teardown()
+		ctx := context.Background()
 
-		// Start topo server
-		if err := clusterInstance.StartTopo(); err != nil {
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithKeyspace(keyspaceName).
+				WithShardNames("-80", "80-").
+				WithReplicas(1).
+				WithRDOnly(1).
+				WithSchema(sqlSchema).
+				WithVSchema(vSchema),
+			vitesst.WithVTTabletArgs("--queryserver-config-transaction-timeout", "5s"),
+			vitesst.WithVTGateArgs("--lock-heartbeat-time", "2s"),
+		)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-
-		// Start keyspace
-		keyspace := &cluster.Keyspace{
-			Name:      keyspaceName,
-			SchemaSQL: sqlSchema,
-			VSchema:   vSchema,
-		}
-		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-transaction-timeout", "5s"}
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, true, clusterInstance.Cell); err != nil {
+		cleanup, err := cluster.Start(ctx)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
 
-		// Start vtgate
-		clusterInstance.VtGateExtraArgs = []string{"--lock-heartbeat-time", "2s"}
-		if err := clusterInstance.StartVtgate(); err != nil {
-			return 1
-		}
-
-		vtParams = mysql.ConnParams{
-			Host: clusterInstance.Hostname,
-			Port: clusterInstance.VtgateMySQLPort,
-		}
+		clusterInstance = cluster
+		vtParams = cluster.VTParams(ctx, "")
 		return m.Run()
 	}()
 	os.Exit(exitCode)
@@ -105,18 +101,18 @@ func TestTabletChange(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	utils.Exec(t, conn, "use @primary")
-	utils.Exec(t, conn, "set sql_mode = ''")
+	vitesst.Exec(t, conn, "use @primary")
+	vitesst.Exec(t, conn, "set sql_mode = ''")
 
 	// this will create reserved connection on primary on -80 and 80- shards.
-	utils.Exec(t, conn, "select * from test")
+	vitesst.Exec(t, conn, "select * from test")
 
 	// Change Primary
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("PlannedReparentShard", fmt.Sprintf("%s/%s", keyspaceName, "-80"))
+	err = clusterInstance.Vtctld().ExecuteCommand(t.Context(), "PlannedReparentShard", fmt.Sprintf("%s/%s", keyspaceName, "-80"))
 	require.NoError(t, err)
 
 	// this should pass as there is a new primary tablet and is serving.
-	_, err = utils.ExecAllowError(t, conn, "select * from test")
+	_, err = vitesst.ExecAllowError(t, conn, "select * from test")
 	assert.NoError(t, err)
 }
 
@@ -125,18 +121,18 @@ func TestTabletChangeStreaming(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	utils.Exec(t, conn, "set workload = olap")
-	utils.Exec(t, conn, "use @primary")
-	utils.Exec(t, conn, "set sql_mode = ''")
+	vitesst.Exec(t, conn, "set workload = olap")
+	vitesst.Exec(t, conn, "use @primary")
+	vitesst.Exec(t, conn, "set sql_mode = ''")
 
 	// this will create reserved connection on primary on -80 and 80- shards.
-	utils.Exec(t, conn, "select * from test")
+	vitesst.Exec(t, conn, "select * from test")
 
 	// Change Primary
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("PlannedReparentShard", fmt.Sprintf("%s/%s", keyspaceName, "-80"))
+	err = clusterInstance.Vtctld().ExecuteCommand(t.Context(), "PlannedReparentShard", fmt.Sprintf("%s/%s", keyspaceName, "-80"))
 	require.NoError(t, err)
 
 	// this should pass as there is a new primary tablet and is serving.
-	_, err = utils.ExecAllowError(t, conn, "select * from test")
+	_, err = vitesst.ExecAllowError(t, conn, "select * from test")
 	assert.NoError(t, err)
 }

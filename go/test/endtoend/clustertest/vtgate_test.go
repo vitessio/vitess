@@ -18,10 +18,7 @@ This tests select/insert using the unshared keyspace added in main_test
 package clustertest
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"reflect"
 	"strings"
 	"testing"
@@ -30,35 +27,28 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 func TestVtgateProcess(t *testing.T) {
-	verifyVtgateVariables(t, clusterInstance.VtgateProcess.VerifyURL)
 	ctx := t.Context()
+	resultMap, err := clusterInstance.VTGate().GetVars(ctx)
+	require.NoError(t, err)
+	verifyVtgateVariables(t, resultMap)
+
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
-	utils.Exec(t, conn, "insert into customer(id, email) values(1,'email1')")
-	_ = utils.Exec(t, conn, "begin")
-	qr := utils.Exec(t, conn, "select id, email from customer")
+	vitesst.Exec(t, conn, "insert into customer(id, email) values(1,'email1')")
+	_ = vitesst.Exec(t, conn, "begin")
+	qr := vitesst.Exec(t, conn, "select id, email from customer")
 	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(1) VARCHAR("email1")]]`; got != want {
 		assert.Equalf(t, want, got, "select:\n%v want\n%v", got, want)
 	}
 }
 
-func verifyVtgateVariables(t *testing.T, url string) {
-	resp, err := http.Get(url)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	require.Equal(t, 200, resp.StatusCode)
-	resultMap := make(map[string]any)
-	respByte, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-	err = json.Unmarshal(respByte, &resultMap)
-	require.NoError(t, err)
+func verifyVtgateVariables(t *testing.T, resultMap map[string]any) {
 	assert.NotNil(t, resultMap["VtgateVSchemaCounts"], "Vschema count should be present in variables")
 	vschemaCountMap := getMapFromJSON(resultMap, "VtgateVSchemaCounts")
 	if _, present := vschemaCountMap["Reload"]; !present {

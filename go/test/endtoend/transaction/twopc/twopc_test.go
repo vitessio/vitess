@@ -35,7 +35,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	twopcutil "vitess.io/vitess/go/test/endtoend/transaction/twopc/utils"
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/test/vitesst"
 	"vitess.io/vitess/go/vt/callerid"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -51,29 +51,35 @@ func TestDynamicConfig(t *testing.T) {
 	defer conn.Close()
 
 	// Ensure that initially running a distributed transaction is possible.
-	utils.Exec(t, conn, "begin")
-	utils.Exec(t, conn, "insert into twopc_t1(id, col) values(4, 4)")
-	utils.Exec(t, conn, "insert into twopc_t1(id, col) values(6, 4)")
-	utils.Exec(t, conn, "insert into twopc_t1(id, col) values(9, 4)")
-	utils.Exec(t, conn, "commit")
+	vitesst.Exec(t, conn, "begin")
+	vitesst.Exec(t, conn, "insert into twopc_t1(id, col) values(4, 4)")
+	vitesst.Exec(t, conn, "insert into twopc_t1(id, col) values(6, 4)")
+	vitesst.Exec(t, conn, "insert into twopc_t1(id, col) values(9, 4)")
+	vitesst.Exec(t, conn, "commit")
 
-	clusterInstance.VtgateProcess.Config.TransactionMode = "SINGLE"
+	require.NoError(t, clusterInstance.VTGate().WriteConfig(t.Context(), `{"transaction_mode":"SINGLE"}`))
 	defer func() {
-		clusterInstance.VtgateProcess.Config.TransactionMode = "TWOPC"
-		err := clusterInstance.VtgateProcess.RewriteConfiguration()
-		require.NoError(t, err)
+		require.NoError(t, clusterInstance.VTGate().WriteConfig(context.WithoutCancel(t.Context()), `{"transaction_mode":"TWOPC"}`))
+		waitForVtgateConfig(t, `"transaction_mode":"TWOPC"`)
 	}()
-	err := clusterInstance.VtgateProcess.RewriteConfiguration()
-	require.NoError(t, err)
-	err = clusterInstance.VtgateProcess.WaitForConfig(`"transaction_mode":"SINGLE"`)
-	require.NoError(t, err)
+	waitForVtgateConfig(t, `"transaction_mode":"SINGLE"`)
 
 	// After the config changes verify running a distributed transaction fails.
-	utils.Exec(t, conn, "begin")
-	utils.Exec(t, conn, "insert into twopc_t1(id, col) values(20, 4)")
-	_, err = utils.ExecAllowError(t, conn, "insert into twopc_t1(id, col) values(22, 4)")
+	vitesst.Exec(t, conn, "begin")
+	vitesst.Exec(t, conn, "insert into twopc_t1(id, col) values(20, 4)")
+	_, err := vitesst.ExecAllowError(t, conn, "insert into twopc_t1(id, col) values(22, 4)")
 	require.ErrorContains(t, err, "multi-db transaction attempted")
-	utils.Exec(t, conn, "rollback")
+	vitesst.Exec(t, conn, "rollback")
+}
+
+// waitForVtgateConfig polls the vtgate's /debug/config until the expected
+// substring appears in the served configuration.
+func waitForVtgateConfig(t *testing.T, expected string) {
+	t.Helper()
+	_, _, err := clusterInstance.VTGate().MakeAPICallRetry(t.Context(), "/debug/config", 30*time.Second, func(status int, body string) bool {
+		return status == 200 && strings.Contains(body, expected)
+	})
+	require.NoError(t, err)
 }
 
 // TestDTCommit tests distributed transaction commit for insert, update and delete operations
@@ -93,13 +99,13 @@ func TestDTCommit(t *testing.T) {
 	runVStream(t, ctx, ch, vtgateConn)
 
 	// Insert into multiple shards
-	utils.Exec(t, conn, "begin")
-	utils.Exec(t, conn, "insert into twopc_user(id, name) values(7,'foo')")
-	utils.Exec(t, conn, "insert into twopc_user(id, name) values(8,'bar')")
-	utils.Exec(t, conn, `set time_zone="+10:30"`)
-	utils.Exec(t, conn, "insert into twopc_user(id, name) values(9,'baz')")
-	utils.Exec(t, conn, "insert into twopc_user(id, name) values(10,'apa')")
-	utils.Exec(t, conn, "commit")
+	vitesst.Exec(t, conn, "begin")
+	vitesst.Exec(t, conn, "insert into twopc_user(id, name) values(7,'foo')")
+	vitesst.Exec(t, conn, "insert into twopc_user(id, name) values(8,'bar')")
+	vitesst.Exec(t, conn, `set time_zone="+10:30"`)
+	vitesst.Exec(t, conn, "insert into twopc_user(id, name) values(9,'baz')")
+	vitesst.Exec(t, conn, "insert into twopc_user(id, name) values(10,'apa')")
+	vitesst.Exec(t, conn, "commit")
 
 	tableMap := make(map[string][]*querypb.Field)
 	dtMap := make(map[string]string)
@@ -151,10 +157,10 @@ func TestDTCommit(t *testing.T) {
 		"mismatch expected: \n got: %s, want: %s", prettyPrint(logTable), prettyPrint(expectations))
 
 	// Update from multiple shard
-	utils.Exec(t, conn, "begin")
-	utils.Exec(t, conn, "update twopc_user set name='newfoo' where id = 7")
-	utils.Exec(t, conn, "update twopc_user set name='newfoo' where id = 8")
-	utils.Exec(t, conn, "commit")
+	vitesst.Exec(t, conn, "begin")
+	vitesst.Exec(t, conn, "update twopc_user set name='newfoo' where id = 7")
+	vitesst.Exec(t, conn, "update twopc_user set name='newfoo' where id = 8")
+	vitesst.Exec(t, conn, "commit")
 
 	logTable = retrieveTransitions(t, ch, tableMap, dtMap)
 	expectations = map[string][]string{
@@ -184,10 +190,10 @@ func TestDTCommit(t *testing.T) {
 		"mismatch expected: \n got: %s, want: %s", prettyPrint(logTable), prettyPrint(expectations))
 
 	// DELETE from multiple shard
-	utils.Exec(t, conn, "begin")
-	utils.Exec(t, conn, "delete from twopc_user where id = 9")
-	utils.Exec(t, conn, "delete from twopc_user where id = 10")
-	utils.Exec(t, conn, "commit")
+	vitesst.Exec(t, conn, "begin")
+	vitesst.Exec(t, conn, "delete from twopc_user where id = 9")
+	vitesst.Exec(t, conn, "delete from twopc_user where id = 10")
+	vitesst.Exec(t, conn, "commit")
 
 	logTable = retrieveTransitions(t, ch, tableMap, dtMap)
 	expectations = map[string][]string{
@@ -224,7 +230,7 @@ func TestDTRollback(t *testing.T) {
 	defer closer()
 
 	// Insert initial Data
-	utils.Exec(t, conn, "insert into twopc_user(id, name) values(7,'foo'), (8,'bar')")
+	vitesst.Exec(t, conn, "insert into twopc_user(id, name) values(7,'foo'), (8,'bar')")
 
 	// run vstream to stream binlogs
 	vtgateConn, err := cluster.DialVTGate(t.Context(), t.Name(), vtgateGrpcAddress, "dt_user", "")
@@ -238,10 +244,10 @@ func TestDTRollback(t *testing.T) {
 	runVStream(t, ctx, ch, vtgateConn)
 
 	// Insert into multiple shards
-	utils.Exec(t, conn, "begin")
-	utils.Exec(t, conn, "insert into twopc_user(id, name) values(9,'baz')")
-	utils.Exec(t, conn, "insert into twopc_user(id, name) values(10,'apa')")
-	utils.Exec(t, conn, "rollback")
+	vitesst.Exec(t, conn, "begin")
+	vitesst.Exec(t, conn, "insert into twopc_user(id, name) values(9,'baz')")
+	vitesst.Exec(t, conn, "insert into twopc_user(id, name) values(10,'apa')")
+	vitesst.Exec(t, conn, "rollback")
 
 	tableMap := make(map[string][]*querypb.Field)
 	logTable := retrieveTransitions(t, ch, tableMap, nil)
@@ -249,20 +255,20 @@ func TestDTRollback(t *testing.T) {
 		"no change in binlog expected: got: %s", prettyPrint(logTable))
 
 	// Update from multiple shard
-	utils.Exec(t, conn, "begin")
-	utils.Exec(t, conn, "update twopc_user set name='newfoo' where id = 7")
-	utils.Exec(t, conn, "update twopc_user set name='newfoo' where id = 8")
-	utils.Exec(t, conn, "rollback")
+	vitesst.Exec(t, conn, "begin")
+	vitesst.Exec(t, conn, "update twopc_user set name='newfoo' where id = 7")
+	vitesst.Exec(t, conn, "update twopc_user set name='newfoo' where id = 8")
+	vitesst.Exec(t, conn, "rollback")
 
 	logTable = retrieveTransitions(t, ch, tableMap, nil)
 	assert.Zero(t, len(logTable),
 		"no change in binlog expected: got: %s", prettyPrint(logTable))
 
 	// DELETE from multiple shard
-	utils.Exec(t, conn, "begin")
-	utils.Exec(t, conn, "delete from twopc_user where id = 7")
-	utils.Exec(t, conn, "delete from twopc_user where id = 8")
-	utils.Exec(t, conn, "rollback")
+	vitesst.Exec(t, conn, "begin")
+	vitesst.Exec(t, conn, "delete from twopc_user where id = 7")
+	vitesst.Exec(t, conn, "delete from twopc_user where id = 8")
+	vitesst.Exec(t, conn, "rollback")
 
 	logTable = retrieveTransitions(t, ch, tableMap, nil)
 	assert.Zero(t, len(logTable),
@@ -287,11 +293,11 @@ func TestDTCommitDMLOnlyOnMM(t *testing.T) {
 	runVStream(t, ctx, ch, vtgateConn)
 
 	// Insert into multiple shards
-	utils.Exec(t, conn, "begin")
-	utils.Exec(t, conn, "insert into twopc_user(id, name) values(7,'foo')")
-	utils.Exec(t, conn, "select * from twopc_user where id = 8")
-	utils.Exec(t, conn, "select * from twopc_user where id = 10")
-	utils.Exec(t, conn, "commit")
+	vitesst.Exec(t, conn, "begin")
+	vitesst.Exec(t, conn, "insert into twopc_user(id, name) values(7,'foo')")
+	vitesst.Exec(t, conn, "select * from twopc_user where id = 8")
+	vitesst.Exec(t, conn, "select * from twopc_user where id = 10")
+	vitesst.Exec(t, conn, "commit")
 
 	tableMap := make(map[string][]*querypb.Field)
 	dtMap := make(map[string]string)
@@ -314,11 +320,11 @@ func TestDTCommitDMLOnlyOnMM(t *testing.T) {
 		"mismatch expected: \n got: %s, want: %s", prettyPrint(logTable), prettyPrint(expectations))
 
 	// Update from multiple shard
-	utils.Exec(t, conn, "begin")
-	utils.Exec(t, conn, "update twopc_user set name='newfoo' where id = 7")
-	utils.Exec(t, conn, "select * from twopc_user where id = 8")
-	utils.Exec(t, conn, "select * from twopc_user where id = 10")
-	utils.Exec(t, conn, "commit")
+	vitesst.Exec(t, conn, "begin")
+	vitesst.Exec(t, conn, "update twopc_user set name='newfoo' where id = 7")
+	vitesst.Exec(t, conn, "select * from twopc_user where id = 8")
+	vitesst.Exec(t, conn, "select * from twopc_user where id = 10")
+	vitesst.Exec(t, conn, "commit")
 
 	logTable = retrieveTransitions(t, ch, tableMap, dtMap)
 	expectations = map[string][]string{
@@ -339,11 +345,11 @@ func TestDTCommitDMLOnlyOnMM(t *testing.T) {
 		"mismatch expected: \n got: %s, want: %s", prettyPrint(logTable), prettyPrint(expectations))
 
 	// DELETE from multiple shard
-	utils.Exec(t, conn, "begin")
-	utils.Exec(t, conn, "delete from twopc_user where id = 7")
-	utils.Exec(t, conn, "select * from twopc_user where id = 8")
-	utils.Exec(t, conn, "select * from twopc_user where id = 10")
-	utils.Exec(t, conn, "commit")
+	vitesst.Exec(t, conn, "begin")
+	vitesst.Exec(t, conn, "delete from twopc_user where id = 7")
+	vitesst.Exec(t, conn, "select * from twopc_user where id = 8")
+	vitesst.Exec(t, conn, "select * from twopc_user where id = 10")
+	vitesst.Exec(t, conn, "commit")
 
 	logTable = retrieveTransitions(t, ch, tableMap, dtMap)
 	expectations = map[string][]string{
@@ -382,10 +388,10 @@ func TestDTCommitDMLOnlyOnRM(t *testing.T) {
 	runVStream(t, ctx, ch, vtgateConn)
 
 	// Insert into multiple shards
-	utils.Exec(t, conn, "begin")
-	utils.Exec(t, conn, "select * from twopc_user where id = 8")
-	utils.Exec(t, conn, "insert into twopc_user(id, name) values(7,'foo')")
-	utils.Exec(t, conn, "commit")
+	vitesst.Exec(t, conn, "begin")
+	vitesst.Exec(t, conn, "select * from twopc_user where id = 8")
+	vitesst.Exec(t, conn, "insert into twopc_user(id, name) values(7,'foo')")
+	vitesst.Exec(t, conn, "commit")
 
 	tableMap := make(map[string][]*querypb.Field)
 	dtMap := make(map[string]string)
@@ -414,10 +420,10 @@ func TestDTCommitDMLOnlyOnRM(t *testing.T) {
 		"mismatch expected: \n got: %s, want: %s", prettyPrint(logTable), prettyPrint(expectations))
 
 	// Update from multiple shard
-	utils.Exec(t, conn, "begin")
-	utils.Exec(t, conn, "select * from twopc_user where id = 8")
-	utils.Exec(t, conn, "update twopc_user set name='newfoo' where id = 7")
-	utils.Exec(t, conn, "commit")
+	vitesst.Exec(t, conn, "begin")
+	vitesst.Exec(t, conn, "select * from twopc_user where id = 8")
+	vitesst.Exec(t, conn, "update twopc_user set name='newfoo' where id = 7")
+	vitesst.Exec(t, conn, "commit")
 
 	logTable = retrieveTransitions(t, ch, tableMap, dtMap)
 	expectations = map[string][]string{
@@ -444,10 +450,10 @@ func TestDTCommitDMLOnlyOnRM(t *testing.T) {
 		"mismatch expected: \n got: %s, want: %s", prettyPrint(logTable), prettyPrint(expectations))
 
 	// DELETE from multiple shard
-	utils.Exec(t, conn, "begin")
-	utils.Exec(t, conn, "select * from twopc_user where id = 8")
-	utils.Exec(t, conn, "delete from twopc_user where id = 7")
-	utils.Exec(t, conn, "commit")
+	vitesst.Exec(t, conn, "begin")
+	vitesst.Exec(t, conn, "select * from twopc_user where id = 8")
+	vitesst.Exec(t, conn, "delete from twopc_user where id = 7")
+	vitesst.Exec(t, conn, "commit")
 
 	logTable = retrieveTransitions(t, ch, tableMap, dtMap)
 	expectations = map[string][]string{
@@ -490,30 +496,30 @@ func TestDTPrepareFailOnRM(t *testing.T) {
 	runVStream(t, ctx, ch, vtgateConn)
 
 	// Insert into multiple shards
-	utils.Exec(t, conn, "begin")
-	utils.Exec(t, conn, "insert into twopc_user(id, name) values(7,'foo')")
-	utils.Exec(t, conn, "insert into twopc_user(id, name) values(8,'bar')")
+	vitesst.Exec(t, conn, "begin")
+	vitesst.Exec(t, conn, "insert into twopc_user(id, name) values(7,'foo')")
+	vitesst.Exec(t, conn, "insert into twopc_user(id, name) values(8,'bar')")
 
 	ctx2 := t.Context()
 	conn2, err := mysql.Connect(ctx2, &vtParams)
 	require.NoError(t, err)
 
-	utils.Exec(t, conn2, "begin")
-	utils.Exec(t, conn2, "insert into twopc_user(id, name) values(9,'baz')")
-	utils.Exec(t, conn2, "insert into twopc_user(id, name) values(18,'apa')")
+	vitesst.Exec(t, conn2, "begin")
+	vitesst.Exec(t, conn2, "insert into twopc_user(id, name) values(9,'baz')")
+	vitesst.Exec(t, conn2, "insert into twopc_user(id, name) values(18,'apa')")
 
 	var wg sync.WaitGroup
 	wg.Add(2)
 	var commitErr error
 	go func() {
-		_, err := utils.ExecAllowError(t, conn, "commit")
+		_, err := vitesst.ExecAllowError(t, conn, "commit")
 		if err != nil {
 			commitErr = err
 		}
 		wg.Done()
 	}()
 	go func() {
-		_, err := utils.ExecAllowError(t, conn2, "commit")
+		_, err := vitesst.ExecAllowError(t, conn2, "commit")
 		wg.Done()
 		if err != nil {
 			commitErr = err
@@ -598,7 +604,7 @@ func TestDTResolveAfterMMCommit(t *testing.T) {
 	defer closer()
 
 	// Do an insertion into a table that has a consistent lookup vindex.
-	utils.Exec(t, initconn, "insert into twopc_consistent_lookup(id, col, col_unique) values(4, 4, 6)")
+	vitesst.Exec(t, initconn, "insert into twopc_consistent_lookup(id, col, col_unique) values(4, 4, 6)")
 
 	vtgateConn, err := cluster.DialVTGate(t.Context(), t.Name(), vtgateGrpcAddress, "dt_user", "")
 	require.NoError(t, err)
@@ -700,7 +706,7 @@ func TestDTResolveAfterRMPrepare(t *testing.T) {
 	defer closer()
 
 	// Do an insertion into a table that has a consistent lookup vindex.
-	utils.Exec(t, initconn, "insert into twopc_consistent_lookup(id, col, col_unique) values(4, 4, 6)")
+	vitesst.Exec(t, initconn, "insert into twopc_consistent_lookup(id, col, col_unique) values(4, 4, 6)")
 
 	vtgateConn, err := cluster.DialVTGate(t.Context(), t.Name(), vtgateGrpcAddress, "dt_user", "")
 	require.NoError(t, err)
@@ -1056,22 +1062,22 @@ func TestReadingUnresolvedTransactions(t *testing.T) {
 			conn, closer := start(t)
 			defer closer()
 			// Start an atomic transaction.
-			utils.Exec(t, conn, "begin")
+			vitesst.Exec(t, conn, "begin")
 			// Insert rows such that they go to all the three shards. Given that we have sharded the table `twopc_t1` on reverse_bits
 			// it is very easy to figure out what value will end up in which shard.
-			utils.Exec(t, conn, "insert into twopc_t1(id, col) values(4, 4)")
-			utils.Exec(t, conn, "insert into twopc_t1(id, col) values(6, 4)")
-			utils.Exec(t, conn, "insert into twopc_t1(id, col) values(9, 4)")
+			vitesst.Exec(t, conn, "insert into twopc_t1(id, col) values(4, 4)")
+			vitesst.Exec(t, conn, "insert into twopc_t1(id, col) values(6, 4)")
+			vitesst.Exec(t, conn, "insert into twopc_t1(id, col) values(9, 4)")
 			// We want to delay the commit on one of the shards to simulate slow commits on a shard.
-			twopcutil.WriteTestCommunicationFile(t, twopcutil.DebugDelayCommitShard, "80-")
-			defer twopcutil.DeleteFile(twopcutil.DebugDelayCommitShard)
-			twopcutil.WriteTestCommunicationFile(t, twopcutil.DebugDelayCommitTime, "5")
-			defer twopcutil.DeleteFile(twopcutil.DebugDelayCommitTime)
+			twopcutil.WriteTestCommunicationFileToTablets(t, clusterInstance, keyspaceName, twopcutil.DebugDelayCommitShard, "80-")
+			defer twopcutil.DeleteFileFromTablets(t, clusterInstance, keyspaceName, twopcutil.DebugDelayCommitShard)
+			twopcutil.WriteTestCommunicationFileToTablets(t, clusterInstance, keyspaceName, twopcutil.DebugDelayCommitTime, "5")
+			defer twopcutil.DeleteFileFromTablets(t, clusterInstance, keyspaceName, twopcutil.DebugDelayCommitTime)
 			// We will execute a commit in a go routine, because we know it will take some time to complete.
 			// While the commit is ongoing, we would like to check that we see the unresolved transaction.
 			var wg sync.WaitGroup
 			wg.Go(func() {
-				_, err := utils.ExecAllowError(t, conn, "commit")
+				_, err := vitesst.ExecAllowError(t, conn, "commit")
 				if err != nil {
 					fmt.Println("Error in commit: ", err.Error())
 				}
@@ -1083,7 +1089,7 @@ func TestReadingUnresolvedTransactions(t *testing.T) {
 			require.NoError(t, err)
 			defer newConn.Close()
 			for _, query := range testcase.queries {
-				lastRes = utils.Exec(t, newConn, query)
+				lastRes = vitesst.Exec(t, newConn, query)
 			}
 			require.NotNil(t, lastRes)
 			require.Len(t, lastRes.Rows, 1)
@@ -1422,37 +1428,38 @@ func TestSemiSyncRequiredWithTwoPC(t *testing.T) {
 	}()
 
 	reparentAllShards(t, clusterInstance, 0)
-	out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=none")
+	out, err := clusterInstance.Vtctld().ExecuteCommandWithOutput(t.Context(), "SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=none")
 	require.NoError(t, err, out)
 	// After changing the durability policy for the given keyspace to none, we run PRS to ensure the changes have taken effect.
 	reparentAllShards(t, clusterInstance, 1)
 
 	// A new distributed transaction should fail.
-	utils.Exec(t, conn, "begin")
-	utils.Exec(t, conn, "insert into twopc_t1(id, col) values(4, 4)")
-	utils.Exec(t, conn, "insert into twopc_t1(id, col) values(6, 4)")
-	utils.Exec(t, conn, "insert into twopc_t1(id, col) values(9, 4)")
-	_, err = utils.ExecAllowError(t, conn, "commit")
+	vitesst.Exec(t, conn, "begin")
+	vitesst.Exec(t, conn, "insert into twopc_t1(id, col) values(4, 4)")
+	vitesst.Exec(t, conn, "insert into twopc_t1(id, col) values(6, 4)")
+	vitesst.Exec(t, conn, "insert into twopc_t1(id, col) values(9, 4)")
+	_, err = vitesst.ExecAllowError(t, conn, "commit")
 	require.Error(t, err)
 	require.ErrorContains(t, err, "two-pc is enabled, but semi-sync is not")
 
-	_, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
+	_, err = clusterInstance.Vtctld().ExecuteCommandWithOutput(t.Context(), "SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
 	require.NoError(t, err)
 	reparentAllShards(t, clusterInstance, 0)
 
 	// Transaction should now succeed.
-	utils.Exec(t, conn, "begin")
-	utils.Exec(t, conn, "insert into twopc_t1(id, col) values(4, 4)")
-	utils.Exec(t, conn, "insert into twopc_t1(id, col) values(6, 4)")
-	utils.Exec(t, conn, "insert into twopc_t1(id, col) values(9, 4)")
-	_, err = utils.ExecAllowError(t, conn, "commit")
+	vitesst.Exec(t, conn, "begin")
+	vitesst.Exec(t, conn, "insert into twopc_t1(id, col) values(4, 4)")
+	vitesst.Exec(t, conn, "insert into twopc_t1(id, col) values(6, 4)")
+	vitesst.Exec(t, conn, "insert into twopc_t1(id, col) values(9, 4)")
+	_, err = vitesst.ExecAllowError(t, conn, "commit")
 	require.NoError(t, err)
 }
 
 // reparentAllShards reparents all the shards to the given tablet index for that shard.
-func reparentAllShards(t *testing.T, clusterInstance *cluster.LocalProcessCluster, idx int) {
-	for _, shard := range clusterInstance.Keyspaces[0].Shards {
-		err := clusterInstance.VtctldClientProcess.PlannedReparentShard(keyspaceName, shard.Name, shard.Vttablets[idx].Alias)
+func reparentAllShards(t *testing.T, clusterInstance *vitesst.Cluster, idx int) {
+	for _, shard := range clusterInstance.Keyspace(keyspaceName).Shards() {
+		tablets := shard.Tablets()
+		err := clusterInstance.Vtctld().ExecuteCommand(t.Context(), "PlannedReparentShard", shard.Ref(), "--new-primary", tablets[idx].Alias())
 		require.NoError(t, err)
 	}
 }
@@ -1462,13 +1469,13 @@ func TestReadTransactionStatus(t *testing.T) {
 	conn, closer := start(t)
 	defer closer()
 	defer conn.Close()
-	defer twopcutil.DeleteFile(twopcutil.DebugDelayCommitShard)
-	defer twopcutil.DeleteFile(twopcutil.DebugDelayCommitTime)
+	defer twopcutil.DeleteFileFromTablets(t, clusterInstance, keyspaceName, twopcutil.DebugDelayCommitShard)
+	defer twopcutil.DeleteFileFromTablets(t, clusterInstance, keyspaceName, twopcutil.DebugDelayCommitTime)
 
 	// We create a multi shard commit and delay its commit on one of the shards.
 	// This allows us to query to transaction status and actually get some data back.
 	var wg sync.WaitGroup
-	twopcutil.RunMultiShardCommitWithDelay(t, conn, "10", &wg, []string{
+	twopcutil.RunMultiShardCommitWithDelayOnTablets(t, clusterInstance, keyspaceName, conn, "10", &wg, []string{
 		"begin",
 		"insert into twopc_t1(id, col) values(4, 4)",
 		"insert into twopc_t1(id, col) values(6, 4)",
@@ -1481,13 +1488,14 @@ func TestReadTransactionStatus(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 	defer cancel()
 
-	primaryTablet := getTablet(clusterInstance.Keyspaces[0].Shards[2].FindPrimaryTablet().GrpcPort)
+	shards := clusterInstance.Keyspace(keyspaceName).Shards()
+	primaryTablet := primaryTabletProto(ctx, t, shards[2])
 	// Wait for the transaction to show up in the unresolved list.
 	var unresTransaction *querypb.TransactionMetadata
 	timeout := time.After(10 * time.Second)
 	for {
-		for _, shard := range clusterInstance.Keyspaces[0].Shards {
-			urtRes, err := tmc.GetUnresolvedTransactions(ctx, getTablet(shard.FindPrimaryTablet().GrpcPort), 1)
+		for _, shard := range shards {
+			urtRes, err := tmc.GetUnresolvedTransactions(ctx, primaryTabletProto(ctx, t, shard), 1)
 			require.NoError(t, err)
 			if len(urtRes) > 0 {
 				unresTransaction = urtRes[0]
@@ -1510,7 +1518,7 @@ func TestReadTransactionStatus(t *testing.T) {
 	assert.Equal(t, []string{"insert into twopc_t1(id, col) values (9, 4)"}, res.Statements)
 
 	// Also try running the RPC from vtctld and verify we see the same values.
-	out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("DistributedTransaction",
+	out, err := clusterInstance.Vtctld().ExecuteCommandWithOutput(ctx, "DistributedTransaction",
 		"Read",
 		"--dtid="+unresTransaction.Dtid,
 	)
@@ -1519,7 +1527,10 @@ func TestReadTransactionStatus(t *testing.T) {
 	require.Contains(t, out, unresTransaction.Dtid)
 
 	// Read the data from vtadmin API, and verify that too has the same information.
-	apiRes := clusterInstance.VtadminProcess.MakeAPICallRetry(t, fmt.Sprintf("/api/transaction/local/%v/info", unresTransaction.Dtid))
+	_, apiRes, err := clusterInstance.VTAdmin().MakeAPICallRetry(ctx, fmt.Sprintf("/api/transaction/local/%v/info", unresTransaction.Dtid), 30*time.Second, func(status int, body string) bool {
+		return status == 200 && strings.Contains(body, unresTransaction.Dtid)
+	})
+	require.NoError(t, err)
 	require.Contains(t, apiRes, "insert into twopc_t1(id, col) values (9, 4)")
 	require.Contains(t, apiRes, unresTransaction.Dtid)
 	require.Contains(t, apiRes, strconv.FormatInt(res.TimeCreated, 10))
@@ -1864,8 +1875,12 @@ func TestVindexes(t *testing.T) {
 	}
 }
 
-func getTablet(tabletGrpcPort int) *tabletpb.Tablet {
-	portMap := make(map[string]int32)
-	portMap["grpc"] = int32(tabletGrpcPort)
-	return &tabletpb.Tablet{Hostname: hostname, PortMap: portMap}
+// primaryTabletProto returns the shard primary's topology record with
+// host-reachable grpc/vt ports, so tmclient calls from the test process reach
+// the tablet running in its container.
+func primaryTabletProto(ctx context.Context, t *testing.T, shard *vitesst.Shard) *tabletpb.Tablet {
+	t.Helper()
+	proto, err := shard.Primary().TabletProto(ctx)
+	require.NoError(t, err)
+	return proto
 }

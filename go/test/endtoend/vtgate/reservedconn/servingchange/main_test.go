@@ -17,36 +17,33 @@ limitations under the License.
 package servingchange
 
 import (
+	"context"
 	"flag"
+	"fmt"
 	"os"
 	"testing"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
-
 	"github.com/stretchr/testify/assert"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
+	clusterInstance *vitesst.Cluster
 	vtParams        mysql.ConnParams
 	keyspaceName    = "ks"
-	cell            = "zone1"
-	hostname        = "localhost"
 	sqlSchema       = `create table test(id bigint primary key)Engine=InnoDB;`
 
 	vSchema = `
-		{	
+		{
 			"sharded":true,
 			"vindexes": {
 				"hash_index": {
 					"type": "hash"
 				}
-			},	
+			},
 			"tables": {
 				"test":{
 					"column_vindexes": [
@@ -65,121 +62,138 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(cell, hostname)
-		defer clusterInstance.Teardown()
+		ctx := context.Background()
 
-		// Start topo server
-		if err := clusterInstance.StartTopo(); err != nil {
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithKeyspace(keyspaceName).
+				WithShardNames("-80", "80-").
+				WithReplicas(1).
+				WithRDOnly(1).
+				WithSchema(sqlSchema).
+				WithVSchema(vSchema),
+			vitesst.WithVTGateArgs("--lock-heartbeat-time", "2s"),
+		)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-
-		// Start keyspace
-		keyspace := &cluster.Keyspace{
-			Name:      keyspaceName,
-			SchemaSQL: sqlSchema,
-			VSchema:   vSchema,
-		}
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, true, clusterInstance.Cell); err != nil {
+		cleanup, err := cluster.Start(ctx)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
 
-		// Start vtgate
-		clusterInstance.VtGateExtraArgs = []string{"--lock-heartbeat-time", "2s"}
-		if err := clusterInstance.StartVtgate(); err != nil {
-			return 1
-		}
-
-		vtParams = mysql.ConnParams{
-			Host: clusterInstance.Hostname,
-			Port: clusterInstance.VtgateMySQLPort,
-		}
+		clusterInstance = cluster
+		vtParams = cluster.VTParams(ctx, "")
 		return m.Run()
 	}()
 	os.Exit(exitCode)
 }
 
+// tabletOfType returns the shard's non-primary tablet currently reporting the
+// wanted type ("replica" or "rdonly").
+func tabletOfType(t *testing.T, ctx context.Context, shard *vitesst.Shard, wantType string) *vitesst.Tablet {
+	candidates := append(shard.Replicas(), shard.RDOnly()...)
+	for _, tablet := range candidates {
+		vars, err := tablet.GetVars(ctx)
+		require.NoError(t, err)
+		if typ, ok := vars["TabletType"].(string); ok && typ == wantType {
+			return tablet
+		}
+	}
+	require.Failf(t, "no tablet found", "shard %s has no %s tablet", shard.Name, wantType)
+	return nil
+}
+
 func TestServingChange(t *testing.T) {
-	conn, err := mysql.Connect(t.Context(), &vtParams)
+	ctx := t.Context()
+	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
-	utils.Exec(t, conn, "use @rdonly")
-	utils.Exec(t, conn, "set sql_mode = ''")
+	vitesst.Exec(t, conn, "use @rdonly")
+	vitesst.Exec(t, conn, "set sql_mode = ''")
 
 	// to see rdonly is available and
 	// also this will create reserved connection on rdonly on -80 and 80- shards.
-	_, err = utils.ExecAllowError(t, conn, "select * from test")
+	_, err = vitesst.ExecAllowError(t, conn, "select * from test")
 	for err != nil {
-		_, err = utils.ExecAllowError(t, conn, "select * from test")
+		_, err = vitesst.ExecAllowError(t, conn, "select * from test")
 	}
 
+	shard := clusterInstance.Keyspace(keyspaceName).Shard("-80")
+	rdonlyTablet := tabletOfType(t, ctx, shard, "rdonly")
+	replicaTablet := tabletOfType(t, ctx, shard, "replica")
+
 	// changing rdonly tablet to spare (non serving).
-	rdonlyTablet := clusterInstance.Keyspaces[0].Shards[0].Rdonly()
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", rdonlyTablet.Alias, "replica")
+	err = clusterInstance.Vtctld().ExecuteCommand(ctx, "ChangeTabletType", rdonlyTablet.Alias(), "replica")
 	require.NoError(t, err)
-	rdonlyTablet.Type = "replica"
 
 	// this should fail as there is no rdonly present
-	_, err = utils.ExecAllowError(t, conn, "select * from test")
+	_, err = vitesst.ExecAllowError(t, conn, "select * from test")
 	require.Error(t, err)
 
 	// changing replica tablet to rdonly to make rdonly available for serving.
-	replicaTablet := clusterInstance.Keyspaces[0].Shards[0].Replica()
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", replicaTablet.Alias, "rdonly")
+	err = clusterInstance.Vtctld().ExecuteCommand(ctx, "ChangeTabletType", replicaTablet.Alias(), "rdonly")
 	require.NoError(t, err)
-	replicaTablet.Type = "rdonly"
 
 	// to see/make the new rdonly available
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("PingTablet", replicaTablet.Alias)
+	err = clusterInstance.Vtctld().ExecuteCommand(ctx, "PingTablet", replicaTablet.Alias())
 	require.NoError(t, err)
 
 	// this should pass now as there is rdonly present
-	_, err = utils.ExecAllowError(t, conn, "select * from test")
+	_, err = vitesst.ExecAllowError(t, conn, "select * from test")
 	assert.NoError(t, err)
 }
 
 func TestServingChangeStreaming(t *testing.T) {
-	conn, err := mysql.Connect(t.Context(), &vtParams)
+	ctx := t.Context()
+	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
-	utils.Exec(t, conn, "set workload = olap")
-	utils.Exec(t, conn, "use @rdonly")
-	utils.Exec(t, conn, "set sql_mode = ''")
+	vitesst.Exec(t, conn, "set workload = olap")
+	vitesst.Exec(t, conn, "use @rdonly")
+	vitesst.Exec(t, conn, "set sql_mode = ''")
 
 	// to see rdonly is available and
 	// also this will create reserved connection on rdonly on -80 and 80- shards.
-	_, err = utils.ExecAllowError(t, conn, "select * from test")
+	_, err = vitesst.ExecAllowError(t, conn, "select * from test")
 	for err != nil {
-		_, err = utils.ExecAllowError(t, conn, "select * from test")
+		_, err = vitesst.ExecAllowError(t, conn, "select * from test")
 	}
 
+	shard := clusterInstance.Keyspace(keyspaceName).Shard("-80")
+	rdonlyTablet := tabletOfType(t, ctx, shard, "rdonly")
+	replicaTablet := tabletOfType(t, ctx, shard, "replica")
+
 	// changing rdonly tablet to spare (non serving).
-	rdonlyTablet := clusterInstance.Keyspaces[0].Shards[0].Rdonly()
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", rdonlyTablet.Alias, "replica")
+	err = clusterInstance.Vtctld().ExecuteCommand(ctx, "ChangeTabletType", rdonlyTablet.Alias(), "replica")
 	require.NoError(t, err)
-	rdonlyTablet.Type = "replica"
 
 	// this should fail as there is no rdonly present
-	_, err = utils.ExecAllowError(t, conn, "select * from test")
+	_, err = vitesst.ExecAllowError(t, conn, "select * from test")
 	require.Error(t, err)
 
 	// The mid-stream error must surface to the client via an ERR packet without
 	// tearing down the connection — a subsequent query on the same conn must succeed.
-	_, err = utils.ExecAllowError(t, conn, "select 1")
+	_, err = vitesst.ExecAllowError(t, conn, "select 1")
 	require.NoError(t, err, "streaming connection must survive a mid-stream error")
 
 	// changing replica tablet to rdonly to make rdonly available for serving.
-	replicaTablet := clusterInstance.Keyspaces[0].Shards[0].Replica()
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", replicaTablet.Alias, "rdonly")
+	err = clusterInstance.Vtctld().ExecuteCommand(ctx, "ChangeTabletType", replicaTablet.Alias(), "rdonly")
 	require.NoError(t, err)
-	replicaTablet.Type = "rdonly"
 
 	// to see/make the new rdonly available
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("PingTablet", replicaTablet.Alias)
+	err = clusterInstance.Vtctld().ExecuteCommand(ctx, "PingTablet", replicaTablet.Alias())
 	require.NoError(t, err)
 
 	// this should pass now as there is rdonly present
-	_, err = utils.ExecAllowError(t, conn, "select * from test")
+	_, err = vitesst.ExecAllowError(t, conn, "select * from test")
 	assert.NoError(t, err)
 }

@@ -17,8 +17,10 @@ limitations under the License.
 package misc
 
 import (
+	"context"
 	_ "embed"
 	"flag"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -26,16 +28,13 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	rutils "vitess.io/vitess/go/test/endtoend/reparent/utils"
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
+	clusterInstance *vitesst.Cluster
 	vtParams        mysql.ConnParams
 	keyspaceName    = "ks"
-	cell            = "test"
 
 	//go:embed schema.sql
 	schemaSQL string
@@ -45,40 +44,40 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(cell, "localhost")
-		defer clusterInstance.Teardown()
+		ctx := context.Background()
 
-		// Start topo server
-		err := clusterInstance.StartTopo()
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithKeyspace(keyspaceName).
+				WithReplicas(2).
+				WithSchema(schemaSQL),
+			vitesst.WithVTGateArgs("--planner-version", "gen4"),
+		)
 		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-
-		// Start keyspace
-		keyspace := &cluster.Keyspace{
-			Name:      keyspaceName,
-			SchemaSQL: schemaSQL,
-		}
-		err = clusterInstance.StartUnshardedKeyspace(*keyspace, 2, false, clusterInstance.Cell)
+		cleanup, err := cluster.Start(ctx)
 		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
 
-		// Start vtgate
-		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
-			"--planner-version", "gen4")
-		err = clusterInstance.StartVtgate()
-		if err != nil {
-			return 1
-		}
-
-		vtParams = mysql.ConnParams{
-			Host: clusterInstance.Hostname,
-			Port: clusterInstance.VtgateMySQLPort,
-		}
+		clusterInstance = cluster
+		vtParams = cluster.VTParams(ctx, "")
 		return m.Run()
 	}()
 	os.Exit(exitCode)
+}
+
+// prs runs a PlannedReparentShard to make tab the new primary of the shard.
+func prs(ctx context.Context, shard *vitesst.Shard, tab *vitesst.Tablet) (string, error) {
+	return clusterInstance.Vtctld().ExecuteCommandWithOutput(ctx,
+		"PlannedReparentShard", shard.Ref(), "--new-primary", tab.Alias())
 }
 
 func TestSettingsPoolWithTXAndPRS(t *testing.T) {
@@ -88,29 +87,31 @@ func TestSettingsPoolWithTXAndPRS(t *testing.T) {
 	defer conn.Close()
 
 	// set a system settings that will trigger reserved connection usage.
-	utils.Exec(t, conn, "set default_week_format = 5")
+	vitesst.Exec(t, conn, "set default_week_format = 5")
 
 	// have transaction on the session
-	utils.Exec(t, conn, "begin")
-	utils.Exec(t, conn, "select id1, id2 from t1")
-	utils.Exec(t, conn, "commit")
+	vitesst.Exec(t, conn, "begin")
+	vitesst.Exec(t, conn, "select id1, id2 from t1")
+	vitesst.Exec(t, conn, "commit")
 
-	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+	shard := clusterInstance.Keyspace(keyspaceName).Shards()[0]
+	primary := shard.Primary()
+	replica := shard.Replicas()[0]
 
 	// prs should happen without any error.
-	text, err := rutils.Prs(t, clusterInstance, tablets[1])
+	text, err := prs(ctx, shard, replica)
 	require.NoError(t, err, text)
-	rutils.WaitForTabletToBeServing(ctx, t, clusterInstance, tablets[0], 1*time.Minute)
+	require.NoError(t, primary.WaitForTabletStatus(ctx, 1*time.Minute, "SERVING"))
 
 	defer func() {
 		// reset state
-		text, err = rutils.Prs(t, clusterInstance, tablets[0])
+		text, err = prs(ctx, shard, primary)
 		require.NoError(t, err, text)
-		rutils.WaitForTabletToBeServing(ctx, t, clusterInstance, tablets[1], 1*time.Minute)
+		require.NoError(t, replica.WaitForTabletStatus(ctx, 1*time.Minute, "SERVING"))
 	}()
 
 	// no error should occur and it should go to the right tablet.
-	utils.Exec(t, conn, "select id1, id2 from t1")
+	vitesst.Exec(t, conn, "select id1, id2 from t1")
 }
 
 func TestSettingsPoolWithoutTXAndPRS(t *testing.T) {
@@ -120,24 +121,26 @@ func TestSettingsPoolWithoutTXAndPRS(t *testing.T) {
 	defer conn.Close()
 
 	// set a system settings that will trigger reserved connection usage.
-	utils.Exec(t, conn, "set default_week_format = 5")
+	vitesst.Exec(t, conn, "set default_week_format = 5")
 
 	// execute non-tx query
-	utils.Exec(t, conn, "select id1, id2 from t1")
+	vitesst.Exec(t, conn, "select id1, id2 from t1")
 
-	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+	shard := clusterInstance.Keyspace(keyspaceName).Shards()[0]
+	primary := shard.Primary()
+	replica := shard.Replicas()[0]
 
 	// prs should happen without any error.
-	text, err := rutils.Prs(t, clusterInstance, tablets[1])
+	text, err := prs(ctx, shard, replica)
 	require.NoError(t, err, text)
-	rutils.WaitForTabletToBeServing(ctx, t, clusterInstance, tablets[0], 1*time.Minute)
+	require.NoError(t, primary.WaitForTabletStatus(ctx, 1*time.Minute, "SERVING"))
 	defer func() {
 		// reset state
-		text, err = rutils.Prs(t, clusterInstance, tablets[0])
+		text, err = prs(ctx, shard, primary)
 		require.NoError(t, err, text)
-		rutils.WaitForTabletToBeServing(ctx, t, clusterInstance, tablets[1], 1*time.Minute)
+		require.NoError(t, replica.WaitForTabletStatus(ctx, 1*time.Minute, "SERVING"))
 	}()
 
 	// no error should occur and it should go to the right tablet.
-	utils.Exec(t, conn, "select id1, id2 from t1")
+	vitesst.Exec(t, conn, "select id1, id2 from t1")
 }

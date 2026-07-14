@@ -48,6 +48,15 @@ type (
 		// vtorcArgs are appended to the VTOrc command line.
 		vtorcArgs []string
 
+		// vtadminEnabled records whether the test requested a vtadmin container.
+		vtadminEnabled bool
+
+		// vtadminArgs are appended to the vtadmin command line.
+		vtadminArgs []string
+
+		// vtadminClusterID overrides vtadmin's cluster identifier.
+		vtadminClusterID string
+
 		// mysqlVersion selects the Docker image tag used for Vitess components.
 		mysqlVersion string
 

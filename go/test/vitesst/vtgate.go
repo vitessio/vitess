@@ -102,6 +102,32 @@ func (g *VTGate) WriteConfig(ctx context.Context, content string) error {
 	return writeContainerFile(ctx, ctr, vtgateConfigPath, content)
 }
 
+// QueryLog returns the vtgate's query log content so far.
+func (g *VTGate) QueryLog(ctx context.Context) (string, error) {
+	ctr := g.container()
+	if ctr == nil {
+		return "", vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s has no container", g.name)
+	}
+	_, output, err := containerExec(ctx, ctr, []string{"cat", vtgateQueryLogPath})
+	if err != nil {
+		return "", vterrors.Wrapf(err, "reading %s query log", g.name)
+	}
+	return output, nil
+}
+
+// StopContainer stops the vtgate container gracefully with SIGTERM, killing
+// it after the timeout. The vtgate drains existing connections while it shuts
+// down.
+func (g *VTGate) StopContainer(ctx context.Context, timeout time.Duration) error {
+	return g.container().Stop(ctx, &timeout)
+}
+
+// IsRunning reports whether the vtgate container is running.
+func (g *VTGate) IsRunning() bool {
+	ctr := g.container()
+	return ctr != nil && ctr.IsRunning()
+}
+
 // Restart recreates the vtgate container behind this handle with the same
 // network alias. When extraArgs are given they replace the vtgate's previous
 // extra args, so tests can restart vtgate with new flags. Mapped host ports
@@ -195,6 +221,7 @@ func (c *Cluster) runVTGateContainer(ctx context.Context, name string, extraArgs
 	args = append(args, c.topoFlags()...)
 	args = append(args,
 		"--config-file", vtgateConfigPath,
+		"--log-queries-to-file", vtgateQueryLogPath,
 		"--cell", c.cells[0],
 		"--cells-to-watch", strings.Join(c.cells, ","),
 		"--port", strconv.Itoa(vtgateHTTPPort),
@@ -204,6 +231,7 @@ func (c *Cluster) runVTGateContainer(ctx context.Context, name string, extraArgs
 		"--tablet-types-to-wait", "PRIMARY",
 		"--service-map", "grpc-tabletmanager,grpc-throttler,grpc-queryservice,grpc-updatestream,grpc-vtctl,grpc-vtgateservice",
 		"--log-format", "text",
+		"--alsologtostderr",
 	)
 	if c.mysqlVersion != "" && !argsContain(extraArgs, "mysql-server-version") {
 		args = append(args, "--mysql-server-version", c.mysqlVersion+"-vitess")
