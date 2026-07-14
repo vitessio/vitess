@@ -3483,7 +3483,7 @@ func TestEmergencyReparenter_promotionOfNewPrimary(t *testing.T) {
 	}
 }
 
-func TestEmergencyReparenter_waitForAllRelayLogsToApply(t *testing.T) {
+func TestEmergencyReparenter_waitForRelayLogsToApply(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
@@ -4207,7 +4207,7 @@ func TestEmergencyReparenter_waitForAllRelayLogsToApply(t *testing.T) {
 			}
 
 			erp := NewEmergencyReparenter(nil, tt.tmc, logger)
-			result, err := erp.waitForAllRelayLogsToApply(cellCtx, tt.candidates, tt.tabletMap, tt.statusMap, cellTimeout, tt.requireAll)
+			result, err := erp.waitForRelayLogsToApply(cellCtx, tt.candidates, tt.tabletMap, tt.statusMap, cellTimeout, tt.requireAll)
 			if tt.shouldErr {
 				require.Error(t, err)
 				if tt.errContains != "" {

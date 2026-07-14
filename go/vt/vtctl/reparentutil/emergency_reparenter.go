@@ -77,7 +77,7 @@ type relayLogResult struct {
 	err   error
 }
 
-// relayLogWaitResult is the per-tablet outcome of waitForAllRelayLogsToApply.
+// relayLogWaitResult is the per-tablet outcome of waitForRelayLogsToApply.
 type relayLogWaitResult struct {
 	// applied are the tablets that finished applying their relay logs.
 	applied []string
@@ -497,13 +497,11 @@ func (erp *EmergencyReparenter) restartReplicationOnStoppedReplicas(
 	return nil
 }
 
-// waitForAllRelayLogsToApply waits for the given candidates to apply their relay logs and
+// waitForRelayLogsToApply waits for the given candidates to apply their relay logs and
 // reports the per-tablet outcome. With requireAll any failure fails the whole wait;
 // without it the candidates all received the same changes, so the first one to finish
-// applying wins and the remaining waits are cancelled. When in requireAll=false mode we
-// deliberately don't wait for all candidates; keeping the historical name for now as this
-// has a single caller.
-func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
+// applying wins and the remaining waits are cancelled.
+func (erp *EmergencyReparenter) waitForRelayLogsToApply(
 	ctx context.Context,
 	validCandidates map[string]*RelayLogPositions,
 	tabletMap map[string]*topo.TabletInfo,
@@ -641,7 +639,7 @@ func (erp *EmergencyReparenter) applyRelayLogsAndReconcile(
 	waitReplicasTimeout time.Duration,
 	requireAll bool,
 ) (map[string]*RelayLogPositions, *relayLogWaitResult, error) {
-	waitResult, err := erp.waitForAllRelayLogsToApply(ctx, waitCandidates, tabletMap, statusMap, waitReplicasTimeout, requireAll)
+	waitResult, err := erp.waitForRelayLogsToApply(ctx, waitCandidates, tabletMap, statusMap, waitReplicasTimeout, requireAll)
 	if err != nil {
 		return validCandidates, waitResult, err
 	}
