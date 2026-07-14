@@ -652,14 +652,6 @@ func (tp *TablePlan) applyBulkInsertChanges(rowInserts []*binlogdatapb.RowChange
 
 	newStmt := true
 	for _, rowInsert := range rowInserts {
-<<<<<<< HEAD
-||||||| parent of 4c6a952c1f (VReplication: Avoid sending mixed batch of row changes to bulk insert or bulk delete in vplayer batch mode (#20565))
-		if limit > 0 {
-			if err := tp.checkInsertJSONRowSize(rowInsert.After, nil, nil, limit); err != nil {
-				return nil, err
-			}
-		}
-=======
 		// The caller must only route homogeneous insert-shaped events here: a
 		// nil After image would panic in MakeRowTrusted, an empty one would
 		// panic indexing the row in the field loop, and a change with a
@@ -671,12 +663,6 @@ func (tp *TablePlan) applyBulkInsertChanges(rowInserts []*binlogdatapb.RowChange
 				"vreplication: bulk-insert change for table %s is not insert-shaped (After image only); a mixed row event must be applied per-change",
 				tp.TargetName)
 		}
-		if limit > 0 {
-			if err := tp.checkInsertJSONRowSize(rowInsert.After, nil, nil, limit); err != nil {
-				return nil, err
-			}
-		}
->>>>>>> 4c6a952c1f (VReplication: Avoid sending mixed batch of row changes to bulk insert or bulk delete in vplayer batch mode (#20565))
 		var (
 			err     error
 			bindVar *querypb.BindVariable
