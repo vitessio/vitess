@@ -18,20 +18,18 @@ package mysqlctld
 
 import (
 	"testing"
-
-	backup "vitess.io/vitess/go/test/endtoend/backup/vtctlbackup"
 )
 
 // TestIncrementalBackupAndRestoreToPos
 func TestIncrementalBackupAndRestoreToPos(t *testing.T) {
-	tcase := &backup.PITRTestCase{
+	tcase := &PITRTestCase{
 		Name:      "MySQLShell",
-		SetupType: backup.MySQLShell,
-		ComprssDetails: &backup.CompressionDetails{
+		SetupType: MySQLShell,
+		ComprssDetails: &CompressionDetails{
 			CompressorEngineName: "pgzip",
 		},
 	}
-	backup.ExecTestIncrementalBackupAndRestoreToPos(t, tcase)
+	ExecTestIncrementalBackupAndRestoreToPos(t, tcase)
 }
 
 // TestIncrementalBackupAndRestoreToTimestamp - tests incremental backups and restores.
@@ -50,12 +48,12 @@ func TestIncrementalBackupAndRestoreToPos(t *testing.T) {
 //
 // All of the above is done for BuiltinBackup, XtraBackup, Mysqlctld (which is technically builtin)
 func TestIncrementalBackupAndRestoreToTimestamp(t *testing.T) {
-	tcase := &backup.PITRTestCase{
+	tcase := &PITRTestCase{
 		Name:      "MySQLShell",
-		SetupType: backup.MySQLShell,
-		ComprssDetails: &backup.CompressionDetails{
+		SetupType: MySQLShell,
+		ComprssDetails: &CompressionDetails{
 			CompressorEngineName: "pgzip",
 		},
 	}
-	backup.ExecTestIncrementalBackupAndRestoreToTimestamp(t, tcase)
+	ExecTestIncrementalBackupAndRestoreToTimestamp(t, tcase)
 }

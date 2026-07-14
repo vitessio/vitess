@@ -18,8 +18,10 @@ package vtctlbackup
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math/rand/v2"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -27,10 +29,17 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql/replication"
-
-	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/vitesst"
+	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
+	tmc "vitess.io/vitess/go/vt/vttablet/grpctmclient"
 )
 
 var (
@@ -48,6 +57,21 @@ const (
 	operationRestore
 	operationFlushAndPurge
 )
+
+// backupStorageRoot is where the shard's backups are stored in every container of the cluster.
+const backupStorageRoot = "/vt/backups"
+
+// mysqlShellBackupLocation is where the MySQL Shell backup engine writes its dumps.
+const mysqlShellBackupLocation = backupStorageRoot + "/mysqlshell"
+
+// backupReadCnfPath is the mysqld configuration snippet that lets the tablets' mysqld read the
+// backup storage, so that the tests can read a backup's MANIFEST.
+const backupReadCnfPath = "/vt/files/backup-read.cnf"
+
+const backupReadCnf = `
+[mysqld]
+secure-file-priv = ` + backupStorageRoot + `
+`
 
 type incrementalFromPosType int
 
@@ -68,9 +92,468 @@ type testedBackupTimestampInfo struct {
 	postTimestamp time.Time
 }
 
+var (
+	tmClient = tmc.NewClient()
+
+	vitessCluster   *vitesst.Cluster
+	clusterCleanup  func(context.Context) error
+	primaryTablet   *vitesst.Tablet
+	replicaTablets  []*vitesst.Tablet
+	tabletExtraArgs []string
+)
+
+// launchPITRCluster starts the cluster the tests run against: a single shard with a primary, a
+// replica, an rdonly tablet and a spare tablet, file backup storage, and the backup engine
+// requested by the test case.
+func launchPITRCluster(ctx context.Context, setupType int, streamMode string, stripes int, cDetails *CompressionDetails) (int, error) {
+	currentSetupType = setupType
+
+	tabletExtraArgs = getDefaultCommonArgs()
+
+	switch setupType {
+	case XtraBackup:
+		xtrabackupArgs := []string{
+			"--backup-engine-implementation", "xtrabackup",
+			fmt.Sprintf("%s=%s", "--xtrabackup-stream-mode", streamMode),
+			"--xtrabackup-user" + "=vt_dba",
+			fmt.Sprintf("%s=%d", "--xtrabackup-stripes", stripes),
+		}
+
+		// if streamMode is xbstream, add some additional args to test other xtrabackup flags
+		if streamMode == "xbstream" {
+			xtrabackupArgs = append(xtrabackupArgs, "--xtrabackup-prepare-flags", "--use-memory=100M")
+		}
+
+		tabletExtraArgs = append(tabletExtraArgs, xtrabackupArgs...)
+	case MySQLShell:
+		tabletExtraArgs = append(
+			tabletExtraArgs,
+			"--backup-engine-implementation", "mysqlshell",
+			"--mysql-shell-backup-location", mysqlShellBackupLocation,
+			"--mysql-shell-speedup-restore=true",
+		)
+	}
+
+	tabletExtraArgs = append(tabletExtraArgs, getCompressorArgs(cDetails)...)
+
+	keyspace := vitesst.WithKeyspace(keyspaceName).
+		WithShardNames(shardName).
+		WithReplicas(2).
+		WithRDOnly(1).
+		WithDurabilityPolicy("semi_sync").
+		WithTabletArgs(tabletExtraArgs...).
+		WithTabletSpec(func(spec *vitesst.TabletSpec) {
+			spec.ExtraArgs = append(spec.ExtraArgs, mysqlShellTabletArgs(setupType, spec.UID)...)
+		})
+
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithBackupStorage(),
+		vitesst.WithVTOrc(),
+		vitesst.WithTabletFiles(vitesst.ContainerFile{
+			Content:       []byte(backupReadCnf),
+			ContainerPath: backupReadCnfPath,
+		}),
+		vitesst.WithTabletEnv(map[string]string{"EXTRA_MY_CNF": backupReadCnfPath}),
+		keyspace,
+	)
+	if err != nil {
+		return 1, err
+	}
+
+	cleanup, err := cluster.Start(ctx)
+	clusterCleanup = cleanup
+	if err != nil {
+		return 1, err
+	}
+	vitessCluster = cluster
+
+	shard := cluster.Keyspace(keyspaceName).Shard(shardName)
+	primaryTablet = shard.Primary()
+	replicas := shard.Replicas()
+	rdonly := shard.RDOnly()
+	if primaryTablet == nil || len(replicas) != 2 || len(rdonly) != 1 {
+		return 1, vterrors.Errorf(vtrpc.Code_INTERNAL,
+			"expected a primary, two replicas and one rdonly tablet in %s, found %d replicas and %d rdonly tablets",
+			shard.Ref(), len(replicas), len(rdonly))
+	}
+
+	// The tests address the shard's tablets by index: the replica they back up from, the rdonly
+	// tablet the two-tablet tests back up from as well, and the spare tablet they bootstrap from
+	// the backups.
+	spare := replicas[1]
+	replicaTablets = []*vitesst.Tablet{replicas[0], rdonly[0], spare}
+
+	// The spare tablet leaves the shard with an empty mysqld and no tablet record, so that a test
+	// can later start its vttablet and have it bootstrap itself from the backups.
+	if err := spare.StopVttablet(ctx); err != nil {
+		return 1, err
+	}
+	if err := cluster.Vtctld().ExecuteCommand(ctx, "DeleteTablets", spare.Alias()); err != nil {
+		return 1, err
+	}
+	if err := emptyTabletDatabase(ctx, spare); err != nil {
+		return 1, err
+	}
+
+	return 0, nil
+}
+
+// mysqlShellTabletArgs returns the vttablet arguments a tablet needs to run MySQL Shell against its
+// own mysqld: each tablet has its own socket.
+func mysqlShellTabletArgs(setupType int, tabletUID int) []string {
+	if setupType != MySQLShell {
+		return nil
+	}
+	socket := fmt.Sprintf("/vt/vtdataroot/vt_%010d/mysql.sock", tabletUID)
+	return []string{"--mysql-shell-flags", "--js -u vt_dba -S " + socket}
+}
+
+// tearDownPITRCluster shuts the cluster down, dumping component logs when the test failed.
+func tearDownPITRCluster(t *testing.T) {
+	ctx := context.WithoutCancel(t.Context())
+
+	if vitessCluster != nil && t.Failed() {
+		vitessCluster.DumpDiagnostics(ctx, t.Logf)
+	}
+	if clusterCleanup != nil {
+		if err := clusterCleanup(ctx); err != nil {
+			t.Logf("cluster teardown: %v", err)
+		}
+	}
+
+	vitessCluster = nil
+	clusterCleanup = nil
+	primaryTablet = nil
+	replicaTablets = nil
+}
+
+func getReplica(t *testing.T, replicaIndex int) *vitesst.Tablet {
+	if replicaIndex < 0 || replicaIndex >= len(replicaTablets) {
+		assert.Failf(t, "invalid replica index", "index=%d", replicaIndex)
+		return nil
+	}
+	return replicaTablets[replicaIndex]
+}
+
+// SetupReplica3Tablet starts the vttablet of the shard's spare tablet with the given extra
+// arguments. Its mysqld is empty, so the tablet bootstraps itself from the backups.
+func SetupReplica3Tablet(t *testing.T, extraArgs []string) (*vitesst.Tablet, error) {
+	ctx := t.Context()
+	replica := getReplica(t, 2)
+
+	args := slices.Clone(tabletExtraArgs)
+	args = append(args, mysqlShellTabletArgs(currentSetupType, replica.UID)...)
+	args = append(args, extraArgs...)
+	if err := replica.StartVttablet(ctx, args...); err != nil {
+		return replica, err
+	}
+	return replica, nil
+}
+
+func InitTestTable(t *testing.T) {
+	_, err := primaryTablet.QueryTablet(t.Context(), "DROP TABLE IF EXISTS vt_insert_test")
+	require.NoError(t, err)
+	_, err = primaryTablet.QueryTablet(t.Context(), vtInsertTest)
+	require.NoError(t, err)
+}
+
+func InsertRowOnPrimary(t *testing.T, hint string) {
+	if hint == "" {
+		hint = textutil.RandomHash()[:12]
+	}
+	query, err := sqlparser.ParseAndBind("insert into vt_insert_test (msg) values (%a)", sqltypes.StringBindVariable(hint))
+	require.NoError(t, err)
+	_, err = primaryTablet.QueryTablet(t.Context(), query)
+	require.NoError(t, err)
+}
+
+func ReadRowsFromTablet(t *testing.T, tablet *vitesst.Tablet) (msgs []string) {
+	query := "select msg from vt_insert_test"
+	rs, err := tablet.QueryTablet(t.Context(), query)
+	require.NoError(t, err)
+	for _, row := range rs.Named().Rows {
+		msg, err := row.ToString("msg")
+		require.NoError(t, err)
+		msgs = append(msgs, msg)
+	}
+	return msgs
+}
+
+func ReadRowsFromPrimary(t *testing.T) (msgs []string) {
+	return ReadRowsFromTablet(t, primaryTablet)
+}
+
+func ReadRowsFromReplica(t *testing.T, replicaIndex int) (msgs []string) {
+	return ReadRowsFromTablet(t, getReplica(t, replicaIndex))
+}
+
+func GetReplicaPosition(t *testing.T, replicaIndex int) string {
+	replica := getReplica(t, replicaIndex)
+	tablet, err := replica.TabletProto(t.Context())
+	require.NoError(t, err)
+	pos, err := tmClient.PrimaryPosition(t.Context(), tablet)
+	require.NoError(t, err)
+	return pos
+}
+
+func GetReplicaGtidPurged(t *testing.T, replicaIndex int) string {
+	replica := getReplica(t, replicaIndex)
+	query := "select @@global.gtid_purged as gtid_purged"
+	rs, err := replica.QueryTablet(t.Context(), query)
+	require.NoError(t, err)
+	row := rs.Named().Row()
+	require.NotNil(t, row)
+	return row.AsString("gtid_purged", "")
+}
+
+// primaryMySQLPort returns the port the primary's mysqld listens on inside the cluster.
+func primaryMySQLPort(t *testing.T) int64 {
+	rs, err := primaryTablet.QueryTabletWithDB(t.Context(), "select @@port as port", "")
+	require.NoError(t, err)
+	row := rs.Named().Row()
+	require.NotNil(t, row)
+	return row.AsInt64("port", 0)
+}
+
+func ReconnectReplicaToPrimary(t *testing.T, replicaIndex int) {
+	query := fmt.Sprintf("CHANGE REPLICATION SOURCE TO SOURCE_HOST='%s', SOURCE_PORT=%d, SOURCE_USER='vt_repl', GET_SOURCE_PUBLIC_KEY = 1, SOURCE_AUTO_POSITION = 1",
+		primaryTablet.Name(), primaryMySQLPort(t))
+	replica := getReplica(t, replicaIndex)
+	_, err := replica.QueryTablet(t.Context(), "stop replica")
+	require.NoError(t, err)
+	_, err = replica.QueryTablet(t.Context(), query)
+	require.NoError(t, err)
+	_, err = replica.QueryTablet(t.Context(), "start replica")
+	require.NoError(t, err)
+}
+
+// FlushBinaryLogsOnReplica issues `FLUSH BINARY LOGS` <count> times
+func FlushBinaryLogsOnReplica(t *testing.T, replicaIndex int, count int) {
+	replica := getReplica(t, replicaIndex)
+	query := "flush binary logs"
+	for range count {
+		_, err := replica.QueryTablet(t.Context(), query)
+		require.NoError(t, err)
+	}
+}
+
+// FlushAndPurgeBinaryLogsOnReplica intentionally loses all existing binary logs. It flushes into a new binary log
+// and immediately purges all previous logs.
+// This is used to lose information.
+func FlushAndPurgeBinaryLogsOnReplica(t *testing.T, replicaIndex int) (lastBinlog string) {
+	FlushBinaryLogsOnReplica(t, replicaIndex, 1)
+
+	replica := getReplica(t, replicaIndex)
+	{
+		query := "show binary logs"
+		rs, err := replica.QueryTablet(t.Context(), query)
+		require.NoError(t, err)
+		require.NotEmpty(t, rs.Rows)
+		for _, row := range rs.Rows {
+			// binlog file name is first column
+			lastBinlog = row[0].ToString()
+		}
+	}
+	{
+		query, err := sqlparser.ParseAndBind("purge binary logs to %a", sqltypes.StringBindVariable(lastBinlog))
+		require.NoError(t, err)
+		_, err = replica.QueryTablet(t.Context(), query)
+		require.NoError(t, err)
+	}
+	return lastBinlog
+}
+
+// readBackupManifest reads a backup's MANIFEST from the shard's backup storage.
+func readBackupManifest(t *testing.T, backupName string) (manifest *mysqlctl.BackupManifest) {
+	fullPath := fmt.Sprintf("%s/%s/%s/%s/MANIFEST", backupStorageRoot, keyspaceName, shardName, backupName)
+
+	// reading manifest
+	query, err := sqlparser.ParseAndBind("select load_file(%a) as manifest", sqltypes.StringBindVariable(fullPath))
+	require.NoError(t, err)
+	rs, err := primaryTablet.QueryTabletWithDB(t.Context(), query, "")
+	require.NoErrorf(t, err, "error while reading MANIFEST %v", fullPath)
+	row := rs.Named().Row()
+	require.NotNil(t, row)
+	data := row.AsBytes("manifest", nil)
+	require.NotEmptyf(t, data, "empty MANIFEST %v", fullPath)
+
+	// parsing manifest
+	err = json.Unmarshal(data, &manifest)
+	require.NoErrorf(t, err, "error while parsing MANIFEST %v", err)
+	require.NotNil(t, manifest)
+	return manifest
+}
+
+// waitForNumBackups waits for GetBackups to list exactly the given expected number.
+// If expectNumBackups < 0 then any response is considered valid
+func waitForNumBackups(t *testing.T, expectNumBackups int) []string {
+	ctx, cancel := context.WithTimeout(t.Context(), topoConsistencyTimeout)
+	defer cancel()
+
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	for {
+		backups, err := vitessCluster.ListBackups(ctx, keyspaceName, shardName)
+		require.NoError(t, err)
+		if expectNumBackups < 0 {
+			// any result is valid
+			return backups
+		}
+		if len(backups) == expectNumBackups {
+			// what we waited for
+			return backups
+		}
+		assert.Less(t, len(backups), expectNumBackups)
+		select {
+		case <-ctx.Done():
+			assert.Failf(t, ctx.Err().Error(), "expected %d backups, got %d", expectNumBackups, len(backups))
+			return nil
+		case <-ticker.C:
+		}
+	}
+}
+
+func removeBackup(t *testing.T, backupName string) {
+	err := vitessCluster.Vtctld().ExecuteCommand(t.Context(), "RemoveBackup", shardKsName, backupName)
+	require.NoError(t, err)
+}
+
+// waitForTabletType waits for a tablet's topology record to carry the expected type.
+func waitForTabletType(t *testing.T, tablet *vitesst.Tablet, tabletType topodata.TabletType) {
+	t.Helper()
+	// for loop for 15 seconds to check if tablet type is correct
+	for range 15 {
+		output, err := vitessCluster.Vtctld().ExecuteCommandWithOutput(t.Context(), "GetTablet", tablet.Alias())
+		if !assert.NoError(t, err) {
+			return
+		}
+		var tabletPB topodata.Tablet
+		err = json2.UnmarshalPB([]byte(output), &tabletPB)
+		if !assert.NoError(t, err) {
+			return
+		}
+		if tabletType == tabletPB.Type {
+			return
+		}
+		time.Sleep(1 * time.Second)
+	}
+	assert.Failf(t, "waitForTabletType failed.", "Tablet type is not correct. Expected: %v", tabletType)
+}
+
+// getTabletVars returns a tablet's /debug/vars.
+func getTabletVars(t *testing.T, tablet *vitesst.Tablet) map[string]any {
+	vars, err := tablet.GetVars(t.Context())
+	require.NoError(t, err)
+	return vars
+}
+
+func vtctlBackupReplicaNoDestroyNoWrites(t *testing.T, replicaIndex int) (backups []string) {
+	replica := getReplica(t, replicaIndex)
+	numBackups := len(waitForNumBackups(t, -1))
+
+	err := vitessCluster.Vtctld().ExecuteCommand(t.Context(), "Backup", replica.Alias())
+	require.NoError(t, err)
+
+	backups = waitForNumBackups(t, numBackups+1)
+	require.NotEmpty(t, backups)
+
+	verifyTabletBackupStats(t, getTabletVars(t, replica))
+
+	return backups
+}
+
+func TestReplicaFullBackup(t *testing.T, replicaIndex int) (manifest *mysqlctl.BackupManifest) {
+	backups := vtctlBackupReplicaNoDestroyNoWrites(t, replicaIndex)
+
+	return readBackupManifest(t, backups[len(backups)-1])
+}
+
+func testReplicaIncrementalBackup(t *testing.T, replica *vitesst.Tablet, incrementalFromPos string, expectEmpty bool, expectError string) (manifest *mysqlctl.BackupManifest, backupName string) {
+	numBackups := len(waitForNumBackups(t, -1))
+
+	output, err := vitessCluster.Vtctld().ExecuteCommandWithOutput(t.Context(), "Backup", "--incremental-from-pos", incrementalFromPos, replica.Alias())
+	if expectError != "" {
+		require.Errorf(t, err, "expected: %v", expectError)
+		require.Contains(t, output, expectError)
+		return nil, ""
+	}
+	require.NoErrorf(t, err, "output: %v", output)
+
+	if expectEmpty {
+		require.Contains(t, output, mysqlctl.EmptyBackupMessage)
+		return nil, ""
+	}
+
+	backups := waitForNumBackups(t, numBackups+1)
+	require.NotEmptyf(t, backups, "output: %v", output)
+
+	verifyTabletBackupStats(t, getTabletVars(t, replica))
+	backupName = backups[len(backups)-1]
+
+	return readBackupManifest(t, backupName), backupName
+}
+
+func TestReplicaIncrementalBackup(t *testing.T, replicaIndex int, incrementalFromPos string, expectEmpty bool, expectError string) (manifest *mysqlctl.BackupManifest, backupName string) {
+	replica := getReplica(t, replicaIndex)
+	return testReplicaIncrementalBackup(t, replica, incrementalFromPos, expectEmpty, expectError)
+}
+
+func TestReplicaFullRestore(t *testing.T, replicaIndex int, expectError string) {
+	replica := getReplica(t, replicaIndex)
+
+	output, err := vitessCluster.Vtctld().ExecuteCommandWithOutput(t.Context(), "RestoreFromBackup", replica.Alias())
+	if expectError != "" {
+		require.Errorf(t, err, "expected: %v", expectError)
+		require.Contains(t, output, expectError)
+		return
+	}
+	require.NoErrorf(t, err, "output: %v", output)
+	verifyTabletRestoreStats(t, getTabletVars(t, replica))
+}
+
+func TestReplicaRestoreToPos(t *testing.T, replicaIndex int, restoreToPos replication.Position, expectError string) {
+	replica := getReplica(t, replicaIndex)
+
+	require.False(t, restoreToPos.IsZero())
+	restoreToPosArg := replication.EncodePosition(restoreToPos)
+	assert.Contains(t, restoreToPosArg, "MySQL56/")
+	if rand.IntN(2) == 0 {
+		// Verify that restore works whether or not the MySQL56/ prefix is present.
+		restoreToPosArg = strings.Replace(restoreToPosArg, "MySQL56/", "", 1)
+		assert.NotContains(t, restoreToPosArg, "MySQL56/")
+	}
+
+	output, err := vitessCluster.Vtctld().ExecuteCommandWithOutput(t.Context(), "RestoreFromBackup", "--restore-to-pos", restoreToPosArg, replica.Alias())
+	if expectError != "" {
+		require.Errorf(t, err, "expected: %v", expectError)
+		require.Contains(t, output, expectError)
+		return
+	}
+	require.NoErrorf(t, err, "output: %v", output)
+	verifyTabletRestoreStats(t, getTabletVars(t, replica))
+	waitForTabletType(t, getReplica(t, 0), topodata.TabletType_DRAINED)
+}
+
+func TestReplicaRestoreToTimestamp(t *testing.T, restoreToTimestamp time.Time, expectError string) {
+	replica := getReplica(t, 0)
+
+	require.False(t, restoreToTimestamp.IsZero())
+	restoreToTimestampArg := mysqlctl.FormatRFC3339(restoreToTimestamp)
+	output, err := vitessCluster.Vtctld().ExecuteCommandWithOutput(t.Context(), "RestoreFromBackup", "--restore-to-timestamp", restoreToTimestampArg, replica.Alias())
+	if expectError != "" {
+		require.Errorf(t, err, "expected: %v", expectError)
+		require.Contains(t, output, expectError)
+		return
+	}
+	require.NoErrorf(t, err, "output: %v", output)
+	verifyTabletRestoreStats(t, getTabletVars(t, replica))
+	waitForTabletType(t, replica, topodata.TabletType_DRAINED)
+}
+
 // waitForReplica waits for the replica to have same row set as on primary.
 func waitForReplica(t *testing.T, replicaIndex int) int {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
@@ -97,9 +580,9 @@ func waitForReplica(t *testing.T, replicaIndex int) int {
 func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase) {
 	t.Run(tcase.Name, func(t *testing.T) {
 		// setup cluster for the testing
-		code, err := LaunchCluster(tcase.SetupType, "xbstream", 0, tcase.ComprssDetails)
+		code, err := launchPITRCluster(t.Context(), tcase.SetupType, "xbstream", 0, tcase.ComprssDetails)
 		require.NoError(t, err, "setup failed with status code %d", code)
-		defer TearDownCluster()
+		defer tearDownPITRCluster(t)
 
 		InitTestTable(t)
 
@@ -305,7 +788,7 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 		t.Run("remove full position backups", func(t *testing.T) {
 			// Delete the fromFullPosition backup(s), which leaves us with less restore options. Try again.
 			for _, backupName := range fromFullPositionBackups {
-				RemoveBackup(t, backupName)
+				removeBackup(t, backupName)
 			}
 		})
 		t.Run("PITR-2", func(t *testing.T) {
@@ -316,14 +799,14 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 		t.Run("init tablet PITR", func(t *testing.T) {
 			require.NotEmpty(t, sampleTestedBackupPos)
 
-			var tablet *cluster.Vttablet
+			var tablet *vitesst.Tablet
 
 			t.Run("init from backup pos "+sampleTestedBackupPos, func(t *testing.T) {
-				tablet, err = SetupReplica3Tablet([]string{"--restore-to-pos", sampleTestedBackupPos})
+				tablet, err = SetupReplica3Tablet(t, []string{"--restore-to-pos", sampleTestedBackupPos})
 				assert.NoError(t, err)
 			})
 			t.Run("wait for drained", func(t *testing.T) {
-				err = tablet.VttabletProcess.WaitForTabletTypesForTimeout([]string{"drained"}, backupTimeoutDuration)
+				err = tablet.WaitForTabletType(t.Context(), backupTimeoutDuration, "drained")
 				assert.NoError(t, err)
 			})
 			t.Run(fmt.Sprintf("validate %d rows", rowsPerPosition[sampleTestedBackupPos]), func(t *testing.T) {
@@ -345,11 +828,11 @@ func ExecTestIncrementalBackupAndRestoreToTimestamp(t *testing.T, tcase *PITRTes
 
 	t.Run(tcase.Name, func(t *testing.T) {
 		// setup cluster for the testing
-		code, err := LaunchCluster(tcase.SetupType, "xbstream", 0, &CompressionDetails{
+		code, err := launchPITRCluster(t.Context(), tcase.SetupType, "xbstream", 0, &CompressionDetails{
 			CompressorEngineName: "pgzip",
 		})
 		require.NoError(t, err, "setup failed with status code %d", code)
-		defer TearDownCluster()
+		defer tearDownPITRCluster(t)
 
 		InitTestTable(t)
 
@@ -565,7 +1048,7 @@ func ExecTestIncrementalBackupAndRestoreToTimestamp(t *testing.T, tcase *PITRTes
 		t.Run("remove full position backups", func(t *testing.T) {
 			// Delete the fromFullPosition backup(s), which leaves us with less restore options. Try again.
 			for _, backupName := range fromFullPositionBackups {
-				RemoveBackup(t, backupName)
+				removeBackup(t, backupName)
 			}
 		})
 		t.Run("PITR-2", func(t *testing.T) {
@@ -578,14 +1061,14 @@ func ExecTestIncrementalBackupAndRestoreToTimestamp(t *testing.T, tcase *PITRTes
 			sampleTestedBackup := testedBackups[sampleTestedBackupIndex]
 			restoreToTimestampArg := mysqlctl.FormatRFC3339(sampleTestedBackup.postTimestamp)
 
-			var tablet *cluster.Vttablet
+			var tablet *vitesst.Tablet
 
 			t.Run(fmt.Sprintf("init from backup num %d", sampleTestedBackupIndex), func(t *testing.T) {
-				tablet, err = SetupReplica3Tablet([]string{"--restore-to-timestamp", restoreToTimestampArg})
+				tablet, err = SetupReplica3Tablet(t, []string{"--restore-to-timestamp", restoreToTimestampArg})
 				assert.NoError(t, err)
 			})
 			t.Run("wait for drained", func(t *testing.T) {
-				err = tablet.VttabletProcess.WaitForTabletTypesForTimeout([]string{"drained"}, backupTimeoutDuration)
+				err = tablet.WaitForTabletType(t.Context(), backupTimeoutDuration, "drained")
 				assert.NoError(t, err)
 			})
 			t.Run(fmt.Sprintf("validate %d rows", sampleTestedBackup.rows), func(t *testing.T) {
@@ -603,9 +1086,9 @@ func ExecTestIncrementalBackupAndRestoreToTimestamp(t *testing.T, tcase *PITRTes
 func ExecTestIncrementalBackupOnTwoTablets(t *testing.T, tcase *PITRTestCase) {
 	t.Run(tcase.Name, func(t *testing.T) {
 		// setup cluster for the testing
-		code, err := LaunchCluster(tcase.SetupType, "xbstream", 0, tcase.ComprssDetails)
+		code, err := launchPITRCluster(t.Context(), tcase.SetupType, "xbstream", 0, tcase.ComprssDetails)
 		require.NoError(t, err, "setup failed with status code %d", code)
-		defer TearDownCluster()
+		defer tearDownPITRCluster(t)
 
 		InitTestTable(t)
 

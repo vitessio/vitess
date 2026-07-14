@@ -18,11 +18,11 @@ package s3
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log"
 	"net"
 	"os"
-	"os/exec"
 	"path"
 	"strconv"
 	"strings"
@@ -32,6 +32,10 @@ import (
 	"github.com/minio/minio-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
+
+	"vitess.io/vitess/go/test/vitesst"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/replication"
@@ -56,74 +60,56 @@ import (
 	hence the rename to 'endtoend'.
 */
 
-// getRandomListenPorts() returns two consequtive, random tcp ports
-// that are hypothetically not in use.
-func getRandomListenPorts() (int, int) {
-	timeout := time.After(time.Minute)
-	for {
-		select {
-		case <-timeout:
-			panic("getRandomListenPorts() timed out")
-		default:
-			ln1, err := net.Listen("tcp", ":0")
-			if err != nil {
-				continue
-			}
-			addr1 := ln1.Addr().(*net.TCPAddr)
-
-			ln2, err := net.Listen("tcp", ":"+strconv.Itoa(addr1.Port+1))
-			if err != nil {
-				ln1.Close()
-				continue
-			}
-			ln1.Close()
-			ln2.Close()
-			return addr1.Port, addr1.Port + 1
-		}
-	}
-}
+const (
+	minioImage       = "minio/minio:latest"
+	minioAPIPort     = "9000/tcp"
+	minioConsolePort = "9001/tcp"
+)
 
 func TestMain(m *testing.M) {
 	f := func() int {
-		minioPath, err := exec.LookPath("minio")
-		if err != nil {
-			log.Fatalf("minio binary not found: %v", err)
-		}
-
-		dataDir, err := os.MkdirTemp("", "")
-		if err != nil {
-			log.Fatalf("could not create temporary directory: %v", err)
-		}
-		err = os.MkdirAll(dataDir, 0o755)
-		if err != nil {
-			log.Fatalf("failed to create MinIO data directory: %v", err)
-		}
-
-		apiPort, consolePort := getRandomListenPorts()
-		minioAddress := net.JoinHostPort("localhost", strconv.Itoa(apiPort))
-		minioConsoleAddress := net.JoinHostPort("localhost", strconv.Itoa(consolePort))
-
-		cmd := exec.Command(minioPath, "server", dataDir,
-			"--address", minioAddress,
-			"--console-address", minioConsoleAddress,
-		)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-
-		err = cmd.Start()
-		if err != nil {
-			log.Fatalf("failed to start MinIO: %v", err)
-		}
-		defer func() {
-			cmd.Process.Kill()
-		}()
+		ctx := context.Background()
 
 		// Local MinIO credentials
 		accessKey := "minioadmin"
 		secretKey := "minioadmin"
-		minioEndpoint := "http://" + minioAddress
 		bucketName := "test-bucket"
 		region := "us-east-1"
+
+		ctr, err := testcontainers.Run(
+			ctx, minioImage,
+			testcontainers.WithCmd("server", "/data", "--console-address", ":9001"),
+			testcontainers.WithEnv(map[string]string{
+				"MINIO_ROOT_USER":     accessKey,
+				"MINIO_ROOT_PASSWORD": secretKey,
+			}),
+			testcontainers.WithExposedPorts(minioAPIPort, minioConsolePort),
+			testcontainers.WithWaitStrategyAndDeadline(
+				2*time.Minute,
+				wait.ForHTTP("/minio/health/live").
+					WithPort(minioAPIPort).
+					WithStartupTimeout(2*time.Minute).
+					WithPollInterval(time.Second),
+			),
+		)
+		defer func() {
+			testcontainers.TerminateContainer(ctr)
+		}()
+		if err != nil {
+			log.Fatalf("failed to start MinIO: %v", err)
+		}
+
+		host, err := ctr.Host(ctx)
+		if err != nil {
+			log.Fatalf("failed to get MinIO host: %v", err)
+		}
+		port, err := ctr.MappedPort(ctx, minioAPIPort)
+		if err != nil {
+			log.Fatalf("failed to get MinIO port: %v", err)
+		}
+
+		minioAddress := net.JoinHostPort(host, port.Port())
+		minioEndpoint := "http://" + minioAddress
 
 		client, err := minio.New(minioAddress, accessKey, secretKey, false)
 		if err != nil {
@@ -143,10 +129,80 @@ func TestMain(m *testing.M) {
 		os.Setenv("AWS_ENDPOINT", minioEndpoint)
 		os.Setenv("AWS_REGION", region)
 
+		mysqlRoot, err := setupMysqlRoot(ctx)
+		if err != nil {
+			log.Fatalf("failed to set up VT_MYSQL_ROOT: %v", err)
+		}
+		defer os.RemoveAll(mysqlRoot)
+		os.Setenv("VT_MYSQL_ROOT", mysqlRoot)
+
 		return m.Run()
 	}
 
 	os.Exit(f())
+}
+
+// setupMysqlRoot returns a directory whose bin/mysqld reports the MySQL version
+// of the Vitess image. mysqlctl reads that version to decide how a backup lays
+// out the InnoDB redo log directory.
+func setupMysqlRoot(ctx context.Context) (string, error) {
+	version, err := imageMysqldVersion(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	root, err := os.MkdirTemp("", "vt_mysql_root")
+	if err != nil {
+		return "", err
+	}
+	if err := os.MkdirAll(path.Join(root, "bin"), 0o755); err != nil {
+		return "", err
+	}
+
+	versionFile := path.Join(root, "version.txt")
+	if err := os.WriteFile(versionFile, []byte(version+"\n"), 0o644); err != nil {
+		return "", err
+	}
+	mysqld := "#!/bin/sh\ncat " + versionFile + "\n"
+	if err := os.WriteFile(path.Join(root, "bin", "mysqld"), []byte(mysqld), 0o755); err != nil {
+		return "", err
+	}
+	return root, nil
+}
+
+// imageMysqldVersion runs "mysqld --version" inside the Vitess image and returns
+// the version line it prints.
+func imageMysqldVersion(ctx context.Context) (string, error) {
+	ctr, err := testcontainers.Run(
+		ctx, vitesst.Image("8.0"),
+		testcontainers.WithEntrypoint("mysqld"),
+		testcontainers.WithCmd("--version"),
+		testcontainers.WithWaitStrategy(wait.ForExit().WithExitTimeout(time.Minute)),
+	)
+	defer func() {
+		testcontainers.TerminateContainer(ctr)
+	}()
+	if err != nil {
+		return "", err
+	}
+
+	rc, err := ctr.Logs(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer rc.Close()
+
+	output, err := io.ReadAll(rc)
+	if err != nil {
+		return "", err
+	}
+
+	for line := range strings.SplitSeq(string(output), "\n") {
+		if idx := strings.Index(line, "mysqld"); idx >= 0 && strings.Contains(line, " Ver ") {
+			return strings.TrimSpace(line[idx:]), nil
+		}
+	}
+	return "", fmt.Errorf("could not find the mysqld version in: %s", output)
 }
 
 func waitForMinio(client *minio.Client) {
