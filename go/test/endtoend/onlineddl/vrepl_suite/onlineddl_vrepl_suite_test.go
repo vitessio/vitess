@@ -17,6 +17,7 @@ limitations under the License.
 package vreplsuite
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -28,29 +29,31 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tidwall/gjson"
+	"google.golang.org/protobuf/encoding/protojson"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/endtoend/onlineddl"
+	"vitess.io/vitess/go/test/vitesst"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/onlineddl"
-	"vitess.io/vitess/go/test/endtoend/throttler"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 var (
-	clusterInstance         *cluster.LocalProcessCluster
+	clusterInstance         *vitesst.Cluster
+	primaryTablet           *vitesst.Tablet
 	vtParams                mysql.ConnParams
-	evaluatedMysqlParams    *mysql.ConnParams
 	ddlStrategy             = "vitess -vreplication-test-suite"
 	waitForMigrationTimeout = 20 * time.Second
 
-	hostname              = "localhost"
 	keyspaceName          = "ks"
-	cell                  = "zone1"
-	schemaChangeDirectory = ""
+	schemaChangeDirectory = "/vt/files"
 	tableName             = `onlineddl_test`
 	beforeTableName       = `onlineddl_test_before`
 	afterTableName        = `onlineddl_test_after`
@@ -60,8 +63,9 @@ var (
 )
 
 const (
-	testDataPath     = "testdata"
-	testFilterEnvVar = "ONLINEDDL_SUITE_TEST_FILTER"
+	testDataPath           = "testdata"
+	testFilterEnvVar       = "ONLINEDDL_SUITE_TEST_FILTER"
+	throttlerConfigTimeout = 60 * time.Second
 )
 
 // Use $VREPL_SUITE_TEST_FILTER environment variable to filter tests by name.
@@ -70,69 +74,54 @@ func TestMain(m *testing.M) {
 
 	testsFilter = os.Getenv(testFilterEnvVar)
 
-	exitcode, err := func() (int, error) {
-		clusterInstance = cluster.NewCluster(cell, hostname)
-		schemaChangeDirectory = path.Join("/tmp", fmt.Sprintf("schema_change_dir_%d", clusterInstance.GetAndReserveTabletUID()))
-		defer os.RemoveAll(schemaChangeDirectory)
-		defer clusterInstance.Teardown()
+	exitCode := func() int {
+		ctx := context.Background()
 
-		if _, err := os.Stat(schemaChangeDirectory); os.IsNotExist(err) {
-			_ = os.Mkdir(schemaChangeDirectory, 0o700)
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithVTCtldArgs(
+				"--schema-change-dir", schemaChangeDirectory,
+				"--schema-change-controller", "local",
+				"--schema-change-check-interval", "1s",
+			),
+			vitesst.WithVTTabletArgs(
+				"--heartbeat-interval", "250ms",
+				"--heartbeat-on-demand-duration", "5s",
+				"--migration-check-interval", "5s",
+			),
+			// No need for replicas in this stress test
+			vitesst.WithKeyspace(keyspaceName).
+				WithShardNames("1"),
+		)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
 		}
 
-		clusterInstance.VtctldExtraArgs = []string{
-			"--schema-change-dir", schemaChangeDirectory,
-			"--schema-change-controller", "local",
-			"--schema-change-check-interval", "1s",
+		cleanup, err := cluster.Start(ctx)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
 		}
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
 
-		clusterInstance.VtTabletExtraArgs = []string{
-			"--heartbeat-interval", "250ms",
-			"--heartbeat-on-demand-duration", "5s",
-			"--migration-check-interval", "5s",
-		}
+		clusterInstance = cluster
+		primaryTablet = cluster.Keyspace(keyspaceName).Shards()[0].Primary()
+		vtParams = cluster.VTParams(ctx, "")
 
-		if err := clusterInstance.StartTopo(); err != nil {
-			return 1, err
-		}
-
-		// Start keyspace
-		keyspace := &cluster.Keyspace{
-			Name: keyspaceName,
-		}
-
-		// No need for replicas in this stress test
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"1"}, 0, false, clusterInstance.Cell); err != nil {
-			return 1, err
-		}
-
-		vtgateInstance := clusterInstance.NewVtgateInstance()
-		// Start vtgate
-		if err := vtgateInstance.Setup(); err != nil {
-			return 1, err
-		}
-		// ensure it is torn down during cluster TearDown
-		clusterInstance.VtgateProcess = *vtgateInstance
-		vtParams = mysql.ConnParams{
-			Host: clusterInstance.Hostname,
-			Port: clusterInstance.VtgateMySQLPort,
-		}
-
-		return m.Run(), nil
+		return m.Run()
 	}()
-	if err != nil {
-		fmt.Printf("%v\n", err)
-		os.Exit(1)
-	} else {
-		os.Exit(exitcode)
-	}
+	os.Exit(exitCode)
 }
 
 func TestVreplSuiteSchemaChanges(t *testing.T) {
-	shards := clusterInstance.Keyspaces[0].Shards
+	shards := clusterInstance.Keyspace(keyspaceName).Shards()
 	require.Equal(t, 1, len(shards))
 
-	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance)
+	enableLagThrottlerAndWaitForStatus(t)
 
 	fkOnlineDDLPossible := false
 	t.Run("check 'rename_table_preserve_foreign_key' variable", func(t *testing.T) {
@@ -149,7 +138,7 @@ func TestVreplSuiteSchemaChanges(t *testing.T) {
 		//
 		// In this stress test, we enable Online DDL if the variable 'rename_table_preserve_foreign_key' is present. The Online DDL mechanism will in turn
 		// query for this variable, and manipulate it, when starting the migration and when cutting over.
-		rs, err := shards[0].Vttablets[0].VttabletProcess.QueryTablet("show global variables like 'rename_table_preserve_foreign_key'", keyspaceName, false)
+		rs, err := shards[0].Primary().QueryTabletWithDB(t.Context(), "show global variables like 'rename_table_preserve_foreign_key'", "")
 		require.NoError(t, err)
 		fkOnlineDDLPossible = len(rs.Rows) > 0
 		t.Logf("MySQL support for 'rename_table_preserve_foreign_key': %v", fkOnlineDDLPossible)
@@ -226,7 +215,7 @@ func testSingle(t *testing.T, testName string, fkOnlineDDLPossible bool) {
 		f := "create.sql"
 		_, exists := readTestFile(t, testName, f)
 		require.True(t, exists)
-		onlineddl.MysqlClientExecFile(t, mysqlParams(), testDataPath, testName, f)
+		mysqlExecFile(t, testName, f)
 		// ensure test table has been created:
 		getCreateTableStatement(t, tableName)
 	}
@@ -234,7 +223,7 @@ func testSingle(t *testing.T, testName string, fkOnlineDDLPossible bool) {
 		// destroy
 		f := "destroy.sql"
 		if _, exists := readTestFile(t, testName, f); exists {
-			onlineddl.MysqlClientExecFile(t, mysqlParams(), testDataPath, testName, f)
+			mysqlExecFile(t, testName, f)
 		}
 	}()
 
@@ -312,13 +301,8 @@ func testSingle(t *testing.T, testName string, fkOnlineDDLPossible bool) {
 		selectBefore := fmt.Sprintf("select %s from %s %s", beforeColumns, beforeTableName, orderBy)
 		selectAfter := fmt.Sprintf("select %s from %s %s", afterColumns, afterTableName, orderBy)
 
-		selectBeforeFile := onlineddl.CreateTempScript(t, selectBefore)
-		defer os.Remove(selectBeforeFile)
-		beforeOutput := onlineddl.MysqlClientExecFile(t, mysqlParams(), testDataPath, "", selectBeforeFile)
-
-		selectAfterFile := onlineddl.CreateTempScript(t, selectAfter)
-		defer os.Remove(selectAfterFile)
-		afterOutput := onlineddl.MysqlClientExecFile(t, mysqlParams(), testDataPath, "", selectAfterFile)
+		beforeOutput := mysqlExecOutput(t, selectBefore)
+		afterOutput := mysqlExecOutput(t, selectAfter)
 
 		require.Equal(t, beforeOutput, afterOutput, "results mismatch: (%s) and (%s)", selectBefore, selectAfter)
 	}
@@ -362,29 +346,24 @@ func waitForMigration(t *testing.T, uuid string, timeout time.Duration) sqltypes
 	return nil
 }
 
-func getTablet() *cluster.Vttablet {
-	return clusterInstance.Keyspaces[0].Shards[0].Vttablets[0]
+func getTablet() *vitesst.Tablet {
+	return primaryTablet
 }
 
-func mysqlParams() *mysql.ConnParams {
-	if evaluatedMysqlParams != nil {
-		return evaluatedMysqlParams
-	}
-	evaluatedMysqlParams = &mysql.ConnParams{
-		Uname:      "vt_dba",
-		UnixSocket: path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", getTablet().TabletUID), "/mysql.sock"),
-		DbName:     "vt_" + keyspaceName,
-	}
-	return evaluatedMysqlParams
+// mysqlConn opens a dba connection to the tablet's mysqld, on the keyspace's database
+func mysqlConn(t *testing.T) *mysql.Conn {
+	t.Helper()
+
+	conn, err := vitesst.GetMySQLConn(t.Context(), getTablet(), "vt_"+keyspaceName)
+	require.NoError(t, err)
+	return conn
 }
 
 // VtgateExecDDL executes a DDL query with given strategy
 func mysqlExec(t *testing.T, sql string, expectError string) *sqltypes.Result {
 	t.Helper()
 
-	ctx := t.Context()
-	conn, err := mysql.Connect(ctx, mysqlParams())
-	require.Nil(t, err)
+	conn := mysqlConn(t)
 	defer conn.Close()
 
 	qr, err := conn.ExecuteFetch(sql, 100000, true)
@@ -397,13 +376,260 @@ func mysqlExec(t *testing.T, sql string, expectError string) *sqltypes.Result {
 	return qr
 }
 
+// mysqlExecOutput runs a query on the tablet's mysqld and returns its result rows rendered as
+// tab separated lines, with `NULL` standing for a NULL value.
+func mysqlExecOutput(t *testing.T, sql string) (output string) {
+	t.Helper()
+
+	conn := mysqlConn(t)
+	defer conn.Close()
+
+	qr, err := conn.ExecuteFetch(sql, mysql.FETCH_ALL_ROWS, true)
+	require.NoError(t, err)
+	return renderRows(qr)
+}
+
+// mysqlExecFile runs all statements of a test's SQL file on the tablet's mysqld
+func mysqlExecFile(t *testing.T, testName string, fileName string) {
+	t.Helper()
+
+	content, exists := readTestFile(t, testName, fileName)
+	require.True(t, exists)
+
+	conn := mysqlConn(t)
+	defer conn.Close()
+
+	for _, statement := range splitSQLScript(content) {
+		_, err := conn.ExecuteFetch(statement, mysql.FETCH_ALL_ROWS, true)
+		require.NoError(t, err, "executing statement: %s", statement)
+	}
+}
+
+// renderRows formats a query result as tab separated lines, one line per row,
+// with `NULL` standing for a NULL value.
+func renderRows(qr *sqltypes.Result) string {
+	var b strings.Builder
+	for _, row := range qr.Rows {
+		for i, value := range row {
+			if i > 0 {
+				b.WriteByte('\t')
+			}
+			if value.IsNull() {
+				b.WriteString("NULL")
+			} else {
+				b.WriteString(value.ToString())
+			}
+		}
+		b.WriteByte('\n')
+	}
+	return b.String()
+}
+
+// splitSQLScript breaks a SQL script into its individual statements. It honors the `delimiter`
+// directive, which the scripts use to declare a routine or event body whose statements are
+// themselves terminated by a semicolon.
+func splitSQLScript(script string) (statements []string) {
+	const delimiterDirective = "delimiter "
+
+	var statement strings.Builder
+	delimiter := ";"
+
+	flush := func() {
+		if s := strings.TrimSpace(statement.String()); s != "" {
+			statements = append(statements, s)
+		}
+		statement.Reset()
+	}
+
+	for i := 0; i < len(script); {
+		rest := script[i:]
+
+		atLineStart := i == 0 || script[i-1] == '\n'
+		if atLineStart && strings.TrimSpace(statement.String()) == "" && strings.HasPrefix(strings.ToLower(rest), delimiterDirective) {
+			line := rest
+			if end := strings.IndexByte(line, '\n'); end >= 0 {
+				line = line[:end]
+			}
+			delimiter = strings.TrimSpace(line[len(delimiterDirective):])
+			statement.Reset()
+			i += len(line)
+			continue
+		}
+
+		if strings.HasPrefix(rest, delimiter) {
+			flush()
+			i += len(delimiter)
+			continue
+		}
+
+		switch {
+		case rest[0] == '\'', rest[0] == '"', rest[0] == '`':
+			end := endOfQuoted(script, i)
+			statement.WriteString(script[i:end])
+			i = end
+		case rest[0] == '#', strings.HasPrefix(rest, "--") && (len(rest) == 2 || rest[2] == ' ' || rest[2] == '\t' || rest[2] == '\n'):
+			i += endOfLineComment(rest)
+		case strings.HasPrefix(rest, "/*"):
+			i += endOfBlockComment(rest)
+		default:
+			statement.WriteByte(rest[0])
+			i++
+		}
+	}
+	flush()
+	return statements
+}
+
+// endOfQuoted returns the index just past the quoted literal or identifier that starts at `start`
+func endOfQuoted(script string, start int) int {
+	quote := script[start]
+	for i := start + 1; i < len(script); i++ {
+		switch script[i] {
+		case '\\':
+			i++
+		case quote:
+			if i+1 < len(script) && script[i+1] == quote {
+				i++
+				continue
+			}
+			return i + 1
+		}
+	}
+	return len(script)
+}
+
+// endOfLineComment returns the length of the line comment that starts at the beginning of `rest`
+func endOfLineComment(rest string) int {
+	if end := strings.IndexByte(rest, '\n'); end >= 0 {
+		return end + 1
+	}
+	return len(rest)
+}
+
+// endOfBlockComment returns the length of the block comment that starts at the beginning of `rest`
+func endOfBlockComment(rest string) int {
+	if end := strings.Index(rest[2:], "*/"); end >= 0 {
+		return 2 + end + 2
+	}
+	return len(rest)
+}
+
 // getCreateTableStatement returns the CREATE TABLE statement for a given table
 func getCreateTableStatement(t *testing.T, tableName string) (statement string) {
-	queryResult, err := getTablet().VttabletProcess.QueryTablet("show create table "+tableName, keyspaceName, true)
+	queryResult, err := getTablet().QueryTablet(t.Context(), "show create table "+tableName)
 	require.Nil(t, err)
 
 	assert.Equal(t, len(queryResult.Rows), 1)
 	assert.Equal(t, len(queryResult.Rows[0]), 2) // table name, create statement
 	statement = queryResult.Rows[0][1].ToString()
 	return statement
+}
+
+// updateThrottlerConfig runs vtctldclient UpdateThrottlerConfig. It retries the command until it
+// succeeds or times out, as the SrvKeyspace record may not yet exist for a keyspace that is still
+// initializing before it becomes serving.
+func updateThrottlerConfig(ctx context.Context, args ...string) (result string, err error) {
+	args = append([]string{"UpdateThrottlerConfig"}, args...)
+	args = append(args, "--custom-query", "")
+	args = append(args, keyspaceName)
+
+	ctx, cancel := context.WithTimeout(ctx, throttlerConfigTimeout)
+	defer cancel()
+
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	for {
+		result, err = clusterInstance.Vtctld().ExecuteCommandWithOutput(ctx, args...)
+		if err == nil {
+			return result, nil
+		}
+		select {
+		case <-ctx.Done():
+			return "", fmt.Errorf("timed out waiting for UpdateThrottlerConfig to succeed after %v; last seen value: %+v, error: %v", throttlerConfigTimeout, result, err)
+		case <-ticker.C:
+		}
+	}
+}
+
+// getThrottlerStatus runs vtctldclient GetThrottlerStatus.
+func getThrottlerStatus(ctx context.Context, tablet *vitesst.Tablet) (*tabletmanagerdatapb.GetThrottlerStatusResponse, error) {
+	output, err := clusterInstance.Vtctld().ExecuteCommandWithOutput(ctx, "GetThrottlerStatus", tablet.Alias())
+	if err != nil {
+		return nil, err
+	}
+	var resp vtctldatapb.GetThrottlerStatusResponse
+	if err := protojson.Unmarshal([]byte(output), &resp); err != nil {
+		return nil, err
+	}
+	return resp.Status, nil
+}
+
+// tabletNotServing indicates whether the tablet reports itself as not serving, in which case
+// its throttler is not open and its throttler status is not indicative.
+func tabletNotServing(ctx context.Context, tablet *vitesst.Tablet) bool {
+	_, body, err := tablet.MakeAPICall(ctx, "/debug/status_details")
+	if err != nil {
+		return false
+	}
+	class := strings.ToLower(gjson.Get(body, "0.Class").String())
+	value := strings.ToLower(gjson.Get(body, "0.Value").String())
+	return class == "unhappy" && strings.Contains(value, "not serving")
+}
+
+// waitForThrottlerStatusEnabled waits for a tablet to report its throttler status as
+// enabled/disabled until the specified timeout.
+func waitForThrottlerStatusEnabled(t *testing.T, tablet *vitesst.Tablet, enabled bool, timeout time.Duration) {
+	ctx, cancel := context.WithTimeout(t.Context(), timeout)
+	defer cancel()
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	for {
+		// If the tablet is Not Serving due to e.g. being involved in a
+		// Reshard where its QueryService is explicitly disabled, then
+		// we should not fail the test as the throttler will not be Open.
+		if tabletNotServing(ctx, tablet) {
+			log.Info(fmt.Sprintf("tablet %s is Not Serving, so ignoring throttler status as the throttler will not be Opened", tablet.Alias()))
+			return
+		}
+
+		status, err := getThrottlerStatus(ctx, tablet)
+		good := func() bool {
+			if err != nil {
+				log.Error(fmt.Sprintf("GetThrottlerStatus failed: %v", err))
+				return false
+			}
+			if status.IsEnabled != enabled {
+				return false
+			}
+			if status.IsEnabled && len(status.MetricsHealth) == 0 {
+				// throttler is enabled, but no metrics collected yet. Wait for something to be collected.
+				return false
+			}
+			return true
+		}
+		if good() {
+			return
+		}
+		select {
+		case <-ctx.Done():
+			assert.Fail(t, "timeout", "waiting for the %s tablet's throttler status enabled to be %t with the correct config after %v; last seen status: %+v",
+				tablet.Alias(), enabled, timeout, status)
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
+// enableLagThrottlerAndWaitForStatus enables the throttler, configured to use the standard
+// replication lag metric. The function waits until the throttler is confirmed to be running
+// on all tablets.
+func enableLagThrottlerAndWaitForStatus(t *testing.T) {
+	_, err := updateThrottlerConfig(t.Context(), "--enable")
+	require.NoError(t, err)
+
+	for _, tablet := range clusterInstance.Tablets() {
+		waitForThrottlerStatusEnabled(t, tablet, true, time.Minute)
+	}
 }

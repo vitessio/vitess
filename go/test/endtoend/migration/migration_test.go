@@ -18,9 +18,8 @@ package migration
 
 import (
 	"bytes"
+	"context"
 	"fmt"
-	"os"
-	"path"
 	"strings"
 	"testing"
 	"time"
@@ -30,71 +29,94 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/vitesst"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
-	vtParams        *mysql.ConnParams
+	clusterInstance *vitesst.Cluster
+	vtParams        mysql.ConnParams
 	cell            = "test"
-	keyspaces       = make(map[string]*cluster.Keyspace)
 
-	legacyProduct = cluster.Keyspace{
-		Name: "product",
-		SchemaSQL: `
+	legacyProduct = vitesst.WithKeyspace("product").
+			WithReplicas(1).
+			WithSchema(`
 create table product(pid bigint, description varbinary(128), primary key(pid));
-`,
-	}
+`)
 	legacyProductData = `
 insert into vt_product.product(pid, description) values(1, 'keyboard'), (2, 'monitor');
 `
 
-	legacyCustomer = cluster.Keyspace{
-		Name: "customer",
-		SchemaSQL: `
+	legacyCustomer = vitesst.WithKeyspace("customer").
+			WithReplicas(1).
+			WithSchema(`
 create table customer(cid bigint, name varbinary(128),	primary key(cid));
 create table orders(oid bigint, cid bigint, pid bigint, mname varchar(128), price bigint, primary key(oid));
-`,
-	}
+`)
 	legacyCustomerData = `
 insert into vt_customer.customer(cid, name) values(1, 'john'), (2, 'paul'), (3, 'ringo');
 insert into vt_customer.orders(oid, cid, mname, pid, price) values(1, 1, 'monoprice', 1, 10), (2, 1, 'newegg', 2, 15);
 `
 
-	commerce = cluster.Keyspace{
-		Name: "commerce",
-		SchemaSQL: `
+	commerceSchema = `
 create table product(pid bigint, description varbinary(128), primary key(pid));
 create table customer(cid bigint, name varbinary(128),	primary key(cid));
 create table orders(oid bigint, cid bigint, pid bigint, mname varchar(128), price bigint, primary key(oid));
-`,
-		VSchema: `{
+`
+	commerceVSchema = `{
   "tables": {
 		"product": {},
 		"customer": {},
 		"orders": {}
 	}
-}`,
-	}
+}`
+
+	// externalUsers grants the users named in the externalConnections config
+	// access from the other containers on the cluster network.
+	externalUsers = `
+CREATE USER 'vt_app'@'%';
+GRANT ALL ON *.* TO 'vt_app'@'%';
+CREATE USER 'vt_filtered'@'%';
+GRANT ALL ON *.* TO 'vt_filtered'@'%';
+CREATE USER 'vt_allprivs'@'%';
+GRANT ALL ON *.* TO 'vt_allprivs'@'%';
+`
+
+	// tabletConfigPath is where the externalConnections config is placed in the
+	// commerce tablet containers.
+	tabletConfigPath = "/vt/files/external.yaml"
+
+	// externalMySQLPort is the port mysqld listens on inside every tablet
+	// container.
+	externalMySQLPort = 3306
 
 	connFormat = `externalConnections:
   product:
-    socket: %s
+    host: %s
+    port: %d
     dbName: vt_product
     app:
       user: vt_app
     dba:
       user: vt_dba
+    filtered:
+      user: vt_filtered
+    allprivs:
+      user: vt_allprivs
   customer:
     flavor: FilePos
-    socket: %s
+    host: %s
+    port: %d
     dbName: vt_customer
     app:
       user: vt_app
     dba:
       user: vt_dba
+    filtered:
+      user: vt_filtered
+    allprivs:
+      user: vt_allprivs
 `
 )
 
@@ -111,7 +133,8 @@ take a yaml config that defines these external sources. it will look like this:
 externalConnections:
 
 	product:
-	  socket: /home/sougou/dev/src/vitess.io/vitess/vtdataroot/vtroot_15201/vt_0000000622/mysql.sock
+	  host: vttablet-102
+	  port: 3306
 	  dbName: vt_product
 	  app:
 	    user: vt_app
@@ -119,7 +142,8 @@ externalConnections:
 	    user: vt_dba
 	customer:
 	  flavor: FilePos
-	  socket: /home/sougou/dev/src/vitess.io/vitess/vtdataroot/vtroot_15201/vt_0000000620/mysql.sock
+	  host: vttablet-100
+	  port: 3306
 	  dbName: vt_customer
 	  app:
 	    user: vt_app
@@ -133,24 +157,34 @@ source is that the source proto contains an "external_mysql" field instead of ke
 That field is the key into the externalConnections section of the input yaml.
 */
 func TestMigration(t *testing.T) {
-	yamlFile := startCluster(t)
-	defer clusterInstance.Teardown()
+	ctx := t.Context()
+	tabletConfig := startCluster(ctx, t)
 
-	tabletConfig := func(vt *cluster.VttabletProcess) {
-		vt.ExtraArgs = append(vt.ExtraArgs, "--tablet-config", yamlFile)
-	}
-	createKeyspace(t, commerce, []string{"0"}, tabletConfig)
-	err := clusterInstance.VtctldClientProcess.ExecuteCommand("RebuildKeyspaceGraph", "commerce")
+	commerce := vitesst.WithKeyspace("commerce").
+		WithReplicas(1).
+		WithSchema(commerceSchema).
+		WithVSchema(commerceVSchema).
+		WithTabletSpec(func(spec *vitesst.TabletSpec) {
+			spec.Files = append(spec.Files, vitesst.ContainerFile{
+				Content:       []byte(tabletConfig),
+				ContainerPath: tabletConfigPath,
+			})
+			spec.ExtraArgs = append(spec.ExtraArgs, "--tablet-config", tabletConfigPath)
+		})
+	_, err := clusterInstance.AddKeyspace(ctx, commerce)
 	require.NoError(t, err)
 
-	err = clusterInstance.StartVtgate()
+	err = clusterInstance.Vtctld().ExecuteCommand(ctx, "RebuildKeyspaceGraph", "commerce")
 	require.NoError(t, err)
 
-	migrate(t, "product", "commerce", []string{"product"})
-	migrate(t, "customer", "commerce", []string{"customer"})
-	migrate(t, "customer", "commerce", []string{"orders"})
-	vttablet := keyspaces["commerce"].Shards[0].Vttablets[0].VttabletProcess
-	waitForVReplicationToCatchup(t, vttablet, 30*time.Second)
+	_, err = clusterInstance.AddVTGate(ctx)
+	require.NoError(t, err)
+
+	migrate(ctx, t, "product", "commerce", []string{"product"})
+	migrate(ctx, t, "customer", "commerce", []string{"customer"})
+	migrate(ctx, t, "customer", "commerce", []string{"orders"})
+	vttablet := clusterInstance.Keyspace("commerce").Shards()[0].Primary()
+	waitForVReplicationToCatchup(ctx, t, vttablet, 30*time.Second)
 
 	testcases := []struct {
 		query  string
@@ -182,11 +216,8 @@ func TestMigration(t *testing.T) {
 		),
 	}}
 
-	vtParams = &mysql.ConnParams{
-		Host: clusterInstance.Hostname,
-		Port: clusterInstance.VtgateMySQLPort,
-	}
-	conn, err := mysql.Connect(t.Context(), vtParams)
+	vtParams = clusterInstance.VTParams(ctx, "")
+	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
@@ -200,7 +231,7 @@ func TestMigration(t *testing.T) {
 	}
 }
 
-func migrate(t *testing.T, fromdb, toks string, tables []string) {
+func migrate(ctx context.Context, t *testing.T, fromdb, toks string, tables []string) {
 	bls := &binlogdatapb.BinlogSource{
 		ExternalMysql: fromdb,
 		Filter:        &binlogdatapb.Filter{},
@@ -215,65 +246,56 @@ func migrate(t *testing.T, fromdb, toks string, tables []string) {
 		"(workflow, db_name, source, pos, max_tps, max_replication_lag, tablet_types, time_updated, transaction_timestamp, state, options) values"+
 		"('%s', '%s', %s, '', 9999, 9999, 'primary', 0, 0, 'Running', '{}')", tables[0], "vt_"+toks, sqlEscaped.String())
 	fmt.Printf("VReplication insert: %s\n", query)
-	vttablet := keyspaces[toks].Shards[0].Vttablets[0].Alias
-	err := clusterInstance.VtctldClientProcess.ExecuteCommand("ExecuteFetchAsDBA", vttablet, query)
+	vttablet := clusterInstance.Keyspace(toks).Shards()[0].Primary().Alias()
+	err := clusterInstance.Vtctld().ExecuteCommand(ctx, "ExecuteFetchAsDBA", vttablet, query)
 	require.NoError(t, err)
 }
 
-func startCluster(t *testing.T) string {
-	clusterInstance = cluster.NewCluster(cell, "localhost")
-
-	err := clusterInstance.StartTopo()
+func startCluster(ctx context.Context, t *testing.T) string {
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithCells(cell),
+		vitesst.WithoutVTGate(),
+		vitesst.WithInitDBSQLExtra(externalUsers),
+		legacyCustomer,
+		legacyProduct,
+	)
 	require.NoError(t, err)
 
-	createKeyspace(t, legacyCustomer, []string{"0"})
-	createKeyspace(t, legacyProduct, []string{"0"})
+	cleanup, err := cluster.Start(ctx)
+	t.Cleanup(func() {
+		if err := cleanup(context.WithoutCancel(ctx)); err != nil {
+			t.Logf("cluster teardown: %v", err)
+		}
+	})
+	require.NoError(t, err)
+	clusterInstance = cluster
 
-	productSocket := path.Join(keyspaces["product"].Shards[0].Vttablets[0].VttabletProcess.Directory, "mysql.sock")
-	customerSocket := path.Join(keyspaces["customer"].Shards[0].Vttablets[0].VttabletProcess.Directory, "mysql.sock")
+	product := cluster.Keyspace("product").Shards()[0].Primary()
+	customer := cluster.Keyspace("customer").Shards()[0].Primary()
 
-	populate(t, productSocket, legacyProductData)
-	populate(t, customerSocket, legacyCustomerData)
+	populate(ctx, t, product, legacyProductData)
+	populate(ctx, t, customer, legacyCustomerData)
 
-	buf := &bytes.Buffer{}
-	fmt.Fprintf(buf, "externalConnections:\n")
-	tabletConfig := fmt.Sprintf(connFormat, productSocket, customerSocket)
+	tabletConfig := fmt.Sprintf(connFormat, product.Name(), externalMySQLPort, customer.Name(), externalMySQLPort)
 	fmt.Printf("tablet_config:\n%s\n", tabletConfig)
-	yamlFile := path.Join(clusterInstance.TmpDirectory, "external.yaml")
-	err = os.WriteFile(yamlFile, []byte(tabletConfig), 0o644)
-	require.NoError(t, err)
-	return yamlFile
+	return tabletConfig
 }
 
-func createKeyspace(t *testing.T, ks cluster.Keyspace, shards []string, customizers ...any) {
+func populate(ctx context.Context, t *testing.T, tablet *vitesst.Tablet, sql string) {
 	t.Helper()
 
-	err := clusterInstance.StartKeyspace(ks, shards, 1, false, clusterInstance.Cell, customizers...)
-	require.NoError(t, err)
-	keyspaces[ks.Name] = &clusterInstance.Keyspaces[len(clusterInstance.Keyspaces)-1]
-}
-
-func populate(t *testing.T, socket, sql string) {
-	t.Helper()
-
-	params := &mysql.ConnParams{
-		UnixSocket: socket,
-		Uname:      "vt_app",
-	}
-	conn, err := mysql.Connect(t.Context(), params)
-	require.NoError(t, err)
-	defer conn.Close()
 	lines := strings.SplitSeq(sql, "\n")
 	for line := range lines {
 		if line == "" {
 			continue
 		}
-		execQuery(t, conn, line)
+		_, err := tablet.QueryTabletWithDB(ctx, line, "")
+		require.NoError(t, err)
 	}
 }
 
 // waitForVReplicationToCatchup: logic copied from go/test/endtoend/vreplication/cluster.go
-func waitForVReplicationToCatchup(t *testing.T, vttablet *cluster.VttabletProcess, duration time.Duration) {
+func waitForVReplicationToCatchup(ctx context.Context, t *testing.T, vttablet *vitesst.Tablet, duration time.Duration) {
 	queries := []string{
 		`select count(*) from _vt.vreplication where pos = ''`,
 		"select count(*) from information_schema.tables where table_schema='_vt' and table_name='copy_state' limit 1;",
@@ -283,7 +305,7 @@ func waitForVReplicationToCatchup(t *testing.T, vttablet *cluster.VttabletProces
 	for ind, query := range queries {
 		waitDuration := 100 * time.Millisecond
 		for {
-			qr, err := vttablet.QueryTablet(query, "", false)
+			qr, err := vttablet.QueryTabletWithDB(ctx, query, "")
 			require.NoError(t, err)
 			if len(qr.Rows) > 0 && fmt.Sprintf("%v", qr.Rows[0]) == string(results[ind]) {
 				break

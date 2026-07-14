@@ -114,38 +114,6 @@
       "Tags": [],
       "Needs": []
     },
-    "backup_pitr_xtrabackup": {
-      "File": "unused.go",
-      "Packages": [
-        "vitess.io/vitess/go/test/endtoend/backup/pitr_xtrabackup"
-      ],
-      "Args": [
-        "-timeout",
-        "30m"
-      ],
-      "Command": [],
-      "Manual": false,
-      "Shard": "backup_pitr_xtrabackup",
-      "Tags": [],
-      "Needs": [
-        "xtrabackup"
-      ]
-    },
-    "backup_pitr_mysqlshell": {
-      "File": "unused.go",
-      "Packages": [
-        "vitess.io/vitess/go/test/endtoend/backup/pitr_mysqlshell"
-      ],
-      "Args": [
-        "-timeout",
-        "30m"
-      ],
-      "Command": [],
-      "Manual": false,
-      "Shard": "backup_pitr_mysqlshell",
-      "Tags": [],
-      "Needs": []
-    },
     "backup": {
       "File": "unused.go",
       "Packages": [
@@ -167,23 +135,6 @@
       "File": "unused.go",
       "Packages": [
         "vitess.io/vitess/go/test/endtoend/backup/mysqlctld"
-      ],
-      "Args": [
-        "-timeout",
-        "30m"
-      ],
-      "Command": [],
-      "Manual": false,
-      "Shard": "21",
-      "Tags": [],
-      "Needs": [
-        "minio"
-      ]
-    },
-    "backup_s3": {
-      "File": "unused.go",
-      "Packages": [
-        "vitess.io/vitess/go/test/endtoend/backup/s3"
       ],
       "Args": [
         "-timeout",
@@ -280,78 +231,6 @@
       ],
       "Needs": []
     },
-    "onlineddl_vrepl": {
-      "File": "unused.go",
-      "Packages": [
-        "vitess.io/vitess/go/test/endtoend/onlineddl/vrepl"
-      ],
-      "Args": [
-        "-timeout",
-        "30m"
-      ],
-      "Command": [],
-      "Manual": false,
-      "Shard": "onlineddl_vrepl",
-      "Tags": [],
-      "Needs": [
-        "larger-runner",
-        "binlog-compression"
-      ]
-    },
-    "onlineddl_vrepl_stress": {
-      "File": "unused.go",
-      "Packages": [
-        "vitess.io/vitess/go/test/endtoend/onlineddl/vrepl_stress"
-      ],
-      "Args": [
-        "-timeout",
-        "30m"
-      ],
-      "Command": [],
-      "Manual": false,
-      "Shard": "onlineddl_vrepl_stress",
-      "Tags": [],
-      "Needs": [
-        "larger-runner",
-        "binlog-compression"
-      ]
-    },
-    "onlineddl_vrepl_suite": {
-      "File": "unused.go",
-      "Packages": [
-        "vitess.io/vitess/go/test/endtoend/onlineddl/vrepl_suite"
-      ],
-      "Args": [
-        "-timeout",
-        "30m"
-      ],
-      "Command": [],
-      "Manual": false,
-      "Shard": "onlineddl_vrepl_suite",
-      "Tags": [],
-      "Needs": [
-        "larger-runner",
-        "binlog-compression"
-      ]
-    },
-    "onlineddl_vrepl_stress_suite": {
-      "File": "unused.go",
-      "Packages": [
-        "vitess.io/vitess/go/test/endtoend/onlineddl/vrepl_stress_suite"
-      ],
-      "Args": [
-        "-timeout",
-        "30m"
-      ],
-      "Command": [],
-      "Manual": false,
-      "Shard": "onlineddl_vrepl_stress_suite",
-      "Tags": [],
-      "Needs": [
-        "larger-runner",
-        "binlog-compression"
-      ]
-    },
     "onlineddl_revert": {
       "File": "unused.go",
       "Packages": [
@@ -382,66 +261,6 @@
       "Tags": [],
       "Needs": []
     },
-    "onlineddl_flow": {
-      "File": "unused.go",
-      "Packages": [
-        "vitess.io/vitess/go/test/endtoend/onlineddl/flow"
-      ],
-      "Args": [
-        "-timeout",
-        "30m"
-      ],
-      "Command": [],
-      "Manual": false,
-      "Shard": "onlineddl_flow",
-      "Tags": [
-        "upgrade_downgrade_onlineddl_flow"
-      ],
-      "Needs": []
-    },
-    "schemadiff_vrepl": {
-      "File": "unused.go",
-      "Packages": [
-        "vitess.io/vitess/go/test/endtoend/schemadiff/vrepl"
-      ],
-      "Args": [
-        "-timeout",
-        "30m"
-      ],
-      "Command": [],
-      "Manual": false,
-      "Shard": "schemadiff_vrepl",
-      "Tags": [],
-      "Needs": [
-        "binlog-compression"
-      ]
-    },
-    "recovery": {
-      "File": "unused.go",
-      "Packages": [
-        "vitess.io/vitess/go/test/endtoend/recovery/unshardedrecovery"
-      ],
-      "Args": [],
-      "Command": [],
-      "Manual": false,
-      "Shard": "vtctlbackup_sharded_clustertest_heavy",
-      "Tags": [],
-      "Needs": [
-        "limit-resources"
-      ]
-    },
-    "tabletgateway_buffer_reshard": {
-      "File": "unused.go",
-      "Packages": [
-        "vitess.io/vitess/go/test/endtoend/tabletgateway/buffer/reshard"
-      ],
-      "Args": [],
-      "Command": [],
-      "Manual": false,
-      "Shard": "13",
-      "Tags": [],
-      "Needs": []
-    },
     "tabletmanager": {
       "File": "unused.go",
       "Packages": [
@@ -457,20 +276,6 @@
       "Tags": [
         "site_test"
       ],
-      "Needs": [
-        "consul"
-      ]
-    },
-    "tabletmanager_primary": {
-      "File": "unused.go",
-      "Packages": [
-        "vitess.io/vitess/go/test/endtoend/tabletmanager/primary"
-      ],
-      "Args": [],
-      "Command": [],
-      "Manual": false,
-      "Shard": "18",
-      "Tags": [],
       "Needs": [
         "consul"
       ]
@@ -506,34 +311,6 @@
       "Needs": [
         "consul"
       ]
-    },
-    "tabletmanager_throttler_topo": {
-      "File": "unused.go",
-      "Packages": [
-        "vitess.io/vitess/go/test/endtoend/tabletmanager/throttler_topo"
-      ],
-      "Args": [],
-      "Command": [],
-      "Manual": false,
-      "Shard": "tabletmanager_throttler_topo",
-      "Tags": [
-        "site_test"
-      ],
-      "Needs": []
-    },
-    "tabletmanager_tablegc": {
-      "File": "unused.go",
-      "Packages": [
-        "vitess.io/vitess/go/test/endtoend/tabletmanager/tablegc"
-      ],
-      "Args": [],
-      "Command": [],
-      "Manual": false,
-      "Shard": "tabletmanager_tablegc",
-      "Tags": [
-        "site_test"
-      ],
-      "Needs": []
     },
     "tabletmanager_disk_health_monitor": {
       "File": "unused.go",
@@ -583,47 +360,6 @@
       "Tags": [],
       "Needs": []
     },
-    "vtgate_queries_reference": {
-      "File": "unused.go",
-      "Packages": [
-        "vitess.io/vitess/go/test/endtoend/vtgate/queries/reference"
-      ],
-      "Args": [],
-      "Command": [],
-      "Manual": false,
-      "Shard": "vtgate_queries",
-      "Tags": [
-        "upgrade_downgrade_query_serving_queries_2"
-      ],
-      "Needs": []
-    },
-    "vtgate_foreignkey": {
-      "File": "unused.go",
-      "Packages": [
-        "vitess.io/vitess/go/test/endtoend/vtgate/foreignkey"
-      ],
-      "Args": [],
-      "Command": [],
-      "Manual": false,
-      "Shard": "vtgate_foreignkey_stress",
-      "Tags": [],
-      "Needs": []
-    },
-    "vtgate_foreignkey_stress": {
-      "File": "unused.go",
-      "Packages": [
-        "vitess.io/vitess/go/test/endtoend/vtgate/foreignkey/stress"
-      ],
-      "Args": [
-        "-timeout",
-        "30m"
-      ],
-      "Command": [],
-      "Manual": false,
-      "Shard": "vtgate_foreignkey_stress",
-      "Tags": [],
-      "Needs": []
-    },
     "vttest_sample": {
       "File": "unused.go",
       "Packages": [
@@ -647,20 +383,6 @@
       "Shard": "docker_cluster",
       "Tags": [],
       "Needs": []
-    },
-    "xb_recovery": {
-      "File": "recovery_test.go",
-      "Packages": [
-        "vitess.io/vitess/go/test/endtoend/recovery/xtrabackup"
-      ],
-      "Args": [],
-      "Command": [],
-      "Manual": false,
-      "Shard": "xb_recovery",
-      "Tags": [],
-      "Needs": [
-        "xtrabackup"
-      ]
     },
     "vreplication_materialize": {
       "File": "unused.go",

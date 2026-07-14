@@ -16,129 +16,103 @@ limitations under the License.
 package tabletmanager
 
 import (
-	"fmt"
-	"io"
-	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 func TestFallbackSecurityPolicy(t *testing.T) {
 	ctx := t.Context()
-	mTablet := clusterInstance.NewVttabletInstance("replica", 0, "")
-
-	// Start Mysql Processes
-	err := cluster.StartMySQL(ctx, mTablet, username, clusterInstance.TmpDirectory)
+	mTablet, err := clusterInstance.AddTablet(ctx, cell, keyspaceName, shardName, "replica")
 	require.NoError(t, err)
 
 	// Requesting an unregistered security-policy should fallback to deny-all.
-	clusterInstance.VtTabletExtraArgs = []string{"--security-policy", "bogus"}
-	err = clusterInstance.StartVttablet(mTablet, false, "SERVING", false, cell, keyspaceName, hostname, shardName)
+	err = mTablet.StopVttablet(ctx)
+	require.NoError(t, err)
+	err = mTablet.StartVttablet(ctx, "--security-policy", "bogus")
+	require.NoError(t, err)
+	err = mTablet.WaitForTabletStatus(ctx, vttabletStateTimeout, "SERVING")
 	require.NoError(t, err)
 
 	// It should deny ADMIN role.
-	url := fmt.Sprintf("http://localhost:%d/livequeryz/terminate", mTablet.HTTPPort)
-	assertNotAllowedURLTest(t, url)
+	assertNotAllowedURLTest(t, mTablet, "/livequeryz/terminate")
 
 	// It should deny MONITORING role.
-	url = fmt.Sprintf("http://localhost:%d/debug/health", mTablet.HTTPPort)
-	assertNotAllowedURLTest(t, url)
+	assertNotAllowedURLTest(t, mTablet, "/debug/health")
 
 	// It should deny DEBUGGING role.
-	url = fmt.Sprintf("http://localhost:%d/queryz", mTablet.HTTPPort)
-	assertNotAllowedURLTest(t, url)
+	assertNotAllowedURLTest(t, mTablet, "/queryz")
 
-	// Reset the VtTabletExtraArgs
-	clusterInstance.VtTabletExtraArgs = []string{}
 	// Tear down custom processes
-	killTablets(mTablet)
+	killTablets(ctx, mTablet)
 }
 
-func assertNotAllowedURLTest(t *testing.T, url string) {
-	resp, err := http.Get(url)
+func assertNotAllowedURLTest(t *testing.T, tablet *vitesst.Tablet, path string) {
+	status, body, err := tablet.MakeAPICall(t.Context(), path)
 	require.NoError(t, err)
 
-	body, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	assert.True(t, resp.StatusCode > 400)
-	assert.Contains(t, string(body), "Access denied: not allowed")
+	assert.True(t, status > 400)
+	assert.Contains(t, body, "Access denied: not allowed")
 }
 
-func assertAllowedURLTest(t *testing.T, url string) {
-	resp, err := http.Get(url)
+func assertAllowedURLTest(t *testing.T, tablet *vitesst.Tablet, path string) {
+	_, body, err := tablet.MakeAPICall(t.Context(), path)
 	require.NoError(t, err)
 
-	body, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	assert.NotContains(t, string(body), "Access denied: not allowed")
+	assert.NotContains(t, body, "Access denied: not allowed")
 }
 
 func TestDenyAllSecurityPolicy(t *testing.T) {
 	ctx := t.Context()
-	mTablet := clusterInstance.NewVttabletInstance("replica", 0, "")
-
-	// Start Mysql Processes
-	err := cluster.StartMySQL(ctx, mTablet, username, clusterInstance.TmpDirectory)
+	mTablet, err := clusterInstance.AddTablet(ctx, cell, keyspaceName, shardName, "replica")
 	require.NoError(t, err)
 
 	// Requesting a deny-all security-policy.
-	clusterInstance.VtTabletExtraArgs = []string{"--security-policy", "deny-all"}
-	err = clusterInstance.StartVttablet(mTablet, false, "SERVING", false, cell, keyspaceName, hostname, shardName)
+	err = mTablet.StopVttablet(ctx)
+	require.NoError(t, err)
+	err = mTablet.StartVttablet(ctx, "--security-policy", "deny-all")
+	require.NoError(t, err)
+	err = mTablet.WaitForTabletStatus(ctx, vttabletStateTimeout, "SERVING")
 	require.NoError(t, err)
 
 	// It should deny ADMIN role.
-	url := fmt.Sprintf("http://localhost:%d/livequeryz/terminate", mTablet.HTTPPort)
-	assertNotAllowedURLTest(t, url)
+	assertNotAllowedURLTest(t, mTablet, "/livequeryz/terminate")
 
 	// It should deny MONITORING role.
-	url = fmt.Sprintf("http://localhost:%d/debug/health", mTablet.HTTPPort)
-	assertNotAllowedURLTest(t, url)
+	assertNotAllowedURLTest(t, mTablet, "/debug/health")
 
 	// It should deny DEBUGGING role.
-	url = fmt.Sprintf("http://localhost:%d/queryz", mTablet.HTTPPort)
-	assertNotAllowedURLTest(t, url)
+	assertNotAllowedURLTest(t, mTablet, "/queryz")
 
-	// Reset the VtTabletExtraArgs
-	clusterInstance.VtTabletExtraArgs = []string{}
 	// Tear down custom processes
-	killTablets(mTablet)
+	killTablets(ctx, mTablet)
 }
 
 func TestReadOnlySecurityPolicy(t *testing.T) {
 	ctx := t.Context()
-	mTablet := clusterInstance.NewVttabletInstance("replica", 0, "")
-
-	// Start Mysql Processes
-	err := cluster.StartMySQL(ctx, mTablet, username, clusterInstance.TmpDirectory)
+	mTablet, err := clusterInstance.AddTablet(ctx, cell, keyspaceName, shardName, "replica")
 	require.NoError(t, err)
 
 	// Requesting a read-only security-policy.
-	clusterInstance.VtTabletExtraArgs = []string{"--security-policy", "read-only"}
-	err = clusterInstance.StartVttablet(mTablet, false, "SERVING", false, cell, keyspaceName, hostname, shardName)
+	err = mTablet.StopVttablet(ctx)
+	require.NoError(t, err)
+	err = mTablet.StartVttablet(ctx, "--security-policy", "read-only")
+	require.NoError(t, err)
+	err = mTablet.WaitForTabletStatus(ctx, vttabletStateTimeout, "SERVING")
 	require.NoError(t, err)
 
 	// It should deny ADMIN role.
-	url := fmt.Sprintf("http://localhost:%d/livequeryz/terminate", mTablet.HTTPPort)
-	assertNotAllowedURLTest(t, url)
+	assertNotAllowedURLTest(t, mTablet, "/livequeryz/terminate")
 
 	// It should deny MONITORING role.
-	url = fmt.Sprintf("http://localhost:%d/debug/health", mTablet.HTTPPort)
-	assertAllowedURLTest(t, url)
+	assertAllowedURLTest(t, mTablet, "/debug/health")
 
 	// It should deny DEBUGGING role.
-	url = fmt.Sprintf("http://localhost:%d/queryz", mTablet.HTTPPort)
-	assertAllowedURLTest(t, url)
+	assertAllowedURLTest(t, mTablet, "/queryz")
 
-	// Reset the VtTabletExtraArgs
-	clusterInstance.VtTabletExtraArgs = []string{}
 	// Tear down custom processes
-	killTablets(mTablet)
+	killTablets(ctx, mTablet)
 }

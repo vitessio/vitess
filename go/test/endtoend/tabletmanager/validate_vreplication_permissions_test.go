@@ -33,17 +33,19 @@ const vreplicationPermissionTimeout = 5 * time.Second
 func TestValidateVReplicationPermissions_SucceedsWithValidPermissions(t *testing.T) {
 	permissionsMu.Lock()
 	defer permissionsMu.Unlock()
-	tablet := getTablet(primaryTablet.GrpcPort)
+	tablet, err := primaryTablet.TabletProto(t.Context())
+	require.NoError(t, err)
 
 	req := &tmdatapb.ValidateVReplicationPermissionsRequest{}
-	_, err := tmClient.ValidateVReplicationPermissions(t.Context(), tablet, req)
+	_, err = tmClient.ValidateVReplicationPermissions(t.Context(), tablet, req)
 	require.NoError(t, err)
 }
 
 func TestValidateVReplicationPermissions_FailsWithoutSelectPermissions(t *testing.T) {
 	permissionsMu.Lock()
 	defer permissionsMu.Unlock()
-	tablet := getTablet(primaryTablet.GrpcPort)
+	tablet, err := primaryTablet.TabletProto(t.Context())
+	require.NoError(t, err)
 
 	// Revoke SELECT permission on the _vt.vreplication table
 	ctx := t.Context()
@@ -78,7 +80,8 @@ func TestValidateVReplicationPermissions_FailsWithoutSelectPermissions(t *testin
 func TestValidateVReplicationPermissions_FailsWithoutInsertPermissions(t *testing.T) {
 	permissionsMu.Lock()
 	defer permissionsMu.Unlock()
-	tablet := getTablet(primaryTablet.GrpcPort)
+	tablet, err := primaryTablet.TabletProto(t.Context())
+	require.NoError(t, err)
 
 	// Revoke INSERT permission on the _vt.vreplication table
 	ctx := t.Context()
@@ -113,7 +116,8 @@ func TestValidateVReplicationPermissions_FailsWithoutInsertPermissions(t *testin
 func TestValidateVReplicationPermissions_FailsWithoutUpdatePermissions(t *testing.T) {
 	permissionsMu.Lock()
 	defer permissionsMu.Unlock()
-	tablet := getTablet(primaryTablet.GrpcPort)
+	tablet, err := primaryTablet.TabletProto(t.Context())
+	require.NoError(t, err)
 
 	// Revoke UPDATE permission on the _vt.vreplication table
 	ctx := t.Context()
@@ -148,7 +152,8 @@ func TestValidateVReplicationPermissions_FailsWithoutUpdatePermissions(t *testin
 func TestValidateVReplicationPermissions_FailsWithoutDeletePermissions(t *testing.T) {
 	permissionsMu.Lock()
 	defer permissionsMu.Unlock()
-	tablet := getTablet(primaryTablet.GrpcPort)
+	tablet, err := primaryTablet.TabletProto(t.Context())
+	require.NoError(t, err)
 
 	// Revoke DELETE permission on the _vt.vreplication table
 	ctx := t.Context()
@@ -183,7 +188,8 @@ func TestValidateVReplicationPermissions_FailsWithoutDeletePermissions(t *testin
 func TestValidateVReplicationPermissions_FailsIfUserCantLogin(t *testing.T) {
 	permissionsMu.Lock()
 	defer permissionsMu.Unlock()
-	tablet := getTablet(primaryTablet.GrpcPort)
+	tablet, err := primaryTablet.TabletProto(t.Context())
+	require.NoError(t, err)
 
 	ctx := t.Context()
 	// Lock the user account to simulate some other error

@@ -25,8 +25,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/json2"
-	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/tabletgateway/buffer"
+	"vitess.io/vitess/go/test/vitesst"
 	"vitess.io/vitess/go/vt/log"
 
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -37,12 +37,12 @@ const (
 	acceptableLagSeconds = 5
 )
 
-func waitForLowLag(t *testing.T, clusterInstance *cluster.LocalProcessCluster, keyspace, workflow string) {
+func waitForLowLag(t *testing.T, clusterInstance *vitesst.Cluster, keyspace, workflow string) {
 	var lagSeconds int64
 	waitDuration := 500 * time.Millisecond
 	duration := maxWait
 	for duration > 0 {
-		output, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("Workflow", "--keyspace", keyspace, "show", "--workflow", workflow)
+		output, err := clusterInstance.Vtctld().ExecuteCommandWithOutput(t.Context(), "Workflow", "--keyspace", keyspace, "show", "--workflow", workflow)
 		require.NoError(t, err)
 
 		var resp vtctldatapb.GetWorkflowsResponse
@@ -67,13 +67,16 @@ func waitForLowLag(t *testing.T, clusterInstance *cluster.LocalProcessCluster, k
 	}
 }
 
-func reshard02(t *testing.T, clusterInstance *cluster.LocalProcessCluster, keyspaceName string, reads, writes buffer.QueryEngine) {
-	keyspace := &cluster.Keyspace{Name: keyspaceName}
-	err := clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, false, clusterInstance.Cell)
-	require.NoError(t, err)
+func reshard02(t *testing.T, clusterInstance *vitesst.Cluster, keyspaceName string, reads, writes buffer.QueryEngine) {
+	ctx := t.Context()
+
+	for _, shardName := range []string{"-80", "80-"} {
+		_, err := clusterInstance.AddShard(ctx, keyspaceName, shardName, 1, 0)
+		require.NoError(t, err)
+	}
 	workflowName := "buf2buf"
 
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("Reshard", "Create", "--target-keyspace", keyspaceName, "--workflow", workflowName, "--source-shards", "0", "--target-shards", "-80,80-")
+	err := clusterInstance.Vtctld().ExecuteCommand(ctx, "Reshard", "Create", "--target-keyspace", keyspaceName, "--workflow", workflowName, "--source-shards", "0", "--target-shards", "-80,80-")
 	require.NoError(t, err)
 
 	// Execute the resharding operation
@@ -81,13 +84,13 @@ func reshard02(t *testing.T, clusterInstance *cluster.LocalProcessCluster, keysp
 	writes.ExpectQueries(25)
 
 	waitForLowLag(t, clusterInstance, keyspaceName, workflowName)
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("Reshard", "SwitchTraffic", "--target-keyspace", keyspaceName, "--workflow", workflowName, "--tablet-types=rdonly,replica")
+	err = clusterInstance.Vtctld().ExecuteCommand(ctx, "Reshard", "SwitchTraffic", "--target-keyspace", keyspaceName, "--workflow", workflowName, "--tablet-types=rdonly,replica")
 	require.NoError(t, err)
 
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("Reshard", "SwitchTraffic", "--target-keyspace", keyspaceName, "--workflow", workflowName, "--tablet-types=primary")
+	err = clusterInstance.Vtctld().ExecuteCommand(ctx, "Reshard", "SwitchTraffic", "--target-keyspace", keyspaceName, "--workflow", workflowName, "--tablet-types=primary")
 	require.NoError(t, err)
 
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("Reshard", "--target-keyspace", keyspaceName, "--workflow", workflowName, "Complete")
+	err = clusterInstance.Vtctld().ExecuteCommand(ctx, "Reshard", "--target-keyspace", keyspaceName, "--workflow", workflowName, "Complete")
 	require.NoError(t, err)
 }
 

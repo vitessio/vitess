@@ -22,26 +22,27 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/utils"
-	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/test/vitesst"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 var (
-	clusterInstance      *cluster.LocalProcessCluster
+	clusterInstance      *vitesst.Cluster
 	vtParams             mysql.ConnParams
 	mysqlParams          mysql.ConnParams
-	vtgateGrpcAddress    string
 	shardedKs            = "ks"
 	shardScopedKs        = "sks"
 	unshardedKs          = "uks"
 	unshardedUnmanagedKs = "unmanaged_uks"
-	Cell                 = "test"
 
 	//go:embed schema.sql
 	schemaSQL string
@@ -94,6 +95,15 @@ var (
 	}
 )
 
+const (
+	// mysqlVersion is the MySQL version the cluster and the comparison mysqld run.
+	mysqlVersion = "8.4"
+
+	// extraMyCnfPath is where extra_my.cnf lands inside the containers whose
+	// mysqld reads it.
+	extraMyCnfPath = "/vt/files/extra_my.cnf"
+)
+
 // fkReference stores a foreign key reference from one table to another.
 type fkReference struct {
 	parentTable string
@@ -104,102 +114,178 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		// Setup EXTRA_MY_CNF for foreign key tests
-		err := setupExtraMyConfig()
+		ctx := context.Background()
+
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithMySQLVersion(mysqlVersion),
+			vitesst.WithTabletFiles(vitesst.ContainerFile{
+				HostPath:      "extra_my.cnf",
+				ContainerPath: extraMyCnfPath,
+			}),
+			vitesst.WithTabletEnv(map[string]string{"EXTRA_MY_CNF": extraMyCnfPath}),
+			vitesst.WithKeyspace(shardedKs).
+				WithShardNames("-80", "80-").
+				WithReplicas(1).
+				WithSchema(schemaSQL).
+				WithVSchema(shardedVSchema),
+			vitesst.WithKeyspace(shardScopedKs).
+				WithShardNames("-80", "80-").
+				WithReplicas(1).
+				WithSchema(schemaSQL).
+				WithVSchema(shardScopedVSchema),
+			vitesst.WithKeyspace(unshardedKs).
+				WithShardNames("0").
+				WithReplicas(1).
+				WithSchema(schemaSQL).
+				WithVSchema(unshardedVSchema),
+			vitesst.WithKeyspace(unshardedUnmanagedKs).
+				WithShardNames("0").
+				WithReplicas(1).
+				WithSchema(schemaSQL).
+				WithVSchema(unshardedUnmanagedVSchema),
+		)
 		if err != nil {
-			fmt.Printf("Failed to setup extra MySQL config: %v\n", err)
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
 
-		clusterInstance = cluster.NewCluster(Cell, "localhost")
-		defer clusterInstance.Teardown()
-
-		// Start topo server
-		err = clusterInstance.StartTopo()
+		cleanup, err := cluster.Start(ctx)
 		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
+
+		if err = cluster.Vtctld().ExecuteCommand(ctx, "RebuildVSchemaGraph"); err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
 
-		// Start keyspace
-		cell := clusterInstance.Cell
-		sKs := &cluster.Keyspace{
-			Name:      shardedKs,
-			SchemaSQL: schemaSQL,
-			VSchema:   shardedVSchema,
-		}
+		clusterInstance = cluster
+		vtParams = cluster.VTParams(ctx, "")
 
-		err = clusterInstance.StartKeyspace(*sKs, []string{"-80", "80-"}, 1, false, cell)
+		connParams, closer, err := newComparisonMySQL(ctx, cluster, shardedKs, schemaSQL)
 		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-
-		// Start shard-scoped keyspace
-		ssKs := &cluster.Keyspace{
-			Name:      shardScopedKs,
-			SchemaSQL: schemaSQL,
-			VSchema:   shardScopedVSchema,
-		}
-
-		err = clusterInstance.StartKeyspace(*ssKs, []string{"-80", "80-"}, 1, false, cell)
-		if err != nil {
-			return 1
-		}
-
-		uKs := &cluster.Keyspace{
-			Name:      unshardedKs,
-			SchemaSQL: schemaSQL,
-			VSchema:   unshardedVSchema,
-		}
-		err = clusterInstance.StartUnshardedKeyspace(*uKs, 1, false, cell)
-		if err != nil {
-			return 1
-		}
-
-		unmanagedKs := &cluster.Keyspace{
-			Name:      unshardedUnmanagedKs,
-			SchemaSQL: schemaSQL,
-			VSchema:   unshardedUnmanagedVSchema,
-		}
-		err = clusterInstance.StartUnshardedKeyspace(*unmanagedKs, 1, false, cell)
-		if err != nil {
-			return 1
-		}
-
-		err = clusterInstance.VtctldClientProcess.ExecuteCommand("RebuildVSchemaGraph")
-		if err != nil {
-			return 1
-		}
-
-		// Start vtgate
-		err = clusterInstance.StartVtgate()
-		if err != nil {
-			return 1
-		}
-		vtParams = mysql.ConnParams{
-			Host: clusterInstance.Hostname,
-			Port: clusterInstance.VtgateMySQLPort,
-		}
-		vtgateGrpcAddress = fmt.Sprintf("%s:%d", clusterInstance.Hostname, clusterInstance.VtgateGrpcPort)
-
-		connParams, closer, err := utils.NewMySQL(clusterInstance, shardedKs, schemaSQL)
-		if err != nil {
-			fmt.Println(err)
-			return 1
-		}
-		defer closer()
+		defer func() {
+			if err := closer(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "comparison mysqld teardown:", err)
+			}
+		}()
 		mysqlParams = connParams
 		return m.Run()
 	}()
 	os.Exit(exitCode)
 }
 
-func start(t *testing.T) (utils.MySQLCompare, func()) {
-	mcmp, err := utils.NewMySQLCompare(t, vtParams, mysqlParams)
+// newComparisonMySQL starts the standalone mysqld the tests compare Vitess
+// against. It reads extra_my.cnf, so foreign keys that reference non-standard
+// keys are accepted, and it applies the given schema to the database.
+func newComparisonMySQL(ctx context.Context, cluster *vitesst.Cluster, dbName string, schema string) (mysql.ConnParams, func(context.Context) error, error) {
+	const (
+		mysqlUID    = 1
+		mysqlPort   = 3306
+		dataRoot    = "/vt/vtdataroot"
+		initPath    = "/vt/files/init_compare.sql"
+		dbaUser     = "vt_dba"
+		startupWait = 3 * time.Minute
+	)
+
+	initSQL := fmt.Sprintf(`SET GLOBAL super_read_only='OFF';
+CREATE DATABASE IF NOT EXISTS %s;
+CREATE USER '%s'@'%%';
+GRANT ALL ON *.* TO '%s'@'%%' WITH GRANT OPTION;
+`, dbName, dbaUser, dbaUser)
+
+	socket := fmt.Sprintf("%s/vt_%010d/mysql.sock", dataRoot, mysqlUID)
+	script := fmt.Sprintf(
+		"mysqlctl --tablet-uid %d --mysql-port %d --log-format text init --init-db-sql-file %s && sleep infinity",
+		mysqlUID, mysqlPort, initPath,
+	)
+	probe := []string{"mysql", "--socket", socket, "-u", dbaUser, "-e", "SELECT 1"}
+
+	ctr, err := testcontainers.Run(ctx, vitesst.Image(mysqlVersion),
+		testcontainers.WithEntrypoint("bash", "-c", script),
+		testcontainers.WithEnv(map[string]string{"EXTRA_MY_CNF": extraMyCnfPath}),
+		testcontainers.WithExposedPorts(fmt.Sprintf("%d/tcp", mysqlPort)),
+		testcontainers.WithTmpfs(map[string]string{dataRoot: "uid=999,gid=999"}),
+		testcontainers.WithFiles(
+			testcontainers.ContainerFile{HostFilePath: "extra_my.cnf", ContainerFilePath: extraMyCnfPath, FileMode: 0o644},
+			testcontainers.ContainerFile{Reader: strings.NewReader(initSQL), ContainerFilePath: initPath, FileMode: 0o644},
+		),
+		testcontainers.WithWaitStrategyAndDeadline(startupWait,
+			wait.ForExec(probe).
+				WithStartupTimeout(startupWait).
+				WithPollInterval(100*time.Millisecond),
+		),
+	)
+	if err != nil {
+		return mysql.ConnParams{}, nil, err
+	}
+
+	cleanup := func(ctx context.Context) error {
+		return testcontainers.TerminateContainer(ctr, testcontainers.StopContext(ctx), testcontainers.StopTimeout(0))
+	}
+
+	fail := func(err error) (mysql.ConnParams, func(context.Context) error, error) {
+		_ = cleanup(ctx)
+		return mysql.ConnParams{}, nil, err
+	}
+
+	host, err := ctr.Host(ctx)
+	if err != nil {
+		return fail(err)
+	}
+	mapped, err := ctr.MappedPort(ctx, fmt.Sprintf("%d/tcp", mysqlPort))
+	if err != nil {
+		return fail(err)
+	}
+
+	params := mysql.ConnParams{
+		Host:   host,
+		Port:   int(mapped.Num()),
+		Uname:  dbaUser,
+		DbName: dbName,
+	}
+	if err = applyComparisonSchema(ctx, params, schema); err != nil {
+		return fail(err)
+	}
+	return params, cleanup, nil
+}
+
+// applyComparisonSchema applies the schema statements to the comparison mysqld.
+func applyComparisonSchema(ctx context.Context, params mysql.ConnParams, schema string) error {
+	conn, err := mysql.Connect(ctx, &params)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	statements, err := sqlparser.NewTestParser().SplitStatementToPieces(schema)
+	if err != nil {
+		return err
+	}
+	for _, statement := range statements {
+		if _, err := conn.ExecuteFetch(statement, 1, false); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func start(t *testing.T) (vitesst.MySQLCompare, func()) {
+	mcmp, err := vitesst.NewMySQLCompare(t.Context(), t, vtParams, mysqlParams)
 	require.NoError(t, err)
 
 	deleteAll := func() {
 		clearOutAllData(t, mcmp.VtConn, mcmp.MySQLConn)
-		_ = utils.Exec(t, mcmp.VtConn, "use `ks`")
+		_ = vitesst.Exec(t, mcmp.VtConn, "use `ks`")
 	}
 
 	deleteAll()
@@ -225,10 +311,10 @@ func clearOutAllData(t testing.TB, vtConn *mysql.Conn, mysqlConn *mysql.Conn) {
 	tables = append(tables, fkTables...)
 	keyspaces := []string{`ks/-80`, `ks/80-`, `sks/-80`, `sks/80-`}
 	for _, keyspace := range keyspaces {
-		_ = utils.Exec(t, vtConn, fmt.Sprintf("use `%v`", keyspace))
+		_ = vitesst.Exec(t, vtConn, fmt.Sprintf("use `%v`", keyspace))
 		for _, table := range tables {
-			_, _ = utils.ExecAllowError(t, vtConn, "delete /*+ SET_VAR(foreign_key_checks=OFF) */ from "+table)
-			_, _ = utils.ExecAllowError(t, mysqlConn, "delete /*+ SET_VAR(foreign_key_checks=OFF) */ from "+table)
+			_, _ = vitesst.ExecAllowError(t, vtConn, "delete /*+ SET_VAR(foreign_key_checks=OFF) */ from "+table)
+			_, _ = vitesst.ExecAllowError(t, mysqlConn, "delete /*+ SET_VAR(foreign_key_checks=OFF) */ from "+table)
 		}
 	}
 
@@ -236,35 +322,10 @@ func clearOutAllData(t testing.TB, vtConn *mysql.Conn, mysqlConn *mysql.Conn) {
 	tables = append(tables, fkTables...)
 	keyspaces = []string{`uks`, `unmanaged_uks`}
 	for _, keyspace := range keyspaces {
-		_ = utils.Exec(t, vtConn, fmt.Sprintf("use `%v`", keyspace))
+		_ = vitesst.Exec(t, vtConn, fmt.Sprintf("use `%v`", keyspace))
 		for _, table := range tables {
-			_, _ = utils.ExecAllowError(t, vtConn, "delete /*+ SET_VAR(foreign_key_checks=OFF) */ from "+table)
-			_, _ = utils.ExecAllowError(t, mysqlConn, "delete /*+ SET_VAR(foreign_key_checks=OFF) */ from "+table)
+			_, _ = vitesst.ExecAllowError(t, vtConn, "delete /*+ SET_VAR(foreign_key_checks=OFF) */ from "+table)
+			_, _ = vitesst.ExecAllowError(t, mysqlConn, "delete /*+ SET_VAR(foreign_key_checks=OFF) */ from "+table)
 		}
 	}
-}
-
-// setupExtraMyConfig sets the EXTRA_MY_CNF environment variable to point to our static config file
-func setupExtraMyConfig() error {
-	// Get the absolute path to the config file in the same directory as this test
-	wd, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("failed to get working directory: %v", err)
-	}
-
-	// The config file is in the same directory as this test file
-	configPath := wd + "/extra_my.cnf"
-
-	// Verify the file exists
-	if _, err := os.Stat(configPath); err != nil {
-		return fmt.Errorf("config file does not exist at %s: %v", configPath, err)
-	}
-
-	// Set the environment variable
-	if err = os.Setenv("EXTRA_MY_CNF", configPath); err != nil {
-		return fmt.Errorf("failed to set EXTRA_MY_CNF: %v", err)
-	}
-
-	log.Info("Set EXTRA_MY_CNF to: " + configPath)
-	return nil
 }

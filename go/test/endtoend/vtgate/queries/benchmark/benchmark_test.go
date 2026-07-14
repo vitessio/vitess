@@ -30,7 +30,7 @@ import (
 	mapsx "golang.org/x/exp/maps"
 	"google.golang.org/protobuf/encoding/protojson"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/test/vitesst"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
@@ -137,7 +137,7 @@ func BenchmarkShardedTblNoLookup(b *testing.B) {
 		insStmt := tq.getInsertQuery(rows)
 		b.Run(fmt.Sprintf("4-shards-%d-rows", rows), func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
-				_ = utils.Exec(b, conn, insStmt)
+				_ = vitesst.Exec(b, conn, insStmt)
 			}
 		})
 	}
@@ -155,12 +155,12 @@ func BenchmarkShardedTblUpdateIn(b *testing.B) {
 		intTyp:    intType,
 	}
 	insStmt := tq.getInsertQuery(10000)
-	_ = utils.Exec(b, conn, insStmt)
+	_ = vitesst.Exec(b, conn, insStmt)
 	for _, rows := range []int{1, 10, 100, 500, 1000, 5000, 10000} {
 		updStmt := tq.getUpdateQuery(rows)
 		b.Run(fmt.Sprintf("4-shards-%d-rows", rows), func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
-				_ = utils.Exec(b, conn, updStmt)
+				_ = vitesst.Exec(b, conn, updStmt)
 			}
 		})
 	}
@@ -174,11 +174,11 @@ func BenchmarkShardedTblDeleteIn(b *testing.B) {
 	}
 	for _, rows := range []int{1, 10, 100, 500, 1000, 5000, 10000} {
 		insStmt := tq.getInsertQuery(rows)
-		_ = utils.Exec(b, conn, insStmt)
+		_ = vitesst.Exec(b, conn, insStmt)
 		delStmt := tq.getDeleteQuery(rows)
 		b.Run(fmt.Sprintf("4-shards-%d-rows", rows), func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
-				_ = utils.Exec(b, conn, delStmt)
+				_ = vitesst.Exec(b, conn, delStmt)
 			}
 		})
 	}
@@ -193,15 +193,15 @@ func BenchmarkShardedAggrPushDown(b *testing.B) {
 	for _, user := range sizes {
 		for _, userExtra := range sizes {
 			insert1, insert2 := generateInserts(user, userExtra)
-			_ = utils.Exec(b, conn, insert1)
-			_ = utils.Exec(b, conn, insert2)
+			_ = vitesst.Exec(b, conn, insert1)
+			_ = vitesst.Exec(b, conn, insert2)
 			b.Run(fmt.Sprintf("user-%d-user_extra-%d", user, userExtra), func(b *testing.B) {
 				for i := 0; i < b.N; i++ {
-					_ = utils.Exec(b, conn, "select sum(user.type) from user join user_extra on user.team_id = user_extra.id group by user_extra.id order by user_extra.id")
+					_ = vitesst.Exec(b, conn, "select sum(user.type) from user join user_extra on user.team_id = user_extra.id group by user_extra.id order by user_extra.id")
 				}
 			})
-			_ = utils.Exec(b, conn, deleteUser)
-			_ = utils.Exec(b, conn, deleteUserExtra)
+			_ = vitesst.Exec(b, conn, deleteUser)
+			_ = vitesst.Exec(b, conn, deleteUserExtra)
 		}
 	}
 }
@@ -249,7 +249,7 @@ func BenchmarkMirror(b *testing.B) {
 		// Set up MoveTables workflows, which is (at present) the only way to set up
 		// mirror rules.
 		for tks, tbl := range ksTables {
-			output, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(
+			output, err := clusterInstance.Vtctld().ExecuteCommandWithOutput(b.Context(),
 				"MoveTables", "--target-keyspace", tks, "--workflow", fmt.Sprintf("%s2%s", sKs1, tks),
 				"create", "--source-keyspace", sKs1, "--tables", tbl)
 			require.NoError(b, err, output)
@@ -260,7 +260,7 @@ func BenchmarkMirror(b *testing.B) {
 		maps.Copy(pending, ksTables)
 		for len(pending) > 0 {
 			for tks := range ksTables {
-				output, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(
+				output, err := clusterInstance.Vtctld().ExecuteCommandWithOutput(b.Context(),
 					"Workflow", "--keyspace", tks, "show", "--workflow", fmt.Sprintf("%s2%s", sKs1, tks))
 				require.NoError(b, err, output)
 
@@ -371,7 +371,7 @@ func BenchmarkMirror(b *testing.B) {
 
 func mirrorTraffic(b *testing.B, targetKeyspaces []string, percent float32) {
 	for _, tks := range targetKeyspaces {
-		output, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(
+		output, err := clusterInstance.Vtctld().ExecuteCommandWithOutput(b.Context(),
 			"MoveTables", "--target-keyspace", tks, "--workflow", fmt.Sprintf("%s2%s", sKs1, tks),
 			"mirrortraffic", "--percent", fmt.Sprintf("%.02f", percent))
 		require.NoError(b, err, output)

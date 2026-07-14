@@ -32,28 +32,21 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"math/rand/v2"
-	"net/http"
 	"sync"
 	"testing"
 	"time"
-
-	"vitess.io/vitess/go/test/endtoend/utils"
-
-	"vitess.io/vitess/go/vt/log"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/vitesst"
+	"vitess.io/vitess/go/vt/log"
 )
 
 const (
 	keyspaceUnshardedName = "ks1"
-	cell                  = "zone1"
-	hostname              = "localhost"
 	sqlSchema             = `
 	create table buffer(
 		id BIGINT NOT NULL,
@@ -211,30 +204,18 @@ func updateExecute(c *threadParams, conn *mysql.Conn) error {
 	return nil
 }
 
-func (bt *BufferingTest) createCluster() (*cluster.LocalProcessCluster, int) {
-	clusterInstance := cluster.NewCluster(cell, hostname)
+func (bt *BufferingTest) createCluster(t *testing.T) (*vitesst.Cluster, func(context.Context) error, error) {
+	ctx := t.Context()
 
-	// Start topo server
-	clusterInstance.VtctldExtraArgs = []string{"--remote-operation-timeout", "30s", "--topo-etcd-lease-ttl", "40"}
-	if err := clusterInstance.StartTopo(); err != nil {
-		return nil, 1
-	}
-
-	// Start keyspace
-	keyspace := &cluster.Keyspace{
-		Name:      keyspaceUnshardedName,
-		SchemaSQL: sqlSchema,
-		VSchema:   bt.VSchema,
-	}
-	clusterInstance.VtTabletExtraArgs = []string{
-		"--health-check-interval", "1s",
-		"--queryserver-config-transaction-timeout", "20s",
-	}
-	if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false, clusterInstance.Cell); err != nil {
-		return nil, 1
+	keyspace := vitesst.WithKeyspace(keyspaceUnshardedName).
+		WithShardNames("0").
+		WithReplicas(1).
+		WithSchema(sqlSchema)
+	if bt.VSchema != "" {
+		keyspace = keyspace.WithVSchema(bt.VSchema)
 	}
 
-	clusterInstance.VtGateExtraArgs = []string{
+	vtgateArgs := []string{
 		"--enable-buffer",
 		// Long timeout in case failover is slow.
 		"--buffer-window", "10m",
@@ -243,14 +224,23 @@ func (bt *BufferingTest) createCluster() (*cluster.LocalProcessCluster, int) {
 		"--tablet-refresh-interval", "1s",
 		"--buffer-drain-concurrency", "4",
 	}
-	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, bt.VtGateExtraArgs...)
+	vtgateArgs = append(vtgateArgs, bt.VtGateExtraArgs...)
 
-	// Start vtgate
-	clusterInstance.VtGatePlannerVersion = 0
-	if err := clusterInstance.StartVtgate(); err != nil {
-		return nil, 1
+	clusterInstance, err := vitesst.NewCluster(
+		keyspace,
+		vitesst.WithVTCtldArgs("--remote-operation-timeout", "30s", "--topo-etcd-lease-ttl", "40"),
+		vitesst.WithVTTabletArgs(
+			"--health-check-interval", "1s",
+			"--queryserver-config-transaction-timeout", "20s",
+		),
+		vitesst.WithVTGateArgs(vtgateArgs...),
+	)
+	if err != nil {
+		return nil, nil, err
 	}
-	return clusterInstance, 0
+
+	cleanup, err := clusterInstance.Start(ctx)
+	return clusterInstance, cleanup, err
 }
 
 type QueryEngine interface {
@@ -259,7 +249,7 @@ type QueryEngine interface {
 
 type BufferingTest struct {
 	Assert   func(t *testing.T, shard string, stats *VTGateBufferingStats)
-	Failover func(t *testing.T, cluster *cluster.LocalProcessCluster, keyspace string, reads, writes QueryEngine)
+	Failover func(t *testing.T, cluster *vitesst.Cluster, keyspace string, reads, writes QueryEngine)
 
 	ReserveConn bool
 	SlowQueries bool
@@ -271,16 +261,23 @@ type BufferingTest struct {
 }
 
 func (bt *BufferingTest) Test(t *testing.T) {
-	clusterInstance, exitCode := bt.createCluster()
-	if exitCode != 0 {
-		t.Fatal("failed to start cluster")
-	}
-	defer clusterInstance.Teardown()
+	ctx := t.Context()
 
-	vtParams := mysql.ConnParams{
-		Host: clusterInstance.Hostname,
-		Port: clusterInstance.VtgateMySQLPort,
+	clusterInstance, cleanup, err := bt.createCluster(t)
+	if clusterInstance != nil {
+		t.Cleanup(func() {
+			cleanupCtx := context.WithoutCancel(ctx)
+			if t.Failed() {
+				clusterInstance.DumpDiagnostics(cleanupCtx, t.Logf)
+			}
+			if cleanupErr := cleanup(cleanupCtx); cleanupErr != nil {
+				t.Logf("cluster teardown: %v", cleanupErr)
+			}
+		})
 	}
+	require.NoError(t, err)
+
+	vtParams := clusterInstance.VTParams(ctx, "")
 
 	// Healthcheck interval on tablet is set to 1s, so sleep for 2s
 	time.Sleep(2 * time.Second)
@@ -289,8 +286,8 @@ func (bt *BufferingTest) Test(t *testing.T) {
 	defer conn.Close()
 
 	// Insert two rows for the later threads (critical read, update).
-	utils.Exec(t, conn, fmt.Sprintf("INSERT INTO buffer (id, msg) VALUES (%d, %s)", criticalReadRowID, "'critical read'"))
-	utils.Exec(t, conn, fmt.Sprintf("INSERT INTO buffer (id, msg) VALUES (%d, %s)", updateRowID, "'update'"))
+	vitesst.Exec(t, conn, fmt.Sprintf("INSERT INTO buffer (id, msg) VALUES (%d, %s)", criticalReadRowID, "'critical read'"))
+	vitesst.Exec(t, conn, fmt.Sprintf("INSERT INTO buffer (id, msg) VALUES (%d, %s)", updateRowID, "'update'"))
 
 	// Start both threads.
 	readThreadInstance := &threadParams{
@@ -346,16 +343,13 @@ func (bt *BufferingTest) Test(t *testing.T) {
 
 	// At least one thread should have been buffered.
 	// This may fail if a failover is too fast. Add retries then.
-	resp, err := http.Get(clusterInstance.VtgateProcess.VerifyURL)
+	status, body, err := clusterInstance.VTGate().MakeAPICall(ctx, "/debug/vars")
 	require.NoError(t, err)
-	defer resp.Body.Close()
 
-	require.Equal(t, 200, resp.StatusCode)
+	require.Equal(t, 200, status)
 
 	var metadata VTGateBufferingStats
-	respByte, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-	err = json.Unmarshal(respByte, &metadata)
+	err = json.Unmarshal([]byte(body), &metadata)
 	require.NoError(t, err)
 
 	label := fmt.Sprintf("%s.%s", keyspaceUnshardedName, "0")

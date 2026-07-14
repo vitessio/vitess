@@ -29,7 +29,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/test/vitesst"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
@@ -276,7 +276,7 @@ func (fz *fuzzer) runFuzzerThread(t *testing.T, keyspace string, fuzzerThreadId 
 		fz.wg.Done()
 	}()
 	// Create a MySQL Compare that connects to both Vitess and MySQL and runs the queries against both.
-	mcmp, err := utils.NewMySQLCompare(t, vtParams, mysqlParams)
+	mcmp, err := vitesst.NewMySQLCompare(t.Context(), t, vtParams, mysqlParams)
 	if !assert.NoError(t, err) {
 		return
 	}
@@ -292,19 +292,19 @@ func (fz *fuzzer) runFuzzerThread(t *testing.T, keyspace string, fuzzerThreadId 
 		}
 		defer vitessDb.Close()
 		// Open a similar connection to MySQL
-		mysqlDb, err = sql.Open("mysql", fmt.Sprintf("%v:%v@unix(%s)/%s", mysqlParams.Uname, mysqlParams.Pass, mysqlParams.UnixSocket, mysqlParams.DbName))
+		mysqlDb, err = sql.Open("mysql", fmt.Sprintf("%v:%v@tcp(%s:%v)/%s", mysqlParams.Uname, mysqlParams.Pass, mysqlParams.Host, mysqlParams.Port, mysqlParams.DbName))
 		if !assert.NoError(t, err) {
 			return
 		}
 		defer mysqlDb.Close()
 	}
 	// Set the correct keyspace to use from VtGates.
-	_ = utils.Exec(t, mcmp.VtConn, fmt.Sprintf("use `%v`", keyspace))
+	_ = vitesst.Exec(t, mcmp.VtConn, fmt.Sprintf("use `%v`", keyspace))
 	if vitessDb != nil {
 		_, _ = vitessDb.Exec(fmt.Sprintf("use `%v`", keyspace))
 	}
 	if fz.queryFormat == OlapSQLQueries {
-		_ = utils.Exec(t, mcmp.VtConn, "set workload = olap")
+		_ = vitesst.Exec(t, mcmp.VtConn, "set workload = olap")
 	}
 	for {
 		// If fuzzer thread is marked to be stopped, then we should exit this go routine.
@@ -331,14 +331,14 @@ func (fz *fuzzer) runFuzzerThread(t *testing.T, keyspace string, fuzzerThreadId 
 // We handle 2 query formats in this function:
 //  1. SQLQueries: DML queries are run as a single SQL query.
 //  2. PreparedStatmentQueries: We execute a prepared statement as a SQL query, SET user defined variables and then Execute the DML.
-func (fz *fuzzer) generateAndExecuteStatementQuery(t *testing.T, mcmp utils.MySQLCompare) (exit bool) {
+func (fz *fuzzer) generateAndExecuteStatementQuery(t *testing.T, mcmp vitesst.MySQLCompare) (exit bool) {
 	// Get a query and execute it.
 	queries := fz.generateQuery()
 	// We get a set of queries only when we are using prepared statements, which require running `SET` queries before running the actual DML query.
 	for _, query := range queries {
 		// When the concurrency is 1, then we run the query both on MySQL and Vitess.
 		if fz.concurrency == 1 {
-			_, _ = mcmp.ExecAllowAndCompareError(query, utils.CompareOptions{IgnoreRowsAffected: true})
+			_, _ = mcmp.ExecAllowAndCompareError(query, vitesst.CompareOptions{IgnoreRowsAffected: true})
 			// If t is marked failed, we have encountered our first failure.
 			// Let's collect the required information and finish execution.
 			if t.Failed() {
@@ -351,7 +351,7 @@ func (fz *fuzzer) generateAndExecuteStatementQuery(t *testing.T, mcmp utils.MySQ
 			}
 		} else {
 			// When we are running concurrent threads, then we run all the queries on Vitess.
-			_, _ = utils.ExecAllowError(t, mcmp.VtConn, query)
+			_, _ = vitesst.ExecAllowError(t, mcmp.VtConn, query)
 		}
 	}
 	return false
@@ -360,7 +360,7 @@ func (fz *fuzzer) generateAndExecuteStatementQuery(t *testing.T, mcmp utils.MySQ
 // generateAndExecutePreparedPacketQuery generates a query and runs it on Vitess (and possibly MySQL).
 // This function handles the query format PreparedStatementPacket. Here we send the prepared statement as a COM_STMT_PREPARE packet.
 // Following which we execute it. To this end, we use the go-sql-driver.
-func (fz *fuzzer) generateAndExecutePreparedPacketQuery(t *testing.T, mysqlDB *sql.DB, vitessDb *sql.DB, mcmp utils.MySQLCompare) bool {
+func (fz *fuzzer) generateAndExecutePreparedPacketQuery(t *testing.T, mysqlDB *sql.DB, vitessDb *sql.DB, mcmp vitesst.MySQLCompare) bool {
 	query, params := fz.generateParameterizedQuery()
 	// When the concurrency is 1, then we run the query both on MySQL and Vitess.
 	if fz.concurrency == 1 {
@@ -728,7 +728,7 @@ func TestFkFuzzTest(t *testing.T) {
 							t.Skip("Skip test since we don't have sharded foreign key support yet")
 						}
 						// Set the correct keyspace to use from VtGates.
-						_ = utils.Exec(t, mcmp.VtConn, fmt.Sprintf("use `%v`", keyspace))
+						_ = vitesst.Exec(t, mcmp.VtConn, fmt.Sprintf("use `%v`", keyspace))
 
 						// Ensure that the Vitess database is originally empty
 						ensureDatabaseState(t, mcmp.VtConn, true)

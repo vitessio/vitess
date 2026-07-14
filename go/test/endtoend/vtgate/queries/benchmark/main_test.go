@@ -28,18 +28,15 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
+	clusterInstance *vitesst.Cluster
 	vtParams        mysql.ConnParams
-	mysqlParams     mysql.ConnParams
 	sKs1            = "sks1"
 	sKs2            = "sks2"
 	sKs3            = "sks3"
-	cell            = "test"
 
 	//go:embed sharded_schema1.sql
 	sSchemaSQL1 string
@@ -68,58 +65,40 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(cell, "localhost")
-		defer clusterInstance.Teardown()
+		ctx := context.Background()
 
-		// Start topo server
-		err := clusterInstance.StartTopo()
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithKeyspace(sKs1).
+				WithShardNames(shards4...).
+				WithSchema(sSchemaSQL1).
+				WithVSchema(sVSchema1),
+			vitesst.WithKeyspace(sKs2).
+				WithShardNames(shards4...).
+				WithSchema(sSchemaSQL2).
+				WithVSchema(sVSchema2),
+			vitesst.WithKeyspace(sKs3).
+				WithShardNames(shards4...).
+				WithSchema(sSchemaSQL3).
+				WithVSchema(sVSchema3),
+		)
 		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
 
-		// Start sharded keyspace 1
-		sKeyspace1 := &cluster.Keyspace{
-			Name:      sKs1,
-			SchemaSQL: sSchemaSQL1,
-			VSchema:   sVSchema1,
-		}
-
-		err = clusterInstance.StartKeyspace(*sKeyspace1, shards4, 0, false, clusterInstance.Cell)
+		cleanup, err := cluster.Start(ctx)
 		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
 
-		// Start sharded keyspace 2
-		sKeyspace2 := &cluster.Keyspace{
-			Name:      sKs2,
-			SchemaSQL: sSchemaSQL2,
-			VSchema:   sVSchema2,
-		}
-
-		err = clusterInstance.StartKeyspace(*sKeyspace2, shards4, 0, false, clusterInstance.Cell)
-		if err != nil {
-			return 1
-		}
-
-		// Start sharded keyspace 3
-		sKeyspace3 := &cluster.Keyspace{
-			Name:      sKs3,
-			SchemaSQL: sSchemaSQL3,
-			VSchema:   sVSchema3,
-		}
-
-		err = clusterInstance.StartKeyspace(*sKeyspace3, shards4, 0, false, clusterInstance.Cell)
-		if err != nil {
-			return 1
-		}
-
-		// Start vtgate
-		err = clusterInstance.StartVtgate()
-		if err != nil {
-			return 1
-		}
-
-		vtParams = clusterInstance.GetVTParams("@primary")
+		clusterInstance = cluster
+		vtParams = cluster.VTParams(ctx, "@primary")
 
 		return m.Run()
 	}()
@@ -139,7 +118,7 @@ func start(b *testing.B) (*mysql.Conn, func()) {
 			sKs3 + ".mirror_tbl2",
 		}
 		for _, table := range tables {
-			_, _ = utils.ExecAllowError(b, conn, "delete from "+table)
+			_, _ = vitesst.ExecAllowError(b, conn, "delete from "+table)
 		}
 	}
 

@@ -33,7 +33,6 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"os"
-	"path"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -45,9 +44,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/sqlerror"
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/onlineddl"
-	"vitess.io/vitess/go/test/endtoend/throttler"
+	"vitess.io/vitess/go/test/vitesst"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
@@ -71,20 +68,19 @@ type testcase struct {
 }
 
 var (
-	clusterInstance      *cluster.LocalProcessCluster
-	primaryTablet        *cluster.Vttablet
+	clusterInstance      *vitesst.Cluster
+	primaryTablet        *vitesst.Tablet
 	vtParams             mysql.ConnParams
 	evaluatedMysqlParams *mysql.ConnParams
 
 	directDDLStrategy     = "direct"
 	onlineDDLStrategy     = "vitess -vreplication-test-suite -skip-topo"
-	hostname              = "localhost"
 	keyspaceName          = "ks"
 	cell                  = "zone1"
-	shards                []cluster.Shard
+	shards                []*vitesst.Shard
 	opOrder               int64
 	opOrderMutex          sync.Mutex
-	schemaChangeDirectory = ""
+	schemaChangeDirectory = "/vt/files"
 	tableName             = "stress_test"
 	afterTableName        = "stress_test_after"
 	cleanupStatements     = []string{
@@ -394,75 +390,86 @@ func nextOpOrder() int64 {
 	return opOrder
 }
 
-func mysqlParams() *mysql.ConnParams {
+func mysqlParams(t *testing.T) *mysql.ConnParams {
 	if evaluatedMysqlParams != nil {
 		return evaluatedMysqlParams
 	}
-	evaluatedMysqlParams = &mysql.ConnParams{
-		Uname:      "vt_dba",
-		UnixSocket: path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", primaryTablet.TabletUID), "/mysql.sock"),
-		DbName:     "vt_" + keyspaceName,
-	}
+	params, err := primaryTablet.DBAConnParams(t.Context(), "vt_"+keyspaceName)
+	require.NoError(t, err)
+	evaluatedMysqlParams = &params
 	return evaluatedMysqlParams
+}
+
+// mysqlExec runs a query directly on the tablet's mysqld and returns the result rows rendered
+// as tab separated values, one row per line.
+func mysqlExec(t *testing.T, query string) string {
+	conn, err := mysql.Connect(t.Context(), mysqlParams(t))
+	require.NoError(t, err)
+	defer conn.Close()
+
+	rs, err := conn.ExecuteFetch(query, -1, true)
+	require.NoError(t, err)
+
+	lines := make([]string, 0, len(rs.Rows))
+	for _, row := range rs.Rows {
+		values := make([]string, 0, len(row))
+		for _, value := range row {
+			if value.IsNull() {
+				values = append(values, "NULL")
+				continue
+			}
+			values = append(values, value.ToString())
+		}
+		lines = append(lines, strings.Join(values, "\t"))
+	}
+	return strings.Join(lines, "\n")
 }
 
 func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitcode, err := func() (int, error) {
-		clusterInstance = cluster.NewCluster(cell, hostname)
-		schemaChangeDirectory = path.Join("/tmp", fmt.Sprintf("schema_change_dir_%d", clusterInstance.GetAndReserveTabletUID()))
-		defer os.RemoveAll(schemaChangeDirectory)
-		defer clusterInstance.Teardown()
-
-		if _, err := os.Stat(schemaChangeDirectory); os.IsNotExist(err) {
-			_ = os.Mkdir(schemaChangeDirectory, 0o700)
-		}
-
-		clusterInstance.VtctldExtraArgs = []string{
-			"--schema-change-dir", schemaChangeDirectory,
-			"--schema-change-controller", "local",
-			"--schema-change-check-interval", "1s",
-		}
+		ctx := context.Background()
 
 		// --vstream-packet-size is set to a small value that ensures we get multiple stream iterations,
 		// thereby examining lastPK on vcopier side. We will be iterating tables using non-PK order throughout
 		// this test suite, and so the low setting ensures we hit the more interesting code paths.
-		clusterInstance.VtTabletExtraArgs = []string{
-			"--heartbeat-interval", "250ms",
-			"--heartbeat-on-demand-duration", "5s",
-			"--migration-check-interval", "5s",
-			"--vstream-packet-size", "4096", // Keep this value small and below 10k to ensure multilple vstream iterations
-		}
-		clusterInstance.VtGateExtraArgs = []string{
-			"--ddl-strategy", "online",
-		}
-
-		if err := clusterInstance.StartTopo(); err != nil {
-			return 1, err
-		}
-
-		// Start keyspace
-		keyspace := &cluster.Keyspace{
-			Name: keyspaceName,
-		}
-
+		//
 		// No need for replicas in this stress test
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"1"}, 0, false, clusterInstance.Cell); err != nil {
+		newCluster, err := vitesst.NewCluster(
+			vitesst.WithCells(cell),
+			vitesst.WithVTCtldArgs(
+				"--schema-change-dir", schemaChangeDirectory,
+				"--schema-change-controller", "local",
+				"--schema-change-check-interval", "1s",
+			),
+			vitesst.WithVTTabletArgs(
+				"--heartbeat-interval", "250ms",
+				"--heartbeat-on-demand-duration", "5s",
+				"--migration-check-interval", "5s",
+				"--vstream-packet-size", "4096", // Keep this value small and below 10k to ensure multilple vstream iterations
+			),
+			vitesst.WithVTGateArgs(
+				"--ddl-strategy", "online",
+			),
+			vitesst.WithKeyspace(keyspaceName).WithShardNames("1"),
+		)
+		if err != nil {
 			return 1, err
 		}
 
-		vtgateInstance := clusterInstance.NewVtgateInstance()
-		// Start vtgate
-		if err := vtgateInstance.Setup(); err != nil {
+		cleanup, err := newCluster.Start(ctx)
+		if err != nil {
 			return 1, err
 		}
-		// ensure it is torn down during cluster TearDown
-		clusterInstance.VtgateProcess = *vtgateInstance
-		vtParams = mysql.ConnParams{
-			Host: clusterInstance.Hostname,
-			Port: clusterInstance.VtgateMySQLPort,
-		}
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
+
+		clusterInstance = newCluster
+		vtParams = clusterInstance.VTParams(ctx, "")
 
 		return m.Run(), nil
 	}()
@@ -475,21 +482,21 @@ func TestMain(m *testing.M) {
 }
 
 func TestVreplStressSchemaChanges(t *testing.T) {
-	shards = clusterInstance.Keyspaces[0].Shards
+	shards = clusterInstance.Keyspace(keyspaceName).Shards()
 	require.Equal(t, 1, len(shards))
-	require.Equal(t, 1, len(shards[0].Vttablets))
-	primaryTablet = shards[0].Vttablets[0]
+	require.Equal(t, 1, len(shards[0].Tablets()))
+	primaryTablet = shards[0].Primary()
 
-	_, err := primaryTablet.VttabletProcess.QueryTablet(setSqlMode, keyspaceName, true)
+	_, err := primaryTablet.QueryTablet(t.Context(), setSqlMode)
 	require.NoError(t, err)
-	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance)
+	enableLagThrottlerAndWaitForStatus(t)
 
 	for _, testcase := range testCases {
 		require.NotEmpty(t, testcase.name)
 		t.Run(testcase.name, func(t *testing.T) {
 			t.Run("cancel pending migrations", func(t *testing.T) {
 				cancelQuery := "alter vitess_migration cancel all"
-				r := onlineddl.VtgateExecQuery(t, &vtParams, cancelQuery, "")
+				r := vtgateExecQuery(t, &vtParams, cancelQuery, "")
 				if r.RowsAffected > 0 {
 					fmt.Printf("# Cancelled migrations (for debug purposes): %d\n", r.RowsAffected)
 				}
@@ -501,7 +508,7 @@ func TestVreplStressSchemaChanges(t *testing.T) {
 			t.Run("prepare table", func(t *testing.T) {
 				if testcase.prepareStatement != "" {
 					fullStatement := fmt.Sprintf("alter table %s %s", tableName, testcase.prepareStatement)
-					onlineddl.VtgateExecDDL(t, &vtParams, directDDLStrategy, fullStatement, "")
+					vtgateExecDDL(t, &vtParams, directDDLStrategy, fullStatement, "")
 				}
 			})
 			t.Run("init table data", func(t *testing.T) {
@@ -524,16 +531,16 @@ func TestVreplStressSchemaChanges(t *testing.T) {
 				if testcase.expectFailure {
 					expectStatus = schema.OnlineDDLStatusFailed
 				}
-				status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, waitForStatusTimeout, expectStatus)
+				status := waitForMigrationStatus(t, &vtParams, shards, uuid, waitForStatusTimeout, expectStatus)
 				fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
-				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, expectStatus)
+				checkMigrationStatus(t, &vtParams, shards, uuid, expectStatus)
 				cancel() // will cause runMultipleConnections() to terminate
 				wg.Wait()
 				if !testcase.expectFailure {
 					testCompareBeforeAfterTables(t, testcase.autoIncInsert)
 				}
 
-				rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+				rs := readMigrations(t, &vtParams, uuid)
 				for _, row := range rs.Named().Rows {
 					assert.Equal(t, testcase.expectAddedUniqueKeys, row.AsInt64("added_unique_keys", 0), "expectAddedUniqueKeys")
 					assert.Equal(t, testcase.expectRemovedUniqueKeys, row.AsInt64("removed_unique_keys", 0), "expectRemovedUniqueKeys")
@@ -546,10 +553,10 @@ func TestVreplStressSchemaChanges(t *testing.T) {
 func testWithInitialSchema(t *testing.T) {
 	// Create the stress table
 	for _, statement := range cleanupStatements {
-		err := clusterInstance.VtctldClientProcess.ApplySchema(keyspaceName, statement)
+		err := applySchema(t.Context(), keyspaceName, statement)
 		require.Nil(t, err)
 	}
-	err := clusterInstance.VtctldClientProcess.ApplySchema(keyspaceName, createStatement)
+	err := applySchema(t.Context(), keyspaceName, createStatement)
 	require.Nil(t, err)
 
 	// Check if table is created
@@ -559,13 +566,13 @@ func testWithInitialSchema(t *testing.T) {
 // testOnlineDDLStatement runs an online DDL, ALTER statement
 func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy string, executeStrategy string, expectHint string) (uuid string) {
 	if executeStrategy == "vtgate" {
-		row := onlineddl.VtgateExecDDL(t, &vtParams, ddlStrategy, alterStatement, "").Named().Row()
+		row := vtgateExecDDL(t, &vtParams, ddlStrategy, alterStatement, "").Named().Row()
 		if row != nil {
 			uuid = row.AsString("uuid", "")
 		}
 	} else {
 		var err error
-		uuid, err = clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(keyspaceName, alterStatement, cluster.ApplySchemaParams{DDLStrategy: ddlStrategy})
+		uuid, err = applySchemaWithOutput(t.Context(), keyspaceName, alterStatement, applySchemaParams{DDLStrategy: ddlStrategy})
 		assert.NoError(t, err)
 	}
 	uuid = strings.TrimSpace(uuid)
@@ -577,7 +584,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 
 	status := schema.OnlineDDLStatusComplete
 	if !strategySetting.Strategy.IsDirect() {
-		status = onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, waitForStatusTimeout, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+		status = waitForMigrationStatus(t, &vtParams, shards, uuid, waitForStatusTimeout, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 	}
 
@@ -590,18 +597,18 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 // checkTable checks the number of tables in the first two shards.
 func checkTable(t *testing.T, showTableName string) {
 	for i := range shards {
-		checkTablesCount(t, shards[i].Vttablets[0], showTableName, 1)
+		checkTablesCount(t, shards[i].Tablets()[0], showTableName, 1)
 	}
 }
 
 // checkTablesCount checks the number of tables in the given tablet
-func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName string, expectCount int) {
+func checkTablesCount(t *testing.T, tablet *vitesst.Tablet, showTableName string, expectCount int) {
 	query := fmt.Sprintf(`show tables like '%%%s%%';`, showTableName)
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	rowcount := 0
 	for {
-		queryResult, err := tablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
+		queryResult, err := tablet.QueryTablet(ctx, query)
 		require.Nil(t, err)
 		rowcount = len(queryResult.Rows)
 		if rowcount > 0 {
@@ -620,14 +627,14 @@ func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName stri
 // checkMigratedTables checks the CREATE STATEMENT of a table after migration
 func checkMigratedTable(t *testing.T, tableName, expectHint string) {
 	for i := range shards {
-		createStatement := getCreateTableStatement(t, shards[i].Vttablets[0], tableName)
+		createStatement := getCreateTableStatement(t, shards[i].Tablets()[0], tableName)
 		assert.Contains(t, createStatement, expectHint)
 	}
 }
 
 // getCreateTableStatement returns the CREATE TABLE statement for a given table
-func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName string) (statement string) {
-	queryResult, err := tablet.VttabletProcess.QueryTablet(fmt.Sprintf("show create table %s;", tableName), keyspaceName, true)
+func getCreateTableStatement(t *testing.T, tablet *vitesst.Tablet, tableName string) (statement string) {
+	queryResult, err := tablet.QueryTablet(t.Context(), fmt.Sprintf("show create table %s;", tableName))
 	require.Nil(t, err)
 
 	assert.Equal(t, len(queryResult.Rows), 1)
@@ -786,7 +793,7 @@ func testCompareBeforeAfterTables(t *testing.T, autoIncInsert bool) {
 	var countBefore int64
 	{
 		// Validate after table is populated
-		rs := onlineddl.VtgateExecQuery(t, &vtParams, selectCountFromTableBefore, "")
+		rs := vtgateExecQuery(t, &vtParams, selectCountFromTableBefore, "")
 		row := rs.Named().Row()
 		require.NotNil(t, row)
 
@@ -800,7 +807,7 @@ func testCompareBeforeAfterTables(t *testing.T, autoIncInsert bool) {
 	var countAfter int64
 	{
 		// Validate after table is populated
-		rs := onlineddl.VtgateExecQuery(t, &vtParams, selectCountFromTableAfter, "")
+		rs := vtgateExecQuery(t, &vtParams, selectCountFromTableAfter, "")
 		row := rs.Named().Row()
 		require.NotNil(t, row)
 
@@ -812,7 +819,7 @@ func testCompareBeforeAfterTables(t *testing.T, autoIncInsert bool) {
 		fmt.Printf("# count rows in table (after): %d\n", countAfter)
 	}
 	{
-		rs := onlineddl.VtgateExecQuery(t, &vtParams, selectMaxOpOrderFromTableBefore, "")
+		rs := vtgateExecQuery(t, &vtParams, selectMaxOpOrderFromTableBefore, "")
 		row := rs.Named().Row()
 		require.NotNil(t, row)
 
@@ -820,7 +827,7 @@ func testCompareBeforeAfterTables(t *testing.T, autoIncInsert bool) {
 		fmt.Printf("# max op_order in table (before): %d\n", maxOpOrder)
 	}
 	{
-		rs := onlineddl.VtgateExecQuery(t, &vtParams, selectMaxOpOrderFromTableAfter, "")
+		rs := vtgateExecQuery(t, &vtParams, selectMaxOpOrderFromTableAfter, "")
 		row := rs.Named().Row()
 		require.NotNil(t, row)
 
@@ -829,16 +836,12 @@ func testCompareBeforeAfterTables(t *testing.T, autoIncInsert bool) {
 	}
 
 	{
-		selectBeforeFile := onlineddl.CreateTempScript(t, selectBeforeTable)
-		defer os.Remove(selectBeforeFile)
-		beforeOutput := onlineddl.MysqlClientExecFile(t, mysqlParams(), os.TempDir(), "", selectBeforeFile)
+		beforeOutput := mysqlExec(t, selectBeforeTable)
 		beforeOutput = strings.TrimSpace(beforeOutput)
 		require.NotEmpty(t, beforeOutput)
 		assert.Equal(t, countBefore, int64(len(strings.Split(beforeOutput, "\n"))))
 
-		selectAfterFile := onlineddl.CreateTempScript(t, selectAfterTable)
-		defer os.Remove(selectAfterFile)
-		afterOutput := onlineddl.MysqlClientExecFile(t, mysqlParams(), os.TempDir(), "", selectAfterFile)
+		afterOutput := mysqlExec(t, selectAfterTable)
 		afterOutput = strings.TrimSpace(afterOutput)
 		require.NotEmpty(t, afterOutput)
 		assert.Equal(t, countAfter, int64(len(strings.Split(afterOutput, "\n"))))

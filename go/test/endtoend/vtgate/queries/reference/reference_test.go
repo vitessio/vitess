@@ -22,7 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 func start(t *testing.T) (*mysql.Conn, func()) {
@@ -63,16 +63,16 @@ func TestReferenceRouting(t *testing.T) {
 	defer closer()
 
 	// INSERT should route an unqualified zip_detail to unsharded keyspace.
-	utils.Exec(t, conn, "INSERT INTO zip_detail(id, zip_id, discontinued_at) VALUES(3, 1, DATE('2022-12-03'))")
+	vitesst.Exec(t, conn, "INSERT INTO zip_detail(id, zip_id, discontinued_at) VALUES(3, 1, DATE('2022-12-03'))")
 	// Verify with qualified zip_detail queries to each keyspace. The unsharded
 	// keyspace should have an extra row.
-	utils.AssertMatches(
+	vitesst.AssertMatches(
 		t,
 		conn,
 		"SELECT COUNT(zd.id) FROM "+unshardedKeyspaceName+".zip_detail zd WHERE id = 3",
 		`[[INT64(1)]]`,
 	)
-	utils.AssertMatches(
+	vitesst.AssertMatches(
 		t,
 		conn,
 		"SELECT COUNT(zd.id) FROM "+shardedKeyspaceName+".zip_detail zd WHERE id = 3",
@@ -81,7 +81,7 @@ func TestReferenceRouting(t *testing.T) {
 
 	t.Run("Complex reference query", func(t *testing.T) {
 		// Verify a complex query using reference tables with a left join having a derived table with an order by clause works as intended.
-		utils.AssertMatches(
+		vitesst.AssertMatches(
 			t,
 			conn,
 			`SELECT t.id FROM (
@@ -98,17 +98,17 @@ func TestReferenceRouting(t *testing.T) {
 	})
 
 	// UPDATE should route an unqualified zip_detail to unsharded keyspace.
-	utils.Exec(t, conn,
+	vitesst.Exec(t, conn,
 		"UPDATE zip_detail SET discontinued_at = NULL WHERE id = 2")
 	// Verify with qualified zip_detail queries to each keyspace. The unsharded
 	// keyspace should have a matching row, but not the sharded keyspace.
-	utils.AssertMatches(
+	vitesst.AssertMatches(
 		t,
 		conn,
 		"SELECT COUNT(id) FROM "+unshardedKeyspaceName+".zip_detail WHERE discontinued_at IS NULL",
 		`[[INT64(1)]]`,
 	)
-	utils.AssertMatches(
+	vitesst.AssertMatches(
 		t,
 		conn,
 		"SELECT COUNT(id) FROM "+shardedKeyspaceName+".zip_detail WHERE discontinued_at IS NULL",
@@ -116,7 +116,7 @@ func TestReferenceRouting(t *testing.T) {
 	)
 
 	// SELECT a table in unsharded keyspace and JOIN unqualified zip_detail.
-	utils.AssertMatches(
+	vitesst.AssertMatches(
 		t,
 		conn,
 		"SELECT COUNT(zd.id) FROM zip z JOIN zip_detail zd ON z.id = zd.zip_id WHERE zd.id = 3",
@@ -125,7 +125,7 @@ func TestReferenceRouting(t *testing.T) {
 
 	// SELECT a table in sharded keyspace and JOIN unqualified zip_detail.
 	// Use gen4 planner to avoid errors from gen3 planner.
-	utils.AssertMatches(
+	vitesst.AssertMatches(
 		t,
 		conn,
 		`SELECT COUNT(zd.id)
@@ -135,16 +135,16 @@ func TestReferenceRouting(t *testing.T) {
 	)
 
 	// DELETE should route an unqualified zip_detail to unsharded keyspace.
-	utils.Exec(t, conn, "DELETE FROM zip_detail")
+	vitesst.Exec(t, conn, "DELETE FROM zip_detail")
 	// Verify with qualified zip_detail queries to each keyspace. The unsharded
 	// keyspace should not have any rows; the sharded keyspace should.
-	utils.AssertMatches(
+	vitesst.AssertMatches(
 		t,
 		conn,
 		"SELECT COUNT(id) FROM "+unshardedKeyspaceName+".zip_detail",
 		`[[INT64(0)]]`,
 	)
-	utils.AssertMatches(
+	vitesst.AssertMatches(
 		t,
 		conn,
 		"SELECT COUNT(id) FROM "+shardedKeyspaceName+".zip_detail",
@@ -163,13 +163,13 @@ func TestMultiReferenceQuery(t *testing.T) {
 		 	join uks.zip_detail zd1 on df1.zip_detail_id = zd1.zip_id
 		 	join uks.zip_detail zd2 on zd1.zip_id = zd2.zip_id`
 
-	utils.Exec(t, conn, query)
+	vitesst.Exec(t, conn, query)
 }
 
 func TestDMLReferenceUsingShardedKS(t *testing.T) {
 	conn, closer := start(t)
 	defer closer()
 
-	utils.Exec(t, conn, "use sks")
-	utils.Exec(t, conn, "update zip_detail set zip_id = 1 where id = 1")
+	vitesst.Exec(t, conn, "use sks")
+	vitesst.Exec(t, conn, "update zip_detail set zip_id = 1 where id = 1")
 }

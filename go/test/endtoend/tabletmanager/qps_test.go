@@ -23,16 +23,13 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 func TestQPS(t *testing.T) {
 	ctx := t.Context()
 
-	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
-	}
+	vtParams := clusterInstance.VTParams(ctx, "")
 	vtGateConn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer vtGateConn.Close()
@@ -42,8 +39,8 @@ func TestQPS(t *testing.T) {
 	defer replicaConn.Close()
 
 	// Sanity Check
-	utils.Exec(t, vtGateConn, "delete from t1")
-	utils.Exec(t, vtGateConn, "insert into t1(id, value) values(1,'a'), (2,'b')")
+	vitesst.Exec(t, vtGateConn, "delete from t1")
+	vitesst.Exec(t, vtGateConn, "insert into t1(id, value) values(1,'a'), (2,'b')")
 	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")] [VARCHAR("b")]]`)
 
 	// Test that tablet health stream reports a QPS >0.0.
@@ -55,7 +52,7 @@ func TestQPS(t *testing.T) {
 
 	for range 15 {
 		// Run queries via vtGate so that they are counted.
-		utils.Exec(t, vtGateConn, "select * from t1")
+		vitesst.Exec(t, vtGateConn, "select * from t1")
 	}
 
 	// This may take up to 5 seconds to become true because we sample the query
@@ -64,7 +61,7 @@ func TestQPS(t *testing.T) {
 	var qpsIncreased bool
 	timeout := time.Now().Add(12 * time.Second)
 	for time.Now().Before(timeout) {
-		shrs, err := clusterInstance.StreamTabletHealth(ctx, &primaryTablet, 1)
+		shrs, err := streamTabletHealth(ctx, primaryTablet, 1)
 		require.Nil(t, err)
 
 		streamHealthResponse := shrs[0]

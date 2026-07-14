@@ -26,17 +26,13 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/test/vitesst"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
-
-	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
-	cell            = "zone1"
-	hostname        = "localhost"
+	clusterInstance *vitesst.Cluster
 	vtParams        mysql.ConnParams
 
 	unshardedKeyspaceName = "uks"
@@ -56,56 +52,41 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(cell, hostname)
-		defer clusterInstance.Teardown()
+		ctx := context.Background()
 
-		// Start topo server
-		if err := clusterInstance.StartTopo(); err != nil {
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithKeyspace(unshardedKeyspaceName).
+				WithSchema(unshardedSQLSchema).
+				WithVSchema(unshardedVSchema),
+			vitesst.WithKeyspace(shardedKeyspaceName).
+				WithShardNames("-80", "80-").
+				WithSchema(shardedSQLSchema).
+				WithVSchema(shardedVSchema),
+		)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-
-		// Start keyspace
-		cell := clusterInstance.Cell
-		uKeyspace := &cluster.Keyspace{
-			Name:      unshardedKeyspaceName,
-			SchemaSQL: unshardedSQLSchema,
-			VSchema:   unshardedVSchema,
-		}
-		if err := clusterInstance.StartUnshardedKeyspace(*uKeyspace, 0, false, cell); err != nil {
+		cleanup, err := cluster.Start(ctx)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
 
-		sKeyspace := &cluster.Keyspace{
-			Name:      shardedKeyspaceName,
-			SchemaSQL: shardedSQLSchema,
-			VSchema:   shardedVSchema,
-		}
-		if err := clusterInstance.StartKeyspace(*sKeyspace, []string{"-80", "80-"}, 0, false, cell); err != nil {
-			return 1
-		}
-
-		// Start vtgate
-		if err := clusterInstance.StartVtgate(); err != nil {
-			return 1
-		}
-
-		if err := clusterInstance.WaitForTabletsToHealthyInVtgate(); err != nil {
-			return 1
-		}
-
-		vtParams = mysql.ConnParams{
-			Host: "localhost",
-			Port: clusterInstance.VtgateMySQLPort,
-		}
+		clusterInstance = cluster
+		vtParams = cluster.VTParams(ctx, "")
 
 		// TODO(maxeng) remove when we have a proper way to check
 		// materialization lag and cutover.
 		done := make(chan bool, 1)
 		expectRows := 2
 		go func() {
-			ctx := context.Background()
-			vtgateAddr := fmt.Sprintf("%s:%d", clusterInstance.Hostname, clusterInstance.VtgateProcess.GrpcPort)
-			vtgateConn, err := vtgateconn.Dial(ctx, vtgateAddr)
+			vtgateConn, err := cluster.VTGate().DialVTGate(ctx)
 			if err != nil {
 				done <- false
 				return
@@ -113,11 +94,11 @@ func TestMain(m *testing.M) {
 			defer vtgateConn.Close()
 
 			maxWait := time.After(300 * time.Second)
-			for _, ks := range clusterInstance.Keyspaces {
+			for _, ks := range cluster.Keyspaces() {
 				if ks.Name != shardedKeyspaceName {
 					continue
 				}
-				for _, s := range ks.Shards {
+				for _, s := range ks.Shards() {
 					var ok bool
 					for !ok {
 						select {
@@ -156,7 +137,8 @@ func TestMain(m *testing.M) {
 		}()
 
 		// Materialize zip_detail to sharded keyspace.
-		output, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(
+		output, err := cluster.Vtctld().ExecuteCommandWithOutput(
+			ctx,
 			"Materialize",
 			"--workflow", "copy_zip_detail",
 			"--target-keyspace", shardedKeyspaceName,
@@ -171,9 +153,7 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		ctx := context.Background()
-		vtgateAddr := fmt.Sprintf("%s:%d", clusterInstance.Hostname, clusterInstance.VtgateProcess.GrpcPort)
-		vtgateConn, err := vtgateconn.Dial(ctx, vtgateAddr)
+		vtgateConn, err := cluster.VTGate().DialVTGate(ctx)
 		if err != nil {
 			return 1
 		}
@@ -205,7 +185,8 @@ func TestMain(m *testing.M) {
 		}
 
 		// Stop materialize zip_detail to sharded keyspace.
-		err = clusterInstance.VtctldClientProcess.ExecuteCommand(
+		err = cluster.Vtctld().ExecuteCommand(
+			ctx,
 			"Workflow",
 			"--keyspace", shardedKeyspaceName,
 			"delete",

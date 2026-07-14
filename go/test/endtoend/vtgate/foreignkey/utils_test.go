@@ -31,9 +31,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 var supportedOpps = []string{"*", "+", "-"}
@@ -77,32 +77,84 @@ func convertIntValueToString(value int) string {
 // waitForSchemaTrackingForFkTables waits for schema tracking to have run and seen the tables used
 // for foreign key tests.
 func waitForSchemaTrackingForFkTables(t testing.TB) {
-	err := utils.WaitForColumn(t, clusterInstance.VtgateProcess, shardedKs, "fk_t1", "col")
+	err := waitForColumn(t, shardedKs, "fk_t1", "col")
 	require.NoError(t, err)
-	err = utils.WaitForColumn(t, clusterInstance.VtgateProcess, shardedKs, "fk_t18", "col")
+	err = waitForColumn(t, shardedKs, "fk_t18", "col")
 	require.NoError(t, err)
-	err = utils.WaitForColumn(t, clusterInstance.VtgateProcess, shardedKs, "fk_t11", "col")
+	err = waitForColumn(t, shardedKs, "fk_t11", "col")
 	require.NoError(t, err)
-	err = utils.WaitForColumn(t, clusterInstance.VtgateProcess, unshardedKs, "fk_t1", "col")
+	err = waitForColumn(t, unshardedKs, "fk_t1", "col")
 	require.NoError(t, err)
-	err = utils.WaitForColumn(t, clusterInstance.VtgateProcess, unshardedKs, "fk_t18", "col")
+	err = waitForColumn(t, unshardedKs, "fk_t18", "col")
 	require.NoError(t, err)
-	err = utils.WaitForColumn(t, clusterInstance.VtgateProcess, unshardedKs, "fk_t11", "col")
+	err = waitForColumn(t, unshardedKs, "fk_t11", "col")
 	require.NoError(t, err)
-	err = utils.WaitForColumn(t, clusterInstance.VtgateProcess, unshardedUnmanagedKs, "fk_t11", "col")
+	err = waitForColumn(t, unshardedUnmanagedKs, "fk_t11", "col")
 	require.NoError(t, err)
 }
 
+// waitForColumn waits until vtgate's vschema has an authoritative column list for the
+// given table and that list has the given column.
+func waitForColumn(t testing.TB, ks, tbl, col string) error {
+	readVSchema := func() (*any, error) {
+		return clusterInstance.VTGate().ReadVSchema(t.Context())
+	}
+	if err := vitesst.WaitForAuthoritative(t, ks, tbl, readVSchema); err != nil {
+		return err
+	}
+
+	timeout := time.After(60 * time.Second)
+	for {
+		select {
+		case <-timeout:
+			return fmt.Errorf("schema tracking did not find column '%s' in table '%s'", col, tbl)
+		default:
+			res, err := readVSchema()
+			require.NoError(t, err, res)
+			if vschemaHasColumn(res, ks, tbl, col) {
+				return nil
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+}
+
+// vschemaHasColumn reports whether the given table in the vtgate vschema has the given column.
+func vschemaHasColumn(res *any, ks, tbl, col string) bool {
+	asMap := func(input any) map[string]any {
+		output, ok := input.(map[string]any)
+		if !ok {
+			return make(map[string]any)
+		}
+		return output
+	}
+	tblMap := asMap(asMap(asMap(asMap(*res)["keyspaces"])[ks])["tables"])[tbl]
+	colList, isSlice := asMap(tblMap)["columns"].([]any)
+	if !isSlice {
+		return false
+	}
+	for _, c := range colList {
+		colDef, isMap := c.(map[string]any)
+		if !isMap {
+			return false
+		}
+		if colName, exists := colDef["name"]; exists && strings.EqualFold(colName.(string), col) {
+			return true
+		}
+	}
+	return false
+}
+
 // getReplicaTablets gets all the replica tablets.
-func getReplicaTablets(keyspace string) []*cluster.Vttablet {
-	var replicaTablets []*cluster.Vttablet
-	for _, ks := range clusterInstance.Keyspaces {
+func getReplicaTablets(keyspace string) []*vitesst.Tablet {
+	var replicaTablets []*vitesst.Tablet
+	for _, ks := range clusterInstance.Keyspaces() {
 		if ks.Name != keyspace {
 			continue
 		}
-		for _, shard := range ks.Shards {
-			for _, vttablet := range shard.Vttablets {
-				if vttablet.Type != "primary" {
+		for _, shard := range ks.Shards() {
+			for _, vttablet := range shard.Tablets() {
+				if vttablet.Type() != "primary" {
 					replicaTablets = append(replicaTablets, vttablet)
 				}
 			}
@@ -112,9 +164,9 @@ func getReplicaTablets(keyspace string) []*cluster.Vttablet {
 }
 
 // removeAllForeignKeyConstraints removes all the foreign key constraints from the given tablet.
-func removeAllForeignKeyConstraints(t *testing.T, vttablet *cluster.Vttablet, keyspace string) {
+func removeAllForeignKeyConstraints(t *testing.T, vttablet *vitesst.Tablet, keyspace string) {
 	getAllFksQuery := `SELECT RefCons.table_name, RefCons.constraint_name FROM information_schema.referential_constraints RefCons;`
-	res, err := utils.RunSQL(t, getAllFksQuery, vttablet, "")
+	res, err := vitesst.RunSQL(t, getAllFksQuery, vttablet, "")
 	require.NoError(t, err)
 	var queries []string
 	queries = append(queries, "set global super_read_only=0")
@@ -125,13 +177,13 @@ func removeAllForeignKeyConstraints(t *testing.T, vttablet *cluster.Vttablet, ke
 		queries = append(queries, removeFkQuery)
 	}
 	queries = append(queries, "set global super_read_only=1")
-	err = utils.RunSQLs(t, queries, vttablet, fmt.Sprintf("vt_%v", keyspace))
+	err = vitesst.RunSQLs(t, queries, vttablet, fmt.Sprintf("vt_%v", keyspace))
 	require.NoError(t, err)
 }
 
 // checkReplicationHealthy verifies that the replication on the given vttablet is working as expected.
-func checkReplicationHealthy(t *testing.T, vttablet *cluster.Vttablet) {
-	rs, err := utils.RunSQL(t, "show replica status", vttablet, "")
+func checkReplicationHealthy(t *testing.T, vttablet *vitesst.Tablet) {
+	rs, err := vitesst.RunSQL(t, "show replica status", vttablet, "")
 	require.NoError(t, err)
 	var ioThreadRunning, sqlThreadRunning string
 	for idx, value := range rs.Rows[0] {
@@ -143,8 +195,48 @@ func checkReplicationHealthy(t *testing.T, vttablet *cluster.Vttablet) {
 			sqlThreadRunning = value.ToString()
 		}
 	}
-	require.Equal(t, "Yes", sqlThreadRunning, "SQL Thread isn't happy on %v, Replica status - %v", vttablet.Alias, rs.Rows)
-	require.Equal(t, "Yes", ioThreadRunning, "IO Thread isn't happy on %v, Replica status - %v", vttablet.Alias, rs.Rows)
+	require.Equal(t, "Yes", sqlThreadRunning, "SQL Thread isn't happy on %v, Replica status - %v", vttablet.Alias(), rs.Rows)
+	require.Equal(t, "Yes", ioThreadRunning, "IO Thread isn't happy on %v, Replica status - %v", vttablet.Alias(), rs.Rows)
+}
+
+// primaryPosition returns the tablet's current executed replication position.
+func primaryPosition(t *testing.T, tablet *vitesst.Tablet) replication.Position {
+	conn, err := vitesst.GetMySQLConn(t.Context(), tablet, "")
+	require.NoError(t, err)
+	defer conn.Close()
+
+	pos, err := conn.PrimaryPosition()
+	require.NoError(t, err)
+	return pos
+}
+
+// waitForReplicationPos waits for tabletB's replication position to catch up to
+// where tabletA is now.
+func waitForReplicationPos(t *testing.T, tabletA, tabletB *vitesst.Tablet, timeout time.Duration) {
+	ctx, cancel := context.WithTimeout(t.Context(), timeout)
+	defer cancel()
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+
+	replicationPosA := primaryPosition(t, tabletA)
+	for {
+		checkReplicationHealthy(t, tabletB)
+		if t.Failed() {
+			return
+		}
+		replicationPosB := primaryPosition(t, tabletB)
+		if replicationPosB.AtLeast(replicationPosA) {
+			return
+		}
+		msg := fmt.Sprintf("%s's replication position to catch up to %s's; currently at: %s, waiting to catch up to: %s",
+			tabletB.Alias(), tabletA.Alias(), replicationPosB, replicationPosA)
+		select {
+		case <-ctx.Done():
+			require.FailNowf(t, "timeout waiting for condition", "%s", msg)
+			return
+		case <-ticker.C:
+		}
+	}
 }
 
 // compareVitessAndMySQLResults compares Vitess and MySQL results and reports if they don't report the same number of rows affected.
@@ -193,7 +285,7 @@ func ensureDatabaseState(t *testing.T, vtconn *mysql.Conn, empty bool) {
 }
 
 // verifyDataIsCorrect verifies that the data in MySQL database matches the data in the Vitess database.
-func verifyDataIsCorrect(t *testing.T, mcmp utils.MySQLCompare, concurrency int) {
+func verifyDataIsCorrect(t *testing.T, mcmp vitesst.MySQLCompare, concurrency int) {
 	// For single concurrent thread, we run all the queries on both MySQL and Vitess, so we can verify correctness
 	// by just checking if the data in MySQL and Vitess match.
 	if concurrency == 1 {
@@ -217,11 +309,11 @@ func verifyDataIsCorrect(t *testing.T, mcmp utils.MySQLCompare, concurrency int)
 		}
 	}
 	// We also verify that the results in Primary and Replica table match as is.
-	for _, keyspace := range clusterInstance.Keyspaces {
-		for _, shard := range keyspace.Shards {
-			var primaryTab, replicaTab *cluster.Vttablet
-			for _, vttablet := range shard.Vttablets {
-				if vttablet.Type == "primary" {
+	for _, keyspace := range clusterInstance.Keyspaces() {
+		for _, shard := range keyspace.Shards() {
+			var primaryTab, replicaTab *vitesst.Tablet
+			for _, vttablet := range shard.Tablets() {
+				if vttablet.Type() == "primary" {
 					primaryTab = vttablet
 				} else {
 					replicaTab = vttablet
@@ -230,10 +322,10 @@ func verifyDataIsCorrect(t *testing.T, mcmp utils.MySQLCompare, concurrency int)
 			require.NotNil(t, primaryTab)
 			require.NotNil(t, replicaTab)
 			checkReplicationHealthy(t, replicaTab)
-			cluster.WaitForReplicationPos(t, primaryTab, replicaTab, true, 1*time.Minute)
-			primaryConn, err := utils.GetMySQLConn(primaryTab, fmt.Sprintf("vt_%v", keyspace.Name))
+			waitForReplicationPos(t, primaryTab, replicaTab, 1*time.Minute)
+			primaryConn, err := vitesst.GetMySQLConn(t.Context(), primaryTab, fmt.Sprintf("vt_%v", keyspace.Name))
 			require.NoError(t, err)
-			replicaConn, err := utils.GetMySQLConn(replicaTab, fmt.Sprintf("vt_%v", keyspace.Name))
+			replicaConn, err := vitesst.GetMySQLConn(t.Context(), replicaTab, fmt.Sprintf("vt_%v", keyspace.Name))
 			require.NoError(t, err)
 			primaryRes := collectFkTablesState(primaryConn)
 			replicaRes := collectFkTablesState(replicaConn)
@@ -263,10 +355,10 @@ func collectFkTablesState(conn *mysql.Conn) []*sqltypes.Result {
 }
 
 func validateReplication(t *testing.T) {
-	for _, keyspace := range clusterInstance.Keyspaces {
-		for _, shard := range keyspace.Shards {
-			for _, vttablet := range shard.Vttablets {
-				if vttablet.Type != "primary" {
+	for _, keyspace := range clusterInstance.Keyspaces() {
+		for _, shard := range keyspace.Shards() {
+			for _, vttablet := range shard.Tablets() {
+				if vttablet.Type() != "primary" {
 					checkReplicationHealthy(t, vttablet)
 				}
 			}
@@ -301,11 +393,11 @@ func setupBenchmark(b *testing.B, maxValForId int, maxValForCol int, insertShare
 	// Connect to Vitess managed foreign keys keyspace
 	vtConn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(b, err)
-	utils.Exec(b, vtConn, fmt.Sprintf("use `%v`", unshardedKs))
+	vitesst.Exec(b, vtConn, fmt.Sprintf("use `%v`", unshardedKs))
 	// Connect to Vitess unmanaged foreign keys keyspace
 	vtUnmanagedConn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(b, err)
-	utils.Exec(b, vtUnmanagedConn, fmt.Sprintf("use `%v`", unshardedUnmanagedKs))
+	vitesst.Exec(b, vtUnmanagedConn, fmt.Sprintf("use `%v`", unshardedUnmanagedKs))
 
 	// First we make sure that running all the queries in both the Vitess modes and MySQL gives the same data.
 	// So we run all the queries and then check that the data in all of them matches.
@@ -325,6 +417,6 @@ func setupBenchmark(b *testing.B, maxValForId int, maxValForCol int, insertShare
 
 func runQueries(t testing.TB, conn *mysql.Conn, queries []string) {
 	for _, query := range queries {
-		_, _ = utils.ExecAllowError(t, conn, query)
+		_, _ = vitesst.ExecAllowError(t, conn, query)
 	}
 }

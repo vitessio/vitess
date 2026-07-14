@@ -37,9 +37,8 @@ import (
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/onlineddl"
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/test/vitesst"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
@@ -137,18 +136,16 @@ deletesAttempts=%d, deletesFailures=%d, deletesNoops=%d, deletes=%d,
 }
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
-	shards          []cluster.Shard
-	primary         *cluster.Vttablet
-	replicaNoFK     *cluster.Vttablet
-	replicaFK       *cluster.Vttablet
+	clusterInstance *vitesst.Cluster
+	shards          []*vitesst.Shard
+	primary         *vitesst.Tablet
+	replicaNoFK     *vitesst.Tablet
+	replicaFK       *vitesst.Tablet
 	vtParams        mysql.ConnParams
 
 	onlineDDLStrategy     = "vitess --unsafe-allow-foreign-keys --cut-over-threshold=30s --force-cut-over-after=15s"
-	hostname              = "localhost"
 	keyspaceName          = "ks"
-	cell                  = "zone1"
-	schemaChangeDirectory = ""
+	schemaChangeDirectory = "/vt/files/schema_change_dir"
 	parentTableName       = "stress_parent"
 	childTableName        = "stress_child"
 	child2TableName       = "stress_child2"
@@ -338,58 +335,49 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitcode, err := func() (int, error) {
-		clusterInstance = cluster.NewCluster(cell, hostname)
-		schemaChangeDirectory = path.Join("/tmp", fmt.Sprintf("schema_change_dir_%d", clusterInstance.GetAndReserveTabletUID()))
-		defer os.RemoveAll(schemaChangeDirectory)
-		defer clusterInstance.Teardown()
-
-		if _, err := os.Stat(schemaChangeDirectory); os.IsNotExist(err) {
-			_ = os.Mkdir(schemaChangeDirectory, 0o700)
-		}
-
-		clusterInstance.VtctldExtraArgs = []string{
-			"--schema-change-dir", schemaChangeDirectory,
-			"--schema-change-controller", "local",
-			"--schema-change-check-interval", "1s",
-		}
-
-		clusterInstance.VtTabletExtraArgs = []string{
-			"--heartbeat-enable",
-			"--heartbeat-interval", "250ms",
-			"--heartbeat-on-demand-duration", "5s",
-			"--migration-check-interval", "3s",
-		}
-		clusterInstance.VtGateExtraArgs = []string{}
-
-		if err := clusterInstance.StartTopo(); err != nil {
-			return 1, err
-		}
-
-		// Start keyspace
-		keyspace := &cluster.Keyspace{
-			Name: keyspaceName,
-			VSchema: `{
-				"sharded": false,
-				"foreignKeyMode": "managed"
-			}`,
-		}
+		ctx := context.Background()
 
 		// We will use a replica to confirm that vtgate's cascading works correctly.
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"1"}, 2, false, clusterInstance.Cell); err != nil {
+		newCluster, err := vitesst.NewCluster(
+			vitesst.WithKeyspace(keyspaceName).
+				WithShardNames("1").
+				WithReplicas(2).
+				WithVSchema(`{
+					"sharded": false,
+					"foreignKeyMode": "managed"
+				}`),
+			vitesst.WithVTCtldArgs(
+				"--schema-change-dir", schemaChangeDirectory,
+				"--schema-change-controller", "local",
+				"--schema-change-check-interval", "1s",
+			),
+			vitesst.WithVTCtldFiles(vitesst.ContainerFile{
+				Content:       []byte("\n"),
+				ContainerPath: path.Join(schemaChangeDirectory, ".keep"),
+			}),
+			vitesst.WithVTTabletArgs(
+				"--heartbeat-enable",
+				"--heartbeat-interval", "250ms",
+				"--heartbeat-on-demand-duration", "5s",
+				"--migration-check-interval", "3s",
+			),
+		)
+		if err != nil {
 			return 1, err
 		}
 
-		vtgateInstance := clusterInstance.NewVtgateInstance()
-		// Start vtgate
-		if err := vtgateInstance.Setup(); err != nil {
+		cleanup, err := newCluster.Start(ctx)
+		if err != nil {
 			return 1, err
 		}
-		// ensure it is torn down during cluster TearDown
-		clusterInstance.VtgateProcess = *vtgateInstance
-		vtParams = mysql.ConnParams{
-			Host: clusterInstance.Hostname,
-			Port: clusterInstance.VtgateMySQLPort,
-		}
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
+
+		clusterInstance = newCluster
+		vtParams = clusterInstance.VTParams(ctx, "")
 
 		return m.Run(), nil
 	}()
@@ -401,8 +389,8 @@ func TestMain(m *testing.M) {
 	}
 }
 
-func queryTablet(t *testing.T, tablet *cluster.Vttablet, query string, expectError string) *sqltypes.Result {
-	rs, err := tablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
+func queryTablet(t *testing.T, tablet *vitesst.Tablet, query string, expectError string) *sqltypes.Result {
+	rs, err := tablet.QueryTablet(t.Context(), query)
 	if expectError == "" {
 		assert.NoError(t, err)
 	} else {
@@ -411,7 +399,7 @@ func queryTablet(t *testing.T, tablet *cluster.Vttablet, query string, expectErr
 	return rs
 }
 
-func tabletTestName(t *testing.T, tablet *cluster.Vttablet) string {
+func tabletTestName(t *testing.T, tablet *vitesst.Tablet) string {
 	switch tablet {
 	case primary:
 		return "primary"
@@ -420,19 +408,36 @@ func tabletTestName(t *testing.T, tablet *cluster.Vttablet) string {
 	case replicaFK:
 		return "replicaFK"
 	default:
-		assert.FailNowf(t, "unknown tablet", "%v, type=%v", tablet.Alias, tablet.Type)
+		assert.FailNowf(t, "unknown tablet", "%v, type=%v", tablet.Alias(), tablet.Type())
 	}
 	return ""
 }
 
-func validateReplicationIsHealthy(t *testing.T, tablet *cluster.Vttablet) (result bool) {
+// replicationIsHealthy checks that the given tablet's replication threads are both running.
+func replicationIsHealthy(t *testing.T, tablet *vitesst.Tablet) bool {
+	rs, err := tablet.QueryTabletWithDB(t.Context(), "show replica status", "")
+	assert.NoError(t, err)
+	row := rs.Named().Row()
+	require.NotNil(t, row)
+
+	ioRunning := row.AsString("Replica_IO_Running", "")
+	require.NotEmpty(t, ioRunning)
+	ioHealthy := assert.Equalf(t, "Yes", ioRunning, "Replication is broken. Replication status: %v", row)
+	sqlRunning := row.AsString("Replica_SQL_Running", "")
+	require.NotEmpty(t, sqlRunning)
+	sqlHealthy := assert.Equalf(t, "Yes", sqlRunning, "Replication is broken. Replication status: %v", row)
+
+	return ioHealthy && sqlHealthy
+}
+
+func validateReplicationIsHealthy(t *testing.T, tablet *vitesst.Tablet) (result bool) {
 	t.Run(tabletTestName(t, tablet), func(t *testing.T) {
-		result = cluster.ValidateReplicationIsHealthy(t, tablet)
+		result = replicationIsHealthy(t, tablet)
 	})
 	return result
 }
 
-func getTabletPosition(t *testing.T, tablet *cluster.Vttablet) replication.Position {
+func getTabletPosition(t *testing.T, tablet *vitesst.Tablet) replication.Position {
 	rs := queryTablet(t, tablet, "select @@gtid_executed as gtid_executed", "")
 	row := rs.Named().Row()
 	require.NotNil(t, row)
@@ -443,7 +448,7 @@ func getTabletPosition(t *testing.T, tablet *cluster.Vttablet) replication.Posit
 	return pos
 }
 
-func waitForReplicaCatchup(t *testing.T, ctx context.Context, replica *cluster.Vttablet, pos replication.Position) {
+func waitForReplicaCatchup(t *testing.T, ctx context.Context, replica *vitesst.Tablet, pos replication.Position) {
 	for {
 		replicaPos := getTabletPosition(t, replica)
 		if replicaPos.GTIDSet.Contains(pos.GTIDSet) {
@@ -469,7 +474,7 @@ func waitForReplicationCatchup(t *testing.T) {
 	defer cancel()
 	primaryPos := getTabletPosition(t, primary)
 	var wg sync.WaitGroup
-	for _, replica := range []*cluster.Vttablet{replicaNoFK, replicaFK} {
+	for _, replica := range []*vitesst.Tablet{replicaNoFK, replicaFK} {
 		wg.Go(func() {
 			waitForReplicaCatchup(t, ctx, replica, primaryPos)
 		})
@@ -502,18 +507,19 @@ func validateMetrics(t *testing.T, tcase *testCase) {
 }
 
 func TestInitialSetup(t *testing.T) {
-	shards = clusterInstance.Keyspaces[0].Shards
+	shards = clusterInstance.Keyspace(keyspaceName).Shards()
 	require.Equal(t, 1, len(shards))
-	require.Equal(t, 3, len(shards[0].Vttablets)) // primary, no-fk replica, fk replica
-	primary = shards[0].Vttablets[0]
+	tablets := shards[0].Tablets()
+	require.Equal(t, 3, len(tablets)) // primary, no-fk replica, fk replica
+	primary = tablets[0]
 	require.NotNil(t, primary)
-	replicaNoFK = shards[0].Vttablets[1]
+	replicaNoFK = tablets[1]
 	require.NotNil(t, replicaNoFK)
-	require.NotEqual(t, primary.Alias, replicaNoFK.Alias)
-	replicaFK = shards[0].Vttablets[2]
+	require.NotEqual(t, primary.Alias(), replicaNoFK.Alias())
+	replicaFK = tablets[2]
 	require.NotNil(t, replicaFK)
-	require.NotEqual(t, primary.Alias, replicaFK.Alias)
-	require.NotEqual(t, replicaNoFK.Alias, replicaFK.Alias)
+	require.NotEqual(t, primary.Alias(), replicaFK.Alias())
+	require.NotEqual(t, replicaNoFK.Alias(), replicaFK.Alias())
 
 	reverseTableNames = slices.Clone(tableNames)
 	slices.Reverse(reverseTableNames)
@@ -604,7 +610,7 @@ func ExecuteFKTest(t *testing.T, tcase *testCase) {
 						}
 						t.Logf("alter statement: %v, hint: %v", alterStatement, hint)
 						uuid := testOnlineDDLStatement(t, alterStatement, onlineDDLStrategy, "vtgate", hint)
-						ok := onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+						ok := checkMigrationStatus(t, uuid, schema.OnlineDDLStatusComplete)
 						require.True(t, ok) // or else don't attempt to cleanup artifacts
 						t.Run("cleanup artifacts", func(t *testing.T) {
 							rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
@@ -615,7 +621,7 @@ func ExecuteFKTest(t *testing.T, tcase *testCase) {
 							artifacts := textutil.SplitDelimitedList(row.AsString("artifacts", ""))
 							for _, artifact := range artifacts {
 								t.Run(artifact, func(t *testing.T) {
-									err := clusterInstance.VtctldClientProcess.ApplySchema(keyspaceName, "drop table if exists "+artifact)
+									err := applySchema(t, "drop table if exists "+artifact)
 									require.NoError(t, err)
 								})
 							}
@@ -668,7 +674,7 @@ func TestStressFK(t *testing.T) {
 		//
 		// In this stress test, we enable Online DDL if the variable 'rename_table_preserve_foreign_key' is present. The Online DDL mechanism will in turn
 		// query for this variable, and manipulate it, when starting the migration and when cutting over.
-		rs, err := primary.VttabletProcess.QueryTablet("show global variables like 'rename_table_preserve_foreign_key'", keyspaceName, false)
+		rs, err := primary.QueryTabletWithDB(t.Context(), "show global variables like 'rename_table_preserve_foreign_key'", "")
 		require.NoError(t, err)
 		runOnlineDDL = len(rs.Rows) > 0
 		t.Logf("MySQL support for 'rename_table_preserve_foreign_key': %v", runOnlineDDL)
@@ -797,14 +803,14 @@ func createInitialSchema(t *testing.T, tcase *testCase) {
 
 	t.Run("dropping tables", func(t *testing.T) {
 		for _, tableName := range reverseTableNames {
-			err := clusterInstance.VtctldClientProcess.ApplySchema(keyspaceName, "drop table if exists "+tableName)
+			err := applySchema(t, "drop table if exists "+tableName)
 			require.NoError(t, err)
 		}
 	})
 	t.Run("waiting for vschema deletions to apply", func(t *testing.T) {
 		for _, tableName := range tableNames {
 			t.Run(tableName, func(t *testing.T) {
-				utils.WaitForTableDeletions(t, clusterInstance.VtgateProcess, keyspaceName, tableName)
+				vitesst.WaitForTableDeletions(t, clusterInstance.VTGate(), keyspaceName, tableName)
 			})
 		}
 	})
@@ -842,7 +848,7 @@ func createInitialSchema(t *testing.T, tcase *testCase) {
 			}
 			b.WriteString(";")
 		}
-		err := clusterInstance.VtctldClientProcess.ApplySchema(keyspaceName, b.String())
+		err := applySchema(t, b.String())
 		require.NoError(t, err, b.String())
 	})
 	if tcase.preStatement != "" {
@@ -875,7 +881,7 @@ func createInitialSchema(t *testing.T, tcase *testCase) {
 	t.Run("waiting for vschema definition to apply", func(t *testing.T) {
 		for _, tableName := range tableNames {
 			t.Run(tableName, func(t *testing.T) {
-				err := utils.WaitForColumn(t, clusterInstance.VtgateProcess, keyspaceName, tableName, "id")
+				err := vitesst.WaitForColumn(t, clusterInstance.VTGate(), keyspaceName, tableName, "id")
 				require.NoError(t, err)
 			})
 		}
@@ -891,6 +897,97 @@ func createInitialSchema(t *testing.T, tcase *testCase) {
 	validateTableDefinitions(t, false)
 }
 
+// applySchema applies SQL schema to the keyspace
+func applySchema(t *testing.T, sql string) error {
+	return clusterInstance.Vtctld().ExecuteCommand(t.Context(),
+		"ApplySchema",
+		"--sql", sql,
+		"--ddl-strategy", "direct -allow-zero-in-date",
+		keyspaceName,
+	)
+}
+
+// applySchemaWithOutput applies SQL schema to the keyspace with the given DDL strategy, and
+// returns the command's output
+func applySchemaWithOutput(t *testing.T, sql string, ddlStrategy string) (string, error) {
+	return clusterInstance.Vtctld().ExecuteCommandWithOutput(t.Context(),
+		"ApplySchema",
+		"--sql", sql,
+		"--ddl-strategy", ddlStrategy,
+		keyspaceName,
+	)
+}
+
+// checkMigrationStatus verifies that the migration indicated by given UUID has the given expected status
+func checkMigrationStatus(t *testing.T, uuid string, expectStatuses ...schema.OnlineDDLStatus) bool {
+	query, err := sqlparser.ParseAndBind(fmt.Sprintf("show vitess_migrations from %s like %%a", keyspaceName),
+		sqltypes.StringBindVariable(uuid),
+	)
+	require.NoError(t, err)
+
+	r := onlineddl.VtgateExecQuery(t, &vtParams, query, "")
+
+	count := 0
+	for _, row := range r.Named().Rows {
+		if row["migration_uuid"].ToString() != uuid {
+			continue
+		}
+		for _, expectStatus := range expectStatuses {
+			if row["migration_status"].ToString() == string(expectStatus) {
+				count++
+				break
+			}
+		}
+	}
+	return assert.Equal(t, len(shards), count)
+}
+
+// waitForMigrationStatus waits for a migration to reach either provided statuses (returns immediately), or eventually time out
+func waitForMigrationStatus(t *testing.T, uuid string, timeout time.Duration, expectStatuses ...schema.OnlineDDLStatus) schema.OnlineDDLStatus {
+	shardNames := map[string]bool{}
+	for _, shard := range shards {
+		shardNames[shard.Name] = true
+	}
+	query, err := sqlparser.ParseAndBind("show vitess_migrations like %a",
+		sqltypes.StringBindVariable(uuid),
+	)
+	require.NoError(t, err)
+
+	statusesMap := map[string]bool{}
+	for _, status := range expectStatuses {
+		statusesMap[string(status)] = true
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), timeout)
+	defer cancel()
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	lastKnownStatus := ""
+	for {
+		countMatchedShards := 0
+		r := onlineddl.VtgateExecQuery(t, &vtParams, query, "")
+		for _, row := range r.Named().Rows {
+			shardName := row["shard"].ToString()
+			if !shardNames[shardName] {
+				// irrelevant shard
+				continue
+			}
+			lastKnownStatus = row["migration_status"].ToString()
+			if row["migration_uuid"].ToString() == uuid && statusesMap[lastKnownStatus] {
+				countMatchedShards++
+			}
+		}
+		if countMatchedShards == len(shards) {
+			return schema.OnlineDDLStatus(lastKnownStatus)
+		}
+		select {
+		case <-ctx.Done():
+			return schema.OnlineDDLStatus(lastKnownStatus)
+		case <-ticker.C:
+		}
+	}
+}
+
 // testOnlineDDLStatement runs an online DDL, ALTER statement
 func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy string, executeStrategy string, expectHint string) (uuid string) {
 	if executeStrategy == "vtgate" {
@@ -900,7 +997,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 		}
 	} else {
 		var err error
-		uuid, err = clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(keyspaceName, alterStatement, cluster.ApplySchemaParams{DDLStrategy: ddlStrategy})
+		uuid, err = applySchemaWithOutput(t, alterStatement, ddlStrategy)
 		assert.NoError(t, err)
 	}
 	uuid = strings.TrimSpace(uuid)
@@ -912,7 +1009,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 
 	if !strategySetting.Strategy.IsDirect() {
 		t.Logf("===== waiting for migration %v to conclude", uuid)
-		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+		status := waitForMigrationStatus(t, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 	}
 
@@ -964,7 +1061,7 @@ func waitForTable(t *testing.T, tableName string, conn *mysql.Conn) {
 
 // checkTable checks that the given table exists on all tablets
 func checkTable(t *testing.T, showTableName string, expectHint string) {
-	for _, tablet := range shards[0].Vttablets {
+	for _, tablet := range shards[0].Tablets() {
 		checkTablesCount(t, tablet, showTableName, 1)
 		if expectHint != "" {
 			createStatement := getCreateTableStatement(t, tablet, showTableName)
@@ -974,13 +1071,13 @@ func checkTable(t *testing.T, showTableName string, expectHint string) {
 }
 
 // checkTablesCount checks the number of tables in the given tablet
-func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName string, expectCount int) {
+func checkTablesCount(t *testing.T, tablet *vitesst.Tablet, showTableName string, expectCount int) {
 	query := fmt.Sprintf(`show tables like '%s';`, showTableName)
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	rowcount := 0
 	for {
-		queryResult, err := tablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
+		queryResult, err := tablet.QueryTablet(t.Context(), query)
 		require.Nil(t, err)
 		rowcount = len(queryResult.Rows)
 		if rowcount > 0 {
@@ -997,7 +1094,7 @@ func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName stri
 }
 
 // getCreateTableStatement returns the CREATE TABLE statement for a given table
-func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName string) (statement string) {
+func getCreateTableStatement(t *testing.T, tablet *vitesst.Tablet, tableName string) (statement string) {
 	queryResult := queryTablet(t, tablet, "show create table "+tableName, "")
 
 	require.Equal(t, len(queryResult.Rows), 1)
@@ -1327,7 +1424,7 @@ func populateTables(t *testing.T, tcase *testCase) {
 // and the values do not match what reported to us when we UPDATE/DELETE on the parent tables.
 func testSelectTableMetrics(
 	t *testing.T,
-	tablet *cluster.Vttablet,
+	tablet *vitesst.Tablet,
 	tableName string,
 	tcase *testCase,
 ) int64 {
@@ -1391,7 +1488,7 @@ func testSelectTableFKErrors(
 //     the binary log. And so, if VTGate does not do a proper job, then a parent and child will drift apart in CASCADE writes.
 func testFKIntegrity(
 	t *testing.T,
-	tablet *cluster.Vttablet,
+	tablet *vitesst.Tablet,
 	tcase *testCase,
 ) {
 	testName := tabletTestName(t, tablet)

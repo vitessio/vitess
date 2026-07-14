@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"os"
-	"path"
 	"runtime"
 	"strings"
 	"sync"
@@ -33,9 +32,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/onlineddl"
-	"vitess.io/vitess/go/test/endtoend/throttler"
+	"vitess.io/vitess/go/test/vitesst"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
 )
@@ -82,17 +80,15 @@ deletesAttempts=%d, deletesFailures=%d, deletesNoops=%d, deletes=%d,
 }
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
-	shards          []cluster.Shard
+	clusterInstance *vitesst.Cluster
+	shards          []*vitesst.Shard
 	vtParams        mysql.ConnParams
 
 	opOrder               int64
 	opOrderMutex          sync.Mutex
 	onlineDDLStrategy     = "vitess"
-	hostname              = "localhost"
 	keyspaceName          = "ks"
-	cell                  = "zone1"
-	schemaChangeDirectory = ""
+	schemaChangeDirectory = "/vt/files"
 	tableName             = `stress_test`
 	cleanupStatements     = []string{
 		`DROP TABLE IF EXISTS stress_test`,
@@ -160,55 +156,41 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitcode, err := func() (int, error) {
-		clusterInstance = cluster.NewCluster(cell, hostname)
-		schemaChangeDirectory = path.Join("/tmp", fmt.Sprintf("schema_change_dir_%d", clusterInstance.GetAndReserveTabletUID()))
-		defer os.RemoveAll(schemaChangeDirectory)
-		defer clusterInstance.Teardown()
+		ctx := context.Background()
 
-		if _, err := os.Stat(schemaChangeDirectory); os.IsNotExist(err) {
-			_ = os.Mkdir(schemaChangeDirectory, 0o700)
-		}
-
-		clusterInstance.VtctldExtraArgs = []string{
-			"--schema-change-dir", schemaChangeDirectory,
-			"--schema-change-controller", "local",
-			"--schema-change-check-interval", "1s",
-		}
-
-		clusterInstance.VtTabletExtraArgs = []string{
-			"--heartbeat-interval", "250ms",
-			"--heartbeat-on-demand-duration", "5s",
-			"--migration-check-interval", "5s",
-		}
-		clusterInstance.VtGateExtraArgs = []string{
-			"--ddl-strategy", "online",
-		}
-
-		if err := clusterInstance.StartTopo(); err != nil {
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithVTCtldArgs(
+				"--schema-change-dir", schemaChangeDirectory,
+				"--schema-change-controller", "local",
+				"--schema-change-check-interval", "1s",
+			),
+			vitesst.WithVTTabletArgs(
+				"--heartbeat-interval", "250ms",
+				"--heartbeat-on-demand-duration", "5s",
+				"--migration-check-interval", "5s",
+			),
+			vitesst.WithVTGateArgs(
+				"--ddl-strategy", "online",
+			),
+			// No need for replicas in this stress test
+			vitesst.WithKeyspace(keyspaceName).WithShardNames("1"),
+		)
+		if err != nil {
 			return 1, err
 		}
 
-		// Start keyspace
-		keyspace := &cluster.Keyspace{
-			Name: keyspaceName,
-		}
-
-		// No need for replicas in this stress test
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"1"}, 0, false, clusterInstance.Cell); err != nil {
+		cleanup, err := cluster.Start(ctx)
+		if err != nil {
 			return 1, err
 		}
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
+			}
+		}()
 
-		vtgateInstance := clusterInstance.NewVtgateInstance()
-		// Start vtgate
-		if err := vtgateInstance.Setup(); err != nil {
-			return 1, err
-		}
-		// ensure it is torn down during cluster TearDown
-		clusterInstance.VtgateProcess = *vtgateInstance
-		vtParams = mysql.ConnParams{
-			Host: clusterInstance.Hostname,
-			Port: clusterInstance.VtgateMySQLPort,
-		}
+		clusterInstance = cluster
+		vtParams = cluster.VTParams(ctx, "")
 
 		return m.Run(), nil
 	}()
@@ -223,13 +205,13 @@ func TestMain(m *testing.M) {
 func TestVreplMiniStressSchemaChanges(t *testing.T) {
 	ctx := t.Context()
 
-	shards = clusterInstance.Keyspaces[0].Shards
+	shards = clusterInstance.Keyspace(keyspaceName).Shards()
 	require.Equal(t, 1, len(shards))
 
-	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance)
+	enableLagThrottlerAndWaitForStatus(ctx, t, clusterInstance)
 
 	t.Run("create schema", func(t *testing.T) {
-		assert.Equal(t, 1, len(clusterInstance.Keyspaces[0].Shards))
+		assert.Equal(t, 1, len(shards))
 		testWithInitialSchema(t)
 	})
 	for i := range countIterations {
@@ -267,7 +249,7 @@ func TestVreplMiniStressSchemaChanges(t *testing.T) {
 		initTable(t)
 		hint := "hint-alter-without-workload"
 		uuid := testOnlineDDLStatement(t, fmt.Sprintf(alterHintStatement, hint), onlineDDLStrategy, "vtgate", hint)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		checkMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		testSelectTableMetrics(t)
 	})
 
@@ -297,7 +279,7 @@ func TestVreplMiniStressSchemaChanges(t *testing.T) {
 				})
 				hint := fmt.Sprintf("hint-alter-with-workload-%d", i)
 				uuid := testOnlineDDLStatement(t, fmt.Sprintf(alterHintStatement, hint), onlineDDLStrategy, "vtgate", hint)
-				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+				checkMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 				cancel() // Now that the migration is complete, we can stop the workload.
 				wg.Wait()
 			})
@@ -308,17 +290,17 @@ func TestVreplMiniStressSchemaChanges(t *testing.T) {
 	}
 
 	t.Run("summary: validate sequential migration IDs", func(t *testing.T) {
-		onlineddl.ValidateSequentialMigrationIDs(t, &vtParams, shards)
+		validateSequentialMigrationIDs(t, &vtParams, shards)
 	})
 }
 
 func testWithInitialSchema(t *testing.T) {
 	for _, statement := range cleanupStatements {
-		err := clusterInstance.VtctldClientProcess.ApplySchema(keyspaceName, statement)
+		err := applySchema(t.Context(), keyspaceName, statement)
 		require.Nil(t, err)
 	}
 	// Create the stress table
-	err := clusterInstance.VtctldClientProcess.ApplySchema(keyspaceName, createStatement)
+	err := applySchema(t.Context(), keyspaceName, createStatement)
 	require.Nil(t, err)
 
 	// Check if table is created
@@ -334,7 +316,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 		}
 	} else {
 		var err error
-		uuid, err = clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(keyspaceName, alterStatement, cluster.ApplySchemaParams{DDLStrategy: ddlStrategy})
+		uuid, err = applySchemaWithOutput(t.Context(), keyspaceName, alterStatement, applySchemaParams{DDLStrategy: ddlStrategy})
 		assert.NoError(t, err)
 	}
 	uuid = strings.TrimSpace(uuid)
@@ -345,7 +327,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 	assert.NoError(t, err)
 
 	if !strategySetting.Strategy.IsDirect() {
-		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+		status := waitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 	}
 
@@ -357,13 +339,13 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 
 // checkTable checks the number of tables in the first two shards.
 func checkTable(t *testing.T, showTableName string) {
-	for i := range clusterInstance.Keyspaces[0].Shards {
-		checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[i].Vttablets[0], showTableName, 1)
+	for _, shard := range shards {
+		checkTablesCount(t, shard.Tablets()[0], showTableName, 1)
 	}
 }
 
 // checkTablesCount checks the number of tables in the given tablet
-func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName string, expectCount int) {
+func checkTablesCount(t *testing.T, tablet *vitesst.Tablet, showTableName string, expectCount int) {
 	query := fmt.Sprintf(`show tables like '%%%s%%';`, showTableName)
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
@@ -373,7 +355,7 @@ func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName stri
 	rowcount := 0
 
 	for {
-		queryResult, err := tablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
+		queryResult, err := tablet.QueryTablet(ctx, query)
 		require.Nil(t, err)
 		rowcount = len(queryResult.Rows)
 		if rowcount > 0 {
@@ -395,15 +377,15 @@ func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName stri
 
 // checkMigratedTables checks the CREATE STATEMENT of a table after migration
 func checkMigratedTable(t *testing.T, tableName, expectHint string) {
-	for i := range clusterInstance.Keyspaces[0].Shards {
-		createStatement := getCreateTableStatement(t, clusterInstance.Keyspaces[0].Shards[i].Vttablets[0], tableName)
+	for _, shard := range shards {
+		createStatement := getCreateTableStatement(t, shard.Tablets()[0], tableName)
 		assert.Contains(t, createStatement, expectHint)
 	}
 }
 
 // getCreateTableStatement returns the CREATE TABLE statement for a given table
-func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName string) (statement string) {
-	queryResult, err := tablet.VttabletProcess.QueryTablet(fmt.Sprintf("show create table %s;", tableName), keyspaceName, true)
+func getCreateTableStatement(t *testing.T, tablet *vitesst.Tablet, tableName string) (statement string) {
+	queryResult, err := tablet.QueryTablet(t.Context(), fmt.Sprintf("show create table %s;", tableName))
 	require.Nil(t, err)
 
 	assert.Equal(t, len(queryResult.Rows), 1)

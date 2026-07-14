@@ -25,25 +25,21 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/capabilities"
+	"vitess.io/vitess/go/test/vitesst"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/gc"
-
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/onlineddl"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
-	primaryTablet   cluster.Vttablet
-	hostname        = "localhost"
+	clusterInstance *vitesst.Cluster
+	primaryTablet   *vitesst.Tablet
 	keyspaceName    = "ks"
-	cell            = "zone1"
 	fastDropTable   bool
 	sqlCreateTable  = `
 		create table if not exists t1(
@@ -87,43 +83,40 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(cell, hostname)
-		defer clusterInstance.Teardown()
+		ctx := context.Background()
 
-		// Start topo server
-		err := clusterInstance.StartTopo()
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithVTOrc(),
+			vitesst.WithVTTabletArgs(
+				"--lock-tables-timeout", "5s",
+				"--enable-replication-reporter",
+				"--heartbeat-interval", "250ms",
+				"--gc-check-interval", gcCheckInterval.String(),
+				"--gc-purge-check-interval", gcPurgeCheckInterval.String(),
+				"--table-gc-lifecycle", "hold,purge,evac,drop",
+			),
+			vitesst.WithKeyspace(keyspaceName).
+				WithReplicas(1).
+				WithSchema(strings.Join(sqlSchema, ";")).
+				WithVSchema(vSchema),
+		)
 		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-
-		// Set extra tablet args for lock timeout
-		clusterInstance.VtTabletExtraArgs = []string{
-			"--lock-tables-timeout", "5s",
-			"--enable-replication-reporter",
-			"--heartbeat-interval", "250ms",
-			"--gc-check-interval", gcCheckInterval.String(),
-			"--gc-purge-check-interval", gcPurgeCheckInterval.String(),
-			"--table-gc-lifecycle", "hold,purge,evac,drop",
-		}
-
-		// Start keyspace
-		keyspace := &cluster.Keyspace{
-			Name:      keyspaceName,
-			SchemaSQL: strings.Join(sqlSchema, ";"),
-			VSchema:   vSchema,
-		}
-
-		if err = clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false, clusterInstance.Cell); err != nil {
+		cleanup, err := cluster.Start(ctx)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-
-		// Collect table paths and ports
-		tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
-		for _, tablet := range tablets {
-			if tablet.Type == "primary" {
-				primaryTablet = *tablet
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
 			}
-		}
+		}()
+
+		clusterInstance = cluster
+		primaryTablet = cluster.Keyspace(keyspaceName).Shards()[0].Primary()
 
 		return m.Run()
 	}()
@@ -134,7 +127,7 @@ func getTableRows(t *testing.T, tableName string) int64 {
 	require.NotEmpty(t, tableName)
 	query := `select count(*) as c from %a`
 	parsed := sqlparser.BuildParsedQuery(query, tableName)
-	rs, err := primaryTablet.VttabletProcess.QueryTablet(parsed.Query, keyspaceName, true)
+	rs, err := primaryTablet.QueryTablet(t.Context(), parsed.Query)
 	require.NoError(t, err)
 	count := rs.Named().Row().AsInt64("c", 0)
 	return count
@@ -146,27 +139,29 @@ func checkTableRows(t *testing.T, tableName string, expect int64) {
 }
 
 func populateTable(t *testing.T) {
-	err := primaryTablet.VttabletProcess.QueryTabletMultiple(sqlSchema, keyspaceName, true)
-	require.NoError(t, err)
+	for _, query := range sqlSchema {
+		_, err := primaryTablet.QueryTablet(t.Context(), query)
+		require.NoError(t, err)
+	}
 
-	_, err = primaryTablet.VttabletProcess.QueryTablet("delete from t1", keyspaceName, true)
+	_, err := primaryTablet.QueryTablet(t.Context(), "delete from t1")
 	require.NoError(t, err)
-	_, err = primaryTablet.VttabletProcess.QueryTablet("insert into t1 (id, value) values (null, md5(rand()))", keyspaceName, true)
+	_, err = primaryTablet.QueryTablet(t.Context(), "insert into t1 (id, value) values (null, md5(rand()))")
 	require.NoError(t, err)
 	for range 10 {
-		_, err = primaryTablet.VttabletProcess.QueryTablet("insert into t1 (id, value) select null, md5(rand()) from t1", keyspaceName, true)
+		_, err = primaryTablet.QueryTablet(t.Context(), "insert into t1 (id, value) select null, md5(rand()) from t1")
 		require.NoError(t, err)
 	}
 	checkTableRows(t, "t1", 1024)
 	{
-		exists, _, err := tableExists("t1")
+		exists, _, err := tableExists(t.Context(), "t1")
 		require.NoError(t, err)
 		require.True(t, exists)
 	}
 }
 
 // tableExists sees that a given table exists in MySQL
-func tableExists(exprs ...string) (exists bool, tableName string, err error) {
+func tableExists(ctx context.Context, exprs ...string) (exists bool, tableName string, err error) {
 	if len(exprs) == 0 {
 		return false, "", errors.New("empty table list")
 	}
@@ -176,7 +171,7 @@ func tableExists(exprs ...string) (exists bool, tableName string, err error) {
 	}
 	clause := strings.Join(clauses, " or ")
 	query := fmt.Sprintf(`select table_name as table_name from information_schema.tables where table_schema=database() and (%s)`, clause)
-	rs, err := primaryTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
+	rs, err := primaryTablet.QueryTablet(ctx, query)
 	if err != nil {
 		return false, "", err
 	}
@@ -194,7 +189,7 @@ func validateTableDoesNotExist(t *testing.T, tableExpr string) {
 	defer ticker.Stop()
 
 	for {
-		exists, foundTableName, err := tableExists(tableExpr)
+		exists, foundTableName, err := tableExists(t.Context(), tableExpr)
 		require.NoError(t, err)
 		if !exists {
 			return
@@ -216,7 +211,7 @@ func validateTableExists(t *testing.T, tableExpr string) {
 	defer ticker.Stop()
 
 	for {
-		exists, _, err := tableExists(tableExpr)
+		exists, _, err := tableExists(t.Context(), tableExpr)
 		require.NoError(t, err)
 		if exists {
 			return
@@ -265,7 +260,7 @@ func validateAnyState(t *testing.T, expectNumRows int64, states ...schema.TableG
 				default:
 					require.Failf(t, "unknown state", "%v", state)
 				}
-				exists, tableName, err := tableExists(searchExpr, searchExpr2)
+				exists, tableName, err := tableExists(t.Context(), searchExpr, searchExpr2)
 				require.NoError(t, err)
 
 				var foundRows int64
@@ -296,12 +291,12 @@ func validateAnyState(t *testing.T, expectNumRows int64, states ...schema.TableG
 func dropTable(t *testing.T, tableName string) {
 	query := `drop table if exists %a`
 	parsed := sqlparser.BuildParsedQuery(query, tableName)
-	_, err := primaryTablet.VttabletProcess.QueryTablet(parsed.Query, keyspaceName, true)
+	_, err := primaryTablet.QueryTablet(t.Context(), parsed.Query)
 	require.NoError(t, err)
 }
 
 func TestCapability(t *testing.T) {
-	mysqlVersion := onlineddl.GetMySQLVersion(t, clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet())
+	mysqlVersion := getMySQLVersion(t)
 	require.NotEmpty(t, mysqlVersion)
 
 	capableOf := mysql.ServerVersionCapableOf(mysqlVersion)
@@ -309,6 +304,18 @@ func TestCapability(t *testing.T) {
 	var err error
 	fastDropTable, err = capableOf(capabilities.FastDropTableFlavorCapability)
 	require.NoError(t, err)
+}
+
+// getMySQLVersion returns the version of the MySQL server backing the primary tablet
+func getMySQLVersion(t *testing.T) string {
+	primary := clusterInstance.Keyspace(keyspaceName).Shards()[0].Primary()
+	rs, err := primary.QueryTablet(t.Context(), `select @@version as version`)
+	assert.NoError(t, err)
+	row := rs.Named().Row()
+	assert.NotNil(t, row)
+	version := row["version"].ToString()
+	assert.NotEmpty(t, row)
+	return version
 }
 
 func TestPopulateTable(t *testing.T) {
@@ -326,7 +333,7 @@ func TestHold(t *testing.T) {
 	query, tableName, err := generateRenameStatement("t1", schema.HoldTableGCState, time.Now().UTC().Add(tableTransitionExpiration))
 	assert.NoError(t, err)
 
-	_, err = primaryTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
+	_, err = primaryTablet.QueryTablet(t.Context(), query)
 	assert.NoError(t, err)
 
 	validateTableDoesNotExist(t, "t1")
@@ -359,7 +366,7 @@ func TestEvac(t *testing.T) {
 		query, tableName, err = generateRenameStatement("t1", schema.EvacTableGCState, time.Now().UTC().Add(tableTransitionExpiration))
 		assert.NoError(t, err)
 
-		_, err = primaryTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
+		_, err = primaryTablet.QueryTablet(t.Context(), query)
 		assert.NoError(t, err)
 
 		validateTableDoesNotExist(t, "t1")
@@ -390,7 +397,7 @@ func TestDrop(t *testing.T) {
 	query, tableName, err := generateRenameStatement("t1", schema.DropTableGCState, time.Now().UTC().Add(tableTransitionExpiration))
 	assert.NoError(t, err)
 
-	_, err = primaryTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
+	_, err = primaryTablet.QueryTablet(t.Context(), query)
 	assert.NoError(t, err)
 
 	validateTableDoesNotExist(t, "t1")
@@ -406,7 +413,7 @@ func TestPurge(t *testing.T) {
 	query, tableName, err := generateRenameStatement("t1", schema.PurgeTableGCState, time.Now().UTC().Add(tableTransitionExpiration))
 	require.NoError(t, err)
 
-	_, err = primaryTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
+	_, err = primaryTablet.QueryTablet(t.Context(), query)
 	require.NoError(t, err)
 
 	validateTableDoesNotExist(t, "t1")
@@ -431,7 +438,7 @@ func TestPurgeView(t *testing.T) {
 	query, tableName, err := generateRenameStatement("v1", schema.PurgeTableGCState, time.Now().UTC().Add(tableTransitionExpiration))
 	require.NoError(t, err)
 
-	_, err = primaryTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
+	_, err = primaryTablet.QueryTablet(t.Context(), query)
 	require.NoError(t, err)
 
 	// table untouched
@@ -469,7 +476,7 @@ func TestDropView(t *testing.T) {
 	require.NoError(t, err)
 	createStatement := fmt.Sprintf("create or replace view %s as select 1", viewName)
 
-	_, err = primaryTablet.VttabletProcess.QueryTablet(createStatement, keyspaceName, true)
+	_, err = primaryTablet.QueryTablet(t.Context(), createStatement)
 	require.NoError(t, err)
 
 	// view should be there, because the timestamp hint is still in the near future.

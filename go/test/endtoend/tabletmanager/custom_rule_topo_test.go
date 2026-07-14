@@ -16,18 +16,37 @@ limitations under the License.
 package tabletmanager
 
 import (
-	"os"
 	"testing"
 	"time"
-
-	"vitess.io/vitess/go/test/endtoend/utils"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/vitesst"
+)
+
+const (
+	// topoCustomRuleEmptyFile and topoCustomRuleDenyFile hold the query rule
+	// documents inside the vtctld container, where vtctldclient reads them.
+	topoCustomRuleEmptyFile = "/vt/files/rules.json"
+	topoCustomRuleDenyFile  = "/vt/files/rules_deny.json"
+
+	topoCustomRulePath = "/keyspaces/ks/configs/CustomRules"
+
+	emptyCustomRules = "[]\n"
+
+	denySelectCustomRules = `[{
+		"Name": "rule1",
+		"Description": "disallow select on table t1",
+		"TableNames" : ["t1"],
+		"Query" : "(select)|(SELECT)"
+	  }]`
+
+	// topoGlobalServerAddress is the topology server as reached from inside the
+	// cluster network, for vtctldclient commands that talk to it directly.
+	topoGlobalServerAddress = "etcd:2379"
 )
 
 func TestTopoCustomRule(t *testing.T) {
@@ -40,38 +59,28 @@ func TestTopoCustomRule(t *testing.T) {
 	defer replicaConn.Close()
 
 	// Insert data for sanity checks
-	utils.Exec(t, conn, "delete from t1")
-	utils.Exec(t, conn, "insert into t1(id, value) values(11,'r'), (12,'s')")
+	vitesst.Exec(t, conn, "delete from t1")
+	vitesst.Exec(t, conn, "insert into t1(id, value) values(11,'r'), (12,'s')")
 	checkDataOnReplica(t, replicaConn, `[[VARCHAR("r")] [VARCHAR("s")]]`)
 
-	// create empty topoCustomRuleFile.
-	topoCustomRuleFile := "/tmp/rules.json"
-	topoCustomRulePath := "/keyspaces/ks/configs/CustomRules"
-	data := []byte("[]\n")
-	err = os.WriteFile(topoCustomRuleFile, data, 0o777)
-	require.NoError(t, err)
-
-	// Copy config file into topo.
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("--server", "internal", "WriteTopologyPath", topoCustomRulePath, topoCustomRuleFile)
+	// Copy the empty config file into topo.
+	err = writeTopologyPath(t, topoCustomRulePath, topoCustomRuleEmptyFile)
 	require.Nil(t, err, "error should be Nil")
 
-	// Set extra tablet args for topo custom rule
-	clusterInstance.VtTabletExtraArgs = []string{
+	// Start a new Tablet with the topo custom rule
+	rTablet, err := clusterInstance.AddTablet(ctx, cell, keyspaceName, shardName, "replica")
+	require.Nil(t, err, "error should be Nil")
+
+	err = rTablet.StopVttablet(ctx)
+	require.Nil(t, err, "error should be Nil")
+	err = rTablet.StartVttablet(ctx,
 		"--topocustomrule-path", topoCustomRulePath,
-	}
-
-	// Start a new Tablet
-	rTablet := clusterInstance.NewVttabletInstance("replica", 0, "")
-
-	// Start Mysql Processes
-	err = cluster.StartMySQL(ctx, rTablet, username, clusterInstance.TmpDirectory)
+	)
+	require.Nil(t, err, "error should be Nil")
+	err = rTablet.WaitForTabletStatus(ctx, vttabletStateTimeout, "SERVING")
 	require.Nil(t, err, "error should be Nil")
 
-	// Start Vttablet
-	err = clusterInstance.StartVttablet(rTablet, false, "SERVING", false, cell, keyspaceName, hostname, shardName)
-	require.Nil(t, err, "error should be Nil")
-
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("Validate")
+	err = clusterInstance.Vtctld().ExecuteCommand(ctx, "Validate")
 	require.Nil(t, err, "error should be Nil")
 
 	// And wait until the query is working.
@@ -79,7 +88,7 @@ func TestTopoCustomRule(t *testing.T) {
 	// It might take a while to replicate the two rows.
 	timeout := time.Now().Add(10 * time.Second)
 	for time.Now().Before(timeout) {
-		qr, err := clusterInstance.ExecOnTablet(t.Context(), rTablet, "select id, value from t1", nil, nil)
+		qr, err := execOnTablet(t.Context(), rTablet, "select id, value from t1", nil, nil)
 		if err == nil {
 			if len(qr.Rows) == 2 {
 				break
@@ -89,22 +98,13 @@ func TestTopoCustomRule(t *testing.T) {
 	}
 
 	// Now update the topocustomrule file.
-	data = []byte(`[{
-		"Name": "rule1",
-		"Description": "disallow select on table t1",
-		"TableNames" : ["t1"],
-		"Query" : "(select)|(SELECT)"
-	  }]`)
-	err = os.WriteFile(topoCustomRuleFile, data, 0o777)
-	require.NoError(t, err)
-
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("--server", "internal", "WriteTopologyPath", topoCustomRulePath, topoCustomRuleFile)
+	err = writeTopologyPath(t, topoCustomRulePath, topoCustomRuleDenyFile)
 	require.Nil(t, err, "error should be Nil")
 
 	// And wait until the query fails with the right error.
 	timeout = time.Now().Add(10 * time.Second)
 	for time.Now().Before(timeout) {
-		if _, err := clusterInstance.ExecOnTablet(t.Context(), rTablet, "select id, value from t1", nil, nil); err != nil {
+		if _, err := execOnTablet(t.Context(), rTablet, "select id, value from t1", nil, nil); err != nil {
 			assert.Contains(t, err.Error(), "disallow select on table t1")
 			break
 		}
@@ -112,9 +112,18 @@ func TestTopoCustomRule(t *testing.T) {
 	}
 
 	// Empty the table
-	utils.Exec(t, conn, "delete from t1")
-	// Reset the VtTabletExtraArgs
-	clusterInstance.VtTabletExtraArgs = []string{}
+	vitesst.Exec(t, conn, "delete from t1")
 	// Tear down custom processes
-	killTablets(rTablet)
+	killTablets(ctx, rTablet)
+}
+
+// writeTopologyPath copies a file of the vtctld container to the given path in
+// the topology server.
+func writeTopologyPath(t *testing.T, path, file string) error {
+	t.Helper()
+	return clusterInstance.Vtctld().ExecuteCommand(t.Context(),
+		"--server", "internal",
+		"--topo-global-server-address", topoGlobalServerAddress,
+		"WriteTopologyPath", path, file,
+	)
 }

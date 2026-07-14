@@ -17,6 +17,7 @@ limitations under the License.
 package tabletmanager
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -28,8 +29,9 @@ import (
 
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/test/vitesst"
 
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
@@ -53,14 +55,14 @@ func TestTabletCommands(t *testing.T) {
 	defer replicaConn.Close()
 
 	// Sanity Check
-	utils.Exec(t, conn, "delete from t1")
-	utils.Exec(t, conn, "insert into t1(id, value) values(1,'a'), (2,'b')")
+	vitesst.Exec(t, conn, "delete from t1")
+	vitesst.Exec(t, conn, "insert into t1(id, value) values(1,'a'), (2,'b')")
 	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")] [VARCHAR("b")]]`)
 
 	t.Run("ExecuteFetchAsDBA", func(t *testing.T) {
 		// make sure direct dba queries work
 		sql := "select * from t1"
-		result, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ExecuteFetchAsDBA", "--json", primaryTablet.Alias, sql)
+		result, err := clusterInstance.Vtctld().ExecuteCommandWithOutput(t.Context(), "ExecuteFetchAsDBA", "--json", primaryTablet.Alias(), sql)
 		require.Nil(t, err)
 		assertExecuteFetch(t, result)
 	})
@@ -68,70 +70,70 @@ func TestTabletCommands(t *testing.T) {
 	t.Run("ExecuteMultiFetchAsDBA", func(t *testing.T) {
 		// make sure direct dba queries work
 		sql := "select * from t1; select * from t1 limit 100"
-		result, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ExecuteMultiFetchAsDBA", "--json", primaryTablet.Alias, sql)
+		result, err := clusterInstance.Vtctld().ExecuteCommandWithOutput(t.Context(), "ExecuteMultiFetchAsDBA", "--json", primaryTablet.Alias(), sql)
 		require.Nil(t, err)
 		assertExecuteMultiFetch(t, result)
 	})
 
 	t.Run("GetUnresolvedTransactions", func(t *testing.T) {
-		_, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("DistributedTransaction", "unresolved-list",
+		_, err := clusterInstance.Vtctld().ExecuteCommandWithOutput(t.Context(), "DistributedTransaction", "unresolved-list",
 			"--keyspace", keyspaceName)
 		require.NoError(t, err)
 	})
 	t.Run("GetUnresolvedTransactions with age threshold", func(t *testing.T) {
-		_, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("DistributedTransaction", "unresolved-list",
+		_, err := clusterInstance.Vtctld().ExecuteCommandWithOutput(t.Context(), "DistributedTransaction", "unresolved-list",
 			"--keyspace", keyspaceName,
 			"--abandon-age", "32")
 		require.NoError(t, err)
 	})
 	t.Run("ConcludeTransaction", func(t *testing.T) {
-		output, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("DistributedTransaction", "conclude", "--dtid", "ks:0:1234")
+		output, err := clusterInstance.Vtctld().ExecuteCommandWithOutput(t.Context(), "DistributedTransaction", "conclude", "--dtid", "ks:0:1234")
 		assert.NoError(t, err)
 		assert.Contains(t, output, "Successfully concluded the distributed transaction")
 	})
 
 	// check Ping / RefreshState / RefreshStateByShard
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("PingTablet", primaryTablet.Alias)
+	err = clusterInstance.Vtctld().ExecuteCommand(ctx, "PingTablet", primaryTablet.Alias())
 	require.Nil(t, err, "error should be Nil")
 
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("RefreshState", primaryTablet.Alias)
+	err = clusterInstance.Vtctld().ExecuteCommand(ctx, "RefreshState", primaryTablet.Alias())
 	require.Nil(t, err, "error should be Nil")
 
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("RefreshStateByShard", keyspaceShard)
+	err = clusterInstance.Vtctld().ExecuteCommand(ctx, "RefreshStateByShard", keyspaceShard)
 	require.Nil(t, err, "error should be Nil")
 
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("RefreshStateByShard", "--cells", cell, keyspaceShard)
+	err = clusterInstance.Vtctld().ExecuteCommand(ctx, "RefreshStateByShard", "--cells", cell, keyspaceShard)
 	require.Nil(t, err, "error should be Nil")
 
 	// Check basic actions.
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("SetWritable", primaryTablet.Alias, "false")
+	err = clusterInstance.Vtctld().ExecuteCommand(ctx, "SetWritable", primaryTablet.Alias(), "false")
 	require.Nil(t, err, "error should be Nil")
-	qr := utils.Exec(t, conn, "show variables like 'read_only'")
+	qr := vitesst.Exec(t, conn, "show variables like 'read_only'")
 	got := fmt.Sprintf("%v", qr.Rows)
 	want := "[[VARCHAR(\"read_only\") VARCHAR(\"ON\")]]"
 	assert.Equal(t, want, got)
 
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("SetWritable", primaryTablet.Alias, "true")
+	err = clusterInstance.Vtctld().ExecuteCommand(ctx, "SetWritable", primaryTablet.Alias(), "true")
 	require.Nil(t, err, "error should be Nil")
-	qr = utils.Exec(t, conn, "show variables like 'read_only'")
+	qr = vitesst.Exec(t, conn, "show variables like 'read_only'")
 	got = fmt.Sprintf("%v", qr.Rows)
 	want = "[[VARCHAR(\"read_only\") VARCHAR(\"OFF\")]]"
 	assert.Equal(t, want, got)
 
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("Validate")
+	err = clusterInstance.Vtctld().ExecuteCommand(ctx, "Validate")
 	require.Nil(t, err, "error should be Nil")
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("Validate", "--ping-tablets")
-	require.Nil(t, err, "error should be Nil")
-
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ValidateKeyspace", keyspaceName)
-	require.Nil(t, err, "error should be Nil")
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ValidateKeyspace", "--ping-tablets", keyspaceName)
+	err = clusterInstance.Vtctld().ExecuteCommand(ctx, "Validate", "--ping-tablets")
 	require.Nil(t, err, "error should be Nil")
 
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ValidateShard", "--ping-tablets", keyspaceShard)
+	err = clusterInstance.Vtctld().ExecuteCommand(ctx, "ValidateKeyspace", keyspaceName)
+	require.Nil(t, err, "error should be Nil")
+	err = clusterInstance.Vtctld().ExecuteCommand(ctx, "ValidateKeyspace", "--ping-tablets", keyspaceName)
 	require.Nil(t, err, "error should be Nil")
 
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ValidateShard", "--ping-tablets", keyspaceShard)
+	err = clusterInstance.Vtctld().ExecuteCommand(ctx, "ValidateShard", "--ping-tablets", keyspaceShard)
+	require.Nil(t, err, "error should be Nil")
+
+	err = clusterInstance.Vtctld().ExecuteCommand(ctx, "ValidateShard", "--ping-tablets", keyspaceShard)
 	require.Nil(t, err, "error should be Nil")
 }
 
@@ -183,33 +185,33 @@ func assertExecuteMultiFetch(t *testing.T, qr string) {
 func TestHook(t *testing.T) {
 	// test a regular program works
 	runHookAndAssert(t, []string{
-		"ExecuteHook", primaryTablet.Alias, "test.sh", "--", "--flag1", "--param1=hello",
+		"ExecuteHook", primaryTablet.Alias(), "test.sh", "--", "--flag1", "--param1=hello",
 	}, 0, false, "")
 
 	// test stderr output
 	runHookAndAssert(t, []string{
-		"ExecuteHook", primaryTablet.Alias, "test.sh", "--", "--to-stderr",
+		"ExecuteHook", primaryTablet.Alias(), "test.sh", "--", "--to-stderr",
 	}, 0, false, "ERR: --to-stderr\n")
 
 	// test commands that fail
 	runHookAndAssert(t, []string{
-		"ExecuteHook", primaryTablet.Alias, "test.sh", "--", "--exit-error",
+		"ExecuteHook", primaryTablet.Alias(), "test.sh", "--", "--exit-error",
 	}, 1, false, "ERROR: exit status 1\n")
 
 	// test hook that is not present
 	runHookAndAssert(t, []string{
-		"ExecuteHook", primaryTablet.Alias, "not_here.sh", "--", "--exit-error",
+		"ExecuteHook", primaryTablet.Alias(), "not_here.sh", "--", "--exit-error",
 	}, -1, false, "missing hook")
 
 	// test hook with invalid name
 
 	runHookAndAssert(t, []string{
-		"ExecuteHook", primaryTablet.Alias, "/bin/ls",
+		"ExecuteHook", primaryTablet.Alias(), "/bin/ls",
 	}, -1, true, "hook name cannot have")
 }
 
 func runHookAndAssert(t *testing.T, params []string, expectedStatus int64, expectedError bool, expectedStderr string) {
-	hr, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(params...)
+	hr, err := clusterInstance.Vtctld().ExecuteCommandWithOutput(t.Context(), params...)
 	if expectedError {
 		assert.Error(t, err, "Expected error")
 	} else {
@@ -225,33 +227,48 @@ func runHookAndAssert(t *testing.T, params []string, expectedStatus int64, expec
 }
 
 func TestShardReplicationFix(t *testing.T) {
+	ctx := t.Context()
+
 	// make sure the replica is in the replication graph, 2 nodes: 1 primary, 1 replica
-	result, err := clusterInstance.VtctldClientProcess.GetShardReplication(keyspaceName, shardName, cell)
+	result, err := getShardReplication(ctx, keyspaceName, shardName, cell)
 	require.Nil(t, err, "error should be Nil")
 	require.NotNil(t, result[cell], "result should not be Nil")
 	assert.Len(t, result[cell].Nodes, 3)
 
 	// Manually add a bogus entry to the replication graph, and check it is removed by ShardReplicationFix
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ShardReplicationAdd", keyspaceShard, cell+"-9000")
+	err = clusterInstance.Vtctld().ExecuteCommand(ctx, "ShardReplicationAdd", keyspaceShard, cell+"-9000")
 	require.Nil(t, err, "error should be Nil")
 
-	result, err = clusterInstance.VtctldClientProcess.GetShardReplication(keyspaceName, shardName, cell)
+	result, err = getShardReplication(ctx, keyspaceName, shardName, cell)
 	require.Nil(t, err, "error should be Nil")
 	require.NotNil(t, result[cell], "result should not be Nil")
 	assert.Len(t, result[cell].Nodes, 4)
 
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ShardReplicationFix", cell, keyspaceShard)
+	err = clusterInstance.Vtctld().ExecuteCommand(ctx, "ShardReplicationFix", cell, keyspaceShard)
 	require.Nil(t, err, "error should be Nil")
-	result, err = clusterInstance.VtctldClientProcess.GetShardReplication(keyspaceName, shardName, cell)
+	result, err = getShardReplication(ctx, keyspaceName, shardName, cell)
 	require.Nil(t, err, "error should be Nil")
 	require.NotNil(t, result[cell], "result should not be Nil")
 	assert.Len(t, result[cell].Nodes, 3)
 }
 
+// getShardReplication returns the replication graph of a shard, by cell.
+func getShardReplication(ctx context.Context, keyspace string, shard string, cells ...string) (map[string]*topodatapb.ShardReplication, error) {
+	args := append([]string{"GetShardReplication", keyspace + "/" + shard}, cells...)
+	out, err := clusterInstance.Vtctld().ExecuteCommandWithOutput(ctx, args...)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp vtctldatapb.GetShardReplicationResponse
+	err = json2.UnmarshalPB([]byte(out), &resp)
+	return resp.ShardReplicationByCell, err
+}
+
 func TestGetSchema(t *testing.T) {
-	res, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("GetSchema",
+	res, err := clusterInstance.Vtctld().ExecuteCommandWithOutput(t.Context(), "GetSchema",
 		"--include-views", "--tables", "t1,v1",
-		fmt.Sprintf("%s-%d", clusterInstance.Cell, primaryTablet.TabletUID))
+		primaryTablet.Alias())
 	require.Nil(t, err)
 
 	t1Create := gjson.Get(res, "table_definitions.#(name==\"t1\").schema")
