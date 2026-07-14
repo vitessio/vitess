@@ -18,65 +18,48 @@ package clone
 
 import (
 	"fmt"
-	"os"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/vitesst"
 	"vitess.io/vitess/go/vt/log"
 )
 
 func TestCloneBackup(t *testing.T) {
-	t.Cleanup(func() { removeBackups(t) })
-	t.Cleanup(tearDown)
+	// The primary and replica1 come up with the shard; replica2 joins later and
+	// restores from the backup this test takes.
+	cluster := startCluster(t,
+		vitesst.WithKeyspace(keyspaceName).
+			WithShardNames(shardName).
+			WithReplicas(1).
+			WithDurabilityPolicy("semi_sync"),
+	)
+	t.Cleanup(func() { removeBackups(t, cluster) })
 
-	// Disable VTOrc recoveries, so that it's not racing with InitShardPrimary
-	// call to set the primary.
-	localCluster.DisableVTOrcRecoveries(t)
+	// Disable VTOrc recoveries, so that it's not racing with the primary
+	// election.
+	disableVTOrcRecoveries(t, cluster)
 
-	// Initialize tablets first so we can connect to MySQL.
-	for _, tablet := range []*cluster.Vttablet{primary, replica1} {
-		err := localCluster.InitTablet(tablet, keyspaceName, shardName)
-		require.NoError(t, err)
-		err = tablet.VttabletProcess.Setup()
-		require.NoError(t, err)
-	}
-
-	// Initialize shard primary.
-	err := localCluster.VtctldClientProcess.InitShardPrimary(keyspaceName, shardName, cell, primary.TabletUID)
-	require.NoError(t, err)
-
-	// Now check if MySQL version supports clone (need vttablet running to query).
-	if !mysqlVersionSupportsClone(t, primary) {
-		ci, ok := os.LookupEnv("CI")
-		if !ok || strings.ToLower(ci) != "true" {
-			t.Skip("Skipping clone test: MySQL version does not support CLONE (requires 8.0.17+)")
-		} else {
-			require.FailNow(t, "CI should be running versions of mysqld that support CLONE")
-		}
-	}
-
-	// Check if clone plugin is available.
-	if !clonePluginAvailable(t, primary) {
-		t.Skip("Skipping clone test: clone plugin not available")
-	}
+	ctx := t.Context()
+	shard := cluster.Keyspace(keyspaceName).Shard(shardName)
+	primary := shard.Primary()
+	replica1 := shard.Replicas()[0]
 
 	// Set up clean test data (table may have data from previous tests).
-	_, err = primary.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)
+	_, err := primary.QueryTablet(ctx, vtInsertTest)
 	require.NoError(t, err)
-	_, err = primary.VttabletProcess.QueryTablet("TRUNCATE TABLE vt_insert_test", keyspaceName, true)
+	_, err = primary.QueryTablet(ctx, "TRUNCATE TABLE vt_insert_test")
 	require.NoError(t, err)
-	_, err = primary.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('clone_test_1')", keyspaceName, true)
+	_, err = primary.QueryTablet(ctx, "insert into vt_insert_test (msg) values ('clone_test_1')")
 	require.NoError(t, err)
-	_, err = primary.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('clone_test_2')", keyspaceName, true)
+	_, err = primary.QueryTablet(ctx, "insert into vt_insert_test (msg) values ('clone_test_2')")
 	require.NoError(t, err)
 
 	// Verify data exists on primary.
-	cluster.VerifyRowsInTablet(t, primary, keyspaceName, 2)
+	verifyRowsInTablet(t, primary, 2)
 
 	// Wait for replica to catch up.
 	waitInsertedRows(
@@ -89,24 +72,24 @@ func TestCloneBackup(t *testing.T) {
 
 	// Take a backup using clone from primary.
 	log.Info("Starting vtbackup with --clone-from-primary")
-	err = vtbackupWithClone(t)
+	err = vtbackupWithClone(t, cluster)
 	require.NoError(t, err)
 
 	// Verify a backup was created.
-	backups := verifyBackupCount(t, shardKsName, 1)
+	backups := verifyBackupCount(t, cluster, 1)
 	assert.NotEmpty(t, backups)
 
 	// Insert more data AFTER the backup was taken.
-	_, err = primary.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('after_backup')", keyspaceName, true)
+	_, err = primary.QueryTablet(ctx, "insert into vt_insert_test (msg) values ('after_backup')")
 	require.NoError(t, err)
-	cluster.VerifyRowsInTablet(t, primary, keyspaceName, 3)
+	verifyRowsInTablet(t, primary, 3)
 
 	// Now bring up replica2 and restore from the backup we just created.
 	// This verifies the clone-based backup actually contains the data.
 	log.Info("Restoring replica2 from backup to verify clone worked")
-	err = localCluster.InitTablet(replica2, keyspaceName, shardName)
+	replica2, err := cluster.AddTablet(ctx, cell, keyspaceName, shardName, "replica")
 	require.NoError(t, err)
-	restore(t, replica2, "replica", "SERVING")
+	require.NoError(t, replica2.WaitForTabletStatus(ctx, time.Minute, "SERVING"))
 
 	// Verify replica2 has ALL the data (2 rows from before backup + 1 from after).
 	// The 2 pre-backup rows prove the clone-based backup worked.
@@ -121,16 +104,10 @@ func TestCloneBackup(t *testing.T) {
 	log.Info("Clone backup verification successful: replica2 has all data")
 }
 
-func vtbackupWithClone(t *testing.T) error {
-	mysqlSocket, err := os.CreateTemp("", "vtbackup_clone_test_mysql.sock")
-	require.NoError(t, err)
-	defer os.Remove(mysqlSocket.Name())
-
+func vtbackupWithClone(t *testing.T, cluster *vitesst.Cluster) error {
 	extraArgs := []string{
 		"--allow-first-backup",
-		"--db-credentials-file", dbCredentialFile,
 		"--mysql-clone-enabled",
-		"--mysql-socket", mysqlSocket.Name(),
 		// Clone from primary instead of restoring from backup.
 		"--restore-with-clone",
 		"--clone-from-primary",
@@ -142,41 +119,18 @@ func vtbackupWithClone(t *testing.T) error {
 	}
 
 	log.Info(fmt.Sprintf("Starting vtbackup with clone args: %v", extraArgs))
-	return localCluster.StartVtbackup(newInitDBFile, false, keyspaceName, shardName, cell, extraArgs...)
+	_, err := cluster.RunVtbackup(t.Context(), vitesst.VtbackupSpec{
+		Keyspace:  keyspaceName,
+		Shard:     shardName,
+		ExtraArgs: extraArgs,
+	})
+	return err
 }
 
-func verifyBackupCount(t *testing.T, shardKsName string, expected int) []string {
-	backups, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("GetBackups", shardKsName)
+func verifyBackupCount(t *testing.T, cluster *vitesst.Cluster, expected int) []string {
+	backups, err := cluster.ListBackups(t.Context(), keyspaceName, shardName)
 	require.NoError(t, err)
 
-	var result []string
-	for line := range strings.SplitSeq(backups, "\n") {
-		if line != "" {
-			result = append(result, line)
-		}
-	}
-	assert.Len(t, result, expected, "expected %d backups, got %d", expected, len(result))
-	return result
-}
-
-func restore(t *testing.T, tablet *cluster.Vttablet, tabletType string, waitForState string) {
-	// Start tablet with restore enabled. MySQL is already running from TestMain.
-	log.Info(fmt.Sprintf("restoring tablet %s", time.Now()))
-	tablet.VttabletProcess.ExtraArgs = vttabletExtraArgs
-	tablet.VttabletProcess.TabletType = tabletType
-	tablet.VttabletProcess.ServingStatus = waitForState
-	tablet.VttabletProcess.SupportsBackup = true
-	err := tablet.VttabletProcess.Setup()
-	require.NoError(t, err)
-}
-
-func tearDown() {
-	for _, tablet := range []*cluster.Vttablet{primary, replica1, replica2} {
-		if tablet != nil && tablet.VttabletProcess != nil {
-			_ = tablet.VttabletProcess.TearDown()
-		}
-		if tablet != nil {
-			_ = localCluster.VtctldClientProcess.ExecuteCommand("DeleteTablets", "--allow-primary", tablet.Alias)
-		}
-	}
+	assert.Len(t, backups, expected, "expected %d backups, got %d", expected, len(backups))
+	return backups
 }

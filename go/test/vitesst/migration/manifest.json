@@ -17,7 +17,7 @@
     "mysqld-process-control",
     "semi-sync"
    ],
-   "ci_shard": null,
+   "ci_shard": "default-2",
    "dropped_tests": [],
    "honesty": null,
    "lifecycle": "shared-cluster",
@@ -40,9 +40,9 @@
     "TestCloneRestore"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/backup/clone",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 55.9,
+   "status": "verified",
+   "verified_at_sha": "fb67a94da0",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/backup/clone/",
    "wave": 4
   },
@@ -269,7 +269,7 @@
     "semi-sync",
     "tablet-metrics"
    ],
-   "ci_shard": null,
+   "ci_shard": "default-1",
    "dropped_tests": [],
    "honesty": null,
    "lifecycle": "shared-cluster",
@@ -295,9 +295,9 @@
     "TestMain"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/backup/vtbackup",
-   "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "runtime_sec": 328.8,
+   "status": "verified",
+   "verified_at_sha": "fb67a94da0",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/backup/vtbackup/",
    "wave": 4
   },
@@ -681,7 +681,7 @@
     "vtgate-restart",
     "tmclient-grpc"
    ],
-   "ci_shard": "default-2",
+   "ci_shard": "default-3",
    "dropped_tests": [],
    "honesty": "pass",
    "lifecycle": "cluster-per-test",
@@ -1547,7 +1547,7 @@
     "prs-ers",
     "compare-mysql"
    ],
-   "ci_shard": "default-2",
+   "ci_shard": "default-3",
    "dropped_tests": [],
    "honesty": "pass",
    "lifecycle": "shared-cluster",
@@ -1580,7 +1580,7 @@
     "extra-args",
     "prs-ers"
    ],
-   "ci_shard": "default-2",
+   "ci_shard": "default-3",
    "dropped_tests": [],
    "honesty": "pass",
    "lifecycle": "shared-cluster",
@@ -2146,7 +2146,7 @@
     "topo-consul",
     "topo-restart"
    ],
-   "ci_shard": "default-2",
+   "ci_shard": "default-3",
    "dropped_tests": [],
    "honesty": "pass",
    "lifecycle": "shared-cluster",
@@ -2185,7 +2185,7 @@
     "vschema",
     "topo-restart"
    ],
-   "ci_shard": "default-2",
+   "ci_shard": "default-3",
    "dropped_tests": [],
    "honesty": "pass",
    "lifecycle": "shared-cluster",
@@ -2326,7 +2326,7 @@
     "extra-args",
     "mysqld-process-control"
    ],
-   "ci_shard": "default-2",
+   "ci_shard": "default-3",
    "dropped_tests": [],
    "honesty": "pass",
    "lifecycle": "shared-cluster",
@@ -2713,7 +2713,7 @@
     "vtorc",
     "tablet-process-control"
    ],
-   "ci_shard": "default-2",
+   "ci_shard": "default-3",
    "dropped_tests": [],
    "honesty": "pass",
    "lifecycle": "shared-cluster",
@@ -3739,7 +3739,7 @@
     "vschema",
     "tablet-metrics"
    ],
-   "ci_shard": "default-2",
+   "ci_shard": "default-1",
    "dropped_tests": [],
    "honesty": "pass",
    "lifecycle": "shared-cluster",
@@ -4692,7 +4692,7 @@
     "schema-tracking",
     "views"
    ],
-   "ci_shard": "default-2",
+   "ci_shard": "default-3",
    "dropped_tests": [],
    "honesty": "pass",
    "lifecycle": "shared-cluster",
@@ -5159,7 +5159,7 @@
     "extra-args",
     "vtgate-metrics"
    ],
-   "ci_shard": "default-2",
+   "ci_shard": "default-3",
    "dropped_tests": [],
    "honesty": "pass",
    "lifecycle": "cluster-per-test",
@@ -5369,7 +5369,7 @@
     "mysqld-process-control",
     "vtorc"
    ],
-   "ci_shard": "default-2",
+   "ci_shard": "default-3",
    "dropped_tests": [],
    "honesty": "pass",
    "lifecycle": "shared-cluster",
@@ -5474,7 +5474,7 @@
     "vtctldclient-exec",
     "vtorc"
    ],
-   "ci_shard": "default-1",
+   "ci_shard": "default-3",
    "dropped_tests": [],
    "honesty": "pass",
    "lifecycle": "shared-cluster",
@@ -5536,7 +5536,7 @@
     "vtctldclient-exec",
     "multi-cell"
    ],
-   "ci_shard": "default-2",
+   "ci_shard": "default-3",
    "dropped_tests": [],
    "honesty": null,
    "lifecycle": "shared-cluster",
@@ -5680,7 +5680,7 @@
     "schema-tracking",
     "vschema"
    ],
-   "ci_shard": "default-1",
+   "ci_shard": "default-2",
    "dropped_tests": [],
    "honesty": "pass",
    "lifecycle": "shared-cluster",
@@ -5716,7 +5716,7 @@
     "init-db-custom",
     "extra-args"
    ],
-   "ci_shard": "default-2",
+   "ci_shard": "default-3",
    "dropped_tests": [],
    "honesty": "pass",
    "lifecycle": "shared-cluster",
@@ -6110,7 +6110,7 @@
     "extra-args",
     "tls"
    ],
-   "ci_shard": "default-2",
+   "ci_shard": "default-3",
    "dropped_tests": [],
    "honesty": "pass",
    "lifecycle": "shared-cluster",
@@ -6140,7 +6140,7 @@
     "extra-args",
     "vtgate-metrics"
    ],
-   "ci_shard": "default-2",
+   "ci_shard": "default-3",
    "dropped_tests": [],
    "honesty": "pass",
    "lifecycle": "shared-cluster",
@@ -6373,7 +6373,7 @@
     "multi-cell",
     "tablet-metrics"
    ],
-   "ci_shard": "default-1",
+   "ci_shard": "default-2",
    "dropped_tests": [],
    "honesty": "pass",
    "lifecycle": "mixed",

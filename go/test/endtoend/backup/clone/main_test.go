@@ -17,42 +17,27 @@ limitations under the License.
 package clone
 
 import (
-	"flag"
-	"fmt"
-	"os"
-	"os/exec"
-	"path"
-	"strings"
+	"context"
+	"net/http"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql/capabilities"
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/utils"
-	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 var (
-	primary           *cluster.Vttablet
-	replica1          *cluster.Vttablet
-	replica2          *cluster.Vttablet
-	localCluster      *cluster.LocalProcessCluster
-	newInitDBFile     string
-	cell              = cluster.DefaultCell
-	hostname          = "localhost"
+	cell              = "zone1"
 	keyspaceName      = "ks"
 	shardName         = "0"
-	dbPassword        = "VtDbaPass"
-	shardKsName       = fmt.Sprintf("%s/%s", keyspaceName, shardName)
-	dbCredentialFile  string
 	vttabletExtraArgs = []string{
 		"--vreplication-retry-delay", "1s",
 		"--degraded-threshold", "5s",
 		"--lock-tables-timeout", "5s",
 		"--enable-replication-reporter",
 		"--serving-state-grace-period", "1s",
+		"--mysql-clone-enabled",
 	}
 	vtInsertTest = `
 		create table if not exists vt_insert_test (
@@ -62,192 +47,91 @@ var (
 		) Engine=InnoDB;`
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+// cloneCnfPath is the clone plugin configuration the image carries; every
+// mysqld picks it up through EXTRA_MY_CNF.
+const cloneCnfPath = "/vt/config/mycnf/clone.cnf"
 
-	exitCode, err := func() (int, error) {
-		localCluster = cluster.NewCluster(cell, hostname)
-		defer localCluster.Teardown()
+// initCloneSQL creates the user MySQL CLONE operations connect to the donor
+// with. BACKUP_ADMIN is required on the donor for clone operations.
+const initCloneSQL = `CREATE USER IF NOT EXISTS 'vt_clone'@'%';
+GRANT BACKUP_ADMIN ON *.* TO 'vt_clone'@'%';`
 
-		// Setup EXTRA_MY_CNF for clone plugin
-		if err := setupExtraMyCnf(); err != nil {
-			log.Error(fmt.Sprintf("Failed to setup extra MySQL config: %v", err))
-			return 1, err
-		}
+// startCluster brings up a cluster for the shard under test: file backup
+// storage, the CLONE plugin loaded in every mysqld, and the vt_clone user
+// seeded through init_db.sql.
+func startCluster(t *testing.T, opts ...vitesst.ClusterOption) *vitesst.Cluster {
+	t.Helper()
 
-		// Start topo server
-		err := localCluster.StartTopo()
-		if err != nil {
-			return 1, err
-		}
-
-		// Start keyspace
-		localCluster.Keyspaces = []cluster.Keyspace{
-			{
-				Name: keyspaceName,
-				Shards: []cluster.Shard{
-					{
-						Name: shardName,
-					},
-				},
-			},
-		}
-		shard := &localCluster.Keyspaces[0].Shards[0]
-		vtctldClientProcess := cluster.VtctldClientProcessInstance(localCluster.VtctldProcess.GrpcPort, localCluster.TopoPort, "localhost", localCluster.TmpDirectory)
-		_, err = vtctldClientProcess.ExecuteCommandWithOutput("CreateKeyspace", keyspaceName, "--durability-policy=semi_sync")
-		if err != nil {
-			return 1, err
-		}
-
-		// Create a new init_db.sql file that sets up passwords for all users and clone user
-		dbCredentialFile = cluster.WriteDbCredentialToTmp(localCluster.TmpDirectory)
-		initDb, _ := os.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
-		initClone, err := os.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_clone.sql"))
-		if err != nil {
-			log.Warn(fmt.Sprintf("init_clone.sql not found, clone tests may fail: %v", err))
-			initClone = []byte("")
-		}
-
-		sql := string(initDb)
-		// The original init_db.sql does not have any passwords. Here we update the init file with passwords
-		sql, err = utils.GetInitDBSQL(sql, cluster.GetPasswordUpdateSQL(localCluster), string(initClone))
-		if err != nil {
-			return 1, err
-		}
-		newInitDBFile = path.Join(localCluster.TmpDirectory, "init_db_with_passwords_and_clone.sql")
-		err = os.WriteFile(newInitDBFile, []byte(sql), 0o666)
-		if err != nil {
-			return 1, err
-		}
-
-		mysqlctlExtraArgs := []string{"--db-credentials-file", dbCredentialFile}
-		vttabletExtraArgs = append(vttabletExtraArgs,
-			"--db-credentials-file", dbCredentialFile,
-			"--mysql-clone-enabled")
-
-		primary = localCluster.NewVttabletInstance("replica", 0, "")
-		replica1 = localCluster.NewVttabletInstance("replica", 0, "")
-		replica2 = localCluster.NewVttabletInstance("replica", 0, "")
-		shard.Vttablets = []*cluster.Vttablet{primary, replica1, replica2}
-
-		// Start MySql processes
-		var mysqlProcs []*exec.Cmd
-		for _, tablet := range shard.Vttablets {
-			tablet.VttabletProcess = localCluster.VtprocessInstanceFromVttablet(tablet, shard.Name, keyspaceName)
-			tablet.VttabletProcess.DbPassword = dbPassword
-			tablet.VttabletProcess.ExtraArgs = vttabletExtraArgs
-			tablet.VttabletProcess.SupportsBackup = true
-
-			mysqlctlProcess, err := cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, localCluster.TmpDirectory)
-			if err != nil {
-				return 1, err
-			}
-			tablet.MysqlctlProcess = *mysqlctlProcess
-			tablet.MysqlctlProcess.InitDBFile = newInitDBFile
-			tablet.MysqlctlProcess.ExtraArgs = mysqlctlExtraArgs
-			proc, err := tablet.MysqlctlProcess.StartProcess()
-			if err != nil {
-				return 1, err
-			}
-			mysqlProcs = append(mysqlProcs, proc)
-		}
-		for _, proc := range mysqlProcs {
-			if err := proc.Wait(); err != nil {
-				return 1, err
-			}
-		}
-
-		if err := localCluster.StartVTOrc(cell, keyspaceName); err != nil {
-			return 1, err
-		}
-
-		return m.Run(), nil
-	}()
-
-	if err != nil {
-		log.Error(err.Error())
-		os.Exit(1)
-	} else {
-		os.Exit(exitCode)
+	base := []vitesst.ClusterOption{
+		vitesst.WithBackupStorage(),
+		vitesst.WithVTOrc(),
+		vitesst.WithoutVTGate(),
+		vitesst.WithTabletEnv(map[string]string{"EXTRA_MY_CNF": cloneCnfPath}),
+		vitesst.WithInitDBSQLExtra(initCloneSQL),
+		vitesst.WithVTTabletArgs(vttabletExtraArgs...),
 	}
+
+	cluster, err := vitesst.NewCluster(append(base, opts...)...)
+	require.NoError(t, err)
+
+	cleanup, err := cluster.Start(t.Context())
+	t.Cleanup(func() {
+		ctx := context.WithoutCancel(t.Context())
+		if t.Failed() {
+			cluster.DumpDiagnostics(ctx, t.Logf)
+		}
+		if err := cleanup(ctx); err != nil {
+			t.Logf("cluster teardown: %v", err)
+		}
+	})
+	require.NoError(t, err)
+
+	return cluster
 }
 
-// setupExtraMyCnf sets EXTRA_MY_CNF to include clone plugin configuration
-func setupExtraMyCnf() error {
-	cloneCnfPath := path.Join(os.Getenv("VTROOT"), "config", "mycnf", "clone.cnf")
-	if _, err := os.Stat(cloneCnfPath); os.IsNotExist(err) {
-		return fmt.Errorf("clone.cnf not found at %s", cloneCnfPath)
-	}
-
-	// Check if EXTRA_MY_CNF is already set
-	existing := os.Getenv("EXTRA_MY_CNF")
-	if existing != "" {
-		// Append clone.cnf to existing
-		if err := os.Setenv("EXTRA_MY_CNF", existing+":"+cloneCnfPath); err != nil {
-			return fmt.Errorf("failed to set EXTRA_MY_CNF: %v", err)
-		}
-	} else {
-		if err := os.Setenv("EXTRA_MY_CNF", cloneCnfPath); err != nil {
-			return fmt.Errorf("failed to set EXTRA_MY_CNF: %v", err)
-		}
-	}
-
-	log.Info("Set EXTRA_MY_CNF to include clone plugin: " + os.Getenv("EXTRA_MY_CNF"))
-	return nil
-}
-
-// mysqlVersionSupportsClone checks if the MySQL version supports CLONE plugin
-func mysqlVersionSupportsClone(t *testing.T, tablet *cluster.Vttablet) bool {
-	conn, err := tablet.VttabletProcess.TabletConn(keyspaceName, false)
-	require.NoError(t, err, "failed to get tablet connection")
-	ok, err := conn.SupportsCapability(capabilities.MySQLClonePluginFlavorCapability)
-	require.NoError(t, err, "failed to check clone capability")
-	return ok
-}
-
-// clonePluginAvailable checks if the clone plugin is installed and active
-func clonePluginAvailable(t *testing.T, tablet *cluster.Vttablet) bool {
-	qr, err := tablet.VttabletProcess.QueryTablet(
-		"SELECT PLUGIN_STATUS FROM INFORMATION_SCHEMA.PLUGINS WHERE PLUGIN_NAME = 'clone'",
-		keyspaceName, true)
-	if err != nil {
-		t.Logf("Failed to check clone plugin: %v", err)
-		return false
-	}
-	if len(qr.Rows) == 0 {
-		return false
-	}
-	status := qr.Rows[0][0].ToString()
-	return status == "ACTIVE"
+// disableVTOrcRecoveries stops VTOrc from running any recoveries.
+func disableVTOrcRecoveries(t *testing.T, cluster *vitesst.Cluster) {
+	status, _, err := cluster.VTOrc().MakeAPICallRetry(t.Context(), "/api/disable-global-recoveries",
+		30*time.Second, func(status int, _ string) bool {
+			return status == http.StatusOK
+		})
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, status)
 }
 
 // removeBackups removes all backups for the test shard.
-func removeBackups(t *testing.T) {
-	backups, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("GetBackups", shardKsName)
-	require.NoError(t, err)
-	for backup := range strings.SplitSeq(backups, "\n") {
-		if backup != "" {
-			_, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("RemoveBackup", shardKsName, backup)
-			require.NoError(t, err)
+func removeBackups(t *testing.T, cluster *vitesst.Cluster) {
+	ctx := context.WithoutCancel(t.Context())
+	require.NoError(t, cluster.RemoveAllBackups(ctx, keyspaceName, shardName))
+}
+
+// verifyRowsInTablet verifies the total number of rows in a tablet.
+func verifyRowsInTablet(t *testing.T, tablet *vitesst.Tablet, expectedRows int) {
+	lastNumRowsFound := 0
+	require.Eventuallyf(t, func() bool {
+		// Ignoring the error check, if the newly created table is not replicated, then there might be error and we
+		// should ignore it, but eventually it will catch up and if not caught up in required time, testcase will fail.
+		qr, err := tablet.QueryTablet(t.Context(), "select * from vt_insert_test")
+		if err != nil {
+			return false
 		}
-	}
+		lastNumRowsFound = len(qr.Rows)
+		return lastNumRowsFound == expectedRows
+	}, time.Minute, 300*time.Millisecond,
+		"unexpected number of rows in %s (%s.vt_insert_test): found %d", tablet.Alias(), keyspaceName, lastNumRowsFound)
 }
 
 // waitInsertedRows checks that the specific test data we inserted on primary
 // exists on the cloned replica. This proves data was actually transferred.
 func waitInsertedRows(
 	t *testing.T,
-	tablet *cluster.Vttablet,
+	tablet *vitesst.Tablet,
 	expectedValues []string,
 	waitFor time.Duration,
 	tickInterval time.Duration,
 ) {
 	require.Eventually(t, func() bool {
-		qr, err := tablet.VttabletProcess.QueryTablet(
-			"SELECT msg FROM vt_insert_test ORDER BY id",
-			keyspaceName,
-			true,
-		)
+		qr, err := tablet.QueryTablet(t.Context(), "SELECT msg FROM vt_insert_test ORDER BY id")
 		if err != nil {
 			return false
 		}

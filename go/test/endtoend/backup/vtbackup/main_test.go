@@ -17,32 +17,19 @@ limitations under the License.
 package vtbackup
 
 import (
-	"flag"
-	"fmt"
-	"os"
-	"os/exec"
-	"path"
+	"context"
 	"testing"
 
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/utils"
-	"vitess.io/vitess/go/vt/log"
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 var (
-	primary          *cluster.Vttablet
-	replica1         *cluster.Vttablet
-	replica2         *cluster.Vttablet
-	localCluster     *cluster.LocalProcessCluster
-	newInitDBFile    string
-	cell             = cluster.DefaultCell
-	hostname         = "localhost"
-	keyspaceName     = "ks"
-	shardName        = "0"
-	dbPassword       = "VtDbaPass"
-	shardKsName      = fmt.Sprintf("%s/%s", keyspaceName, shardName)
-	dbCredentialFile string
-	commonTabletArg  = []string{
+	cell            = "zone1"
+	keyspaceName    = "ks"
+	shardName       = "0"
+	commonTabletArg = []string{
 		"--vreplication-retry-delay", "1s",
 		"--degraded-threshold", "5s",
 		"--lock-tables-timeout", "5s",
@@ -51,100 +38,33 @@ var (
 	}
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+// startCluster brings up the cluster the tests take backups in: file backup
+// storage shared by the tablets and by vtbackup, a VTOrc, and no vtgate, since
+// the tests talk to the tablets' mysqld directly.
+func startCluster(t *testing.T, opts ...vitesst.ClusterOption) *vitesst.Cluster {
+	t.Helper()
 
-	exitCode, err := func() (int, error) {
-		localCluster = cluster.NewCluster(cell, hostname)
-		defer localCluster.Teardown()
-
-		// Start topo server
-		err := localCluster.StartTopo()
-		if err != nil {
-			return 1, err
-		}
-
-		// Start keyspace
-		localCluster.Keyspaces = []cluster.Keyspace{
-			{
-				Name: keyspaceName,
-				Shards: []cluster.Shard{
-					{
-						Name: shardName,
-					},
-				},
-			},
-		}
-		shard := &localCluster.Keyspaces[0].Shards[0]
-		vtctldClientProcess := cluster.VtctldClientProcessInstance(localCluster.VtctldProcess.GrpcPort, localCluster.TopoPort, "localhost", localCluster.TmpDirectory)
-		_, err = vtctldClientProcess.ExecuteCommandWithOutput("CreateKeyspace", keyspaceName, "--durability-policy=semi_sync")
-		if err != nil {
-			return 1, err
-		}
-
-		// Create a new init_db.sql file that sets up passwords for all users.
-		// Then we use a db-credentials-file with the passwords.
-		// TODO: We could have operated with empty password here. Create a separate test for --db-credentials-file functionality (@rsajwani)
-		dbCredentialFile = cluster.WriteDbCredentialToTmp(localCluster.TmpDirectory)
-		initDb, _ := os.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
-		sql := string(initDb)
-		// The original init_db.sql does not have any passwords. Here we update the init file with passwords
-		sql, err = utils.GetInitDBSQL(sql, cluster.GetPasswordUpdateSQL(localCluster), "")
-		if err != nil {
-			return 1, err
-		}
-		newInitDBFile = path.Join(localCluster.TmpDirectory, "init_db_with_passwords.sql")
-		err = os.WriteFile(newInitDBFile, []byte(sql), 0o666)
-		if err != nil {
-			return 1, err
-		}
-
-		extraArgs := []string{"--db-credentials-file", dbCredentialFile}
-		commonTabletArg = append(commonTabletArg, "--db-credentials-file", dbCredentialFile)
-
-		primary = localCluster.NewVttabletInstance("replica", 0, "")
-		replica1 = localCluster.NewVttabletInstance("replica", 0, "")
-		replica2 = localCluster.NewVttabletInstance("replica", 0, "")
-		shard.Vttablets = []*cluster.Vttablet{primary, replica1, replica2}
-
-		// Start MySql processes
-		var mysqlProcs []*exec.Cmd
-		for _, tablet := range shard.Vttablets {
-			tablet.VttabletProcess = localCluster.VtprocessInstanceFromVttablet(tablet, shard.Name, keyspaceName)
-			tablet.VttabletProcess.DbPassword = dbPassword
-			tablet.VttabletProcess.ExtraArgs = commonTabletArg
-			tablet.VttabletProcess.SupportsBackup = true
-
-			mysqlctlProcess, err := cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, localCluster.TmpDirectory)
-			if err != nil {
-				return 1, err
-			}
-			tablet.MysqlctlProcess = *mysqlctlProcess
-			tablet.MysqlctlProcess.InitDBFile = newInitDBFile
-			tablet.MysqlctlProcess.ExtraArgs = extraArgs
-			proc, err := tablet.MysqlctlProcess.StartProcess()
-			if err != nil {
-				return 1, err
-			}
-			mysqlProcs = append(mysqlProcs, proc)
-		}
-		for _, proc := range mysqlProcs {
-			if err := proc.Wait(); err != nil {
-				return 1, err
-			}
-		}
-
-		if err := localCluster.StartVTOrc(cell, keyspaceName); err != nil {
-			return 1, err
-		}
-
-		return m.Run(), nil
-	}()
-
-	if err != nil {
-		log.Error(err.Error())
-		os.Exit(1)
-	} else {
-		os.Exit(exitCode)
+	base := []vitesst.ClusterOption{
+		vitesst.WithBackupStorage(),
+		vitesst.WithVTOrc(),
+		vitesst.WithoutVTGate(),
+		vitesst.WithVTTabletArgs(commonTabletArg...),
 	}
+
+	cluster, err := vitesst.NewCluster(append(base, opts...)...)
+	require.NoError(t, err)
+
+	cleanup, err := cluster.Start(t.Context())
+	t.Cleanup(func() {
+		ctx := context.WithoutCancel(t.Context())
+		if t.Failed() {
+			cluster.DumpDiagnostics(ctx, t.Logf)
+		}
+		if err := cleanup(ctx); err != nil {
+			t.Logf("cluster teardown: %v", err)
+		}
+	})
+	require.NoError(t, err)
+
+	return cluster
 }

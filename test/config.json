@@ -99,21 +99,6 @@
       "Tags": [],
       "Needs": []
     },
-    "backup_clone": {
-      "File": "unused.go",
-      "Packages": [
-        "vitess.io/vitess/go/test/endtoend/backup/clone"
-      ],
-      "Args": [
-        "-timeout",
-        "30m"
-      ],
-      "Command": [],
-      "Manual": false,
-      "Shard": "21",
-      "RetryMax": 1,
-      "Tags": []
-    },
     "backup_pitr": {
       "File": "unused.go",
       "Packages": [
@@ -211,23 +196,6 @@
       "Needs": [
         "minio"
       ]
-    },
-    "backup_only": {
-      "File": "unused.go",
-      "Packages": [
-        "vitess.io/vitess/go/test/endtoend/backup/vtbackup"
-      ],
-      "Args": [
-        "-timeout",
-        "20m"
-      ],
-      "Command": [],
-      "Manual": false,
-      "Shard": "vtbackup",
-      "Tags": [
-        "upgrade_downgrade_backups"
-      ],
-      "Needs": []
     },
     "backup_xtrabackup": {
       "File": "unused.go",
@@ -1277,25 +1245,6 @@
       "Tags": [],
       "Needs": [
         "memory-check"
-      ]
-    },
-    "vreplication_performance": {
-      "File": "unused.go",
-      "Packages": [
-        "vitess.io/vitess/go/test/endtoend/vreplication"
-      ],
-      "Args": [
-        "-run",
-        "TestReplicationStress"
-      ],
-      "Command": [],
-      "Manual": false,
-      "Shard": "vreplication_v2",
-      "Tags": [],
-      "Needs": [
-        "larger-runner",
-        "limit-resources",
-        "binlog-compression"
       ]
     },
     "vreplication_switch_traffic_order": {
