@@ -86,25 +86,25 @@ func (rlp *RelayLogPositions) IsZero() bool {
 	return rlp.Combined.IsZero()
 }
 
-// positionDominates returns true if position a is strictly ahead of position b, meaning
+// hasDominantPosition returns true if position a is strictly ahead of position b, meaning
 // a contains everything b has, plus more.
-func positionDominates(a, b replication.Position) bool {
+func hasDominantPosition(a, b replication.Position) bool {
 	return a.AtLeast(b) && !a.Equal(b)
 }
 
-// positionsIncomparable returns true if neither position contains the other. Replication
+// haveIncomparablePositions returns true if neither position contains the other. Replication
 // lag alone can't cause this, it takes writes that no other tablet has seen (split brain
 // or errant GTIDs).
-func positionsIncomparable(a, b replication.Position) bool {
+func haveIncomparablePositions(a, b replication.Position) bool {
 	return !a.AtLeast(b) && !b.AtLeast(a)
 }
 
-// uniformCombined returns true when every candidate has the same Combined position. On the
+// hasUniformCombinedPosition returns true when every candidate has the same Combined position. On the
 // output of filterToMostAdvancedCombined a false result means the leading candidates have
 // incomparable positions, as the filter already removed anything dominated.
-func uniformCombined(candidates map[string]*RelayLogPositions) bool {
+func hasUniformCombinedPosition(candidates map[string]*RelayLogPositions) bool {
 	var ref replication.Position
-	set := false
+	var set bool
 	for _, pos := range candidates {
 		if !set {
 			ref = pos.Combined
@@ -121,7 +121,7 @@ func uniformCombined(candidates map[string]*RelayLogPositions) bool {
 // filterToMostAdvancedCombined returns the candidates that no other candidate dominates on
 // the Combined position. GTID positions are partially ordered, so each candidate is
 // compared against all of the others; two incomparable leaders don't dominate each other
-// and both must be kept, which uniformCombined relies on. The returned map shares the
+// and both must be kept, which hasUniformCombinedPosition relies on. The returned map shares the
 // caller's RelayLogPositions structs.
 func filterToMostAdvancedCombined(candidates map[string]*RelayLogPositions, logger logutil.Logger) map[string]*RelayLogPositions {
 	if len(candidates) == 0 {
@@ -130,12 +130,12 @@ func filterToMostAdvancedCombined(candidates map[string]*RelayLogPositions, logg
 
 	result := make(map[string]*RelayLogPositions, len(candidates))
 	for alias, pos := range candidates {
-		dominated := false
+		var dominated bool
 		for otherAlias, otherPos := range candidates {
 			if otherAlias == alias {
 				continue
 			}
-			if positionDominates(otherPos.Combined, pos.Combined) {
+			if hasDominantPosition(otherPos.Combined, pos.Combined) {
 				dominated = true
 				break
 			}

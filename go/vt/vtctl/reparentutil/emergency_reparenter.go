@@ -312,7 +312,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		// Leading candidates with incomparable positions are a suspected split brain:
 		// wait for all of them so a failed one isn't dropped before findMostAdvanced
 		// sees it
-		requireAll = !uniformCombined(waitCandidates)
+		requireAll = !hasUniformCombinedPosition(waitCandidates)
 	}
 
 	// Keep the pre-wait candidates around: tablets that fail the wait are removed from
@@ -349,7 +349,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		// surviving candidates may still have relay logs to apply. Wait on the leading
 		// survivors before electing one; we never promote a tablet that hasn't applied
 		// everything it received
-		appliedSurvived := false
+		var appliedSurvived bool
 		for _, alias := range waitResult.applied {
 			if _, ok := validCandidates[alias]; ok {
 				appliedSurvived = true
@@ -359,7 +359,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		if !appliedSurvived {
 			erp.logger.Warningf("no candidate that applied its relay logs survived errant GTID detection; waiting for the remaining candidates to apply their relay logs")
 			rewaitCandidates := filterToMostAdvancedCombined(validCandidates, erp.logger)
-			requireAll = !uniformCombined(rewaitCandidates)
+			requireAll = !hasUniformCombinedPosition(rewaitCandidates)
 			validCandidates, _, err = erp.applyRelayLogsAndReconcile(relayLogCtx, rewaitCandidates, validCandidates, tabletMap, stoppedReplicationSnapshot.statusMap, opts.WaitReplicasTimeout, requireAll)
 			if err != nil {
 				return err
@@ -563,7 +563,7 @@ func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 	}
 
 	var firstFailure error
-	weCancelled := false
+	var weCancelled bool
 	for range waiterCount {
 		res := <-resultCh
 		switch {
@@ -698,12 +698,12 @@ func (erp *EmergencyReparenter) findMostAdvanced(
 	// should cancel the ERS. Split brain is about divergent received history, so we only compare the Combined positions; the Executed
 	// positions can be transiently incomparable at an equal Combined position (multi-threaded apply gaps) without any divergence
 	for i, position := range tabletPositions {
-		if positionsIncomparable(winningPosition.Combined, position.Combined) {
+		if haveIncomparablePositions(winningPosition.Combined, position.Combined) {
 			return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "split brain detected between servers - %v and %v", winningPrimaryTablet.Alias, validTablets[i].Alias)
 		}
 		// The sort can't guarantee a maximum at index 0 when some positions are incomparable, so also reject a winner that
 		// another candidate dominates. This is an invariant check that should never fire, not an expected path
-		if positionDominates(position.Combined, winningPosition.Combined) {
+		if hasDominantPosition(position.Combined, winningPosition.Combined) {
 			return nil, nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "candidate sorting error: %v has a more advanced position than the chosen candidate %v", validTablets[i].Alias, winningPrimaryTablet.Alias)
 		}
 	}

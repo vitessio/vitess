@@ -78,20 +78,20 @@ func (rs *reparentSorter) Less(i, j int) bool {
 	// ordered, so a pair can also be incomparable (disjoint UUIDs); those fall through to
 	// the tiebreakers below to keep the sort deterministic. this can't make the sort a
 	// total order, so findMostAdvanced re-checks the winner after sorting.
-	if positionDominates(iPositions.Combined, jPositions.Combined) {
+	if hasDominantPosition(iPositions.Combined, jPositions.Combined) {
 		return true
 	}
-	if positionDominates(jPositions.Combined, iPositions.Combined) {
+	if hasDominantPosition(jPositions.Combined, iPositions.Combined) {
 		return false
 	}
 
 	// if the combined positions are equal, sort by the executed GTID positions. this
 	// prefers tablets with less SQL delay, which would otherwise slow down the reparent.
 	if iPositions.Combined.Equal(jPositions.Combined) {
-		if positionDominates(iPositions.Executed, jPositions.Executed) {
+		if hasDominantPosition(iPositions.Executed, jPositions.Executed) {
 			return true
 		}
-		if positionDominates(jPositions.Executed, iPositions.Executed) {
+		if hasDominantPosition(jPositions.Executed, iPositions.Executed) {
 			return false
 		}
 	}

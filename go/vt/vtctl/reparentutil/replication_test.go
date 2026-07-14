@@ -1875,7 +1875,7 @@ func mustPosition(t *testing.T, spec string) replication.Position {
 	return replication.Position{GTIDSet: gtidSet}
 }
 
-func TestPositionDominates(t *testing.T) {
+func TestHasDominantPosition(t *testing.T) {
 	tests := []struct {
 		name string
 		a    string
@@ -1928,12 +1928,12 @@ func TestPositionDominates(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, positionDominates(mustPosition(t, tt.a), mustPosition(t, tt.b)))
+			assert.Equal(t, tt.want, hasDominantPosition(mustPosition(t, tt.a), mustPosition(t, tt.b)))
 		})
 	}
 }
 
-func TestPositionsIncomparable(t *testing.T) {
+func TestHaveIncomparablePositions(t *testing.T) {
 	tests := []struct {
 		name string
 		a    string
@@ -1974,14 +1974,14 @@ func TestPositionsIncomparable(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, positionsIncomparable(mustPosition(t, tt.a), mustPosition(t, tt.b)))
+			assert.Equal(t, tt.want, haveIncomparablePositions(mustPosition(t, tt.a), mustPosition(t, tt.b)))
 			// Incomparability is symmetric by definition; pin both directions.
-			assert.Equal(t, tt.want, positionsIncomparable(mustPosition(t, tt.b), mustPosition(t, tt.a)))
+			assert.Equal(t, tt.want, haveIncomparablePositions(mustPosition(t, tt.b), mustPosition(t, tt.a)))
 		})
 	}
 }
 
-func TestUniformCombined(t *testing.T) {
+func TestHasUniformCombinedPosition(t *testing.T) {
 	tests := []struct {
 		name       string
 		candidates map[string]*RelayLogPositions
@@ -2033,7 +2033,7 @@ func TestUniformCombined(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, uniformCombined(tt.candidates))
+			assert.Equal(t, tt.want, hasUniformCombinedPosition(tt.candidates))
 		})
 	}
 }
