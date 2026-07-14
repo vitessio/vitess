@@ -18,8 +18,10 @@ package vstreamclient
 
 import (
 	"context"
+	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -147,6 +149,34 @@ func isExpectedRunStop(err error, runCtx context.Context) bool {
 		strings.Contains(msg, "context deadline exceeded") ||
 		strings.Contains(msg, "code = Canceled") ||
 		strings.Contains(msg, "error code: CANCEL")
+}
+
+// rowCollector accumulates flushed rows behind a mutex. FlushFn runs on the goroutine that calls
+// Run, while tests poll and assert on the collected rows from the test goroutine, so appending to
+// and reading an unsynchronized slice is a data race.
+type rowCollector[T any] struct {
+	mu   sync.Mutex
+	rows []T
+}
+
+func (c *rowCollector[T]) collect(rows []vstreamclient.Row) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, row := range rows {
+		c.rows = append(c.rows, row.Data.(T))
+	}
+}
+
+func (c *rowCollector[T]) count() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return len(c.rows)
+}
+
+func (c *rowCollector[T]) snapshot() []T {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return slices.Clone(c.rows)
 }
 
 func customerBindVars(id int64, email string) map[string]*querypb.BindVariable {
