@@ -70,7 +70,7 @@
     - go/vt/vttablet/tabletserver/*throttle*/**
     - go/vt/proto/*throttler*/**
     - go/vt/throttler/**
-    - go/test/endtoend/throttler/**
+    - go/test/vitesst/throttler/**
     - go/test/endtoend/tabletmanager/throttler*/**
     - proto/*throttler*.proto
 
