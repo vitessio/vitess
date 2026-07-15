@@ -214,6 +214,9 @@ func validateQueryThrottlerConfigContent(cfg *querythrottler.Config) error {
 	for tabletType, stmtRuleSet := range tsc.GetTabletRules() {
 		for stmtType, metricRuleSet := range stmtRuleSet.GetStatementRules() {
 			for metricName, rule := range metricRuleSet.GetMetricRules() {
+				if _, _, err := base.DisaggregateMetricName(metricName); err != nil {
+					return fmt.Errorf("unknown metric name %q (tablet_type=%s, statement=%s)", metricName, tabletType, stmtType)
+				}
 				for i, t := range rule.GetThresholds() {
 					if t.GetAbove() < 0 {
 						return fmt.Errorf("threshold[%d] 'above' must be >= 0, got %v (tablet_type=%s, statement=%s, metric=%s)",

@@ -209,6 +209,34 @@ func TestValidateQueryThrottlerConfigRequest(t *testing.T) {
 			},
 			wantErr: "threshold[0] 'throttle' must be between 0 and 100, got -10 (tablet_type=PRIMARY, statement=SELECT, metric=lag)",
 		},
+		{
+			name: "unknown metric name",
+			req: &vtctldatapb.UpdateQueryThrottlerConfigRequest{
+				Keyspace: "ks1",
+				QueryThrottlerConfig: &querythrottlerpb.Config{
+					Enabled:  true,
+					Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
+					TabletStrategyConfig: &querythrottlerpb.TabletStrategyConfig{
+						TabletRules: map[string]*querythrottlerpb.StatementRuleSet{
+							"PRIMARY": {
+								StatementRules: map[string]*querythrottlerpb.MetricRuleSet{
+									"SELECT": {
+										MetricRules: map[string]*querythrottlerpb.MetricRule{
+											"lags": {
+												Thresholds: []*querythrottlerpb.ThrottleThreshold{
+													{Above: 5.0, Throttle: 100},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: `unknown metric name "lags" (tablet_type=PRIMARY, statement=SELECT)`,
+		},
 	}
 
 	for _, tt := range tests {

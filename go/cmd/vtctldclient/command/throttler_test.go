@@ -286,6 +286,31 @@ func TestValidateQueryThrottlerConfigContent(t *testing.T) {
 			},
 			wantErr: "threshold[1] 'above' must be >= 0, got -1 (tablet_type=PRIMARY, statement=SELECT, metric=lag)",
 		},
+		{
+			name: "unknown metric name",
+			config: &querythrottler.Config{
+				Enabled:  true,
+				Strategy: querythrottler.ThrottlingStrategy_TABLET_THROTTLER,
+				TabletStrategyConfig: &querythrottler.TabletStrategyConfig{
+					TabletRules: map[string]*querythrottler.StatementRuleSet{
+						"PRIMARY": {
+							StatementRules: map[string]*querythrottler.MetricRuleSet{
+								"SELECT": {
+									MetricRules: map[string]*querythrottler.MetricRule{
+										"lags": {
+											Thresholds: []*querythrottler.ThrottleThreshold{
+												{Above: 5.0, Throttle: 100},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: `unknown metric name "lags" (tablet_type=PRIMARY, statement=SELECT)`,
+		},
 	}
 
 	for _, tt := range tests {
