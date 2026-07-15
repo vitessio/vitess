@@ -33,7 +33,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -41,26 +40,6 @@ import (
 )
 
 const mysqlShutdownTimeout = 1 * time.Minute
-
-// NewMySQL creates a new MySQL server using the local mysqld binary. The name of the database
-// will be set to `dbName`. SQL queries that need to be executed on the new MySQL instance
-// can be passed through the `schemaSQL` argument.
-// The mysql.ConnParams to connect to the new database is returned, along with a function to
-// teardown the database.
-func NewMySQL(cluster *cluster.LocalProcessCluster, dbName string, schemaSQL ...string) (mysql.ConnParams, func(), error) {
-	// Even though we receive schemaSQL as a variadic argument, we ensure to further split it into singular statements.
-	parser := sqlparser.NewTestParser()
-	var sqls []string
-	for _, sql := range schemaSQL {
-		split, err := parser.SplitStatementToPieces(sql)
-		if err != nil {
-			return mysql.ConnParams{}, nil, err
-		}
-		sqls = append(sqls, split...)
-	}
-	mysqlParam, _, _, closer, err := NewMySQLWithMysqld(cluster.GetAndReservePort(), cluster.Hostname, dbName, sqls...)
-	return mysqlParam, closer, err
-}
 
 // CreateMysqldAndMycnf returns a Mysqld and a Mycnf object to use for working with a MySQL
 // installation that hasn't been set up yet.

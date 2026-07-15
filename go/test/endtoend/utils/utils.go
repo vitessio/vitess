@@ -17,11 +17,8 @@ limitations under the License.
 package utils
 
 import (
-	"context"
 	"errors"
 	"fmt"
-	"os"
-	"path"
 	"strings"
 	"testing"
 	"time"
@@ -32,7 +29,6 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
@@ -225,26 +221,6 @@ func ExecWithRowCount(t testing.TB, conn *mysql.Conn, query string, rowCount int
 	return conn.ExecuteFetch(query, rowCount, true)
 }
 
-// SkipIfBinaryIsBelowVersion skips the given test if the binary's major version is below majorVersion.
-func SkipIfBinaryIsBelowVersion(t *testing.T, majorVersion int, binary string) {
-	version, err := cluster.GetMajorVersion(binary)
-	if err != nil {
-		return
-	}
-	if version < majorVersion {
-		t.Skip("Current version of ", binary, ": v", version, ", expected version >= v", majorVersion)
-	}
-}
-
-// BinaryIsAtLeastAtVersion returns true if this binary is at or above the required version
-func BinaryIsAtLeastAtVersion(majorVersion int, binary string) bool {
-	version, err := cluster.GetMajorVersion(binary)
-	if err != nil {
-		return false
-	}
-	return version >= majorVersion
-}
-
 // AssertMatchesWithTimeout asserts that the given query produces the expected result.
 // The query will be executed every 'r' duration until it matches the expected result.
 // If after 'd' duration we still did not find the expected result, the test will be marked as failed.
@@ -290,101 +266,6 @@ func WaitForAuthoritative(t TestingT, ks, tbl string, readVSchema func() (*any, 
 				continue
 			}
 			return nil
-		}
-	}
-}
-
-// WaitForKsError waits for the ks error field to be populated and returns it.
-func WaitForKsError(t *testing.T, vtgateProcess cluster.VtgateProcess, ks string) string {
-	var errString string
-	WaitForVschemaCondition(t, vtgateProcess, ks, func(t *testing.T, keyspace map[string]any) bool {
-		ksErr, fieldPresent := keyspace["error"]
-		if !fieldPresent {
-			return false
-		}
-		var ok bool
-		errString, ok = ksErr.(string)
-		return ok
-	}, "Waiting for error")
-	return errString
-}
-
-// WaitForVschemaCondition waits for the condition to be true
-func WaitForVschemaCondition(
-	t *testing.T,
-	vtgateProcess cluster.VtgateProcess,
-	ks string,
-	conditionMet func(t *testing.T, keyspace map[string]any) bool,
-	message string,
-) {
-	timeout := time.After(60 * time.Second)
-	for {
-		select {
-		case <-timeout:
-			t.Fatalf("schema tracking did not met the condition within the time for keyspace: %s\n%s", ks, message)
-		default:
-			res, err := vtgateProcess.ReadVSchema()
-			require.NoError(t, err, res)
-			kss := convertToMap(*res)["keyspaces"]
-			ksMap := convertToMap(convertToMap(kss)[ks])
-			if conditionMet(t, ksMap) {
-				return
-			}
-			time.Sleep(100 * time.Millisecond)
-		}
-	}
-}
-
-// WaitForTableDeletions waits for a table to be deleted
-func WaitForTableDeletions(t *testing.T, vtgateProcess cluster.VtgateProcess, ks, tbl string) {
-	WaitForVschemaCondition(t, vtgateProcess, ks, func(t *testing.T, keyspace map[string]any) bool {
-		tablesMap := keyspace["tables"]
-		_, isPresent := convertToMap(tablesMap)[tbl]
-		return !isPresent
-	}, "Waiting for table to be deleted")
-}
-
-// WaitForColumn waits for a table's column to be present
-func WaitForColumn(t TestingT, vtgateProcess cluster.VtgateProcess, ks, tbl, col string) error {
-	timeout := time.After(60 * time.Second)
-	for {
-		select {
-		case <-timeout:
-			return fmt.Errorf("schema tracking did not find column '%s' in table '%s'", col, tbl)
-		default:
-			res, err := vtgateProcess.ReadVSchema()
-			require.NoError(t, err, res)
-			t2Map := getTableT2Map(res, ks, tbl)
-			authoritative, fieldPresent := t2Map["column_list_authoritative"]
-			if !fieldPresent {
-				time.Sleep(100 * time.Millisecond)
-				continue
-			}
-			authoritativeBool, isBool := authoritative.(bool)
-			if !isBool || !authoritativeBool {
-				time.Sleep(100 * time.Millisecond)
-				continue
-			}
-			colMap, exists := t2Map["columns"]
-			if !exists {
-				time.Sleep(100 * time.Millisecond)
-				continue
-			}
-			colList, isSlice := colMap.([]any)
-			if !isSlice {
-				time.Sleep(100 * time.Millisecond)
-				continue
-			}
-			for _, c := range colList {
-				colDef, isMap := c.(map[string]any)
-				if !isMap {
-					break
-				}
-				if colName, exists := colDef["name"]; exists && strings.EqualFold(colName.(string), col) {
-					return nil
-				}
-			}
-			time.Sleep(100 * time.Millisecond)
 		}
 	}
 }
@@ -442,58 +323,7 @@ func TimeoutAction(t *testing.T, timeout time.Duration, errMsg string, action fu
 	}
 }
 
-// RunSQLs is used to run a list of SQL statements on the given tablet
-func RunSQLs(t *testing.T, sqls []string, tablet *cluster.Vttablet, db string) error {
-	// Get Connection
-	tabletParams := getMysqlConnParam(tablet, db)
-	timeoutDuration := time.Duration(5 * len(sqls))
-	ctx, cancel := context.WithTimeout(context.Background(), timeoutDuration*time.Second)
-	defer cancel()
-	conn, err := mysql.Connect(ctx, &tabletParams)
-	require.Nil(t, err)
-	defer conn.Close()
-
-	// Run SQLs
-	for _, sql := range sqls {
-		if _, err := execute(t, conn, sql); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// RunSQL is used to run a SQL statement on the given tablet
-func RunSQL(t *testing.T, sql string, tablet *cluster.Vttablet, db string) (*sqltypes.Result, error) {
-	// Get Connection
-	tabletParams := getMysqlConnParam(tablet, db)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	conn, err := mysql.Connect(ctx, &tabletParams)
-	require.Nil(t, err)
-	defer conn.Close()
-
-	// RunSQL
-	return execute(t, conn, sql)
-}
-
-// GetMySQLConn gets a MySQL connection for the given tablet
-func GetMySQLConn(tablet *cluster.Vttablet, db string) (*mysql.Conn, error) {
-	tabletParams := getMysqlConnParam(tablet, db)
-	return mysql.Connect(context.Background(), &tabletParams)
-}
-
 func execute(t *testing.T, conn *mysql.Conn, query string) (*sqltypes.Result, error) {
 	t.Helper()
 	return conn.ExecuteFetch(query, 1000, true)
-}
-
-func getMysqlConnParam(tablet *cluster.Vttablet, db string) mysql.ConnParams {
-	connParams := mysql.ConnParams{
-		Uname:      "vt_dba",
-		UnixSocket: path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/mysql.sock", tablet.TabletUID)),
-	}
-	if db != "" {
-		connParams.DbName = db
-	}
-	return connParams
 }

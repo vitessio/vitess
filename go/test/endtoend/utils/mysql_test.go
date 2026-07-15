@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"net"
 	"os"
 	"testing"
 	"time"
@@ -29,19 +30,16 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
-	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
-	mysqlParams     mysql.ConnParams
-	mysqld          *mysqlctl.Mysqld
-	mycnf           *mysqlctl.Mycnf
-	keyspaceName    = "ks"
-	cell            = "test"
-	schemaSQL       = `create table t1(
+	mysqlParams  mysql.ConnParams
+	mysqld       *mysqlctl.Mysqld
+	mycnf        *mysqlctl.Mycnf
+	keyspaceName = "ks"
+	schemaSQL    = `create table t1(
 		id1 bigint,
 		id2 bigint,
 		id3 bigint,
@@ -49,14 +47,26 @@ var (
 	) Engine=InnoDB;`
 )
 
+// freePort returns a TCP port that is free at the moment of the call.
+func freePort() (int, error) {
+	listener, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		return 0, err
+	}
+	defer listener.Close()
+	return listener.Addr().(*net.TCPAddr).Port, nil
+}
+
 func TestMain(m *testing.M) {
 	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(cell, "localhost")
-		defer clusterInstance.Teardown()
+		port, err := freePort()
+		if err != nil {
+			fmt.Println(err)
+			return 1
+		}
 
 		var closer func()
-		var err error
-		mysqlParams, mysqld, mycnf, closer, err = NewMySQLWithMysqld(clusterInstance.GetAndReservePort(), clusterInstance.Hostname, keyspaceName, schemaSQL)
+		mysqlParams, mysqld, mycnf, closer, err = NewMySQLWithMysqld(port, "localhost", keyspaceName, schemaSQL)
 		if err != nil {
 			fmt.Println(err)
 			return 1
@@ -175,10 +185,8 @@ func TestGetMysqlPort(t *testing.T) {
 	defer cancel()
 	port, err := mysqld.GetMysqlPort(ctx)
 
-	// Expected port should be one less than the port returned by GetAndReservePort
-	// As we are calling this second time to get port
-	want := clusterInstance.GetAndReservePort() - 1
-	assert.Equal(t, want, int(port))
+	// The reported port should be the one the mysqld was started on.
+	assert.Equal(t, mysqlParams.Port, int(port))
 	assert.NoError(t, err)
 }
 
