@@ -407,6 +407,65 @@ func TestCopyRowToStruct_ScannerAndTextUnmarshalerFields(t *testing.T) {
 	assert.Equal(t, testTextWrapper("wrapped:gold"), out.Level)
 }
 
+func TestHandleRowEvent_UpdateUsesAfterRowData(t *testing.T) {
+	fields := []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}
+
+	table := &TableConfig{Keyspace: "ks", Table: "t", DataType: &testRowSmall{}}
+	table.underlyingType = reflect.Indirect(reflect.ValueOf(table.DataType)).Type()
+	fieldMap, err := table.reflectMapFields(fields)
+	require.NoError(t, err)
+	table.shards = map[string]shardConfig{"0": {fieldMap: fieldMap, fields: fields}}
+	table.resetBatch()
+
+	ev := &binlogdatapb.RowEvent{TableName: "ks.t", Shard: "0", RowChanges: []*binlogdatapb.RowChange{{
+		Before: sqltypes.RowToProto3([]sqltypes.Value{sqltypes.NewInt64(1)}),
+		After:  sqltypes.RowToProto3([]sqltypes.Value{sqltypes.NewInt64(2)}),
+	}}}
+
+	vstreamStats := &VStreamStats{}
+	err = table.handleRowEvent(ev, vstreamStats)
+	require.NoError(t, err)
+
+	require.Len(t, table.currentBatch, 1)
+	out, ok := table.currentBatch[0].Data.(*testRowSmall)
+	require.True(t, ok)
+	assert.Equal(t, int64(2), out.ID)
+	assert.Equal(t, 1, table.stats.RowUpdateCount)
+	assert.Equal(t, 1, vstreamStats.RowUpdateCount)
+}
+
+func TestHandleRowEvent_CountsStatsPerChangeType(t *testing.T) {
+	fields := []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}
+
+	table := &TableConfig{Keyspace: "ks", Table: "t", DataType: &testRowSmall{}}
+	table.underlyingType = reflect.Indirect(reflect.ValueOf(table.DataType)).Type()
+	fieldMap, err := table.reflectMapFields(fields)
+	require.NoError(t, err)
+	table.shards = map[string]shardConfig{"0": {fieldMap: fieldMap, fields: fields}}
+	table.resetBatch()
+
+	ev := &binlogdatapb.RowEvent{TableName: "ks.t", Shard: "0", RowChanges: []*binlogdatapb.RowChange{
+		{After: sqltypes.RowToProto3([]sqltypes.Value{sqltypes.NewInt64(1)})}, // insert
+		{
+			Before: sqltypes.RowToProto3([]sqltypes.Value{sqltypes.NewInt64(1)}), // update
+			After:  sqltypes.RowToProto3([]sqltypes.Value{sqltypes.NewInt64(2)}),
+		},
+		{Before: sqltypes.RowToProto3([]sqltypes.Value{sqltypes.NewInt64(2)})}, // delete
+	}}
+
+	vstreamStats := &VStreamStats{}
+	err = table.handleRowEvent(ev, vstreamStats)
+	require.NoError(t, err)
+
+	require.Len(t, table.currentBatch, 3)
+	assert.Equal(t, 1, table.stats.RowInsertCount)
+	assert.Equal(t, 1, table.stats.RowUpdateCount)
+	assert.Equal(t, 1, table.stats.RowDeleteCount)
+	assert.Equal(t, 1, vstreamStats.RowInsertCount)
+	assert.Equal(t, 1, vstreamStats.RowUpdateCount)
+	assert.Equal(t, 1, vstreamStats.RowDeleteCount)
+}
+
 func TestCopyRowToStruct_NullThroughScannerFields(t *testing.T) {
 	fields := []*querypb.Field{
 		{Name: "name", Type: querypb.Type_VARCHAR},
