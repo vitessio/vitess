@@ -99,26 +99,6 @@
       "Tags": [],
       "Needs": []
     },
-    "upgrade": {
-      "File": "unused.go",
-      "Packages": [
-        "vitess.io/vitess/go/test/endtoend/versionupgrade"
-      ],
-      "Args": [
-        "-keep-data",
-        "-force-vtdataroot",
-        "/tmp/vtdataroot/vtroot_10901",
-        "-force-port-start",
-        "vtctlbackup_sharded_clustertest_heavy900",
-        "-force-base-tablet-uid",
-        "vtctlbackup_sharded_clustertest_heavy90"
-      ],
-      "Command": [],
-      "Manual": false,
-      "Shard": "28",
-      "Tags": [],
-      "Needs": []
-    },
     "vttest_sample": {
       "File": "unused.go",
       "Packages": [

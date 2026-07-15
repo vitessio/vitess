@@ -2814,10 +2814,11 @@
       ],
       "pkg": "vitess.io/vitess/go/test/endtoend/versionupgrade",
       "runtime_sec": null,
-      "status": "exception",
+      "status": "retire",
       "verified_at_sha": null,
       "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/versionupgrade/",
-      "wave": null
+      "wave": null,
+      "retire_reason": "Removed. This full-version data-survival test (old binaries create data on a shared vtdataroot, new binaries read it back) ran in CI via the dedicated cluster_endtoend_upgrade.yml workflow until that workflow was deleted on 2022-02-15 (commit 6f40ea71fe). It has not run in any CI since; the shard-28 entry and package were left orphaned. The tag-based upgrade_downgrade_test_* family (mixed old/new components) has been the projects upgrade/downgrade coverage since. Retired rather than revived on vitesst."
     },
     "vitess.io/vitess/go/test/endtoend/vreplication": {
       "blockers": [

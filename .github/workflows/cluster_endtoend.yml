@@ -45,7 +45,6 @@ jobs:
             "java",
             "docker_cluster",
             "5",
-            "28",
             "onlineddl_flow"
           ]'
 
