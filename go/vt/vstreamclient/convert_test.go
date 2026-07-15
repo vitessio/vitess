@@ -19,8 +19,11 @@ package vstreamclient
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"encoding/json"
+	"math"
 	"reflect"
+	"strconv"
 	"testing"
 	"time"
 
@@ -402,6 +405,71 @@ func TestCopyRowToStruct_ScannerAndTextUnmarshalerFields(t *testing.T) {
 	assert.True(t, out.SeenAt.Valid)
 	assert.Equal(t, time.Date(2026, 2, 10, 11, 12, 13, 0, time.UTC), out.SeenAt.Time)
 	assert.Equal(t, testTextWrapper("wrapped:gold"), out.Level)
+}
+
+func TestCopyRowToStruct_NullThroughScannerFields(t *testing.T) {
+	fields := []*querypb.Field{
+		{Name: "name", Type: querypb.Type_VARCHAR},
+		{Name: "count", Type: querypb.Type_INT64},
+		{Name: "seen_at", Type: querypb.Type_TIMESTAMP},
+		{Name: "level", Type: querypb.Type_VARCHAR},
+	}
+
+	table := &TableConfig{DataType: &testWrapperRow{}}
+	table.underlyingType = reflect.Indirect(reflect.ValueOf(table.DataType)).Type()
+
+	fieldMap, err := table.reflectMapFields(fields)
+	require.NoError(t, err)
+
+	shard := shardConfig{fieldMap: fieldMap, fields: fields}
+	row := []sqltypes.Value{
+		sqltypes.NULL,
+		sqltypes.NULL,
+		sqltypes.NULL,
+		sqltypes.NewVarChar("gold"),
+	}
+
+	v := reflect.New(table.underlyingType)
+	err = copyRowToStruct(shard, row, v)
+	require.NoError(t, err)
+
+	// NULLs reach sql.Scanner fields as nil driver values, so they scan as invalid
+	out := v.Interface().(*testWrapperRow)
+	assert.False(t, out.Name.Valid)
+	assert.False(t, out.Count.Valid)
+	assert.False(t, out.SeenAt.Valid)
+	assert.Equal(t, testTextWrapper("wrapped:gold"), out.Level)
+}
+
+func TestSQLValueToDriverValue_Branches(t *testing.T) {
+	denver, err := time.LoadLocation("America/Denver")
+	require.NoError(t, err)
+
+	tests := []struct {
+		name  string
+		value sqltypes.Value
+		want  driver.Value
+	}{
+		{name: "null", value: sqltypes.NULL, want: nil},
+		{name: "signed int", value: sqltypes.NewInt64(-42), want: int64(-42)},
+		{name: "small unsigned as int64", value: sqltypes.MakeTrusted(sqltypes.Uint32, []byte("42")), want: int64(42)},
+		{name: "uint64 within int64 range", value: sqltypes.NewUint64(42), want: int64(42)},
+		{name: "uint64 above int64 range as string", value: sqltypes.NewUint64(math.MaxUint64), want: strconv.FormatUint(math.MaxUint64, 10)},
+		{name: "float", value: sqltypes.NewFloat64(1.5), want: 1.5},
+		{name: "decimal keeps exact text", value: sqltypes.NewDecimal("12.34"), want: "12.34"},
+		{name: "date in location", value: sqltypes.MakeTrusted(sqltypes.Date, []byte("2024-01-02")), want: time.Date(2024, 1, 2, 0, 0, 0, 0, denver)},
+		{name: "datetime in location", value: sqltypes.MakeTrusted(sqltypes.Datetime, []byte("2024-01-02 03:04:05")), want: time.Date(2024, 1, 2, 3, 4, 5, 0, denver)},
+		{name: "integral zero-or-one bool fallback", value: sqltypes.MakeTrusted(sqltypes.Year, []byte("1")), want: true},
+		{name: "text bytes fallback", value: sqltypes.NewVarChar("hello"), want: []byte("hello")},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := sqlValueToDriverValue(tt.value, denver)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
 }
 
 func TestCopyRowToStruct_UnsupportedStructFieldErrors(t *testing.T) {
