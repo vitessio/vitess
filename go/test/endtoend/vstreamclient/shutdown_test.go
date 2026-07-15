@@ -73,7 +73,6 @@ func TestVStreamClientGracefulShutdownChanStopsActiveRun(t *testing.T) {
 	err = vstreamClient.Run(t.Context())
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "client is closed")
-	_ = runCtx
 }
 
 // TestVStreamClientGracefulShutdownChanStopsOnThresholdFlush verifies shutdown
@@ -291,7 +290,7 @@ func TestVStreamClientGracefulShutdownReplayMatrix(t *testing.T) {
 					}, binlogdatapb.VEventType_ROW),
 				)
 
-				runCtx, cancelRun, runErrCh := te.runAsync(client, 30*time.Second)
+				_, cancelRun, runErrCh := te.runAsync(client, 30*time.Second)
 				defer cancelRun()
 				te.exec(t, "insert into customer.customer(id, email) values(:id, :email)", customerBindVars(want.ID, want.Email))
 
@@ -302,7 +301,6 @@ func TestVStreamClientGracefulShutdownReplayMatrix(t *testing.T) {
 
 				replayed := replayAfterShutdown(t, te, newClient, sentinel)
 				assert.Equal(t, []*Customer{want, sentinel}, replayed)
-				_ = runCtx
 			},
 		},
 		{
@@ -403,7 +401,7 @@ func TestVStreamClientGracefulShutdownReplayMatrix(t *testing.T) {
 					}, binlogdatapb.VEventType_ROW),
 				)
 
-				runCtx, cancelRun, runErrCh := te.runAsync(client, 30*time.Second)
+				_, cancelRun, runErrCh := te.runAsync(client, 30*time.Second)
 				defer cancelRun()
 				te.exec(t, "insert into customer.customer(id, email) values(:id, :email)", customerBindVars(want.ID, want.Email))
 
@@ -414,7 +412,6 @@ func TestVStreamClientGracefulShutdownReplayMatrix(t *testing.T) {
 
 				replayed := replayAfterShutdown(t, te, newClient, sentinel)
 				assert.Equal(t, []*Customer{want, sentinel}, replayed)
-				_ = runCtx
 			},
 		},
 	}

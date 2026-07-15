@@ -140,7 +140,7 @@ func TestVStreamClientSchemaDriftFailsWhenProjectedColumnDropped(t *testing.T) {
 		},
 	}})
 
-	runCtx, cancelRun, runErrCh := te.runAsync(vstreamClient, 30*time.Second)
+	_, cancelRun, runErrCh := te.runAsync(vstreamClient, 30*time.Second)
 	defer cancelRun()
 
 	te.exec(t, "insert into customer.customer(id, email, projected_col) values (3301, 'projected-before-drop@domain.com', 'before-drop')", nil)
@@ -155,7 +155,6 @@ func TestVStreamClientSchemaDriftFailsWhenProjectedColumnDropped(t *testing.T) {
 	err := <-runErrCh
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "projected_col")
-	_ = runCtx
 }
 
 func TestVStreamClientSchemaDriftFailsWhenProjectedColumnRenamed(t *testing.T) {
@@ -179,7 +178,7 @@ func TestVStreamClientSchemaDriftFailsWhenProjectedColumnRenamed(t *testing.T) {
 		},
 	}})
 
-	runCtx, cancelRun, runErrCh := te.runAsync(vstreamClient, 30*time.Second)
+	_, cancelRun, runErrCh := te.runAsync(vstreamClient, 30*time.Second)
 	defer cancelRun()
 
 	te.exec(t, "insert into customer.customer(id, email, projected_col) values (3401, 'projected-before-rename@domain.com', 'before-rename')", nil)
@@ -194,7 +193,6 @@ func TestVStreamClientSchemaDriftFailsWhenProjectedColumnRenamed(t *testing.T) {
 	err := <-runErrCh
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "projected_col")
-	_ = runCtx
 }
 
 func TestVStreamClientSchemaDriftFailsWhenProjectedColumnTypeChanges(t *testing.T) {
@@ -217,7 +215,7 @@ func TestVStreamClientSchemaDriftFailsWhenProjectedColumnTypeChanges(t *testing.
 		},
 	}})
 
-	runCtx, cancelRun, runErrCh := te.runAsync(vstreamClient, 30*time.Second)
+	_, cancelRun, runErrCh := te.runAsync(vstreamClient, 30*time.Second)
 	defer cancelRun()
 
 	te.exec(t, `insert into customer.customer(id, email, projected_payload) values (3501, 'projected-before-type@domain.com', '{"source":"before-type"}')`, nil)
@@ -234,7 +232,6 @@ func TestVStreamClientSchemaDriftFailsWhenProjectedColumnTypeChanges(t *testing.
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "projected_payload")
 	assert.ErrorContains(t, err, "error unmarshalling JSON")
-	_ = runCtx
 }
 
 func TestVStreamClientRemapsFieldsAfterDDL(t *testing.T) {

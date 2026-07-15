@@ -94,7 +94,6 @@ func TestVStreamClientStreamsMultipleTablesInOneKeyspace(t *testing.T) {
 	var gotOrders []*Order
 	var fieldTables []string
 	var rowTables []string
-	rowTableSeen := make(chan string, 4)
 	vstreamClient := te.newDefaultClient(
 		t, t.Name(), []vstreamclient.TableConfig{
 			{
@@ -130,10 +129,6 @@ func TestVStreamClientStreamsMultipleTablesInOneKeyspace(t *testing.T) {
 		}, binlogdatapb.VEventType_FIELD),
 		vstreamclient.WithEventFunc(func(_ context.Context, ev *binlogdatapb.VEvent) error {
 			rowTables = append(rowTables, ev.RowEvent.TableName)
-			select {
-			case rowTableSeen <- ev.RowEvent.TableName:
-			default:
-			}
 			return nil
 		}, binlogdatapb.VEventType_ROW),
 	)
