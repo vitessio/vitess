@@ -527,6 +527,17 @@ func (c *Cluster) RemoveShard(ctx context.Context, keyspace, shardName string) e
 	return nil
 }
 
+// tabletInitDBSQL returns the init_db.sql content mysqlctl init applies on a
+// keyspace's tablets: the keyspace's own init SQL when it sets one, spliced
+// with the framework's vt_dba host-access grants, otherwise the cluster
+// init_db.sql.
+func (c *Cluster) tabletInitDBSQL(keyspace string) (string, error) {
+	if kc := c.keyspaceConfig(keyspace); kc != nil && kc.initDBSQL != "" {
+		return spliceInitDBSQL(kc.initDBSQL, c.opts.initDBSQLExtra)
+	}
+	return c.initDBSQL, nil
+}
+
 // keyspaceConfig returns the configuration a keyspace was created with.
 func (c *Cluster) keyspaceConfig(name string) *keyspaceConfig {
 	for i := range c.opts.keyspaces {

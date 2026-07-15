@@ -65,6 +65,13 @@ type (
 		// instead of the cluster image.
 		image string
 
+		// initDBSQL, when set, is the init_db.sql content mysqlctl init applies
+		// on this keyspace's tablets, instead of the cluster init_db.sql. A
+		// MariaDB keyspace needs a variant without super_read_only. The
+		// framework's vt_dba host-access grants are spliced in the same way as
+		// the cluster init_db.sql.
+		initDBSQL string
+
 		// tabletArgs are appended to this keyspace's vttablet command lines,
 		// after cluster-wide vttablet args.
 		tabletArgs []string
@@ -196,6 +203,17 @@ func (kb *keyspaceBuilder) WithSnapshotOf(baseKeyspace, snapshotTime string) *ke
 // whose source keyspace runs an older MySQL or MariaDB than its target.
 func (kb *keyspaceBuilder) WithImage(image string) *keyspaceBuilder {
 	kb.config.image = image
+	return kb
+}
+
+// WithInitDBSQL sets the init_db.sql content mysqlctl init applies on this
+// keyspace's tablets, instead of the cluster init_db.sql. The framework splices
+// its vt_dba host-access grants into it at the custom-SQL marker, so the SQL
+// passed here is a standard init_db.sql document. A MariaDB source keyspace
+// uses it to supply a variant that sets read_only instead of the unsupported
+// super_read_only.
+func (kb *keyspaceBuilder) WithInitDBSQL(sql string) *keyspaceBuilder {
+	kb.config.initDBSQL = sql
 	return kb
 }
 

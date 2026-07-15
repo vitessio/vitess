@@ -52,7 +52,9 @@ func TestMultipleConcurrentVDiffs(t *testing.T) {
 	var loadCtx context.Context
 	var loadCancel context.CancelFunc
 	loadCtx, loadCancel = context.WithCancel(t.Context())
+	var loadWg sync.WaitGroup
 	load := func(tableName string) {
+		defer loadWg.Done()
 		query := "insert into %s(cid, name) values(%d, 'customer-%d')"
 		for {
 			select {
@@ -91,6 +93,7 @@ func TestMultipleConcurrentVDiffs(t *testing.T) {
 	createWorkflow("wf1", "customer")
 	createWorkflow("wf2", "customer2")
 
+	loadWg.Add(2)
 	go load("customer")
 	go load("customer2")
 
@@ -105,6 +108,9 @@ func TestMultipleConcurrentVDiffs(t *testing.T) {
 	go doVdiff("wf2", "customer2")
 	wg.Wait()
 	loadCancel()
+	// Wait for the load goroutines to stop before the cluster tears down, so
+	// no connection attempt outlives the vtgate it dials.
+	loadWg.Wait()
 
 	// confirm that show all shows the correct workflow and only that workflow.
 	output, err := vc.VtctldClient.ExecuteCommandWithOutput("VDiff", "--format", "json", "--workflow", "wf1", "--target-keyspace", defaultTargetKs, "show", "all")

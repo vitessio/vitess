@@ -18,6 +18,7 @@ package vreplication
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
 	"strings"
 	"sync"
@@ -77,13 +78,23 @@ var (
 		"--heartbeat-interval", "250ms",
 	}
 
+	// mariaDBImage is the Docker image MariaDB source keyspaces run.
+	mariaDBImage = "vitesst:mariadb"
+
 	// dbTypeVersionImages maps the DBTypeVersion keyspace option to the Docker
 	// image a keyspace's tablets run.
 	dbTypeVersionImages = map[string]string{
 		"mysql-8.0":     vitesst.Image("8.0"),
 		"mysql-8.4":     vitesst.Image("8.4"),
-		"mariadb-10.10": "vitesst:mariadb",
+		"mariadb-10.10": mariaDBImage,
 	}
+
+	// mariaDBInitDBSQL initializes MariaDB tablets. MariaDB has no
+	// super_read_only system variable, so it sets read_only instead. Everything
+	// else matches the standard init_db.sql.
+	//
+	//go:embed testdata/config/init_testserver_db.sql
+	mariaDBInitDBSQL string
 )
 
 type (
@@ -318,6 +329,9 @@ func (vc *VitessCluster) AddKeyspace(t *testing.T, cells []*Cell, ksName string,
 		WithTabletSpec(keyspace.tablets.assign)
 	if image := keyspaceImage(t, opts); image != "" {
 		kb.WithImage(image)
+		if image == mariaDBImage {
+			kb.WithInitDBSQL(mariaDBInitDBSQL)
+		}
 	}
 
 	for _, cell := range cells {

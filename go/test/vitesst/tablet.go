@@ -528,8 +528,13 @@ func (c *Cluster) startTablet(ctx context.Context, spec *TabletSpec) (*Tablet, e
 		typ:      spec.Type,
 	}
 
+	initDBSQL, err := c.tabletInitDBSQL(spec.Keyspace)
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "assembling init_db.sql for tablet %s", t.Alias())
+	}
+
 	files := []ContainerFile{
-		{Content: []byte(c.initDBSQL), ContainerPath: tabletInitDBPath},
+		{Content: []byte(initDBSQL), ContainerPath: tabletInitDBPath},
 		{Content: []byte(c.supervisorScript(spec, alias)), ContainerPath: supervisorScriptPath, Mode: 0o755},
 	}
 	files = append(files, c.opts.tabletFiles...)
