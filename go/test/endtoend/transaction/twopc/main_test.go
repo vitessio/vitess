@@ -51,12 +51,11 @@ import (
 const vtgateConfigPath = "/vt/files/vtgate.json"
 
 var (
-	clusterInstance   *vitesst.Cluster
-	mysqlParams       mysql.ConnParams
-	vtParams          mysql.ConnParams
-	vtgateGrpcAddress string
-	keyspaceName      = "ks"
-	sidecarDBName     = "vt_ks"
+	clusterInstance *vitesst.Cluster
+	mysqlParams     mysql.ConnParams
+	vtParams        mysql.ConnParams
+	keyspaceName    = "ks"
+	sidecarDBName   = "vt_ks"
 
 	//go:embed schema.sql
 	SchemaSQL string
@@ -110,13 +109,6 @@ func TestMain(m *testing.M) {
 
 		clusterInstance = cluster
 		vtParams = cluster.VTParams(ctx, "")
-
-		grpcAddr, err := cluster.VTGate().GRPCAddr(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		vtgateGrpcAddress = grpcAddr
 
 		// create mysql instance and connection parameters
 		conn, closer, err := vitesst.NewMySQL(ctx, cluster, keyspaceName, SchemaSQL)

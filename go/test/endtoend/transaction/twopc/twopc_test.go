@@ -33,7 +33,6 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/test/endtoend/cluster"
 	twopcutil "vitess.io/vitess/go/test/endtoend/transaction/twopc/utils"
 	"vitess.io/vitess/go/test/vitesst"
 	"vitess.io/vitess/go/vt/callerid"
@@ -88,7 +87,7 @@ func TestDTCommit(t *testing.T) {
 	conn, closer := start(t)
 	defer closer()
 
-	vtgateConn, err := cluster.DialVTGate(t.Context(), t.Name(), vtgateGrpcAddress, "dt_user", "")
+	vtgateConn, err := clusterInstance.VTGate().DialVTGateAs(t.Context(), "dt_user", "")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
@@ -233,7 +232,7 @@ func TestDTRollback(t *testing.T) {
 	vitesst.Exec(t, conn, "insert into twopc_user(id, name) values(7,'foo'), (8,'bar')")
 
 	// run vstream to stream binlogs
-	vtgateConn, err := cluster.DialVTGate(t.Context(), t.Name(), vtgateGrpcAddress, "dt_user", "")
+	vtgateConn, err := clusterInstance.VTGate().DialVTGateAs(t.Context(), "dt_user", "")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
@@ -282,7 +281,7 @@ func TestDTCommitDMLOnlyOnMM(t *testing.T) {
 	conn, closer := start(t)
 	defer closer()
 
-	vtgateConn, err := cluster.DialVTGate(t.Context(), t.Name(), vtgateGrpcAddress, "dt_user", "")
+	vtgateConn, err := clusterInstance.VTGate().DialVTGateAs(t.Context(), "dt_user", "")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
@@ -377,7 +376,7 @@ func TestDTCommitDMLOnlyOnRM(t *testing.T) {
 	conn, closer := start(t)
 	defer closer()
 
-	vtgateConn, err := cluster.DialVTGate(t.Context(), t.Name(), vtgateGrpcAddress, "dt_user", "")
+	vtgateConn, err := clusterInstance.VTGate().DialVTGateAs(t.Context(), "dt_user", "")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
@@ -485,7 +484,7 @@ func TestDTPrepareFailOnRM(t *testing.T) {
 	conn, closer := start(t)
 	defer closer()
 
-	vtgateConn, err := cluster.DialVTGate(t.Context(), t.Name(), vtgateGrpcAddress, "dt_user", "")
+	vtgateConn, err := clusterInstance.VTGate().DialVTGateAs(t.Context(), "dt_user", "")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
@@ -606,7 +605,7 @@ func TestDTResolveAfterMMCommit(t *testing.T) {
 	// Do an insertion into a table that has a consistent lookup vindex.
 	vitesst.Exec(t, initconn, "insert into twopc_consistent_lookup(id, col, col_unique) values(4, 4, 6)")
 
-	vtgateConn, err := cluster.DialVTGate(t.Context(), t.Name(), vtgateGrpcAddress, "dt_user", "")
+	vtgateConn, err := clusterInstance.VTGate().DialVTGateAs(t.Context(), "dt_user", "")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
@@ -708,7 +707,7 @@ func TestDTResolveAfterRMPrepare(t *testing.T) {
 	// Do an insertion into a table that has a consistent lookup vindex.
 	vitesst.Exec(t, initconn, "insert into twopc_consistent_lookup(id, col, col_unique) values(4, 4, 6)")
 
-	vtgateConn, err := cluster.DialVTGate(t.Context(), t.Name(), vtgateGrpcAddress, "dt_user", "")
+	vtgateConn, err := clusterInstance.VTGate().DialVTGateAs(t.Context(), "dt_user", "")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
@@ -787,7 +786,7 @@ func TestDTResolveAfterRMPrepare(t *testing.T) {
 func TestDTResolveDuringRMPrepare(t *testing.T) {
 	defer cleanup(t)
 
-	vtgateConn, err := cluster.DialVTGate(t.Context(), t.Name(), vtgateGrpcAddress, "dt_user", "")
+	vtgateConn, err := clusterInstance.VTGate().DialVTGateAs(t.Context(), "dt_user", "")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
@@ -853,7 +852,7 @@ func TestDTResolveDuringRMPrepare(t *testing.T) {
 func TestDTResolveDuringRMCommit(t *testing.T) {
 	defer cleanup(t)
 
-	vtgateConn, err := cluster.DialVTGate(t.Context(), t.Name(), vtgateGrpcAddress, "dt_user", "")
+	vtgateConn, err := clusterInstance.VTGate().DialVTGateAs(t.Context(), "dt_user", "")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
@@ -936,7 +935,7 @@ func TestDTResolveDuringRMCommit(t *testing.T) {
 func TestDTResolveAfterTransactionRecord(t *testing.T) {
 	defer cleanup(t)
 
-	vtgateConn, err := cluster.DialVTGate(t.Context(), t.Name(), vtgateGrpcAddress, "dt_user", "")
+	vtgateConn, err := clusterInstance.VTGate().DialVTGateAs(t.Context(), "dt_user", "")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
@@ -1154,7 +1153,7 @@ func TestDTSavepointWithVanilaMySQL(t *testing.T) {
 func TestDTSavepoint(t *testing.T) {
 	defer cleanup(t)
 
-	vtgateConn, err := cluster.DialVTGate(t.Context(), t.Name(), vtgateGrpcAddress, "dt_user", "")
+	vtgateConn, err := clusterInstance.VTGate().DialVTGateAs(t.Context(), "dt_user", "")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
@@ -1324,7 +1323,7 @@ func sortShard(ss *vtgateconn.VTGateSession) {
 func TestDTSavepointResolveAfterMMCommit(t *testing.T) {
 	defer cleanup(t)
 
-	vtgateConn, err := cluster.DialVTGate(t.Context(), t.Name(), vtgateGrpcAddress, "dt_user", "")
+	vtgateConn, err := clusterInstance.VTGate().DialVTGateAs(t.Context(), "dt_user", "")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
@@ -1837,7 +1836,7 @@ func TestVindexes(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			defer cleanup(t)
 
-			vtgateConn, err := cluster.DialVTGate(t.Context(), t.Name(), vtgateGrpcAddress, "dt_user", "")
+			vtgateConn, err := clusterInstance.VTGate().DialVTGateAs(t.Context(), "dt_user", "")
 			require.NoError(t, err)
 			defer vtgateConn.Close()
 
