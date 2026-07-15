@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"math/rand/v2"
+	"os"
 	"os/exec"
 	"path"
 	"strconv"
@@ -35,7 +36,6 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/tlstest"
@@ -45,6 +45,46 @@ import (
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
+
+// printFiles logs the contents of the named files found under dir, recursing
+// into subdirectories. With no names it logs every file. It is a debugging aid
+// used when a test fails.
+func printFiles(t *testing.T, dir string, files ...string) {
+	t.Helper()
+	directories := []string{dir}
+	for len(directories) > 0 {
+		dir = directories[0]
+		directories = directories[1:]
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			log.Error(fmt.Sprintf("Couldn't read directory - %v", dir))
+			continue
+		}
+		for _, entry := range entries {
+			name := path.Join(dir, entry.Name())
+			if entry.IsDir() {
+				directories = append(directories, name)
+				continue
+			}
+			if len(files) != 0 {
+				fileFound := false
+				for _, file := range files {
+					if strings.EqualFold(entry.Name(), file) {
+						fileFound = true
+						break
+					}
+				}
+				if !fileFound {
+					continue
+				}
+			}
+			res, err := os.ReadFile(name)
+			require.NoError(t, err)
+			log.Error(fmt.Sprintf("READING FILE - %v", name))
+			log.Error(string(res))
+		}
+	}
+}
 
 type columnVindex struct {
 	keyspace   string
@@ -214,7 +254,7 @@ func TestCreateDbaTCPUser(t *testing.T) {
 
 	defer func() {
 		if t.Failed() {
-			cluster.PrintFiles(t, clusterInstance.Env.Directory(), "init_db_with_vt_dba_tcp.sql")
+			printFiles(t, clusterInstance.Env.Directory(), "init_db_with_vt_dba_tcp.sql")
 		}
 	}()
 
@@ -245,7 +285,7 @@ func TestCanGetKeyspaces(t *testing.T) {
 
 	defer func() {
 		if t.Failed() {
-			cluster.PrintFiles(t, clusterInstance.Env.Directory(), "vtcombo.INFO", "error.log")
+			printFiles(t, clusterInstance.Env.Directory(), "vtcombo.INFO", "error.log")
 		}
 	}()
 
