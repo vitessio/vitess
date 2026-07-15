@@ -18,6 +18,7 @@ package vitesst
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -31,8 +32,6 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"vitess.io/vitess/go/vt/key"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
 type (
@@ -138,7 +137,7 @@ func (c *Cluster) Start(ctx context.Context) (cleanup func(context.Context) erro
 	cleanup = c.terminate
 
 	if c.network != nil {
-		return cleanup, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cluster is already started")
+		return cleanup, errors.New("cluster is already started")
 	}
 
 	// Tear down whatever came up when bootstrap fails part-way, so failed
@@ -159,7 +158,7 @@ func (c *Cluster) Start(ctx context.Context) (cleanup func(context.Context) erro
 		c.logf("creating cluster network")
 		c.network, err = network.New(ctx, network.WithDriver("bridge"))
 		if err != nil {
-			return cleanup, vterrors.Wrapf(err, "creating cluster network")
+			return cleanup, fmt.Errorf("creating cluster network: %w", err)
 		}
 	}
 
@@ -243,11 +242,11 @@ func (c *Cluster) startKeyspace(ctx context.Context, kc *keyspaceConfig) error {
 		var err error
 		shardNames, err = key.GenerateShardRanges(kc.shards, 0)
 		if err != nil {
-			return vterrors.Wrapf(err, "generating %d shard ranges for keyspace %s", kc.shards, kc.name)
+			return fmt.Errorf("generating %d shard ranges for keyspace %s: %w", kc.shards, kc.name, err)
 		}
 	}
 
-	ks := &Keyspace{Name: kc.name}
+	ks := &Keyspace{Name: kc.name, cluster: c}
 	c.mu.Lock()
 	c.keyspaces = append(c.keyspaces, ks)
 	c.mu.Unlock()
@@ -355,7 +354,7 @@ func (c *Cluster) startShard(ctx context.Context, shard *Shard, specs []*TabletS
 
 	c.logf("electing %s as primary of %s", tablets[0].Alias(), shard.Ref())
 	if err := c.vtctld.initializeShard(ctx, shard.Keyspace.Name, shard.Name, tablets[0].Alias()); err != nil {
-		return vterrors.Wrapf(err, "electing primary for shard %s", shard.Ref())
+		return fmt.Errorf("electing primary for shard %s: %w", shard.Ref(), err)
 	}
 	return nil
 }
@@ -365,12 +364,12 @@ func (c *Cluster) startShard(ctx context.Context, shard *Shard, specs []*TabletS
 func (c *Cluster) detectMySQLVersion(ctx context.Context) error {
 	output, err := mustExec(ctx, c.vtctld.container(), []string{"bash", "-c", "mysqld --version || /usr/sbin/mysqld --version"})
 	if err != nil {
-		return vterrors.Wrapf(err, "detecting mysqld version")
+		return fmt.Errorf("detecting mysqld version: %w", err)
 	}
 
 	match := regexp.MustCompile(`(\d+)\.(\d+)\.(\d+)`).FindString(output)
 	if match == "" {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot parse mysqld version from %q", output)
+		return fmt.Errorf("cannot parse mysqld version from %q", output)
 	}
 	c.mysqlVersion = match
 	return nil
@@ -387,7 +386,7 @@ func (c *Cluster) assembleInitDBSQL(ctx context.Context) error {
 
 	base, err := mustExec(ctx, c.vtctld.container(), []string{"cat", imageInitDBPath})
 	if err != nil {
-		return vterrors.Wrapf(err, "reading %s from image", imageInitDBPath)
+		return fmt.Errorf("reading %s from image: %w", imageInitDBPath, err)
 	}
 
 	c.initDBSQL, err = spliceInitDBSQL(base, c.opts.initDBSQLExtra)
@@ -408,7 +407,7 @@ GRANT PROXY ON ''@'' TO '%[1]s'@'%%' WITH GRANT OPTION;
 
 	pieces := strings.SplitN(base, customSQLMarker, 2)
 	if len(pieces) != 2 {
-		return "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "missing %q marker in init_db.sql", customSQLMarker)
+		return "", fmt.Errorf("missing %q marker in init_db.sql", customSQLMarker)
 	}
 
 	return pieces[0] + custom + customSQLMarker + pieces[1], nil
@@ -422,7 +421,7 @@ func (c *Cluster) AddKeyspace(ctx context.Context, kb *keyspaceBuilder) (*Keyspa
 		return nil, err
 	}
 	if c.Keyspace(kc.name) != nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "keyspace %s already exists", kc.name)
+		return nil, fmt.Errorf("keyspace %s already exists", kc.name)
 	}
 
 	// Register the configuration so the keyspace's tablet args and schema are
@@ -446,15 +445,15 @@ func (c *Cluster) AddKeyspace(ctx context.Context, kb *keyspaceBuilder) (*Keyspa
 func (c *Cluster) AddShard(ctx context.Context, keyspace, shardName string, replicas, rdonly int) (*Shard, error) {
 	ks := c.Keyspace(keyspace)
 	if ks == nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "keyspace %s does not exist", keyspace)
+		return nil, fmt.Errorf("keyspace %s does not exist", keyspace)
 	}
 	if ks.Shard(shardName) != nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "shard %s/%s already exists", keyspace, shardName)
+		return nil, fmt.Errorf("shard %s/%s already exists", keyspace, shardName)
 	}
 
 	kc := c.keyspaceConfig(keyspace)
 	if kc == nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "keyspace %s has no configuration", keyspace)
+		return nil, fmt.Errorf("keyspace %s has no configuration", keyspace)
 	}
 
 	shard := &Shard{Name: shardName, Keyspace: ks, cluster: c}
@@ -517,7 +516,7 @@ func (c *Cluster) RemoveShard(ctx context.Context, keyspace, shardName string) e
 
 	for _, tablet := range shard.Tablets() {
 		if err := tablet.Remove(ctx); err != nil {
-			return vterrors.Wrapf(err, "removing tablet %s", tablet.Alias())
+			return fmt.Errorf("removing tablet %s: %w", tablet.Alias(), err)
 		}
 	}
 
@@ -555,11 +554,11 @@ func (c *Cluster) keyspaceConfig(name string) *keyspaceConfig {
 func (c *Cluster) AddTablet(ctx context.Context, cell, keyspace, shard, tabletType string) (*Tablet, error) {
 	ks := c.Keyspace(keyspace)
 	if ks == nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "keyspace %s does not exist", keyspace)
+		return nil, fmt.Errorf("keyspace %s does not exist", keyspace)
 	}
 	sh := ks.Shard(shard)
 	if sh == nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "shard %s/%s does not exist", keyspace, shard)
+		return nil, fmt.Errorf("shard %s/%s does not exist", keyspace, shard)
 	}
 
 	if cell == "" {
@@ -603,7 +602,7 @@ func (c *Cluster) RemoveKeyspace(ctx context.Context, name string) error {
 
 	for _, tablet := range ks.Tablets() {
 		if err := tablet.Remove(ctx); err != nil {
-			return vterrors.Wrapf(err, "removing tablet %s", tablet.Alias())
+			return fmt.Errorf("removing tablet %s: %w", tablet.Alias(), err)
 		}
 	}
 
@@ -665,10 +664,10 @@ func (c *Cluster) firstCell() string {
 // AddVTGateSpec configures.
 func (c *Cluster) AddCell(ctx context.Context, cell string) error {
 	if cell == "" {
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cell name must not be empty")
+		return errors.New("cell name must not be empty")
 	}
 	if slices.Contains(c.Cells(), cell) {
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cell %s already exists", cell)
+		return fmt.Errorf("cell %s already exists", cell)
 	}
 
 	c.logf("adding cell %s", cell)
@@ -798,7 +797,7 @@ func (c *Cluster) terminate(ctx context.Context) error {
 		c.network = nil
 		if c.opts.borrowedNetwork == nil {
 			if removeErr := nw.Remove(ctx); removeErr != nil && err == nil {
-				err = vterrors.Wrapf(removeErr, "removing cluster network")
+				err = fmt.Errorf("removing cluster network: %w", removeErr)
 			}
 		}
 	}

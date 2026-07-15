@@ -26,9 +26,6 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/network"
 	"github.com/testcontainers/testcontainers-go/wait"
-
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // vtorcConfigPath is the VTOrc config file inside its container. The vtorc
@@ -96,7 +93,7 @@ func (c *Cluster) AddVTOrc(ctx context.Context, cell string, extraArgs ...string
 
 	ctr, err := c.runVTOrcContainer(ctx, name, cell, args)
 	if err != nil {
-		return nil, vterrors.Wrapf(err, "starting %s", name)
+		return nil, fmt.Errorf("starting %s: %w", name, err)
 	}
 	v.setContainer(ctr)
 
@@ -112,7 +109,7 @@ func (c *Cluster) AddVTOrc(ctx context.Context, cell string, extraArgs ...string
 func (v *VTOrc) WriteConfig(ctx context.Context, content string) error {
 	ctr := v.container()
 	if ctr == nil {
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s has no container", v.name)
+		return fmt.Errorf("%s has no container", v.name)
 	}
 	return writeContainerFile(ctx, ctr, vtorcConfigPath, content)
 }
@@ -136,7 +133,7 @@ func (v *VTOrc) callRecoveriesAPI(ctx context.Context, path string) error {
 		return err
 	}
 	if status != http.StatusOK {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%s %s returned status %d: %s", v.name, path, status, body)
+		return fmt.Errorf("%s %s returned status %d: %s", v.name, path, status, body)
 	}
 	return nil
 }
@@ -174,13 +171,13 @@ func (v *VTOrc) restart(ctx context.Context, args []string) error {
 	old := v.setContainer(nil)
 	if old != nil {
 		if err := testcontainers.TerminateContainer(old, testcontainers.StopContext(ctx), testcontainers.StopTimeout(0)); err != nil {
-			return vterrors.Wrapf(err, "terminating %s for restart", v.name)
+			return fmt.Errorf("terminating %s for restart: %w", v.name, err)
 		}
 	}
 
 	ctr, err := v.cluster.runVTOrcContainer(ctx, v.name, cell, args)
 	if err != nil {
-		return vterrors.Wrapf(err, "restarting %s", v.name)
+		return fmt.Errorf("restarting %s: %w", v.name, err)
 	}
 	v.setContainer(ctr)
 	return nil
@@ -221,7 +218,7 @@ func (c *Cluster) runVTOrcContainer(ctx context.Context, name, cell string, extr
 		{Content: []byte("{}\n"), ContainerPath: vtorcConfigPath, Mode: 0o666},
 	})
 	if err != nil {
-		return nil, vterrors.Wrapf(err, "preparing files for %s", name)
+		return nil, fmt.Errorf("preparing files for %s: %w", name, err)
 	}
 
 	return testcontainers.Run(

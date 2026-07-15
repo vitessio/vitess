@@ -18,6 +18,7 @@ package vitesst
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -30,8 +31,6 @@ import (
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
 type (
@@ -63,7 +62,7 @@ func (v *Vtctld) ExecuteCommandWithOutput(ctx context.Context, args ...string) (
 func (v *Vtctld) executeCommand(ctx context.Context, args ...string) (string, error) {
 	ctr := v.container()
 	if ctr == nil {
-		return "", vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vtctld is not running")
+		return "", errors.New("vtctld is not running")
 	}
 
 	cmd := append([]string{
@@ -76,7 +75,7 @@ func (v *Vtctld) executeCommand(ctx context.Context, args ...string) (string, er
 		return "", err
 	}
 	if exitCode != 0 {
-		return output, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vtctldclient %s failed with exit code %d: %s", strings.Join(args, " "), exitCode, output)
+		return output, fmt.Errorf("vtctldclient %s failed with exit code %d: %s", strings.Join(args, " "), exitCode, output)
 	}
 	return output, nil
 }
@@ -162,7 +161,7 @@ func (v *Vtctld) getTablet(ctx context.Context, alias string) (*topodatapb.Table
 
 	tablet := &topodatapb.Tablet{}
 	if err := protojson.Unmarshal([]byte(output), tablet); err != nil {
-		return nil, vterrors.Wrapf(err, "parsing GetTablet %s output %q", alias, output)
+		return nil, fmt.Errorf("parsing GetTablet %s output %q: %w", alias, output, err)
 	}
 	return tablet, nil
 }
@@ -176,7 +175,7 @@ func (v *Vtctld) Shard(ctx context.Context, keyspace, shard string) (*vtctldatap
 
 	record := &vtctldatapb.Shard{}
 	if err := protojson.Unmarshal([]byte(output), record); err != nil {
-		return nil, vterrors.Wrapf(err, "parsing GetShard %s/%s output %q", keyspace, shard, output)
+		return nil, fmt.Errorf("parsing GetShard %s/%s output %q: %w", keyspace, shard, output, err)
 	}
 	return record, nil
 }
@@ -199,7 +198,7 @@ func (c *Cluster) startVtctld(ctx context.Context) error {
 
 	filesOpt, err := withContainerFiles(c.opts.vtctldFiles)
 	if err != nil {
-		return vterrors.Wrapf(err, "preparing files for vtctld")
+		return fmt.Errorf("preparing files for vtctld: %w", err)
 	}
 
 	opts := []testcontainers.ContainerCustomizer{
@@ -227,7 +226,7 @@ func (c *Cluster) startVtctld(ctx context.Context) error {
 
 	ctr, err := testcontainers.Run(ctx, c.vtctldImage(), opts...)
 	if err != nil {
-		return vterrors.Wrapf(err, "starting vtctld")
+		return fmt.Errorf("starting vtctld: %w", err)
 	}
 
 	c.vtctld.setContainer(ctr)
@@ -243,5 +242,8 @@ func (c *Cluster) addCellInfo(ctx context.Context, cell string) error {
 		"--server-address", c.TopoAddress(),
 		cell,
 	)
-	return vterrors.Wrapf(err, "adding cell %s", cell)
+	if err != nil {
+		return fmt.Errorf("adding cell %s: %w", cell, err)
+	}
+	return nil
 }

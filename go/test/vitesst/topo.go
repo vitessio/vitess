@@ -18,15 +18,13 @@ package vitesst
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/network"
 	"github.com/testcontainers/testcontainers-go/wait"
-
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // Topology server images. The versions match the binaries pinned by build.env.
@@ -48,10 +46,10 @@ func (c *Cluster) Topo() *component {
 // etcd client port. It errors for non-etcd topo flavors.
 func (c *Cluster) EtcdAddr(ctx context.Context) (string, error) {
 	if c.opts.topoFlavor != "etcd2" {
-		return "", vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "topo flavor is %s, not etcd2", c.opts.topoFlavor)
+		return "", fmt.Errorf("topo flavor is %s, not etcd2", c.opts.topoFlavor)
 	}
 	if c.topo == nil {
-		return "", vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "topo server is not running")
+		return "", errors.New("topo server is not running")
 	}
 	return c.topo.HTTPAddr(ctx)
 }
@@ -66,7 +64,7 @@ func (c *Cluster) startTopo(ctx context.Context) error {
 	case "zk2":
 		return c.startZookeeper(ctx)
 	default:
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "unsupported topo flavor %q", c.opts.topoFlavor)
+		return fmt.Errorf("unsupported topo flavor %q", c.opts.topoFlavor)
 	}
 }
 
@@ -97,7 +95,7 @@ func (c *Cluster) startEtcd(ctx context.Context) error {
 		),
 	)
 	if err != nil {
-		return vterrors.Wrapf(err, "starting etcd")
+		return fmt.Errorf("starting etcd: %w", err)
 	}
 
 	topo.setContainer(ctr)
@@ -131,7 +129,7 @@ func (c *Cluster) startConsul(ctx context.Context) error {
 		),
 	)
 	if err != nil {
-		return vterrors.Wrapf(err, "starting consul")
+		return fmt.Errorf("starting consul: %w", err)
 	}
 
 	topo.setContainer(ctr)
@@ -175,7 +173,7 @@ done`
 		),
 	)
 	if err != nil {
-		return vterrors.Wrapf(err, "starting zookeeper")
+		return fmt.Errorf("starting zookeeper: %w", err)
 	}
 
 	topo.setContainer(ctr)
@@ -238,7 +236,7 @@ func (c *Cluster) StopTopoProcess(ctx context.Context) error {
 	// The character class stops pkill -f from matching this exec's own argv.
 	script := `rm -f /tmp/zk.run && pkill -f '[Q]uorumPeerMain' || pkill '[j]ava' || true`
 	if _, err := mustExec(ctx, c.topo.container(), []string{"bash", "-c", script}); err != nil {
-		return vterrors.Wrapf(err, "stopping zookeeper process")
+		return fmt.Errorf("stopping zookeeper process: %w", err)
 	}
 	return nil
 }
@@ -251,7 +249,7 @@ func (c *Cluster) StartTopoProcess(ctx context.Context) error {
 	}
 
 	if _, err := mustExec(ctx, c.topo.container(), []string{"bash", "-c", "touch /tmp/zk.run"}); err != nil {
-		return vterrors.Wrapf(err, "starting zookeeper process")
+		return fmt.Errorf("starting zookeeper process: %w", err)
 	}
 
 	// Wait for the four-letter ruok probe to answer imok, so callers see a
@@ -267,7 +265,7 @@ func (c *Cluster) StartTopoProcess(ctx context.Context) error {
 
 		select {
 		case <-waitCtx.Done():
-			return vterrors.Wrapf(waitCtx.Err(), "zookeeper did not accept sessions after restart")
+			return fmt.Errorf("zookeeper did not accept sessions after restart: %w", waitCtx.Err())
 		case <-time.After(defaultPollInterval):
 		}
 	}

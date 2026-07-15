@@ -18,12 +18,11 @@ package vitesst
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"slices"
 	"sync"
 	"time"
-
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
 type (
@@ -103,8 +102,9 @@ type (
 		// Name is the keyspace name.
 		Name string
 
-		mu     sync.Mutex
-		shards []*Shard
+		cluster *Cluster
+		mu      sync.Mutex
+		shards  []*Shard
 	}
 
 	// Shard is the runtime handle for a started shard.
@@ -246,17 +246,17 @@ func (kb *keyspaceBuilder) WithoutPrimaryElection() *keyspaceBuilder {
 func (kc *keyspaceConfig) validate() error {
 	switch {
 	case kc.name == "":
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "keyspace name cannot be empty")
+		return errors.New("keyspace name cannot be empty")
 	case len(kc.shardNames) > 0 && kc.shards != defaultShards:
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "keyspace %s sets both WithShards and WithShardNames", kc.name)
+		return fmt.Errorf("keyspace %s sets both WithShards and WithShardNames", kc.name)
 	case slices.Contains(kc.shardNames, ""):
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "keyspace %s shard names must not be empty", kc.name)
+		return fmt.Errorf("keyspace %s shard names must not be empty", kc.name)
 	case kc.shards < 1:
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "keyspace %s needs at least one shard", kc.name)
+		return fmt.Errorf("keyspace %s needs at least one shard", kc.name)
 	case kc.replicas < 0:
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "keyspace %s replica count cannot be negative", kc.name)
+		return fmt.Errorf("keyspace %s replica count cannot be negative", kc.name)
 	case kc.rdonly < 0:
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "keyspace %s rdonly count cannot be negative", kc.name)
+		return fmt.Errorf("keyspace %s rdonly count cannot be negative", kc.name)
 	}
 	return nil
 }
@@ -364,7 +364,7 @@ func (s *Shard) CurrentPrimary(ctx context.Context) (*Tablet, error) {
 		}
 	}
 
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "shard %s/%s primary %s-%d is not a tracked tablet", s.Keyspace.Name, s.Name, alias.GetCell(), alias.GetUid())
+	return nil, fmt.Errorf("shard %s/%s primary %s-%d is not a tracked tablet", s.Keyspace.Name, s.Name, alias.GetCell(), alias.GetUid())
 }
 
 // WaitForPrimary polls the shard's topology record until it names a primary,
@@ -383,7 +383,7 @@ func (s *Shard) WaitForPrimary(ctx context.Context, timeout time.Duration) (*Tab
 
 		select {
 		case <-ctx.Done():
-			return nil, vterrors.Wrapf(errFirst(lastErr, ctx.Err()), "shard %s/%s did not get a primary within %s", s.Keyspace.Name, s.Name, timeout)
+			return nil, fmt.Errorf("shard %s/%s did not get a primary within %s: %w", s.Keyspace.Name, s.Name, timeout, errFirst(lastErr, ctx.Err()))
 		case <-time.After(healthyShardPollInterval):
 		}
 	}

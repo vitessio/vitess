@@ -31,7 +31,6 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/vitesst"
-	"vitess.io/vitess/go/test/vitesst/throttler"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 
@@ -69,7 +68,7 @@ var (
 
 	parallelInsertWorkers = "--vreplication-parallel-insert-workers=4"
 
-	throttlerConfig = throttler.Config{Threshold: 15}
+	throttlerConfig = vitesst.ThrottlerConfig{Threshold: 15}
 
 	// defaultHeartbeatOptions are the heartbeat flags every vttablet gets
 	// unless the cluster overrides them: on demand (5s) with a 250ms interval.
@@ -448,14 +447,14 @@ func (vc *VitessCluster) setupShards(t *testing.T, cells []*Cell, keyspace *Keys
 
 	log.Info("Applying throttler config for keyspace " + keyspace.Name)
 	req := &vtctldatapb.UpdateThrottlerConfigRequest{Enable: true, Threshold: throttlerConfig.Threshold, CustomQuery: throttlerConfig.Query}
-	res, err := throttler.UpdateThrottlerTopoConfigRaw(ctx, vc.Cluster, keyspace.Name, req, nil, nil)
+	res, err := vc.Cluster.Keyspace(keyspace.Name).Throttler().UpdateConfig(ctx, req, nil, nil)
 	require.NoError(t, err, res)
 
 	log.Info("Waiting for throttler config to be applied on all shards")
 	for _, shardName := range shardNames {
 		for _, tablet := range keyspace.Shards[shardName].Tablets {
 			log.Info("+ Waiting for throttler config to be applied on " + tablet.Name)
-			throttler.WaitForThrottlerStatusEnabled(ctx, t, vc.Cluster, tablet.Vttablet, true, nil, time.Minute)
+			tablet.Vttablet.Throttler().WaitForStatusEnabled(ctx, t, true, nil, time.Minute)
 		}
 	}
 	log.Info("Throttler config applied on all shards")

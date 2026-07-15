@@ -33,8 +33,6 @@ import (
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/vt/grpcclient"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 )
@@ -110,12 +108,12 @@ func (g *VTGate) ReadVSchema(ctx context.Context) (*any, error) {
 		return nil, err
 	}
 	if status != http.StatusOK {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%s /debug/vschema returned status %d", g.name, status)
+		return nil, fmt.Errorf("%s /debug/vschema returned status %d", g.name, status)
 	}
 
 	var results any
 	if err := json.Unmarshal([]byte(body), &results); err != nil {
-		return nil, vterrors.Wrapf(err, "decoding %s /debug/vschema", g.name)
+		return nil, fmt.Errorf("decoding %s /debug/vschema: %w", g.name, err)
 	}
 	return &results, nil
 }
@@ -126,7 +124,7 @@ func (g *VTGate) ReadVSchema(ctx context.Context) (*any, error) {
 func (g *VTGate) WriteConfig(ctx context.Context, content string) error {
 	ctr := g.container()
 	if ctr == nil {
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s has no container", g.name)
+		return fmt.Errorf("%s has no container", g.name)
 	}
 	return writeContainerFile(ctx, ctr, vtgateConfigPath, content)
 }
@@ -135,11 +133,11 @@ func (g *VTGate) WriteConfig(ctx context.Context, content string) error {
 func (g *VTGate) QueryLog(ctx context.Context) (string, error) {
 	ctr := g.container()
 	if ctr == nil {
-		return "", vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s has no container", g.name)
+		return "", fmt.Errorf("%s has no container", g.name)
 	}
 	_, output, err := containerExec(ctx, ctr, []string{"cat", vtgateQueryLogPath})
 	if err != nil {
-		return "", vterrors.Wrapf(err, "reading %s query log", g.name)
+		return "", fmt.Errorf("reading %s query log: %w", g.name, err)
 	}
 	return output, nil
 }
@@ -159,13 +157,13 @@ func (g *VTGate) Restart(ctx context.Context, extraArgs ...string) error {
 	old := g.setContainer(nil)
 	if old != nil {
 		if err := testcontainers.TerminateContainer(old, testcontainers.StopContext(ctx), testcontainers.StopTimeout(0)); err != nil {
-			return vterrors.Wrapf(err, "terminating %s for restart", g.name)
+			return fmt.Errorf("terminating %s for restart: %w", g.name, err)
 		}
 	}
 
 	ctr, err := g.cluster.runVTGateContainer(ctx, g.name, spec)
 	if err != nil {
-		return vterrors.Wrapf(err, "restarting %s", g.name)
+		return fmt.Errorf("restarting %s: %w", g.name, err)
 	}
 	g.setContainer(ctr)
 	return nil
@@ -231,7 +229,7 @@ func (c *Cluster) AddVTGateSpec(ctx context.Context, spec VTGateSpec) (*VTGate, 
 
 	ctr, err := c.runVTGateContainer(ctx, name, spec)
 	if err != nil {
-		return nil, vterrors.Wrapf(err, "starting %s", name)
+		return nil, fmt.Errorf("starting %s: %w", name, err)
 	}
 	g.setContainer(ctr)
 
@@ -271,7 +269,7 @@ func (c *Cluster) runVTGateContainer(ctx context.Context, name string, spec VTGa
 	files := append([]ContainerFile{{Content: []byte("{}\n"), ContainerPath: vtgateConfigPath, Mode: 0o666}}, c.opts.vtgateFiles...)
 	filesOpt, err := withContainerFiles(files)
 	if err != nil {
-		return nil, vterrors.Wrapf(err, "preparing files for %s", name)
+		return nil, fmt.Errorf("preparing files for %s: %w", name, err)
 	}
 
 	return testcontainers.Run(

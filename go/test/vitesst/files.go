@@ -18,12 +18,11 @@ package vitesst
 
 import (
 	"bytes"
+	"errors"
+	"fmt"
 	"os"
 
 	"github.com/testcontainers/testcontainers-go"
-
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
 type (
@@ -70,16 +69,16 @@ func (f ContainerFile) toTestcontainers() (testcontainers.ContainerFile, error) 
 
 	switch {
 	case f.ContainerPath == "":
-		return tcf, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "ContainerFile.ContainerPath cannot be empty")
+		return tcf, errors.New("ContainerFile.ContainerPath cannot be empty")
 	case len(f.Content) > 0:
 		tcf.Reader = bytes.NewReader(f.Content)
 	case f.HostPath != "":
 		if _, err := os.Stat(f.HostPath); err != nil {
-			return tcf, vterrors.Wrapf(err, "ContainerFile.HostPath %s", f.HostPath)
+			return tcf, fmt.Errorf("ContainerFile.HostPath %s: %w", f.HostPath, err)
 		}
 		tcf.HostFilePath = f.HostPath
 	default:
-		return tcf, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "ContainerFile for %s needs Content or HostPath", f.ContainerPath)
+		return tcf, fmt.Errorf("ContainerFile for %s needs Content or HostPath", f.ContainerPath)
 	}
 
 	return tcf, nil

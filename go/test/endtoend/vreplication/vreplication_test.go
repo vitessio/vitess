@@ -39,7 +39,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/test/vitesst"
-	"vitess.io/vitess/go/test/vitesst/throttler"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topotools"
@@ -1399,10 +1398,10 @@ func materializeProduct(t *testing.T) {
 		productTablets := vc.getVttabletsInKeyspace(t, defaultCell, defaultSourceKs, "primary")
 		t.Run("throttle-app-product", func(t *testing.T) {
 			// Now, throttle the source side component (vstreamer), and insert some rows.
-			err := throttler.ThrottleKeyspaceApp(t.Context(), vc.Cluster, defaultSourceKs, sourceThrottlerAppName)
+			err := vc.Cluster.Keyspace(defaultSourceKs).Throttler().ThrottleApp(t.Context(), sourceThrottlerAppName)
 			assert.NoError(t, err)
 			for _, tab := range productTablets {
-				status, err := throttler.GetThrottlerStatus(t.Context(), vc.Cluster, tab)
+				status, err := tab.Throttler().Status(t.Context())
 				assert.NoError(t, err)
 				assert.Contains(t, status.ThrottledApps, sourceThrottlerAppName.String())
 				// Wait for throttling to take effect (caching will expire by this time):
@@ -1411,7 +1410,7 @@ func materializeProduct(t *testing.T) {
 				}
 			}
 			for _, tab := range customerTablets {
-				status, err := throttler.GetThrottlerStatus(t.Context(), vc.Cluster, tab)
+				status, err := tab.Throttler().Status(t.Context())
 				assert.NoError(t, err)
 				if !waitForTabletThrottlingStatus(t, tab, targetThrottlerAppName, throttlerStatusNotThrottled) {
 					t.Logf("Throttler status: %v", status)
@@ -1433,12 +1432,12 @@ func materializeProduct(t *testing.T) {
 		})
 		t.Run("unthrottle-app-product", func(t *testing.T) {
 			// Unthrottle the vstreamer component, and expect the rows to show up.
-			err := throttler.UnthrottleKeyspaceApp(t.Context(), vc.Cluster, defaultSourceKs, sourceThrottlerAppName)
+			err := vc.Cluster.Keyspace(defaultSourceKs).Throttler().UnthrottleApp(t.Context(), sourceThrottlerAppName)
 			assert.NoError(t, err)
 			for _, tab := range productTablets {
 				// Give time for unthrottling to take effect and for targets to fetch data.
 				if !waitForTabletThrottlingStatus(t, tab, sourceThrottlerAppName, throttlerStatusNotThrottled) {
-					status, err := throttler.GetThrottlerStatus(t.Context(), vc.Cluster, tab)
+					status, err := tab.Throttler().Status(t.Context())
 					assert.NoError(t, err)
 					assert.NotContains(t, status.ThrottledApps, sourceThrottlerAppName.String())
 					t.Logf("Throttler status: %v", status)
@@ -1452,10 +1451,10 @@ func materializeProduct(t *testing.T) {
 		t.Run("throttle-app-customer", func(t *testing.T) {
 			// Now, throttle vreplication on the target side (vplayer), and insert some
 			// more rows.
-			err := throttler.ThrottleKeyspaceApp(t.Context(), vc.Cluster, keyspace, targetThrottlerAppName)
+			err := vc.Cluster.Keyspace(keyspace).Throttler().ThrottleApp(t.Context(), targetThrottlerAppName)
 			assert.NoError(t, err)
 			for _, tab := range customerTablets {
-				status, err := throttler.GetThrottlerStatus(t.Context(), vc.Cluster, tab)
+				status, err := tab.Throttler().Status(t.Context())
 				assert.NoError(t, err)
 				assert.Contains(t, status.ThrottledApps, targetThrottlerAppName.String())
 				// Wait for throttling to take effect (caching will expire by this time):
@@ -1465,7 +1464,7 @@ func materializeProduct(t *testing.T) {
 			}
 			for _, tab := range productTablets {
 				// Give time for unthrottling to take effect and for targets to fetch data.
-				status, err := throttler.GetThrottlerStatus(t.Context(), vc.Cluster, tab)
+				status, err := tab.Throttler().Status(t.Context())
 				assert.NoError(t, err)
 				if !waitForTabletThrottlingStatus(t, tab, sourceThrottlerAppName, throttlerStatusNotThrottled) {
 					t.Logf("Throttler status: %v", status)
@@ -1487,12 +1486,12 @@ func materializeProduct(t *testing.T) {
 		})
 		t.Run("unthrottle-app-customer", func(t *testing.T) {
 			// unthrottle on target tablets, and expect the rows to show up
-			err := throttler.UnthrottleKeyspaceApp(t.Context(), vc.Cluster, keyspace, targetThrottlerAppName)
+			err := vc.Cluster.Keyspace(keyspace).Throttler().UnthrottleApp(t.Context(), targetThrottlerAppName)
 			assert.NoError(t, err)
 			// give time for unthrottling to take effect and for target to fetch data
 			for _, tab := range customerTablets {
 				if !waitForTabletThrottlingStatus(t, tab, targetThrottlerAppName, throttlerStatusNotThrottled) {
-					status, err := throttler.GetThrottlerStatus(t.Context(), vc.Cluster, tab)
+					status, err := tab.Throttler().Status(t.Context())
 					assert.NoError(t, err)
 					assert.NotContains(t, status.ThrottledApps, targetThrottlerAppName.String())
 					t.Logf("Throttler status: %v", status)

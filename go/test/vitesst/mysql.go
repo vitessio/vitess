@@ -30,7 +30,6 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // comparisonMySQLUID is the tablet UID the standalone comparison mysqld runs
@@ -96,7 +95,7 @@ GRANT ALL ON *.* TO '%s'@'%%' WITH GRANT OPTION;
 		),
 	)
 	if err != nil {
-		return mysql.ConnParams{}, nil, vterrors.Wrapf(err, "starting comparison mysqld")
+		return mysql.ConnParams{}, nil, fmt.Errorf("starting comparison mysqld: %w", err)
 	}
 	cleanup := func(ctx context.Context) error {
 		return testcontainers.TerminateContainer(ctr, testcontainers.StopContext(ctx), testcontainers.StopTimeout(0))
@@ -106,7 +105,7 @@ GRANT ALL ON *.* TO '%s'@'%%' WITH GRANT OPTION;
 		if cleanupErr := cleanup(ctx); cleanupErr != nil {
 			cluster.logf("cleaning up comparison mysqld: %v", cleanupErr)
 		}
-		return mysql.ConnParams{}, nil, vterrors.Wrapf(err, "resolving comparison mysqld address")
+		return mysql.ConnParams{}, nil, fmt.Errorf("resolving comparison mysqld address: %w", err)
 	}
 
 	host, err := ctr.Host(ctx)
@@ -135,7 +134,7 @@ func applySchema(ctx context.Context, params mysql.ConnParams, schemaSQL []strin
 
 	conn, err := mysql.Connect(ctx, &params)
 	if err != nil {
-		return vterrors.Wrapf(err, "connecting to comparison mysqld")
+		return fmt.Errorf("connecting to comparison mysqld: %w", err)
 	}
 	defer conn.Close()
 
@@ -143,11 +142,11 @@ func applySchema(ctx context.Context, params mysql.ConnParams, schemaSQL []strin
 	for _, sql := range schemaSQL {
 		statements, err := parser.SplitStatementToPieces(sql)
 		if err != nil {
-			return vterrors.Wrapf(err, "splitting schema SQL")
+			return fmt.Errorf("splitting schema SQL: %w", err)
 		}
 		for _, statement := range statements {
 			if _, err := conn.ExecuteFetch(statement, 1, false); err != nil {
-				return vterrors.Wrapf(err, "applying schema statement %q", statement)
+				return fmt.Errorf("applying schema statement %q: %w", statement, err)
 			}
 		}
 	}

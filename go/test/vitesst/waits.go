@@ -18,9 +18,8 @@ package vitesst
 
 import (
 	"context"
+	"fmt"
 	"time"
-
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // healthyShardPollInterval is the poll interval for WaitForHealthyShard.
@@ -42,7 +41,7 @@ func (c *Cluster) WaitForHealthyShard(ctx context.Context, keyspace, shard strin
 
 		select {
 		case <-ctx.Done():
-			return vterrors.Wrapf(errFirst(lastErr, ctx.Err()), "shard %s/%s did not get a primary within %s", keyspace, shard, timeout)
+			return fmt.Errorf("shard %s/%s did not get a primary within %s: %w", keyspace, shard, timeout, errFirst(lastErr, ctx.Err()))
 		case <-time.After(healthyShardPollInterval):
 		}
 	}

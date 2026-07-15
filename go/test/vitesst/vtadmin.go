@@ -23,8 +23,6 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/network"
 	"github.com/testcontainers/testcontainers-go/wait"
-
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // vtadminHTTPPort is the vtadmin API port inside the container.
@@ -114,7 +112,7 @@ func (c *Cluster) startVTAdmin(ctx context.Context) error {
 		{Content: []byte(discovery), ContainerPath: discoveryPath},
 	})
 	if err != nil {
-		return vterrors.Wrapf(err, "preparing vtadmin files")
+		return fmt.Errorf("preparing vtadmin files: %w", err)
 	}
 
 	clusterID := c.opts.vtadminClusterID
@@ -153,7 +151,7 @@ func (c *Cluster) startVTAdmin(ctx context.Context) error {
 		),
 	)
 	if err != nil {
-		return vterrors.Wrapf(err, "starting vtadmin")
+		return fmt.Errorf("starting vtadmin: %w", err)
 	}
 
 	vtadmin.setContainer(ctr)

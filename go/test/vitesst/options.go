@@ -17,13 +17,12 @@ limitations under the License.
 package vitesst
 
 import (
+	"errors"
+	"fmt"
 	"maps"
 	"slices"
 
 	"github.com/testcontainers/testcontainers-go"
-
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
 type (
@@ -295,13 +294,13 @@ func newClusterOptions(opts []ClusterOption) *clusterOptions {
 // validate checks the applied configuration.
 func (config *clusterOptions) validate() error {
 	if len(config.keyspaces) == 0 {
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "at least one keyspace is required")
+		return errors.New("at least one keyspace is required")
 	}
 	if len(config.cells) == 0 {
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "at least one cell is required")
+		return errors.New("at least one cell is required")
 	}
 	if slices.Contains(config.cells, "") {
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cell names must not be empty")
+		return errors.New("cell names must not be empty")
 	}
 
 	seen := make(map[string]bool, len(config.keyspaces))
@@ -311,7 +310,7 @@ func (config *clusterOptions) validate() error {
 			return err
 		}
 		if seen[ks.name] {
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "keyspace %s configured twice", ks.name)
+			return fmt.Errorf("keyspace %s configured twice", ks.name)
 		}
 		seen[ks.name] = true
 	}
@@ -319,13 +318,13 @@ func (config *clusterOptions) validate() error {
 	switch config.mysqlVersion {
 	case "8.0", "8.4":
 	default:
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "unsupported MySQL version %q, supported versions are 8.0 and 8.4", config.mysqlVersion)
+		return fmt.Errorf("unsupported MySQL version %q, supported versions are 8.0 and 8.4", config.mysqlVersion)
 	}
 
 	switch config.topoFlavor {
 	case "etcd2", "consul", "zk2":
 	default:
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "unsupported topo flavor %q, supported flavors are etcd2, consul and zk2", config.topoFlavor)
+		return fmt.Errorf("unsupported topo flavor %q, supported flavors are etcd2, consul and zk2", config.topoFlavor)
 	}
 
 	return nil

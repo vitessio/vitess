@@ -46,7 +46,6 @@ import (
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/vitesst"
-	"vitess.io/vitess/go/test/vitesst/throttler"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -179,7 +178,7 @@ func waitForQueryResult(t *testing.T, conn *mysql.Conn, database string, query s
 // waitForTabletThrottlingStatus waits for the tablet to return the provided HTTP code for
 // the provided app name in its self check.
 func waitForTabletThrottlingStatus(t *testing.T, tablet *vitesst.Tablet, throttlerApp throttlerapp.Name, wantCode tabletmanagerdatapb.CheckThrottlerResponseCode) bool {
-	_, ok := throttler.WaitForCheckThrottlerResult(t.Context(), t, vc.Cluster, tablet, throttlerApp, nil, wantCode, defaultTimeout)
+	_, ok := tablet.Throttler().WaitForCheckResult(t.Context(), t, throttlerApp, nil, wantCode, defaultTimeout)
 	return ok
 }
 

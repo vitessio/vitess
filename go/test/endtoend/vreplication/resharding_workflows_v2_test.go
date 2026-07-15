@@ -32,7 +32,6 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 
 	"vitess.io/vitess/go/test/vitesst"
-	"vitess.io/vitess/go/test/vitesst/throttler"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/wrangler"
@@ -682,7 +681,7 @@ func testRestOfWorkflow(t *testing.T) {
 		Threshold:   throttlerConfig.Threshold * 5,
 		CustomQuery: throttlerConfig.Query,
 	}
-	res, err := throttler.UpdateThrottlerTopoConfigRaw(t.Context(), vc.Cluster, defaultTargetKs, req, nil, nil)
+	res, err := vc.Cluster.Keyspace(defaultTargetKs).Throttler().UpdateConfig(t.Context(), req, nil, nil)
 	require.NoError(t, err, res)
 
 	testPartialSwitches(t)

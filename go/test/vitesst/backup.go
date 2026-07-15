@@ -18,6 +18,7 @@ package vitesst
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strconv"
@@ -32,8 +33,6 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 
 	"vitess.io/vitess/go/mysql"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // vtbackupTimeout bounds how long one vtbackup run may take.
@@ -119,7 +118,7 @@ func (c *Cluster) backupMount() testcontainers.CustomizeRequestOption {
 func (c *Cluster) createBackupVolume(ctx context.Context) error {
 	cli, err := testcontainers.NewDockerClientWithOpts(ctx)
 	if err != nil {
-		return vterrors.Wrapf(err, "creating docker client")
+		return fmt.Errorf("creating docker client: %w", err)
 	}
 	defer cli.Close()
 
@@ -127,7 +126,7 @@ func (c *Cluster) createBackupVolume(ctx context.Context) error {
 		Labels: testcontainers.GenericLabels(),
 	})
 	if err != nil {
-		return vterrors.Wrapf(err, "creating backup volume")
+		return fmt.Errorf("creating backup volume: %w", err)
 	}
 
 	c.backupVolume = vol.Volume.Name
@@ -142,12 +141,12 @@ func (c *Cluster) removeBackupVolume(ctx context.Context) error {
 
 	cli, err := testcontainers.NewDockerClientWithOpts(ctx)
 	if err != nil {
-		return vterrors.Wrapf(err, "creating docker client")
+		return fmt.Errorf("creating docker client: %w", err)
 	}
 	defer cli.Close()
 
 	if _, err := cli.VolumeRemove(ctx, c.backupVolume, client.VolumeRemoveOptions{Force: true}); err != nil {
-		return vterrors.Wrapf(err, "removing backup volume %s", c.backupVolume)
+		return fmt.Errorf("removing backup volume %s: %w", c.backupVolume, err)
 	}
 	c.backupVolume = ""
 	return nil
@@ -174,7 +173,7 @@ func (c *Cluster) RunVtbackup(ctx context.Context, spec VtbackupSpec) (string, e
 // it exits; the container is torn down with the cluster.
 func (c *Cluster) StartVtbackup(ctx context.Context, spec VtbackupSpec) (*Vtbackup, error) {
 	if !c.opts.backupStorage {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cluster has no backup storage, use WithBackupStorage")
+		return nil, errors.New("cluster has no backup storage, use WithBackupStorage")
 	}
 
 	name := c.name(fmt.Sprintf("vtbackup-%d", c.nextTabletUID()))
@@ -201,7 +200,7 @@ func (c *Cluster) StartVtbackup(ctx context.Context, spec VtbackupSpec) (*Vtback
 	files = append(files, c.opts.tabletFiles...)
 	filesOpt, err := withContainerFiles(files)
 	if err != nil {
-		return nil, vterrors.Wrapf(err, "preparing files for %s", name)
+		return nil, fmt.Errorf("preparing files for %s: %w", name, err)
 	}
 
 	ctr, err := testcontainers.Run(
@@ -218,7 +217,7 @@ func (c *Cluster) StartVtbackup(ctx context.Context, spec VtbackupSpec) (*Vtback
 		testcontainers.WithWaitStrategy(wait.ForLog("")),
 	)
 	if err != nil {
-		return nil, vterrors.Wrapf(err, "starting %s", name)
+		return nil, fmt.Errorf("starting %s: %w", name, err)
 	}
 
 	vb := &Vtbackup{component: component{
@@ -255,7 +254,7 @@ func (v *Vtbackup) DBAConnParams(ctx context.Context, dbName string) (mysql.Conn
 func (v *Vtbackup) Wait(ctx context.Context) (string, error) {
 	ctr := v.container()
 	if ctr == nil {
-		return "", vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s has no container", v.name)
+		return "", fmt.Errorf("%s has no container", v.name)
 	}
 
 	waitCtx, cancel := context.WithTimeout(ctx, vtbackupTimeout)
@@ -264,7 +263,7 @@ func (v *Vtbackup) Wait(ctx context.Context) (string, error) {
 	for {
 		state, err := ctr.State(waitCtx)
 		if err != nil {
-			return "", vterrors.Wrapf(err, "inspecting %s", v.name)
+			return "", fmt.Errorf("inspecting %s: %w", v.name, err)
 		}
 		if !state.Running {
 			output, err := v.Logs(ctx)
@@ -272,14 +271,14 @@ func (v *Vtbackup) Wait(ctx context.Context) (string, error) {
 				return "", err
 			}
 			if state.ExitCode != 0 {
-				return output, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%s exited with code %d", v.name, state.ExitCode)
+				return output, fmt.Errorf("%s exited with code %d", v.name, state.ExitCode)
 			}
 			return output, nil
 		}
 
 		select {
 		case <-waitCtx.Done():
-			return "", vterrors.Wrapf(waitCtx.Err(), "%s did not exit", v.name)
+			return "", fmt.Errorf("%s did not exit: %w", v.name, waitCtx.Err())
 		case <-time.After(defaultPollInterval):
 		}
 	}
@@ -289,13 +288,13 @@ func (v *Vtbackup) Wait(ctx context.Context) (string, error) {
 func (c *Cluster) readContainerLog(ctx context.Context, ctr testcontainers.Container) (string, error) {
 	rc, err := ctr.Logs(ctx)
 	if err != nil {
-		return "", vterrors.Wrapf(err, "reading container log")
+		return "", fmt.Errorf("reading container log: %w", err)
 	}
 	defer rc.Close()
 
 	content, err := io.ReadAll(rc)
 	if err != nil {
-		return "", vterrors.Wrapf(err, "reading container log")
+		return "", fmt.Errorf("reading container log: %w", err)
 	}
 	return string(content), nil
 }
@@ -326,7 +325,7 @@ func (c *Cluster) RemoveAllBackups(ctx context.Context, keyspace, shard string) 
 
 	for _, backup := range backups {
 		if err := c.Vtctld().ExecuteCommand(ctx, "RemoveBackup", keyspace+"/"+shard, backup); err != nil {
-			return vterrors.Wrapf(err, "removing backup %s", backup)
+			return fmt.Errorf("removing backup %s: %w", backup, err)
 		}
 	}
 	return nil

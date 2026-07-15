@@ -26,9 +26,6 @@ import (
 	"time"
 
 	"github.com/testcontainers/testcontainers-go"
-
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
 type (
@@ -78,17 +75,17 @@ func (cp *component) HTTPAddr(ctx context.Context) (string, error) {
 func (cp *component) hostAddr(ctx context.Context, port string) (string, error) {
 	ctr := cp.container()
 	if ctr == nil {
-		return "", vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s has no container", cp.name)
+		return "", fmt.Errorf("%s has no container", cp.name)
 	}
 
 	host, err := ctr.Host(ctx)
 	if err != nil {
-		return "", vterrors.Wrapf(err, "resolving %s host", cp.name)
+		return "", fmt.Errorf("resolving %s host: %w", cp.name, err)
 	}
 
 	mapped, err := ctr.MappedPort(ctx, port)
 	if err != nil {
-		return "", vterrors.Wrapf(err, "resolving %s mapped port %s", cp.name, port)
+		return "", fmt.Errorf("resolving %s mapped port %s: %w", cp.name, port, err)
 	}
 
 	return fmt.Sprintf("%s:%d", host, mapped.Num()), nil
@@ -104,18 +101,18 @@ func (cp *component) MakeAPICall(ctx context.Context, path string) (int, string,
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+addr+path, nil)
 	if err != nil {
-		return 0, "", vterrors.Wrapf(err, "building request for %s%s", cp.name, path)
+		return 0, "", fmt.Errorf("building request for %s%s: %w", cp.name, path, err)
 	}
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return 0, "", vterrors.Wrapf(err, "calling %s%s", cp.name, path)
+		return 0, "", fmt.Errorf("calling %s%s: %w", cp.name, path, err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return resp.StatusCode, "", vterrors.Wrapf(err, "reading %s%s response", cp.name, path)
+		return resp.StatusCode, "", fmt.Errorf("reading %s%s response: %w", cp.name, path, err)
 	}
 
 	return resp.StatusCode, string(body), nil
@@ -140,7 +137,7 @@ func (cp *component) MakeAPICallRetry(ctx context.Context, path string, timeout 
 
 		select {
 		case <-ctx.Done():
-			return status, body, vterrors.Wrapf(errFirst(lastErr, ctx.Err()), "%s%s did not reach the expected state within %s", cp.name, path, timeout)
+			return status, body, fmt.Errorf("%s%s did not reach the expected state within %s: %w", cp.name, path, timeout, errFirst(lastErr, ctx.Err()))
 		case <-time.After(defaultPollInterval):
 		}
 	}
@@ -153,12 +150,12 @@ func (cp *component) GetVars(ctx context.Context) (map[string]any, error) {
 		return nil, err
 	}
 	if status != http.StatusOK {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%s /debug/vars returned status %d", cp.name, status)
+		return nil, fmt.Errorf("%s /debug/vars returned status %d", cp.name, status)
 	}
 
 	vars := make(map[string]any)
 	if err := json.Unmarshal([]byte(body), &vars); err != nil {
-		return nil, vterrors.Wrapf(err, "decoding %s /debug/vars", cp.name)
+		return nil, fmt.Errorf("decoding %s /debug/vars: %w", cp.name, err)
 	}
 	return vars, nil
 }
@@ -170,7 +167,7 @@ func (cp *component) GetMetrics(ctx context.Context) (string, error) {
 		return "", err
 	}
 	if status != http.StatusOK {
-		return "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%s /metrics returned status %d", cp.name, status)
+		return "", fmt.Errorf("%s /metrics returned status %d", cp.name, status)
 	}
 	return body, nil
 }
@@ -180,18 +177,18 @@ func (cp *component) GetMetrics(ctx context.Context) (string, error) {
 func (cp *component) Logs(ctx context.Context) (string, error) {
 	ctr := cp.container()
 	if ctr == nil {
-		return "", vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s has no container", cp.name)
+		return "", fmt.Errorf("%s has no container", cp.name)
 	}
 
 	rc, err := ctr.Logs(ctx)
 	if err != nil {
-		return "", vterrors.Wrapf(err, "reading %s logs", cp.name)
+		return "", fmt.Errorf("reading %s logs: %w", cp.name, err)
 	}
 	defer rc.Close()
 
 	content, err := io.ReadAll(rc)
 	if err != nil {
-		return "", vterrors.Wrapf(err, "reading %s logs", cp.name)
+		return "", fmt.Errorf("reading %s logs: %w", cp.name, err)
 	}
 	return string(content), nil
 }
@@ -201,7 +198,7 @@ func (cp *component) Logs(ctx context.Context) (string, error) {
 func (cp *component) Exec(ctx context.Context, cmd ...string) (int, string, error) {
 	ctr := cp.container()
 	if ctr == nil {
-		return 0, "", vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s has no container", cp.name)
+		return 0, "", fmt.Errorf("%s has no container", cp.name)
 	}
 	return containerExec(ctx, ctr, cmd)
 }
@@ -213,7 +210,7 @@ func (cp *component) ReadFile(ctx context.Context, path string) (string, error) 
 		return "", err
 	}
 	if exitCode != 0 {
-		return "", vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "reading %s on %s: %s", path, cp.name, output)
+		return "", fmt.Errorf("reading %s on %s: %s", path, cp.name, output)
 	}
 	return output, nil
 }
@@ -223,10 +220,10 @@ func (cp *component) ReadFile(ctx context.Context, path string) (string, error) 
 func (cp *component) WriteFile(ctx context.Context, path, content string) error {
 	ctr := cp.container()
 	if ctr == nil {
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s has no container", cp.name)
+		return fmt.Errorf("%s has no container", cp.name)
 	}
 	if err := writeContainerFile(ctx, ctr, path, content); err != nil {
-		return vterrors.Wrapf(err, "writing %s on %s", path, cp.name)
+		return fmt.Errorf("writing %s on %s: %w", path, cp.name, err)
 	}
 	return nil
 }
@@ -235,7 +232,7 @@ func (cp *component) WriteFile(ctx context.Context, path, content string) error 
 // it is a directory.
 func (cp *component) RemoveFile(ctx context.Context, path string) error {
 	if _, _, err := cp.Exec(ctx, "rm", "-rf", path); err != nil {
-		return vterrors.Wrapf(err, "removing %s on %s", path, cp.name)
+		return fmt.Errorf("removing %s on %s: %w", path, cp.name, err)
 	}
 	return nil
 }
@@ -245,7 +242,7 @@ func (cp *component) RemoveFile(ctx context.Context, path string) error {
 func (cp *component) StopContainer(ctx context.Context, timeout time.Duration) error {
 	ctr := cp.container()
 	if ctr == nil {
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s has no container", cp.name)
+		return fmt.Errorf("%s has no container", cp.name)
 	}
 	return ctr.Stop(ctx, &timeout)
 }
@@ -255,7 +252,7 @@ func (cp *component) StopContainer(ctx context.Context, timeout time.Duration) e
 func (cp *component) StartContainer(ctx context.Context) error {
 	ctr := cp.container()
 	if ctr == nil {
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s has no container", cp.name)
+		return fmt.Errorf("%s has no container", cp.name)
 	}
 	return ctr.Start(ctx)
 }

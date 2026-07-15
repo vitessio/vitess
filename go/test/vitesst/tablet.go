@@ -37,8 +37,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // Supervisor control paths inside tablet containers. The tablet entrypoint is
@@ -150,11 +148,11 @@ func (t *Tablet) DBAConnParams(ctx context.Context, dbName string) (mysql.ConnPa
 func dbaConnParams(addr, dbName string) (mysql.ConnParams, error) {
 	host, portStr, ok := strings.Cut(addr, ":")
 	if !ok {
-		return mysql.ConnParams{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "malformed mysqld address %q", addr)
+		return mysql.ConnParams{}, fmt.Errorf("malformed mysqld address %q", addr)
 	}
 	port, err := strconv.Atoi(portStr)
 	if err != nil {
-		return mysql.ConnParams{}, vterrors.Wrapf(err, "malformed mysqld port in %q", addr)
+		return mysql.ConnParams{}, fmt.Errorf("malformed mysqld port in %q: %w", addr, err)
 	}
 
 	return mysql.ConnParams{
@@ -181,7 +179,7 @@ func (t *Tablet) QueryTabletWithDB(ctx context.Context, query, dbName string) (*
 
 	conn, err := mysql.Connect(ctx, &params)
 	if err != nil {
-		return nil, vterrors.Wrapf(err, "connecting to tablet %s mysqld", t.Alias())
+		return nil, fmt.Errorf("connecting to tablet %s mysqld: %w", t.Alias(), err)
 	}
 	defer conn.Close()
 
@@ -208,7 +206,7 @@ func (t *Tablet) TabletProto(ctx context.Context) (*topodatapb.Tablet, error) {
 
 	host, grpcPort, ok := strings.Cut(grpcAddr, ":")
 	if !ok {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "malformed grpc address %q", grpcAddr)
+		return nil, fmt.Errorf("malformed grpc address %q", grpcAddr)
 	}
 	_, httpPort, _ := strings.Cut(httpAddr, ":")
 
@@ -227,7 +225,7 @@ func (t *Tablet) TabletProto(ctx context.Context) (*topodatapb.Tablet, error) {
 func parsePort(s string) (int32, error) {
 	port, err := strconv.ParseInt(s, 10, 32)
 	if err != nil {
-		return 0, vterrors.Wrapf(err, "parsing port %q", s)
+		return 0, fmt.Errorf("parsing port %q: %w", s, err)
 	}
 	return int32(port), nil
 }
@@ -255,7 +253,7 @@ func (t *Tablet) MySQLSocket() string {
 // WithMysqlctld.
 func (t *Tablet) MysqlctldGRPCAddr(ctx context.Context) (string, error) {
 	if !t.cluster.opts.mysqlctld {
-		return "", vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "tablet %s has no mysqlctld, use WithMysqlctld", t.Alias())
+		return "", fmt.Errorf("tablet %s has no mysqlctld, use WithMysqlctld", t.Alias())
 	}
 	return t.hostAddr(ctx, fmt.Sprintf("%d/tcp", tabletMysqlctldGRPCPort))
 }
@@ -325,7 +323,7 @@ func (t *Tablet) signalVttablet(ctx context.Context, signal string) error {
 	// waitVttabletGone confirms it.
 	script := fmt.Sprintf(`if [[ -f %[1]s ]]; then kill -%[2]s "$(cat %[1]s)" 2>/dev/null || true; fi`, supervisorPidFile, signal)
 	if _, err := mustExec(ctx, t.container(), []string{"bash", "-c", script}); err != nil {
-		return vterrors.Wrapf(err, "signaling vttablet on %s", t.Alias())
+		return fmt.Errorf("signaling vttablet on %s: %w", t.Alias(), err)
 	}
 
 	return t.waitVttabletGone(ctx)
@@ -336,7 +334,7 @@ func (t *Tablet) waitVttabletGone(ctx context.Context) error {
 	for {
 		exitCode, _, err := containerExec(ctx, t.container(), []string{"test", "!", "-f", supervisorPidFile})
 		if err != nil {
-			return vterrors.Wrapf(err, "waiting for vttablet on %s to exit", t.Alias())
+			return fmt.Errorf("waiting for vttablet on %s to exit: %w", t.Alias(), err)
 		}
 		if exitCode == 0 {
 			return nil
@@ -344,7 +342,7 @@ func (t *Tablet) waitVttabletGone(ctx context.Context) error {
 
 		select {
 		case <-ctx.Done():
-			return vterrors.Wrapf(ctx.Err(), "vttablet on %s did not exit", t.Alias())
+			return fmt.Errorf("vttablet on %s did not exit: %w", t.Alias(), ctx.Err())
 		case <-time.After(defaultPollInterval):
 		}
 	}
@@ -373,7 +371,7 @@ func (t *Tablet) StartVttablet(ctx context.Context, extraArgs ...string) error {
 
 func (t *Tablet) writeControlFile(ctx context.Context, path, content string) error {
 	if err := writeContainerFile(ctx, t.container(), path, content); err != nil {
-		return vterrors.Wrapf(err, "writing %s on %s", path, t.Alias())
+		return fmt.Errorf("writing %s on %s: %w", path, t.Alias(), err)
 	}
 	return nil
 }
@@ -383,7 +381,7 @@ func (t *Tablet) writeControlFile(ctx context.Context, path, content string) err
 func (t *Tablet) FreezeVttablet(ctx context.Context) error {
 	script := fmt.Sprintf(`kill -STOP "$(cat %s)"`, supervisorPidFile)
 	if _, err := mustExec(ctx, t.container(), []string{"bash", "-c", script}); err != nil {
-		return vterrors.Wrapf(err, "freezing vttablet on %s", t.Alias())
+		return fmt.Errorf("freezing vttablet on %s: %w", t.Alias(), err)
 	}
 	return nil
 }
@@ -392,7 +390,7 @@ func (t *Tablet) FreezeVttablet(ctx context.Context) error {
 func (t *Tablet) UnfreezeVttablet(ctx context.Context) error {
 	script := fmt.Sprintf(`kill -CONT "$(cat %s)"`, supervisorPidFile)
 	if _, err := mustExec(ctx, t.container(), []string{"bash", "-c", script}); err != nil {
-		return vterrors.Wrapf(err, "unfreezing vttablet on %s", t.Alias())
+		return fmt.Errorf("unfreezing vttablet on %s: %w", t.Alias(), err)
 	}
 	return nil
 }
@@ -403,7 +401,7 @@ func (t *Tablet) UnfreezeVttablet(ctx context.Context) error {
 func (t *Tablet) DisconnectNetwork(ctx context.Context) error {
 	cli, err := testcontainers.NewDockerClientWithOpts(ctx)
 	if err != nil {
-		return vterrors.Wrapf(err, "creating docker client")
+		return fmt.Errorf("creating docker client: %w", err)
 	}
 	defer cli.Close()
 
@@ -412,7 +410,7 @@ func (t *Tablet) DisconnectNetwork(ctx context.Context) error {
 		Force:     true,
 	})
 	if err != nil {
-		return vterrors.Wrapf(err, "disconnecting %s from the cluster network", t.Alias())
+		return fmt.Errorf("disconnecting %s from the cluster network: %w", t.Alias(), err)
 	}
 	return nil
 }
@@ -422,7 +420,7 @@ func (t *Tablet) DisconnectNetwork(ctx context.Context) error {
 func (t *Tablet) ReconnectNetwork(ctx context.Context) error {
 	cli, err := testcontainers.NewDockerClientWithOpts(ctx)
 	if err != nil {
-		return vterrors.Wrapf(err, "creating docker client")
+		return fmt.Errorf("creating docker client: %w", err)
 	}
 	defer cli.Close()
 
@@ -433,7 +431,7 @@ func (t *Tablet) ReconnectNetwork(ctx context.Context) error {
 		},
 	})
 	if err != nil {
-		return vterrors.Wrapf(err, "reconnecting %s to the cluster network", t.Alias())
+		return fmt.Errorf("reconnecting %s to the cluster network: %w", t.Alias(), err)
 	}
 	return nil
 }
@@ -452,7 +450,7 @@ func (t *Tablet) StopMySQL(ctx context.Context) error {
 		"shutdown",
 	}
 	if _, err := mustExec(ctx, t.container(), cmd); err != nil {
-		return vterrors.Wrapf(err, "stopping mysqld on %s", t.Alias())
+		return fmt.Errorf("stopping mysqld on %s: %w", t.Alias(), err)
 	}
 	return nil
 }
@@ -473,7 +471,7 @@ else
 fi`, t.tabletDir(), t.UID, tabletMySQLPort, tabletInitDBPath)
 
 	if _, err := mustExec(ctx, t.container(), []string{"bash", "-c", script}); err != nil {
-		return vterrors.Wrapf(err, "starting mysqld on %s", t.Alias())
+		return fmt.Errorf("starting mysqld on %s: %w", t.Alias(), err)
 	}
 	return nil
 }
@@ -486,7 +484,7 @@ func (t *Tablet) KillMySQL(ctx context.Context) error {
 
 	script := fmt.Sprintf(`kill -9 "$(cat %s/mysql.pid)"`, t.tabletDir())
 	if _, err := mustExec(ctx, t.container(), []string{"bash", "-c", script}); err != nil {
-		return vterrors.Wrapf(err, "killing mysqld on %s", t.Alias())
+		return fmt.Errorf("killing mysqld on %s: %w", t.Alias(), err)
 	}
 	return nil
 }
@@ -497,7 +495,10 @@ func (t *Tablet) WaitForTabletStatus(ctx context.Context, timeout time.Duration,
 	_, _, err := t.MakeAPICallRetry(ctx, "/debug/vars", timeout, func(status int, body string) bool {
 		return status == 200 && matchesDebugVar(body, "TabletStateName", states)
 	})
-	return vterrors.Wrapf(err, "tablet %s did not reach state %v", t.Alias(), states)
+	if err != nil {
+		return fmt.Errorf("tablet %s did not reach state %v: %w", t.Alias(), states, err)
+	}
+	return nil
 }
 
 // WaitForTabletType polls the tablet's /debug/vars until TabletType is one of
@@ -506,7 +507,10 @@ func (t *Tablet) WaitForTabletType(ctx context.Context, timeout time.Duration, t
 	_, _, err := t.MakeAPICallRetry(ctx, "/debug/vars", timeout, func(status int, body string) bool {
 		return status == 200 && matchesDebugVar(body, "TabletType", types)
 	})
-	return vterrors.Wrapf(err, "tablet %s did not reach type %v", t.Alias(), types)
+	if err != nil {
+		return fmt.Errorf("tablet %s did not reach type %v: %w", t.Alias(), types, err)
+	}
+	return nil
 }
 
 // matchesDebugVar decodes a /debug/vars body and reports whether the named
@@ -543,7 +547,7 @@ func (c *Cluster) startTablet(ctx context.Context, spec *TabletSpec) (*Tablet, e
 
 	initDBSQL, err := c.tabletInitDBSQL(spec.Keyspace)
 	if err != nil {
-		return nil, vterrors.Wrapf(err, "assembling init_db.sql for tablet %s", t.Alias())
+		return nil, fmt.Errorf("assembling init_db.sql for tablet %s: %w", t.Alias(), err)
 	}
 
 	files := []ContainerFile{
@@ -555,7 +559,7 @@ func (c *Cluster) startTablet(ctx context.Context, spec *TabletSpec) (*Tablet, e
 
 	filesOpt, err := withContainerFiles(files)
 	if err != nil {
-		return nil, vterrors.Wrapf(err, "preparing files for tablet %s", t.Alias())
+		return nil, fmt.Errorf("preparing files for tablet %s: %w", t.Alias(), err)
 	}
 
 	opts := []testcontainers.ContainerCustomizer{
@@ -600,7 +604,7 @@ func (c *Cluster) startTablet(ctx context.Context, spec *TabletSpec) (*Tablet, e
 
 	ctr, err := testcontainers.Run(ctx, c.vttabletImage(spec.Keyspace), opts...)
 	if err != nil {
-		return nil, vterrors.Wrapf(err, "starting tablet %s", t.Alias())
+		return nil, fmt.Errorf("starting tablet %s: %w", t.Alias(), err)
 	}
 
 	t.setContainer(ctr)
