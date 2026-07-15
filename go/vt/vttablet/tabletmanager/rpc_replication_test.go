@@ -940,8 +940,8 @@ func TestGetMySQLVersionStringCache(t *testing.T) {
 		}
 		tm := &TabletManager{MysqlDaemon: daemon}
 
-		require.Equal(t, "", tm.getMySQLVersionString(t.Context()))
-		require.Equal(t, "", tm.getMySQLVersionString(t.Context()))
+		require.Empty(t, tm.getMySQLVersionString(t.Context()))
+		require.Empty(t, tm.getMySQLVersionString(t.Context()))
 		require.EqualValues(t, 2, daemon.calls.Load(), "should retry after an error rather than cache the empty result")
 	})
 
