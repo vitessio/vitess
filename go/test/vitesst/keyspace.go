@@ -49,11 +49,6 @@ type (
 		// primary and any rdonly tablets.
 		replicas int
 
-		// replicasPerCell, when set, places replicas[i] replica tablets in the
-		// i-th cell instead of spreading replicas round-robin. Its length must
-		// not exceed the number of cells. replicas is kept as the sum.
-		replicasPerCell []int
-
 		// rdonly is the number of rdonly tablets per shard.
 		rdonly int
 
@@ -178,23 +173,6 @@ func (kb *keyspaceBuilder) WithReplicas(n int) *keyspaceBuilder {
 	return kb
 }
 
-// WithReplicasPerCell places counts[i] replica tablets in the i-th cell,
-// instead of spreading a flat replica count round-robin across cells. Use it
-// with WithCells for asymmetric placement, e.g. WithReplicasPerCell(3, 1) for
-// three replicas in the first cell and one in the second. The number of counts
-// must not exceed the number of cells. The total replica count is their sum.
-func (kb *keyspaceBuilder) WithReplicasPerCell(counts ...int) *keyspaceBuilder {
-	kb.config.replicasPerCell = counts
-
-	total := 0
-	for _, n := range counts {
-		total += n
-	}
-	kb.config.replicas = total
-
-	return kb
-}
-
 // WithRDOnly sets the number of rdonly tablets per shard.
 func (kb *keyspaceBuilder) WithRDOnly(n int) *keyspaceBuilder {
 	kb.config.rdonly = n
@@ -287,25 +265,6 @@ func (kc *keyspaceConfig) validate() error {
 // replicas plus rdonly tablets.
 func (kc *keyspaceConfig) tabletsPerShard() int {
 	return 1 + kc.replicas + kc.rdonly
-}
-
-// cellForTablet returns the cell for the i-th tablet of a shard under
-// replicasPerCell placement: the primary (index 0) and any rdonly tablets go to
-// the first cell, and replica index i-1 lands in the cell whose cumulative
-// replicasPerCell count first covers it. Callers guarantee replicasPerCell is
-// set and no longer than cells.
-func (kc *keyspaceConfig) cellForTablet(i int, cells []string) string {
-	if i >= 1 && i <= kc.replicas {
-		r := i - 1
-		for ci, count := range kc.replicasPerCell {
-			if r < count {
-				return cells[ci]
-			}
-			r -= count
-		}
-	}
-
-	return cells[0]
 }
 
 // Shards returns the keyspace's shards in range order.

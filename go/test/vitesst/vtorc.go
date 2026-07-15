@@ -164,21 +164,6 @@ func (v *VTOrc) RestartWithBuiltinConfig(ctx context.Context) error {
 	return v.restart(ctx, nil)
 }
 
-// Stop terminates the VTOrc container. The instance can be brought back with
-// Restart, which reuses the last extra args it ran with.
-func (v *VTOrc) Stop(ctx context.Context) error {
-	old := v.setContainer(nil)
-	if old == nil {
-		return nil
-	}
-
-	if err := testcontainers.TerminateContainer(old, testcontainers.StopContext(ctx), testcontainers.StopTimeout(0)); err != nil {
-		return vterrors.Wrapf(err, "stopping %s", v.name)
-	}
-
-	return nil
-}
-
 // restart terminates the current container and runs a new one with the given
 // extra args.
 func (v *VTOrc) restart(ctx context.Context, args []string) error {

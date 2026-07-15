@@ -140,18 +140,3 @@ func TestMatchesDebugVar(t *testing.T) {
 	assert.False(t, matchesDebugVar(body, "Other", []string{"3"}), "non-string vars never match")
 	assert.False(t, matchesDebugVar("not json", "TabletStateName", []string{"SERVING"}))
 }
-
-func TestCellForTablet(t *testing.T) {
-	cells := []string{"zone1", "zone2", "zone3"}
-	kc := &keyspaceConfig{replicas: 4, replicasPerCell: []int{3, 1}}
-
-	// The primary (index 0) and any rdonly tablets (index > replicas) go to the
-	// first cell.
-	assert.Equal(t, "zone1", kc.cellForTablet(0, cells))
-	assert.Equal(t, "zone1", kc.cellForTablet(5, cells))
-
-	// The first three replicas land in zone1, the fourth in zone2.
-	assert.Equal(t, "zone1", kc.cellForTablet(1, cells))
-	assert.Equal(t, "zone1", kc.cellForTablet(3, cells))
-	assert.Equal(t, "zone2", kc.cellForTablet(4, cells))
-}

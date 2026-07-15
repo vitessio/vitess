@@ -254,9 +254,6 @@ func (c *Cluster) startKeyspace(ctx context.Context, kc *keyspaceConfig) error {
 
 	group, groupCtx := errgroup.WithContext(ctx)
 	cells := c.Cells()
-	if n := len(kc.replicasPerCell); n > len(cells) {
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "keyspace %s has %d per-cell replica counts but the cluster has only %d cells", kc.name, n, len(cells))
-	}
 	cellIndex := 0
 	for _, shardName := range shardNames {
 		shard := &Shard{Name: shardName, Keyspace: ks, cluster: c}
@@ -274,20 +271,14 @@ func (c *Cluster) startKeyspace(ctx context.Context, kc *keyspaceConfig) error {
 				typ = "rdonly"
 			}
 
-			cell := cells[cellIndex%len(cells)]
-			if len(kc.replicasPerCell) > 0 {
-				cell = kc.cellForTablet(i, cells)
-			} else {
-				cellIndex++
-			}
-
 			spec := &TabletSpec{
 				UID:      c.nextTabletUID(),
-				Cell:     cell,
+				Cell:     cells[cellIndex%len(cells)],
 				Keyspace: kc.name,
 				Shard:    shardName,
 				Type:     typ,
 			}
+			cellIndex++
 			if kc.tabletSpec != nil {
 				kc.tabletSpec(spec)
 			}
