@@ -60,6 +60,11 @@ const (
 	tabletHTTPPort = 15100
 	tabletGRPCPort = 16100
 
+	// tabletMysqlctldGRPCPort is the mysqlctld gRPC port inside every tablet
+	// container of a cluster started with WithMysqlctld. The framework exposes
+	// it so the test process can reach mysqlctld from the host.
+	tabletMysqlctldGRPCPort = 16200
+
 	// tabletMySQLPort is the mysqld port inside tablet and comparison-MySQL
 	// containers.
 	tabletMySQLPort = 3306

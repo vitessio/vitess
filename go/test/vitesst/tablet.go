@@ -250,6 +250,16 @@ func (t *Tablet) MySQLSocket() string {
 	return t.TabletDir() + "/mysql.sock"
 }
 
+// MysqlctldGRPCAddr returns the host-reachable "host:port" of the tablet's
+// mysqlctld gRPC endpoint. It is available only on clusters started with
+// WithMysqlctld.
+func (t *Tablet) MysqlctldGRPCAddr(ctx context.Context) (string, error) {
+	if !t.cluster.opts.mysqlctld {
+		return "", vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "tablet %s has no mysqlctld, use WithMysqlctld", t.Alias())
+	}
+	return t.hostAddr(ctx, fmt.Sprintf("%d/tcp", tabletMysqlctldGRPCPort))
+}
+
 // Remove shuts the tablet's vttablet down, terminates its container and
 // removes the tablet from the cluster's and its shard's bookkeeping. The
 // topology record is untouched; tests delete it through vtctldclient when
@@ -448,18 +458,21 @@ func (t *Tablet) StopMySQL(ctx context.Context) error {
 }
 
 // StartMySQL starts the tablet's mysqld again after StopMySQL or KillMySQL.
+// When the data directory is still present it starts mysqld from it, and when
+// the data directory is absent it re-initializes mysqld from the init SQL, so
+// a test can wipe the data directory and bring mysqld back cleanly. This
+// matches the tablet supervisor's own boot behavior.
 func (t *Tablet) StartMySQL(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, defaultOperationTimeout)
 	defer cancel()
 
-	cmd := []string{
-		"mysqlctl",
-		"--tablet-uid", strconv.Itoa(t.UID),
-		"--mysql-port", strconv.Itoa(tabletMySQLPort),
-		"--log-format", "text",
-		"start",
-	}
-	if _, err := mustExec(ctx, t.container(), cmd); err != nil {
+	script := fmt.Sprintf(`if [[ -d %[1]s ]]; then
+  mysqlctl --tablet-uid %[2]d --mysql-port %[3]d --log-format text start
+else
+  mysqlctl --tablet-uid %[2]d --mysql-port %[3]d --log-format text init --init-db-sql-file %[4]s
+fi`, t.tabletDir(), t.UID, tabletMySQLPort, tabletInitDBPath)
+
+	if _, err := mustExec(ctx, t.container(), []string{"bash", "-c", script}); err != nil {
 		return vterrors.Wrapf(err, "starting mysqld on %s", t.Alias())
 	}
 	return nil
@@ -581,6 +594,9 @@ func (c *Cluster) startTablet(ctx context.Context, spec *TabletSpec) (*Tablet, e
 	if c.opts.backupStorage {
 		opts = append(opts, c.backupMount())
 	}
+	if c.opts.mysqlctld {
+		opts = append(opts, testcontainers.WithExposedPorts(fmt.Sprintf("%d/tcp", tabletMysqlctldGRPCPort)))
+	}
 
 	ctr, err := testcontainers.Run(ctx, c.vttabletImage(spec.Keyspace), opts...)
 	if err != nil {
@@ -650,9 +666,9 @@ fi`, tabletDirForUID(spec.UID), spec.UID, tabletMySQLPort, tabletInitDBPath)
 	// gate is a query as vt_dba: the user the init SQL creates and vttablet
 	// connects as.
 	if c.opts.mysqlctld {
-		mysqldStart = fmt.Sprintf(`mysqlctld --tablet-uid %[1]d --mysql-port %[2]d --log-format text --init-db-sql-file %[3]s &
+		mysqldStart = fmt.Sprintf(`mysqlctld --tablet-uid %[1]d --mysql-port %[2]d --grpc-port %[5]d --log-format text --init-db-sql-file %[3]s &
 until mysql --socket %[4]s --user vt_dba --execute 'select 1' >/dev/null 2>&1; do sleep 0.2; done`,
-			spec.UID, tabletMySQLPort, tabletInitDBPath, tabletDirForUID(spec.UID)+"/mysql.sock")
+			spec.UID, tabletMySQLPort, tabletInitDBPath, tabletDirForUID(spec.UID)+"/mysql.sock", tabletMysqlctldGRPCPort)
 	}
 
 	return fmt.Sprintf(

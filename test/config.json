@@ -99,34 +99,6 @@
       "Tags": [],
       "Needs": []
     },
-    "mysqlctl": {
-      "File": "unused.go",
-      "Packages": [
-        "vitess.io/vitess/go/test/endtoend/mysqlctl"
-      ],
-      "Args": [],
-      "Command": [],
-      "Manual": false,
-      "Shard": "12",
-      "Tags": [
-        "site_test"
-      ],
-      "Needs": []
-    },
-    "mysqlctld": {
-      "File": "unused.go",
-      "Packages": [
-        "vitess.io/vitess/go/test/endtoend/mysqlctld"
-      ],
-      "Args": [],
-      "Command": [],
-      "Manual": false,
-      "Shard": "12",
-      "Tags": [
-        "site_test"
-      ],
-      "Needs": []
-    },
     "upgrade": {
       "File": "unused.go",
       "Packages": [

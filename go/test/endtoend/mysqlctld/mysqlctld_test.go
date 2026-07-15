@@ -17,158 +17,121 @@ limitations under the License.
 package mysqlctld
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
-	"path"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/constants/sidecar"
+	"vitess.io/vitess/go/test/vitesst"
 	"vitess.io/vitess/go/vt/mysqlctl/mysqlctlclient"
 	"vitess.io/vitess/go/vt/proto/mysqlctl"
 
-	"vitess.io/vitess/go/test/endtoend/cluster"
+	// Register the gRPC mysqlctl client factory that mysqlctlclient.New selects.
+	_ "vitess.io/vitess/go/vt/mysqlctl/grpcmysqlctlclient"
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
-	primaryTablet   *cluster.Vttablet
-	replicaTablet   *cluster.Vttablet
-	hostname        = "localhost"
+	clusterInstance *vitesst.Cluster
+	shard           *vitesst.Shard
+	primaryTablet   *vitesst.Tablet
+	replicaTablet   *vitesst.Tablet
 	keyspaceName    = "test_keyspace"
-	shardName       = "0"
-	cell            = "zone1"
 )
+
+// mysqldRestartTimeout bounds how long the tablet may take to serve again
+// after its mysqld is wiped and restarted under mysqlctld.
+const mysqldRestartTimeout = 3 * time.Minute
 
 func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(cell, hostname)
-		defer clusterInstance.Teardown()
+		ctx := context.Background()
 
-		// Start topo server
-		err := clusterInstance.StartTopo()
+		// The keyspace runs each tablet's mysqld under mysqlctld and starts two
+		// tablets without electing a primary, so TestAutoDetect drives the first
+		// flavor-detecting reparent itself.
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithMysqlctld(),
+			vitesst.WithoutVTGate(),
+			vitesst.WithKeyspace(keyspaceName).
+				WithReplicas(1).
+				WithoutPrimaryElection(),
+		)
 		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-
-		if err := clusterInstance.VtctldClientProcess.CreateKeyspace(keyspaceName, sidecar.DefaultName, ""); err != nil {
+		cleanup, err := cluster.Start(ctx)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-
-		if err := initCluster([]string{"0"}, 2); err != nil {
-			return 1
-		}
-
-		// Collect tablet paths and ports
-		tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
-		for _, tablet := range tablets {
-			if tablet.Type == "primary" {
-				primaryTablet = tablet
-			} else if tablet.Type != "rdonly" {
-				replicaTablet = tablet
+		defer func() {
+			if err := cleanup(ctx); err != nil {
+				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
 			}
-		}
+		}()
+
+		clusterInstance = cluster
+		shard = cluster.Keyspace(keyspaceName).Shards()[0]
+		tablets := shard.Tablets()
+		primaryTablet = tablets[0]
+		replicaTablet = tablets[1]
 
 		return m.Run()
 	}()
 	os.Exit(exitCode)
 }
 
-func initCluster(shardNames []string, totalTabletsRequired int) error {
-	keyspace := cluster.Keyspace{
-		Name: keyspaceName,
-	}
-	for _, shardName := range shardNames {
-		shard := &cluster.Shard{
-			Name: shardName,
-		}
-		for i := range totalTabletsRequired {
-			// instantiate vttablet object with reserved ports
-			tabletUID := clusterInstance.GetAndReserveTabletUID()
-			tablet := &cluster.Vttablet{
-				TabletUID: tabletUID,
-				HTTPPort:  clusterInstance.GetAndReservePort(),
-				GrpcPort:  clusterInstance.GetAndReservePort(),
-				MySQLPort: clusterInstance.GetAndReservePort(),
-				Alias:     fmt.Sprintf("%s-%010d", clusterInstance.Cell, tabletUID),
-			}
-			if i == 0 { // Make the first one as primary
-				tablet.Type = "primary"
-			}
-			// Start Mysqlctld process
-			mysqlctldProcess, err := cluster.MysqlCtldProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
-			if err != nil {
-				return err
-			}
-			mysqlctldProcess.SocketFile = path.Join(clusterInstance.TmpDirectory, fmt.Sprintf("mysqlctld_%d.sock", tablet.TabletUID))
-			tablet.MysqlctldProcess = *mysqlctldProcess
-			err = tablet.MysqlctldProcess.Start()
-			if err != nil {
-				return err
-			}
-
-			// start vttablet process
-			tablet.VttabletProcess = cluster.VttabletProcessInstance(
-				tablet.HTTPPort,
-				tablet.GrpcPort,
-				tablet.TabletUID,
-				clusterInstance.Cell,
-				shardName,
-				keyspaceName,
-				clusterInstance.VtctldProcess.Port,
-				tablet.Type,
-				clusterInstance.TopoProcess.Port,
-				clusterInstance.Hostname,
-				clusterInstance.TmpDirectory,
-				clusterInstance.VtTabletExtraArgs,
-				clusterInstance.DefaultCharset)
-			tablet.Alias = tablet.VttabletProcess.TabletPath
-
-			shard.Vttablets = append(shard.Vttablets, tablet)
-		}
-
-		keyspace.Shards = append(keyspace.Shards, *shard)
-	}
-	clusterInstance.Keyspaces = append(clusterInstance.Keyspaces, keyspace)
-
-	return nil
-}
-
 func TestRestart(t *testing.T) {
-	err := primaryTablet.MysqlctldProcess.Stop()
-	require.Nil(t, err)
-	require.Truef(t, primaryTablet.MysqlctldProcess.WaitForMysqlCtldShutdown(), "Mysqlctld has not stopped...")
-	primaryTablet.MysqlctldProcess.CleanupFiles(primaryTablet.TabletUID)
-	err = primaryTablet.MysqlctldProcess.Start()
-	require.Nil(t, err)
+	ctx := t.Context()
+
+	// Deleting the data directory and restarting the container has the
+	// supervisor re-initialize mysqld under a fresh mysqlctld daemon.
+	require.NoError(t, primaryTablet.RemoveFile(ctx, primaryTablet.TabletDir()))
+	require.NoError(t, primaryTablet.StopContainer(ctx, mysqldRestartTimeout))
+	require.NoError(t, primaryTablet.StartContainer(ctx))
+	require.NoError(t, primaryTablet.WaitForTabletStatus(ctx, mysqldRestartTimeout, "SERVING", "NOT_SERVING"))
 }
 
 func TestAutoDetect(t *testing.T) {
-	err := clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].VttabletProcess.Setup()
-	require.Nil(t, err, "error should be nil")
-	err = clusterInstance.Keyspaces[0].Shards[0].Vttablets[1].VttabletProcess.Setup()
-	require.Nil(t, err, "error should be nil")
+	ctx := t.Context()
 
-	// Reparent tablets, which requires flavor detection
-	err = clusterInstance.VtctldClientProcess.InitializeShard(keyspaceName, shardName, cell, primaryTablet.TabletUID)
-	require.Nil(t, err, "error should be nil")
+	// Electing the shard's first primary reparents both tablets, which
+	// requires MySQL flavor detection to succeed.
+	err := clusterInstance.Vtctld().ExecuteCommand(
+		ctx,
+		"PlannedReparentShard", shard.Ref(),
+		"--wait-replicas-timeout", "31s",
+		"--new-primary", primaryTablet.Alias(),
+	)
+	require.NoError(t, err)
 }
 
 func TestVersionString(t *testing.T) {
-	client, err := mysqlctlclient.New(t.Context(), "unix", primaryTablet.MysqlctldProcess.SocketFile)
+	ctx := t.Context()
+
+	addr, err := primaryTablet.MysqlctldGRPCAddr(ctx)
 	require.NoError(t, err)
-	version, err := client.VersionString(t.Context())
+	client, err := mysqlctlclient.New(ctx, "tcp", addr)
+	require.NoError(t, err)
+	version, err := client.VersionString(ctx)
 	require.NoError(t, err)
 	require.NotEmpty(t, version)
 }
 
 func TestReadBinlogFilesTimestamps(t *testing.T) {
-	client, err := mysqlctlclient.New(t.Context(), "unix", primaryTablet.MysqlctldProcess.SocketFile)
+	ctx := t.Context()
+
+	addr, err := primaryTablet.MysqlctldGRPCAddr(ctx)
 	require.NoError(t, err)
-	_, err = client.ReadBinlogFilesTimestamps(t.Context(), &mysqlctl.ReadBinlogFilesTimestampsRequest{})
+	client, err := mysqlctlclient.New(ctx, "tcp", addr)
+	require.NoError(t, err)
+	_, err = client.ReadBinlogFilesTimestamps(ctx, &mysqlctl.ReadBinlogFilesTimestampsRequest{})
 	require.ErrorContains(t, err, "empty binlog list in ReadBinlogFilesTimestampsRequest")
 }

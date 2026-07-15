@@ -851,11 +851,11 @@
   "vitess.io/vitess/go/test/endtoend/mysqlctl": {
    "blockers": [],
    "capabilities": [],
-   "ci_shard": null,
+   "ci_shard": "default-3",
    "dropped_tests": [],
    "honesty": null,
    "lifecycle": null,
-   "notes": "",
+   "notes": "mysqld lifecycle driven by the tablet supervisor: StopMySQL, wipe the data dir, StartMySQL re-initializes; PlannedReparentShard exercises flavor detection.",
    "old_shards": [
     {
      "args": [],
@@ -873,20 +873,20 @@
     "TestAutoDetect"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/mysqlctl",
-   "runtime_sec": null,
-   "status": "exception",
-   "verified_at_sha": null,
-   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/mysqlctl/",
+   "runtime_sec": 12,
+   "status": "verified",
+   "verified_at_sha": "cb1cbddd2cf2148cd10a0cec3de96fd44293d4f2",
+   "verify_cmd": "go test -count=1 -timeout 18m ./go/test/endtoend/mysqlctl/",
    "wave": null
   },
   "vitess.io/vitess/go/test/endtoend/mysqlctld": {
    "blockers": [],
    "capabilities": [],
-   "ci_shard": null,
+   "ci_shard": "default-10",
    "dropped_tests": [],
    "honesty": null,
    "lifecycle": null,
-   "notes": "",
+   "notes": "WithMysqlctld runs mysqld under mysqlctld; the framework exposes the mysqlctld gRPC port so TestVersionString and TestReadBinlogFilesTimestamps reach it over tcp.",
    "old_shards": [
     {
      "args": [],
@@ -906,10 +906,10 @@
     "TestReadBinlogFilesTimestamps"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/mysqlctld",
-   "runtime_sec": null,
-   "status": "exception",
-   "verified_at_sha": null,
-   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/mysqlctld/",
+   "runtime_sec": 10,
+   "status": "verified",
+   "verified_at_sha": "cb1cbddd2cf2148cd10a0cec3de96fd44293d4f2",
+   "verify_cmd": "go test -count=1 -timeout 18m ./go/test/endtoend/mysqlctld/",
    "wave": null
   },
   "vitess.io/vitess/go/test/endtoend/mysqlserver": {
@@ -4449,7 +4449,7 @@
     "compare-mysql",
     "schema-tracking"
    ],
-   "ci_shard": "default-3",
+   "ci_shard": "default-10",
    "dropped_tests": [],
    "honesty": "pass",
    "lifecycle": "shared-cluster",
