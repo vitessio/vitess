@@ -534,6 +534,188 @@ func TestFlush_ConsumerMutationDoesNotAffectInternalCheckpoint(t *testing.T) {
 	assert.Same(t, v.latestVgtid, v.lastFlushedVgtid)
 }
 
+func TestFlush_ChunksBatchesByMaxRowsPerFlush(t *testing.T) {
+	session, impl := newStateTestSession(t, stateExecuteResponse{result: &sqltypes.Result{RowsAffected: 1}})
+
+	var chunkSizes []int
+	var reasons []FlushReason
+	table := &TableConfig{
+		Keyspace:        "ks",
+		Table:           "t",
+		MaxRowsPerFlush: 2,
+		FlushFn: func(_ context.Context, rows []Row, meta FlushMeta) error {
+			chunkSizes = append(chunkSizes, len(rows))
+			reasons = append(reasons, meta.FlushReason)
+			return nil
+		},
+		currentBatch: []Row{{Data: "1"}, {Data: "2"}, {Data: "3"}, {Data: "4"}, {Data: "5"}},
+	}
+
+	vgtid := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/1"}},
+	}
+	v := &VStreamClient{
+		cfg: clientConfig{
+			name:               "stream",
+			vgtidStateKeyspace: "ks",
+			vgtidStateTable:    "state",
+			minFlushDuration:   time.Second,
+		},
+		session:     session,
+		latestVgtid: vgtid,
+		stats:       VStreamStats{LastFlushedAt: time.Now().Add(-2 * time.Second)},
+		tables:      map[string]*TableConfig{qualifiedTableName("ks", "t"): table},
+	}
+
+	err := v.flush(t.Context(), false)
+	require.NoError(t, err)
+
+	assert.Equal(t, []int{2, 2, 1}, chunkSizes)
+	assert.Equal(t, []FlushReason{FlushReasonMinDuration, FlushReasonMinDuration, FlushReasonMinDuration}, reasons)
+	assert.Empty(t, table.currentBatch)
+
+	assert.Equal(t, 3, table.stats.FlushCount)
+	assert.Equal(t, 5, table.stats.FlushedRowCount)
+	assert.False(t, table.stats.LastFlushedAt.IsZero())
+	assert.Equal(t, 1, v.stats.FlushCount)
+	assert.Equal(t, 3, v.stats.TableFlushCount)
+	assert.Equal(t, 5, v.stats.FlushedRowCount)
+
+	// all chunks are covered by a single checkpoint write
+	assert.Same(t, vgtid, v.lastFlushedVgtid)
+	require.Len(t, impl.queries, 1)
+	assert.Contains(t, impl.queries[0], "update ks.state set latest_vgtid = :latest_vgtid")
+}
+
+func TestFlush_FlushFnErrorStopsFlushAndPreservesState(t *testing.T) {
+	session, impl := newStateTestSession(t)
+
+	flushErr := errors.New("sink write failed")
+	calls := 0
+	table := &TableConfig{
+		Keyspace:        "ks",
+		Table:           "t",
+		MaxRowsPerFlush: 2,
+		FlushFn: func(_ context.Context, _ []Row, _ FlushMeta) error {
+			calls++
+			if calls == 2 {
+				return flushErr
+			}
+			return nil
+		},
+		currentBatch: []Row{{Data: "1"}, {Data: "2"}, {Data: "3"}, {Data: "4"}, {Data: "5"}},
+	}
+
+	lastFlushedAt := time.Now().Add(-2 * time.Second)
+	v := &VStreamClient{
+		cfg: clientConfig{
+			name:               "stream",
+			vgtidStateKeyspace: "ks",
+			vgtidStateTable:    "state",
+			minFlushDuration:   time.Second,
+		},
+		session: session,
+		latestVgtid: &binlogdatapb.VGtid{
+			ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/1"}},
+		},
+		stats:  VStreamStats{LastFlushedAt: lastFlushedAt},
+		tables: map[string]*TableConfig{qualifiedTableName("ks", "t"): table},
+	}
+
+	err := v.flush(t.Context(), false)
+	require.ErrorIs(t, err, flushErr)
+	require.ErrorContains(t, err, "error flushing table t")
+
+	// the batch is preserved for replay, no checkpoint is written, and stream-level flush
+	// state is untouched; only the successfully flushed first chunk was counted
+	assert.Len(t, table.currentBatch, 5)
+	assert.Nil(t, v.lastFlushedVgtid)
+	assert.Empty(t, impl.queries)
+	assert.Equal(t, 1, table.stats.FlushCount)
+	assert.Equal(t, 2, table.stats.FlushedRowCount)
+	assert.Equal(t, 0, v.stats.FlushCount)
+	assert.Equal(t, lastFlushedAt, v.stats.LastFlushedAt)
+}
+
+func TestFlush_ReuseBatchSliceKeepsBackingArrayAcrossFlushes(t *testing.T) {
+	session, _ := newStateTestSession(t, stateExecuteResponse{result: &sqltypes.Result{RowsAffected: 1}})
+
+	table := &TableConfig{
+		Keyspace:        "ks",
+		Table:           "t",
+		MaxRowsPerFlush: 4,
+		ReuseBatchSlice: true,
+		FlushFn:         func(context.Context, []Row, FlushMeta) error { return nil },
+	}
+	table.resetBatch()
+	table.currentBatch = append(table.currentBatch, Row{Data: "1"}, Row{Data: "2"})
+	held := &table.currentBatch[0]
+
+	v := &VStreamClient{
+		cfg: clientConfig{
+			name:               "stream",
+			vgtidStateKeyspace: "ks",
+			vgtidStateTable:    "state",
+			minFlushDuration:   time.Second,
+		},
+		session: session,
+		latestVgtid: &binlogdatapb.VGtid{
+			ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/1"}},
+		},
+		stats:  VStreamStats{LastFlushedAt: time.Now().Add(-2 * time.Second)},
+		tables: map[string]*TableConfig{qualifiedTableName("ks", "t"): table},
+	}
+
+	err := v.flush(t.Context(), false)
+	require.NoError(t, err)
+
+	require.Empty(t, table.currentBatch)
+	table.currentBatch = append(table.currentBatch, Row{Data: "3"})
+	assert.Same(t, held, &table.currentBatch[0])
+}
+
+func TestFlush_SkipsCheckpointWhenVGtidUnchanged(t *testing.T) {
+	session, impl := newStateTestSession(t)
+
+	flushed := 0
+	table := &TableConfig{
+		Keyspace:        "ks",
+		Table:           "t",
+		MaxRowsPerFlush: 2,
+		FlushFn: func(_ context.Context, rows []Row, _ FlushMeta) error {
+			flushed += len(rows)
+			return nil
+		},
+		currentBatch: []Row{{Data: "1"}},
+	}
+
+	vgtid := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/1"}},
+	}
+	v := &VStreamClient{
+		cfg: clientConfig{
+			name:               "stream",
+			vgtidStateKeyspace: "ks",
+			vgtidStateTable:    "state",
+			minFlushDuration:   time.Second,
+		},
+		session:          session,
+		latestVgtid:      vgtid,
+		lastFlushedVgtid: proto.Clone(vgtid).(*binlogdatapb.VGtid),
+		stats:            VStreamStats{LastFlushedAt: time.Now().Add(-2 * time.Second)},
+		tables:           map[string]*TableConfig{qualifiedTableName("ks", "t"): table},
+	}
+
+	err := v.flush(t.Context(), false)
+	require.NoError(t, err)
+
+	// buffered rows still flush, but the no-op checkpoint update is skipped, since MySQL
+	// reports RowsAffected=0 for an update that changes nothing
+	assert.Equal(t, 1, flushed)
+	assert.Empty(t, table.currentBatch)
+	assert.Empty(t, impl.queries)
+}
+
 func TestShouldFlush_ForceBypassesThresholds(t *testing.T) {
 	v := &VStreamClient{
 		cfg:   clientConfig{minFlushDuration: time.Hour},
