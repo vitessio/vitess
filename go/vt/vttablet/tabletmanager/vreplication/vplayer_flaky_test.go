@@ -3828,6 +3828,83 @@ func TestPlayerBatchMode(t *testing.T) {
 	}
 }
 
+// TestPlayerBatchModeMixedRowEvent confirms that a row event whose changes do
+// not all have the same shape is applied per-change in batch mode. The source
+// vstreamer emits only the Before or After image of an update when just one
+// side passes the workflow filter, so a single multi-row UPDATE that moves
+// rows across an in_keyrange boundary (e.g. a sharding-key update replicated
+// by a MoveTables or Reshard workflow) produces one row event mixing
+// insert-shaped and delete-shaped changes. Batch mode used to pick the
+// bulk-insert or bulk-delete statement by looking only at the first change
+// and then apply every change in the event with that shape, panicking on the
+// first change of the opposite shape (nil row image in MakeRowTrusted).
+func TestPlayerBatchModeMixedRowEvent(t *testing.T) {
+	oldVreplicationExperimentalFlags := vttablet.DefaultVReplicationConfig.ExperimentalFlags
+	vttablet.DefaultVReplicationConfig.ExperimentalFlags = vttablet.VReplicationExperimentalFlagVPlayerBatching
+	defer func() {
+		vttablet.DefaultVReplicationConfig.ExperimentalFlags = oldVreplicationExperimentalFlags
+	}()
+
+	defer deleteTablet(addTablet(100))
+	execStatements(t, []string{
+		"create table t1(id bigint, val varbinary(128), primary key(id))",
+		fmt.Sprintf("create table %s.t1(id bigint, val varbinary(128), primary key(id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+		fmt.Sprintf("drop table %s.t1", vrepldb),
+	})
+
+	// Replicate only the rows whose id hashes into -80, like one target shard
+	// of a MoveTables or Reshard workflow. With the hash vindex, ids 2, 3 and
+	// 5 map into -80 while ids 4 and 6 map into 80-.
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "t1",
+			Filter: "select * from t1 where in_keyrange(id, 'hash', '-80')",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, _ := startVReplication(t, bls, "")
+	defer cancel()
+
+	execStatements(t, []string{"insert into t1 values (4, 'a'), (5, 'b')"})
+	expectNontxQueries(t, qh.Expect("insert into t1(id,val) values (5,_binary'b')"), recvTimeout)
+	expectData(t, "t1", [][]string{{"5", "b"}})
+
+	// One UPDATE whose first row moves into the keyrange (an insert-shaped
+	// change with only an After image) and whose second row moves out of it
+	// (a delete-shaped change with only a Before image). Batch mode used to
+	// route the whole event to the bulk-insert path based on the first change
+	// and panic on the delete-shaped change's nil After image.
+	execStatements(t, []string{
+		"update t1 set id = case id when 4 then 2 when 5 then 6 end where id in (4, 5)",
+	})
+	expectNontxQueries(t, qh.Expect(
+		"insert into t1(id,val) values (2,_binary'a')",
+		"delete from t1 where id=5",
+	), recvTimeout)
+	expectData(t, "t1", [][]string{{"2", "a"}})
+
+	// The mirror image: the first row moves out of the keyrange (a
+	// delete-shaped change) and the second moves in (an insert-shaped
+	// change). Batch mode used to route the whole event to the bulk-delete
+	// path and panic on the insert-shaped change's nil Before image.
+	execStatements(t, []string{
+		"update t1 set id = case id when 2 then 4 when 6 then 3 end where id in (2, 6)",
+	})
+	expectNontxQueries(t, qh.Expect(
+		"delete from t1 where id=2",
+		"insert into t1(id,val) values (3,_binary'b')",
+	), recvTimeout)
+	expectData(t, "t1", [][]string{{"3", "b"}})
+}
+
 // TestPlayerStalls confirms that the vplayer will detect a stall and generate
 // a meaningful error -- which is stored in the vreplication record and the
 // vreplication_log table as well as being logged -- when it does.

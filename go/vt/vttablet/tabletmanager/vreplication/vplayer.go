@@ -37,6 +37,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 const failedToRecordHeartbeatMsg = "failed to record heartbeat"
@@ -364,6 +365,48 @@ func (vp *vplayer) applyStmtEvent(ctx context.Context, event *binlogdatapb.VEven
 	return fmt.Errorf("filter rules are not supported for SBR replication: %v", vp.vr.source.Filter.GetRules())
 }
 
+// bulkApplicableShapes scans a row event's changes and reports whether they
+// are all delete-shaped (Before image only) or all insert-shaped (After image
+// only). A single event can mix shapes: when only one side of an update passes
+// the source vstreamer's workflow filter (e.g. a sharding-key update that
+// moves rows across an in_keyrange boundary), only that side's image is
+// emitted, so one multi-row UPDATE can yield insert-shaped, delete-shaped and
+// update-shaped changes in the same event. The bulk DELETE/INSERT statements
+// assume a homogeneous event, so a mixed event must be applied per-change.
+// A change with no images at all (nil, or present but empty) is malformed --
+// the vstreamer never produces one -- and is rejected with an error rather
+// than being routed to either apply path: the per-change path would
+// dereference a nil change and silently treat an empty one as a no-op.
+// The scan visits every change, even once the event is already known not to
+// be bulk-applicable, so a malformed entry is detected regardless of its
+// position.
+func bulkApplicableShapes(tableName string, rowChanges []*binlogdatapb.RowChange) (deletesOnly, insertsOnly bool, err error) {
+	deletesOnly, insertsOnly = true, true
+	for _, change := range rowChanges {
+		// An image that is present but has no column values is the malformed
+		// shape from issue #20360: MakeRowTrusted returns an empty row that
+		// later indexing panics on, so it cannot be treated as either a
+		// usable or a missing image.
+		if (change.GetBefore() != nil && len(change.GetBefore().GetLengths()) == 0) ||
+			(change.GetAfter() != nil && len(change.GetAfter().GetLengths()) == 0) {
+			return false, false, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+				"vreplication: malformed row change with an empty row image in event for table %s", tableName)
+		}
+		switch {
+		case change.GetBefore() == nil && change.GetAfter() == nil:
+			return false, false, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+				"vreplication: malformed row change with no row images in event for table %s", tableName)
+		case change.GetBefore() != nil && change.GetAfter() == nil:
+			insertsOnly = false
+		case change.GetBefore() == nil && change.GetAfter() != nil:
+			deletesOnly = false
+		default: // Update-shaped (both images).
+			deletesOnly, insertsOnly = false, false
+		}
+	}
+	return deletesOnly, insertsOnly, nil
+}
+
 func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.RowEvent) error {
 	if err := vp.updateFKCheck(ctx, rowEvent.Flags); err != nil {
 		return err
@@ -385,17 +428,20 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 	}
 
 	if vp.batchMode && len(rowEvent.RowChanges) > 1 {
+		deletesOnly, insertsOnly, err := bulkApplicableShapes(rowEvent.TableName, rowEvent.RowChanges)
+		if err != nil {
+			return err
+		}
 		// If we have multiple delete row events for a table with a single PK column
 		// then we can perform a simple bulk DELETE using an IN clause.
-		if (rowEvent.RowChanges[0].Before != nil && rowEvent.RowChanges[0].After == nil) &&
-			tplan.MultiDelete != nil {
+		if deletesOnly && tplan.MultiDelete != nil {
 			_, err := tplan.applyBulkDeleteChanges(rowEvent.RowChanges, applyFunc, vp.vr.dbClient.maxBatchSize)
 			return err
 		}
 		// If we're done with the copy phase then we will be replicating all INSERTS
 		// regardless of the PK value and can use a single INSERT statment with
 		// multiple VALUES clauses.
-		if len(vp.copyState) == 0 && (rowEvent.RowChanges[0].Before == nil && rowEvent.RowChanges[0].After != nil) {
+		if len(vp.copyState) == 0 && insertsOnly {
 			_, err := tplan.applyBulkInsertChanges(rowEvent.RowChanges, applyFunc, vp.vr.dbClient.maxBatchSize)
 			return err
 		}
