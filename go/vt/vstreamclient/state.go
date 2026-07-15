@@ -19,13 +19,14 @@ package vstreamclient
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 
 	"google.golang.org/protobuf/encoding/protojson"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 )
 
@@ -33,7 +34,7 @@ import (
 // state row was deleted or another client using the same stream name claimed ownership after this
 // client started. The newest client wins; this client must stop so the two don't ping-pong the
 // checkpoint back and forth.
-var ErrFenced = errors.New("vstreamclient: state row missing or claimed by another client")
+var ErrFenced = vterrors.New(vtrpcpb.Code_ABORTED, "vstreamclient: state row missing or claimed by another client")
 
 type dbTableConfig struct {
 	Keyspace string
@@ -162,7 +163,7 @@ func newVGtid(tables map[string]*TableConfig, shardsByKeyspace map[string][]stri
 		// TODO: this currently doesn't support subsetting shards, but we can add that if needed
 		shards, ok := shardsByKeyspace[table.Keyspace]
 		if !ok {
-			return nil, fmt.Errorf("vstreamclient: keyspace %s not found", table.Keyspace)
+			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: keyspace %s not found", table.Keyspace)
 		}
 
 		for _, shard := range shards {

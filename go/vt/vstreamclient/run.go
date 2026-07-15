@@ -31,17 +31,19 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var (
 	// ErrHeartbeatTimeout is returned by Run (as the wrapped cause) when the heartbeat monitor stops
 	// the stream because no events, including heartbeats, were received within the liveness window
 	// (the heartbeat interval times DefaultHeartbeatTimeoutMultiplier).
-	ErrHeartbeatTimeout = errors.New("vstreamclient: no events received within the heartbeat liveness window")
+	ErrHeartbeatTimeout = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "vstreamclient: no events received within the heartbeat liveness window")
 
 	// ErrStartupTimeout is returned by Run (as the wrapped cause) when the stream never delivered a
 	// single event within DefaultStartupTimeout after Run started.
-	ErrStartupTimeout = errors.New("vstreamclient: no events received before the startup timeout")
+	ErrStartupTimeout = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "vstreamclient: no events received before the startup timeout")
 )
 
 // EventFunc is an optional callback function that can be registered for individual event types
@@ -137,7 +139,7 @@ func (v *VStreamClient) Run(ctx context.Context) error {
 	ctx, cancelRunCtxFn := context.WithCancelCause(ctx)
 	if !v.beginRun(cancelRunCtxFn) {
 		cancelRunCtxFn(nil)
-		return errors.New("vstreamclient: client is closed; create a new client for each Run attempt")
+		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: client is closed; create a new client for each Run attempt")
 	}
 	defer cancelRunCtxFn(nil)
 	defer v.endRun()

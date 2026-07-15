@@ -18,7 +18,6 @@ package vstreamclient
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"slices"
@@ -32,7 +31,9 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	_ "vitess.io/vitess/go/vt/vtctl/grpcvtctlclient"
+	"vitess.io/vitess/go/vt/vterrors"
 	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 )
@@ -141,15 +142,15 @@ type VStreamStats struct {
 func New(ctx context.Context, name string, conn *vtgateconn.VTGateConn, tables []TableConfig, opts ...Option) (*VStreamClient, error) {
 	// validate required parameters
 	if name == "" {
-		return nil, errors.New("vstreamclient: name is required")
+		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: name is required")
 	}
 
 	if len(name) > 64 {
-		return nil, fmt.Errorf("vstreamclient: name must be 64 characters or less, got %d", len(name))
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: name must be 64 characters or less, got %d", len(name))
 	}
 
 	if conn == nil {
-		return nil, errors.New("vstreamclient: conn is required")
+		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: conn is required")
 	}
 
 	// initialize the VStreamClient, with options and settings to be set later
@@ -225,7 +226,7 @@ func New(ctx context.Context, name string, conn *vtgateconn.VTGateConn, tables [
 
 	// handle state lookup
 	if v.cfg.vgtidStateKeyspace == "" || v.cfg.vgtidStateTable == "" {
-		return nil, errors.New("vstreamclient: state table not configured (use WithStateTable)")
+		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: state table not configured (use WithStateTable)")
 	}
 
 	explicitStartingVGtid := v.latestVgtid
@@ -410,7 +411,7 @@ func getShardsByKeyspace(ctx context.Context, session *vtgateconn.VTGateSession)
 	for _, row := range result.Rows {
 		keyspace, shard, found := strings.Cut(row[0].ToString(), "/")
 		if !found {
-			return nil, fmt.Errorf("vstreamclient: failed to parse keyspace_id: %s", row[0].ToString())
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vstreamclient: failed to parse keyspace_id: %s", row[0].ToString())
 		}
 
 		shardsByKeyspace[keyspace] = append(shardsByKeyspace[keyspace], shard)
@@ -444,5 +445,5 @@ func validateTableNameMode(tables map[string]*TableConfig, flags *vtgatepb.VStre
 	}
 
 	slices.Sort(ambiguous)
-	return fmt.Errorf("vstreamclient: ExcludeKeyspaceFromTableName cannot be used with same-named tables across keyspaces: %s", strings.Join(ambiguous, "; "))
+	return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: ExcludeKeyspaceFromTableName cannot be used with same-named tables across keyspaces: %s", strings.Join(ambiguous, "; "))
 }
