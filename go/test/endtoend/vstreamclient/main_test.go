@@ -22,14 +22,11 @@ import (
 	"os"
 	"testing"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
 var (
 	clusterInstance   *cluster.LocalProcessCluster
-	vtParams          mysql.ConnParams
-	keyspaceName      = "customer"
 	vtgateGrpcAddress string
 	cell              = "zone1"
 	sqlSchema         = `create table customer(
@@ -57,7 +54,7 @@ func TestMain(m *testing.M) {
 
 	exitcode, err := func() (int, error) {
 		clusterInstance = cluster.NewCluster(cell, "localhost")
-		clusterInstance.VtTabletExtraArgs = []string{"--health_check_interval", "1s", "--shutdown_grace_period", "3s"}
+		clusterInstance.VtTabletExtraArgs = []string{"--health-check-interval", "1s", "--shutdown-grace-period", "3s"}
 		defer clusterInstance.Teardown()
 
 		// Start topo server
@@ -105,10 +102,6 @@ func TestMain(m *testing.M) {
 		}
 		// ensure it is torn down during cluster TearDown
 		clusterInstance.VtgateProcess = *vtgateInstance
-		vtParams = mysql.ConnParams{
-			Host: clusterInstance.Hostname,
-			Port: clusterInstance.VtgateMySQLPort,
-		}
 		vtgateGrpcAddress = fmt.Sprintf("%s:%d", clusterInstance.Hostname, clusterInstance.VtgateGrpcPort)
 		return m.Run(), nil
 	}()
