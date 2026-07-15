@@ -31,7 +31,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
-	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/vitesst"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
@@ -46,16 +46,16 @@ func TestBinlogDumpGTID_Streaming(t *testing.T) {
 	ctx := t.Context()
 
 	// Get the primary tablet for our keyspace
-	primaryTablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
-	tabletAlias := primaryTablet.Alias
+	primaryTablet := clusterInstance.Keyspace(keyspaceName).Shards()[0].Primary()
+	tabletAlias := primaryTablet.Alias()
 
 	t.Logf("Tablet alias: %s", tabletAlias)
 
 	// Connect to vtgate for binlog streaming
 	targetString := fmt.Sprintf("%s:0@primary|%s", keyspaceName, tabletAlias)
 	binlogParams := mysql.ConnParams{
-		Host:  clusterInstance.Hostname,
-		Port:  clusterInstance.VtgateMySQLPort,
+		Host:  vtParams.Host,
+		Port:  vtParams.Port,
 		Uname: "vt_repl|" + targetString,
 	}
 
@@ -180,16 +180,16 @@ func TestBinlogDumpGTID_LargeEvent(t *testing.T) {
 	ctx := t.Context()
 
 	// Get the primary tablet for our keyspace
-	primaryTablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
-	tabletAlias := primaryTablet.Alias
+	primaryTablet := clusterInstance.Keyspace(keyspaceName).Shards()[0].Primary()
+	tabletAlias := primaryTablet.Alias()
 
 	t.Logf("Tablet alias: %s", tabletAlias)
 
 	// Connect to vtgate for binlog streaming
 	targetString := fmt.Sprintf("%s:0@primary|%s", keyspaceName, tabletAlias)
 	binlogParams := mysql.ConnParams{
-		Host:  clusterInstance.Hostname,
-		Port:  clusterInstance.VtgateMySQLPort,
+		Host:  vtParams.Host,
+		Port:  vtParams.Port,
 		Uname: "vt_repl|" + targetString,
 	}
 
@@ -377,11 +377,11 @@ func TestBinlogDumpGTID_FromSpecificPosition(t *testing.T) {
 	}
 
 	// Connect for binlog streaming
-	primaryTablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
-	targetString := fmt.Sprintf("%s:0@primary|%s", keyspaceName, primaryTablet.Alias)
+	primaryTablet := clusterInstance.Keyspace(keyspaceName).Shards()[0].Primary()
+	targetString := fmt.Sprintf("%s:0@primary|%s", keyspaceName, primaryTablet.Alias())
 	binlogParams := mysql.ConnParams{
-		Host:  clusterInstance.Hostname,
-		Port:  clusterInstance.VtgateMySQLPort,
+		Host:  vtParams.Host,
+		Port:  vtParams.Port,
 		Uname: "vt_repl|" + targetString,
 	}
 
@@ -420,11 +420,11 @@ func TestBinlogDumpGTID_InvalidFormat(t *testing.T) {
 	ctx := t.Context()
 
 	// Connect with proper target
-	primaryTablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
-	targetString := fmt.Sprintf("%s:0@primary|%s", keyspaceName, primaryTablet.Alias)
+	primaryTablet := clusterInstance.Keyspace(keyspaceName).Shards()[0].Primary()
+	targetString := fmt.Sprintf("%s:0@primary|%s", keyspaceName, primaryTablet.Alias())
 	binlogParams := mysql.ConnParams{
-		Host:  clusterInstance.Hostname,
-		Port:  clusterInstance.VtgateMySQLPort,
+		Host:  vtParams.Host,
+		Port:  vtParams.Port,
 		Uname: "vt_repl|" + targetString,
 	}
 
@@ -486,11 +486,11 @@ func TestBinlogDumpGTID_FuturePosition(t *testing.T) {
 	t.Logf("Future GTID (includes non-existent transactions): %s", futureGTID)
 
 	// Connect for binlog streaming
-	primaryTablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
-	targetString := fmt.Sprintf("%s:0@primary|%s", keyspaceName, primaryTablet.Alias)
+	primaryTablet := clusterInstance.Keyspace(keyspaceName).Shards()[0].Primary()
+	targetString := fmt.Sprintf("%s:0@primary|%s", keyspaceName, primaryTablet.Alias())
 	binlogParams := mysql.ConnParams{
-		Host:  clusterInstance.Hostname,
-		Port:  clusterInstance.VtgateMySQLPort,
+		Host:  vtParams.Host,
+		Port:  vtParams.Port,
 		Uname: "vt_repl|" + targetString,
 	}
 
@@ -549,11 +549,11 @@ func TestBinlogDumpGTID_NonBlockEOF(t *testing.T) {
 	t.Logf("Starting from GTID: %s (should have no pending events)", currentGTID)
 
 	// Connect for binlog streaming
-	primaryTablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
-	targetString := fmt.Sprintf("%s:0@primary|%s", keyspaceName, primaryTablet.Alias)
+	primaryTablet := clusterInstance.Keyspace(keyspaceName).Shards()[0].Primary()
+	targetString := fmt.Sprintf("%s:0@primary|%s", keyspaceName, primaryTablet.Alias())
 	binlogParams := mysql.ConnParams{
-		Host:  clusterInstance.Hostname,
-		Port:  clusterInstance.VtgateMySQLPort,
+		Host:  vtParams.Host,
+		Port:  vtParams.Port,
 		Uname: "vt_repl|" + targetString,
 	}
 
@@ -639,11 +639,11 @@ func TestBinlogDumpGTID_NonBlockWithPendingEvents(t *testing.T) {
 	t.Logf("End GTID (after inserts): %s", endGTID)
 
 	// Connect for binlog streaming
-	primaryTablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
-	targetString := fmt.Sprintf("%s:0@primary|%s", keyspaceName, primaryTablet.Alias)
+	primaryTablet := clusterInstance.Keyspace(keyspaceName).Shards()[0].Primary()
+	targetString := fmt.Sprintf("%s:0@primary|%s", keyspaceName, primaryTablet.Alias())
 	binlogParams := mysql.ConnParams{
-		Host:  clusterInstance.Hostname,
-		Port:  clusterInstance.VtgateMySQLPort,
+		Host:  vtParams.Host,
+		Port:  vtParams.Port,
 		Uname: "vt_repl|" + targetString,
 	}
 
@@ -720,11 +720,11 @@ func TestBinlogDumpGTID_BlockingMode(t *testing.T) {
 	t.Logf("Starting from GTID: %s", currentGTID)
 
 	// Connect for binlog streaming
-	primaryTablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
-	targetString := fmt.Sprintf("%s:0@primary|%s", keyspaceName, primaryTablet.Alias)
+	primaryTablet := clusterInstance.Keyspace(keyspaceName).Shards()[0].Primary()
+	targetString := fmt.Sprintf("%s:0@primary|%s", keyspaceName, primaryTablet.Alias())
 	binlogParams := mysql.ConnParams{
-		Host:  clusterInstance.Hostname,
-		Port:  clusterInstance.VtgateMySQLPort,
+		Host:  vtParams.Host,
+		Port:  vtParams.Port,
 		Uname: "vt_repl|" + targetString,
 	}
 
@@ -821,19 +821,12 @@ func TestBinlogDumpGTID_DirectGRPC(t *testing.T) {
 	ctx := t.Context()
 
 	// Get the tablet info for direct gRPC connection
-	primaryTablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
-	tablet, err := clusterInstance.VtctldClientProcess.GetTablet(primaryTablet.Alias)
+	primaryTablet := clusterInstance.Keyspace(keyspaceName).Shards()[0].Primary()
+	tablet, err := primaryTablet.TabletProto(ctx)
 	require.NoError(t, err)
 
-	// Get current position - returns format like "MySQL56/uuid:1-44"
-	pos, _ := cluster.GetPrimaryPosition(t, *primaryTablet, hostname)
-	t.Logf("Primary position: %v", pos)
-
-	// Extract just the GTID set (strip the "MySQL56/" prefix)
-	gtidSet := pos
-	if _, after, found := strings.Cut(pos, "/"); found {
-		gtidSet = after
-	}
+	// Get current GTID position from the tablet's mysqld.
+	gtidSet := primaryGTIDSet(ctx, t, primaryTablet)
 	t.Logf("GTID set for BinlogDump: %s", gtidSet)
 
 	grpcCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
@@ -925,11 +918,11 @@ func TestBinlogDumpGTID_EmptyGTIDStartsFromBeginning(t *testing.T) {
 	countPackets := func(t *testing.T, sidBlock []byte, label string) int {
 		t.Helper()
 
-		primaryTablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
-		targetString := fmt.Sprintf("%s:0@primary|%s", keyspaceName, primaryTablet.Alias)
+		primaryTablet := clusterInstance.Keyspace(keyspaceName).Shards()[0].Primary()
+		targetString := fmt.Sprintf("%s:0@primary|%s", keyspaceName, primaryTablet.Alias())
 		binlogParams := mysql.ConnParams{
-			Host:  clusterInstance.Hostname,
-			Port:  clusterInstance.VtgateMySQLPort,
+			Host:  vtParams.Host,
+			Port:  vtParams.Port,
 			Uname: "vt_repl|" + targetString,
 		}
 
@@ -994,8 +987,8 @@ func TestBinlogDumpGTID_ShardTargeting(t *testing.T) {
 	// Connect to vtgate for binlog streaming using shard-level targeting (no tablet alias)
 	targetString := keyspaceName + ":0@primary"
 	binlogParams := mysql.ConnParams{
-		Host:  clusterInstance.Hostname,
-		Port:  clusterInstance.VtgateMySQLPort,
+		Host:  vtParams.Host,
+		Port:  vtParams.Port,
 		Uname: "vt_repl|" + targetString,
 	}
 
@@ -1083,9 +1076,21 @@ packetLoop:
 	assert.GreaterOrEqual(t, receivedPackets, 1, "Should have received at least one binlog packet with shard-level targeting")
 }
 
-// vtgateGrpcAddr returns the vtgate gRPC address for the cluster.
-func vtgateGrpcAddr() string {
-	return fmt.Sprintf("%s:%d", clusterInstance.Hostname, clusterInstance.VtgateGrpcPort)
+// vtgateGrpcAddr returns the host-reachable vtgate gRPC address for the cluster.
+func vtgateGrpcAddr(ctx context.Context, t *testing.T) string {
+	t.Helper()
+	addr, err := clusterInstance.VTGate().GRPCAddr(ctx)
+	require.NoError(t, err)
+	return addr
+}
+
+// primaryGTIDSet returns the current gtid_executed value from the tablet's mysqld.
+func primaryGTIDSet(ctx context.Context, t *testing.T, tablet *vitesst.Tablet) string {
+	t.Helper()
+	qr, err := tablet.QueryTablet(ctx, "SELECT @@global.gtid_executed")
+	require.NoError(t, err)
+	require.Len(t, qr.Rows, 1)
+	return qr.Rows[0][0].ToString()
 }
 
 // TestBinlogDumpGTID_VTGateGRPC_Streaming tests binlog streaming through vtgate's gRPC endpoint.
@@ -1093,13 +1098,9 @@ func TestBinlogDumpGTID_VTGateGRPC_Streaming(t *testing.T) {
 	ctx := t.Context()
 
 	// Get current GTID position
-	pos, _ := cluster.GetPrimaryPosition(t, *clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet(), hostname)
-	gtidSet := pos
-	if _, after, found := strings.Cut(pos, "/"); found {
-		gtidSet = after
-	}
+	gtidSet := primaryGTIDSet(ctx, t, clusterInstance.Keyspace(keyspaceName).Shards()[0].Primary())
 
-	conn, err := vtgateconn.Dial(ctx, vtgateGrpcAddr())
+	conn, err := vtgateconn.Dial(ctx, vtgateGrpcAddr(ctx, t))
 	require.NoError(t, err)
 	defer conn.Close()
 
@@ -1155,7 +1156,7 @@ func TestBinlogDumpGTID_VTGateGRPC_Streaming(t *testing.T) {
 func TestBinlogDumpGTID_VTGateGRPC_RejectsFilename(t *testing.T) {
 	ctx := t.Context()
 
-	conn, err := vtgateconn.Dial(ctx, vtgateGrpcAddr())
+	conn, err := vtgateconn.Dial(ctx, vtgateGrpcAddr(ctx, t))
 	require.NoError(t, err)
 	defer conn.Close()
 
@@ -1174,7 +1175,7 @@ func TestBinlogDumpGTID_VTGateGRPC_RejectsFilename(t *testing.T) {
 func TestBinlogDumpGTID_VTGateGRPC_RejectsNonDefaultPosition(t *testing.T) {
 	ctx := t.Context()
 
-	conn, err := vtgateconn.Dial(ctx, vtgateGrpcAddr())
+	conn, err := vtgateconn.Dial(ctx, vtgateGrpcAddr(ctx, t))
 	require.NoError(t, err)
 	defer conn.Close()
 
@@ -1193,7 +1194,7 @@ func TestBinlogDumpGTID_VTGateGRPC_RejectsNonDefaultPosition(t *testing.T) {
 func TestBinlogDumpGTID_VTGateGRPC_RejectsPositionBelowMinimum(t *testing.T) {
 	ctx := t.Context()
 
-	conn, err := vtgateconn.Dial(ctx, vtgateGrpcAddr())
+	conn, err := vtgateconn.Dial(ctx, vtgateGrpcAddr(ctx, t))
 	require.NoError(t, err)
 	defer conn.Close()
 

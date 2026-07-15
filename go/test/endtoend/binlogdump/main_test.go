@@ -17,21 +17,22 @@ limitations under the License.
 package binlogdump
 
 import (
+	"context"
 	"flag"
 	"fmt"
+	"net"
 	"os"
+	"strconv"
 	"testing"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/vitesst"
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
+	clusterInstance *vitesst.Cluster
 	vtParams        mysql.ConnParams
-	hostname        = "localhost"
 	keyspaceName    = "test_keyspace"
-	cell            = "zone1"
 	sqlSchema       = `create table binlog_test (
 		id bigint auto_increment,
 		msg varchar(64),
@@ -49,38 +50,44 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitcode, err := func() (int, error) {
-		clusterInstance = cluster.NewCluster(cell, hostname)
-		defer clusterInstance.Teardown()
+		ctx := context.Background()
 
-		// Start topo server
-		if err := clusterInstance.StartTopo(); err != nil {
-			return 1, err
-		}
-
-		// Set gRPC max message size to 64MB for both vttablet and vtgate
-		// This is needed to stream large binlog events (>16MB default)
+		// Set gRPC max message size to 64MB for both vttablet and vtgate.
+		// This is needed to stream large binlog events (>16MB default).
 		grpcMaxMsgSize := "--grpc-max-message-size=67108864" // 64MB
-		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, grpcMaxMsgSize, "--pprof-http")
-		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, grpcMaxMsgSize, "--enable-binlog-dump", "--binlog-dump-authorized-users=%", "--pprof-http")
 
-		// Start keyspace
-		keyspace := &cluster.Keyspace{
-			Name:      keyspaceName,
-			SchemaSQL: sqlSchema,
-		}
-		if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false, clusterInstance.Cell); err != nil {
+		cluster, err := vitesst.NewCluster(
+			vitesst.WithKeyspace(keyspaceName).WithShardNames("0").WithReplicas(0).WithSchema(sqlSchema),
+			vitesst.WithVTTabletArgs(grpcMaxMsgSize, "--pprof-http"),
+			vitesst.WithVTGateArgs(grpcMaxMsgSize, "--enable-binlog-dump", "--binlog-dump-authorized-users=%", "--pprof-http"),
+		)
+		if err != nil {
 			return 1, err
 		}
 
-		// Start vtgate
-		if err := clusterInstance.StartVtgate(); err != nil {
+		cleanup, err := cluster.Start(ctx)
+		if cleanup != nil {
+			defer cleanup(ctx)
+		}
+		if err != nil {
 			return 1, err
 		}
 
-		vtParams = mysql.ConnParams{
-			Host: clusterInstance.Hostname,
-			Port: clusterInstance.VtgateMySQLPort,
+		clusterInstance = cluster
+
+		addr, err := cluster.VTGate().MySQLAddr(ctx)
+		if err != nil {
+			return 1, err
 		}
+		host, portStr, err := net.SplitHostPort(addr)
+		if err != nil {
+			return 1, err
+		}
+		port, err := strconv.Atoi(portStr)
+		if err != nil {
+			return 1, err
+		}
+		vtParams = mysql.ConnParams{Host: host, Port: port}
 
 		return m.Run(), nil
 	}()

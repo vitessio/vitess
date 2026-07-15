@@ -19,8 +19,6 @@ package binlogdump
 import (
 	"context"
 	"fmt"
-	"os"
-	"path"
 	"testing"
 	"time"
 
@@ -173,16 +171,11 @@ func BenchmarkBinlogDumpThroughput(b *testing.B) {
 				}
 			}
 
-			// --- Sub-benchmark: Direct MySQL (unix socket) ---
+			// --- Sub-benchmark: Direct MySQL (tablet TCP) ---
 			b.Run("Direct", func(b *testing.B) {
-				primaryTablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
-				socketPath := path.Join(os.Getenv("VTDATAROOT"),
-					fmt.Sprintf("vt_%010d", primaryTablet.TabletUID), "mysql.sock")
-
-				directParams := mysql.ConnParams{
-					Uname:      "vt_dba",
-					UnixSocket: socketPath,
-				}
+				primaryTablet := clusterInstance.Keyspace(keyspaceName).Shards()[0].Primary()
+				directParams, err := primaryTablet.DBAConnParams(ctx, "")
+				require.NoError(b, err)
 
 				// Warmup iteration to get byte count for SetBytes.
 				warmConn, err := mysql.Connect(ctx, &directParams)
@@ -203,11 +196,11 @@ func BenchmarkBinlogDumpThroughput(b *testing.B) {
 
 			// --- Sub-benchmark: VTGate (full path) ---
 			b.Run("VTGate", func(b *testing.B) {
-				primaryTablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
-				targetString := fmt.Sprintf("%s:0@primary|%s", keyspaceName, primaryTablet.Alias)
+				primaryTablet := clusterInstance.Keyspace(keyspaceName).Shards()[0].Primary()
+				targetString := fmt.Sprintf("%s:0@primary|%s", keyspaceName, primaryTablet.Alias())
 				vtgateParams := mysql.ConnParams{
-					Host:   clusterInstance.Hostname,
-					Port:   clusterInstance.VtgateMySQLPort,
+					Host:   vtParams.Host,
+					Port:   vtParams.Port,
 					Uname:  "vt_repl",
 					DbName: targetString,
 				}
