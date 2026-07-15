@@ -2000,6 +2000,24 @@ func TestTempTableCommandTracking(t *testing.T) {
 	vh.tempTableCommandEnd(c)
 	require.Greater(t, registered.gen, genBefore, "command end must supersede in-flight sweeps")
 
+	// A surviving target's consecutive-failure count is carried across a
+	// republish. A command republishes the targets every time it settles, but an
+	// unavailable tablet is still unavailable — resetting its count would route it
+	// back through the unbounded healthy dispatch path, so unrelated client
+	// activity could keep an outage from ever being gated.
+	key := newTempTableTargetKey(tempTableHeartbeatTarget{alias: alias, reservedID: 42})
+	registered.mu.Lock()
+	failing := registered.targets[key]
+	failing.failures = 3
+	registered.targets[key] = failing
+	registered.mu.Unlock()
+
+	vh.tempTableCommandEnd(c)
+	registered.mu.Lock()
+	require.Equal(t, 3, registered.targets[key].failures,
+		"a republish must preserve a surviving target's failure count")
+	registered.mu.Unlock()
+
 	// The temp-table flag being cleared deregisters the connection and clears
 	// the published targets.
 	c.ClientData = &vtgatepb.Session{Options: &querypb.ExecuteOptions{}}
@@ -2086,6 +2104,239 @@ func TestTempTableHeartbeatSplitsOversizedBatch(t *testing.T) {
 	}
 	require.Equal(t, 2, batches, "%d connections must be split into two batches", total)
 	require.Len(t, seen, total, "every reserved connection must be refreshed across the batches")
+}
+
+// concurrentBeatConn is a tablet fake whose Execute records the peak number of
+// beats in flight at once and blocks each until its context (the beat budget)
+// ends. Unlike sandboxconn — which serializes Execute under a mutex — it lets a
+// test observe whether a tablet's oversized-batch chunks are beaten concurrently
+// or serialized.
+type concurrentBeatConn struct {
+	*sandboxconn.SandboxConn
+	inFlight    atomic.Int64
+	maxInFlight atomic.Int64
+}
+
+func (c *concurrentBeatConn) Execute(ctx context.Context, session queryservice.Session, target *querypb.Target, sql string, bindVars map[string]*querypb.BindVariable, transactionID, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+	n := c.inFlight.Add(1)
+	defer c.inFlight.Add(-1)
+	for {
+		m := c.maxInFlight.Load()
+		if n <= m || c.maxInFlight.CompareAndSwap(m, n) {
+			break
+		}
+	}
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+// TestTempTableHeartbeatChunksBeatConcurrently proves a tablet holding more than
+// one batch of reserved connections has its chunks beaten concurrently within a
+// single round. Serialized (the previous behavior), a stalled first chunk would
+// hold every later chunk for its whole budget, so a later chunk's refresh would
+// miss the interval-plus-one-budget bound and the next sweep would stay
+// suppressed for the sum of the chunks' budgets.
+func TestTempTableHeartbeatChunksBeatConcurrently(t *testing.T) {
+	origInterval := tempTableHeartbeatTime
+	tempTableHeartbeatTime = 30 * time.Second // budget 15s: chunks stay in flight
+	t.Cleanup(func() { tempTableHeartbeatTime = origInterval })
+
+	executor, _, _, _, ctx := createExecutorEnv(t)
+	vsm := newVStreamManager(executor.resolver.resolver, executor.serv, "aa")
+	vtg := newVTGate(executor, executor.resolver, vsm, nil, executor.scatterConn.gateway)
+	vh := newVtgateHandler(vtg)
+	hc := executor.scatterConn.gateway.hc.(*discovery.FakeHealthCheck)
+
+	qs := hc.AddFakeTablet("aa", "beathost", 1, "beatks", "0", topodatapb.TabletType_PRIMARY, true, 1, nil,
+		func(tablet *topodatapb.Tablet) queryservice.QueryService {
+			return &concurrentBeatConn{SandboxConn: sandboxconn.NewSandboxConn(tablet)}
+		})
+	beat := qs.(*concurrentBeatConn)
+
+	// Two batches' worth of reserved connections on the one tablet -> two chunks.
+	tablet := beat.Tablet()
+	target := &querypb.Target{Keyspace: tablet.Keyspace, Shard: tablet.Shard, TabletType: tablet.Type}
+	const total = 2 * queryservice.ReservedConnKeepAliveMaxBatch
+	ts := make([]tempTableHeartbeatTarget, 0, total)
+	for i := range total {
+		ts = append(ts, tempTableHeartbeatTarget{target: target, alias: tablet.Alias, reservedID: int64(i + 1)})
+	}
+	c := &mysql.Conn{ConnectionID: 1}
+	vh.tempTableConns.Store(c, &tempTableConn{targets: tempTargets(ts...)})
+
+	hbCtx, hbCancel := context.WithCancel(ctx)
+	wg := vh.dispatchTempTableBeats(hbCtx)
+	t.Cleanup(func() {
+		hbCancel()
+		wg.Wait()
+	})
+
+	require.Eventually(t, func() bool { return beat.maxInFlight.Load() >= 2 }, 5*time.Second, time.Millisecond,
+		"a tablet's oversized-batch chunks must be beaten concurrently, not serialized")
+}
+
+// gatedBeatConn is a tablet fake whose Execute counts its calls and, when given a
+// release channel, blocks until released (or the context ends) before returning
+// the configured error. It lets a test hold a beat in flight and control exactly
+// when it completes. Unlike sandboxconn it does not serialize Execute under a
+// mutex, so independent tablets' beats run concurrently.
+type gatedBeatConn struct {
+	*sandboxconn.SandboxConn
+	execCount atomic.Int64
+	release   chan struct{}
+	err       error
+}
+
+func (c *gatedBeatConn) Execute(ctx context.Context, session queryservice.Session, target *querypb.Target, sql string, bindVars map[string]*querypb.BindVariable, transactionID, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+	c.execCount.Add(1)
+	if c.release != nil {
+		select {
+		case <-c.release:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+	if c.err != nil {
+		return nil, c.err
+	}
+	return &sqltypes.Result{}, nil
+}
+
+// storeGatedFailingTablet registers a tablet backed by a gatedBeatConn and a
+// reserved connection on it that is already marked failing, so the sweep routes
+// it through the bounded failing lane.
+func storeGatedFailingTablet(vh *vtgateHandler, hc *discovery.FakeHealthCheck, i int, release chan struct{}, err error) *gatedBeatConn {
+	qs := hc.AddFakeTablet("aa", fmt.Sprintf("gated-%d", i), int32(i+1), "gatedks", fmt.Sprintf("g%d", i), topodatapb.TabletType_PRIMARY, true, 1, nil,
+		func(tablet *topodatapb.Tablet) queryservice.QueryService {
+			return &gatedBeatConn{SandboxConn: sandboxconn.NewSandboxConn(tablet), release: release, err: err}
+		})
+	gc := qs.(*gatedBeatConn)
+	st := gc.Tablet()
+	c := &mysql.Conn{ConnectionID: uint32(2000 + i)}
+	vh.tempTableConns.Store(c, &tempTableConn{targets: tempTargets(tempTableHeartbeatTarget{
+		target:     &querypb.Target{Keyspace: st.Keyspace, Shard: st.Shard, TabletType: st.Type},
+		alias:      st.Alias,
+		reservedID: int64(2000 + i),
+		failures:   1,
+	})})
+	return gc
+}
+
+// TestTempTableHeartbeatFailingLaneContactsRecovered proves the failing lane
+// queues rather than drops: with every slot occupied by a stuck tablet, a tablet
+// registered afterwards is not contacted while the lane is full, and is contacted
+// the instant a slot frees — not deferred to the next tick. On the drop-if-full
+// behavior it was never contacted within the round at all.
+func TestTempTableHeartbeatFailingLaneContactsRecovered(t *testing.T) {
+	origInterval := tempTableHeartbeatTime
+	tempTableHeartbeatTime = 30 * time.Second
+	t.Cleanup(func() { tempTableHeartbeatTime = origInterval })
+
+	executor, _, _, _, ctx := createExecutorEnv(t)
+	vsm := newVStreamManager(executor.resolver.resolver, executor.serv, "aa")
+	vtg := newVTGate(executor, executor.resolver, vsm, nil, executor.scatterConn.gateway)
+	vh := newVtgateHandler(vtg)
+	hc := executor.scatterConn.gateway.hc.(*discovery.FakeHealthCheck)
+
+	// Fill every failing-lane slot with a stuck tablet that blocks until released.
+	release := make(chan struct{})
+	var stuck []*gatedBeatConn
+	for i := range tempTableFailingBeatConcurrency {
+		stuck = append(stuck, storeGatedFailingTablet(vh, hc, i, release, assert.AnError))
+	}
+	hbCtx, hbCancel := context.WithCancel(ctx)
+	var wgs []*sync.WaitGroup
+	t.Cleanup(func() {
+		hbCancel()
+		close(release)
+		for _, wg := range wgs {
+			wg.Wait()
+		}
+	})
+	wgs = append(wgs, vh.dispatchTempTableBeats(hbCtx))
+
+	inFlight := func() int64 {
+		var n int64
+		for _, c := range stuck {
+			n += c.execCount.Load()
+		}
+		return n
+	}
+	require.Eventually(t, func() bool { return inFlight() == int64(tempTableFailingBeatConcurrency) }, 5*time.Second, time.Millisecond,
+		"every failing-lane slot must fill")
+
+	// A recovered tablet — still marked failing until it is probed — registers
+	// while the lane is full.
+	recovered := storeGatedFailingTablet(vh, hc, tempTableFailingBeatConcurrency, nil /* no block */, nil /* success */)
+	wgs = append(wgs, vh.dispatchTempTableBeats(hbCtx))
+
+	// While the lane is full it waits (queued, not dropped)...
+	require.Never(t, func() bool { return recovered.execCount.Load() > 0 }, 300*time.Millisecond, 10*time.Millisecond,
+		"a queued tablet must not beat while the lane is full")
+	// ...and the moment a slot frees it is contacted, without a new tick.
+	release <- struct{}{}
+	require.Eventually(t, func() bool { return recovered.execCount.Load() >= 1 }, 5*time.Second, time.Millisecond,
+		"a recovered tablet must be contacted as soon as a lane slot frees")
+}
+
+// TestTempTableHeartbeatBeatOutcomeSurvivesRepublish proves a beat's outcome is
+// applied to a target that survives a republish that happened while the beat was
+// in flight. A command settling mid-beat bumps the generation but keeps the same
+// reserved connection; discarding the outcome on the generation change (the old
+// behavior) would drop the failure and leave the unavailable tablet on the
+// uncapped path.
+func TestTempTableHeartbeatBeatOutcomeSurvivesRepublish(t *testing.T) {
+	origInterval := tempTableHeartbeatTime
+	tempTableHeartbeatTime = 30 * time.Second
+	t.Cleanup(func() { tempTableHeartbeatTime = origInterval })
+
+	executor, _, _, _, ctx := createExecutorEnv(t)
+	vsm := newVStreamManager(executor.resolver.resolver, executor.serv, "aa")
+	vtg := newVTGate(executor, executor.resolver, vsm, nil, executor.scatterConn.gateway)
+	vh := newVtgateHandler(vtg)
+	hc := executor.scatterConn.gateway.hc.(*discovery.FakeHealthCheck)
+
+	release := make(chan struct{})
+	qs := hc.AddFakeTablet("aa", "republishhost", 1, "repubks", "0", topodatapb.TabletType_PRIMARY, true, 1, nil,
+		func(tablet *topodatapb.Tablet) queryservice.QueryService {
+			return &gatedBeatConn{SandboxConn: sandboxconn.NewSandboxConn(tablet), release: release, err: assert.AnError}
+		})
+	gc := qs.(*gatedBeatConn)
+	tablet := gc.Tablet()
+	target := &querypb.Target{Keyspace: tablet.Keyspace, Shard: tablet.Shard, TabletType: tablet.Type}
+
+	const reservedID = 77
+	c := &mysql.Conn{ConnectionID: 1}
+	c.ClientData = &vtgatepb.Session{
+		Options:       &querypb.ExecuteOptions{HasCreatedTempTables: true},
+		ShardSessions: []*vtgatepb.Session_ShardSession{{Target: target, TabletAlias: tablet.Alias, ReservedId: reservedID}},
+	}
+	vh.tempTableCommandEnd(c)
+	v, ok := vh.tempTableConns.Load(c)
+	require.True(t, ok)
+	ttc := v.(*tempTableConn)
+	key := newTempTableTargetKey(tempTableHeartbeatTarget{alias: tablet.Alias, reservedID: reservedID})
+
+	hbCtx, hbCancel := context.WithCancel(ctx)
+	t.Cleanup(hbCancel)
+	wg := vh.dispatchTempTableBeats(hbCtx)
+
+	// The beat reaches the tablet and blocks there.
+	require.Eventually(t, func() bool { return gc.execCount.Load() >= 1 }, 5*time.Second, time.Millisecond,
+		"the beat must reach the tablet")
+
+	// A command settles while the beat is blocked, republishing the same target
+	// (bumping the generation, preserving the key).
+	vh.tempTableCommandEnd(c)
+
+	// The beat now fails; its failure must still be recorded against the target.
+	close(release)
+	wg.Wait()
+
+	ttc.mu.Lock()
+	require.Equal(t, 1, ttc.targets[key].failures,
+		"a beat outcome must apply to a target that survived a mid-flight republish")
+	ttc.mu.Unlock()
 }
 
 // TestTempTableHeartbeatTouchesRegistrationWithinOneInterval covers the
@@ -2638,7 +2889,7 @@ func BenchmarkTempTableHeartbeatSnapshot(b *testing.B) {
 }
 
 // TestTempTableHeartbeatSweep verifies that a sweep pings the registered
-// reserved connection, discards results from a superseded snapshot, and
+// reserved connection, ignores a result for a target that no longer exists, and
 // evicts a reserved connection that no longer exists.
 func TestTempTableHeartbeatSweep(t *testing.T) {
 	vtg, sbc, ctx := createVtgateEnv(t)
@@ -2663,15 +2914,14 @@ func TestTempTableHeartbeatSweep(t *testing.T) {
 	require.True(t, opts[len(opts)-1].GetReservedConnKeepAlive(),
 		"beats must be keepalive touches so mysqld's wait_timeout keeps counting only real user traffic")
 
-	// A result whose snapshot was superseded mid-flight (command end bumped
-	// the generation) is discarded rather than applied: even a gone result
-	// with a stale gen must not evict the target.
-	staleTarget := firstTempTarget(t, ttc.targets)
-	staleGen := ttc.gen
-	ttc.gen++
-	vh.applyTempTableBeatResult(tempTableBeatItem{c: c, ttc: ttc, gen: staleGen, target: staleTarget}, true /* gone */, nil)
-	require.Len(t, ttc.targets, 1, "results for a superseded snapshot must be discarded")
-	ttc.gen--
+	// A result for a target that no longer exists — the reserved connection was
+	// released, or the connection closed, while the beat was in flight — is
+	// ignored and must not disturb other targets. (A target that merely survived
+	// a mid-flight generation bump is still applied; see
+	// TestTempTableHeartbeatBeatOutcomeSurvivesRepublish.)
+	missing := tempTableHeartbeatTarget{target: target, alias: tablet.Alias, reservedID: 12345}
+	vh.applyTempTableBeatResult(tempTableBeatItem{c: c, ttc: ttc, gen: ttc.gen, target: missing}, true /* gone */, assert.AnError)
+	require.Len(t, ttc.targets, 1, "a result for an unknown target must not touch other targets")
 
 	// A reserved connection the tablet reports gone is evicted so it is not
 	// beaten (and warned about) on every sweep.

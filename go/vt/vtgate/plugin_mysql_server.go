@@ -125,13 +125,14 @@ type tempTableHeartbeatTarget struct {
 	target     *querypb.Target
 	alias      *topodatapb.TabletAlias
 	reservedID int64
-	// failures counts consecutive keepalive failures. It only gates the
-	// transition logging (warn once when a target starts failing, note the
-	// recovery once when it stops): failures never evict a target — only a
-	// confirmed connection-closed error does — or a few seconds of network
-	// trouble would silently disable the keepalives of a live connection.
-	// It resets on success (and whenever a command's end hook republishes
-	// the targets).
+	// failures counts consecutive keepalive failures. It gates the transition
+	// logging (warn once when a target starts failing, note the recovery once
+	// when it stops) and routes a failing tablet through the bounded dispatch
+	// lane; failures never evict a target — only a confirmed connection-closed
+	// error does — or a few seconds of network trouble would silently disable
+	// the keepalives of a live connection. It resets only on a successful beat,
+	// and is carried across a command's target republish so client activity
+	// cannot reset a still-unavailable tablet.
 	failures int
 }
 
@@ -315,6 +316,18 @@ func (vh *vtgateHandler) tempTableCommandEnd(c *mysql.Conn) {
 		vh.tempTableConns.Delete(c)
 		return
 	}
+	// Carry each surviving target's failure count across the republish. A command
+	// republishes the targets every time it settles, but an unavailable tablet is
+	// still unavailable — resetting its count here would route it back through the
+	// unbounded healthy dispatch path on the next sweep, so unrelated client
+	// activity could keep an outage from ever being gated. Only a successful or
+	// gone beat clears the count.
+	for k, nt := range targets {
+		if ot, ok := ttc.targets[k]; ok && ot.failures > 0 {
+			nt.failures = ot.failures
+			targets[k] = nt
+		}
+	}
 	ttc.targets = targets
 	// Re-register in case the sweeper deregistered the entry after evicting
 	// its last target during the command.
@@ -432,32 +445,47 @@ func tempTableBeatItemsFailing(items []tempTableBeatItem) bool {
 // Two mechanisms bound a broad outage. Per-tablet in-flight suppression skips a
 // tablet whose previous beat is still running, so a stuck tablet keeps a single
 // beat rather than accumulating one every tick. And a tablet whose last beat
-// failed — which will block for the whole budget — is gated through a small
-// semaphore, so no more than tempTableFailingBeatConcurrency stuck beats run at
-// once; a failing tablet that cannot get a slot this tick releases its claim and
-// retries on the next. Healthy tablets bypass the semaphore, so they are never
-// starved by the failing backlog.
+// failed — which may block for the whole budget — queues behind a small
+// semaphore, so no more than tempTableFailingBeatConcurrency of them beat at
+// once; a slot freed by a completed beat is taken immediately, so a tablet that
+// has recovered (its beat returns fast) is contacted as soon as a slot opens
+// rather than dropped until the next tick. Healthy tablets bypass the semaphore,
+// so they are never starved by the failing backlog.
+//
+// One case is deliberately left unbounded: the first sweep of a sudden broad
+// outage. A tablet healthy until it went down still has failures == 0, so it
+// takes the healthy path and starts one beat before that beat's timeout marks it
+// failing; only from the next sweep on is it gated. Bounding this first sweep too
+// would mean capping the healthy path, which would delay healthy refreshes once a
+// deployment holds more tablets than the cap — the exact cost a keepalive must
+// avoid, and to spare work on connections a mass outage has already lost. The
+// burst is self-limiting: in-flight suppression holds it to one beat per tablet,
+// and it clears within one budget.
 func (vh *vtgateHandler) dispatchTempTableBeats(ctx context.Context) *sync.WaitGroup {
 	wg := &sync.WaitGroup{}
 	for alias, items := range vh.snapshotTempTableBeats() {
 		if _, inFlight := vh.tempTableBeatInFlight.LoadOrStore(alias, struct{}{}); inFlight {
 			continue
 		}
-		var sem chan struct{}
-		if tempTableBeatItemsFailing(items) {
-			sem = vh.failingBeatSem()
-			select {
-			case sem <- struct{}{}:
-			default:
-				// The failing lane is full: retry this tablet on the next tick.
-				vh.tempTableBeatInFlight.Delete(alias)
-				continue
-			}
-		}
+		failing := tempTableBeatItemsFailing(items)
 		wg.Go(func() {
 			defer vh.tempTableBeatInFlight.Delete(alias)
-			if sem != nil {
-				defer func() { <-sem }()
+			if failing {
+				// Queue behind the bounded failing lane rather than dropping the
+				// tablet when the lane is full. A slot freed by a completed beat is
+				// taken right away, so a tablet that has recovered — its beat
+				// returns fast — is contacted the moment a slot opens instead of
+				// waiting a whole interval for the next tick, which matters when an
+				// outage has already eaten into the tablet timeout. In-flight
+				// suppression keeps this to one queued beat per tablet, so the
+				// backlog is bounded by the number of failing tablets, not growing.
+				sem := vh.failingBeatSem()
+				select {
+				case sem <- struct{}{}:
+					defer func() { <-sem }()
+				case <-ctx.Done():
+					return
+				}
 			}
 			vh.beatTempTableTablet(ctx, items)
 		})
@@ -552,28 +580,48 @@ func (vh *vtgateHandler) beatTempTableTablet(ctx context.Context, items []tempTa
 	// connections simply are not kept alive until the tablet is upgraded.
 	// The tablet rejects a keepalive carrying more than
 	// queryservice.ReservedConnKeepAliveMaxBatch ids, so split a tablet's reserved
-	// connections into batches of at most that many rather than send one
-	// oversized touch that would refresh none of them. Each batch is applied
-	// independently: its own reported-gone ids, and its own whole-batch error.
+	// connections into chunks of at most that many rather than send one oversized
+	// touch that would refresh none of them.
 	const maxBatch = queryservice.ReservedConnKeepAliveMaxBatch
+	if len(valid) <= maxBatch {
+		vh.beatTempTableChunk(ctx, valid)
+		return
+	}
+	// Beat the chunks concurrently within this one round. Run serially, a stalled
+	// chunk would hold every later chunk for its whole budget, pushing their
+	// refreshes past the interval-plus-one-budget bound; and because the tablet's
+	// beat stays in flight until its last chunk finishes, the next sweep would be
+	// suppressed for the sum of the chunks' budgets rather than just one.
+	var wg sync.WaitGroup
 	for start := 0; start < len(valid); start += maxBatch {
 		batch := valid[start:min(start+maxBatch, len(valid))]
-		ids := make([]int64, 0, len(batch))
-		for _, item := range batch {
-			ids = append(ids, item.target.reservedID)
-		}
-		bctx, cancel := context.WithTimeout(tempTableBeatContext(ctx, batch[0].c), tempTableBeatBudget(tempTableHeartbeatTime))
-		gone, err := vh.sendTempTableBeat(bctx, batch[0].target, ids)
-		cancel()
+		wg.Go(func() {
+			vh.beatTempTableChunk(ctx, batch)
+		})
+	}
+	wg.Wait()
+}
 
-		goneSet := make(map[int64]struct{}, len(gone))
-		for _, id := range gone {
-			goneSet[id] = struct{}{}
-		}
-		for _, item := range batch {
-			_, isGone := goneSet[item.target.reservedID]
-			vh.applyTempTableBeatResult(item, isGone, err)
-		}
+// beatTempTableChunk sends one batched touch for a single chunk of a tablet's
+// reserved connections (at most queryservice.ReservedConnKeepAliveMaxBatch ids)
+// and applies the outcome — the tablet's reported-gone ids and the whole-chunk
+// error — to each connection in the chunk.
+func (vh *vtgateHandler) beatTempTableChunk(ctx context.Context, batch []tempTableBeatItem) {
+	ids := make([]int64, 0, len(batch))
+	for _, item := range batch {
+		ids = append(ids, item.target.reservedID)
+	}
+	bctx, cancel := context.WithTimeout(tempTableBeatContext(ctx, batch[0].c), tempTableBeatBudget(tempTableHeartbeatTime))
+	gone, err := vh.sendTempTableBeat(bctx, batch[0].target, ids)
+	cancel()
+
+	goneSet := make(map[int64]struct{}, len(gone))
+	for _, id := range gone {
+		goneSet[id] = struct{}{}
+	}
+	for _, item := range batch {
+		_, isGone := goneSet[item.target.reservedID]
+		vh.applyTempTableBeatResult(item, isGone, err)
 	}
 }
 
@@ -586,13 +634,18 @@ func (vh *vtgateHandler) applyTempTableBeatResult(item tempTableBeatItem, gone b
 	ttc := item.ttc
 	ttc.mu.Lock()
 	defer ttc.mu.Unlock()
-	if ttc.gen != item.gen {
-		// The targets were replaced while this beat was in flight (command
-		// end, reset, or close): this result describes a superseded snapshot.
-		return
-	}
 	t, ok := ttc.targets[key]
 	if !ok {
+		// The target no longer exists: the reserved connection was released, or
+		// the client connection closed (which clears every target), while this
+		// beat was in flight — there is nothing to apply. We key on the target,
+		// not the snapshot generation: a command settling mid-beat republishes
+		// the targets (bumping the generation) but keeps this key, and its
+		// outcome still applies to the same physical connection. Discarding it on
+		// a generation change instead would drop a failure — letting unrelated
+		// activity keep resetting the count and route the unavailable tablet
+		// through the uncapped path — or drop a recovery, leaving a healed tablet
+		// marked failing.
 		return
 	}
 	if gone {
