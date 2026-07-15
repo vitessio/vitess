@@ -18,6 +18,11 @@ limitations under the License.
 
 package mysql
 
+// ConnCheckSupported is false on Windows because ConnCheck below is only a stub:
+// it cannot tell a live connection from one the peer has closed, so callers must
+// not treat its success as proof of life.
+const ConnCheckSupported = false
+
 // ConnCheck is not implemented for Windows.
 func (c *Conn) ConnCheck() error {
 	return nil

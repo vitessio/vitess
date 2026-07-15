@@ -219,6 +219,17 @@ func (tp *TxPool) KeepAliveReserved(reservedID tx.ConnID) error {
 		}
 		return vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction %d: %v", reservedID, err)
 	}
+	// On a platform without a real peer check (Windows), PeerCheck cannot tell a
+	// live connection from one mysqld already closed. Refreshing anyway would pin
+	// a dead connection in the pool forever, so instead return it without
+	// extending its expiry: an idle connection is then reclaimed by the normal
+	// tablet timeout, exactly as before this feature, rather than kept alive.
+	// unlock(false) returns the connection to the pool without refreshing its
+	// timers.
+	if !conn.dbConn.Conn.PeerCheckSupported() {
+		conn.unlock(false)
+		return nil
+	}
 	// Detect a peer-closed socket (e.g. mysqld reclaimed the connection at
 	// wait_timeout) with a non-blocking zero-byte read — nothing is sent,
 	// so mysqld's idle timers are unaffected. A dead connection must be

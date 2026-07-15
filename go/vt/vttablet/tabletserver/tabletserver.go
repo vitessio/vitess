@@ -930,6 +930,13 @@ func (tsv *TabletServer) Execute(ctx context.Context, session queryservice.Sessi
 		if reservedID == 0 && len(ids) == 0 {
 			return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "reserved connection keepalive requires at least one reserved ID")
 		}
+		// Bound the batch before allocating: vtgate strips this control from
+		// client sessions, but the field is still client-shaped on the wire, so
+		// the tablet caps it defensively. vtgate splits its own touches at this
+		// same limit (queryservice.ReservedConnKeepAliveMaxBatch).
+		if len(ids) > queryservice.ReservedConnKeepAliveMaxBatch {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "reserved connection keepalive batch of %d exceeds the limit of %d", len(ids), queryservice.ReservedConnKeepAliveMaxBatch)
+		}
 		return tsv.keepAliveReservedConns(reservedID, ids), nil
 	}
 

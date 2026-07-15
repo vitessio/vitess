@@ -39,6 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
@@ -2985,6 +2986,13 @@ func TestReservedConnKeepAliveBatch(t *testing.T) {
 	gone, err := res.Rows[0][0].ToInt64()
 	require.NoError(t, err)
 	require.Equal(t, s2.ReservedID, gone)
+
+	// An oversized batch is rejected before any allocation, bounding what a
+	// malformed or hostile request can cost.
+	huge := make([]int64, queryservice.ReservedConnKeepAliveMaxBatch+1)
+	_, err = tsv.Execute(ctx, nil, &target, "/* keepalive */ select 1", nil, 0, 0,
+		&querypb.ExecuteOptions{ReservedConnKeepAlive: true, ReservedConnKeepAliveIds: huge})
+	require.ErrorContains(t, err, "exceeds the limit")
 
 	require.NoError(t, tsv.Release(ctx, &target, 0, s1.ReservedID))
 }

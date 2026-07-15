@@ -37,6 +37,13 @@ import (
 // normally and returns its own result instead).
 const ReservedConnKeepAliveGoneField = "gone_reserved_id"
 
+// ReservedConnKeepAliveMaxBatch is the largest number of reserved ids a single
+// keepalive touch may carry. The tablet rejects a larger request before
+// allocating (bounding a malformed or hostile call), so a caller with more than
+// this many reserved connections on one tablet must split them across several
+// touches rather than send one oversized batch.
+const ReservedConnKeepAliveMaxBatch = 1024
+
 // Session represents the current session.
 type Session interface {
 	// GetSessionUUID returns the session's UUID.

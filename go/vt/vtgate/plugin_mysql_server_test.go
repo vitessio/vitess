@@ -28,6 +28,7 @@ import (
 	"path"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"testing"
@@ -51,6 +52,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate/binlogacl"
+	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -2045,6 +2047,47 @@ func TestTempTableHeartbeatBatchesPerTablet(t *testing.T) {
 	require.Len(t, opts[len(opts)-1].GetReservedConnKeepAliveIds(), 2, "the batch must carry both reserved connections' ids")
 }
 
+// TestTempTableHeartbeatSplitsOversizedBatch verifies that a tablet holding more
+// reserved connections than the tablet's per-request limit is beaten in several
+// batches of at most that limit, rather than one oversized request the tablet
+// would reject — which would refresh none of them and eventually lose their
+// temporary tables.
+func TestTempTableHeartbeatSplitsOversizedBatch(t *testing.T) {
+	vtg, sbc, ctx := createVtgateEnv(t)
+	vh := newVtgateHandler(vtg)
+	tablet := sbc.Tablet()
+	target := &querypb.Target{Keyspace: tablet.Keyspace, Shard: tablet.Shard, TabletType: tablet.Type}
+
+	// One more reserved connection than a single batch can carry.
+	const total = queryservice.ReservedConnKeepAliveMaxBatch + 1
+	for i := range total {
+		c := &mysql.Conn{ConnectionID: uint32(i + 1)}
+		vh.tempTableConns.Store(c, &tempTableConn{targets: tempTargets(tempTableHeartbeatTarget{
+			target: target, alias: tablet.Alias, reservedID: int64(i + 1),
+		})})
+	}
+
+	vh.sendTempTableHeartbeats(ctx)
+
+	// Collect the reserved-id batches the tablet received.
+	batches := 0
+	seen := map[int64]struct{}{}
+	for _, o := range sbc.GetOptions() {
+		if !o.GetReservedConnKeepAlive() {
+			continue
+		}
+		ids := o.GetReservedConnKeepAliveIds()
+		require.LessOrEqual(t, len(ids), queryservice.ReservedConnKeepAliveMaxBatch,
+			"no batch may exceed the tablet's per-request limit")
+		batches++
+		for _, id := range ids {
+			seen[id] = struct{}{}
+		}
+	}
+	require.Equal(t, 2, batches, "%d connections must be split into two batches", total)
+	require.Len(t, seen, total, "every reserved connection must be refreshed across the batches")
+}
+
 // TestTempTableHeartbeatTouchesRegistrationWithinOneInterval covers the
 // scheduling guarantee that motivated dropping the stagger: a connection
 // registered right after a sweep's snapshot is touched by the very next sweep,
@@ -2188,10 +2231,20 @@ func TestTempTableHeartbeatHealthyNotStarvedBySlowTablet(t *testing.T) {
 		"healthy connection must be beaten promptly, not starved behind the slow tablet")
 }
 
-// storeFailingTempTablet adds a slow tablet to the healthcheck and registers a
-// reserved connection on it pre-marked as failing, so the sweep routes it to the
-// bounded unhealthy lane. It returns the tablet's sandboxconn.
+// storeSlowTempTablet adds a tablet whose every beat blocks well past the budget
+// to the healthcheck and registers a reserved connection on it. It returns the
+// tablet's sandboxconn.
+func storeSlowTempTablet(vh *vtgateHandler, hc *discovery.FakeHealthCheck, i int) *sandboxconn.SandboxConn {
+	return storeTempTablet(vh, hc, i, 0 /* failures */)
+}
+
+// storeFailingTempTablet is like storeSlowTempTablet but pre-marks the reserved
+// connection as failing, so the sweep routes it to the bounded failing lane.
 func storeFailingTempTablet(vh *vtgateHandler, hc *discovery.FakeHealthCheck, i int) *sandboxconn.SandboxConn {
+	return storeTempTablet(vh, hc, i, 1 /* failures */)
+}
+
+func storeTempTablet(vh *vtgateHandler, hc *discovery.FakeHealthCheck, i, failures int) *sandboxconn.SandboxConn {
 	slow := hc.AddTestTablet("aa", fmt.Sprintf("host-%d", i), int32(i+1), "slowks", fmt.Sprintf("s%d", i), topodatapb.TabletType_PRIMARY, true, 1, nil)
 	slow.ExecDelayResponse = 30 * time.Second
 	st := slow.Tablet()
@@ -2200,20 +2253,18 @@ func storeFailingTempTablet(vh *vtgateHandler, hc *discovery.FakeHealthCheck, i 
 		target:     &querypb.Target{Keyspace: st.Keyspace, Shard: st.Shard, TabletType: st.Type},
 		alias:      st.Alias,
 		reservedID: int64(1000 + i),
-		failures:   1, // already failing -> unhealthy lane
+		failures:   failures,
 	})})
 	return slow
 }
 
-// TestTempTableHeartbeatFailingTabletsDoNotStarveHealthy proves that a healthy
-// tablet is still refreshed on time even when far more failing tablets than the
-// unhealthy lane holds are saturating it. The healthy tablet is in the separate
-// healthy lane, so it is never queued behind the failing ones — a large partial
-// outage cannot push its gap past the tablet timeout. It would fail on a single
-// shared semaphore that failing tablets fill.
-func TestTempTableHeartbeatFailingTabletsDoNotStarveHealthy(t *testing.T) {
+// TestTempTableHeartbeatFailingLaneBoundedNoStarvation proves the two properties
+// of the failing lane: no matter how many failing tablets there are, at most
+// tempTableFailingBeatConcurrency of their beats are in flight at once, and a
+// healthy tablet is still beaten because it bypasses the lane entirely.
+func TestTempTableHeartbeatFailingLaneBoundedNoStarvation(t *testing.T) {
 	origInterval := tempTableHeartbeatTime
-	tempTableHeartbeatTime = 20 * time.Second // budget 10s
+	tempTableHeartbeatTime = 30 * time.Second // budget 15s: failing beats stay stuck
 	t.Cleanup(func() { tempTableHeartbeatTime = origInterval })
 
 	executor, sbcHealthy, _, _, ctx := createExecutorEnv(t)
@@ -2222,10 +2273,70 @@ func TestTempTableHeartbeatFailingTabletsDoNotStarveHealthy(t *testing.T) {
 	vh := newVtgateHandler(vtg)
 	hc := executor.scatterConn.gateway.hc.(*discovery.FakeHealthCheck)
 
-	// Far more failing tablets than the unhealthy lane holds, each blocking past
-	// the budget, so the unhealthy lane stays saturated.
-	for i := range tempTableBeatUnhealthyConcurrency * 4 {
-		storeFailingTempTablet(vh, hc, i)
+	// Far more failing tablets than the failing lane holds.
+	var failing []*sandboxconn.SandboxConn
+	for i := range tempTableFailingBeatConcurrency * 3 {
+		failing = append(failing, storeFailingTempTablet(vh, hc, i))
+	}
+
+	// One healthy tablet.
+	th := sbcHealthy.Tablet()
+	cHealthy := &mysql.Conn{ConnectionID: 1}
+	vh.tempTableConns.Store(cHealthy, &tempTableConn{targets: tempTargets(tempTableHeartbeatTarget{
+		target: &querypb.Target{Keyspace: th.Keyspace, Shard: th.Shard, TabletType: th.Type}, alias: th.Alias, reservedID: 1,
+	})})
+
+	hbCtx, hbCancel := context.WithCancel(ctx)
+	var wgs []*sync.WaitGroup
+	t.Cleanup(func() {
+		hbCancel()
+		for _, wg := range wgs {
+			wg.Wait()
+		}
+	})
+	wgs = append(wgs, vh.dispatchTempTableBeats(hbCtx))
+
+	// The healthy tablet is beaten — it never enters the failing lane.
+	require.Eventually(t, func() bool { return sbcHealthy.ExecCount.Load() >= 1 }, 5*time.Second, 5*time.Millisecond,
+		"the healthy tablet must be beaten, not starved by the failing lane")
+
+	// Each failing beat increments its exec count on entry and then blocks past
+	// the budget, so before any completes the sum is the number in flight.
+	inFlight := func() int64 {
+		var n int64
+		for _, c := range failing {
+			n += c.ExecCount.Load()
+		}
+		return n
+	}
+	require.Eventually(t, func() bool { return inFlight() >= int64(tempTableFailingBeatConcurrency) }, 5*time.Second, time.Millisecond,
+		"the failing lane should fill to its cap")
+	for range 50 {
+		require.LessOrEqual(t, inFlight(), int64(tempTableFailingBeatConcurrency),
+			"beats to failing tablets in flight must never exceed the lane cap")
+	}
+}
+
+// TestTempTableHeartbeatBacklogDoesNotDelayHealthySweep proves that a backlog of
+// stuck beats from unreachable tablets never delays a later healthy sweep: each
+// tick dispatches without waiting, so the second tick beats the healthy tablet
+// again even though many earlier beats are still stuck. It would fail if the
+// tick blocked on the outstanding beats.
+func TestTempTableHeartbeatBacklogDoesNotDelayHealthySweep(t *testing.T) {
+	origInterval := tempTableHeartbeatTime
+	tempTableHeartbeatTime = 30 * time.Second // budget 15s: slow beats stay stuck across both ticks
+	t.Cleanup(func() { tempTableHeartbeatTime = origInterval })
+
+	executor, sbcHealthy, _, _, ctx := createExecutorEnv(t)
+	vsm := newVStreamManager(executor.resolver.resolver, executor.serv, "aa")
+	vtg := newVTGate(executor, executor.resolver, vsm, nil, executor.scatterConn.gateway)
+	vh := newVtgateHandler(vtg)
+	hc := executor.scatterConn.gateway.hc.(*discovery.FakeHealthCheck)
+
+	// More than six stuck tablets, each blocking every beat past the budget.
+	const slowTablets = 10
+	for i := range slowTablets {
+		storeSlowTempTablet(vh, hc, i)
 	}
 
 	// One healthy tablet.
@@ -2237,27 +2348,36 @@ func TestTempTableHeartbeatFailingTabletsDoNotStarveHealthy(t *testing.T) {
 		reservedID: 1,
 	})})
 
-	before := sbcHealthy.ExecCount.Load()
-	done := make(chan struct{})
 	hbCtx, hbCancel := context.WithCancel(ctx)
-	go func() { defer close(done); vh.sendTempTableHeartbeats(hbCtx) }()
-	t.Cleanup(func() { hbCancel(); <-done })
+	var wgs []*sync.WaitGroup
+	t.Cleanup(func() {
+		hbCancel()
+		for _, wg := range wgs {
+			wg.Wait()
+		}
+	})
 
-	// The healthy tablet must be beaten promptly — well under the budget the
-	// failing tablets hold — because its healthy lane is independent of the
-	// saturated unhealthy lane.
-	require.Eventually(t, func() bool { return sbcHealthy.ExecCount.Load() > before }, 5*time.Second, 5*time.Millisecond,
-		"the healthy tablet must be beaten without waiting on the saturated unhealthy lane")
+	// First tick: dispatch (non-blocking). The healthy tablet is beaten; the ten
+	// slow tablets each start a beat that stays stuck.
+	wgs = append(wgs, vh.dispatchTempTableBeats(hbCtx))
+	require.Eventually(t, func() bool { return sbcHealthy.ExecCount.Load() >= 1 }, 5*time.Second, 5*time.Millisecond,
+		"the first tick must beat the healthy tablet")
+
+	// Second tick: the ten slow tablets are still in flight and are suppressed, so
+	// this tick only re-dispatches the healthy tablet — which is beaten again even
+	// though the backlog is still stuck.
+	wgs = append(wgs, vh.dispatchTempTableBeats(hbCtx))
+	require.Eventually(t, func() bool { return sbcHealthy.ExecCount.Load() >= 2 }, 5*time.Second, 5*time.Millisecond,
+		"the second tick must beat the healthy tablet again, not wait on the stuck backlog")
 }
 
-// TestTempTableHeartbeatBoundsInFlightBeats proves that a broad outage cannot
-// keep an unbounded number of beats in flight: no matter how many failing
-// tablets there are, the unhealthy lane holds at most its cap open at once. The
-// beats block past the budget, so within the budget window none complete and the
-// summed entry count of the failing tablets equals the beats actually in flight.
-func TestTempTableHeartbeatBoundsInFlightBeats(t *testing.T) {
+// TestTempTableHeartbeatSuppressesInFlightTablet proves per-tablet in-flight
+// suppression: a tablet whose beat is still running is not dispatched again on
+// the next tick, so a broad outage holds at most one stuck beat per tablet rather
+// than accumulating one every tick.
+func TestTempTableHeartbeatSuppressesInFlightTablet(t *testing.T) {
 	origInterval := tempTableHeartbeatTime
-	tempTableHeartbeatTime = 20 * time.Second // budget 10s
+	tempTableHeartbeatTime = 30 * time.Second // budget 15s: the beat stays stuck across both ticks
 	t.Cleanup(func() { tempTableHeartbeatTime = origInterval })
 
 	executor, _, _, _, ctx := createExecutorEnv(t)
@@ -2266,32 +2386,30 @@ func TestTempTableHeartbeatBoundsInFlightBeats(t *testing.T) {
 	vh := newVtgateHandler(vtg)
 	hc := executor.scatterConn.gateway.hc.(*discovery.FakeHealthCheck)
 
-	var conns []*sandboxconn.SandboxConn
-	for i := range tempTableBeatUnhealthyConcurrency * 4 {
-		conns = append(conns, storeFailingTempTablet(vh, hc, i))
-	}
+	slow := storeSlowTempTablet(vh, hc, 0)
 
-	done := make(chan struct{})
 	hbCtx, hbCancel := context.WithCancel(ctx)
-	go func() { defer close(done); vh.sendTempTableHeartbeats(hbCtx) }()
-	t.Cleanup(func() { hbCancel(); <-done })
-
-	// Each failing tablet increments its exec count on entry and then blocks past
-	// the budget, so before any beat completes the sum is the number in flight.
-	inFlight := func() int64 {
-		var n int64
-		for _, c := range conns {
-			n += c.ExecCount.Load()
+	var wgs []*sync.WaitGroup
+	t.Cleanup(func() {
+		hbCancel()
+		for _, wg := range wgs {
+			wg.Wait()
 		}
-		return n
+	})
+
+	// First tick starts the beat, which enters the tablet and blocks.
+	wgs = append(wgs, vh.dispatchTempTableBeats(hbCtx))
+	require.Eventually(t, func() bool { return slow.ExecCount.Load() == 1 }, 5*time.Second, time.Millisecond,
+		"the first tick must start exactly one beat")
+
+	// Further ticks are suppressed while that beat is in flight, so the exec count
+	// stays at one — no accumulating backlog.
+	for range 5 {
+		wgs = append(wgs, vh.dispatchTempTableBeats(hbCtx))
 	}
-	// The lane fills to its cap...
-	require.Eventually(t, func() bool { return inFlight() >= int64(tempTableBeatUnhealthyConcurrency) }, 5*time.Second, time.Millisecond,
-		"the unhealthy lane should fill to its cap")
-	// ...and never exceeds it, however many failing tablets are registered.
 	for range 50 {
-		require.LessOrEqual(t, inFlight(), int64(tempTableBeatUnhealthyConcurrency),
-			"beats in flight must never exceed the unhealthy lane cap")
+		require.Equal(t, int64(1), slow.ExecCount.Load(),
+			"a tablet with a beat in flight must not be dispatched again")
 	}
 }
 

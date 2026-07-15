@@ -25,6 +25,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/sqltypes"
@@ -658,6 +659,13 @@ func (dbc *Conn) ConnCheck(ctx context.Context) error {
 // connection out from under it.
 func (dbc *Conn) PeerCheck() error {
 	return dbc.conn.ConnCheck()
+}
+
+// PeerCheckSupported reports whether PeerCheck is a real check on this platform.
+// It is false where the underlying ConnCheck is only a stub (Windows), so a
+// caller cannot rely on PeerCheck's success to mean the peer is alive.
+func (dbc *Conn) PeerCheckSupported() bool {
+	return mysql.ConnCheckSupported
 }
 
 func (dbc *Conn) Reconnect(ctx context.Context) error {

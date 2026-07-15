@@ -197,6 +197,23 @@ type vtgateHandler struct {
 	// own goroutine; the sweeper also evicts targets that no longer exist.
 	tempTableConns sync.Map
 
+	// tempTableBeatInFlight holds the tablet aliases that currently have a
+	// keepalive beat running (alias string -> struct{}). A tablet already in
+	// this set is skipped when the next tick dispatches, so a slow or
+	// unreachable tablet keeps at most one stuck beat rather than a growing
+	// backlog, and never delays a healthy tablet's beat. The zero value is
+	// ready to use.
+	tempTableBeatInFlight sync.Map
+
+	// tempTableFailingBeatSem bounds how many failing (unreachable) tablets are
+	// beaten at once. A failing tablet's beat blocks for the whole budget, so
+	// without a bound a broad outage would hold one stuck RPC and goroutine per
+	// affected tablet. Healthy tablets bypass this gate entirely, so they are
+	// never starved by the failing backlog. It is created lazily so a zero-value
+	// handler (as some tests construct) works without an initializer.
+	tempTableFailingBeatSemOnce sync.Once
+	tempTableFailingBeatSem     chan struct{}
+
 	busyConnections atomic.Int32
 }
 
@@ -330,23 +347,22 @@ func (vh *vtgateHandler) startTempTableHeartbeat(ctx context.Context) {
 			slog.Duration("temp_table_heartbeat_time", tempTableHeartbeatTime))
 		return
 	}
-	// Once per interval the registry is scanned a single time, every reserved
-	// connection is grouped by its tablet, and each tablet is touched right away
-	// on its own goroutine. Touching every tablet immediately after the single
-	// snapshot (rather than spreading tablets across the interval) is what bounds
-	// a connection's time-to-touch to one interval: a connection registered at
-	// any moment is picked up by the next snapshot, at most one interval later,
-	// and touched at once — never one interval to be seen plus a further delay
-	// before its turn. A slow or unreachable tablet delays only its own
-	// goroutine, and the touches are batched (one cheap RPC per tablet, to
-	// tablets vtgate already talks to), so touching them together is not a
-	// meaningful load spike. Scanning once keeps the per-interval work
-	// proportional to the number of registered sessions.
+	// Each tick scans the registry once, groups reserved connections by tablet,
+	// and dispatches a beat for every tablet on its own goroutine — then returns
+	// without waiting. Because the tick never blocks on the beats, a slow or
+	// unreachable tablet can never delay the next tick's healthy beats, and a
+	// connection registered at any moment is beaten within one interval. Beats
+	// are batched (one cheap RPC per tablet vtgate already talks to). A broad
+	// outage is bounded two ways (see dispatchTempTableBeats): per-tablet
+	// in-flight suppression keeps a stuck tablet to a single beat, and beats to
+	// failing tablets are gated through a small semaphore that healthy tablets
+	// bypass — so the stuck retry work stays bounded without starving healthy
+	// tablets.
 	go func() {
 		ticker := time.NewTicker(tempTableHeartbeatTime)
 		defer ticker.Stop()
 		for {
-			vh.sendTempTableHeartbeats(ctx)
+			vh.dispatchTempTableBeats(ctx)
 			select {
 			case <-ctx.Done():
 				return
@@ -377,71 +393,25 @@ func (vh *vtgateHandler) snapshotTempTableBeats() map[string][]tempTableBeatItem
 	return byTablet
 }
 
-const (
-	// tempTableBeatHealthyConcurrency caps how many reachable (or not-yet-failed)
-	// tablets a sweep touches at once. Healthy tablets reply in well under a
-	// millisecond, so this rarely engages; it bounds the burst — of both gRPC
-	// calls and goroutines — when a large deployment's tablets are touched
-	// together each tick.
-	tempTableBeatHealthyConcurrency = 256
-	// tempTableBeatUnhealthyConcurrency caps how many failing tablets a sweep
-	// retries at once. A failing tablet's beat blocks for its whole budget, so a
-	// broad outage would otherwise keep thousands of gRPC calls and goroutines in
-	// flight. A failing tablet is unreachable, so its reserved connections are
-	// likely already reclaimed — retrying at a bounded rate loses nothing the
-	// outage had not already lost, and the healthy lane is never gated on it.
-	tempTableBeatUnhealthyConcurrency = 32
-)
+// tempTableFailingBeatConcurrency bounds how many failing tablets are beaten at
+// once (see tempTableFailingBeatSem). Healthy tablets are not bounded — they
+// reply in well under a millisecond — so this only caps the stuck retry work a
+// broad outage produces.
+const tempTableFailingBeatConcurrency = 32
 
-// beatTempTableByTablet refreshes each tablet's reserved connections on its own
-// goroutine, routed by the tablet's last-known health into two independent,
-// bounded lanes. Bounding each lane keeps the gRPC calls and goroutines in
-// flight bounded even during a broad outage; routing by health keeps a healthy
-// tablet from ever queuing behind failing ones — a failing tablet only competes
-// for the small unhealthy lane — so a large partial outage cannot push a healthy
-// connection's gap past its tablet timeout.
-func (vh *vtgateHandler) beatTempTableByTablet(ctx context.Context, byTablet map[string][]tempTableBeatItem) {
-	var healthy, failing [][]tempTableBeatItem
-	for _, items := range byTablet {
-		if tempTableBeatItemsFailing(items) {
-			failing = append(failing, items)
-		} else {
-			healthy = append(healthy, items)
-		}
-	}
-	var wg sync.WaitGroup
-	wg.Go(func() { vh.beatTempTableLane(ctx, healthy, tempTableBeatHealthyConcurrency) })
-	wg.Go(func() { vh.beatTempTableLane(ctx, failing, tempTableBeatUnhealthyConcurrency) })
-	wg.Wait()
+// failingBeatSem returns the semaphore that bounds concurrent beats to failing
+// tablets, creating it on first use so a zero-value handler works.
+func (vh *vtgateHandler) failingBeatSem() chan struct{} {
+	vh.tempTableFailingBeatSemOnce.Do(func() {
+		vh.tempTableFailingBeatSem = make(chan struct{}, tempTableFailingBeatConcurrency)
+	})
+	return vh.tempTableFailingBeatSem
 }
 
-// beatTempTableLane touches a set of tablets, each on its own goroutine, with at
-// most concurrency in flight at once. Acquiring the slot before launching the
-// goroutine bounds both the outstanding goroutines and the outstanding RPCs the
-// lane holds open.
-func (vh *vtgateHandler) beatTempTableLane(ctx context.Context, tablets [][]tempTableBeatItem, concurrency int) {
-	sem := make(chan struct{}, concurrency)
-	var wg sync.WaitGroup
-	for _, items := range tablets {
-		select {
-		case <-ctx.Done():
-			wg.Wait()
-			return
-		case sem <- struct{}{}:
-		}
-		wg.Go(func() {
-			defer func() { <-sem }()
-			vh.beatTempTableTablet(ctx, items)
-		})
-	}
-	wg.Wait()
-}
-
-// tempTableBeatItemsFailing reports whether a tablet's last beat failed, so its
-// retry is routed to the bounded unhealthy lane. All of a tablet's reserved
-// connections share one batched beat and so fail together; a connection newly
-// added to a failing tablet still routes there, which is correct — the tablet is
-// unreachable.
+// tempTableBeatItemsFailing reports whether a tablet's last beat failed. All of
+// a tablet's reserved connections share one batched beat and so fail together; a
+// connection newly added to a failing tablet counts as failing too, which is
+// correct — the tablet is unreachable.
 func tempTableBeatItemsFailing(items []tempTableBeatItem) bool {
 	for _, item := range items {
 		if item.target.failures > 0 {
@@ -449,6 +419,50 @@ func tempTableBeatItemsFailing(items []tempTableBeatItem) bool {
 		}
 	}
 	return false
+}
+
+// dispatchTempTableBeats snapshots the registry once and launches a beat for
+// every tablet that does not already have one in flight, each on its own
+// goroutine. It returns immediately without waiting for the beats to finish, so
+// a slow or unreachable tablet can never delay the caller (the ticker) or a
+// healthy tablet's beat. The returned WaitGroup completes when the beats this
+// call launched have finished; the background loop ignores it, while tests use
+// it to run a sweep synchronously.
+//
+// Two mechanisms bound a broad outage. Per-tablet in-flight suppression skips a
+// tablet whose previous beat is still running, so a stuck tablet keeps a single
+// beat rather than accumulating one every tick. And a tablet whose last beat
+// failed — which will block for the whole budget — is gated through a small
+// semaphore, so no more than tempTableFailingBeatConcurrency stuck beats run at
+// once; a failing tablet that cannot get a slot this tick releases its claim and
+// retries on the next. Healthy tablets bypass the semaphore, so they are never
+// starved by the failing backlog.
+func (vh *vtgateHandler) dispatchTempTableBeats(ctx context.Context) *sync.WaitGroup {
+	wg := &sync.WaitGroup{}
+	for alias, items := range vh.snapshotTempTableBeats() {
+		if _, inFlight := vh.tempTableBeatInFlight.LoadOrStore(alias, struct{}{}); inFlight {
+			continue
+		}
+		var sem chan struct{}
+		if tempTableBeatItemsFailing(items) {
+			sem = vh.failingBeatSem()
+			select {
+			case sem <- struct{}{}:
+			default:
+				// The failing lane is full: retry this tablet on the next tick.
+				vh.tempTableBeatInFlight.Delete(alias)
+				continue
+			}
+		}
+		wg.Go(func() {
+			defer vh.tempTableBeatInFlight.Delete(alias)
+			if sem != nil {
+				defer func() { <-sem }()
+			}
+			vh.beatTempTableTablet(ctx, items)
+		})
+	}
+	return wg
 }
 
 // tempTableBeatBudget returns how long a single tablet's batched touch may run
@@ -478,13 +492,12 @@ func tempTableBeatWorstCaseGap(interval time.Duration) time.Duration {
 	return interval + tempTableBeatBudget(interval)
 }
 
-// sendTempTableHeartbeats snapshots the registry once and refreshes every
-// tablet's reserved connections, each tablet on its own goroutine, returning
-// once all beats settle. The background heartbeat loop calls this once per
-// interval; snapshotting afresh and touching every tablet right away is what
-// bounds any connection's time-to-touch to one interval.
+// sendTempTableHeartbeats dispatches a beat for every registered tablet and
+// waits for the beats it launched to finish. It is a synchronous helper for
+// tests; the background loop uses dispatchTempTableBeats directly and never
+// waits.
 func (vh *vtgateHandler) sendTempTableHeartbeats(ctx context.Context) {
-	vh.beatTempTableByTablet(ctx, vh.snapshotTempTableBeats())
+	vh.dispatchTempTableBeats(ctx).Wait()
 }
 
 // tempTableBeatItem is one reserved connection to keep alive: one target of
@@ -537,21 +550,30 @@ func (vh *vtgateHandler) beatTempTableTablet(ctx context.Context, items []tempTa
 	// pooled connection (reserved id zero) instead of a reserved one, so it can
 	// never kill a reserved connection and its temporary tables. Those
 	// connections simply are not kept alive until the tablet is upgraded.
-	ids := make([]int64, 0, len(valid))
-	for _, item := range valid {
-		ids = append(ids, item.target.reservedID)
-	}
-	bctx, cancel := context.WithTimeout(tempTableBeatContext(ctx, valid[0].c), tempTableBeatBudget(tempTableHeartbeatTime))
-	gone, err := vh.sendTempTableBeat(bctx, valid[0].target, ids)
-	cancel()
+	// The tablet rejects a keepalive carrying more than
+	// queryservice.ReservedConnKeepAliveMaxBatch ids, so split a tablet's reserved
+	// connections into batches of at most that many rather than send one
+	// oversized touch that would refresh none of them. Each batch is applied
+	// independently: its own reported-gone ids, and its own whole-batch error.
+	const maxBatch = queryservice.ReservedConnKeepAliveMaxBatch
+	for start := 0; start < len(valid); start += maxBatch {
+		batch := valid[start:min(start+maxBatch, len(valid))]
+		ids := make([]int64, 0, len(batch))
+		for _, item := range batch {
+			ids = append(ids, item.target.reservedID)
+		}
+		bctx, cancel := context.WithTimeout(tempTableBeatContext(ctx, batch[0].c), tempTableBeatBudget(tempTableHeartbeatTime))
+		gone, err := vh.sendTempTableBeat(bctx, batch[0].target, ids)
+		cancel()
 
-	goneSet := make(map[int64]struct{}, len(gone))
-	for _, id := range gone {
-		goneSet[id] = struct{}{}
-	}
-	for _, item := range valid {
-		_, isGone := goneSet[item.target.reservedID]
-		vh.applyTempTableBeatResult(item, isGone, err)
+		goneSet := make(map[int64]struct{}, len(gone))
+		for _, id := range gone {
+			goneSet[id] = struct{}{}
+		}
+		for _, item := range batch {
+			_, isGone := goneSet[item.target.reservedID]
+			vh.applyTempTableBeatResult(item, isGone, err)
+		}
 	}
 }
 

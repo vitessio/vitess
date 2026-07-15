@@ -137,6 +137,16 @@ func NewSafeSession(sessn *vtgatepb.Session) *SafeSession {
 	if sessn == nil {
 		sessn = &vtgatepb.Session{}
 	}
+	// reserved_conn_keep_alive(_ids) are an internal vtgate->tablet control used
+	// only by the temp-table keepalive, which builds its own ExecuteOptions and
+	// passes them straight to the tablet without a SafeSession. Strip them from
+	// any client-supplied session — every client query is wrapped here — so a
+	// client cannot turn a normal query into a reserved-connection keepalive
+	// touch on the tablet.
+	if opts := sessn.GetOptions(); opts != nil && (opts.ReservedConnKeepAlive || opts.ReservedConnKeepAliveIds != nil) {
+		opts.ReservedConnKeepAlive = false
+		opts.ReservedConnKeepAliveIds = nil
+	}
 	return &SafeSession{Session: sessn}
 }
 
