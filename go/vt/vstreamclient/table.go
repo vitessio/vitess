@@ -149,11 +149,11 @@ func (v *VStreamClient) initTables(tables []TableConfig) error {
 		}
 
 		if table.Keyspace == "" {
-			return fmt.Errorf("vstreamclient: table %v has no keyspace", table)
+			return fmt.Errorf("vstreamclient: table %q has no keyspace", table.Table)
 		}
 
 		if table.Table == "" {
-			return fmt.Errorf("vstreamclient: table %v has no table name", table)
+			return fmt.Errorf("vstreamclient: table in keyspace %q has no table name", table.Keyspace)
 		}
 		if table.FlushFn == nil {
 			return fmt.Errorf("vstreamclient: table %s.%s has no flush function", table.Keyspace, table.Table)
