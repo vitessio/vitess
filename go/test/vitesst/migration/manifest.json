@@ -1963,8 +1963,9 @@
     "TestDiskHealthMonitor_StallAndRecover"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/tabletmanager/disk_health_monitor",
+   "retire_reason": "Removed. The stall-detection logic is unit-tested by TestDiskHealthMonitor_stallAndRecover and TestDiskHealthMonitor_stallDetected in go/vt/vttablet/tabletserver/disk_health_monitor_test.go, and the stalled-disk to NOT_SERVING transition is unit-tested by TestIsServing in go/vt/vttablet/tabletserver/state_manager_test.go. The e2e test added only a real FUSE mount to trigger the stall, which is the part that needs a privileged host mount, so its marginal coverage did not justify the cost.",
    "runtime_sec": null,
-   "status": "exception",
+   "status": "retire",
    "verified_at_sha": null,
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/tabletmanager/disk_health_monitor/",
    "wave": null
@@ -5561,8 +5562,9 @@
     "TestReusePort"
    ],
    "pkg": "vitess.io/vitess/go/test/endtoend/vtgate/reuseport",
+   "retire_reason": "Removed. TestListenReusePort in go/netutil/reuseport_unix_test.go binds two listeners to one address and asserts SO_REUSEPORT is set, which is the behavior the project owns. The e2e added a vtgate failover on top, which is thin flag wiring plus kernel behavior, and the package was not wired into CI (no config.json entry, no workflow). The netutil unit test runs on the Linux CI where SO_REUSEPORT applies.",
    "runtime_sec": null,
-   "status": "exception",
+   "status": "retire",
    "verified_at_sha": null,
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtgate/reuseport/",
    "wave": 2

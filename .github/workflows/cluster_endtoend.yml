@@ -46,8 +46,7 @@ jobs:
             "docker_cluster",
             "5",
             "28",
-            "onlineddl_flow",
-            "tabletmanager_disk_health_monitor"
+            "onlineddl_flow"
           ]'
 
           # Build matrix

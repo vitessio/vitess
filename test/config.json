@@ -127,18 +127,6 @@
       ],
       "Needs": []
     },
-    "tabletmanager_disk_health_monitor": {
-      "File": "unused.go",
-      "Packages": [
-        "vitess.io/vitess/go/test/endtoend/tabletmanager/disk_health_monitor"
-      ],
-      "Args": [],
-      "Command": [],
-      "Manual": false,
-      "Shard": "tabletmanager_disk_health_monitor",
-      "Tags": [],
-      "Needs": []
-    },
     "upgrade": {
       "File": "unused.go",
       "Packages": [
