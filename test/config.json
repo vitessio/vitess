@@ -127,87 +127,6 @@
       ],
       "Needs": []
     },
-    "onlineddl_revert": {
-      "File": "unused.go",
-      "Packages": [
-        "vitess.io/vitess/go/test/endtoend/onlineddl/revert"
-      ],
-      "Args": [
-        "-timeout",
-        "30m"
-      ],
-      "Command": [],
-      "Manual": false,
-      "Shard": "onlineddl_revert",
-      "Tags": [],
-      "Needs": []
-    },
-    "onlineddl_scheduler": {
-      "File": "unused.go",
-      "Packages": [
-        "vitess.io/vitess/go/test/endtoend/onlineddl/scheduler"
-      ],
-      "Args": [
-        "-timeout",
-        "30m"
-      ],
-      "Command": [],
-      "Manual": false,
-      "Shard": "onlineddl_scheduler",
-      "Tags": [],
-      "Needs": []
-    },
-    "tabletmanager": {
-      "File": "unused.go",
-      "Packages": [
-        "vitess.io/vitess/go/test/endtoend/tabletmanager"
-      ],
-      "Args": [
-        "-timeout",
-        "20m"
-      ],
-      "Command": [],
-      "Manual": false,
-      "Shard": "18",
-      "Tags": [
-        "site_test"
-      ],
-      "Needs": [
-        "consul"
-      ]
-    },
-    "tabletmanager_replication_manager": {
-      "File": "unused.go",
-      "Packages": [
-        "vitess.io/vitess/go/test/endtoend/tabletmanager/replication_manager"
-      ],
-      "Args": [],
-      "Command": [],
-      "Manual": false,
-      "Shard": "18",
-      "Tags": [],
-      "Needs": [
-        "consul"
-      ]
-    },
-    "tabletmanager_consul": {
-      "File": "unused.go",
-      "Packages": [
-        "vitess.io/vitess/go/test/endtoend/tabletmanager"
-      ],
-      "Args": [
-        "--topo-flavor=consul"
-      ],
-      "Command": [],
-      "Manual": false,
-      "Shard": "tabletmanager_consul",
-      "Tags": [
-        "site_test"
-      ],
-      "Needs": [
-        "consul"
-      ]
-    },
     "tabletmanager_disk_health_monitor": {
       "File": "unused.go",
       "Packages": [
@@ -218,22 +137,6 @@
       "Manual": false,
       "Shard": "tabletmanager_disk_health_monitor",
       "Tags": [],
-      "Needs": []
-    },
-    "tabletmanager_zk2": {
-      "File": "unused.go",
-      "Packages": [
-        "vitess.io/vitess/go/test/endtoend/tabletmanager"
-      ],
-      "Args": [
-        "--topo-flavor=zk2"
-      ],
-      "Command": [],
-      "Manual": false,
-      "Shard": "docker_cluster",
-      "Tags": [
-        "site_test"
-      ],
       "Needs": []
     },
     "upgrade": {
@@ -808,20 +711,6 @@
       "Shard": "",
       "Tags": [],
       "Needs": []
-    },
-    "vtorc_api": {
-      "File": "unused.go",
-      "Packages": [
-        "vitess.io/vitess/go/test/endtoend/vtorc/api"
-      ],
-      "Args": [],
-      "Command": [],
-      "Manual": false,
-      "Shard": "vtorc",
-      "Tags": [],
-      "Needs": [
-        "memory-check"
-      ]
     },
     "vtorc_readtopologyinstance": {
       "File": "unused.go",
