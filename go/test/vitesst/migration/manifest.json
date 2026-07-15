@@ -460,8 +460,7 @@
     },
     "vitess.io/vitess/go/test/endtoend/binlogdump": {
       "blockers": [
-        "bench_test.go connects directly to mysqld via a unix socket built from os.Getenv(\"VTDATAROOT\") and the tablet UID directory naming convention -- no container equivalent path",
-        "requires bumping grpc-max-message-size to 64MB and streaming 32MB blobs through the wire, timing-sensitive (sleeps, 5-30s timeouts) COM_BINLOG_DUMP_GTID protocol-level testing that bypasses normal query APIs"
+        "Migrated onto vitesst; no longer imports endtoend/cluster. Not in CI: two known-failing behaviors preserved faithfully rather than papered over -- the vt_repl|target username-pipe form does not populate the vtgate session target on this checkout, and TestBinlogDumpGTID_LargeEvent depends on a 50-packet cap that container startup binlog volume exceeds. Needs upstream/test fixes before it can be enabled in CI."
       ],
       "capabilities": [
         "extra-args",
@@ -473,7 +472,7 @@
       "dropped_tests": [],
       "honesty": null,
       "lifecycle": "shared-cluster",
-      "notes": "Not migrated: reverted to the old framework files. Never in test/config.json. Two upstream issues: the username-pipe binlog target form (vt_repl|target) never populates the vtgate session target on this checkout, and TestBinlogDumpGTID_LargeEvent depends on a 50-packet cap that container startup binlog volume exceeds. Needs an upstream test fix before migration. | Uses raw MySQL wire protocol (WriteComBinlogDumpGTID/ReadPacket) against both vtgate MySQL port and direct vttablet gRPC and vtgate gRPC BinlogDumpGTID; several tests rely on time.Sleep for stream startup and generous timeouts (5-30s) for eventual packet arrival; benchmark file directly touches mysqld socket file, bypassing vttablet entirely. | cluster APIs: LocalProcessCluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartUnshardedKeyspace, LocalProcessCluster.StartVtgate, LocalProcessCluster.Teardown, VtctldClientProcess.GetTablet, cluster.GetPrimaryPosition, Shard.PrimaryTablet | external deps: direct unix-socket mysql connection using VTDATAROOT env path, direct gRPC dial to vttablet via tabletconn.GetDialer | difficulty: hard",
+      "notes": "Migrated onto vitesst (2026). Direct-mysqld access uses Tablet.DBAConnParams over TCP; vttablet/vtgate gRPC via Tablet.GRPCAddr / VTGate().GRPCAddr. Raw COM_BINLOG_DUMP_GTID wire-protocol assertions preserved. Was never in test/config.json.",
       "old_shards": [],
       "old_test_funcs": [
         "TestBinlogDumpGTID_Streaming",
@@ -2531,8 +2530,7 @@
     },
     "vitess.io/vitess/go/test/endtoend/transaction/twopc/fuzz": {
       "blockers": [
-        "directly reads a PID file from the host filesystem ($VTDATAROOT/vt_<uid>/mysql.pid) and sends SIGKILL to that OS PID -- has no meaning in a container-per-component model where the test process and mysqld are not co-located and don't share PID namespace or VTDATAROOT",
-        "fuzzer runs concurrent uncoordinated cluster-topology mutations (PRS/ERS/reshard/movetables all racing against live traffic) which assumes the legacy cluster's shared, mutable Keyspaces/Shards slices are safely readable/writable across goroutines"
+        "Excluded from CI pending upstream fix for the defer-secondary-keys / auto_increment errno-1075 reshard failure (vitessio/vitess#18965); the migration itself is complete and off the legacy framework."
       ],
       "capabilities": [
         "bootstrap",
@@ -2570,7 +2568,7 @@
         "TestMain"
       ],
       "pkg": "vitess.io/vitess/go/test/endtoend/transaction/twopc/fuzz",
-      "quarantine_reason": "The migration is complete and faithful, but the reshard disruption cannot pass with this package's schema, on any framework. Reshard Create defaults to --defer-secondary-keys=true, so the target primary's copy phase runs `alter table twopc_fuzzer_insert drop key col`, which MySQL rejects with errno 1075 because `col` is auto_increment and is not the leading column of the primary key. Only errno 1091 is tolerated, so both streams stay at an empty position and the catchup wait times out. The same ALTER is rejected by stock mysql:8.0.42 and mysql:8.4, so this is not a container artifact. Upstream tracks it as vitessio/vitess#18965.",
+      "quarantine_reason": "Migrated onto vitesst: no longer imports endtoend/cluster (mysqld kills go through Tablet.KillMySQL, the former host PID-file SIGKILL blocker is resolved). Kept out of CI because the reshard-disruption path fails on an upstream product bug, not a framework issue: Reshard Create with --defer-secondary-keys=true runs `alter table twopc_fuzzer_insert drop key col`, which MySQL rejects with errno 1075 because col is auto_increment and not the leading primary-key column. The same ALTER is rejected by stock mysql:8.0 and 8.4, so it is not a container artifact. Tracked upstream as vitessio/vitess#18965.",
       "runtime_sec": 51,
       "status": "quarantined",
       "verified_at_sha": null,
