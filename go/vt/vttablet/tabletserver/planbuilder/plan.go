@@ -198,11 +198,19 @@ func (plan *Plan) TableNames() (names []string) {
 	// AllTables only covers FROM-clause tables. A DDL statement carries its targets as
 	// bare TableNames on the DDL node itself, so they have to be collected separately.
 	if ddl, ok := plan.FullStmt.(sqlparser.DDLStatement); ok {
-		for _, table := range ddl.AffectedTables() {
+		affectedTables := ddl.AffectedTables()
+		names = slices.Grow(names, len(affectedTables))
+		seen := make(map[string]struct{}, len(names))
+		for _, name := range names {
+			seen[name] = struct{}{}
+		}
+		for _, table := range affectedTables {
 			name := table.Name.String()
-			if !slices.Contains(names, name) {
-				names = append(names, name)
+			if _, ok := seen[name]; ok {
+				continue
 			}
+			seen[name] = struct{}{}
+			names = append(names, name)
 		}
 	}
 	if len(names) == 0 {
