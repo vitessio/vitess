@@ -29,6 +29,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -112,7 +113,8 @@ func (te *testEnv) execBackgroundAllowMissingColumn(t *testing.T, query string, 
 		return
 	}
 
-	if strings.Contains(err.Error(), "errno 1091") || strings.Contains(err.Error(), "check that column/key exists") {
+	var sqlErr *sqlerror.SQLError
+	if errors.As(sqlerror.NewSQLErrorFromError(err), &sqlErr) && sqlErr.Number() == sqlerror.ERCantDropFieldOrKey {
 		return
 	}
 
