@@ -456,10 +456,17 @@ func stopReplicationAndBuildStatusMaps(
 // Typically a caller will set a timeout of WaitReplicasTimeout on a context and
 // use that context with this function.
 func WaitForRelayLogsToApply(ctx context.Context, tmc tmclient.TabletManagerClient, tabletInfo *topo.TabletInfo, status *replicationdatapb.StopReplicationStatus) error {
-	switch status.After.RelayLogPosition {
-	case "":
-		return tmc.WaitForPosition(ctx, tabletInfo.Tablet, status.After.RelayLogSourceBinlogEquivalentPosition)
-	default:
-		return tmc.WaitForPosition(ctx, tabletInfo.Tablet, status.After.RelayLogPosition)
+	return tmc.WaitForPosition(ctx, tabletInfo.Tablet, appliedPositionAfterWait(status))
+}
+
+// appliedPositionAfterWait returns the position that WaitForRelayLogsToApply
+// waits for — the position the SQL thread is known to have reached once that
+// wait succeeds. It is the relay-log position for GTID-based replication, or the
+// relay-log-equivalent file position when relay-log positions are unavailable
+// (non-GTID replication).
+func appliedPositionAfterWait(status *replicationdatapb.StopReplicationStatus) string {
+	if status.After.RelayLogPosition == "" {
+		return status.After.RelayLogSourceBinlogEquivalentPosition
 	}
+	return status.After.RelayLogPosition
 }

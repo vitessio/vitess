@@ -6195,11 +6195,12 @@ func TestEmergencyReparenter_waitForAllRelayLogsToApply_reconcilesPositions(t *t
 				"zone1-0000000100": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}}},
 				"zone1-0000000101": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}}},
 			}
+			combinedStr := replication.EncodePosition(combined)
 			statusMap := map[string]*replicationdatapb.StopReplicationStatus{
-				"zone1-0000000100": {After: &replicationdatapb.Status{RelayLogPosition: "position1"}},
+				"zone1-0000000100": {After: &replicationdatapb.Status{RelayLogPosition: combinedStr}},
 			}
-			// An empty inner map (no entry for position1) makes WaitForPosition error.
-			waitResult := map[string]error{"position1": nil}
+			// An empty inner map (no entry for the position) makes WaitForPosition error.
+			waitResult := map[string]error{combinedStr: nil}
 			if tt.waitErr {
 				waitResult = map[string]error{}
 			}
@@ -6277,15 +6278,17 @@ func TestEmergencyReparenter_findMostAdvanced_versionTiebreakerAfterCatchUp(t *t
 	require.NoError(t, err)
 	require.True(t, topoproto.TabletAliasEqual(intermediateSource.Alias, &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}))
 
-	// Both candidates' SQL threads catch up during the relay-log wait, which
-	// advances their Executed positions to Combined. After that, positions are
-	// equal and the version tiebreaker selects the lower-version tablet.
-	statusMap["zone1-0000000100"].After = &replicationdatapb.Status{RelayLogPosition: "position1"}
-	statusMap["zone1-0000000101"].After = &replicationdatapb.Status{RelayLogPosition: "position1"}
+	// Both candidates' SQL threads catch up to the combined relay-log position
+	// during the wait, which reconciles their positions to that applied position.
+	// After that, positions are equal and the version tiebreaker selects the
+	// lower-version tablet.
+	combinedStr := replication.EncodePosition(combined)
+	statusMap["zone1-0000000100"].After = &replicationdatapb.Status{RelayLogPosition: combinedStr}
+	statusMap["zone1-0000000101"].After = &replicationdatapb.Status{RelayLogPosition: combinedStr}
 	tmc := &testutil.TabletManagerClient{
 		WaitForPositionResults: map[string]map[string]error{
-			"zone1-0000000100": {"position1": nil},
-			"zone1-0000000101": {"position1": nil},
+			"zone1-0000000100": {combinedStr: nil},
+			"zone1-0000000101": {combinedStr: nil},
 		},
 	}
 	erp := NewEmergencyReparenter(nil, tmc, logutil.NewMemoryLogger())
@@ -6294,4 +6297,121 @@ func TestEmergencyReparenter_findMostAdvanced_versionTiebreakerAfterCatchUp(t *t
 	intermediateSource, _, err = erp.findMostAdvanced(validCandidates, tabletMap, versionMap, EmergencyReparentOptions{durability: durability})
 	require.NoError(t, err)
 	require.True(t, topoproto.TabletAliasEqual(intermediateSource.Alias, &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}))
+}
+
+// TestEmergencyReparenter_findMostAdvanced_versionTiebreakerAfterCatchUp_FilePos
+// is the file-position (non-GTID) analogue of the test above. For file-position
+// replication the candidate positions are stored in Combined as the pre-wait
+// executed position, while the wait catches up to the relay-log-equivalent
+// position. The reconcile must therefore advance Combined to the actually-waited-for
+// position; otherwise two candidates that both caught up would still be compared
+// on their stale pre-wait positions and the newer-version tablet would win.
+func TestEmergencyReparenter_findMostAdvanced_versionTiebreakerAfterCatchUp_FilePos(t *testing.T) {
+	// Pre-wait executed file positions: the newer tablet is slightly ahead.
+	// Both relay logs have downloaded up to offset 100 (the equivalent position
+	// the wait catches up to).
+	olderExecutedStr := "FilePos/mysql-bin.0001:80"
+	newerExecutedStr := "FilePos/mysql-bin.0001:90"
+	appliedStr := "FilePos/mysql-bin.0001:100"
+
+	olderExecuted, err := replication.DecodePosition(olderExecutedStr)
+	require.NoError(t, err)
+	newerExecuted, err := replication.DecodePosition(newerExecutedStr)
+	require.NoError(t, err)
+
+	// For non-GTID replication FindPositionsOfAllCandidates stores the executed
+	// position in Combined and leaves Executed zero.
+	validCandidates := map[string]*RelayLogPositions{
+		"zone1-0000000100": {Combined: olderExecuted}, // older version, behind pre-wait
+		"zone1-0000000101": {Combined: newerExecuted}, // newer version, ahead pre-wait
+	}
+	tabletMap := map[string]*topo.TabletInfo{
+		"zone1-0000000100": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}, Type: topodatapb.TabletType_REPLICA}},
+		"zone1-0000000101": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}, Type: topodatapb.TabletType_REPLICA}},
+	}
+	versionMap := map[string]mysqlctl.ServerVersion{
+		"zone1-0000000100": {Major: 8, Minor: 0, Patch: 35},
+		"zone1-0000000101": {Major: 8, Minor: 4, Patch: 0},
+	}
+
+	durability, err := policy.GetDurabilityPolicy(policy.DurabilityNone)
+	require.NoError(t, err)
+
+	// Before the wait, the newer tablet is ahead on the (stale) executed position
+	// and would be chosen as the intermediate source.
+	erpBefore := NewEmergencyReparenter(nil, nil, logutil.NewMemoryLogger())
+	intermediateSource, _, err := erpBefore.findMostAdvanced(validCandidates, tabletMap, versionMap, EmergencyReparentOptions{durability: durability})
+	require.NoError(t, err)
+	require.True(t, topoproto.TabletAliasEqual(intermediateSource.Alias, &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}))
+
+	// Both catch up to the relay-log-equivalent position during the wait. For
+	// file-position replication that position comes from RelayLogSourceBinlogEquivalentPosition
+	// (RelayLogPosition is empty). The reconcile advances Combined to it, so both
+	// compare equal and the version tiebreaker selects the lower-version tablet.
+	statusMap := map[string]*replicationdatapb.StopReplicationStatus{
+		"zone1-0000000100": {After: &replicationdatapb.Status{RelayLogSourceBinlogEquivalentPosition: appliedStr}},
+		"zone1-0000000101": {After: &replicationdatapb.Status{RelayLogSourceBinlogEquivalentPosition: appliedStr}},
+	}
+	tmc := &testutil.TabletManagerClient{
+		WaitForPositionResults: map[string]map[string]error{
+			"zone1-0000000100": {appliedStr: nil},
+			"zone1-0000000101": {appliedStr: nil},
+		},
+	}
+	erp := NewEmergencyReparenter(nil, tmc, logutil.NewMemoryLogger())
+	require.NoError(t, erp.waitForAllRelayLogsToApply(t.Context(), validCandidates, tabletMap, statusMap, 30*time.Second))
+
+	intermediateSource, _, err = erp.findMostAdvanced(validCandidates, tabletMap, versionMap, EmergencyReparentOptions{durability: durability})
+	require.NoError(t, err)
+	require.True(t, topoproto.TabletAliasEqual(intermediateSource.Alias, &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}))
+}
+
+// TestEmergencyReparenter_findMostAdvanced_splitBrainSurvivesReconcile guards the
+// interaction between the post-wait position reconcile and split-brain
+// detection: reconciling each candidate to its own applied position must not
+// mask a genuine split brain (two candidates each holding GTIDs the other
+// lacks). Because the reconcile advances each candidate only to the position it
+// actually applied, the neither-is-a-superset condition is preserved and ERS
+// still aborts.
+func TestEmergencyReparenter_findMostAdvanced_splitBrainSurvivesReconcile(t *testing.T) {
+	sid1 := replication.SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+	sid2 := replication.SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16}
+
+	// posA has sid1's GTIDs, posB has sid2's — neither is a superset of the other.
+	posA := replication.Position{GTIDSet: replication.Mysql56GTIDSet{}}
+	posA.GTIDSet = posA.GTIDSet.AddGTID(replication.Mysql56GTID{Server: sid1, Sequence: 10})
+	posB := replication.Position{GTIDSet: replication.Mysql56GTIDSet{}}
+	posB.GTIDSet = posB.GTIDSet.AddGTID(replication.Mysql56GTID{Server: sid2, Sequence: 10})
+
+	validCandidates := map[string]*RelayLogPositions{
+		"zone1-0000000100": {Combined: posA, Executed: posA},
+		"zone1-0000000101": {Combined: posB, Executed: posB},
+	}
+	tabletMap := map[string]*topo.TabletInfo{
+		"zone1-0000000100": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}, Type: topodatapb.TabletType_REPLICA}},
+		"zone1-0000000101": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}, Type: topodatapb.TabletType_REPLICA}},
+	}
+	posAStr := replication.EncodePosition(posA)
+	posBStr := replication.EncodePosition(posB)
+	statusMap := map[string]*replicationdatapb.StopReplicationStatus{
+		"zone1-0000000100": {After: &replicationdatapb.Status{RelayLogPosition: posAStr}},
+		"zone1-0000000101": {After: &replicationdatapb.Status{RelayLogPosition: posBStr}},
+	}
+	tmc := &testutil.TabletManagerClient{
+		WaitForPositionResults: map[string]map[string]error{
+			"zone1-0000000100": {posAStr: nil},
+			"zone1-0000000101": {posBStr: nil},
+		},
+	}
+
+	durability, err := policy.GetDurabilityPolicy(policy.DurabilityNone)
+	require.NoError(t, err)
+
+	erp := NewEmergencyReparenter(nil, tmc, logutil.NewMemoryLogger())
+	require.NoError(t, erp.waitForAllRelayLogsToApply(t.Context(), validCandidates, tabletMap, statusMap, 30*time.Second))
+
+	// After the reconcile, the divergent positions remain divergent, so ERS must
+	// still detect the split brain.
+	_, _, err = erp.findMostAdvanced(validCandidates, tabletMap, nil, EmergencyReparentOptions{durability: durability})
+	require.ErrorContains(t, err, "split brain detected between servers")
 }

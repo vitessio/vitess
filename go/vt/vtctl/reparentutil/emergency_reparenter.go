@@ -478,24 +478,40 @@ func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 			if err != nil {
 				return
 			}
-			// This candidate's SQL thread has now applied its relay log up to its
-			// Combined position, and ERS has already stopped the IO thread so no
-			// new events can arrive past it. Advance the in-memory Executed
-			// position to Combined so this candidate compares equal to other
-			// equally-advanced candidates in RelayLogPositions.AtLeast (which uses
-			// Executed as the tiebreaker when Combined positions match), letting
-			// the MySQL version tiebreaker decide the election. The positions were
-			// captured before the wait, so without this a candidate whose SQL
-			// thread was merely behind pre-wait would still look behind.
+			// This candidate's SQL thread has now applied its relay log up to the
+			// position WaitForRelayLogsToApply waited for, and ERS has already
+			// stopped the IO thread so no new events can arrive past it. Reconcile
+			// the in-memory positions to that applied position so this candidate
+			// compares equal to other equally-advanced candidates in
+			// RelayLogPositions.AtLeast, letting the MySQL version tiebreaker decide
+			// the election. The positions were captured before the wait, so without
+			// this a candidate whose SQL thread was merely behind pre-wait would
+			// still look behind.
+			//
+			// We reconcile to the actually-waited-for position rather than simply
+			// setting Executed = Combined: for file-position (non-GTID) replication
+			// Combined holds the pre-wait executed position, which differs from the
+			// relay-log-equivalent position the wait catches up to. For GTID-based
+			// replication the waited-for position equals Combined, so this is a
+			// no-op on Combined and only advances Executed.
 			//
 			// This is deliberately tied to this candidate's own apply success — we
 			// only advance the position of a tablet we confirmed caught up — so it
 			// remains correct even if this wait ever tolerates partial success.
 			// We do not re-issue a ReplicationStatus RPC: the successful wait is
 			// sufficient proof, and avoiding the extra call keeps ERS fast.
+			appliedPos, decodeErr := replication.DecodePosition(appliedPositionAfterWait(status))
+			if decodeErr != nil {
+				// Leave the pre-wait positions in place. This is safe: the candidate
+				// keeps its real (possibly-behind) position rather than being
+				// overstated, so it can never be elected as more advanced than it is.
+				erp.logger.Warningf("could not decode applied position for %v after relay-log wait, leaving pre-wait position: %v", alias, decodeErr)
+				return
+			}
 			mu.Lock()
 			if pos := validCandidates[alias]; pos != nil {
-				pos.Executed = pos.Combined
+				pos.Combined = appliedPos
+				pos.Executed = appliedPos
 			}
 			mu.Unlock()
 		}(candidate, status)
