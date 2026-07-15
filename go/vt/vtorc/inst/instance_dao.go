@@ -222,115 +222,12 @@ func ReadTopologyInstanceBufferable(tabletAlias *topodatapb.TabletAlias, latency
 	}
 	partialSuccess = true // We at least managed to read something from the server.
 
-	instance.Hostname = tablet.MysqlHostname
-	instance.Port = int(tablet.MysqlPort)
 	{
-		// We begin with a few operations we can run concurrently, and which do not depend on anything
-		instance.ServerID = uint(fs.ServerId)
-		instance.TabletType = fs.TabletType
-		instance.Version = fs.Version
-		instance.ReadOnly = fs.ReadOnly
-		instance.LogBinEnabled = fs.LogBinEnabled
-		instance.BinlogFormat = fs.BinlogFormat
-		instance.LogReplicationUpdatesEnabled = fs.LogReplicaUpdates
-		instance.VersionComment = fs.VersionComment
-
-		if instance.LogBinEnabled && fs.PrimaryStatus != nil {
-			binlogPos, err := getBinlogCoordinatesFromPositionString(fs.PrimaryStatus.FilePosition)
-			instance.SelfBinlogCoordinates = binlogPos
-			errorChan <- err
+		var mappingErrs []error
+		instance, mappingErrs = instanceFromFullStatus(tablet, fs)
+		for _, mappingErr := range mappingErrs {
+			errorChan <- mappingErr
 		}
-
-		instance.SemiSyncPrimaryEnabled = fs.SemiSyncPrimaryEnabled
-		instance.SemiSyncReplicaEnabled = fs.SemiSyncReplicaEnabled
-		instance.SemiSyncPrimaryWaitForReplicaCount = uint(fs.SemiSyncWaitForReplicaCount)
-		instance.SemiSyncPrimaryTimeout = fs.SemiSyncPrimaryTimeout
-
-		instance.SemiSyncPrimaryClients = uint(fs.SemiSyncPrimaryClients)
-		instance.SemiSyncPrimaryStatus = fs.SemiSyncPrimaryStatus
-		instance.SemiSyncReplicaStatus = fs.SemiSyncReplicaStatus
-		instance.SemiSyncBlocked = fs.SemiSyncBlocked
-
-		if instance.IsOracleMySQL() || instance.IsPercona() {
-			// Stuff only supported on Oracle / Percona MySQL
-			// ...
-			// @@gtid_mode only available in Oracle / Percona MySQL >= 5.6
-			instance.GTIDMode = fs.GtidMode
-			instance.ServerUUID = fs.ServerUuid
-			if fs.PrimaryStatus != nil {
-				GtidExecutedPos, err := replication.DecodePosition(fs.PrimaryStatus.Position)
-				errorChan <- err
-				if err == nil && GtidExecutedPos.GTIDSet != nil {
-					instance.ExecutedGtidSet = GtidExecutedPos.GTIDSet.String()
-				}
-			}
-			GtidPurgedPos, err := replication.DecodePosition(fs.GtidPurged)
-			errorChan <- err
-			if err == nil && GtidPurgedPos.GTIDSet != nil {
-				instance.GtidPurged = GtidPurgedPos.GTIDSet.String()
-			}
-			instance.BinlogRowImage = fs.BinlogRowImage
-
-			if instance.GTIDMode != "" && instance.GTIDMode != "OFF" {
-				instance.SupportsOracleGTID = true
-			}
-		}
-	}
-
-	instance.ReplicationIOThreadState = ReplicationThreadStateNoThread
-	instance.ReplicationSQLThreadState = ReplicationThreadStateNoThread
-	if fs.ReplicationStatus != nil {
-		instance.HasReplicationCredentials = fs.ReplicationStatus.SourceUser != ""
-
-		instance.ReplicationIOThreadState = ReplicationThreadStateFromReplicationState(replication.ReplicationState(fs.ReplicationStatus.IoState))
-		instance.ReplicationSQLThreadState = ReplicationThreadStateFromReplicationState(replication.ReplicationState(fs.ReplicationStatus.SqlState))
-		instance.ReplicationIOThreadRuning = instance.ReplicationIOThreadState.IsRunning()
-		instance.ReplicationSQLThreadRuning = instance.ReplicationSQLThreadState.IsRunning()
-
-		binlogPos, err := getBinlogCoordinatesFromPositionString(fs.ReplicationStatus.RelayLogSourceBinlogEquivalentPosition)
-		instance.ReadBinlogCoordinates = binlogPos
-		errorChan <- err
-
-		binlogPos, err = getBinlogCoordinatesFromPositionString(fs.ReplicationStatus.FilePosition)
-		instance.ExecBinlogCoordinates = binlogPos
-		errorChan <- err
-		instance.IsDetached, _ = instance.ExecBinlogCoordinates.ExtractDetachedCoordinates()
-
-		binlogPos, err = getBinlogCoordinatesFromPositionString(fs.ReplicationStatus.RelayLogFilePosition)
-		instance.RelaylogCoordinates = binlogPos
-		instance.RelaylogCoordinates.Type = RelayLog
-		errorChan <- err
-
-		instance.LastSQLError = emptyQuotesRegexp.ReplaceAllString(strconv.QuoteToASCII(fs.ReplicationStatus.LastSqlError), "")
-		instance.LastIOError = emptyQuotesRegexp.ReplaceAllString(strconv.QuoteToASCII(fs.ReplicationStatus.LastIoError), "")
-
-		instance.SQLDelay = fs.ReplicationStatus.SqlDelay
-		instance.UsingOracleGTID = fs.ReplicationStatus.AutoPosition
-		instance.SourceUUID = fs.ReplicationStatus.SourceUuid
-		instance.HasReplicationFilters = fs.ReplicationStatus.HasReplicationFilters
-
-		instance.SourceHost = fs.ReplicationStatus.SourceHost
-		instance.SourcePort = int(fs.ReplicationStatus.SourcePort)
-
-		if fs.ReplicationStatus.ReplicationLagUnknown {
-			instance.SecondsBehindPrimary.Valid = false
-		} else {
-			instance.SecondsBehindPrimary.Valid = true
-			instance.SecondsBehindPrimary.Int64 = int64(fs.ReplicationStatus.ReplicationLagSeconds)
-		}
-		if instance.SecondsBehindPrimary.Valid && instance.SecondsBehindPrimary.Int64 < 0 {
-			log.Warn(fmt.Sprintf("Alias: %+v, instance.SecondsBehindPrimary < 0 [%+v], correcting to 0", tabletAlias, instance.SecondsBehindPrimary.Int64))
-			instance.SecondsBehindPrimary.Int64 = 0
-		}
-		// And until told otherwise:
-		instance.ReplicationLagSeconds = instance.SecondsBehindPrimary
-
-		instance.AllowTLS = fs.ReplicationStatus.SslAllowed
-	}
-
-	if fs.ReplicationConfiguration != nil {
-		instance.ReplicaNetTimeout = fs.ReplicationConfiguration.ReplicaNetTimeout
-		instance.HeartbeatInterval = fs.ReplicationConfiguration.HeartbeatInterval
 	}
 
 	instanceFound = true
@@ -402,6 +299,128 @@ Cleanup:
 	_ = UpdateInstanceLastChecked(tabletAlias, partialSuccess, stalledDisk)
 	latency.Stop("backend")
 	return nil, err
+}
+
+// instanceFromFullStatus builds an Instance from the deterministic fields of a
+// tablet record and its FullStatus. It performs no backend or network access.
+// Any errors returned come from decoding binlog positions and GTID sets; callers
+// propagate them the same way the surrounding read path always has.
+func instanceFromFullStatus(tablet *topodatapb.Tablet, fs *replicationdatapb.FullStatus) (*Instance, []error) {
+	instance := NewInstance()
+	var errs []error
+
+	instance.Hostname = tablet.MysqlHostname
+	instance.Port = int(tablet.MysqlPort)
+	{
+		// We begin with a few operations we can run concurrently, and which do not depend on anything
+		instance.ServerID = uint(fs.ServerId)
+		instance.TabletType = fs.TabletType
+		instance.Version = fs.Version
+		instance.ReadOnly = fs.ReadOnly
+		instance.LogBinEnabled = fs.LogBinEnabled
+		instance.BinlogFormat = fs.BinlogFormat
+		instance.LogReplicationUpdatesEnabled = fs.LogReplicaUpdates
+		instance.VersionComment = fs.VersionComment
+
+		if instance.LogBinEnabled && fs.PrimaryStatus != nil {
+			binlogPos, err := getBinlogCoordinatesFromPositionString(fs.PrimaryStatus.FilePosition)
+			instance.SelfBinlogCoordinates = binlogPos
+			errs = append(errs, err)
+		}
+
+		instance.SemiSyncPrimaryEnabled = fs.SemiSyncPrimaryEnabled
+		instance.SemiSyncReplicaEnabled = fs.SemiSyncReplicaEnabled
+		instance.SemiSyncPrimaryWaitForReplicaCount = uint(fs.SemiSyncWaitForReplicaCount)
+		instance.SemiSyncPrimaryTimeout = fs.SemiSyncPrimaryTimeout
+
+		instance.SemiSyncPrimaryClients = uint(fs.SemiSyncPrimaryClients)
+		instance.SemiSyncPrimaryStatus = fs.SemiSyncPrimaryStatus
+		instance.SemiSyncReplicaStatus = fs.SemiSyncReplicaStatus
+		instance.SemiSyncBlocked = fs.SemiSyncBlocked
+
+		if instance.IsOracleMySQL() || instance.IsPercona() {
+			// Stuff only supported on Oracle / Percona MySQL
+			// ...
+			// @@gtid_mode only available in Oracle / Percona MySQL >= 5.6
+			instance.GTIDMode = fs.GtidMode
+			instance.ServerUUID = fs.ServerUuid
+			if fs.PrimaryStatus != nil {
+				GtidExecutedPos, err := replication.DecodePosition(fs.PrimaryStatus.Position)
+				errs = append(errs, err)
+				if err == nil && GtidExecutedPos.GTIDSet != nil {
+					instance.ExecutedGtidSet = GtidExecutedPos.GTIDSet.String()
+				}
+			}
+			GtidPurgedPos, err := replication.DecodePosition(fs.GtidPurged)
+			errs = append(errs, err)
+			if err == nil && GtidPurgedPos.GTIDSet != nil {
+				instance.GtidPurged = GtidPurgedPos.GTIDSet.String()
+			}
+			instance.BinlogRowImage = fs.BinlogRowImage
+
+			if instance.GTIDMode != "" && instance.GTIDMode != "OFF" {
+				instance.SupportsOracleGTID = true
+			}
+		}
+	}
+
+	instance.ReplicationIOThreadState = ReplicationThreadStateNoThread
+	instance.ReplicationSQLThreadState = ReplicationThreadStateNoThread
+	if fs.ReplicationStatus != nil {
+		instance.HasReplicationCredentials = fs.ReplicationStatus.SourceUser != ""
+
+		instance.ReplicationIOThreadState = ReplicationThreadStateFromReplicationState(replication.ReplicationState(fs.ReplicationStatus.IoState))
+		instance.ReplicationSQLThreadState = ReplicationThreadStateFromReplicationState(replication.ReplicationState(fs.ReplicationStatus.SqlState))
+		instance.ReplicationIOThreadRuning = instance.ReplicationIOThreadState.IsRunning()
+		instance.ReplicationSQLThreadRuning = instance.ReplicationSQLThreadState.IsRunning()
+
+		binlogPos, err := getBinlogCoordinatesFromPositionString(fs.ReplicationStatus.RelayLogSourceBinlogEquivalentPosition)
+		instance.ReadBinlogCoordinates = binlogPos
+		errs = append(errs, err)
+
+		binlogPos, err = getBinlogCoordinatesFromPositionString(fs.ReplicationStatus.FilePosition)
+		instance.ExecBinlogCoordinates = binlogPos
+		errs = append(errs, err)
+		instance.IsDetached, _ = instance.ExecBinlogCoordinates.ExtractDetachedCoordinates()
+
+		binlogPos, err = getBinlogCoordinatesFromPositionString(fs.ReplicationStatus.RelayLogFilePosition)
+		instance.RelaylogCoordinates = binlogPos
+		instance.RelaylogCoordinates.Type = RelayLog
+		errs = append(errs, err)
+
+		instance.LastSQLError = emptyQuotesRegexp.ReplaceAllString(strconv.QuoteToASCII(fs.ReplicationStatus.LastSqlError), "")
+		instance.LastIOError = emptyQuotesRegexp.ReplaceAllString(strconv.QuoteToASCII(fs.ReplicationStatus.LastIoError), "")
+
+		instance.SQLDelay = fs.ReplicationStatus.SqlDelay
+		instance.UsingOracleGTID = fs.ReplicationStatus.AutoPosition
+		instance.SourceUUID = fs.ReplicationStatus.SourceUuid
+		instance.HasReplicationFilters = fs.ReplicationStatus.HasReplicationFilters
+
+		instance.SourceHost = fs.ReplicationStatus.SourceHost
+		instance.SourcePort = int(fs.ReplicationStatus.SourcePort)
+
+		if fs.ReplicationStatus.ReplicationLagUnknown {
+			instance.SecondsBehindPrimary.Valid = false
+		} else {
+			instance.SecondsBehindPrimary.Valid = true
+			instance.SecondsBehindPrimary.Int64 = int64(fs.ReplicationStatus.ReplicationLagSeconds)
+		}
+		if instance.SecondsBehindPrimary.Valid && instance.SecondsBehindPrimary.Int64 < 0 {
+			log.Warn(fmt.Sprintf("Alias: %+v, instance.SecondsBehindPrimary < 0 [%+v], correcting to 0", tablet.Alias, instance.SecondsBehindPrimary.Int64))
+			instance.SecondsBehindPrimary.Int64 = 0
+		}
+		// And until told otherwise:
+		instance.ReplicationLagSeconds = instance.SecondsBehindPrimary
+
+		instance.AllowTLS = fs.ReplicationStatus.SslAllowed
+	}
+
+	if fs.ReplicationConfiguration != nil {
+		instance.ReplicaNetTimeout = fs.ReplicationConfiguration.ReplicaNetTimeout
+		instance.HeartbeatInterval = fs.ReplicationConfiguration.HeartbeatInterval
+	}
+
+	return instance, errs
 }
 
 // detectErrantGTIDs detects the errant GTIDs on an instance.

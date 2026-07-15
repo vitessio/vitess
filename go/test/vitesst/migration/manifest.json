@@ -6471,7 +6471,7 @@
       "dropped_tests": [],
       "honesty": null,
       "lifecycle": "cluster-per-test",
-      "notes": "Exception: white-box in-process vtorc test. inst.ReadTopologyInstanceBufferable runs in the test process and dials the raw topo tablet records (container aliases, container-internal ports), and asserts stored Hostname == localhost. Stored records must stay container-reachable for the cluster to function, so host-side in-process vtorc cannot work against containers. vtorc behavior itself is covered by the migrated vtorc/api, general, and primaryfailure suites. | Effectively a white-box integration test of vtorc/inst.ReadTopologyInstanceBufferable against a real MySQL/replica topology (checks binlog coordinates, GTID sets, semi-sync counters, heartbeat interval, etc.) rather than a black-box VTOrc-process test; cannot be ported as-is to a framework that only exposes VTOrc as an opaque container. | cluster APIs: utils.SetupNewClusterSemiSync (spins a whole new LocalProcessCluster), LocalProcessCluster.Teardown, VtctldClientProcess.TopoGlobalAddress/TopoImplementation/TopoGlobalRoot fields | external deps: in-process invocation of vtorc's own internal packages (servenv.ParseFlags, vtorc/config, vtorc/server.StartVTOrcDiscovery, vtorc/inst.ReadTopologyInstanceBufferable) linked directly into the test binary rather than driving a separate VTOrc process; mutates os.Args to fake CLI flags for servenv | destructive: injects an errant GTID by disabling recovery, stopping replication and setting GTID_NEXT, then restarting replication | difficulty: hard",
+      "notes": "",
       "old_shards": [
         {
           "args": [],
@@ -6488,10 +6488,11 @@
       ],
       "pkg": "vitess.io/vitess/go/test/endtoend/vtorc/readtopologyinstance",
       "runtime_sec": null,
-      "status": "exception",
+      "status": "retire",
       "verified_at_sha": null,
       "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vtorc/readtopologyinstance/",
-      "wave": 3
+      "wave": 3,
+      "retire_reason": "Replaced by a unit test. ReadTopologyInstanceBufferable reads the tablet from topo, calls the vttablet FullStatus RPC, and maps the result into an Instance struct. The mapping was extracted into a pure instanceFromFullStatus(tablet, fs) and is now covered exactly by TestInstanceFromFullStatus in go/vt/vtorc/inst. Errant-GTID detection was already unit-tested (TestDetectErrantGTIDs et al.) and a real cluster producing a correct FullStatus is covered by the migrated tabletmanager e2e (TestStopReplicationAndGetStatus). The in-process host call could not reach container tablets, so the e2e was deleted rather than containerized."
     }
   }
 }
