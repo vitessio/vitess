@@ -17,7 +17,6 @@ limitations under the License.
 package vstreamclient
 
 import (
-	"errors"
 	"fmt"
 	"reflect"
 	"slices"
@@ -28,6 +27,8 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // TableConfig is the configuration for a table, which is used to configure filtering and scanning of the results
@@ -125,11 +126,11 @@ type fieldMapping struct {
 // That'd be a much better user experience, but a decent amount of added complexity.
 func (v *VStreamClient) initTables(tables []TableConfig) error {
 	if len(v.tables) > 0 {
-		return fmt.Errorf("vstreamclient: %d tables already configured", len(v.tables))
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: %d tables already configured", len(v.tables))
 	}
 
 	if len(tables) == 0 {
-		return errors.New("vstreamclient: no tables provided")
+		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: no tables provided")
 	}
 
 	queriesByTableName := make(map[string]string)
@@ -137,38 +138,38 @@ func (v *VStreamClient) initTables(tables []TableConfig) error {
 	for _, table := range tables {
 		// basic validation
 		if table.DataType == nil {
-			return fmt.Errorf("vstreamclient: table %s.%s has no data type", table.Keyspace, table.Table)
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: table %s.%s has no data type", table.Keyspace, table.Table)
 		}
 
 		dataTypeValue := reflect.ValueOf(table.DataType)
 		switch dataTypeValue.Kind() {
 		case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
 			if dataTypeValue.IsNil() {
-				return fmt.Errorf("vstreamclient: table %s.%s has no data type", table.Keyspace, table.Table)
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: table %s.%s has no data type", table.Keyspace, table.Table)
 			}
 		}
 
 		if table.Keyspace == "" {
-			return fmt.Errorf("vstreamclient: table %q has no keyspace", table.Table)
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: table %q has no keyspace", table.Table)
 		}
 
 		if table.Table == "" {
-			return fmt.Errorf("vstreamclient: table in keyspace %q has no table name", table.Keyspace)
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: table in keyspace %q has no table name", table.Keyspace)
 		}
 		if table.FlushFn == nil {
-			return fmt.Errorf("vstreamclient: table %s.%s has no flush function", table.Keyspace, table.Table)
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: table %s.%s has no flush function", table.Keyspace, table.Table)
 		}
 
 		// make sure the keyspace exists in the cluster
 		_, ok := v.shardsByKeyspace[table.Keyspace]
 		if !ok {
-			return fmt.Errorf("vstreamclient: keyspace %s not found in the cluster", table.Keyspace)
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: keyspace %s not found in the cluster", table.Keyspace)
 		}
 
 		k := qualifiedTableName(table.Keyspace, table.Table)
 
 		if _, ok = v.tables[k]; ok {
-			return fmt.Errorf("vstreamclient: duplicate table %s", k)
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: duplicate table %s", k)
 		}
 
 		// set defaults if not provided
@@ -180,14 +181,14 @@ func (v *VStreamClient) initTables(tables []TableConfig) error {
 		// end up sharing whichever rule is matched first. Requiring identical queries makes
 		// that overlap harmless instead of silently applying the wrong filter/projection.
 		if existingQuery, ok := queriesByTableName[table.Table]; ok && existingQuery != table.Query {
-			return fmt.Errorf("vstreamclient: same table name across keyspaces must use identical queries: %s", table.Table)
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: same table name across keyspaces must use identical queries: %s", table.Table)
 		}
 		queriesByTableName[table.Table] = table.Query
 
 		if table.MaxRowsPerFlush == 0 {
 			table.MaxRowsPerFlush = DefaultMaxRowsPerFlush
 		} else if table.MaxRowsPerFlush < 0 {
-			return fmt.Errorf("vstreamclient: max rows per flush must be positive for table %s.%s, got %d", table.Keyspace, table.Table, table.MaxRowsPerFlush)
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: max rows per flush must be positive for table %s.%s, got %d", table.Keyspace, table.Table, table.MaxRowsPerFlush)
 		}
 
 		// regardless whether the user provided a pointer to a struct or a struct, we want to store the
@@ -195,7 +196,7 @@ func (v *VStreamClient) initTables(tables []TableConfig) error {
 		table.underlyingType = reflect.Indirect(reflect.ValueOf(table.DataType)).Type()
 
 		if table.underlyingType.Kind() != reflect.Struct {
-			return fmt.Errorf("vstreamclient: data type for table %s.%s must be a struct", table.Keyspace, table.Table)
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: data type for table %s.%s must be a struct", table.Keyspace, table.Table)
 		}
 
 		// Rows are always instantiated as pointers, so detect scanner support on *T even when the
@@ -229,13 +230,13 @@ func (v *VStreamClient) lookupTable(tableName string) (*TableConfig, error) {
 			continue
 		}
 		if matched != nil {
-			return nil, fmt.Errorf("vstreamclient: ambiguous table name: %s", tableName)
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vstreamclient: ambiguous table name: %s", tableName)
 		}
 		matched = table
 	}
 
 	if matched == nil {
-		return nil, fmt.Errorf("vstreamclient: unexpected table name: %s", tableName)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vstreamclient: unexpected table name: %s", tableName)
 	}
 
 	return matched, nil
@@ -289,7 +290,7 @@ func validateTableConfig(providedTables, dbTables map[string]*TableConfig) error
 	}
 
 	if len(diffs) > 0 {
-		return fmt.Errorf("vstreamclient: provided tables do not match stored tables: %s", strings.Join(diffs, "; "))
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: provided tables do not match stored tables: %s", strings.Join(diffs, "; "))
 	}
 
 	return nil
@@ -337,14 +338,14 @@ func (table *TableConfig) reflectMapFields(fields []*querypb.Field) (map[string]
 	if table.ErrorOnUnknownFields {
 		for _, f := range fields {
 			if _, ok := fieldMap[f.Name]; !ok {
-				return nil, fmt.Errorf("vstreamclient: field %s not found in provided data type", f.Name)
+				return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: field %s not found in provided data type", f.Name)
 			}
 		}
 	}
 
 	// sanity check that we found at least one field
 	if len(fieldMap) == 0 {
-		return nil, fmt.Errorf("vstreamclient: no matching fields found for table %s", table.Table)
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: no matching fields found for table %s", table.Table)
 	}
 
 	return fieldMap, nil
@@ -449,11 +450,11 @@ func (table *TableConfig) validateRowChangeForDefaultDecoding(rc *binlogdatapb.R
 	qualifiedName := qualifiedTableName(table.Keyspace, table.Table)
 
 	if rc.JsonPartialValues != nil {
-		return fmt.Errorf("vstreamclient: partial JSON updates are unsupported for default decoding on table %s; implement VStreamScanner to handle RowChange bitmaps explicitly", qualifiedName)
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: partial JSON updates are unsupported for default decoding on table %s; implement VStreamScanner to handle RowChange bitmaps explicitly", qualifiedName)
 	}
 
 	if rc.DataColumns != nil {
-		return fmt.Errorf("vstreamclient: partial row images are unsupported for default decoding on table %s; implement VStreamScanner to handle RowChange bitmaps explicitly", qualifiedName)
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: partial row images are unsupported for default decoding on table %s; implement VStreamScanner to handle RowChange bitmaps explicitly", qualifiedName)
 	}
 
 	return nil
@@ -462,7 +463,7 @@ func (table *TableConfig) validateRowChangeForDefaultDecoding(rc *binlogdatapb.R
 func (table *TableConfig) handleRowEvent(ev *binlogdatapb.RowEvent, vstreamStats *VStreamStats) error {
 	shard, ok := table.shards[ev.Shard]
 	if !ok {
-		return fmt.Errorf("vstreamclient: unexpected shard: %s", ev.Shard)
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vstreamclient: unexpected shard: %s", ev.Shard)
 	}
 
 	table.currentBatch = slices.Grow(table.currentBatch, len(ev.RowChanges))

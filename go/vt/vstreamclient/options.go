@@ -17,8 +17,6 @@ limitations under the License.
 package vstreamclient
 
 import (
-	"errors"
-	"fmt"
 	"math"
 	"os"
 	"time"
@@ -27,6 +25,8 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var (
@@ -63,7 +63,7 @@ type Option func(v *VStreamClient) error
 func WithMinFlushDuration(d time.Duration) Option {
 	return func(v *VStreamClient) error {
 		if d <= 0 {
-			return fmt.Errorf("vstreamclient: minimum flush duration must be positive, got %s", d.String())
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: minimum flush duration must be positive, got %s", d.String())
 		}
 
 		v.cfg.minFlushDuration = d
@@ -74,11 +74,11 @@ func WithMinFlushDuration(d time.Duration) Option {
 func WithHeartbeatSeconds(seconds int) Option {
 	return func(v *VStreamClient) error {
 		if seconds <= 0 {
-			return fmt.Errorf("vstreamclient: heartbeat seconds must be positive, got %d", seconds)
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: heartbeat seconds must be positive, got %d", seconds)
 		}
 
 		if uint64(seconds) > math.MaxUint32 {
-			return fmt.Errorf("vstreamclient: heartbeat seconds must be %d or less, got %d", uint64(math.MaxUint32), seconds)
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: heartbeat seconds must be %d or less, got %d", uint64(math.MaxUint32), seconds)
 		}
 
 		v.cfg.heartbeatSeconds = seconds
@@ -89,7 +89,7 @@ func WithHeartbeatSeconds(seconds int) Option {
 func WithTimeLocation(loc *time.Location) Option {
 	return func(v *VStreamClient) error {
 		if loc == nil {
-			return errors.New("vstreamclient: time location cannot be nil")
+			return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: time location cannot be nil")
 		}
 
 		v.cfg.timeLocation = loc
@@ -102,7 +102,7 @@ func WithTimeLocation(loc *time.Location) Option {
 func WithTabletType(tabletType topodatapb.TabletType) Option {
 	return func(v *VStreamClient) error {
 		if tabletType == topodatapb.TabletType_UNKNOWN {
-			return errors.New("vstreamclient: tablet type cannot be UNKNOWN")
+			return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: tablet type cannot be UNKNOWN")
 		}
 
 		v.cfg.tabletType = tabletType
@@ -115,10 +115,10 @@ func WithTabletType(tabletType topodatapb.TabletType) Option {
 func WithGracefulShutdownChan(ch <-chan struct{}, wait time.Duration) Option {
 	return func(v *VStreamClient) error {
 		if ch == nil {
-			return errors.New("vstreamclient: graceful shutdown channel is required")
+			return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: graceful shutdown channel is required")
 		}
 		if wait <= 0 {
-			return fmt.Errorf("vstreamclient: graceful shutdown wait must be positive, got %s", wait)
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: graceful shutdown wait must be positive, got %s", wait)
 		}
 
 		v.cfg.gracefulShutdownChan = ch
@@ -132,10 +132,10 @@ func WithGracefulShutdownChan(ch <-chan struct{}, wait time.Duration) Option {
 func WithGracefulShutdownSignals(wait time.Duration, signals ...os.Signal) Option {
 	return func(v *VStreamClient) error {
 		if len(signals) == 0 {
-			return errors.New("vstreamclient: graceful shutdown signals are required")
+			return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: graceful shutdown signals are required")
 		}
 		if wait <= 0 {
-			return fmt.Errorf("vstreamclient: graceful shutdown wait must be positive, got %s", wait)
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: graceful shutdown wait must be positive, got %s", wait)
 		}
 
 		v.cfg.gracefulShutdownSignals = append([]os.Signal(nil), signals...)
@@ -147,17 +147,17 @@ func WithGracefulShutdownSignals(wait time.Duration, signals ...os.Signal) Optio
 func WithStateTable(keyspace, table string) Option {
 	return func(v *VStreamClient) error {
 		if table == "" {
-			return errors.New("vstreamclient: state table name is required")
+			return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: state table name is required")
 		}
 
 		shards, ok := v.shardsByKeyspace[keyspace]
 		if !ok {
-			return fmt.Errorf("vstreamclient: keyspace %s not found", keyspace)
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: keyspace %s not found", keyspace)
 		}
 
 		// this could allow for shard pinning, but we can support that if it becomes useful
 		if len(shards) > 1 {
-			return fmt.Errorf("vstreamclient: keyspace %s is sharded, only unsharded keyspaces are supported", keyspace)
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: keyspace %s is sharded, only unsharded keyspaces are supported", keyspace)
 		}
 
 		v.cfg.vgtidStateKeyspace = sqlescape.EscapeID(keyspace)
@@ -179,10 +179,10 @@ func DefaultFlags() *vtgatepb.VStreamFlags {
 func WithFlags(flags *vtgatepb.VStreamFlags) Option {
 	return func(v *VStreamClient) error {
 		if flags == nil {
-			return errors.New("vstreamclient: flags cannot be nil")
+			return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: flags cannot be nil")
 		}
 		if flags.HeartbeatInterval == 0 {
-			return errors.New("vstreamclient: HeartbeatInterval must be positive")
+			return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: HeartbeatInterval must be positive")
 		}
 		v.cfg.flags = flags
 		return nil
@@ -195,11 +195,11 @@ func WithFlags(flags *vtgatepb.VStreamFlags) Option {
 func WithEventFunc(fn EventFunc, eventTypes ...binlogdatapb.VEventType) Option {
 	return func(v *VStreamClient) error {
 		if len(eventTypes) == 0 {
-			return errors.New("vstreamclient: no event types provided")
+			return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: no event types provided")
 		}
 
 		if fn == nil {
-			return errors.New("vstreamclient: event func cannot be nil")
+			return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: event func cannot be nil")
 		}
 
 		if v.cfg.eventFuncs == nil {
@@ -208,7 +208,7 @@ func WithEventFunc(fn EventFunc, eventTypes ...binlogdatapb.VEventType) Option {
 
 		for _, eventType := range eventTypes {
 			if _, ok := v.cfg.eventFuncs[eventType]; ok {
-				return fmt.Errorf("vstreamclient: event type %s already has a function", eventType.String())
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: event type %s already has a function", eventType.String())
 			}
 
 			v.cfg.eventFuncs[eventType] = fn

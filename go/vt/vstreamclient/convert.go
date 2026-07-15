@@ -29,6 +29,8 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // VStreamScanner allows for custom scan implementations
@@ -72,7 +74,7 @@ func copyRowToStructInLocation(shard shardConfig, row []sqltypes.Value, vPtr ref
 
 		if m.jsonDecode {
 			if row[m.rowIndex].IsNull() {
-				return fmt.Errorf("vstreamclient: error unmarshalling JSON for field %s: NULL into non-pointer field", fieldName)
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: error unmarshalling JSON for field %s: NULL into non-pointer field", fieldName)
 			}
 
 			rowVal, err := row[m.rowIndex].ToBytes()
@@ -101,7 +103,7 @@ func copyRowToStructInLocation(shard shardConfig, row []sqltypes.Value, vPtr ref
 		switch m.kind {
 		case reflect.Bool:
 			if row[m.rowIndex].IsNull() {
-				return fmt.Errorf("vstreamclient: error converting row value to bool for field %s: NULL into non-pointer field", fieldName)
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: error converting row value to bool for field %s: NULL into non-pointer field", fieldName)
 			}
 			rowVal, err := row[m.rowIndex].ToBool()
 			if err != nil {
@@ -111,46 +113,46 @@ func copyRowToStructInLocation(shard shardConfig, row []sqltypes.Value, vPtr ref
 
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 			if row[m.rowIndex].IsNull() {
-				return fmt.Errorf("vstreamclient: error converting row value to int64 for field %s: NULL into non-pointer field", fieldName)
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: error converting row value to int64 for field %s: NULL into non-pointer field", fieldName)
 			}
 			rowVal, err := row[m.rowIndex].ToInt64()
 			if err != nil {
 				return fmt.Errorf("vstreamclient: error converting row value to int64 for field %s: %w", fieldName, err)
 			}
 			if structField.OverflowInt(rowVal) {
-				return fmt.Errorf("vstreamclient: error converting row value to int64 for field %s: %d overflows destination type %s", fieldName, rowVal, structField.Type())
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: error converting row value to int64 for field %s: %d overflows destination type %s", fieldName, rowVal, structField.Type())
 			}
 			structField.SetInt(rowVal)
 
 		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 			if row[m.rowIndex].IsNull() {
-				return fmt.Errorf("vstreamclient: error converting row value to uint64 for field %s: NULL into non-pointer field", fieldName)
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: error converting row value to uint64 for field %s: NULL into non-pointer field", fieldName)
 			}
 			rowVal, err := row[m.rowIndex].ToUint64()
 			if err != nil {
 				return fmt.Errorf("vstreamclient: error converting row value to uint64 for field %s: %w", fieldName, err)
 			}
 			if structField.OverflowUint(rowVal) {
-				return fmt.Errorf("vstreamclient: error converting row value to uint64 for field %s: %d overflows destination type %s", fieldName, rowVal, structField.Type())
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: error converting row value to uint64 for field %s: %d overflows destination type %s", fieldName, rowVal, structField.Type())
 			}
 			structField.SetUint(rowVal)
 
 		case reflect.Float32, reflect.Float64:
 			if row[m.rowIndex].IsNull() {
-				return fmt.Errorf("vstreamclient: error converting row value to float64 for field %s: NULL into non-pointer field", fieldName)
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: error converting row value to float64 for field %s: NULL into non-pointer field", fieldName)
 			}
 			rowVal, err := row[m.rowIndex].ToFloat64()
 			if err != nil {
 				return fmt.Errorf("vstreamclient: error converting row value to float64 for field %s: %w", fieldName, err)
 			}
 			if structField.OverflowFloat(rowVal) {
-				return fmt.Errorf("vstreamclient: error converting row value to float64 for field %s: %v overflows destination type %s", fieldName, rowVal, structField.Type())
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: error converting row value to float64 for field %s: %v overflows destination type %s", fieldName, rowVal, structField.Type())
 			}
 			structField.SetFloat(rowVal)
 
 		case reflect.String:
 			if row[m.rowIndex].IsNull() {
-				return fmt.Errorf("vstreamclient: error converting row value to string for field %s: NULL into non-pointer field", fieldName)
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: error converting row value to string for field %s: NULL into non-pointer field", fieldName)
 			}
 			rowVal := row[m.rowIndex].ToString()
 			structField.SetString(rowVal)
@@ -159,7 +161,7 @@ func copyRowToStructInLocation(shard shardConfig, row []sqltypes.Value, vPtr ref
 			switch m.structType {
 			case timeType:
 				if row[m.rowIndex].IsNull() {
-					return fmt.Errorf("vstreamclient: error converting row value to time.Time for field %s: NULL into non-pointer field", fieldName)
+					return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: error converting row value to time.Time for field %s: NULL into non-pointer field", fieldName)
 				}
 				rowVal, err := row[m.rowIndex].ToTime(loc)
 				if err != nil {
@@ -168,15 +170,15 @@ func copyRowToStructInLocation(shard shardConfig, row []sqltypes.Value, vPtr ref
 				structField.Set(reflect.ValueOf(rowVal))
 
 			default:
-				return fmt.Errorf("vstreamclient: unsupported struct field type for field %s: %s", fieldName, m.structType.String())
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: unsupported struct field type for field %s: %s", fieldName, m.structType.String())
 			}
 
 		case reflect.Slice:
 			if !isByteSliceType(m.structType) {
-				return fmt.Errorf("vstreamclient: unsupported field type: %s", m.kind.String())
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: unsupported field type: %s", m.kind.String())
 			}
 			if row[m.rowIndex].IsNull() {
-				return fmt.Errorf("vstreamclient: error converting row value to bytes for field %s: NULL into non-pointer field", fieldName)
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: error converting row value to bytes for field %s: NULL into non-pointer field", fieldName)
 			}
 			rowVal, err := row[m.rowIndex].ToBytes()
 			if err != nil {
@@ -195,7 +197,7 @@ func copyRowToStructInLocation(shard shardConfig, row []sqltypes.Value, vPtr ref
 			reflect.Interface,
 			reflect.Map,
 			reflect.UnsafePointer:
-			return fmt.Errorf("vstreamclient: unsupported field type: %s", m.kind.String())
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: unsupported field type: %s", m.kind.String())
 		}
 	}
 
