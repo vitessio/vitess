@@ -24,19 +24,19 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/network"
 	"github.com/testcontainers/testcontainers-go/wait"
+	"google.golang.org/grpc"
 
+	"vitess.io/vitess/go/vt/grpcclient"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
-
-	// Imported for its side effect of registering the grpc vtgateconn dialer,
-	// so DialVTGate works from any test package.
-	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
 )
 
 type (
@@ -78,6 +78,26 @@ func (g *VTGate) DialVTGate(ctx context.Context) (*vtgateconn.VTGateConn, error)
 		return nil, err
 	}
 	return vtgateconn.DialProtocol(ctx, "grpc", addr)
+}
+
+// dialerSeq hands out a unique protocol name for each credentialed dialer, so
+// concurrent DialVTGateAs calls with different credentials never share a
+// registry entry.
+var dialerSeq atomic.Uint64
+
+// DialVTGateAs returns a vtgateconn connected to this vtgate over gRPC,
+// authenticating as the given static-auth user. An empty username and password
+// dials without credentials, so the vtgate rejects the unauthenticated client.
+func (g *VTGate) DialVTGateAs(ctx context.Context, username, password string) (*vtgateconn.VTGateConn, error) {
+	addr, err := g.GRPCAddr(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	creds := grpc.WithPerRPCCredentials(&grpcclient.StaticAuthClientCreds{Username: username, Password: password})
+	protocol := fmt.Sprintf("grpc-auth-%d", dialerSeq.Add(1))
+	vtgateconn.RegisterDialer(protocol, grpcvtgateconn.Dial(creds))
+	return vtgateconn.DialProtocol(ctx, protocol, addr)
 }
 
 // ReadVSchema fetches and decodes the vtgate's /debug/vschema.

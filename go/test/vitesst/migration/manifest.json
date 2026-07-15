@@ -1929,6 +1929,46 @@
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/tabletmanager/",
    "wave": 5
   },
+  "vitess.io/vitess/go/test/endtoend/tabletmanager/disk_health_monitor": {
+   "blockers": [
+    "The stalled-disk monitor is exercised by pointing vttablet's --disk-write-dir at a signal-gated go-fuse loopback mount and stalling it with SIGUSR1; a container-per-component tablet has its own mount and PID namespace, so the fault-injecting FUSE mount and vttablet's write path never share a filesystem the test can gate.",
+    "Mounting FUSE inside the tablet container needs CAP_SYS_ADMIN plus /dev/fuse and fusermount3 in the image (a privileged container); the framework grants tablets neither the capability nor the device and exposes no option to add them.",
+    "Bind-propagating a host FUSE mount into the tablet container needs a shared-propagation host bind mount established before start; the framework mounts only Docker volumes (the backup volume), with no host-bind-mount option.",
+    "Linux-only (//go:build linux) and self-skips unless CI or GITHUB_ACTIONS is set, so it cannot be exercised on a Darwin developer host at all."
+   ],
+   "capabilities": [
+    "bootstrap",
+    "vtctldclient-exec",
+    "extra-args",
+    "tablet-metrics",
+    "tablet-process-control",
+    "fuse-disk-fault-injection"
+   ],
+   "ci_shard": null,
+   "dropped_tests": [],
+   "honesty": null,
+   "lifecycle": "shared-cluster",
+   "notes": "Exception: needs host-level disk fault injection the container-per-component model cannot provide. TestMain builds a go-fuse loopback helper (fuse_helper), mounts it on a host path, points vttablet --disk-write-dir at that mount, and stalls it with SIGUSR1 / clears it with SIGHUP by signaling the helper PID; the disk health monitor's blocked probe write flips the tablet to NOT_SERVING and back to SERVING. In the container model vttablet runs in its own mount and PID namespace, so reproducing this needs either a privileged tablet container (CAP_SYS_ADMIN + /dev/fuse + fusermount3) mounting FUSE in-container, or a shared-propagation host bind mount of a host FUSE mount, neither of which the framework offers. Linux-only and CI-gated (skips unless CI/GITHUB_ACTIONS). | cluster APIs: cluster.NewCluster, LocalProcessCluster.StartTopo, LocalProcessCluster.StartUnshardedKeyspace, LocalProcessCluster.Teardown, VttabletProcess.WaitForTabletStatusesForTimeout, VtctldClientProcess.ExecuteCommandWithOutput (GetFullStatus) | external deps: go-fuse loopback fuse_helper subprocess, FUSE mount (CAP_SYS_ADMIN + /dev/fuse), fusermount/fusermount3, SIGUSR1/SIGHUP signal protocol to the helper | destructive: stalls the tablet's --disk-write-dir filesystem to drive it NOT_SERVING, then clears the stall to recover | difficulty: hard",
+   "old_shards": [
+    {
+     "args": [],
+     "entry": "tabletmanager_disk_health_monitor",
+     "needs": [],
+     "shard": "tabletmanager_disk_health_monitor",
+     "tags": []
+    }
+   ],
+   "old_test_funcs": [
+    "TestMain",
+    "TestDiskHealthMonitor_StallAndRecover"
+   ],
+   "pkg": "vitess.io/vitess/go/test/endtoend/tabletmanager/disk_health_monitor",
+   "runtime_sec": null,
+   "status": "exception",
+   "verified_at_sha": null,
+   "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/tabletmanager/disk_health_monitor/",
+   "wave": null
+  },
   "vitess.io/vitess/go/test/endtoend/tabletmanager/primary": {
    "blockers": [],
    "capabilities": [

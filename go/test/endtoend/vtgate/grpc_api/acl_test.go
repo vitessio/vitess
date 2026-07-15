@@ -22,7 +22,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/callerid"
 )
 
@@ -30,7 +29,7 @@ import (
 func TestEffectiveCallerIDWithAccess(t *testing.T) {
 	ctx := t.Context()
 
-	vtgateConn, err := cluster.DialVTGate(ctx, t.Name(), vtgateGrpcAddress, "some_other_user", "test_password")
+	vtgateConn, err := clusterInstance.VTGate().DialVTGateAs(ctx, "some_other_user", "test_password")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
@@ -45,7 +44,7 @@ func TestEffectiveCallerIDWithAccess(t *testing.T) {
 func TestEffectiveCallerIDWithNoAccess(t *testing.T) {
 	ctx := t.Context()
 
-	vtgateConn, err := cluster.DialVTGate(ctx, t.Name(), vtgateGrpcAddress, "another_unrelated_user", "test_password")
+	vtgateConn, err := clusterInstance.VTGate().DialVTGateAs(ctx, "another_unrelated_user", "test_password")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
@@ -62,7 +61,7 @@ func TestEffectiveCallerIDWithNoAccess(t *testing.T) {
 func TestAuthenticatedUserWithAccess(t *testing.T) {
 	ctx := t.Context()
 
-	vtgateConn, err := cluster.DialVTGate(ctx, t.Name(), vtgateGrpcAddress, "user_with_access", "test_password")
+	vtgateConn, err := clusterInstance.VTGate().DialVTGateAs(ctx, "user_with_access", "test_password")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
@@ -76,7 +75,7 @@ func TestAuthenticatedUserWithAccess(t *testing.T) {
 func TestAuthenticatedUserNoAccess(t *testing.T) {
 	ctx := t.Context()
 
-	vtgateConn, err := cluster.DialVTGate(ctx, t.Name(), vtgateGrpcAddress, "user_no_access", "test_password")
+	vtgateConn, err := clusterInstance.VTGate().DialVTGateAs(ctx, "user_no_access", "test_password")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
@@ -92,7 +91,7 @@ func TestAuthenticatedUserNoAccess(t *testing.T) {
 func TestUnauthenticatedUser(t *testing.T) {
 	ctx := t.Context()
 
-	vtgateConn, err := cluster.DialVTGate(ctx, t.Name(), vtgateGrpcAddress, "", "")
+	vtgateConn, err := clusterInstance.VTGate().DialVTGateAs(ctx, "", "")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 

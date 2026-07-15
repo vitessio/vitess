@@ -25,7 +25,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/test/endtoend/cluster"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
@@ -36,7 +35,7 @@ import (
 func TestTransactionsWithGRPCAPI(t *testing.T) {
 	ctx := t.Context()
 
-	vtgateConn, err := cluster.DialVTGate(ctx, t.Name(), vtgateGrpcAddress, "user_with_access", "test_password")
+	vtgateConn, err := clusterInstance.VTGate().DialVTGateAs(ctx, "user_with_access", "test_password")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
