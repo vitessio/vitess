@@ -145,8 +145,7 @@ func (v *VStreamClient) Run(ctx context.Context) error {
 	go v.listenForGracefulShutdown(ctx)
 
 	// initialize the streamer
-	var err error
-	v.reader, err = v.cfg.conn.VStream(ctx, v.cfg.tabletType, v.latestVgtid, v.cfg.filter, v.cfg.flags)
+	reader, err := v.cfg.conn.VStream(ctx, v.cfg.tabletType, v.latestVgtid, v.cfg.filter, v.cfg.flags)
 	if err != nil {
 		return fmt.Errorf("vstreamclient: failed to create vstream: %w", err)
 	}
@@ -166,7 +165,7 @@ func (v *VStreamClient) Run(ctx context.Context) error {
 		// events come in batches, depending on how busy the keyspace is. This is where the network communication
 		// happens, so it's the most likely place for errors to occur.
 		var events []*binlogdatapb.VEvent
-		events, err = v.reader.Recv()
+		events, err = reader.Recv()
 		switch {
 		case err == nil: // no error, continue processing below
 
