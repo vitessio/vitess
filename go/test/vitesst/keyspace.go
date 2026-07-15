@@ -17,8 +17,10 @@ limitations under the License.
 package vitesst
 
 import (
+	"context"
 	"slices"
 	"sync"
+	"time"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -46,6 +48,11 @@ type (
 		// replicas is the number of replica tablets per shard, excluding the
 		// primary and any rdonly tablets.
 		replicas int
+
+		// replicasPerCell, when set, places replicas[i] replica tablets in the
+		// i-th cell instead of spreading replicas round-robin. Its length must
+		// not exceed the number of cells. replicas is kept as the sum.
+		replicasPerCell []int
 
 		// rdonly is the number of rdonly tablets per shard.
 		rdonly int
@@ -113,6 +120,7 @@ type (
 		// Keyspace is the keyspace this shard belongs to.
 		Keyspace *Keyspace
 
+		cluster  *Cluster
 		mu       sync.Mutex
 		primary  *Tablet
 		replicas []*Tablet
@@ -167,6 +175,23 @@ func (kb *keyspaceBuilder) WithShardNames(names ...string) *keyspaceBuilder {
 // the primary. WithReplicas(1) gives each shard a primary and one replica.
 func (kb *keyspaceBuilder) WithReplicas(n int) *keyspaceBuilder {
 	kb.config.replicas = n
+	return kb
+}
+
+// WithReplicasPerCell places counts[i] replica tablets in the i-th cell,
+// instead of spreading a flat replica count round-robin across cells. Use it
+// with WithCells for asymmetric placement, e.g. WithReplicasPerCell(3, 1) for
+// three replicas in the first cell and one in the second. The number of counts
+// must not exceed the number of cells. The total replica count is their sum.
+func (kb *keyspaceBuilder) WithReplicasPerCell(counts ...int) *keyspaceBuilder {
+	kb.config.replicasPerCell = counts
+
+	total := 0
+	for _, n := range counts {
+		total += n
+	}
+	kb.config.replicas = total
+
 	return kb
 }
 
@@ -264,6 +289,25 @@ func (kc *keyspaceConfig) tabletsPerShard() int {
 	return 1 + kc.replicas + kc.rdonly
 }
 
+// cellForTablet returns the cell for the i-th tablet of a shard under
+// replicasPerCell placement: the primary (index 0) and any rdonly tablets go to
+// the first cell, and replica index i-1 lands in the cell whose cumulative
+// replicasPerCell count first covers it. Callers guarantee replicasPerCell is
+// set and no longer than cells.
+func (kc *keyspaceConfig) cellForTablet(i int, cells []string) string {
+	if i >= 1 && i <= kc.replicas {
+		r := i - 1
+		for ci, count := range kc.replicasPerCell {
+			if r < count {
+				return cells[ci]
+			}
+			r -= count
+		}
+	}
+
+	return cells[0]
+}
+
 // Shards returns the keyspace's shards in range order.
 func (k *Keyspace) Shards() []*Shard {
 	k.mu.Lock()
@@ -339,4 +383,49 @@ func (s *Shard) Tablets() []*Tablet {
 	tablets = append(tablets, s.replicas...)
 	tablets = append(tablets, s.rdonly...)
 	return tablets
+}
+
+// CurrentPrimary reads the shard's topology record and returns the tablet the
+// topology currently names as primary, or nil if the shard has no primary.
+// Unlike Primary, it reflects the live topology after reparents.
+func (s *Shard) CurrentPrimary(ctx context.Context) (*Tablet, error) {
+	record, err := s.cluster.Vtctld().Shard(ctx, s.Keyspace.Name, s.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	alias := record.GetShard().GetPrimaryAlias()
+	if alias.GetUid() == 0 {
+		return nil, nil
+	}
+
+	for _, t := range s.Tablets() {
+		if t.Cell == alias.GetCell() && t.UID == int(alias.GetUid()) {
+			return t, nil
+		}
+	}
+
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "shard %s/%s primary %s-%d is not a tracked tablet", s.Keyspace.Name, s.Name, alias.GetCell(), alias.GetUid())
+}
+
+// WaitForPrimary polls the shard's topology record until it names a primary,
+// then returns that tablet.
+func (s *Shard) WaitForPrimary(ctx context.Context, timeout time.Duration) (*Tablet, error) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	var lastErr error
+	for {
+		primary, err := s.CurrentPrimary(ctx)
+		lastErr = err
+		if err == nil && primary != nil {
+			return primary, nil
+		}
+
+		select {
+		case <-ctx.Done():
+			return nil, vterrors.Wrapf(errFirst(lastErr, ctx.Err()), "shard %s/%s did not get a primary within %s", s.Keyspace.Name, s.Name, timeout)
+		case <-time.After(healthyShardPollInterval):
+		}
+	}
 }

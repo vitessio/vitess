@@ -18,7 +18,6 @@ package vitesst
 
 import (
 	"context"
-	"encoding/json"
 	"time"
 
 	"vitess.io/vitess/go/vt/vterrors"
@@ -35,9 +34,9 @@ func (c *Cluster) WaitForHealthyShard(ctx context.Context, keyspace, shard strin
 
 	var lastErr error
 	for {
-		output, err := c.Vtctld().getShard(ctx, keyspace, shard)
+		record, err := c.Vtctld().Shard(ctx, keyspace, shard)
 		lastErr = err
-		if err == nil && shardHasPrimary(output) {
+		if err == nil && record.GetShard().GetPrimaryAlias().GetUid() != 0 {
 			return nil
 		}
 
@@ -47,21 +46,4 @@ func (c *Cluster) WaitForHealthyShard(ctx context.Context, keyspace, shard strin
 		case <-time.After(healthyShardPollInterval):
 		}
 	}
-}
-
-// shardHasPrimary parses a GetShard JSON response and reports whether the
-// shard record names a primary tablet.
-func shardHasPrimary(getShardJSON string) bool {
-	var record struct {
-		Shard struct {
-			PrimaryAlias struct {
-				Cell string `json:"cell"`
-				UID  uint32 `json:"uid"`
-			} `json:"primary_alias"`
-		} `json:"shard"`
-	}
-	if err := json.Unmarshal([]byte(getShardJSON), &record); err != nil {
-		return false
-	}
-	return record.Shard.PrimaryAlias.Cell != "" && record.Shard.PrimaryAlias.UID > 0
 }

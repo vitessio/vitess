@@ -57,7 +57,10 @@ limitations under the License.
 //
 //	func TestMain(m *testing.M) {
 //	    exitCode := func() int {
-//	        ctx := context.Background()
+//	        // Start and cleanup honor the context deadline, so bound cluster
+//	        // bring-up rather than letting a stuck image pull hang the run.
+//	        ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+//	        defer cancel()
 //	        c, err := vitesst.NewCluster(
 //	            vitesst.WithKeyspace("ks").WithSchema(schemaSQL),
 //	        )

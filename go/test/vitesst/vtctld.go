@@ -29,6 +29,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -121,13 +122,35 @@ func (v *Vtctld) applyVSchema(ctx context.Context, keyspace, vschema string) err
 
 // initializeShard elects the initial primary for a shard.
 func (v *Vtctld) initializeShard(ctx context.Context, keyspace, shard, primaryAlias string) error {
-	return v.ExecuteCommand(
-		ctx,
-		"PlannedReparentShard",
-		keyspace+"/"+shard,
-		"--wait-replicas-timeout", "31s",
-		"--new-primary", primaryAlias,
-	)
+	_, err := v.PlannedReparentShard(ctx, keyspace, shard, primaryAlias, "--wait-replicas-timeout", "31s")
+	return err
+}
+
+// PlannedReparentShard promotes newPrimaryAlias to primary of the shard and
+// returns the command's output. Extra vtctldclient flags may be passed through.
+func (v *Vtctld) PlannedReparentShard(ctx context.Context, keyspace, shard, newPrimaryAlias string, extraArgs ...string) (string, error) {
+	args := append([]string{"PlannedReparentShard", keyspace + "/" + shard, "--new-primary", newPrimaryAlias}, extraArgs...)
+	return v.ExecuteCommandWithOutput(ctx, args...)
+}
+
+// PlannedReparentShardAvoid runs a PlannedReparentShard that promotes any
+// eligible replica other than avoidPrimaryAlias, returning the command output.
+func (v *Vtctld) PlannedReparentShardAvoid(ctx context.Context, keyspace, shard, avoidPrimaryAlias string, extraArgs ...string) (string, error) {
+	args := append([]string{"PlannedReparentShard", keyspace + "/" + shard, "--avoid-primary", avoidPrimaryAlias}, extraArgs...)
+	return v.ExecuteCommandWithOutput(ctx, args...)
+}
+
+// EmergencyReparentShard runs an EmergencyReparentShard and returns the command
+// output. When newPrimaryAlias is empty, vtctld chooses the most advanced
+// replica itself.
+func (v *Vtctld) EmergencyReparentShard(ctx context.Context, keyspace, shard, newPrimaryAlias string, extraArgs ...string) (string, error) {
+	args := []string{"EmergencyReparentShard", keyspace + "/" + shard}
+	if newPrimaryAlias != "" {
+		args = append(args, "--new-primary", newPrimaryAlias)
+	}
+	args = append(args, extraArgs...)
+
+	return v.ExecuteCommandWithOutput(ctx, args...)
 }
 
 // getTablet fetches a tablet's topology record.
@@ -144,9 +167,18 @@ func (v *Vtctld) getTablet(ctx context.Context, alias string) (*topodatapb.Table
 	return tablet, nil
 }
 
-// getShard fetches a shard's topology record as raw JSON.
-func (v *Vtctld) getShard(ctx context.Context, keyspace, shard string) (string, error) {
-	return v.ExecuteCommandWithOutput(ctx, "GetShard", keyspace+"/"+shard)
+// Shard fetches a shard's topology record.
+func (v *Vtctld) Shard(ctx context.Context, keyspace, shard string) (*vtctldatapb.Shard, error) {
+	output, err := v.ExecuteCommandWithOutput(ctx, "GetShard", keyspace+"/"+shard)
+	if err != nil {
+		return nil, err
+	}
+
+	record := &vtctldatapb.Shard{}
+	if err := protojson.Unmarshal([]byte(output), record); err != nil {
+		return nil, vterrors.Wrapf(err, "parsing GetShard %s/%s output %q", keyspace, shard, output)
+	}
+	return record, nil
 }
 
 // startVtctld starts the vtctld container.
