@@ -84,6 +84,7 @@ func ElectNewPrimary(
 	var (
 		mu                   sync.Mutex
 		mysqlVersions        []mysqlctl.ServerVersion
+		mysqlFlavors         []mysqlctl.MySQLFlavor
 		errorGroup, groupCtx = errgroup.WithContext(ctx)
 	)
 
@@ -140,15 +141,20 @@ func ElectNewPrimary(
 					tabletPositions = append(tabletPositions, pos)
 
 					v := unknownVersion
+					f := mysqlctl.FlavorUnknown
 					if serverVersion != "" {
-						_, parsed, parseErr := mysqlctl.ParseVersionString(serverVersion)
+						flavor, parsed, parseErr := mysqlctl.ParseVersionString(serverVersion)
 						if parseErr == nil {
 							v = parsed
+							f = flavor
 						} else {
 							logger.Warningf("failed to parse MySQL version %q for tablet %v: %v", serverVersion, topoproto.TabletAliasString(tb.Alias), parseErr)
 						}
+					} else {
+						logger.Warningf("could not determine MySQL version for tablet %v; it will not be preferred by version-aware election", topoproto.TabletAliasString(tb.Alias))
 					}
 					mysqlVersions = append(mysqlVersions, v)
+					mysqlFlavors = append(mysqlFlavors, f)
 				}
 			} else {
 				fmt.Fprintf(&reasonsToInvalidate, "\n%v has %v replication lag which is more than the tolerable amount", topoproto.TabletAliasString(tablet.Alias), replLag)
@@ -183,6 +189,14 @@ func ElectNewPrimary(
 			}
 			innodbBufferPool = append(innodbBufferPool, v)
 		}
+	}
+
+	// Disable version-aware ordering when candidates span multiple flavor
+	// families (e.g. MariaDB alongside MySQL/Percona), where version comparison
+	// is meaningless. Falls through to the position/promotion ordering.
+	if usableMySQLVersions(mysqlVersions, mysqlFlavors) == nil {
+		logger.Warningf("reparent candidates span multiple MySQL flavor families; skipping version-aware election")
+		mysqlVersions = nil
 	}
 
 	// sort preferred tablets for finding the best primary — PRS prefers version over position
@@ -386,9 +400,10 @@ func findCandidate(
 		return possibleCandidates[0]
 	}
 
-	// Find the candidate with the lowest MySQL release (major.minor) in this tier.
-	// Patch differences within the same release are ignored.
-	// Among same-release candidates, prefer the intermediate source to avoid catch-up.
+	// Find the candidate with the lowest MySQL version in this tier, comparing by
+	// major.minor (and by patch within the pre-8.0.34 MySQL 8.0 series; see
+	// ServerVersion.CompareForReplication). Among candidates that compare equal,
+	// prefer the intermediate source to avoid catch-up.
 	sourceAlias := topoproto.TabletAliasString(intermediateSource.Alias)
 	sourceVersion, ok := versionMap[sourceAlias]
 	if !ok {
@@ -410,7 +425,8 @@ func findCandidate(
 			continue
 		}
 
-		if v.ReleaseAtLeast(bestVersion) {
+		// Keep the lower version; CompareForReplication returns < 0 when v is lower.
+		if v.CompareForReplication(bestVersion) >= 0 {
 			continue
 		}
 		best = candidate
@@ -418,9 +434,9 @@ func findCandidate(
 	}
 
 	// The first loop finds the lowest-version candidate without bias. Now that we know
-	// the best version, check if the intermediate source is on the same release — if so,
-	// prefer it because it already holds the most-advanced position and won't need catch-up.
-	if sourceVersion.IsSameRelease(bestVersion) {
+	// the best version, check if the intermediate source is equivalent for replication —
+	// if so, prefer it because it already holds the most-advanced position and won't need catch-up.
+	if sourceVersion.CompareForReplication(bestVersion) == 0 {
 		for _, candidate := range possibleCandidates {
 			if topoproto.TabletAliasEqual(intermediateSource.Alias, candidate.Alias) {
 				return candidate

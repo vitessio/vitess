@@ -30,6 +30,46 @@ import (
 
 var unknownVersion = mysqlctl.ServerVersion{Major: math.MaxInt, Minor: math.MaxInt, Patch: math.MaxInt}
 
+// usableMySQLVersions returns mysqlVersions unchanged when it is safe to use them
+// as an election tiebreaker, or nil to disable version-aware ordering entirely.
+//
+// Version ordering is only meaningful when every candidate belongs to the same
+// replication-compatibility family. MySQL and Percona share a version lineage
+// and are comparable, so a mix of the two is fine; MariaDB has its own lineage
+// (10.x/11.x), so comparing it against MySQL/Percona is nonsensical (10 > 8 does
+// not mean MariaDB is "newer" in any compatibility sense). When candidates span
+// more than one family we fall back to the pre-version ordering. Candidates
+// whose flavor could not be determined (FlavorUnknown) do not by themselves
+// disable ordering — they are handled by the unknownVersion sentinel, which
+// sorts them last while still comparing the known candidates against each other.
+//
+// mysqlVersions and flavors are parallel slices; a nil/empty mysqlVersions is
+// returned unchanged (version ordering already disabled).
+func usableMySQLVersions(mysqlVersions []mysqlctl.ServerVersion, flavors []mysqlctl.MySQLFlavor) []mysqlctl.ServerVersion {
+	if len(mysqlVersions) == 0 {
+		return mysqlVersions
+	}
+
+	var knownFamily mysqlctl.FlavorFamily
+	for _, f := range flavors {
+		family := f.ReplicationFamily()
+		if family == mysqlctl.FlavorFamilyUnknown {
+			continue
+		}
+		if knownFamily == "" {
+			knownFamily = family
+			continue
+		}
+		if family != knownFamily {
+			// Candidates span multiple flavor families: version comparison is
+			// meaningless, so disable version-aware ordering and fall back to
+			// position/promotion ordering.
+			return nil
+		}
+	}
+	return mysqlVersions
+}
+
 // SortMode controls the priority order used when sorting reparent candidates.
 type SortMode int
 
@@ -168,24 +208,17 @@ func (rs *reparentSorter) lessPRS(i, j int) bool {
 	return rs.compareAlias(i, j)
 }
 
-// compareVersion returns -1 if i has a lower release, +1 if j does, 0 if same.
-// Only major.minor is compared; patch differences are ignored.
+// compareVersion returns -1 if i has a lower version, +1 if j does, 0 if they
+// are equivalent for replication. Comparison is by major.minor, with the patch
+// component significant only within the pre-8.0.34 MySQL 8.0 series (see
+// ServerVersion.CompareForReplication).
 func (rs *reparentSorter) compareVersion(i, j int) int {
 	if len(rs.mysqlVersions) == 0 {
 		return 0
 	}
 	iVersion := rs.mysqlVersions[i]
 	jVersion := rs.mysqlVersions[j]
-	if iVersion.IsSameRelease(jVersion) {
-		return 0
-	}
-	if !iVersion.ReleaseAtLeast(jVersion) {
-		return -1
-	}
-	if !jVersion.ReleaseAtLeast(iVersion) {
-		return 1
-	}
-	return 0
+	return iVersion.CompareForReplication(jVersion)
 }
 
 func (rs *reparentSorter) compareBufferPool(i, j int) int {

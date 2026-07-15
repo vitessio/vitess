@@ -241,6 +241,9 @@ func TestReparentSorter_MySQLVersion(t *testing.T) {
 
 	mysql80 := mysqlctl.ServerVersion{Major: 8, Minor: 0, Patch: 35}
 	mysql84 := mysqlctl.ServerVersion{Major: 8, Minor: 4, Patch: 0}
+	// A pre-8.0.34 patch and a later 8.0 patch: within the 8.0 series before the
+	// bugfix-only cutoff, the patch is significant (see CompareForReplication).
+	mysql8020 := mysqlctl.ServerVersion{Major: 8, Minor: 0, Patch: 20}
 
 	durability, err := policy.GetDurabilityPolicy(policy.DurabilityNone)
 	require.NoError(t, err)
@@ -326,6 +329,21 @@ func TestReparentSorter_MySQLVersion(t *testing.T) {
 			mode:          SortForPRS,
 			sortedTablets: []*topodatapb.Tablet{tabletA, tabletRdonly},
 		},
+		{
+			name:          "ERS: lower 8.0 patch preferred below the bugfix-only cutoff when positions are equal",
+			tablets:       []*topodatapb.Tablet{tabletA, tabletB},
+			positions:     []*RelayLogPositions{posAdvanced, posAdvanced},
+			mysqlVersions: []mysqlctl.ServerVersion{mysql80, mysql8020},
+			sortedTablets: []*topodatapb.Tablet{tabletB, tabletA},
+		},
+		{
+			name:          "PRS: lower 8.0 patch preferred below the bugfix-only cutoff even when slightly behind",
+			tablets:       []*topodatapb.Tablet{tabletA, tabletB},
+			positions:     []*RelayLogPositions{posAdvanced, posBehind},
+			mysqlVersions: []mysqlctl.ServerVersion{mysql80, mysql8020},
+			mode:          SortForPRS,
+			sortedTablets: []*topodatapb.Tablet{tabletB, tabletA},
+		},
 	}
 
 	for _, tc := range testcases {
@@ -333,6 +351,130 @@ func TestReparentSorter_MySQLVersion(t *testing.T) {
 			err := sortTabletsForReparent(tc.tablets, tc.positions, nil, tc.mysqlVersions, durability, tc.mode)
 			require.NoError(t, err)
 			require.Equal(t, tc.sortedTablets, tc.tablets)
+		})
+	}
+}
+
+// TestReparentSorter_ExecutedTiebreak pins the sorter's behavior when two
+// candidates have equal Combined (relay-log) positions but different Executed
+// (applied) positions: the one that has applied more sorts first. This is the
+// tie-break RelayLogPositions.AtLeast implements, exercised at the election
+// level. It must hold independently of the version tiebreaker (no versions
+// supplied here), so a change to AtLeast or the sorter is caught even if the
+// version-aware tests change.
+func TestReparentSorter_ExecutedTiebreak(t *testing.T) {
+	sid := replication.SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+
+	tabletBehind := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+		Type:  topodatapb.TabletType_REPLICA,
+	}
+	tabletCaughtUp := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+		Type:  topodatapb.TabletType_REPLICA,
+	}
+
+	// Both relay logs hold GTIDs 1-10 (equal Combined). tabletCaughtUp has applied
+	// all of them; tabletBehind has applied only 1-5.
+	combined := replication.Position{GTIDSet: replication.Mysql56GTIDSet{}}
+	combined.GTIDSet = combined.GTIDSet.AddGTID(replication.Mysql56GTID{Server: sid, Sequence: 5})
+	combined.GTIDSet = combined.GTIDSet.AddGTID(replication.Mysql56GTID{Server: sid, Sequence: 10})
+	executedBehind := replication.Position{GTIDSet: replication.Mysql56GTIDSet{}}
+	executedBehind.GTIDSet = executedBehind.GTIDSet.AddGTID(replication.Mysql56GTID{Server: sid, Sequence: 5})
+
+	posCaughtUp := &RelayLogPositions{Combined: combined, Executed: combined}
+	posBehind := &RelayLogPositions{Combined: combined, Executed: executedBehind}
+
+	durability, err := policy.GetDurabilityPolicy(policy.DurabilityNone)
+	require.NoError(t, err)
+
+	for _, mode := range []SortMode{SortForERS, SortForPRS} {
+		t.Run(map[SortMode]string{SortForERS: "ERS", SortForPRS: "PRS"}[mode], func(t *testing.T) {
+			// Input order deliberately puts the behind tablet first to prove the sort
+			// reorders on the Executed tiebreak rather than preserving input order.
+			tablets := []*topodatapb.Tablet{tabletBehind, tabletCaughtUp}
+			positions := []*RelayLogPositions{posBehind, posCaughtUp}
+
+			err := sortTabletsForReparent(tablets, positions, nil, nil, durability, mode)
+			require.NoError(t, err)
+			require.Equal(t, []*topodatapb.Tablet{tabletCaughtUp, tabletBehind}, tablets,
+				"candidate that applied more relay log should sort first")
+		})
+	}
+}
+
+// TestUsableMySQLVersions verifies the guard that disables version-aware
+// election when candidates span multiple flavor families (MariaDB vs
+// MySQL/Percona), allows a MySQL+Percona mix (same family), and confirms that an
+// unknown flavor among otherwise-uniform candidates does not disable it.
+func TestUsableMySQLVersions(t *testing.T) {
+	v80 := mysqlctl.ServerVersion{Major: 8, Minor: 0, Patch: 35}
+	v84 := mysqlctl.ServerVersion{Major: 8, Minor: 4, Patch: 0}
+
+	tests := []struct {
+		name     string
+		versions []mysqlctl.ServerVersion
+		flavors  []mysqlctl.MySQLFlavor
+		wantNil  bool
+	}{
+		{
+			name:     "empty versions stays empty",
+			versions: nil,
+			flavors:  nil,
+			wantNil:  true,
+		},
+		{
+			name:     "single flavor is usable",
+			versions: []mysqlctl.ServerVersion{v80, v84},
+			flavors:  []mysqlctl.MySQLFlavor{mysqlctl.FlavorMySQL, mysqlctl.FlavorMySQL},
+			wantNil:  false,
+		},
+		{
+			name:     "MySQL and Percona mix is usable (same family)",
+			versions: []mysqlctl.ServerVersion{v80, v84},
+			flavors:  []mysqlctl.MySQLFlavor{mysqlctl.FlavorMySQL, mysqlctl.FlavorPercona},
+			wantNil:  false,
+		},
+		{
+			name:     "MariaDB alongside MySQL disables version ordering",
+			versions: []mysqlctl.ServerVersion{v80, v84},
+			flavors:  []mysqlctl.MySQLFlavor{mysqlctl.FlavorMySQL, mysqlctl.FlavorMariaDB},
+			wantNil:  true,
+		},
+		{
+			name:     "MariaDB alongside Percona disables version ordering",
+			versions: []mysqlctl.ServerVersion{v80, v84},
+			flavors:  []mysqlctl.MySQLFlavor{mysqlctl.FlavorPercona, mysqlctl.FlavorMariaDB},
+			wantNil:  true,
+		},
+		{
+			name:     "all MariaDB is usable (single family)",
+			versions: []mysqlctl.ServerVersion{{Major: 10, Minor: 6}, {Major: 11, Minor: 4}},
+			flavors:  []mysqlctl.MySQLFlavor{mysqlctl.FlavorMariaDB, mysqlctl.FlavorMariaDB},
+			wantNil:  false,
+		},
+		{
+			name:     "unknown flavor alongside a known flavor is still usable",
+			versions: []mysqlctl.ServerVersion{unknownVersion, v80},
+			flavors:  []mysqlctl.MySQLFlavor{mysqlctl.FlavorUnknown, mysqlctl.FlavorMySQL},
+			wantNil:  false,
+		},
+		{
+			name:     "all unknown flavors is usable (no conflicting known families)",
+			versions: []mysqlctl.ServerVersion{unknownVersion, unknownVersion},
+			flavors:  []mysqlctl.MySQLFlavor{mysqlctl.FlavorUnknown, mysqlctl.FlavorUnknown},
+			wantNil:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := usableMySQLVersions(tt.versions, tt.flavors)
+			if tt.wantNil {
+				require.Nil(t, got)
+			} else {
+				require.NotNil(t, got)
+			}
 		})
 	}
 }

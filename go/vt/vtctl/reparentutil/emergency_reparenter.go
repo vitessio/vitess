@@ -298,7 +298,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	// Here we also check for split brain scenarios and check that the selected replica must be more advanced than all the other valid candidates.
 	// We fail in case there is a split brain detected.
 	// The validCandidateTablets list is sorted by the replication positions with ties broken by promotion rules.
-	intermediateSource, validCandidateTablets, err = erp.findMostAdvanced(validCandidates, tabletMap, stoppedReplicationSnapshot.mysqlVersions, opts)
+	intermediateSource, validCandidateTablets, err = erp.findMostAdvanced(validCandidates, tabletMap, stoppedReplicationSnapshot.mysqlVersions, stoppedReplicationSnapshot.mysqlFlavors, opts)
 	if err != nil {
 		return err
 	}
@@ -519,6 +519,16 @@ func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 		waiterCount++
 	}
 
+	// This is all-or-nothing: every waiter must succeed (NumRequiredSuccesses ==
+	// waiterCount, NumAllowedErrors == 0) or the function returns an error and the
+	// caller aborts before any election happens. Note the position reconcile in
+	// the goroutines above is already tied to each tablet's own apply success (it
+	// runs only after that tablet's WaitForRelayLogsToApply returns nil), so a
+	// tablet that did not catch up is never advanced regardless of these settings.
+	// But if this is ever loosened to tolerate partial success, revisit that
+	// reconcile together with the election in findMostAdvanced: a candidate that
+	// errored here must not be treated as caught up, or ERS could elect a
+	// not-most-advanced tablet and lose transactions.
 	errgroup := concurrency.ErrorGroup{
 		NumGoroutines:        waiterCount,
 		NumRequiredSuccesses: waiterCount,
@@ -538,6 +548,7 @@ func (erp *EmergencyReparenter) findMostAdvanced(
 	validCandidates map[string]*RelayLogPositions,
 	tabletMap map[string]*topo.TabletInfo,
 	versionMap map[string]mysqlctl.ServerVersion,
+	flavorMap map[string]mysqlctl.MySQLFlavor,
 	opts EmergencyReparentOptions,
 ) (*topodatapb.Tablet, []*topodatapb.Tablet, error) {
 	erp.logger.Infof("started finding the intermediate source")
@@ -550,15 +561,30 @@ func (erp *EmergencyReparenter) findMostAdvanced(
 		return nil, nil, err
 	}
 
-	// build version slice for sorting
+	// build parallel version and flavor slices for sorting
 	mysqlVersions := make([]mysqlctl.ServerVersion, len(validTablets))
+	mysqlFlavors := make([]mysqlctl.MySQLFlavor, len(validTablets))
 
 	for i, tablet := range validTablets {
-		v, ok := versionMap[topoproto.TabletAliasString(tablet.Alias)]
+		alias := topoproto.TabletAliasString(tablet.Alias)
+		v, ok := versionMap[alias]
 		if !ok {
 			v = unknownVersion
 		}
 		mysqlVersions[i] = v
+		f, ok := flavorMap[alias]
+		if !ok {
+			f = mysqlctl.FlavorUnknown
+		}
+		mysqlFlavors[i] = f
+	}
+
+	// Disable version-aware ordering when candidates span multiple flavor
+	// families (e.g. MariaDB alongside MySQL/Percona), where version comparison
+	// is meaningless. Falls through to the position/promotion ordering.
+	if usableMySQLVersions(mysqlVersions, mysqlFlavors) == nil {
+		erp.logger.Warningf("reparent candidates span multiple MySQL flavor families; skipping version-aware election")
+		mysqlVersions = nil
 	}
 
 	// sort the tablets for finding the best intermediate source in ERS — position first to minimize data loss

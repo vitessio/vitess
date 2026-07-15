@@ -222,17 +222,21 @@ See [#19978](https://github.com/vitessio/vitess/issues/19978) for details.
 
 #### <a id="vtctld-version-aware-reparent"/>MySQL version-aware reparent candidate election</a>
 
-`PlannedReparentShard` (PRS) and `EmergencyReparentShard` (ERS) now consider the MySQL server version (major.minor) when electing a new primary. During rolling MySQL upgrades, this prevents promoting a newer-version tablet that would break replication for replicas still on the older version.
+`PlannedReparentShard` (PRS) and `EmergencyReparentShard` (ERS) now consider the MySQL server version when electing a new primary. During rolling MySQL upgrades, this prevents promoting a newer-version tablet that would break replication for replicas still on the older version.
+
+Versions are compared by major.minor. The patch component is normally ignored (patch releases are bugfix-only and do not affect replication compatibility), with one exception: within the MySQL 8.0 series, feature additions before 8.0.34 (the first bugfix-only 8.0 patch — e.g. binary log transaction compression added in 8.0.20) can make a newer patch incompatible as a source to an older-patch replica. So when both candidates are in the 8.0 series and the lower patch is below 8.0.34, the patch is compared too.
 
 **Sort order:**
-- PRS: promotion rules > MySQL release > replication position > buffer pool > alias
-- ERS: replication position > promotion rules > MySQL release > buffer pool > alias
+- PRS: promotion rules > MySQL version > replication position > buffer pool > alias
+- ERS: replication position > promotion rules > MySQL version > buffer pool > alias
 
 **Behavior change:** PRS during a rolling MySQL upgrade will now prefer lower-version candidates even when they are slightly behind in replication position. The elected tablet will catch up to the old primary's demotion position before completing the reparent, which may increase reparent latency. Operators should ensure `--wait-replicas-timeout` is generous enough to accommodate this catch-up time.
 
 **Cross-cell limitation:** PRS will still promote a higher-version tablet if no lower-version candidate exists in the same cell as the current primary. The cell boundary is enforced before version comparison. Operators who want version preference to override cell locality can use `--allow-cross-cell-promotion`.
 
 Tablets that do not report a version (e.g. running an older Vitess build) are treated as "unknown version" and sorted last, preserving existing behavior.
+
+**Flavor compatibility:** version comparison is only applied when all candidates belong to the same flavor family. MySQL and Percona Server share a version lineage and are compared against each other; MariaDB is a separate lineage, so a shard mixing MariaDB with MySQL/Percona disables version-aware election and falls back to the previous position/promotion ordering (with a warning logged).
 
 See [#20211](https://github.com/vitessio/vitess/pull/20211) for details.
 

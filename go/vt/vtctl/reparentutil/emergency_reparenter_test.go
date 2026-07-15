@@ -3545,7 +3545,7 @@ func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
 			erp := NewEmergencyReparenter(nil, nil, logutil.NewMemoryLogger())
 
 			test.emergencyReparentOps.durability = durability
-			winningTablet, _, err := erp.findMostAdvanced(test.validCandidates, test.tabletMap, test.versionMap, test.emergencyReparentOps)
+			winningTablet, _, err := erp.findMostAdvanced(test.validCandidates, test.tabletMap, test.versionMap, nil, test.emergencyReparentOps)
 			if test.err != "" {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), test.err)
@@ -6051,7 +6051,7 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 			dp, err := policy.GetDurabilityPolicy(policy.DurabilitySemiSync)
 			require.NoError(t, err)
 			ers := EmergencyReparenter{logger: logutil.NewCallbackLogger(func(*logutilpb.Event) {})}
-			winningPrimary, _, err := ers.findMostAdvanced(candidates, tt.tabletMap, nil, EmergencyReparentOptions{durability: dp})
+			winningPrimary, _, err := ers.findMostAdvanced(candidates, tt.tabletMap, nil, nil, EmergencyReparentOptions{durability: dp})
 			require.NoError(t, err)
 			require.True(t, slices.Contains(tt.wantMostAdvancedPossible, winningPrimary.Hostname), winningPrimary.Hostname)
 		})
@@ -6274,7 +6274,7 @@ func TestEmergencyReparenter_findMostAdvanced_versionTiebreakerAfterCatchUp(t *t
 	// Before the relay-log wait, the newer tablet looks more advanced on Executed
 	// and would be chosen as the intermediate source.
 	erpBefore := NewEmergencyReparenter(nil, nil, logutil.NewMemoryLogger())
-	intermediateSource, _, err := erpBefore.findMostAdvanced(validCandidates, tabletMap, versionMap, EmergencyReparentOptions{durability: durability})
+	intermediateSource, _, err := erpBefore.findMostAdvanced(validCandidates, tabletMap, versionMap, nil, EmergencyReparentOptions{durability: durability})
 	require.NoError(t, err)
 	require.True(t, topoproto.TabletAliasEqual(intermediateSource.Alias, &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}))
 
@@ -6294,7 +6294,7 @@ func TestEmergencyReparenter_findMostAdvanced_versionTiebreakerAfterCatchUp(t *t
 	erp := NewEmergencyReparenter(nil, tmc, logutil.NewMemoryLogger())
 	require.NoError(t, erp.waitForAllRelayLogsToApply(t.Context(), validCandidates, tabletMap, statusMap, 30*time.Second))
 
-	intermediateSource, _, err = erp.findMostAdvanced(validCandidates, tabletMap, versionMap, EmergencyReparentOptions{durability: durability})
+	intermediateSource, _, err = erp.findMostAdvanced(validCandidates, tabletMap, versionMap, nil, EmergencyReparentOptions{durability: durability})
 	require.NoError(t, err)
 	require.True(t, topoproto.TabletAliasEqual(intermediateSource.Alias, &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}))
 }
@@ -6340,7 +6340,7 @@ func TestEmergencyReparenter_findMostAdvanced_versionTiebreakerAfterCatchUp_File
 	// Before the wait, the newer tablet is ahead on the (stale) executed position
 	// and would be chosen as the intermediate source.
 	erpBefore := NewEmergencyReparenter(nil, nil, logutil.NewMemoryLogger())
-	intermediateSource, _, err := erpBefore.findMostAdvanced(validCandidates, tabletMap, versionMap, EmergencyReparentOptions{durability: durability})
+	intermediateSource, _, err := erpBefore.findMostAdvanced(validCandidates, tabletMap, versionMap, nil, EmergencyReparentOptions{durability: durability})
 	require.NoError(t, err)
 	require.True(t, topoproto.TabletAliasEqual(intermediateSource.Alias, &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}))
 
@@ -6361,7 +6361,7 @@ func TestEmergencyReparenter_findMostAdvanced_versionTiebreakerAfterCatchUp_File
 	erp := NewEmergencyReparenter(nil, tmc, logutil.NewMemoryLogger())
 	require.NoError(t, erp.waitForAllRelayLogsToApply(t.Context(), validCandidates, tabletMap, statusMap, 30*time.Second))
 
-	intermediateSource, _, err = erp.findMostAdvanced(validCandidates, tabletMap, versionMap, EmergencyReparentOptions{durability: durability})
+	intermediateSource, _, err = erp.findMostAdvanced(validCandidates, tabletMap, versionMap, nil, EmergencyReparentOptions{durability: durability})
 	require.NoError(t, err)
 	require.True(t, topoproto.TabletAliasEqual(intermediateSource.Alias, &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}))
 }
@@ -6412,6 +6412,6 @@ func TestEmergencyReparenter_findMostAdvanced_splitBrainSurvivesReconcile(t *tes
 
 	// After the reconcile, the divergent positions remain divergent, so ERS must
 	// still detect the split brain.
-	_, _, err = erp.findMostAdvanced(validCandidates, tabletMap, nil, EmergencyReparentOptions{durability: durability})
+	_, _, err = erp.findMostAdvanced(validCandidates, tabletMap, nil, nil, EmergencyReparentOptions{durability: durability})
 	require.ErrorContains(t, err, "split brain detected between servers")
 }
