@@ -45,7 +45,7 @@ import (
 // before it is refetched. The server version only changes across a mysqld
 // restart (e.g. an upgrade), so a short TTL is enough to pick up a change while
 // collapsing the many per-RPC lookups down to roughly one query per TTL.
-const mysqlVersionCacheTTL = 30 * time.Second
+const mysqlVersionCacheTTL = 10 * time.Second
 
 // mysqlVersionCache caches the MySQL server version string behind its own lock
 // so lookups never contend with unrelated TabletManager operations.
