@@ -68,7 +68,7 @@ func newStateTestSession(t *testing.T, responses ...stateExecuteResponse) (*vtga
 	t.Helper()
 
 	impl := &stateTestVTGateImpl{responses: responses}
-	conn, err := vtgateconn.DialCustom(context.Background(), func(context.Context, string) (vtgateconn.Impl, error) {
+	conn, err := vtgateconn.DialCustom(t.Context(), func(context.Context, string) (vtgateconn.Impl, error) {
 		return impl, nil
 	}, "")
 	require.NoError(t, err)
@@ -81,7 +81,7 @@ func newStateTestConn(t *testing.T, responses ...stateExecuteResponse) (*vtgatec
 	t.Helper()
 
 	impl := &stateTestVTGateImpl{responses: responses}
-	conn, err := vtgateconn.DialCustom(context.Background(), func(context.Context, string) (vtgateconn.Impl, error) {
+	conn, err := vtgateconn.DialCustom(t.Context(), func(context.Context, string) (vtgateconn.Impl, error) {
 		return impl, nil
 	}, "")
 	require.NoError(t, err)
@@ -143,7 +143,7 @@ func TestGetLatestVGtid_MalformedStoredJSONErrors(t *testing.T) {
 		sqltypes.NewInt64(1),
 	)})
 
-	_, _, _, err := getLatestVGtid(context.Background(), session, "stream", "ks", "state")
+	_, _, _, err := getLatestVGtid(t.Context(), session, "stream", "ks", "state")
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "failed to unmarshal latest_vgtid")
 }
@@ -160,7 +160,7 @@ func TestGetLatestVGtid_MalformedCopyCompletedErrors(t *testing.T) {
 		sqltypes.NewVarBinary("not-a-bool"),
 	)})
 
-	_, _, _, err = getLatestVGtid(context.Background(), session, "stream", "ks", "state")
+	_, _, _, err = getLatestVGtid(t.Context(), session, "stream", "ks", "state")
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "failed to convert copy_completed to bool")
 }
@@ -186,7 +186,7 @@ func TestNew_RestartTableConfigMismatchErrors(t *testing.T) {
 		)},
 	)
 
-	_, err = New(context.Background(), "stream", conn, []TableConfig{{
+	_, err = New(t.Context(), "stream", conn, []TableConfig{{
 		Keyspace:        "ks",
 		Table:           "t",
 		Query:           "select * from t where id >= 10",
@@ -220,7 +220,7 @@ func TestNew_ResumeThenIdleFlushSkipsCheckpointWrite(t *testing.T) {
 		)},
 	)
 
-	v, err := New(context.Background(), "stream", conn, []TableConfig{{
+	v, err := New(t.Context(), "stream", conn, []TableConfig{{
 		Keyspace:        "ks",
 		Table:           "t",
 		Query:           "select * from t",
@@ -234,7 +234,7 @@ func TestNew_ResumeThenIdleFlushSkipsCheckpointWrite(t *testing.T) {
 	// an idle stream after resume has no buffered rows and an unchanged vgtid, so a flush
 	// (e.g. triggered by a heartbeat after minFlushDuration) must not rewrite the checkpoint:
 	// MySQL reports RowsAffected=0 for a no-op update, which updateLatestVGtid treats as an error
-	err = v.flush(context.Background(), false)
+	err = v.flush(t.Context(), false)
 	require.NoError(t, err)
 	assert.Len(t, impl.queries, queriesAfterNew)
 }
@@ -273,7 +273,7 @@ func TestNew_ExplicitStartingVGtidPersistsWithCopyCompleted(t *testing.T) {
 		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/42"}},
 	}
 
-	v, err := New(context.Background(), "stream", conn, []TableConfig{newStateTestTableConfig()},
+	v, err := New(t.Context(), "stream", conn, []TableConfig{newStateTestTableConfig()},
 		WithStateTable("ks", "state"), WithStartingVGtid(explicit))
 	require.NoError(t, err)
 
@@ -310,7 +310,7 @@ func TestNew_ExplicitStartingVGtidOverridesStoredState(t *testing.T) {
 		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/42"}},
 	}
 
-	v, err := New(context.Background(), "stream", conn, []TableConfig{newStateTestTableConfig()},
+	v, err := New(t.Context(), "stream", conn, []TableConfig{newStateTestTableConfig()},
 		WithStateTable("ks", "state"), WithStartingVGtid(explicit))
 	require.NoError(t, err)
 
@@ -336,7 +336,7 @@ func TestNew_RestartsIncompleteCopyFromScratch(t *testing.T) {
 		sqltypes.NewInt64(0),
 	))...)
 
-	v, err := New(context.Background(), "stream", conn, []TableConfig{newStateTestTableConfig()},
+	v, err := New(t.Context(), "stream", conn, []TableConfig{newStateTestTableConfig()},
 		WithStateTable("ks", "state"))
 	require.NoError(t, err)
 
@@ -377,7 +377,7 @@ func TestNew_ClaimsStateOwnershipBeforeReadingState(t *testing.T) {
 		)},
 	)
 
-	v, err := New(context.Background(), "stream", conn, []TableConfig{{
+	v, err := New(t.Context(), "stream", conn, []TableConfig{{
 		Keyspace:        "ks",
 		Table:           "t",
 		Query:           "select * from t",
@@ -399,7 +399,7 @@ func TestNew_ClaimsStateOwnershipBeforeReadingState(t *testing.T) {
 	v.latestVgtid = &binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/2"}},
 	}
-	err = v.flush(context.Background(), false)
+	err = v.flush(t.Context(), false)
 	require.NoError(t, err)
 
 	lastIdx := len(impl.queries) - 1
@@ -410,7 +410,7 @@ func TestNew_ClaimsStateOwnershipBeforeReadingState(t *testing.T) {
 func TestUpdateLatestVGtid_MissingStateRowErrors(t *testing.T) {
 	session, impl := newStateTestSession(t, stateExecuteResponse{result: &sqltypes.Result{RowsAffected: 0}})
 
-	err := updateLatestVGtid(context.Background(), session, "stream", "ks", "state", "token-a", &binlogdatapb.VGtid{}, false)
+	err := updateLatestVGtid(t.Context(), session, "stream", "ks", "state", "token-a", &binlogdatapb.VGtid{}, false)
 	require.ErrorIs(t, err, ErrFenced)
 	require.Len(t, impl.queries, 1)
 	assert.NotContains(t, impl.queries[0], "copy_completed = true")
@@ -435,7 +435,7 @@ func TestHandleEvents_FinalCopyCompletedPersistsCheckpointAndCopyCompletedTogeth
 		tables:      map[string]*TableConfig{},
 	}
 
-	err := v.handleEvents(context.Background(), []*binlogdatapb.VEvent{{Type: binlogdatapb.VEventType_COPY_COMPLETED}})
+	err := v.handleEvents(t.Context(), []*binlogdatapb.VEvent{{Type: binlogdatapb.VEventType_COPY_COMPLETED}})
 	require.NoError(t, err)
 	require.Len(t, impl.queries, 1)
 	assert.True(t, strings.Contains(impl.queries[0], "latest_vgtid = :latest_vgtid") && strings.Contains(impl.queries[0], "copy_completed = true"))
@@ -464,7 +464,7 @@ func TestHandleEvents_HeartbeatCheckpointsLatestVGtidWithoutRows(t *testing.T) {
 		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/2"}},
 	}
 
-	err := v.handleEvents(context.Background(), []*binlogdatapb.VEvent{
+	err := v.handleEvents(t.Context(), []*binlogdatapb.VEvent{
 		{Type: binlogdatapb.VEventType_VGTID, Vgtid: vgtid},
 		{Type: binlogdatapb.VEventType_HEARTBEAT},
 	})
@@ -480,7 +480,7 @@ func TestHandleEvents_HeartbeatCheckpointsLatestVGtidWithoutRows(t *testing.T) {
 func TestUpdateLatestVGtid_CopyCompletedMissingStateRowErrors(t *testing.T) {
 	session, impl := newStateTestSession(t, stateExecuteResponse{result: &sqltypes.Result{RowsAffected: 0}})
 
-	err := updateLatestVGtid(context.Background(), session, "stream", "ks", "state", "token-a", &binlogdatapb.VGtid{}, true)
+	err := updateLatestVGtid(t.Context(), session, "stream", "ks", "state", "token-a", &binlogdatapb.VGtid{}, true)
 	require.ErrorIs(t, err, ErrFenced)
 	require.Len(t, impl.queries, 1)
 	assert.Contains(t, impl.queries[0], "copy_completed = true")

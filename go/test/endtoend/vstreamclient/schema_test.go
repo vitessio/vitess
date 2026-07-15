@@ -83,7 +83,7 @@ func TestVStreamClientSchemaDriftFailsWithUnknownFields(t *testing.T) {
 	te.exec(t, "insert into customer.customer(id, email, strict_extra) values (2502, 'strict-after@domain.com', 'extra')", nil)
 
 	// the run self-terminates on the strict schema mismatch; the deadline is only a generous cap
-	runCtx, cancelRun := context.WithTimeout(context.Background(), 30*time.Second)
+	runCtx, cancelRun := context.WithTimeout(t.Context(), 30*time.Second)
 	err := newClient().Run(runCtx)
 	cancelRun()
 	require.Error(t, err)
@@ -112,7 +112,7 @@ func TestVStreamClientJSONDecodeFailure(t *testing.T) {
 	}})
 
 	// the run self-terminates on the JSON decode failure; the deadline is only a generous cap
-	runCtx, cancelRun := context.WithTimeout(context.Background(), 30*time.Second)
+	runCtx, cancelRun := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancelRun()
 
 	err := vstreamClient.Run(runCtx)
