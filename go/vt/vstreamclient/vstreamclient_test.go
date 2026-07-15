@@ -483,7 +483,7 @@ func TestFlush_ClosesGracefulShutdownWhenAlreadyFlushed(t *testing.T) {
 	select {
 	case <-v.getGracefulShutdownFlushChan():
 	default:
-		t.Fatal("expected graceful shutdown flush channel to be closed")
+		require.FailNow(t, "expected graceful shutdown flush channel to be closed")
 	}
 }
 
@@ -830,7 +830,7 @@ func TestGracefulShutdown_CancelsActiveRunAfterWait(t *testing.T) {
 		select {
 		case <-done:
 		default:
-			t.Fatal("GracefulShutdown did not return after wait elapsed")
+			require.FailNow(t, "GracefulShutdown did not return after wait elapsed")
 		}
 		assert.ErrorIs(t, ctx.Err(), context.Canceled)
 	})
