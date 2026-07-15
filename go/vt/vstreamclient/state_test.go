@@ -239,6 +239,123 @@ func TestNew_ResumeThenIdleFlushSkipsCheckpointWrite(t *testing.T) {
 	assert.Len(t, impl.queries, queriesAfterNew)
 }
 
+func newStateTestTableConfig() TableConfig {
+	return TableConfig{
+		Keyspace:        "ks",
+		Table:           "t",
+		Query:           "select * from t",
+		MaxRowsPerFlush: 1,
+		DataType:        &testRowSmall{},
+		FlushFn:         func(context.Context, []Row, FlushMeta) error { return nil },
+	}
+}
+
+func shardsAndStateTableResponses(stateRow *sqltypes.Result) []stateExecuteResponse {
+	responses := []stateExecuteResponse{
+		{result: &sqltypes.Result{
+			Fields: []*querypb.Field{{Name: "shard", Type: querypb.Type_VARCHAR}},
+			Rows:   [][]sqltypes.Value{{sqltypes.NewVarBinary("ks/0")}},
+		}},
+		{result: &sqltypes.Result{RowsAffected: 1}}, // create state table
+		{result: &sqltypes.Result{RowsAffected: 1}}, // claim ownership
+	}
+
+	if stateRow == nil {
+		stateRow = &sqltypes.Result{}
+	}
+	return append(responses, stateExecuteResponse{result: stateRow})
+}
+
+func TestNew_ExplicitStartingVGtidPersistsWithCopyCompleted(t *testing.T) {
+	conn, impl := newStateTestConn(t, shardsAndStateTableResponses(nil)...)
+
+	explicit := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/42"}},
+	}
+
+	v, err := New(context.Background(), "stream", conn, []TableConfig{newStateTestTableConfig()},
+		WithStateTable("ks", "state"), WithStartingVGtid(explicit))
+	require.NoError(t, err)
+
+	// the caller provided a starting point, so no copy phase should run, now or on restart:
+	// the persisted row must set copy_completed together with the explicit vgtid
+	require.Len(t, impl.queries, 5)
+	assert.Contains(t, impl.queries[4], "insert into `ks`.`state`")
+	assert.Contains(t, impl.queries[4], "values (:name, :latest_vgtid, :table_config, true, :owner_token)")
+	assert.Contains(t, impl.queries[4], "copy_completed = true")
+
+	expectedVGtidJSON, err := protojson.Marshal(explicit)
+	require.NoError(t, err)
+	assert.Equal(t, string(expectedVGtidJSON), string(impl.bindVars[4]["latest_vgtid"].Value))
+
+	assert.Same(t, explicit, v.latestVgtid)
+	assert.Same(t, explicit, v.lastFlushedVgtid)
+}
+
+func TestNew_ExplicitStartingVGtidOverridesStoredState(t *testing.T) {
+	storedVGtidJSON, err := protojson.Marshal(&binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/1"}},
+	})
+	require.NoError(t, err)
+
+	// the stored table config does not match the provided one; an ordinary resume would fail
+	// validation, but an explicit starting vgtid overwrites stored state instead
+	conn, impl := newStateTestConn(t, shardsAndStateTableResponses(stateRowResult(
+		sqltypes.NewVarBinary(string(storedVGtidJSON)),
+		sqltypes.NewVarBinary(`{"ks.t":{"Keyspace":"ks","Table":"t","Query":"select * from t where id < 10"}}`),
+		sqltypes.NewInt64(1),
+	))...)
+
+	explicit := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/42"}},
+	}
+
+	v, err := New(context.Background(), "stream", conn, []TableConfig{newStateTestTableConfig()},
+		WithStateTable("ks", "state"), WithStartingVGtid(explicit))
+	require.NoError(t, err)
+
+	require.Len(t, impl.queries, 5)
+	assert.Contains(t, impl.queries[4], "insert into `ks`.`state`")
+	expectedVGtidJSON, err := protojson.Marshal(explicit)
+	require.NoError(t, err)
+	assert.Equal(t, string(expectedVGtidJSON), string(impl.bindVars[4]["latest_vgtid"].Value))
+	assert.Same(t, explicit, v.latestVgtid)
+}
+
+func TestNew_RestartsIncompleteCopyFromScratch(t *testing.T) {
+	storedVGtidJSON, err := protojson.Marshal(&binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/1"}},
+	})
+	require.NoError(t, err)
+
+	// stored state exists but copy_completed is false, so the copy must restart from the
+	// beginning instead of resuming from the stored vgtid
+	conn, impl := newStateTestConn(t, shardsAndStateTableResponses(stateRowResult(
+		sqltypes.NewVarBinary(string(storedVGtidJSON)),
+		sqltypes.NewVarBinary(`{"ks.t":{"Keyspace":"ks","Table":"t","Query":"select * from t"}}`),
+		sqltypes.NewInt64(0),
+	))...)
+
+	v, err := New(context.Background(), "stream", conn, []TableConfig{newStateTestTableConfig()},
+		WithStateTable("ks", "state"))
+	require.NoError(t, err)
+
+	require.Len(t, impl.queries, 5)
+	assert.Contains(t, impl.queries[4], "insert into `ks`.`state`")
+	assert.NotContains(t, impl.queries[4], "copy_completed")
+
+	freshVGtid := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: ""}},
+	}
+	expectedVGtidJSON, err := protojson.Marshal(freshVGtid)
+	require.NoError(t, err)
+	assert.Equal(t, string(expectedVGtidJSON), string(impl.bindVars[4]["latest_vgtid"].Value))
+
+	require.Len(t, v.latestVgtid.ShardGtids, 1)
+	assert.Empty(t, v.latestVgtid.ShardGtids[0].Gtid)
+	assert.Same(t, v.latestVgtid, v.lastFlushedVgtid)
+}
+
 func TestNew_ClaimsStateOwnershipBeforeReadingState(t *testing.T) {
 	vgtidJSON, err := protojson.Marshal(&binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/1"}},
