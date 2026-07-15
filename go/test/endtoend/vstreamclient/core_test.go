@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/vstreamclient"
 )
@@ -181,7 +182,7 @@ func TestVStreamClientFlushesOnHeartbeat(t *testing.T) {
 	cancelRun()
 	err := <-runErrCh
 	if err != nil && runCtx.Err() == nil {
-		t.Fatalf("failed to run vstreamclient: %v", err)
+		require.NoError(t, err, "failed to run vstreamclient")
 	}
 }
 
@@ -220,7 +221,7 @@ func TestVStreamClientTransactionBoundaries(t *testing.T) {
 	cancelRun()
 	err := <-runErrCh
 	if err != nil && runCtx.Err() == nil {
-		t.Fatalf("failed to run vstreamclient: %v", err)
+		require.NoError(t, err, "failed to run vstreamclient")
 	}
 }
 
@@ -268,7 +269,7 @@ func TestVStreamClientHandlesDDL(t *testing.T) {
 	cancelRun()
 	err := <-runErrCh
 	if err != nil && runCtx.Err() == nil {
-		t.Fatalf("failed to run vstreamclient: %v", err)
+		require.NoError(t, err, "failed to run vstreamclient")
 	}
 }
 

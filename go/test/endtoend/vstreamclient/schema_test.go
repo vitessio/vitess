@@ -279,6 +279,6 @@ func TestVStreamClientRemapsFieldsAfterDDL(t *testing.T) {
 	cancelRun()
 	err := <-runErrCh
 	if err != nil && runCtx.Err() == nil {
-		t.Fatalf("failed to run vstreamclient: %v", err)
+		require.NoError(t, err, "failed to run vstreamclient")
 	}
 }

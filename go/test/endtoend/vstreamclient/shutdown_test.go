@@ -67,7 +67,7 @@ func TestVStreamClientGracefulShutdownChanStopsActiveRun(t *testing.T) {
 
 	err := <-runErrCh
 	if !isExpectedRunStop(err, runCtx) && !errors.Is(err, context.Canceled) {
-		t.Fatalf("failed to run vstreamclient: %v", err)
+		require.NoError(t, err, "failed to run vstreamclient")
 	}
 	cancelRun()
 	err = vstreamClient.Run(context.Background())
@@ -115,7 +115,7 @@ func TestVStreamClientGracefulShutdownChanStopsOnThresholdFlush(t *testing.T) {
 	err := <-runErrCh
 	assert.NotErrorIs(t, runCtx.Err(), context.DeadlineExceeded)
 	if err != nil && !errors.Is(err, context.Canceled) {
-		t.Fatalf("failed to run vstreamclient: %v", err)
+		require.NoError(t, err, "failed to run vstreamclient")
 	}
 }
 
@@ -220,7 +220,7 @@ func TestVStreamClientGracefulShutdownClosesMultiTableClient(t *testing.T) {
 		case tableName := <-rowTableSeen:
 			seen[tableName] = true
 		case <-deadline:
-			t.Fatal("timed out waiting for both prime row event tables")
+			require.FailNow(t, "timed out waiting for both prime row event tables")
 		}
 	}
 
@@ -228,7 +228,7 @@ func TestVStreamClientGracefulShutdownClosesMultiTableClient(t *testing.T) {
 	cancelRun()
 	err := <-runErrCh
 	if !isExpectedRunStop(err, nil) && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("failed to run vstreamclient: %v", err)
+		require.NoError(t, err, "failed to run vstreamclient")
 	}
 
 	err = vstreamClient.Run(context.Background())
@@ -332,7 +332,7 @@ func TestVStreamClientGracefulShutdownReplayMatrix(t *testing.T) {
 
 				err := <-runErrCh
 				if err != nil && !errors.Is(err, context.Canceled) && !isExpectedRunStop(err, runCtx) {
-					t.Fatalf("failed to run vstreamclient: %v", err)
+					require.NoError(t, err, "failed to run vstreamclient")
 				}
 				assert.Equal(t, []*Customer{want}, active)
 
@@ -377,7 +377,7 @@ func TestVStreamClientGracefulShutdownReplayMatrix(t *testing.T) {
 
 				err := <-runErrCh
 				if err != nil && !errors.Is(err, context.Canceled) && !isExpectedRunStop(err, runCtx) {
-					t.Fatalf("failed to run vstreamclient: %v", err)
+					require.NoError(t, err, "failed to run vstreamclient")
 				}
 				assert.Equal(t, []*Customer{want}, active)
 
