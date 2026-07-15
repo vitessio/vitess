@@ -7,7 +7,7 @@ As Vitess developers, our goal is to have great end to end test coverage. In the
 
 These tests are meant to test end-to-end behaviors of the Vitess ecosystem, and complement the unit tests. For instance, we test each RPC interaction independently (client to vtgate, vtgate to vttablet, vttablet to MySQL, see previous sections). But is also good to have an end-to-end test that validates everything works together.
 
-These tests almost always launch a topology service, a few mysqld instances, a few vttablets, a vtctld process, a few vtgates, ... They use the real production processes, and real replication. This setup is mandatory for properly testing re-sharding, cluster operations, ... They all however run on the same machine, so they might be limited by the environment.
+These tests almost always launch a topology service, a few mysqld instances, a few vttablets, a vtctld process, a few vtgates, ... They use the real production binaries, packaged as Docker containers, and real replication. This setup is mandatory for properly testing re-sharding, cluster operations, ... Each component runs in its own container, so a test is isolated from whatever else is on the host.
 
 
 ## Strategy 
@@ -19,26 +19,16 @@ The main purpose of grouping them together is to make sure we have single place 
 ### Setup
 All the tests should be launching a real cluster just like the production setup and execute the tests on that setup followed by a teardown of all the services.
 
-The cluster launch functions are provided under go/test/endtoend/cluster. This is still work in progress so feel free to add new function as required or update the existing ones.   
+The cluster launch functions are provided under go/test/vitesst. A test builds a cluster with `vitesst.NewCluster`, passing keyspace, shard, and component options, then calls `Start`, which brings up the containers and returns a cleanup function.
 
-In general the cluster is build in following order
-- Define Keyspace
-- Define Shards
-- Start topology service [default etcd]
-- Start vtctld client
-- Start required mysqld instances
-- Start corresponding vttablets (atleast 1 primary and 1 replica)
-- Start Vtgate 
+In general the cluster is built in the following order
+- Define the keyspace and its shards, with the schema
+- Start the topology service [default etcd]
+- Start the required mysqld instances
+- Start the corresponding vttablets (at least one primary per shard)
+- Start vtctld and vtgate
 
-A good example to refer will be  go/test/endtoend/clustertest
+A good example to refer to is any `main_test.go` under go/test/endtoend; go/test/vitesst holds the framework itself.
 
-### Pre-Requisite 
-Make sure you have vitess binary available in bin folder. If not, then you can run `./bootstrap.sh` follow by `make build` & `source build.env`.
-
-To make it easier to re-run test please add following to you bash profile. 
- 
-```
-export VTROOT=/<vitess path>/vitess
-export VTDATAROOT=${VTROOT}/vtdataroot
-export PATH=${VTROOT}/bin:${PATH}
-```
+### Pre-Requisite
+Make sure Docker is running. The framework builds the component images on demand from the current tree, so no local vitess binaries are required.
