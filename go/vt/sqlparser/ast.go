@@ -1854,6 +1854,12 @@ func (node *AlterTable) AffectedTables() TableNames {
 			affectedTables = append(affectedTables, altOption.Table)
 		}
 	}
+	// EXCHANGE PARTITION swaps data with a second table, which the loop
+	// above misses because that table is named in PartitionSpec rather
+	// than AlterOptions. So we add it explicitly.
+	if node.PartitionSpec != nil && node.PartitionSpec.Action == ExchangeAction {
+		affectedTables = append(affectedTables, node.PartitionSpec.TableName)
+	}
 	return affectedTables
 }
 

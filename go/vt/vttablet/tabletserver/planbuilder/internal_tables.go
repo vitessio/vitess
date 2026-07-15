@@ -214,23 +214,6 @@ func rejectInternalTableDDL(stmt sqlparser.DDLStatement, tables map[string]*sche
 		}
 	}
 
-	alterTable, ok := stmt.(*sqlparser.AlterTable)
-	if !ok {
-		return nil
-	}
-
-	// AffectedTables does not include the WITH TABLE target, but EXCHANGE
-	// PARTITION swaps data with that table.
-	partitionSpec := alterTable.PartitionSpec
-	if partitionSpec == nil || partitionSpec.Action != sqlparser.ExchangeAction {
-		return nil
-	}
-
-	name := partitionSpec.TableName.Name.String()
-	if isInternalOperationTableName(name) {
-		return internalTableModificationError(name)
-	}
-
 	return nil
 }
 
