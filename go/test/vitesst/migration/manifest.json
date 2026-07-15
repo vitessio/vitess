@@ -3474,10 +3474,11 @@
     "TestVStreamHeartbeats",
     "TestVStreamPushdownFilters"
    ],
+   "open_item": "TestVreplicationCopyThrottling fails deterministically in the container. It holds a transaction open to keep the source primary's InnoDB history list above a threshold and asserts the copy phase blocks until the history is released. The source's read view releases about a second into the copy phase, so the history drops below the threshold before the copy-phase throttle samples it, and the copy proceeds. The failure is not caused by the migration's connection-helper change, which was proven by reproducing it with a direct source connection. Whether it also fails upstream under MySQL 8.4 is unconfirmed. It is a real CI shard, vreplication_copy_throttling, not a manual test, so its legacy CI entry is retained until this is resolved.",
    "pkg": "vitess.io/vitess/go/test/endtoend/vreplication",
    "runtime_sec": null,
-   "status": "pending",
-   "verified_at_sha": null,
+   "status": "verified-except-copythrottling",
+   "verified_at_sha": "07427125d2",
    "verify_cmd": "go test -count=1 -timeout 30m -v ./go/test/endtoend/vreplication/",
    "wave": 6
   },
