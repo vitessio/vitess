@@ -19,23 +19,21 @@ package planbuilder
 import (
 	"strings"
 
-	"vitess.io/vitess/go/vt/schema"
+	vtschema "vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 )
 
-type (
-	// dmlTable is a table in a DML statement's FROM clause, keyed by the name
-	// that SET column qualifiers and DELETE targets use to reference it.
-	dmlTable struct {
-		key  string
-		name string
-	}
-)
+// dmlTable is a table in a DML statement's FROM clause, keyed by the name
+// that SET column qualifiers and DELETE targets use to reference it.
+type dmlTable struct {
+	key  string
+	name string
+}
 
-// internalTableModificationError returns the planner error for a statement
-// that targets a Vitess internal table.
+// internalTableModificationError returns the plan error for a statement that
+// targets a Vitess internal table.
 func internalTableModificationError(tableName string) error {
 	return vterrors.VT09033(tableName)
 }
@@ -43,31 +41,31 @@ func internalTableModificationError(tableName string) error {
 // isInternalOperationTableName reports whether tableName is reserved for
 // internal Vitess operations.
 func isInternalOperationTableName(tableName string) bool {
-	return schema.IsInternalOperationTableName(strings.ToLower(tableName))
+	return vtschema.IsInternalOperationTableName(strings.ToLower(tableName))
 }
 
-// rejectInternalTableDML returns an error when the supplied DML statement
-// would modify a Vitess internal operation table. Reading an internal table,
-// for example in a join, is allowed. semTable carries schema knowledge when
-// the caller has run semantic analysis; nil means unqualified SET columns in
-// a multi-table UPDATE cannot be attributed and are passed through unchecked.
-func rejectInternalTableDML(stmt sqlparser.Statement, semTable *semantics.SemTable) error {
-	switch stmt := stmt.(type) {
+// rejectInternalTableWrites returns an error when statement modifies a Vitess
+// internal operation table. Reading an internal table, for example in a join,
+// is allowed. A nil parser leaves PREPARE literals inside stored procedure
+// bodies unchecked.
+func rejectInternalTableWrites(statement sqlparser.Statement, tables map[string]*schema.Table, parser *sqlparser.Parser) error {
+	switch stmt := statement.(type) {
 	case *sqlparser.Insert:
 		return rejectInternalDMLTables(dmlTables(stmt.Table))
 	case *sqlparser.Update:
-		return rejectInternalTableUpdate(stmt, semTable)
+		return rejectInternalTableUpdate(stmt, tables)
 	case *sqlparser.Delete:
 		return rejectInternalTableDelete(stmt)
-	default:
-		return nil
+	case sqlparser.DDLStatement:
+		return rejectInternalTableDDL(stmt, tables, parser)
 	}
+	return nil
 }
 
 // rejectInternalTableUpdate returns an error when an UPDATE assigns a column
 // of a Vitess internal operation table. An UPDATE modifies only the tables
 // named in its SET clause.
-func rejectInternalTableUpdate(stmt *sqlparser.Update, semTable *semantics.SemTable) error {
+func rejectInternalTableUpdate(stmt *sqlparser.Update, schemaTables map[string]*schema.Table) error {
 	tables := dmlTables(stmt.TableExprs...)
 
 	// A single-table UPDATE modifies its one table no matter how the SET
@@ -80,10 +78,9 @@ func rejectInternalTableUpdate(stmt *sqlparser.Update, semTable *semantics.SemTa
 		qualifier := strings.ToLower(updateExpr.Name.Qualifier.Name.String())
 		if qualifier == "" {
 			// An unqualified column belongs to whichever table defines it.
-			// When schema tracking has made the other tables authoritative,
-			// the column can be attributed; otherwise it stays unresolved
-			// and is passed through unchecked.
-			name, ok := updateColumnTable(semTable, updateExpr.Name)
+			// The tablet schema attributes it when it resolves to exactly
+			// one table, otherwise it is passed through unchecked.
+			name, ok := updateColumnTable(tables, schemaTables, updateExpr.Name)
 			if ok && isInternalOperationTableName(name) {
 				return internalTableModificationError(name)
 			}
@@ -101,20 +98,13 @@ func rejectInternalTableUpdate(stmt *sqlparser.Update, semTable *semantics.SemTa
 }
 
 // updateColumnTable resolves the table an unqualified SET column belongs to.
-// Schema knowledge is consulted directly rather than the analyzer's column
-// bindings because the single-unsharded-keyspace shortcut skips binding. A
-// table can own the column unless schema tracking has made its column list
-// authoritative and the column is absent. The resolution is conclusive only
-// when exactly one table can own the column.
-func updateColumnTable(semTable *semantics.SemTable, col *sqlparser.ColName) (string, bool) {
-	if semTable == nil {
-		return "", false
-	}
-
+// The resolution is conclusive only when exactly one FROM table can own the
+// column.
+func updateColumnTable(tables []dmlTable, schemaTables map[string]*schema.Table, col *sqlparser.ColName) (string, bool) {
 	owner := ""
 	found := false
-	for _, table := range semTable.Tables {
-		if tableExcludesColumn(table, col) {
+	for _, table := range tables {
+		if schemaTable := schemaTables[table.name]; schemaTable != nil && schemaTable.FindColumn(col.Name) == -1 {
 			continue
 		}
 
@@ -122,33 +112,10 @@ func updateColumnTable(semTable *semantics.SemTable, col *sqlparser.ColName) (st
 			return "", false
 		}
 		found = true
-
-		// A table without a vschema entry, such as a derived table, can own
-		// the column but cannot be an internal table, so it resolves to an
-		// empty name rather than to its alias.
-		if vtbl := table.GetVindexTable(); vtbl != nil {
-			owner = vtbl.Name.String()
-		}
+		owner = table.name
 	}
 
 	return owner, found
-}
-
-// tableExcludesColumn reports whether table is known not to have col. Only a
-// table with an authoritative column list can rule the column out.
-func tableExcludesColumn(table semantics.TableInfo, col *sqlparser.ColName) bool {
-	vtbl := table.GetVindexTable()
-	if vtbl == nil || !vtbl.ColumnListAuthoritative {
-		return false
-	}
-
-	for _, column := range vtbl.Columns {
-		if col.Name.Equal(column.Name) {
-			return false
-		}
-	}
-
-	return true
 }
 
 // rejectInternalTableDelete returns an error when a DELETE removes rows from
@@ -219,52 +186,92 @@ func dmlTables(tableExprs ...sqlparser.TableExpr) []dmlTable {
 // rejectInternalDMLTables returns an error when any of tables is a Vitess
 // internal operation table.
 func rejectInternalDMLTables(tables []dmlTable) error {
-	name, found := firstInternalDMLTable(tables)
-	if !found {
-		return nil
-	}
-
-	return internalTableModificationError(name)
-}
-
-// firstInternalDMLTable returns the first Vitess internal operation table in
-// tables.
-func firstInternalDMLTable(tables []dmlTable) (string, bool) {
 	for _, table := range tables {
 		if isInternalOperationTableName(table.name) {
-			return table.name, true
-		}
-	}
-
-	return "", false
-}
-
-// rejectInternalTableDDL returns an error when the supplied DDL statement
-// targets a Vitess internal operation table.
-func rejectInternalTableDDL(stmt sqlparser.DDLStatement) error {
-	switch stmt.(type) {
-	// Procedure names live outside the table namespace, so an
-	// internal-shaped procedure name does not target an internal table.
-	case *sqlparser.CreateProcedure, *sqlparser.DropProcedure:
-		return nil
-	}
-
-	for _, tableName := range stmt.AffectedTables() {
-		if err := rejectInternalTableName(tableName); err != nil {
-			return err
+			return internalTableModificationError(table.name)
 		}
 	}
 
 	return nil
 }
 
-// rejectInternalTableName returns an error for a Vitess internal operation
-// table name.
-func rejectInternalTableName(tableName sqlparser.TableName) error {
-	name := tableName.Name.String()
-	if !isInternalOperationTableName(name) {
+// rejectInternalTableDDL returns an error when the supplied DDL statement
+// targets a Vitess internal operation table.
+func rejectInternalTableDDL(stmt sqlparser.DDLStatement, tables map[string]*schema.Table, parser *sqlparser.Parser) error {
+	// Procedure names live outside the table namespace, so an
+	// internal-shaped procedure name does not target an internal table.
+	switch stmt := stmt.(type) {
+	case *sqlparser.CreateProcedure:
+		return rejectInternalTableCreateProcedure(stmt, tables, parser)
+	case *sqlparser.DropProcedure:
 		return nil
 	}
 
-	return internalTableModificationError(name)
+	for _, tableName := range stmt.AffectedTables() {
+		name := tableName.Name.String()
+		if isInternalOperationTableName(name) {
+			return internalTableModificationError(name)
+		}
+	}
+
+	alterTable, ok := stmt.(*sqlparser.AlterTable)
+	if !ok {
+		return nil
+	}
+
+	// AffectedTables does not include the WITH TABLE target, but EXCHANGE
+	// PARTITION swaps data with that table.
+	partitionSpec := alterTable.PartitionSpec
+	if partitionSpec == nil || partitionSpec.Action != sqlparser.ExchangeAction {
+		return nil
+	}
+
+	name := partitionSpec.TableName.Name.String()
+	if isInternalOperationTableName(name) {
+		return internalTableModificationError(name)
+	}
+
+	return nil
+}
+
+// rejectInternalTableCreateProcedure returns an error when a stored procedure
+// body contains a statement that would modify a Vitess internal operation
+// table.
+func rejectInternalTableCreateProcedure(stmt *sqlparser.CreateProcedure, tables map[string]*schema.Table, parser *sqlparser.Parser) error {
+	return sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		switch node := node.(type) {
+		case *sqlparser.Insert:
+			return false, rejectInternalTableWrites(node, tables, parser)
+		case *sqlparser.Update:
+			return false, rejectInternalTableWrites(node, tables, parser)
+		case *sqlparser.Delete:
+			return false, rejectInternalTableWrites(node, tables, parser)
+		case sqlparser.DDLStatement:
+			return false, rejectInternalTableWrites(node, tables, parser)
+		case *sqlparser.PrepareStmt:
+			return false, rejectInternalTablePrepare(node, tables, parser)
+		}
+		return true, nil
+	}, stmt.Body)
+}
+
+// rejectInternalTablePrepare returns an error when a PREPARE statement inside
+// a stored procedure would modify a Vitess internal operation table. Dynamic
+// and unparseable statements are passed through unchecked.
+func rejectInternalTablePrepare(stmt *sqlparser.PrepareStmt, tables map[string]*schema.Table, parser *sqlparser.Parser) error {
+	if parser == nil {
+		return nil
+	}
+
+	literal, ok := stmt.Statement.(*sqlparser.Literal)
+	if !ok {
+		return nil
+	}
+
+	preparedStmt, err := parser.Parse(literal.Val)
+	if err != nil {
+		return nil
+	}
+
+	return rejectInternalTableWrites(preparedStmt, tables, parser)
 }

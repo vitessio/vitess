@@ -54,10 +54,6 @@ func gen4DeleteStmtPlanner(
 		return nil, err
 	}
 
-	if err := rejectInternalTableDML(deleteStmt, nil); err != nil {
-		return nil, err
-	}
-
 	// Remove all the foreign keys that don't require any handling.
 	err = ctx.SemTable.RemoveNonRequiredForeignKeys(ctx.VerifyAllFKs, vindexes.DeleteAction)
 	if err != nil {

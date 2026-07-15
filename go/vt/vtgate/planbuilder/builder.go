@@ -169,10 +169,6 @@ func getPlannerFromQueryHint(stmt sqlparser.Statement) (plancontext.PlannerVersi
 
 func buildRoutePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, f func(statement sqlparser.Statement, reservedVars *sqlparser.ReservedVars, schema plancontext.VSchema) (*planResult, error)) (*planResult, error) {
 	if vschema.ShardDestination() != nil {
-		if err := rejectInternalTableDML(stmt, nil); err != nil {
-			return nil, err
-		}
-
 		return buildPlanForBypass(stmt, reservedVars, vschema)
 	}
 	return f(stmt, reservedVars, vschema)
