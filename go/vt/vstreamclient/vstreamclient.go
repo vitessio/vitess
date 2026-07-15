@@ -44,10 +44,8 @@ type VStreamClient struct {
 	// this session is used to obtain the shards for the keyspace, and to manage the state table
 	session *vtgateconn.VTGateSession
 
-	// the reader is the vstream reader, which is used to read the binlog events
-	reader vtgateconn.VStreamReader
-
-	// may not be necessary...
+	// shardsByKeyspace caches the cluster's serving shards per keyspace, used to validate
+	// configured keyspaces and to bootstrap the initial vgtid
 	shardsByKeyspace map[string][]string
 
 	// keep per table state and config, which is used to generate the vgtid filter.
@@ -199,10 +197,6 @@ func New(ctx context.Context, name string, conn *vtgateconn.VTGateConn, tables [
 
 	// validate required options and set defaults where possible
 
-	if len(v.tables) == 0 {
-		return nil, errors.New("vstreamclient: no tables configured")
-	}
-
 	// convert the tables into filter + rules
 
 	rules := make([]*binlogdatapb.Rule, 0, len(v.tables))
@@ -222,9 +216,6 @@ func New(ctx context.Context, name string, conn *vtgateconn.VTGateConn, tables [
 		v.cfg.flags = DefaultFlags()
 	}
 
-	if v.cfg.flags.HeartbeatInterval == 0 {
-		return nil, errors.New("vstreamclient: HeartbeatInterval must be positive")
-	}
 	if v.cfg.heartbeatSeconds > 0 {
 		v.cfg.flags.HeartbeatInterval = uint32(v.cfg.heartbeatSeconds)
 	}
