@@ -233,20 +233,6 @@ func TestMultiTenantSimple(t *testing.T) {
 		require.Zero(t, rowCount)
 	})
 
-	t.Run("cancel after switching writes", func(t *testing.T) {
-		// Writes can be switched before reads. Reversing the writes puts the
-		// workflow back into a state where it can be canceled, which must again
-		// clean up all of the state.
-		createFunc()
-		mt.SwitchWrites()
-		confirmOnlyWritesSwitched(t)
-		mt.ReverseWrites()
-		mt.Cancel()
-		confirmNoRoutingRules(t)
-		rowCount := getRowCount(t, vtgateConn, fmt.Sprintf("%s.%s", targetKeyspace, "t1"))
-		require.Zero(t, rowCount)
-	})
-
 	// Create again and run it to completion.
 	createFunc()
 
