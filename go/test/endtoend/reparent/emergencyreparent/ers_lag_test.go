@@ -177,6 +177,12 @@ func TestERSFiltersReplicaBehindOnRelayLogReceipt(t *testing.T) {
 	// ...so this write lands in tablets[1]'s relay log without being applied...
 	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[2], tablets[3]})
 
+	// ...and wait until tablets[1] has actually received it: semi-sync only needs one
+	// acker, so the write confirming on tablets[2] and tablets[3] says nothing about
+	// tablets[1]'s relay log...
+	primaryPosition := strings.ReplaceAll(utils.RunSQL(t.Context(), t, `select @@global.gtid_executed`, tablets[0]).Rows[0][0].ToString(), "\n", "")
+	waitForReceivedPosition(t, tablets[1], primaryPosition)
+
 	// ...then stop receiving too. tablets[1] is now fully stopped with a
 	// received-but-unapplied backlog.
 	utils.RunSQL(t.Context(), t, `STOP REPLICA IO_THREAD`, tablets[1])

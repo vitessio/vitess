@@ -19,6 +19,7 @@ package reparentutil
 import (
 	"context"
 	"errors"
+	"maps"
 	"slices"
 	"strings"
 	"testing"
@@ -1652,6 +1653,522 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 			shard:            "-",
 			cells:            []string{"zone1"},
 			errShouldContain: "no valid candidates for emergency reparent",
+		},
+		{
+			// zone1-0000000101 had replication fully stopped before the reparent, so ERS
+			// repoints it without starting it and it can't send semi-sync ACKs until an
+			// operator starts it. It must not count as an acker: with it as
+			// zone1-0000000100's only acker, 100 still wins the intermediate election
+			// (lowest uid among equals) but must not be the final primary; the promotion
+			// must fall to 101 itself, whose acker (100) is actually running
+			name:       "acker stopped before the reparent doesn't count for the election",
+			durability: policy.DurabilitySemiSync,
+			emergencyReparentOps: EmergencyReparentOptions{
+				WaitReplicasTimeout: time.Millisecond * 50,
+			},
+			tmc: &testutil.TabletManagerClient{
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000101": nil,
+				},
+				PromoteReplicaResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000101": {Result: "ok"},
+				},
+				// 101 catches up to the intermediate source 100 before its promotion
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000100": {Position: getRelayLogPosition("1-21")},
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000100": nil,
+					"zone1-0000000101": nil,
+					"zone1-0000000102": nil,
+				},
+				StopReplicationAndGetStatusResults: map[string]struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Error      error
+				}{
+					"zone1-0000000100": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-21"),
+							},
+						},
+					},
+					// fully stopped before the reparent, relay log already drained
+					"zone1-0000000101": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateStopped), SqlState: int32(replication.ReplicationStateStopped)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-21"),
+							},
+						},
+					},
+					"zone1-0000000102": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-21"),
+							},
+						},
+					},
+				},
+				// the rdonly is slow (cancelled by the race); the stopped 101 is drained
+				// so its wait finishes instantly
+				WaitForPositionDelays: map[string]time.Duration{
+					"zone1-0000000102": time.Minute,
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000100": {
+						getRelayLogPosition("1-21"): nil,
+					},
+					"zone1-0000000101": {
+						getRelayLogPosition("1-21"): nil,
+					},
+					"zone1-0000000102": {
+						getRelayLogPosition("1-21"): nil,
+					},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						PrimaryAlias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Hostname: "running, but its only acker is stopped",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Hostname: "stopped before the reparent, wins with 100 as its acker",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  102,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_RDONLY,
+					Hostname: "rdonly, cannot ack",
+				},
+			},
+			shouldErr: false,
+			keyspace:  "testkeyspace",
+			shard:     "-",
+			cells:     []string{"zone1"},
+		},
+		{
+			// zone1-0000000100 leads on received position only because of an errant GTID
+			// (uuid2), and the clean peers received the latest reparent journal entry
+			// without applying it yet, so their journal counts read as lagged and can't
+			// corroborate the leader. ERS must wait on the skipped peers so their counts
+			// become truthful, re-run errant GTID detection, and convict 100
+			name:       "errant sole leader is convicted after rescuing the skipped candidates",
+			durability: policy.DurabilityNone,
+			emergencyReparentOps: EmergencyReparentOptions{
+				WaitReplicasTimeout: time.Second * 30,
+			},
+			tmc: &testutil.TabletManagerClient{
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000101": nil,
+				},
+				PromoteReplicaResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000101": {Result: "ok"},
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000100": nil,
+					"zone1-0000000102": nil,
+				},
+				// 100 applied the latest reparent journal entry; 101 and 102 received it
+				// but haven't applied it, so their counts only reach 2 once the rescue
+				// wait lets them apply
+				ReadReparentJournalInfoResults: map[string]int32{
+					"zone1-0000000100": 2,
+					"zone1-0000000101": 1,
+					"zone1-0000000102": 1,
+				},
+				ReadReparentJournalInfoAfterApplyResults: map[string]int32{
+					"zone1-0000000101": 2,
+					"zone1-0000000102": 2,
+				},
+				StopReplicationAndGetStatusResults: map[string]struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Error      error
+				}{
+					"zone1-0000000100": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-21", "1-1"),
+							},
+						},
+					},
+					"zone1-0000000101": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-21"),
+							},
+						},
+					},
+					"zone1-0000000102": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-21"),
+							},
+						},
+					},
+				},
+				// 102 is slow so the rescue race deterministically finishes on 101
+				WaitForPositionDelays: map[string]time.Duration{
+					"zone1-0000000102": time.Minute,
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000100": {
+						getRelayLogPosition("1-21", "1-1"): nil,
+					},
+					"zone1-0000000101": {
+						getRelayLogPosition("1-21"): nil,
+					},
+					"zone1-0000000102": {
+						getRelayLogPosition("1-21"): nil,
+					},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						PrimaryAlias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Hostname: "errant sole leader, must not be promoted",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Hostname: "clean peer, applies during the rescue wait and wins",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  102,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Hostname: "clean peer, cancelled during the rescue wait",
+				},
+			},
+			shouldErr: false,
+			keyspace:  "testkeyspace",
+			shard:     "-",
+			cells:     []string{"zone1"},
+		},
+		{
+			// same errant sole leader as the cell above, but the skipped candidates have
+			// mixed received positions: zone1-0000000102 is further behind and has no
+			// journal entry in its backlog, so a rescue race it wins proves nothing. The
+			// rescue must wait for all mixed-position candidates so zone1-0000000101 gets
+			// to apply the journal entry that convicts 100
+			name:       "errant sole leader is convicted when the rescue candidates have mixed positions",
+			durability: policy.DurabilityNone,
+			emergencyReparentOps: EmergencyReparentOptions{
+				WaitReplicasTimeout: time.Second * 30,
+			},
+			tmc: &testutil.TabletManagerClient{
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000101": nil,
+				},
+				PromoteReplicaResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000101": {Result: "ok"},
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000100": nil,
+					"zone1-0000000102": nil,
+				},
+				// only 101 received the latest reparent journal entry; its count reaches
+				// 2 once the rescue wait lets it apply. 102 never received it, so
+				// applying its empty backlog adds nothing
+				ReadReparentJournalInfoResults: map[string]int32{
+					"zone1-0000000100": 2,
+					"zone1-0000000101": 1,
+					"zone1-0000000102": 1,
+				},
+				ReadReparentJournalInfoAfterApplyResults: map[string]int32{
+					"zone1-0000000101": 2,
+				},
+				StopReplicationAndGetStatusResults: map[string]struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Error      error
+				}{
+					"zone1-0000000100": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-21", "1-1"),
+							},
+						},
+					},
+					"zone1-0000000101": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-21"),
+							},
+						},
+					},
+					"zone1-0000000102": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-10"),
+							},
+						},
+					},
+				},
+				// 101 has the bigger backlog to apply; a rescue that races would see 102
+				// finish first and cancel 101
+				WaitForPositionDelays: map[string]time.Duration{
+					"zone1-0000000101": time.Second * 2,
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000100": {
+						getRelayLogPosition("1-21", "1-1"): nil,
+					},
+					"zone1-0000000101": {
+						getRelayLogPosition("1-21"): nil,
+					},
+					"zone1-0000000102": {
+						getRelayLogPosition("1-10"): nil,
+					},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						PrimaryAlias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Hostname: "errant sole leader, must not be promoted",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Hostname: "holds the convicting journal entry, slow to apply",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  102,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Hostname: "most lagged, no journal entry to apply",
+				},
+			},
+			shouldErr: false,
+			keyspace:  "testkeyspace",
+			shard:     "-",
+			cells:     []string{"zone1"},
+		},
+		{
+			// same rescue as the cell above, but the further-behind zone1-0000000102 is
+			// stuck and can't apply at all. It is strictly dominated by 101, so it can't
+			// hold a journal entry 101 lacks: the rescue must only wait on the
+			// most-advanced skipped candidates and a stuck straggler must not abort the
+			// reparent
+			name:       "stuck dominated candidate doesn't block the errant GTID rescue",
+			durability: policy.DurabilityNone,
+			emergencyReparentOps: EmergencyReparentOptions{
+				WaitReplicasTimeout: time.Second * 30,
+			},
+			tmc: &testutil.TabletManagerClient{
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000101": nil,
+				},
+				PromoteReplicaResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000101": {Result: "ok"},
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000100": nil,
+					"zone1-0000000102": nil,
+				},
+				// only 101 received the latest reparent journal entry; its count reaches
+				// 2 once the rescue wait lets it apply
+				ReadReparentJournalInfoResults: map[string]int32{
+					"zone1-0000000100": 2,
+					"zone1-0000000101": 1,
+					"zone1-0000000102": 1,
+				},
+				ReadReparentJournalInfoAfterApplyResults: map[string]int32{
+					"zone1-0000000101": 2,
+				},
+				StopReplicationAndGetStatusResults: map[string]struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Error      error
+				}{
+					"zone1-0000000100": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-21", "1-1"),
+							},
+						},
+					},
+					"zone1-0000000101": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-21"),
+							},
+						},
+					},
+					"zone1-0000000102": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-10"),
+							},
+						},
+					},
+				},
+				// 102 has no WaitForPosition stub at all: any wait on it fails instantly
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000100": {
+						getRelayLogPosition("1-21", "1-1"): nil,
+					},
+					"zone1-0000000101": {
+						getRelayLogPosition("1-21"): nil,
+					},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						PrimaryAlias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Hostname: "errant sole leader, must not be promoted",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Hostname: "holds the convicting journal entry",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  102,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Hostname: "stuck and dominated, must not block the rescue",
+				},
+			},
+			shouldErr: false,
+			keyspace:  "testkeyspace",
+			shard:     "-",
+			cells:     []string{"zone1"},
 		},
 		{
 			// the mirror of the cell above: the sole acker zone1-0000000101 is only
@@ -4595,7 +5112,7 @@ func TestEmergencyReparenter_applyRelayLogsAndReconcile(t *testing.T) {
 
 		candidates := newCandidates(t)
 		erp := NewEmergencyReparenter(nil, tmc, logger)
-		reconciled, waitResult, err := erp.applyRelayLogsAndReconcile(t.Context(), waitCandidatesOf(candidates), candidates, tabletMap, statusMap, waitReplicasTimeout, false)
+		reconciled, waitResult, err := erp.applyRelayLogsAndReconcile(t.Context(), waitCandidatesOf(candidates), candidates, tabletMap, statusMap, waitReplicasTimeout, false, true)
 		require.NoError(t, err)
 		require.NotNil(t, waitResult)
 
@@ -4627,12 +5144,44 @@ func TestEmergencyReparenter_applyRelayLogsAndReconcile(t *testing.T) {
 
 		candidates := newCandidates(t)
 		erp := NewEmergencyReparenter(nil, tmc, logger)
-		reconciled, _, err := erp.applyRelayLogsAndReconcile(t.Context(), waitCandidatesOf(candidates), candidates, tabletMap, statusMap, waitReplicasTimeout, true)
+		reconciled, _, err := erp.applyRelayLogsAndReconcile(t.Context(), waitCandidatesOf(candidates), candidates, tabletMap, statusMap, waitReplicasTimeout, true, true)
 		require.ErrorContains(t, err, "could not apply all relay logs")
 
 		// on error the caller's candidates come back as-is: nothing removed, nothing bumped
 		assert.Len(t, reconciled, 4)
 		assert.True(t, reconciled["zone1-0000000100"].Executed.Equal(mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5")))
+	})
+
+	t.Run("non-GTID candidates never get their Executed position bumped", func(t *testing.T) {
+		t.Parallel()
+
+		tmc := &testutil.TabletManagerClient{
+			WaitForPositionResults: map[string]map[string]error{
+				"zone1-0000000100": {"position1": nil},
+				"zone1-0000000101": {"position1": nil},
+				"zone1-0000000102": {"position1": nil},
+			},
+		}
+
+		// non-GTID candidates store their executed position in Combined and leave
+		// Executed intentionally zero; the bump must not rewrite it, or every waited
+		// replica would sort ahead of an equal-position former primary
+		filePos, err := replication.DecodePosition("FilePos/binlog.000001:1000")
+		require.NoError(t, err)
+		candidates := map[string]*RelayLogPositions{
+			"zone1-0000000100": {Combined: filePos},
+			"zone1-0000000101": {Combined: filePos},
+			"zone1-0000000102": {Combined: filePos},
+		}
+		erp := NewEmergencyReparenter(nil, tmc, logger)
+		reconciled, waitResult, err := erp.applyRelayLogsAndReconcile(t.Context(), maps.Clone(candidates), candidates, tabletMap, statusMap, waitReplicasTimeout, true, false)
+		require.NoError(t, err)
+		require.NotNil(t, waitResult)
+		assert.Len(t, waitResult.applied, 3)
+
+		for alias, pos := range reconciled {
+			assert.True(t, pos.Executed.IsZero(), "%s Executed should stay zero, got %v", alias, pos.Executed)
+		}
 	})
 }
 
@@ -6591,6 +7140,7 @@ func TestEmergencyReparenter_filterValidCandidates(t *testing.T) {
 		durability          string
 		validTablets        []*topodatapb.Tablet
 		tabletsReachable    []*topodatapb.Tablet
+		nonAckers           []string
 		tabletsTakingBackup map[string]bool
 		prevPrimary         *topodatapb.Tablet
 		opts                EmergencyReparentOptions
@@ -6657,6 +7207,25 @@ func TestEmergencyReparenter_filterValidCandidates(t *testing.T) {
 			tabletsTakingBackup: noTabletsTakingBackup,
 			filteredTablets:     []*topodatapb.Tablet{replicaCrossCellTablet},
 		}, {
+			// a non-acker doesn't count towards another candidate's forward progress
+			name:                "filter candidate whose only acker is a non-acker",
+			durability:          policy.DurabilitySemiSync,
+			validTablets:        []*topodatapb.Tablet{replicaTablet},
+			tabletsReachable:    []*topodatapb.Tablet{replicaTablet, replicaCrossCellTablet},
+			nonAckers:           []string{topoproto.TabletAliasString(replicaCrossCellTablet.Alias)},
+			tabletsTakingBackup: noTabletsTakingBackup,
+			filteredTablets:     []*topodatapb.Tablet{},
+		}, {
+			// a non-acker was still reached, so it remains individually promotable; the
+			// other replica loses its only acker (the non-acker) and is filtered instead
+			name:                "non-acker candidate remains promotable",
+			durability:          policy.DurabilitySemiSync,
+			validTablets:        []*topodatapb.Tablet{replicaTablet, replicaCrossCellTablet},
+			tabletsReachable:    []*topodatapb.Tablet{replicaTablet, replicaCrossCellTablet},
+			nonAckers:           []string{topoproto.TabletAliasString(replicaTablet.Alias)},
+			tabletsTakingBackup: noTabletsTakingBackup,
+			filteredTablets:     []*topodatapb.Tablet{replicaTablet},
+		}, {
 			name:                "error - requested primary must not",
 			durability:          policy.DurabilityNone,
 			validTablets:        allTablets,
@@ -6697,7 +7266,7 @@ func TestEmergencyReparenter_filterValidCandidates(t *testing.T) {
 			tt.opts.durability = durability
 			logger := logutil.NewMemoryLogger()
 			erp := NewEmergencyReparenter(nil, nil, logger)
-			tabletList, err := erp.filterValidCandidates(tt.validTablets, tt.tabletsReachable, tt.tabletsTakingBackup, tt.prevPrimary, tt.opts)
+			tabletList, err := erp.filterValidCandidates(tt.validTablets, tt.tabletsReachable, tt.nonAckers, tt.tabletsTakingBackup, tt.prevPrimary, tt.opts)
 			if tt.errShouldContain != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tt.errShouldContain)
@@ -6746,6 +7315,7 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 		tabletMap                map[string]*topo.TabletInfo
 		wantedCandidates         []string
 		wantMostAdvancedPossible []string
+		wantStarved              []string
 		wantErr                  string
 	}{
 		{
@@ -7003,6 +7573,7 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 			},
 			wantedCandidates:         []string{"zone1-0000000102", "zone1-0000000103", "zone1-0000000104"},
 			wantMostAdvancedPossible: []string{"zone1-0000000102"},
+			wantStarved:              []string{"zone1-0000000102"},
 		},
 		{
 			name: "Case 3: All replicas severely lagged (Primary tablet dies with t1: u1-100, u2:1-30, u3:1-100)",
@@ -7194,6 +7765,7 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 			},
 			wantedCandidates:         []string{"zone1-0000000102", "zone1-0000000103"},
 			wantMostAdvancedPossible: []string{"zone1-0000000103"},
+			wantStarved:              []string{"zone1-0000000103"},
 		},
 		{
 			name: "Case 5b: Old Primary and a rdonly have errant GTID. Both come up during ERS",
@@ -7257,6 +7829,7 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 			},
 			wantedCandidates:         []string{"zone1-0000000103"},
 			wantMostAdvancedPossible: []string{"zone1-0000000103"},
+			wantStarved:              []string{"zone1-0000000103"},
 		},
 		{
 			name: "Case 6a: Errant GTID introduced on a replica server by a write that shouldn't happen. The replica with errant GTID is not the most advanced.",
@@ -7559,6 +8132,7 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 			},
 			wantedCandidates:         []string{"zone1-0000000103"},
 			wantMostAdvancedPossible: []string{"zone1-0000000103"},
+			wantStarved:              []string{"zone1-0000000103"},
 		},
 		{
 			name: "Reading reparent journal fails",
@@ -7627,12 +8201,13 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 			validCandidates, isGtid, err := FindPositionsOfAllCandidates(tt.statusMap, tt.primaryStatusMap)
 			require.NoError(t, err)
 			require.True(t, isGtid)
-			candidates, err := erp.findErrantGTIDs(t.Context(), validCandidates, tt.statusMap, tt.tabletMap, 10*time.Second, nil)
+			candidates, starved, err := erp.findErrantGTIDs(t.Context(), validCandidates, tt.statusMap, tt.tabletMap, 10*time.Second, nil)
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)
 				return
 			}
 			require.NoError(t, err)
+			assert.ElementsMatch(t, tt.wantStarved, starved)
 			keys := make([]string, 0, len(candidates))
 			for key := range candidates {
 				keys = append(keys, key)
@@ -7730,7 +8305,10 @@ func TestEmergencyReparenterFindErrantGTIDs_NilPosition(t *testing.T) {
 		"zone1-0000000104": nil,
 	}
 
-	candidates, err := erp.findErrantGTIDs(t.Context(), validCandidates, statusMap, tabletMap, 10*time.Second, nil)
+	candidates, starved, err := erp.findErrantGTIDs(t.Context(), validCandidates, statusMap, tabletMap, 10*time.Second, nil)
 	require.NoError(t, err)
 	require.Contains(t, candidates, "zone1-0000000102")
+	// the nil peer at maxLen contributed no evidence, so the surviving candidate was
+	// accepted without any comparison
+	assert.ElementsMatch(t, []string{"zone1-0000000102"}, starved)
 }
