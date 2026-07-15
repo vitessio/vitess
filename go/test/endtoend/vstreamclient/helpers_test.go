@@ -59,7 +59,7 @@ type testEnv struct {
 func newTestEnv(t *testing.T) *testEnv {
 	t.Helper()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := cluster.DialVTGate(ctx, t.Name(), vtgateGrpcAddress, "test_user", "")
 	require.NoError(t, err)
 	t.Cleanup(func() {
@@ -95,6 +95,8 @@ func (te *testEnv) exec(t *testing.T, query string, bindVariables map[string]*qu
 	require.NoError(t, err)
 }
 
+// execBackground uses context.Background() on purpose: it is called from t.Cleanup and from
+// FlushFns that must outlive a canceled run context, both of which run after t.Context() is done.
 func (te *testEnv) execBackground(t *testing.T, query string, bindVariables map[string]*querypb.BindVariable) {
 	t.Helper()
 
@@ -126,7 +128,7 @@ func (te *testEnv) execBackgroundAllowMissingColumn(t *testing.T, query string, 
 func (te *testEnv) runUntil(t *testing.T, client *vstreamclient.VStreamClient, condition func() bool) {
 	t.Helper()
 
-	runCtx, cancelRun := context.WithCancel(context.Background())
+	runCtx, cancelRun := context.WithCancel(t.Context())
 	defer cancelRun()
 
 	runErrCh := make(chan error, 1)
@@ -180,7 +182,7 @@ func (te *testEnv) copyCompleted(streamName string) func() bool {
 }
 
 func (te *testEnv) runAsync(client *vstreamclient.VStreamClient, timeout time.Duration) (context.Context, context.CancelFunc, chan error) {
-	runCtx, cancelRun := context.WithTimeout(context.Background(), timeout)
+	runCtx, cancelRun := context.WithTimeout(te.qCtx, timeout)
 	runErrCh := make(chan error, 1)
 	go func() {
 		runErrCh <- client.Run(runCtx)

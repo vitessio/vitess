@@ -91,7 +91,7 @@ func TestVStreamClientFlushFnError(t *testing.T) {
 	te.exec(t, "insert into customer.customer(id, email) values (1001, 'flush-error@domain.com')", nil)
 
 	// the run self-terminates on the flush error; the deadline is only a generous cap
-	runCtx, cancelRun := context.WithTimeout(context.Background(), 30*time.Second)
+	runCtx, cancelRun := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancelRun()
 	err := vstreamClient.Run(runCtx)
 	require.Error(t, err)
@@ -120,7 +120,7 @@ func TestVStreamClientEventHookError(t *testing.T) {
 	te.exec(t, "insert into customer.customer(id, email) values (1701, 'hook-error@domain.com')", nil)
 
 	// the run self-terminates on the hook error; the deadline is only a generous cap
-	runCtx, cancelRun := context.WithTimeout(context.Background(), 30*time.Second)
+	runCtx, cancelRun := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancelRun()
 	err := vstreamClient.Run(runCtx)
 	require.Error(t, err)

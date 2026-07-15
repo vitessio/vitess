@@ -153,7 +153,7 @@ func TestVStreamClientRestartsInterruptedCopy(t *testing.T) {
 	)
 
 	// the run self-terminates when the hook error fires; the deadline is only a generous cap
-	runCtx, cancelRun := context.WithTimeout(context.Background(), 30*time.Second)
+	runCtx, cancelRun := context.WithTimeout(t.Context(), 30*time.Second)
 	err := interruptedClient.Run(runCtx)
 	cancelRun()
 	require.Error(t, err)
@@ -217,7 +217,7 @@ func TestVStreamClientReplaysRowsWhenCheckpointWriteFails(t *testing.T) {
 	})
 
 	// the run self-terminates when the checkpoint write fails; the deadline is only a generous cap
-	runCtx, cancelRun := context.WithTimeout(context.Background(), 30*time.Second)
+	runCtx, cancelRun := context.WithTimeout(t.Context(), 30*time.Second)
 	err := failingClient.Run(runCtx)
 	cancelRun()
 	require.ErrorIs(t, err, vstreamclient.ErrFenced)

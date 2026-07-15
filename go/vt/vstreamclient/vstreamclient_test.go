@@ -124,7 +124,7 @@ func (t *newTestVTGateImpl) Execute(_ context.Context, session *vtgatepb.Session
 func newConstructorTestConn(t *testing.T) *vtgateconn.VTGateConn {
 	t.Helper()
 
-	conn, err := vtgateconn.DialCustom(context.Background(), func(context.Context, string) (vtgateconn.Impl, error) {
+	conn, err := vtgateconn.DialCustom(t.Context(), func(context.Context, string) (vtgateconn.Impl, error) {
 		return &newTestVTGateImpl{}, nil
 	}, "")
 	require.NoError(t, err)
@@ -186,11 +186,11 @@ func TestDefaultFlagsExcludeKeyspaceFromTableName(t *testing.T) {
 }
 
 func TestNew_ValidatesName(t *testing.T) {
-	_, err := New(context.Background(), "", nil, nil)
+	_, err := New(t.Context(), "", nil, nil)
 	assert.Error(t, err)
 	assert.ErrorContains(t, err, "name is required")
 
-	_, err = New(context.Background(), strings.Repeat("a", 65), nil, nil)
+	_, err = New(t.Context(), strings.Repeat("a", 65), nil, nil)
 	assert.Error(t, err)
 	assert.ErrorContains(t, err, "name must be 64 characters or less")
 }
@@ -199,7 +199,7 @@ func TestNew_RejectsAmbiguousBareTableNamesAcrossKeyspaces(t *testing.T) {
 	conn := newConstructorTestConn(t)
 
 	_, err := New(
-		context.Background(), "test-stream", conn, []TableConfig{
+		t.Context(), "test-stream", conn, []TableConfig{
 			{
 				Keyspace:        "customer",
 				Table:           "customer",
@@ -391,7 +391,7 @@ func TestRun_RejectsClosedClient(t *testing.T) {
 	v := &VStreamClient{}
 	setLifecycleState(v, true, false, false, nil)
 
-	err := v.Run(context.Background())
+	err := v.Run(t.Context())
 	assert.Error(t, err)
 	assert.ErrorContains(t, err, "client is closed")
 }
@@ -441,7 +441,7 @@ func TestRun_EOFReturnsErrorAndLeavesBufferedRowsUnflushed(t *testing.T) {
 	table.underlyingType = reflect.Indirect(reflect.ValueOf(table.DataType)).Type()
 	table.resetBatch()
 
-	conn, err := vtgateconn.DialCustom(context.Background(), func(context.Context, string) (vtgateconn.Impl, error) {
+	conn, err := vtgateconn.DialCustom(t.Context(), func(context.Context, string) (vtgateconn.Impl, error) {
 		return &testVTGateImpl{reader: reader}, nil
 	}, "")
 	require.NoError(t, err)
@@ -456,7 +456,7 @@ func TestRun_EOFReturnsErrorAndLeavesBufferedRowsUnflushed(t *testing.T) {
 		tables: map[string]*TableConfig{qualifiedTableName("ks", "t"): table},
 	}
 
-	err = v.Run(context.Background())
+	err = v.Run(t.Context())
 	assert.Error(t, err)
 	assert.ErrorContains(t, err, "unexpected EOF")
 	assert.Nil(t, v.lastFlushedVgtid)
@@ -477,7 +477,7 @@ func TestFlush_ClosesGracefulShutdownWhenAlreadyFlushed(t *testing.T) {
 	}
 	setLifecycleState(v, false, false, true, nil)
 
-	err := v.flush(context.Background(), false)
+	err := v.flush(t.Context(), false)
 	require.NoError(t, err)
 
 	select {
@@ -523,7 +523,7 @@ func TestFlush_ConsumerMutationDoesNotAffectInternalCheckpoint(t *testing.T) {
 		},
 	}
 
-	err := v.flush(context.Background(), true)
+	err := v.flush(t.Context(), true)
 	require.NoError(t, err)
 	require.NotNil(t, seenFlushVGtid)
 	assert.NotSame(t, v.latestVgtid, seenFlushVGtid)
@@ -807,6 +807,8 @@ func TestGracefulShutdown_BeforeRunDoesNothing(t *testing.T) {
 
 func TestGracefulShutdown_CancelsActiveRunAfterWait(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
+		// deliberately not t.Context(): contexts created outside the synctest bubble
+		// don't participate in its fake-time blocking semantics
 		ctx, cancel := context.WithCancelCause(context.Background())
 		defer cancel(nil)
 
@@ -837,7 +839,7 @@ func TestGracefulShutdown_CancelsActiveRunAfterWait(t *testing.T) {
 }
 
 func TestMonitorHeartbeat_DoesNotShutdownBeforeFirstEvent(t *testing.T) {
-	ctx, cancel := context.WithCancelCause(context.Background())
+	ctx, cancel := context.WithCancelCause(t.Context())
 	defer cancel(nil)
 
 	v := &VStreamClient{
@@ -879,7 +881,7 @@ func TestMonitorHeartbeat_DoesNotShutdownBeforeFirstEvent(t *testing.T) {
 }
 
 func TestMonitorHeartbeat_ShutsDownWhenHeartbeatStopsAfterFirstEvent(t *testing.T) {
-	ctx, cancel := context.WithCancelCause(context.Background())
+	ctx, cancel := context.WithCancelCause(t.Context())
 	defer cancel(nil)
 
 	v := &VStreamClient{
@@ -911,7 +913,7 @@ func TestMonitorHeartbeat_ShutsDownWhenHeartbeatStopsAfterFirstEvent(t *testing.
 }
 
 func TestMonitorHeartbeat_StartupTimeoutShutsDownWithCause(t *testing.T) {
-	ctx, cancel := context.WithCancelCause(context.Background())
+	ctx, cancel := context.WithCancelCause(t.Context())
 	defer cancel(nil)
 
 	v := &VStreamClient{
@@ -947,7 +949,7 @@ func TestShouldExitRun_SurfacesCancelCause(t *testing.T) {
 	v := &VStreamClient{}
 	setLifecycleState(v, true, true, true, nil)
 
-	ctx, cancel := context.WithCancelCause(context.Background())
+	ctx, cancel := context.WithCancelCause(t.Context())
 	cancel(ErrHeartbeatTimeout)
 
 	shouldExit, err := v.shouldExitRun(ctx)
@@ -959,7 +961,7 @@ func TestShouldExitRun_PlainCancelReturnsContextError(t *testing.T) {
 	v := &VStreamClient{}
 	setLifecycleState(v, true, true, true, nil)
 
-	ctx, cancel := context.WithCancelCause(context.Background())
+	ctx, cancel := context.WithCancelCause(t.Context())
 	cancel(nil)
 
 	shouldExit, err := v.shouldExitRun(ctx)

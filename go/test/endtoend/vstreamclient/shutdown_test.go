@@ -70,7 +70,7 @@ func TestVStreamClientGracefulShutdownChanStopsActiveRun(t *testing.T) {
 		require.NoError(t, err, "failed to run vstreamclient")
 	}
 	cancelRun()
-	err = vstreamClient.Run(context.Background())
+	err = vstreamClient.Run(t.Context())
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "client is closed")
 	_ = runCtx
@@ -231,7 +231,7 @@ func TestVStreamClientGracefulShutdownClosesMultiTableClient(t *testing.T) {
 		require.NoError(t, err, "failed to run vstreamclient")
 	}
 
-	err = vstreamClient.Run(context.Background())
+	err = vstreamClient.Run(t.Context())
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "client is closed")
 	assert.ElementsMatch(t, []string{"customer.customer", "customer.purchases"}, rowTables)
