@@ -34,6 +34,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/capabilities"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
@@ -131,7 +132,8 @@ func (w *WriteMetrics) Clear() {
 }
 
 func (w *WriteMetrics) String() string {
-	return fmt.Sprintf(`WriteMetrics: inserts-deletes=%d, updates-deletes=%d,
+	return fmt.Sprintf(
+		`WriteMetrics: inserts-deletes=%d, updates-deletes=%d,
 insertsAttempts=%d, insertsFailures=%d, insertsNoops=%d, inserts=%d,
 updatesAttempts=%d, updatesFailures=%d, updatesNoops=%d, updates=%d,
 deletesAttempts=%d, deletesFailures=%d, deletesNoops=%d, deletes=%d,
@@ -497,7 +499,8 @@ func enableLagThrottlerAndWaitForStatus(t *testing.T) {
 
 // checkRetryMigration attempts to retry a migration, and expects success/failure by counting affected rows
 func checkRetryMigration(t *testing.T, uuid string, expectRetryPossible bool) {
-	query, err := sqlparser.ParseAndBind("alter vitess_migration %a retry",
+	query, err := sqlparser.ParseAndBind(
+		"alter vitess_migration %a retry",
 		sqltypes.StringBindVariable(uuid),
 	)
 	require.NoError(t, err)
@@ -512,7 +515,8 @@ func checkRetryMigration(t *testing.T, uuid string, expectRetryPossible bool) {
 
 // checkCancelMigration attempts to cancel a migration, and expects success/failure by counting affected rows
 func checkCancelMigration(t *testing.T, uuid string, expectCancelPossible bool) {
-	query, err := sqlparser.ParseAndBind("alter vitess_migration %a cancel",
+	query, err := sqlparser.ParseAndBind(
+		"alter vitess_migration %a cancel",
 		sqltypes.StringBindVariable(uuid),
 	)
 	require.NoError(t, err)
@@ -527,7 +531,8 @@ func checkCancelMigration(t *testing.T, uuid string, expectCancelPossible bool) 
 
 // checkCompleteMigration attempts to complete a migration, and expects success/failure by counting affected rows
 func checkCompleteMigration(t *testing.T, uuid string, expectCompletePossible bool) {
-	query, err := sqlparser.ParseAndBind("alter vitess_migration %a complete",
+	query, err := sqlparser.ParseAndBind(
+		"alter vitess_migration %a complete",
 		sqltypes.StringBindVariable(uuid),
 	)
 	require.NoError(t, err)
@@ -542,7 +547,8 @@ func checkCompleteMigration(t *testing.T, uuid string, expectCompletePossible bo
 
 // checkCompleteMigrationShards attempts to complete a migration for specific shards, and expects success by counting affected rows
 func checkCompleteMigrationShards(t *testing.T, uuid string, completeShards string, expectCompletePossible bool) {
-	query, err := sqlparser.ParseAndBind("alter vitess_migration %a complete vitess_shards %a",
+	query, err := sqlparser.ParseAndBind(
+		"alter vitess_migration %a complete vitess_shards %a",
 		sqltypes.StringBindVariable(uuid),
 		sqltypes.StringBindVariable(completeShards),
 	)
@@ -558,7 +564,8 @@ func checkCompleteMigrationShards(t *testing.T, uuid string, completeShards stri
 
 // checkPostponeCompleteMigration attempts to postpone-complete a migration, and expects success/failure by counting affected rows
 func checkPostponeCompleteMigration(t *testing.T, uuid string, expectPotponePossible bool) {
-	query, err := sqlparser.ParseAndBind("alter vitess_migration %a postpone complete",
+	query, err := sqlparser.ParseAndBind(
+		"alter vitess_migration %a postpone complete",
 		sqltypes.StringBindVariable(uuid),
 	)
 	require.NoError(t, err)
@@ -573,7 +580,8 @@ func checkPostponeCompleteMigration(t *testing.T, uuid string, expectPotponePoss
 
 // checkLaunchMigration attempts to launch a migration, and expects success/failure by counting affected rows
 func checkLaunchMigration(t *testing.T, uuid string, launchShards string, expectLaunchPossible bool) {
-	query, err := sqlparser.ParseAndBind("alter vitess_migration %a launch vitess_shards %a",
+	query, err := sqlparser.ParseAndBind(
+		"alter vitess_migration %a launch vitess_shards %a",
 		sqltypes.StringBindVariable(uuid),
 		sqltypes.StringBindVariable(launchShards),
 	)
@@ -589,7 +597,8 @@ func checkLaunchMigration(t *testing.T, uuid string, launchShards string, expect
 
 // checkForceMigrationCutOver forces a migration to cut over, and expects success/failure by counting affected rows
 func checkForceMigrationCutOver(t *testing.T, uuid string, expectPossible bool) {
-	query, err := sqlparser.ParseAndBind("alter vitess_migration %a force_cutover",
+	query, err := sqlparser.ParseAndBind(
+		"alter vitess_migration %a force_cutover",
 		sqltypes.StringBindVariable(uuid),
 	)
 	require.NoError(t, err)
@@ -604,7 +613,8 @@ func checkForceMigrationCutOver(t *testing.T, uuid string, expectPossible bool) 
 
 // checkSetMigrationCutOverThreshold sets the cut-over threshold for a migration
 func checkSetMigrationCutOverThreshold(t *testing.T, uuid string, threshold time.Duration, expectError string) {
-	query, err := sqlparser.ParseAndBind("alter vitess_migration %a cutover_threshold %a",
+	query, err := sqlparser.ParseAndBind(
+		"alter vitess_migration %a cutover_threshold %a",
 		sqltypes.StringBindVariable(uuid),
 		sqltypes.StringBindVariable(threshold.String()),
 	)
@@ -614,7 +624,8 @@ func checkSetMigrationCutOverThreshold(t *testing.T, uuid string, threshold time
 
 // checkMigrationStatus verifies that the migration indicated by given UUID has the given expected status
 func checkMigrationStatus(t *testing.T, uuid string, expectStatuses ...schema.OnlineDDLStatus) bool {
-	query, err := sqlparser.ParseAndBind(fmt.Sprintf("show vitess_migrations from %s like %%a", keyspaceName),
+	query, err := sqlparser.ParseAndBind(
+		fmt.Sprintf("show vitess_migrations from %s like %%a", keyspaceName),
 		sqltypes.StringBindVariable(uuid),
 	)
 	require.NoError(t, err)
@@ -644,7 +655,8 @@ func waitForMigrationStatus(t *testing.T, uuid string, timeout time.Duration, ex
 	for _, shard := range shards {
 		shardNames[shard.Name] = true
 	}
-	query, err := sqlparser.ParseAndBind("show vitess_migrations like %a",
+	query, err := sqlparser.ParseAndBind(
+		"show vitess_migrations like %a",
 		sqltypes.StringBindVariable(uuid),
 	)
 	require.NoError(t, err)
@@ -693,7 +705,8 @@ func waitForMigrationReviewedTimestamp(t *testing.T, uuid string, timeout time.D
 	for _, shard := range shards {
 		shardNames[shard.Name] = true
 	}
-	query, err := sqlparser.ParseAndBind("show vitess_migrations like %a",
+	query, err := sqlparser.ParseAndBind(
+		"show vitess_migrations like %a",
 		sqltypes.StringBindVariable(uuid),
 	)
 	require.NoError(t, err)
@@ -1295,7 +1308,7 @@ func testScheduler(t *testing.T) {
 				// the transaction's connection.
 				select {
 				case err := <-transactionErrorChan:
-					assert.ErrorContains(t, err, "broken pipe")
+					assert.Truef(t, isConnectionTerminated(err), "expected the commit to fail because force_cutover terminated the connection, got: %v", err)
 				case <-ctx.Done():
 					assert.Fail(t, ctx.Err().Error())
 				}
@@ -1381,7 +1394,7 @@ func testScheduler(t *testing.T) {
 			})
 			t.Run("expect unlock failure", func(t *testing.T) {
 				err := unlockTables()
-				assert.ErrorContains(t, err, "broken pipe")
+				assert.Truef(t, isConnectionTerminated(err), "expected the unlock to fail because force_cutover terminated the connection, got: %v", err)
 			})
 		})
 	}
@@ -1427,7 +1440,7 @@ func testScheduler(t *testing.T) {
 				// the transaction's connection.
 				select {
 				case err := <-transactionErrorChan:
-					assert.ErrorContains(t, err, "broken pipe")
+					assert.Truef(t, isConnectionTerminated(err), "expected the commit to fail because force_cutover terminated the connection, got: %v", err)
 				case <-ctx.Done():
 					assert.Fail(t, ctx.Err().Error())
 				}
@@ -4152,6 +4165,18 @@ func getCreateTableStatement(t *testing.T, tablet *vitesst.Tablet, tableName str
 	assert.GreaterOrEqual(t, len(queryResult.Rows[0]), 2) // table name, create statement, and if it's a view then additional columns
 	statement = queryResult.Rows[0][1].ToString()
 	return statement
+}
+
+// isConnectionTerminated reports whether err indicates the server killed the connection mid-query,
+// which is what a force cut-over does to any transaction still holding locks. A direct client socket
+// observes the killed connection as a "broken pipe" write failure. A connection reached through port
+// forwarding instead observes it as CR_SERVER_LOST, MySQL's "Lost connection to MySQL server during
+// query" (errno 2013).
+func isConnectionTerminated(err error) bool {
+	if err == nil {
+		return false
+	}
+	return sqlerror.IsConnLostDuringQuery(err) || strings.Contains(err.Error(), "broken pipe")
 }
 
 func runInTransaction(t *testing.T, ctx context.Context, tablet *vitesst.Tablet, query string, commitTransactionChan chan any, transactionErrorChan chan error) error {
