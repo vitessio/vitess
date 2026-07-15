@@ -1676,13 +1676,20 @@ func moveTablesAction(t *testing.T, action, cell, workflow, sourceKs, targetKs, 
 			cellTargetTablets := vc.getVttabletsInKeyspace(t, vc.Cells[cell], targetKs, topodatapb.TabletType_PRIMARY.String())
 			maps.Copy(targetTablets, cellTargetTablets)
 		}
-		for _, targetTablet := range targetTablets {
-			lag, err := getDebugVar(t, targetTablet, []string{"VReplicationLag"})
-			require.NoError(t, err)
-			require.NotEqual(t, "{}", lag)
-			qps, err := getDebugVar(t, targetTablet, []string{"VReplicationQPS"})
-			require.NoError(t, err)
-			require.NotEqual(t, "{}", qps)
+		for name, targetTablet := range targetTablets {
+			// VReplicationQPS reports a value only after its rate has taken two
+			// sampling intervals, so wait for the timeseries stats to reflect the
+			// stream that ran on this target primary before asserting on them.
+			require.Eventuallyf(t, func() bool {
+				_, body, err := targetTablet.MakeAPICall(t.Context(), "/debug/vars")
+				if err != nil {
+					return false
+				}
+				lag, _, _, _ := jsonparser.Get([]byte(body), "VReplicationLag")
+				qps, _, _, _ := jsonparser.Get([]byte(body), "VReplicationQPS")
+				return string(lag) != "" && string(lag) != "{}" && string(qps) != "" && string(qps) != "{}"
+			}, defaultTimeout, defaultTick,
+				"VReplication timeseries stats stayed empty on target primary %s", name)
 		}
 	}
 	args = append(args, extraFlags...)
