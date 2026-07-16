@@ -119,6 +119,14 @@ func (t *newTestVTGateImpl) Execute(_ context.Context, session *vtgatepb.Session
 
 	case strings.Contains(query, "binlog_row_image"):
 		return session, sqltypes.MakeTestResult(sqltypes.MakeTestFields("@@global.binlog_row_image", "varchar"), "FULL"), nil
+
+	case query == "SHOW VSCHEMA KEYSPACES":
+		return session, sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("Keyspace|Sharded|Foreign Key|Comment", "varchar|varchar|varchar|varchar"),
+			"customer|false|unmanaged|",
+			"accounting|false|unmanaged|",
+			"commerce|false|unmanaged|",
+		), nil
 	}
 
 	return nil, nil, fmt.Errorf("unexpected Execute call: %s", query)

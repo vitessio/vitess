@@ -170,6 +170,18 @@ func TestWithStateTable_RejectsSingleShardShardedKeyspace(t *testing.T) {
 	require.ErrorContains(t, err, "only unsharded keyspaces are supported")
 }
 
+func TestWithStateTable_RejectsVSchemaShardedKeyspace(t *testing.T) {
+	// the vschema property is authoritative: a sharded keyspace whose single shard happens to
+	// be named "0" passes the shard-name heuristic but must still be rejected
+	v := &VStreamClient{
+		shardsByKeyspace:  map[string][]string{"sharded": {"0"}},
+		shardedByKeyspace: map[string]bool{"sharded": true},
+	}
+
+	err := WithStateTable("sharded", "state")(v)
+	require.ErrorContains(t, err, "only unsharded keyspaces are supported")
+}
+
 func TestWithStateTable_RejectsStreamedSourceKeyspace(t *testing.T) {
 	v := &VStreamClient{
 		shardsByKeyspace: map[string][]string{"ks": {"0"}},

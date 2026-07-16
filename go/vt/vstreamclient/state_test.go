@@ -71,6 +71,16 @@ func (t *stateTestVTGateImpl) VStream(ctx context.Context, _ topodatapb.TabletTy
 }
 
 func (t *stateTestVTGateImpl) Execute(ctx context.Context, session *vtgatepb.Session, query string, bindVars map[string]*querypb.BindVariable, prepared bool) (*vtgatepb.Session, *sqltypes.Result, error) {
+	// answered non-positionally so the vschema probe doesn't disturb the positional response
+	// queues or query-index assertions; all fake keyspaces report unsharded
+	if query == "SHOW VSCHEMA KEYSPACES" {
+		return session, sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("Keyspace|Sharded|Foreign Key|Comment", "varchar|varchar|varchar|varchar"),
+			"ks|false|unmanaged|",
+			"stateks|false|unmanaged|",
+		), nil
+	}
+
 	// answered non-positionally so the per-keyspace row-image probe doesn't disturb the
 	// positional response queues or query-index assertions
 	if strings.Contains(query, "binlog_row_image") {

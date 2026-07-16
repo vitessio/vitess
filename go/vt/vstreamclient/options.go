@@ -163,9 +163,14 @@ func WithStateTable(keyspace, table string) Option {
 			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: keyspace %s not found", keyspace)
 		}
 
-		// unsharded keyspaces always have exactly one shard named "0". A sharded keyspace can
-		// currently have a single shard (named "-") and can gain shards through resharding, so
-		// checking the shard count alone is not enough.
+		// the vschema sharded property is the authoritative check: a sharded keyspace can have
+		// any single shard today (even one named "0") and gain shards through resharding
+		if sharded, ok := v.shardedByKeyspace[keyspace]; ok && sharded {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: keyspace %s is sharded, only unsharded keyspaces are supported", keyspace)
+		}
+
+		// shard-name heuristic as a backstop for clusters where the vschema cannot be read:
+		// unsharded keyspaces always have exactly one shard named "0"
 		if len(shards) != 1 || shards[0] != "0" {
 			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: keyspace %s is sharded, only unsharded keyspaces are supported", keyspace)
 		}

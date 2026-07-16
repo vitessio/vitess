@@ -19,6 +19,7 @@ package vstreamclient
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"maps"
 	"os"
 	"slices"
@@ -52,6 +53,10 @@ type VStreamClient struct {
 	// shardsByKeyspace caches the cluster's serving shards per keyspace, used to validate
 	// configured keyspaces and to bootstrap the initial vgtid
 	shardsByKeyspace map[string][]string
+
+	// shardedByKeyspace caches each keyspace's vschema sharded property; nil when the vschema
+	// could not be read, in which case validation falls back to the shard-name heuristic
+	shardedByKeyspace map[string]bool
 
 	// keep per table state and config, which is used to generate the vgtid filter.
 	// this is a map of keyspace.table to TableConfig, since that's how the binlog table is stored
@@ -230,6 +235,14 @@ func New(ctx context.Context, name string, conn *vtgateconn.VTGateConn, tables [
 	v.shardsByKeyspace, err = getShardsByKeyspace(ctx, v.session)
 	if err != nil {
 		return nil, err
+	}
+
+	v.shardedByKeyspace, err = getShardedByKeyspace(ctx, v.session)
+	if err != nil {
+		// older vtgates may not support SHOW VSCHEMA KEYSPACES; validation falls back to the
+		// shard-name heuristic in that case
+		log.Warn("vstreamclient: could not read vschema keyspace sharding", slog.Any("error", err))
+		v.shardedByKeyspace = nil
 	}
 
 	err = v.initTables(tables)
@@ -541,6 +554,26 @@ func getShardsByKeyspace(ctx context.Context, session *vtgateconn.VTGateSession)
 	}
 
 	return shardsByKeyspace, nil
+}
+
+// getShardedByKeyspace reads each keyspace's vschema sharded property, which is authoritative in
+// a way physical shard names are not: a sharded keyspace can have a single arbitrary shard today
+// and gain shards through resharding later.
+func getShardedByKeyspace(ctx context.Context, session *vtgateconn.VTGateSession) (map[string]bool, error) {
+	result, err := session.Execute(ctx, "SHOW VSCHEMA KEYSPACES", nil, false)
+	if err != nil {
+		return nil, err
+	}
+
+	shardedByKeyspace := make(map[string]bool, len(result.Rows))
+	for _, row := range result.Rows {
+		if len(row) < 2 {
+			continue
+		}
+		shardedByKeyspace[row[0].ToString()] = strings.EqualFold(row[1].ToString(), "true")
+	}
+
+	return shardedByKeyspace, nil
 }
 
 // validateBinlogRowImage checks that every shard of every streamed source keyspace uses
