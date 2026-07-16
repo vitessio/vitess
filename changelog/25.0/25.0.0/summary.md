@@ -28,6 +28,7 @@
     - **[VTTablet](#minor-changes-vttablet)**
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
         - [Skip MySQL version check when restoring from a mysql-shell backup](#vttablet-mysql-shell-restore-skip-version-check)
+        - [Modifications to internal Vitess tables are now rejected](#vttablet-reject-internal-table-writes)
     - **[Backup/Restore](#minor-changes-backup)**
         - [Chunked backup/restore for the builtinbackupengine](#backup-chunked-builtin)
     - **[General](#minor-changes-general)**
@@ -237,6 +238,16 @@ A new `--mysql-shell-restore-skip-version-check` flag (default `false`) has been
 Because mysql-shell performs a logical restore, its backups are not tied to the on-disk data dictionary format the way physical backups are, so restoring across otherwise-incompatible MySQL versions can be safe. This flag lets operators opt into that behavior.
 
 **Impact**: With this flag set, VTTablet may select and restore a `mysqlshell` backup whose MySQL version would otherwise be rejected as incompatible. Leave it unset to preserve the existing behavior.
+
+#### <a id="vttablet-reject-internal-table-writes"/>Modifications to internal Vitess tables are now rejected</a>
+
+VTTablet now rejects any statement that modifies an internal Vitess table, whether through DML (`INSERT`, `REPLACE`, `UPDATE`, `DELETE`) or DDL (`CREATE`, `ALTER`, `RENAME`, `DROP`, `TRUNCATE`), with the new error `VT09033`, `modification of internal table '<name>' is not allowed`. Internal tables are identified by the `_vt_<hint>_<uuid>_<timestamp>_` name format, which covers Table GC tables and Online DDL artifacts. Reading these tables is still allowed, and legacy gh-ost and pt-osc artifact names (`_<table>_gho`, `_<table>_new`, `_<table>_old`) are not affected.
+
+The check runs at the tablet, so it applies to every query the query service handles regardless of routing. It guards against a failover hazard: the Table GC `purge` stage runs with `sql_log_bin=0`, so its deletes are not replicated, and manually modifying a GC table on a newly promoted primary can leave the old primary unable to apply those events once it rejoins as a replica.
+
+**Impact**: Tooling that modifies these tables through `vtgate` (for example, manual GC cleanup scripts) now fails with `VT09033`. Use `ExecuteFetchAsDba` or the appropriate Vitess workflow instead.
+
+See [#19901](https://github.com/vitessio/vitess/pull/19901) for details.
 
 ### <a id="minor-changes-backup"/>Backup/Restore</a>
 
