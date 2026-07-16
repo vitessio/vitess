@@ -50,7 +50,14 @@ type VReplicationConfig struct {
 	StoreCompressedGTID     bool
 	ParallelInsertWorkers   int
 	TabletTypesStr          string
+<<<<<<< HEAD
 	EnableHttpLog           bool // Enable the /debug/vrlog endpoint
+||||||| parent of 657662e78b (VReplication: Remove internal undocumented VRLog feature (#20467))
+	EnableHttpLog           bool // Enable the /debug/vrlog endpoint
+	MaxRowJSONBytes         int64
+=======
+	MaxRowJSONBytes         int64
+>>>>>>> 657662e78b (VReplication: Remove internal undocumented VRLog feature (#20467))
 
 	// Config parameters applicable to the source side (vstreamer)
 	// The coresponding Override fields are used to determine if the user has provided a value for the parameter so
@@ -95,7 +102,14 @@ func GetVReplicationConfigDefaults(useCached bool) *VReplicationConfig {
 		StoreCompressedGTID:     vreplicationStoreCompressedGTID,
 		ParallelInsertWorkers:   vreplicationParallelInsertWorkers,
 		TabletTypesStr:          vreplicationTabletTypesStr,
+<<<<<<< HEAD
 		EnableHttpLog:           vreplicationEnableHttpLog,
+||||||| parent of 657662e78b (VReplication: Remove internal undocumented VRLog feature (#20467))
+		EnableHttpLog:           vreplicationEnableHttpLog,
+		MaxRowJSONBytes:         vreplicationMaxRowJSONBytes,
+=======
+		MaxRowJSONBytes:         vreplicationMaxRowJSONBytes,
+>>>>>>> 657662e78b (VReplication: Remove internal undocumented VRLog feature (#20467))
 
 		VStreamPacketSizeOverride:              false,
 		VStreamPacketSize:                      VStreamerDefaultPacketSize,
