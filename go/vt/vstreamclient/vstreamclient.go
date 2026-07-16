@@ -19,6 +19,7 @@ package vstreamclient
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"maps"
 	"os"
 	"slices"
@@ -29,6 +30,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
@@ -198,6 +200,11 @@ func New(ctx context.Context, name string, conn *vtgateconn.VTGateConn, tables [
 	}
 
 	err = validateKeyspaceRuleSets(v.tables)
+	if err != nil {
+		return nil, err
+	}
+
+	err = validateBinlogRowImage(ctx, conn, v.tables)
 	if err != nil {
 		return nil, err
 	}
@@ -476,6 +483,38 @@ func getShardsByKeyspace(ctx context.Context, session *vtgateconn.VTGateSession)
 	}
 
 	return shardsByKeyspace, nil
+}
+
+// validateBinlogRowImage checks that every streamed source keyspace uses binlog_row_image=FULL.
+// With NOBLOB or MINIMAL, delete before-images can omit column values in a way that is
+// indistinguishable from SQL NULL to both the default decoder and custom scanners, silently
+// corrupting nullable fields downstream. If the setting cannot be queried (e.g. restricted
+// permissions), a warning is logged and the check is skipped.
+func validateBinlogRowImage(ctx context.Context, conn *vtgateconn.VTGateConn, tables map[string]*TableConfig) error {
+	keyspaces := make(map[string]bool)
+	for _, table := range tables {
+		keyspaces[table.Keyspace] = true
+	}
+
+	for _, keyspace := range slices.Sorted(maps.Keys(keyspaces)) {
+		session := conn.Session(keyspace, nil)
+		result, err := session.Execute(ctx, "select @@global.binlog_row_image", nil, false)
+		if err != nil || len(result.Rows) == 0 || len(result.Rows[0]) == 0 {
+			log.Warn(
+				"vstreamclient: could not verify binlog_row_image; delete events may be silently corrupted unless it is FULL",
+				slog.String("keyspace", keyspace),
+				slog.Any("error", err),
+			)
+			continue
+		}
+
+		rowImage := result.Rows[0][0].ToString()
+		if !strings.EqualFold(rowImage, "FULL") {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: keyspace %s uses binlog_row_image=%s, but this client requires FULL: with partial row images, omitted delete before-image values are indistinguishable from NULL", keyspace, rowImage)
+		}
+	}
+
+	return nil
 }
 
 // validateKeyspaceRuleSets rejects configurations whose (table, query) rule sets differ across

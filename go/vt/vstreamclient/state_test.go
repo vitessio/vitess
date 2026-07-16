@@ -46,9 +46,27 @@ type stateTestVTGateImpl struct {
 	responses []stateExecuteResponse
 	queries   []string
 	bindVars  []map[string]*querypb.BindVariable
+
+	// rowImage overrides the binlog_row_image probe answer; empty means FULL.
+	// rowImageErr makes the probe fail, exercising the warn-and-continue path.
+	rowImage    string
+	rowImageErr bool
 }
 
 func (t *stateTestVTGateImpl) Execute(ctx context.Context, session *vtgatepb.Session, query string, bindVars map[string]*querypb.BindVariable, prepared bool) (*vtgatepb.Session, *sqltypes.Result, error) {
+	// answered non-positionally so the per-keyspace row-image probe doesn't disturb the
+	// positional response queues or query-index assertions
+	if strings.Contains(query, "binlog_row_image") {
+		if t.rowImageErr {
+			return session, nil, errors.New("binlog_row_image probe failed")
+		}
+		rowImage := t.rowImage
+		if rowImage == "" {
+			rowImage = "FULL"
+		}
+		return session, sqltypes.MakeTestResult(sqltypes.MakeTestFields("@@global.binlog_row_image", "varchar"), rowImage), nil
+	}
+
 	t.queries = append(t.queries, query)
 	t.bindVars = append(t.bindVars, bindVars)
 
@@ -401,6 +419,24 @@ func TestNew_ClaimsStateOwnershipAfterValidatingState(t *testing.T) {
 	lastIdx := len(impl.queries) - 1
 	assert.Contains(t, impl.queries[lastIdx], "owner_token = :owner_token")
 	assert.Equal(t, claimToken, impl.bindVars[lastIdx]["owner_token"].Value)
+}
+
+func TestNew_RejectsNonFullBinlogRowImage(t *testing.T) {
+	conn, impl := newStateTestConn(t, shardsAndStateTableResponses(nil)...)
+	impl.rowImage = "NOBLOB"
+
+	_, err := New(t.Context(), "stream", conn, []TableConfig{newStateTestTableConfig()},
+		WithStateTable("stateks", "state"))
+	require.ErrorContains(t, err, "requires FULL")
+}
+
+func TestNew_UnqueryableBinlogRowImageWarnsAndContinues(t *testing.T) {
+	conn, impl := newStateTestConn(t, shardsAndStateTableResponses(nil)...)
+	impl.rowImageErr = true
+
+	_, err := New(t.Context(), "stream", conn, []TableConfig{newStateTestTableConfig()},
+		WithStateTable("stateks", "state"))
+	require.NoError(t, err)
 }
 
 func TestNew_NilTableConfigEntryReportsStructuredError(t *testing.T) {
