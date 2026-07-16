@@ -374,7 +374,7 @@ func (ts *txThrottlerStateImpl) throttle() bool {
 func (ts *txThrottlerStateImpl) updateMaxLag() {
 	defer ts.waitForTermination.Done()
 	// We use half of the target lag to ensure we have enough resolution to see changes in lag below that value
-	ticker := time.NewTicker(time.Duration(ts.config.TxThrottlerConfig.TargetReplicationLagSec/2) * time.Second)
+	ticker := time.NewTicker(time.Duration(ts.config.TxThrottlerConfig.TargetReplicationLagSec) * time.Second / 2)
 	defer ticker.Stop()
 outerloop:
 	for {
