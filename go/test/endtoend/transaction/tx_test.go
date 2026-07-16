@@ -19,10 +19,8 @@ package transaction
 import (
 	"context"
 	_ "embed"
-	"flag"
-	"fmt"
-	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -32,9 +30,7 @@ import (
 )
 
 var (
-	clusterInstance *vitesst.Cluster
-	vtParams        mysql.ConnParams
-	keyspaceName    = "ks"
+	keyspaceName = "ks"
 
 	//go:embed schema.sql
 	SchemaSQL string
@@ -43,51 +39,40 @@ var (
 	VSchema string
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func startCluster(t *testing.T) mysql.ConnParams {
+	t.Helper()
 
-	exitcode, err := func() (int, error) {
-		ctx := context.Background()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithVTTabletArgs("--twopc-abandon-age", "3600"),
+		vitesst.WithKeyspace(keyspaceName).
+			WithShardNames("-80", "80-").
+			WithReplicas(1).
+			WithSchema(SchemaSQL).
+			WithVSchema(VSchema).
+			WithDurabilityPolicy(policy.DurabilitySemiSync),
+	)
+	require.NoError(t, err)
 
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithVTTabletArgs("--twopc-abandon-age", "3600"),
-			vitesst.WithKeyspace(keyspaceName).
-				WithShardNames("-80", "80-").
-				WithReplicas(1).
-				WithSchema(SchemaSQL).
-				WithVSchema(VSchema).
-				WithDurabilityPolicy(policy.DurabilitySemiSync),
-		)
-		if err != nil {
-			return 1, err
+	cleanup, err := cluster.Start(t.Context())
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Minute)
+		defer cancel()
+		if t.Failed() {
+			cluster.DumpDiagnostics(ctx, t.Logf)
 		}
-
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			return 1, err
+		if err := cleanup(ctx); err != nil {
+			t.Logf("cluster teardown: %v", err)
 		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
+	require.NoError(t, err)
 
-		clusterInstance = cluster
-		vtParams = cluster.VTParams(ctx, "")
-
-		return m.Run(), nil
-	}()
-	if err != nil {
-		fmt.Printf("%v\n", err)
-		os.Exit(1)
-	} else {
-		os.Exit(exitcode)
-	}
+	return cluster.VTParams(t.Context(), "")
 }
 
 // TestTransactionModes tests transactions using twopc mode
 func TestTransactionModes(t *testing.T) {
 	ctx := t.Context()
+	vtParams := startCluster(t)
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -132,6 +117,7 @@ func TestTransactionModes(t *testing.T) {
 // TestTransactionIsolation tests transaction isolation level.
 func TestTransactionIsolation(t *testing.T) {
 	ctx := t.Context()
+	vtParams := startCluster(t)
 
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
@@ -164,7 +150,8 @@ func TestTransactionIsolation(t *testing.T) {
 }
 
 func TestTransactionAccessModes(t *testing.T) {
-	closer := start(t)
+	vtParams := startCluster(t)
+	closer := clearTables(t, vtParams)
 	defer closer()
 
 	ctx := t.Context()
@@ -201,6 +188,7 @@ func TestTransactionAccessModes(t *testing.T) {
 // and setting isolation level to different values.
 func TestTransactionIsolationInTx(t *testing.T) {
 	ctx := t.Context()
+	vtParams := startCluster(t)
 
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
@@ -222,7 +210,7 @@ func TestTransactionIsolationInTx(t *testing.T) {
 	vitesst.Exec(t, conn, "commit")
 }
 
-func start(t *testing.T) func() {
+func clearTables(t *testing.T, vtParams mysql.ConnParams) func() {
 	deleteAll := func() {
 		conn, err := mysql.Connect(t.Context(), &vtParams)
 		require.NoError(t, err)

@@ -19,19 +19,19 @@ package tabletbalancer
 import (
 	"context"
 	_ "embed"
-	"flag"
 	"fmt"
-	"os"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/vitesst"
 )
 
 var (
-	clusterInstance *vitesst.Cluster
-	cell1           = "zone1"
-	cell2           = "zone2"
-	keyspaceName    = "ks"
+	cell1        = "zone1"
+	cell2        = "zone2"
+	keyspaceName = "ks"
 
 	//go:embed schema.sql
 	schemaSQL string
@@ -44,46 +44,30 @@ var (
 	}`
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setupCluster(t *testing.T) *vitesst.Cluster {
+	t.Helper()
 
-	exitCode := func() int {
-		ctx := context.Background()
+	ctx := t.Context()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithCells(cell1, cell2),
+		vitesst.WithKeyspace(keyspaceName).
+			WithReplicas(5).
+			WithSchema(schemaSQL).
+			WithVSchema(vSchema),
+	)
+	require.NoError(t, err)
+	cleanup, err := cluster.Start(ctx)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+		defer cancel()
+		require.NoError(t, cleanup(cleanupCtx))
+	})
 
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithCells(cell1, cell2),
-			vitesst.WithKeyspace(keyspaceName).
-				WithReplicas(5).
-				WithSchema(schemaSQL).
-				WithVSchema(vSchema),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	allCells := fmt.Sprintf("%s,%s", cell1, cell2)
+	require.NoError(t, cluster.Vtctld().ExecuteCommand(ctx, "AddCellsAlias",
+		"--cells", allCells,
+		"combined_cells"))
 
-		clusterInstance = cluster
-
-		// we need to create an alias to make sure that we'll use both cells at all, even with cells_to_watch
-		allCells := fmt.Sprintf("%s,%s", cell1, cell2)
-		if err := cluster.Vtctld().ExecuteCommand(ctx, "AddCellsAlias",
-			"--cells", allCells,
-			"combined_cells"); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	return cluster
 }

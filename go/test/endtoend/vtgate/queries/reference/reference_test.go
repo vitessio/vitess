@@ -59,6 +59,7 @@ func start(t *testing.T) (*mysql.Conn, func()) {
 // When: we execute `DELETE FROM zip_detail ...`,
 // Then: `zip_detail` should be routed to `uks`.
 func TestReferenceRouting(t *testing.T) {
+	setup(t)
 	conn, closer := start(t)
 	defer closer()
 
@@ -154,6 +155,7 @@ func TestReferenceRouting(t *testing.T) {
 
 // TestMultiReferenceQuery tests that a query with multiple references with unsharded keyspace and sharded keyspace works with join.
 func TestMultiReferenceQuery(t *testing.T) {
+	setup(t)
 	conn, closer := start(t)
 	defer closer()
 
@@ -167,6 +169,7 @@ func TestMultiReferenceQuery(t *testing.T) {
 }
 
 func TestDMLReferenceUsingShardedKS(t *testing.T) {
+	setup(t)
 	conn, closer := start(t)
 	defer closer()
 

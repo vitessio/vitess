@@ -19,9 +19,7 @@ package sharded
 import (
 	"context"
 	_ "embed"
-	"flag"
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
@@ -33,10 +31,8 @@ import (
 )
 
 var (
-	clusterInstance *vitesst.Cluster
-	vtParams        mysql.ConnParams
-	KeyspaceName    = "ks"
-	sidecarDBName   = "_vt_schema_tracker_metadata" // custom sidecar database name for testing
+	KeyspaceName  = "ks"
+	sidecarDBName = "_vt_schema_tracker_metadata" // custom sidecar database name for testing
 	//go:embed schema.sql
 	SchemaSQL string
 
@@ -44,50 +40,47 @@ var (
 	VSchema string
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setup(t *testing.T) (*vitesst.Cluster, mysql.ConnParams) {
+	t.Helper()
+	ctx := t.Context()
 
-	exitCode := func() int {
-		ctx := context.Background()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithKeyspace(KeyspaceName).
+			WithShards(2).
+			WithSchema(SchemaSQL).
+			WithVSchema(VSchema).
+			WithSidecarDBName(sidecarDBName),
+		vitesst.WithVTGateArgs(
+			"--schema-change-signal",
+			"--vschema-ddl-authorized-users", "%",
+			"--enable-views",
+		),
+		vitesst.WithVTTabletArgs(
+			"--queryserver-config-schema-change-signal",
+			"--queryserver-enable-views",
+		),
+	)
+	require.NoError(t, err)
 
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithKeyspace(KeyspaceName).
-				WithShards(2).
-				WithSchema(SchemaSQL).
-				WithVSchema(VSchema).
-				WithSidecarDBName(sidecarDBName),
-			vitesst.WithVTGateArgs(
-				"--schema-change-signal",
-				"--vschema-ddl-authorized-users", "%",
-				"--enable-views"),
-			vitesst.WithVTTabletArgs(
-				"--queryserver-config-schema-change-signal",
-				"--queryserver-enable-views"),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+	cleanup, err := cluster.Start(ctx)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Minute)
+		defer cancel()
+		if t.Failed() {
+			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
 		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+		if err := cleanup(cleanupCtx); err != nil {
+			t.Logf("cluster teardown: %v", err)
 		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
 
-		clusterInstance = cluster
-		vtParams = cluster.VTParams(ctx, "")
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	return cluster, cluster.VTParams(ctx, "")
 }
 
 func TestNewTable(t *testing.T) {
 	ctx := t.Context()
+	_, vtParams := setup(t)
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -129,6 +122,7 @@ func TestNewTable(t *testing.T) {
 
 func TestAmbiguousColumnJoin(t *testing.T) {
 	ctx := t.Context()
+	_, vtParams := setup(t)
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -140,6 +134,7 @@ func TestAmbiguousColumnJoin(t *testing.T) {
 
 func TestInitAndUpdate(t *testing.T) {
 	ctx := t.Context()
+	_, vtParams := setup(t)
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -188,6 +183,7 @@ func TestInitAndUpdate(t *testing.T) {
 
 func TestDMLOnNewTable(t *testing.T) {
 	ctx := t.Context()
+	_, vtParams := setup(t)
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -240,6 +236,7 @@ func TestDMLOnNewTable(t *testing.T) {
 // TestNewView validates that view tracking works as expected.
 func TestNewView(t *testing.T) {
 	ctx := t.Context()
+	_, vtParams := setup(t)
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -262,13 +259,14 @@ func TestNewView(t *testing.T) {
 // TestViewAndTable validates that new column added in table is present in the view definition
 func TestViewAndTable(t *testing.T) {
 	ctx := t.Context()
+	cluster, vtParams := setup(t)
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
 	// add a new column to the table t8
 	_ = vitesst.Exec(t, conn, "alter table t8 add column new_col varchar(50)")
-	err = vitesst.WaitForColumn(t, clusterInstance.VTGate(), KeyspaceName, "t8", "new_col")
+	err = vitesst.WaitForColumn(t, cluster.VTGate(), KeyspaceName, "t8", "new_col")
 	require.NoError(t, err)
 
 	// insert some data
@@ -283,7 +281,7 @@ func TestViewAndTable(t *testing.T) {
 
 	// add another column to the table t8
 	_ = vitesst.Exec(t, conn, "alter table t8 add column additional_col bigint")
-	err = vitesst.WaitForColumn(t, clusterInstance.VTGate(), KeyspaceName, "t8", "additional_col")
+	err = vitesst.WaitForColumn(t, cluster.VTGate(), KeyspaceName, "t8", "additional_col")
 	require.NoError(t, err)
 
 	// executing the query on view

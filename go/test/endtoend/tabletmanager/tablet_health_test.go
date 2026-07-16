@@ -42,6 +42,7 @@ import (
 
 // TabletReshuffle test if a vttablet can be pointed at an existing mysql
 func TestTabletReshuffle(t *testing.T) {
+	setup(t)
 	ctx := t.Context()
 
 	conn, err := mysql.Connect(ctx, &primaryTabletParams)
@@ -67,7 +68,8 @@ func TestTabletReshuffle(t *testing.T) {
 	// We also have to disable replication reporting because we're pointed at the primary.
 	err = rTablet.StopVttablet(ctx)
 	require.NoError(t, err)
-	err = rTablet.StartVttablet(ctx,
+	err = rTablet.StartVttablet(
+		ctx,
 		"--lock-tables-timeout", "5s",
 		"--mycnf-server-id", strconv.Itoa(rTablet.UID),
 		"--db-host", primaryTablet.Name(),
@@ -93,6 +95,7 @@ func TestTabletReshuffle(t *testing.T) {
 }
 
 func TestHealthCheck(t *testing.T) {
+	setup(t)
 	// Add one replica that starts not initialized
 	ctx := t.Context()
 	disableVTOrcRecoveries(t)
@@ -177,6 +180,7 @@ func TestHealthCheck(t *testing.T) {
 
 // TestHealthCheckSchemaChangeSignal tests the tables and views, which report their schemas have changed in the output of a StreamHealth.
 func TestHealthCheckSchemaChangeSignal(t *testing.T) {
+	setup(t)
 	// Add one replica that starts not initialized
 	ctx := t.Context()
 
@@ -225,7 +229,8 @@ func TestHealthCheckSchemaChangeSignal(t *testing.T) {
 
 // plannedReparentShard makes the given tablet the primary of the shard.
 func plannedReparentShard(ctx context.Context, keyspace, shard, alias string) error {
-	return clusterInstance.Vtctld().ExecuteCommand(ctx,
+	return clusterInstance.Vtctld().ExecuteCommand(
+		ctx,
 		"PlannedReparentShard",
 		fmt.Sprintf("%s/%s", keyspace, shard),
 		"--new-primary", alias,
@@ -403,6 +408,7 @@ func waitForTabletHealth(t *testing.T, ctx context.Context, tablet *vitesst.Tabl
 }
 
 func TestHealthCheckDrainedStateDoesNotShutdownQueryService(t *testing.T) {
+	setup(t)
 	// This test is similar to test_health_check, but has the following differences:
 	// - the second tablet is an 'rdonly' and not a 'replica'
 	// - the second tablet will be set to 'drained' and we expect that

@@ -64,6 +64,26 @@ func NewMySQLWithMysqld(port int, hostname, dbName string, schemaSQL ...string) 
 	if err != nil {
 		return mysql.ConnParams{}, nil, nil, nil, err
 	}
+	var mysqld *mysqlctl.Mysqld
+	var mycnf *mysqlctl.Mycnf
+	cleanup := func() {
+		defer func() {
+			_ = os.RemoveAll(mysqlDir)
+		}()
+		if mysqld == nil || mycnf == nil {
+			return
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), mysqlShutdownTimeout)
+		defer cancel()
+		_ = mysqld.Teardown(ctx, mycnf, true, mysqlShutdownTimeout)
+	}
+	succeeded := false
+	defer func() {
+		if !succeeded {
+			cleanup()
+		}
+	}()
+
 	initMySQLFile, err := createInitSQLFile(mysqlDir, dbName)
 	if err != nil {
 		return mysql.ConnParams{}, nil, nil, nil, err
@@ -71,7 +91,7 @@ func NewMySQLWithMysqld(port int, hostname, dbName string, schemaSQL ...string) 
 
 	ctx := context.Background()
 	mysqlPort := port
-	mysqld, mycnf, err := CreateMysqldAndMycnf(uid, "", mysqlPort)
+	mysqld, mycnf, err = CreateMysqldAndMycnf(uid, "", mysqlPort)
 	if err != nil {
 		return mysql.ConnParams{}, nil, nil, nil, err
 	}
@@ -92,9 +112,8 @@ func NewMySQLWithMysqld(port int, hostname, dbName string, schemaSQL ...string) 
 			return mysql.ConnParams{}, nil, nil, nil, err
 		}
 	}
-	return params, mysqld, mycnf, func() {
-		_ = mysqld.Teardown(ctx, mycnf, true, mysqlShutdownTimeout)
-	}, nil
+	succeeded = true
+	return params, mysqld, mycnf, cleanup, nil
 }
 
 func createMySQLDir(portNo uint32) (string, error) {

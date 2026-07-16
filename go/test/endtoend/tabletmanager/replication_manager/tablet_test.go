@@ -19,10 +19,7 @@ package tabletmanager
 import (
 	"context"
 	"encoding/json"
-	"flag"
-	"fmt"
 	"net/http"
-	"os"
 	"slices"
 	"strconv"
 	"testing"
@@ -91,51 +88,40 @@ const (
 	resurrectedMySQLPort = 3307
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setup(t *testing.T) {
+	t.Helper()
+	ctx := t.Context()
 
-	exitCode := func() int {
-		ctx := context.Background()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithCells(cell),
+		vitesst.WithoutVTGate(),
+		vitesst.WithVTOrc("--clusters-to-watch", keyspaceName),
+		vitesst.WithKeyspace(keyspaceName).
+			WithShardNames(shardName).
+			WithReplicas(1).
+			WithSchema(sqlSchema).
+			WithVSchema(vSchema),
+	)
+	require.NoError(t, err)
 
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithCells(cell),
-			vitesst.WithoutVTGate(),
-			vitesst.WithVTOrc("--clusters-to-watch", keyspaceName),
-			vitesst.WithKeyspace(keyspaceName).
-				WithShardNames(shardName).
-				WithReplicas(1).
-				WithSchema(sqlSchema).
-				WithVSchema(vSchema),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+	cleanup, err := cluster.Start(ctx)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+		defer cancel()
+		if t.Failed() {
+			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
 		}
-
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+		if cleanupErr := cleanup(cleanupCtx); cleanupErr != nil {
+			t.Logf("cluster teardown: %v", cleanupErr)
 		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
+	require.NoError(t, err)
 
-		clusterInstance = cluster
-
-		// Collect the tablets of the shard
-		shard := cluster.Keyspace(keyspaceName).Shard(shardName)
-		primaryTablet = shard.Primary()
-		replicaTablet = shard.Replicas()[0]
-
-		// create tablet manager client
-		tmClient = tmc.NewClient()
-
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	clusterInstance = cluster
+	shard := cluster.Keyspace(keyspaceName).Shard(shardName)
+	primaryTablet = shard.Primary()
+	replicaTablet = shard.Replicas()[0]
+	tmClient = tmc.NewClient()
 }
 
 func tmcGetReplicationStatus(ctx context.Context, tablet *vitesst.Tablet) (*replicationdatapb.Status, error) {
@@ -242,6 +228,8 @@ func getSidecarDBDDLQueryCount(ctx context.Context, tablet *vitesst.Tablet) (int
 }
 
 func TestReplicationRepairAfterPrimaryTabletChange(t *testing.T) {
+	setup(t)
+
 	ctx := t.Context()
 	// Check that initially replication is setup correctly on the replica tablet
 	err := waitForSourcePort(ctx, replicaTablet, tabletMySQLPort)
@@ -283,6 +271,8 @@ func TestReplicationRepairAfterPrimaryTabletChange(t *testing.T) {
 }
 
 func TestReparentJournalInfo(t *testing.T) {
+	setup(t)
+
 	for _, vttablet := range clusterInstance.Keyspace(keyspaceName).Shard(shardName).Tablets() {
 		tablet, err := vttablet.TabletProto(t.Context())
 		require.NoError(t, err)

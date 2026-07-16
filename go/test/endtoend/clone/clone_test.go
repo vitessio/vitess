@@ -18,9 +18,7 @@ package clone
 
 import (
 	"context"
-	"flag"
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
@@ -70,48 +68,40 @@ GRANT BACKUP_ADMIN ON *.* TO 'vt_clone'@'%';`
 	cloneWaitTimeout = 5 * time.Minute
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setup(t *testing.T) {
+	t.Helper()
 
-	exitCode := func() int {
-		ctx := context.Background()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithCells(cell),
+		vitesst.WithoutVTGate(),
+		vitesst.WithTabletEnv(map[string]string{"EXTRA_MY_CNF": cloneCnfPath}),
+		vitesst.WithInitDBSQLExtra(initCloneSQL),
+		vitesst.WithVTTabletArgs(cloneArgs...),
+		// The donor keyspace holds the data the clone transfers.
+		vitesst.WithKeyspace(donorKeyspace).WithShardNames(shardName),
+		// The recipient keyspace has no primary, so its tablet stays an
+		// empty replica: nothing creates a database on its mysqld and
+		// nothing replicates into it before the clone runs.
+		vitesst.WithKeyspace(recipientKeyspace).WithShardNames(shardName).WithoutPrimaryElection(),
+	)
+	require.NoError(t, err)
 
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithCells(cell),
-			vitesst.WithoutVTGate(),
-			vitesst.WithTabletEnv(map[string]string{"EXTRA_MY_CNF": cloneCnfPath}),
-			vitesst.WithInitDBSQLExtra(initCloneSQL),
-			vitesst.WithVTTabletArgs(cloneArgs...),
-			// The donor keyspace holds the data the clone transfers.
-			vitesst.WithKeyspace(donorKeyspace).WithShardNames(shardName),
-			// The recipient keyspace has no primary, so its tablet stays an
-			// empty replica: nothing creates a database on its mysqld and
-			// nothing replicates into it before the clone runs.
-			vitesst.WithKeyspace(recipientKeyspace).WithShardNames(shardName).WithoutPrimaryElection(),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+	cleanup, err := cluster.Start(t.Context())
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Minute)
+		defer cancel()
+		if t.Failed() {
+			cluster.DumpDiagnostics(ctx, t.Logf)
 		}
-
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+		if cleanupErr := cleanup(ctx); cleanupErr != nil {
+			t.Logf("cluster teardown: %v", cleanupErr)
 		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
+	require.NoError(t, err)
 
-		clusterInstance = cluster
-		donorTablet = cluster.Keyspace(donorKeyspace).Shard(shardName).Primary()
-		recipientTablet = cluster.Keyspace(recipientKeyspace).Shard(shardName).Replicas()[0]
-
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	clusterInstance = cluster
+	donorTablet = cluster.Keyspace(donorKeyspace).Shard(shardName).Primary()
+	recipientTablet = cluster.Keyspace(recipientKeyspace).Shard(shardName).Replicas()[0]
 }
 
 // stopMysqldSafeForTablet stops mysqld_safe for a tablet without stopping
@@ -168,14 +158,10 @@ func waitForCloneResult(ctx context.Context, t *testing.T, tablet *vitesst.Table
 
 // TestCloneRemote tests MySQL CLONE INSTANCE functionality
 func TestCloneRemote(t *testing.T) {
+	setup(t)
+
 	ctx, cancel := context.WithTimeout(t.Context(), 6*time.Minute)
 	defer cancel()
-
-	t.Cleanup(func() {
-		if t.Failed() {
-			clusterInstance.DumpDiagnostics(context.WithoutCancel(ctx), t.Logf)
-		}
-	})
 
 	// Disable super_read_only so we can create test data
 	_, err := donorTablet.QueryTabletWithDB(ctx, "SET GLOBAL super_read_only = OFF", "")

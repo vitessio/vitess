@@ -129,6 +129,8 @@ func vtgateExec(t *testing.T, query string, expectError string) *sqltypes.Result
 }
 
 func TestInitialThrottler(t *testing.T) {
+	setup(t)
+
 	ctx := t.Context()
 
 	t.Run("validating OK response from disabled throttler", func(t *testing.T) {
@@ -273,10 +275,13 @@ func TestInitialThrottler(t *testing.T) {
 }
 
 func TestThrottleViaApplySchema(t *testing.T) {
+	setup(t)
+
 	ctx := t.Context()
 
 	t.Run("throttling via ApplySchema", func(t *testing.T) {
-		_, err := clusterInstance.Vtctld().ExecuteCommandWithOutput(ctx,
+		_, err := clusterInstance.Vtctld().ExecuteCommandWithOutput(
+			ctx,
 			"ApplySchema", "--sql", "alter vitess_migration throttle all", "--ddl-strategy", "online", keyspaceName,
 		)
 		assert.NoError(t, err)
@@ -297,7 +302,8 @@ func TestThrottleViaApplySchema(t *testing.T) {
 		assert.True(t, expireAt.After(time.Now()), "expected rule to expire in the future: %v", expireAt)
 	})
 	t.Run("unthrottling via ApplySchema", func(t *testing.T) {
-		_, err := clusterInstance.Vtctld().ExecuteCommandWithOutput(ctx,
+		_, err := clusterInstance.Vtctld().ExecuteCommandWithOutput(
+			ctx,
 			"ApplySchema", "--sql", "alter vitess_migration unthrottle all", "--ddl-strategy", "online", keyspaceName,
 		)
 		assert.NoError(t, err)
@@ -315,6 +321,8 @@ func TestThrottleViaApplySchema(t *testing.T) {
 }
 
 func TestThrottlerAfterMetricsCollected(t *testing.T) {
+	setup(t)
+
 	ctx := t.Context()
 
 	// By this time metrics will have been collected. We expect no lag, and something like:
@@ -339,6 +347,8 @@ func TestThrottlerAfterMetricsCollected(t *testing.T) {
 }
 
 func TestLag(t *testing.T) {
+	setup(t)
+
 	ctx := t.Context()
 
 	// Temporarily disable VTOrc recoveries because we want to
@@ -471,6 +481,8 @@ func TestLag(t *testing.T) {
 }
 
 func TestNoReplicas(t *testing.T) {
+	setup(t)
+
 	ctx := t.Context()
 
 	t.Run("changing replica to RDONLY", func(t *testing.T) {
@@ -490,6 +502,8 @@ func TestNoReplicas(t *testing.T) {
 }
 
 func TestCustomQuery(t *testing.T) {
+	setup(t)
+
 	ctx := t.Context()
 
 	t.Run("enabling throttler with custom query and threshold", func(t *testing.T) {
@@ -550,6 +564,8 @@ func TestCustomQuery(t *testing.T) {
 }
 
 func TestRestoreDefaultQuery(t *testing.T) {
+	setup(t)
+
 	ctx := t.Context()
 
 	// Validate going back from custom-query to default-query (replication lag) still works.
@@ -575,6 +591,8 @@ func TestRestoreDefaultQuery(t *testing.T) {
 }
 
 func TestUpdateMetricThresholds(t *testing.T) {
+	setup(t)
+
 	ctx := t.Context()
 
 	t.Run("validating pushback from throttler", func(t *testing.T) {
@@ -628,6 +646,8 @@ func TestUpdateMetricThresholds(t *testing.T) {
 }
 
 func TestUpdateAppCheckedMetrics(t *testing.T) {
+	setup(t)
+
 	ctx := t.Context()
 
 	t.Run("ensure replica is not dormant", func(t *testing.T) {

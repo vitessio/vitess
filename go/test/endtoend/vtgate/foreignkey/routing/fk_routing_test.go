@@ -19,10 +19,8 @@ package routing
 import (
 	"context"
 	_ "embed"
-	"flag"
-	"fmt"
-	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -45,48 +43,34 @@ var (
 	routingRules string
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setup(t *testing.T) {
+	t.Helper()
+	ctx := t.Context()
 
-	exitCode := func() int {
-		ctx := context.Background()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithKeyspace(sourceKs).
+			WithSchema(sourceSchema),
+		vitesst.WithKeyspace(targetKs).
+			WithSchema(targetSchema),
+	)
+	require.NoError(t, err)
 
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithKeyspace(sourceKs).
-				WithSchema(sourceSchema),
-			vitesst.WithKeyspace(targetKs).
-				WithSchema(targetSchema),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+	cleanup, err := cluster.Start(ctx)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), 30*time.Second)
+		defer cancel()
+		if t.Failed() {
+			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
 		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+		if err := cleanup(cleanupCtx); err != nil {
+			t.Logf("cluster teardown: %v", err)
 		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
 
-		clusterInstance = cluster
-
-		if err := cluster.Vtctld().ExecuteCommand(ctx, "ApplyRoutingRules", "--rules", routingRules); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-
-		if err := cluster.Vtctld().ExecuteCommand(ctx, "RebuildVSchemaGraph"); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	clusterInstance = cluster
+	require.NoError(t, cluster.Vtctld().ExecuteCommand(ctx, "ApplyRoutingRules", "--rules", routingRules))
+	require.NoError(t, cluster.Vtctld().ExecuteCommand(ctx, "RebuildVSchemaGraph"))
 }
 
 // TestForeignKeyRoutingRules validates that foreign key routing rules work correctly:
@@ -105,6 +89,8 @@ func TestMain(m *testing.M) {
 // This validates the core routing rules behavior: FKs are only established
 // where tables actually reside, preventing cross-keyspace relationships.
 func TestForeignKeyRoutingRules(t *testing.T) {
+	setup(t)
+
 	// Wait for schema tracking to complete
 	vitesst.WaitForVschemaCondition(t, clusterInstance.VTGate(), targetKs, func(t *testing.T, keyspace map[string]any) bool {
 		tables := keyspace["tables"].(map[string]any)

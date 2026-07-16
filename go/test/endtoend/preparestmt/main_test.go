@@ -22,10 +22,8 @@ import (
 	_ "embed"
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -132,66 +130,47 @@ var (
 	sVschema string
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setupCluster(t testing.TB) {
+	t.Helper()
+	ctx := t.Context()
+	dbInfo.KeyspaceName = uks
 
-	exitCode := func() int {
-		ctx := context.Background()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithKeyspace(uks).
+			WithReplicas(1).
+			WithSchema(uSQLSchema).
+			WithVSchema(uVschema),
+		vitesst.WithKeyspace(sks).
+			WithSchema(sSQLSchema).
+			WithVSchema(sVschema),
+		vitesst.WithVTGateFiles(vitesst.ContainerFile{
+			Content:       []byte(authServerJSON),
+			ContainerPath: authServerFile,
+		}),
+		vitesst.WithVTGateArgs(
+			"--mysql-server-query-timeout", "1s",
+			"--mysql-auth-server-impl", "static",
+			"--mysql-auth-server-static-file", authServerFile,
+			"--pprof-http",
+			"--schema-change-signal=false",
+		),
+	)
+	require.NoError(t, err)
+	cleanup, err := cluster.Start(ctx)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, cleanup(context.WithoutCancel(ctx)))
+	})
 
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithKeyspace(uks).
-				WithReplicas(1).
-				WithSchema(uSQLSchema).
-				WithVSchema(uVschema),
-			vitesst.WithKeyspace(sks).
-				WithSchema(sSQLSchema).
-				WithVSchema(sVschema),
-			vitesst.WithVTGateFiles(vitesst.ContainerFile{
-				Content:       []byte(authServerJSON),
-				ContainerPath: authServerFile,
-			}),
-			vitesst.WithVTGateArgs(
-				"--mysql-server-query-timeout", "1s",
-				"--mysql-auth-server-impl", "static",
-				"--mysql-auth-server-static-file", authServerFile,
-				"--pprof-http",
-				"--schema-change-signal=false",
-			),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	clusterInstance = cluster
 
-		clusterInstance = cluster
-
-		addr, err := cluster.VTGate().MySQLAddr(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		host, portStr, _ := strings.Cut(addr, ":")
-		port, err := strconv.Atoi(portStr)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		dbInfo.Host = host
-		dbInfo.Port = uint(port)
-
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	addr, err := cluster.VTGate().MySQLAddr(ctx)
+	require.NoError(t, err)
+	host, portStr, _ := strings.Cut(addr, ":")
+	port, err := strconv.Atoi(portStr)
+	require.NoError(t, err)
+	dbInfo.Host = host
+	dbInfo.Port = uint(port)
 }
 
 // ConnectionString generates the connection string using dbinfo.

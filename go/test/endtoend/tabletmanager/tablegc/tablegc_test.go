@@ -18,9 +18,7 @@ package tablegc
 import (
 	"context"
 	"errors"
-	"flag"
 	"fmt"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -79,48 +77,48 @@ var (
 	waitForTransitionTimeout  = 30 * time.Second
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setup(t *testing.T) {
+	t.Helper()
+	ctx := t.Context()
 
-	exitCode := func() int {
-		ctx := context.Background()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithVTOrc(),
+		vitesst.WithVTTabletArgs(
+			"--lock-tables-timeout", "5s",
+			"--enable-replication-reporter",
+			"--heartbeat-interval", "250ms",
+			"--gc-check-interval", gcCheckInterval.String(),
+			"--gc-purge-check-interval", gcPurgeCheckInterval.String(),
+			"--table-gc-lifecycle", "hold,purge,evac,drop",
+		),
+		vitesst.WithKeyspace(keyspaceName).
+			WithReplicas(1).
+			WithSchema(strings.Join(sqlSchema, ";")).
+			WithVSchema(vSchema),
+	)
+	require.NoError(t, err)
 
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithVTOrc(),
-			vitesst.WithVTTabletArgs(
-				"--lock-tables-timeout", "5s",
-				"--enable-replication-reporter",
-				"--heartbeat-interval", "250ms",
-				"--gc-check-interval", gcCheckInterval.String(),
-				"--gc-purge-check-interval", gcPurgeCheckInterval.String(),
-				"--table-gc-lifecycle", "hold,purge,evac,drop",
-			),
-			vitesst.WithKeyspace(keyspaceName).
-				WithReplicas(1).
-				WithSchema(strings.Join(sqlSchema, ";")).
-				WithVSchema(vSchema),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+	cleanup, err := cluster.Start(ctx)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+		defer cancel()
+		if t.Failed() {
+			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
 		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+		if cleanupErr := cleanup(cleanupCtx); cleanupErr != nil {
+			t.Logf("cluster teardown: %v", cleanupErr)
 		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
+	require.NoError(t, err)
 
-		clusterInstance = cluster
-		primaryTablet = cluster.Keyspace(keyspaceName).Shards()[0].Primary()
+	clusterInstance = cluster
+	primaryTablet = cluster.Keyspace(keyspaceName).Shards()[0].Primary()
 
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	mysqlVersion := getMySQLVersion(t)
+	capableOf := mysql.ServerVersionCapableOf(mysqlVersion)
+	require.NotNil(t, capableOf)
+	fastDropTable, err = capableOf(capabilities.FastDropTableFlavorCapability)
+	require.NoError(t, err)
 }
 
 func getTableRows(t *testing.T, tableName string) int64 {
@@ -296,6 +294,8 @@ func dropTable(t *testing.T, tableName string) {
 }
 
 func TestCapability(t *testing.T) {
+	setup(t)
+
 	mysqlVersion := getMySQLVersion(t)
 	require.NotEmpty(t, mysqlVersion)
 
@@ -319,6 +319,8 @@ func getMySQLVersion(t *testing.T) string {
 }
 
 func TestPopulateTable(t *testing.T) {
+	setup(t)
+
 	populateTable(t)
 	validateTableExists(t, "t1")
 	validateTableDoesNotExist(t, "no_such_table")
@@ -329,6 +331,8 @@ func generateRenameStatement(fromTableName string, state schema.TableGCState, tm
 }
 
 func TestHold(t *testing.T) {
+	setup(t)
+
 	populateTable(t)
 	query, tableName, err := generateRenameStatement("t1", schema.HoldTableGCState, time.Now().UTC().Add(tableTransitionExpiration))
 	assert.NoError(t, err)
@@ -358,6 +362,8 @@ func TestHold(t *testing.T) {
 }
 
 func TestEvac(t *testing.T) {
+	setup(t)
+
 	var tableName string
 	t.Run("setting up EVAC table", func(t *testing.T) {
 		populateTable(t)
@@ -393,6 +399,8 @@ func TestEvac(t *testing.T) {
 }
 
 func TestDrop(t *testing.T) {
+	setup(t)
+
 	populateTable(t)
 	query, tableName, err := generateRenameStatement("t1", schema.DropTableGCState, time.Now().UTC().Add(tableTransitionExpiration))
 	assert.NoError(t, err)
@@ -409,6 +417,8 @@ func TestDrop(t *testing.T) {
 }
 
 func TestPurge(t *testing.T) {
+	setup(t)
+
 	populateTable(t)
 	query, tableName, err := generateRenameStatement("t1", schema.PurgeTableGCState, time.Now().UTC().Add(tableTransitionExpiration))
 	require.NoError(t, err)
@@ -434,6 +444,8 @@ func TestPurge(t *testing.T) {
 }
 
 func TestPurgeView(t *testing.T) {
+	setup(t)
+
 	populateTable(t)
 	query, tableName, err := generateRenameStatement("v1", schema.PurgeTableGCState, time.Now().UTC().Add(tableTransitionExpiration))
 	require.NoError(t, err)
@@ -472,6 +484,8 @@ func TestPurgeView(t *testing.T) {
 }
 
 func TestDropView(t *testing.T) {
+	setup(t)
+
 	viewName, err := schema.GenerateGCTableName(schema.DropTableGCState, time.Now().Add(tableTransitionExpiration)) // shortly in the future
 	require.NoError(t, err)
 	createStatement := fmt.Sprintf("create or replace view %s as select 1", viewName)

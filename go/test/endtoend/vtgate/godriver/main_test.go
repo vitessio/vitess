@@ -18,9 +18,7 @@ package godriver
 
 import (
 	"context"
-	"flag"
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
@@ -34,9 +32,8 @@ import (
 )
 
 var (
-	clusterInstance *vitesst.Cluster
-	KeyspaceName    = "customer"
-	SchemaSQL       = `
+	KeyspaceName = "customer"
+	SchemaSQL    = `
 create table my_message(
 	# required columns
 	id bigint NOT NULL COMMENT 'often an event id, can also be auto-increment or a sequence',
@@ -81,44 +78,35 @@ create table my_message(
 	testMessage = "{\"message\":\"hello world\"}"
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setupCluster(t *testing.T) *vitesst.Cluster {
+	t.Helper()
 
-	exitCode := func() int {
-		ctx := context.Background()
+	ctx := t.Context()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithKeyspace(KeyspaceName).
+			WithShardNames("-80", "80-").
+			WithReplicas(1).
+			WithSchema(SchemaSQL).
+			WithVSchema(VSchema),
+		vitesst.WithVTTabletArgs("--queryserver-config-transaction-timeout", "3s"),
+		vitesst.WithVTGateArgs("--warn-sharded-only=true"),
+	)
+	require.NoError(t, err)
 
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithKeyspace(KeyspaceName).
-				WithShardNames("-80", "80-").
-				WithReplicas(1).
-				WithSchema(SchemaSQL).
-				WithVSchema(VSchema),
-			vitesst.WithVTTabletArgs("--queryserver-config-transaction-timeout", "3s"),
-			vitesst.WithVTGateArgs("--warn-sharded-only=true"),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+	cleanup, err := cluster.Start(ctx)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		if err := cleanup(context.WithoutCancel(ctx)); err != nil {
+			t.Logf("cluster teardown: %v", err)
 		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
 
-		clusterInstance = cluster
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	return cluster
 }
 
 func TestStreamMessaging(t *testing.T) {
 	ctx := t.Context()
+	clusterInstance := setupCluster(t)
 
 	grpcAddr, err := clusterInstance.VTGate().GRPCAddr(ctx)
 	require.NoError(t, err)

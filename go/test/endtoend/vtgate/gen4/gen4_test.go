@@ -31,6 +31,7 @@ import (
 )
 
 func TestOrderBy(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -45,6 +46,7 @@ func TestOrderBy(t *testing.T) {
 }
 
 func TestCorrelatedExistsSubquery(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -71,6 +73,7 @@ where exists(
 }
 
 func TestGroupBy(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -98,6 +101,7 @@ func TestGroupBy(t *testing.T) {
 }
 
 func TestJoinBindVars(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -108,6 +112,7 @@ func TestJoinBindVars(t *testing.T) {
 }
 
 func TestDistinctAggregationFunc(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -137,6 +142,7 @@ func TestDistinctAggregationFunc(t *testing.T) {
 }
 
 func TestDistinct(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -149,6 +155,7 @@ func TestDistinct(t *testing.T) {
 }
 
 func TestSubQueries(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -187,6 +194,7 @@ func TestSubQueriesOnOuterJoinOnCondition(t *testing.T) {
 }
 
 func TestHashJoin(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -200,6 +208,7 @@ func TestHashJoin(t *testing.T) {
 }
 
 func TestMultiColumnVindex(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 	mcmp.Exec(`insert into user_region(id, cola, colb) values (1, 1, 2),(2, 30, 40),(3, 500, 600),(4, 30, 40),(5, 10000, 30000),(6, 422333, 40),(7, 30, 60)`)
@@ -217,6 +226,7 @@ func TestMultiColumnVindex(t *testing.T) {
 }
 
 func TestFanoutVindex(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -267,6 +277,7 @@ func TestFanoutVindex(t *testing.T) {
 }
 
 func TestSubShardVindex(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -323,6 +334,7 @@ func TestSubShardVindex(t *testing.T) {
 }
 
 func TestSubShardVindexDML(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -377,6 +389,7 @@ func TestSubShardVindexDML(t *testing.T) {
 }
 
 func TestOuterJoin(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -394,6 +407,7 @@ func TestOuterJoin(t *testing.T) {
 }
 
 func TestUsingJoin(t *testing.T) {
+	setup(t)
 	require.NoError(t, vitesst.WaitForAuthoritative(t, shardedKs, "t1", func() (*any, error) {
 		return clusterInstance.VTGate().ReadVSchema(t.Context())
 	}))
@@ -427,6 +441,7 @@ func TestUsingJoin(t *testing.T) {
 
 // TestInsertFunction tests the INSERT function
 func TestInsertFunction(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -437,6 +452,7 @@ func TestInsertFunction(t *testing.T) {
 
 // TestGTIDFunctions tests the gtid functions
 func TestGTIDFunctions(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -445,6 +461,7 @@ func TestGTIDFunctions(t *testing.T) {
 }
 
 func TestFilterOnLeftOuterJoin(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -467,6 +484,7 @@ func TestFilterOnLeftOuterJoin(t *testing.T) {
 }
 
 func TestPercentageAndUnderscore(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -497,6 +515,7 @@ func TestPercentageAndUnderscore(t *testing.T) {
 
 // TestDualJoinQueries tests that queries having a join between a dual query and another query work as intended.
 func TestDualJoinQueries(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 

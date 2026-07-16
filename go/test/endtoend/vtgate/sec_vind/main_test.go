@@ -19,10 +19,8 @@ package vtgate
 import (
 	"context"
 	_ "embed"
-	"flag"
-	"fmt"
-	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -31,9 +29,7 @@ import (
 )
 
 var (
-	clusterInstance *vitesst.Cluster
-	vtParams        mysql.ConnParams
-	KeyspaceName    = "ks"
+	KeyspaceName = "ks"
 
 	//go:embed schema.sql
 	SchemaSQL string
@@ -42,41 +38,35 @@ var (
 	VSchema string
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setup(t *testing.T) mysql.ConnParams {
+	t.Helper()
+	ctx := t.Context()
 
-	exitCode := func() int {
-		ctx := context.Background()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithKeyspace(KeyspaceName).
+			WithShards(2).
+			WithSchema(SchemaSQL).
+			WithVSchema(VSchema),
+	)
+	require.NoError(t, err)
 
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithKeyspace(KeyspaceName).
-				WithShards(2).
-				WithSchema(SchemaSQL).
-				WithVSchema(VSchema),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+	cleanup, err := cluster.Start(ctx)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+		defer cancel()
+		if t.Failed() {
+			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
 		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+		if cleanupErr := cleanup(cleanupCtx); cleanupErr != nil {
+			t.Logf("cluster teardown: %v", cleanupErr)
 		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
+	require.NoError(t, err)
 
-		clusterInstance = cluster
-		vtParams = cluster.VTParams(ctx, "")
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	return cluster.VTParams(ctx, "")
 }
 
-func start(t *testing.T) (*mysql.Conn, func()) {
+func start(t *testing.T, vtParams mysql.ConnParams) (*mysql.Conn, func()) {
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
@@ -99,7 +89,8 @@ func start(t *testing.T) (*mysql.Conn, func()) {
 }
 
 func TestInAgainstSecondaryVindex(t *testing.T) {
-	conn, closer := start(t)
+	vtParams := setup(t)
+	conn, closer := start(t, vtParams)
 	defer closer()
 
 	vitesst.AssertMatches(t, conn, `select 1 from t1 where c2 in ("abc")`, "[]")

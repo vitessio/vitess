@@ -38,6 +38,7 @@ var lastUsedValue int
 
 // TestAPIEndpoints tests the various API endpoints that VTOrc offers.
 func TestAPIEndpoints(t *testing.T) {
+	clusterInstance = setupCluster(t)
 	ctx := t.Context()
 
 	keyspace := clusterInstance.Keyspace(keyspaceName)

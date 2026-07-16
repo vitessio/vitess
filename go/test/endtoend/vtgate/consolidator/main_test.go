@@ -19,10 +19,8 @@ package vtgate
 import (
 	"bufio"
 	"context"
-	"flag"
 	"fmt"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -43,10 +41,8 @@ type consolidatorTestCase struct {
 }
 
 var (
-	clusterInstance *vitesst.Cluster
-	vtParams        mysql.ConnParams
-	KeyspaceName    = "ks"
-	SchemaSQL       = `create table t1(
+	KeyspaceName = "ks"
+	SchemaSQL    = `create table t1(
 	id1 bigint,
 	id2 bigint,
 	primary key(id1)
@@ -66,60 +62,41 @@ var (
 }`
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setupCluster(t *testing.T) (*vitesst.Cluster, mysql.ConnParams) {
+	t.Helper()
 
-	exitCode := func() int {
-		ctx := context.Background()
+	ctx := t.Context()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithKeyspace(KeyspaceName).
+			WithReplicas(1).
+			WithSchema(SchemaSQL).
+			WithVSchema(VSchema),
+	)
+	require.NoError(t, err)
 
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithKeyspace(KeyspaceName).
-				WithReplicas(1).
-				WithSchema(SchemaSQL).
-				WithVSchema(VSchema),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+	cleanup, err := cluster.Start(ctx)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		if err := cleanup(context.WithoutCancel(ctx)); err != nil {
+			t.Logf("cluster teardown: %v", err)
 		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
 
-		clusterInstance = cluster
-		vtParams = cluster.VTParams(ctx, "")
+	vtParams := cluster.VTParams(ctx, "")
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		conn.Close()
+	})
+	vitesst.Exec(t, conn, `insert into t1(id1, id2) values (1, 1)`)
 
-		conn, err := mysql.Connect(ctx, &vtParams)
-		if err != nil {
-			return 1
-		}
-		defer conn.Close()
-
-		// Insert some test data.
-		_, err = conn.ExecuteFetch(`insert into t1(id1, id2) values (1, 1)`, 1000, true)
-		if err != nil {
-			return 1
-		}
-		defer func() {
-			conn.ExecuteFetch(`use @primary`, 1000, true)
-			conn.ExecuteFetch(`delete from t1`, 1000, true)
-		}()
-
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	return cluster, vtParams
 }
 
 func TestConsolidatorEnabledByDefault(t *testing.T) {
+	clusterInstance, vtParams := setupCluster(t)
 	shard := clusterInstance.Keyspace(KeyspaceName).Shard("-")
-	testConsolidator(t, []consolidatorTestCase{
+	testConsolidator(t, vtParams, []consolidatorTestCase{
 		{
 			"@primary",
 			shard.Primary(),
@@ -136,8 +113,9 @@ func TestConsolidatorEnabledByDefault(t *testing.T) {
 }
 
 func TestConsolidatorEnabledWithDirective(t *testing.T) {
+	clusterInstance, vtParams := setupCluster(t)
 	shard := clusterInstance.Keyspace(KeyspaceName).Shard("-")
-	testConsolidator(t, []consolidatorTestCase{
+	testConsolidator(t, vtParams, []consolidatorTestCase{
 		{
 			"@primary",
 			shard.Primary(),
@@ -154,8 +132,9 @@ func TestConsolidatorEnabledWithDirective(t *testing.T) {
 }
 
 func TestConsolidatorDisabledWithDirective(t *testing.T) {
+	clusterInstance, vtParams := setupCluster(t)
 	shard := clusterInstance.Keyspace(KeyspaceName).Shard("-")
-	testConsolidator(t, []consolidatorTestCase{
+	testConsolidator(t, vtParams, []consolidatorTestCase{
 		{
 			"@primary",
 			shard.Primary(),
@@ -172,8 +151,9 @@ func TestConsolidatorDisabledWithDirective(t *testing.T) {
 }
 
 func TestConsolidatorEnabledReplicasWithDirective(t *testing.T) {
+	clusterInstance, vtParams := setupCluster(t)
 	shard := clusterInstance.Keyspace(KeyspaceName).Shard("-")
-	testConsolidator(t, []consolidatorTestCase{
+	testConsolidator(t, vtParams, []consolidatorTestCase{
 		{
 			"@primary",
 			shard.Primary(),
@@ -189,7 +169,7 @@ func TestConsolidatorEnabledReplicasWithDirective(t *testing.T) {
 	})
 }
 
-func testConsolidator(t *testing.T, testCases []consolidatorTestCase) {
+func testConsolidator(t *testing.T, vtParams mysql.ConnParams, testCases []consolidatorTestCase) {
 	for _, testCase := range testCases {
 		t.Run(fmt.Sprintf("%s%s", testCase.query, testCase.tabletType), func(t *testing.T) {
 			// Create a connection.

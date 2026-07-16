@@ -18,9 +18,7 @@ package ectd2
 
 import (
 	"context"
-	"flag"
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
@@ -60,42 +58,37 @@ CREATE TABLE t1 (
 `
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setupCluster(t *testing.T) {
+	t.Helper()
+	ctx := t.Context()
 
-	exitCode := func() int {
-		ctx := context.Background()
-
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithTopo("etcd2"),
-			vitesst.WithKeyspace(KeyspaceName).
-				WithShardNames("0").
-				WithSchema(SchemaSQL).
-				WithVSchema(VSchema),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithTopo("etcd2"),
+		vitesst.WithKeyspace(KeyspaceName).
+			WithShardNames("0").
+			WithSchema(SchemaSQL).
+			WithVSchema(VSchema),
+	)
+	require.NoError(t, err)
+	cleanup, err := cluster.Start(ctx)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+		defer cancel()
+		if t.Failed() {
+			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
 		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+		if cleanupErr := cleanup(cleanupCtx); cleanupErr != nil {
+			t.Logf("cluster teardown: %v", cleanupErr)
 		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
 
-		clusterInstance = cluster
-		vtParams = cluster.VTParams(ctx, "")
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	clusterInstance = cluster
+	vtParams = cluster.VTParams(ctx, "")
 }
 
 func TestTopoDownServingQuery(t *testing.T) {
+	setupCluster(t)
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
@@ -115,6 +108,7 @@ func TestTopoDownServingQuery(t *testing.T) {
 
 // TestShardLocking tests that shard locking works as intended.
 func TestShardLocking(t *testing.T) {
+	setupCluster(t)
 	// create topo server connection
 	addr, err := clusterInstance.Topo().HTTPAddr(t.Context())
 	require.NoError(t, err)
@@ -161,6 +155,7 @@ func TestShardLocking(t *testing.T) {
 
 // TestKeyspaceLocking tests that keyspace locking works as intended.
 func TestKeyspaceLocking(t *testing.T) {
+	setupCluster(t)
 	// create topo server connection
 	addr, err := clusterInstance.Topo().HTTPAddr(t.Context())
 	require.NoError(t, err)
@@ -204,6 +199,7 @@ func TestKeyspaceLocking(t *testing.T) {
 
 // TestLockingWithTTL tests that locking with the TTL override works as intended.
 func TestLockingWithTTL(t *testing.T) {
+	setupCluster(t)
 	// Create the topo server connection.
 	addr, err := clusterInstance.Topo().HTTPAddr(t.Context())
 	require.NoError(t, err)
@@ -227,6 +223,7 @@ func TestLockingWithTTL(t *testing.T) {
 
 // TestNamedLocking tests that named locking works as intended.
 func TestNamedLocking(t *testing.T) {
+	setupCluster(t)
 	// Create topo server connection.
 	addr, err := clusterInstance.Topo().HTTPAddr(t.Context())
 	require.NoError(t, err)

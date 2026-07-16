@@ -29,7 +29,8 @@ import (
 
 // TestSessionModeBalancer tests the "session" mode routes each session consistently to the same tablet.
 func TestSessionModeBalancer(t *testing.T) {
-	vtParams, _, _ := setupCluster(t)
+	cluster := setupCluster(t)
+	vtParams, _, _ := setupSessionBalancer(t, cluster)
 
 	// Create 2 session connections that route to different tablets
 	conns := createSessionConnections(t, &vtParams, 2)
@@ -43,7 +44,8 @@ func TestSessionModeBalancer(t *testing.T) {
 // TestSessionModeRemoveTablet tests that when a tablet is killed, connections switch to remaining tablets
 func TestSessionModeRemoveTablet(t *testing.T) {
 	ctx := t.Context()
-	vtParams, replicaTablets, aliases := setupCluster(t)
+	cluster := setupCluster(t)
+	vtParams, replicaTablets, aliases := setupSessionBalancer(t, cluster)
 
 	// Create 2 connections to different tablets
 	conns := createSessionConnections(t, &vtParams, 2)
@@ -99,20 +101,24 @@ func TestSessionModeRemoveTablet(t *testing.T) {
 }
 
 // setupCluster sets up a cluster with a vtgate using the session balancer.
-func setupCluster(t *testing.T) (mysql.ConnParams, []*vitesst.Tablet, map[string]int64) {
+func setupSessionBalancer(
+	t *testing.T,
+	cluster *vitesst.Cluster,
+) (mysql.ConnParams, []*vitesst.Tablet, map[string]int64) {
 	t.Helper()
 
 	ctx := t.Context()
 
 	// Start vtgate in cell1 with session mode
-	vtgate, err := clusterInstance.AddVTGate(ctx,
+	vtgate, err := cluster.AddVTGate(
+		ctx,
 		"--vtgate-balancer-mode", "session",
 	)
 	require.NoError(t, err)
 
 	vtParams := vtgateParams(t, ctx, vtgate)
 
-	shard := clusterInstance.Keyspace(keyspaceName).Shards()[0]
+	shard := cluster.Keyspace(keyspaceName).Shards()[0]
 	allTablets := shard.Tablets()
 	shardName := shard.Name
 	replicaTablets := replicaTablets(allTablets)

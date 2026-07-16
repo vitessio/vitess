@@ -25,6 +25,7 @@ import (
 )
 
 func TestFallbackSecurityPolicy(t *testing.T) {
+	setup(t)
 	ctx := t.Context()
 	mTablet, err := clusterInstance.AddTablet(ctx, cell, keyspaceName, shardName, "replica")
 	require.NoError(t, err)
@@ -66,6 +67,7 @@ func assertAllowedURLTest(t *testing.T, tablet *vitesst.Tablet, path string) {
 }
 
 func TestDenyAllSecurityPolicy(t *testing.T) {
+	setup(t)
 	ctx := t.Context()
 	mTablet, err := clusterInstance.AddTablet(ctx, cell, keyspaceName, shardName, "replica")
 	require.NoError(t, err)
@@ -92,6 +94,7 @@ func TestDenyAllSecurityPolicy(t *testing.T) {
 }
 
 func TestReadOnlySecurityPolicy(t *testing.T) {
+	setup(t)
 	ctx := t.Context()
 	mTablet, err := clusterInstance.AddTablet(ctx, cell, keyspaceName, shardName, "replica")
 	require.NoError(t, err)

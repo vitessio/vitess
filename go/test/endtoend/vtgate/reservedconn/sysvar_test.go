@@ -31,6 +31,7 @@ import (
 )
 
 func TestSetSysVarSingle(t *testing.T) {
+	setup(t)
 	ctx := t.Context()
 	type queriesWithExpectations struct {
 		name, expr string
@@ -90,6 +91,7 @@ func TestSetSysVarSingle(t *testing.T) {
 }
 
 func TestSetSystemVariable(t *testing.T) {
+	setup(t)
 	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -108,6 +110,7 @@ func TestSetSystemVariable(t *testing.T) {
 }
 
 func TestSetSystemVarWithTxFailure(t *testing.T) {
+	setup(t)
 	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -135,6 +138,7 @@ func TestSetSystemVarWithTxFailure(t *testing.T) {
 }
 
 func TestSetSystemVarWithConnectionTimeout(t *testing.T) {
+	setup(t)
 	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -152,6 +156,7 @@ func TestSetSystemVarWithConnectionTimeout(t *testing.T) {
 }
 
 func TestSetSystemVariableAndThenSuccessfulTx(t *testing.T) {
+	setup(t)
 	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -166,6 +171,7 @@ func TestSetSystemVariableAndThenSuccessfulTx(t *testing.T) {
 }
 
 func TestSetSystemVariableAndThenSuccessfulAutocommitDML(t *testing.T) {
+	setup(t)
 	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -197,6 +203,7 @@ func TestSetSystemVariableAndThenSuccessfulAutocommitDML(t *testing.T) {
 // changing the session transaction isolation level affects only the next
 // transaction that's started.
 func TestSetSystemVariableWithAutocommitDisabled(t *testing.T) {
+	setup(t)
 	conn1, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn1.Close()
@@ -220,6 +227,7 @@ func TestSetSystemVariableWithAutocommitDisabled(t *testing.T) {
 }
 
 func TestStartTxAndSetSystemVariableAndThenSuccessfulCommit(t *testing.T) {
+	setup(t)
 	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -234,6 +242,7 @@ func TestStartTxAndSetSystemVariableAndThenSuccessfulCommit(t *testing.T) {
 }
 
 func TestSetSystemVarAutocommitWithConnError(t *testing.T) {
+	setup(t)
 	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -260,6 +269,7 @@ func TestSetSystemVarAutocommitWithConnError(t *testing.T) {
 }
 
 func TestSetSystemVarInTxWithConnError(t *testing.T) {
+	setup(t)
 	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -290,6 +300,7 @@ func TestSetSystemVarInTxWithConnError(t *testing.T) {
 }
 
 func BenchmarkReservedConnFieldQuery(b *testing.B) {
+	setup(b)
 	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(b, err)
 	defer conn.Close()
@@ -307,6 +318,7 @@ func BenchmarkReservedConnFieldQuery(b *testing.B) {
 }
 
 func TestEnableSystemSettings(t *testing.T) {
+	setup(t)
 	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -334,6 +346,7 @@ func TestEnableSystemSettings(t *testing.T) {
 
 // Tests type consitency through multiple queries
 func TestSystemVariableType(t *testing.T) {
+	setup(t)
 	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -353,6 +366,7 @@ func TestSystemVariableType(t *testing.T) {
 }
 
 func TestSysvarSocket(t *testing.T) {
+	setup(t)
 	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -370,6 +384,7 @@ func TestSysvarSocket(t *testing.T) {
 }
 
 func TestReservedConnInStreaming(t *testing.T) {
+	setup(t)
 	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -385,6 +400,7 @@ func TestReservedConnInStreaming(t *testing.T) {
 }
 
 func TestUnifiedOlapAndOltp(t *testing.T) {
+	setup(t)
 	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -439,6 +455,7 @@ func checkOltpAndOlapInterchangingTx(t *testing.T, conn *mysql.Conn) {
 }
 
 func TestSysVarTxIsolation(t *testing.T) {
+	setup(t)
 	t.Run("returns the default isolation level if unchanged", func(t *testing.T) {
 		conn, err := mysql.Connect(t.Context(), &vtParams)
 		require.NoError(t, err)
@@ -511,6 +528,7 @@ func TestSysVarTxIsolation(t *testing.T) {
 
 // TestSysVarInnodbWaitTimeout tests the innodb_lock_wait_timeout system variable
 func TestSysVarInnodbWaitTimeout(t *testing.T) {
+	setup(t)
 	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -545,6 +563,7 @@ func TestSysVarInnodbWaitTimeout(t *testing.T) {
 // transactions for statements that access real table data when autocommit=0,
 // matching MySQL's behavior.
 func TestImplicitTxOnAutocommitOff(t *testing.T) {
+	setup(t)
 	tests := []struct {
 		name     string
 		query    string

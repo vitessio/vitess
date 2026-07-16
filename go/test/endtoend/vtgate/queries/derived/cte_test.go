@@ -21,6 +21,7 @@ import (
 )
 
 func TestCTEWithOrderByLimit(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -28,6 +29,7 @@ func TestCTEWithOrderByLimit(t *testing.T) {
 }
 
 func TestCTEAggregationOnRHS(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -36,6 +38,7 @@ func TestCTEAggregationOnRHS(t *testing.T) {
 }
 
 func TestCTERemoveInnerOrderBy(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -43,6 +46,7 @@ func TestCTERemoveInnerOrderBy(t *testing.T) {
 }
 
 func TestCTEWithHaving(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -53,6 +57,7 @@ func TestCTEWithHaving(t *testing.T) {
 }
 
 func TestCTEColumns(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -61,6 +66,7 @@ func TestCTEColumns(t *testing.T) {
 }
 
 func TestCTEAggregationsInUnion(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 

@@ -37,9 +37,11 @@ var replicaStr = strings.ToLower(topodata.TabletType_REPLICA.String())
 // TestCellModeBalancer tests the default "cell" mode which shuffles tablets in the local cell
 func TestCellModeBalancer(t *testing.T) {
 	ctx := t.Context()
+	clusterInstance := setupCluster(t)
 
 	// Start vtgate in cell1 with cell mode (default)
-	vtgate, err := clusterInstance.AddVTGate(ctx,
+	vtgate, err := clusterInstance.AddVTGate(
+		ctx,
 		"--vtgate-balancer-mode", "cell",
 	)
 	require.NoError(t, err)
@@ -95,9 +97,11 @@ func TestCellModeBalancer(t *testing.T) {
 // TestPreferCell tests the "prefer-cell" mode which maintains cell affinity while balancing load
 func TestPreferCell(t *testing.T) {
 	ctx := t.Context()
+	clusterInstance := setupCluster(t)
 
 	// Start vtgate in cell1 with prefer-cell mode
-	vtgate, err := clusterInstance.AddVTGate(ctx,
+	vtgate, err := clusterInstance.AddVTGate(
+		ctx,
 		"--vtgate-balancer-mode", "prefer-cell",
 		"--balancer-vtgate-cells", fmt.Sprintf("%s,%s", cell1, cell2),
 	)
@@ -152,9 +156,11 @@ func TestPreferCell(t *testing.T) {
 // TestRandomModeBalancer tests the "random" mode which uniformly distributes load
 func TestRandomModeBalancer(t *testing.T) {
 	ctx := t.Context()
+	clusterInstance := setupCluster(t)
 
 	// Start vtgate in cell1 with random mode
-	vtgate, err := clusterInstance.AddVTGate(ctx,
+	vtgate, err := clusterInstance.AddVTGate(
+		ctx,
 		"--vtgate-balancer-mode", "random",
 	)
 	require.NoError(t, err)
@@ -218,9 +224,11 @@ func TestRandomModeBalancer(t *testing.T) {
 // TestRandomModeWithCellFiltering tests random mode with cell filtering via balancer-vtgate-cells
 func TestRandomModeWithCellFiltering(t *testing.T) {
 	ctx := t.Context()
+	clusterInstance := setupCluster(t)
 
 	// Start vtgate in cell1 with random mode but filter to only cell1 tablets
-	vtgate, err := clusterInstance.AddVTGate(ctx,
+	vtgate, err := clusterInstance.AddVTGate(
+		ctx,
 		"--vtgate-balancer-mode", "random",
 		"--balancer-vtgate-cells", cell1, // only consider cell1 tablets
 	)
@@ -279,9 +287,11 @@ func TestRandomModeWithCellFiltering(t *testing.T) {
 // TestDeprecatedEnableBalancerFlag tests backward compatibility with --enable-balancer flag
 func TestDeprecatedEnableBalancerFlag(t *testing.T) {
 	ctx := t.Context()
+	clusterInstance := setupCluster(t)
 
 	// Start vtgate with deprecated --enable-balancer flag
-	vtgate, err := clusterInstance.AddVTGate(ctx,
+	vtgate, err := clusterInstance.AddVTGate(
+		ctx,
 		"--enable-balancer",
 		"--balancer-vtgate-cells", fmt.Sprintf("%s,%s", cell1, cell2),
 	)

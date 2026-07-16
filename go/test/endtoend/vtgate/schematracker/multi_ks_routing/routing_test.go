@@ -19,10 +19,9 @@ package multiksrouting
 import (
 	"context"
 	_ "embed"
-	"flag"
 	"fmt"
-	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -31,10 +30,8 @@ import (
 )
 
 var (
-	clusterInstance *vitesst.Cluster
-	vtParams        mysql.ConnParams
-	ksA             = "ks_a"
-	ksB             = "ks_b"
+	ksA = "ks_a"
+	ksB = "ks_b"
 
 	//go:embed schema_a.sql
 	schemaA string
@@ -49,54 +46,42 @@ var (
 	routingRules string
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setup(t *testing.T) (*vitesst.Cluster, mysql.ConnParams) {
+	t.Helper()
+	ctx := t.Context()
 
-	exitCode := func() int {
-		ctx := context.Background()
+	// Two unsharded keyspaces, each with a single table on the tablet but
+	// an explicit empty vschema (the schema tracker is the only source of
+	// column info). The vschema is set explicitly rather than left to a
+	// default so the test always pins down the routing-rules-only +
+	// schema-tracker scenario regardless of vtctld defaults.
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithKeyspace(ksA).
+			WithSchema(schemaA).
+			WithVSchema(emptyVSchema),
+		vitesst.WithKeyspace(ksB).
+			WithSchema(schemaB).
+			WithVSchema(emptyVSchema),
+	)
+	require.NoError(t, err)
 
-		// Two unsharded keyspaces, each with a single table on the tablet but
-		// an explicit empty vschema (the schema tracker is the only source of
-		// column info). The vschema is set explicitly rather than left to a
-		// default so the test always pins down the routing-rules-only +
-		// schema-tracker scenario regardless of vtctld defaults.
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithKeyspace(ksA).
-				WithSchema(schemaA).
-				WithVSchema(emptyVSchema),
-			vitesst.WithKeyspace(ksB).
-				WithSchema(schemaB).
-				WithVSchema(emptyVSchema),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+	cleanup, err := cluster.Start(ctx)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Minute)
+		defer cancel()
+		if t.Failed() {
+			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
 		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+		if err := cleanup(cleanupCtx); err != nil {
+			t.Logf("cluster teardown: %v", err)
 		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
 
-		if err := cluster.Vtctld().ExecuteCommand(ctx, "ApplyRoutingRules", "--rules", routingRules); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		if err := cluster.Vtctld().ExecuteCommand(ctx, "RebuildVSchemaGraph"); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
+	require.NoError(t, cluster.Vtctld().ExecuteCommand(ctx, "ApplyRoutingRules", "--rules", routingRules))
+	require.NoError(t, cluster.Vtctld().ExecuteCommand(ctx, "RebuildVSchemaGraph"))
 
-		clusterInstance = cluster
-		vtParams = cluster.VTParams(ctx, "")
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	return cluster, cluster.VTParams(ctx, "")
 }
 
 // TestRoutedTableColumnsAreAuthoritativeForStarExpansion exercises the case
@@ -114,6 +99,7 @@ func TestMain(m *testing.M) {
 //
 // All four should plan and return the seeded rows.
 func TestRoutedTableColumnsAreAuthoritativeForStarExpansion(t *testing.T) {
+	cluster, vtParams := setup(t)
 	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -124,7 +110,7 @@ func TestRoutedTableColumnsAreAuthoritativeForStarExpansion(t *testing.T) {
 	// authoritativeness bug we're actually testing.
 	waitForColumns := func(ks, tbl string, want int) {
 		t.Helper()
-		vitesst.WaitForVschemaCondition(t, clusterInstance.VTGate(), ks,
+		vitesst.WaitForVschemaCondition(t, cluster.VTGate(), ks,
 			func(t *testing.T, keyspace map[string]any) bool {
 				tables, ok := keyspace["tables"].(map[string]any)
 				if !ok {

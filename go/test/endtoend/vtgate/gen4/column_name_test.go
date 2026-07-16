@@ -27,6 +27,7 @@ import (
 )
 
 func TestColumnNames(t *testing.T) {
+	setup(t)
 	ctx := t.Context()
 
 	conn, err := mysql.Connect(ctx, &vtParams)

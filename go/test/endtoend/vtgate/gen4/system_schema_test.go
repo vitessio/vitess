@@ -28,6 +28,7 @@ import (
 )
 
 func TestDbNameOverride(t *testing.T) {
+	setup(t)
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
@@ -50,6 +51,7 @@ func TestDbNameOverride(t *testing.T) {
 }
 
 func TestInformationSchemaQuery(t *testing.T) {
+	setup(t)
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
@@ -84,6 +86,7 @@ func assertSingleRowIsReturned(t *testing.T, conn *mysql.Conn, predicate string,
 }
 
 func TestInformationSchemaWithSubquery(t *testing.T) {
+	setup(t)
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
@@ -94,6 +97,7 @@ func TestInformationSchemaWithSubquery(t *testing.T) {
 }
 
 func TestInformationSchemaQueryGetsRoutedToTheRightTableAndKeyspace(t *testing.T) {
+	setup(t)
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
@@ -105,6 +109,7 @@ func TestInformationSchemaQueryGetsRoutedToTheRightTableAndKeyspace(t *testing.T
 }
 
 func TestFKConstraintUsingInformationSchema(t *testing.T) {
+	setup(t)
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
@@ -122,6 +127,7 @@ func TestFKConstraintUsingInformationSchema(t *testing.T) {
 }
 
 func TestConnectWithSystemSchema(t *testing.T) {
+	setup(t)
 	ctx := t.Context()
 	for _, dbname := range []string{"information_schema", "mysql", "performance_schema", "sys"} {
 		connParams := vtParams
@@ -134,6 +140,7 @@ func TestConnectWithSystemSchema(t *testing.T) {
 }
 
 func TestUseSystemSchema(t *testing.T) {
+	setup(t)
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
@@ -145,6 +152,7 @@ func TestUseSystemSchema(t *testing.T) {
 }
 
 func TestSystemSchemaQueryWithoutQualifier(t *testing.T) {
+	setup(t)
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
@@ -179,6 +187,7 @@ func TestSystemSchemaQueryWithoutQualifier(t *testing.T) {
 }
 
 func TestMultipleSchemaPredicates(t *testing.T) {
+	setup(t)
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
@@ -204,6 +213,7 @@ func TestMultipleSchemaPredicates(t *testing.T) {
 }
 
 func TestQuerySystemTables(t *testing.T) {
+	setup(t)
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)

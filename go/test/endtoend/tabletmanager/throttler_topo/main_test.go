@@ -17,10 +17,10 @@ package throttler
 
 import (
 	"context"
-	"flag"
-	"fmt"
-	"os"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/vitesst"
@@ -63,54 +63,43 @@ var (
 	}`
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setup(t *testing.T) {
+	t.Helper()
+	ctx := t.Context()
 
-	exitCode := func() int {
-		ctx := context.Background()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithCells(cell),
+		vitesst.WithVTTabletArgs(
+			"--lock-tables-timeout", "5s",
+			"--enable-replication-reporter",
+			"--heartbeat-interval", "250ms",
+			"--heartbeat-on-demand-duration", onDemandHeartbeatDuration.String(),
+		),
+		vitesst.WithVTOrc(),
+		vitesst.WithKeyspace(keyspaceName).
+			WithShardNames(shardName).
+			WithReplicas(1).
+			WithSchema(sqlSchema).
+			WithVSchema(vSchema),
+	)
+	require.NoError(t, err)
 
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithCells(cell),
-			// Set extra tablet args for lock timeout
-			vitesst.WithVTTabletArgs(
-				"--lock-tables-timeout", "5s",
-				"--enable-replication-reporter",
-				"--heartbeat-interval", "250ms",
-				"--heartbeat-on-demand-duration", onDemandHeartbeatDuration.String(),
-			),
-			vitesst.WithVTOrc(),
-			vitesst.WithKeyspace(keyspaceName).
-				WithShardNames(shardName).
-				WithReplicas(1).
-				WithSchema(sqlSchema).
-				WithVSchema(vSchema),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+	cleanup, err := cluster.Start(ctx)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+		defer cancel()
+		if t.Failed() {
+			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
 		}
-
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+		if cleanupErr := cleanup(cleanupCtx); cleanupErr != nil {
+			t.Logf("cluster teardown: %v", cleanupErr)
 		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
+	require.NoError(t, err)
 
-		clusterInstance = cluster
-
-		// Collect the tablets of the single shard.
-		shard := cluster.Keyspace(keyspaceName).Shard(shardName)
-		primaryTablet = shard.Primary()
-		replicaTablet = shard.Replicas()[0]
-
-		vtParams = cluster.VTParams(ctx, "")
-
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	clusterInstance = cluster
+	shard := cluster.Keyspace(keyspaceName).Shard(shardName)
+	primaryTablet = shard.Primary()
+	replicaTablet = shard.Replicas()[0]
+	vtParams = cluster.VTParams(ctx, "")
 }

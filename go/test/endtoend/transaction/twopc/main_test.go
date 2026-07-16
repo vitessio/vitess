@@ -20,10 +20,8 @@ import (
 	"context"
 	_ "embed"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"io"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -64,68 +62,71 @@ var (
 	VSchema string
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setup(t *testing.T) {
+	t.Helper()
 
-	exitcode := func() int {
-		ctx := context.Background()
+	clusterInstance = nil
+	mysqlParams = mysql.ConnParams{}
+	vtParams = mysql.ConnParams{}
+	sm.reset()
+	t.Cleanup(func() {
+		clusterInstance = nil
+		mysqlParams = mysql.ConnParams{}
+		vtParams = mysql.ConnParams{}
+		sm.reset()
+	})
 
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithVTGateArgs("--grpc-use-effective-callerid"),
-			vitesst.WithVTGateFiles(vitesst.ContainerFile{
-				Content:       []byte(`{"transaction_mode":"TWOPC"}` + "\n"),
-				ContainerPath: vtgateConfigPath,
-				Mode:          0o666,
-			}),
-			vitesst.WithVTTabletArgs(
-				"--twopc-abandon-age", "1",
-				"--queryserver-config-transaction-cap", "3",
-				"--queryserver-config-transaction-timeout", "400s",
-				"--queryserver-config-query-timeout", "9000s",
-			),
-			vitesst.WithVTAdmin(),
-			vitesst.WithKeyspace(keyspaceName).
-				WithShardNames("-40", "40-80", "80-").
-				WithReplicas(2).
-				WithSchema(SchemaSQL).
-				WithVSchema(VSchema).
-				WithSidecarDBName(sidecarDBName).
-				WithDurabilityPolicy(policy.DurabilitySemiSync),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+	ctx := t.Context()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithVTGateArgs("--grpc-use-effective-callerid"),
+		vitesst.WithVTGateFiles(vitesst.ContainerFile{
+			Content:       []byte(`{"transaction_mode":"TWOPC"}` + "\n"),
+			ContainerPath: vtgateConfigPath,
+			Mode:          0o666,
+		}),
+		vitesst.WithVTTabletArgs(
+			"--twopc-abandon-age", "1",
+			"--queryserver-config-transaction-cap", "3",
+			"--queryserver-config-transaction-timeout", "400s",
+			"--queryserver-config-query-timeout", "9000s",
+		),
+		vitesst.WithVTAdmin(),
+		vitesst.WithKeyspace(keyspaceName).
+			WithShardNames("-40", "40-80", "80-").
+			WithReplicas(2).
+			WithSchema(SchemaSQL).
+			WithVSchema(VSchema).
+			WithSidecarDBName(sidecarDBName).
+			WithDurabilityPolicy(policy.DurabilitySemiSync),
+	)
+	require.NoError(t, err)
+
+	cleanup, err := cluster.Start(ctx)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+		defer cancel()
+		if t.Failed() {
+			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
 		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+		if err := cleanup(cleanupCtx); err != nil {
+			t.Logf("cluster teardown: %v", err)
 		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
+	require.NoError(t, err)
 
-		clusterInstance = cluster
-		vtParams = cluster.VTParams(ctx, "")
+	clusterInstance = cluster
+	vtParams = cluster.VTParams(ctx, "")
 
-		// create mysql instance and connection parameters
-		conn, closer, err := vitesst.NewMySQL(ctx, cluster, keyspaceName, SchemaSQL)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+	mysqlConn, closeMySQL, err := vitesst.NewMySQL(ctx, cluster, keyspaceName, SchemaSQL)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+		defer cancel()
+		if err := closeMySQL(cleanupCtx); err != nil {
+			t.Logf("comparison mysqld teardown: %v", err)
 		}
-		defer func() {
-			if err := closer(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "comparison mysqld teardown:", err)
-			}
-		}()
-		mysqlParams = conn
-
-		return m.Run()
-	}()
-	os.Exit(exitcode)
+	})
+	mysqlParams = mysqlConn
 }
 
 func start(t *testing.T) (*mysql.Conn, func()) {

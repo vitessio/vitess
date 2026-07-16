@@ -31,6 +31,9 @@ export ver=v1 p=~/benchmark && go test \
 | tee $p/${ver}.txt
 */
 func BenchmarkPreparedStmt(b *testing.B) {
+	b.StopTimer()
+	setupCluster(b)
+	b.StartTimer()
 	dbo := Connect(b)
 	defer dbo.Close()
 
@@ -150,6 +153,9 @@ export ver=v1 p=~/benchmark && go test \
 | tee $p/${ver}.txt
 */
 func BenchmarkExecuteStmt(b *testing.B) {
+	b.StopTimer()
+	setupCluster(b)
+	b.StartTimer()
 	dbo := Connect(b, "interpolateParams=false")
 	defer dbo.Close()
 

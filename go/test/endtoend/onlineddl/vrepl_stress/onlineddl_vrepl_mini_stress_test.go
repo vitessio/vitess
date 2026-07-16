@@ -18,10 +18,8 @@ package vreplstress
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"math/rand/v2"
-	"os"
 	"runtime"
 	"strings"
 	"sync"
@@ -67,7 +65,8 @@ func (w *WriteMetrics) Clear() {
 }
 
 func (w *WriteMetrics) String() string {
-	return fmt.Sprintf(`WriteMetrics: inserts-deletes=%d, updates-deletes=%d,
+	return fmt.Sprintf(
+		`WriteMetrics: inserts-deletes=%d, updates-deletes=%d,
 insertsAttempts=%d, insertsFailures=%d, insertsNoops=%d, inserts=%d,
 updatesAttempts=%d, updatesFailures=%d, updatesNoops=%d, updates=%d,
 deletesAttempts=%d, deletesFailures=%d, deletesNoops=%d, deletes=%d,
@@ -152,57 +151,47 @@ func nextOpOrder() int64 {
 	return opOrder
 }
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setup(t *testing.T) {
+	t.Helper()
+	ctx := t.Context()
 
-	exitcode, err := func() (int, error) {
-		ctx := context.Background()
-
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithVTCtldArgs(
-				"--schema-change-dir", schemaChangeDirectory,
-				"--schema-change-controller", "local",
-				"--schema-change-check-interval", "1s",
-			),
-			vitesst.WithVTTabletArgs(
-				"--heartbeat-interval", "250ms",
-				"--heartbeat-on-demand-duration", "5s",
-				"--migration-check-interval", "5s",
-			),
-			vitesst.WithVTGateArgs(
-				"--ddl-strategy", "online",
-			),
-			// No need for replicas in this stress test
-			vitesst.WithKeyspace(keyspaceName).WithShardNames("1"),
-		)
-		if err != nil {
-			return 1, err
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithVTCtldArgs(
+			"--schema-change-dir", schemaChangeDirectory,
+			"--schema-change-controller", "local",
+			"--schema-change-check-interval", "1s",
+		),
+		vitesst.WithVTTabletArgs(
+			"--heartbeat-interval", "250ms",
+			"--heartbeat-on-demand-duration", "5s",
+			"--migration-check-interval", "5s",
+		),
+		vitesst.WithVTGateArgs(
+			"--ddl-strategy", "online",
+		),
+		// No need for replicas in this stress test
+		vitesst.WithKeyspace(keyspaceName).WithShardNames("1"),
+	)
+	require.NoError(t, err)
+	cleanup, err := cluster.Start(ctx)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Minute)
+		defer cancel()
+		if t.Failed() {
+			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
 		}
-
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			return 1, err
+		if err := cleanup(cleanupCtx); err != nil {
+			t.Logf("cluster teardown: %v", err)
 		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
 
-		clusterInstance = cluster
-		vtParams = cluster.VTParams(ctx, "")
-
-		return m.Run(), nil
-	}()
-	if err != nil {
-		fmt.Printf("%v\n", err)
-		os.Exit(1)
-	} else {
-		os.Exit(exitcode)
-	}
+	clusterInstance = cluster
+	vtParams = cluster.VTParams(ctx, "")
 }
 
 func TestVreplMiniStressSchemaChanges(t *testing.T) {
+	setup(t)
 	ctx := t.Context()
 
 	shards = clusterInstance.Keyspace(keyspaceName).Shards()

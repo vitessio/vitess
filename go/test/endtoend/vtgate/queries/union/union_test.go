@@ -47,6 +47,7 @@ func start(t *testing.T) (vitesst.MySQLCompare, func()) {
 }
 
 func TestUnionDistinct(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -81,6 +82,7 @@ func TestUnionDistinct(t *testing.T) {
 }
 
 func TestUnionAll(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -139,6 +141,7 @@ from (
 }
 
 func TestUnion(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 	mcmp.Exec("insert into t1(id1, id2) values(1, 1), (2, 2)")

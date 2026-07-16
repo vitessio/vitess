@@ -18,9 +18,7 @@ package vtgate
 
 import (
 	"context"
-	"flag"
 	"fmt"
-	"os"
 	"strings"
 	"testing"
 
@@ -33,10 +31,8 @@ import (
 )
 
 var (
-	clusterInstance *vitesst.Cluster
-	vtParams        mysql.ConnParams
-	KeyspaceName    = "ks"
-	SchemaSQL       = `create table t1(
+	KeyspaceName = "ks"
+	SchemaSQL    = `create table t1(
 	id1 bigint,
 	id2 bigint,
 	primary key(id1)
@@ -63,42 +59,32 @@ var (
 }`
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setupCluster(t *testing.T) (*vitesst.Cluster, mysql.ConnParams) {
+	t.Helper()
 
-	exitCode := func() int {
-		ctx := context.Background()
+	ctx := t.Context()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithKeyspace(KeyspaceName).
+			WithShardNames("-80", "80-").
+			WithReplicas(1).
+			WithSchema(SchemaSQL).
+			WithVSchema(VSchema),
+	)
+	require.NoError(t, err)
 
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithKeyspace(KeyspaceName).
-				WithShardNames("-80", "80-").
-				WithReplicas(1).
-				WithSchema(SchemaSQL).
-				WithVSchema(VSchema),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+	cleanup, err := cluster.Start(ctx)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		if err := cleanup(context.WithoutCancel(ctx)); err != nil {
+			t.Logf("cluster teardown: %v", err)
 		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
 
-		clusterInstance = cluster
-		vtParams = cluster.VTParams(ctx, "")
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	return cluster, cluster.VTParams(ctx, "")
 }
 
 func TestScatterErrsAsWarns(t *testing.T) {
+	clusterInstance, vtParams := setupCluster(t)
 	oltp, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer oltp.Close()

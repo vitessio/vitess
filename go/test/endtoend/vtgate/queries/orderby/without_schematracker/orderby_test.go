@@ -46,6 +46,8 @@ func start(t *testing.T) (vitesst.MySQLCompare, func()) {
 }
 
 func TestSimpleOrderBy(t *testing.T) {
+	setup(t)
+
 	mcmp, closer := start(t)
 	defer closer()
 

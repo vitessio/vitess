@@ -38,6 +38,7 @@ import (
 4. 'ListAllTablets' should return all the new tablets.
 */
 func TestVtctldListAllTablets(t *testing.T) {
+	setupCluster(t)
 	testURL(t, "/api/keyspaces/", "keyspace url")
 	testURL(t, "/debug/health", "vtctld health check url")
 

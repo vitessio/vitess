@@ -33,6 +33,7 @@ import (
 
 // TestDMLNone tests that impossible query run without an error.
 func TestDMLNone(t *testing.T) {
+	setupCluster(t)
 	dbo := Connect(t)
 	defer dbo.Close()
 
@@ -60,12 +61,14 @@ func dmlquery(t *testing.T, dbo *sql.DB, query string) {
 
 // TestSelect simple select the data without any condition.
 func TestSelect(t *testing.T) {
+	setupCluster(t)
 	dbo := Connect(t)
 	defer dbo.Close()
 	selectWhere(t, dbo, "")
 }
 
 func TestSelectDatabase(t *testing.T) {
+	setupCluster(t)
 	dbo := Connect(t)
 	defer dbo.Close()
 	prepare, err := dbo.Prepare("select database()")
@@ -83,6 +86,7 @@ func TestSelectDatabase(t *testing.T) {
 // TestInsertUpdateDelete validates all insert, update and
 // delete method on prepared statements.
 func TestInsertUpdateDelete(t *testing.T) {
+	setupCluster(t)
 	dbo := Connect(t)
 	defer dbo.Close()
 	// prepare insert statement
@@ -170,6 +174,7 @@ func testcount(t *testing.T, dbo *sql.DB, except int) {
 // TestAutoIncColumns test insertion of row without passing
 // the value of auto increment columns (here it is id).
 func TestAutoIncColumns(t *testing.T) {
+	setupCluster(t)
 	dbo := Connect(t)
 	defer dbo.Close()
 	// insert a row without id
@@ -245,6 +250,7 @@ func reconnectAndTest(t *testing.T) {
 // TestColumnParameter query database using column
 // parameter.
 func TestColumnParameter(t *testing.T) {
+	setupCluster(t)
 	dbo := Connect(t)
 	defer dbo.Close()
 
@@ -284,6 +290,7 @@ func TestColumnParameter(t *testing.T) {
 // TestWrongTableName query database using invalid
 // tablename and validate error.
 func TestWrongTableName(t *testing.T) {
+	setupCluster(t)
 	dbo := Connect(t)
 	defer dbo.Close()
 	execWithError(t, dbo, []uint16{1146}, "select * from teseting_table;")
@@ -335,6 +342,7 @@ func getStringToString(x sql.NullString) string {
 }
 
 func TestSelectDBA(t *testing.T) {
+	setupCluster(t)
 	dbo := Connect(t)
 	defer dbo.Close()
 
@@ -374,7 +382,8 @@ func TestSelectDBA(t *testing.T) {
 			&rec.columnDefault,
 			&rec.isNullable,
 			&rec.extra,
-			&rec.tableName)
+			&rec.tableName,
+		)
 		require.NoError(t, err)
 		assert.True(t, rec.columnName == "one" || rec.columnName == "two")
 		assert.Equal(t, "int", rec.dataType)
@@ -393,6 +402,7 @@ func TestSelectDBA(t *testing.T) {
 }
 
 func TestSelectLock(t *testing.T) {
+	setupCluster(t)
 	dbo := Connect(t)
 	defer dbo.Close()
 
@@ -428,6 +438,7 @@ func TestSelectLock(t *testing.T) {
 }
 
 func TestShowColumns(t *testing.T) {
+	setupCluster(t)
 	dbo := Connect(t)
 	defer dbo.Close()
 
@@ -448,6 +459,7 @@ func TestShowColumns(t *testing.T) {
 }
 
 func TestBinaryColumn(t *testing.T) {
+	setupCluster(t)
 	dbo := Connect(t, "interpolateParams=false")
 	defer dbo.Close()
 
@@ -469,6 +481,7 @@ func TestBinaryColumn(t *testing.T) {
 
 // TestInsertTest inserts a row with empty json array.
 func TestInsertTest(t *testing.T) {
+	setupCluster(t)
 	dbo := Connect(t, "interpolateParams=false")
 	defer dbo.Close()
 
@@ -530,6 +543,7 @@ var streamingSpecializedPlanQueries = []specializedPlanQuery{{
 
 // TestSpecializedPlan tests the specialized plan generation for the query.
 func TestSpecializedPlan(t *testing.T) {
+	setupCluster(t)
 	dbInfo.KeyspaceName = sks
 	dbo := Connect(t, "interpolateParams=false")
 	defer dbo.Close()
@@ -543,6 +557,7 @@ func TestSpecializedPlan(t *testing.T) {
 // streaming path never built them and the window-function query failed with
 // "window functions are only supported for single-shard queries".
 func TestSpecializedPlanStreaming(t *testing.T) {
+	setupCluster(t)
 	dbInfo.KeyspaceName = sks
 	dbo := Connect(t, "interpolateParams=false")
 	defer dbo.Close()

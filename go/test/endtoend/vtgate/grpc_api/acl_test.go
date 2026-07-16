@@ -28,6 +28,7 @@ import (
 // TestEffectiveCallerIDWithAccess verifies that an authenticated gRPC static user with an effectiveCallerID that has ACL access can execute queries
 func TestEffectiveCallerIDWithAccess(t *testing.T) {
 	ctx := t.Context()
+	clusterInstance := setupCluster(t)
 
 	vtgateConn, err := clusterInstance.VTGate().DialVTGateAs(ctx, "some_other_user", "test_password")
 	require.NoError(t, err)
@@ -43,6 +44,7 @@ func TestEffectiveCallerIDWithAccess(t *testing.T) {
 // TestEffectiveCallerIDWithNoAccess verifies that an authenticated gRPC static user without an effectiveCallerID that has ACL access cannot execute queries
 func TestEffectiveCallerIDWithNoAccess(t *testing.T) {
 	ctx := t.Context()
+	clusterInstance := setupCluster(t)
 
 	vtgateConn, err := clusterInstance.VTGate().DialVTGateAs(ctx, "another_unrelated_user", "test_password")
 	require.NoError(t, err)
@@ -60,6 +62,7 @@ func TestEffectiveCallerIDWithNoAccess(t *testing.T) {
 // TestAuthenticatedUserWithAccess verifies that an authenticated gRPC static user with ACL access can execute queries
 func TestAuthenticatedUserWithAccess(t *testing.T) {
 	ctx := t.Context()
+	clusterInstance := setupCluster(t)
 
 	vtgateConn, err := clusterInstance.VTGate().DialVTGateAs(ctx, "user_with_access", "test_password")
 	require.NoError(t, err)
@@ -74,6 +77,7 @@ func TestAuthenticatedUserWithAccess(t *testing.T) {
 // TestAuthenticatedUserNoAccess verifies that an authenticated gRPC static user with no ACL access cannot execute queries
 func TestAuthenticatedUserNoAccess(t *testing.T) {
 	ctx := t.Context()
+	clusterInstance := setupCluster(t)
 
 	vtgateConn, err := clusterInstance.VTGate().DialVTGateAs(ctx, "user_no_access", "test_password")
 	require.NoError(t, err)
@@ -90,6 +94,7 @@ func TestAuthenticatedUserNoAccess(t *testing.T) {
 // TestUnauthenticatedUser verifies that an unauthenticated gRPC user cannot execute queries
 func TestUnauthenticatedUser(t *testing.T) {
 	ctx := t.Context()
+	clusterInstance := setupCluster(t)
 
 	vtgateConn, err := clusterInstance.VTGate().DialVTGateAs(ctx, "", "")
 	require.NoError(t, err)

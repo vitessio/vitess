@@ -49,6 +49,8 @@ var idVals = [3]int{
 }
 
 func TestSettings(t *testing.T) {
+	setup(t)
+
 	testcases := []struct {
 		name            string
 		commitDelayTime string
@@ -68,7 +70,8 @@ func TestSettings(t *testing.T) {
 			commitDelayTime: "5",
 			queries: append(
 				append([]string{`set @@time_zone="+10:30"`, "begin"}, getMultiShardInsertQueries()...),
-				"insert into twopc_settings(id, col) values(9, now())"),
+				"insert into twopc_settings(id, col) values(9, now())",
+			),
 			verifyFunc: func(t *testing.T, vtParams *mysql.ConnParams) {
 				// We can check that the time_zone setting was taken into account by checking the diff with the time by using a different time_zone.
 				ctx := t.Context()
@@ -85,7 +88,8 @@ func TestSettings(t *testing.T) {
 			queries: append(
 				append([]string{"begin"}, getMultiShardInsertQueries()...),
 				`set @@time_zone="+10:30"`,
-				"insert into twopc_settings(id, col) values(9, now())"),
+				"insert into twopc_settings(id, col) values(9, now())",
+			),
 			verifyFunc: func(t *testing.T, vtParams *mysql.ConnParams) {
 				// We can check that the time_zone setting was taken into account by checking the diff with the time by using a different time_zone.
 				ctx := t.Context()
@@ -103,7 +107,8 @@ func TestSettings(t *testing.T) {
 				append([]string{`set @@time_zone="+10:30"`, "begin"}, getMultiShardInsertQueries()...),
 				"insert into twopc_settings(id, col) values(9, now())",
 				`set @@time_zone="+7:00"`,
-				"insert into twopc_settings(id, col) values(25, now())"),
+				"insert into twopc_settings(id, col) values(25, now())",
+			),
 			verifyFunc: func(t *testing.T, vtParams *mysql.ConnParams) {
 				// We can check that the time_zone setting was taken into account by checking the diff with the time by using a different time_zone.
 				ctx := t.Context()
@@ -143,6 +148,8 @@ func TestSettings(t *testing.T) {
 
 // TestDisruptions tests that atomic transactions persevere through various disruptions.
 func TestDisruptions(t *testing.T) {
+	setup(t)
+
 	testcases := []struct {
 		disruptionName  string
 		commitDelayTime string
@@ -439,7 +446,8 @@ func onlineDDL(t *testing.T) error {
 // checkMigrationStatus verifies that the migration indicated by given UUID has the given expected status
 func checkMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []*vitesst.Shard, uuid string, expectStatuses ...schema.OnlineDDLStatus) bool {
 	ksName := shards[0].Keyspace.Name
-	query, err := sqlparser.ParseAndBind(fmt.Sprintf("show vitess_migrations from %s like %%a", ksName),
+	query, err := sqlparser.ParseAndBind(
+		fmt.Sprintf("show vitess_migrations from %s like %%a", ksName),
 		sqltypes.StringBindVariable(uuid),
 	)
 	require.NoError(t, err)

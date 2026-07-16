@@ -19,10 +19,8 @@ package vtgate
 import (
 	"context"
 	_ "embed"
-	"flag"
-	"fmt"
-	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -44,56 +42,37 @@ var (
 	shardedVSchema string
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
-
-	exitCode := func() int {
-		ctx := context.Background()
-
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithKeyspace(shardedKs).
-				WithShardNames(shardedKsShards...).
-				WithSchema(shardedSchemaSQL).
-				WithVSchema(shardedVSchema),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+func setup(t *testing.T) {
+	ctx := t.Context()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithKeyspace(shardedKs).
+			WithShardNames(shardedKsShards...).
+			WithSchema(shardedSchemaSQL).
+			WithVSchema(shardedVSchema),
+	)
+	require.NoError(t, err)
+	cleanup, err := cluster.Start(ctx)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		if err := cleanup(context.WithoutCancel(ctx)); err != nil {
+			t.Logf("cluster teardown: %v", err)
 		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+	})
+
+	clusterInstance = cluster
+	err = cluster.Vtctld().ExecuteCommand(ctx, "RebuildVSchemaGraph")
+	require.NoError(t, err)
+	vtParams = cluster.VTParams(ctx, "")
+	conn, closer, err := vitesst.NewMySQL(ctx, cluster, shardedKs, shardedSchemaSQL)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+		defer cancel()
+		if err := closer(cleanupCtx); err != nil {
+			t.Logf("mysql teardown: %v", err)
 		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
-
-		clusterInstance = cluster
-
-		if err := cluster.Vtctld().ExecuteCommand(ctx, "RebuildVSchemaGraph"); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-
-		vtParams = cluster.VTParams(ctx, "")
-
-		conn, closer, err := vitesst.NewMySQL(ctx, cluster, shardedKs, shardedSchemaSQL)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		defer func() {
-			if err := closer(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "mysql teardown:", err)
-			}
-		}()
-		mysqlParams = conn
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	})
+	mysqlParams = conn
 }
 
 func start(t *testing.T) (vitesst.MySQLCompare, func()) {
@@ -117,6 +96,7 @@ func start(t *testing.T) (vitesst.MySQLCompare, func()) {
 }
 
 func TestLookupQueries(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 

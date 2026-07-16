@@ -31,6 +31,7 @@ import (
 const vreplicationPermissionTimeout = 5 * time.Second
 
 func TestValidateVReplicationPermissions_SucceedsWithValidPermissions(t *testing.T) {
+	setup(t)
 	permissionsMu.Lock()
 	defer permissionsMu.Unlock()
 	tablet, err := primaryTablet.TabletProto(t.Context())
@@ -42,6 +43,7 @@ func TestValidateVReplicationPermissions_SucceedsWithValidPermissions(t *testing
 }
 
 func TestValidateVReplicationPermissions_FailsWithoutSelectPermissions(t *testing.T) {
+	setup(t)
 	permissionsMu.Lock()
 	defer permissionsMu.Unlock()
 	tablet, err := primaryTablet.TabletProto(t.Context())
@@ -78,6 +80,7 @@ func TestValidateVReplicationPermissions_FailsWithoutSelectPermissions(t *testin
 }
 
 func TestValidateVReplicationPermissions_FailsWithoutInsertPermissions(t *testing.T) {
+	setup(t)
 	permissionsMu.Lock()
 	defer permissionsMu.Unlock()
 	tablet, err := primaryTablet.TabletProto(t.Context())
@@ -114,6 +117,7 @@ func TestValidateVReplicationPermissions_FailsWithoutInsertPermissions(t *testin
 }
 
 func TestValidateVReplicationPermissions_FailsWithoutUpdatePermissions(t *testing.T) {
+	setup(t)
 	permissionsMu.Lock()
 	defer permissionsMu.Unlock()
 	tablet, err := primaryTablet.TabletProto(t.Context())
@@ -150,6 +154,7 @@ func TestValidateVReplicationPermissions_FailsWithoutUpdatePermissions(t *testin
 }
 
 func TestValidateVReplicationPermissions_FailsWithoutDeletePermissions(t *testing.T) {
+	setup(t)
 	permissionsMu.Lock()
 	defer permissionsMu.Unlock()
 	tablet, err := primaryTablet.TabletProto(t.Context())
@@ -186,6 +191,7 @@ func TestValidateVReplicationPermissions_FailsWithoutDeletePermissions(t *testin
 }
 
 func TestValidateVReplicationPermissions_FailsIfUserCantLogin(t *testing.T) {
+	setup(t)
 	permissionsMu.Lock()
 	defer permissionsMu.Unlock()
 	tablet, err := primaryTablet.TabletProto(t.Context())

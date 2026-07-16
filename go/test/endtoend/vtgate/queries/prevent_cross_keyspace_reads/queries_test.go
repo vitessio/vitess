@@ -37,6 +37,8 @@ func start(t *testing.T) *mysql.Conn {
 // TestPreventCrossKeyspaceReadsVSchemaSetting tests that the prevent_cross_keyspace_reads
 // vschema keyspace setting denies cross-keyspace joins.
 func TestPreventCrossKeyspaceReadsVSchemaSetting(t *testing.T) {
+	setup(t)
+
 	conn := start(t)
 
 	// Cross-keyspace join should fail because ks1 has prevent_cross_keyspace_reads: true in its vschema.
@@ -51,6 +53,8 @@ func TestPreventCrossKeyspaceReadsVSchemaSetting(t *testing.T) {
 // check fires even when table names are not qualified with a keyspace prefix,
 // relying on global routing to resolve unique table names to their keyspaces.
 func TestPreventCrossKeyspaceReadsUnqualifiedTables(t *testing.T) {
+	setup(t)
+
 	conn := start(t)
 
 	// Unqualified cross-keyspace join should fail — t1 routes to ks1, t2 routes to ks2.
@@ -71,6 +75,8 @@ func TestPreventCrossKeyspaceReadsUnqualifiedTables(t *testing.T) {
 // TestPreventCrossKeyspaceReadsVSchemaSettingUnion tests that the prevent_cross_keyspace_reads
 // vschema keyspace setting also denies cross-keyspace UNIONs.
 func TestPreventCrossKeyspaceReadsVSchemaSettingUnion(t *testing.T) {
+	setup(t)
+
 	conn := start(t)
 
 	// Cross-keyspace UNION should fail because ks1 has prevent_cross_keyspace_reads: true in its vschema.
@@ -84,6 +90,8 @@ func TestPreventCrossKeyspaceReadsVSchemaSettingUnion(t *testing.T) {
 // TestPreventCrossKeyspaceReadsVTGateFlag tests that the --prevent-cross-keyspace-reads
 // vtgate flag denies cross-keyspace joins globally.
 func TestPreventCrossKeyspaceReadsVTGateFlag(t *testing.T) {
+	setup(t)
+
 	ctx := t.Context()
 
 	// Restart vtgate with the --prevent-cross-keyspace-reads flag.

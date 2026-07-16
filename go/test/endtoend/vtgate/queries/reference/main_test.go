@@ -19,11 +19,11 @@ package reference
 import (
 	"context"
 	_ "embed"
-	"flag"
 	"fmt"
-	"os"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/vitesst"
@@ -48,157 +48,123 @@ var (
 	shardedVSchema string
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setup(t *testing.T) {
+	t.Helper()
+	ctx := t.Context()
 
-	exitCode := func() int {
-		ctx := context.Background()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithKeyspace(unshardedKeyspaceName).
+			WithSchema(unshardedSQLSchema).
+			WithVSchema(unshardedVSchema),
+		vitesst.WithKeyspace(shardedKeyspaceName).
+			WithShardNames("-80", "80-").
+			WithSchema(shardedSQLSchema).
+			WithVSchema(shardedVSchema),
+	)
+	require.NoError(t, err)
 
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithKeyspace(unshardedKeyspaceName).
-				WithSchema(unshardedSQLSchema).
-				WithVSchema(unshardedVSchema),
-			vitesst.WithKeyspace(shardedKeyspaceName).
-				WithShardNames("-80", "80-").
-				WithSchema(shardedSQLSchema).
-				WithVSchema(shardedVSchema),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+	cleanup, err := cluster.Start(ctx)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Minute)
+		defer cancel()
+		if t.Failed() {
+			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
 		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+		if err := cleanup(cleanupCtx); err != nil {
+			t.Logf("cluster teardown: %v", err)
 		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
+	require.NoError(t, err)
 
-		clusterInstance = cluster
-		vtParams = cluster.VTParams(ctx, "")
+	clusterInstance = cluster
+	vtParams = cluster.VTParams(ctx, "")
 
-		// TODO(maxeng) remove when we have a proper way to check
-		// materialization lag and cutover.
-		done := make(chan bool, 1)
-		expectRows := 2
-		go func() {
-			vtgateConn, err := cluster.VTGate().DialVTGate(ctx)
-			if err != nil {
-				done <- false
-				return
-			}
-			defer vtgateConn.Close()
+	output, err := cluster.Vtctld().ExecuteCommandWithOutput(
+		ctx,
+		"Materialize",
+		"--workflow", "copy_zip_detail",
+		"--target-keyspace", shardedKeyspaceName,
+		"create",
+		"--source-keyspace", unshardedKeyspaceName,
+		"--table-settings",
+		`[{"target_table": "zip_detail", "source_expression": "select * from zip_detail", "create_ddl": "copy" }]`,
+		"--tablet-types", "PRIMARY",
+	)
+	t.Logf("output from materialize: %s", output)
+	require.NoError(t, err)
 
-			maxWait := time.After(300 * time.Second)
-			for _, ks := range cluster.Keyspaces() {
-				if ks.Name != shardedKeyspaceName {
+	vtgateConn, err := cluster.VTGate().DialVTGate(ctx)
+	require.NoError(t, err)
+	defer vtgateConn.Close()
+
+	session := vtgateConn.Session("@primary", nil)
+	_, err = session.Execute(ctx, `
+		INSERT INTO zip_detail(id, zip_id, discontinued_at)
+		VALUES (1, 1, '2022-05-13'),
+		       (2, 2, '2022-08-15')
+	`, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+
+	_, err = session.Execute(ctx, `
+		INSERT INTO delivery_failure(id, zip_detail_id, reason)
+		VALUES (1, 1, 'Failed delivery due to discontinued zipcode.'),
+		       (2, 2, 'Failed delivery due to discontinued zipcode.'),
+		       (3, 3, 'Failed delivery due to unknown reason.');
+	`, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+
+	waitForMaterialization(t, ctx, cluster)
+
+	err = cluster.Vtctld().ExecuteCommand(
+		ctx,
+		"Workflow",
+		"--keyspace", shardedKeyspaceName,
+		"delete",
+		"--workflow", "copy_zip_detail",
+		"--keep-data",
+	)
+	require.NoError(t, err)
+}
+
+func waitForMaterialization(t *testing.T, ctx context.Context, cluster *vitesst.Cluster) {
+	t.Helper()
+	vtgateConn, err := cluster.VTGate().DialVTGate(ctx)
+	require.NoError(t, err)
+	defer vtgateConn.Close()
+
+	deadline := time.NewTimer(300 * time.Second)
+	defer deadline.Stop()
+
+	for _, keyspace := range cluster.Keyspaces() {
+		if keyspace.Name != shardedKeyspaceName {
+			continue
+		}
+		for _, shardInfo := range keyspace.Shards() {
+			shard := fmt.Sprintf("%s/%s@primary", keyspace.Name, shardInfo.Name)
+			session := vtgateConn.Session(shard, nil)
+			for {
+				select {
+				case <-deadline.C:
+					require.FailNow(t, "materialization did not complete", "waited for shard %s", shard)
+				default:
+				}
+
+				_, err := session.Execute(ctx, "SHOW CREATE TABLE zip_detail", map[string]*querypb.BindVariable{}, false)
+				if err != nil {
+					t.Logf("zip_detail is not ready on %s: %v", shard, err)
+					time.Sleep(time.Second)
 					continue
 				}
-				for _, s := range ks.Shards() {
-					var ok bool
-					for !ok {
-						select {
-						case <-maxWait:
-							fmt.Println("Waited too long for materialization, cancelling.")
-							done <- false
-							return
-						default:
-						}
-						shard := fmt.Sprintf("%s/%s@primary", ks.Name, s.Name)
-						session := vtgateConn.Session(shard, nil)
-						_, err := session.Execute(ctx, "SHOW CREATE TABLE zip_detail", map[string]*querypb.BindVariable{}, false)
-						if err != nil {
-							fmt.Fprintf(os.Stderr, "Failed to SHOW CREATE TABLE zip_detail; might not exist yet: %v\n", err)
-							time.Sleep(1 * time.Second)
-							continue
-						}
-						qr, err := session.Execute(ctx, "SELECT * FROM zip_detail", map[string]*querypb.BindVariable{}, false)
-						if err != nil {
-							fmt.Fprintf(os.Stderr, "Failed to query sharded keyspace for zip_detail rows: %v\n", err)
-							done <- false
-							return
-						}
-						if len(qr.Rows) != expectRows {
-							fmt.Fprintf(os.Stderr, "Shard %s doesn't yet have expected number of zip_detail rows\n", shard)
-							time.Sleep(10 * time.Second)
-							continue
-						}
-						fmt.Fprintf(os.Stdout, "Shard %s has expected number of zip_detail rows.\n", shard)
-						ok = true
-					}
+				qr, err := session.Execute(ctx, "SELECT * FROM zip_detail", map[string]*querypb.BindVariable{}, false)
+				require.NoError(t, err)
+				if len(qr.Rows) != 2 {
+					t.Logf("%s has %d zip_detail rows, waiting for 2", shard, len(qr.Rows))
+					time.Sleep(10 * time.Second)
+					continue
 				}
-				fmt.Println("All shards have expected number of zip_detail rows.")
-				done <- true
+				t.Logf("%s has expected number of zip_detail rows", shard)
+				break
 			}
-		}()
-
-		// Materialize zip_detail to sharded keyspace.
-		output, err := cluster.Vtctld().ExecuteCommandWithOutput(
-			ctx,
-			"Materialize",
-			"--workflow", "copy_zip_detail",
-			"--target-keyspace", shardedKeyspaceName,
-			"create",
-			"--source-keyspace", unshardedKeyspaceName,
-			"--table-settings", `[{"target_table": "zip_detail", "source_expression": "select * from zip_detail", "create_ddl": "copy" }]`,
-			"--tablet-types", "PRIMARY",
-		)
-		fmt.Fprintf(os.Stderr, "Output from materialize: %s\n", output)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Got error trying to start materialize zip_detail: %v\n", err)
-			return 1
 		}
-
-		vtgateConn, err := cluster.VTGate().DialVTGate(ctx)
-		if err != nil {
-			return 1
-		}
-		defer vtgateConn.Close()
-
-		session := vtgateConn.Session("@primary", nil)
-		// INSERT some zip_detail rows.
-		if _, err := session.Execute(ctx, `
-			INSERT INTO zip_detail(id, zip_id, discontinued_at)
-			VALUES (1, 1, '2022-05-13'),
-				   (2, 2, '2022-08-15')
-		`, map[string]*querypb.BindVariable{}, false); err != nil {
-			return 1
-		}
-
-		// INSERT some delivery_failure rows.
-		if _, err := session.Execute(ctx, `
-			INSERT INTO delivery_failure(id, zip_detail_id, reason)
-			VALUES (1, 1, 'Failed delivery due to discontinued zipcode.'),
-			       (2, 2, 'Failed delivery due to discontinued zipcode.'),
-			       (3, 3, 'Failed delivery due to unknown reason.');
-		`, map[string]*querypb.BindVariable{}, false); err != nil {
-			return 1
-		}
-
-		if ok := <-done; !ok {
-			fmt.Fprintf(os.Stderr, "Materialize did not succeed.\n")
-			return 1
-		}
-
-		// Stop materialize zip_detail to sharded keyspace.
-		err = cluster.Vtctld().ExecuteCommand(
-			ctx,
-			"Workflow",
-			"--keyspace", shardedKeyspaceName,
-			"delete",
-			"--workflow", "copy_zip_detail",
-			"--keep-data",
-		)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to stop materialization workflow: %v", err)
-			return 1
-		}
-
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	}
 }

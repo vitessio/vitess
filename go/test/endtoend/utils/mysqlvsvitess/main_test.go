@@ -18,9 +18,8 @@ package mysqlvsvitess
 
 import (
 	"context"
-	"fmt"
-	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -61,55 +60,40 @@ var (
 }`
 )
 
-func TestMain(m *testing.M) {
-	exitCode := func() int {
-		ctx := context.Background()
+func setupCluster(t testing.TB) {
+	t.Helper()
+	ctx := t.Context()
 
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithKeyspace(keyspaceName).
-				WithShardNames("-80", "80-").
-				WithSchema(schemaSQL).
-				WithVSchema(vschema),
-			vitesst.WithVTGateArgs("--schema-change-signal", "--enable-system-settings=true"),
-			vitesst.WithVTTabletArgs("--queryserver-config-schema-change-signal"),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithKeyspace(keyspaceName).
+			WithShardNames("-80", "80-").
+			WithSchema(schemaSQL).
+			WithVSchema(vschema),
+		vitesst.WithVTGateArgs("--schema-change-signal", "--enable-system-settings=true"),
+		vitesst.WithVTTabletArgs("--queryserver-config-schema-change-signal"),
+	)
+	require.NoError(t, err)
+	cleanup, err := cluster.Start(ctx)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, cleanup(context.WithoutCancel(ctx)))
+	})
 
-		clusterInstance = cluster
-		vtParams = cluster.VTParams(ctx, "")
+	clusterInstance = cluster
+	vtParams = cluster.VTParams(ctx, "")
 
-		// create mysql instance and connection parameters
-		conn, closer, err := vitesst.NewMySQL(ctx, cluster, keyspaceName, schemaSQL)
-		if err != nil {
-			fmt.Println(err)
-			return 1
-		}
-		defer func() {
-			if err := closer(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "mysql teardown:", err)
-			}
-		}()
-		mysqlParams = conn
-
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	conn, closer, err := vitesst.NewMySQL(ctx, cluster, keyspaceName, schemaSQL)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+		defer cancel()
+		require.NoError(t, closer(cleanupCtx))
+	})
+	mysqlParams = conn
 }
 
 func TestCreateMySQL(t *testing.T) {
+	setupCluster(t)
 	ctx := t.Context()
 	mysqlConn, err := mysql.Connect(ctx, &mysqlParams)
 	require.NoError(t, err)

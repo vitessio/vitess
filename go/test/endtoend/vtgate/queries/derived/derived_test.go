@@ -47,6 +47,7 @@ func start(t *testing.T) (vitesst.MySQLCompare, func()) {
 }
 
 func TestDerivedTableWithOrderByLimit(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -54,6 +55,7 @@ func TestDerivedTableWithOrderByLimit(t *testing.T) {
 }
 
 func TestDerivedAggregationOnRHS(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -62,6 +64,7 @@ func TestDerivedAggregationOnRHS(t *testing.T) {
 }
 
 func TestDerivedRemoveInnerOrderBy(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -69,6 +72,7 @@ func TestDerivedRemoveInnerOrderBy(t *testing.T) {
 }
 
 func TestDerivedTableWithHaving(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -79,6 +83,7 @@ func TestDerivedTableWithHaving(t *testing.T) {
 }
 
 func TestDerivedTableColumns(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -90,6 +95,7 @@ func TestDerivedTableColumns(t *testing.T) {
 // We do this by not using the apply join we usually use, and instead use the hash join engine primitive
 // These tests exercise these situations
 func TestDerivedTablesWithLimit(t *testing.T) {
+	setup(t)
 	// We need full type info before planning this, so we wait for the schema tracker
 	require.NoError(t,
 		vitesst.WaitForAuthoritative(t, keyspaceName, "user", func() (*any, error) {
@@ -105,16 +111,19 @@ func TestDerivedTablesWithLimit(t *testing.T) {
 		`SELECT u.id, m.id FROM
 	            (SELECT id, name FROM user LIMIT 10) AS u JOIN
 	            (SELECT id, user_id FROM music LIMIT 10) as m on u.id = m.user_id`,
-		`[[INT64(1) INT64(1)] [INT64(5) INT64(2)] [INT64(1) INT64(3)] [INT64(2) INT64(4)] [INT64(3) INT64(5)] [INT64(5) INT64(7)] [INT64(4) INT64(6)]]`)
+		`[[INT64(1) INT64(1)] [INT64(5) INT64(2)] [INT64(1) INT64(3)] [INT64(2) INT64(4)] [INT64(3) INT64(5)] [INT64(5) INT64(7)] [INT64(4) INT64(6)]]`,
+	)
 
 	mcmp.AssertMatchesNoOrder(
 		`SELECT u.id, m.id FROM user AS u LEFT JOIN 
                 (SELECT id, user_id FROM music LIMIT 10) as m on u.id = m.user_id`,
-		`[[INT64(1) INT64(1)] [INT64(5) INT64(2)] [INT64(1) INT64(3)] [INT64(2) INT64(4)] [INT64(3) INT64(5)] [INT64(5) INT64(7)] [INT64(4) INT64(6)] [INT64(6) NULL]]`)
+		`[[INT64(1) INT64(1)] [INT64(5) INT64(2)] [INT64(1) INT64(3)] [INT64(2) INT64(4)] [INT64(3) INT64(5)] [INT64(5) INT64(7)] [INT64(4) INT64(6)] [INT64(6) NULL]]`,
+	)
 }
 
 // TestDerivedTableColumnAliasWithJoin tests the derived table having alias column and using it in the join condition
 func TestDerivedTableColumnAliasWithJoin(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 

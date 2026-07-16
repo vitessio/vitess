@@ -19,7 +19,6 @@ package unshardedrecovery
 import (
 	"context"
 	"fmt"
-	"os"
 	"slices"
 	"testing"
 	"time"
@@ -29,7 +28,6 @@ import (
 
 	"vitess.io/vitess/go/test/endtoend/recovery"
 	"vitess.io/vitess/go/test/vitesst"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 )
 
@@ -86,80 +84,71 @@ var (
 }`
 )
 
-// TestMainImpl creates cluster for unsharded recovery testing.
-func TestMainImpl(m *testing.M) {
-	ctx := context.Background()
+// Setup creates the cluster used by the unsharded recovery tests.
+func Setup(t *testing.T, useXtrabackup bool) {
+	t.Helper()
+	ctx := t.Context()
 
-	exitCode, err := func() (int, error) {
-		// The mysqld users are created with passwords, so every vttablet needs
-		// the credentials file to reach its mysqld.
-		commonTabletArg = append(commonTabletArg, "--db-credentials-file", dbCredentialFile)
-		if recovery.UseXb {
-			commonTabletArg = append(commonTabletArg, recovery.XbArgs...)
+	// The mysqld users are created with passwords, so every vttablet needs
+	// the credentials file to reach its mysqld.
+	tabletArgs := append([]string(nil), commonTabletArg...)
+	tabletArgs = append(tabletArgs, "--db-credentials-file", dbCredentialFile)
+	if useXtrabackup {
+		tabletArgs = append(tabletArgs, recovery.XbArgs...)
+	}
+
+	keyspace := vitesst.WithKeyspace(keyspaceName).
+		WithShardNames(shardName).
+		WithReplicas(3).
+		WithDurabilityPolicy("semi_sync")
+
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithCells(cell),
+		vitesst.WithBackupStorage(),
+		vitesst.WithoutVTGate(),
+		vitesst.WithVTOrc("--clusters-to-watch", keyspaceName),
+		vitesst.WithVTTabletArgs(tabletArgs...),
+		vitesst.WithTabletFiles(vitesst.ContainerFile{
+			Content:       []byte(dbCredentials),
+			ContainerPath: dbCredentialFile,
+		}),
+		vitesst.WithInitDBSQLExtra(passwordUpdateSQL+oldAlterTableMode),
+		keyspace,
+	)
+	require.NoError(t, err)
+
+	cleanup, err := cluster.Start(ctx)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Minute)
+		defer cancel()
+		if t.Failed() {
+			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
 		}
-
-		keyspace := vitesst.WithKeyspace(keyspaceName).
-			WithShardNames(shardName).
-			WithReplicas(3).
-			WithDurabilityPolicy("semi_sync")
-
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithCells(cell),
-			vitesst.WithBackupStorage(),
-			vitesst.WithoutVTGate(),
-			vitesst.WithVTOrc("--clusters-to-watch", keyspaceName),
-			vitesst.WithVTTabletArgs(commonTabletArg...),
-			vitesst.WithTabletFiles(vitesst.ContainerFile{
-				Content:       []byte(dbCredentials),
-				ContainerPath: dbCredentialFile,
-			}),
-			vitesst.WithInitDBSQLExtra(passwordUpdateSQL+oldAlterTableMode),
-			keyspace,
-		)
-		if err != nil {
-			return 1, err
+		if err := cleanup(cleanupCtx); err != nil {
+			t.Logf("cluster teardown: %v", err)
 		}
+	})
+	require.NoError(t, err)
 
-		cleanup, err := cluster.Start(ctx)
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				log.Error(err.Error())
-			}
-		}()
-		if err != nil {
-			return 1, err
-		}
-		localCluster = cluster
+	localCluster = cluster
+	shard := cluster.Keyspace(keyspaceName).Shard(shardName)
+	primary = shard.Primary()
+	replicas := shard.Replicas()
+	replica1, replica2, replica3 = replicas[0], replicas[1], replicas[2]
 
-		shard := cluster.Keyspace(keyspaceName).Shard(shardName)
-		primary = shard.Primary()
-		replicas := shard.Replicas()
-		replica1, replica2, replica3 = replicas[0], replicas[1], replicas[2]
-
-		for _, tablet := range []*vitesst.Tablet{replica2, replica3} {
-			if err := detachTablet(ctx, tablet); err != nil {
-				return 1, err
-			}
-		}
-		return m.Run(), nil
-	}()
-
-	if err != nil {
-		log.Error(err.Error())
-		os.Exit(1)
-	} else {
-		os.Exit(exitCode)
+	for _, tablet := range []*vitesst.Tablet{replica2, replica3} {
+		require.NoError(t, detachTablet(ctx, cluster, tablet))
 	}
 }
 
 // detachTablet leaves a tablet with a running, empty mysqld and no tablet
 // record, so that a test can later start its vttablet in a recovery keyspace
 // and have it bootstrap itself from a backup.
-func detachTablet(ctx context.Context, tablet *vitesst.Tablet) error {
+func detachTablet(ctx context.Context, cluster *vitesst.Cluster, tablet *vitesst.Tablet) error {
 	if err := tablet.StopVttablet(ctx); err != nil {
 		return err
 	}
-	if err := localCluster.Vtctld().ExecuteCommand(ctx, "DeleteTablets", tablet.Alias()); err != nil {
+	if err := cluster.Vtctld().ExecuteCommand(ctx, "DeleteTablets", tablet.Alias()); err != nil {
 		return err
 	}
 
@@ -336,7 +325,8 @@ func restoreTablet(t *testing.T, tablet *vitesst.Tablet, restoreKSName string, r
 	}
 
 	replicaTabletArgs := slices.Clone(commonTabletArg)
-	replicaTabletArgs = append(replicaTabletArgs,
+	replicaTabletArgs = append(
+		replicaTabletArgs,
 		"--enable-replication-reporter=false",
 		"--init-tablet-type", "replica",
 		"--init-keyspace", restoreKSName,

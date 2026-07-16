@@ -18,10 +18,8 @@ package primary
 import (
 	"context"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
-	"os"
 	"strconv"
 	"testing"
 	"time"
@@ -82,47 +80,42 @@ var (
   }`
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setup(t *testing.T) {
+	t.Helper()
+	ctx := t.Context()
 
-	exitCode := func() int {
-		ctx := context.Background()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithVTTabletArgs(tabletArgs...),
+		vitesst.WithKeyspace(keyspaceName).
+			WithShardNames(shardName).
+			WithReplicas(1).
+			WithSchema(sqlSchema).
+			WithVSchema(vSchema),
+	)
+	require.NoError(t, err)
 
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithVTTabletArgs(tabletArgs...),
-			vitesst.WithKeyspace(keyspaceName).
-				WithShardNames(shardName).
-				WithReplicas(1).
-				WithSchema(sqlSchema).
-				WithVSchema(vSchema),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+	cleanup, err := cluster.Start(ctx)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+		defer cancel()
+		if t.Failed() {
+			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
 		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+		if cleanupErr := cleanup(cleanupCtx); cleanupErr != nil {
+			t.Logf("cluster teardown: %v", cleanupErr)
 		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
+	require.NoError(t, err)
 
-		clusterInstance = cluster
-
-		shard := cluster.Keyspace(keyspaceName).Shard(shardName)
-		primaryTablet = shard.Primary()
-		replicaTablet = shard.Replicas()[0]
-
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	clusterInstance = cluster
+	shard := cluster.Keyspace(keyspaceName).Shard(shardName)
+	primaryTablet = shard.Primary()
+	replicaTablet = shard.Replicas()[0]
 }
 
 func TestRepeatedInitShardPrimary(t *testing.T) {
+	setup(t)
+
 	// Test that using InitShardPrimary can go back and forth between 2 hosts.
 	ctx := t.Context()
 
@@ -162,6 +155,8 @@ func TestRepeatedInitShardPrimary(t *testing.T) {
 }
 
 func TestPrimaryRestartSetsPTSTimestamp(t *testing.T) {
+	setup(t)
+
 	// Test that PTS timestamp is set when we restart the PRIMARY vttablet.
 	// PTS = PrimaryTermStart.
 	// See StreamHealthResponse.primary_term_start_timestamp for details.

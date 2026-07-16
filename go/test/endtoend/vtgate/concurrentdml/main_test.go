@@ -19,9 +19,7 @@ package concurrentdml
 import (
 	"context"
 	_ "embed"
-	"flag"
 	"fmt"
-	"os"
 	"sync"
 	"testing"
 	"time"
@@ -34,9 +32,8 @@ import (
 )
 
 var (
-	clusterInstance *vitesst.Cluster
-	unsKs           = "commerce"
-	unsSchema       = `
+	unsKs     = "commerce"
+	unsSchema = `
 CREATE TABLE t1_seq (
     id INT,
     next_id BIGINT,
@@ -61,45 +58,35 @@ INSERT INTO t1_seq (id, next_id, cache) values(0, 1, 1000);
 	sVSchema string
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setupCluster(t *testing.T) *vitesst.Cluster {
+	t.Helper()
 
-	exitCode := func() int {
-		ctx := context.Background()
+	ctx := t.Context()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithKeyspace(unsKs).
+			WithSchema(unsSchema).
+			WithVSchema(unsVSchema),
+		vitesst.WithKeyspace(sKs).
+			WithShardNames("-80", "80-").
+			WithSchema(sSchema).
+			WithVSchema(sVSchema),
+	)
+	require.NoError(t, err)
 
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithKeyspace(unsKs).
-				WithSchema(unsSchema).
-				WithVSchema(unsVSchema),
-			vitesst.WithKeyspace(sKs).
-				WithShardNames("-80", "80-").
-				WithSchema(sSchema).
-				WithVSchema(sVSchema),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+	cleanup, err := cluster.Start(ctx)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		if err := cleanup(context.WithoutCancel(ctx)); err != nil {
+			t.Logf("cluster teardown: %v", err)
 		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
 
-		clusterInstance = cluster
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	return cluster
 }
 
 func TestInsertIgnoreOnLookupUniqueVindex(t *testing.T) {
 	ctx := t.Context()
-	vtParams := clusterInstance.VTParams(ctx, "")
+	vtParams := setupCluster(t).VTParams(ctx, "")
 
 	// end-to-end test
 	conn, err := mysql.Connect(ctx, &vtParams)
@@ -124,7 +111,7 @@ func TestInsertIgnoreOnLookupUniqueVindex(t *testing.T) {
 func TestOpenTxBlocksInSerial(t *testing.T) {
 	t.Skip("Update and Insert in same transaction does not work with the unique consistent lookup having same value.")
 	ctx := t.Context()
-	vtParams := clusterInstance.VTParams(ctx, "")
+	vtParams := setupCluster(t).VTParams(ctx, "")
 	conn1, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn1.Close()
@@ -152,7 +139,7 @@ func TestOpenTxBlocksInSerial(t *testing.T) {
 func TestOpenTxBlocksInConcurrent(t *testing.T) {
 	t.Skip("Update and Insert in same transaction does not work with the unique consistent lookup having same value.")
 	ctx := t.Context()
-	vtParams := clusterInstance.VTParams(ctx, "")
+	vtParams := setupCluster(t).VTParams(ctx, "")
 	conn1, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn1.Close()
@@ -184,7 +171,7 @@ func TestOpenTxBlocksInConcurrent(t *testing.T) {
 
 func TestUpdateLookupUniqueVindex(t *testing.T) {
 	ctx := t.Context()
-	vtParams := clusterInstance.VTParams(ctx, "")
+	vtParams := setupCluster(t).VTParams(ctx, "")
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()

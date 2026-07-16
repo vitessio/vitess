@@ -19,7 +19,6 @@ package vrepl
 import (
 	"context"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"os"
 	"strings"
@@ -158,52 +157,45 @@ const (
 	noCustomQuery           = ""
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setup(t *testing.T) {
+	t.Helper()
+	ctx := t.Context()
 
-	exitcode := func() int {
-		ctx := context.Background()
-
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithCells(cell),
-			vitesst.WithVTCtldArgs(
-				"--schema-change-dir", schemaChangeDirectory,
-				"--schema-change-controller", "local",
-				"--schema-change-check-interval", "1s",
-			),
-			vitesst.WithVTTabletArgs(
-				"--heartbeat-interval", "250ms",
-				"--migration-check-interval", "5s",
-			),
-			vitesst.WithVTGateArgs(
-				"--ddl-strategy", "online",
-			),
-			vitesst.WithKeyspace(keyspaceName).
-				WithShardNames("-80", "80-").
-				WithReplicas(1).
-				WithVSchema(vSchema),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithCells(cell),
+		vitesst.WithVTCtldArgs(
+			"--schema-change-dir", schemaChangeDirectory,
+			"--schema-change-controller", "local",
+			"--schema-change-check-interval", "1s",
+		),
+		vitesst.WithVTTabletArgs(
+			"--heartbeat-interval", "250ms",
+			"--migration-check-interval", "5s",
+		),
+		vitesst.WithVTGateArgs(
+			"--ddl-strategy", "online",
+		),
+		vitesst.WithKeyspace(keyspaceName).
+			WithShardNames("-80", "80-").
+			WithReplicas(1).
+			WithVSchema(vSchema),
+	)
+	require.NoError(t, err)
+	cleanup, err := cluster.Start(ctx)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Minute)
+		defer cancel()
+		if t.Failed() {
+			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
 		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+		if err := cleanup(cleanupCtx); err != nil {
+			t.Logf("cluster teardown: %v", err)
 		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
 
-		clusterInstance = cluster
-		vtParams = cluster.VTParams(ctx, "")
-
-		return m.Run()
-	}()
-	os.Exit(exitcode)
+	clusterInstance = cluster
+	vtParams = cluster.VTParams(ctx, "")
 }
 
 // waitForTabletsToHealthyInVtgate waits until vtgate's healthcheck has a serving
@@ -248,6 +240,7 @@ func waitForTabletsToHealthyInVtgate(ctx context.Context) error {
 }
 
 func TestVreplSchemaChanges(t *testing.T) {
+	setup(t)
 	shards = clusterInstance.Keyspace(keyspaceName).Shards()
 	require.Equal(t, 2, len(shards))
 	for _, shard := range shards {

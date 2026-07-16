@@ -20,10 +20,8 @@ import (
 	"context"
 	"errors"
 	"flag"
-	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"sync"
 	"testing"
 	"time"
@@ -128,89 +126,76 @@ CREATE USER 'vt_filtered'@'%';
 GRANT ALL ON *.* TO 'vt_filtered'@'%';`
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setup(t *testing.T) {
+	t.Helper()
+	ctx := t.Context()
 
-	exitCode := func() int {
-		ctx := context.Background()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithCells(cell),
+		vitesst.WithTopo(*topoFlavor),
+		vitesst.WithVTOrc("--clusters-to-watch", keyspaceName),
+		// List of users authorized to execute vschema ddl operations
+		vitesst.WithVTGateArgs(
+			"--vschema-ddl-authorized-users=%",
+			"--enable-views",
+			"--discovery-low-replication-lag", tabletUnhealthyThreshold.String(),
+		),
+		// Set extra tablet args for lock timeout
+		vitesst.WithVTTabletArgs(vttabletExtraArgs...),
+		vitesst.WithTabletFiles(vitesst.ContainerFile{
+			HostPath:      hookScriptPath,
+			ContainerPath: hookContainerPath,
+			Mode:          0o755,
+		}),
+		vitesst.WithVTCtldFiles(
+			vitesst.ContainerFile{
+				Content:       []byte(emptyCustomRules),
+				ContainerPath: topoCustomRuleEmptyFile,
+			},
+			vitesst.ContainerFile{
+				Content:       []byte(denySelectCustomRules),
+				ContainerPath: topoCustomRuleDenyFile,
+			},
+		),
+		vitesst.WithInitDBSQLExtra(hostAccessGrants),
+		vitesst.WithKeyspace(keyspaceName).
+			WithShardNames(shardName).
+			WithReplicas(1).
+			WithRDOnly(1).
+			WithSchema(sqlSchema).
+			WithVSchema(vSchema),
+	)
+	require.NoError(t, err)
 
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithCells(cell),
-			vitesst.WithTopo(*topoFlavor),
-			vitesst.WithVTOrc("--clusters-to-watch", keyspaceName),
-			// List of users authorized to execute vschema ddl operations
-			vitesst.WithVTGateArgs(
-				"--vschema-ddl-authorized-users=%",
-				"--enable-views",
-				"--discovery-low-replication-lag", tabletUnhealthyThreshold.String(),
-			),
-			// Set extra tablet args for lock timeout
-			vitesst.WithVTTabletArgs(vttabletExtraArgs...),
-			vitesst.WithTabletFiles(vitesst.ContainerFile{
-				HostPath:      hookScriptPath,
-				ContainerPath: hookContainerPath,
-				Mode:          0o755,
-			}),
-			vitesst.WithVTCtldFiles(
-				vitesst.ContainerFile{
-					Content:       []byte(emptyCustomRules),
-					ContainerPath: topoCustomRuleEmptyFile,
-				},
-				vitesst.ContainerFile{
-					Content:       []byte(denySelectCustomRules),
-					ContainerPath: topoCustomRuleDenyFile,
-				},
-			),
-			vitesst.WithInitDBSQLExtra(hostAccessGrants),
-			vitesst.WithKeyspace(keyspaceName).
-				WithShardNames(shardName).
-				WithReplicas(1).
-				WithRDOnly(1).
-				WithSchema(sqlSchema).
-				WithVSchema(vSchema),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+	cleanup, err := cluster.Start(ctx)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Minute)
+		defer cancel()
+		if t.Failed() {
+			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
 		}
-
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+		if err := cleanup(cleanupCtx); err != nil {
+			t.Logf("cluster teardown: %v", err)
 		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
 
-		clusterInstance = cluster
+	clusterInstance = cluster
 
-		// Collect the tablets of the shard
-		shard := cluster.Keyspace(keyspaceName).Shard(shardName)
-		primaryTablet = shard.Primary()
-		replicaTablet = shard.Replicas()[0]
-		rdonlyTablet = shard.RDOnly()[0]
+	// Collect the tablets of the shard
+	shard := cluster.Keyspace(keyspaceName).Shard(shardName)
+	primaryTablet = shard.Primary()
+	replicaTablet = shard.Replicas()[0]
+	rdonlyTablet = shard.RDOnly()[0]
 
-		// Set mysql tablet params
-		primaryTabletParams, err = primaryTablet.DBAConnParams(ctx, dbName)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		replicaTabletParams, err = replicaTablet.DBAConnParams(ctx, dbName)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
+	// Set mysql tablet params
+	primaryTabletParams, err = primaryTablet.DBAConnParams(ctx, dbName)
+	require.NoError(t, err)
+	replicaTabletParams, err = replicaTablet.DBAConnParams(ctx, dbName)
+	require.NoError(t, err)
 
-		// create tablet manager client
-		tmClient = tmc.NewClient()
-
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	// create tablet manager client
+	tmClient = tmc.NewClient()
 }
 
 func tmcLockTables(ctx context.Context, tablet *vitesst.Tablet) error {

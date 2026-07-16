@@ -35,6 +35,7 @@ var dynamicConfig = map[string]any{}
 
 // TestDynamicConfigs tests the dyanamic configurations that VTOrc offers.
 func TestDynamicConfigs(t *testing.T) {
+	clusterInstance = setupCluster(t)
 	ctx := t.Context()
 	vtorc := clusterInstance.VTOrc()
 

@@ -18,11 +18,11 @@ package mysqlserver
 
 import (
 	"context"
-	"flag"
-	"fmt"
 	"os"
 	"strconv"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/vitesst"
@@ -59,18 +59,17 @@ END;
 `
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setupCluster(t testing.TB) {
+	t.Helper()
 
 	// setting grpc max size
 	if os.Getenv("grpc-max-message-size") == "" {
 		os.Setenv("grpc-max-message-size", strconv.FormatInt(16*1024*1024, 10))
 	}
 
-	exitcode, err := func() (int, error) {
-		ctx := context.Background()
+	ctx := t.Context()
 
-		ACLConfig := `{
+	ACLConfig := `{
 			"table_groups": [
 				{
 					"table_names_or_prefixes": ["vt_insert_test", "vt_partition_test", "dual"],
@@ -81,7 +80,7 @@ func TestMain(m *testing.M) {
 			]
 		}`
 
-		SQLConfig := `{
+	SQLConfig := `{
 			"testuser1": {
 				"Password": "testpassword1",
 				"UserData": "vtgate client 1"
@@ -92,61 +91,45 @@ func TestMain(m *testing.M) {
 			}
 		}`
 
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithKeyspace(keyspaceName).
-				WithSchema(sqlSchema).
-				WithReplicas(1),
-			vitesst.WithVTGateArgs(
-				"--vschema-ddl-authorized-users=%",
-				"--mysql-server-query-timeout", "1s",
-				"--mysql-auth-server-impl", "static",
-				"--mysql-auth-server-static-file", mysqlAuthServerStatic,
-				"--mysql-server-version", "8.0.16-7",
-				"--warn-sharded-only=true",
-			),
-			vitesst.WithVTGateFiles(vitesst.ContainerFile{
-				Content:       []byte(SQLConfig),
-				ContainerPath: mysqlAuthServerStatic,
-			}),
-			vitesst.WithVTTabletArgs(
-				"--table-acl-config", tableACLConfig,
-				"--queryserver-config-strict-table-acl",
-			),
-			vitesst.WithTabletFiles(vitesst.ContainerFile{
-				Content:       []byte(ACLConfig),
-				ContainerPath: tableACLConfig,
-			}),
-		)
-		if err != nil {
-			return 1, err
-		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			return 1, err
-		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithKeyspace(keyspaceName).
+			WithSchema(sqlSchema).
+			WithReplicas(1),
+		vitesst.WithVTGateArgs(
+			"--vschema-ddl-authorized-users=%",
+			"--mysql-server-query-timeout", "1s",
+			"--mysql-auth-server-impl", "static",
+			"--mysql-auth-server-static-file", mysqlAuthServerStatic,
+			"--mysql-server-version", "8.0.16-7",
+			"--warn-sharded-only=true",
+		),
+		vitesst.WithVTGateFiles(vitesst.ContainerFile{
+			Content:       []byte(SQLConfig),
+			ContainerPath: mysqlAuthServerStatic,
+		}),
+		vitesst.WithVTTabletArgs(
+			"--table-acl-config", tableACLConfig,
+			"--queryserver-config-strict-table-acl",
+		),
+		vitesst.WithTabletFiles(vitesst.ContainerFile{
+			Content:       []byte(ACLConfig),
+			ContainerPath: tableACLConfig,
+		}),
+	)
+	require.NoError(t, err)
+	cleanup, err := cluster.Start(ctx)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, cleanup(context.WithoutCancel(ctx)))
+	})
 
-		clusterInstance = cluster
+	clusterInstance = cluster
 
-		vtParams = cluster.VTParams(ctx, "")
-		vtParams.Uname = "testuser1"
-		vtParams.Pass = "testpassword1"
+	vtParams = cluster.VTParams(ctx, "")
+	vtParams.Uname = "testuser1"
+	vtParams.Pass = "testpassword1"
 
-		primaryTablet := cluster.Keyspace(keyspaceName).Shard("-").Primary()
-		if _, err := primaryTablet.QueryTablet(ctx, createProcSQL); err != nil {
-			return 1, err
-		}
-
-		return m.Run(), nil
-	}()
-	if err != nil {
-		fmt.Printf("%v\n", err)
-		os.Exit(1)
-	} else {
-		os.Exit(exitcode)
-	}
+	primaryTablet := cluster.Keyspace(keyspaceName).Shard("-").Primary()
+	_, err = primaryTablet.QueryTablet(ctx, createProcSQL)
+	require.NoError(t, err)
 }

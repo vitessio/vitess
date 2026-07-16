@@ -57,24 +57,29 @@ func freePort() (int, error) {
 	return listener.Addr().(*net.TCPAddr).Port, nil
 }
 
-func TestMain(m *testing.M) {
-	exitCode := func() int {
-		port, err := freePort()
-		if err != nil {
-			fmt.Println(err)
-			return 1
-		}
+func setupMySQL(t testing.TB) {
+	t.Helper()
+	port, err := freePort()
+	require.NoError(t, err)
 
-		var closer func()
-		mysqlParams, mysqld, mycnf, closer, err = NewMySQLWithMysqld(port, "localhost", keyspaceName, schemaSQL)
-		if err != nil {
-			fmt.Println(err)
-			return 1
-		}
-		defer closer()
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	var closer func()
+	mysqlParams, mysqld, mycnf, closer, err = NewMySQLWithMysqld(port, "localhost", keyspaceName, schemaSQL)
+	require.NoError(t, err)
+	t.Cleanup(closer)
+}
+
+func TestNewMySQLWithMysqldRemovesRootAfterVersionDetectionPanic(t *testing.T) {
+	dataRoot := t.TempDir()
+	t.Setenv("VTDATAROOT", dataRoot)
+	t.Setenv("VT_MYSQL_ROOT", t.TempDir())
+
+	assert.Panics(t, func() {
+		_, _, _, _, _ = NewMySQLWithMysqld(0, "localhost", "ks")
+	})
+
+	entries, err := os.ReadDir(dataRoot)
+	require.NoError(t, err)
+	assert.Empty(t, entries)
 }
 
 func TestCheckFields(t *testing.T) {
@@ -119,6 +124,7 @@ func TestCheckFields(t *testing.T) {
 }
 
 func TestCreateMySQL(t *testing.T) {
+	setupMySQL(t)
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &mysqlParams)
 	require.NoError(t, err)
@@ -129,6 +135,7 @@ func TestCreateMySQL(t *testing.T) {
 }
 
 func TestSetSuperReadOnlyMySQL(t *testing.T) {
+	setupMySQL(t)
 	require.NotNil(t, mysqld)
 	isSuperReadOnly, _ := mysqld.IsSuperReadOnly(t.Context())
 	assert.False(t, isSuperReadOnly, "super_read_only should be set to False")
@@ -179,6 +186,7 @@ func TestSetSuperReadOnlyMySQL(t *testing.T) {
 }
 
 func TestGetMysqlPort(t *testing.T) {
+	setupMySQL(t)
 	require.NotNil(t, mysqld)
 
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
@@ -191,6 +199,7 @@ func TestGetMysqlPort(t *testing.T) {
 }
 
 func TestGetServerID(t *testing.T) {
+	setupMySQL(t)
 	require.NotNil(t, mysqld)
 
 	sid, err := mysqld.GetServerID(t.Context())
@@ -203,6 +212,7 @@ func TestGetServerID(t *testing.T) {
 }
 
 func TestReplicationStatus(t *testing.T) {
+	setupMySQL(t)
 	require.NotNil(t, mysqld)
 
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
@@ -230,6 +240,7 @@ func TestReplicationStatus(t *testing.T) {
 }
 
 func TestPrimaryStatus(t *testing.T) {
+	setupMySQL(t)
 	require.NotNil(t, mysqld)
 
 	res, err := mysqld.PrimaryStatus(t.Context())
@@ -249,6 +260,7 @@ func TestPrimaryStatus(t *testing.T) {
 }
 
 func TestReplicationConfiguration(t *testing.T) {
+	setupMySQL(t)
 	require.NotNil(t, mysqld)
 
 	replConfig, err := mysqld.ReplicationConfiguration(t.Context())
@@ -260,6 +272,7 @@ func TestReplicationConfiguration(t *testing.T) {
 }
 
 func TestGTID(t *testing.T) {
+	setupMySQL(t)
 	require.NotNil(t, mysqld)
 
 	res, err := mysqld.GetGTIDPurged(t.Context())
@@ -288,6 +301,7 @@ func TestGTID(t *testing.T) {
 }
 
 func TestSetReplicationPosition(t *testing.T) {
+	setupMySQL(t)
 	require.NotNil(t, mysqld)
 
 	pos := replication.Position{GTIDSet: replication.Mysql56GTIDSet{}}
@@ -304,6 +318,7 @@ func TestSetReplicationPosition(t *testing.T) {
 }
 
 func TestSetAndResetReplication(t *testing.T) {
+	setupMySQL(t)
 	require.NotNil(t, mysqld)
 
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
@@ -351,6 +366,7 @@ func TestSetAndResetReplication(t *testing.T) {
 }
 
 func TestGetBinlogInformation(t *testing.T) {
+	setupMySQL(t)
 	require.NotNil(t, mysqld)
 
 	// Default values
@@ -386,6 +402,7 @@ func TestGetBinlogInformation(t *testing.T) {
 }
 
 func TestGetGTIDMode(t *testing.T) {
+	setupMySQL(t)
 	require.NotNil(t, mysqld)
 
 	// Default value
@@ -411,6 +428,7 @@ func TestGetGTIDMode(t *testing.T) {
 }
 
 func TestBinaryLogs(t *testing.T) {
+	setupMySQL(t)
 	require.NotNil(t, mysqld)
 
 	res, err := mysqld.GetBinaryLogs(t.Context())
@@ -427,6 +445,7 @@ func TestBinaryLogs(t *testing.T) {
 }
 
 func TestGetPreviousGTIDs(t *testing.T) {
+	setupMySQL(t)
 	require.NotNil(t, mysqld)
 
 	res, err := mysqld.GetBinaryLogs(t.Context())
@@ -443,6 +462,7 @@ func TestGetPreviousGTIDs(t *testing.T) {
 }
 
 func TestSemiSyncEnabled(t *testing.T) {
+	setupMySQL(t)
 	require.NotNil(t, mysqld)
 
 	err := mysqld.SetSemiSyncEnabled(t.Context(), true, false)
@@ -461,6 +481,7 @@ func TestSemiSyncEnabled(t *testing.T) {
 }
 
 func TestWaitForReplicationStart(t *testing.T) {
+	setupMySQL(t)
 	require.NotNil(t, mysqld)
 
 	err := mysqlctl.WaitForReplicationStart(t.Context(), mysqld, 1)
@@ -483,6 +504,7 @@ func TestWaitForReplicationStart(t *testing.T) {
 }
 
 func TestStartReplication(t *testing.T) {
+	setupMySQL(t)
 	require.NotNil(t, mysqld)
 
 	err := mysqld.StartReplication(t.Context(), map[string]string{})
@@ -506,6 +528,7 @@ func TestStartReplication(t *testing.T) {
 }
 
 func TestStopReplication(t *testing.T) {
+	setupMySQL(t)
 	require.NotNil(t, mysqld)
 
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
@@ -532,6 +555,7 @@ func TestStopReplication(t *testing.T) {
 }
 
 func TestStopSQLThread(t *testing.T) {
+	setupMySQL(t)
 	require.NotNil(t, mysqld)
 
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)

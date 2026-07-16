@@ -18,7 +18,6 @@ package fkstress
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"math/rand/v2"
 	"os"
@@ -123,7 +122,8 @@ func (w *WriteMetrics) Clear() {
 }
 
 func (w *WriteMetrics) String() string {
-	return fmt.Sprintf(`WriteMetrics: inserts-deletes=%d, updates-deletes=%d,
+	return fmt.Sprintf(
+		`WriteMetrics: inserts-deletes=%d, updates-deletes=%d,
 insertsAttempts=%d, insertsFailures=%d, insertsNoops=%d, inserts=%d,
 updatesAttempts=%d, updatesFailures=%d, updatesNoops=%d, updates=%d,
 deletesAttempts=%d, deletesFailures=%d, deletesNoops=%d, deletes=%d,
@@ -331,62 +331,93 @@ var (
 	countIterations = 3
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setup(t *testing.T) {
+	t.Helper()
+	ctx := t.Context()
 
-	exitcode, err := func() (int, error) {
-		ctx := context.Background()
+	clusterInstance = nil
+	shards = nil
+	primary = nil
+	replicaNoFK = nil
+	replicaFK = nil
+	vtParams = mysql.ConnParams{}
+	reverseTableNames = nil
+	writeMetrics = make(map[string]*WriteMetrics, len(tableNames))
+	seedOnce = sync.Once{}
 
-		// We will use a replica to confirm that vtgate's cascading works correctly.
-		newCluster, err := vitesst.NewCluster(
-			vitesst.WithKeyspace(keyspaceName).
-				WithShardNames("1").
-				WithReplicas(2).
-				WithVSchema(`{
-					"sharded": false,
-					"foreignKeyMode": "managed"
-				}`),
-			vitesst.WithVTCtldArgs(
-				"--schema-change-dir", schemaChangeDirectory,
-				"--schema-change-controller", "local",
-				"--schema-change-check-interval", "1s",
-			),
-			vitesst.WithVTCtldFiles(vitesst.ContainerFile{
-				Content:       []byte("\n"),
-				ContainerPath: path.Join(schemaChangeDirectory, ".keep"),
-			}),
-			vitesst.WithVTTabletArgs(
-				"--heartbeat-enable",
-				"--heartbeat-interval", "250ms",
-				"--heartbeat-on-demand-duration", "5s",
-				"--migration-check-interval", "3s",
-			),
-		)
-		if err != nil {
-			return 1, err
+	// We will use a replica to confirm that vtgate's cascading works correctly.
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithKeyspace(keyspaceName).
+			WithShardNames("1").
+			WithReplicas(2).
+			WithVSchema(`{
+				"sharded": false,
+				"foreignKeyMode": "managed"
+			}`),
+		vitesst.WithVTCtldArgs(
+			"--schema-change-dir", schemaChangeDirectory,
+			"--schema-change-controller", "local",
+			"--schema-change-check-interval", "1s",
+		),
+		vitesst.WithVTCtldFiles(vitesst.ContainerFile{
+			Content:       []byte("\n"),
+			ContainerPath: path.Join(schemaChangeDirectory, ".keep"),
+		}),
+		vitesst.WithVTTabletArgs(
+			"--heartbeat-enable",
+			"--heartbeat-interval", "250ms",
+			"--heartbeat-on-demand-duration", "5s",
+			"--migration-check-interval", "3s",
+		),
+	)
+	require.NoError(t, err)
+
+	cleanup, err := cluster.Start(ctx)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), 30*time.Second)
+		defer cancel()
+		if t.Failed() {
+			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
 		}
-
-		cleanup, err := newCluster.Start(ctx)
-		if err != nil {
-			return 1, err
+		if err := cleanup(cleanupCtx); err != nil {
+			t.Logf("cluster teardown: %v", err)
 		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
 
-		clusterInstance = newCluster
-		vtParams = clusterInstance.VTParams(ctx, "")
+	clusterInstance = cluster
+	vtParams = cluster.VTParams(ctx, "")
+}
 
-		return m.Run(), nil
-	}()
-	if err != nil {
-		fmt.Printf("%v\n", err)
-		os.Exit(1)
-	} else {
-		os.Exit(exitcode)
+func validateInitialSetup(t *testing.T) {
+	t.Helper()
+
+	shards = clusterInstance.Keyspace(keyspaceName).Shards()
+	require.Equal(t, 1, len(shards))
+	tablets := shards[0].Tablets()
+	require.Equal(t, 3, len(tablets)) // primary, no-fk replica, fk replica
+	primary = tablets[0]
+	require.NotNil(t, primary)
+	replicaNoFK = tablets[1]
+	require.NotNil(t, replicaNoFK)
+	require.NotEqual(t, primary.Alias(), replicaNoFK.Alias())
+	replicaFK = tablets[2]
+	require.NotNil(t, replicaFK)
+	require.NotEqual(t, primary.Alias(), replicaFK.Alias())
+	require.NotEqual(t, replicaNoFK.Alias(), replicaFK.Alias())
+
+	reverseTableNames = slices.Clone(tableNames)
+	slices.Reverse(reverseTableNames)
+	require.ElementsMatch(t, tableNames, reverseTableNames)
+
+	for _, tableName := range tableNames {
+		writeMetrics[tableName] = &WriteMetrics{}
 	}
+}
+
+func TestInitialSetup(t *testing.T) {
+	setup(t)
+	validateInitialSetup(t)
 }
 
 func queryTablet(t *testing.T, tablet *vitesst.Tablet, query string, expectError string) *sqltypes.Result {
@@ -503,30 +534,6 @@ func validateMetrics(t *testing.T, tcase *testCase) {
 				assert.Equal(t, primaryRows, replicaFKRows)
 			})
 		})
-	}
-}
-
-func TestInitialSetup(t *testing.T) {
-	shards = clusterInstance.Keyspace(keyspaceName).Shards()
-	require.Equal(t, 1, len(shards))
-	tablets := shards[0].Tablets()
-	require.Equal(t, 3, len(tablets)) // primary, no-fk replica, fk replica
-	primary = tablets[0]
-	require.NotNil(t, primary)
-	replicaNoFK = tablets[1]
-	require.NotNil(t, replicaNoFK)
-	require.NotEqual(t, primary.Alias(), replicaNoFK.Alias())
-	replicaFK = tablets[2]
-	require.NotNil(t, replicaFK)
-	require.NotEqual(t, primary.Alias(), replicaFK.Alias())
-	require.NotEqual(t, replicaNoFK.Alias(), replicaFK.Alias())
-
-	reverseTableNames = slices.Clone(tableNames)
-	slices.Reverse(reverseTableNames)
-	require.ElementsMatch(t, tableNames, reverseTableNames)
-
-	for _, tableName := range tableNames {
-		writeMetrics[tableName] = &WriteMetrics{}
 	}
 }
 
@@ -651,6 +658,9 @@ func ExecuteFKTest(t *testing.T, tcase *testCase) {
 }
 
 func TestStressFK(t *testing.T) {
+	setup(t)
+	validateInitialSetup(t)
+
 	t.Run("validate replication health", func(t *testing.T) {
 		validateReplicationIsHealthy(t, replicaNoFK)
 		validateReplicationIsHealthy(t, replicaFK)
@@ -899,7 +909,8 @@ func createInitialSchema(t *testing.T, tcase *testCase) {
 
 // applySchema applies SQL schema to the keyspace
 func applySchema(t *testing.T, sql string) error {
-	return clusterInstance.Vtctld().ExecuteCommand(t.Context(),
+	return clusterInstance.Vtctld().ExecuteCommand(
+		t.Context(),
 		"ApplySchema",
 		"--sql", sql,
 		"--ddl-strategy", "direct -allow-zero-in-date",
@@ -910,7 +921,8 @@ func applySchema(t *testing.T, sql string) error {
 // applySchemaWithOutput applies SQL schema to the keyspace with the given DDL strategy, and
 // returns the command's output
 func applySchemaWithOutput(t *testing.T, sql string, ddlStrategy string) (string, error) {
-	return clusterInstance.Vtctld().ExecuteCommandWithOutput(t.Context(),
+	return clusterInstance.Vtctld().ExecuteCommandWithOutput(
+		t.Context(),
 		"ApplySchema",
 		"--sql", sql,
 		"--ddl-strategy", ddlStrategy,
@@ -920,7 +932,8 @@ func applySchemaWithOutput(t *testing.T, sql string, ddlStrategy string) (string
 
 // checkMigrationStatus verifies that the migration indicated by given UUID has the given expected status
 func checkMigrationStatus(t *testing.T, uuid string, expectStatuses ...schema.OnlineDDLStatus) bool {
-	query, err := sqlparser.ParseAndBind(fmt.Sprintf("show vitess_migrations from %s like %%a", keyspaceName),
+	query, err := sqlparser.ParseAndBind(
+		fmt.Sprintf("show vitess_migrations from %s like %%a", keyspaceName),
 		sqltypes.StringBindVariable(uuid),
 	)
 	require.NoError(t, err)
@@ -948,7 +961,8 @@ func waitForMigrationStatus(t *testing.T, uuid string, timeout time.Duration, ex
 	for _, shard := range shards {
 		shardNames[shard.Name] = true
 	}
-	query, err := sqlparser.ParseAndBind("show vitess_migrations like %a",
+	query, err := sqlparser.ParseAndBind(
+		"show vitess_migrations like %a",
 		sqltypes.StringBindVariable(uuid),
 	)
 	require.NoError(t, err)

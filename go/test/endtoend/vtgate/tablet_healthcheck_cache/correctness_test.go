@@ -19,9 +19,7 @@ package tablethealthcheckcache
 import (
 	"context"
 	"encoding/json"
-	"flag"
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
@@ -33,8 +31,6 @@ import (
 )
 
 var (
-	clusterInstance       *vitesst.Cluster
-	vtParams              mysql.ConnParams
 	tabletRefreshInterval = 5 * time.Second
 	keyspaceName          = "healthcheck_test_ks"
 	cell                  = "healthcheck_test_cell"
@@ -84,43 +80,30 @@ create table corder(
 `
 )
 
-// TestMain sets up the vitess cluster for any subsequent tests
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setup(t *testing.T) (*vitesst.Cluster, mysql.ConnParams) {
+	t.Helper()
 
-	exitCode := func() int {
-		ctx := context.Background()
+	ctx := t.Context()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithCells(cell),
+		vitesst.WithVTTabletArgs("--health-check-interval", "1s"),
+		vitesst.WithVTGateArgs("--tablet-refresh-interval", tabletRefreshInterval.String()),
+		vitesst.WithKeyspace(keyspaceName).
+			WithShardNames(shards...).
+			WithReplicas(1).
+			WithSchema(schemaSQL).
+			WithVSchema(vSchema),
+	)
+	require.NoError(t, err)
+	cleanup, err := cluster.Start(ctx)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+		defer cancel()
+		require.NoError(t, cleanup(cleanupCtx))
+	})
 
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithCells(cell),
-			vitesst.WithVTTabletArgs("--health-check-interval", "1s"),
-			vitesst.WithVTGateArgs("--tablet-refresh-interval", tabletRefreshInterval.String()),
-			vitesst.WithKeyspace(keyspaceName).
-				WithShardNames(shards...).
-				WithReplicas(1).
-				WithSchema(schemaSQL).
-				WithVSchema(vSchema),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
-
-		clusterInstance = cluster
-		vtParams = cluster.VTParams(ctx, "")
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	return cluster, cluster.VTParams(ctx, "")
 }
 
 // TestHealthCheckCacheWithTabletChurn verifies that the tablet healthcheck cache has the correct number of records
@@ -128,6 +111,7 @@ func TestMain(m *testing.M) {
 // conditions with these operations and their interactions with the cache.
 func TestHealthCheckCacheWithTabletChurn(t *testing.T) {
 	ctx := t.Context()
+	clusterInstance, vtParams := setup(t)
 	tries := 5
 	numShards := len(shards)
 	// 1 for primary,replica
@@ -146,13 +130,13 @@ func TestHealthCheckCacheWithTabletChurn(t *testing.T) {
 	assert.Equal(t, expectedTabletHCcacheEntries, len(qr.Rows), "wrong number of tablet records in healthcheck cache, expected %d but had %d. Results: %v", expectedTabletHCcacheEntries, len(qr.Rows), qr.Rows)
 
 	for range tries {
-		tablet := addTablet(ctx, t, churnTabletType)
+		tablet := addTablet(ctx, t, clusterInstance, churnTabletType)
 		expectedTabletHCcacheEntries++
 
 		qr, _ := vtgateConn.ExecuteFetch(query, 100, true)
 		assert.Equal(t, expectedTabletHCcacheEntries, len(qr.Rows), "wrong number of tablet records in healthcheck cache, expected %d but had %d. Results: %v", expectedTabletHCcacheEntries, len(qr.Rows), qr.Rows)
 
-		deleteTablet(ctx, t, tablet)
+		deleteTablet(ctx, t, clusterInstance, tablet)
 		expectedTabletHCcacheEntries--
 
 		// We need to sleep for at least vtgate's --tablet-refresh-interval to be sure we
@@ -169,12 +153,12 @@ func TestHealthCheckCacheWithTabletChurn(t *testing.T) {
 	assert.Equal(t, expectedTabletHCcacheEntries, len(qr.Rows), "wrong number of tablet records in healthcheck cache, expected %d but had %d", expectedTabletHCcacheEntries, len(qr.Rows))
 }
 
-func addTablet(ctx context.Context, t *testing.T, tabletType string) *vitesst.Tablet {
-	tablet, err := clusterInstance.AddTablet(ctx, "", keyspaceName, shards[0], tabletType)
+func addTablet(ctx context.Context, t *testing.T, cluster *vitesst.Cluster, tabletType string) *vitesst.Tablet {
+	tablet, err := cluster.AddTablet(ctx, "", keyspaceName, shards[0], tabletType)
 	require.Nil(t, err)
 
 	name := fmt.Sprintf("%s.%s.%s", keyspaceName, shards[0], tabletType)
-	_, _, err = clusterInstance.VTGate().MakeAPICallRetry(ctx, "/debug/vars", 30*time.Second,
+	_, _, err = cluster.VTGate().MakeAPICallRetry(ctx, "/debug/vars", 30*time.Second,
 		func(status int, body string) bool {
 			if status != 200 {
 				return false
@@ -196,11 +180,11 @@ func addTablet(ctx context.Context, t *testing.T, tabletType string) *vitesst.Ta
 	return tablet
 }
 
-func deleteTablet(ctx context.Context, t *testing.T, tablet *vitesst.Tablet) {
+func deleteTablet(ctx context.Context, t *testing.T, cluster *vitesst.Cluster, tablet *vitesst.Tablet) {
 	err := tablet.Remove(ctx)
 	require.Nil(t, err)
 
-	err = clusterInstance.Vtctld().ExecuteCommand(ctx, "DeleteTablets", tablet.Alias())
+	err = cluster.Vtctld().ExecuteCommand(ctx, "DeleteTablets", tablet.Alias())
 	require.Nil(t, err)
 
 	t.Logf("Deleted tablet: %s", tablet.Alias())

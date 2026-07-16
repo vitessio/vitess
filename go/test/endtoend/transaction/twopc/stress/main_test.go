@@ -19,10 +19,8 @@ package stress
 import (
 	"context"
 	_ "embed"
-	"flag"
-	"fmt"
-	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -46,68 +44,70 @@ var (
 	VSchema string
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setup(t *testing.T) {
+	t.Helper()
 
-	exitcode := func() int {
-		ctx := context.Background()
+	clusterInstance = nil
+	vtParams = mysql.ConnParams{}
+	vtgateGrpcAddress = ""
+	count = 0
+	t.Cleanup(func() {
+		clusterInstance = nil
+		vtParams = mysql.ConnParams{}
+		vtgateGrpcAddress = ""
+		count = 0
+	})
 
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithVTGateArgs(
-				"--transaction-mode", "TWOPC",
-				"--grpc-use-effective-callerid",
-				"--tablet-refresh-interval", "2s",
-			),
-			// A tablet that is stopped while a transaction is prepared needs long enough on
-			// termination to kill the writes that are waiting on the prepared transaction's row
-			// locks and to roll that transaction back, so that the transaction is the one that
-			// gets redone when the tablet comes back.
-			vitesst.WithVTTabletArgs(
-				"--twopc-abandon-age", "1",
-				"--migration-check-interval", "2s",
-				"--onterm-timeout", "10s",
-				"--onclose-timeout", "1s",
-			),
-			vitesst.WithVTOrc(),
-			vitesst.WithKeyspace(keyspaceName).
-				WithShardNames("-40", "40-80", "80-").
-				WithReplicas(2).
-				WithSchema(SchemaSQL).
-				WithVSchema(VSchema).
-				WithDurabilityPolicy(policy.DurabilitySemiSync),
-			vitesst.WithKeyspace(unshardedKeyspaceName).
-				WithReplicas(2).
-				WithVSchema("{}").
-				WithDurabilityPolicy(policy.DurabilitySemiSync),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+	ctx := t.Context()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithVTGateArgs(
+			"--transaction-mode", "TWOPC",
+			"--grpc-use-effective-callerid",
+			"--tablet-refresh-interval", "2s",
+		),
+		// A tablet that is stopped while a transaction is prepared needs long enough on
+		// termination to kill the writes that are waiting on the prepared transaction's row
+		// locks and to roll that transaction back, so that the transaction is the one that
+		// gets redone when the tablet comes back.
+		vitesst.WithVTTabletArgs(
+			"--twopc-abandon-age", "1",
+			"--migration-check-interval", "2s",
+			"--onterm-timeout", "10s",
+			"--onclose-timeout", "1s",
+		),
+		vitesst.WithVTOrc(),
+		vitesst.WithKeyspace(keyspaceName).
+			WithShardNames("-40", "40-80", "80-").
+			WithReplicas(2).
+			WithSchema(SchemaSQL).
+			WithVSchema(VSchema).
+			WithDurabilityPolicy(policy.DurabilitySemiSync),
+		vitesst.WithKeyspace(unshardedKeyspaceName).
+			WithReplicas(2).
+			WithVSchema("{}").
+			WithDurabilityPolicy(policy.DurabilitySemiSync),
+	)
+	require.NoError(t, err)
+
+	cleanup, err := cluster.Start(ctx)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+		defer cancel()
+		if t.Failed() {
+			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
 		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+		if err := cleanup(cleanupCtx); err != nil {
+			t.Logf("cluster teardown: %v", err)
 		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
+	require.NoError(t, err)
 
-		clusterInstance = cluster
-		vtParams = cluster.VTParams(ctx, "")
+	clusterInstance = cluster
+	vtParams = cluster.VTParams(ctx, "")
 
-		grpcAddr, err := cluster.VTGate().GRPCAddr(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		vtgateGrpcAddress = grpcAddr
-
-		return m.Run()
-	}()
-	os.Exit(exitcode)
+	grpcAddr, err := cluster.VTGate().GRPCAddr(ctx)
+	require.NoError(t, err)
+	vtgateGrpcAddress = grpcAddr
 }
 
 func start(t *testing.T) (*mysql.Conn, func()) {

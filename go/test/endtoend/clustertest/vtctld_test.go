@@ -40,6 +40,7 @@ var oneTableOutput = `+---+
 `
 
 func TestVtctldProcess(t *testing.T) {
+	setup(t)
 	ctx := t.Context()
 	vtctldAddr, err := clusterInstance.Vtctld().HTTPAddr(ctx)
 	require.NoError(t, err)
@@ -102,7 +103,8 @@ func testGetTablets(t *testing.T) {
 
 	// now filtering with the first keyspace and tablet type of primary, in
 	// addition to the cell
-	result, err = clusterInstance.Vtctld().ExecuteCommandWithOutput(ctx,
+	result, err = clusterInstance.Vtctld().ExecuteCommandWithOutput(
+		ctx,
 		"GetTablets",
 		"--keyspace", clusterInstance.Keyspaces()[0].Name,
 		"--tablet-type", "primary",

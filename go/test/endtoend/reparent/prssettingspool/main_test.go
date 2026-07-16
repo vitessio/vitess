@@ -19,9 +19,6 @@ package misc
 import (
 	"context"
 	_ "embed"
-	"flag"
-	"fmt"
-	"os"
 	"testing"
 	"time"
 
@@ -32,56 +29,49 @@ import (
 )
 
 var (
-	clusterInstance *vitesst.Cluster
-	vtParams        mysql.ConnParams
-	keyspaceName    = "ks"
+	keyspaceName = "ks"
 
 	//go:embed schema.sql
 	schemaSQL string
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setup(t *testing.T) (*vitesst.Cluster, mysql.ConnParams) {
+	t.Helper()
+	ctx := t.Context()
 
-	exitCode := func() int {
-		ctx := context.Background()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithKeyspace(keyspaceName).
+			WithReplicas(2).
+			WithSchema(schemaSQL),
+		vitesst.WithVTGateArgs("--planner-version", "gen4"),
+	)
+	require.NoError(t, err)
 
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithKeyspace(keyspaceName).
-				WithReplicas(2).
-				WithSchema(schemaSQL),
-			vitesst.WithVTGateArgs("--planner-version", "gen4"),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+	cleanup, err := cluster.Start(ctx)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Minute)
+		defer cancel()
+		if t.Failed() {
+			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
 		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+		if err := cleanup(cleanupCtx); err != nil {
+			t.Logf("cluster teardown: %v", err)
 		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
+	require.NoError(t, err)
 
-		clusterInstance = cluster
-		vtParams = cluster.VTParams(ctx, "")
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	return cluster, cluster.VTParams(ctx, "")
 }
 
 // prs runs a PlannedReparentShard to make tab the new primary of the shard.
-func prs(ctx context.Context, shard *vitesst.Shard, tab *vitesst.Tablet) (string, error) {
-	return clusterInstance.Vtctld().ExecuteCommandWithOutput(ctx,
+func prs(ctx context.Context, cluster *vitesst.Cluster, shard *vitesst.Shard, tab *vitesst.Tablet) (string, error) {
+	return cluster.Vtctld().ExecuteCommandWithOutput(ctx,
 		"PlannedReparentShard", shard.Ref(), "--new-primary", tab.Alias())
 }
 
 func TestSettingsPoolWithTXAndPRS(t *testing.T) {
 	ctx := t.Context()
+	clusterInstance, vtParams := setup(t)
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -99,13 +89,13 @@ func TestSettingsPoolWithTXAndPRS(t *testing.T) {
 	replica := shard.Replicas()[0]
 
 	// prs should happen without any error.
-	text, err := prs(ctx, shard, replica)
+	text, err := prs(ctx, clusterInstance, shard, replica)
 	require.NoError(t, err, text)
 	require.NoError(t, primary.WaitForTabletStatus(ctx, 1*time.Minute, "SERVING"))
 
 	defer func() {
 		// reset state
-		text, err = prs(ctx, shard, primary)
+		text, err = prs(ctx, clusterInstance, shard, primary)
 		require.NoError(t, err, text)
 		require.NoError(t, replica.WaitForTabletStatus(ctx, 1*time.Minute, "SERVING"))
 	}()
@@ -116,6 +106,7 @@ func TestSettingsPoolWithTXAndPRS(t *testing.T) {
 
 func TestSettingsPoolWithoutTXAndPRS(t *testing.T) {
 	ctx := t.Context()
+	clusterInstance, vtParams := setup(t)
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -131,12 +122,12 @@ func TestSettingsPoolWithoutTXAndPRS(t *testing.T) {
 	replica := shard.Replicas()[0]
 
 	// prs should happen without any error.
-	text, err := prs(ctx, shard, replica)
+	text, err := prs(ctx, clusterInstance, shard, replica)
 	require.NoError(t, err, text)
 	require.NoError(t, primary.WaitForTabletStatus(ctx, 1*time.Minute, "SERVING"))
 	defer func() {
 		// reset state
-		text, err = prs(ctx, shard, primary)
+		text, err = prs(ctx, clusterInstance, shard, primary)
 		require.NoError(t, err, text)
 		require.NoError(t, replica.WaitForTabletStatus(ctx, 1*time.Minute, "SERVING"))
 	}()

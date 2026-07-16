@@ -18,9 +18,9 @@ package s3
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"os"
 	"path"
@@ -52,7 +52,7 @@ import (
 	in our GitHub repo.
 
 	Minio is almost a drop-in replacement for AWS S3, if you want to run these
-	tests against a true AWS S3 Bucket, you can do so by not running the TestMain
+	tests against a true AWS S3 Bucket, you can do so by not running the test setup
 	and setting the 'AWS_*' environment variables to your own values.
 
 	This package and file are named 'endtoend', but it's more an integration test.
@@ -66,92 +66,79 @@ const (
 	minioConsolePort = "9001/tcp"
 )
 
-func TestMain(m *testing.M) {
-	f := func() int {
-		ctx := context.Background()
+func setup(t *testing.T) {
+	t.Helper()
+	ctx := t.Context()
 
-		// Local MinIO credentials
-		accessKey := "minioadmin"
-		secretKey := "minioadmin"
-		bucketName := "test-bucket"
-		region := "us-east-1"
+	// Local MinIO credentials
+	accessKey := "minioadmin"
+	secretKey := "minioadmin"
+	bucketName := "test-bucket"
+	region := "us-east-1"
 
-		ctr, err := testcontainers.Run(
-			ctx, minioImage,
-			testcontainers.WithCmd("server", "/data", "--console-address", ":9001"),
-			testcontainers.WithEnv(map[string]string{
-				"MINIO_ROOT_USER":     accessKey,
-				"MINIO_ROOT_PASSWORD": secretKey,
-			}),
-			testcontainers.WithExposedPorts(minioAPIPort, minioConsolePort),
-			testcontainers.WithWaitStrategyAndDeadline(
-				2*time.Minute,
-				wait.ForHTTP("/minio/health/live").
-					WithPort(minioAPIPort).
-					WithStartupTimeout(2*time.Minute).
-					WithPollInterval(time.Second),
-			),
-		)
-		defer func() {
-			testcontainers.TerminateContainer(ctr)
-		}()
-		if err != nil {
-			log.Fatalf("failed to start MinIO: %v", err)
+	ctr, err := testcontainers.Run(
+		ctx, minioImage,
+		testcontainers.WithCmd("server", "/data", "--console-address", ":9001"),
+		testcontainers.WithEnv(map[string]string{
+			"MINIO_ROOT_USER":     accessKey,
+			"MINIO_ROOT_PASSWORD": secretKey,
+		}),
+		testcontainers.WithExposedPorts(minioAPIPort, minioConsolePort),
+		testcontainers.WithWaitStrategyAndDeadline(
+			2*time.Minute,
+			wait.ForHTTP("/minio/health/live").
+				WithPort(minioAPIPort).
+				WithStartupTimeout(2*time.Minute).
+				WithPollInterval(time.Second),
+		),
+	)
+	t.Cleanup(func() {
+		if ctr == nil {
+			return
 		}
-
-		host, err := ctr.Host(ctx)
-		if err != nil {
-			log.Fatalf("failed to get MinIO host: %v", err)
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Minute)
+		defer cancel()
+		if cleanupErr := ctr.Terminate(cleanupCtx); cleanupErr != nil {
+			t.Logf("MinIO teardown: %v", cleanupErr)
 		}
-		port, err := ctr.MappedPort(ctx, minioAPIPort)
-		if err != nil {
-			log.Fatalf("failed to get MinIO port: %v", err)
-		}
+	})
+	require.NoError(t, err)
 
-		minioAddress := net.JoinHostPort(host, port.Port())
-		minioEndpoint := "http://" + minioAddress
+	host, err := ctr.Host(ctx)
+	require.NoError(t, err)
+	port, err := ctr.MappedPort(ctx, minioAPIPort)
+	require.NoError(t, err)
 
-		client, err := minio.New(minioAddress, accessKey, secretKey, false)
-		if err != nil {
-			log.Fatalf("failed to create MinIO client: %v", err)
-		}
-		waitForMinio(client)
+	minioAddress := net.JoinHostPort(host, port.Port())
+	minioEndpoint := "http://" + minioAddress
 
-		err = client.MakeBucket(bucketName, region)
-		if err != nil {
-			log.Fatalf("failed to create test bucket: %v", err)
-		}
+	client, err := minio.New(minioAddress, accessKey, secretKey, false)
+	require.NoError(t, err)
+	require.NoError(t, waitForMinio(ctx, client))
+	require.NoError(t, client.MakeBucket(bucketName, region))
 
-		// Same env variables that are used between AWS S3 and Minio
-		os.Setenv("AWS_ACCESS_KEY_ID", accessKey)
-		os.Setenv("AWS_SECRET_ACCESS_KEY", secretKey)
-		os.Setenv("AWS_BUCKET", bucketName)
-		os.Setenv("AWS_ENDPOINT", minioEndpoint)
-		os.Setenv("AWS_REGION", region)
+	// Same env variables that are used between AWS S3 and Minio
+	t.Setenv("AWS_ACCESS_KEY_ID", accessKey)
+	t.Setenv("AWS_SECRET_ACCESS_KEY", secretKey)
+	t.Setenv("AWS_BUCKET", bucketName)
+	t.Setenv("AWS_ENDPOINT", minioEndpoint)
+	t.Setenv("AWS_REGION", region)
 
-		mysqlRoot, err := setupMysqlRoot(ctx)
-		if err != nil {
-			log.Fatalf("failed to set up VT_MYSQL_ROOT: %v", err)
-		}
-		defer os.RemoveAll(mysqlRoot)
-		os.Setenv("VT_MYSQL_ROOT", mysqlRoot)
-
-		return m.Run()
-	}
-
-	os.Exit(f())
+	mysqlRoot, err := setupMysqlRoot(t)
+	require.NoError(t, err)
+	t.Setenv("VT_MYSQL_ROOT", mysqlRoot)
 }
 
 // setupMysqlRoot returns a directory whose bin/mysqld reports the MySQL version
 // of the Vitess image. mysqlctl reads that version to decide how a backup lays
 // out the InnoDB redo log directory.
-func setupMysqlRoot(ctx context.Context) (string, error) {
-	version, err := imageMysqldVersion(ctx)
+func setupMysqlRoot(t *testing.T) (string, error) {
+	version, err := imageMysqldVersion(t)
 	if err != nil {
 		return "", err
 	}
 
-	root, err := os.MkdirTemp("", "vt_mysql_root")
+	root, err := os.MkdirTemp(t.TempDir(), "vt_mysql_root")
 	if err != nil {
 		return "", err
 	}
@@ -172,16 +159,25 @@ func setupMysqlRoot(ctx context.Context) (string, error) {
 
 // imageMysqldVersion runs "mysqld --version" inside the Vitess image and returns
 // the version line it prints.
-func imageMysqldVersion(ctx context.Context) (string, error) {
+func imageMysqldVersion(t *testing.T) (string, error) {
+	t.Helper()
+	ctx := t.Context()
 	ctr, err := testcontainers.Run(
 		ctx, vitesst.Image("8.0"),
 		testcontainers.WithEntrypoint("mysqld"),
 		testcontainers.WithCmd("--version"),
 		testcontainers.WithWaitStrategy(wait.ForExit().WithExitTimeout(time.Minute)),
 	)
-	defer func() {
-		testcontainers.TerminateContainer(ctr)
-	}()
+	t.Cleanup(func() {
+		if ctr == nil {
+			return
+		}
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Minute)
+		defer cancel()
+		if cleanupErr := ctr.Terminate(cleanupCtx); cleanupErr != nil {
+			t.Logf("mysqld version image teardown: %v", cleanupErr)
+		}
+	})
 	if err != nil {
 		return "", err
 	}
@@ -205,20 +201,24 @@ func imageMysqldVersion(ctx context.Context) (string, error) {
 	return "", fmt.Errorf("could not find the mysqld version in: %s", output)
 }
 
-func waitForMinio(client *minio.Client) {
+func waitForMinio(ctx context.Context, client *minio.Client) error {
 	for range 60 {
 		_, err := client.ListBuckets()
 		if err == nil {
-			return
+			return nil
 		}
-		time.Sleep(1 * time.Second)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(time.Second):
+		}
 	}
-	log.Fatal("MinIO server did not become ready in time")
+	return errors.New("MinIO server did not become ready in time")
 }
 
 func checkEnvForS3(t *testing.T) {
 	// We never want to skip the tests if we are running on CI.
-	// We will always run these tests on CI with the TestMain and Minio.
+	// We will always run these tests on CI with the test setup and Minio.
 	// There should not be a need to skip the tests due to missing ENV vars.
 	if os.Getenv("GITHUB_ACTIONS") != "" {
 		return
@@ -328,6 +328,8 @@ func runBackupTest(t *testing.T, cfg backupTestConfig) {
 }
 
 func TestExecuteBackupS3FailEachFileOnce(t *testing.T) {
+	setup(t)
+
 	runBackupTest(t, backupTestConfig{
 		concurrency: 2,
 
@@ -349,6 +351,8 @@ func TestExecuteBackupS3FailEachFileOnce(t *testing.T) {
 }
 
 func TestExecuteBackupS3FailEachFileTwice(t *testing.T) {
+	setup(t)
+
 	runBackupTest(t, backupTestConfig{
 		concurrency: 1,
 
@@ -496,6 +500,8 @@ func runRestoreTest(t *testing.T, cfg restoreTestConfig) {
 }
 
 func TestExecuteRestoreS3FailEachFileOnce(t *testing.T) {
+	setup(t)
+
 	runRestoreTest(t, restoreTestConfig{
 		readFileReturnFn: s3backupstorage.FailFirstRead,
 		expectSuccess:    true,
@@ -511,6 +517,8 @@ func TestExecuteRestoreS3FailEachFileOnce(t *testing.T) {
 }
 
 func TestExecuteRestoreS3FailEachFileTwice(t *testing.T) {
+	setup(t)
+
 	runRestoreTest(t, restoreTestConfig{
 		readFileReturnFn: s3backupstorage.FailAllReadExpectManifest,
 		expectSuccess:    false,

@@ -30,6 +30,7 @@ import (
 )
 
 func TestUnownedLookupInsertNull(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 
@@ -42,6 +43,7 @@ func TestUnownedLookupInsertNull(t *testing.T) {
 }
 
 func TestLookupUniqueWithAutocommit(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 
@@ -81,6 +83,7 @@ func TestLookupUniqueWithAutocommit(t *testing.T) {
 }
 
 func TestUnownedLookupInsertChecksKeyspaceIdsAreMatching(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 
@@ -96,6 +99,7 @@ func TestUnownedLookupInsertChecksKeyspaceIdsAreMatching(t *testing.T) {
 }
 
 func TestUnownedLookupSelectNull(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 
@@ -103,6 +107,7 @@ func TestUnownedLookupSelectNull(t *testing.T) {
 }
 
 func TestConsistentLookup(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 	// conn2 is for queries that target shards.
@@ -234,6 +239,7 @@ func TestConsistentLookup(t *testing.T) {
 }
 
 func TestDMLScatter(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 
@@ -322,6 +328,7 @@ func TestDMLScatter(t *testing.T) {
 }
 
 func TestDMLIn(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 
@@ -410,6 +417,7 @@ func TestDMLIn(t *testing.T) {
 }
 
 func TestConsistentLookupMultiInsert(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 	// conn2 is for queries that target shards.
@@ -456,6 +464,7 @@ func TestConsistentLookupMultiInsert(t *testing.T) {
 }
 
 func TestHashLookupMultiInsertIgnore(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 	// conn2 is for queries that target shards.
@@ -485,6 +494,7 @@ func TestHashLookupMultiInsertIgnore(t *testing.T) {
 }
 
 func TestConsistentLookupUpdate(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 
@@ -552,6 +562,7 @@ func TestConsistentLookupUpdate(t *testing.T) {
 }
 
 func TestSelectMultiEqualLookup(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 
@@ -568,6 +579,7 @@ func TestSelectMultiEqualLookup(t *testing.T) {
 }
 
 func TestSelectNullLookup(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 
@@ -589,6 +601,7 @@ func TestSelectNullLookup(t *testing.T) {
 }
 
 func TestUnicodeLooseMD5CaseInsensitive(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 
@@ -598,6 +611,7 @@ func TestUnicodeLooseMD5CaseInsensitive(t *testing.T) {
 }
 
 func TestJoinWithPredicateAndJoinOnDifferentVindex(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 

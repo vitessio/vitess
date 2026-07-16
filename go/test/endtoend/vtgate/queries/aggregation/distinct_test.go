@@ -23,6 +23,7 @@ import (
 )
 
 func TestDistinct(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 	mcmp.Exec("insert into t3(id5,id6,id7) values(1,3,3), (2,3,4), (3,3,6), (4,5,7), (5,5,6)")
@@ -34,6 +35,7 @@ func TestDistinct(t *testing.T) {
 }
 
 func TestDistinctIt(t *testing.T) {
+	setup(t)
 	// tests more variations of DISTINCT
 	mcmp, closer := start(t)
 	defer closer()
@@ -68,6 +70,7 @@ func TestDistinctIt(t *testing.T) {
 }
 
 func TestWindowFunctionWithGroupByError(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -78,6 +81,7 @@ func TestWindowFunctionWithGroupByError(t *testing.T) {
 }
 
 func TestDistinctWindowLimitShardTruncation(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 

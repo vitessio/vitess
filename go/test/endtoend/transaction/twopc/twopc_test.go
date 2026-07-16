@@ -45,6 +45,8 @@ import (
 
 // TestDynamicConfig tests that transaction mode is dynamically configurable.
 func TestDynamicConfig(t *testing.T) {
+	setup(t)
+
 	conn, closer := start(t)
 	defer closer()
 	defer conn.Close()
@@ -84,6 +86,8 @@ func waitForVtgateConfig(t *testing.T, expected string) {
 // TestDTCommit tests distributed transaction commit for insert, update and delete operations
 // It verifies the binlog events for the same with transaction state changes and redo statements.
 func TestDTCommit(t *testing.T) {
+	setup(t)
+
 	conn, closer := start(t)
 	defer closer()
 
@@ -225,6 +229,8 @@ func TestDTCommit(t *testing.T) {
 // TestDTRollback tests distributed transaction rollback for insert, update and delete operations
 // There would not be any binlog events for rollback
 func TestDTRollback(t *testing.T) {
+	setup(t)
+
 	conn, closer := start(t)
 	defer closer()
 
@@ -278,6 +284,8 @@ func TestDTRollback(t *testing.T) {
 // There is DML operation only on single shard but transaction open on multiple shards.
 // Metdata Manager is the one which executed the DML operation on the shard.
 func TestDTCommitDMLOnlyOnMM(t *testing.T) {
+	setup(t)
+
 	conn, closer := start(t)
 	defer closer()
 
@@ -373,6 +381,8 @@ func TestDTCommitDMLOnlyOnMM(t *testing.T) {
 // There is DML operation only on single shard but transaction open on multiple shards.
 // Resource Manager is the one which executed the DML operation on the shard.
 func TestDTCommitDMLOnlyOnRM(t *testing.T) {
+	setup(t)
+
 	conn, closer := start(t)
 	defer closer()
 
@@ -481,6 +491,8 @@ func TestDTCommitDMLOnlyOnRM(t *testing.T) {
 
 // TestDTPrepareFailOnRM tests distributed transaction prepare failure on resource manager
 func TestDTPrepareFailOnRM(t *testing.T) {
+	setup(t)
+
 	conn, closer := start(t)
 	defer closer()
 
@@ -599,6 +611,8 @@ func compareMaps(t *testing.T, expected, actual map[string][]string, flexibleExp
 // TestDTResolveAfterMMCommit tests that transaction is committed on recovery
 // failure after MM commit.
 func TestDTResolveAfterMMCommit(t *testing.T) {
+	setup(t)
+
 	initconn, closer := start(t)
 	defer closer()
 
@@ -701,6 +715,8 @@ func TestDTResolveAfterMMCommit(t *testing.T) {
 // TestDTResolveAfterRMPrepare tests that transaction is rolled back on recovery
 // failure after RM prepare and before MM commit.
 func TestDTResolveAfterRMPrepare(t *testing.T) {
+	setup(t)
+
 	initconn, closer := start(t)
 	defer closer()
 
@@ -784,6 +800,8 @@ func TestDTResolveAfterRMPrepare(t *testing.T) {
 // TestDTResolveDuringRMPrepare tests that transaction is rolled back on recovery
 // failure after semi RM prepare.
 func TestDTResolveDuringRMPrepare(t *testing.T) {
+	setup(t)
+
 	defer cleanup(t)
 
 	vtgateConn, err := clusterInstance.VTGate().DialVTGateAs(t.Context(), "dt_user", "")
@@ -850,6 +868,8 @@ func TestDTResolveDuringRMPrepare(t *testing.T) {
 // TestDTResolveDuringRMCommit tests that transaction is committed on recovery
 // failure after semi RM commit.
 func TestDTResolveDuringRMCommit(t *testing.T) {
+	setup(t)
+
 	defer cleanup(t)
 
 	vtgateConn, err := clusterInstance.VTGate().DialVTGateAs(t.Context(), "dt_user", "")
@@ -933,6 +953,8 @@ func TestDTResolveDuringRMCommit(t *testing.T) {
 // TestDTResolveAfterTransactionRecord tests that transaction is rolled back on recovery
 // failure after TR created and before RM prepare.
 func TestDTResolveAfterTransactionRecord(t *testing.T) {
+	setup(t)
+
 	defer cleanup(t)
 
 	vtgateConn, err := clusterInstance.VTGate().DialVTGateAs(t.Context(), "dt_user", "")
@@ -1036,6 +1058,8 @@ func testWarningAndTransactionStatus(t *testing.T, conn *vtgateconn.VTGateSessio
 
 // TestReadingUnresolvedTransactions tests the reading of unresolved transactions
 func TestReadingUnresolvedTransactions(t *testing.T) {
+	setup(t)
+
 	defer cleanup(t)
 
 	testcases := []struct {
@@ -1102,6 +1126,8 @@ func TestReadingUnresolvedTransactions(t *testing.T) {
 
 // TestDTSavepointWithVanilaMySQL ensures that distributed transactions should work with savepoint as with vanila MySQL
 func TestDTSavepointWithVanilaMySQL(t *testing.T) {
+	setup(t)
+
 	mcmp, closer := startWithMySQL(t)
 	defer closer()
 
@@ -1151,6 +1177,8 @@ func TestDTSavepointWithVanilaMySQL(t *testing.T) {
 
 // TestDTSavepoint tests distributed transaction should work with savepoint.
 func TestDTSavepoint(t *testing.T) {
+	setup(t)
+
 	defer cleanup(t)
 
 	vtgateConn, err := clusterInstance.VTGate().DialVTGateAs(t.Context(), "dt_user", "")
@@ -1321,6 +1349,8 @@ func sortShard(ss *vtgateconn.VTGateSession) {
 // TestDTSavepointResolveAfterMMCommit tests that transaction is committed on recovery
 // failure after MM commit involving savepoint.
 func TestDTSavepointResolveAfterMMCommit(t *testing.T) {
+	setup(t)
+
 	defer cleanup(t)
 
 	vtgateConn, err := clusterInstance.VTGate().DialVTGateAs(t.Context(), "dt_user", "")
@@ -1419,6 +1449,8 @@ func TestDTSavepointResolveAfterMMCommit(t *testing.T) {
 
 // TestSemiSyncRequiredWithTwoPC tests that semi-sync is required when using two-phase commit.
 func TestSemiSyncRequiredWithTwoPC(t *testing.T) {
+	setup(t)
+
 	// cleanup all the old data.
 	conn, closer := start(t)
 	defer closer()
@@ -1465,6 +1497,8 @@ func reparentAllShards(t *testing.T, clusterInstance *vitesst.Cluster, idx int) 
 
 // TestReadTransactionStatus tests that read transaction state rpc works as expected.
 func TestReadTransactionStatus(t *testing.T) {
+	setup(t)
+
 	conn, closer := start(t)
 	defer closer()
 	defer conn.Close()
@@ -1517,7 +1551,8 @@ func TestReadTransactionStatus(t *testing.T) {
 	assert.Equal(t, []string{"insert into twopc_t1(id, col) values (9, 4)"}, res.Statements)
 
 	// Also try running the RPC from vtctld and verify we see the same values.
-	out, err := clusterInstance.Vtctld().ExecuteCommandWithOutput(ctx, "DistributedTransaction",
+	out, err := clusterInstance.Vtctld().ExecuteCommandWithOutput(
+		ctx, "DistributedTransaction",
 		"Read",
 		"--dtid="+unresTransaction.Dtid,
 	)
@@ -1540,6 +1575,8 @@ func TestReadTransactionStatus(t *testing.T) {
 
 // TestVindexes tests that different vindexes work well with two-phase commit.
 func TestVindexes(t *testing.T) {
+	setup(t)
+
 	testcases := []struct {
 		name        string
 		initQueries []string

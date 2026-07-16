@@ -19,8 +19,6 @@ package connectiondrain
 import (
 	"context"
 	_ "embed"
-	"flag"
-	"os"
 	"testing"
 	"time"
 
@@ -42,11 +40,6 @@ var (
 // vtgate --onterm-timeout of 30s so the vtgate always decides when to exit:
 // either after draining its connections or after reaching its own timeout.
 const drainTimeout = time.Minute
-
-func TestMain(m *testing.M) {
-	flag.Parse()
-	os.Exit(m.Run())
-}
 
 func setupCluster(t *testing.T) (*vitesst.Cluster, mysql.ConnParams) {
 	ctx := t.Context()

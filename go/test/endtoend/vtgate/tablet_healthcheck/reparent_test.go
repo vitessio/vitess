@@ -18,9 +18,7 @@ package tablethealthcheck
 
 import (
 	"context"
-	"flag"
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
@@ -31,8 +29,6 @@ import (
 )
 
 var (
-	clusterInstance *vitesst.Cluster
-
 	// tabletRefreshInterval is the interval at which the tablet health check will refresh.
 	// This value is set to a high value to ensure that the vtgate does not attempt to refresh the tablet between the time a tablet is added and the time it is promoted.
 	tabletRefreshInterval = time.Hour
@@ -85,47 +81,36 @@ create table corder(
 `
 )
 
-// TestMain sets up the vitess cluster for any subsequent tests
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setup(t *testing.T) *vitesst.Cluster {
+	t.Helper()
 
-	exitCode := func() int {
-		ctx := context.Background()
+	ctx := t.Context()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithCells(cell),
+		vitesst.WithVTTabletArgs("--health-check-interval", "1s"),
+		vitesst.WithVTGateArgs("--tablet-refresh-interval", tabletRefreshInterval.String()),
+		vitesst.WithKeyspace(keyspaceName).
+			WithShardNames(shards...).
+			WithSchema(schemaSQL).
+			WithVSchema(vSchema),
+	)
+	require.NoError(t, err)
+	cleanup, err := cluster.Start(ctx)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+		defer cancel()
+		require.NoError(t, cleanup(cleanupCtx))
+	})
 
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithCells(cell),
-			vitesst.WithVTTabletArgs("--health-check-interval", "1s"),
-			vitesst.WithVTGateArgs("--tablet-refresh-interval", tabletRefreshInterval.String()),
-			vitesst.WithKeyspace(keyspaceName).
-				WithShardNames(shards...).
-				WithSchema(schemaSQL).
-				WithVSchema(vSchema),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
-
-		clusterInstance = cluster
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	return cluster
 }
 
 // TestHealthCheckExternallyReparentNewTablet ensures that calling TabletExternallyReparented on a new tablet will switch the primary tablet
 // without having to wait for the tabletRefreshInterval.
 func TestHealthCheckExternallyReparentNewTablet(t *testing.T) {
 	ctx := t.Context()
+	clusterInstance := setup(t)
 
 	// verify output of `show vitess_tablets` and `INSERT` statement
 	vtParams := clusterInstance.VTParams(ctx, "")
@@ -160,7 +145,7 @@ func TestHealthCheckExternallyReparentNewTablet(t *testing.T) {
 
 	// delete the old primary tablet
 	// This will ensure that the vtgate will experience the primary connection error if the switch would have to wait for the `tabletRefreshInterval`.
-	deleteTablet(t, clusterInstance.Keyspace(keyspaceName).Shard(shards[0]).Primary())
+	deleteTablet(t, clusterInstance, clusterInstance.Keyspace(keyspaceName).Shard(shards[0]).Primary())
 
 	// verify that the vtgate will route the `INSERT` statement to the new primary tablet instead of the deleted tablet
 	qr, err = vtgateConn.ExecuteFetch("insert into customer(customer_id, email) values(2, 'dummy1')", 100, true) // -80
@@ -172,13 +157,13 @@ func tabletAlias(tabletUID int) string {
 	return fmt.Sprintf("%s-%010d", cell, tabletUID)
 }
 
-func deleteTablet(t *testing.T, tablet *vitesst.Tablet) {
+func deleteTablet(t *testing.T, cluster *vitesst.Cluster, tablet *vitesst.Tablet) {
 	ctx := t.Context()
 
 	err := tablet.Remove(ctx)
 	require.NoError(t, err)
 
-	err = clusterInstance.Vtctld().ExecuteCommand(ctx, "DeleteTablets", tablet.Alias())
+	err = cluster.Vtctld().ExecuteCommand(ctx, "DeleteTablets", tablet.Alias())
 	require.NoError(t, err)
 
 	t.Logf("Deleted tablet: %s", tablet.Alias())

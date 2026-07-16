@@ -29,6 +29,7 @@ import (
 )
 
 func TestLockUnlock(t *testing.T) {
+	setup(t)
 	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -45,6 +46,7 @@ func TestLockUnlock(t *testing.T) {
 }
 
 func TestLocksDontIntersect(t *testing.T) {
+	setup(t)
 	conn1, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn1.Close()
@@ -59,6 +61,7 @@ func TestLocksDontIntersect(t *testing.T) {
 }
 
 func TestLocksIntersect(t *testing.T) {
+	setup(t)
 	conn1, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn1.Close()
@@ -80,6 +83,7 @@ func TestLocksIntersect(t *testing.T) {
 }
 
 func TestLocksAreExplicitlyReleaseAndRegrab(t *testing.T) {
+	setup(t)
 	conn1, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn1.Close()
@@ -93,6 +97,7 @@ func TestLocksAreExplicitlyReleaseAndRegrab(t *testing.T) {
 }
 
 func TestLocksAreReleasedWhenConnectionIsClosed(t *testing.T) {
+	setup(t)
 	conn1, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn1.Close()
@@ -107,6 +112,7 @@ func TestLocksAreReleasedWhenConnectionIsClosed(t *testing.T) {
 }
 
 func TestLocksBlockEachOther(t *testing.T) {
+	setup(t)
 	conn1, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn1.Close()
@@ -136,6 +142,7 @@ func TestLocksBlockEachOther(t *testing.T) {
 }
 
 func TestLocksBlocksWithTx(t *testing.T) {
+	setup(t)
 	conn1, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn1.Close()
@@ -169,6 +176,7 @@ func TestLocksBlocksWithTx(t *testing.T) {
 }
 
 func TestLocksWithTxFailure(t *testing.T) {
+	setup(t)
 	conn1, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn1.Close()
@@ -198,6 +206,7 @@ func TestLocksWithTxFailure(t *testing.T) {
 }
 
 func TestLocksWithTxOngoingAndReleaseLock(t *testing.T) {
+	setup(t)
 	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -212,6 +221,7 @@ func TestLocksWithTxOngoingAndReleaseLock(t *testing.T) {
 }
 
 func TestLocksWithTxOngoingAndLockFails(t *testing.T) {
+	setup(t)
 	conn1, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn1.Close()
@@ -233,6 +243,7 @@ func TestLocksWithTxOngoingAndLockFails(t *testing.T) {
 }
 
 func TestLocksKeepLockConnectionActive(t *testing.T) {
+	setup(t)
 	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -245,6 +256,7 @@ func TestLocksKeepLockConnectionActive(t *testing.T) {
 }
 
 func TestLocksResetLockOnTimeout(t *testing.T) {
+	setup(t)
 	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -256,6 +268,7 @@ func TestLocksResetLockOnTimeout(t *testing.T) {
 }
 
 func TestLockWaitOnConnTimeoutWithTxNext(t *testing.T) {
+	setup(t)
 	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()

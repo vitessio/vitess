@@ -18,12 +18,12 @@ package binlogdump
 
 import (
 	"context"
-	"flag"
-	"fmt"
 	"net"
-	"os"
 	"strconv"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/vitesst"
@@ -46,55 +46,40 @@ var (
 	) Engine=InnoDB;`
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setup(target testing.TB) {
+	target.Helper()
 
-	exitcode, err := func() (int, error) {
-		ctx := context.Background()
+	// Set gRPC max message size to 64MB for both vttablet and vtgate.
+	// This is needed to stream large binlog events (>16MB default).
+	grpcMaxMsgSize := "--grpc-max-message-size=67108864" // 64MB
 
-		// Set gRPC max message size to 64MB for both vttablet and vtgate.
-		// This is needed to stream large binlog events (>16MB default).
-		grpcMaxMsgSize := "--grpc-max-message-size=67108864" // 64MB
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithKeyspace(keyspaceName).WithShardNames("0").WithReplicas(0).WithSchema(sqlSchema),
+		vitesst.WithVTTabletArgs(grpcMaxMsgSize, "--pprof-http"),
+		vitesst.WithVTGateArgs(grpcMaxMsgSize, "--enable-binlog-dump", "--binlog-dump-authorized-users=%", "--pprof-http"),
+	)
+	require.NoError(target, err)
 
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithKeyspace(keyspaceName).WithShardNames("0").WithReplicas(0).WithSchema(sqlSchema),
-			vitesst.WithVTTabletArgs(grpcMaxMsgSize, "--pprof-http"),
-			vitesst.WithVTGateArgs(grpcMaxMsgSize, "--enable-binlog-dump", "--binlog-dump-authorized-users=%", "--pprof-http"),
-		)
-		if err != nil {
-			return 1, err
+	cleanup, err := cluster.Start(target.Context())
+	target.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(target.Context()), time.Minute)
+		defer cancel()
+		if target.Failed() {
+			cluster.DumpDiagnostics(ctx, target.Logf)
 		}
+		if cleanupErr := cleanup(ctx); cleanupErr != nil {
+			target.Logf("cluster teardown: %v", cleanupErr)
+		}
+	})
+	require.NoError(target, err)
 
-		cleanup, err := cluster.Start(ctx)
-		if cleanup != nil {
-			defer cleanup(ctx)
-		}
-		if err != nil {
-			return 1, err
-		}
+	clusterInstance = cluster
 
-		clusterInstance = cluster
-
-		addr, err := cluster.VTGate().MySQLAddr(ctx)
-		if err != nil {
-			return 1, err
-		}
-		host, portStr, err := net.SplitHostPort(addr)
-		if err != nil {
-			return 1, err
-		}
-		port, err := strconv.Atoi(portStr)
-		if err != nil {
-			return 1, err
-		}
-		vtParams = mysql.ConnParams{Host: host, Port: port}
-
-		return m.Run(), nil
-	}()
-	if err != nil {
-		fmt.Printf("%v\n", err)
-		os.Exit(1)
-	} else {
-		os.Exit(exitcode)
-	}
+	addr, err := cluster.VTGate().MySQLAddr(target.Context())
+	require.NoError(target, err)
+	host, portStr, err := net.SplitHostPort(addr)
+	require.NoError(target, err)
+	port, err := strconv.Atoi(portStr)
+	require.NoError(target, err)
+	vtParams = mysql.ConnParams{Host: host, Port: port}
 }

@@ -33,6 +33,7 @@ import (
 )
 
 func TestInsertOnDuplicateKey(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 
@@ -42,6 +43,7 @@ func TestInsertOnDuplicateKey(t *testing.T) {
 }
 
 func TestInsertNeg(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 
@@ -50,6 +52,7 @@ func TestInsertNeg(t *testing.T) {
 }
 
 func TestSelectNull(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 
@@ -69,6 +72,7 @@ func TestSelectNull(t *testing.T) {
 }
 
 func TestDoStatement(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 
@@ -77,6 +81,7 @@ func TestDoStatement(t *testing.T) {
 }
 
 func TestShowColumns(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 
@@ -91,6 +96,7 @@ func TestShowColumns(t *testing.T) {
 }
 
 func TestShowTables(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 
@@ -104,6 +110,7 @@ func TestShowTables(t *testing.T) {
 }
 
 func TestCastConvert(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 
@@ -111,6 +118,7 @@ func TestCastConvert(t *testing.T) {
 }
 
 func TestCompositeIN(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 
@@ -121,6 +129,7 @@ func TestCompositeIN(t *testing.T) {
 }
 
 func TestSavepointInTx(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 
@@ -180,6 +189,7 @@ func TestSavepointInTx(t *testing.T) {
 }
 
 func TestSavepointOutsideTx(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 
@@ -193,6 +203,7 @@ func TestSavepointOutsideTx(t *testing.T) {
 }
 
 func TestSavepointAdditionalCase(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 
@@ -223,6 +234,7 @@ func TestSavepointAdditionalCase(t *testing.T) {
 }
 
 func TestExplainPassthrough(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 
@@ -236,6 +248,7 @@ func TestExplainPassthrough(t *testing.T) {
 }
 
 func TestXXHash(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 
@@ -252,6 +265,7 @@ func TestXXHash(t *testing.T) {
 }
 
 func TestShowTablesWithWhereClause(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 
@@ -261,6 +275,7 @@ func TestShowTablesWithWhereClause(t *testing.T) {
 }
 
 func TestOffsetAndLimitWithOLAP(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 
@@ -271,6 +286,7 @@ func TestOffsetAndLimitWithOLAP(t *testing.T) {
 }
 
 func TestSwitchBetweenOlapAndOltp(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 
@@ -286,6 +302,7 @@ func TestSwitchBetweenOlapAndOltp(t *testing.T) {
 }
 
 func TestFoundRowsOnDualQueries(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 
@@ -294,6 +311,7 @@ func TestFoundRowsOnDualQueries(t *testing.T) {
 }
 
 func TestUseStmtInOLAP(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 
@@ -306,6 +324,7 @@ func TestUseStmtInOLAP(t *testing.T) {
 }
 
 func TestInsertStmtInOLAP(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 
@@ -320,6 +339,7 @@ func TestInsertStmtInOLAP(t *testing.T) {
 // must succeed on that path and run in an implicit transaction, just like the
 // non-streaming path.
 func TestShardTargetedDMLInOLAP(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	t.Cleanup(closer)
 
@@ -336,6 +356,7 @@ func TestShardTargetedDMLInOLAP(t *testing.T) {
 // Before the fix, streamed DML returned the correct result but recorded no
 // QueryRowsAffected, leaving these DMLs invisible to per-table tablet metrics.
 func TestShardTargetedDMLInOLAPRecordsTabletStats(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	t.Cleanup(closer)
 
@@ -359,6 +380,7 @@ func TestShardTargetedDMLInOLAPRecordsTabletStats(t *testing.T) {
 // non-streaming Execute path. Before the fix, a failed streamed DML returned the
 // error to the client but incremented no QueryErrorCounts.
 func TestShardTargetedFailedDMLInOLAPRecordsErrorStats(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	t.Cleanup(closer)
 
@@ -402,6 +424,7 @@ func tabletQueryStat(t *testing.T, tablet *vitesst.Tablet, varName, key string) 
 }
 
 func TestCreateIndex(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 	// Test that create index with the correct table name works
@@ -411,6 +434,7 @@ func TestCreateIndex(t *testing.T) {
 }
 
 func TestVersions(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 
@@ -422,6 +446,7 @@ func TestVersions(t *testing.T) {
 }
 
 func TestFlush(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 	vitesst.Exec(t, conn, "flush local tables t1, t2")
@@ -429,6 +454,7 @@ func TestFlush(t *testing.T) {
 
 // TestFlushLock tests that ftwrl and unlock tables should unblock other session connections to execute the query.
 func TestFlushLock(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 
@@ -475,6 +501,7 @@ func TestFlushLock(t *testing.T) {
 }
 
 func TestShowVariables(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 	res := vitesst.Exec(t, conn, "show variables like \"%version%\";")
@@ -489,6 +516,7 @@ func TestShowVariables(t *testing.T) {
 }
 
 func TestShowVGtid(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 
@@ -507,6 +535,7 @@ func TestShowVGtid(t *testing.T) {
 }
 
 func TestShowGtid(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 
@@ -533,6 +562,7 @@ func TestShowGtid(t *testing.T) {
 }
 
 func TestDeleteAlias(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 
@@ -541,6 +571,7 @@ func TestDeleteAlias(t *testing.T) {
 }
 
 func TestFunctionInDefault(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 
@@ -582,6 +613,7 @@ ts12 TIMESTAMP DEFAULT LOCALTIME()
 }
 
 func TestRenameFieldsOnOLAP(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 
@@ -596,6 +628,7 @@ func TestRenameFieldsOnOLAP(t *testing.T) {
 }
 
 func TestSelectEqualUniqueOuterJoinRightPredicate(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 
@@ -605,6 +638,7 @@ func TestSelectEqualUniqueOuterJoinRightPredicate(t *testing.T) {
 }
 
 func TestSQLSelectLimit(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 
@@ -639,6 +673,7 @@ func TestSQLSelectLimit(t *testing.T) {
 }
 
 func TestSQLSelectLimitWithPlanCache(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 
@@ -673,6 +708,7 @@ func TestSQLSelectLimitWithPlanCache(t *testing.T) {
 }
 
 func TestSavepointInReservedConn(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 
@@ -695,6 +731,7 @@ func TestSavepointInReservedConn(t *testing.T) {
 }
 
 func TestUnionWithManyInfSchemaQueries(t *testing.T) {
+	setupCluster(t)
 	// trying to reproduce the problems in https://github.com/vitessio/vitess/issues/9139
 	conn, closer := start(t)
 	defer closer()
@@ -801,6 +838,7 @@ func TestUnionWithManyInfSchemaQueries(t *testing.T) {
 }
 
 func TestTransactionsInStreamingMode(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 
@@ -819,6 +857,7 @@ func TestTransactionsInStreamingMode(t *testing.T) {
 }
 
 func TestCharsetIntro(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 
@@ -830,6 +869,7 @@ func TestCharsetIntro(t *testing.T) {
 }
 
 func TestFilterAfterLeftJoin(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 
@@ -842,6 +882,7 @@ func TestFilterAfterLeftJoin(t *testing.T) {
 }
 
 func TestFilterWithINAfterLeftJoin(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 
@@ -863,6 +904,7 @@ func TestFilterWithINAfterLeftJoin(t *testing.T) {
 }
 
 func TestDescribeVindex(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 
@@ -875,6 +917,7 @@ func TestDescribeVindex(t *testing.T) {
 }
 
 func TestEmptyQuery(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 
@@ -885,6 +928,7 @@ func TestEmptyQuery(t *testing.T) {
 
 // TestJoinWithMergedRouteWithPredicate checks the issue found in https://github.com/vitessio/vitess/issues/10713
 func TestJoinWithMergedRouteWithPredicate(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 
@@ -896,6 +940,7 @@ func TestJoinWithMergedRouteWithPredicate(t *testing.T) {
 }
 
 func TestRowCountExceed(t *testing.T) {
+	setupCluster(t)
 	conn, _ := start(t)
 	defer func() {
 		// needs special delete logic as it exceeds row count.
@@ -913,6 +958,7 @@ func TestRowCountExceed(t *testing.T) {
 }
 
 func TestDDLTargeted(t *testing.T) {
+	setupCluster(t)
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
@@ -933,6 +979,7 @@ func TestDDLTargeted(t *testing.T) {
 // TestTabletTargeting tests tablet-specific routing with USE keyspace:shard@tablet-alias syntax.
 // When shard is specified, tablet-specific routing bypasses vindex-based shard resolution.
 func TestTabletTargeting(t *testing.T) {
+	setupCluster(t)
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
@@ -1100,6 +1147,7 @@ type vtgateConfiguration struct {
 
 // TestDynamicConfig tests the dynamic configurations.
 func TestDynamicConfig(t *testing.T) {
+	setupCluster(t)
 	var config vtgateConfiguration
 	rewrite := func(t *testing.T) {
 		body, err := json.Marshal(&config)
@@ -1175,6 +1223,7 @@ func waitForVtgateConfig(t *testing.T, expected string) {
 }
 
 func TestLookupErrorMetric(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 
@@ -1215,6 +1264,7 @@ func getVar(t *testing.T, key string) any {
 
 // TestQueryProcessedMetric verifies that query metrics are correctly published.
 func TestQueryProcessedMetric(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 
@@ -1296,6 +1346,7 @@ func TestQueryProcessedMetric(t *testing.T) {
 
 // TestQueryProcessedMetric verifies that query metrics are correctly published.
 func TestMetricForExplain(t *testing.T) {
+	setupCluster(t)
 	conn, closer := start(t)
 	defer closer()
 

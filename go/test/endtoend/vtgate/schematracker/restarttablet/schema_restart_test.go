@@ -19,9 +19,6 @@ package schematracker
 import (
 	"context"
 	"encoding/json"
-	"flag"
-	"fmt"
-	"os"
 	"testing"
 	"time"
 
@@ -33,10 +30,8 @@ import (
 )
 
 var (
-	clusterInstance *vitesst.Cluster
-	vtParams        mysql.ConnParams
-	keyspaceName    = "ks"
-	sqlSchema       = `
+	keyspaceName = "ks"
+	sqlSchema    = `
 		create table vt_user (
 			id bigint,
 			name varchar(64),
@@ -57,59 +52,44 @@ var (
 `
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setup(t *testing.T) (*vitesst.Cluster, mysql.ConnParams) {
+	t.Helper()
+	ctx := t.Context()
 
-	exitcode := func() int {
-		ctx := context.Background()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithKeyspace(keyspaceName).
+			WithReplicas(1).
+			WithSchema(sqlSchema),
+		// List of users authorized to execute vschema ddl operations
+		vitesst.WithVTGateArgs("--schema-change-signal"),
+	)
+	require.NoError(t, err)
 
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithKeyspace(keyspaceName).
-				WithReplicas(1).
-				WithSchema(sqlSchema),
-			// List of users authorized to execute vschema ddl operations
-			vitesst.WithVTGateArgs("--schema-change-signal"),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+	cleanup, err := cluster.Start(ctx)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Minute)
+		defer cancel()
+		if t.Failed() {
+			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
 		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+		if err := cleanup(cleanupCtx); err != nil {
+			t.Logf("cluster teardown: %v", err)
 		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
 
-		// restart the tablet so that the schema.Engine gets a chance to start with existing schema
-		tablet := cluster.Keyspace(keyspaceName).Shard("-").Primary()
-		if err := tablet.StopVttablet(ctx); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		if err := tablet.StartVttablet(ctx, "--queryserver-config-schema-change-signal"); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
+	// restart the tablet so that the schema.Engine gets a chance to start with existing schema
+	tablet := cluster.Keyspace(keyspaceName).Shard("-").Primary()
+	require.NoError(t, tablet.StopVttablet(ctx))
+	require.NoError(t, tablet.StartVttablet(ctx, "--queryserver-config-schema-change-signal"))
+	require.NoError(t, cluster.WaitForHealthyShard(ctx, keyspaceName, "-", 5*time.Minute))
 
-		if err := cluster.WaitForHealthyShard(ctx, keyspaceName, "-", 5*time.Minute); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-
-		clusterInstance = cluster
-		vtParams = cluster.VTParams(ctx, "")
-		return m.Run()
-	}()
-	os.Exit(exitcode)
+	return cluster, cluster.VTParams(ctx, "")
 }
 
 func TestVSchemaTrackerInit(t *testing.T) {
 	ctx := t.Context()
+	_, vtParams := setup(t)
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -130,10 +110,11 @@ func TestVSchemaTrackerInit(t *testing.T) {
 // the exact same vschema state as before the restart.
 func TestVSchemaTrackerKeyspaceReInit(t *testing.T) {
 	ctx := t.Context()
-	primaryTablet := clusterInstance.Keyspace(keyspaceName).Shard("-").Primary()
+	cluster, _ := setup(t)
+	primaryTablet := cluster.Keyspace(keyspaceName).Shard("-").Primary()
 
 	// get the vschema prior to the restarts
-	originalResults := readVSchema(t)
+	originalResults := readVSchema(t, cluster)
 	assert.NotNil(t, originalResults)
 
 	// restart the primary tablet so that the vschema gets reloaded for the keyspace
@@ -142,10 +123,10 @@ func TestVSchemaTrackerKeyspaceReInit(t *testing.T) {
 		require.NoError(t, err)
 		err = primaryTablet.StartVttablet(ctx)
 		require.NoError(t, err)
-		waitForHealthyInVtgate(t)
+		waitForHealthyInVtgate(t, cluster)
 
 		vitesst.TimeoutAction(t, 1*time.Minute, "timeout - could not find the updated vschema in VTGate", func() bool {
-			newResults := readVSchema(t)
+			newResults := readVSchema(t, cluster)
 			return assert.ObjectsAreEqual(originalResults, newResults)
 		})
 	}
@@ -153,9 +134,9 @@ func TestVSchemaTrackerKeyspaceReInit(t *testing.T) {
 
 // waitForHealthyInVtgate waits until vtgate's healthcheck sees the keyspace's
 // primary tablet as serving again.
-func waitForHealthyInVtgate(t *testing.T) {
+func waitForHealthyInVtgate(t *testing.T, cluster *vitesst.Cluster) {
 	t.Helper()
-	_, _, err := clusterInstance.VTGate().MakeAPICallRetry(t.Context(), "/debug/vars", 2*time.Minute, func(status int, body string) bool {
+	_, _, err := cluster.VTGate().MakeAPICallRetry(t.Context(), "/debug/vars", 2*time.Minute, func(status int, body string) bool {
 		if status != 200 {
 			return false
 		}
@@ -170,8 +151,8 @@ func waitForHealthyInVtgate(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func readVSchema(t *testing.T) any {
-	results, err := clusterInstance.VTGate().ReadVSchema(t.Context())
+func readVSchema(t *testing.T, cluster *vitesst.Cluster) any {
+	results, err := cluster.VTGate().ReadVSchema(t.Context())
 	require.NoError(t, err)
 	require.NotNil(t, results)
 	return *results

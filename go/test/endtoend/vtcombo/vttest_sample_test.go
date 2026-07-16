@@ -20,7 +20,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"io"
 	"net/http"
@@ -73,49 +72,34 @@ var (
 }`
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setupCluster(t testing.TB) {
+	t.Helper()
+	var topology vttestpb.VTTestTopology
 
-	exitcode, err := func() (int, error) {
-		var topology vttestpb.VTTestTopology
+	data := vttest.JSONTopoData(&topology)
+	require.NoError(t, data.Set(jsonTopo))
 
-		data := vttest.JSONTopoData(&topology)
-		err := data.Set(jsonTopo)
-		if err != nil {
-			return 1, err
-		}
-
-		var cfg vttest.Config
-		cfg.Topology = &topology
-		cfg.SchemaDir = os.Getenv("VTROOT") + "/test/vttest_schema"
-		cfg.DefaultSchemaDir = os.Getenv("VTROOT") + "/test/vttest_schema/default"
-		cfg.PersistentMode = true
-
-		localCluster = &vttest.LocalCluster{
-			Config: cfg,
-		}
-
-		err = localCluster.Setup()
-		defer localCluster.TearDown()
-		if err != nil {
-			return 1, err
-		}
-
-		grpcAddress = fmt.Sprintf("localhost:%d", localCluster.Env.PortForProtocol("vtcombo", "grpc"))
-		mysqlAddress = fmt.Sprintf("localhost:%d", localCluster.Env.PortForProtocol("vtcombo_mysql_port", ""))
-		vtctldAddr = fmt.Sprintf("localhost:%d", localCluster.Env.PortForProtocol("vtcombo", "port"))
-
-		return m.Run(), nil
-	}()
-	if err != nil {
-		log.Error(fmt.Sprintf("top level error: %v\n", err))
-		os.Exit(1)
-	} else {
-		os.Exit(exitcode)
+	cfg := vttest.Config{
+		Topology:         &topology,
+		SchemaDir:        os.Getenv("VTROOT") + "/test/vttest_schema",
+		DefaultSchemaDir: os.Getenv("VTROOT") + "/test/vttest_schema/default",
+		PersistentMode:   true,
 	}
+
+	localCluster = &vttest.LocalCluster{Config: cfg}
+	err := localCluster.Setup()
+	t.Cleanup(func() {
+		require.NoError(t, localCluster.TearDown())
+	})
+	require.NoError(t, err)
+
+	grpcAddress = fmt.Sprintf("localhost:%d", localCluster.Env.PortForProtocol("vtcombo", "grpc"))
+	mysqlAddress = fmt.Sprintf("localhost:%d", localCluster.Env.PortForProtocol("vtcombo_mysql_port", ""))
+	vtctldAddr = fmt.Sprintf("localhost:%d", localCluster.Env.PortForProtocol("vtcombo", "port"))
 }
 
 func TestStandalone(t *testing.T) {
+	setupCluster(t)
 	// validate debug vars
 	resp, err := http.Get(fmt.Sprintf("http://%s/debug/vars", vtctldAddr))
 	require.NoError(t, err)

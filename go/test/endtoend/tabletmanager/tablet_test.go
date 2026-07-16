@@ -58,6 +58,7 @@ func newDBTestTablet(ctx context.Context, t *testing.T) *vitesst.Tablet {
 
 // TestEnsureDB tests that vttablet creates the db as needed
 func TestEnsureDB(t *testing.T) {
+	setup(t)
 	ctx := t.Context()
 
 	// Create new tablet. It won't be able to serve because there's no db.
@@ -86,6 +87,7 @@ func TestEnsureDB(t *testing.T) {
 // TestGRPCErrorCode_UNAVAILABLE tests that vttablet returns correct gRPC codes,
 // in this case codes.Unavailable/vtrpcpb.Code_UNAVAILABLE when mysqld is down.
 func TestGRPCErrorCode_UNAVAILABLE(t *testing.T) {
+	setup(t)
 	// Create new tablet. It won't be able to serve because there's no db.
 	tablet := newDBTestTablet(t.Context(), t)
 	defer killTablets(t.Context(), tablet)
@@ -106,6 +108,7 @@ func TestGRPCErrorCode_UNAVAILABLE(t *testing.T) {
 
 // TestResetReplicationParameters tests that the RPC ResetReplicationParameters works as intended.
 func TestResetReplicationParameters(t *testing.T) {
+	setup(t)
 	ctx := t.Context()
 
 	// Create new tablet. It won't be able to serve because there's no db.
@@ -141,6 +144,7 @@ func TestResetReplicationParameters(t *testing.T) {
 
 // TestGetGlobalStatusVars tests the GetGlobalStatusVars RPC
 func TestGetGlobalStatusVars(t *testing.T) {
+	setup(t)
 	ctx := t.Context()
 	statusValues, err := tmcGetGlobalStatusVars(ctx, replicaTablet, []string{"Innodb_buffer_pool_pages_data", "unknown_value"})
 	require.NoError(t, err)
@@ -163,6 +167,7 @@ func TestGetGlobalStatusVars(t *testing.T) {
 
 // TestStopReplicationAndGetStatus tests the StopReplicationAndGetStatus RPC.
 func TestStopReplicationAndGetStatus(t *testing.T) {
+	setup(t)
 	// Create new tablet
 	tablet, err := clusterInstance.AddTablet(t.Context(), cell, keyspaceName, shardName, "replica")
 	require.NoError(t, err)

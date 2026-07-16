@@ -16,10 +16,9 @@ package prefixfanout
 
 import (
 	"context"
-	"flag"
 	"fmt"
-	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -29,8 +28,6 @@ import (
 )
 
 var (
-	clusterInstance *vitesst.Cluster
-
 	sKs     = "cfc_testing"
 	sSchema = `
 CREATE TABLE t1 (
@@ -104,46 +101,42 @@ PRIMARY KEY (c1)
 }`
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setup(t *testing.T) *vitesst.Cluster {
+	t.Helper()
+	ctx := t.Context()
 
-	exitCode := func() int {
-		ctx := context.Background()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithKeyspace(sKs).
+			WithShardNames("-41", "41-4180", "4180-42", "42-").
+			WithSchema(sSchema).
+			WithVSchema(sVSchema),
+		vitesst.WithKeyspace(sKsMD5).
+			WithShardNames("-c2", "c2-c20a80", "c20a80-d0", "d0-").
+			WithSchema(sSchemaMD5).
+			WithVSchema(sVSchemaMD5),
+	)
+	require.NoError(t, err)
 
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithKeyspace(sKs).
-				WithShardNames("-41", "41-4180", "4180-42", "42-").
-				WithSchema(sSchema).
-				WithVSchema(sVSchema),
-			vitesst.WithKeyspace(sKsMD5).
-				WithShardNames("-c2", "c2-c20a80", "c20a80-d0", "d0-").
-				WithSchema(sSchemaMD5).
-				WithVSchema(sVSchemaMD5),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+	cleanup, err := cluster.Start(ctx)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+		defer cancel()
+		if t.Failed() {
+			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
 		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+		if cleanupErr := cleanup(cleanupCtx); cleanupErr != nil {
+			t.Logf("cluster teardown: %v", cleanupErr)
 		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
+	require.NoError(t, err)
 
-		clusterInstance = cluster
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	return cluster
 }
 
 func TestCFCPrefixQueryNoHash(t *testing.T) {
 	ctx := t.Context()
-	vtParams := clusterInstance.VTParams(ctx, "")
+	cluster := setup(t)
+	vtParams := cluster.VTParams(ctx, "")
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
@@ -180,7 +173,8 @@ func TestCFCPrefixQueryNoHash(t *testing.T) {
 
 func TestCFCPrefixQueryWithHash(t *testing.T) {
 	ctx := t.Context()
-	vtParams := clusterInstance.VTParams(ctx, "")
+	cluster := setup(t)
+	vtParams := cluster.VTParams(ctx, "")
 
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
@@ -223,7 +217,8 @@ func TestCFCPrefixQueryWithHash(t *testing.T) {
 func TestCFCInsert(t *testing.T) {
 	ctx := t.Context()
 
-	vtParams := clusterInstance.VTParams(ctx, "")
+	cluster := setup(t)
+	vtParams := cluster.VTParams(ctx, "")
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()

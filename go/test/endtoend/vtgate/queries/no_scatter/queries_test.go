@@ -45,6 +45,8 @@ func start(t *testing.T) (*mysql.Conn, func()) {
 }
 
 func TestFailsWhenForcedToScatter(t *testing.T) {
+	setup(t)
+
 	vtconn, closer := start(t)
 	defer closer()
 

@@ -18,7 +18,6 @@ package vreplsuite
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"os"
 	"path"
@@ -69,55 +68,47 @@ const (
 )
 
 // Use $VREPL_SUITE_TEST_FILTER environment variable to filter tests by name.
-func TestMain(m *testing.M) {
-	flag.Parse()
-
+func setup(t *testing.T) {
+	t.Helper()
 	testsFilter = os.Getenv(testFilterEnvVar)
+	ctx := t.Context()
 
-	exitCode := func() int {
-		ctx := context.Background()
-
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithVTCtldArgs(
-				"--schema-change-dir", schemaChangeDirectory,
-				"--schema-change-controller", "local",
-				"--schema-change-check-interval", "1s",
-			),
-			vitesst.WithVTTabletArgs(
-				"--heartbeat-interval", "250ms",
-				"--heartbeat-on-demand-duration", "5s",
-				"--migration-check-interval", "5s",
-			),
-			// No need for replicas in this stress test
-			vitesst.WithKeyspace(keyspaceName).
-				WithShardNames("1"),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithVTCtldArgs(
+			"--schema-change-dir", schemaChangeDirectory,
+			"--schema-change-controller", "local",
+			"--schema-change-check-interval", "1s",
+		),
+		vitesst.WithVTTabletArgs(
+			"--heartbeat-interval", "250ms",
+			"--heartbeat-on-demand-duration", "5s",
+			"--migration-check-interval", "5s",
+		),
+		// No need for replicas in this stress test
+		vitesst.WithKeyspace(keyspaceName).
+			WithShardNames("1"),
+	)
+	require.NoError(t, err)
+	cleanup, err := cluster.Start(ctx)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Minute)
+		defer cancel()
+		if t.Failed() {
+			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
 		}
-
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+		if err := cleanup(cleanupCtx); err != nil {
+			t.Logf("cluster teardown: %v", err)
 		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
 
-		clusterInstance = cluster
-		primaryTablet = cluster.Keyspace(keyspaceName).Shards()[0].Primary()
-		vtParams = cluster.VTParams(ctx, "")
-
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	clusterInstance = cluster
+	primaryTablet = cluster.Keyspace(keyspaceName).Shards()[0].Primary()
+	vtParams = cluster.VTParams(ctx, "")
 }
 
 func TestVreplSuiteSchemaChanges(t *testing.T) {
+	setup(t)
 	shards := clusterInstance.Keyspace(keyspaceName).Shards()
 	require.Equal(t, 1, len(shards))
 
@@ -256,7 +247,8 @@ func testSingle(t *testing.T, testName string, fkOnlineDDLPossible bool) {
 	assert.NotEmpty(t, uuid)
 
 	defer func() {
-		query, err := sqlparser.ParseAndBind("alter vitess_migration %a cancel",
+		query, err := sqlparser.ParseAndBind(
+			"alter vitess_migration %a cancel",
 			sqltypes.StringBindVariable(uuid),
 		)
 		require.NoError(t, err)

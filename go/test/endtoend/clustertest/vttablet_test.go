@@ -25,6 +25,7 @@ import (
 )
 
 func TestVttabletProcess(t *testing.T) {
+	setup(t)
 	ctx := t.Context()
 	tablet := clusterInstance.Keyspaces()[0].Shards()[0].Tablets()[0]
 	status, _, err := tablet.MakeAPICall(ctx, "/debug/vars/")
@@ -39,6 +40,7 @@ func TestVttabletProcess(t *testing.T) {
 }
 
 func TestDeleteTablet(t *testing.T) {
+	setup(t)
 	ctx := t.Context()
 	primary := clusterInstance.Keyspaces()[0].Shards()[0].Primary()
 	require.NotNil(t, primary)

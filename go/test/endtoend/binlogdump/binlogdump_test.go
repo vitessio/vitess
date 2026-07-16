@@ -43,6 +43,8 @@ import (
 
 // TestBinlogDumpGTID_Streaming tests that binlog events are actually streamed from vttablet to the client.
 func TestBinlogDumpGTID_Streaming(t *testing.T) {
+	setup(t)
+
 	ctx := t.Context()
 
 	// Get the primary tablet for our keyspace
@@ -151,6 +153,8 @@ packetLoop:
 
 // TestBinlogDumpGTID_NoTarget verifies that binlog dump returns an error packet without a target
 func TestBinlogDumpGTID_NoTarget(t *testing.T) {
+	setup(t)
+
 	ctx := t.Context()
 
 	conn, err := mysql.Connect(ctx, &vtParams)
@@ -177,6 +181,8 @@ func TestBinlogDumpGTID_NoTarget(t *testing.T) {
 // are correctly streamed through VTGate. This is critical because MySQL protocol uses 16MB max packet
 // size, and large events must be split into multiple packets and reassembled correctly.
 func TestBinlogDumpGTID_LargeEvent(t *testing.T) {
+	setup(t)
+
 	ctx := t.Context()
 
 	// Get the primary tablet for our keyspace
@@ -351,6 +357,8 @@ func gtidToSIDBlock(t *testing.T, gtidStr string) []byte {
 // TestBinlogDumpGTID_FromSpecificPosition verifies that binlog streaming starts from the specified
 // GTID position and only receives subsequent events.
 func TestBinlogDumpGTID_FromSpecificPosition(t *testing.T) {
+	setup(t)
+
 	ctx := t.Context()
 
 	// Connect to insert initial data
@@ -361,7 +369,8 @@ func TestBinlogDumpGTID_FromSpecificPosition(t *testing.T) {
 	// Insert initial data (we should NOT see these events)
 	for i := range 3 {
 		_, err := dataConn.ExecuteFetch(
-			fmt.Sprintf("INSERT INTO binlog_test (msg) VALUES ('before_gtid_%d')", i), 1, false)
+			fmt.Sprintf("INSERT INTO binlog_test (msg) VALUES ('before_gtid_%d')", i), 1, false,
+		)
 		require.NoError(t, err)
 	}
 
@@ -372,7 +381,8 @@ func TestBinlogDumpGTID_FromSpecificPosition(t *testing.T) {
 	// Insert more data (we SHOULD see these events)
 	for i := range 3 {
 		_, err := dataConn.ExecuteFetch(
-			fmt.Sprintf("INSERT INTO binlog_test (msg) VALUES ('after_gtid_%d')", i), 1, false)
+			fmt.Sprintf("INSERT INTO binlog_test (msg) VALUES ('after_gtid_%d')", i), 1, false,
+		)
 		require.NoError(t, err)
 	}
 
@@ -417,6 +427,8 @@ func TestBinlogDumpGTID_FromSpecificPosition(t *testing.T) {
 
 // TestBinlogDumpGTID_InvalidFormat verifies that an invalid GTID format returns a proper error packet.
 func TestBinlogDumpGTID_InvalidFormat(t *testing.T) {
+	setup(t)
+
 	ctx := t.Context()
 
 	// Connect with proper target
@@ -454,6 +466,8 @@ func TestBinlogDumpGTID_InvalidFormat(t *testing.T) {
 // transactions not yet in the binlog, MySQL returns an error.
 // This is expected MySQL behavior - you cannot request events from a position that doesn't exist.
 func TestBinlogDumpGTID_FuturePosition(t *testing.T) {
+	setup(t)
+
 	ctx := t.Context()
 
 	// Connect to get current GTID
@@ -533,6 +547,8 @@ func TestBinlogDumpGTID_FuturePosition(t *testing.T) {
 // the server returns an EOF packet when there are no more events to stream, instead of
 // blocking indefinitely waiting for new events.
 func TestBinlogDumpGTID_NonBlockEOF(t *testing.T) {
+	setup(t)
+
 	ctx := t.Context()
 
 	// Connect to insert some data first to ensure binlog has content
@@ -616,6 +632,8 @@ readLoop:
 // TestBinlogDumpGTID_NonBlockWithPendingEvents verifies that when nonBlock is set and there
 // ARE pending events, the server streams them all and THEN returns EOF.
 func TestBinlogDumpGTID_NonBlockWithPendingEvents(t *testing.T) {
+	setup(t)
+
 	ctx := t.Context()
 
 	// Connect to insert data
@@ -631,7 +649,8 @@ func TestBinlogDumpGTID_NonBlockWithPendingEvents(t *testing.T) {
 	numInserts := 5
 	for i := range numInserts {
 		_, err := dataConn.ExecuteFetch(
-			fmt.Sprintf("INSERT INTO binlog_test (msg) VALUES ('nonblock_pending_%d')", i), 1, false)
+			fmt.Sprintf("INSERT INTO binlog_test (msg) VALUES ('nonblock_pending_%d')", i), 1, false,
+		)
 		require.NoError(t, err)
 	}
 
@@ -708,6 +727,8 @@ readLoop:
 // This test verifies that new events are received after an insert, demonstrating that the
 // connection stays open and continues to stream events.
 func TestBinlogDumpGTID_BlockingMode(t *testing.T) {
+	setup(t)
+
 	ctx := t.Context()
 
 	// Connect to get current position
@@ -818,6 +839,8 @@ readLoop:
 
 // TestBinlogDumpGTID_DirectGRPC tests GTID-based binlog streaming via direct gRPC connection to vttablet.
 func TestBinlogDumpGTID_DirectGRPC(t *testing.T) {
+	setup(t)
+
 	ctx := t.Context()
 
 	// Get the tablet info for direct gRPC connection
@@ -877,7 +900,8 @@ func TestBinlogDumpGTID_DirectGRPC(t *testing.T) {
 			time.Sleep(1 * time.Second)
 			t.Logf("Writing row %d", i+1)
 			_, err := dataConn.ExecuteFetch(
-				fmt.Sprintf("INSERT INTO binlog_test (msg) VALUES ('grpc_test_%d')", i), 1, false)
+				fmt.Sprintf("INSERT INTO binlog_test (msg) VALUES ('grpc_test_%d')", i), 1, false,
+			)
 			if err != nil {
 				t.Logf("Insert failed: %v", err)
 				return
@@ -897,6 +921,8 @@ func TestBinlogDumpGTID_DirectGRPC(t *testing.T) {
 // empty-GTID nonBlock dump against a current-GTID nonBlock dump: the empty-GTID dump should
 // receive strictly more packets because it includes all pre-existing events.
 func TestBinlogDumpGTID_EmptyGTIDStartsFromBeginning(t *testing.T) {
+	setup(t)
+
 	ctx := t.Context()
 
 	// Insert some data to ensure binlog has events before we record the GTID position.
@@ -906,7 +932,8 @@ func TestBinlogDumpGTID_EmptyGTIDStartsFromBeginning(t *testing.T) {
 
 	for i := range 5 {
 		_, err := dataConn.ExecuteFetch(
-			fmt.Sprintf("INSERT INTO binlog_test (msg) VALUES ('empty_gtid_test_%d')", i), 1, false)
+			fmt.Sprintf("INSERT INTO binlog_test (msg) VALUES ('empty_gtid_test_%d')", i), 1, false,
+		)
 		require.NoError(t, err)
 	}
 
@@ -982,6 +1009,8 @@ func TestBinlogDumpGTID_EmptyGTIDStartsFromBeginning(t *testing.T) {
 // targeting (e.g., "commerce:0@primary") without specifying a tablet alias. VTGate should
 // automatically select a healthy tablet for the shard via health check.
 func TestBinlogDumpGTID_ShardTargeting(t *testing.T) {
+	setup(t)
+
 	ctx := t.Context()
 
 	// Connect to vtgate for binlog streaming using shard-level targeting (no tablet alias)
@@ -1095,6 +1124,8 @@ func primaryGTIDSet(ctx context.Context, t *testing.T, tablet *vitesst.Tablet) s
 
 // TestBinlogDumpGTID_VTGateGRPC_Streaming tests binlog streaming through vtgate's gRPC endpoint.
 func TestBinlogDumpGTID_VTGateGRPC_Streaming(t *testing.T) {
+	setup(t)
+
 	ctx := t.Context()
 
 	// Get current GTID position
@@ -1123,7 +1154,8 @@ func TestBinlogDumpGTID_VTGateGRPC_Streaming(t *testing.T) {
 		defer dataConn.Close()
 		for i := range 3 {
 			_, err := dataConn.ExecuteFetch(
-				fmt.Sprintf("INSERT INTO binlog_test (msg) VALUES ('vtgate_grpc_test_%d')", i), 1, false)
+				fmt.Sprintf("INSERT INTO binlog_test (msg) VALUES ('vtgate_grpc_test_%d')", i), 1, false,
+			)
 			if err != nil {
 				t.Logf("Insert failed: %v", err)
 				return
@@ -1154,6 +1186,8 @@ func TestBinlogDumpGTID_VTGateGRPC_Streaming(t *testing.T) {
 // TestBinlogDumpGTID_VTGateGRPC_RejectsFilename tests that vtgate's gRPC endpoint rejects
 // requests with a binlog filename.
 func TestBinlogDumpGTID_VTGateGRPC_RejectsFilename(t *testing.T) {
+	setup(t)
+
 	ctx := t.Context()
 
 	conn, err := vtgateconn.Dial(ctx, vtgateGrpcAddr(ctx, t))
@@ -1173,6 +1207,8 @@ func TestBinlogDumpGTID_VTGateGRPC_RejectsFilename(t *testing.T) {
 // TestBinlogDumpGTID_VTGateGRPC_RejectsNonDefaultPosition tests that vtgate's gRPC endpoint
 // rejects requests with a binlog position other than 4.
 func TestBinlogDumpGTID_VTGateGRPC_RejectsNonDefaultPosition(t *testing.T) {
+	setup(t)
+
 	ctx := t.Context()
 
 	conn, err := vtgateconn.Dial(ctx, vtgateGrpcAddr(ctx, t))
@@ -1192,6 +1228,8 @@ func TestBinlogDumpGTID_VTGateGRPC_RejectsNonDefaultPosition(t *testing.T) {
 // TestBinlogDumpGTID_VTGateGRPC_RejectsPositionBelowMinimum tests that vtgate's gRPC endpoint
 // rejects requests with a binlog position below 4.
 func TestBinlogDumpGTID_VTGateGRPC_RejectsPositionBelowMinimum(t *testing.T) {
+	setup(t)
+
 	ctx := t.Context()
 
 	conn, err := vtgateconn.Dial(ctx, vtgateGrpcAddr(ctx, t))

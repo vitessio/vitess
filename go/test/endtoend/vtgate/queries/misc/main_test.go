@@ -19,10 +19,10 @@ package misc
 import (
 	"context"
 	_ "embed"
-	"flag"
-	"fmt"
-	"os"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/vitesst"
@@ -46,60 +46,44 @@ var (
 	vschema string
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
-
-	exitCode := func() int {
-		ctx := context.Background()
-
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithCells(cell),
-			vitesst.WithVTTabletArgs(
-				"--queryserver-config-max-result-size", "1000000",
-				"--queryserver-enable-views",
-			),
-			vitesst.WithVTGateArgs(
-				"--enable-views",
-				"--slow-query-threshold", "10ms",
-			),
-			vitesst.WithKeyspace(uks).
-				WithSchema(uschemaSQL),
-			vitesst.WithKeyspace(keyspaceName).
-				WithShardNames("-80", "80-").
-				WithSchema(schemaSQL).
-				WithVSchema(vschema),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+func setup(t *testing.T) {
+	ctx := t.Context()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithCells(cell),
+		vitesst.WithVTTabletArgs(
+			"--queryserver-config-max-result-size", "1000000",
+			"--queryserver-enable-views",
+		),
+		vitesst.WithVTGateArgs(
+			"--enable-views",
+			"--slow-query-threshold", "10ms",
+		),
+		vitesst.WithKeyspace(uks).
+			WithSchema(uschemaSQL),
+		vitesst.WithKeyspace(keyspaceName).
+			WithShardNames("-80", "80-").
+			WithSchema(schemaSQL).
+			WithVSchema(vschema),
+	)
+	require.NoError(t, err)
+	cleanup, err := cluster.Start(ctx)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		if err := cleanup(context.WithoutCancel(ctx)); err != nil {
+			t.Logf("cluster teardown: %v", err)
 		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
 
-		clusterInstance = cluster
-		vtParams = cluster.VTParams(ctx, "")
-
-		// create mysql instance and connection parameters
-		conn, closer, err := vitesst.NewMySQL(ctx, cluster, keyspaceName, schemaSQL, uschemaSQL)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+	clusterInstance = cluster
+	vtParams = cluster.VTParams(ctx, "")
+	conn, closer, err := vitesst.NewMySQL(ctx, cluster, keyspaceName, schemaSQL, uschemaSQL)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+		defer cancel()
+		if err := closer(cleanupCtx); err != nil {
+			t.Logf("comparison mysqld teardown: %v", err)
 		}
-		defer func() {
-			if err := closer(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "comparison mysqld teardown:", err)
-			}
-		}()
-		mysqlParams = conn
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	})
+	mysqlParams = conn
 }

@@ -18,7 +18,6 @@ package docker
 
 import (
 	"fmt"
-	"os"
 	"os/exec"
 	"testing"
 
@@ -28,18 +27,14 @@ import (
 	"vitess.io/vitess/go/test/vitesst"
 )
 
-func TestMain(m *testing.M) {
-	exitCode := func() int {
-		err := makeVttestserverDockerImages()
-		if err != nil {
-			return 1
-		}
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+func setup(t *testing.T) {
+	t.Helper()
+	require.NoError(t, makeVttestserverDockerImages())
 }
 
 func TestUnsharded(t *testing.T) {
+	setup(t)
+
 	dockerImages := []string{vttestserverMysql80image, vttestserverMysql84image}
 	for _, image := range dockerImages {
 		t.Run(image, func(t *testing.T) {
@@ -63,6 +58,8 @@ func TestUnsharded(t *testing.T) {
 }
 
 func TestSharded(t *testing.T) {
+	setup(t)
+
 	dockerImages := []string{vttestserverMysql80image, vttestserverMysql84image}
 	for _, image := range dockerImages {
 		t.Run(image, func(t *testing.T) {
@@ -87,6 +84,8 @@ func TestSharded(t *testing.T) {
 }
 
 func TestMysqlMaxCons(t *testing.T) {
+	setup(t)
+
 	dockerImages := []string{vttestserverMysql80image, vttestserverMysql84image}
 	for _, image := range dockerImages {
 		t.Run(image, func(t *testing.T) {
@@ -108,6 +107,8 @@ func TestMysqlMaxCons(t *testing.T) {
 
 // TestVtctldCommands tests that vtctld commands can be run with the docker image.
 func TestVtctldCommands(t *testing.T) {
+	setup(t)
+
 	dockerImages := []string{vttestserverMysql80image, vttestserverMysql84image}
 	for _, image := range dockerImages {
 		t.Run(image, func(t *testing.T) {
@@ -128,6 +129,8 @@ func TestVtctldCommands(t *testing.T) {
 }
 
 func TestLargeNumberOfKeyspaces(t *testing.T) {
+	setup(t)
+
 	dockerImages := []string{vttestserverMysql80image, vttestserverMysql84image}
 	for _, image := range dockerImages {
 		t.Run(image, func(t *testing.T) {

@@ -18,8 +18,6 @@ package unsharded
 
 import (
 	"context"
-	"flag"
-	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -34,10 +32,8 @@ import (
 )
 
 var (
-	clusterInstance *vitesst.Cluster
-	vtParams        mysql.ConnParams
-	KeyspaceName    = "customer"
-	SchemaSQL       = `
+	KeyspaceName = "customer"
+	SchemaSQL    = `
 CREATE TABLE t1 (
     c1 BIGINT NOT NULL,
     c2 BIGINT NOT NULL,
@@ -153,53 +149,35 @@ END;
 	}
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setup(t *testing.T) (*vitesst.Cluster, mysql.ConnParams) {
+	t.Helper()
 
-	exitCode := func() int {
-		ctx := context.Background()
+	ctx := t.Context()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithVTTabletArgs("--queryserver-config-transaction-timeout", "3s", "--queryserver-config-max-result-size", "30"),
+		vitesst.WithVTGateArgs("--warn-sharded-only=true"),
+		vitesst.WithKeyspace(KeyspaceName).
+			WithSchema(SchemaSQL).
+			WithVSchema(VSchema),
+	)
+	require.NoError(t, err)
+	cleanup, err := cluster.Start(ctx)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+		defer cancel()
+		require.NoError(t, cleanup(cleanupCtx))
+	})
 
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithVTTabletArgs("--queryserver-config-transaction-timeout", "3s", "--queryserver-config-max-result-size", "30"),
-			vitesst.WithVTGateArgs("--warn-sharded-only=true"),
-			vitesst.WithKeyspace(KeyspaceName).
-				WithSchema(SchemaSQL).
-				WithVSchema(VSchema),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	vtParams := cluster.VTParams(ctx, "")
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		conn.Close()
+	})
+	require.NoError(t, runCreateProcedures(conn))
 
-		clusterInstance = cluster
-		vtParams = cluster.VTParams(ctx, "")
-
-		// Also check we can create procedures through the vtgate.
-		conn, err := mysql.Connect(ctx, &vtParams)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		defer conn.Close()
-
-		if err := runCreateProcedures(conn); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	return cluster, vtParams
 }
 
 func runCreateProcedures(conn *mysql.Conn) error {
@@ -216,6 +194,7 @@ func TestSelectIntoAndLoadFrom(t *testing.T) {
 	// Test is skipped because it requires secure-file-priv variable to be set to not NULL or empty.
 	t.Skip()
 	ctx := t.Context()
+	_, vtParams := setup(t)
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
@@ -246,6 +225,7 @@ func TestSelectIntoAndLoadFrom(t *testing.T) {
 
 func TestEmptyStatement(t *testing.T) {
 	ctx := t.Context()
+	_, vtParams := setup(t)
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
@@ -258,6 +238,7 @@ func TestEmptyStatement(t *testing.T) {
 
 func TestTopoDownServingQuery(t *testing.T) {
 	ctx := t.Context()
+	clusterInstance, vtParams := setup(t)
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
@@ -276,6 +257,7 @@ func TestTopoDownServingQuery(t *testing.T) {
 
 func TestInsertAllDefaults(t *testing.T) {
 	ctx := t.Context()
+	_, vtParams := setup(t)
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -286,6 +268,7 @@ func TestInsertAllDefaults(t *testing.T) {
 
 func TestDDLUnsharded(t *testing.T) {
 	ctx := t.Context()
+	_, vtParams := setup(t)
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -302,6 +285,7 @@ func TestDDLUnsharded(t *testing.T) {
 
 func TestCallProcedure(t *testing.T) {
 	ctx := t.Context()
+	clusterInstance, _ := setup(t)
 	vtParams := clusterInstance.VTParams(ctx, "@primary")
 	vtParams.Flags = mysql.CapabilityClientMultiResults
 	time.Sleep(5 * time.Second)
@@ -344,6 +328,7 @@ func TestCallProcedure(t *testing.T) {
 
 func TestTempTable(t *testing.T) {
 	ctx := t.Context()
+	_, vtParams := setup(t)
 	conn1, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn1.Close()
@@ -364,6 +349,7 @@ func TestTempTable(t *testing.T) {
 
 func TestReservedConnDML(t *testing.T) {
 	ctx := t.Context()
+	_, vtParams := setup(t)
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -382,6 +368,7 @@ func TestReservedConnDML(t *testing.T) {
 
 func TestNumericPrecisionScale(t *testing.T) {
 	ctx := t.Context()
+	_, vtParams := setup(t)
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -415,6 +402,7 @@ func TestNumericPrecisionScale(t *testing.T) {
 }
 
 func TestDeleteAlias(t *testing.T) {
+	_, vtParams := setup(t)
 	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -424,6 +412,7 @@ func TestDeleteAlias(t *testing.T) {
 }
 
 func TestFloatValueDefault(t *testing.T) {
+	_, vtParams := setup(t)
 	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -452,42 +441,43 @@ func execMulti(t *testing.T, conn *mysql.Conn, query string) []*sqltypes.Result 
 // TestMetricForExplain verifies that query metrics are correctly published for explain queries.
 func TestMetricForExplain(t *testing.T) {
 	ctx := t.Context()
+	clusterInstance, vtParams := setup(t)
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
-	initialQP := getQPMetric(t, "QueryExecutions")
-	initialQT := getQPMetric(t, "QueryExecutionsByTable")
+	initialQP := getQPMetric(t, clusterInstance, "QueryExecutions")
+	initialQT := getQPMetric(t, clusterInstance, "QueryExecutionsByTable")
 
 	t.Run("explain t1", func(t *testing.T) {
 		vitesst.Exec(t, conn, "explain t1")
-		updatedQP := getQPMetric(t, "QueryExecutions")
-		updatedQT := getQPMetric(t, "QueryExecutionsByTable")
+		updatedQP := getQPMetric(t, clusterInstance, "QueryExecutions")
+		updatedQT := getQPMetric(t, clusterInstance, "QueryExecutionsByTable")
 		assert.EqualValues(t, 1, getValue(updatedQP, "EXPLAIN.Passthrough.PRIMARY")-getValue(initialQP, "EXPLAIN.Passthrough.PRIMARY"))
 		assert.EqualValues(t, 1, getValue(updatedQT, "EXPLAIN.customer_t1")-getValue(initialQT, "EXPLAIN.customer_t1"))
 	})
 
 	t.Run("explain `select c1, c2 from t1`", func(t *testing.T) {
 		vitesst.ExecAllowError(t, conn, "explain `select c1, c2 from t1`")
-		updatedQP := getQPMetric(t, "QueryExecutions")
-		updatedQT := getQPMetric(t, "QueryExecutionsByTable")
+		updatedQP := getQPMetric(t, clusterInstance, "QueryExecutions")
+		updatedQT := getQPMetric(t, clusterInstance, "QueryExecutionsByTable")
 		assert.EqualValues(t, 2, getValue(updatedQP, "EXPLAIN.Passthrough.PRIMARY")-getValue(initialQP, "EXPLAIN.Passthrough.PRIMARY"))
 		assert.EqualValues(t, 1, getValue(updatedQT, "EXPLAIN.customer_t1")-getValue(initialQT, "EXPLAIN.customer_t1"))
 	})
 
 	t.Run("explain select c1, c2 from t1", func(t *testing.T) {
 		vitesst.Exec(t, conn, "explain select c1, c2 from t1")
-		updatedQP := getQPMetric(t, "QueryExecutions")
-		updatedQT := getQPMetric(t, "QueryExecutionsByTable")
+		updatedQP := getQPMetric(t, clusterInstance, "QueryExecutions")
+		updatedQT := getQPMetric(t, clusterInstance, "QueryExecutionsByTable")
 		assert.EqualValues(t, 3, getValue(updatedQP, "EXPLAIN.Passthrough.PRIMARY")-getValue(initialQP, "EXPLAIN.Passthrough.PRIMARY"))
 		assert.EqualValues(t, 2, getValue(updatedQT, "EXPLAIN.customer_t1")-getValue(initialQT, "EXPLAIN.customer_t1"))
 	})
 }
 
-func getQPMetric(t *testing.T, metric string) map[string]any {
+func getQPMetric(t *testing.T, cluster *vitesst.Cluster, metric string) map[string]any {
 	t.Helper()
 
-	vars, err := clusterInstance.VTGate().GetVars(t.Context())
+	vars, err := cluster.VTGate().GetVars(t.Context())
 	require.NoError(t, err)
 	require.NotNil(t, vars)
 

@@ -18,10 +18,9 @@ package rollback
 
 import (
 	"context"
-	"flag"
 	"fmt"
-	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -31,10 +30,8 @@ import (
 )
 
 var (
-	clusterInstance *vitesst.Cluster
-	vtParams        mysql.ConnParams
-	keyspaceName    = "ks"
-	sqlSchema       = `
+	keyspaceName = "ks"
+	sqlSchema    = `
 	create table buffer(
 		id BIGINT NOT NULL,
 		msg VARCHAR(64) NOT NULL,
@@ -42,43 +39,37 @@ var (
 	) Engine=InnoDB;`
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func startCluster(t *testing.T) (*vitesst.Cluster, mysql.ConnParams) {
+	t.Helper()
 
-	exitCode := func() int {
-		ctx := context.Background()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithKeyspace(keyspaceName).
+			WithReplicas(1).
+			WithSchema(sqlSchema),
+		// Set a short onterm timeout so the test goes faster.
+		vitesst.WithVTGateArgs("--onterm-timeout", "1s"),
+	)
+	require.NoError(t, err)
 
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithKeyspace(keyspaceName).
-				WithReplicas(1).
-				WithSchema(sqlSchema),
-			// Set a short onterm timeout so the test goes faster.
-			vitesst.WithVTGateArgs("--onterm-timeout", "1s"),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+	cleanup, err := cluster.Start(t.Context())
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Minute)
+		defer cancel()
+		if t.Failed() {
+			cluster.DumpDiagnostics(ctx, t.Logf)
 		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+		if err := cleanup(ctx); err != nil {
+			t.Logf("cluster teardown: %v", err)
 		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
+	require.NoError(t, err)
 
-		clusterInstance = cluster
-		vtParams = cluster.VTParams(ctx, "")
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	return cluster, cluster.VTParams(t.Context(), "")
 }
 
 func TestTransactionRollBackWhenShutDown(t *testing.T) {
 	ctx := t.Context()
+	cluster, vtParams := startCluster(t)
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -91,19 +82,19 @@ func TestTransactionRollBackWhenShutDown(t *testing.T) {
 	vitesst.Exec(t, conn, "insert into buffer(id, msg) values(33,'mark')")
 
 	// Enforce a restart to enforce rollback
-	if err = clusterInstance.VTGate().Restart(ctx); err != nil {
+	if err = cluster.VTGate().Restart(ctx); err != nil {
 		assert.NoError(t, err)
 	}
 
 	want := ""
 
 	// Make a new mysql connection to vtGate
-	vtParams = clusterInstance.VTParams(ctx, "")
+	vtParams = cluster.VTParams(ctx, "")
 	conn2, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn2.Close()
 
-	vtParams = clusterInstance.VTParams(ctx, "")
+	vtParams = cluster.VTParams(ctx, "")
 	// Verify that rollback worked
 	qr := vitesst.Exec(t, conn2, "select id from buffer where msg='mark'")
 	got := fmt.Sprintf("%v", qr.Rows)
@@ -113,10 +104,13 @@ func TestTransactionRollBackWhenShutDown(t *testing.T) {
 
 func TestErrorInAutocommitSession(t *testing.T) {
 	ctx := t.Context()
+	_, vtParams := startCluster(t)
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
+	vitesst.Exec(t, conn, "insert into buffer(id, msg) values(3,'mark')")
+	vitesst.Exec(t, conn, "insert into buffer(id, msg) values(4,'doug')")
 	vitesst.Exec(t, conn, "set autocommit=true")
 	vitesst.Exec(t, conn, "insert into buffer(id, msg) values(1,'foo')")
 	_, err = conn.ExecuteFetch("insert into buffer(id, msg) values(1,'bar')", 1, true)

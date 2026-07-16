@@ -19,9 +19,6 @@ package shardedprs
 import (
 	"context"
 	"encoding/json"
-	"flag"
-	"fmt"
-	"os"
 	"testing"
 	"time"
 
@@ -32,11 +29,9 @@ import (
 )
 
 var (
-	clusterInstance *vitesst.Cluster
-	vtParams        mysql.ConnParams
-	KeyspaceName    = "ks"
-	sidecarDBName   = "_vt_schema_tracker_metadata" // custom sidecar database name for testing
-	SchemaSQL       = `
+	KeyspaceName  = "ks"
+	sidecarDBName = "_vt_schema_tracker_metadata" // custom sidecar database name for testing
+	SchemaSQL     = `
 create table t2(
 	id3 bigint,
 	id4 bigint,
@@ -118,73 +113,55 @@ create table t8(
 }`
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setup(t *testing.T) (*vitesst.Cluster, mysql.ConnParams) {
+	t.Helper()
+	ctx := t.Context()
 
-	exitCode := func() int {
-		ctx := context.Background()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithKeyspace(KeyspaceName).
+			WithShards(2).
+			WithReplicas(2).
+			WithSchema(SchemaSQL).
+			WithVSchema(VSchema).
+			WithSidecarDBName(sidecarDBName),
+		vitesst.WithVTGateArgs("--schema-change-signal"),
+		vitesst.WithVTTabletArgs("--queryserver-config-schema-change-signal"),
+	)
+	require.NoError(t, err)
 
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithKeyspace(KeyspaceName).
-				WithShards(2).
-				WithReplicas(2).
-				WithSchema(SchemaSQL).
-				WithVSchema(VSchema).
-				WithSidecarDBName(sidecarDBName),
-			vitesst.WithVTGateArgs("--schema-change-signal"),
-			vitesst.WithVTTabletArgs("--queryserver-config-schema-change-signal"),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+	cleanup, err := cluster.Start(ctx)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Minute)
+		defer cancel()
+		if t.Failed() {
+			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
 		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+		if err := cleanup(cleanupCtx); err != nil {
+			t.Logf("cluster teardown: %v", err)
 		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
 
-		// PRS on the second VTTablet of each shard.
-		// This is supposed to change the primary tablet in the shards, meaning that a different tablet
-		// will be responsible for sending schema tracking updates.
-		for _, shard := range cluster.Keyspace(KeyspaceName).Shards() {
-			newPrimary := shard.Replicas()[0]
-			err := cluster.Vtctld().ExecuteCommand(ctx,
-				"PlannedReparentShard",
-				shard.Ref(),
-				"--wait-replicas-timeout", "31s",
-				"--new-primary", newPrimary.Alias(),
-			)
-			if err != nil {
-				fmt.Fprintln(os.Stderr, err)
-				return 1
-			}
-			if err := cluster.WaitForHealthyShard(ctx, KeyspaceName, shard.Name, 5*time.Minute); err != nil {
-				fmt.Fprintln(os.Stderr, err)
-				return 1
-			}
-		}
+	// PRS on the second VTTablet of each shard.
+	// This is supposed to change the primary tablet in the shards, meaning that a different tablet
+	// will be responsible for sending schema tracking updates.
+	for _, shard := range cluster.Keyspace(KeyspaceName).Shards() {
+		newPrimary := shard.Replicas()[0]
+		require.NoError(t, cluster.Vtctld().ExecuteCommand(
+			ctx,
+			"PlannedReparentShard",
+			shard.Ref(),
+			"--wait-replicas-timeout", "31s",
+			"--new-primary", newPrimary.Alias(),
+		))
+		require.NoError(t, cluster.WaitForHealthyShard(ctx, KeyspaceName, shard.Name, 5*time.Minute))
+	}
 
-		if _, err := cluster.AddVTOrc(ctx, ""); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
+	_, err = cluster.AddVTOrc(ctx, "")
+	require.NoError(t, err)
+	require.NoError(t, waitForVTGateHealthy(ctx, cluster, 5*time.Minute))
 
-		if err := waitForVTGateHealthy(ctx, cluster, 5*time.Minute); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-
-		clusterInstance = cluster
-		vtParams = cluster.VTParams(ctx, "")
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	return cluster, cluster.VTParams(ctx, "")
 }
 
 // waitForVTGateHealthy blocks until VTGate's healthcheck reports one serving
@@ -216,6 +193,7 @@ func waitForVTGateHealthy(ctx context.Context, c *vitesst.Cluster, timeout time.
 
 func TestAddColumn(t *testing.T) {
 	ctx := t.Context()
+	_, vtParams := setup(t)
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()

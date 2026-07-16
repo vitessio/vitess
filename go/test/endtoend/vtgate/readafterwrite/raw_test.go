@@ -18,10 +18,8 @@ package readafterwrite
 
 import (
 	"context"
-	"flag"
-	"fmt"
-	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -30,10 +28,8 @@ import (
 )
 
 var (
-	clusterInstance *vitesst.Cluster
-	vtParams        mysql.ConnParams
-	keyspaceName    = "ks"
-	sqlSchema       = `
+	keyspaceName = "ks"
+	sqlSchema    = `
 	create table test(
 		id bigint,
 		val1 varchar(16),
@@ -96,44 +92,39 @@ CREATE TABLE test_vdx (
 	`
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setup(t *testing.T) mysql.ConnParams {
+	t.Helper()
+	ctx := t.Context()
 
-	exitCode := func() int {
-		ctx := context.Background()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithKeyspace(keyspaceName).
+			WithShardNames("-80", "80-").
+			WithReplicas(1).
+			WithSchema(sqlSchema).
+			WithVSchema(vSchema),
+		vitesst.WithVTTabletArgs("--queryserver-config-transaction-timeout", "5s"),
+		vitesst.WithVTGateArgs("--enable-system-settings", "--lock-heartbeat-time", "2s"),
+	)
+	require.NoError(t, err)
 
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithKeyspace(keyspaceName).
-				WithShardNames("-80", "80-").
-				WithReplicas(1).
-				WithSchema(sqlSchema).
-				WithVSchema(vSchema),
-			vitesst.WithVTTabletArgs("--queryserver-config-transaction-timeout", "5s"),
-			vitesst.WithVTGateArgs("--enable-system-settings", "--lock-heartbeat-time", "2s"),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+	cleanup, err := cluster.Start(ctx)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+		defer cancel()
+		if t.Failed() {
+			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
 		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+		if cleanupErr := cleanup(cleanupCtx); cleanupErr != nil {
+			t.Logf("cluster teardown: %v", cleanupErr)
 		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
+	require.NoError(t, err)
 
-		clusterInstance = cluster
-		vtParams = cluster.VTParams(ctx, "")
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	return cluster.VTParams(ctx, "")
 }
 
 func TestRAWSettings(t *testing.T) {
+	vtParams := setup(t)
 	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()

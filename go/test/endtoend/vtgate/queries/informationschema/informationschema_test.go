@@ -49,6 +49,7 @@ func start(t *testing.T) (vitesst.MySQLCompare, func()) {
 }
 
 func TestDbNameOverride(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -60,6 +61,7 @@ func TestDbNameOverride(t *testing.T) {
 }
 
 func TestInformationSchemaQuery(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -75,6 +77,7 @@ func TestInformationSchemaQuery(t *testing.T) {
 }
 
 func TestInformationSchemaWithSubquery(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -94,6 +97,7 @@ func TestInformationSchemaQueryGetsRoutedToTheRightTableAndKeyspace(t *testing.T
 }
 
 func TestFKConstraintUsingInformationSchema(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -105,6 +109,7 @@ func TestFKConstraintUsingInformationSchema(t *testing.T) {
 }
 
 func TestConnectWithSystemSchema(t *testing.T) {
+	setup(t)
 	for _, dbname := range []string{"information_schema", "mysql", "performance_schema", "sys"} {
 		vtConnParams := vtParams
 		vtConnParams.DbName = dbname
@@ -122,6 +127,7 @@ func TestConnectWithSystemSchema(t *testing.T) {
 }
 
 func TestUseSystemSchema(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -132,6 +138,7 @@ func TestUseSystemSchema(t *testing.T) {
 }
 
 func TestSystemSchemaQueryWithoutQualifier(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -165,6 +172,7 @@ func TestSystemSchemaQueryWithoutQualifier(t *testing.T) {
 }
 
 func TestSystemSchemaFieldDatabaseInOLAP(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -184,6 +192,7 @@ func TestSystemSchemaFieldDatabaseInOLAP(t *testing.T) {
 }
 
 func TestMultipleSchemaPredicates(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -209,6 +218,7 @@ func TestMultipleSchemaPredicates(t *testing.T) {
 }
 
 func TestInfrSchemaAndUnionAll(t *testing.T) {
+	setup(t)
 	vtConnParams := clusterInstance.VTParams(t.Context(), keyspaceName)
 	conn, err := mysql.Connect(t.Context(), &vtConnParams)
 	require.NoError(t, err)
@@ -225,6 +235,7 @@ func TestInfrSchemaAndUnionAll(t *testing.T) {
 }
 
 func TestInfoschemaTypes(t *testing.T) {
+	setup(t)
 	require.NoError(t,
 		vitesst.WaitForAuthoritative(t, "ks", "t1", func() (*any, error) {
 			return clusterInstance.VTGate().ReadVSchema(t.Context())
@@ -245,6 +256,7 @@ func TestInfoschemaTypes(t *testing.T) {
 }
 
 func TestTypeORMQuery(t *testing.T) {
+	setup(t)
 	// This test checks that we can run queries similar to the ones that the TypeORM framework uses
 	require.NoError(t,
 		vitesst.WaitForAuthoritative(t, "ks", "t1", func() (*any, error) {
@@ -254,7 +266,8 @@ func TestTypeORMQuery(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
 
-	vitesst.AssertMatchesAny(t, mcmp.VtConn, `SELECT kcu.TABLE_NAME, kcu.COLUMN_NAME, cols.DATA_TYPE
+	vitesst.AssertMatchesAny(
+		t, mcmp.VtConn, `SELECT kcu.TABLE_NAME, kcu.COLUMN_NAME, cols.DATA_TYPE
 FROM (SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME
       FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
       WHERE kcu.TABLE_SCHEMA = 'ks'
@@ -279,7 +292,8 @@ FROM (SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME
 		`[[VARCHAR("t1") VARCHAR("id1") BLOB("bigint")] [VARCHAR("t7_xxhash") VARCHAR("uid") BLOB("varchar")]]`,
 	)
 
-	vitesst.AssertMatchesAny(t, mcmp.VtConn, `
+	vitesst.AssertMatchesAny(
+		t, mcmp.VtConn, `
 SELECT *
 FROM INFORMATION_SCHEMA.COLUMNS
 WHERE TABLE_SCHEMA = 'ks' AND TABLE_NAME = 't1'
@@ -294,6 +308,7 @@ WHERE TABLE_SCHEMA = 'ks' AND TABLE_NAME = 't2';
 }
 
 func TestJoinWithSingleShardQueryOnRHS(t *testing.T) {
+	setup(t)
 	// This test checks that we can run queries like this, where the RHS is a single shard query
 	mcmp, closer := start(t)
 	defer closer()

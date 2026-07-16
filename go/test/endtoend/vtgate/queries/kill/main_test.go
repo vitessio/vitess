@@ -19,10 +19,8 @@ package kill
 import (
 	"context"
 	_ "embed"
-	"flag"
 	"fmt"
 	"math/rand/v2"
-	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -45,47 +43,35 @@ var (
 	vschema string
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
-
-	exitCode := func() int {
-		ctx := context.Background()
-
-		var maxGrpcSize int64 = 256 * 1024 * 1024
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithKeyspace(ks).
-				WithShardNames("-80", "80-").
-				WithSchema(schema).
-				WithVSchema(vschema),
-			vitesst.WithVTTabletArgs(
-				"--queryserver-config-max-result-size", "10000000",
-				"--grpc-max-message-size", strconv.FormatInt(maxGrpcSize, 10)),
-			vitesst.WithVTGateArgs(
-				"--grpc-max-message-size", strconv.FormatInt(maxGrpcSize, 10),
-				"--max-memory-rows", "999999",
-				"--allow-kill-statement"),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+func setup(t *testing.T) {
+	ctx := t.Context()
+	var maxGrpcSize int64 = 256 * 1024 * 1024
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithKeyspace(ks).
+			WithShardNames("-80", "80-").
+			WithSchema(schema).
+			WithVSchema(vschema),
+		vitesst.WithVTTabletArgs(
+			"--queryserver-config-max-result-size", "10000000",
+			"--grpc-max-message-size", strconv.FormatInt(maxGrpcSize, 10),
+		),
+		vitesst.WithVTGateArgs(
+			"--grpc-max-message-size", strconv.FormatInt(maxGrpcSize, 10),
+			"--max-memory-rows", "999999",
+			"--allow-kill-statement",
+		),
+	)
+	require.NoError(t, err)
+	cleanup, err := cluster.Start(ctx)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		if err := cleanup(context.WithoutCancel(ctx)); err != nil {
+			t.Logf("cluster teardown: %v", err)
 		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
 
-		clusterInstance = cluster
-		vtParams = cluster.VTParams(ctx, "")
-
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	clusterInstance = cluster
+	vtParams = cluster.VTParams(ctx, "")
 }
 
 func setupData(t *testing.T, huge bool) {

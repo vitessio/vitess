@@ -18,10 +18,8 @@ package servingchange
 
 import (
 	"context"
-	"flag"
-	"fmt"
-	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -58,41 +56,36 @@ var (
 	`
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setup(t *testing.T) {
+	t.Helper()
+	ctx := t.Context()
 
-	exitCode := func() int {
-		ctx := context.Background()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithKeyspace(keyspaceName).
+			WithShardNames("-80", "80-").
+			WithReplicas(1).
+			WithRDOnly(1).
+			WithSchema(sqlSchema).
+			WithVSchema(vSchema),
+		vitesst.WithVTGateArgs("--lock-heartbeat-time", "2s"),
+	)
+	require.NoError(t, err)
 
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithKeyspace(keyspaceName).
-				WithShardNames("-80", "80-").
-				WithReplicas(1).
-				WithRDOnly(1).
-				WithSchema(sqlSchema).
-				WithVSchema(vSchema),
-			vitesst.WithVTGateArgs("--lock-heartbeat-time", "2s"),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+	cleanup, err := cluster.Start(ctx)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+		defer cancel()
+		if t.Failed() {
+			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
 		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+		if err := cleanup(cleanupCtx); err != nil {
+			t.Logf("cluster teardown: %v", err)
 		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
 
-		clusterInstance = cluster
-		vtParams = cluster.VTParams(ctx, "")
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	clusterInstance = cluster
+	vtParams = cluster.VTParams(ctx, "")
 }
 
 // tabletOfType returns the shard's non-primary tablet currently reporting the
@@ -111,6 +104,7 @@ func tabletOfType(t *testing.T, ctx context.Context, shard *vitesst.Shard, wantT
 }
 
 func TestServingChange(t *testing.T) {
+	setup(t)
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
@@ -152,6 +146,7 @@ func TestServingChange(t *testing.T) {
 }
 
 func TestServingChangeStreaming(t *testing.T) {
+	setup(t)
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)

@@ -37,6 +37,7 @@ import (
 
 // TestInsertWithFK tests that insertions work as expected when foreign key management is enabled in Vitess.
 func TestInsertWithFK(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	conn := mcmp.VtConn
 	defer closer()
@@ -68,6 +69,7 @@ func TestInsertWithFK(t *testing.T) {
 
 // TestDeleteWithFK tests that deletions work as expected when foreign key management is enabled in Vitess.
 func TestDeleteWithFK(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	conn := mcmp.VtConn
 	defer closer()
@@ -113,6 +115,7 @@ func TestDeleteWithFK(t *testing.T) {
 
 // TestUpdateWithFK tests that update work as expected when foreign key management is enabled in Vitess.
 func TestUpdateWithFK(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	conn := mcmp.VtConn
 	defer closer()
@@ -182,6 +185,7 @@ func TestUpdateWithFK(t *testing.T) {
 
 // TestVstreamForFKBinLog tests that dml queries with fks are written with child row first approach in the binary logs.
 func TestVstreamForFKBinLog(t *testing.T) {
+	setup(t)
 	vtgateConn, err := clusterInstance.VTGate().DialVTGate(t.Context())
 	require.NoError(t, err)
 	defer vtgateConn.Close()
@@ -375,6 +379,7 @@ func drainEvents(t *testing.T, ch chan *binlogdatapb.VEvent, count int) []string
 	Self referenced foreign key from col2 to col in fk_t20
 */
 func TestFkScenarios(t *testing.T) {
+	setup(t)
 	// Wait for schema-tracking to be complete.
 	waitForSchemaTrackingForFkTables(t)
 
@@ -994,6 +999,7 @@ func TestFkScenarios(t *testing.T) {
 
 // TestFkQueries is for testing a specific set of queries one after the other.
 func TestFkQueries(t *testing.T) {
+	setup(t)
 	// Wait for schema-tracking to be complete.
 	waitForSchemaTrackingForFkTables(t)
 	// Remove all the foreign key constraints for all the replicas.
@@ -1196,6 +1202,7 @@ func TestFkQueries(t *testing.T) {
 
 // TestShowVschemaKeyspaces verifies the show vschema keyspaces query output for the keyspaces where the foreign keys are
 func TestShowVschemaKeyspaces(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	conn := mcmp.VtConn
 	defer closer()
@@ -1256,6 +1263,7 @@ func TestFkOneCase(t *testing.T) {
 }
 
 func TestCyclicFks(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 	_ = vitesst.Exec(t, mcmp.VtConn, "use `uks`")
@@ -1435,6 +1443,7 @@ func TestReplaceExplicit(t *testing.T) {
 
 // TestReplaceWithFK tests that replace into work as expected when foreign key management is enabled in Vitess.
 func TestReplaceWithFK(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	conn := mcmp.VtConn
 	defer closer()
@@ -1462,6 +1471,7 @@ func TestReplaceWithFK(t *testing.T) {
 
 // TestInsertWithFKOnDup tests that insertion with on duplicate key update works as expected.
 func TestInsertWithFKOnDup(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -1493,6 +1503,7 @@ func TestInsertWithFKOnDup(t *testing.T) {
 
 // TestDDLFk tests that table is created with fk constraint when foreign_key_checks is off.
 func TestDDLFk(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -1524,6 +1535,7 @@ create table temp2(id bigint auto_increment primary key, col varchar(20) not nul
 // names were not being stripped before being sent to MySQL, causing failures because MySQL
 // expects database names (vt_<keyspace>) not keyspace names.
 func TestForeignKeyWithKeyspaceQualifier(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -1560,6 +1572,7 @@ func TestForeignKeyWithKeyspaceQualifier(t *testing.T) {
 
 // TestRestrictFkOnNonStandardKey verifies that restrict_fk_on_non_standard_key is set to off
 func TestRestrictFkOnNonStandardKey(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 

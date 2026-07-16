@@ -30,6 +30,7 @@ import (
 )
 
 func TestSetUDV(t *testing.T) {
+	setup(t)
 	ctx := t.Context()
 
 	type queriesWithExpectations struct {
@@ -117,6 +118,7 @@ func TestSetUDV(t *testing.T) {
 }
 
 func TestMysqlDumpInitialLog(t *testing.T) {
+	setup(t)
 	ctx := t.Context()
 
 	conn, err := mysql.Connect(ctx, &vtParams)
@@ -154,6 +156,7 @@ func TestMysqlDumpInitialLog(t *testing.T) {
 }
 
 func TestUserDefinedVariableResolvedAtTablet(t *testing.T) {
+	setup(t)
 	ctx := t.Context()
 
 	conn, err := mysql.Connect(ctx, &vtParams)

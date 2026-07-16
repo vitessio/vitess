@@ -19,9 +19,7 @@ package foreignkey
 import (
 	"context"
 	_ "embed"
-	"flag"
 	"fmt"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -110,78 +108,68 @@ type fkReference struct {
 	childTable  string
 }
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setup(t testing.TB) {
+	t.Helper()
 
-	exitCode := func() int {
-		ctx := context.Background()
+	clusterInstance = nil
+	vtParams = mysql.ConnParams{}
+	mysqlParams = mysql.ConnParams{}
 
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithMySQLVersion(mysqlVersion),
-			vitesst.WithTabletFiles(vitesst.ContainerFile{
-				HostPath:      "extra_my.cnf",
-				ContainerPath: extraMyCnfPath,
-			}),
-			vitesst.WithTabletEnv(map[string]string{"EXTRA_MY_CNF": extraMyCnfPath}),
-			vitesst.WithKeyspace(shardedKs).
-				WithShardNames("-80", "80-").
-				WithReplicas(1).
-				WithSchema(schemaSQL).
-				WithVSchema(shardedVSchema),
-			vitesst.WithKeyspace(shardScopedKs).
-				WithShardNames("-80", "80-").
-				WithReplicas(1).
-				WithSchema(schemaSQL).
-				WithVSchema(shardScopedVSchema),
-			vitesst.WithKeyspace(unshardedKs).
-				WithShardNames("0").
-				WithReplicas(1).
-				WithSchema(schemaSQL).
-				WithVSchema(unshardedVSchema),
-			vitesst.WithKeyspace(unshardedUnmanagedKs).
-				WithShardNames("0").
-				WithReplicas(1).
-				WithSchema(schemaSQL).
-				WithVSchema(unshardedUnmanagedVSchema),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
+	ctx := t.Context()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithMySQLVersion(mysqlVersion),
+		vitesst.WithTabletFiles(vitesst.ContainerFile{
+			HostPath:      "extra_my.cnf",
+			ContainerPath: extraMyCnfPath,
+		}),
+		vitesst.WithTabletEnv(map[string]string{"EXTRA_MY_CNF": extraMyCnfPath}),
+		vitesst.WithKeyspace(shardedKs).
+			WithShardNames("-80", "80-").
+			WithReplicas(1).
+			WithSchema(schemaSQL).
+			WithVSchema(shardedVSchema),
+		vitesst.WithKeyspace(shardScopedKs).
+			WithShardNames("-80", "80-").
+			WithReplicas(1).
+			WithSchema(schemaSQL).
+			WithVSchema(shardScopedVSchema),
+		vitesst.WithKeyspace(unshardedKs).
+			WithShardNames("0").
+			WithReplicas(1).
+			WithSchema(schemaSQL).
+			WithVSchema(unshardedVSchema),
+		vitesst.WithKeyspace(unshardedUnmanagedKs).
+			WithShardNames("0").
+			WithReplicas(1).
+			WithSchema(schemaSQL).
+			WithVSchema(unshardedUnmanagedVSchema),
+	)
+	require.NoError(t, err)
 
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	cleanup, err := cluster.Start(ctx)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), 30*time.Second)
+		defer cancel()
+		clusterInstance = nil
+		vtParams = mysql.ConnParams{}
+		require.NoError(t, cleanup(cleanupCtx))
+	})
 
-		if err = cluster.Vtctld().ExecuteCommand(ctx, "RebuildVSchemaGraph"); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
+	require.NoError(t, cluster.Vtctld().ExecuteCommand(ctx, "RebuildVSchemaGraph"))
 
-		clusterInstance = cluster
-		vtParams = cluster.VTParams(ctx, "")
+	clusterInstance = cluster
+	vtParams = cluster.VTParams(ctx, "")
 
-		connParams, closer, err := newComparisonMySQL(ctx, cluster, shardedKs, schemaSQL)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		defer func() {
-			if err := closer(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "comparison mysqld teardown:", err)
-			}
-		}()
-		mysqlParams = connParams
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	connParams, closer, err := newComparisonMySQL(ctx, cluster, shardedKs, schemaSQL)
+	require.NoError(t, err)
+	mysqlParams = connParams
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), 30*time.Second)
+		defer cancel()
+		mysqlParams = mysql.ConnParams{}
+		require.NoError(t, closer(cleanupCtx))
+	})
 }
 
 // newComparisonMySQL starts the standalone mysqld the tests compare Vitess
@@ -210,7 +198,8 @@ GRANT ALL ON *.* TO '%s'@'%%' WITH GRANT OPTION;
 	)
 	probe := []string{"mysql", "--socket", socket, "-u", dbaUser, "-e", "SELECT 1"}
 
-	ctr, err := testcontainers.Run(ctx, vitesst.Image(mysqlVersion),
+	ctr, err := testcontainers.Run(
+		ctx, vitesst.Image(mysqlVersion),
 		testcontainers.WithEntrypoint("bash", "-c", script),
 		testcontainers.WithEnv(map[string]string{"EXTRA_MY_CNF": extraMyCnfPath}),
 		testcontainers.WithExposedPorts(fmt.Sprintf("%d/tcp", mysqlPort)),
@@ -219,7 +208,8 @@ GRANT ALL ON *.* TO '%s'@'%%' WITH GRANT OPTION;
 			testcontainers.ContainerFile{HostFilePath: "extra_my.cnf", ContainerFilePath: extraMyCnfPath, FileMode: 0o644},
 			testcontainers.ContainerFile{Reader: strings.NewReader(initSQL), ContainerFilePath: initPath, FileMode: 0o644},
 		),
-		testcontainers.WithWaitStrategyAndDeadline(startupWait,
+		testcontainers.WithWaitStrategyAndDeadline(
+			startupWait,
 			wait.ForExec(probe).
 				WithStartupTimeout(startupWait).
 				WithPollInterval(100*time.Millisecond),

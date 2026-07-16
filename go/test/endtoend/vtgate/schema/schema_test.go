@@ -19,9 +19,7 @@ package schema
 import (
 	"context"
 	"encoding/json"
-	"flag"
 	"fmt"
-	"os"
 	"path"
 	"reflect"
 	"strconv"
@@ -54,45 +52,41 @@ var (
 		ADD INDEX idx_column(%s)`
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setup(t *testing.T) {
+	t.Helper()
+	ctx := t.Context()
 
-	exitcode := func() int {
-		ctx := context.Background()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithoutVTGate(),
+		vitesst.WithVTCtldArgs(
+			"--schema-change-dir", schemaChangeDirectory,
+			"--schema-change-controller", "local",
+			"--schema-change-check-interval", "1s",
+		),
+		vitesst.WithKeyspace(keyspaceName).
+			WithShardNames("0", "1").
+			WithReplicas(1),
+	)
+	require.NoError(t, err)
 
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithoutVTGate(),
-			vitesst.WithVTCtldArgs(
-				"--schema-change-dir", schemaChangeDirectory,
-				"--schema-change-controller", "local",
-				"--schema-change-check-interval", "1s",
-			),
-			vitesst.WithKeyspace(keyspaceName).
-				WithShardNames("0", "1").
-				WithReplicas(1),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+	cleanup, err := cluster.Start(ctx)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+		defer cancel()
+		if t.Failed() {
+			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
 		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+		if cleanupErr := cleanup(cleanupCtx); cleanupErr != nil {
+			t.Logf("cluster teardown: %v", cleanupErr)
 		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
+	require.NoError(t, err)
 
-		clusterInstance = cluster
-		return m.Run()
-	}()
-	os.Exit(exitcode)
+	clusterInstance = cluster
 }
 
 func TestSchemaChange(t *testing.T) {
+	setup(t)
 	testWithInitialSchema(t)
 	testWithAlterSchema(t)
 	testWithAlterDatabase(t)
@@ -123,7 +117,8 @@ func shardTablet(t *testing.T, shardName string, index int) *vitesst.Tablet {
 
 // applySchema applies DDL to the keyspace with the direct strategy.
 func applySchema(t *testing.T, sql string) error {
-	return clusterInstance.Vtctld().ExecuteCommand(t.Context(),
+	return clusterInstance.Vtctld().ExecuteCommand(
+		t.Context(),
 		"ApplySchema",
 		"--sql", sql,
 		"--ddl-strategy", "direct -allow-zero-in-date",

@@ -29,10 +29,8 @@ package vreplstress
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"math/rand/v2"
-	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -425,67 +423,59 @@ func mysqlExec(t *testing.T, query string) string {
 	return strings.Join(lines, "\n")
 }
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setup(t *testing.T) {
+	t.Helper()
+	ctx := t.Context()
+	evaluatedMysqlParams = nil
 
-	exitcode, err := func() (int, error) {
-		ctx := context.Background()
-
-		// --vstream-packet-size is set to a small value that ensures we get multiple stream iterations,
-		// thereby examining lastPK on vcopier side. We will be iterating tables using non-PK order throughout
-		// this test suite, and so the low setting ensures we hit the more interesting code paths.
-		//
-		// No need for replicas in this stress test
-		newCluster, err := vitesst.NewCluster(
-			vitesst.WithCells(cell),
-			vitesst.WithVTCtldArgs(
-				"--schema-change-dir", schemaChangeDirectory,
-				"--schema-change-controller", "local",
-				"--schema-change-check-interval", "1s",
-			),
-			vitesst.WithVTTabletArgs(
-				"--heartbeat-interval", "250ms",
-				"--heartbeat-on-demand-duration", "5s",
-				"--migration-check-interval", "5s",
-				"--vstream-packet-size", "4096", // Keep this value small and below 10k to ensure multilple vstream iterations
-			),
-			vitesst.WithVTGateArgs(
-				"--ddl-strategy", "online",
-			),
-			vitesst.WithKeyspace(keyspaceName).WithShardNames("1"),
-		)
-		if err != nil {
-			return 1, err
+	// --vstream-packet-size is set to a small value that ensures we get multiple stream iterations,
+	// thereby examining lastPK on vcopier side. We will be iterating tables using non-PK order throughout
+	// this test suite, and so the low setting ensures we hit the more interesting code paths.
+	//
+	// No need for replicas in this stress test
+	newCluster, err := vitesst.NewCluster(
+		vitesst.WithCells(cell),
+		vitesst.WithVTCtldArgs(
+			"--schema-change-dir", schemaChangeDirectory,
+			"--schema-change-controller", "local",
+			"--schema-change-check-interval", "1s",
+		),
+		vitesst.WithVTTabletArgs(
+			"--heartbeat-interval", "250ms",
+			"--heartbeat-on-demand-duration", "5s",
+			"--migration-check-interval", "5s",
+			"--vstream-packet-size", "4096", // Keep this value small and below 10k to ensure multilple vstream iterations
+		),
+		vitesst.WithVTGateArgs(
+			"--ddl-strategy", "online",
+		),
+		vitesst.WithKeyspace(keyspaceName).WithShardNames("1"),
+	)
+	require.NoError(t, err)
+	cleanup, err := newCluster.Start(ctx)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Minute)
+		defer cancel()
+		if t.Failed() {
+			newCluster.DumpDiagnostics(cleanupCtx, t.Logf)
 		}
-
-		cleanup, err := newCluster.Start(ctx)
-		if err != nil {
-			return 1, err
+		if err := cleanup(cleanupCtx); err != nil {
+			t.Logf("cluster teardown: %v", err)
 		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+		evaluatedMysqlParams = nil
+	})
 
-		clusterInstance = newCluster
-		vtParams = clusterInstance.VTParams(ctx, "")
-
-		return m.Run(), nil
-	}()
-	if err != nil {
-		fmt.Printf("%v\n", err)
-		os.Exit(1)
-	} else {
-		os.Exit(exitcode)
-	}
+	clusterInstance = newCluster
+	vtParams = clusterInstance.VTParams(ctx, "")
+	primaryTablet = clusterInstance.Keyspace(keyspaceName).Shards()[0].Primary()
 }
 
 func TestVreplStressSchemaChanges(t *testing.T) {
+	setup(t)
 	shards = clusterInstance.Keyspace(keyspaceName).Shards()
 	require.Equal(t, 1, len(shards))
 	require.Equal(t, 1, len(shards[0].Tablets()))
-	primaryTablet = shards[0].Primary()
 
 	_, err := primaryTablet.QueryTablet(t.Context(), setSqlMode)
 	require.NoError(t, err)

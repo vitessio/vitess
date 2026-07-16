@@ -47,6 +47,7 @@ func start(t *testing.T) (vitesst.MySQLCompare, func()) {
 }
 
 func TestQueryTimeoutWithDual(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -72,6 +73,7 @@ func TestQueryTimeoutWithDual(t *testing.T) {
 }
 
 func TestQueryTimeoutWithTables(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -103,6 +105,7 @@ func TestQueryTimeoutWithTables(t *testing.T) {
 
 // TestQueryTimeoutWithShardTargeting tests the query timeout with shard targeting.
 func TestQueryTimeoutWithShardTargeting(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -130,6 +133,7 @@ func TestQueryTimeoutWithShardTargeting(t *testing.T) {
 }
 
 func TestQueryTimeoutWithoutVTGateDefault(t *testing.T) {
+	setup(t)
 	ctx := t.Context()
 
 	// disable query timeout
@@ -182,6 +186,7 @@ func TestQueryTimeoutWithoutVTGateDefault(t *testing.T) {
 // TestOverallQueryTimeout tests that the query timeout is applied to the overall execution of a query
 // and not just individual routes.
 func TestOverallQueryTimeout(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 

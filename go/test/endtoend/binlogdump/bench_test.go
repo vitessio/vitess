@@ -48,6 +48,10 @@ type benchCase struct {
 //
 // All use nonBlock mode so the stream terminates with EOF after catching up.
 func BenchmarkBinlogDumpThroughput(b *testing.B) {
+	b.StopTimer()
+	setup(b)
+	b.StartTimer()
+
 	cases := []benchCase{
 		{
 			name: "SmallRows",
@@ -97,7 +101,8 @@ func BenchmarkBinlogDumpThroughput(b *testing.B) {
 				const numRows = 100
 				for i := range numRows {
 					_, err := conn.ExecuteFetch(
-						fmt.Sprintf("INSERT INTO large_blob_test (data) VALUES (REPEAT('x', 524288))/* row %d */", i), 0, false)
+						fmt.Sprintf("INSERT INTO large_blob_test (data) VALUES (REPEAT('x', 524288))/* row %d */", i), 0, false,
+					)
 					require.NoError(b, err)
 				}
 

@@ -56,6 +56,7 @@ func start(t *testing.T) (vitesst.MySQLCompare, func()) {
 }
 
 func TestBitVals(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -69,6 +70,7 @@ func TestBitVals(t *testing.T) {
 
 // TestTimeFunctionWithPrecision tests that inserting data with NOW(1) works as intended.
 func TestTimeFunctionWithPrecision(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -78,6 +80,7 @@ func TestTimeFunctionWithPrecision(t *testing.T) {
 }
 
 func TestHexVals(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -90,6 +93,7 @@ func TestHexVals(t *testing.T) {
 }
 
 func TestDateTimeTimestampVals(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -99,6 +103,7 @@ func TestDateTimeTimestampVals(t *testing.T) {
 }
 
 func TestInvalidDateTimeTimestampVals(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -112,6 +117,7 @@ func TestInvalidDateTimeTimestampVals(t *testing.T) {
 
 // TestIntervalWithMathFunctions tests that the Interval keyword can be used with math functions.
 func TestIntervalWithMathFunctions(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -124,6 +130,7 @@ func TestIntervalWithMathFunctions(t *testing.T) {
 
 // TestCast tests the queries that contain the cast function.
 func TestCast(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -136,6 +143,7 @@ func TestCast(t *testing.T) {
 
 // TestSetAndGetLastInsertID tests that the last_insert_id function works as intended when used with different arguments.
 func TestSetAndGetLastInsertID(t *testing.T) {
+	setup(t)
 	notZero := 1
 	checkQuery := func(i string, workload string, tx bool, mcmp vitesst.MySQLCompare) {
 		for _, val := range []int{notZero, 0, notZero * 2} {
@@ -192,6 +200,7 @@ func TestSetAndGetLastInsertID(t *testing.T) {
 }
 
 func TestSetAndGetLastInsertIDWithInsertUnsharded(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -242,6 +251,7 @@ func TestSetAndGetLastInsertIDWithInsertUnsharded(t *testing.T) {
 }
 
 func TestSetAndGetLastInsertIDWithInsert(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -282,6 +292,7 @@ func TestSetAndGetLastInsertIDWithInsert(t *testing.T) {
 
 // TestVindexHints tests that vindex hints work as intended.
 func TestVindexHints(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -315,6 +326,7 @@ func TestVindexHints(t *testing.T) {
 }
 
 func TestOuterJoinWithPredicate(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -335,6 +347,7 @@ func TestOuterJoinWithPredicate(t *testing.T) {
 // It opens a MySQL connection using the go-mysql driver and execute a select query
 // it then checks the result contains the proper rows and that it's not failing.
 func TestHighNumberOfParams(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -378,6 +391,7 @@ func TestHighNumberOfParams(t *testing.T) {
 // return correct binary-encoded rows when result fields are only sent in the
 // first chunk.
 func TestPreparedStatementInOLAP(t *testing.T) {
+	setup(t)
 	_, closer := start(t)
 	defer closer()
 
@@ -420,6 +434,7 @@ func TestPreparedStatementInOLAP(t *testing.T) {
 }
 
 func TestSlowQueryStatusFlagsComQueryOKOnlyOLAPEndToEnd(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -506,6 +521,7 @@ func assertVtgateMetricsLineContains(t *testing.T, metric string, substrings ...
 }
 
 func TestPrepareStatements(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -563,6 +579,7 @@ func TestPrepareStatements(t *testing.T) {
 
 // TestBuggyOuterJoin validates inconsistencies around outer joins, adding these tests to stop regressions.
 func TestBuggyOuterJoin(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -571,6 +588,7 @@ func TestBuggyOuterJoin(t *testing.T) {
 }
 
 func TestLeftJoinUsingUnsharded(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -580,6 +598,7 @@ func TestLeftJoinUsingUnsharded(t *testing.T) {
 
 // TestAnalyze executes different analyze statement and validates that they run successfully.
 func TestAnalyze(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -595,6 +614,7 @@ func TestAnalyze(t *testing.T) {
 
 // TestTransactionModeVar executes SELECT on `transaction_mode` variable
 func TestTransactionModeVar(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -626,6 +646,7 @@ func TestTransactionModeVar(t *testing.T) {
 
 // TestAliasesInOuterJoinQueries tests that aliases work in queries that have outer join clauses.
 func TestAliasesInOuterJoinQueries(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -643,6 +664,7 @@ func TestAliasesInOuterJoinQueries(t *testing.T) {
 }
 
 func TestJoinTypes(t *testing.T) {
+	setup(t)
 	columns := []string{
 		"id",
 		"msg",
@@ -724,6 +746,7 @@ func TestJoinTypes(t *testing.T) {
 }
 
 func TestAlterTableWithView(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -783,13 +806,15 @@ var expJoinOutput2 string
 
 // TestStraightJoin tests that Vitess respects the ordering of join in a STRAIGHT JOIN query.
 func TestStraightJoin(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
 	mcmp.Exec("insert into tbl(id, unq_col, nonunq_col) values (1,0,10), (2,10,10), (3,4,20), (4,30,20), (5,40,10)")
 	mcmp.Exec(`insert into t1(id1, id2) values (10, 11), (20, 13)`)
 
-	mcmp.AssertMatchesNoOrder("select tbl.unq_col, tbl.nonunq_col, t1.id2 from t1 join tbl where t1.id1 = tbl.nonunq_col",
+	mcmp.AssertMatchesNoOrder(
+		"select tbl.unq_col, tbl.nonunq_col, t1.id2 from t1 join tbl where t1.id1 = tbl.nonunq_col",
 		`[[INT64(0) INT64(10) INT64(11)] [INT64(10) INT64(10) INT64(11)] [INT64(4) INT64(20) INT64(13)] [INT64(40) INT64(10) INT64(11)] [INT64(30) INT64(20) INT64(13)]]`,
 	)
 	// Verify that in a normal join query, vitess joins tbl with t1.
@@ -799,7 +824,8 @@ func TestStraightJoin(t *testing.T) {
 	require.JSONEq(t, expJoinOutput1, res.Rows[0][0].ToString())
 
 	// Test the same query with a straight join
-	mcmp.AssertMatchesNoOrder("select tbl.unq_col, tbl.nonunq_col, t1.id2 from t1 straight_join tbl where t1.id1 = tbl.nonunq_col",
+	mcmp.AssertMatchesNoOrder(
+		"select tbl.unq_col, tbl.nonunq_col, t1.id2 from t1 straight_join tbl where t1.id1 = tbl.nonunq_col",
 		`[[INT64(0) INT64(10) INT64(11)] [INT64(10) INT64(10) INT64(11)] [INT64(4) INT64(20) INT64(13)] [INT64(40) INT64(10) INT64(11)] [INT64(30) INT64(20) INT64(13)]]`,
 	)
 	// Verify that in a straight join query, vitess joins t1 with tbl.
@@ -810,6 +836,7 @@ func TestStraightJoin(t *testing.T) {
 }
 
 func TestFailingOuterJoinInOLAP(t *testing.T) {
+	setup(t)
 	// This query was returning different results in MySQL and Vitess
 	mcmp, closer := start(t)
 	defer closer()
@@ -825,6 +852,7 @@ func TestFailingOuterJoinInOLAP(t *testing.T) {
 }
 
 func TestColumnAliases(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -833,6 +861,7 @@ func TestColumnAliases(t *testing.T) {
 }
 
 func TestHandleNullableColumn(t *testing.T) {
+	setup(t)
 	require.NoError(t,
 		vitesst.WaitForAuthoritative(t, keyspaceName, "tbl", func() (*any, error) {
 			return clusterInstance.VTGate().ReadVSchema(t.Context())
@@ -848,6 +877,7 @@ func TestHandleNullableColumn(t *testing.T) {
 }
 
 func TestEnumSetVals(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 	require.NoError(t, vitesst.WaitForAuthoritative(t, keyspaceName, "tbl_enum_set", func() (*any, error) {
@@ -861,6 +891,7 @@ func TestEnumSetVals(t *testing.T) {
 }
 
 func TestTimeZones(t *testing.T) {
+	setup(t)
 	testCases := []struct {
 		name         string
 		targetTZ     string
@@ -908,6 +939,7 @@ func TestTimeZones(t *testing.T) {
 
 // TestSemiJoin tests that the semi join works as intended.
 func TestSemiJoin(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -928,9 +960,10 @@ func TestSemiJoin(t *testing.T) {
 
 // TestTabletTypeRouting tests that the tablet type routing works as intended.
 func TestTabletTypeRouting(t *testing.T) {
+	setup(t)
 	// We are gonna configure the routing rules to send the query for a replica
 	// tablet in ks_misc.t1 to a table in a different keyspace (uks). Since uks
-	// is started with 0 replica tablets (see TestMain), the replica-side query
+	// is started with 0 replica tablets, the replica-side query
 	// will fail with "no healthy tablet available" for the uks keyspace —
 	// which is the signal that the @replica routing rule fired and rewrote the
 	// target keyspace correctly. The primary-side query still reaches ks_misc.t1.
@@ -968,6 +1001,7 @@ func TestTabletTypeRouting(t *testing.T) {
 
 // TestJoinMixedCaseExpr tests that join condition with expression from both table having in clause is handled correctly.
 func TestJoinMixedCaseExpr(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 

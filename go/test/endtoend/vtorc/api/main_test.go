@@ -18,10 +18,10 @@ package api
 
 import (
 	"context"
-	"fmt"
-	"os"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/vitesst"
 )
@@ -35,56 +35,45 @@ const (
 
 var clusterInstance *vitesst.Cluster
 
-func TestMain(m *testing.M) {
-	exitcode, err := func() (int, error) {
-		ctx := context.Background()
+func setupCluster(t *testing.T) *vitesst.Cluster {
+	t.Helper()
+	ctx := t.Context()
+	lastUsedValue = 0
+	dynamicConfig = make(map[string]any)
 
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithCells(cell1, cell2),
-			vitesst.WithoutVTGate(),
-			vitesst.WithVTOrc(),
-			vitesst.WithKeyspace(keyspaceName).
-				WithShardNames(shardName).
-				WithReplicas(1).
-				WithRDOnly(1).
-				WithoutPrimaryElection().
-				WithTabletSpec(func(spec *vitesst.TabletSpec) {
-					spec.Cell = cell1
-				}),
-		)
-		if err != nil {
-			return 1, err
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithCells(cell1, cell2),
+		vitesst.WithoutVTGate(),
+		vitesst.WithVTOrc(),
+		vitesst.WithKeyspace(keyspaceName).
+			WithShardNames(shardName).
+			WithReplicas(1).
+			WithRDOnly(1).
+			WithoutPrimaryElection().
+			WithTabletSpec(func(spec *vitesst.TabletSpec) {
+				spec.Cell = cell1
+			}),
+	)
+	require.NoError(t, err)
+
+	cleanup, err := cluster.Start(ctx)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+		defer cancel()
+		if t.Failed() {
+			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
 		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			return 1, err
+		if cleanupErr := cleanup(cleanupCtx); cleanupErr != nil {
+			t.Logf("cluster teardown: %v", cleanupErr)
 		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
+	require.NoError(t, err)
 
-		// Clear super_read_only on every tablet so that writes issued directly
-		// against a replica's mysqld succeed, then let VTOrc elect the primary.
-		for _, tablet := range cluster.Tablets() {
-			if _, err := tablet.QueryTabletWithDB(ctx, "SET GLOBAL super_read_only = OFF", ""); err != nil {
-				return 1, err
-			}
-		}
-		if err := cluster.WaitForHealthyShard(ctx, keyspaceName, shardName, 60*time.Second); err != nil {
-			return 1, err
-		}
-
-		clusterInstance = cluster
-
-		return m.Run(), nil
-	}()
-
-	if err != nil {
-		fmt.Printf("%v\n", err)
-		os.Exit(1)
-	} else {
-		os.Exit(exitcode)
+	for _, tablet := range cluster.Tablets() {
+		_, err := tablet.QueryTabletWithDB(ctx, "SET GLOBAL super_read_only = OFF", "")
+		require.NoError(t, err)
 	}
+	require.NoError(t, cluster.WaitForHealthyShard(ctx, keyspaceName, shardName, 60*time.Second))
+
+	return cluster
 }

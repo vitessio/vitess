@@ -36,6 +36,8 @@ import (
 )
 
 func TestVtgateHealthCheck(t *testing.T) {
+	setup(t)
+
 	// Healthcheck interval on tablet is set to 1s, so sleep for 2s
 	time.Sleep(2 * time.Second)
 	verifyVtgateVariables(t, vtgateVarsURL(t))
@@ -49,6 +51,8 @@ func TestVtgateHealthCheck(t *testing.T) {
 }
 
 func TestVtgateReplicationStatusCheck(t *testing.T) {
+	setup(t)
+
 	// Healthcheck interval on tablet is set to 1s, so sleep for 2s
 	time.Sleep(2 * time.Second)
 	verifyVtgateVariables(t, vtgateVarsURL(t))
@@ -94,6 +98,8 @@ func TestVtgateReplicationStatusCheck(t *testing.T) {
 }
 
 func TestVtgateReplicationStatusCheckWithTabletTypeChange(t *testing.T) {
+	setup(t)
+
 	// Healthcheck interval on tablet is set to 1s, so sleep for 2s
 	time.Sleep(2 * time.Second)
 	verifyVtgateVariables(t, vtgateVarsURL(t))
@@ -189,7 +195,8 @@ func retryNTimes(t *testing.T, maxRetries int, f func() bool) {
 }
 
 func TestReplicaTransactions(t *testing.T) {
-	// TODO(deepthi): this test seems to depend on previous test. Fix tearDown so that tests are independent
+	setup(t)
+
 	// Healthcheck interval on tablet is set to 1s, so sleep for 2s
 	time.Sleep(2 * time.Second)
 	ctx := t.Context()
@@ -217,7 +224,6 @@ func TestReplicaTransactions(t *testing.T) {
 	vitesst.Exec(t, readConn, "use @replica")
 	vitesst.Exec(t, readConn2, "use @replica")
 
-	// insert a row using primary
 	vitesst.Exec(t, writeConn, "insert into customer(id, email) values(1,'email1')")
 
 	// we'll run this query a number of times, and then give up if the row count never reaches this value
@@ -296,6 +302,8 @@ func TestReplicaTransactions(t *testing.T) {
 
 // TestStreamingRPCStuck tests that StreamExecute calls don't get stuck on the vttablets if a client stop reading from a stream.
 func TestStreamingRPCStuck(t *testing.T) {
+	setup(t)
+
 	ctx := t.Context()
 	vtConn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
@@ -328,7 +336,8 @@ func TestStreamingRPCStuck(t *testing.T) {
 	// We simulate a misbehaving client that doesn't read from the stream anymore.
 	// This however shouldn't block PlannedReparentShard calls.
 	shard := clusterInstance.Keyspace(keyspaceName).Shards()[0]
-	err = clusterInstance.Vtctld().ExecuteCommand(ctx,
+	err = clusterInstance.Vtctld().ExecuteCommand(
+		ctx,
 		"PlannedReparentShard",
 		shard.Ref(),
 		"--new-primary", shard.Replicas()[0].Alias(),

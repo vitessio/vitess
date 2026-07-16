@@ -19,11 +19,9 @@ package sequence
 import (
 	"context"
 	"encoding/binary"
-	"flag"
-	"fmt"
-	"os"
 	"path"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -90,58 +88,46 @@ var (
 	}
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setup(t *testing.T) {
+	t.Helper()
+	ctx := t.Context()
 
-	exitCode := func() int {
-		ctx := context.Background()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithCells(cell, cell2),
+		vitesst.WithKeyspace(keyspaceShardedName).
+			WithShardNames("-80", "80-").
+			WithReplicas(1).
+			WithSchema(sqlSchema).
+			WithVSchema(vSchema),
+		vitesst.WithKeyspace(keyspaceUnshardedName).
+			WithShardNames(keyspaceUnshardedName).
+			WithReplicas(1).
+			WithSchema(sqlSchema),
+	)
+	require.NoError(t, err)
 
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithCells(cell, cell2),
-			vitesst.WithKeyspace(keyspaceShardedName).
-				WithShardNames("-80", "80-").
-				WithReplicas(1).
-				WithSchema(sqlSchema).
-				WithVSchema(vSchema),
-			vitesst.WithKeyspace(keyspaceUnshardedName).
-				WithShardNames(keyspaceUnshardedName).
-				WithReplicas(1).
-				WithSchema(sqlSchema),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+	cleanup, err := cluster.Start(ctx)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Minute)
+		defer cancel()
+		if t.Failed() {
+			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
 		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+		if err := cleanup(cleanupCtx); err != nil {
+			t.Logf("cluster teardown: %v", err)
 		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
+	require.NoError(t, err)
 
-		clusterForKSTest = cluster
-
-		if err := cluster.Vtctld().ExecuteCommand(ctx, "RebuildKeyspaceGraph", keyspaceShardedName); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		if err := cluster.Vtctld().ExecuteCommand(ctx, "RebuildKeyspaceGraph", keyspaceUnshardedName); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	clusterForKSTest = cluster
+	require.NoError(t, cluster.Vtctld().ExecuteCommand(ctx, "RebuildKeyspaceGraph", keyspaceShardedName))
+	require.NoError(t, cluster.Vtctld().ExecuteCommand(ctx, "RebuildKeyspaceGraph", keyspaceUnshardedName))
 }
 
 // TestDurabilityPolicyField tests that the DurabilityPolicy field of a keyspace can be set during creation, read and updated later
 // from vtctld server and the vtctl binary
 func TestDurabilityPolicyField(t *testing.T) {
+	setup(t)
 	ctx := t.Context()
 
 	out, err := clusterForKSTest.Vtctld().ExecuteCommandWithOutput(ctx, "CreateKeyspace", "ks_durability", "--durability-policy=semi_sync")
@@ -170,6 +156,7 @@ func checkDurabilityPolicy(t *testing.T, durabilityPolicy string) {
 }
 
 func TestGetSrvKeyspaceNames(t *testing.T) {
+	setup(t)
 	data, err := clusterForKSTest.Vtctld().ExecuteCommandWithOutput(t.Context(), "GetSrvKeyspaceNames", cell)
 	require.Nil(t, err)
 
@@ -182,6 +169,7 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 }
 
 func TestGetSrvKeyspacePartitions(t *testing.T) {
+	setup(t)
 	shardedSrvKeyspace := getSrvKeyspace(t, cell, keyspaceShardedName)
 	otherShardRefFound := false
 	for _, partition := range shardedSrvKeyspace.Partitions {
@@ -210,17 +198,20 @@ func TestGetSrvKeyspacePartitions(t *testing.T) {
 }
 
 func TestShardNames(t *testing.T) {
+	setup(t)
 	output, err := getSrvKeyspaces(t, keyspaceShardedName, cell)
 	require.NoError(t, err)
 	require.NotNil(t, output[cell], "no srvkeyspace for cell %s", cell)
 }
 
 func TestGetKeyspace(t *testing.T) {
+	setup(t)
 	_, err := getKeyspace(t, keyspaceUnshardedName)
 	require.Nil(t, err)
 }
 
 func TestDeleteKeyspace(t *testing.T) {
+	setup(t)
 	ctx := t.Context()
 	vtctld := clusterForKSTest.Vtctld()
 
@@ -272,6 +263,7 @@ func TestDeleteKeyspace(t *testing.T) {
 }
 
 func TestShardCountForAllKeyspaces(t *testing.T) {
+	setup(t)
 	testShardCountForKeyspace(t, keyspaceUnshardedName, 1)
 	testShardCountForKeyspace(t, keyspaceShardedName, 2)
 }
@@ -288,6 +280,7 @@ func testShardCountForKeyspace(t *testing.T, keyspace string, count int) {
 }
 
 func TestShardNameForAllKeyspaces(t *testing.T) {
+	setup(t)
 	testShardNameForKeyspace(t, keyspaceUnshardedName, []string{"test_ks_unsharded"})
 	testShardNameForKeyspace(t, keyspaceShardedName, []string{"-80", "80-"})
 }
@@ -306,6 +299,7 @@ func testShardNameForKeyspace(t *testing.T, keyspace string, shardNames []string
 }
 
 func TestKeyspaceToShardName(t *testing.T) {
+	setup(t)
 	var id []byte
 	srvKeyspace := getSrvKeyspace(t, cell, keyspaceShardedName)
 
@@ -338,7 +332,7 @@ func TestKeyspaceToShardName(t *testing.T) {
 func packKeyspaceID(keyspaceID uint64) []byte {
 	var keybytes [8]byte
 	binary.BigEndian.PutUint64(keybytes[:], keyspaceID)
-	return (keybytes[:])
+	return keybytes[:]
 }
 
 func getSrvKeyspace(t *testing.T, cell string, ksname string) *topodatapb.SrvKeyspace {

@@ -23,9 +23,7 @@ package binlog
 
 import (
 	"context"
-	"flag"
 	"fmt"
-	"os"
 	"reflect"
 	"testing"
 	"time"
@@ -84,69 +82,58 @@ var (
 `
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setup(t *testing.T) {
+	t.Helper()
+	ctx := t.Context()
 
-	exitcode, err := func() (int, error) {
-		ctx := context.Background()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithCells(cell1, cell2),
+		vitesst.WithVTOrc(),
+		vitesst.WithVTTabletArgs(commonTabletArg...),
+		vitesst.WithKeyspace(keyspaceName).
+			WithShardNames("-80", "80-").
+			WithReplicas(1).
+			WithRDOnly(1).
+			WithDurabilityPolicy("semi_sync").
+			WithSchema(fmt.Sprintf(sqlSchema, tableName)).
+			WithVSchema(fmt.Sprintf(vSchema, tableName)).
+			WithTabletSpec(func(spec *vitesst.TabletSpec) {
+				if spec.Type == "primary" {
+					spec.Cell = cell1
+				} else {
+					spec.Cell = cell2
+				}
+			}),
+	)
+	require.NoError(t, err)
 
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithCells(cell1, cell2),
-			vitesst.WithVTOrc(),
-			vitesst.WithVTTabletArgs(commonTabletArg...),
-			vitesst.WithKeyspace(keyspaceName).
-				WithShardNames("-80", "80-").
-				WithReplicas(1).
-				WithRDOnly(1).
-				WithDurabilityPolicy("semi_sync").
-				WithSchema(fmt.Sprintf(sqlSchema, tableName)).
-				WithVSchema(fmt.Sprintf(vSchema, tableName)).
-				WithTabletSpec(func(spec *vitesst.TabletSpec) {
-					if spec.Type == "primary" {
-						spec.Cell = cell1
-					} else {
-						spec.Cell = cell2
-					}
-				}),
-		)
-		if err != nil {
-			return 1, err
+	cleanup, err := cluster.Start(ctx)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Minute)
+		defer cancel()
+		if t.Failed() {
+			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
 		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			return 1, err
+		if err := cleanup(cleanupCtx); err != nil {
+			t.Logf("cluster teardown: %v", err)
 		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
+	require.NoError(t, err)
 
-		clusterInstance = cluster
+	clusterInstance = cluster
 
-		shard1 := cluster.Keyspace(keyspaceName).Shard("-80")
-
-		// run a health check on source replica so it responds to discovery
-		// (for binlog players) and on the source rdonlys (for workers)
-		for _, tablet := range []*vitesst.Tablet{shard1.Replicas()[0], shard1.RDOnly()[0]} {
-			if err := cluster.Vtctld().ExecuteCommand(ctx, "RunHealthCheck", tablet.Alias()); err != nil {
-				return 1, err
-			}
-		}
-
-		_ = cluster.Vtctld().ExecuteCommand(ctx, "RebuildKeyspaceGraph", keyspaceName)
-
-		return m.Run(), nil
-	}()
-	if err != nil {
-		fmt.Printf("%v\n", err)
-		os.Exit(1)
-	} else {
-		os.Exit(exitcode)
+	shard1 := cluster.Keyspace(keyspaceName).Shard("-80")
+	// run a health check on source replica so it responds to discovery
+	// (for binlog players) and on the source rdonlys (for workers)
+	for _, tablet := range []*vitesst.Tablet{shard1.Replicas()[0], shard1.RDOnly()[0]} {
+		require.NoError(t, cluster.Vtctld().ExecuteCommand(ctx, "RunHealthCheck", tablet.Alias()))
 	}
+
+	_ = cluster.Vtctld().ExecuteCommand(ctx, "RebuildKeyspaceGraph", keyspaceName)
 }
 
 func TestAlias(t *testing.T) {
+	setup(t)
 	ctx := t.Context()
 
 	insertInitialValues(t)
@@ -200,6 +187,7 @@ func TestAlias(t *testing.T) {
 }
 
 func TestAddAliasWhileVtgateUp(t *testing.T) {
+	setup(t)
 	ctx := t.Context()
 
 	insertInitialValues(t)

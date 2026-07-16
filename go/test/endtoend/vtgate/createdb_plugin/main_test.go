@@ -18,9 +18,6 @@ package unsharded
 
 import (
 	"context"
-	"flag"
-	"fmt"
-	"os"
 	"sync"
 	"testing"
 	"time"
@@ -31,51 +28,37 @@ import (
 	"vitess.io/vitess/go/test/vitesst"
 )
 
-var (
-	clusterInstance *vitesst.Cluster
-	vtParams        mysql.ConnParams
-	keyspaceName    = "ks"
-)
+var keyspaceName = "ks"
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setupCluster(t *testing.T) (*vitesst.Cluster, mysql.ConnParams) {
+	t.Helper()
 
-	exitCode := func() int {
-		ctx := context.Background()
+	ctx := t.Context()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithVTGateArgs(
+			"--dbddl-plugin", "noop",
+			"--mysql-server-query-timeout", "60s",
+			"--enable-system-settings",
+		),
+		vitesst.WithKeyspace(keyspaceName).
+			WithShardNames("-80", "80-"),
+	)
+	require.NoError(t, err)
 
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithVTGateArgs(
-				"--dbddl-plugin", "noop",
-				"--mysql-server-query-timeout", "60s",
-				"--enable-system-settings",
-			),
-			vitesst.WithKeyspace(keyspaceName).
-				WithShardNames("-80", "80-"),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+	cleanup, err := cluster.Start(ctx)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		if err := cleanup(context.WithoutCancel(ctx)); err != nil {
+			t.Logf("cluster teardown: %v", err)
 		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
 
-		clusterInstance = cluster
-		vtParams = cluster.VTParams(ctx, "")
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	return cluster, cluster.VTParams(ctx, "")
 }
 
 func TestDBDDLPlugin(t *testing.T) {
 	ctx := t.Context()
+	clusterInstance, vtParams := setupCluster(t)
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -87,7 +70,7 @@ func TestDBDDLPlugin(t *testing.T) {
 			require.EqualValues(t, 1, qr.RowsAffected)
 		})
 		time.Sleep(300 * time.Millisecond)
-		start(t, "aaa")
+		start(t, clusterInstance, "aaa")
 
 		// wait until the create database query has returned
 		wg.Wait()
@@ -101,7 +84,7 @@ func TestDBDDLPlugin(t *testing.T) {
 			_ = vitesst.Exec(t, conn, `drop database aaa`)
 		})
 		time.Sleep(300 * time.Millisecond)
-		shutdown(t, "aaa")
+		shutdown(t, clusterInstance, "aaa")
 
 		// wait until the drop database query has returned
 		wg.Wait()
@@ -119,12 +102,12 @@ func TestDBDDLPlugin(t *testing.T) {
 	}
 }
 
-func start(t *testing.T, ksName string) {
+func start(t *testing.T, clusterInstance *vitesst.Cluster, ksName string) {
 	_, err := clusterInstance.AddKeyspace(t.Context(), vitesst.WithKeyspace(ksName))
 	require.NoError(t, err, "new database creation failed")
 }
 
-func shutdown(t *testing.T, ksName string) {
+func shutdown(t *testing.T, clusterInstance *vitesst.Cluster, ksName string) {
 	require.NoError(t,
 		clusterInstance.Vtctld().ExecuteCommand(t.Context(), "DeleteKeyspace", "--recursive", ksName))
 

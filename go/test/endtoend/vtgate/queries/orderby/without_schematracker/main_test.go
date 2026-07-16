@@ -19,10 +19,10 @@ package orderby
 import (
 	"context"
 	_ "embed"
-	"flag"
-	"fmt"
-	"os"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/vitesst"
@@ -41,51 +41,45 @@ var (
 	vschema string
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setup(t testing.TB) {
+	t.Helper()
+	ctx := t.Context()
 
-	exitCode := func() int {
-		ctx := context.Background()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithKeyspace(keyspaceName).
+			WithShardNames("-80", "80-").
+			WithReplicas(1).
+			WithRDOnly(1).
+			WithSchema(schemaSQL).
+			WithVSchema(vschema),
+		vitesst.WithVTGateArgs("--schema-change-signal=false", "--enable-system-settings=true"),
+	)
+	require.NoError(t, err)
 
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithKeyspace(keyspaceName).
-				WithShardNames("-80", "80-").
-				WithReplicas(1).
-				WithRDOnly(1).
-				WithSchema(schemaSQL).
-				WithVSchema(vschema),
-			vitesst.WithVTGateArgs("--schema-change-signal=false", "--enable-system-settings=true"),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+	cleanup, err := cluster.Start(ctx)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Minute)
+		defer cancel()
+		if t.Failed() {
+			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
 		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+		if cleanupErr := cleanup(cleanupCtx); cleanupErr != nil {
+			t.Logf("cluster teardown: %v", cleanupErr)
 		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
+	require.NoError(t, err)
 
-		clusterInstance = cluster
-		vtParams = cluster.VTParams(ctx, "")
+	clusterInstance = cluster
+	vtParams = cluster.VTParams(ctx, "")
 
-		mysqlConn, closer, err := vitesst.NewMySQL(ctx, cluster, keyspaceName, schemaSQL)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+	var closer func(context.Context) error
+	mysqlParams, closer, err = vitesst.NewMySQL(ctx, cluster, keyspaceName, schemaSQL)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Minute)
+		defer cancel()
+		if cleanupErr := closer(cleanupCtx); cleanupErr != nil {
+			t.Logf("mysql teardown: %v", cleanupErr)
 		}
-		defer func() {
-			if err := closer(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "mysql teardown:", err)
-			}
-		}()
-		mysqlParams = mysqlConn
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	})
 }

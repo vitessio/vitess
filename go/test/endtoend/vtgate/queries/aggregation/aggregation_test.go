@@ -75,6 +75,7 @@ func start(t *testing.T) (vitesst.MySQLCompare, func()) {
 }
 
 func TestAggrWithLimit(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -87,6 +88,7 @@ func TestAggrWithLimit(t *testing.T) {
 }
 
 func TestAggregateTypes(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 	mcmp.Exec("insert into aggr_test(id, val1, val2) values(1,'a',1), (2,'A',1), (3,'b',1), (4,'c',3), (5,'c',4)")
@@ -113,6 +115,7 @@ func TestAggregateTypes(t *testing.T) {
 }
 
 func TestGroupBy(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 	mcmp.Exec("insert into t3(id5, id6, id7) values(1,1,2), (2,2,4), (3,2,4), (4,1,2), (5,1,2), (6,3,6)")
@@ -129,6 +132,7 @@ func TestGroupBy(t *testing.T) {
 }
 
 func TestEqualFilterOnScatter(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -160,6 +164,7 @@ func TestEqualFilterOnScatter(t *testing.T) {
 // streaming (OLAP) path used to error on a NULL predicate result instead of
 // treating it as false, aborting the whole stream.
 func TestNullPredicateFilterOnScatter(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -178,6 +183,7 @@ func TestNullPredicateFilterOnScatter(t *testing.T) {
 }
 
 func TestAggrOnJoin(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -244,6 +250,7 @@ func TestAggrOnJoin(t *testing.T) {
 }
 
 func TestNotEqualFilterOnScatter(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -268,6 +275,7 @@ func TestNotEqualFilterOnScatter(t *testing.T) {
 }
 
 func TestLessFilterOnScatter(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -291,6 +299,7 @@ func TestLessFilterOnScatter(t *testing.T) {
 }
 
 func TestLessEqualFilterOnScatter(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -315,6 +324,7 @@ func TestLessEqualFilterOnScatter(t *testing.T) {
 }
 
 func TestGreaterFilterOnScatter(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -339,6 +349,7 @@ func TestGreaterFilterOnScatter(t *testing.T) {
 }
 
 func TestGreaterEqualFilterOnScatter(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -363,6 +374,7 @@ func TestGreaterEqualFilterOnScatter(t *testing.T) {
 }
 
 func TestGroupByOnlyFullGroupByOff(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -376,6 +388,7 @@ func TestGroupByOnlyFullGroupByOff(t *testing.T) {
 }
 
 func TestAggOnTopOfLimit(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 	mcmp.Exec("insert into aggr_test(id, val1, val2) values(1,'a',6), (2,'a',1), (3,'b',1), (4,'c',3), (5,'c',4), (6,'b',null), (7,null,2), (8,null,null)")
@@ -412,6 +425,7 @@ func TestAggOnTopOfLimit(t *testing.T) {
 }
 
 func TestEmptyTableAggr(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -447,6 +461,7 @@ func TestEmptyTableAggr(t *testing.T) {
 }
 
 func TestOrderByCount(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -456,6 +471,7 @@ func TestOrderByCount(t *testing.T) {
 }
 
 func TestAggregateAnyValue(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -470,6 +486,7 @@ func TestAggregateAnyValue(t *testing.T) {
 
 // TestAggregateLeftJoin tests that aggregates work with left joins and does not ignore the count when column value does not match the right side table.
 func TestAggregateLeftJoin(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -517,6 +534,7 @@ func TestAggregateLeftJoin(t *testing.T) {
 
 // TestScalarAggregate tests validates that only count is returned and no additional field is returned.gst
 func TestScalarAggregate(t *testing.T) {
+	setup(t)
 	ctx := t.Context()
 
 	// disable schema tracking to have weight_string column added to query send down to mysql.
@@ -546,6 +564,7 @@ func TestScalarAggregate(t *testing.T) {
 }
 
 func TestAggregationRandomOnAnAggregatedValue(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -556,6 +575,7 @@ func TestAggregationRandomOnAnAggregatedValue(t *testing.T) {
 }
 
 func TestBuggyQueries(t *testing.T) {
+	setup(t)
 	// These queries have been found to be producing the wrong results by the query fuzzer
 	// Adding them as end2end tests to make sure we never get them wrong again
 	mcmp, closer := start(t)
@@ -576,6 +596,7 @@ func TestBuggyQueries(t *testing.T) {
 }
 
 func TestMinMaxAcrossJoins(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 	mcmp.Exec("insert into t1(t1_id, name, value, shardKey) values (1, 'name 1', 'value 1', 1), (2, 'name 2', 'value 2', 2)")
@@ -583,10 +604,12 @@ func TestMinMaxAcrossJoins(t *testing.T) {
 
 	mcmp.AssertMatchesNoOrder(
 		`SELECT t1.name, max(t1.shardKey), t2.shardKey, min(t2.id) FROM t1 JOIN t2 ON t1.t1_id != t2.shardKey GROUP BY t1.name, t2.shardKey`,
-		`[[VARCHAR("name 2") INT64(2) INT64(10) INT64(1)] [VARCHAR("name 1") INT64(1) INT64(10) INT64(1)] [VARCHAR("name 2") INT64(2) INT64(20) INT64(2)] [VARCHAR("name 1") INT64(1) INT64(20) INT64(2)]]`)
+		`[[VARCHAR("name 2") INT64(2) INT64(10) INT64(1)] [VARCHAR("name 1") INT64(1) INT64(10) INT64(1)] [VARCHAR("name 2") INT64(2) INT64(20) INT64(2)] [VARCHAR("name 1") INT64(1) INT64(20) INT64(2)]]`,
+	)
 }
 
 func TestComplexAggregation(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 	mcmp.Exec("insert into t1(t1_id, `name`, `value`, shardkey) values(1,'a1','foo',100), (2,'b1','foo',200), (3,'c1','foo',300), (4,'a1','foo',100), (5,'d1','toto',200), (6,'c1','tata',893), (7,'a1','titi',2380), (8,'b1','tete',12833), (9,'e1','yoyo',783493)")
@@ -605,6 +628,7 @@ func TestComplexAggregation(t *testing.T) {
 }
 
 func TestJoinAggregation(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -629,6 +653,7 @@ func TestJoinAggregation(t *testing.T) {
 // SET_VAR(sql_mode = ...) hint, so the field probe failed with errno 1055 under the tablet's
 // strict default sql_mode.
 func TestJoinAggregationEmptyLeft(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -642,6 +667,7 @@ func TestJoinAggregationEmptyLeft(t *testing.T) {
 
 // TestGroupConcatAggregation tests the group_concat function with vitess doing the aggregation.
 func TestGroupConcatAggregation(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 	mcmp.Exec("insert into t1(t1_id, `name`, `value`, shardkey) values(1,'a1',null,100), (2,'b1','foo',20), (3,'c1','foo',10), (4,'a1','foo',100), (5,'d1','toto',200), (6,'c1',null,893), (10,'a1','titi',2380), (20,'b1','tete',12833), (9,'e1','yoyo',783493)")
@@ -695,6 +721,7 @@ func compareRow(t *testing.T, mRes *sqltypes.Result, vtRes *sqltypes.Result, grp
 }
 
 func TestDistinctAggregation(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 	mcmp.Exec("insert into t1(t1_id, `name`, `value`, shardkey) values(1,'a1','foo',100), (2,'b1','foo',200), (3,'c1','foo',300), (4,'a1','foo',100), (5,'d1','toto',200), (6,'c1','tata',893), (7,'a1','titi',2380), (8,'b1','tete',12833), (9,'e1','yoyo',783493)")
@@ -731,6 +758,7 @@ func TestDistinctAggregation(t *testing.T) {
 }
 
 func TestHavingQueries(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -813,6 +841,7 @@ func TestHavingQueries(t *testing.T) {
 
 // TestJsonAggregation tests that json aggregation works for single sharded queries.
 func TestJsonAggregation(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 

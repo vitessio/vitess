@@ -18,10 +18,10 @@ package messaging
 
 import (
 	"context"
-	"flag"
-	"fmt"
-	"os"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/vitesst"
 )
@@ -101,45 +101,39 @@ var (
 	}`
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setup(t *testing.T) {
+	t.Helper()
+	ctx := t.Context()
 
-	exitCode := func() int {
-		ctx := context.Background()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithKeyspace(lookupKeyspace).
+			WithReplicas(1).
+			WithSchema(createUnshardedMessage).
+			WithVSchema(lookupVschema),
+		vitesst.WithKeyspace(userKeyspace).
+			WithShardNames("-80", "80-").
+			WithReplicas(1).
+			WithSchema(createShardedMessage).
+			WithVSchema(userVschema),
+	)
+	require.NoError(t, err)
 
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithKeyspace(lookupKeyspace).
-				WithReplicas(1).
-				WithSchema(createUnshardedMessage).
-				WithVSchema(lookupVschema),
-			vitesst.WithKeyspace(userKeyspace).
-				WithShardNames("-80", "80-").
-				WithReplicas(1).
-				WithSchema(createShardedMessage).
-				WithVSchema(userVschema),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+	cleanup, err := cluster.Start(ctx)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Minute)
+		defer cancel()
+		if t.Failed() {
+			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
 		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+		if err := cleanup(cleanupCtx); err != nil {
+			t.Logf("cluster teardown: %v", err)
 		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
+	require.NoError(t, err)
 
-		clusterInstance = cluster
-		shard0Primary = cluster.Keyspace(userKeyspace).Shard("-80").Primary()
-		shard1Primary = cluster.Keyspace(userKeyspace).Shard("80-").Primary()
-		lookupPrimary = cluster.Keyspace(lookupKeyspace).Shard("-").Primary()
-		shard0Replica = cluster.Keyspace(userKeyspace).Shard("-80").Replicas()[0]
-
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	clusterInstance = cluster
+	shard0Primary = cluster.Keyspace(userKeyspace).Shard("-80").Primary()
+	shard1Primary = cluster.Keyspace(userKeyspace).Shard("80-").Primary()
+	lookupPrimary = cluster.Keyspace(lookupKeyspace).Shard("-").Primary()
+	shard0Replica = cluster.Keyspace(userKeyspace).Shard("-80").Replicas()[0]
 }

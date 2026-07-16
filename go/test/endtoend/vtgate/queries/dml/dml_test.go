@@ -30,6 +30,7 @@ import (
 
 // TestUniqueLookupDuplicateEntries should fail if the is duplicate in unique lookup column.
 func TestUniqueLookupDuplicateEntries(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -78,6 +79,7 @@ func TestUniqueLookupDuplicateEntries(t *testing.T) {
 
 // TestUniqueLookupDuplicateIgnore tests the insert ignore on lookup table.
 func TestUniqueLookupDuplicateIgnore(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -113,6 +115,7 @@ func TestUniqueLookupDuplicateIgnore(t *testing.T) {
 }
 
 func TestMultiEqual(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -129,6 +132,7 @@ func TestMultiEqual(t *testing.T) {
 
 // TestMultiTableDelete executed multi-table delete queries
 func TestMultiTableDelete(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -158,6 +162,7 @@ func TestMultiTableDelete(t *testing.T) {
 
 // TestDeleteWithLimit executed delete queries with limit
 func TestDeleteWithLimit(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -208,6 +213,7 @@ func TestDeleteWithLimit(t *testing.T) {
 
 // TestUpdateWithLimit executed update queries with limit
 func TestUpdateWithLimit(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -263,6 +269,7 @@ func TestUpdateWithLimit(t *testing.T) {
 
 // TestMultiTableUpdate executed multi-table update queries
 func TestMultiTableUpdate(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -292,6 +299,7 @@ func TestMultiTableUpdate(t *testing.T) {
 
 // TestDeleteWithSubquery executed delete queries with subqueries
 func TestDeleteWithSubquery(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -336,6 +344,7 @@ func TestDeleteWithSubquery(t *testing.T) {
 
 // TestMultiTargetDelete executed multi-target delete queries
 func TestMultiTargetDelete(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -365,6 +374,7 @@ func TestMultiTargetDelete(t *testing.T) {
 
 // TestMultiTargetDeleteMore executed multi-target delete queries with additional cases
 func TestMultiTargetDeleteMore(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -401,6 +411,7 @@ func TestMultiTargetDeleteMore(t *testing.T) {
 
 // TestMultiTargetUpdate executed multi-target update queries
 func TestMultiTargetUpdate(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -430,6 +441,7 @@ func TestMultiTargetUpdate(t *testing.T) {
 
 // TestMultiTargetNonLiteralUpdate executed multi-target update queries with non-literal values.
 func TestMultiTargetNonLiteralUpdate(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -460,6 +472,7 @@ func TestMultiTargetNonLiteralUpdate(t *testing.T) {
 // TestDMLInUnique for update/delete statement using an IN clause with the Vindexes,
 // the query is correctly split according to the corresponding values in the IN list.
 func TestDMLInUnique(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -500,6 +513,7 @@ func TestDMLInUnique(t *testing.T) {
 
 // TestUpdateWithLargeRowsAsInput tests that a query with large input rows should succeed with passthrough DML on.
 func TestUpdateWithLargeRowsAsInput(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -535,6 +549,7 @@ func TestUpdateWithLargeRowsAsInput(t *testing.T) {
 
 // TestDeleteWithLargeRowsAsInput tests that a query with large input rows should succeed with passthrough DML on.
 func TestDeleteWithLargeRowsAsInput(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 

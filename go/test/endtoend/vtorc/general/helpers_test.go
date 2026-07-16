@@ -451,11 +451,13 @@ func waitForDetectedProblems(t *testing.T, vtorc *vitesst.VTOrc, code, alias, ks
 		require.True(c, ok, "DetectedProblems metric not yet available")
 		actual, ok := problems[key]
 		actual = getIntFromValue(actual)
-		assert.True(c, ok,
+		assert.True(
+			c, ok,
 			"The metric DetectedProblems[%s] should exist but does not (all problems: %+v)",
 			key, problems,
 		)
-		assert.EqualValues(c, expect, actual,
+		assert.EqualValues(
+			c, expect, actual,
 			"The metric DetectedProblems[%s] should be %v but is %v (all problems: %+v)",
 			key, expect, actual, problems,
 		)
@@ -558,12 +560,12 @@ func isPrimarySemiSyncSetupCorrectly(t *testing.T, tablet *vitesst.Tablet, semiS
 }
 
 // fullStatusTabletType returns the tablet's served type from its own FullStatus.
-func fullStatusTabletType(t *testing.T, tablet *vitesst.Tablet) topodatapb.TabletType {
+func fullStatusTabletType(t *testing.T, vc *vtorcCluster, tablet *vitesst.Tablet) topodatapb.TabletType {
 	t.Helper()
 	ctx := t.Context()
 	proto, err := tablet.TabletProto(ctx)
 	require.NoError(t, err)
-	status, err := tmClient.FullStatus(ctx, proto)
+	status, err := vc.tmClient.FullStatus(ctx, proto)
 	require.NoError(t, err)
 	return status.TabletType
 }
@@ -665,11 +667,10 @@ func updateTabletFields(ctx context.Context, etcdAddr, cell string, uid int, upd
 
 // printVTOrcLogsOnFailure prints the VTOrc logs and dumps cluster diagnostics on
 // test failure.
-func printVTOrcLogsOnFailure(t *testing.T, vc *vtorcCluster) {
+func printVTOrcLogsOnFailure(t *testing.T, ctx context.Context, vc *vtorcCluster) {
 	if !t.Failed() {
 		return
 	}
-	ctx := context.WithoutCancel(t.Context())
 	for _, vtorc := range vc.vtorcs {
 		logs, err := vtorc.Logs(ctx)
 		if err != nil {

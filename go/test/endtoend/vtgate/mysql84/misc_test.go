@@ -17,7 +17,6 @@ limitations under the License.
 package vtgate
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -30,6 +29,7 @@ import (
 
 func TestFunctionInDefault(t *testing.T) {
 	ctx := t.Context()
+	vtParams := setup(t)
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -73,6 +73,7 @@ ts12 TIMESTAMP DEFAULT LOCALTIME()
 // TestCheckConstraint test check constraints on CREATE TABLE
 // This feature is supported from MySQL 8.0.16 and MariaDB 10.2.1.
 func TestCheckConstraint(t *testing.T) {
+	vtParams := setup(t)
 	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -90,7 +91,7 @@ func TestCheckConstraint(t *testing.T) {
 }
 
 func TestValueDefault(t *testing.T) {
-	vtParams := clusterInstance.VTParams(t.Context(), "")
+	vtParams := setup(t)
 	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -101,6 +102,7 @@ func TestValueDefault(t *testing.T) {
 }
 
 func TestVersionCommentWorks(t *testing.T) {
+	vtParams := setup(t)
 	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -109,6 +111,7 @@ func TestVersionCommentWorks(t *testing.T) {
 }
 
 func TestSystemVariables(t *testing.T) {
+	vtParams := setup(t)
 	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -134,6 +137,7 @@ func TestSystemVariables(t *testing.T) {
 }
 
 func TestUseSystemAndUserVariables(t *testing.T) {
+	vtParams := setup(t)
 	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -156,7 +160,8 @@ func TestUseSystemAndUserVariables(t *testing.T) {
 }
 
 func BenchmarkReservedConnWhenSettingSysVar(b *testing.B) {
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	vtParams := setup(b)
+	conn, err := mysql.Connect(b.Context(), &vtParams)
 	require.NoError(b, err)
 	defer conn.Close()
 
@@ -218,6 +223,7 @@ func BenchmarkReservedConnWhenSettingSysVar(b *testing.B) {
 
 func TestJsonFunctions(t *testing.T) {
 	ctx := t.Context()
+	vtParams := setup(t)
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()

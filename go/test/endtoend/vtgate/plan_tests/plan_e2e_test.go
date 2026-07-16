@@ -26,8 +26,9 @@ import (
 )
 
 func TestE2ECases(t *testing.T) {
+	cluster, vtParams, mysqlParams := setup(t)
 	err := vitesst.WaitForAuthoritative(t, "main", "source_of_ref", func() (*any, error) {
-		return clusterInstance.VTGate().ReadVSchema(t.Context())
+		return cluster.VTGate().ReadVSchema(t.Context())
 	})
 	require.NoError(t, err)
 
@@ -37,7 +38,7 @@ func TestE2ECases(t *testing.T) {
 		"dml_cases.json",
 		"reference_cases.json",
 	}
-	mcmp, closer := start(t)
+	mcmp, closer := start(t, vtParams, mysqlParams)
 	defer closer()
 	loadSampleData(t, mcmp)
 	for _, fileName := range e2eTestCaseFiles {

@@ -18,10 +18,8 @@ package revert
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"math/rand/v2"
-	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -70,7 +68,8 @@ func (w *WriteMetrics) Clear() {
 }
 
 func (w *WriteMetrics) String() string {
-	return fmt.Sprintf(`WriteMetrics: inserts-deletes=%d, updates-deletes=%d,
+	return fmt.Sprintf(
+		`WriteMetrics: inserts-deletes=%d, updates-deletes=%d,
 insertsAttempts=%d, insertsFailures=%d, insertsNoops=%d, inserts=%d,
 updatesAttempts=%d, updatesFailures=%d, updatesNoops=%d, updates=%d,
 deletesAttempts=%d, deletesFailures=%d, deletesNoops=%d, deletes=%d,
@@ -132,58 +131,49 @@ type revertibleTestCase struct {
 	onlyIfFKOnlineDDLPossible   bool
 }
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setup(t *testing.T) {
+	t.Helper()
+	ctx := t.Context()
 
-	exitcode, err := func() (int, error) {
-		ctx := context.Background()
-
-		// No need for replicas in this stress test
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithCells(cell),
-			vitesst.WithVTCtldArgs(
-				"--schema-change-dir", schemaChangeDirectory,
-				"--schema-change-controller", "local",
-				"--schema-change-check-interval", "1s",
-			),
-			vitesst.WithVTTabletArgs(
-				"--heartbeat-interval", "250ms",
-				"--heartbeat-on-demand-duration", "5s",
-				"--migration-check-interval", "5s",
-			),
-			vitesst.WithVTGateArgs(
-				"--ddl-strategy", "online",
-			),
-			vitesst.WithKeyspace(keyspaceName).WithShardNames("1"),
-		)
-		if err != nil {
-			return 1, err
+	// No need for replicas in this stress test
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithCells(cell),
+		vitesst.WithVTCtldArgs(
+			"--schema-change-dir", schemaChangeDirectory,
+			"--schema-change-controller", "local",
+			"--schema-change-check-interval", "1s",
+		),
+		vitesst.WithVTTabletArgs(
+			"--heartbeat-interval", "250ms",
+			"--heartbeat-on-demand-duration", "5s",
+			"--migration-check-interval", "5s",
+		),
+		vitesst.WithVTGateArgs(
+			"--ddl-strategy", "online",
+		),
+		vitesst.WithKeyspace(keyspaceName).WithShardNames("1"),
+	)
+	require.NoError(t, err)
+	cleanup, err := cluster.Start(ctx)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Minute)
+		defer cancel()
+		if t.Failed() {
+			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
 		}
-
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			return 1, err
+		if err := cleanup(cleanupCtx); err != nil {
+			t.Logf("cluster teardown: %v", err)
 		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
 
-		clusterInstance = cluster
-		vtParams = cluster.VTParams(ctx, "")
-		primaryTablet = cluster.Keyspace(keyspaceName).Shards()[0].Primary()
-		return m.Run(), nil
-	}()
-	if err != nil {
-		fmt.Printf("%v\n", err)
-		os.Exit(1)
-	} else {
-		os.Exit(exitcode)
-	}
+	clusterInstance = cluster
+	vtParams = cluster.VTParams(ctx, "")
+	primaryTablet = cluster.Keyspace(keyspaceName).Shards()[0].Primary()
 }
 
 func TestRevertSchemaChanges(t *testing.T) {
+	setup(t)
 	shards = clusterInstance.Keyspace(keyspaceName).Shards()
 	require.Equal(t, 1, len(shards))
 
@@ -1179,7 +1169,8 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 		}
 	} else {
 		var err error
-		uuid, err = clusterInstance.Vtctld().ExecuteCommandWithOutput(t.Context(),
+		uuid, err = clusterInstance.Vtctld().ExecuteCommandWithOutput(
+			t.Context(),
 			"ApplySchema",
 			"--sql", alterStatement,
 			"--ddl-strategy", ddlStrategy,

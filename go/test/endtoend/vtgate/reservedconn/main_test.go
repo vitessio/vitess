@@ -18,12 +18,12 @@ package reservedconn
 
 import (
 	"context"
-	"flag"
 	"fmt"
-	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/vitesst"
@@ -96,47 +96,42 @@ CREATE TABLE test_vdx (
 	`
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setup(t testing.TB) {
+	t.Helper()
+	ctx := t.Context()
 
-	exitCode := func() int {
-		ctx := context.Background()
+	// This test requires setting the mysql-server-version vtgate flag
+	// to 5.7 regardless of the actual MySQL version used for the tests.
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithVTTabletArgs("--queryserver-config-transaction-timeout", "5s"),
+		vitesst.WithVTGateArgs(
+			"--lock-heartbeat-time", "2s",
+			"--mysql-server-version", "5.7.0",
+			"--mysql-server-socket-path", "/tmp/mysql.sock",
+		),
+		vitesst.WithKeyspace(keyspaceName).
+			WithShardNames("-80", "80-").
+			WithReplicas(1).
+			WithSchema(sqlSchema).
+			WithVSchema(vSchema),
+	)
+	require.NoError(t, err)
 
-		// This test requires setting the mysql-server-version vtgate flag
-		// to 5.7 regardless of the actual MySQL version used for the tests.
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithVTTabletArgs("--queryserver-config-transaction-timeout", "5s"),
-			vitesst.WithVTGateArgs(
-				"--lock-heartbeat-time", "2s",
-				"--mysql-server-version", "5.7.0",
-				"--mysql-server-socket-path", "/tmp/mysql.sock",
-			),
-			vitesst.WithKeyspace(keyspaceName).
-				WithShardNames("-80", "80-").
-				WithReplicas(1).
-				WithSchema(sqlSchema).
-				WithVSchema(vSchema),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+	cleanup, err := cluster.Start(ctx)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+		defer cancel()
+		if t.Failed() {
+			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
 		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+		if err := cleanup(cleanupCtx); err != nil {
+			t.Logf("cluster teardown: %v", err)
 		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
 
-		clusterInstance = cluster
-		vtParams = cluster.VTParams(ctx, "")
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	clusterInstance = cluster
+	vtParams = cluster.VTParams(ctx, "")
 }
 
 func assertIsEmpty(t *testing.T, conn *mysql.Conn, query string) {

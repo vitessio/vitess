@@ -26,6 +26,7 @@ import (
 )
 
 func TestEtcdServer(t *testing.T) {
+	setup(t)
 	ctx := t.Context()
 	etcdAddr, err := clusterInstance.EtcdAddr(ctx)
 	require.NoError(t, err)

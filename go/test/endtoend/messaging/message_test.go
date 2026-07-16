@@ -67,6 +67,7 @@ create table vitess_message(
 `
 
 func TestMessage(t *testing.T) {
+	setup(t)
 	ctx := t.Context()
 
 	vtParams := clusterInstance.VTParams(ctx, "")
@@ -198,6 +199,7 @@ create table vitess_message3(
 `
 
 func TestThreeColMessage(t *testing.T) {
+	setup(t)
 	ctx := t.Context()
 
 	vtParams := clusterInstance.VTParams(ctx, "")
@@ -288,6 +290,7 @@ var createSpecificStreamingColsMessage = `create table vitess_message4(
 ) comment 'vitess_message,vt_message_cols=id|msg1,vt_ack_wait=1,vt_purge_after=3,vt_batch_size=2,vt_cache_size=10,vt_poller_interval=1'`
 
 func TestSpecificStreamingColsMessage(t *testing.T) {
+	setup(t)
 	ctx := t.Context()
 
 	vtParams := clusterInstance.VTParams(ctx, "")
@@ -350,17 +353,20 @@ func getTimeEpoch(qr *sqltypes.Result) (int64, int64) {
 }
 
 func TestSharded(t *testing.T) {
+	setup(t)
 	// validate the messaging for sharded keyspace(user)
 	testMessaging(t, "sharded_message", userKeyspace)
 }
 
 func TestUnsharded(t *testing.T) {
+	setup(t)
 	// validate messaging for unsharded keyspace(lookup)
 	testMessaging(t, "unsharded_message", lookupKeyspace)
 }
 
 // TestReparenting checks the client connection count after reparenting.
 func TestReparenting(t *testing.T) {
+	setup(t)
 	name := "sharded_message"
 
 	ctx := t.Context()
@@ -420,6 +426,7 @@ func TestReparenting(t *testing.T) {
 
 // TestConnection validate the connection count and message streaming.
 func TestConnection(t *testing.T) {
+	setup(t)
 	name := "sharded_message"
 
 	ctx := t.Context()

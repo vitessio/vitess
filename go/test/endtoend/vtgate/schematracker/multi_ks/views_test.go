@@ -19,10 +19,9 @@ package multiks
 import (
 	"context"
 	_ "embed"
-	"flag"
 	"fmt"
-	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -31,10 +30,8 @@ import (
 )
 
 var (
-	clusterInstance *vitesst.Cluster
-	vtParams        mysql.ConnParams
-	shardedKs       = "sks"
-	unshardedKs     = "uks"
+	shardedKs   = "sks"
+	unshardedKs = "uks"
 
 	//go:embed sschema.sql
 	shardedSchema string
@@ -49,48 +46,43 @@ var (
 	unshardedVSchema string
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setup(t *testing.T) (*vitesst.Cluster, mysql.ConnParams) {
+	t.Helper()
+	ctx := t.Context()
 
-	exitCode := func() int {
-		ctx := context.Background()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithVTGateArgs("--enable-views"),
+		vitesst.WithVTTabletArgs("--queryserver-enable-views"),
+		vitesst.WithKeyspace(shardedKs).
+			WithShardNames("-80", "80-").
+			WithSchema(shardedSchema).
+			WithVSchema(shardedVSchema),
+		vitesst.WithKeyspace(unshardedKs).
+			WithSchema(unshardedSchema).
+			WithVSchema(unshardedVSchema),
+	)
+	require.NoError(t, err)
 
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithVTGateArgs("--enable-views"),
-			vitesst.WithVTTabletArgs("--queryserver-enable-views"),
-			vitesst.WithKeyspace(shardedKs).
-				WithShardNames("-80", "80-").
-				WithSchema(shardedSchema).
-				WithVSchema(shardedVSchema),
-			vitesst.WithKeyspace(unshardedKs).
-				WithSchema(unshardedSchema).
-				WithVSchema(unshardedVSchema),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+	cleanup, err := cluster.Start(ctx)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Minute)
+		defer cancel()
+		if t.Failed() {
+			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
 		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+		if err := cleanup(cleanupCtx); err != nil {
+			t.Logf("cluster teardown: %v", err)
 		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
 
-		clusterInstance = cluster
-		vtParams = cluster.VTParams(ctx, "")
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	return cluster, cluster.VTParams(ctx, "")
 }
 
 // TestViewQueries validates that view tracking works as expected with qualified and unqualified views.
 func TestViewQueries(t *testing.T) {
 	ctx := t.Context()
+	cluster, vtParams := setup(t)
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -103,7 +95,7 @@ func TestViewQueries(t *testing.T) {
 		return ok
 	}
 
-	vitesst.WaitForVschemaCondition(t, clusterInstance.VTGate(), shardedKs, viewExists, "view cv3 not found")
+	vitesst.WaitForVschemaCondition(t, cluster.VTGate(), shardedKs, viewExists, "view cv3 not found")
 
 	// Insert some data
 	insertData(t, conn)

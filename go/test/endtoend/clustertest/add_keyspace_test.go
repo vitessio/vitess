@@ -60,9 +60,11 @@ primary key (id)
 )
 
 func TestAddKeyspace(t *testing.T) {
+	setup(t)
 	ctx := t.Context()
 
-	_, err := clusterInstance.AddKeyspace(ctx,
+	_, err := clusterInstance.AddKeyspace(
+		ctx,
 		vitesst.WithKeyspace(addKeyspaceName).
 			WithShardNames("-80", "80-").
 			WithSchema(addKeyspaceSchema).

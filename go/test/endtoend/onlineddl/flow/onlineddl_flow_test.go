@@ -40,7 +40,6 @@ package flow
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"math/rand/v2"
 	"os"
@@ -118,66 +117,60 @@ const (
 	throttlerConfigTimeout = 60 * time.Second
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setup(t *testing.T) {
+	t.Helper()
+	ctx := t.Context()
 
-	exitCode := func() int {
-		ctx := context.Background()
-
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithVTCtldArgs(
-				"--schema-change-dir", schemaChangeDirectory,
-				"--schema-change-controller", "local",
-				"--schema-change-check-interval", "1s",
-			),
-			vitesst.WithVTTabletArgs(
-				"--heartbeat-interval", "250ms",
-				"--heartbeat-on-demand-duration", "5s",
-				"--migration-check-interval", "2s",
-			),
-			vitesst.WithVTGateArgs(
-				"--ddl-strategy", "online",
-			),
-			// No need for replicas in this stress test
-			vitesst.WithKeyspace(keyspaceName).
-				WithShardNames("1").
-				WithReplicas(1),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithVTCtldArgs(
+			"--schema-change-dir", schemaChangeDirectory,
+			"--schema-change-controller", "local",
+			"--schema-change-check-interval", "1s",
+		),
+		vitesst.WithVTTabletArgs(
+			"--heartbeat-interval", "250ms",
+			"--heartbeat-on-demand-duration", "5s",
+			"--migration-check-interval", "2s",
+		),
+		vitesst.WithVTGateArgs(
+			"--ddl-strategy", "online",
+		),
+		// No need for replicas in this stress test
+		vitesst.WithKeyspace(keyspaceName).
+			WithShardNames("1").
+			WithReplicas(1),
+	)
+	require.NoError(t, err)
+	cleanup, err := cluster.Start(ctx)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Minute)
+		defer cancel()
+		if t.Failed() {
+			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
 		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+		if err := cleanup(cleanupCtx); err != nil {
+			t.Logf("cluster teardown: %v", err)
 		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
 
-		clusterInstance = cluster
+	clusterInstance = cluster
 
-		// Collect table paths and ports
-		tablets = cluster.Keyspace(keyspaceName).Tablets()
-		for _, tablet := range tablets {
-			if tablet.Type() == "primary" {
-				primaryTablet = tablet
-			} else {
-				replicaTablet = tablet
-			}
+	// Collect table paths and ports
+	tablets = cluster.Keyspace(keyspaceName).Tablets()
+	for _, tablet := range tablets {
+		if tablet.Type() == "primary" {
+			primaryTablet = tablet
+		} else {
+			replicaTablet = tablet
 		}
+	}
 
-		vtParams = cluster.VTParams(ctx, "")
-
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	vtParams = cluster.VTParams(ctx, "")
 }
 
 func TestOnlineDDLFlow(t *testing.T) {
+	setup(t)
 	ctx := t.Context()
 
 	require.NotNil(t, clusterInstance)
@@ -504,7 +497,8 @@ func waitForCheckThrottlerResult(t *testing.T, tablet *vitesst.Tablet, appName t
 
 // checkCompleteMigration attempts to complete a migration, and expects success/failure by counting affected rows
 func checkCompleteMigration(t *testing.T, uuid string, expectCompletePossible bool) {
-	query, err := sqlparser.ParseAndBind("alter vitess_migration %a complete",
+	query, err := sqlparser.ParseAndBind(
+		"alter vitess_migration %a complete",
 		sqltypes.StringBindVariable(uuid),
 	)
 	require.NoError(t, err)
@@ -519,7 +513,8 @@ func checkCompleteMigration(t *testing.T, uuid string, expectCompletePossible bo
 
 // checkForceMigrationCutOver forces a migration to cut over, and expects success/failure by counting affected rows
 func checkForceMigrationCutOver(t *testing.T, uuid string, expectPossible bool) {
-	query, err := sqlparser.ParseAndBind("alter vitess_migration %a force_cutover",
+	query, err := sqlparser.ParseAndBind(
+		"alter vitess_migration %a force_cutover",
 		sqltypes.StringBindVariable(uuid),
 	)
 	require.NoError(t, err)
@@ -534,7 +529,8 @@ func checkForceMigrationCutOver(t *testing.T, uuid string, expectPossible bool) 
 
 // checkMigrationStatus verifies that the migration indicated by given UUID has the given expected status
 func checkMigrationStatus(t *testing.T, uuid string, expectStatuses ...schema.OnlineDDLStatus) bool {
-	query, err := sqlparser.ParseAndBind(fmt.Sprintf("show vitess_migrations from %s like %%a", keyspaceName),
+	query, err := sqlparser.ParseAndBind(
+		fmt.Sprintf("show vitess_migrations from %s like %%a", keyspaceName),
 		sqltypes.StringBindVariable(uuid),
 	)
 	require.NoError(t, err)
@@ -564,7 +560,8 @@ func waitForMigrationStatus(t *testing.T, uuid string, timeout time.Duration, ex
 	for _, shard := range shards {
 		shardNames[shard.Name] = true
 	}
-	query, err := sqlparser.ParseAndBind("show vitess_migrations like %a",
+	query, err := sqlparser.ParseAndBind(
+		"show vitess_migrations like %a",
 		sqltypes.StringBindVariable(uuid),
 	)
 	require.NoError(t, err)
@@ -606,7 +603,8 @@ func waitForMigrationStatus(t *testing.T, uuid string, timeout time.Duration, ex
 
 func testWithInitialSchema(t *testing.T) {
 	// Create the stress table
-	err := clusterInstance.Vtctld().ExecuteCommand(t.Context(),
+	err := clusterInstance.Vtctld().ExecuteCommand(
+		t.Context(),
 		"ApplySchema",
 		"--sql", createStatement,
 		"--ddl-strategy", "direct -allow-zero-in-date",

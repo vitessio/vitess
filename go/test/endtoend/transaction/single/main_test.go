@@ -19,10 +19,9 @@ package single
 import (
 	"context"
 	_ "embed"
-	"flag"
 	"fmt"
-	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -31,9 +30,7 @@ import (
 )
 
 var (
-	clusterInstance *vitesst.Cluster
-	vtParams        mysql.ConnParams
-	KeyspaceName    = "ks"
+	KeyspaceName = "ks"
 
 	//go:embed schema.sql
 	SchemaSQL string
@@ -42,42 +39,36 @@ var (
 	VSchema string
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func startCluster(t *testing.T) mysql.ConnParams {
+	t.Helper()
 
-	exitCode := func() int {
-		ctx := context.Background()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithKeyspace(KeyspaceName).
+			WithShardNames("-80", "80-").
+			WithSchema(SchemaSQL).
+			WithVSchema(VSchema),
+		vitesst.WithVTGateArgs("--transaction-mode", "SINGLE"),
+	)
+	require.NoError(t, err)
 
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithKeyspace(KeyspaceName).
-				WithShardNames("-80", "80-").
-				WithSchema(SchemaSQL).
-				WithVSchema(VSchema),
-			vitesst.WithVTGateArgs("--transaction-mode", "SINGLE"),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+	cleanup, err := cluster.Start(t.Context())
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Minute)
+		defer cancel()
+		if t.Failed() {
+			cluster.DumpDiagnostics(ctx, t.Logf)
 		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+		if err := cleanup(ctx); err != nil {
+			t.Logf("cluster teardown: %v", err)
 		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
+	require.NoError(t, err)
 
-		clusterInstance = cluster
-		vtParams = cluster.VTParams(ctx, "")
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	return cluster.VTParams(t.Context(), "")
 }
 
 func TestSingleOneWay(t *testing.T) {
+	vtParams := startCluster(t)
 	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -99,6 +90,7 @@ func TestSingleOneWay(t *testing.T) {
 }
 
 func TestSingleReverseWay(t *testing.T) {
+	vtParams := startCluster(t)
 	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -120,6 +112,7 @@ func TestSingleReverseWay(t *testing.T) {
 }
 
 func TestSingleLookupDangleRow(t *testing.T) {
+	vtParams := startCluster(t)
 	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -139,6 +132,7 @@ func TestSingleLookupDangleRow(t *testing.T) {
 }
 
 func TestLookupDangleRowLaterMultiDB(t *testing.T) {
+	vtParams := startCluster(t)
 	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -163,7 +157,8 @@ func TestLookupDangleRowLaterMultiDB(t *testing.T) {
 }
 
 func TestLookupDangleRowRecordInSameShard(t *testing.T) {
-	conn, cleanup := setup(t)
+	vtParams := startCluster(t)
+	conn, cleanup := setup(t, vtParams)
 	defer cleanup()
 
 	// insert a dangling row in lookup table
@@ -181,7 +176,8 @@ func TestLookupDangleRowRecordInSameShard(t *testing.T) {
 }
 
 func TestMultiDbSecondRecordLookupDangle(t *testing.T) {
-	conn, cleanup := setup(t)
+	vtParams := startCluster(t)
+	conn, cleanup := setup(t, vtParams)
 	defer cleanup()
 
 	// insert a dangling row in lookup table
@@ -213,7 +209,8 @@ func TestMultiDbSecondRecordLookupDangle(t *testing.T) {
 // If it routes to other shard then the test will fail with multi-shard transaction attempted error.
 // The fix ensures it does not happen.
 func TestNoRecordInTableNotFail(t *testing.T) {
-	conn, cleanup := setup(t)
+	vtParams := startCluster(t)
+	conn, cleanup := setup(t, vtParams)
 	defer cleanup()
 
 	vitesst.AssertMatches(t, conn, `select @@transaction_mode`, `[[VARCHAR("SINGLE")]]`)
@@ -228,7 +225,8 @@ func TestNoRecordInTableNotFail(t *testing.T) {
 }
 
 func TestOnlyMultiShardWriteFail(t *testing.T) {
-	conn, cleanup := setup(t)
+	vtParams := startCluster(t)
+	conn, cleanup := setup(t, vtParams)
 	defer func() {
 		cleanup()
 		conn.Close()
@@ -265,7 +263,7 @@ func TestOnlyMultiShardWriteFail(t *testing.T) {
 	})
 }
 
-func setup(t *testing.T) (*mysql.Conn, func()) {
+func setup(t *testing.T, vtParams mysql.ConnParams) (*mysql.Conn, func()) {
 	t.Helper()
 	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)

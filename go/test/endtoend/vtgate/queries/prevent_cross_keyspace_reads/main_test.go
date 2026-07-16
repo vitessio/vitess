@@ -19,10 +19,10 @@ package preventcrosskeyspacereads
 import (
 	"context"
 	_ "embed"
-	"flag"
-	"fmt"
-	"os"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/vitesst"
@@ -47,40 +47,35 @@ var (
 	ks2VSchema string
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setup(t testing.TB) {
+	t.Helper()
+	ctx := t.Context()
 
-	exitCode := func() int {
-		ctx := context.Background()
+	cluster, err := vitesst.NewCluster(
+		// ks1 has prevent_cross_keyspace_reads: true in vschema.
+		vitesst.WithKeyspace(ks1Name).
+			WithSchema(ks1SchemaSQL).
+			WithVSchema(ks1VSchema),
+		// ks2 has no cross-keyspace join restriction.
+		vitesst.WithKeyspace(ks2Name).
+			WithSchema(ks2SchemaSQL).
+			WithVSchema(ks2VSchema),
+	)
+	require.NoError(t, err)
 
-		cluster, err := vitesst.NewCluster(
-			// ks1 has prevent_cross_keyspace_reads: true in vschema.
-			vitesst.WithKeyspace(ks1Name).
-				WithSchema(ks1SchemaSQL).
-				WithVSchema(ks1VSchema),
-			// ks2 has no cross-keyspace join restriction.
-			vitesst.WithKeyspace(ks2Name).
-				WithSchema(ks2SchemaSQL).
-				WithVSchema(ks2VSchema),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+	cleanup, err := cluster.Start(ctx)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Minute)
+		defer cancel()
+		if t.Failed() {
+			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
 		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+		if cleanupErr := cleanup(cleanupCtx); cleanupErr != nil {
+			t.Logf("cluster teardown: %v", cleanupErr)
 		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
+	require.NoError(t, err)
 
-		clusterInstance = cluster
-		vtParams = cluster.VTParams(ctx, "")
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	clusterInstance = cluster
+	vtParams = cluster.VTParams(ctx, "")
 }

@@ -25,6 +25,7 @@ import (
 )
 
 func TestFoundRows(t *testing.T) {
+	setup(t)
 	mcmp, err := vitesst.NewMySQLCompare(t.Context(), t, vtParams, mysqlParams)
 	require.NoError(t, err)
 	defer mcmp.Close()

@@ -46,6 +46,7 @@ func start(t *testing.T) (vitesst.MySQLCompare, func()) {
 }
 
 func TestTPCHQueries(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 	err := vitesst.WaitForColumn(t, clusterInstance.VTGate(), keyspaceName, "region", `R_COMMENT`)

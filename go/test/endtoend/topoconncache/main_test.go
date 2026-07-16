@@ -18,12 +18,12 @@ package topoconncache
 
 import (
 	"context"
-	"flag"
 	"fmt"
-	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/vitesst"
 )
@@ -81,67 +81,53 @@ with the same name.
 Topology: We create a keyspace with two shards , having 3 tablets each. Primaries belong
 to 'zone1' and replicas/rdonly belongs to cell2.
 */
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setupCluster(t *testing.T) {
+	t.Helper()
+	ctx := t.Context()
 
-	exitcode, err := func() (int, error) {
-		ctx := context.Background()
-
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithCells(cell1, cell2),
-			vitesst.WithoutVTGate(),
-			vitesst.WithVTOrc(),
-			vitesst.WithVTTabletArgs(commonTabletArg...),
-			vitesst.WithKeyspace(keyspaceName).
-				WithShardNames("-80", "80-").
-				WithReplicas(1).
-				WithRDOnly(1).
-				WithDurabilityPolicy("semi_sync").
-				WithSchema(fmt.Sprintf(sqlSchema, tableName)).
-				WithVSchema(fmt.Sprintf(vSchema, tableName)).
-				WithTabletSpec(func(spec *vitesst.TabletSpec) {
-					if spec.Type == "primary" {
-						spec.Cell = cell1
-					} else {
-						spec.Cell = cell2
-					}
-				}),
-		)
-		if err != nil {
-			return 1, err
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithCells(cell1, cell2),
+		vitesst.WithoutVTGate(),
+		vitesst.WithVTOrc(),
+		vitesst.WithVTTabletArgs(commonTabletArg...),
+		vitesst.WithKeyspace(keyspaceName).
+			WithShardNames("-80", "80-").
+			WithReplicas(1).
+			WithRDOnly(1).
+			WithDurabilityPolicy("semi_sync").
+			WithSchema(fmt.Sprintf(sqlSchema, tableName)).
+			WithVSchema(fmt.Sprintf(vSchema, tableName)).
+			WithTabletSpec(func(spec *vitesst.TabletSpec) {
+				if spec.Type == "primary" {
+					spec.Cell = cell1
+				} else {
+					spec.Cell = cell2
+				}
+			}),
+	)
+	require.NoError(t, err)
+	cleanup, err := cluster.Start(ctx)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+		defer cancel()
+		if t.Failed() {
+			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
 		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			return 1, err
+		if cleanupErr := cleanup(cleanupCtx); cleanupErr != nil {
+			t.Logf("cluster teardown: %v", cleanupErr)
 		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
 
-		clusterInstance = cluster
+	clusterInstance = cluster
+	shard1 := cluster.Keyspace(keyspaceName).Shard("-80")
 
-		shard1 := cluster.Keyspace(keyspaceName).Shard("-80")
-
-		// run a health check on source replica so it responds to discovery
-		// (for binlog players) and on the source rdonlys (for workers)
-		for _, tablet := range []*vitesst.Tablet{shard1.Replicas()[0], shard1.RDOnly()[0]} {
-			if err := cluster.Vtctld().ExecuteCommand(ctx, "RunHealthCheck", tablet.Alias()); err != nil {
-				return 1, err
-			}
-		}
-
-		_ = cluster.Vtctld().ExecuteCommand(ctx, "RebuildKeyspaceGraph", keyspaceName)
-
-		return m.Run(), nil
-	}()
-	if err != nil {
-		fmt.Printf("%v\n", err)
-		os.Exit(1)
-	} else {
-		os.Exit(exitcode)
+	// run a health check on source replica so it responds to discovery
+	// (for binlog players) and on the source rdonlys (for workers)
+	for _, tablet := range []*vitesst.Tablet{shard1.Replicas()[0], shard1.RDOnly()[0]} {
+		require.NoError(t, cluster.Vtctld().ExecuteCommand(ctx, "RunHealthCheck", tablet.Alias()))
 	}
+	require.NoError(t, cluster.Vtctld().ExecuteCommand(ctx, "RebuildKeyspaceGraph", keyspaceName))
 }
 
 func testURL(t *testing.T, path string, testCaseName string) {

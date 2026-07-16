@@ -19,8 +19,6 @@ package misc
 import (
 	"context"
 	_ "embed"
-	"flag"
-	"os"
 	"testing"
 	"time"
 
@@ -32,57 +30,51 @@ import (
 )
 
 var (
-	clusterInstance *vitesst.Cluster
-	vtParams        mysql.ConnParams
-	keyspaceName    = "ks"
+	keyspaceName = "ks"
 
 	//go:embed schema.sql
 	schemaSQL string
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setup(t *testing.T) (*vitesst.Cluster, mysql.ConnParams) {
+	t.Helper()
+	ctx := t.Context()
 
-	exitCode := func() int {
-		ctx := context.Background()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithKeyspace(keyspaceName).
+			WithReplicas(1).
+			WithSchema(schemaSQL),
+		vitesst.WithVTTabletArgs(
+			"--queryserver-config-query-timeout=9000s",
+			"--queryserver-config-pool-size=3",
+			"--queryserver-config-stream-pool-size=3",
+			"--queryserver-config-transaction-cap=2",
+			"--queryserver-config-transaction-timeout=20s",
+			"--shutdown-grace-period=3s",
+			"--queryserver-config-schema-change-signal=false",
+		),
+		vitesst.WithVTGateArgs(
+			"--planner-version=gen4",
+			"--mysql-default-workload=olap",
+			"--schema-change-signal=false",
+		),
+	)
+	require.NoError(t, err)
 
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithKeyspace(keyspaceName).
-				WithReplicas(1).
-				WithSchema(schemaSQL),
-			vitesst.WithVTTabletArgs(
-				"--queryserver-config-query-timeout=9000s",
-				"--queryserver-config-pool-size=3",
-				"--queryserver-config-stream-pool-size=3",
-				"--queryserver-config-transaction-cap=2",
-				"--queryserver-config-transaction-timeout=20s",
-				"--shutdown-grace-period=3s",
-				"--queryserver-config-schema-change-signal=false",
-			),
-			vitesst.WithVTGateArgs(
-				"--planner-version=gen4",
-				"--mysql-default-workload=olap",
-				"--schema-change-signal=false",
-			),
-		)
-		if err != nil {
-			return 1
+	cleanup, err := cluster.Start(ctx)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Minute)
+		defer cancel()
+		if t.Failed() {
+			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
 		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			return 1
+		if err := cleanup(cleanupCtx); err != nil {
+			t.Logf("cluster teardown: %v", err)
 		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				os.Stderr.WriteString("cluster teardown: " + err.Error() + "\n")
-			}
-		}()
+	})
+	require.NoError(t, err)
 
-		clusterInstance = cluster
-		vtParams = cluster.VTParams(ctx, "")
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	return cluster, cluster.VTParams(ctx, "")
 }
 
 /*
@@ -98,6 +90,7 @@ func TestAcquireSameConnID(t *testing.T) {
 		}
 	}()
 	ctx := t.Context()
+	clusterInstance, vtParams := setup(t)
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()

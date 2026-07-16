@@ -33,6 +33,8 @@ import (
 )
 
 func TestNormalizeAllFields(t *testing.T) {
+	setup(t)
+
 	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()

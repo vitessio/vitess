@@ -31,6 +31,7 @@ import (
 )
 
 func TestVtgateProcess(t *testing.T) {
+	setup(t)
 	ctx := t.Context()
 	resultMap, err := clusterInstance.VTGate().GetVars(ctx)
 	require.NoError(t, err)

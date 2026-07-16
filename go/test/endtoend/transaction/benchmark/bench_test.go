@@ -19,11 +19,10 @@ package benchmark
 import (
 	"context"
 	_ "embed"
-	"flag"
 	"fmt"
 	"math/rand/v2"
-	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -34,10 +33,8 @@ import (
 )
 
 var (
-	clusterInstance *vitesst.Cluster
-	vtParams        mysql.ConnParams
-	keyspaceName    = "ks"
-	sidecarDBName   = "vt_ks"
+	keyspaceName  = "ks"
+	sidecarDBName = "vt_ks"
 
 	//go:embed schema.sql
 	SchemaSQL string
@@ -46,58 +43,48 @@ var (
 	VSchema string
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func startCluster(b *testing.B) mysql.ConnParams {
+	b.Helper()
 
-	exitcode := func() int {
-		ctx := context.Background()
-
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithKeyspace(keyspaceName).
-				WithShardNames("-40", "40-80", "80-c0", "c0-").
-				WithReplicas(1).
-				WithSchema(SchemaSQL).
-				WithVSchema(VSchema).
-				WithSidecarDBName(sidecarDBName).
-				WithDurabilityPolicy(policy.DurabilitySemiSync),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
-
-		clusterInstance = cluster
-		vtParams = cluster.VTParams(ctx, "")
-
-		return m.Run()
-	}()
-	os.Exit(exitcode)
-}
-
-func start(b *testing.B) (*mysql.Conn, func()) {
-	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, &vtParams)
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithKeyspace(keyspaceName).
+			WithShardNames("-40", "40-80", "80-c0", "c0-").
+			WithReplicas(1).
+			WithSchema(SchemaSQL).
+			WithVSchema(VSchema).
+			WithSidecarDBName(sidecarDBName).
+			WithDurabilityPolicy(policy.DurabilitySemiSync),
+	)
 	require.NoError(b, err)
-	cleanup(b)
 
-	return conn, func() {
-		conn.Close()
-		cleanup(b)
-	}
+	cleanup, err := cluster.Start(b.Context())
+	b.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(b.Context()), time.Minute)
+		defer cancel()
+		if b.Failed() {
+			cluster.DumpDiagnostics(ctx, b.Logf)
+		}
+		if err := cleanup(ctx); err != nil {
+			b.Logf("cluster teardown: %v", err)
+		}
+	})
+	require.NoError(b, err)
+
+	return cluster.VTParams(b.Context(), "")
 }
 
-func cleanup(b *testing.B) {
+func setup(b *testing.B, vtParams mysql.ConnParams) *mysql.Conn {
+	b.Helper()
+
+	conn, err := mysql.Connect(b.Context(), &vtParams)
+	require.NoError(b, err)
 	twopcutil.ClearOutTable(b, vtParams, "test")
+	b.Cleanup(func() {
+		conn.Close()
+		twopcutil.ClearOutTable(b, vtParams, "test")
+	})
+
+	return conn
 }
 
 // BenchmarkTwoPCCommit benchmarks the performance of a two-phase commit transaction
@@ -110,6 +97,9 @@ export ver=v1 p=~/path && go test \
 | tee $p/${ver}.txt
 */
 func BenchmarkTwoPCCommit(b *testing.B) {
+	b.StopTimer()
+	vtParams := startCluster(b)
+
 	// Pre-generate 100 random strings
 	const sampleSize = 100
 	randomStrings := generateRandomStrings(sampleSize, 25)
@@ -130,36 +120,29 @@ func BenchmarkTwoPCCommit(b *testing.B) {
 
 	for _, tc := range testCases {
 		for _, commitMode := range []string{"twopc", "multi"} {
-			conn, _ := start(b)
-			_, err := conn.ExecuteFetch("set transaction_mode = "+commitMode, 0, false)
-			if err != nil {
-				b.Fatal(err)
-			}
 			b.Run(commitMode+tc.name, func(b *testing.B) {
+				b.StopTimer()
+				conn := setup(b, vtParams)
+				_, err := conn.ExecuteFetch("set transaction_mode = "+commitMode, 0, false)
+				require.NoError(b, err)
 				b.ResetTimer()
 				for i := 0; i < b.N; i++ {
 					_, err = conn.ExecuteFetch("begin", 0, false)
-					if err != nil {
-						b.Fatal(err)
-					}
+					require.NoError(b, err)
 
 					randomMsg := randomStrings[id%sampleSize]
 					// Perform the specified number of inserts to specific shards
 					for _, val := range tc.shardStart {
 						_, err = conn.ExecuteFetch(fmt.Sprintf("insert into test(id, msg) values(%d, '%s')", val+(4*id), randomMsg), 0, false)
-						if err != nil {
-							b.Fatal(err)
-						}
+						require.NoError(b, err)
 					}
 					id++
 
 					_, err = conn.ExecuteFetch("commit", 0, false)
-					if err != nil {
-						b.Fatal(err)
-					}
+					require.NoError(b, err)
 				}
+				b.StopTimer()
 			})
-			conn.Close()
 		}
 	}
 }

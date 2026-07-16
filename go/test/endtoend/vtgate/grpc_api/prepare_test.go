@@ -28,6 +28,7 @@ import (
 // It is done through both streaming api and non-streaming api.
 func TestPrepareWithGRPCAPI(t *testing.T) {
 	ctx := t.Context()
+	clusterInstance := setupCluster(t)
 
 	vtgateConn, err := clusterInstance.VTGate().DialVTGateAs(ctx, "user_with_access", "test_password")
 	require.NoError(t, err)

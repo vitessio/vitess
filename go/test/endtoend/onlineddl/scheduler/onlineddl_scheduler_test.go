@@ -18,7 +18,6 @@ package scheduler
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"math/rand/v2"
 	"os"
@@ -252,53 +251,42 @@ func waitForMessage(t *testing.T, uuid string, messageSubstring string) {
 	}
 }
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setup(t *testing.T) {
+	t.Helper()
+	ctx := t.Context()
 
-	exitcode, err := func() (int, error) {
-		ctx := context.Background()
-
-		// No need for replicas in this stress test
-		newCluster, err := vitesst.NewCluster(
-			vitesst.WithCells(cell),
-			vitesst.WithVTCtldArgs(
-				"--schema-change-dir", schemaChangeDirectory,
-				"--schema-change-controller", "local",
-				"--schema-change-check-interval", "1s",
-			),
-			vitesst.WithVTTabletArgs(
-				"--heartbeat-interval", "250ms",
-				"--heartbeat-on-demand-duration", "5s",
-				"--migration-check-interval", "2s",
-			),
-			vitesst.WithKeyspace(keyspaceName).WithShardNames("1"),
-		)
-		if err != nil {
-			return 1, err
+	// No need for replicas in this stress test
+	newCluster, err := vitesst.NewCluster(
+		vitesst.WithCells(cell),
+		vitesst.WithVTCtldArgs(
+			"--schema-change-dir", schemaChangeDirectory,
+			"--schema-change-controller", "local",
+			"--schema-change-check-interval", "1s",
+		),
+		vitesst.WithVTTabletArgs(
+			"--heartbeat-interval", "250ms",
+			"--heartbeat-on-demand-duration", "5s",
+			"--migration-check-interval", "2s",
+		),
+		vitesst.WithKeyspace(keyspaceName).WithShardNames("1"),
+	)
+	require.NoError(t, err)
+	cleanup, err := newCluster.Start(ctx)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Minute)
+		defer cancel()
+		if t.Failed() {
+			newCluster.DumpDiagnostics(cleanupCtx, t.Logf)
 		}
-
-		cleanup, err := newCluster.Start(ctx)
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
-		if err != nil {
-			return 1, err
+		if err := cleanup(cleanupCtx); err != nil {
+			t.Logf("cluster teardown: %v", err)
 		}
+	})
 
-		clusterInstance = newCluster
-		vtParams = clusterInstance.VTParams(ctx, "")
-		primaryTablet = clusterInstance.Keyspace(keyspaceName).Shards()[0].Primary()
-
-		return m.Run(), nil
-	}()
-	if err != nil {
-		fmt.Printf("%v\n", err)
-		os.Exit(1)
-	} else {
-		os.Exit(exitcode)
-	}
+	clusterInstance = newCluster
+	vtParams = clusterInstance.VTParams(ctx, "")
+	primaryTablet = clusterInstance.Keyspace(keyspaceName).Shards()[0].Primary()
 }
 
 // applySchemaWithOutput applies SQL schema to the keyspace
@@ -789,6 +777,7 @@ func validateSequentialMigrationIDs(t *testing.T) {
 }
 
 func TestSchedulerSchemaChanges(t *testing.T) {
+	setup(t)
 	enableLagThrottlerAndWaitForStatus(t)
 
 	t.Run("scheduler", testScheduler)
@@ -4217,6 +4206,7 @@ func runInTransaction(t *testing.T, ctx context.Context, tablet *vitesst.Tablet,
 // when migrations are executed end-to-end. This verifies that the metrics
 // tracking works correctly in a real cluster environment.
 func TestMigrationMetrics(t *testing.T) {
+	setup(t)
 	enableLagThrottlerAndWaitForStatus(t)
 
 	shards = clusterInstance.Keyspace(keyspaceName).Shards()

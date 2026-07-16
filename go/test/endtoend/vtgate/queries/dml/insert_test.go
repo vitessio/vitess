@@ -28,6 +28,7 @@ import (
 )
 
 func TestSimpleInsertSelect(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -53,6 +54,7 @@ func TestSimpleInsertSelect(t *testing.T) {
 
 // TestInsertOnDup test the insert on duplicate key update feature with argument and list argument.
 func TestInsertOnDup(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -71,6 +73,7 @@ func TestInsertOnDup(t *testing.T) {
 }
 
 func TestFailureInsertSelect(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -93,6 +96,7 @@ func TestFailureInsertSelect(t *testing.T) {
 }
 
 func TestAutoIncInsertSelect(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -139,6 +143,7 @@ func TestAutoIncInsertSelect(t *testing.T) {
 }
 
 func TestAutoIncInsertSelectOlapMode(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -187,6 +192,7 @@ func TestAutoIncInsertSelectOlapMode(t *testing.T) {
 }
 
 func TestUnownedVindexInsertSelect(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -221,6 +227,7 @@ func TestUnownedVindexInsertSelect(t *testing.T) {
 }
 
 func TestUnownedVindexInsertSelectOlapMode(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -255,6 +262,7 @@ func TestUnownedVindexInsertSelectOlapMode(t *testing.T) {
 }
 
 func TestLookupCasesIncInsertSelect(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -274,6 +282,7 @@ func TestLookupCasesIncInsertSelect(t *testing.T) {
 }
 
 func TestLookupCasesIncInsertSelectOlapMode(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -295,6 +304,7 @@ func TestLookupCasesIncInsertSelectOlapMode(t *testing.T) {
 }
 
 func TestIgnoreInsertSelect(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -331,6 +341,7 @@ func TestIgnoreInsertSelect(t *testing.T) {
 }
 
 func TestIgnoreInsertSelectOlapMode(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -369,6 +380,7 @@ func TestIgnoreInsertSelectOlapMode(t *testing.T) {
 }
 
 func TestInsertSelectUnshardedUsingSharded(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -386,6 +398,7 @@ func TestInsertSelectUnshardedUsingSharded(t *testing.T) {
 }
 
 func TestRedactDupError(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -397,6 +410,7 @@ func TestRedactDupError(t *testing.T) {
 
 // TestMixedCases test all the cases for insert when lookup column is also the auto increment column.
 func TestMixedCases(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -454,6 +468,7 @@ func TestMixedCases(t *testing.T) {
 
 // TestInsertAlias test the alias feature in insert statement.
 func TestInsertAlias(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -475,6 +490,7 @@ func TestInsertAlias(t *testing.T) {
 
 // TestInsertJson tests that selected json values are encoded correctly.
 func TestInsertJson(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -499,6 +515,7 @@ func TestInsertJson(t *testing.T) {
 }
 
 func TestInsertIgnoreNullAndInsertNull(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 

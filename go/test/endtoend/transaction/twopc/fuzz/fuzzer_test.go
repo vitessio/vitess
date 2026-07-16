@@ -77,6 +77,8 @@ var (
 // If any transaction was partially successful, then it would have missed an increment on one of the rows.
 // Moreover, the threadIDs of rows for a given update set in the 3 shards should be the same to ensure that conflicting transactions got committed in the same exact order.
 func TestTwoPCFuzzTest(t *testing.T) {
+	setup(t)
+
 	testcases := []struct {
 		name                  string
 		threads               int

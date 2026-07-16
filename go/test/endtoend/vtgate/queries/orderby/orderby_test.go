@@ -46,6 +46,8 @@ func start(t *testing.T) (vitesst.MySQLCompare, func()) {
 }
 
 func TestSimpleOrderBy(t *testing.T) {
+	setup(t)
+
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -55,6 +57,8 @@ func TestSimpleOrderBy(t *testing.T) {
 
 // TestQueryWithDBQualifier tests that we remove the db qualifier in the plan output that is sent down to the database.
 func TestQueryWithDBQualifier(t *testing.T) {
+	setup(t)
+
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -63,6 +67,8 @@ func TestQueryWithDBQualifier(t *testing.T) {
 }
 
 func TestOrderBy(t *testing.T) {
+	setup(t)
+
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -87,6 +93,8 @@ func TestOrderBy(t *testing.T) {
 }
 
 func TestOrderByComplex(t *testing.T) {
+	setup(t)
+
 	// tests written to try to trick the ORDER BY engine and planner
 	mcmp, closer := start(t)
 	defer closer()

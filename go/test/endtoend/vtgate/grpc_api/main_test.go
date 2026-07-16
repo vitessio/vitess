@@ -18,19 +18,16 @@ package grpc_api
 
 import (
 	"context"
-	"flag"
-	"fmt"
-	"os"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/vitesst"
 )
 
 var (
-	clusterInstance   *vitesst.Cluster
-	vtgateGrpcAddress string
-	keyspaceName      = "ks"
-	sqlSchema         = `
+	keyspaceName = "ks"
+	sqlSchema    = `
 		create table test_table (
 			id bigint,
 			val varchar(128),
@@ -77,58 +74,43 @@ const (
 	tableACLPath             = "/vt/files/table_acl.json"
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setupCluster(t *testing.T) *vitesst.Cluster {
+	t.Helper()
 
-	exitcode := func() int {
-		ctx := context.Background()
+	ctx := t.Context()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithKeyspace(keyspaceName).
+			WithReplicas(1).
+			WithSchema(sqlSchema),
+		vitesst.WithVTGateArgs(
+			"--grpc-auth-mode", "static",
+			"--grpc-auth-static-password-file", grpcServerAuthStaticPath,
+			"--grpc-use-effective-callerid",
+			"--grpc-use-static-authentication-callerid",
+		),
+		vitesst.WithVTTabletArgs(
+			"--enforce-tableacl-config",
+			"--queryserver-config-strict-table-acl",
+			"--table-acl-config", tableACLPath,
+		),
+		vitesst.WithVTGateFiles(vitesst.ContainerFile{
+			Content:       []byte(grpcServerAuthStaticJSON),
+			ContainerPath: grpcServerAuthStaticPath,
+		}),
+		vitesst.WithTabletFiles(vitesst.ContainerFile{
+			Content:       []byte(tableACLJSON),
+			ContainerPath: tableACLPath,
+		}),
+	)
+	require.NoError(t, err)
 
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithKeyspace(keyspaceName).
-				WithReplicas(1).
-				WithSchema(sqlSchema),
-			vitesst.WithVTGateArgs(
-				"--grpc-auth-mode", "static",
-				"--grpc-auth-static-password-file", grpcServerAuthStaticPath,
-				"--grpc-use-effective-callerid",
-				"--grpc-use-static-authentication-callerid",
-			),
-			vitesst.WithVTTabletArgs(
-				"--enforce-tableacl-config",
-				"--queryserver-config-strict-table-acl",
-				"--table-acl-config", tableACLPath,
-			),
-			vitesst.WithVTGateFiles(vitesst.ContainerFile{
-				Content:       []byte(grpcServerAuthStaticJSON),
-				ContainerPath: grpcServerAuthStaticPath,
-			}),
-			vitesst.WithTabletFiles(vitesst.ContainerFile{
-				Content:       []byte(tableACLJSON),
-				ContainerPath: tableACLPath,
-			}),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+	cleanup, err := cluster.Start(ctx)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		if err := cleanup(context.WithoutCancel(ctx)); err != nil {
+			t.Logf("cluster teardown: %v", err)
 		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
 
-		clusterInstance = cluster
-		vtgateGrpcAddress, err = cluster.VTGate().GRPCAddr(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		return m.Run()
-	}()
-	os.Exit(exitcode)
+	return cluster
 }

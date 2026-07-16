@@ -22,10 +22,12 @@ import (
 	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
 )
 
-func TestMain(m *testing.M) {
-	TestMainImpl(m)
+func setup(t *testing.T) {
+	t.Helper()
+	Setup(t, false)
 }
 
 func TestRecovery(t *testing.T) {
+	setup(t)
 	TestRecoveryImpl(t)
 }

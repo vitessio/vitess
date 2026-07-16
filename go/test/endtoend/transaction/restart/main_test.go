@@ -19,10 +19,8 @@ package restart
 import (
 	"context"
 	_ "embed"
-	"flag"
-	"fmt"
-	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -31,47 +29,38 @@ import (
 )
 
 var (
-	clusterInstance *vitesst.Cluster
-	vtParams        mysql.ConnParams
-	keyspaceName    = "ks"
+	keyspaceName = "ks"
 
 	//go:embed schema.sql
 	schemaSQL string
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func startCluster(t *testing.T) (*vitesst.Cluster, mysql.ConnParams) {
+	t.Helper()
 
-	exitCode := func() int {
-		ctx := context.Background()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithKeyspace(keyspaceName).
+			WithReplicas(1).
+			WithSchema(schemaSQL),
+		vitesst.WithVTTabletArgs("--shutdown-grace-period=0s"),
+		vitesst.WithVTGateArgs("--planner-version=gen4", "--mysql-default-workload=olap"),
+	)
+	require.NoError(t, err)
 
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithKeyspace(keyspaceName).
-				WithReplicas(1).
-				WithSchema(schemaSQL),
-			vitesst.WithVTTabletArgs("--shutdown-grace-period=0s"),
-			vitesst.WithVTGateArgs("--planner-version=gen4", "--mysql-default-workload=olap"),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+	cleanup, err := cluster.Start(t.Context())
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Minute)
+		defer cancel()
+		if t.Failed() {
+			cluster.DumpDiagnostics(ctx, t.Logf)
 		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+		if err := cleanup(ctx); err != nil {
+			t.Logf("cluster teardown: %v", err)
 		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
+	require.NoError(t, err)
 
-		clusterInstance = cluster
-		vtParams = cluster.VTParams(ctx, "")
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	return cluster, cluster.VTParams(t.Context(), "")
 }
 
 /*
@@ -80,6 +69,7 @@ then the transaction should not continue to serve the query via reconnect.
 */
 func TestStreamTxRestart(t *testing.T) {
 	ctx := t.Context()
+	cluster, vtParams := startCluster(t)
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -92,7 +82,7 @@ func TestStreamTxRestart(t *testing.T) {
 	_ = vitesst.Exec(t, conn, "select connection_id()")
 
 	// restart the mysql to terminate all the existing connections.
-	primTablet := clusterInstance.Keyspace(keyspaceName).Shards()[0].Primary()
+	primTablet := cluster.Keyspace(keyspaceName).Shards()[0].Primary()
 	err = primTablet.StopMySQL(ctx)
 	require.NoError(t, err)
 	err = primTablet.StartMySQL(ctx)

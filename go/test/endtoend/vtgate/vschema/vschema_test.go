@@ -19,11 +19,9 @@ package vschema
 import (
 	"context"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"math/rand/v2"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -44,10 +42,8 @@ import (
 const vtgateConfigPath = "/vt/files/vtgate.json"
 
 var (
-	clusterInstance *vitesst.Cluster
-	vtParams        mysql.ConnParams
-	keyspaceName    = "ks"
-	sqlSchema       = `
+	keyspaceName = "ks"
+	sqlSchema    = `
 		create table vt_user (
 			id bigint,
 			name varchar(64),
@@ -62,58 +58,43 @@ var (
 `
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setup(t *testing.T) (*vitesst.Cluster, mysql.ConnParams) {
+	t.Helper()
 
-	exitcode, err := func() (int, error) {
-		ctx := context.Background()
+	ctx := t.Context()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithKeyspace(keyspaceName).
+			WithSchema(sqlSchema),
+		vitesst.WithVTGateArgs("--schema-change-signal=false"),
+		vitesst.WithVTGateFiles(vitesst.ContainerFile{
+			Content:       []byte("{}\n"),
+			ContainerPath: vtgateConfigPath,
+			Mode:          0o666,
+		}),
+	)
+	require.NoError(t, err)
+	cleanup, err := cluster.Start(ctx)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+		defer cancel()
+		require.NoError(t, cleanup(cleanupCtx))
+	})
+	require.NoError(t, setAuthorizedDDLUsers(ctx, cluster, "%"))
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+		defer cancel()
+		require.NoError(t, setAuthorizedDDLUsers(cleanupCtx, cluster, "%"))
+	})
 
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithKeyspace(keyspaceName).
-				WithSchema(sqlSchema),
-			vitesst.WithVTGateArgs("--schema-change-signal=false"),
-			vitesst.WithVTGateFiles(vitesst.ContainerFile{
-				Content:       []byte("{}\n"),
-				ContainerPath: vtgateConfigPath,
-				Mode:          0o666,
-			}),
-		)
-		if err != nil {
-			return 1, err
-		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			return 1, err
-		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
-
-		clusterInstance = cluster
-		vtParams = cluster.VTParams(ctx, "")
-
-		// List of users authorized to execute vschema ddl operations.
-		if err := setAuthorizedDDLUsers(ctx, "%"); err != nil {
-			return 1, err
-		}
-
-		return m.Run(), nil
-	}()
-	if err != nil {
-		fmt.Printf("%v\n", err)
-		os.Exit(1)
-	} else {
-		os.Exit(exitcode)
-	}
+	return cluster, cluster.VTParams(ctx, "")
 }
 
 // setAuthorizedDDLUsers rewrites the vtgate config file with the given list of
 // users authorized to execute vschema ddl operations, then waits for the
 // running vtgate to hot-reload the new value.
-func setAuthorizedDDLUsers(ctx context.Context, users string) error {
-	g := clusterInstance.VTGate()
+func setAuthorizedDDLUsers(ctx context.Context, cluster *vitesst.Cluster, users string) error {
+	g := cluster.VTGate()
 	content := fmt.Sprintf("{%q:%q}\n", "vschema_ddl_authorized_users", users)
 	if err := g.WriteConfig(ctx, content); err != nil {
 		return err
@@ -134,6 +115,7 @@ func setAuthorizedDDLUsers(ctx context.Context, users string) error {
 
 func TestVSchema(t *testing.T) {
 	ctx := t.Context()
+	clusterInstance, vtParams := setup(t)
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -175,12 +157,9 @@ func TestVSchema(t *testing.T) {
 
 	// Don't allow any users to modify the vschema via the SQL API
 	// in order to test that behavior.
-	require.NoError(t, setAuthorizedDDLUsers(ctx, ""))
+	require.NoError(t, setAuthorizedDDLUsers(ctx, clusterInstance, ""))
 	// Allow anyone to modify the vschema via the SQL API again when
 	// the test completes.
-	defer func() {
-		_ = setAuthorizedDDLUsers(context.Background(), "%")
-	}()
 	require.EventuallyWithT(t, func(t *assert.CollectT) {
 		_, err = conn.ExecuteFetch("ALTER VSCHEMA DROP TABLE main", 1000, false)
 		assert.Error(t, err)
@@ -191,6 +170,7 @@ func TestVSchema(t *testing.T) {
 // TestVSchemaSQLAPIConcurrency tests that we prevent lost writes when we have
 // concurrent vschema changes being made via the SQL API.
 func TestVSchemaSQLAPIConcurrency(t *testing.T) {
+	_, vtParams := setup(t)
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
 	conn, err := mysql.Connect(ctx, &vtParams)

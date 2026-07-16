@@ -31,6 +31,7 @@ import (
 
 // TestKillConnection kills its own connection and checks the error message received.
 func TestKillOwnConnection(t *testing.T) {
+	setup(t)
 	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -45,6 +46,7 @@ func TestKillOwnConnection(t *testing.T) {
 
 // TestKillDifferentConnection kills different connection and check relevant error messages.
 func TestKillDifferentConnection(t *testing.T) {
+	setup(t)
 	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -68,6 +70,7 @@ func TestKillDifferentConnection(t *testing.T) {
 
 // TestKillOwnQuery kills the kill statement itself
 func TestKillOwnQuery(t *testing.T) {
+	setup(t)
 	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -80,6 +83,7 @@ func TestKillOwnQuery(t *testing.T) {
 
 // TestKillDifferentConnectionQuery kills query on different connection and check relevant error messages.
 func TestKillDifferentConnectionQuery(t *testing.T) {
+	setup(t)
 	setupData(t, false)
 	defer dropData(t)
 
@@ -118,6 +122,7 @@ func TestKillDifferentConnectionQuery(t *testing.T) {
 
 // TestKillOnHungQuery test that any hung query should return.
 func TestKillOnHungQuery(t *testing.T) {
+	setup(t)
 	execFunc := func(conn *mysql.Conn) error {
 		vitesst.Exec(t, conn, "begin")
 		_, err := vitesst.ExecAllowError(t, conn, "insert into test(id, msg, extra) values (1, 'a', 'e')")
@@ -164,6 +169,7 @@ func testHungQuery(t *testing.T, execFunc func(*mysql.Conn) error, killFunc func
 
 // TestKillStmtOnHugeData tests different kill scenario on huge data.
 func TestKillStmtOnHugeData(t *testing.T) {
+	setup(t)
 	setupData(t, true)
 	defer dropData(t)
 

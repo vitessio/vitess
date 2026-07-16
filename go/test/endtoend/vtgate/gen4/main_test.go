@@ -19,10 +19,8 @@ package vtgate
 import (
 	"context"
 	_ "embed"
-	"flag"
-	"fmt"
-	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -64,71 +62,57 @@ var (
 	unsharded2SchemaSQL string
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setup(t testing.TB) {
+	t.Helper()
 
-	exitCode := func() int {
-		ctx := context.Background()
+	clusterInstance = nil
+	vtParams = mysql.ConnParams{}
+	mysqlParams = mysql.ConnParams{}
 
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithCells(Cell),
-			vitesst.WithVTGateArgs("--schema-change-signal"),
-			vitesst.WithVTTabletArgs("--queryserver-config-schema-change-signal"),
-			vitesst.WithKeyspace(shardedKs).
-				WithShardNames(shardedKsShards...).
-				WithSchema(shardedSchemaSQL).
-				WithVSchema(shardedVSchema),
-			vitesst.WithKeyspace(unshardedKs).
-				WithSchema(unshardedSchemaSQL).
-				WithVSchema(unshardedVSchema),
-			// This keyspace is used to test automatic addition of tables to global routing rules when
-			// there are multiple unsharded keyspaces.
-			vitesst.WithKeyspace(unsharded2Ks).
-				WithSchema(unsharded2SchemaSQL),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	ctx := t.Context()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithCells(Cell),
+		vitesst.WithVTGateArgs("--schema-change-signal"),
+		vitesst.WithVTTabletArgs("--queryserver-config-schema-change-signal"),
+		vitesst.WithKeyspace(shardedKs).
+			WithShardNames(shardedKsShards...).
+			WithSchema(shardedSchemaSQL).
+			WithVSchema(shardedVSchema),
+		vitesst.WithKeyspace(unshardedKs).
+			WithSchema(unshardedSchemaSQL).
+			WithVSchema(unshardedVSchema),
+		// This keyspace is used to test automatic addition of tables to global routing rules when
+		// there are multiple unsharded keyspaces.
+		vitesst.WithKeyspace(unsharded2Ks).
+			WithSchema(unsharded2SchemaSQL),
+	)
+	require.NoError(t, err)
 
-		// apply routing rules
-		if err := cluster.Vtctld().ExecuteCommand(ctx, "ApplyRoutingRules", "--rules", routingRules); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
+	cleanup, err := cluster.Start(ctx)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), 30*time.Second)
+		defer cancel()
+		clusterInstance = nil
+		vtParams = mysql.ConnParams{}
+		require.NoError(t, cleanup(cleanupCtx))
+	})
 
-		if err := cluster.Vtctld().ExecuteCommand(ctx, "RebuildVSchemaGraph"); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
+	require.NoError(t, cluster.Vtctld().ExecuteCommand(ctx, "ApplyRoutingRules", "--rules", routingRules))
+	require.NoError(t, cluster.Vtctld().ExecuteCommand(ctx, "RebuildVSchemaGraph"))
 
-		clusterInstance = cluster
-		vtParams = cluster.VTParams(ctx, "")
+	clusterInstance = cluster
+	vtParams = cluster.VTParams(ctx, "")
 
-		conn, closer, err := vitesst.NewMySQL(ctx, cluster, shardedKs, shardedSchemaSQL)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		defer func() {
-			if err := closer(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "comparison mysqld teardown:", err)
-			}
-		}()
-		mysqlParams = conn
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	conn, closer, err := vitesst.NewMySQL(ctx, cluster, shardedKs, shardedSchemaSQL)
+	require.NoError(t, err)
+	mysqlParams = conn
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), 30*time.Second)
+		defer cancel()
+		mysqlParams = mysql.ConnParams{}
+		require.NoError(t, closer(cleanupCtx))
+	})
 }
 
 func start(t *testing.T) (vitesst.MySQLCompare, func()) {

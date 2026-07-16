@@ -22,7 +22,6 @@ import (
 	"math/rand/v2"
 	"strconv"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -122,6 +121,7 @@ func getRandomString(size int) string {
 }
 
 func BenchmarkShardedTblNoLookup(b *testing.B) {
+	setup(b)
 	conn, closer := start(b)
 	defer closer()
 
@@ -144,6 +144,7 @@ func BenchmarkShardedTblNoLookup(b *testing.B) {
 }
 
 func BenchmarkShardedTblUpdateIn(b *testing.B) {
+	setup(b)
 	conn, closer := start(b)
 	defer closer()
 
@@ -167,6 +168,7 @@ func BenchmarkShardedTblUpdateIn(b *testing.B) {
 }
 
 func BenchmarkShardedTblDeleteIn(b *testing.B) {
+	setup(b)
 	conn, closer := start(b)
 	defer closer()
 	tq := &testQuery{
@@ -185,6 +187,7 @@ func BenchmarkShardedTblDeleteIn(b *testing.B) {
 }
 
 func BenchmarkShardedAggrPushDown(b *testing.B) {
+	setup(b)
 	conn, closer := start(b)
 	defer closer()
 
@@ -206,9 +209,8 @@ func BenchmarkShardedAggrPushDown(b *testing.B) {
 	}
 }
 
-var mirrorInitOnce sync.Once
-
 func BenchmarkMirror(b *testing.B) {
+	setup(b)
 	const numRows = 10000
 
 	conn, closer := start(b)
@@ -225,66 +227,67 @@ func BenchmarkMirror(b *testing.B) {
 	}
 	targetKeyspaces := mapsx.Keys(ksTables)
 
-	mirrorInitOnce.Do(func() {
-		b.Logf("seeding database for benchmark...")
+	b.Logf("seeding database for benchmark...")
 
-		for i := range numRows {
-			_, err := conn.ExecuteFetch(
-				fmt.Sprintf("INSERT INTO %s.mirror_tbl1(id) VALUES(%d)", sKs1, i), -1, false)
-			require.NoError(b, err)
-
-			_, err = conn.ExecuteFetch(
-				fmt.Sprintf("INSERT INTO %s.mirror_tbl2(id) VALUES(%d)", sKs1, i), -1, false)
-			require.NoError(b, err)
-		}
-
+	for i := range numRows {
 		_, err := conn.ExecuteFetch(
-			fmt.Sprintf("SELECT COUNT(id) FROM %s.%s", sKs1, "mirror_tbl1"), 1, false)
+			fmt.Sprintf("INSERT INTO %s.mirror_tbl1(id) VALUES(%d)", sKs1, i), -1, false,
+		)
 		require.NoError(b, err)
 
-		b.Logf("finished (inserted %d rows)", numRows)
+		_, err = conn.ExecuteFetch(
+			fmt.Sprintf("INSERT INTO %s.mirror_tbl2(id) VALUES(%d)", sKs1, i), -1, false,
+		)
+		require.NoError(b, err)
+	}
 
-		b.Logf("using MoveTables to copy data from source keyspace to target keyspaces")
+	_, err := conn.ExecuteFetch(
+		fmt.Sprintf("SELECT COUNT(id) FROM %s.%s", sKs1, "mirror_tbl1"), 1, false,
+	)
+	require.NoError(b, err)
 
-		// Set up MoveTables workflows, which is (at present) the only way to set up
-		// mirror rules.
-		for tks, tbl := range ksTables {
+	b.Logf("finished (inserted %d rows)", numRows)
+
+	b.Logf("using MoveTables to copy data from source keyspace to target keyspaces")
+
+	// Set up MoveTables workflows, which is (at present) the only way to set up
+	// mirror rules.
+	for tks, tbl := range ksTables {
+		output, err := clusterInstance.Vtctld().ExecuteCommandWithOutput(b.Context(),
+			"MoveTables", "--target-keyspace", tks, "--workflow", fmt.Sprintf("%s2%s", sKs1, tks),
+			"create", "--source-keyspace", sKs1, "--tables", tbl)
+		require.NoError(b, err, output)
+	}
+
+	// Wait for tables to be copied from source to targets.
+	pending := make(map[string]string, len(ksTables))
+	maps.Copy(pending, ksTables)
+	for len(pending) > 0 {
+		for tks := range ksTables {
 			output, err := clusterInstance.Vtctld().ExecuteCommandWithOutput(b.Context(),
-				"MoveTables", "--target-keyspace", tks, "--workflow", fmt.Sprintf("%s2%s", sKs1, tks),
-				"create", "--source-keyspace", sKs1, "--tables", tbl)
+				"Workflow", "--keyspace", tks, "show", "--workflow", fmt.Sprintf("%s2%s", sKs1, tks))
 			require.NoError(b, err, output)
-		}
 
-		// Wait for tables to be copied from source to targets.
-		pending := make(map[string]string, len(ksTables))
-		maps.Copy(pending, ksTables)
-		for len(pending) > 0 {
-			for tks := range ksTables {
-				output, err := clusterInstance.Vtctld().ExecuteCommandWithOutput(b.Context(),
-					"Workflow", "--keyspace", tks, "show", "--workflow", fmt.Sprintf("%s2%s", sKs1, tks))
-				require.NoError(b, err, output)
+			var response vtctldatapb.GetWorkflowsResponse
+			require.NoError(b, protojson.Unmarshal([]byte(output), &response))
 
-				var response vtctldatapb.GetWorkflowsResponse
-				require.NoError(b, protojson.Unmarshal([]byte(output), &response))
+			require.Len(b, response.Workflows, 1)
+			workflow := response.Workflows[0]
 
-				require.Len(b, response.Workflows, 1)
-				workflow := response.Workflows[0]
-
-				require.Len(b, workflow.ShardStreams, 4 /*shards*/)
-				for _, ss := range workflow.ShardStreams {
-					for _, s := range ss.Streams {
-						if s.State == "Running" {
-							delete(pending, tks)
-						} else {
-							b.Logf("waiting for workflow %s.%s stream %s=>%s to be running; last state: %s",
-								workflow.Target, workflow.Name, s.BinlogSource.Shard, s.Shard, s.State)
-							time.Sleep(1 * time.Second)
-						}
+			require.Len(b, workflow.ShardStreams, 4 /*shards*/)
+			for _, ss := range workflow.ShardStreams {
+				for _, s := range ss.Streams {
+					if s.State == "Running" {
+						delete(pending, tks)
+					} else {
+						b.Logf("waiting for workflow %s.%s stream %s=>%s to be running; last state: %s",
+							workflow.Target, workflow.Name, s.BinlogSource.Shard, s.Shard, s.State)
+						time.Sleep(1 * time.Second)
 					}
 				}
 			}
 		}
-	})
+	}
 
 	testCases := []struct {
 		name string

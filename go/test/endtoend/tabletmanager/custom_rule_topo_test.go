@@ -46,6 +46,7 @@ const (
 )
 
 func TestTopoCustomRule(t *testing.T) {
+	setup(t)
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &primaryTabletParams)
 	require.NoError(t, err)

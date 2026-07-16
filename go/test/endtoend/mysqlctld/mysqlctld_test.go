@@ -18,9 +18,6 @@ package mysqlctld
 
 import (
 	"context"
-	"flag"
-	"fmt"
-	"os"
 	"testing"
 	"time"
 
@@ -46,49 +43,44 @@ var (
 // after its mysqld is wiped and restarted under mysqlctld.
 const mysqldRestartTimeout = 3 * time.Minute
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setup(t *testing.T) {
+	t.Helper()
 
-	exitCode := func() int {
-		ctx := context.Background()
+	// The keyspace runs each tablet's mysqld under mysqlctld and starts two
+	// tablets without electing a primary, so TestAutoDetect drives the first
+	// flavor-detecting reparent itself.
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithMysqlctld(),
+		vitesst.WithoutVTGate(),
+		vitesst.WithKeyspace(keyspaceName).
+			WithReplicas(1).
+			WithoutPrimaryElection(),
+	)
+	require.NoError(t, err)
 
-		// The keyspace runs each tablet's mysqld under mysqlctld and starts two
-		// tablets without electing a primary, so TestAutoDetect drives the first
-		// flavor-detecting reparent itself.
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithMysqlctld(),
-			vitesst.WithoutVTGate(),
-			vitesst.WithKeyspace(keyspaceName).
-				WithReplicas(1).
-				WithoutPrimaryElection(),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+	cleanup, err := cluster.Start(t.Context())
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Minute)
+		defer cancel()
+		if t.Failed() {
+			cluster.DumpDiagnostics(ctx, t.Logf)
 		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+		if cleanupErr := cleanup(ctx); cleanupErr != nil {
+			t.Logf("cluster teardown: %v", cleanupErr)
 		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
+	require.NoError(t, err)
 
-		clusterInstance = cluster
-		shard = cluster.Keyspace(keyspaceName).Shards()[0]
-		tablets := shard.Tablets()
-		primaryTablet = tablets[0]
-		replicaTablet = tablets[1]
-
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	clusterInstance = cluster
+	shard = cluster.Keyspace(keyspaceName).Shards()[0]
+	tablets := shard.Tablets()
+	primaryTablet = tablets[0]
+	replicaTablet = tablets[1]
 }
 
 func TestRestart(t *testing.T) {
+	setup(t)
+
 	ctx := t.Context()
 
 	// Deleting the data directory and restarting the container has the
@@ -100,6 +92,8 @@ func TestRestart(t *testing.T) {
 }
 
 func TestAutoDetect(t *testing.T) {
+	setup(t)
+
 	ctx := t.Context()
 
 	// Electing the shard's first primary reparents both tablets, which
@@ -114,6 +108,8 @@ func TestAutoDetect(t *testing.T) {
 }
 
 func TestVersionString(t *testing.T) {
+	setup(t)
+
 	ctx := t.Context()
 
 	addr, err := primaryTablet.MysqlctldGRPCAddr(ctx)
@@ -126,6 +122,8 @@ func TestVersionString(t *testing.T) {
 }
 
 func TestReadBinlogFilesTimestamps(t *testing.T) {
+	setup(t)
+
 	ctx := t.Context()
 
 	addr, err := primaryTablet.MysqlctldGRPCAddr(ctx)

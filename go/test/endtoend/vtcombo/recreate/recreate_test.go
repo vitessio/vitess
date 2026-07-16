@@ -18,7 +18,6 @@ package recreate
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"os"
 	"os/exec"
@@ -44,12 +43,10 @@ var (
 	redirected   = "redirected"
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
-
-	exitcode, err := func() (int, error) {
-		topology := new(vttestpb.VTTestTopology)
-		topology.Keyspaces = []*vttestpb.Keyspace{
+func setupCluster(t testing.TB) {
+	t.Helper()
+	topology := &vttestpb.VTTestTopology{
+		Keyspaces: []*vttestpb.Keyspace{
 			{
 				Name: ks1,
 				Shards: []*vttestpb.Shard{
@@ -59,41 +56,30 @@ func TestMain(m *testing.M) {
 				RdonlyCount:  1,
 				ReplicaCount: 2,
 			},
-			{
-				Name: redirected,
-			},
-		}
-
-		var cfg vttest.Config
-		cfg.Topology = topology
-		cfg.SchemaDir = os.Getenv("VTROOT") + "/test/vttest_schema"
-		cfg.DefaultSchemaDir = os.Getenv("VTROOT") + "/test/vttest_schema/default"
-		cfg.PersistentMode = true
-
-		localCluster = &vttest.LocalCluster{
-			Config: cfg,
-		}
-
-		err := localCluster.Setup()
-		defer localCluster.TearDown()
-		if err != nil {
-			return 1, err
-		}
-
-		grpcAddress = fmt.Sprintf("localhost:%d", localCluster.Env.PortForProtocol("vtcombo", "grpc"))
-		vtctldAddr = fmt.Sprintf("localhost:%d", localCluster.Env.PortForProtocol("vtcombo", "port"))
-
-		return m.Run(), nil
-	}()
-	if err != nil {
-		log.Error(fmt.Sprintf("top level error: %v\n", err))
-		os.Exit(1)
-	} else {
-		os.Exit(exitcode)
+			{Name: redirected},
+		},
 	}
+
+	cfg := vttest.Config{
+		Topology:         topology,
+		SchemaDir:        os.Getenv("VTROOT") + "/test/vttest_schema",
+		DefaultSchemaDir: os.Getenv("VTROOT") + "/test/vttest_schema/default",
+		PersistentMode:   true,
+	}
+
+	localCluster = &vttest.LocalCluster{Config: cfg}
+	err := localCluster.Setup()
+	t.Cleanup(func() {
+		require.NoError(t, localCluster.TearDown())
+	})
+	require.NoError(t, err)
+
+	grpcAddress = fmt.Sprintf("localhost:%d", localCluster.Env.PortForProtocol("vtcombo", "grpc"))
+	vtctldAddr = fmt.Sprintf("localhost:%d", localCluster.Env.PortForProtocol("vtcombo", "port"))
 }
 
 func TestDropAndRecreateWithSameShards(t *testing.T) {
+	setupCluster(t)
 	ctx := t.Context()
 	conn, err := vtgateconn.Dial(ctx, grpcAddress)
 	require.Nil(t, err)

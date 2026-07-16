@@ -19,9 +19,6 @@ package viewsdisabled
 import (
 	"context"
 	_ "embed"
-	"flag"
-	"fmt"
-	"os"
 	"testing"
 	"time"
 
@@ -33,9 +30,7 @@ import (
 )
 
 var (
-	clusterInstance *vitesst.Cluster
-	vtParams        mysql.ConnParams
-	keyspaceName    = "test_ks"
+	keyspaceName = "test_ks"
 
 	//go:embed schema.sql
 	schemaSQL string
@@ -44,38 +39,32 @@ var (
 	vschemaJSON string
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setup(t *testing.T) (*vitesst.Cluster, mysql.ConnParams) {
+	t.Helper()
+	ctx := t.Context()
 
-	exitCode := func() int {
-		ctx := context.Background()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithVTGateArgs("--schema-change-signal"),
+		vitesst.WithKeyspace(keyspaceName).
+			WithSchema(schemaSQL).
+			WithVSchema(vschemaJSON),
+	)
+	require.NoError(t, err)
 
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithVTGateArgs("--schema-change-signal"),
-			vitesst.WithKeyspace(keyspaceName).
-				WithSchema(schemaSQL).
-				WithVSchema(vschemaJSON),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+	cleanup, err := cluster.Start(ctx)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Minute)
+		defer cancel()
+		if t.Failed() {
+			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
 		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+		if err := cleanup(cleanupCtx); err != nil {
+			t.Logf("cluster teardown: %v", err)
 		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
 
-		clusterInstance = cluster
-		vtParams = cluster.VTParams(ctx, "")
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	return cluster, cluster.VTParams(ctx, "")
 }
 
 // TestVSchemaDoesNotIncludeViews tests that when views are disabled,
@@ -84,7 +73,8 @@ func TestMain(m *testing.M) {
 func TestVSchemaDoesNotIncludeViews(t *testing.T) {
 	// Get the vschema from VTGate
 	var vschemaResult map[string]any
-	readVSchema(t, &vschemaResult)
+	cluster, _ := setup(t)
+	readVSchema(t, cluster, &vschemaResult)
 
 	// Verify that the keyspace exists in vschema
 	require.Contains(t, vschemaResult, "keyspaces")
@@ -125,6 +115,7 @@ func TestVSchemaDoesNotIncludeViews(t *testing.T) {
 // doesn't perform problematic query rewriting since it cannot load view definitions.
 func TestViewOperationsWithViewsDisabled(t *testing.T) {
 	ctx := t.Context()
+	_, vtParams := setup(t)
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -179,6 +170,7 @@ func TestViewOperationsWithViewsDisabled(t *testing.T) {
 // that DDL operations on views don't cause issues.
 func TestSchemaTrackingWithViewsDisabled(t *testing.T) {
 	ctx := t.Context()
+	cluster, vtParams := setup(t)
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -191,7 +183,7 @@ func TestSchemaTrackingWithViewsDisabled(t *testing.T) {
 
 	// Verify that VTGate still doesn't include views in its vschema
 	var vschemaResult map[string]any
-	readVSchema(t, &vschemaResult)
+	readVSchema(t, cluster, &vschemaResult)
 
 	keyspaces := vschemaResult["keyspaces"].(map[string]any)
 	keyspaceVSchema := keyspaces[keyspaceName].(map[string]any)
@@ -213,7 +205,7 @@ func TestSchemaTrackingWithViewsDisabled(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	// VSchema should remain stable (no views section should appear)
-	readVSchema(t, &vschemaResult)
+	readVSchema(t, cluster, &vschemaResult)
 	keyspaces = vschemaResult["keyspaces"].(map[string]any)
 	keyspaceVSchema = keyspaces[keyspaceName].(map[string]any)
 	assert.NotContains(t, keyspaceVSchema, "views", "VSchema should remain stable after view DDL operations")
@@ -223,6 +215,7 @@ func TestSchemaTrackingWithViewsDisabled(t *testing.T) {
 // continue to work normally when views are disabled.
 func TestTableOperationsStillWork(t *testing.T) {
 	ctx := t.Context()
+	_, vtParams := setup(t)
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -248,8 +241,8 @@ func TestTableOperationsStillWork(t *testing.T) {
 }
 
 // readVSchema reads the vschema from VTGate's debug endpoint
-func readVSchema(t *testing.T, results *map[string]any) {
-	vschema, err := clusterInstance.VTGate().ReadVSchema(t.Context())
+func readVSchema(t *testing.T, cluster *vitesst.Cluster, results *map[string]any) {
+	vschema, err := cluster.VTGate().ReadVSchema(t.Context())
 	require.NoError(t, err)
 	*results = (*vschema).(map[string]any)
 }

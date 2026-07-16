@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -34,71 +35,59 @@ import (
 )
 
 var (
-	clusterInstance *vitesst.Cluster
-	vtParams        mysql.ConnParams
-	mysqlParams     mysql.ConnParams
-	uks             = "main"
-	sks             = "user"
+	uks = "main"
+	sks = "user"
 )
 
-func TestMain(m *testing.M) {
+func setup(t *testing.T) (*vitesst.Cluster, mysql.ConnParams, mysql.ConnParams) {
+	t.Helper()
+	ctx := t.Context()
 	vschema := readFile("vschemas/schema.json")
 	userVs := extractUserKS(vschema)
 	mainVs := extractMainKS(vschema)
 	sSQL := readFile("schemas/user.sql")
 	uSQL := readFile("schemas/main.sql")
 
-	exitCode := func() int {
-		ctx := context.Background()
+	// TODO: (@GuptaManan100/@systay): Also run the tests with normalizer on.
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithKeyspace(uks).
+			WithSchema(uSQL).
+			WithVSchema(mainVs),
+		vitesst.WithKeyspace(sks).
+			WithShardNames("-80", "80-").
+			WithSchema(sSQL).
+			WithVSchema(userVs),
+		vitesst.WithVTGateArgs(
+			"--normalize-queries=false",
+			"--schema-change-signal=true",
+		),
+	)
+	require.NoError(t, err)
 
-		// TODO: (@GuptaManan100/@systay): Also run the tests with normalizer on.
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithKeyspace(uks).
-				WithSchema(uSQL).
-				WithVSchema(mainVs),
-			vitesst.WithKeyspace(sks).
-				WithShardNames("-80", "80-").
-				WithSchema(sSQL).
-				WithVSchema(userVs),
-			vitesst.WithVTGateArgs(
-				"--normalize-queries=false",
-				"--schema-change-signal=true",
-			),
-		)
-		if err != nil {
-			fmt.Println(err.Error())
-			return 1
+	cleanup, err := cluster.Start(ctx)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+		defer cancel()
+		if t.Failed() {
+			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
 		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Println(err.Error())
-			return 1
+		if cleanupErr := cleanup(cleanupCtx); cleanupErr != nil {
+			t.Logf("cluster teardown: %v", cleanupErr)
 		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
+	require.NoError(t, err)
 
-		clusterInstance = cluster
-		vtParams = cluster.VTParams(ctx, "")
-
-		// create mysql instance and connection parameters
-		conn, closer, err := vitesst.NewMySQL(ctx, cluster, sks, sSQL, uSQL)
-		if err != nil {
-			fmt.Println(err.Error())
-			return 1
+	mysqlParams, mysqlCleanup, err := vitesst.NewMySQL(ctx, cluster, sks, sSQL, uSQL)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+		defer cancel()
+		if cleanupErr := mysqlCleanup(cleanupCtx); cleanupErr != nil {
+			t.Logf("mysql teardown: %v", cleanupErr)
 		}
-		defer func() {
-			if err := closer(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "mysql teardown:", err)
-			}
-		}()
-		mysqlParams = conn
+	})
 
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	return cluster, cluster.VTParams(ctx, ""), mysqlParams
 }
 
 func readFile(filename string) string {
@@ -110,7 +99,7 @@ func readFile(filename string) string {
 	return string(schema)
 }
 
-func start(t *testing.T) (vitesst.MySQLCompare, func()) {
+func start(t *testing.T, vtParams, mysqlParams mysql.ConnParams) (vitesst.MySQLCompare, func()) {
 	mcmp, err := vitesst.NewMySQLCompare(t.Context(), t, vtParams, mysqlParams)
 	require.NoError(t, err)
 	return mcmp, func() {

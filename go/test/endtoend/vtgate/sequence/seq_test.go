@@ -18,10 +18,9 @@ package sequence
 
 import (
 	"context"
-	"flag"
 	"fmt"
-	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -32,7 +31,6 @@ import (
 )
 
 var (
-	clusterInstance    *vitesst.Cluster
 	unshardedKs        = "uks"
 	unshardedSQLSchema = `
 	create table sequence_test(
@@ -167,50 +165,40 @@ CREATE TABLE allDefaults (
 		}`
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setup(t *testing.T) *vitesst.Cluster {
+	t.Helper()
+	ctx := t.Context()
 
-	exitCode := func() int {
-		ctx := context.Background()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithKeyspace(unshardedKs).
+			WithSchema(unshardedSQLSchema).
+			WithVSchema(unshardedVSchema),
+		vitesst.WithKeyspace(shardedKeyspaceName).
+			WithShardNames("-80", "80-").
+			WithSchema(shardedSQLSchema).
+			WithVSchema(shardedVSchema),
+	)
+	require.NoError(t, err)
 
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithKeyspace(unshardedKs).
-				WithSchema(unshardedSQLSchema).
-				WithVSchema(unshardedVSchema),
-			vitesst.WithKeyspace(shardedKeyspaceName).
-				WithShardNames("-80", "80-").
-				WithSchema(shardedSQLSchema).
-				WithVSchema(shardedVSchema),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+	cleanup, err := cluster.Start(ctx)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+		defer cancel()
+		if t.Failed() {
+			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
 		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+		if cleanupErr := cleanup(cleanupCtx); cleanupErr != nil {
+			t.Logf("cluster teardown: %v", cleanupErr)
 		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
+	require.NoError(t, err)
 
-		clusterInstance = cluster
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	return cluster
 }
 
-func TestSeq(t *testing.T) {
-	ctx := t.Context()
-	vtParams := clusterInstance.VTParams(ctx, "")
-	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
-	defer conn.Close()
+func initializeSequenceTest(t *testing.T, conn *mysql.Conn) {
+	t.Helper()
 
-	// Initialize seq table if needed
 	qr := vitesst.Exec(t, conn, "select count(*) from sequence_test_seq")
 	require.Len(t, qr.Rows, 1)
 	cnt, err := qr.Rows[0][0].ToInt()
@@ -218,12 +206,23 @@ func TestSeq(t *testing.T) {
 	if cnt == 0 {
 		vitesst.Exec(t, conn, "insert into sequence_test_seq(id, next_id, cache) values(0,1,10)")
 	}
+}
+
+func TestSeq(t *testing.T) {
+	ctx := t.Context()
+	cluster := setup(t)
+	vtParams := cluster.VTParams(ctx, "")
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.Nil(t, err)
+	defer conn.Close()
+
+	initializeSequenceTest(t, conn)
 
 	// Insert 4 values in the main table
 	vitesst.Exec(t, conn, "insert into sequence_test(val) values('a'), ('b') ,('c'), ('d')")
 
 	// Test select calls to main table and verify expected id.
-	qr = vitesst.Exec(t, conn, "select id, val  from sequence_test where id=4")
+	qr := vitesst.Exec(t, conn, "select id, val  from sequence_test where id=4")
 	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(4) VARCHAR("d")]]`; got != want {
 		assert.Equalf(t, want, got, "select:\n%v want\n%v", got, want)
 	}
@@ -263,7 +262,8 @@ func TestSeq(t *testing.T) {
 
 func TestDotTableSeq(t *testing.T) {
 	ctx := t.Context()
-	vtParams := clusterInstance.VTParams(ctx, shardedKeyspaceName)
+	cluster := setup(t)
+	vtParams := cluster.VTParams(ctx, shardedKeyspaceName)
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -281,7 +281,8 @@ func TestDotTableSeq(t *testing.T) {
 
 func TestInsertAllDefaults(t *testing.T) {
 	ctx := t.Context()
-	vtParams := clusterInstance.VTParams(ctx, shardedKeyspaceName)
+	cluster := setup(t)
+	vtParams := cluster.VTParams(ctx, shardedKeyspaceName)
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -301,21 +302,15 @@ func TestInsertAllDefaults(t *testing.T) {
 // This is a regression test for https://github.com/vitessio/vitess/issues/18946
 func TestLastInsertIDWithSequence(t *testing.T) {
 	ctx := t.Context()
+	cluster := setup(t)
 
 	t.Run("unsharded keyspace", func(t *testing.T) {
-		vtParams := clusterInstance.VTParams(ctx, unshardedKs)
+		vtParams := cluster.VTParams(ctx, unshardedKs)
 		conn, err := mysql.Connect(ctx, &vtParams)
 		require.NoError(t, err)
 		defer conn.Close()
 
-		// Initialize seq table if needed
-		qr := vitesst.Exec(t, conn, "select count(*) from sequence_test_seq")
-		require.Len(t, qr.Rows, 1)
-		cnt, err := qr.Rows[0][0].ToInt()
-		require.NoError(t, err)
-		if cnt == 0 {
-			vitesst.Exec(t, conn, "insert into sequence_test_seq(id, next_id, cache) values(0,1,10)")
-		}
+		initializeSequenceTest(t, conn)
 
 		// Clean up (don't reinitialize sequence - vtgate caches values in memory)
 		vitesst.Exec(t, conn, "delete from sequence_test")
@@ -324,7 +319,7 @@ func TestLastInsertIDWithSequence(t *testing.T) {
 		vitesst.Exec(t, conn, "insert into sequence_test(val) values('test1')")
 
 		// LAST_INSERT_ID() should return a non-zero sequence-generated value
-		qr = vitesst.Exec(t, conn, "select LAST_INSERT_ID()")
+		qr := vitesst.Exec(t, conn, "select LAST_INSERT_ID()")
 		require.Len(t, qr.Rows, 1, "should have one row")
 		firstID, err := qr.Rows[0][0].ToInt()
 		require.NoError(t, err)
@@ -354,7 +349,7 @@ func TestLastInsertIDWithSequence(t *testing.T) {
 	})
 
 	t.Run("sharded keyspace", func(t *testing.T) {
-		vtParams := clusterInstance.VTParams(ctx, shardedKeyspaceName)
+		vtParams := cluster.VTParams(ctx, shardedKeyspaceName)
 		conn, err := mysql.Connect(ctx, &vtParams)
 		require.NoError(t, err)
 		defer conn.Close()
@@ -385,14 +380,12 @@ func TestLastInsertIDWithSequence(t *testing.T) {
 	})
 
 	t.Run("within transaction", func(t *testing.T) {
-		vtParams := clusterInstance.VTParams(ctx, unshardedKs)
+		vtParams := cluster.VTParams(ctx, unshardedKs)
 		conn, err := mysql.Connect(ctx, &vtParams)
 		require.NoError(t, err)
 		defer conn.Close()
 
-		// Note: We don't reinitialize the sequence here because vtgate caches
-		// sequence values in memory. Instead, we just verify the behavior
-		// works correctly within a transaction regardless of the actual value.
+		initializeSequenceTest(t, conn)
 
 		// Start a transaction
 		vitesst.Exec(t, conn, "begin")

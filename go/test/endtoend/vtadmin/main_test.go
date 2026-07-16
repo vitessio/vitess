@@ -18,10 +18,7 @@ package vtadmin
 
 import (
 	"context"
-	"flag"
-	"fmt"
 	"net/http"
-	"os"
 	"testing"
 	"time"
 
@@ -52,41 +49,29 @@ create table u_b
 `
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setupCluster(t testing.TB) {
+	t.Helper()
+	ctx := t.Context()
 
-	exitCode := func() int {
-		ctx := context.Background()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithKeyspace(uks).
+			WithSchema(uschemaSQL),
+		vitesst.WithVTAdmin(),
+		vitesst.WithVTAdminClusterID("local_test"),
+	)
+	require.NoError(t, err)
+	cleanup, err := cluster.Start(ctx)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, cleanup(context.WithoutCancel(ctx)))
+	})
 
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithKeyspace(uks).
-				WithSchema(uschemaSQL),
-			vitesst.WithVTAdmin(),
-			vitesst.WithVTAdminClusterID("local_test"),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
-
-		clusterInstance = cluster
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	clusterInstance = cluster
 }
 
 // TestVtadminAPIs tests the vtadmin APIs.
 func TestVtadminAPIs(t *testing.T) {
+	setupCluster(t)
 	// Test the vtadmin APIs
 	t.Run("keyspaces api", func(t *testing.T) {
 		_, resp, err := clusterInstance.VTAdmin().MakeAPICallRetry(t.Context(), "/api/keyspaces", 10*time.Second,

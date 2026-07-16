@@ -34,6 +34,8 @@ import (
 
 // TestTransactionModes tests transactions using twopc mode
 func TestTransactionModeMetrics(t *testing.T) {
+	setup(t)
+
 	ctx := t.Context()
 	conn, closer := start(t)
 	defer closer()
@@ -108,6 +110,8 @@ func TestTransactionModeMetrics(t *testing.T) {
 
 // TestVTGate2PCCommitMetricOnFailure tests unresolved commit metrics on VTGate.
 func TestVTGate2PCCommitMetricOnFailure(t *testing.T) {
+	setup(t)
+
 	defer cleanup(t)
 
 	ctx := t.Context()
@@ -155,6 +159,8 @@ func TestVTGate2PCCommitMetricOnFailure(t *testing.T) {
 
 // TestVTTablet2PCMetrics tests 2pc metrics on VTTablet.
 func TestVTTablet2PCMetrics(t *testing.T) {
+	setup(t)
+
 	defer cleanup(t)
 
 	vtgateConn, err := clusterInstance.VTGate().DialVTGate(t.Context())
@@ -209,6 +215,8 @@ func TestVTTablet2PCMetrics(t *testing.T) {
 
 // TestVTTablet2PCMetricsFailCommitPrepared tests 2pc metrics on VTTablet on commit prepared failure..';;/
 func TestVTTablet2PCMetricsFailCommitPrepared(t *testing.T) {
+	setup(t)
+
 	defer cleanup(t)
 
 	ctx := t.Context()

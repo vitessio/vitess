@@ -50,6 +50,7 @@ func start(t *testing.T) (vitesst.MySQLCompare, func()) {
 }
 
 func TestSubqueriesHasValues(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -59,6 +60,7 @@ func TestSubqueriesHasValues(t *testing.T) {
 }
 
 func TestNotINQueries(t *testing.T) {
+	setup(t)
 	// Tests NOT IN where the RHS contains all rows, some rows and no rows
 	mcmp, closer := start(t)
 	defer closer()
@@ -78,6 +80,7 @@ func TestNotINQueries(t *testing.T) {
 }
 
 func TestSubqueriesExists(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -87,6 +90,7 @@ func TestSubqueriesExists(t *testing.T) {
 }
 
 func TestQueryAndSubQWithLimit(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -96,6 +100,7 @@ func TestQueryAndSubQWithLimit(t *testing.T) {
 }
 
 func TestSubQueryOnTopOfSubQuery(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -106,6 +111,7 @@ func TestSubQueryOnTopOfSubQuery(t *testing.T) {
 }
 
 func TestSubqueryInINClause(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -114,6 +120,7 @@ func TestSubqueryInINClause(t *testing.T) {
 }
 
 func TestSubqueryInUpdate(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -128,6 +135,7 @@ func TestSubqueryInUpdate(t *testing.T) {
 }
 
 func TestSubqueryInReference(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -159,6 +167,7 @@ func TestSubqueryInReference(t *testing.T) {
 
 // TestSubqueryInAggregation validates that subquery work inside aggregation functions.
 func TestSubqueryInAggregation(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -176,6 +185,7 @@ func TestSubqueryInAggregation(t *testing.T) {
 // TestSubqueryInDerivedTable tests that subqueries and derived tables
 // are handled correctly when there are joins inside the derived table
 func TestSubqueryInDerivedTable(t *testing.T) {
+	setup(t)
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -186,6 +196,7 @@ func TestSubqueryInDerivedTable(t *testing.T) {
 }
 
 func TestSubqueries(t *testing.T) {
+	setup(t)
 	// This method tests many types of subqueries. The queries should move to a vt tester test file once we have a way to run them.
 	// The commented out queries are failing because of wrong types being returned.
 	// The tests are commented out until the issue is fixed.
@@ -228,6 +239,7 @@ func TestSubqueries(t *testing.T) {
 }
 
 func TestProperTypesOfPullOutValue(t *testing.T) {
+	setup(t)
 	query := "select (select sum(id) from user) from user_extra"
 
 	mcmp, closer := start(t)

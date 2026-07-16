@@ -19,10 +19,8 @@ package multi_query
 import (
 	"context"
 	_ "embed"
-	"flag"
-	"fmt"
-	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -43,52 +41,36 @@ var (
 	vschema string
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
-
-	exitCode := func() int {
-		ctx := context.Background()
-
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithVTGateArgs("--mysql-server-multi-query-protocol"),
-			vitesst.WithKeyspace(keyspaceName).
-				WithShardNames("-80", "80-").
-				WithSchema(schemaSQL).
-				WithVSchema(vschema),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+func setup(t *testing.T) {
+	ctx := t.Context()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithVTGateArgs("--mysql-server-multi-query-protocol"),
+		vitesst.WithKeyspace(keyspaceName).
+			WithShardNames("-80", "80-").
+			WithSchema(schemaSQL).
+			WithVSchema(vschema),
+	)
+	require.NoError(t, err)
+	cleanup, err := cluster.Start(ctx)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		if err := cleanup(context.WithoutCancel(ctx)); err != nil {
+			t.Logf("cluster teardown: %v", err)
 		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
 
-		clusterInstance = cluster
-		vtParams = cluster.VTParams(ctx, "")
-
-		// create mysql instance and connection parameters
-		conn, closer, err := vitesst.NewMySQL(ctx, cluster, keyspaceName, schemaSQL)
-		if err != nil {
-			fmt.Println(err)
-			return 1
+	clusterInstance = cluster
+	vtParams = cluster.VTParams(ctx, "")
+	conn, closer, err := vitesst.NewMySQL(ctx, cluster, keyspaceName, schemaSQL)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+		defer cancel()
+		if err := closer(cleanupCtx); err != nil {
+			t.Logf("mysql teardown: %v", err)
 		}
-		defer func() {
-			if err := closer(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "mysql teardown:", err)
-			}
-		}()
-		mysqlParams = conn
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	})
+	mysqlParams = conn
 }
 
 func start(t *testing.T) (vitesst.MySQLCompare, func()) {

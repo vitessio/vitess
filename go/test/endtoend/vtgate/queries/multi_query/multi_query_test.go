@@ -31,6 +31,7 @@ import (
 // TestMultiQuery tests the new way of handling queries in vtgate
 // that runs multiple queries together.
 func TestMultiQuery(t *testing.T) {
+	setup(t)
 	testcases := []struct {
 		name        string
 		sql         string

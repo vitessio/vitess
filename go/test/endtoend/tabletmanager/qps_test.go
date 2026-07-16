@@ -27,6 +27,7 @@ import (
 )
 
 func TestQPS(t *testing.T) {
+	setup(t)
 	ctx := t.Context()
 
 	vtParams := clusterInstance.VTParams(ctx, "")

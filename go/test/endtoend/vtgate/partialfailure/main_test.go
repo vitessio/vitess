@@ -19,10 +19,8 @@ package reservedconn
 import (
 	"context"
 	_ "embed"
-	"flag"
-	"fmt"
-	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -31,9 +29,7 @@ import (
 )
 
 var (
-	clusterInstance *vitesst.Cluster
-	vtParams        mysql.ConnParams
-	keyspaceName    = "ks"
+	keyspaceName = "ks"
 
 	//go:embed schema.sql
 	SchemaSQL string
@@ -42,42 +38,36 @@ var (
 	VSchema string
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setup(t testing.TB) mysql.ConnParams {
+	t.Helper()
+	ctx := t.Context()
 
-	exitCode := func() int {
-		ctx := context.Background()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithKeyspace(keyspaceName).
+			WithShardNames("-40", "40-80", "80-c0", "c0-").
+			WithSchema(SchemaSQL).
+			WithVSchema(VSchema),
+		vitesst.WithVTGateArgs("--planner-version", "Gen4Fallback"),
+	)
+	require.NoError(t, err)
 
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithKeyspace(keyspaceName).
-				WithShardNames("-40", "40-80", "80-c0", "c0-").
-				WithSchema(SchemaSQL).
-				WithVSchema(VSchema),
-			vitesst.WithVTGateArgs("--planner-version", "Gen4Fallback"),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+	cleanup, err := cluster.Start(ctx)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+		defer cancel()
+		if t.Failed() {
+			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
 		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+		if cleanupErr := cleanup(cleanupCtx); cleanupErr != nil {
+			t.Logf("cluster teardown: %v", cleanupErr)
 		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
+	require.NoError(t, err)
 
-		clusterInstance = cluster
-		vtParams = cluster.VTParams(ctx, "")
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	return cluster.VTParams(ctx, "")
 }
 
-func testAllModes(t *testing.T, stmts func(conn *mysql.Conn)) {
+func testAllModes(t *testing.T, vtParams mysql.ConnParams, stmts func(conn *mysql.Conn)) {
 	t.Helper()
 
 	tcases := []struct {
@@ -112,7 +102,8 @@ func testAllModes(t *testing.T, stmts func(conn *mysql.Conn)) {
 }
 
 func TestPartialQueryFailureExplicitTx(t *testing.T) {
-	testAllModes(t, func(conn *mysql.Conn) {
+	vtParams := setup(t)
+	testAllModes(t, vtParams, func(conn *mysql.Conn) {
 		vitesst.Exec(t, conn, `begin`)
 		vitesst.Exec(t, conn, `insert into test(id, val1) values (1,'A'),(2,'B'),(3,'C')`)
 		// primary vindex is duplicate
@@ -124,7 +115,8 @@ func TestPartialQueryFailureExplicitTx(t *testing.T) {
 }
 
 func TestPartialVindexQueryFailureExplicitTx(t *testing.T) {
-	testAllModes(t, func(conn *mysql.Conn) {
+	vtParams := setup(t)
+	testAllModes(t, vtParams, func(conn *mysql.Conn) {
 		vitesst.Exec(t, conn, `begin`)
 		vitesst.Exec(t, conn, `insert into test(id, val1) values (1,'A'),(2,'B'),(3,'C')`)
 		// lookup vindex is duplicate
@@ -137,7 +129,8 @@ func TestPartialVindexQueryFailureExplicitTx(t *testing.T) {
 }
 
 func TestPartialQueryFailureNoAutoCommit(t *testing.T) {
-	testAllModes(t, func(conn *mysql.Conn) {
+	vtParams := setup(t)
+	testAllModes(t, vtParams, func(conn *mysql.Conn) {
 		// autocommit is false.
 		vitesst.Exec(t, conn, `set autocommit = off`)
 		vitesst.Exec(t, conn, `insert into test(id, val1) values (1,'A'),(2,'B'),(3,'C')`)
@@ -150,7 +143,8 @@ func TestPartialQueryFailureNoAutoCommit(t *testing.T) {
 }
 
 func TestPartialVindexQueryFailureNoAutoCommit(t *testing.T) {
-	testAllModes(t, func(conn *mysql.Conn) {
+	vtParams := setup(t)
+	testAllModes(t, vtParams, func(conn *mysql.Conn) {
 		// autocommit is false.
 		vitesst.Exec(t, conn, `set autocommit = off`)
 		vitesst.Exec(t, conn, `insert into test(id, val1) values (1,'A'),(2,'B'),(3,'C')`)
@@ -164,7 +158,8 @@ func TestPartialVindexQueryFailureNoAutoCommit(t *testing.T) {
 }
 
 func TestPartialQueryFailureAutoCommit(t *testing.T) {
-	testAllModes(t, func(conn *mysql.Conn) {
+	vtParams := setup(t)
+	testAllModes(t, vtParams, func(conn *mysql.Conn) {
 		vitesst.Exec(t, conn, `insert into test(id, val1) values (1,'A'),(2,'B'),(3,'C')`)
 		// primary vindex is duplicate, transaction is rolled back as it was an implicit transaction started by vtgate.
 		vitesst.AssertContainsError(t, conn, `insert into test(id, val1) values (1,'D'),(4,'E')`, `transaction rolled back to reverse changes of partial DML execution`)
@@ -176,7 +171,8 @@ func TestPartialQueryFailureAutoCommit(t *testing.T) {
 }
 
 func TestPartialVindexQueryFailureAutoCommit(t *testing.T) {
-	testAllModes(t, func(conn *mysql.Conn) {
+	vtParams := setup(t)
+	testAllModes(t, vtParams, func(conn *mysql.Conn) {
 		vitesst.Exec(t, conn, `insert into test(id, val1) values (1,'A'),(2,'B'),(3,'C')`)
 		// lookup vindex is duplicate, transaction is rolled back as it was an implicit transaction started by vtgate.
 		vitesst.AssertContainsError(t, conn, `insert into test(id, val1) values (4,'D'),(5,'C')`, `transaction rolled back to reverse changes of partial DML execution`)
@@ -189,7 +185,8 @@ func TestPartialVindexQueryFailureAutoCommit(t *testing.T) {
 }
 
 func TestPartialQueryFailureRollback(t *testing.T) {
-	testAllModes(t, func(conn *mysql.Conn) {
+	vtParams := setup(t)
+	testAllModes(t, vtParams, func(conn *mysql.Conn) {
 		vitesst.Exec(t, conn, `begin`)
 		vitesst.Exec(t, conn, `insert into test(id, val1) values (1,'A'),(2,'B'),(3,'C')`)
 		// primary vindex is duplicate
@@ -201,7 +198,8 @@ func TestPartialQueryFailureRollback(t *testing.T) {
 }
 
 func TestPartialVindexQueryFailureRollback(t *testing.T) {
-	testAllModes(t, func(conn *mysql.Conn) {
+	vtParams := setup(t)
+	testAllModes(t, vtParams, func(conn *mysql.Conn) {
 		vitesst.Exec(t, conn, `begin`)
 		vitesst.Exec(t, conn, `insert into test(id, val1) values (1,'A'),(2,'B'),(3,'C')`)
 		// lookup vindex is duplicate
@@ -214,7 +212,8 @@ func TestPartialVindexQueryFailureRollback(t *testing.T) {
 }
 
 func TestPartialQueryFailureNoAutoCommitRollback(t *testing.T) {
-	testAllModes(t, func(conn *mysql.Conn) {
+	vtParams := setup(t)
+	testAllModes(t, vtParams, func(conn *mysql.Conn) {
 		// autocommit is false.
 		vitesst.Exec(t, conn, `set autocommit = off`)
 		vitesst.Exec(t, conn, `insert into test(id, val1) values (1,'A'),(2,'B'),(3,'C')`)
@@ -227,7 +226,8 @@ func TestPartialQueryFailureNoAutoCommitRollback(t *testing.T) {
 }
 
 func TestPartialVindexQueryFailureNoAutoCommitRollback(t *testing.T) {
-	testAllModes(t, func(conn *mysql.Conn) {
+	vtParams := setup(t)
+	testAllModes(t, vtParams, func(conn *mysql.Conn) {
 		// autocommit is false.  y 6
 		vitesst.Exec(t, conn, `set autocommit = off`)
 		vitesst.Exec(t, conn, `insert into test(id, val1) values (1,'A'),(2,'B'),(3,'C')`)
@@ -241,7 +241,8 @@ func TestPartialVindexQueryFailureNoAutoCommitRollback(t *testing.T) {
 }
 
 func TestPartialQueryFailureAutoCommitRollback(t *testing.T) {
-	testAllModes(t, func(conn *mysql.Conn) {
+	vtParams := setup(t)
+	testAllModes(t, vtParams, func(conn *mysql.Conn) {
 		vitesst.Exec(t, conn, `insert into test(id, val1) values (1,'A'),(2,'B'),(3,'C')`)
 		// primary vindex is duplicate, transaction is rolled back as it was an implicit transaction started by vtgate.
 		vitesst.AssertContainsError(t, conn, `insert into test(id, val1) values (1,'D'),(4,'E')`, `transaction rolled back to reverse changes of partial DML execution`)
@@ -253,7 +254,8 @@ func TestPartialQueryFailureAutoCommitRollback(t *testing.T) {
 }
 
 func TestPartialVindexQueryFailureAutoCommitRollback(t *testing.T) {
-	testAllModes(t, func(conn *mysql.Conn) {
+	vtParams := setup(t)
+	testAllModes(t, vtParams, func(conn *mysql.Conn) {
 		vitesst.Exec(t, conn, `insert into test(id, val1) values (1,'A'),(2,'B'),(3,'C')`)
 		// lookup vindex is duplicate, transaction is rolled back as it was an implicit transaction started by vtgate.
 		vitesst.AssertContainsError(t, conn, `insert into test(id, val1) values (4,'D'),(5,'C')`, `transaction rolled back to reverse changes of partial DML execution`)

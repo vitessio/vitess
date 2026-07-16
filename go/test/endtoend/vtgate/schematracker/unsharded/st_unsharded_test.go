@@ -18,9 +18,6 @@ package unsharded
 
 import (
 	"context"
-	"flag"
-	"fmt"
-	"os"
 	"testing"
 	"time"
 
@@ -31,11 +28,9 @@ import (
 )
 
 var (
-	clusterInstance *vitesst.Cluster
-	vtParams        mysql.ConnParams
-	keyspaceName    = "ks"
-	sidecarDBName   = "_vt_schema_tracker_metadata" // custom sidecar database name for testing
-	sqlSchema       = `
+	keyspaceName  = "ks"
+	sidecarDBName = "_vt_schema_tracker_metadata" // custom sidecar database name for testing
+	sqlSchema     = `
 		create table main (
 			id bigint,
 			val varchar(128),
@@ -44,47 +39,42 @@ var (
 `
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setup(t *testing.T) mysql.ConnParams {
+	t.Helper()
+	ctx := t.Context()
 
-	exitCode := func() int {
-		ctx := context.Background()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithKeyspace(keyspaceName).
+			WithSchema(sqlSchema).
+			WithSidecarDBName(sidecarDBName),
+		vitesst.WithVTTabletArgs("--queryserver-config-schema-change-signal"),
+		vitesst.WithVTGateArgs(
+			"--schema-change-signal",
+			"--vschema-ddl-authorized-users", "%",
+		),
+	)
+	require.NoError(t, err)
 
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithKeyspace(keyspaceName).
-				WithSchema(sqlSchema).
-				WithSidecarDBName(sidecarDBName),
-			vitesst.WithVTTabletArgs("--queryserver-config-schema-change-signal"),
-			vitesst.WithVTGateArgs(
-				"--schema-change-signal",
-				"--vschema-ddl-authorized-users", "%",
-			),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+	cleanup, err := cluster.Start(ctx)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Minute)
+		defer cancel()
+		if t.Failed() {
+			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
 		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+		if err := cleanup(cleanupCtx); err != nil {
+			t.Logf("cluster teardown: %v", err)
 		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
 
-		clusterInstance = cluster
-		vtParams = cluster.VTParams(ctx, "")
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	return cluster.VTParams(ctx, "")
 }
 
 func TestNewUnshardedTable(t *testing.T) {
 	// create a sql connection
 	ctx := t.Context()
+	vtParams := setup(t)
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -153,6 +143,7 @@ func TestNewUnshardedTable(t *testing.T) {
 func TestCaseSensitiveSchemaTracking(t *testing.T) {
 	// create a sql connection
 	ctx := t.Context()
+	vtParams := setup(t)
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()

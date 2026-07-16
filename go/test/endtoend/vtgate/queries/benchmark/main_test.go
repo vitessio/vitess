@@ -19,9 +19,7 @@ package dml
 import (
 	"context"
 	_ "embed"
-	"flag"
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
@@ -61,52 +59,48 @@ var shards4 = []string{
 	"-40", "40-80", "80-c0", "c0-",
 }
 
-func TestMain(m *testing.M) {
-	flag.Parse()
+func setup(b *testing.B) {
+	b.Helper()
+	b.StopTimer()
+	ctx := b.Context()
 
-	exitCode := func() int {
-		ctx := context.Background()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithKeyspace(sKs1).
+			WithShardNames(shards4...).
+			WithSchema(sSchemaSQL1).
+			WithVSchema(sVSchema1),
+		vitesst.WithKeyspace(sKs2).
+			WithShardNames(shards4...).
+			WithSchema(sSchemaSQL2).
+			WithVSchema(sVSchema2),
+		vitesst.WithKeyspace(sKs3).
+			WithShardNames(shards4...).
+			WithSchema(sSchemaSQL3).
+			WithVSchema(sVSchema3),
+	)
+	require.NoError(b, err)
 
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithKeyspace(sKs1).
-				WithShardNames(shards4...).
-				WithSchema(sSchemaSQL1).
-				WithVSchema(sVSchema1),
-			vitesst.WithKeyspace(sKs2).
-				WithShardNames(shards4...).
-				WithSchema(sSchemaSQL2).
-				WithVSchema(sVSchema2),
-			vitesst.WithKeyspace(sKs3).
-				WithShardNames(shards4...).
-				WithSchema(sSchemaSQL3).
-				WithVSchema(sVSchema3),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+	cleanup, err := cluster.Start(ctx)
+	require.NoError(b, err)
+	b.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(b.Context()), time.Minute)
+		defer cancel()
+		if b.Failed() {
+			cluster.DumpDiagnostics(cleanupCtx, b.Logf)
 		}
-
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+		if err := cleanup(cleanupCtx); err != nil {
+			b.Logf("cluster teardown: %v", err)
 		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	})
 
-		clusterInstance = cluster
-		vtParams = cluster.VTParams(ctx, "@primary")
-
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	clusterInstance = cluster
+	vtParams = cluster.VTParams(ctx, "@primary")
 }
 
 func start(b *testing.B) (*mysql.Conn, func()) {
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	b.Helper()
+	b.StopTimer()
+	conn, err := mysql.Connect(b.Context(), &vtParams)
 	require.NoError(b, err)
 
 	deleteAll := func() {
@@ -131,7 +125,8 @@ func start(b *testing.B) (*mysql.Conn, func()) {
 	for len(pending) > 0 {
 		for ks, tbl := range pending {
 			_, err := conn.ExecuteFetch(
-				fmt.Sprintf("SELECT COUNT(id) FROM %s.%s", ks, tbl), 1, false)
+				fmt.Sprintf("SELECT COUNT(id) FROM %s.%s", ks, tbl), 1, false,
+			)
 			if err != nil {
 				b.Logf("waiting for keyspace %s to be serving; last error: %v", ks, err)
 				time.Sleep(1 * time.Second)

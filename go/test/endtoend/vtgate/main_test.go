@@ -19,10 +19,8 @@ package vtgate
 import (
 	"context"
 	_ "embed"
-	"flag"
-	"fmt"
-	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -56,58 +54,47 @@ var (
 `
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
-	exitCode := func() int {
-		ctx := context.Background()
+func setupCluster(t *testing.T) {
+	t.Helper()
+	ctx := t.Context()
 
-		cluster, err := vitesst.NewCluster(
-			vitesst.WithVTTabletArgs(
-				"--queryserver-config-max-result-size", "100",
-				"--queryserver-config-terse-errors",
-			),
-			vitesst.WithVTGateArgs("--vschema-ddl-authorized-users", "%"),
-			vitesst.WithVTGateFiles(vitesst.ContainerFile{
-				Content:       []byte("{}\n"),
-				ContainerPath: vtgateConfigPath,
-				Mode:          0o666,
-			}),
-			vitesst.WithKeyspace(KeyspaceName).
-				WithShards(2).
-				WithReplicas(2).
-				WithSchema(SchemaSQL).
-				WithVSchema(VSchema),
-		)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		cleanup, err := cluster.Start(ctx)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		defer func() {
-			if err := cleanup(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-			}
-		}()
+	cluster, err := vitesst.NewCluster(
+		vitesst.WithVTTabletArgs(
+			"--queryserver-config-max-result-size", "100",
+			"--queryserver-config-terse-errors",
+		),
+		vitesst.WithVTGateArgs("--vschema-ddl-authorized-users", "%"),
+		vitesst.WithVTGateFiles(vitesst.ContainerFile{
+			Content:       []byte("{}\n"),
+			ContainerPath: vtgateConfigPath,
+			Mode:          0o666,
+		}),
+		vitesst.WithKeyspace(KeyspaceName).
+			WithShards(2).
+			WithReplicas(2).
+			WithSchema(SchemaSQL).
+			WithVSchema(VSchema),
+	)
+	require.NoError(t, err)
 
-		if err := cluster.Vtctld().ExecuteCommand(ctx, "ApplyRoutingRules", "--rules", routingRules); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+	cleanup, err := cluster.Start(ctx)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+		defer cancel()
+		if t.Failed() {
+			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
 		}
-		if err := cluster.Vtctld().ExecuteCommand(ctx, "RebuildVSchemaGraph"); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+		if cleanupErr := cleanup(cleanupCtx); cleanupErr != nil {
+			t.Logf("cluster teardown: %v", cleanupErr)
 		}
+	})
+	require.NoError(t, err)
 
-		clusterInstance = cluster
-		vtParams = cluster.VTParams(ctx, "")
+	require.NoError(t, cluster.Vtctld().ExecuteCommand(ctx, "ApplyRoutingRules", "--rules", routingRules))
+	require.NoError(t, cluster.Vtctld().ExecuteCommand(ctx, "RebuildVSchemaGraph"))
 
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	clusterInstance = cluster
+	vtParams = cluster.VTParams(ctx, "")
 }
 
 func start(t *testing.T) (*mysql.Conn, func()) {

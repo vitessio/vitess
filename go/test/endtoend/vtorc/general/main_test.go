@@ -18,8 +18,6 @@ package general
 
 import (
 	"context"
-	"fmt"
-	"os"
 	"testing"
 	"time"
 
@@ -43,14 +41,6 @@ const (
 	tabletMySQLPort = 3306
 )
 
-var (
-	// clusterInfo is the shared cluster reused across tests. Each test resets
-	// the tablets and VTOrcs it needs through setupVttabletsAndVTOrcs.
-	clusterInfo *vtorcCluster
-
-	tmClient = tmc.NewClient()
-)
-
 // vtorcCluster bundles a vitesst cluster with the bookkeeping the VTOrc tests
 // need: the shard's tablet pools, a host-side topo client, and the currently
 // running VTOrc instances.
@@ -65,34 +55,31 @@ type vtorcCluster struct {
 	active        []*vitesst.Tablet
 	vtorcs        []*vitesst.VTOrc
 	lastUsedValue int
+	tmClient      *tmc.Client
 
 	cleanup func(context.Context) error
 }
 
-func TestMain(m *testing.M) {
-	ctx := context.Background()
+func setupVtorcCluster(t *testing.T) *vtorcCluster {
+	t.Helper()
 
-	exitcode, err := func() (int, error) {
-		var err error
-		clusterInfo, err = createClusterAndStartTopo(ctx)
-		if err != nil {
-			return 1, err
-		}
-		return m.Run(), nil
-	}()
+	vc, err := createClusterAndStartTopo(t.Context())
+	if vc != nil {
+		vc.tmClient = tmc.NewClient()
+		t.Cleanup(func() {
+			ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), 30*time.Second)
+			defer cancel()
 
-	if clusterInfo != nil {
-		clusterInfo.teardown(context.WithoutCancel(ctx))
+			printVTOrcLogsOnFailure(t, ctx, vc)
+			vc.tmClient.Close()
+			vc.teardown(t, ctx)
+		})
 	}
-
-	if err != nil {
-		fmt.Printf("%v\n", err)
-		os.Exit(1)
-	}
-	os.Exit(exitcode)
+	require.NoError(t, err)
+	return vc
 }
 
-// createClusterAndStartTopo starts the shared cluster: one keyspace with four
+// createClusterAndStartTopo starts a cluster: one keyspace with four
 // replica tablets and one rdonly tablet in zone1, with a second empty cell
 // registered, and no primary elected.
 func createClusterAndStartTopo(ctx context.Context) (*vtorcCluster, error) {
@@ -140,14 +127,15 @@ func createClusterAndStartTopo(ctx context.Context) (*vtorcCluster, error) {
 	return vc, nil
 }
 
-func (vc *vtorcCluster) teardown(ctx context.Context) {
+func (vc *vtorcCluster) teardown(t *testing.T, ctx context.Context) {
+	t.Helper()
 	vc.stopVTOrcs(ctx)
 	if vc.ts != nil {
 		vc.ts.Close()
 	}
 	if vc.cleanup != nil {
 		if err := vc.cleanup(ctx); err != nil {
-			fmt.Printf("cluster teardown: %v\n", err)
+			t.Logf("cluster teardown: %v", err)
 		}
 	}
 }
@@ -314,6 +302,15 @@ func setupNewClusterSemiSync(t *testing.T) *vtorcCluster {
 	require.NoError(t, err)
 
 	vc := &vtorcCluster{cluster: cluster, cleanup: cleanup, lastUsedValue: 100}
+	vc.tmClient = tmc.NewClient()
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), 30*time.Second)
+		defer cancel()
+
+		printVTOrcLogsOnFailure(t, ctx, vc)
+		vc.tmClient.Close()
+		vc.teardown(t, ctx)
+	})
 	vc.etcdAddr, err = cluster.EtcdAddr(ctx)
 	require.NoError(t, err)
 	vc.ts, err = topo.OpenServer("etcd2", vc.etcdAddr, "/vitess/global")

@@ -44,6 +44,7 @@ var (
 
 // TabletCommands tests the basic tablet commands
 func TestTabletCommands(t *testing.T) {
+	setup(t)
 	ctx := t.Context()
 
 	conn, err := mysql.Connect(ctx, &primaryTabletParams)
@@ -183,6 +184,7 @@ func assertExecuteMultiFetch(t *testing.T, qr string) {
 }
 
 func TestHook(t *testing.T) {
+	setup(t)
 	// test a regular program works
 	runHookAndAssert(t, []string{
 		"ExecuteHook", primaryTablet.Alias(), "test.sh", "--", "--flag1", "--param1=hello",
@@ -227,6 +229,7 @@ func runHookAndAssert(t *testing.T, params []string, expectedStatus int64, expec
 }
 
 func TestShardReplicationFix(t *testing.T) {
+	setup(t)
 	ctx := t.Context()
 
 	// make sure the replica is in the replication graph, 2 nodes: 1 primary, 1 replica
@@ -266,6 +269,7 @@ func getShardReplication(ctx context.Context, keyspace string, shard string, cel
 }
 
 func TestGetSchema(t *testing.T) {
+	setup(t)
 	res, err := clusterInstance.Vtctld().ExecuteCommandWithOutput(t.Context(), "GetSchema",
 		"--include-views", "--tables", "t1,v1",
 		primaryTablet.Alias())
