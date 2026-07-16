@@ -84,6 +84,10 @@ func internalTableWriteCases() []struct {
 		query:   "update " + internalGCTable + " gc1 join " + internalGCTable + " gc2 on gc1.id = gc2.id set col3 = 1",
 		wantErr: internalTableErr,
 	}, {
+		name:    "update with unqualified SET column in case-varied internal table self-join is blocked",
+		query:   "update " + internalGCTable + " gc1 join _VT_HLD_6ACE8BCEF73211EA87E9F875A4D24E90_20200915120410_ gc2 on gc1.id = gc2.id set col3 = 1",
+		wantErr: "modification of internal table '_VT_HLD_6ACE8BCEF73211EA87E9F875A4D24E90_20200915120410_' is not allowed",
+	}, {
 		name:    "single-table delete from internal table is blocked",
 		query:   "delete from " + internalGCTable + " where id = 1",
 		wantErr: internalTableErr,
