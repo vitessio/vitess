@@ -185,6 +185,17 @@ func WithStateTable(keyspace, table string) Option {
 	}
 }
 
+// WithSkipRowImageCheck disables the verification that every source shard uses
+// binlog_row_image=FULL. Use this only when the probe cannot run (e.g. restricted permissions)
+// and you have verified FULL out of band: with NOBLOB or MINIMAL row images, omitted delete
+// before-image values are indistinguishable from SQL NULL and silently corrupt nullable fields.
+func WithSkipRowImageCheck() Option {
+	return func(v *VStreamClient) error {
+		v.cfg.skipRowImageCheck = true
+		return nil
+	}
+}
+
 // DefaultFlags returns a default set of flags for a VStreamClient, safe to use in most cases, but can be customized
 func DefaultFlags() *vtgatepb.VStreamFlags {
 	return &vtgatepb.VStreamFlags{

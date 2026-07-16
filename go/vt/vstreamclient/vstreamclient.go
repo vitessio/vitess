@@ -19,7 +19,6 @@ package vstreamclient
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"maps"
 	"os"
 	"slices"
@@ -115,6 +114,9 @@ type clientConfig struct {
 	// multiple of the heartbeat interval.
 	startupTimeout             time.Duration
 	heartbeatTimeoutMultiplier int
+
+	// skipRowImageCheck disables the per-shard binlog_row_image=FULL verification
+	skipRowImageCheck bool
 
 	// these fields configure how graceful shutdown is configured
 	gracefulShutdownChan    <-chan struct{}
@@ -240,16 +242,17 @@ func New(ctx context.Context, name string, conn *vtgateconn.VTGateConn, tables [
 		return nil, err
 	}
 
-	err = validateBinlogRowImage(ctx, conn, v.tables)
-	if err != nil {
-		return nil, err
-	}
-
 	// set options from the variadic list
 	for _, opt := range opts {
 		if err = opt(v); err != nil {
 			return nil, err
 		}
+	}
+
+	// after options, so WithSkipRowImageCheck can opt out
+	err = v.validateBinlogRowImage(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	for _, table := range v.tables {
@@ -540,32 +543,41 @@ func getShardsByKeyspace(ctx context.Context, session *vtgateconn.VTGateSession)
 	return shardsByKeyspace, nil
 }
 
-// validateBinlogRowImage checks that every streamed source keyspace uses binlog_row_image=FULL.
-// With NOBLOB or MINIMAL, delete before-images can omit column values in a way that is
-// indistinguishable from SQL NULL to both the default decoder and custom scanners, silently
-// corrupting nullable fields downstream. If the setting cannot be queried (e.g. restricted
-// permissions), a warning is logged and the check is skipped.
-func validateBinlogRowImage(ctx context.Context, conn *vtgateconn.VTGateConn, tables map[string]*TableConfig) error {
-	keyspaces := make(map[string]bool)
-	for _, table := range tables {
+// validateBinlogRowImage checks that every shard of every streamed source keyspace uses
+// binlog_row_image=FULL. With NOBLOB or MINIMAL, delete before-images can omit column values in a
+// way that is indistinguishable from SQL NULL to both the default decoder and custom scanners,
+// silently corrupting nullable fields downstream. The check fails closed: a shard that cannot be
+// probed is treated as unverified, unless the caller explicitly opted out with
+// WithSkipRowImageCheck.
+//
+// Note this can only verify the current value on each shard: events replayed from a position
+// written while a different row image was active are not detectable. FULL must have been in
+// effect for the entire retained replay range.
+func (v *VStreamClient) validateBinlogRowImage(ctx context.Context) error {
+	if v.cfg.skipRowImageCheck {
+		log.Warn("vstreamclient: binlog_row_image verification skipped; delete events are silently corrupted unless every source shard uses FULL")
+		return nil
+	}
+
+	keyspaces := make(map[string]bool, len(v.tables))
+	for _, table := range v.tables {
 		keyspaces[table.Keyspace] = true
 	}
 
 	for _, keyspace := range slices.Sorted(maps.Keys(keyspaces)) {
-		session := conn.Session(keyspace, nil)
-		result, err := session.Execute(ctx, "select @@global.binlog_row_image", nil, false)
-		if err != nil || len(result.Rows) == 0 || len(result.Rows[0]) == 0 {
-			log.Warn(
-				"vstreamclient: could not verify binlog_row_image; delete events may be silently corrupted unless it is FULL",
-				slog.String("keyspace", keyspace),
-				slog.Any("error", err),
-			)
-			continue
-		}
+		for _, shard := range v.shardsByKeyspace[keyspace] {
+			// target each shard individually: an untargeted probe would only observe one
+			// arbitrary shard, and another shard's primary could still use NOBLOB
+			session := v.cfg.conn.Session(keyspace+":"+shard, nil)
+			result, err := session.Execute(ctx, "select @@global.binlog_row_image", nil, false)
+			if err != nil || len(result.Rows) == 0 || len(result.Rows[0]) == 0 {
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: could not verify binlog_row_image on shard %s/%s (use WithSkipRowImageCheck to bypass at your own risk): %v", keyspace, shard, err)
+			}
 
-		rowImage := result.Rows[0][0].ToString()
-		if !strings.EqualFold(rowImage, "FULL") {
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: keyspace %s uses binlog_row_image=%s, but this client requires FULL: with partial row images, omitted delete before-image values are indistinguishable from NULL", keyspace, rowImage)
+			rowImage := result.Rows[0][0].ToString()
+			if !strings.EqualFold(rowImage, "FULL") {
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: shard %s/%s uses binlog_row_image=%s, but this client requires FULL: with partial row images, omitted delete before-image values are indistinguishable from NULL", keyspace, shard, rowImage)
+			}
 		}
 	}
 

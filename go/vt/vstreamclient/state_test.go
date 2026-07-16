@@ -631,12 +631,23 @@ func TestNew_RejectsNonFullBinlogRowImage(t *testing.T) {
 	require.ErrorContains(t, err, "requires FULL")
 }
 
-func TestNew_UnqueryableBinlogRowImageWarnsAndContinues(t *testing.T) {
+func TestNew_UnqueryableBinlogRowImageFailsClosed(t *testing.T) {
+	conn, impl := newStateTestConn(t, shardsAndStateTableResponses(nil)...)
+	impl.rowImageErr = true
+
+	// an unverifiable shard must fail closed: a shard we cannot probe could be running NOBLOB,
+	// which silently corrupts delete before-images
+	_, err := New(t.Context(), "stream", conn, []TableConfig{newStateTestTableConfig()},
+		WithStateTable("stateks", "state"))
+	require.ErrorContains(t, err, "could not verify binlog_row_image")
+}
+
+func TestNew_SkipRowImageCheckBypassesProbe(t *testing.T) {
 	conn, impl := newStateTestConn(t, shardsAndStateTableResponses(nil)...)
 	impl.rowImageErr = true
 
 	_, err := New(t.Context(), "stream", conn, []TableConfig{newStateTestTableConfig()},
-		WithStateTable("stateks", "state"))
+		WithStateTable("stateks", "state"), WithSkipRowImageCheck())
 	require.NoError(t, err)
 }
 

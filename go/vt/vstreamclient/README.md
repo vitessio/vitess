@@ -780,18 +780,29 @@ For row events coming from MySQL binlog replication, `binlog_row_image` affects 
 | `NOBLOB` | Large blob/text-style fields may be omitted from row images. | Reduces memory and event size, but if your sink assumes those fields are always present, you can accidentally write `NULL` or otherwise clear data you expected to keep. |
 | `MINIMAL` | Only the fields needed for the row event may be present. | Smallest row images, but you should not assume you received a full record. If you need to flesh out missing data, a common pattern is to fetch the extra metadata inside `FlushFn` using the primary key from the event. |
 
-If your downstream system expects each flushed row to be a complete current record, `FULL` is the safest default.
-If you optimize for lower memory or network usage with `NOBLOB` or `MINIMAL`, make sure your `FlushFn` treats missing
-fields as "not provided by the binlog image" rather than "the value should be cleared."
+This client requires `FULL`. `New(...)` probes `@@global.binlog_row_image` on every source shard and fails unless it
+reports `FULL`; an unverifiable shard also fails, since it could silently be running `NOBLOB`. The check can be
+bypassed with `WithSkipRowImageCheck()` when the probe cannot run (e.g. restricted permissions), but only do that if
+you have verified `FULL` out of band.
 
-For the default reflection-based decoder, `vstreamclient` now fails fast when Vitess explicitly marks a row as partial:
+The hard requirement exists because delete events carry only a before-image, and the protocol has no presence bitmap
+for before-images: under `NOBLOB` or `MINIMAL`, an omitted delete value is indistinguishable from a real SQL `NULL`
+for both the default decoder and custom `VStreamScanner` implementations, so nullable fields get silently corrupted.
+There is no way to "handle it in `FlushFn`" — the information is simply not on the wire.
+
+Note the probe can only verify the *current* value on each shard. Replaying from an old position (stored state or an
+explicit starting VGtid) can deliver events written while a different row image was active, and writer sessions can
+override the global value. `FULL` must have been in effect for the entire retained replay range you intend to consume.
+
+For after-images, the default reflection-based decoder fails fast when Vitess explicitly marks a row as partial:
 
 - `RowChange.DataColumns != nil`
 - `RowChange.JsonPartialValues != nil`
 
 That behavior is intentional. Without bitmap-aware decoding, omitted columns can be misread as real `NULL` or empty
-values. If you need to consume partial row images or partial JSON updates, implement `VStreamScanner` and handle the
-bitmaps directly from `rowChange`.
+values. If you need to consume partial after-images or partial JSON updates, implement `VStreamScanner` and handle the
+bitmaps directly from `rowChange` — but note this only helps for after-images, which carry bitmaps; delete
+before-images do not.
 
 ### `ReuseBatchSlice` changes ownership expectations
 
