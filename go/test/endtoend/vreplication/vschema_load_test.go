@@ -19,6 +19,7 @@ package vreplication
 import (
 	"context"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -49,7 +50,15 @@ func TestVSchemaChangesUnderLoad(t *testing.T) {
 	// ch is used to signal that there is significant data inserted into the tables and when a lot of vschema changes have been applied
 	ch := make(chan bool, 1)
 
-	ctx := t.Context()
+	// The load goroutines run until ctx is canceled so they cannot
+	// outlive the test and touch a torn-down cluster.
+	ctx, stop := context.WithCancel(t.Context())
+	var wg sync.WaitGroup
+	defer func() {
+		stop()
+		wg.Wait()
+	}()
+
 	initialDataInserted := false
 	startCid := 100
 	warmupRowCount := startCid + 2000
@@ -73,11 +82,13 @@ func TestVSchemaChangesUnderLoad(t *testing.T) {
 			case <-timer.C:
 				log.Info("Done inserting data into customer")
 				return
+			case <-ctx.Done():
+				return
 			default:
 			}
 		}
 	}
-	go func() {
+	wg.Go(func() {
 		log.Info("Starting to vstream from replica")
 		vgtid := &binlogdatapb.VGtid{
 			ShardGtids: []*binlogdatapb.ShardGtid{{
@@ -112,15 +123,19 @@ func TestVSchemaChangesUnderLoad(t *testing.T) {
 			return
 		}
 		log.Info("About to sleep in vstreaming to block the vstream Recv() channel")
-		time.Sleep(extendedTimeout)
+		select {
+		case <-time.After(extendedTimeout):
+		case <-ctx.Done():
+		}
 		log.Info("Done vstreaming")
-	}()
+	})
 
-	go insertData()
+	wg.Go(insertData)
 	<-ch // wait for enough data to be inserted before ApplyVSchema
 	const maxApplyVSchemas = 20
-	go func() {
+	wg.Go(func() {
 		numApplyVSchema := 0
+		signalled := false
 		timer := time.NewTimer(extendedTimeout)
 		defer timer.Stop()
 		log.Info("Started ApplyVSchema")
@@ -130,19 +145,24 @@ func TestVSchemaChangesUnderLoad(t *testing.T) {
 				return
 			}
 			numApplyVSchema++
-			if numApplyVSchema > maxApplyVSchemas {
+			if numApplyVSchema > maxApplyVSchemas && !signalled {
+				signalled = true
 				ch <- true
 			}
 			select {
 			case <-timer.C:
 				log.Info("Done ApplyVSchema")
-				ch <- true
+				if !signalled {
+					ch <- true
+				}
+				return
+			case <-ctx.Done():
 				return
 			default:
 				time.Sleep(defaultTick)
 			}
 		}
-	}()
+	})
 
 	<-ch // wait for enough ApplyVSchema calls before doing a PRS
 	if err := vc.VtctldClient.ExecuteCommand("PlannedReparentShard", "product/0",
