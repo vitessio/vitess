@@ -260,7 +260,7 @@ func New(ctx context.Context, name string, conn *vtgateconn.VTGateConn, tables [
 		return nil, err
 	}
 
-	storedVGtid, storedTableConfig, copyCompleted, rowExists, err := getLatestVGtid(ctx, v.session, v.cfg.name, v.cfg.vgtidStateKeyspace, v.cfg.vgtidStateTable)
+	storedVGtid, storedTableConfig, copyCompleted, rowExists, observedOwnerToken, err := getLatestVGtid(ctx, v.session, v.cfg.name, v.cfg.vgtidStateKeyspace, v.cfg.vgtidStateTable)
 	if err != nil {
 		return nil, err
 	}
@@ -303,20 +303,18 @@ func New(ctx context.Context, name string, conn *vtgateconn.VTGateConn, tables [
 	}
 
 	// claiming ownership and persisting the starting state are the only state-mutating steps,
-	// and they run last. The claim fences out a still-running client with the same stream name;
-	// the follow-up write is predicated on our token, so a stale constructor cannot steal
-	// ownership back from a newer client.
+	// and they run last, as a single compare-and-swap against the owner token observed when
+	// state was read: it fences out a still-running client with the same stream name, while a
+	// stale constructor that lost the race fails with ErrFenced instead of stealing ownership
+	// back from a newer client.
 	if rowExists {
-		err = claimStateOwnership(ctx, v.session, v.cfg.name, v.cfg.vgtidStateKeyspace, v.cfg.vgtidStateTable, v.cfg.ownerToken)
+		if persistVGtid != nil {
+			err = updateStateRow(ctx, v.session, v.cfg.name, v.cfg.vgtidStateKeyspace, v.cfg.vgtidStateTable, v.cfg.ownerToken, observedOwnerToken, persistVGtid, v.tables, persistCopyCompleted)
+		} else {
+			err = claimStateOwnership(ctx, v.session, v.cfg.name, v.cfg.vgtidStateKeyspace, v.cfg.vgtidStateTable, v.cfg.ownerToken, observedOwnerToken)
+		}
 		if err != nil {
 			return nil, err
-		}
-
-		if persistVGtid != nil {
-			err = updateStateRow(ctx, v.session, v.cfg.name, v.cfg.vgtidStateKeyspace, v.cfg.vgtidStateTable, v.cfg.ownerToken, persistVGtid, v.tables, persistCopyCompleted)
-			if err != nil {
-				return nil, err
-			}
 		}
 	} else {
 		err = insertStateRow(ctx, v.session, v.cfg.name, v.cfg.vgtidStateKeyspace, v.cfg.vgtidStateTable, v.cfg.ownerToken, persistVGtid, v.tables, persistCopyCompleted)

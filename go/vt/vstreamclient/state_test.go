@@ -115,8 +115,9 @@ func stateRowResult(latestVGtid, tableConfig, copyCompleted sqltypes.Value) *sql
 			{Name: "latest_vgtid", Type: querypb.Type_JSON},
 			{Name: "table_config", Type: querypb.Type_JSON},
 			{Name: "copy_completed", Type: querypb.Type_VARCHAR},
+			{Name: "owner_token", Type: querypb.Type_VARBINARY},
 		},
-		Rows: [][]sqltypes.Value{{latestVGtid, tableConfig, copyCompleted}},
+		Rows: [][]sqltypes.Value{{latestVGtid, tableConfig, copyCompleted, sqltypes.NewVarBinary("previous-owner")}},
 	}
 }
 
@@ -162,7 +163,7 @@ func TestGetLatestVGtid_MalformedStoredJSONErrors(t *testing.T) {
 		sqltypes.NewInt64(1),
 	)})
 
-	_, _, _, _, err := getLatestVGtid(t.Context(), session, "stream", "ks", "state")
+	_, _, _, _, _, err := getLatestVGtid(t.Context(), session, "stream", "ks", "state")
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "failed to unmarshal latest_vgtid")
 }
@@ -179,7 +180,7 @@ func TestGetLatestVGtid_MalformedCopyCompletedErrors(t *testing.T) {
 		sqltypes.NewVarBinary("not-a-bool"),
 	)})
 
-	_, _, _, _, err = getLatestVGtid(t.Context(), session, "stream", "ks", "state")
+	_, _, _, _, _, err = getLatestVGtid(t.Context(), session, "stream", "ks", "state")
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "failed to convert copy_completed to bool")
 }
@@ -332,15 +333,17 @@ func TestNew_ExplicitStartingVGtidOverridesStoredState(t *testing.T) {
 		WithStateTable("stateks", "state"), WithStartingVGtid(explicit))
 	require.NoError(t, err)
 
-	// the row exists, so the explicit position lands via claim + owner-predicated update
-	require.Len(t, impl.queries, 5)
+	// the row exists, so the explicit position lands via a single compare-and-swap update that
+	// claims ownership and persists the position atomically
+	require.Len(t, impl.queries, 4)
+	assert.Contains(t, impl.queries[3], "update `stateks`.`state`")
 	assert.Contains(t, impl.queries[3], "set owner_token = :owner_token")
-	assert.Contains(t, impl.queries[4], "update `stateks`.`state`")
-	assert.Contains(t, impl.queries[4], "owner_token = :owner_token")
-	assert.Equal(t, []byte("1"), impl.bindVars[4]["copy_completed"].Value)
+	assert.Contains(t, impl.queries[3], "owner_token <=> :observed_owner_token")
+	assert.Equal(t, []byte("previous-owner"), impl.bindVars[3]["observed_owner_token"].Value)
+	assert.Equal(t, []byte("1"), impl.bindVars[3]["copy_completed"].Value)
 	expectedVGtidJSON, err := protojson.Marshal(explicit)
 	require.NoError(t, err)
-	assert.Equal(t, string(expectedVGtidJSON), string(impl.bindVars[4]["latest_vgtid"].Value))
+	assert.Equal(t, string(expectedVGtidJSON), string(impl.bindVars[3]["latest_vgtid"].Value))
 	assert.True(t, proto.Equal(explicit, v.latestVgtid))
 }
 
@@ -362,20 +365,21 @@ func TestNew_RestartsIncompleteCopyFromScratch(t *testing.T) {
 		WithStateTable("stateks", "state"))
 	require.NoError(t, err)
 
-	// the row exists, so the fresh copy position lands via claim + owner-predicated update,
-	// and copy_completed is explicitly reset so a crash mid-copy is never mistaken for
-	// completed state
-	require.Len(t, impl.queries, 5)
+	// the row exists, so the fresh copy position lands via a single compare-and-swap update
+	// that claims ownership atomically, and copy_completed is explicitly reset so a crash
+	// mid-copy is never mistaken for completed state
+	require.Len(t, impl.queries, 4)
+	assert.Contains(t, impl.queries[3], "update `stateks`.`state`")
 	assert.Contains(t, impl.queries[3], "set owner_token = :owner_token")
-	assert.Contains(t, impl.queries[4], "update `stateks`.`state`")
-	assert.Equal(t, []byte("0"), impl.bindVars[4]["copy_completed"].Value)
+	assert.Contains(t, impl.queries[3], "owner_token <=> :observed_owner_token")
+	assert.Equal(t, []byte("0"), impl.bindVars[3]["copy_completed"].Value)
 
 	freshVGtid := &binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: ""}},
 	}
 	expectedVGtidJSON, err := protojson.Marshal(freshVGtid)
 	require.NoError(t, err)
-	assert.Equal(t, string(expectedVGtidJSON), string(impl.bindVars[4]["latest_vgtid"].Value))
+	assert.Equal(t, string(expectedVGtidJSON), string(impl.bindVars[3]["latest_vgtid"].Value))
 
 	require.Len(t, v.latestVgtid.ShardGtids, 1)
 	assert.Empty(t, v.latestVgtid.ShardGtids[0].Gtid)
