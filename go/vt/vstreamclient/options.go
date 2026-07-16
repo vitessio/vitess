@@ -19,6 +19,7 @@ package vstreamclient
 import (
 	"math"
 	"os"
+	"strings"
 	"time"
 
 	"google.golang.org/protobuf/proto"
@@ -227,9 +228,27 @@ func WithEventFunc(fn EventFunc, eventTypes ...binlogdatapb.VEventType) Option {
 
 // WithStartingVGtid sets the starting VGtid for the VStreamClient. This is useful for resuming a stream from a
 // specific point, vs what might be stored in the state table.
+//
+// The position is persisted with copy_completed=true and becomes the durable restart point, so every
+// shard gtid must be a concrete position: symbolic positions like "current" are resolved afresh by
+// VTGate on every run, which would silently skip rows delivered between a crash and the restart.
 func WithStartingVGtid(vgtid *binlogdatapb.VGtid) Option {
 	return func(v *VStreamClient) error {
-		v.latestVgtid = vgtid
+		if vgtid == nil || len(vgtid.ShardGtids) == 0 {
+			return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: starting vgtid must include at least one shard gtid")
+		}
+
+		for _, shardGtid := range vgtid.ShardGtids {
+			if shardGtid == nil || shardGtid.Keyspace == "" || shardGtid.Shard == "" {
+				return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: every starting shard gtid must name a keyspace and shard")
+			}
+			if shardGtid.Gtid == "" || strings.EqualFold(shardGtid.Gtid, "current") {
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: starting gtid for %s/%s must be a concrete position, got %q: symbolic or empty positions cannot be persisted as a restart point", shardGtid.Keyspace, shardGtid.Shard, shardGtid.Gtid)
+			}
+		}
+
+		// clone so later caller mutations can't change or race with client state
+		v.latestVgtid = proto.Clone(vgtid).(*binlogdatapb.VGtid)
 		return nil
 	}
 }
