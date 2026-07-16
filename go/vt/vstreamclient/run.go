@@ -510,11 +510,14 @@ func (v *VStreamClient) monitorHeartbeat(ctx context.Context) {
 				continue
 			}
 
-			// re-read the timestamp after observing that processing is idle: the event goroutine
-			// may have stored a fresh timestamp and cleared the processing flag between our first
-			// load and the check above, and comparing against the stale value could trigger a
-			// false timeout right at the boundary
-			lastEventProcessedAtUnixNano = v.lastEventProcessedAtUnixNano.Load()
+			// require a stable snapshot: the timestamp must be unchanged across the idle
+			// observation above. handleEvents stores the timestamp before clearing the
+			// processing flag, so if the value moved, a batch completed while we were sampling
+			// and its fresh timestamp resets the window; skip this tick instead of comparing
+			// against a value that was mid-update.
+			if v.lastEventProcessedAtUnixNano.Load() != lastEventProcessedAtUnixNano {
+				continue
+			}
 
 			// if we haven't received an event within the liveness window, we'll cancel the context, since
 			// we're likely disconnected, and exit the goroutine
@@ -530,8 +533,11 @@ func (v *VStreamClient) monitorHeartbeat(ctx context.Context) {
 			}
 
 		case <-startupTimerChan:
-			// this is a sanity check to shutdown the client if we never receive a single event
-			if v.lastEventProcessedAtUnixNano.Load() == 0 && !v.isProcessingEvents.Load() {
+			// this is a sanity check to shutdown the client if we never receive a single event.
+			// The processing flag is checked before the timestamp: handleEvents stores the
+			// timestamp before clearing the flag, so once we observe idle, the timestamp read
+			// is guaranteed to see any batch that just finished.
+			if !v.isProcessingEvents.Load() && v.lastEventProcessedAtUnixNano.Load() == 0 {
 				log.Warn(
 					"vstreamclient: no events received since Run started, shutting down the stream",
 					slog.String("name", v.cfg.name),
