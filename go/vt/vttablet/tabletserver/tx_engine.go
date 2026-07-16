@@ -497,9 +497,20 @@ func (te *TxEngine) prepareFromRedo() error {
 		return readErr
 	}
 
-	// The durable redo metadata has been read and is now the source of truth,
-	// so the previous in-memory reservations can be rebuilt from it.
-	te.preparedPool.ResetReservations()
+	// The durable redo metadata is the source of truth. Dtids absent from it
+	// are already resolved, so their leftover state is cleared. Durable dtids
+	// keep their reservations until replay resolves them, so a replay error
+	// cannot make CommitPrepared treat one as already committed.
+	durable := make(map[string]struct{}, len(prepared)+len(failed))
+	for _, preparedTx := range prepared {
+		durable[preparedTx.Dtid] = struct{}{}
+	}
+
+	for _, preparedTx := range failed {
+		durable[preparedTx.Dtid] = struct{}{}
+	}
+
+	te.preparedPool.ResetReservations(durable)
 
 	var (
 		maxID           = int64(0)
@@ -582,7 +593,7 @@ func (te *TxEngine) prepareTx(ctx context.Context, preparedTx *tx.PreparedTx) (f
 	}
 	// We should not use the external Prepare because
 	// we don't want to write again to the redo log.
-	err = te.preparedPool.Put(conn, preparedTx.Dtid)
+	err = te.preparedPool.PutRecovered(conn, preparedTx.Dtid)
 	if err == nil {
 		te.preparedPool.MarkRedoCommitStarted(preparedTx.Dtid)
 	}

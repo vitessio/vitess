@@ -75,14 +75,49 @@ func (pp *TxPreparedPool) Open() {
 	pp.open = true
 }
 
-// ResetReservations clears all reservations and redo flags so that redo
-// recovery can rebuild them from durable metadata.
-func (pp *TxPreparedPool) ResetReservations() {
+// ResetReservations clears the reservations and redo flags of dtids absent
+// from the durable redo metadata. A durable dtid keeps its reservation until
+// replay swaps it for a connection or records the failure, so a replay error
+// cannot leave it looking already committed.
+func (pp *TxPreparedPool) ResetReservations(durable map[string]struct{}) {
 	pp.mu.Lock()
 	defer pp.mu.Unlock()
 
-	pp.reserved = make(map[string]error)
-	pp.redoCommitStarted = make(map[string]struct{})
+	for dtid := range pp.reserved {
+		if _, ok := durable[dtid]; !ok {
+			delete(pp.reserved, dtid)
+		}
+	}
+
+	for dtid := range pp.redoCommitStarted {
+		if _, ok := durable[dtid]; !ok {
+			delete(pp.redoCommitStarted, dtid)
+		}
+	}
+}
+
+// PutRecovered adds a redo-recovered transaction to the pool, replacing any
+// reservation left over from the previous serving period.
+func (pp *TxPreparedPool) PutRecovered(c *StatefulConnection, dtid string) error {
+	pp.mu.Lock()
+	defer pp.mu.Unlock()
+
+	if !pp.open {
+		return vterrors.VT09025("pool is shutdown")
+	}
+
+	if _, ok := pp.conns[dtid]; ok {
+		return vterrors.VT09025("duplicate DTID in Prepare: " + dtid)
+	}
+
+	if len(pp.conns) >= pp.capacity {
+		return vterrors.New(vtrpcpb.Code_RESOURCE_EXHAUSTED, fmt.Sprintf("prepared transactions exceeded limit: %d", pp.capacity))
+	}
+
+	delete(pp.reserved, dtid)
+	pp.conns[dtid] = c
+
+	return nil
 }
 
 // Close marks the prepared pool closed.

@@ -131,10 +131,51 @@ func TestPrepFetchAllKeepsRedoStartedDTIDsInDoubt(t *testing.T) {
 	require.Equal(t, errPrepRolledBackForShutdown, pp.reserved["aa"])
 	require.True(t, pp.RedoCommitStarted("aa"))
 
-	pp.ResetReservations()
+	pp.ResetReservations(nil)
 
 	require.Empty(t, pp.reserved)
 	require.False(t, pp.RedoCommitStarted("aa"))
+}
+
+// TestPrepResetReservationsKeepsDurable verifies that recovery reset keeps
+// the reservations of durable dtids and clears resolved ones.
+func TestPrepResetReservationsKeepsDurable(t *testing.T) {
+	pp := createAndOpenPreparedPool(2)
+
+	require.NoError(t, pp.Put(&StatefulConnection{}, "aa"))
+	pp.MarkRedoCommitStarted("aa")
+	require.NoError(t, pp.Put(&StatefulConnection{}, "bb"))
+	pp.MarkRedoCommitStarted("bb")
+
+	pp.FetchAllForRollback()
+	pp.Open()
+
+	pp.ResetReservations(map[string]struct{}{"aa": {}})
+
+	require.Equal(t, errPrepRolledBackForShutdown, pp.reserved["aa"])
+	require.True(t, pp.RedoCommitStarted("aa"))
+	require.NotContains(t, pp.reserved, "bb")
+	require.False(t, pp.RedoCommitStarted("bb"))
+}
+
+// TestPrepPutRecovered verifies that redo recovery swaps a leftover
+// reservation for the recovered connection.
+func TestPrepPutRecovered(t *testing.T) {
+	pp := createAndOpenPreparedPool(2)
+
+	require.NoError(t, pp.Put(&StatefulConnection{}, "aa"))
+	pp.MarkRedoCommitStarted("aa")
+
+	pp.FetchAllForRollback()
+	pp.Open()
+
+	err := pp.Put(&StatefulConnection{}, "aa")
+	require.ErrorContains(t, err, "duplicate DTID in Prepare: aa")
+
+	recovered := &StatefulConnection{}
+	require.NoError(t, pp.PutRecovered(recovered, "aa"))
+	require.Equal(t, recovered, pp.conns["aa"])
+	require.NotContains(t, pp.reserved, "aa")
 }
 
 // TestPrepFetchAllKeepsUnheldReservations verifies that shutdown rollback
