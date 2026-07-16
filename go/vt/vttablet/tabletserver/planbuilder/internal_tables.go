@@ -241,14 +241,8 @@ func rejectInternalTableDDL(stmt sqlparser.DDLStatement, tables map[string]*sche
 func rejectInternalTableCreateProcedure(stmt *sqlparser.CreateProcedure, tables map[string]*schema.Table, parser *sqlparser.Parser) error {
 	return sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
 		switch node := node.(type) {
-		case *sqlparser.Insert:
-			return false, rejectInternalTableWrites(node, tables, parser)
-		case *sqlparser.Update:
-			return false, rejectInternalTableWrites(node, tables, parser)
-		case *sqlparser.Delete:
-			return false, rejectInternalTableWrites(node, tables, parser)
-		case sqlparser.DDLStatement:
-			return false, rejectInternalTableWrites(node, tables, parser)
+		case *sqlparser.Insert, *sqlparser.Update, *sqlparser.Delete, sqlparser.DDLStatement:
+			return false, rejectInternalTableWrites(node.(sqlparser.Statement), tables, parser)
 		case *sqlparser.PrepareStmt:
 			return false, rejectInternalTablePrepare(node, tables, parser)
 		}
