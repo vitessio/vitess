@@ -42,7 +42,8 @@ func TestSpliceInitDBSQL(t *testing.T) {
 	out, err = spliceInitDBSQL(string(base), "CREATE USER 'extra'@'%';")
 	require.NoError(t, err)
 	assert.Contains(t, out, "CREATE USER 'extra'@'%';")
-	assert.Less(t,
+	assert.Less(
+		t,
 		strings.Index(out, "CREATE USER 'vt_dba'@'%'"),
 		strings.Index(out, "CREATE USER 'extra'@'%';"),
 		"extra SQL goes after the framework grants",

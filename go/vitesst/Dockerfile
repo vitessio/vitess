@@ -14,11 +14,11 @@
 
 # The vitesst e2e test image: a MySQL flavor installed by the repo's standard
 # install script, plus Vitess binaries cross-compiled on the host into
-# .vitesst_install/bin (see `make vitesst-images`). The binaries are copied
+# .vitesst_install/bin (see `make vitesst_images`). The binaries are copied
 # last so the MySQL layers cache across source changes.
 #
 # Build from the repo root, e.g.:
-#   docker buildx bake --load -f go/test/vitesst/docker-bake.hcl
+#   docker buildx bake --load -f go/vitesst/docker-bake.hcl
 
 ARG BASE_IMAGE=debian:trixie-slim
 

@@ -36,7 +36,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/test/vitesst"
+	"vitess.io/vitess/go/vitesst"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -120,7 +120,8 @@ func printQueryResult(writer io.Writer, qr *sqltypes.Result) {
 		return
 	}
 
-	table := tablewriter.NewTable(writer,
+	table := tablewriter.NewTable(
+		writer,
 		tablewriter.WithSymbols(tw.NewSymbols(tw.StyleASCII)),
 		tablewriter.WithHeaderAutoFormat(tw.State(-1)),
 		tablewriter.WithRowMaxWidth(30),
@@ -196,7 +197,8 @@ func vtgateExecDDL(t *testing.T, vtParams *mysql.ConnParams, ddlStrategy string,
 
 // checkRetryMigration attempts to retry a migration, and expects success/failure by counting affected rows
 func checkRetryMigration(t *testing.T, vtParams *mysql.ConnParams, shards []*vitesst.Shard, uuid string, expectRetryPossible bool) {
-	query, err := sqlparser.ParseAndBind("alter vitess_migration %a retry",
+	query, err := sqlparser.ParseAndBind(
+		"alter vitess_migration %a retry",
 		sqltypes.StringBindVariable(uuid),
 	)
 	require.NoError(t, err)
@@ -211,7 +213,8 @@ func checkRetryMigration(t *testing.T, vtParams *mysql.ConnParams, shards []*vit
 
 // checkRetryPartialMigration attempts to retry a migration where a subset of shards failed
 func checkRetryPartialMigration(t *testing.T, vtParams *mysql.ConnParams, uuid string, expectAtLeastRowsAffected uint64) {
-	query, err := sqlparser.ParseAndBind("alter vitess_migration %a retry",
+	query, err := sqlparser.ParseAndBind(
+		"alter vitess_migration %a retry",
 		sqltypes.StringBindVariable(uuid),
 	)
 	require.NoError(t, err)
@@ -222,7 +225,8 @@ func checkRetryPartialMigration(t *testing.T, vtParams *mysql.ConnParams, uuid s
 
 // checkCancelMigration attempts to cancel a migration, and expects success/failure by counting affected rows
 func checkCancelMigration(t *testing.T, vtParams *mysql.ConnParams, shards []*vitesst.Shard, uuid string, expectCancelPossible bool) {
-	query, err := sqlparser.ParseAndBind("alter vitess_migration %a cancel",
+	query, err := sqlparser.ParseAndBind(
+		"alter vitess_migration %a cancel",
 		sqltypes.StringBindVariable(uuid),
 	)
 	require.NoError(t, err)
@@ -237,7 +241,8 @@ func checkCancelMigration(t *testing.T, vtParams *mysql.ConnParams, shards []*vi
 
 // checkCleanupMigration attempts to cleanup a migration, and expects success by counting affected rows
 func checkCleanupMigration(t *testing.T, vtParams *mysql.ConnParams, shards []*vitesst.Shard, uuid string) {
-	query, err := sqlparser.ParseAndBind("alter vitess_migration %a cleanup",
+	query, err := sqlparser.ParseAndBind(
+		"alter vitess_migration %a cleanup",
 		sqltypes.StringBindVariable(uuid),
 	)
 	require.NoError(t, err)
@@ -248,7 +253,8 @@ func checkCleanupMigration(t *testing.T, vtParams *mysql.ConnParams, shards []*v
 
 // checkCompleteMigration attempts to complete a migration, and expects success by counting affected rows
 func checkCompleteMigration(t *testing.T, vtParams *mysql.ConnParams, shards []*vitesst.Shard, uuid string, expectCompletePossible bool) {
-	query, err := sqlparser.ParseAndBind("alter vitess_migration %a complete",
+	query, err := sqlparser.ParseAndBind(
+		"alter vitess_migration %a complete",
 		sqltypes.StringBindVariable(uuid),
 	)
 	require.NoError(t, err)
@@ -263,7 +269,8 @@ func checkCompleteMigration(t *testing.T, vtParams *mysql.ConnParams, shards []*
 
 // checkLaunchMigration attempts to launch a migration, and expects success by counting affected rows
 func checkLaunchMigration(t *testing.T, vtParams *mysql.ConnParams, shards []*vitesst.Shard, uuid string, launchShards string, expectLaunchPossible bool) {
-	query, err := sqlparser.ParseAndBind("alter vitess_migration %a launch vitess_shards %a",
+	query, err := sqlparser.ParseAndBind(
+		"alter vitess_migration %a launch vitess_shards %a",
 		sqltypes.StringBindVariable(uuid),
 		sqltypes.StringBindVariable(launchShards),
 	)
@@ -321,7 +328,8 @@ func checkLaunchAllMigrations(t *testing.T, vtParams *mysql.ConnParams, expectCo
 // checkMigrationStatus verifies that the migration indicated by given UUID has the given expected status
 func checkMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []*vitesst.Shard, uuid string, expectStatuses ...schema.OnlineDDLStatus) bool {
 	ksName := shards[0].Keyspace.Name
-	query, err := sqlparser.ParseAndBind(fmt.Sprintf("show vitess_migrations from %s like %%a", ksName),
+	query, err := sqlparser.ParseAndBind(
+		fmt.Sprintf("show vitess_migrations from %s like %%a", ksName),
 		sqltypes.StringBindVariable(uuid),
 	)
 	require.NoError(t, err)
@@ -351,7 +359,8 @@ func waitForMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []*
 	for _, shard := range shards {
 		shardNames[shard.Name] = true
 	}
-	query, err := sqlparser.ParseAndBind("show vitess_migrations like %a",
+	query, err := sqlparser.ParseAndBind(
+		"show vitess_migrations like %a",
 		sqltypes.StringBindVariable(uuid),
 	)
 	require.NoError(t, err)
@@ -404,7 +413,8 @@ func checkMigrationArtifacts(t *testing.T, vtParams *mysql.ConnParams, shards []
 
 // readMigrations reads migration entries
 func readMigrations(t *testing.T, vtParams *mysql.ConnParams, like string) *sqltypes.Result {
-	query, err := sqlparser.ParseAndBind("show vitess_migrations like %a",
+	query, err := sqlparser.ParseAndBind(
+		"show vitess_migrations like %a",
 		sqltypes.StringBindVariable(like),
 	)
 	require.NoError(t, err)
@@ -548,7 +558,8 @@ func validateCompletedTimestamp(t *testing.T, vtParams *mysql.ConnParams) {
 
 // waitForVReplicationStatus waits for a vreplication stream to be in one of given states, or timeout
 func waitForVReplicationStatus(t *testing.T, tablet *vitesst.Tablet, uuid string, timeout time.Duration, expectStatuses ...string) (status string) {
-	query, err := sqlparser.ParseAndBind("select state from _vt.vreplication where workflow=%a",
+	query, err := sqlparser.ParseAndBind(
+		"select state from _vt.vreplication where workflow=%a",
 		sqltypes.StringBindVariable(uuid),
 	)
 	require.NoError(t, err)

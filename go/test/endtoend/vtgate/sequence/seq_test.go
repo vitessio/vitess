@@ -27,7 +27,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/sqlerror"
-	"vitess.io/vitess/go/test/vitesst"
+	"vitess.io/vitess/go/vitesst"
 )
 
 var (

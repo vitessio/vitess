@@ -32,7 +32,7 @@ import (
 	"github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/test/vitesst"
+	"vitess.io/vitess/go/vitesst"
 )
 
 // tableData is a temporary structure to hold selected data.

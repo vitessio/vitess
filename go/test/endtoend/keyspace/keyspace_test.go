@@ -28,7 +28,7 @@ import (
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/json2"
-	"vitess.io/vitess/go/test/vitesst"
+	"vitess.io/vitess/go/vitesst"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/topo"
 	_ "vitess.io/vitess/go/vt/topo/etcd2topo"

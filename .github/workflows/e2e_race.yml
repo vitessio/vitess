@@ -92,4 +92,4 @@ jobs:
       if: steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 30
       run: |
-        NOVTADMINBUILD=1 make e2e_test_race
+        NOVTADMINBUILD=1 make e2e_race

@@ -29,7 +29,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	topoutils "vitess.io/vitess/go/test/endtoend/topotest/utils"
-	"vitess.io/vitess/go/test/vitesst"
+	"vitess.io/vitess/go/vitesst"
 	"vitess.io/vitess/go/vt/topo"
 
 	// Registers the consul topology factory so topo.OpenServer can dial it.

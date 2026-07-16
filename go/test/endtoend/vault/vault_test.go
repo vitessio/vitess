@@ -28,7 +28,7 @@ import (
 	"github.com/testcontainers/testcontainers-go/network"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/vitesst"
+	"vitess.io/vitess/go/vitesst"
 	"vitess.io/vitess/go/vt/tlstest"
 )
 

@@ -29,7 +29,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/test/vitesst"
+	"vitess.io/vitess/go/vitesst"
 )
 
 const authServerStaticPath = "/vt/files/mysql_auth_server_static.json"

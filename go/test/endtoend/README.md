@@ -19,7 +19,7 @@ The main purpose of grouping them together is to make sure we have single place 
 ### Setup
 All the tests should be launching a real cluster just like the production setup and execute the tests on that setup followed by a teardown of all the services.
 
-The cluster launch functions are provided under go/test/vitesst. A test builds a cluster with `vitesst.NewCluster`, passing keyspace, shard, and component options, then calls `Start`, which brings up the containers and returns a cleanup function.
+The cluster launch functions are provided under go/vitesst. A test builds a cluster with `vitesst.NewCluster`, passing keyspace, shard, and component options, then calls `Start`, which brings up the containers and returns a cleanup function.
 
 In general the cluster is built in the following order
 - Define the keyspace and its shards, with the schema
@@ -28,7 +28,7 @@ In general the cluster is built in the following order
 - Start the corresponding vttablets (at least one primary per shard)
 - Start vtctld and vtgate
 
-A good example to refer to is any `main_test.go` under go/test/endtoend; go/test/vitesst holds the framework itself.
+A good example to refer to is any `main_test.go` under go/test/endtoend; go/vitesst holds the framework itself.
 
 ### Pre-Requisite
 Make sure Docker is running. The framework builds the component images on demand from the current tree, so no local vitess binaries are required.

@@ -21,7 +21,7 @@ limitations under the License.
 //
 // The containers run the prebuilt vitesst:mysql80, vitesst:mysql84 and
 // vitesst:mariadb Docker images. Build them from the current source tree with
-// `make vitesst-images` before running tests so the containers use the code
+// `make vitesst_images` before running tests so the containers use the code
 // under test. The VITESST_IMAGE environment variable overrides the image
 // entirely, and a keyspace's tablets take another image with WithImage.
 //

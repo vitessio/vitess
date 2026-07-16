@@ -26,7 +26,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	twopcutil "vitess.io/vitess/go/test/endtoend/transaction/twopc/utils"
-	"vitess.io/vitess/go/test/vitesst"
+	"vitess.io/vitess/go/vitesst"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 )
 

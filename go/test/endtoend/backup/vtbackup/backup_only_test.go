@@ -30,7 +30,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/stats/opentsdb"
-	"vitess.io/vitess/go/test/vitesst"
+	"vitess.io/vitess/go/vitesst"
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -121,7 +121,8 @@ func TestTabletInitialBackup(t *testing.T) {
 func prepareCluster(t *testing.T) (*vitesst.Cluster, *vitesst.Tablet, *vitesst.Tablet) {
 	t.Helper()
 
-	cluster := startCluster(t,
+	cluster := startCluster(
+		t,
 		vitesst.WithKeyspace(keyspaceName).
 			WithShardNames(shardName).
 			WithDurabilityPolicy("semi_sync").
@@ -181,7 +182,8 @@ func TestTabletBackupOnly(t *testing.T) {
 	//    - Bring up a second replica, and restore from the second backup
 	//    - list the backups, remove them
 
-	cluster := startCluster(t,
+	cluster := startCluster(
+		t,
 		vitesst.WithKeyspace(keyspaceName).
 			WithShardNames(shardName).
 			WithReplicas(1).

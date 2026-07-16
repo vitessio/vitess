@@ -30,7 +30,8 @@
       "Packages": [],
       "Args": [],
       "Command": [
-        "tools/e2e_test_runner.sh"
+        "make",
+        "e2e"
       ],
       "Manual": false,
       "Shard": "",
@@ -43,7 +44,7 @@
       "Args": [],
       "Command": [
         "make",
-        "e2e_test_race"
+        "e2e_race"
       ],
       "Manual": false,
       "Shard": "",

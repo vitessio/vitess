@@ -38,7 +38,7 @@ def pack(entries, budget):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--budget", type=int, default=1200, help="target seconds per CI job")
-    parser.add_argument("--manifest", default="go/test/vitesst/migration/manifest.json")
+    parser.add_argument("--manifest", default="go/vitesst/migration/manifest.json")
     args = parser.parse_args()
 
     with open(args.manifest) as f:

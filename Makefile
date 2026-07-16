@@ -46,7 +46,7 @@ export REWRITER=go/vt/sqlparser/rewriter.go
 # Since we are not using this Makefile for compilation, limiting parallelism will not increase build time.
 .NOTPARALLEL:
 
-.PHONY: all build install test clean unit_test unit_test_cover unit_test_race integration_test proto proto_banner site_test site_integration_test docker_bootstrap docker_test docker_unit_test java_test reshard_tests e2e_test e2e_test_race lint lint-fix minimaltools tools generate-flag-testdata
+.PHONY: all build install test clean unit_test unit_test_cover unit_test_race integration_test proto proto_banner site_test site_integration_test docker_bootstrap docker_test docker_unit_test java_test reshard_tests e2e e2e_race lint lint-fix minimaltools tools generate-flag-testdata
 
 all: build
 
@@ -151,24 +151,24 @@ cross-install: cross-build
 	mkdir -p "$${PREFIX}/bin"
 	cp "${VTROOTBIN}/${GOOS}_${GOARCH}/"{mysqlctl,mysqlctld,vtorc,vtadmin,vtctld,vtctlclient,vtctldclient,vtgate,vttablet,vtbackup} "$${PREFIX}/bin/"
 
-# vitesst-images builds the vitesst e2e test images (vitesst:mysql80,
+# vitesst_images builds the vitesst e2e test images (vitesst:mysql80,
 # vitesst:mysql84 and vitesst:mariadb) from the current source tree. Binaries
 # are cross-compiled on the host for the Docker server architecture, so image
 # rebuilds after source changes only cost a COPY layer.
-# Usage: make vitesst-images
-vitesst-images:
+# Usage: make vitesst_images
+vitesst_images:
 ifndef NOBANNER
 	echo $$(date): Building vitesst images
 endif
 	${MAKE} cross-install GOOS=linux GOARCH=$$(docker version --format '{{.Server.Arch}}') PREFIX=${PWD}/.vitesst_install
-	docker buildx bake --load -f go/test/vitesst/docker-bake.hcl
+	docker buildx bake --load -f go/vitesst/docker-bake.hcl
 
 # vitesst-images-debug2pc builds the vitesst image variant whose binaries
 # carry the debug2PC build tag, for the transaction/twopc fault-injection
 # suites. Run with VITESST_IMAGE=vitesst:mysql84-debug2pc.
 vitesst-images-debug2pc:
 	EXTRA_BUILD_TAGS=debug2PC ${MAKE} cross-install GOOS=linux GOARCH=$$(docker version --format '{{.Server.Arch}}') PREFIX=${PWD}/.vitesst_install_debug2pc
-	docker buildx bake --load -f go/test/vitesst/docker-bake.hcl mysql84-debug2pc
+	docker buildx bake --load -f go/vitesst/docker-bake.hcl mysql84-debug2pc
 
 # vitesst-image-ref bakes a vitesst image from a directory of already-compiled
 # binaries, tagging it as requested. The upgrade/downgrade suite uses it to
@@ -190,7 +190,7 @@ endif
 ifndef BIN_DIR
 	$(error BIN_DIR is required, e.g. BIN_DIR=.vitesst_install_prev/bin)
 endif
-	docker buildx bake --load -f go/test/vitesst/docker-bake.hcl ${VITESST_REF_TARGET} \
+	docker buildx bake --load -f go/vitesst/docker-bake.hcl ${VITESST_REF_TARGET} \
 		--set ${VITESST_REF_TARGET}.args.BIN_DIR=${BIN_DIR} \
 		--set ${VITESST_REF_TARGET}.tags=${IMAGE_TAG}
 
@@ -256,16 +256,18 @@ unit_test: build dependency_check demo
 	echo $$(date): Running unit tests
 	tools/unit_test_runner.sh
 
-e2e_test: build
-	echo $$(date): Running endtoend tests
-	go test $(VT_GO_PARALLEL) ./go/.../endtoend/...
-
-# e2e_vitesst runs the containerized end-to-end tests. It builds the images
+# e2e runs the containerized end-to-end tests. It builds the images
 # from the current source first, so the containers run the code under test.
-# Usage: make e2e_vitesst [PKG=./go/test/endtoend/vtgate/...]
-e2e_vitesst: vitesst-images
-	echo $$(date): Running vitesst endtoend tests
-	VITESST_E2E=1 go test -count=1 -timeout 60m $(or $(PKG),./go/test/vitesst/... ./go/test/endtoend/...)
+# Usage: make e2e [PKG=./go/test/endtoend/vtgate/...]
+e2e: vitesst_images
+	echo $$(date): Running endtoend tests
+	go test -count=1 -timeout 60m $(or $(PKG),./go/test/endtoend/...)
+
+# e2e_race runs the containerized end-to-end tests with the race detector.
+# Usage: make e2e_race [PKG=./go/test/endtoend/vtgate/...]
+e2e_race: vitesst_images
+	echo $$(date): Running endtoend tests with the race detector
+	go test -race -count=1 -timeout 60m $(or $(PKG),./go/test/endtoend/...)
 
 # Run the code coverage tools, compute aggregate.
 unit_test_cover: build dependency_check demo
@@ -273,12 +275,6 @@ unit_test_cover: build dependency_check demo
 
 unit_test_race: build dependency_check
 	RACE=1 tools/unit_test_runner.sh
-
-e2e_test_race: build
-	tools/e2e_test_race.sh
-
-e2e_test_cluster: build
-	tools/e2e_test_cluster.sh
 
 .ONESHELL:
 SHELL = /bin/bash

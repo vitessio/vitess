@@ -27,7 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	twopcutil "vitess.io/vitess/go/test/endtoend/transaction/twopc/utils"
-	"vitess.io/vitess/go/test/vitesst"
+	"vitess.io/vitess/go/vitesst"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 )

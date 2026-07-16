@@ -26,7 +26,7 @@ import (
 
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/test/endtoend/tabletgateway/buffer"
-	"vitess.io/vitess/go/test/vitesst"
+	"vitess.io/vitess/go/vitesst"
 	"vitess.io/vitess/go/vt/log"
 
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"

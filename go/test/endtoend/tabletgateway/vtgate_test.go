@@ -31,7 +31,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/vitesst"
+	"vitess.io/vitess/go/vitesst"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 

@@ -14,18 +14,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Framework self-tests: they exercise the tricky seams of the vitesst
-// framework itself (supervisor lifecycle, restart handles, comparison MySQL)
-// against real Docker containers. They are skipped unless VITESST_E2E=1 so
-// unit-test runs of ./go/... stay Docker-free; run them with:
+// Framework self-tests exercise supervisor lifecycle, restart handles, and
+// comparison MySQL against real Docker containers. Run them with:
 //
-//	make vitesst-images && VITESST_E2E=1 go test -count=1 -v ./go/test/vitesst/
+//	make vitesst_images && go test -count=1 -v ./go/vitesst/
 package vitesst_test
 
 import (
 	"context"
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
@@ -33,7 +30,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/vitesst"
+	"vitess.io/vitess/go/vitesst"
 )
 
 const selfTestSchema = `create table t1(
@@ -48,18 +45,8 @@ const selfTestVSchema = `{
 	"tables": {"t1": {"column_vindexes": [{"column": "id", "name": "hash"}]}}
 }`
 
-// requireE2E gates the Docker-backed self-tests behind VITESST_E2E=1 and runs
-// them in parallel: each test has its own cluster.
-func requireE2E(t *testing.T) {
-	t.Helper()
-	if os.Getenv("VITESST_E2E") == "" {
-		t.Skip("set VITESST_E2E=1 to run vitesst framework self-tests against Docker")
-	}
-	t.Parallel()
-}
-
 func TestClusterBootstrap(t *testing.T) {
-	requireE2E(t)
+	t.Parallel()
 
 	c, err := vitesst.NewCluster(
 		vitesst.WithCells("zone1", "zone2"),
@@ -183,17 +170,17 @@ func bootstrapTopoFlavor(t *testing.T, flavor string) {
 }
 
 func TestClusterBootstrapConsul(t *testing.T) {
-	requireE2E(t)
+	t.Parallel()
 	bootstrapTopoFlavor(t, "consul")
 }
 
 func TestClusterBootstrapZookeeper(t *testing.T) {
-	requireE2E(t)
+	t.Parallel()
 	bootstrapTopoFlavor(t, "zk2")
 }
 
 func TestTabletProcessLifecycle(t *testing.T) {
-	requireE2E(t)
+	t.Parallel()
 
 	c, err := vitesst.NewCluster(
 		vitesst.WithKeyspace("ks").
@@ -263,7 +250,7 @@ func TestTabletProcessLifecycle(t *testing.T) {
 // running cluster: new shards get their own tablets, an elected primary, and
 // the keyspace's schema, while the source shard keeps serving.
 func TestAddShard(t *testing.T) {
-	requireE2E(t)
+	t.Parallel()
 
 	c, err := vitesst.NewCluster(
 		vitesst.WithKeyspace("ks").
@@ -319,7 +306,7 @@ func TestAddShard(t *testing.T) {
 // a replica, vtbackup takes another, both are listed, and a replica restores
 // from them.
 func TestBackupCycle(t *testing.T) {
-	requireE2E(t)
+	t.Parallel()
 
 	c, err := vitesst.NewCluster(
 		vitesst.WithBackupStorage(),
@@ -379,7 +366,7 @@ func TestBackupCycle(t *testing.T) {
 }
 
 func TestVTGateRestart(t *testing.T) {
-	requireE2E(t)
+	t.Parallel()
 
 	c, err := vitesst.NewCluster(
 		vitesst.WithKeyspace("ks").WithSchema(selfTestSchema),
@@ -416,7 +403,7 @@ func TestVTGateRestart(t *testing.T) {
 }
 
 func TestNewMySQLComparison(t *testing.T) {
-	requireE2E(t)
+	t.Parallel()
 
 	c, err := vitesst.NewCluster(
 		vitesst.WithKeyspace("ks").WithSchema(selfTestSchema),

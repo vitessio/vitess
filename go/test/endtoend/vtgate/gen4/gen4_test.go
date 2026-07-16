@@ -21,7 +21,7 @@ import (
 	"strconv"
 	"testing"
 
-	"vitess.io/vitess/go/test/vitesst"
+	"vitess.io/vitess/go/vitesst"
 
 	"github.com/stretchr/testify/assert"
 

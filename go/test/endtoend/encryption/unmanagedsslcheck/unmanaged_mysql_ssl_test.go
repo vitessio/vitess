@@ -35,7 +35,7 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/vitesst"
+	"vitess.io/vitess/go/vitesst"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttls"
@@ -123,7 +123,8 @@ GRANT ALL ON *.* TO '%[1]s'@'%%';
 
 	probe := []string{"mysql", "--socket", socket, "-u", testUser, "-ppassword", "-e", "SELECT 1"}
 
-	ctr, err := testcontainers.Run(ctx, vitesst.Image("8.4"),
+	ctr, err := testcontainers.Run(
+		ctx, vitesst.Image("8.4"),
 		testcontainers.WithEntrypoint("bash", "-c", script),
 		testcontainers.WithEnv(map[string]string{"EXTRA_MY_CNF": cnfPath}),
 		testcontainers.WithExposedPorts(fmt.Sprintf("%d/tcp", mysqlPort)),
@@ -135,7 +136,8 @@ GRANT ALL ON *.* TO '%[1]s'@'%%';
 			testcontainers.ContainerFile{Reader: strings.NewReader(secureCnf), ContainerFilePath: cnfPath, FileMode: 0o644},
 			testcontainers.ContainerFile{Reader: strings.NewReader(initSQL), ContainerFilePath: initPath, FileMode: 0o644},
 		),
-		testcontainers.WithWaitStrategyAndDeadline(startupWait,
+		testcontainers.WithWaitStrategyAndDeadline(
+			startupWait,
 			wait.ForExec(probe).
 				WithStartupTimeout(startupWait).
 				WithPollInterval(100*time.Millisecond),

@@ -34,7 +34,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/test/vitesst"
+	"vitess.io/vitess/go/vitesst"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vtorc/logic"
 )
@@ -492,7 +492,8 @@ func waitForInstancePollSecondsExceededCount(ctx context.Context, t *testing.T, 
 		require.NoError(c, err)
 		exceeded := getIntFromValue(vars["DiscoveriesInstancePollSecondsExceeded"])
 		if enforceEquality {
-			ok := assert.EqualValues(c, minCountExpected, exceeded,
+			ok := assert.EqualValues(
+				c, minCountExpected, exceeded,
 				"The metric DiscoveriesInstancePollSecondsExceeded should be %v but is %v",
 				minCountExpected, exceeded,
 			)

@@ -30,7 +30,7 @@ import (
 
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/protoutil"
-	"vitess.io/vitess/go/test/vitesst"
+	"vitess.io/vitess/go/vitesst"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"

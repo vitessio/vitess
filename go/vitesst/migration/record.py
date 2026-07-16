@@ -12,7 +12,7 @@ Usage: record.py --sha <commit> results.tsv [results.tsv ...]
 import argparse
 import json
 
-MANIFEST = "go/test/vitesst/migration/manifest.json"
+MANIFEST = "go/vitesst/migration/manifest.json"
 PREFIX = "vitess.io/vitess/go/test/endtoend/"
 
 PASSED = {"verified", "passed"}

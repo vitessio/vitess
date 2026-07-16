@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"testing"
 
-	"vitess.io/vitess/go/test/vitesst"
+	"vitess.io/vitess/go/vitesst"
 
 	"github.com/stretchr/testify/require"
 

@@ -100,4 +100,4 @@ jobs:
         # which musn't be more than 107 characters long.
         export VTDATAROOT="/tmp/"
 
-        tools/e2e_test_runner.sh
+        make e2e

@@ -33,7 +33,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/onlineddl"
-	"vitess.io/vitess/go/test/vitesst"
+	"vitess.io/vitess/go/vitesst"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -79,7 +79,8 @@ func applySchemaWithOutput(ctx context.Context, keyspace string, sql string, par
 // checkMigrationStatus verifies that the migration indicated by given UUID has the given expected status
 func checkMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []*vitesst.Shard, uuid string, expectStatuses ...schema.OnlineDDLStatus) bool {
 	ksName := shards[0].Keyspace.Name
-	query, err := sqlparser.ParseAndBind(fmt.Sprintf("show vitess_migrations from %s like %%a", ksName),
+	query, err := sqlparser.ParseAndBind(
+		fmt.Sprintf("show vitess_migrations from %s like %%a", ksName),
 		sqltypes.StringBindVariable(uuid),
 	)
 	require.NoError(t, err)
@@ -109,7 +110,8 @@ func waitForMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []*
 	for _, shard := range shards {
 		shardNames[shard.Name] = true
 	}
-	query, err := sqlparser.ParseAndBind("show vitess_migrations like %a",
+	query, err := sqlparser.ParseAndBind(
+		"show vitess_migrations like %a",
 		sqltypes.StringBindVariable(uuid),
 	)
 	require.NoError(t, err)

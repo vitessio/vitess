@@ -29,7 +29,7 @@ import (
 	mapsx "golang.org/x/exp/maps"
 	"google.golang.org/protobuf/encoding/protojson"
 
-	"vitess.io/vitess/go/test/vitesst"
+	"vitess.io/vitess/go/vitesst"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 

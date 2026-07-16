@@ -32,8 +32,8 @@ import (
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/test/vitesst"
 	"vitess.io/vitess/go/textutil"
+	"vitess.io/vitess/go/vitesst"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/proto/topodata"
@@ -115,7 +115,8 @@ func LaunchCluster(t *testing.T, cDetails *CompressionDetails) {
 	ctx := t.Context()
 
 	commonTabletArg = getDefaultCommonArgs()
-	commonTabletArg = append(commonTabletArg,
+	commonTabletArg = append(
+		commonTabletArg,
 		"--backup-engine-implementation", "mysqlshell",
 		"--mysql-shell-backup-location", mysqlShellBackupLocation,
 		"--mysql-shell-speedup-restore=true",

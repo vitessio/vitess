@@ -35,7 +35,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/test/vitesst"
+	"vitess.io/vitess/go/vitesst"
 	"vitess.io/vitess/go/vt/log"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -93,7 +93,8 @@ func vtgateExecDDL(t *testing.T, vtParams *mysql.ConnParams, ddlStrategy string,
 // checkMigrationStatus verifies that the migration indicated by given UUID has the given expected status
 func checkMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []*vitesst.Shard, uuid string, expectStatuses ...schema.OnlineDDLStatus) bool {
 	ksName := shards[0].Keyspace.Name
-	query, err := sqlparser.ParseAndBind(fmt.Sprintf("show vitess_migrations from %s like %%a", ksName),
+	query, err := sqlparser.ParseAndBind(
+		fmt.Sprintf("show vitess_migrations from %s like %%a", ksName),
 		sqltypes.StringBindVariable(uuid),
 	)
 	require.NoError(t, err)
@@ -123,7 +124,8 @@ func waitForMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []*
 	for _, shard := range shards {
 		shardNames[shard.Name] = true
 	}
-	query, err := sqlparser.ParseAndBind("show vitess_migrations like %a",
+	query, err := sqlparser.ParseAndBind(
+		"show vitess_migrations like %a",
 		sqltypes.StringBindVariable(uuid),
 	)
 	require.NoError(t, err)
@@ -165,7 +167,8 @@ func waitForMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []*
 
 // checkCompleteMigration attempts to complete a migration, and expects success by counting affected rows
 func checkCompleteMigration(t *testing.T, vtParams *mysql.ConnParams, shards []*vitesst.Shard, uuid string, expectCompletePossible bool) {
-	query, err := sqlparser.ParseAndBind("alter vitess_migration %a complete",
+	query, err := sqlparser.ParseAndBind(
+		"alter vitess_migration %a complete",
 		sqltypes.StringBindVariable(uuid),
 	)
 	require.NoError(t, err)
@@ -180,7 +183,8 @@ func checkCompleteMigration(t *testing.T, vtParams *mysql.ConnParams, shards []*
 
 // readMigrations reads migration entries
 func readMigrations(t *testing.T, vtParams *mysql.ConnParams, like string) *sqltypes.Result {
-	query, err := sqlparser.ParseAndBind("show vitess_migrations like %a",
+	query, err := sqlparser.ParseAndBind(
+		"show vitess_migrations like %a",
 		sqltypes.StringBindVariable(like),
 	)
 	require.NoError(t, err)
@@ -209,7 +213,8 @@ func printQueryResult(writer io.Writer, qr *sqltypes.Result) {
 		return
 	}
 
-	table := tablewriter.NewTable(writer,
+	table := tablewriter.NewTable(
+		writer,
 		tablewriter.WithSymbols(tw.NewSymbols(tw.StyleASCII)),
 		tablewriter.WithHeaderAutoFormat(tw.State(-1)),
 		tablewriter.WithRowMaxWidth(30),

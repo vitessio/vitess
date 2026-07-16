@@ -25,7 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/test/vitesst"
+	"vitess.io/vitess/go/vitesst"
 )
 
 // cloneRestoreArgs make a vttablet get its data with MySQL CLONE from the
@@ -48,7 +48,8 @@ func TestCloneRestore(t *testing.T) {
 	// The clone flags are cluster wide, so the replica that joins the shard
 	// later picks them up. The primary and replica1 come up with the shard,
 	// before there is a donor to clone from, and turn the clone off.
-	cluster := startCluster(t,
+	cluster := startCluster(
+		t,
 		vitesst.WithVTTabletArgs(cloneRestoreArgs...),
 		vitesst.WithKeyspace(keyspaceName).
 			WithShardNames(shardName).

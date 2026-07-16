@@ -24,7 +24,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/test/vitesst"
+	"vitess.io/vitess/go/vitesst"
 	"vitess.io/vitess/go/vt/tlstest"
 )
 
@@ -76,7 +76,8 @@ func testReplicationBase(t *testing.T, isClientCertPassed bool) {
 			WithoutPrimaryElection().
 			WithTabletSpec(func(spec *vitesst.TabletSpec) {
 				if isClientCertPassed && spec.Type == "replica" {
-					spec.ExtraArgs = append(spec.ExtraArgs,
+					spec.ExtraArgs = append(
+						spec.ExtraArgs,
 						"--db-flags", "2048",
 						"--db-ssl-ca", "/vt/files/ca-cert.pem",
 						"--db-ssl-cert", "/vt/files/client-cert.pem",
@@ -103,7 +104,8 @@ func testReplicationBase(t *testing.T, isClientCertPassed bool) {
 	primaryTablet := shard.Replicas()[0]
 
 	// Reparent using SSL (this will also check replication works)
-	err = cluster.Vtctld().ExecuteCommand(ctx,
+	err = cluster.Vtctld().ExecuteCommand(
+		ctx,
 		"PlannedReparentShard",
 		keyspace+"/"+shardName,
 		"--wait-replicas-timeout", "31s",

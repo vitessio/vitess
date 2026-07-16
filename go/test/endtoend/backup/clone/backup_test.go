@@ -24,14 +24,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/test/vitesst"
+	"vitess.io/vitess/go/vitesst"
 	"vitess.io/vitess/go/vt/log"
 )
 
 func TestCloneBackup(t *testing.T) {
 	// The primary and replica1 come up with the shard; replica2 joins later and
 	// restores from the backup this test takes.
-	cluster := startCluster(t,
+	cluster := startCluster(
+		t,
 		vitesst.WithKeyspace(keyspaceName).
 			WithShardNames(shardName).
 			WithReplicas(1).
