@@ -24,7 +24,7 @@ import (
 	"sync"
 	"time"
 
-	"gopkg.in/ldap.v2"
+	"github.com/go-ldap/ldap/v3"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/netutil"
@@ -124,7 +124,13 @@ func (asl *AuthServerLdap) validate(username, password string) (mysql.Getter, er
 		return nil, err
 	}
 	defer asl.Close()
-	if err := asl.Bind(fmt.Sprintf(asl.UserDnPattern, username), password); err != nil {
+	var err error
+	if password == "" {
+		err = asl.UnauthenticatedBind(fmt.Sprintf(asl.UserDnPattern, username))
+	} else {
+		err = asl.Bind(fmt.Sprintf(asl.UserDnPattern, username), password)
+	}
+	if err != nil {
 		return nil, err
 	}
 	groups, err := asl.getGroups(username)
@@ -136,7 +142,12 @@ func (asl *AuthServerLdap) validate(username, password string) (mysql.Getter, er
 
 // this needs to be passed an already connected client...should check for this
 func (asl *AuthServerLdap) getGroups(username string) ([]string, error) {
-	err := asl.Bind(asl.User, asl.Password)
+	var err error
+	if asl.Password == "" {
+		err = asl.UnauthenticatedBind(asl.User)
+	} else {
+		err = asl.Bind(asl.User, asl.Password)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -219,8 +230,9 @@ type ServerConfig struct {
 // Client provides an interface we can mock
 type Client interface {
 	Connect(network string, config *ServerConfig) error
-	Close()
+	Close() error
 	Bind(string, string) error
+	UnauthenticatedBind(string) error
 	Search(*ldap.SearchRequest) (*ldap.SearchResult, error)
 }
 
@@ -229,10 +241,10 @@ type ClientImpl struct {
 	*ldap.Conn
 }
 
-// Connect calls ldap.Dial and then upgrades the connection to TLS
+// Connect calls ldap.DialURL and then upgrades the connection to TLS
 // This must be called before any other methods
 func (lci *ClientImpl) Connect(network string, config *ServerConfig) error {
-	conn, err := ldap.Dial(network, config.LdapServer)
+	conn, err := ldap.DialURL("ldap://" + config.LdapServer)
 	if err != nil {
 		return err
 	}
