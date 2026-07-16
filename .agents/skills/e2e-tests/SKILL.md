@@ -1,94 +1,69 @@
 ---
 name: e2e-tests
-description: Run and debug Vitess end-to-end tests. Use when working with tests under go/test/endtoend/, when asked to run e2e tests, debug e2e test failures, or investigate test flakiness.
+description: >-
+  Run and debug Vitess end-to-end tests. Use when working with tests under
+  go/test/endtoend/, when asked to run e2e tests, debug e2e test failures, or
+  investigate test flakiness.
 ---
 
 # Vitess End-to-End Tests
 
-## What end-to-end tests do
-
-End-to-end tests spin up real Vitess binaries (vtgate, vttablet, vtctld, mysqlctl, etcd, vtorc) and real MySQL instances on the local machine. They exercise the full production stack: topology, replication, query routing, cluster operations.
-
-All end-to-end tests live under `go/test/endtoend/`. The cluster harness lives in `go/test/endtoend/cluster/`.
-
-## Building binaries
-
-Tests invoke binaries from `$VTROOT/bin/`. If source code for the binaries has changed, rebuild before running tests. Rebuilding is not needed if only test code under `go/test/endtoend/` has changed, since test code is compiled by `go test` at run time.
-
-```bash
-source build.env
-NOVTADMINBUILD=1 make build
-```
-
-Always rebuild after code changes so tests run against up-to-date binaries.
+Vitess end-to-end tests live under `go/test/endtoend/`. Docker must be running
+before invoking them.
 
 ## Running tests
 
-```bash
-source build.env
-go test -count=1 -timeout 10m -run ^TestName$ vitess.io/vitess/go/test/endtoend/<pkg>
-```
-
-Use `-timeout` generously. End-to-end tests start entire clusters (etcd, MySQL, vttablet, vtgate) and can take minutes. Default 10m is safe for most tests. `-count=1` disables caching, which is essential since these tests have side effects.
-
-To run a specific subtest:
+Run every end-to-end package (not recommended, will take a very long time and
+is unlikely to succeed):
 
 ```bash
-go test -count=1 -timeout 10m -run ^TestParent/SubTest$ vitess.io/vitess/go/test/endtoend/<pkg>
+make e2e
 ```
 
-## VTDATAROOT
-
-`VTDATAROOT` is where all runtime data lives during test execution: MySQL data directories, logs, socket files, backups, and tmp directories. `source build.env` sets it to `$VTROOT/vtdataroot` by default.
-
-Each test cluster creates a subdirectory `vtroot_<port>/` under `VTDATAROOT` and sets `VTDATAROOT` to that subdirectory for the duration of the test.
-
-### Layout
-
-```
-$VTDATAROOT/
-  vtroot_<port>/              # per-test-cluster root
-    vt_0000000100/            # per-tablet directory (tablet UID 100)
-      mysql.sock              # MySQL socket
-      mysql.pid
-      ...
-    tmp_<port>/               # log directory for this cluster
-      vtgate-stderr.txt
-      vttablet-stderr.txt
-      mysqlctl-stderr.txt
-      *.INFO, *.WARNING, *.ERROR   # glog files
-    backups/                  # backup data
-```
-
-### Reading logs
-
-When a test fails, read logs from the tmp directory inside the cluster's VTDATAROOT:
-
-```
-$VTDATAROOT/vtroot_<port>/tmp_<port>/
-```
-
-Look for `*-stderr.txt` files and glog files (`*.INFO`, `*.WARNING`, `*.ERROR`).
-
-### Clear between runs
-
-Stale data in `VTDATAROOT` causes test failures: port conflicts, leftover MySQL data, stale socket files. Clear it between runs:
+Run one package:
 
 ```bash
-rm -rf $VTDATAROOT/vtroot_*
+make e2e PKG=./go/test/endtoend/vreplication
 ```
 
-Do this before re-running tests that failed, especially if the previous run did not tear down cleanly (crash, timeout, ctrl-c).
+Run every package with the race detector:
 
-## Test structure
+```bash
+make e2e_race
+```
 
-Each end-to-end test package starts a `cluster.LocalProcessCluster` (topo, vtctld, MySQL, vttablets, vtgate) before tests run, and tears it down after. Individual `Test*` functions run queries or operations against the live cluster.
+Run one package with the race detector:
 
-## Debugging failures
+```bash
+make e2e_race PKG=./go/test/endtoend/vreplication
+```
 
-1. Clear VTDATAROOT: `rm -rf $VTDATAROOT/vtroot_*`
-2. Rebuild binaries: `make build`
-3. Run the failing test with `-v`
-4. On failure, read logs from `$VTDATAROOT/vtroot_*/tmp_*/`
-5. Check `*-stderr.txt` files first for startup errors
-6. Check glog `*.ERROR` and `*.WARNING` files for runtime errors
+Run one test:
+
+```bash
+make e2e 'PKG=./go/test/endtoend/<package> -run ^TestName$$ -v'
+```
+
+Run one subtest:
+
+```bash
+make e2e 'PKG=./go/test/endtoend/<package> -run ^TestParent/SubTest$$ -v'
+```
+
+The doubled `$$` passes a literal `$` to the `go test` regular expression.
+
+## Logs
+
+Use `-v` to show test progress and `t.Log` output.
+
+Set `VITESST_ARTIFACTS` to retain full failure artifacts:
+
+```bash
+rm -rf /tmp/vitesst-artifacts
+VITESST_ARTIFACTS=/tmp/vitesst-artifacts \
+  make e2e 'PKG=./go/test/endtoend/<package> -run ^TestName$$ -v'
+```
+
+When a test fails, inspect its verbose output and the files under the artifact
+directory. During a hung test, use `docker ps -a` to identify containers that
+did not become healthy.
