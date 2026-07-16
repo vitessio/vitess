@@ -201,6 +201,60 @@ func TestNew_ValidatesName(t *testing.T) {
 	assert.ErrorContains(t, err, "name must be 64 characters or less")
 }
 
+func TestNew_RejectsHeterogeneousKeyspaceTableSets(t *testing.T) {
+	conn := newConstructorTestConn(t)
+
+	_, err := New(
+		t.Context(), "test-stream", conn, []TableConfig{
+			{
+				Keyspace:        "customer",
+				Table:           "customer",
+				Query:           "select * from customer where id between 1 and 10",
+				MaxRowsPerFlush: 1,
+				DataType:        &testRowSmall{},
+				FlushFn:         func(context.Context, []Row, FlushMeta) error { return nil },
+			},
+			{
+				Keyspace:        "accounting",
+				Table:           "invoices",
+				Query:           "select * from invoices",
+				MaxRowsPerFlush: 1,
+				DataType:        &testRowSmall{},
+				FlushFn:         func(context.Context, []Row, FlushMeta) error { return nil },
+			},
+		},
+		WithStateTable("commerce", "vstreams"),
+	)
+	require.ErrorContains(t, err, "different table/query sets")
+}
+
+func TestNew_AllowsIdenticalTableSetsAcrossKeyspaces(t *testing.T) {
+	conn := newConstructorTestConn(t)
+
+	_, err := New(
+		t.Context(), "test-stream", conn, []TableConfig{
+			{
+				Keyspace:        "customer",
+				Table:           "customer",
+				Query:           "select * from customer where id between 1 and 10",
+				MaxRowsPerFlush: 1,
+				DataType:        &testRowSmall{},
+				FlushFn:         func(context.Context, []Row, FlushMeta) error { return nil },
+			},
+			{
+				Keyspace:        "accounting",
+				Table:           "customer",
+				Query:           "select * from customer where id between 1 and 10",
+				MaxRowsPerFlush: 1,
+				DataType:        &testRowSmall{},
+				FlushFn:         func(context.Context, []Row, FlushMeta) error { return nil },
+			},
+		},
+		WithStateTable("commerce", "vstreams"),
+	)
+	require.NoError(t, err)
+}
+
 func TestNew_RejectsAmbiguousBareTableNamesAcrossKeyspaces(t *testing.T) {
 	conn := newConstructorTestConn(t)
 
