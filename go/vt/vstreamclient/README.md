@@ -93,7 +93,7 @@ flowchart TD
     S -->|No| U[Create state record<br/>and start copy phase]
     T --> C[vstreamclient Run loop]
     U --> C
-    C --> D[**Process Events**<br/>FIELD: cache schema<br/>ROW: buffer rows<br/>VGTID: checkpoint<br/><br>COMMIT: flush<br>DDL: flush<br>HEARTBEAT: flush<br/><br>BEGIN: ignore<br/>JOURNAL: ignore<br>VERSION: ignore<br>LASTPK: ignore<br>SAVEPOINT: ignore]
+    C --> D[**Process Events**<br/>FIELD: cache schema<br/>ROW: buffer rows<br/>VGTID: checkpoint<br/><br>COMMIT: flush<br>DDL: flush<br>HEARTBEAT: flush if not in a transaction<br/><br>BEGIN: track transaction<br/>ROLLBACK: end transaction<br/>JOURNAL: ignore<br>VERSION: ignore<br>LASTPK: ignore<br>SAVEPOINT: ignore]
 
     subgraph HOOKS[Optional EventFunc hooks]
         H[Run before built-in handling]
@@ -211,7 +211,9 @@ The client processes:
 - `FIELD` events to learn schema
 - `ROW` events to decode data
 - `VGTID` events to track checkpoint position
-- `COMMIT`, `DDL`, and `HEARTBEAT` events as safe flush boundaries
+- `COMMIT`, `OTHER`, and `DDL` events as safe flush boundaries, plus `HEARTBEAT` events when the
+  stream is not inside a transaction (with `TransactionChunkSize`, a heartbeat can arrive between
+  a transaction's chunks, and flushing there would split the transaction)
 
 If you register hooks with `WithEventFunc(...)`, they run inside this same event loop before the built-in handling for
 that event type. That means:

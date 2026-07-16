@@ -393,6 +393,13 @@ func (v *VStreamClient) handleEvents(ctx context.Context, events []*binlogdatapb
 		case binlogdatapb.VEventType_BEGIN:
 			v.inTransaction = true
 
+		// rollback also terminates a transaction. Rows from rolled-back transactions are never
+		// delivered (vstream reads the binlog, which only contains committed transactions), so
+		// there is nothing to discard; only the transaction state must be cleared, or every
+		// later heartbeat flush would stay suppressed on an idle stream.
+		case binlogdatapb.VEventType_ROLLBACK:
+			v.inTransaction = false
+
 		// journal events are sent on resharding. Unless you are manually targeting shards, vstream should
 		// transparently handle resharding for you, so you shouldn't need to do anything with these events.
 		// You might want to log them for debugging purposes or to alert on resharding events in case

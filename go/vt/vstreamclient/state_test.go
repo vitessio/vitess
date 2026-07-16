@@ -723,6 +723,50 @@ func TestHandleEvents_HeartbeatMidTransactionDefersFlush(t *testing.T) {
 	assert.Len(t, impl.queries, 2)
 }
 
+func TestHandleEvents_RollbackTerminatesTransactionState(t *testing.T) {
+	session, impl := newStateTestSession(t, stateExecuteResponse{result: &sqltypes.Result{RowsAffected: 1}})
+
+	flushed := 0
+	table := &TableConfig{
+		Keyspace:        "ks",
+		Table:           "t",
+		MaxRowsPerFlush: 10,
+		FlushFn: func(_ context.Context, rows []Row, _ FlushMeta) error {
+			flushed += len(rows)
+			return nil
+		},
+		currentBatch: []Row{{Data: "buffered"}},
+	}
+
+	v := &VStreamClient{
+		cfg: clientConfig{
+			name:               "stream",
+			vgtidStateKeyspace: "ks",
+			vgtidStateTable:    "state",
+			minFlushDuration:   time.Second,
+		},
+		session: session,
+		stats:   VStreamStats{LastFlushedAt: time.Now().Add(-2 * time.Second)},
+		tables:  map[string]*TableConfig{qualifiedTableName("ks", "t"): table},
+	}
+
+	vgtid := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/2"}},
+	}
+
+	// ROLLBACK must terminate the transaction state; if it didn't, every heartbeat flush after
+	// BEGIN/ROLLBACK would stay suppressed on an idle stream
+	err := v.handleEvents(t.Context(), []*binlogdatapb.VEvent{
+		{Type: binlogdatapb.VEventType_BEGIN},
+		{Type: binlogdatapb.VEventType_ROLLBACK},
+		{Type: binlogdatapb.VEventType_VGTID, Vgtid: vgtid},
+		{Type: binlogdatapb.VEventType_HEARTBEAT},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 1, flushed)
+	require.Len(t, impl.queries, 1)
+}
+
 func TestUpdateLatestVGtid_MissingStateRowErrors(t *testing.T) {
 	session, impl := newStateTestSession(t, stateExecuteResponse{result: &sqltypes.Result{RowsAffected: 0}})
 
