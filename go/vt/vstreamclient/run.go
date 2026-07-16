@@ -465,15 +465,17 @@ func (v *VStreamClient) listenForGracefulShutdown(ctx context.Context) {
 // healthy startup does not self-cancel.
 // ********************************************************************************************************
 func (v *VStreamClient) monitorHeartbeat(ctx context.Context) {
-	// guard against zero values so a zero liveness window or startup timeout can never
-	// trigger an immediate shutdown
+	// New validates the configured values; these fixed floors only guard directly-constructed
+	// clients (tests) so a zero liveness window or startup timeout can never trigger an
+	// immediate shutdown. They deliberately don't fall back to the mutable package defaults,
+	// which could themselves hold invalid values.
 	startupTimeout := v.cfg.startupTimeout
 	if startupTimeout <= 0 {
-		startupTimeout = DefaultStartupTimeout
+		startupTimeout = 5 * time.Minute
 	}
 	timeoutMultiplier := v.cfg.heartbeatTimeoutMultiplier
 	if timeoutMultiplier <= 0 {
-		timeoutMultiplier = DefaultHeartbeatTimeoutMultiplier
+		timeoutMultiplier = 2
 	}
 
 	heartbeatDur := time.Duration(v.cfg.flags.HeartbeatInterval) * time.Second

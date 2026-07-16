@@ -204,6 +204,22 @@ func New(ctx context.Context, name string, conn *vtgateconn.VTGateConn, tables [
 		tables:  make(map[string]*TableConfig),
 	}
 
+	// the mutable package defaults are documented as safely modifiable, so validate the
+	// effective values instead of trusting them: non-positive timeouts would otherwise cause
+	// immediate startup or heartbeat cancellation at runtime
+	if v.cfg.minFlushDuration <= 0 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: DefaultMinFlushDuration must be positive, got %s", v.cfg.minFlushDuration)
+	}
+	if v.cfg.startupTimeout <= 0 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: DefaultStartupTimeout must be positive, got %s", v.cfg.startupTimeout)
+	}
+	if v.cfg.heartbeatTimeoutMultiplier <= 0 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: DefaultHeartbeatTimeoutMultiplier must be positive, got %d", v.cfg.heartbeatTimeoutMultiplier)
+	}
+	if v.cfg.gracefulShutdownWaitDur <= 0 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: DefaultGracefulShutdownWaitDur must be positive, got %s", v.cfg.gracefulShutdownWaitDur)
+	}
+
 	var err error
 
 	// load all shards, so we can validate settings before starting. It's not technically necessary to do this here,

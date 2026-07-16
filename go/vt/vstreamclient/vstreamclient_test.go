@@ -204,6 +204,44 @@ func TestNew_ValidatesName(t *testing.T) {
 	assert.ErrorContains(t, err, "name must be 64 characters or less")
 }
 
+func TestNew_ValidatesMutableDefaults(t *testing.T) {
+	t.Run("startup timeout", func(t *testing.T) {
+		original := DefaultStartupTimeout
+		t.Cleanup(func() { DefaultStartupTimeout = original })
+		DefaultStartupTimeout = 0
+
+		_, err := New(t.Context(), "stream", newConstructorTestConn(t), nil)
+		require.ErrorContains(t, err, "DefaultStartupTimeout must be positive")
+	})
+
+	t.Run("heartbeat timeout multiplier", func(t *testing.T) {
+		original := DefaultHeartbeatTimeoutMultiplier
+		t.Cleanup(func() { DefaultHeartbeatTimeoutMultiplier = original })
+		DefaultHeartbeatTimeoutMultiplier = -1
+
+		_, err := New(t.Context(), "stream", newConstructorTestConn(t), nil)
+		require.ErrorContains(t, err, "DefaultHeartbeatTimeoutMultiplier must be positive")
+	})
+
+	t.Run("min flush duration", func(t *testing.T) {
+		original := DefaultMinFlushDuration
+		t.Cleanup(func() { DefaultMinFlushDuration = original })
+		DefaultMinFlushDuration = 0
+
+		_, err := New(t.Context(), "stream", newConstructorTestConn(t), nil)
+		require.ErrorContains(t, err, "DefaultMinFlushDuration must be positive")
+	})
+
+	t.Run("graceful shutdown wait", func(t *testing.T) {
+		original := DefaultGracefulShutdownWaitDur
+		t.Cleanup(func() { DefaultGracefulShutdownWaitDur = original })
+		DefaultGracefulShutdownWaitDur = 0
+
+		_, err := New(t.Context(), "stream", newConstructorTestConn(t), nil)
+		require.ErrorContains(t, err, "DefaultGracefulShutdownWaitDur must be positive")
+	})
+}
+
 func TestNew_RejectsHeterogeneousKeyspaceTableSets(t *testing.T) {
 	conn := newConstructorTestConn(t)
 
