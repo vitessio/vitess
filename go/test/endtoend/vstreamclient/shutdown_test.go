@@ -49,7 +49,7 @@ func TestVStreamClientGracefulShutdownChanStopsActiveRun(t *testing.T) {
 		}},
 		vstreamclient.WithMinFlushDuration(10*time.Second),
 		vstreamclient.WithHeartbeatSeconds(5),
-		vstreamclient.WithGracefulShutdownChan(shutdownCh, 6*time.Second),
+		vstreamclient.WithGracefulShutdownChan(shutdownCh, 15*time.Second),
 		vstreamclient.WithEventFunc(func(_ context.Context, _ *binlogdatapb.VEvent) error {
 			select {
 			case rowSeen <- struct{}{}:
@@ -62,14 +62,17 @@ func TestVStreamClientGracefulShutdownChanStopsActiveRun(t *testing.T) {
 	te.exec(t, "insert into customer.customer(id, email) values (2601, 'graceful-chan@domain.com')", nil)
 
 	runCtx, cancelRun, runErrCh := te.runAsync(vstreamClient, 30*time.Second)
+	defer cancelRun()
 	recvOrFail(t, rowSeen, "row event")
 	close(shutdownCh)
 
-	err := <-runErrCh
-	if !isExpectedRunStop(err, runCtx) && !errors.Is(err, context.Canceled) {
-		require.NoError(t, err, "failed to run vstreamclient")
-	}
-	cancelRun()
+	err := recvOrFail(t, runErrCh, "run exit after shutdown channel closed")
+
+	// the configured channel must be what stopped the run: a clean graceful exit before the
+	// outer run deadline. If the channel were ignored, Run would only end via the deadline.
+	require.NoError(t, runCtx.Err(), "run context expired before the shutdown channel stopped the run")
+	require.NoError(t, err)
+
 	err = vstreamClient.Run(t.Context())
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "client is closed")
@@ -83,6 +86,7 @@ func TestVStreamClientGracefulShutdownChanStopsOnThresholdFlush(t *testing.T) {
 
 	rowSeen := make(chan struct{}, 1)
 	shutdownCh := make(chan struct{})
+	var flushReasons []vstreamclient.FlushReason
 	vstreamClient := te.newDefaultClient(
 		t, t.Name(), []vstreamclient.TableConfig{{
 			Keyspace:        "customer",
@@ -90,11 +94,14 @@ func TestVStreamClientGracefulShutdownChanStopsOnThresholdFlush(t *testing.T) {
 			Query:           "select * from customer where id between 2650 and 2699",
 			MaxRowsPerFlush: 1,
 			DataType:        &Customer{},
-			FlushFn:         func(_ context.Context, _ []vstreamclient.Row, _ vstreamclient.FlushMeta) error { return nil },
+			FlushFn: func(_ context.Context, _ []vstreamclient.Row, meta vstreamclient.FlushMeta) error {
+				flushReasons = append(flushReasons, meta.FlushReason)
+				return nil
+			},
 		}},
 		vstreamclient.WithMinFlushDuration(10*time.Second),
 		vstreamclient.WithHeartbeatSeconds(5),
-		vstreamclient.WithGracefulShutdownChan(shutdownCh, 5*time.Second),
+		vstreamclient.WithGracefulShutdownChan(shutdownCh, 15*time.Second),
 		vstreamclient.WithEventFunc(func(_ context.Context, _ *binlogdatapb.VEvent) error {
 			select {
 			case rowSeen <- struct{}{}:
@@ -111,11 +118,13 @@ func TestVStreamClientGracefulShutdownChanStopsOnThresholdFlush(t *testing.T) {
 	recvOrFail(t, rowSeen, "row event")
 	close(shutdownCh)
 
-	err := <-runErrCh
-	assert.NotErrorIs(t, runCtx.Err(), context.DeadlineExceeded)
-	if err != nil && !errors.Is(err, context.Canceled) {
-		require.NoError(t, err, "failed to run vstreamclient")
-	}
+	err := recvOrFail(t, runErrCh, "run exit after shutdown channel closed")
+	require.NoError(t, runCtx.Err(), "run context expired before the shutdown channel stopped the run")
+	require.NoError(t, err)
+
+	// the buffered row hit MaxRowsPerFlush=1, so the shutdown must have completed on a
+	// threshold-triggered flush, not only on the shutdown-forced one
+	assert.Contains(t, flushReasons, vstreamclient.FlushReasonMaxRowsPerFlush)
 }
 
 // TestVStreamClientIgnoresNoOpTransactions verifies transactions in the streamed keyspace whose
@@ -212,6 +221,7 @@ func TestVStreamClientGracefulShutdownClosesMultiTableClient(t *testing.T) {
 
 	vstreamClient := newClient()
 	_, cancelRun, runErrCh := te.runAsync(vstreamClient, 30*time.Second)
+	defer cancelRun()
 	seen := map[string]bool{}
 	deadline := time.After(30 * time.Second)
 	for !(seen["customer.customer"] && seen["customer.purchases"]) {
@@ -223,12 +233,15 @@ func TestVStreamClientGracefulShutdownClosesMultiTableClient(t *testing.T) {
 		}
 	}
 
-	vstreamClient.GracefulShutdown(6 * time.Second)
-	cancelRun()
-	err := <-runErrCh
-	if !isExpectedRunStop(err, nil) && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
-		require.NoError(t, err, "failed to run vstreamclient")
-	}
+	// no fallback cancellation here: GracefulShutdown alone must end the run, otherwise a
+	// no-op shutdown implementation could pass on the strength of the cancel
+	vstreamClient.GracefulShutdown(15 * time.Second)
+	err := recvOrFail(t, runErrCh, "run exit after graceful shutdown")
+	require.NoError(t, err)
+
+	// the shutdown flush must have durably checkpointed the stream
+	vgtid := queryLatestVGtid(t, te.ctx, te.session, t.Name())
+	require.NotEmpty(t, vgtid.ShardGtids)
 
 	err = vstreamClient.Run(t.Context())
 	require.Error(t, err)
@@ -367,10 +380,9 @@ func TestVStreamClientGracefulShutdownReplayMatrix(t *testing.T) {
 
 				recvOrFail(t, flushStarted, "slow flush start")
 				go client.GracefulShutdown(15 * time.Second)
-				// give the GracefulShutdown goroutine time to record the shutdown request before
-				// the flush resumes; if it ever lost this race, the case would degrade to
-				// "after safe boundary", which expects the same outcome
-				time.Sleep(500 * time.Millisecond)
+				// wait for the shutdown request to be registered before releasing the flush, so
+				// this case deterministically proves shutdown-during-flush semantics
+				require.Eventually(t, client.ShutdownRequested, 30*time.Second, 10*time.Millisecond)
 				close(flushGate)
 
 				err := <-runErrCh
