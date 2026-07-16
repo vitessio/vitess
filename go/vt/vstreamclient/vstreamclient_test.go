@@ -108,7 +108,7 @@ func (t *newTestVTGateImpl) Execute(_ context.Context, session *vtgatepb.Session
 	case strings.HasPrefix(query, "create table if not exists "):
 		return session, &sqltypes.Result{RowsAffected: 1}, nil
 
-	case strings.HasPrefix(query, "select latest_vgtid, table_config, copy_completed from "):
+	case strings.HasPrefix(query, "select latest_vgtid, table_config, copy_completed"):
 		return session, &sqltypes.Result{}, nil
 
 	case strings.HasPrefix(query, "insert into "):
