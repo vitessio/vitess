@@ -162,13 +162,19 @@ func (mysqld *Mysqld) prepareReplicaForShutdown(ctx context.Context) error {
 		return vterrors.Wrap(err, "failed to read replication status before shutdown")
 	}
 
-	// The SET protects writes that race an interrupted receiver stop, while the FLUSH
-	// makes the existing relay log durable. Stopping the receiver is then best effort.
+	// Restore full durability before shutdown: innodb_flush_log_at_trx_commit=1
+	// and sync_binlog=1 re-enable per-commit InnoDB redo and binary log flushing
+	// (both are often relaxed together to speed up replica catch-up),
+	// sync_relay_log=1 protects relay writes that race an interrupted receiver
+	// stop, and FLUSH RELAY LOGS makes the existing relay log durable. Stopping
+	// the receiver and applier is then best effort.
 	if err := mysqld.executeSuperQueryListConn(ctx, conn, []string{
+		"SET GLOBAL innodb_flush_log_at_trx_commit = 1",
+		"SET GLOBAL sync_binlog = 1",
 		"SET GLOBAL sync_relay_log = 1",
 		"FLUSH RELAY LOGS",
 	}); err != nil {
-		return vterrors.Wrap(err, "failed to establish relay log durability fence before shutdown")
+		return vterrors.Wrap(err, "failed to establish the crash-safety durability fence before shutdown")
 	}
 	if err := mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.Conn.StopIOThreadCommand()}); err != nil {
 		log.Warn(

@@ -25,6 +25,7 @@
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
+        - [Replicas are placed in a crash-safe state before shutdown](#vttablet-replica-crash-safe-shutdown)
     - **[Backup/Restore](#minor-changes-backup)**
         - [Chunked backup/restore for the builtinbackupengine](#backup-chunked-builtin)
     - **[General](#minor-changes-general)**
@@ -197,6 +198,22 @@ Two changes:
 Tablets that already have more tracked schema objects than the configured limit will reload fine — only new creations are gated. Operators who need to support more tables and views should increase the flag and ensure both vttablet and mysqld have enough memory to comfortably hold the larger schema.
 
 See [#19978](https://github.com/vitessio/vitess/issues/19978) for details.
+
+#### <a id="vttablet-replica-crash-safe-shutdown"/>Replicas are placed in a crash-safe state before shutdown</a>
+
+When VTTablet gracefully shuts down a `REPLICA`/`RDONLY` MySQL, it now proactively puts the server into a crash-safe state first, so that an interrupted shutdown or a host crash during shutdown cannot leave the replica with unsynced writes that are lost or re-applied on restart.
+
+Just before handing off to the shutdown hook, VTTablet, on replicas only:
+
+- restores full commit durability by setting `innodb_flush_log_at_trx_commit=1` and `sync_binlog=1` (these are commonly relaxed together to let a replica catch up faster, and may still be relaxed when a shutdown begins),
+- sets `sync_relay_log=1` and issues `FLUSH RELAY LOGS` to make the relay-log tail durable, and
+- stops the replication receiver (I/O) and applier (SQL) threads so the multi-threaded applier queue drains to a gap-free, position-consistent point.
+
+Restoring the durability settings is required for the fence to hold and will fail the shutdown path if it cannot be done; stopping the threads is best-effort and bounded, so a hung thread cannot wedge shutdown.
+
+**Impact**: On graceful replica shutdown you will now see `innodb_flush_log_at_trx_commit`, `sync_binlog`, and `sync_relay_log` set to `1` and both replication threads stopped, regardless of their prior runtime values. This does not affect `PRIMARY` tablets.
+
+See [#20599](https://github.com/vitessio/vitess/pull/20599) for details.
 
 ### <a id="minor-changes-backup"/>Backup/Restore</a>
 

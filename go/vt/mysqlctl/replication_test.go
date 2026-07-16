@@ -160,6 +160,8 @@ func TestWaitForReplicationStart(t *testing.T) {
 
 func TestPrepareReplicaForShutdown(t *testing.T) {
 	const (
+		setFlushLog     = "SET GLOBAL innodb_flush_log_at_trx_commit = 1"
+		setSyncBinlog   = "SET GLOBAL sync_binlog = 1"
 		setSyncRelayLog = "SET GLOBAL sync_relay_log = 1"
 		flushRelayLogs  = "FLUSH RELAY LOGS"
 		stopIOThread    = "STOP REPLICA IO_THREAD"
@@ -171,64 +173,93 @@ func TestPrepareReplicaForShutdown(t *testing.T) {
 	)
 
 	testCases := []struct {
-		name          string
-		status        *sqltypes.Result
-		rejectedQuery string
-		rejectedError error
-		wantError     string
-		wantSet       int
-		wantFlush     int
-		wantStop      int
-		wantStopSQL   int
+		name           string
+		status         *sqltypes.Result
+		rejectedQuery  string
+		rejectedError  error
+		wantError      string
+		wantFlushLog   int
+		wantSyncBinlog int
+		wantSet        int
+		wantFlush      int
+		wantStop       int
+		wantStopSQL    int
 	}{
 		{
-			name:        "replica",
-			status:      replicaStatus,
-			wantSet:     1,
-			wantFlush:   1,
-			wantStop:    1,
-			wantStopSQL: 1,
+			name:           "replica",
+			status:         replicaStatus,
+			wantFlushLog:   1,
+			wantSyncBinlog: 1,
+			wantSet:        1,
+			wantFlush:      1,
+			wantStop:       1,
+			wantStopSQL:    1,
 		},
 		{
 			name:   "not a replica",
 			status: &sqltypes.Result{},
 		},
 		{
-			name:          "cannot enable relay log syncing",
+			name:          "cannot enable redo log flushing",
 			status:        replicaStatus,
-			rejectedQuery: setSyncRelayLog,
+			rejectedQuery: setFlushLog,
 			rejectedError: assert.AnError,
-			wantError:     "failed to establish relay log durability fence before shutdown",
-			wantSet:       1,
+			wantError:     "failed to establish the crash-safety durability fence before shutdown",
+			wantFlushLog:  1,
 		},
 		{
-			name:          "cannot flush relay logs",
-			status:        replicaStatus,
-			rejectedQuery: flushRelayLogs,
-			rejectedError: assert.AnError,
-			wantError:     "failed to establish relay log durability fence before shutdown",
-			wantSet:       1,
-			wantFlush:     1,
+			name:           "cannot enable binary log syncing",
+			status:         replicaStatus,
+			rejectedQuery:  setSyncBinlog,
+			rejectedError:  assert.AnError,
+			wantError:      "failed to establish the crash-safety durability fence before shutdown",
+			wantFlushLog:   1,
+			wantSyncBinlog: 1,
 		},
 		{
-			name:          "interrupted receiver stop",
-			status:        replicaStatus,
-			rejectedQuery: stopIOThread,
-			rejectedError: context.DeadlineExceeded,
-			wantSet:       1,
-			wantFlush:     1,
-			wantStop:      1,
-			wantStopSQL:   1,
+			name:           "cannot enable relay log syncing",
+			status:         replicaStatus,
+			rejectedQuery:  setSyncRelayLog,
+			rejectedError:  assert.AnError,
+			wantError:      "failed to establish the crash-safety durability fence before shutdown",
+			wantFlushLog:   1,
+			wantSyncBinlog: 1,
+			wantSet:        1,
 		},
 		{
-			name:          "interrupted applier stop",
-			status:        replicaStatus,
-			rejectedQuery: stopSQLThread,
-			rejectedError: context.DeadlineExceeded,
-			wantSet:       1,
-			wantFlush:     1,
-			wantStop:      1,
-			wantStopSQL:   1,
+			name:           "cannot flush relay logs",
+			status:         replicaStatus,
+			rejectedQuery:  flushRelayLogs,
+			rejectedError:  assert.AnError,
+			wantError:      "failed to establish the crash-safety durability fence before shutdown",
+			wantFlushLog:   1,
+			wantSyncBinlog: 1,
+			wantSet:        1,
+			wantFlush:      1,
+		},
+		{
+			name:           "interrupted receiver stop",
+			status:         replicaStatus,
+			rejectedQuery:  stopIOThread,
+			rejectedError:  context.DeadlineExceeded,
+			wantFlushLog:   1,
+			wantSyncBinlog: 1,
+			wantSet:        1,
+			wantFlush:      1,
+			wantStop:       1,
+			wantStopSQL:    1,
+		},
+		{
+			name:           "interrupted applier stop",
+			status:         replicaStatus,
+			rejectedQuery:  stopSQLThread,
+			rejectedError:  context.DeadlineExceeded,
+			wantFlushLog:   1,
+			wantSyncBinlog: 1,
+			wantSet:        1,
+			wantFlush:      1,
+			wantStop:       1,
+			wantStopSQL:    1,
 		},
 	}
 
@@ -238,7 +269,7 @@ func TestPrepareReplicaForShutdown(t *testing.T) {
 			defer db.Close()
 			db.AddQuery("SELECT 1", &sqltypes.Result{})
 			db.AddQuery("SHOW REPLICA STATUS", testCase.status)
-			for _, query := range []string{setSyncRelayLog, flushRelayLogs, stopIOThread, stopSQLThread} {
+			for _, query := range []string{setFlushLog, setSyncBinlog, setSyncRelayLog, flushRelayLogs, stopIOThread, stopSQLThread} {
 				if query == testCase.rejectedQuery {
 					db.AddRejectedQuery(query, testCase.rejectedError)
 					continue
@@ -258,6 +289,8 @@ func TestPrepareReplicaForShutdown(t *testing.T) {
 			} else {
 				require.ErrorContains(t, err, testCase.wantError)
 			}
+			assert.Equal(t, testCase.wantFlushLog, db.GetQueryCalledNum(setFlushLog))
+			assert.Equal(t, testCase.wantSyncBinlog, db.GetQueryCalledNum(setSyncBinlog))
 			assert.Equal(t, testCase.wantSet, db.GetQueryCalledNum(setSyncRelayLog))
 			assert.Equal(t, testCase.wantFlush, db.GetQueryCalledNum(flushRelayLogs))
 			assert.Equal(t, testCase.wantStop, db.GetQueryCalledNum(stopIOThread))

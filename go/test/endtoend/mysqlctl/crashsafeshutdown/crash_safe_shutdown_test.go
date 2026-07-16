@@ -41,28 +41,33 @@ const (
 	databaseName = "vt_" + keyspaceName
 )
 
-// TestReplicaShutdownRelayDurabilityFence verifies that Vitess fences a
-// replica's relay log for crash safety BEFORE handing control to the
-// mysqld_shutdown hook (and mysqladmin): it sets sync_relay_log=1, flushes the
-// relay logs, and stops the receiver (I/O) thread. Without that fence, an
-// interrupted shutdown can leave an unsynced relay-log tail while the receiver
-// is still writing, which is the durability gap that lets a subsequently
-// crashed replica re-fetch and re-apply already-applied transactions.
+// TestReplicaShutdownRelayDurabilityFence verifies that Vitess restores full
+// crash-safety durability on a replica BEFORE handing control to the
+// mysqld_shutdown hook (and mysqladmin): it sets innodb_flush_log_at_trx_commit=1,
+// sync_binlog=1 and sync_relay_log=1, flushes the relay logs, and stops the
+// receiver (I/O) and applier (SQL) threads. Without that fence, an interrupted
+// shutdown can leave unsynced InnoDB redo, an unsynced binary-log tail, and an
+// unsynced relay-log tail while the threads are still active, which is the
+// durability gap that lets a subsequently crashed replica lose committed work
+// or re-apply already-applied transactions.
 //
 // The fence runs inside mysqld shutdown, after the preflight hook and before
 // the mysqld_shutdown hook. Blocking that hook lets us observe the replica's
-// live state at exactly that boundary: a fixed build has already stopped the
-// receiver and set sync_relay_log=1; an unfixed build has not. The test is
-// therefore red on a build without the fix and green on one with it.
+// live state at exactly that boundary: a fixed build has already stopped both
+// replication threads and set both durability variables to 1; an unfixed build
+// has not. The test is therefore red on a build without the fix and green on
+// one with it.
 func TestReplicaShutdownRelayDurabilityFence(t *testing.T) {
 	localCluster := cluster.NewCluster("zone1", "localhost")
 	localCluster.TmpDirectory = t.TempDir()
 	t.Cleanup(localCluster.Teardown)
 
-	// Start with sync_relay_log at a non-default value so the fence setting it
-	// to 1 is observable.
+	// Start with sync_relay_log, innodb_flush_log_at_trx_commit and sync_binlog
+	// at relaxed (non-durable) values -- as an operator might while speeding up
+	// replica catch-up -- so the fence restoring them to 1 is observable.
 	extraMyCnf := filepath.Join(t.TempDir(), "crash-safe-shutdown.cnf")
-	require.NoError(t, os.WriteFile(extraMyCnf, []byte("[mysqld]\nsync_relay_log=10000\n"), 0o600))
+	require.NoError(t, os.WriteFile(extraMyCnf,
+		[]byte("[mysqld]\nsync_relay_log=10000\ninnodb_flush_log_at_trx_commit=2\nsync_binlog=0\n"), 0o600))
 	t.Setenv("EXTRA_MY_CNF", extraMyCnf)
 
 	require.NoError(t, localCluster.StartTopo())
@@ -86,6 +91,8 @@ func TestReplicaShutdownRelayDurabilityFence(t *testing.T) {
 		return err == nil && status.Running()
 	}, 45*time.Second, 100*time.Millisecond, "replica did not start replicating")
 	assertGlobalVariable(t, replicaConn, "sync_relay_log", "10000")
+	assertGlobalVariable(t, replicaConn, "innodb_flush_log_at_trx_commit", "2")
+	assertGlobalVariable(t, replicaConn, "sync_binlog", "0")
 
 	// Give the receiver a live relay log by generating a little traffic.
 	primaryConn := connectMySQL(t, &primary.MysqlctlProcess)
@@ -107,15 +114,21 @@ func TestReplicaShutdownRelayDurabilityFence(t *testing.T) {
 	status, err := replicaConn.ShowReplicationStatus()
 	require.NoError(t, err)
 	syncRelayLog := queryString(t, replicaConn, "SELECT @@global.sync_relay_log")
-	t.Logf("at blocked mysqld_shutdown hook: Replica_IO_Running=%v Replica_SQL_Running=%v sync_relay_log=%s",
-		status.IOState, status.SQLState, syncRelayLog)
+	flushLogAtCommit := queryString(t, replicaConn, "SELECT @@global.innodb_flush_log_at_trx_commit")
+	syncBinlog := queryString(t, replicaConn, "SELECT @@global.sync_binlog")
+	t.Logf("at blocked mysqld_shutdown hook: Replica_IO_Running=%v Replica_SQL_Running=%v sync_relay_log=%s innodb_flush_log_at_trx_commit=%s sync_binlog=%s",
+		status.IOState, status.SQLState, syncRelayLog, flushLogAtCommit, syncBinlog)
 
 	assert.Equalf(t, replication.ReplicationStateStopped, status.IOState,
-		"the receiver (I/O thread) was not stopped before the mysqld_shutdown hook; the relay durability fence did not run")
+		"the receiver (I/O thread) was not stopped before the mysqld_shutdown hook; the durability fence did not run")
 	assert.Equalf(t, replication.ReplicationStateStopped, status.SQLState,
-		"the applier (SQL thread) was not stopped before the mysqld_shutdown hook; the relay durability fence did not run")
+		"the applier (SQL thread) was not stopped before the mysqld_shutdown hook; the durability fence did not run")
 	assert.Equalf(t, "1", syncRelayLog,
-		"sync_relay_log was not set to 1 before the mysqld_shutdown hook; the relay durability fence did not run")
+		"sync_relay_log was not set to 1 before the mysqld_shutdown hook; the durability fence did not run")
+	assert.Equalf(t, "1", flushLogAtCommit,
+		"innodb_flush_log_at_trx_commit was not restored to 1 before the mysqld_shutdown hook; the durability fence did not run")
+	assert.Equalf(t, "1", syncBinlog,
+		"sync_binlog was not restored to 1 before the mysqld_shutdown hook; the durability fence did not run")
 
 	// The observation above is the assertion. Release the blocked hook so
 	// mysqlctl unwinds; the blocking hook stands in for the real mysqld
