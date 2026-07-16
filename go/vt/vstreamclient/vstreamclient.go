@@ -19,6 +19,7 @@ package vstreamclient
 import (
 	"context"
 	"fmt"
+	"maps"
 	"os"
 	"slices"
 	"strings"
@@ -181,6 +182,11 @@ func New(ctx context.Context, name string, conn *vtgateconn.VTGateConn, tables [
 	}
 
 	err = v.initTables(tables)
+	if err != nil {
+		return nil, err
+	}
+
+	err = validateKeyspaceRuleSets(v.tables)
 	if err != nil {
 		return nil, err
 	}
@@ -418,6 +424,39 @@ func getShardsByKeyspace(ctx context.Context, session *vtgateconn.VTGateSession)
 	}
 
 	return shardsByKeyspace, nil
+}
+
+// validateKeyspaceRuleSets rejects configurations whose (table, query) rule sets differ across
+// keyspaces. A single vstream filter is forwarded to every keyspace in the vgtid, so with
+// heterogeneous sets each keyspace would also receive the other keyspaces' rules: the copy phase
+// can fail on tables that don't exist there, and if a same-named foreign table does exist, its
+// rows are streamed and then rejected or misrouted by this client.
+func validateKeyspaceRuleSets(tables map[string]*TableConfig) error {
+	rulesByKeyspace := make(map[string][]string)
+	for _, table := range tables {
+		rulesByKeyspace[table.Keyspace] = append(rulesByKeyspace[table.Keyspace], table.Table+" -> "+table.Query)
+	}
+
+	if len(rulesByKeyspace) <= 1 {
+		return nil
+	}
+
+	var referenceKeyspace, referenceRules string
+	for _, keyspace := range slices.Sorted(maps.Keys(rulesByKeyspace)) {
+		rules := rulesByKeyspace[keyspace]
+		slices.Sort(rules)
+		joined := strings.Join(rules, "; ")
+
+		if referenceKeyspace == "" {
+			referenceKeyspace, referenceRules = keyspace, joined
+			continue
+		}
+		if joined != referenceRules {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: keyspaces %s and %s have different table/query sets, but a single vstream filter applies every rule to every keyspace; configure identical sets per keyspace or use a separate client per keyspace", referenceKeyspace, keyspace)
+		}
+	}
+
+	return nil
 }
 
 func validateTableNameMode(tables map[string]*TableConfig, flags *vtgatepb.VStreamFlags) error {
