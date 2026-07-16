@@ -113,6 +113,27 @@ func TestWithStateTable_RejectsShardedKeyspace(t *testing.T) {
 	require.ErrorContains(t, err, "only unsharded keyspaces are supported")
 }
 
+func TestWithStateTable_RejectsSingleShardShardedKeyspace(t *testing.T) {
+	// a sharded keyspace with one shard is named "-", not "0"; the shard count alone
+	// cannot distinguish it from an unsharded keyspace
+	v := &VStreamClient{shardsByKeyspace: map[string][]string{"sharded": {"-"}}}
+
+	err := WithStateTable("sharded", "state")(v)
+	require.ErrorContains(t, err, "only unsharded keyspaces are supported")
+}
+
+func TestWithStateTable_RejectsStreamedSourceKeyspace(t *testing.T) {
+	v := &VStreamClient{
+		shardsByKeyspace: map[string][]string{"ks": {"0"}},
+		tables: map[string]*TableConfig{
+			"ks.t": {Keyspace: "ks", Table: "t"},
+		},
+	}
+
+	err := WithStateTable("ks", "state")(v)
+	require.ErrorContains(t, err, "also a streamed source keyspace")
+}
+
 func TestWithStateTable_EscapesIdentifiers(t *testing.T) {
 	v := &VStreamClient{shardsByKeyspace: map[string][]string{"ks": {"0"}}}
 
