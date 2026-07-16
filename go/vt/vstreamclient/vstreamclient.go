@@ -64,6 +64,12 @@ type VStreamClient struct {
 	// if we need to flush again.
 	lastFlushedVgtid, latestVgtid *binlogdatapb.VGtid
 
+	// inTransaction tracks whether the stream is between a BEGIN and its terminating event. Only
+	// touched by the Run goroutine. With TransactionChunkSize enabled, VTGate can deliver a
+	// transaction across multiple batches while heartbeats keep arriving independently, so
+	// heartbeat-triggered flushes must be deferred until the transaction terminates.
+	inTransaction bool
+
 	stats VStreamStats
 
 	lifecycle lifecycleState
