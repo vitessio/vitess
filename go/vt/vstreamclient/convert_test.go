@@ -819,7 +819,7 @@ func TestValidateTableConfig(t *testing.T) {
 	t.Run("matching config passes", func(t *testing.T) {
 		err := validateTableConfig(
 			map[string]*TableConfig{"t": {Keyspace: "ks", Table: "t", Query: "select * from t"}},
-			map[string]*TableConfig{"t": {Keyspace: "ks", Table: "t", Query: "select * from t"}},
+			map[string]dbTableConfig{"t": {Keyspace: "ks", Table: "t", Query: "select * from t"}},
 		)
 		require.NoError(t, err)
 	})
@@ -827,7 +827,7 @@ func TestValidateTableConfig(t *testing.T) {
 	t.Run("different config fails", func(t *testing.T) {
 		err := validateTableConfig(
 			map[string]*TableConfig{"t": {Keyspace: "ks", Table: "t", Query: "select * from t"}},
-			map[string]*TableConfig{"t": {Keyspace: "ks", Table: "t", Query: "select id from t"}},
+			map[string]dbTableConfig{"t": {Keyspace: "ks", Table: "t", Query: "select id from t"}},
 		)
 		assert.Error(t, err)
 		assert.ErrorContains(t, err, "provided tables do not match stored tables")
@@ -842,7 +842,7 @@ func TestValidateTableConfig(t *testing.T) {
 				"t1": {Keyspace: "ks", Table: "t1", Query: "select * from t1"},
 				"t2": {Keyspace: "ks", Table: "t2", Query: "select * from t2"},
 			},
-			map[string]*TableConfig{
+			map[string]dbTableConfig{
 				"t1": {Keyspace: "ks", Table: "t1", Query: "select * from t1"},
 			},
 		)
@@ -855,7 +855,7 @@ func TestValidateTableConfig(t *testing.T) {
 			map[string]*TableConfig{
 				"t1": {Keyspace: "ks", Table: "t1", Query: "select * from t1"},
 			},
-			map[string]*TableConfig{
+			map[string]dbTableConfig{
 				"t1": {Keyspace: "ks", Table: "t1", Query: "select * from t1"},
 				"t2": {Keyspace: "ks", Table: "t2", Query: "select * from t2"},
 			},

@@ -251,9 +251,8 @@ func (v *VStreamClient) lookupTable(tableName string) (*TableConfig, error) {
 	return matched, nil
 }
 
-func validateTableConfig(providedTables, dbTables map[string]*TableConfig) error {
+func validateTableConfig(providedTables map[string]*TableConfig, dbTablesMap map[string]dbTableConfig) error {
 	providedTablesMap := tablesToDBTableConfig(providedTables)
-	dbTablesMap := tablesToDBTableConfig(dbTables)
 
 	keys := make([]string, 0, len(providedTablesMap)+len(dbTablesMap))
 	seen := make(map[string]struct{}, len(providedTablesMap)+len(dbTablesMap))

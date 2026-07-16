@@ -242,14 +242,7 @@ func New(ctx context.Context, name string, conn *vtgateconn.VTGateConn, tables [
 		return nil, err
 	}
 
-	// claim ownership before reading state, so a still-running client with the same stream name is
-	// fenced out before we decide where to resume from
-	err = claimStateOwnership(ctx, v.session, v.cfg.name, v.cfg.vgtidStateKeyspace, v.cfg.vgtidStateTable, v.cfg.ownerToken)
-	if err != nil {
-		return nil, err
-	}
-
-	storedVGtid, storedTableConfig, copyCompleted, err := getLatestVGtid(ctx, v.session, v.cfg.name, v.cfg.vgtidStateKeyspace, v.cfg.vgtidStateTable)
+	storedVGtid, storedTableConfig, copyCompleted, rowExists, err := getLatestVGtid(ctx, v.session, v.cfg.name, v.cfg.vgtidStateKeyspace, v.cfg.vgtidStateTable)
 	if err != nil {
 		return nil, err
 	}
@@ -257,35 +250,60 @@ func New(ctx context.Context, name string, conn *vtgateconn.VTGateConn, tables [
 	var useExplicitStartingVGtid bool
 	v.latestVgtid, useExplicitStartingVGtid = resolveLatestVGtid(explicitStartingVGtid, storedVGtid)
 
-	switch {
-	case useExplicitStartingVGtid:
-		// if the caller explicitly provided a starting point, prefer it over persisted state.
-		err = initStartingVGtid(ctx, v.session, v.cfg.name, v.cfg.vgtidStateKeyspace, v.cfg.vgtidStateTable, v.cfg.ownerToken, v.latestVgtid, v.tables)
-		if err != nil {
-			return nil, err
-		}
-
-	case v.latestVgtid == nil:
-		// we need to bootstrap the stream, which means we need to create a new vgtid and store the table config
-		v.latestVgtid, err = initVGtid(ctx, v.session, v.cfg.name, v.cfg.vgtidStateKeyspace, v.cfg.vgtidStateTable, v.cfg.ownerToken, v.tables, v.shardsByKeyspace)
-		if err != nil {
-			return nil, err
-		}
-
-	default:
-		// we need to check if the tables have changed since the last stream, to make
-		// sure users aren't expecting to catch up on a new table that was added after the last stream.
+	// validate before mutating any state, so a constructor that fails can never leave a healthy
+	// running client fenced. Resuming from stored state requires the tables to still match, to
+	// make sure users aren't expecting to catch up on a table that was added after the last run.
+	if !useExplicitStartingVGtid && storedVGtid != nil {
 		err = validateTableConfig(v.tables, storedTableConfig)
 		if err != nil {
 			return nil, err
 		}
+	}
 
-		// since we have a vgtid, but the copy never completed, restart the copy from the beginning
-		if !copyCompleted {
-			v.latestVgtid, err = initVGtid(ctx, v.session, v.cfg.name, v.cfg.vgtidStateKeyspace, v.cfg.vgtidStateTable, v.cfg.ownerToken, v.tables, v.shardsByKeyspace)
+	// decide what needs to be persisted
+	var persistVGtid *binlogdatapb.VGtid
+	var persistCopyCompleted bool
+
+	switch {
+	case useExplicitStartingVGtid:
+		// the caller explicitly provided a starting point: prefer it over persisted state, and
+		// persist copy_completed so no copy phase runs, now or on restart
+		persistVGtid, persistCopyCompleted = v.latestVgtid, true
+
+	case v.latestVgtid == nil, !copyCompleted:
+		// either there is no usable stored position, or the previous copy never finished:
+		// (re)start the copy from the beginning with a fresh vgtid, and reset copy_completed
+		// so a crash mid-copy is never mistaken for completed state
+		v.latestVgtid, err = newVGtid(v.tables, v.shardsByKeyspace)
+		if err != nil {
+			return nil, err
+		}
+		persistVGtid, persistCopyCompleted = v.latestVgtid, false
+
+	default:
+		// resume from the stored checkpoint; nothing to persist beyond claiming ownership
+	}
+
+	// claiming ownership and persisting the starting state are the only state-mutating steps,
+	// and they run last. The claim fences out a still-running client with the same stream name;
+	// the follow-up write is predicated on our token, so a stale constructor cannot steal
+	// ownership back from a newer client.
+	if rowExists {
+		err = claimStateOwnership(ctx, v.session, v.cfg.name, v.cfg.vgtidStateKeyspace, v.cfg.vgtidStateTable, v.cfg.ownerToken)
+		if err != nil {
+			return nil, err
+		}
+
+		if persistVGtid != nil {
+			err = updateStateRow(ctx, v.session, v.cfg.name, v.cfg.vgtidStateKeyspace, v.cfg.vgtidStateTable, v.cfg.ownerToken, persistVGtid, v.tables, persistCopyCompleted)
 			if err != nil {
 				return nil, err
 			}
+		}
+	} else {
+		err = insertStateRow(ctx, v.session, v.cfg.name, v.cfg.vgtidStateKeyspace, v.cfg.vgtidStateTable, v.cfg.ownerToken, persistVGtid, v.tables, persistCopyCompleted)
+		if err != nil {
+			return nil, err
 		}
 	}
 
