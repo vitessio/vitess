@@ -420,10 +420,6 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 		qr, err := vp.query(ctx, sql)
 		vp.vr.stats.QueryCount.Add(vp.phase, 1)
 		vp.vr.stats.QueryTimings.Record(vp.phase, start)
-		if vp.vr.workflowConfig.EnableHttpLog {
-			stats := NewVrLogStats("ROWCHANGE", start)
-			stats.Send(sql)
-		}
 		return qr, err
 	}
 
@@ -712,10 +708,6 @@ func getNextPosition(items [][]*binlogdatapb.VEvent, i, j int) string {
 }
 
 func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, mustSave bool) error {
-	var stats *VrLogStats
-	if vp.vr.workflowConfig.EnableHttpLog {
-		stats = NewVrLogStats(event.Type.String(), time.Now())
-	}
 	switch event.Type {
 	case binlogdatapb.VEventType_GTID:
 		pos, err := binlogplayer.DecodePosition(event.Gtid)
@@ -761,9 +753,6 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			return err
 		}
 		vp.tablePlans[event.FieldEvent.TableName] = tplan
-		if stats != nil {
-			stats.Send(fmt.Sprintf("%v", event.FieldEvent))
-		}
 
 	case binlogdatapb.VEventType_INSERT, binlogdatapb.VEventType_DELETE, binlogdatapb.VEventType_UPDATE,
 		binlogdatapb.VEventType_REPLACE, binlogdatapb.VEventType_SAVEPOINT:
@@ -781,9 +770,6 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			if err := vp.applyStmtEvent(ctx, event); err != nil {
 				return err
 			}
-			if stats != nil {
-				stats.Send(sql)
-			}
 		}
 	case binlogdatapb.VEventType_ROW:
 		// This player is configured for row based replication
@@ -793,11 +779,6 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		if err := vp.applyRowEvent(ctx, event.RowEvent); err != nil {
 			log.Infof("Error applying row event: %s", err.Error())
 			return err
-		}
-		// Row event is logged AFTER RowChanges are applied so as to calculate the total elapsed
-		// time for the Row event.
-		if stats != nil {
-			stats.Send(fmt.Sprintf("%v", event.RowEvent))
 		}
 	case binlogdatapb.VEventType_OTHER:
 		if vp.vr.dbClient.InTransaction {
@@ -852,9 +833,16 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			if _, err := vp.query(ctx, event.Statement); err != nil {
 				return err
 			}
+<<<<<<< HEAD
 			if stats != nil {
 				stats.Send(fmt.Sprintf("%v", event.Statement))
 			}
+||||||| parent of 657662e78b (VReplication: Remove internal undocumented VRLog feature (#20467))
+			if stats != nil {
+				stats.Send(event.Statement)
+			}
+=======
+>>>>>>> 657662e78b (VReplication: Remove internal undocumented VRLog feature (#20467))
 			posReached, err := vp.updatePos(ctx, event.Timestamp)
 			if err != nil {
 				return err
@@ -866,9 +854,16 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			if _, err := vp.query(ctx, event.Statement); err != nil {
 				log.Infof("Ignoring error: %v for DDL: %s", err, event.Statement)
 			}
+<<<<<<< HEAD
 			if stats != nil {
 				stats.Send(fmt.Sprintf("%v", event.Statement))
 			}
+||||||| parent of 657662e78b (VReplication: Remove internal undocumented VRLog feature (#20467))
+			if stats != nil {
+				stats.Send(event.Statement)
+			}
+=======
+>>>>>>> 657662e78b (VReplication: Remove internal undocumented VRLog feature (#20467))
 			posReached, err := vp.updatePos(ctx, event.Timestamp)
 			if err != nil {
 				return err
@@ -921,9 +916,6 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 				return err
 			}
 			return io.EOF
-		}
-		if stats != nil {
-			stats.Send(fmt.Sprintf("%v", event.Journal))
 		}
 		return io.EOF
 	case binlogdatapb.VEventType_HEARTBEAT:
