@@ -937,6 +937,35 @@ func TestTxEngineFailReserve(t *testing.T) {
 	assert.Zero(t, connID)
 }
 
+// TestPrepareFromRedoKeepsReservationsOnReadFailure verifies that in-doubt
+// reservations survive a reopen whose redo recovery fails to read durable
+// metadata, and are cleared once the read succeeds.
+func TestPrepareFromRedoKeepsReservationsOnReadFailure(t *testing.T) {
+	ctx := t.Context()
+	_, tsv, db, closer := newTestTxExecutor(t, ctx)
+	defer closer()
+
+	te := tsv.te
+
+	require.NoError(t, te.preparedPool.Put(&StatefulConnection{}, "aa"))
+	te.preparedPool.MarkRedoCommitStarted("aa")
+	te.preparedPool.FetchAllForRollback()
+	te.preparedPool.Open()
+
+	db.AddRejectedQuery(te.twoPC.readAllRedo, errors.New("redo read failed"))
+	err := te.prepareFromRedo()
+	require.ErrorContains(t, err, "redo read failed")
+	require.Equal(t, errPrepRolledBackForShutdown, te.preparedPool.reserved["aa"])
+	require.True(t, te.preparedPool.RedoCommitStarted("aa"))
+
+	db.DeleteRejectedQuery(te.twoPC.readAllRedo)
+	db.AddQuery(te.twoPC.readAllRedo, &sqltypes.Result{})
+	err = te.prepareFromRedo()
+	require.NoError(t, err)
+	require.Empty(t, te.preparedPool.reserved)
+	require.False(t, te.preparedPool.RedoCommitStarted("aa"))
+}
+
 func TestCheckReceivedError(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()

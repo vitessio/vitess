@@ -128,6 +128,11 @@ func TestPrepFetchAllKeepsRedoStartedDTIDsInDoubt(t *testing.T) {
 
 	pp.Open()
 
+	require.Equal(t, errPrepRolledBackForShutdown, pp.reserved["aa"])
+	require.True(t, pp.RedoCommitStarted("aa"))
+
+	pp.ResetReservations()
+
 	require.Empty(t, pp.reserved)
 	require.False(t, pp.RedoCommitStarted("aa"))
 }

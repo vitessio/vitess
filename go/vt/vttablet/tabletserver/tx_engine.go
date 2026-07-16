@@ -497,6 +497,10 @@ func (te *TxEngine) prepareFromRedo() error {
 		return readErr
 	}
 
+	// The durable redo metadata has been read and is now the source of truth,
+	// so the previous in-memory reservations can be rebuilt from it.
+	te.preparedPool.ResetReservations()
+
 	var (
 		maxID           = int64(0)
 		preparedCounter = 0

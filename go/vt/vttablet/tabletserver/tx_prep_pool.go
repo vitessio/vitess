@@ -67,14 +67,22 @@ func NewTxPreparedPool(capacity int, twoPCEnabled bool) *TxPreparedPool {
 	}
 }
 
-// Open marks the prepared pool open for use and clears shutdown-only state.
+// Open marks the prepared pool open for use.
 func (pp *TxPreparedPool) Open() {
+	pp.mu.Lock()
+	defer pp.mu.Unlock()
+
+	pp.open = true
+}
+
+// ResetReservations clears all reservations and redo flags so that redo
+// recovery can rebuild them from durable metadata.
+func (pp *TxPreparedPool) ResetReservations() {
 	pp.mu.Lock()
 	defer pp.mu.Unlock()
 
 	pp.reserved = make(map[string]error)
 	pp.redoCommitStarted = make(map[string]struct{})
-	pp.open = true
 }
 
 // Close marks the prepared pool closed.
@@ -198,9 +206,8 @@ func (pp *TxPreparedPool) Forget(dtid string) {
 // FetchAllForRollback removes prepared connections and returns them as a list.
 // Dtids whose redo commit started are kept as in-doubt reservations so that a
 // CommitPrepared arriving while the pool is closed gets an error instead of a
-// false "already committed". Open clears these reservations, so they do not
-// protect the window between reopening and redo recovery re-preparing the
-// transactions from durable metadata.
+// false "already committed". The reservations survive reopening until redo
+// recovery reads the durable metadata and rebuilds state from it.
 func (pp *TxPreparedPool) FetchAllForRollback() []*StatefulConnection {
 	pp.mu.Lock()
 	defer pp.mu.Unlock()
