@@ -150,6 +150,11 @@ func (dte *DTExecutor) Prepare(transactionID int64, dtid string) error {
 		return wrapPrepareError(err, "failed to save redo for prepare %s", dtid)
 	}
 
+	// The redo commit is inlined rather than routed through te.commit so that
+	// MarkRedoCommitStarted runs after the gate admits the commit and before
+	// COMMIT is sent. The flag must track whether a redo COMMIT was sent, so a
+	// gate rejection must not mark the dtid and an in-flight COMMIT must
+	// always be marked.
 	remove, err := dte.te.addActiveCommit(dte.ctx, localConn)
 	if err != nil {
 		return wrapPrepareError(err, "failed to track redo commit for prepare %s", dtid)
