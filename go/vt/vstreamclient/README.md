@@ -837,7 +837,7 @@ Current limitations and design choices include:
 - no built-in retry or backoff framework for flush failures
 - no built-in destination connector implementations
 - no special handling for resharding beyond what normal VStream already provides
-- `FlushInTx` exists in `TableConfig`, but a SQL transaction is not currently exposed to `FlushFn`
+- no SQL transaction is exposed to `FlushFn`; transactional sink behavior is the consumer's responsibility
 
 ## Testing And Examples
 
