@@ -80,6 +80,10 @@ func internalTableWriteCases() []struct {
 		query:   "update t1 join " + internalGCTable + " gc on t1.id = gc.id set col3 = 1",
 		wantErr: internalTableErr,
 	}, {
+		name:    "update with unqualified SET column in internal table self-join is blocked",
+		query:   "update " + internalGCTable + " gc1 join " + internalGCTable + " gc2 on gc1.id = gc2.id set col3 = 1",
+		wantErr: internalTableErr,
+	}, {
 		name:    "single-table delete from internal table is blocked",
 		query:   "delete from " + internalGCTable + " where id = 1",
 		wantErr: internalTableErr,

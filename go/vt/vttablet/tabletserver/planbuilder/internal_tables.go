@@ -109,7 +109,7 @@ func updateColumnTable(tables []dmlTable, schemaTables map[string]*schema.Table,
 			continue
 		}
 
-		if found {
+		if found && table.name != owner {
 			return "", false
 		}
 		found = true
