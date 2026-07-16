@@ -84,9 +84,10 @@ func TestVStreamClientGracefulShutdownChanStopsActiveRun(t *testing.T) {
 func TestVStreamClientGracefulShutdownChanStopsOnThresholdFlush(t *testing.T) {
 	te := newTestEnv(t)
 
-	rowSeen := make(chan struct{}, 1)
 	shutdownCh := make(chan struct{})
-	var flushReasons []vstreamclient.FlushReason
+	flushStarted := make(chan vstreamclient.FlushReason, 4)
+	flushGate := make(chan struct{})
+	var flushCalls atomic.Int32
 	vstreamClient := te.newDefaultClient(
 		t, t.Name(), []vstreamclient.TableConfig{{
 			Keyspace:        "customer",
@@ -95,36 +96,38 @@ func TestVStreamClientGracefulShutdownChanStopsOnThresholdFlush(t *testing.T) {
 			MaxRowsPerFlush: 1,
 			DataType:        &Customer{},
 			FlushFn: func(_ context.Context, _ []vstreamclient.Row, meta vstreamclient.FlushMeta) error {
-				flushReasons = append(flushReasons, meta.FlushReason)
+				flushCalls.Add(1)
+				flushStarted <- meta.FlushReason
+				<-flushGate
 				return nil
 			},
 		}},
 		vstreamclient.WithMinFlushDuration(10*time.Second),
 		vstreamclient.WithHeartbeatSeconds(5),
 		vstreamclient.WithGracefulShutdownChan(shutdownCh, 15*time.Second),
-		vstreamclient.WithEventFunc(func(_ context.Context, _ *binlogdatapb.VEvent) error {
-			select {
-			case rowSeen <- struct{}{}:
-			default:
-			}
-			return nil
-		}, binlogdatapb.VEventType_ROW),
 	)
 
 	te.exec(t, "insert into customer.customer(id, email) values (2651, 'threshold-shutdown@domain.com')", nil)
 
 	runCtx, cancelRun, runErrCh := te.runAsync(vstreamClient, 30*time.Second)
 	defer cancelRun()
-	recvOrFail(t, rowSeen, "row event")
+
+	// the buffered row hits MaxRowsPerFlush=1, so the first flush is threshold-triggered;
+	// hold it open on the gate
+	reason := recvOrFail(t, flushStarted, "threshold flush start")
+	require.Equal(t, vstreamclient.FlushReasonMaxRowsPerFlush, reason)
+
+	// request the shutdown while that flush is provably still in progress, then release it
 	close(shutdownCh)
+	require.Eventually(t, vstreamClient.ShutdownRequested, 30*time.Second, 10*time.Millisecond)
+	close(flushGate)
 
 	err := recvOrFail(t, runErrCh, "run exit after shutdown channel closed")
 	require.NoError(t, runCtx.Err(), "run context expired before the shutdown channel stopped the run")
 	require.NoError(t, err)
 
-	// the buffered row hit MaxRowsPerFlush=1, so the shutdown must have completed on a
-	// threshold-triggered flush, not only on the shutdown-forced one
-	assert.Contains(t, flushReasons, vstreamclient.FlushReasonMaxRowsPerFlush)
+	// the shutdown completed on that very threshold flush: no later flush boundary was needed
+	assert.Equal(t, int32(1), flushCalls.Load())
 }
 
 // TestVStreamClientIgnoresNoOpTransactions verifies transactions in the streamed keyspace whose
@@ -247,6 +250,51 @@ func TestVStreamClientGracefulShutdownClosesMultiTableClient(t *testing.T) {
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "client is closed")
 	assert.ElementsMatch(t, []string{"customer.customer", "customer.purchases"}, rowTables)
+
+	// restart with a sentinel row: the shutdown checkpoint must cover the priming rows, so a
+	// fresh client may only ever see the sentinel. A replayed priming row here would mean the
+	// graceful shutdown did not durably advance the checkpoint.
+	sentinel := &Customer{ID: 1951, Email: "close-sentinel@domain.com"}
+	restartCustomers := &rowCollector[*Customer]{}
+	restartOrders := &rowCollector[*Order]{}
+	var sentinelSeen atomic.Bool
+	restartClient := te.newDefaultClient(
+		t, t.Name(), []vstreamclient.TableConfig{
+			{
+				Keyspace:        "customer",
+				Table:           "customer",
+				Query:           "select * from customer where id between 1950 and 1959",
+				MaxRowsPerFlush: 100,
+				DataType:        &Customer{},
+				FlushFn: func(_ context.Context, rows []vstreamclient.Row, _ vstreamclient.FlushMeta) error {
+					restartCustomers.collect(rows)
+					for _, row := range rows {
+						if row.Data.(*Customer).ID == sentinel.ID {
+							sentinelSeen.Store(true)
+						}
+					}
+					return nil
+				},
+			},
+			{
+				Keyspace:        "customer",
+				Table:           "purchases",
+				Query:           "select * from purchases where id between 1950 and 1959",
+				MaxRowsPerFlush: 100,
+				DataType:        &Order{},
+				FlushFn: func(_ context.Context, rows []vstreamclient.Row, _ vstreamclient.FlushMeta) error {
+					restartOrders.collect(rows)
+					return nil
+				},
+			},
+		},
+	)
+
+	te.exec(t, "insert into customer.customer(id, email) values(:id, :email)", customerBindVars(sentinel.ID, sentinel.Email))
+	te.runUntil(t, restartClient, sentinelSeen.Load)
+
+	assert.Equal(t, []*Customer{sentinel}, restartCustomers.snapshot())
+	assert.Empty(t, restartOrders.snapshot())
 }
 
 // replayAfterShutdown inserts a sentinel row and runs a fresh client until the sentinel arrives.

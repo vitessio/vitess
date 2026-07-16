@@ -608,7 +608,21 @@ Things to keep in mind with this pattern:
 
 ### Same table name across keyspaces
 
-This package supports same-named tables across keyspaces.
+This package supports same-named tables across keyspaces, with one important restriction: when
+streaming more than one keyspace, every keyspace must be configured with the **identical set of
+(table, query) pairs**. A single vstream filter is forwarded to every keyspace in the stream, so a
+configuration like `{ks1.foo, ks2.bar}` would apply both rules in both keyspaces — the copy phase
+can fail on tables that don't exist there, and same-named foreign tables would stream unwanted
+rows. `New(...)` rejects heterogeneous configurations; use a separate client per keyspace instead.
+
+For example, this is supported because both keyspaces use the same table and query:
+
+```go
+[]vstreamclient.TableConfig{
+    {Keyspace: "customer", Table: "customer", Query: "select * from customer", ...},
+    {Keyspace: "accounting", Table: "customer", Query: "select * from customer", ...},
+}
+```
 
 By default, it keeps keyspace-qualified table names from VTGate:
 
