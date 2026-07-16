@@ -115,7 +115,8 @@ func (r FlushReason) String() string {
 	case FlushReasonGracefulShutdown:
 		return "gracefulShutdown"
 	default:
-		panic(fmt.Sprintf("unknown FlushReason: %d", r))
+		// the zero value and any future values are reachable by consumers, so never panic here
+		return fmt.Sprintf("unknown(%d)", r)
 	}
 }
 
