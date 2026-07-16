@@ -21,7 +21,28 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
+
+func TestWithFlags_ClonesInput(t *testing.T) {
+	v := &VStreamClient{}
+	flags := &vtgatepb.VStreamFlags{HeartbeatInterval: 1}
+
+	err := WithFlags(flags)(v)
+	require.NoError(t, err)
+
+	// mutating the caller-owned struct after validation must not affect the client
+	flags.HeartbeatInterval = 0
+	assert.EqualValues(t, 1, v.cfg.flags.HeartbeatInterval)
+}
+
+func TestWithFlags_RejectsStreamKeyspaceHeartbeats(t *testing.T) {
+	v := &VStreamClient{}
+
+	err := WithFlags(&vtgatepb.VStreamFlags{HeartbeatInterval: 1, StreamKeyspaceHeartbeats: true})(v)
+	require.ErrorContains(t, err, "StreamKeyspaceHeartbeats is not supported")
+}
 
 func TestWithStateTable_RequiresTableName(t *testing.T) {
 	v := &VStreamClient{shardsByKeyspace: map[string][]string{"ks": {"0"}}}
