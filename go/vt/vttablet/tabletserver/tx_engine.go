@@ -634,16 +634,10 @@ func isRetryableError(err error) bool {
 		// Connection errors are retryable
 		return sqlerror.IsConnErr(sqlErr)
 	case vtrpcpb.Code_CLUSTER_EVENT:
-		return isRetryableClusterEvent(err)
+		return vterrors.IsStateTransitionError(err)
 	default:
 		return false
 	}
-}
-
-// isRetryableClusterEvent reports whether the error came from a tablet state
-// transition.
-func isRetryableClusterEvent(err error) bool {
-	return vterrors.RxOp.MatchString(err.Error())
 }
 
 // shutdownTransactions rolls back all open transactions that are idol.

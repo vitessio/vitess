@@ -16,7 +16,11 @@ limitations under the License.
 
 package vterrors
 
-import "regexp"
+import (
+	"regexp"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+)
 
 // Operation not allowed error
 const (
@@ -26,6 +30,12 @@ const (
 
 // RxOp regex for operation not allowed error
 var RxOp = regexp.MustCompile("operation not allowed in state (NOT_SERVING|SHUTTING_DOWN)")
+
+// IsStateTransitionError reports whether the error is a rejection from a
+// tablet state transition.
+func IsStateTransitionError(err error) bool {
+	return Code(err) == vtrpcpb.Code_CLUSTER_EVENT && RxOp.MatchString(err.Error())
+}
 
 // Constants for error messages
 const (

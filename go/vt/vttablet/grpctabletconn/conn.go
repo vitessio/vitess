@@ -38,7 +38,6 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	queryservicepb "vitess.io/vitess/go/vt/proto/queryservice"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 const protocolName = "grpc"
@@ -375,7 +374,7 @@ func (conn *gRPCQueryClient) StartCommit(ctx context.Context, target *querypb.Ta
 		return resp.State, err
 	}
 
-	if vterrors.Code(err) == vtrpcpb.Code_CLUSTER_EVENT && vterrors.RxOp.MatchString(err.Error()) {
+	if vterrors.IsStateTransitionError(err) {
 		return querypb.StartCommitState_Fail, err
 	}
 
