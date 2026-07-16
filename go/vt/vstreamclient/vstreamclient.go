@@ -117,6 +117,11 @@ type lifecycleState struct {
 	shutdownRequested bool
 	cancelRunCtxFn    context.CancelCauseFunc
 
+	// shutdownCause records why the shutdown was requested (e.g. ErrHeartbeatTimeout); nil for
+	// user-initiated graceful shutdowns. It is preserved so Run surfaces the cause even when the
+	// final graceful flush succeeds.
+	shutdownCause error
+
 	gracefulShutdownFlushChan chan struct{}
 	gracefulShutdownFlushOnce sync.Once
 }
@@ -342,9 +347,10 @@ func (v *VStreamClient) GracefulShutdown(wait time.Duration) {
 }
 
 // gracefulShutdownWithCause is the internal implementation of GracefulShutdown. The cause, if not nil,
-// is recorded as the cancel cause of the Run context, so Run can surface why the stream was stopped.
+// is recorded before waiting, so Run surfaces why the stream was stopped even when the final graceful
+// flush succeeds during the wait.
 func (v *VStreamClient) gracefulShutdownWithCause(wait time.Duration, cause error) {
-	cancelRunCtxFn, gracefulShutdownFlushChan, ok := v.requestShutdown()
+	cancelRunCtxFn, gracefulShutdownFlushChan, ok := v.requestShutdown(cause)
 	if !ok {
 		return
 	}
@@ -371,6 +377,7 @@ func (v *VStreamClient) beginRun(cancelRunCtxFn context.CancelCauseFunc) bool {
 	v.lifecycle.runUsed = true
 	v.lifecycle.runActive = true
 	v.lifecycle.shutdownRequested = false
+	v.lifecycle.shutdownCause = nil
 	v.lifecycle.cancelRunCtxFn = cancelRunCtxFn
 	v.lifecycle.gracefulShutdownFlushChan = make(chan struct{})
 	v.lifecycle.gracefulShutdownFlushOnce = sync.Once{}
@@ -379,26 +386,47 @@ func (v *VStreamClient) beginRun(cancelRunCtxFn context.CancelCauseFunc) bool {
 
 func (v *VStreamClient) endRun() {
 	v.lifecycle.mu.Lock()
-	defer v.lifecycle.mu.Unlock()
 	v.lifecycle.runActive = false
 	v.lifecycle.shutdownRequested = false
 	v.lifecycle.cancelRunCtxFn = nil
+	gracefulShutdownFlushChan := v.lifecycle.gracefulShutdownFlushChan
+	gracefulShutdownFlushOnce := &v.lifecycle.gracefulShutdownFlushOnce
+	v.lifecycle.mu.Unlock()
+
+	// wake any GracefulShutdown caller still waiting for a flush: once Run has exited, no
+	// future flush can ever close the channel, so the caller would otherwise block for its
+	// entire wait duration
+	if gracefulShutdownFlushChan != nil {
+		gracefulShutdownFlushOnce.Do(func() {
+			close(gracefulShutdownFlushChan)
+		})
+	}
 }
 
-func (v *VStreamClient) requestShutdown() (context.CancelCauseFunc, <-chan struct{}, bool) {
+func (v *VStreamClient) requestShutdown(cause error) (context.CancelCauseFunc, <-chan struct{}, bool) {
 	v.lifecycle.mu.Lock()
 	defer v.lifecycle.mu.Unlock()
 	if !v.lifecycle.runActive || v.lifecycle.shutdownRequested || v.lifecycle.cancelRunCtxFn == nil {
 		return nil, nil, false
 	}
 	v.lifecycle.shutdownRequested = true
+	v.lifecycle.shutdownCause = cause
 	return v.lifecycle.cancelRunCtxFn, v.lifecycle.gracefulShutdownFlushChan, true
 }
 
-func (v *VStreamClient) isShutdownRequested() bool {
+// ShutdownRequested reports whether a graceful shutdown has been requested for the active Run,
+// either by a GracefulShutdown call or by the internal liveness monitor. Flush functions can use
+// it to detect that the current flush is the last one before the stream stops.
+func (v *VStreamClient) ShutdownRequested() bool {
 	v.lifecycle.mu.Lock()
 	defer v.lifecycle.mu.Unlock()
 	return v.lifecycle.shutdownRequested
+}
+
+func (v *VStreamClient) getShutdownCause() error {
+	v.lifecycle.mu.Lock()
+	defer v.lifecycle.mu.Unlock()
+	return v.lifecycle.shutdownCause
 }
 
 func (v *VStreamClient) getGracefulShutdownFlushChan() <-chan struct{} {

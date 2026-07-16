@@ -147,13 +147,15 @@ func (v *VStreamClient) Run(ctx context.Context) error {
 
 	go v.listenForGracefulShutdown(ctx)
 
+	// start the monitor before opening the stream, so a blocked stream setup is covered by the
+	// startup deadline rather than hanging outside of it
+	go v.monitorHeartbeat(ctx)
+
 	// initialize the streamer
 	reader, err := v.cfg.conn.VStream(ctx, v.cfg.tabletType, v.latestVgtid, v.cfg.filter, v.cfg.flags)
 	if err != nil {
 		return fmt.Errorf("vstreamclient: failed to create vstream: %w", err)
 	}
-
-	go v.monitorHeartbeat(ctx)
 
 	// to prevent an immediate flush, we initialize LastFlushedAt here, even if it wasn't technically flushed
 	v.stats.LastFlushedAt = time.Now()
@@ -216,9 +218,11 @@ func (v *VStreamClient) shouldExitRun(ctx context.Context) (bool, error) {
 	select {
 	// if we enter this case, that means the last flush completed during the shutdown process, and closed
 	// the channel, so we can exit immediately without processing any more events. This is the happy
-	// path for graceful shutdown, since we were able to flush all buffered data
+	// path for graceful shutdown, since we were able to flush all buffered data. A monitor-initiated
+	// shutdown still surfaces its cause (e.g. ErrHeartbeatTimeout) even though the flush succeeded,
+	// so applications that restart only on errors don't silently stop consuming.
 	case <-gracefulShutdownFlushChan:
-		return true, nil
+		return true, v.getShutdownCause()
 
 	default:
 	}
@@ -380,6 +384,14 @@ func isFinalCopyCompletedEvent(ev *binlogdatapb.VEvent) bool {
 	return ev.Type == binlogdatapb.VEventType_COPY_COMPLETED && ev.Keyspace == "" && ev.Shard == ""
 }
 
+// effectiveStartupTimeout returns the startup timeout floored at the liveness window: an idle
+// stream at a concrete position may not deliver its first event until the first heartbeat, so a
+// startup timeout shorter than the liveness window would cancel a healthy stream whose configured
+// heartbeat simply hasn't fired yet.
+func effectiveStartupTimeout(configured, livenessWindow time.Duration) time.Duration {
+	return max(configured, livenessWindow)
+}
+
 // ********************************************************************************************************
 // Graceful Shutdown
 //
@@ -431,6 +443,7 @@ func (v *VStreamClient) monitorHeartbeat(ctx context.Context) {
 
 	heartbeatDur := time.Duration(v.cfg.flags.HeartbeatInterval) * time.Second
 	livenessWindow := heartbeatDur * time.Duration(timeoutMultiplier)
+	startupTimeout = effectiveStartupTimeout(startupTimeout, livenessWindow)
 	heartbeat := time.NewTicker(heartbeatDur)
 	defer heartbeat.Stop()
 
@@ -461,6 +474,12 @@ func (v *VStreamClient) monitorHeartbeat(ctx context.Context) {
 			if v.isProcessingEvents.Load() {
 				continue
 			}
+
+			// re-read the timestamp after observing that processing is idle: the event goroutine
+			// may have stored a fresh timestamp and cleared the processing flag between our first
+			// load and the check above, and comparing against the stale value could trigger a
+			// false timeout right at the boundary
+			lastEventProcessedAtUnixNano = v.lastEventProcessedAtUnixNano.Load()
 
 			// if we haven't received an event within the liveness window, we'll cancel the context, since
 			// we're likely disconnected, and exit the goroutine
@@ -625,7 +644,7 @@ func (v *VStreamClient) shouldFlush(hasBufferedRows, isCopyCompleted bool) (bool
 
 	// even if we haven't hit either of minDuration or maxRows, if we're actively closing
 	// down, go ahead and force the flush.
-	if v.isShutdownRequested() {
+	if v.ShutdownRequested() {
 		return true, FlushReasonGracefulShutdown
 	}
 

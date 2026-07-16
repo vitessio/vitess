@@ -883,7 +883,7 @@ func TestGracefulShutdown_CancelsActiveRunAfterWait(t *testing.T) {
 		}()
 
 		synctest.Wait()
-		assert.True(t, v.isShutdownRequested())
+		assert.True(t, v.ShutdownRequested())
 		assert.NoError(t, ctx.Err())
 
 		time.Sleep(5 * time.Second)
@@ -925,7 +925,7 @@ func TestMonitorHeartbeat_DoesNotShutdownBeforeFirstEvent(t *testing.T) {
 		}
 	}, 2500*time.Millisecond, 100*time.Millisecond)
 	assert.NoError(t, ctx.Err())
-	assert.False(t, v.isShutdownRequested())
+	assert.False(t, v.ShutdownRequested())
 
 	cancel(nil)
 	assert.Eventually(t, func() bool {
@@ -937,7 +937,7 @@ func TestMonitorHeartbeat_DoesNotShutdownBeforeFirstEvent(t *testing.T) {
 		}
 	}, time.Second, 50*time.Millisecond)
 	assert.ErrorIs(t, ctx.Err(), context.Canceled)
-	assert.False(t, v.isShutdownRequested())
+	assert.False(t, v.ShutdownRequested())
 }
 
 func TestMonitorHeartbeat_ShutsDownWhenHeartbeatStopsAfterFirstEvent(t *testing.T) {
@@ -969,7 +969,7 @@ func TestMonitorHeartbeat_ShutsDownWhenHeartbeatStopsAfterFirstEvent(t *testing.
 	}, 2*time.Second, 100*time.Millisecond)
 	assert.ErrorIs(t, ctx.Err(), context.Canceled)
 	require.ErrorIs(t, context.Cause(ctx), ErrHeartbeatTimeout)
-	assert.True(t, v.isShutdownRequested())
+	assert.True(t, v.ShutdownRequested())
 }
 
 func TestMonitorHeartbeat_StartupTimeoutShutsDownWithCause(t *testing.T) {
@@ -1002,7 +1002,72 @@ func TestMonitorHeartbeat_StartupTimeoutShutsDownWithCause(t *testing.T) {
 	}, 5*time.Second, 50*time.Millisecond)
 	require.ErrorIs(t, ctx.Err(), context.Canceled)
 	require.ErrorIs(t, context.Cause(ctx), ErrStartupTimeout)
-	assert.True(t, v.isShutdownRequested())
+	assert.True(t, v.ShutdownRequested())
+}
+
+func TestShouldExitRun_ReturnsMonitorCauseAfterFinalFlush(t *testing.T) {
+	_, cancel := context.WithCancelCause(context.Background())
+	defer cancel(nil)
+
+	v := &VStreamClient{}
+	setLifecycleState(v, true, true, false, cancel)
+
+	// a monitor-initiated shutdown whose final flush succeeds must still surface its cause,
+	// or applications that restart only on errors would silently stop consuming
+	_, _, ok := v.requestShutdown(ErrHeartbeatTimeout)
+	require.True(t, ok)
+	v.signalGracefulShutdownFlushed()
+
+	shouldExit, err := v.shouldExitRun(t.Context())
+	assert.True(t, shouldExit)
+	require.ErrorIs(t, err, ErrHeartbeatTimeout)
+}
+
+func TestShouldExitRun_UserShutdownAfterFinalFlushReturnsNil(t *testing.T) {
+	_, cancel := context.WithCancelCause(context.Background())
+	defer cancel(nil)
+
+	v := &VStreamClient{}
+	setLifecycleState(v, true, true, false, cancel)
+
+	_, _, ok := v.requestShutdown(nil)
+	require.True(t, ok)
+	v.signalGracefulShutdownFlushed()
+
+	shouldExit, err := v.shouldExitRun(t.Context())
+	assert.True(t, shouldExit)
+	require.NoError(t, err)
+}
+
+func TestEndRun_WakesBlockedGracefulShutdownWaiter(t *testing.T) {
+	_, cancel := context.WithCancelCause(context.Background())
+	defer cancel(nil)
+
+	v := &VStreamClient{}
+	setLifecycleState(v, true, true, false, cancel)
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		v.GracefulShutdown(time.Hour)
+	}()
+
+	assert.Eventually(t, v.ShutdownRequested, 30*time.Second, 10*time.Millisecond)
+
+	// once Run has exited, no future flush can close the channel; endRun must wake the waiter
+	// instead of leaving it blocked for the full wait duration
+	v.endRun()
+
+	select {
+	case <-done:
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "GracefulShutdown did not return after endRun")
+	}
+}
+
+func TestEffectiveStartupTimeout_FlooredAtLivenessWindow(t *testing.T) {
+	assert.Equal(t, 10*time.Second, effectiveStartupTimeout(time.Second, 10*time.Second))
+	assert.Equal(t, 5*time.Minute, effectiveStartupTimeout(5*time.Minute, 2*time.Second))
 }
 
 func TestShouldExitRun_SurfacesCancelCause(t *testing.T) {

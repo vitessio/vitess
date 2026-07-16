@@ -48,7 +48,10 @@ var (
 	DefaultGracefulShutdownWaitDur = 5 * time.Second
 
 	// DefaultStartupTimeout is how long the client waits for the first event after Run starts before it
-	// shuts itself down with ErrStartupTimeout. This can be safely modified if needed before calling New.
+	// shuts itself down with ErrStartupTimeout. The effective timeout is never shorter than the
+	// heartbeat liveness window (heartbeat interval times DefaultHeartbeatTimeoutMultiplier), since an
+	// idle stream may not deliver its first event until the first heartbeat. This can be safely
+	// modified if needed before calling New.
 	DefaultStartupTimeout = 5 * time.Minute
 
 	// DefaultHeartbeatTimeoutMultiplier controls the liveness window as a multiple of the heartbeat
