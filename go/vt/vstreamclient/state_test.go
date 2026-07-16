@@ -424,6 +424,68 @@ func TestNew_NilTableConfigEntryReportsStructuredError(t *testing.T) {
 	require.ErrorContains(t, err, "provided tables do not match stored tables")
 }
 
+func TestHandleEvents_HeartbeatMidTransactionDefersFlush(t *testing.T) {
+	session, impl := newStateTestSession(t, stateExecuteResponse{result: &sqltypes.Result{RowsAffected: 1}})
+
+	flushed := 0
+	table := &TableConfig{
+		Keyspace:        "ks",
+		Table:           "t",
+		MaxRowsPerFlush: 10,
+		FlushFn: func(_ context.Context, rows []Row, _ FlushMeta) error {
+			flushed += len(rows)
+			return nil
+		},
+		currentBatch: []Row{{Data: "buffered"}},
+	}
+
+	v := &VStreamClient{
+		cfg: clientConfig{
+			name:               "stream",
+			vgtidStateKeyspace: "ks",
+			vgtidStateTable:    "state",
+			minFlushDuration:   time.Second,
+		},
+		session: session,
+		stats:   VStreamStats{LastFlushedAt: time.Now().Add(-2 * time.Second)},
+		tables:  map[string]*TableConfig{qualifiedTableName("ks", "t"): table},
+	}
+
+	vgtid := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/2"}},
+	}
+
+	// with TransactionChunkSize enabled, a heartbeat can arrive between a BEGIN and its COMMIT;
+	// flushing there would expose uncommitted rows and checkpoint a transaction prefix
+	err := v.handleEvents(t.Context(), []*binlogdatapb.VEvent{
+		{Type: binlogdatapb.VEventType_BEGIN},
+		{Type: binlogdatapb.VEventType_VGTID, Vgtid: vgtid},
+		{Type: binlogdatapb.VEventType_HEARTBEAT},
+	})
+	require.NoError(t, err)
+	assert.Zero(t, flushed)
+	assert.Empty(t, impl.queries)
+
+	// the terminating COMMIT flushes the buffered rows and checkpoints
+	err = v.handleEvents(t.Context(), []*binlogdatapb.VEvent{
+		{Type: binlogdatapb.VEventType_COMMIT},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 1, flushed)
+	require.Len(t, impl.queries, 1)
+
+	// once the transaction has terminated, heartbeats flush again as usual
+	v.latestVgtid = &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/3"}},
+	}
+	v.stats.LastFlushedAt = time.Now().Add(-2 * time.Second)
+	err = v.handleEvents(t.Context(), []*binlogdatapb.VEvent{
+		{Type: binlogdatapb.VEventType_HEARTBEAT},
+	})
+	require.NoError(t, err)
+	assert.Len(t, impl.queries, 2)
+}
+
 func TestUpdateLatestVGtid_MissingStateRowErrors(t *testing.T) {
 	session, impl := newStateTestSession(t, stateExecuteResponse{result: &sqltypes.Result{RowsAffected: 0}})
 

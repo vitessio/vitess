@@ -323,6 +323,7 @@ func (v *VStreamClient) handleEvents(ctx context.Context, events []*binlogdatapb
 		// Otherwise, there's not much to do with these events.
 		case binlogdatapb.VEventType_COMMIT, binlogdatapb.VEventType_OTHER:
 			// only flush when we have an event that guarantees we're not flushing mid-transaction
+			v.inTransaction = false
 			err = v.flush(ctx, false)
 			if err != nil {
 				return err
@@ -332,6 +333,7 @@ func (v *VStreamClient) handleEvents(ctx context.Context, events []*binlogdatapb
 		// They are safe to flush on, since they indicate the end of a transaction. If you want to
 		// transparently adjust the destination schema based on DDL events, you would do that here.
 		case binlogdatapb.VEventType_DDL:
+			v.inTransaction = false
 			err = v.flush(ctx, false)
 			if err != nil {
 				return err
@@ -356,6 +358,13 @@ func (v *VStreamClient) handleEvents(ctx context.Context, events []*binlogdatapb
 		// thresholds the last time flush was called. Most of the time, that won't be the case, but flush will
 		// check for that and only run if necessary.
 		case binlogdatapb.VEventType_HEARTBEAT:
+			// a heartbeat is NOT a transaction boundary: with TransactionChunkSize enabled, VTGate
+			// can deliver BEGIN and row chunks in separate batches while its heartbeat ticker runs
+			// independently. Flushing mid-transaction would expose uncommitted rows (which could
+			// still roll back) and duplicate the prefix on replay, so defer to the next boundary.
+			if v.inTransaction {
+				continue
+			}
 			err = v.flush(ctx, false)
 			if err != nil {
 				return err
@@ -364,6 +373,7 @@ func (v *VStreamClient) handleEvents(ctx context.Context, events []*binlogdatapb
 		// even if there are no changes to the tables being streamed, we'll still get a begin, vgtid, and commit
 		// event for each transaction. The other two are used for checkpoints, but nothing to do here.
 		case binlogdatapb.VEventType_BEGIN:
+			v.inTransaction = true
 
 		// journal events are sent on resharding. Unless you are manually targeting shards, vstream should
 		// transparently handle resharding for you, so you shouldn't need to do anything with these events.
