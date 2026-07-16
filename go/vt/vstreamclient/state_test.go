@@ -409,6 +409,114 @@ func TestNew_RestartsIncompleteCopyFromScratch(t *testing.T) {
 	assert.Same(t, v.latestVgtid, v.lastFlushedVgtid)
 }
 
+func resumableStateRow(t *testing.T) *sqltypes.Result {
+	t.Helper()
+
+	vgtidJSON, err := protojson.Marshal(&binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/1"}},
+	})
+	require.NoError(t, err)
+
+	return stateRowResult(
+		sqltypes.NewVarBinary(string(vgtidJSON)),
+		sqltypes.NewVarBinary(`{"ks.t":{"Keyspace":"ks","Table":"t","Query":"select * from t"}}`),
+		sqltypes.NewInt64(1),
+	)
+}
+
+func TestTakeStateOwnership_FencedWhenClaimLosesRace(t *testing.T) {
+	// the claim CAS affects zero rows: another client rotated the owner token between this
+	// client's state read and its takeover
+	conn, _ := newStateTestConn(t, append(
+		shardsAndStateTableResponses(resumableStateRow(t)),
+		stateExecuteResponse{result: &sqltypes.Result{RowsAffected: 0}},
+	)...)
+
+	v, err := New(t.Context(), "stream", conn, []TableConfig{newStateTestTableConfig()},
+		WithStateTable("stateks", "state"))
+	require.NoError(t, err)
+
+	err = v.takeStateOwnership(t.Context())
+	require.ErrorIs(t, err, ErrFenced)
+}
+
+func TestTakeStateOwnership_FencedWhenPersistLosesRace(t *testing.T) {
+	vgtidJSON, err := protojson.Marshal(&binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/1"}},
+	})
+	require.NoError(t, err)
+
+	// copy-restart path: the CAS persist affects zero rows because the observed owner changed
+	conn, _ := newStateTestConn(t, append(
+		shardsAndStateTableResponses(stateRowResult(
+			sqltypes.NewVarBinary(string(vgtidJSON)),
+			sqltypes.NewVarBinary(`{"ks.t":{"Keyspace":"ks","Table":"t","Query":"select * from t"}}`),
+			sqltypes.NewInt64(0),
+		)),
+		stateExecuteResponse{result: &sqltypes.Result{RowsAffected: 0}},
+	)...)
+
+	v, err := New(t.Context(), "stream", conn, []TableConfig{newStateTestTableConfig()},
+		WithStateTable("stateks", "state"))
+	require.NoError(t, err)
+
+	err = v.takeStateOwnership(t.Context())
+	require.ErrorIs(t, err, ErrFenced)
+}
+
+func TestTakeStateOwnership_FencedOnConcurrentBootstrapInsert(t *testing.T) {
+	// bootstrap path: a concurrent initializer inserted the row first, so the plain insert
+	// fails with a duplicate key, which maps to ErrFenced
+	conn, _ := newStateTestConn(t, append(
+		shardsAndStateTableResponses(nil),
+		stateExecuteResponse{err: errors.New("Duplicate entry 'stream' for key 'PRIMARY' (errno 1062) (sqlstate 23000)")},
+	)...)
+
+	v, err := New(t.Context(), "stream", conn, []TableConfig{newStateTestTableConfig()},
+		WithStateTable("stateks", "state"))
+	require.NoError(t, err)
+
+	err = v.takeStateOwnership(t.Context())
+	require.ErrorIs(t, err, ErrFenced)
+}
+
+func TestTakeStateOwnership_TwoConstructorsOnlyOneWins(t *testing.T) {
+	// two constructors read the same state (and thus the same observed owner token); only the
+	// first compare-and-swap can match, and the loser must fail with ErrFenced
+	impl := &stateTestVTGateImpl{responses: []stateExecuteResponse{
+		// constructor A: shards, create table, state row
+		shardsAndStateTableResponses(resumableStateRow(t))[0],
+		shardsAndStateTableResponses(resumableStateRow(t))[1],
+		shardsAndStateTableResponses(resumableStateRow(t))[2],
+		// constructor B: shards, create table, state row
+		shardsAndStateTableResponses(resumableStateRow(t))[0],
+		shardsAndStateTableResponses(resumableStateRow(t))[1],
+		shardsAndStateTableResponses(resumableStateRow(t))[2],
+		// A's claim CAS matches, B's does not
+		{result: &sqltypes.Result{RowsAffected: 1}},
+		{result: &sqltypes.Result{RowsAffected: 0}},
+	}}
+
+	dial := func() *vtgateconn.VTGateConn {
+		conn, err := vtgateconn.DialCustom(t.Context(), func(context.Context, string) (vtgateconn.Impl, error) {
+			return impl, nil
+		}, "")
+		require.NoError(t, err)
+		t.Cleanup(conn.Close)
+		return conn
+	}
+
+	clientA, err := New(t.Context(), "stream", dial(), []TableConfig{newStateTestTableConfig()},
+		WithStateTable("stateks", "state"))
+	require.NoError(t, err)
+	clientB, err := New(t.Context(), "stream", dial(), []TableConfig{newStateTestTableConfig()},
+		WithStateTable("stateks", "state"))
+	require.NoError(t, err)
+
+	require.NoError(t, clientA.takeStateOwnership(t.Context()))
+	require.ErrorIs(t, clientB.takeStateOwnership(t.Context()), ErrFenced)
+}
+
 func TestRun_FailedStreamSetupDoesNotFenceIncumbent(t *testing.T) {
 	vgtidJSON, err := protojson.Marshal(&binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/1"}},
