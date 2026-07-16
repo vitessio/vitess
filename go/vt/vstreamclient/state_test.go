@@ -176,7 +176,7 @@ func TestNew_RestartTableConfigMismatchErrors(t *testing.T) {
 		t,
 		stateExecuteResponse{result: &sqltypes.Result{
 			Fields: []*querypb.Field{{Name: "shard", Type: querypb.Type_VARCHAR}},
-			Rows:   [][]sqltypes.Value{{sqltypes.NewVarBinary("ks/0")}},
+			Rows:   [][]sqltypes.Value{{sqltypes.NewVarBinary("ks/0")}, {sqltypes.NewVarBinary("stateks/0")}},
 		}},
 		stateExecuteResponse{result: &sqltypes.Result{RowsAffected: 1}},
 		stateExecuteResponse{result: &sqltypes.Result{RowsAffected: 1}},
@@ -194,7 +194,7 @@ func TestNew_RestartTableConfigMismatchErrors(t *testing.T) {
 		MaxRowsPerFlush: 1,
 		DataType:        &testRowSmall{},
 		FlushFn:         func(context.Context, []Row, FlushMeta) error { return nil },
-	}}, WithStateTable("ks", "state"))
+	}}, WithStateTable("stateks", "state"))
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "provided tables do not match stored tables")
 	assert.ErrorContains(t, err, "query changed")
@@ -210,7 +210,7 @@ func TestNew_ResumeThenIdleFlushSkipsCheckpointWrite(t *testing.T) {
 		t,
 		stateExecuteResponse{result: &sqltypes.Result{
 			Fields: []*querypb.Field{{Name: "shard", Type: querypb.Type_VARCHAR}},
-			Rows:   [][]sqltypes.Value{{sqltypes.NewVarBinary("ks/0")}},
+			Rows:   [][]sqltypes.Value{{sqltypes.NewVarBinary("ks/0")}, {sqltypes.NewVarBinary("stateks/0")}},
 		}},
 		stateExecuteResponse{result: &sqltypes.Result{RowsAffected: 1}},
 		stateExecuteResponse{result: &sqltypes.Result{RowsAffected: 1}},
@@ -228,7 +228,7 @@ func TestNew_ResumeThenIdleFlushSkipsCheckpointWrite(t *testing.T) {
 		MaxRowsPerFlush: 1,
 		DataType:        &testRowSmall{},
 		FlushFn:         func(context.Context, []Row, FlushMeta) error { return nil },
-	}}, WithStateTable("ks", "state"))
+	}}, WithStateTable("stateks", "state"))
 	require.NoError(t, err)
 	queriesAfterNew := len(impl.queries)
 
@@ -255,7 +255,7 @@ func shardsAndStateTableResponses(stateRow *sqltypes.Result) []stateExecuteRespo
 	responses := []stateExecuteResponse{
 		{result: &sqltypes.Result{
 			Fields: []*querypb.Field{{Name: "shard", Type: querypb.Type_VARCHAR}},
-			Rows:   [][]sqltypes.Value{{sqltypes.NewVarBinary("ks/0")}},
+			Rows:   [][]sqltypes.Value{{sqltypes.NewVarBinary("ks/0")}, {sqltypes.NewVarBinary("stateks/0")}},
 		}},
 		{result: &sqltypes.Result{RowsAffected: 1}}, // create state table
 		{result: &sqltypes.Result{RowsAffected: 1}}, // claim ownership
@@ -275,13 +275,13 @@ func TestNew_ExplicitStartingVGtidPersistsWithCopyCompleted(t *testing.T) {
 	}
 
 	v, err := New(t.Context(), "stream", conn, []TableConfig{newStateTestTableConfig()},
-		WithStateTable("ks", "state"), WithStartingVGtid(explicit))
+		WithStateTable("stateks", "state"), WithStartingVGtid(explicit))
 	require.NoError(t, err)
 
 	// the caller provided a starting point, so no copy phase should run, now or on restart:
 	// the persisted row must set copy_completed together with the explicit vgtid
 	require.Len(t, impl.queries, 5)
-	assert.Contains(t, impl.queries[4], "insert into `ks`.`state`")
+	assert.Contains(t, impl.queries[4], "insert into `stateks`.`state`")
 	assert.Contains(t, impl.queries[4], "values (:name, :latest_vgtid, :table_config, true, :owner_token)")
 	assert.Contains(t, impl.queries[4], "copy_completed = true")
 
@@ -314,11 +314,11 @@ func TestNew_ExplicitStartingVGtidOverridesStoredState(t *testing.T) {
 	}
 
 	v, err := New(t.Context(), "stream", conn, []TableConfig{newStateTestTableConfig()},
-		WithStateTable("ks", "state"), WithStartingVGtid(explicit))
+		WithStateTable("stateks", "state"), WithStartingVGtid(explicit))
 	require.NoError(t, err)
 
 	require.Len(t, impl.queries, 5)
-	assert.Contains(t, impl.queries[4], "insert into `ks`.`state`")
+	assert.Contains(t, impl.queries[4], "insert into `stateks`.`state`")
 	expectedVGtidJSON, err := protojson.Marshal(explicit)
 	require.NoError(t, err)
 	assert.Equal(t, string(expectedVGtidJSON), string(impl.bindVars[4]["latest_vgtid"].Value))
@@ -340,11 +340,11 @@ func TestNew_RestartsIncompleteCopyFromScratch(t *testing.T) {
 	))...)
 
 	v, err := New(t.Context(), "stream", conn, []TableConfig{newStateTestTableConfig()},
-		WithStateTable("ks", "state"))
+		WithStateTable("stateks", "state"))
 	require.NoError(t, err)
 
 	require.Len(t, impl.queries, 5)
-	assert.Contains(t, impl.queries[4], "insert into `ks`.`state`")
+	assert.Contains(t, impl.queries[4], "insert into `stateks`.`state`")
 	assert.NotContains(t, impl.queries[4], "copy_completed")
 
 	freshVGtid := &binlogdatapb.VGtid{
@@ -369,7 +369,7 @@ func TestNew_ClaimsStateOwnershipBeforeReadingState(t *testing.T) {
 		t,
 		stateExecuteResponse{result: &sqltypes.Result{
 			Fields: []*querypb.Field{{Name: "shard", Type: querypb.Type_VARCHAR}},
-			Rows:   [][]sqltypes.Value{{sqltypes.NewVarBinary("ks/0")}},
+			Rows:   [][]sqltypes.Value{{sqltypes.NewVarBinary("ks/0")}, {sqltypes.NewVarBinary("stateks/0")}},
 		}},
 		stateExecuteResponse{result: &sqltypes.Result{RowsAffected: 1}},
 		stateExecuteResponse{result: &sqltypes.Result{RowsAffected: 1}},
@@ -387,7 +387,7 @@ func TestNew_ClaimsStateOwnershipBeforeReadingState(t *testing.T) {
 		MaxRowsPerFlush: 1,
 		DataType:        &testRowSmall{},
 		FlushFn:         func(context.Context, []Row, FlushMeta) error { return nil },
-	}}, WithStateTable("ks", "state"))
+	}}, WithStateTable("stateks", "state"))
 	require.NoError(t, err)
 
 	// the ownership claim must run after the state table is created and before state is read,
