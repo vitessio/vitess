@@ -281,14 +281,14 @@ func (v *VRepl) generateFilterQuery() error {
 		switch {
 		case sourceCol.HasEnumValues():
 			// Source is `enum` or `set`. We always take the textual represenation rather than the numeric one.
-			sb.WriteString(fmt.Sprintf("CONCAT(%s)", escapeName(name)))
+			fmt.Fprintf(&sb, "CONCAT(%s)", escapeName(name))
 		case v.analysis.IntToEnumMap[name]:
-			sb.WriteString(fmt.Sprintf("CONCAT(%s)", escapeName(name)))
+			fmt.Fprintf(&sb, "CONCAT(%s)", escapeName(name))
 		case sourceCol.Type() == "json":
-			sb.WriteString(fmt.Sprintf("convert(%s using utf8mb4)", escapeName(name)))
+			fmt.Fprintf(&sb, "convert(%s using utf8mb4)", escapeName(name))
 		case targetCol.Type() == "json": // we already know the source col is not JSON, per the above `case` condition
 			// Convert any type to JSON: encode the type as utf8mb4 text
-			sb.WriteString(fmt.Sprintf("convert(%s using utf8mb4)", escapeName(name)))
+			fmt.Fprintf(&sb, "convert(%s using utf8mb4)", escapeName(name))
 		case sourceCol.IsTextual():
 			// Check source and target charset/encoding. If needed, create
 			// a binlogdatapb.CharsetConversion entry (later written to vreplication)

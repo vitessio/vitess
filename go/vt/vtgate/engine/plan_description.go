@@ -426,7 +426,7 @@ func (m orderedMap) Swap(i, j int) {
 	m[i], m[j] = m[j], m[i]
 }
 
-var _ sort.Interface = (orderedMap)(nil)
+var _ sort.Interface = orderedMap(nil)
 
 func (m orderedMap) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
@@ -456,7 +456,7 @@ func (m orderedMap) MarshalJSON() ([]byte, error) {
 }
 
 func (m orderedMap) String() string {
-	var output []string
+	output := make([]string, 0, len(m))
 	for _, val := range m {
 		output = append(output, fmt.Sprintf("%s:%v", val.key, val.val))
 	}

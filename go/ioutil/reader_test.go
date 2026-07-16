@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type mockReadCloser struct{}
@@ -41,14 +42,14 @@ func (*mockRead) Read([]byte) (int, error) {
 func TestMeteredReader(t *testing.T) {
 	mrc := NewMeteredReadCloser(&mockReadCloser{}, testfn)
 	n, err := mrc.Read([]byte(""))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, 2, n)
 	assert.Equal(t, 2, calledBytes)
 	assert.Equal(t, calledDuration, mrc.Duration())
 
 	mr := NewMeteredReader(&mockRead{}, testfn)
 	n, err = mr.Read([]byte(""))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, 3, n)
 	assert.Equal(t, 3, calledBytes)
 	assert.Equal(t, calledDuration, mr.Duration())

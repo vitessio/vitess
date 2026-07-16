@@ -18,7 +18,7 @@ jobs:
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@8d3c67de8e2fe68ef647c8db1e6a09f647780f40 # v2.19.0
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
         with:
           egress-policy: audit
 
@@ -30,13 +30,13 @@ jobs:
           fi
 
       - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: 'false'
 
       - name: Run FOSSA scan and upload build data
         timeout-minutes: 5
-        uses: fossa-contrib/fossa-action@3d2ef181b1820d6dcd1972f86a767d18167fa19b # v3.0.1
+        uses: fossa-contrib/fossa-action@d28f0c947e7406706981a62a91ecc009bcc39fd7 # v4.0.0
         with:
           # This is a push-only API token: https://github.com/fossa-contrib/fossa-action#push-only-api-token
           fossa-api-key: f62c11ef0c249fef239947f01279aa0f
@@ -53,6 +53,8 @@ jobs:
               - '*.go'
               - 'go.sum'
               - 'go.mod'
+              - 'tools/**/go.mod'
+              - 'tools/**/go.sum'
               - '.github/workflows/static_checks_etc.yml'
             parser_changes:
               - 'go/vt/sqlparser/**'
@@ -111,6 +113,7 @@ jobs:
               - '.github/workflows/static_checks_etc.yml'
             ci_config:
               - 'test/config.json'
+              - 'test/config_partial_keyspace.json'
               - '.github/workflows/static_checks_etc.yml'
             release_notes:
               - 'changelog/**'
@@ -123,10 +126,13 @@ jobs:
 
       - name: Set up Go
         if: (steps.changes.outputs.go_files == 'true' || steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.proto_changes == 'true')
-        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: go.mod
           cache: ${{ (github.base_ref == 'main' || (github.base_ref == '' && github.ref_name == 'main')) && 'true' || 'false' }}
+          cache-dependency-path: |
+            go.sum
+            tools/**/go.sum
 
       - name: Tune the OS
         if: steps.changes.outputs.go_files == 'true'
@@ -147,10 +153,6 @@ jobs:
         timeout-minutes: 5
         run: |
           make minimaltools
-
-      - name: Install goimports
-        run: |
-          go install golang.org/x/tools/cmd/goimports@034e59c473362f8f2be47694d98fd3f12a1ad497 # v0.39.0
 
       - name: Install yamllint
         if: steps.changes.outputs.github == 'true'
@@ -195,30 +197,51 @@ jobs:
             .github/ISSUE_TEMPLATE/*.yml \
             .github/workflows/*.yml
 
+      - name: Get golangci-lint version
+        if: steps.changes.outputs.go_files == 'true'
+        id: golangci_lint_version
+        run: |
+          version=$(cd tools/golangci-lint && go list -m -f '{{.Version}}' github.com/golangci/golangci-lint/v2)
+          if [ -z "$version" ]; then
+            echo "Could not determine golangci-lint version from tools/golangci-lint/go.mod"
+            exit 1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
       - name: Run golangci-lint
         if: steps.changes.outputs.go_files == 'true'
         timeout-minutes: 15
-        uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20 # v9.0.0
+        uses: golangci/golangci-lint-action@82606bf257cbaff209d206a39f5134f0cfbfd2ee # v9.0.0
         with:
           args: --timeout 10m
           install-mode: "goinstall"
           skip-cache: true
           working-directory: go
-          version: v2.9.0
+          version: ${{ steps.golangci_lint_version.outputs.version }}
+
+      - name: Check license headers
+        if: steps.changes.outputs.go_files == 'true'
+        timeout-minutes: 5
+        run: |
+          tools/check_license_headers.sh
 
       - name: Run go mod tidy
         if: steps.changes.outputs.go_files == 'true'
         run: |
           set -e
           go mod tidy
+          for mod in tools/*/go.mod; do
+            (cd "$(dirname "$mod")" && go mod tidy)
+          done
           output=$(git status -s)
           if [ -z "${output}" ]; then
             exit 0
           fi
-          echo 'We wish to maintain a tidy state for go mod. Please run `go mod tidy` on your branch, commit and push again.'
+          echo 'We wish to maintain a tidy state for go mod. Please run `go mod tidy` in the affected module on your branch, commit and push again.'
           echo 'Running `go mod tidy` on this CI test yields with the following changes:'
           echo "$output"
           exit 1
+
 
       - name: Setup Node
         if: steps.changes.outputs.proto_changes == 'true'
@@ -232,10 +255,10 @@ jobs:
         run: |
           tools/check_make_proto.sh || exit 1
 
-      - name: Check test/config.json
+      - name: Check CI test configuration
         if: (steps.changes.outputs.go_files == 'true' || steps.changes.outputs.ci_config == 'true')
         run: |
-          go run ./go/tools/ci-config/main.go || exit 1
+          go run ./go/tools/ci-config || exit 1
 
       - name: Check changelog
         if: steps.changes.outputs.release_notes == 'true'

@@ -90,13 +90,13 @@ export const Keyspace = () => {
 
             <ContentContainer>
                 <TabContainer>
-                    <Tab text="Shards" to="shards" />
-                    <Tab text="VSchema" to="vschema" />
-                    <Tab text="JSON" to="json" />
-                    <Tab text="JSON Tree" to="json_tree" />
+                    <Tab text="Shards" to={`/keyspace/${clusterID}/${name}/shards`} />
+                    <Tab text="VSchema" to={`/keyspace/${clusterID}/${name}/vschema`} />
+                    <Tab text="JSON" to={`/keyspace/${clusterID}/${name}/json`} />
+                    <Tab text="JSON Tree" to={`/keyspace/${clusterID}/${name}/json_tree`} />
 
                     <ReadOnlyGate>
-                        <Tab text="Advanced" to="advanced" />
+                        <Tab text="Advanced" to={`/keyspace/${clusterID}/${name}/advanced`} />
                     </ReadOnlyGate>
                 </TabContainer>
 

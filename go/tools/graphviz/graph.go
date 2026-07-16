@@ -79,14 +79,14 @@ node [shape=record, fontsize=10]
 		labels += labelsSb71.String()
 		labels += "}"
 		if node.tooltip != "" {
-			dot.WriteString(fmt.Sprintf(`n%d [label="%s", tooltip="%s"]`, node.id, labels, node.tooltip))
+			fmt.Fprintf(&dot, `n%d [label="%s", tooltip="%s"]`, node.id, labels, node.tooltip)
 		} else {
-			dot.WriteString(fmt.Sprintf(`n%d [label="%s"]`, node.id, labels))
+			fmt.Fprintf(&dot, `n%d [label="%s"]`, node.id, labels)
 		}
 		dot.WriteString(";\n")
 	}
 	for _, edge := range g.edges {
-		dot.WriteString(fmt.Sprintf(`n%d -> n%d`, edge.From.id, edge.To.id))
+		fmt.Fprintf(&dot, `n%d -> n%d`, edge.From.id, edge.To.id)
 		dot.WriteString(";\n")
 	}
 	dot.WriteString("}")

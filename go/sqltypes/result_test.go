@@ -355,14 +355,19 @@ func TestReplaceKeyspace(t *testing.T) {
 			Database: "vttest",
 		}, {
 			Type: VarBinary,
+		}, {
+			Type:     VarChar,
+			Database: "information_schema",
 		}},
 	}
 
-	result.ReplaceKeyspace("keyspace-name")
+	result.ReplaceKeyspace("vttest", "keyspace-name")
 	assert.Equal(t, "keyspace-name", result.Fields[0].Database)
 	assert.Equal(t, "keyspace-name", result.Fields[1].Database)
 	// Expect empty database identifiers to remain empty
-	assert.Equal(t, "", result.Fields[2].Database)
+	assert.Empty(t, result.Fields[2].Database)
+	// Expect databases that don't match the physical db name to be left intact
+	assert.Equal(t, "information_schema", result.Fields[3].Database)
 }
 
 func TestShallowCopy(t *testing.T) {

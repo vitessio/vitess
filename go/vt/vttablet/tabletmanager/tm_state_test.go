@@ -391,7 +391,7 @@ func TestStateChangeTabletType(t *testing.T) {
 	tm := newTestTM(t, ts, 2, "ks", "0", nil)
 	defer tm.Stop()
 
-	assert.Equal(t, 1, len(statsTabletTypeCount.Counts()))
+	assert.Len(t, statsTabletTypeCount.Counts(), 1)
 	assert.Equal(t, int64(1), statsTabletTypeCount.Counts()["replica"])
 
 	alias := &topodatapb.TabletAlias{
@@ -406,7 +406,7 @@ func TestStateChangeTabletType(t *testing.T) {
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, ti.Type)
 	assert.NotNil(t, ti.PrimaryTermStartTime)
 	assert.Equal(t, "primary", statsTabletType.Get())
-	assert.Equal(t, 2, len(statsTabletTypeCount.Counts()))
+	assert.Len(t, statsTabletTypeCount.Counts(), 2)
 	assert.Equal(t, int64(1), statsTabletTypeCount.Counts()["primary"])
 
 	err = tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_REPLICA, DBActionNone)
@@ -416,7 +416,7 @@ func TestStateChangeTabletType(t *testing.T) {
 	assert.Equal(t, topodatapb.TabletType_REPLICA, ti.Type)
 	assert.Nil(t, ti.PrimaryTermStartTime)
 	assert.Equal(t, "replica", statsTabletType.Get())
-	assert.Equal(t, 2, len(statsTabletTypeCount.Counts()))
+	assert.Len(t, statsTabletTypeCount.Counts(), 2)
 	assert.Equal(t, int64(2), statsTabletTypeCount.Counts()["replica"])
 }
 
@@ -435,7 +435,7 @@ func TestStateChangeTabletTypeWithFailure(t *testing.T) {
 	qsc.SetServingTypeError = vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "mocking resource exhaustion error ")
 	defer tm.Stop()
 
-	assert.Equal(t, 1, len(statsTabletTypeCount.Counts()))
+	assert.Len(t, statsTabletTypeCount.Counts(), 1)
 	assert.Equal(t, int64(1), statsTabletTypeCount.Counts()["replica"])
 
 	alias := &topodatapb.TabletAlias{
@@ -454,7 +454,7 @@ func TestStateChangeTabletTypeWithFailure(t *testing.T) {
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, ti.Type)
 	assert.NotNil(t, ti.PrimaryTermStartTime)
 	assert.Equal(t, "primary", statsTabletType.Get())
-	assert.Equal(t, 2, len(statsTabletTypeCount.Counts()))
+	assert.Len(t, statsTabletTypeCount.Counts(), 2)
 	assert.Equal(t, int64(1), statsTabletTypeCount.Counts()["primary"])
 
 	err = tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_REPLICA, DBActionNone)
@@ -465,7 +465,7 @@ func TestStateChangeTabletTypeWithFailure(t *testing.T) {
 	assert.Equal(t, topodatapb.TabletType_REPLICA, ti.Type)
 	assert.Nil(t, ti.PrimaryTermStartTime)
 	assert.Equal(t, "replica", statsTabletType.Get())
-	assert.Equal(t, 2, len(statsTabletTypeCount.Counts()))
+	assert.Len(t, statsTabletTypeCount.Counts(), 2)
 	assert.Equal(t, int64(2), statsTabletTypeCount.Counts()["replica"])
 
 	// since the table type is spare, it will exercise reason != "" in UpdateLocked and thus
@@ -479,7 +479,7 @@ func TestStateChangeTabletTypeWithFailure(t *testing.T) {
 	assert.Equal(t, topodatapb.TabletType_SPARE, ti.Type)
 	assert.Nil(t, ti.PrimaryTermStartTime)
 	assert.Equal(t, "spare", statsTabletType.Get())
-	assert.Equal(t, 3, len(statsTabletTypeCount.Counts()))
+	assert.Len(t, statsTabletTypeCount.Counts(), 3)
 	assert.Equal(t, int64(1), statsTabletTypeCount.Counts()["spare"])
 }
 

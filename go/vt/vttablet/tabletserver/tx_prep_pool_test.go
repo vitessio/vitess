@@ -76,15 +76,15 @@ func TestPrepFetchForCommit(t *testing.T) {
 	assert.Equal(t, conn, got)
 
 	_, err = pp.FetchForCommit("aa")
-	assert.ErrorContains(t, err, "locked for committing")
+	require.ErrorContains(t, err, "locked for committing")
 
 	pp.SetFailed("aa")
 	_, err = pp.FetchForCommit("aa")
-	assert.ErrorContains(t, err, "failed to commit")
+	require.ErrorContains(t, err, "failed to commit")
 
 	pp.SetFailed("bb")
 	_, err = pp.FetchForCommit("bb")
-	assert.ErrorContains(t, err, "failed to commit")
+	require.ErrorContains(t, err, "failed to commit")
 
 	pp.Forget("aa")
 	got, err = pp.FetchForCommit("aa")
@@ -102,7 +102,7 @@ func TestPrepFetchAll(t *testing.T) {
 
 	got := pp.FetchAllForRollback()
 	require.Len(t, got, 2)
-	require.Len(t, pp.conns, 0)
+	require.Empty(t, pp.conns)
 
 	_, err := pp.FetchForCommit("aa")
 	require.ErrorContains(t, err, "pool is shutdown")

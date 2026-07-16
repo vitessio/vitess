@@ -28,7 +28,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hashicorp/consul/api"
+	"github.com/hashicorp/consul/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -67,7 +67,7 @@ func TestRunsVschemaMigrations(t *testing.T) {
 
 	// Add Hash vindex via vtgate execution on table
 	err = addColumnVindex(cluster, "test_keyspace", "alter vschema on test_table1 add vindex my_vdx (id)")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assertColumnVindex(t, cluster, columnVindex{keyspace: "test_keyspace", table: "test_table1", vindex: "my_vdx", vindexType: "hash", column: "id"})
 }
 
@@ -82,7 +82,7 @@ func TestPersistentMode(t *testing.T) {
 
 	// Add a new "ad-hoc" vindex via vtgate once the cluster is up, to later make sure it is persisted across teardowns
 	err = addColumnVindex(cluster, "test_keyspace", "alter vschema on persistence_test add vindex my_vdx(id)")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Basic sanity checks similar to TestRunsVschemaMigrations
 	// See go/cmd/vttestserver/data/schema/app_customer/* and go/cmd/vttestserver/data/schema/test_keyspace/*
@@ -95,7 +95,7 @@ func TestPersistentMode(t *testing.T) {
 		_, err := conn.ExecuteFetch("insert into customers (id, name) values (1, 'gopherson')", 1, false)
 		return err
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	expectedRows := [][]sqltypes.Value{
 		{sqltypes.NewInt64(1), sqltypes.NewVarChar("gopherson"), sqltypes.NULL},
@@ -107,7 +107,7 @@ func TestPersistentMode(t *testing.T) {
 		res, err = conn.ExecuteFetch("SELECT * FROM customers", 1, false)
 		return err
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, expectedRows, res.Rows)
 
 	// reboot the persistent cluster
@@ -129,7 +129,7 @@ func TestPersistentMode(t *testing.T) {
 		res, err = conn.ExecuteFetch("SELECT * FROM customers", 1, false)
 		return err
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, expectedRows, res.Rows)
 }
 
@@ -147,20 +147,20 @@ func TestForeignKeysAndDDLModes(t *testing.T) {
 			test_table_id BIGINT,
 			FOREIGN KEY (test_table_id) REFERENCES test_table(id)
 		)`, 1, false)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		_, err = conn.ExecuteFetch("SET @@ddl_strategy='online'", 1, false)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		_, err = conn.ExecuteFetch("ALTER TABLE test_table ADD COLUMN something_else VARCHAR(255) NOT NULL DEFAULT ''", 1, false)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		_, err = conn.ExecuteFetch("SET @@ddl_strategy='direct'", 1, false)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		_, err = conn.ExecuteFetch("ALTER TABLE test_table ADD COLUMN something_else_2 VARCHAR(255) NOT NULL DEFAULT ''", 1, false)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		_, err = conn.ExecuteFetch("SELECT something_else_2 FROM test_table", 1, false)
 		assert.NoError(t, err)
 		return nil
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	cluster.TearDown()
 	cluster, err = startCluster("--foreign-key-mode=disallow", "--enable-online-ddl=false", "--enable-direct-ddl=false")
@@ -173,13 +173,13 @@ func TestForeignKeysAndDDLModes(t *testing.T) {
 			test_table_id BIGINT,
 			FOREIGN KEY (test_table_id) REFERENCES test_table(id)
 		)`, 1, false)
-		assert.Error(t, err)
+		require.Error(t, err)
 		_, err = conn.ExecuteFetch("SET @@ddl_strategy='online'", 1, false)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		_, err = conn.ExecuteFetch("ALTER TABLE test_table ADD COLUMN something_else VARCHAR(255) NOT NULL DEFAULT ''", 1, false)
-		assert.Error(t, err)
+		require.Error(t, err)
 		_, err = conn.ExecuteFetch("SET @@ddl_strategy='direct'", 1, false)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		_, err = conn.ExecuteFetch("ALTER TABLE test_table ADD COLUMN something_else VARCHAR(255) NOT NULL DEFAULT ''", 1, false)
 		assert.Error(t, err)
 		return nil
@@ -226,7 +226,7 @@ func TestCreateDbaTCPUser(t *testing.T) {
 		Port:  clusterInstance.Env.PortForProtocol("mysql", ""),
 	}
 	conn, err := mysql.Connect(ctx, &vtParams)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	// Ensure that the existing vt_dba user remains unaffected, meaning it cannot connect through TCP/IP connection.
@@ -267,6 +267,27 @@ func TestGatewayInitialTabletTimeout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 	assertGetKeyspaces(ctx, t, cluster)
+}
+
+func TestNewEnvUsesDataDirWithoutPort(t *testing.T) {
+	conf := config
+	originalBasePort := basePort
+	t.Cleanup(func() {
+		resetConfig(conf)
+		basePort = originalBasePort
+	})
+
+	dir := t.TempDir()
+	config.DataDir = dir
+	basePort = 0
+
+	env, err := newEnv()
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, env.TearDown())
+	})
+
+	assert.Equal(t, dir, env.Directory())
 }
 
 func TestExternalTopoServerConsul(t *testing.T) {
@@ -325,7 +346,8 @@ func TestMtlsAuth(t *testing.T) {
 		fmt.Sprintf("%s=%s", "--vtctld-grpc-key", clientKey),
 		fmt.Sprintf("%s=%s", "--vtctld-grpc-cert", clientCert),
 		fmt.Sprintf("%s=%s", "--vtctld-grpc-ca", caCert),
-		fmt.Sprintf("%s=%s", "--grpc-auth-mtls-allowed-substrings", "CN=ClientApp"))
+		fmt.Sprintf("%s=%s", "--grpc-auth-mtls-allowed-substrings", "CN=ClientApp"),
+	)
 	require.NoError(t, err)
 	defer func() {
 		cluster.PersistentMode = false // Cleanup the tmpdir as we're done
@@ -367,7 +389,8 @@ func TestMtlsAuthUnauthorizedFails(t *testing.T) {
 		fmt.Sprintf("%s=%s", "--vtctld-grpc-key", clientKey),
 		fmt.Sprintf("%s=%s", "--vtctld-grpc-cert", clientCert),
 		fmt.Sprintf("%s=%s", "--vtctld-grpc-ca", caCert),
-		"--grpc-auth-mtls-allowed-substrings="+"CN=ClientApp")
+		"--grpc-auth-mtls-allowed-substrings="+"CN=ClientApp",
+	)
 	defer cluster.TearDown()
 
 	require.Error(t, err)
@@ -377,8 +400,6 @@ func TestMtlsAuthUnauthorizedFails(t *testing.T) {
 func startPersistentCluster(dir string, flags ...string) (vttest.LocalCluster, error) {
 	flags = append(flags, []string{
 		"--persistent-mode",
-		// FIXME: if port is not provided, data_dir is not respected
-		fmt.Sprintf("--port=%d", randomPort()),
 		"--data-dir=" + dir,
 	}...)
 	return startCluster(flags...)
@@ -464,7 +485,7 @@ func randomPort() int {
 
 func assertGetKeyspaces(ctx context.Context, t *testing.T, cluster vttest.LocalCluster) {
 	client, err := vtctlclient.New(ctx, fmt.Sprintf("localhost:%v", cluster.GrpcPort()))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer client.Close()
 	stream, err := client.ExecuteVtctlCommand(
 		ctx,
@@ -475,7 +496,7 @@ func assertGetKeyspaces(ctx context.Context, t *testing.T, cluster vttest.LocalC
 		},
 		30*time.Second,
 	)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	resp, err := consumeEventStream(stream)
 	require.NoError(t, err)

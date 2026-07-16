@@ -52,7 +52,7 @@ func TestGetMysqlMetricsRateLimiter(t *testing.T) {
 				rateLimiter.Do(incr)
 				time.Sleep(2 * rateLimit)
 			}
-			assert.EqualValues(t, 10, val)
+			assert.Equal(t, 10, val)
 			cancel()
 			// There can be a race condition where the rate limiter still emits one final tick after the context is cancelled.
 			// So we wait enough time to ensure that tick is "wasted".
@@ -62,7 +62,7 @@ func TestGetMysqlMetricsRateLimiter(t *testing.T) {
 				rateLimiter.Do(incr)
 				time.Sleep(time.Millisecond)
 			}
-			assert.EqualValues(t, 10, val) // Same "10" value as before.
+			assert.Equal(t, 10, val) // Same "10" value as before.
 			{
 				rateLimiter := mysqlHostMetricsRateLimiter.Load()
 				assert.Nil(t, rateLimiter)

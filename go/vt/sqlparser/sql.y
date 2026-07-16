@@ -50,6 +50,9 @@ func markBindVariable(yylex yyLexer, bvar string) {
 
 %}
 
+%locations
+%loctype location
+
 %union {
   empty         struct{}
   LengthScaleOption LengthScaleOption
@@ -362,7 +365,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> SEQUENCE MERGE TEMPORARY TEMPTABLE INVOKER SECURITY FIRST AFTER LAST
 
 // Migration tokens
-%token <str> VITESS_MIGRATION CANCEL RETRY LAUNCH COMPLETE CLEANUP THROTTLE UNTHROTTLE FORCE_CUTOVER CUTOVER_THRESHOLD EXPIRE RATIO POSTPONE
+%token <str> VITESS_MIGRATION CANCEL RETRY LAUNCH COMPLETE CLEANUP THROTTLE UNTHROTTLE FORCE_CUTOVER CUTOVER_THRESHOLD EXPIRE RATIO POSTPONE CONTEXT
 // Throttler tokens
 %token <str> VITESS_THROTTLER
 
@@ -3732,6 +3735,17 @@ alter_statement:
       Type: CleanupAllMigrationType,
     }
   }
+| ALTER comment_opt VITESS_MIGRATION CLEANUP CONTEXT STRING
+  {
+    if $6 == "" {
+      yylex.Error("migration context cannot be empty")
+      return 1
+    }
+    $$ = &AlterMigration{
+      Type: CleanupAllMigrationType,
+      Context: $6,
+    }
+  }
 | ALTER comment_opt VITESS_MIGRATION STRING LAUNCH
   {
     $$ = &AlterMigration{
@@ -3751,6 +3765,17 @@ alter_statement:
   {
     $$ = &AlterMigration{
       Type: LaunchAllMigrationType,
+    }
+  }
+| ALTER comment_opt VITESS_MIGRATION LAUNCH CONTEXT STRING
+  {
+    if $6 == "" {
+      yylex.Error("migration context cannot be empty")
+      return 1
+    }
+    $$ = &AlterMigration{
+      Type: LaunchAllMigrationType,
+      Context: $6,
     }
   }
 | ALTER comment_opt VITESS_MIGRATION STRING COMPLETE
@@ -3774,6 +3799,17 @@ alter_statement:
       Type: CompleteAllMigrationType,
     }
   }
+| ALTER comment_opt VITESS_MIGRATION COMPLETE CONTEXT STRING
+  {
+    if $6 == "" {
+      yylex.Error("migration context cannot be empty")
+      return 1
+    }
+    $$ = &AlterMigration{
+      Type: CompleteAllMigrationType,
+      Context: $6,
+    }
+  }
 | ALTER comment_opt VITESS_MIGRATION STRING POSTPONE COMPLETE
   {
     $$ = &AlterMigration{
@@ -3787,11 +3823,33 @@ alter_statement:
       Type: PostponeCompleteAllMigrationType,
     }
   }
+| ALTER comment_opt VITESS_MIGRATION POSTPONE COMPLETE CONTEXT STRING
+  {
+    if $7 == "" {
+      yylex.Error("migration context cannot be empty")
+      return 1
+    }
+    $$ = &AlterMigration{
+      Type: PostponeCompleteAllMigrationType,
+      Context: $7,
+    }
+  }
 | ALTER comment_opt VITESS_MIGRATION STRING CANCEL
   {
     $$ = &AlterMigration{
       Type: CancelMigrationType,
       UUID: string($4),
+    }
+  }
+| ALTER comment_opt VITESS_MIGRATION CANCEL CONTEXT STRING
+  {
+    if $6 == "" {
+      yylex.Error("migration context cannot be empty")
+      return 1
+    }
+    $$ = &AlterMigration{
+      Type: CancelAllMigrationType,
+      Context: $6,
     }
   }
 | ALTER comment_opt VITESS_MIGRATION CANCEL ALL
@@ -3817,6 +3875,19 @@ alter_statement:
       Ratio: $7,
     }
   }
+| ALTER comment_opt VITESS_MIGRATION THROTTLE CONTEXT STRING expire_opt ratio_opt
+  {
+    if $6 == "" {
+      yylex.Error("migration context cannot be empty")
+      return 1
+    }
+    $$ = &AlterMigration{
+      Type: ThrottleAllMigrationType,
+      Context: $6,
+      Expire: $7,
+      Ratio: $8,
+    }
+  }
 | ALTER comment_opt VITESS_MIGRATION STRING UNTHROTTLE
   {
     $$ = &AlterMigration{
@@ -3830,6 +3901,17 @@ alter_statement:
       Type: UnthrottleAllMigrationType,
     }
   }
+| ALTER comment_opt VITESS_MIGRATION UNTHROTTLE CONTEXT STRING
+  {
+    if $6 == "" {
+      yylex.Error("migration context cannot be empty")
+      return 1
+    }
+    $$ = &AlterMigration{
+      Type: UnthrottleAllMigrationType,
+      Context: $6,
+    }
+  }
 | ALTER comment_opt VITESS_MIGRATION STRING FORCE_CUTOVER
   {
     $$ = &AlterMigration{
@@ -3841,6 +3923,17 @@ alter_statement:
   {
     $$ = &AlterMigration{
       Type: ForceCutOverAllMigrationType,
+    }
+  }
+| ALTER comment_opt VITESS_MIGRATION FORCE_CUTOVER CONTEXT STRING
+  {
+    if $6 == "" {
+      yylex.Error("migration context cannot be empty")
+      return 1
+    }
+    $$ = &AlterMigration{
+      Type: ForceCutOverAllMigrationType,
+      Context: $6,
     }
   }
 | ALTER comment_opt VITESS_MIGRATION STRING CUTOVER_THRESHOLD STRING
@@ -5556,7 +5649,24 @@ select_expression_list:
 select_expression:
   expression as_ci_opt
   {
-    $$ = &AliasedExpr{Expr: $1, As: $2}
+    ae := &AliasedExpr{Expr: $1, As: $2}
+    if !$2.NotEmpty() {
+      switch expr := $1.(type) {
+      case *ColName:
+        // ColName already has deterministic ColumnName() output
+      case *Literal:
+        switch expr.Type {
+        case DateVal, TimeVal, TimestampVal, HexVal, BitNum:
+          // These literal types need InputExpression because the formatter
+          // doesn't preserve the original input form (e.g. DATE '2022-08-06',
+          // x'48' vs X'48', b'1010' vs 0b1010)
+          ae.InputExpression = yylex.(*Tokenizer).GetInputExpression(@1.start, @1.end)
+        }
+      default:
+        ae.InputExpression = yylex.(*Tokenizer).GetInputExpression(@1.start, @1.end)
+      }
+    }
+    $$ = ae
   }
 | table_id '.' '*'
   {
@@ -9075,6 +9185,7 @@ non_reserved_keyword:
 | CONSTRAINT_CATALOG
 | CONSTRAINT_NAME
 | CONSTRAINT_SCHEMA
+| CONTEXT
 | COPY
 | COUNT %prec FUNCTION_CALL_NON_KEYWORD
 | CSV

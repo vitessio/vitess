@@ -374,10 +374,10 @@ func (c *CloneExecutor) prepareCloneVerification(ctx context.Context, mysqld Mys
 // buildCloneCommand constructs the CLONE INSTANCE SQL command.
 func (c *CloneExecutor) buildCloneCommand() string {
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("CLONE INSTANCE FROM %s@%s:%d",
+	fmt.Fprintf(&sb, "CLONE INSTANCE FROM %s@%s:%d",
 		sqltypes.EncodeStringSQL(c.DonorUser),
 		sqltypes.EncodeStringSQL(c.DonorHost),
-		c.DonorPort))
+		c.DonorPort)
 	sb.WriteString(" IDENTIFIED BY " + sqltypes.EncodeStringSQL(c.DonorPassword))
 
 	if c.UseSSL {

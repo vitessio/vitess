@@ -1,3 +1,19 @@
+/*
+Copyright 2026 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package mysqlctl
 
 import (
@@ -241,7 +257,7 @@ func (bce *benchmarkCompressEnv) compress() {
 		tc := &timedWriter{w: c}
 
 		r, err := bce.reader()
-		require.Nil(bce.b, err, "Failed to get data reader.")
+		require.NoError(bce.b, err, "Failed to get data reader.")
 
 		// Track how many bytes we read.
 		mr := &meteredReader{r: r}
@@ -254,7 +270,7 @@ func (bce *benchmarkCompressEnv) compress() {
 		r.Close()
 		c.Close()
 
-		require.Nil(bce.b, err, logger.Events)
+		require.NoError(bce.b, err, logger.Events)
 
 		// Record how many bytes compressed so we can report these later.
 		durCompressed += tc.duration
@@ -289,7 +305,7 @@ func (bce *benchmarkCompressEnv) compressor(logger logutil.Logger, writer io.Wri
 		compressor, err = newExternalCompressor(context.Background(), bce.external, writer, logger)
 	}
 
-	require.Nil(bce.b, err, "failed to create compressor.")
+	require.NoError(bce.b, err, "failed to create compressor.")
 	return compressor
 }
 

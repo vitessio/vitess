@@ -139,11 +139,11 @@ func (c *errorClient) ExecuteBatch(ctx context.Context, session *vtgatepb.Sessio
 	return c.fallbackClient.ExecuteBatch(ctx, session, sqlList, bindVariablesList)
 }
 
-func (c *errorClient) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) (*vtgatepb.Session, error) {
+func (c *errorClient) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, prepared bool, callback func(*sqltypes.Result) error) (*vtgatepb.Session, error) {
 	if err := requestToError(sql); err != nil {
 		return session, err
 	}
-	return c.fallbackClient.StreamExecute(ctx, mysqlCtx, session, sql, bindVariables, callback)
+	return c.fallbackClient.StreamExecute(ctx, mysqlCtx, session, sql, bindVariables, prepared, callback)
 }
 
 // ExecuteMulti is part of the VTGateService interface

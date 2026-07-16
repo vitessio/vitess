@@ -23,8 +23,8 @@ import (
 )
 
 func TestBlobStorageLength(t *testing.T) {
-	assert.EqualValues(t, 1<<8-1, TinyBlogStorageLength)
-	assert.EqualValues(t, 1<<16-1, BlobStorageLength)
-	assert.EqualValues(t, 1<<24-1, MediumBlobStorageLength)
-	assert.EqualValues(t, 1<<32-1, LongBlobStorageLength)
+	assert.Equal(t, 1<<8-1, TinyBlogStorageLength)
+	assert.Equal(t, 1<<16-1, BlobStorageLength)
+	assert.Equal(t, 1<<24-1, MediumBlobStorageLength)
+	assert.Equal(t, 1<<32-1, LongBlobStorageLength)
 }

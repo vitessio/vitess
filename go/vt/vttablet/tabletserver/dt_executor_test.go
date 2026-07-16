@@ -518,7 +518,7 @@ func TestExecutorUnresolvedTransactions(t *testing.T) {
 			timeCreated := convertNanoStringToTime(t, matches[1])
 
 			// diff should be in microseconds, so we allow 10ms difference
-			require.WithinDuration(t, timeCreated, tcase.expected, 10*time.Millisecond)
+			require.WithinDuration(t, tcase.expected, timeCreated, 10*time.Millisecond)
 		})
 	}
 }

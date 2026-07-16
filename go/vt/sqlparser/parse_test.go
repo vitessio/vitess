@@ -2659,6 +2659,8 @@ var validSQL = []struct {
 }, {
 	input: "alter vitess_migration cleanup all",
 }, {
+	input: "alter vitess_migration cleanup context 'some-context'",
+}, {
 	input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' launch",
 }, {
 	input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' launch vitess_shards '-40'",
@@ -2666,6 +2668,8 @@ var validSQL = []struct {
 	input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' launch vitess_shards '-40,40-80'",
 }, {
 	input: "alter vitess_migration launch all",
+}, {
+	input: "alter vitess_migration launch context 'some-context'",
 }, {
 	input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' complete",
 }, {
@@ -2675,13 +2679,19 @@ var validSQL = []struct {
 }, {
 	input: "alter vitess_migration complete all",
 }, {
+	input: "alter vitess_migration complete context 'some-context'",
+}, {
 	input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' postpone complete",
 }, {
 	input: "alter vitess_migration postpone complete all",
 }, {
+	input: "alter vitess_migration postpone complete context 'some-context'",
+}, {
 	input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' cancel",
 }, {
 	input: "alter vitess_migration force_cutover all",
+}, {
+	input: "alter vitess_migration force_cutover context 'some-context'",
 }, {
 	input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' force_cutover",
 }, {
@@ -2689,6 +2699,8 @@ var validSQL = []struct {
 }, {
 	input:  "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' FORCE_CUTOVER",
 	output: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' force_cutover",
+}, {
+	input: "alter vitess_migration cancel context 'some-context'",
 }, {
 	input: "alter vitess_migration cancel all",
 }, {
@@ -2704,7 +2716,17 @@ var validSQL = []struct {
 }, {
 	input: "alter vitess_migration throttle all",
 }, {
+	input: "alter vitess_migration throttle context 'some-context'",
+}, {
+	input: "alter vitess_migration throttle context 'some-context' expire '1h'",
+}, {
+	input: "alter vitess_migration throttle context 'some-context' ratio 0.7",
+}, {
+	input: "alter vitess_migration throttle context 'some-context' expire '1h' ratio 0.7",
+}, {
 	input: "alter vitess_migration unthrottle all",
+}, {
+	input: "alter vitess_migration unthrottle context 'some-context'",
 }, {
 	input: "alter vitess_migration throttle all expire '1h'",
 }, {
@@ -4560,7 +4582,7 @@ func TestIntroducers(t *testing.T) {
 				tcase.output = tcase.input
 			}
 			tree, err := parser.Parse(tcase.input)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			out := String(tree)
 			assert.Equal(t, tcase.output, out)
 		})
@@ -6488,6 +6510,33 @@ var invalidSQL = []struct {
 	input  string
 	output string
 }{{
+	input:  "alter vitess_migration cancel context ''",
+	output: "migration context cannot be empty at position 41",
+}, {
+	input:  "alter vitess_migration cleanup context ''",
+	output: "migration context cannot be empty at position 42",
+}, {
+	input:  "alter vitess_migration launch context ''",
+	output: "migration context cannot be empty at position 41",
+}, {
+	input:  "alter vitess_migration complete context ''",
+	output: "migration context cannot be empty at position 43",
+}, {
+	input:  "alter vitess_migration postpone complete context ''",
+	output: "migration context cannot be empty at position 52",
+}, {
+	input:  "alter vitess_migration force_cutover context ''",
+	output: "migration context cannot be empty at position 48",
+}, {
+	input:  "alter vitess_migration throttle context ''",
+	output: "migration context cannot be empty at position 43",
+}, {
+	input:  "alter vitess_migration throttle context '' expire '1h' ratio 0.7",
+	output: "migration context cannot be empty at position 65 near '0.7'",
+}, {
+	input:  "alter vitess_migration unthrottle context ''",
+	output: "migration context cannot be empty at position 45",
+}, {
 	input:  "select : from t",
 	output: "syntax error at position 9 near ':'",
 }, {
@@ -6891,7 +6940,7 @@ func TestParseMultiple(t *testing.T) {
 			finalStmts = append(finalStmts, stmt)
 		}
 	}
-	require.EqualValues(t, totalCases, len(finalStmts))
+	require.Len(t, finalStmts, totalCases)
 	idx := 0
 	for _, tcase := range validSQL {
 		if tcase.partialDDL {
@@ -6965,7 +7014,7 @@ func TestParseMultipleEdgeCases(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			require.EqualValues(t, len(test.want), len(stmts))
+			require.Len(t, stmts, len(test.want))
 			for i, stmt := range stmts {
 				require.Equal(t, test.want[i], String(stmt))
 			}
@@ -7010,16 +7059,16 @@ func testFile(t *testing.T, filename, tempDir string) {
 				if tcase.output == "" && tcase.errStr == "" {
 					tcase.output = tcase.input
 				}
-				expected.WriteString(fmt.Sprintf("%sINPUT\n%s\nEND\n", tcase.comments, escapeNewLines(tcase.input)))
+				fmt.Fprintf(&expected, "%sINPUT\n%s\nEND\n", tcase.comments, escapeNewLines(tcase.input))
 				tree, err := parser.Parse(tcase.input)
 				if tcase.errStr != "" {
 					errPresent := ""
 					if err != nil {
 						errPresent = err.Error()
-						expected.WriteString(fmt.Sprintf("ERROR\n%s\nEND\n", escapeNewLines(errPresent)))
+						fmt.Fprintf(&expected, "ERROR\n%s\nEND\n", escapeNewLines(errPresent))
 					} else {
 						out := String(tree)
-						expected.WriteString(fmt.Sprintf("OUTPUT\n%s\nEND\n", escapeNewLines(out)))
+						fmt.Fprintf(&expected, "OUTPUT\n%s\nEND\n", escapeNewLines(out))
 					}
 					if err == nil || tcase.errStr != err.Error() {
 						fail = true
@@ -7027,12 +7076,12 @@ func testFile(t *testing.T, filename, tempDir string) {
 					}
 				} else {
 					if err != nil {
-						expected.WriteString(fmt.Sprintf("ERROR\n%s\nEND\n", escapeNewLines(err.Error())))
+						fmt.Fprintf(&expected, "ERROR\n%s\nEND\n", escapeNewLines(err.Error()))
 						fail = true
 						assert.Failf(t, "unexpected parse error", "File: %s:%d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.errStr, err.Error()), tcase.errStr, err.Error())
 					} else {
 						out := String(tree)
-						expected.WriteString(fmt.Sprintf("OUTPUT\n%s\nEND\n", escapeNewLines(out)))
+						fmt.Fprintf(&expected, "OUTPUT\n%s\nEND\n", escapeNewLines(out))
 						if tcase.output != out {
 							fail = true
 							assert.Failf(t, "parsing failed", "Parsing failed. \nExpected/Got:\n%s\n%s", tcase.output, out)

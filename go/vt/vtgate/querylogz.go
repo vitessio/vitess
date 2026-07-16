@@ -51,6 +51,7 @@ var (
 				<th>SQL</th>
 				<th>ShardQueries</th>
 				<th>RowsAffected</th>
+				<th>SlowQuery</th>
 				<th>Error</th>
 			</tr>
 		</thead>
@@ -77,6 +78,7 @@ var (
 			<td>{{.SQL | .Parser.TruncateForUI | unquote | cssWrappable}}</td>
 			<td>{{.ShardQueries}}</td>
 			<td>{{.RowsAffected}}</td>
+			<td>{{.SlowQuery}}</td>
 			<td>{{.ErrorStr}}</td>
 		</tr>
 	`))

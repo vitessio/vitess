@@ -777,10 +777,10 @@ func (session *SafeSession) SetPreQueries() []string {
 	first := true
 	for _, k := range keys {
 		if first {
-			preQuery.WriteString(fmt.Sprintf("set %s = %s", k, sysVars[k]))
+			fmt.Fprintf(&preQuery, "set %s = %s", k, sysVars[k])
 			first = false
 		} else {
-			preQuery.WriteString(fmt.Sprintf(", %s = %s", k, sysVars[k]))
+			fmt.Fprintf(&preQuery, ", %s = %s", k, sysVars[k])
 		}
 	}
 	return []string{preQuery.String()}

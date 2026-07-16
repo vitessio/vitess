@@ -24,7 +24,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { Icon, Icons } from '../Icon';
 
 export interface ColumnProps {
-    // Coulmn display name string | JSX.Element
+    // Column display name string | JSX.Element
     display: string | JSX.Element;
     // Column data accessor
     accessor: string;
@@ -121,14 +121,14 @@ export const SortedDataTable = <T extends object>({
                 {title && <caption>{title}</caption>}
                 <thead>
                     <tr>
-                        {columns.map((col, cdx) => (
+                        {columns.map((col) => (
                             <SortTableHeader
+                                key={col.accessor}
                                 col={col}
-                                cdx={cdx}
                                 sortColumn={sortColumn}
                                 sortOrder={sortOrder}
                                 handleSort={handleSort}
-                            ></SortTableHeader>
+                            />
                         ))}
                     </tr>
                 </thead>
@@ -147,17 +147,16 @@ export const SortedDataTable = <T extends object>({
 
 type SortTableHeaderProps = {
     col: ColumnProps;
-    cdx: number;
     sortOrder: SortOrder;
     sortColumn: null | string;
     handleSort: (column: any) => void;
 };
 
-const SortTableHeader: React.FC<SortTableHeaderProps> = ({ col, cdx, sortOrder, sortColumn, handleSort }) => {
+const SortTableHeader: React.FC<SortTableHeaderProps> = ({ col, sortOrder, sortColumn, handleSort }) => {
     const upFillColor = sortOrder === 'asc' && sortColumn === col.accessor ? 'fill-current' : 'fill-gray-300';
     const downFillColor = sortOrder !== 'asc' && sortColumn === col.accessor ? 'fill-current' : 'fill-gray-300';
     return (
-        <th key={cdx} onClick={() => handleSort(col.accessor)}>
+        <th onClick={() => handleSort(col.accessor)}>
             <div className="flex cursor-pointer items-center">
                 <div className="mr-1">{col.display}</div>
                 <div>

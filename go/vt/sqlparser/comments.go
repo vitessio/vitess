@@ -381,16 +381,16 @@ func (c *ParsedComments) SetMySQLSetVarValue(key string, value string) (newComme
 				// Otherwise we add the comment as is to our final comments and move on.
 				setVarName, _, isValid := strings.Cut(ohContent, "=")
 				if !isValid || !strings.EqualFold(strings.TrimSpace(setVarName), key) {
-					finalCommentSb342.WriteString(fmt.Sprintf(" %v(%v)", ohName, ohContent))
+					fmt.Fprintf(&finalCommentSb342, " %v(%v)", ohName, ohContent)
 					continue
 				}
 				if strings.EqualFold(strings.TrimSpace(setVarName), key) {
 					keyPresent = true
-					finalCommentSb342.WriteString(fmt.Sprintf(" %v(%v=%v)", ohName, strings.TrimSpace(setVarName), value))
+					fmt.Fprintf(&finalCommentSb342, " %v(%v=%v)", ohName, strings.TrimSpace(setVarName), value)
 				}
 			} else {
 				// If it doesn't match, we add it to our final comment and move on.
-				finalCommentSb342.WriteString(fmt.Sprintf(" %v(%v)", ohName, ohContent))
+				fmt.Fprintf(&finalCommentSb342, " %v(%v)", ohName, ohContent)
 			}
 		}
 		finalComment += finalCommentSb342.String()

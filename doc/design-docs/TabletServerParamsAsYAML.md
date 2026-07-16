@@ -127,7 +127,6 @@ shutdownGracePeriodSeconds: 0            # transaction_shutdown_grace_period
 passthroughDML: false                    # queryserver-config-passthrough-dmls
 streamBufferSize: 32768                  # queryserver-config-stream-buffer-size
 schemaReloadIntervalSeconds: 1800        # queryserver-config-schema-reload-time
-watchReplication: false                  # watch_replication_stream
 terseErrors: false                       # queryserver-config-terse-errors
 messagePostponeParallelism: 4            # queryserver-config-message-postpone-cap
 sanitizeLogMessages: false               # sanitize_log_messages

@@ -185,7 +185,7 @@ func TestReplicationRepairAfterPrimaryTabletChange(t *testing.T) {
 	sidecarDDLCount, err := getSidecarDBDDLQueryCount(primaryTablet.VttabletProcess)
 	require.NoError(t, err)
 	// sidecar db should create all _vt tables when vttablet started
-	require.Greater(t, sidecarDDLCount, int64(0))
+	require.Positive(t, sidecarDDLCount)
 
 	// Stop the primary tablet
 	stopTablet(t, primaryTablet)
@@ -204,7 +204,7 @@ func TestReplicationRepairAfterPrimaryTabletChange(t *testing.T) {
 	sidecarDDLCount, err = getSidecarDBDDLQueryCount(primaryTablet.VttabletProcess)
 	require.NoError(t, err)
 	// sidecardb should find the desired _vt schema and not apply any new creates or upgrades when the tablet comes up again
-	require.Equal(t, sidecarDDLCount, int64(0))
+	require.Equal(t, int64(0), sidecarDDLCount)
 }
 
 func TestReparentJournalInfo(t *testing.T) {

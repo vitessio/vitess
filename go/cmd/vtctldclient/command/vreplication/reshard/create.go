@@ -17,6 +17,9 @@ limitations under the License.
 package reshard
 
 import (
+	"errors"
+	"fmt"
+
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
@@ -42,6 +45,9 @@ var (
 		Aliases:               []string{"Create"},
 		Args:                  cobra.NoArgs,
 		PreRunE: func(cmd *cobra.Command, args []string) error {
+			if err := validateShardFlags(); err != nil {
+				return err
+			}
 			if err := common.ParseAndValidateCreateOptions(cmd); err != nil {
 				return err
 			}
@@ -50,6 +56,28 @@ var (
 		RunE: commandReshardCreate,
 	}
 )
+
+// validateShardFlags fails fast on missing or malformed --source-shards /
+// --target-shards values instead of sending the request to vtctld, where an
+// omission only surfaces deep in resharder setup as errors like
+// "ValidateForReshard: there are no shards to combine".
+//
+// See https://github.com/vitessio/vitess/issues/20568.
+func validateShardFlags() error {
+	if len(reshardCreateOptions.sourceShards) == 0 {
+		return errors.New("--source-shards is required")
+	}
+	if len(reshardCreateOptions.targetShards) == 0 {
+		return errors.New("--target-shards is required")
+	}
+	if err := common.ValidateShards(reshardCreateOptions.sourceShards); err != nil {
+		return fmt.Errorf("invalid --source-shards value: %w", err)
+	}
+	if err := common.ValidateShards(reshardCreateOptions.targetShards); err != nil {
+		return fmt.Errorf("invalid --target-shards value: %w", err)
+	}
+	return nil
+}
 
 func commandReshardCreate(cmd *cobra.Command, args []string) error {
 	format, err := common.GetOutputFormat(cmd)

@@ -109,7 +109,10 @@ func (fbh *FileBackupHandle) AddFile(ctx context.Context, filename string, files
 	return ioutil.NewMeteredWriteCloser(f, stat.TimedIncrementBytes), nil
 }
 
-// EndBackup is part of the BackupHandle interface
+// Wait is part of the BackupHandle interface.
+func (fbh *FileBackupHandle) Wait() {}
+
+// EndBackup is part of the BackupHandle interface.
 func (fbh *FileBackupHandle) EndBackup(ctx context.Context) error {
 	if fbh.readOnly {
 		return errors.New("EndBackup cannot be called on read-only backup")

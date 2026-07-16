@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { delay, http, HttpResponse } from 'msw';
+import { http, HttpResponse } from 'msw';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -36,12 +36,21 @@ describe('CreateKeyspace integration test', () => {
 
         const cluster = { id: 'local', name: 'local' };
         const apiAddr = import.meta.env.VITE_VTADMIN_API_ADDRESS;
+
+        // Gate the create-keyspace response so it stays in flight until the test
+        // releases it. This keeps the form in its loading state deterministically,
+        // rather than racing against a fixed delay that a slow CI runner can miss.
+        let releaseRequest = () => {};
+        const requestGate = new Promise<void>((resolve) => {
+            releaseRequest = resolve;
+        });
+
         global.server.use(
             http.get(`${apiAddr}/api/clusters`, async (info) => {
                 return HttpResponse.json({ result: { clusters: [cluster] }, ok: true });
             }),
             http.post(`${apiAddr}/api/keyspace/:clusterID`, async (info) => {
-                await delay();
+                await requestGate;
                 const data: vtadmin.ICreateKeyspaceResponse = {
                     keyspace: {
                         cluster: { id: cluster.id, name: cluster.name },
@@ -99,11 +108,14 @@ describe('CreateKeyspace integration test', () => {
         });
 
         // Validate form UI loading state, while the API request is "in flight".
-        // Both assertions must be checked atomically during the transient loading state.
+        // The request is gated open, so the loading state persists until we release it.
         await waitFor(() => {
             expect(submitButton).toHaveTextContent('Creating Keyspace...');
             expect(submitButton).toHaveAttribute('disabled');
         });
+
+        // Release the in-flight request now that we've observed the loading state.
+        releaseRequest();
 
         // Wait for the API request to complete
         await waitFor(() => {

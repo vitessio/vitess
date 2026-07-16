@@ -25,7 +25,7 @@ Flags:
       --backend-write-concurrency int                               Maximum concurrency for writes to the backend (default 24)
       --bind-address string                                         Bind address for the server. If empty, the server will listen on all available unicast and anycast IP addresses of the local system.
       --catch-sigpipe                                               catch and ignore SIGPIPE on stdout and stderr if specified
-      --cell string                                                 cell to use (required in v25+)
+      --cell string                                                 cell to use (required)
       --cells-to-watch strings                                      Comma-separated list of cells that this instance will monitor and repair. Defaults to all cells in the topology. Example: "cell1,cell2"
       --change-tablets-with-errant-gtid-to-drained                  Whether VTOrc should be changing the type of tablets with errant GTIDs to DRAINED
       --clusters-to-watch strings                                   Comma-separated list of keyspaces or keyspace/keyranges that this instance will monitor and repair. Defaults to all clusters in the topology. Example: "ks1,ks2/-80"
@@ -37,6 +37,7 @@ Flags:
       --config-type string                                          Config file type (omit to infer config type from file extension).
       --consul-auth-static-file string                              JSON File to read the topos/tokens from.
       --discovery-workers int                                       Number of workers used for tablet discovery (default 300)
+      --emergency-reparent-on-primary-tablet-unreachable            Whether VTOrc should run an emergency reparent when the primary vttablet is unreachable by VTOrc and confirmed down by a quorum of the shard's replicas
       --emit-stats                                                  If set, emit stats to push-based monitoring and stats backends
       --enable-primary-disk-stalled-recovery                        Whether VTOrc should detect a stalled disk on the primary and failover
       --grpc-auth-static-client-creds string                        When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
@@ -73,8 +74,11 @@ Flags:
       --recovery-poll-duration duration                             Timer duration on which VTOrc polls its database to run a recovery (default 1s)
       --remote-operation-timeout duration                           time to wait for a remote operation (default 15s)
       --security-policy string                                      the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
+      --shard-tablet-health-failure-threshold int                   Consecutive shard-peer ping failures before an observer considers a peer down (default 3)
+      --shard-tablet-health-freshness duration                      Maximum age of an observer's shard-peer report for it to count toward quorum. Must exceed --instance-poll-time (ideally 2-3x), since reports only refresh when VTOrc polls each observer (default 15s)
+      --shard-tablet-health-quorum-fraction float                   Required fraction of 'down' votes among eligible observers to declare the primary unreachable (1.0 = unanimous). Values below 1.0 make detection more tolerant of partial agreement, but give up the guarantee that a single fresh 'up' report vetoes the failover (default 1)
+      --shard-tablet-health-quorum-min-observers int                Minimum number of eligible observers required before a quorum-based emergency reparent may run; at 1, a single-observer shard relies on that observer plus VTOrc's own check (default 1)
       --shutdown-wait-time duration                                 Maximum time to wait for VTOrc to release all the locks that it is holding before shutting down on SIGTERM (default 30s)
-      --snapshot-topology-interval duration                         Timer duration on which VTOrc takes a snapshot of the current MySQL information it has in the database. Should be in multiple of hours
       --sqlite-data-file string                                     SQLite Datafile to use as VTOrc's database (default "file::memory:?mode=memory&cache=shared")
       --stats-backend string                                        The name of the registered push-based monitoring/stats backend to use
       --stats-combine-dimensions string                             List of dimensions to be combined into a single "all" value in exported stats vars

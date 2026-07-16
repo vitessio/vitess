@@ -83,6 +83,7 @@ type SandboxConn struct {
 	ReserveCount                atomic.Int64
 	ReleaseCount                atomic.Int64
 	GetSchemaCount              atomic.Int64
+	ExecDelayResponse           time.Duration
 	GetSchemaDelayResponse      time.Duration
 
 	queriesRequireLocking bool
@@ -166,6 +167,22 @@ func NewSandboxConn(t *topodatapb.Tablet) *SandboxConn {
 		MustFailExecute: make(map[sqlparser.StatementType]int),
 		txIDToRID:       make(map[int64]int64),
 		parser:          sqlparser.NewTestParser(),
+	}
+}
+
+func (sbc *SandboxConn) waitForExecDelay(ctx context.Context) error {
+	if sbc.ExecDelayResponse <= 0 {
+		return nil
+	}
+
+	timer := time.NewTimer(sbc.ExecDelayResponse)
+	defer timer.Stop()
+
+	select {
+	case <-timer.C:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }
 
@@ -320,6 +337,9 @@ func (sbc *SandboxConn) Execute(ctx context.Context, session queryservice.Sessio
 	if err := sbc.getError(); err != nil {
 		return nil, err
 	}
+	if err := sbc.waitForExecDelay(ctx); err != nil {
+		return nil, err
+	}
 
 	stmt, _ := sbc.parser.Parse(query) // knowingly ignoring the error
 	if sbc.MustFailExecute[sqlparser.ASTToStatementType(stmt)] > 0 {
@@ -343,6 +363,10 @@ func (sbc *SandboxConn) StreamExecute(ctx context.Context, session queryservice.
 	sbc.appendToOptions(options)
 	err := sbc.getError()
 	if err != nil {
+		sbc.sExecMu.Unlock()
+		return err
+	}
+	if err := sbc.waitForExecDelay(ctx); err != nil {
 		sbc.sExecMu.Unlock()
 		return err
 	}

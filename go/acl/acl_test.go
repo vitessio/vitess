@@ -27,6 +27,7 @@ import (
 
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type TestPolicy struct{}
@@ -50,25 +51,25 @@ func TestSimplePolicy(t *testing.T) {
 	currentPolicy = policies["test"]
 	want := "not allowed"
 	err := CheckAccessHTTP(nil, ADMIN)
-	assert.Equalf(t, err.Error(), want, "got %v, want %s", err, want)
+	assert.Equalf(t, want, err.Error(), "got %v, want %s", err, want)
 
 	err = CheckAccessHTTP(nil, DEBUGGING)
-	assert.Equalf(t, err, nil, "got %v, want no error", err)
+	require.NoErrorf(t, err, "got %v, want no error", err)
 
 	err = CheckAccessHTTP(nil, MONITORING)
-	assert.Equalf(t, err, nil, "got %v, want no error", err)
+	assert.NoErrorf(t, err, "got %v, want no error", err)
 }
 
 func TestEmptyPolicy(t *testing.T) {
 	currentPolicy = nil
 	err := CheckAccessHTTP(nil, ADMIN)
-	assert.Equalf(t, err, nil, "got %v, want no error", err)
+	require.NoErrorf(t, err, "got %v, want no error", err)
 
 	err = CheckAccessHTTP(nil, DEBUGGING)
-	assert.Equalf(t, err, nil, "got %v, want no error", err)
+	require.NoErrorf(t, err, "got %v, want no error", err)
 
 	err = CheckAccessHTTP(nil, MONITORING)
-	assert.Equalf(t, err, nil, "got %v, want no error", err)
+	assert.NoErrorf(t, err, "got %v, want no error", err)
 }
 
 func TestValidSecurityPolicy(t *testing.T) {
@@ -92,12 +93,12 @@ func TestSendError(t *testing.T) {
 	SendError(testW, testErr)
 
 	// Check the status code
-	assert.Equalf(t, testW.Code, http.StatusForbidden, "got %v; want %v", testW.Code, http.StatusForbidden)
+	assert.Equalf(t, http.StatusForbidden, testW.Code, "got %v; want %v", testW.Code, http.StatusForbidden)
 
 	// Check the writer body
 	want := fmt.Sprintf("Access denied: %v\n", testErr)
 	got := testW.Body.String()
-	assert.Equalf(t, got, want, "got %v; want %v", got, want)
+	assert.Equalf(t, want, got, "got %v; want %v", got, want)
 }
 
 func TestRegisterFlags(t *testing.T) {
@@ -112,7 +113,7 @@ func TestRegisterFlags(t *testing.T) {
 	// Check the default value of the flag
 	want := "test"
 	got := securityPolicyFlag.DefValue
-	assert.Equalf(t, got, want, "got %v; want %v", got, want)
+	assert.Equalf(t, want, got, "got %v; want %v", got, want)
 }
 
 func TestAlreadyRegisteredPolicy(t *testing.T) {

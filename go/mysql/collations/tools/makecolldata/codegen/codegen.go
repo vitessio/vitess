@@ -159,7 +159,7 @@ func (g *Generator) gatherPackages(tt reflect.Type) {
 		g.imported[Package(pkg)] = true
 	}
 	switch tt.Kind() {
-	case reflect.Array, reflect.Chan, reflect.Map, reflect.Ptr, reflect.Slice:
+	case reflect.Array, reflect.Chan, reflect.Map, reflect.Pointer, reflect.Slice:
 		g.gatherPackages(tt.Elem())
 	case reflect.Struct:
 		for field := range tt.Fields() {

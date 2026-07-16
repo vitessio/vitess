@@ -356,7 +356,7 @@ func TestVStreamCopyUnspecifiedShardGtid(t *testing.T) {
 					cancel()
 				default:
 					log.Error(fmt.Sprintf("Returned err %v", err))
-					require.FailNow(t, "remote error: %v\n", err)
+					require.FailNowf(t, "remote error", "%v\n", err)
 				}
 			}
 		})
@@ -880,7 +880,7 @@ func printEvents(evs []*binlogdatapb.VEvent) {
 	s := "\n===START===" + "\n"
 	var sSb911 strings.Builder
 	for i, ev := range evs {
-		sSb911.WriteString(fmt.Sprintf("Event %d; %v\n", i, ev))
+		fmt.Fprintf(&sSb911, "Event %d; %v\n", i, ev)
 	}
 	s += sSb911.String()
 	s += "===END===" + "\n"

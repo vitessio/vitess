@@ -163,12 +163,12 @@ func TestCreateViewDiff(t *testing.T) {
 			alter, err := c.Diff(other, hints)
 			switch {
 			case ts.isError:
-				assert.Error(t, err)
+				require.Error(t, err)
 			case ts.diff == "":
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Nil(t, alter)
 			default:
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				require.NotNil(t, alter)
 				require.False(t, alter.IsEmpty())
 				{
@@ -176,7 +176,7 @@ func TestCreateViewDiff(t *testing.T) {
 					assert.Equal(t, ts.diff, diff)
 					// validate we can parse back the statement
 					_, err := env.Parser().ParseStrictDDL(diff)
-					assert.NoError(t, err)
+					require.NoError(t, err)
 
 					eFrom, eTo := alter.Entities()
 					if ts.fromName != "" {
@@ -187,7 +187,7 @@ func TestCreateViewDiff(t *testing.T) {
 					}
 					{ // Validate "apply()" on "from" converges with "to"
 						applied, err := c.Apply(alter)
-						assert.NoError(t, err)
+						require.NoError(t, err)
 						require.NotNil(t, applied)
 						appliedDiff, err := eTo.Diff(applied, hints)
 						require.NoError(t, err)

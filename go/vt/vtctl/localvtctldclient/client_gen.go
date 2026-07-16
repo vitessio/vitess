@@ -26,7 +26,6 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/internal/grpcshim"
 
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
-	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 )
 
 // AddCellInfo is part of the vtctlservicepb.VtctldClient interface.
@@ -102,7 +101,7 @@ func (stream *backupStreamAdapter) Send(msg *vtctldatapb.BackupResponse) error {
 }
 
 // Backup is part of the vtctlservicepb.VtctldClient interface.
-func (client *localVtctldClient) Backup(ctx context.Context, in *vtctldatapb.BackupRequest, opts ...grpc.CallOption) (vtctlservicepb.Vtctld_BackupClient, error) {
+func (client *localVtctldClient) Backup(ctx context.Context, in *vtctldatapb.BackupRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[vtctldatapb.BackupResponse], error) {
 	stream := &backupStreamAdapter{
 		BidiStream: grpcshim.NewBidiStream(ctx),
 		ch:         make(chan *vtctldatapb.BackupResponse, 1),
@@ -153,7 +152,7 @@ func (stream *backupShardStreamAdapter) Send(msg *vtctldatapb.BackupResponse) er
 }
 
 // BackupShard is part of the vtctlservicepb.VtctldClient interface.
-func (client *localVtctldClient) BackupShard(ctx context.Context, in *vtctldatapb.BackupShardRequest, opts ...grpc.CallOption) (vtctlservicepb.Vtctld_BackupShardClient, error) {
+func (client *localVtctldClient) BackupShard(ctx context.Context, in *vtctldatapb.BackupShardRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[vtctldatapb.BackupResponse], error) {
 	stream := &backupShardStreamAdapter{
 		BidiStream: grpcshim.NewBidiStream(ctx),
 		ch:         make(chan *vtctldatapb.BackupResponse, 1),
@@ -604,7 +603,7 @@ func (stream *restoreFromBackupStreamAdapter) Send(msg *vtctldatapb.RestoreFromB
 }
 
 // RestoreFromBackup is part of the vtctlservicepb.VtctldClient interface.
-func (client *localVtctldClient) RestoreFromBackup(ctx context.Context, in *vtctldatapb.RestoreFromBackupRequest, opts ...grpc.CallOption) (vtctlservicepb.Vtctld_RestoreFromBackupClient, error) {
+func (client *localVtctldClient) RestoreFromBackup(ctx context.Context, in *vtctldatapb.RestoreFromBackupRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[vtctldatapb.RestoreFromBackupResponse], error) {
 	stream := &restoreFromBackupStreamAdapter{
 		BidiStream: grpcshim.NewBidiStream(ctx),
 		ch:         make(chan *vtctldatapb.RestoreFromBackupResponse, 1),

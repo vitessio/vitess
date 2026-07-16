@@ -53,7 +53,6 @@ type VTOrcProcess struct {
 
 type VTOrcConfiguration struct {
 	InstancePollTime                     string `json:"instance-poll-time,omitempty"`
-	SnapshotTopologyInterval             string `json:"snapshot-topology-interval,omitempty"`
 	PreventCrossCellFailover             bool   `json:"prevent-cross-cell-failover,omitempty"`
 	ReasonableReplicationLag             string `json:"reasonable-replication-lag,omitempty"`
 	AuditToBackend                       bool   `json:"audit-to-backend,omitempty"`

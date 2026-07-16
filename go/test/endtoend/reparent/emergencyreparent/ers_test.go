@@ -77,11 +77,11 @@ func TestReparentIgnoreReplicas(t *testing.T) {
 
 	// We expect this one to fail because we have an unreachable replica
 	out, err := utils.Ers(clusterInstance, nil, "60s", "30s")
-	require.NotNil(t, err, out)
+	require.Error(t, err, out)
 
 	// Now let's run it again, but set the command to ignore the unreachable replica.
 	out, err = utils.ErsIgnoreTablet(clusterInstance, nil, "60s", "30s", []*cluster.Vttablet{tablets[2]}, false)
-	require.Nil(t, err, out)
+	require.NoError(t, err, out)
 
 	// We'll bring back the replica we took down.
 	utils.RestartTablet(t, clusterInstance, tablets[2])
@@ -94,7 +94,7 @@ func TestReparentIgnoreReplicas(t *testing.T) {
 	newPrimary := utils.GetNewPrimary(t, clusterInstance)
 	// Check new primary has latest transaction.
 	err = utils.CheckInsertedValues(ctx, t, newPrimary, insertVal)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// bring back the old primary as a replica, check that it catches up
 	utils.ResurrectTablet(ctx, t, clusterInstance, tablets[0])
@@ -180,33 +180,20 @@ func TestEmergencyReparentWithBlockedPrimary(t *testing.T) {
 	// Try performing a write and ensure that it blocks.
 	writeSQL := `insert into test(id, msg) values (1, 'test 1')`
 	wg := sync.WaitGroup{}
+	// require.* is unsafe on a worker goroutine, so record the write error and
+	// vtgate vars here and assert them on the test goroutine after wg.Wait().
+	var writeErr error
+	var vtgateVars map[string]any
 	wg.Go(func() {
 		// Attempt writing via vtgate against the primary. This should block (because there's no replicas to ack the semi-sync),
 		// and fail on the vtgate query timeout. Async replicas will still receive this write (probably), because it is written
 		// to the PRIMARY binlog even when no ackers exist. This means we need to disable the vtgate buffer (above), because it
 		// will attempt the write on the promoted, unblocked primary - and this will hit a dupe key error.
-		_, err := conn.ExecuteFetch(writeSQL, 0, false)
+		_, writeErr = conn.ExecuteFetch(writeSQL, 0, false)
 
-		// The error here could be one of:
-		// * target: ks.0.primary: vttablet: rpc error: code = DeadlineExceeded desc = context deadline exceeded (errno 1317) (sqlstate 70100) during query: insert into test(id, msg) values (1, 'test 1')
-		// * target: ks.0.primary: vttablet: rpc error: code = DeadlineExceeded desc = stream terminated by RST_STREAM with error code: CANCEL (errno 1317) (sqlstate 70100) during query: insert into test(id, msg) values (1, 'test 1')
-		// * ...
-		//
-		// So we only check for the part of the error message that's consistent.
-		require.ErrorContains(t, err, "(errno 1317) (sqlstate 70100) during query: insert into test(id, msg) values (1, 'test 1')")
-
-		// Verify vtgate really processed the insert in case something unrelated caused the deadline exceeded.
-		vtgateVars := clusterInstance.VtgateProcess.GetVars()
-		require.NotNil(t, vtgateVars)
-		require.NotNil(t, vtgateVars["QueryRoutes"])
-		require.NotNil(t, vtgateVars["VtgateApiErrorCounts"])
-		require.EqualValues(t, map[string]any{
-			"DDL.DirectDDL.PRIMARY":      float64(1),
-			"INSERT.Passthrough.PRIMARY": float64(1),
-		}, vtgateVars["QueryRoutes"])
-		require.EqualValues(t, map[string]any{
-			"Execute.ks.primary.DEADLINE_EXCEEDED": float64(1),
-		}, vtgateVars["VtgateApiErrorCounts"])
+		// Capture vtgate vars to verify (after the wait) that vtgate really
+		// processed the insert in case something unrelated caused the deadline exceeded.
+		vtgateVars = clusterInstance.VtgateProcess.GetVars()
 	})
 
 	wg.Add(1)
@@ -226,6 +213,25 @@ func TestEmergencyReparentWithBlockedPrimary(t *testing.T) {
 	}()
 
 	wg.Wait()
+	// The error here could be one of:
+	// * target: ks.0.primary: vttablet: rpc error: code = DeadlineExceeded desc = context deadline exceeded (errno 1317) (sqlstate 70100) during query: insert into test(id, msg) values (1, 'test 1')
+	// * target: ks.0.primary: vttablet: rpc error: code = DeadlineExceeded desc = stream terminated by RST_STREAM with error code: CANCEL (errno 1317) (sqlstate 70100) during query: insert into test(id, msg) values (1, 'test 1')
+	// * ...
+	//
+	// So we only check for the part of the error message that's consistent.
+	require.ErrorContains(t, writeErr, "(errno 1317) (sqlstate 70100) during query: insert into test(id, msg) values (1, 'test 1')")
+
+	// Verify vtgate really processed the insert in case something unrelated caused the deadline exceeded.
+	require.NotNil(t, vtgateVars)
+	require.NotNil(t, vtgateVars["QueryRoutes"])
+	require.NotNil(t, vtgateVars["VtgateApiErrorCounts"])
+	require.EqualValues(t, map[string]any{
+		"DDL.DirectDDL.PRIMARY":      float64(1),
+		"INSERT.Passthrough.PRIMARY": float64(1),
+	}, vtgateVars["QueryRoutes"])
+	require.EqualValues(t, map[string]any{
+		"Execute.ks.primary.DEADLINE_EXCEEDED": float64(1),
+	}, vtgateVars["VtgateApiErrorCounts"])
 
 	// We need to wait at least 10 seconds here to ensure the wait-for-replicas-timeout has passed,
 	// before we resume the old primary - otherwise the old primary will receive a `SetReplicationSource` call.
@@ -239,23 +245,23 @@ func TestEmergencyReparentWithBlockedPrimary(t *testing.T) {
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		// Ensure the old primary was demoted correctly
 		tabletInfo, err := clusterInstance.VtctldClientProcess.GetTablet(tablets[0].Alias)
-		require.NoError(c, err)
+		assert.NoError(c, err)
 
 		// The old primary should have noticed there's a new primary tablet now and should
 		// have demoted itself to REPLICA.
-		require.Equal(c, topodatapb.TabletType_REPLICA, tabletInfo.GetType())
+		assert.Equal(c, topodatapb.TabletType_REPLICA, tabletInfo.GetType())
 
 		// The old primary should be in not serving mode because we should be unable to re-attach it
 		// as a replica due to the errant GTID caused by semi-sync writes that were never replicated out.
 		//
 		// Note: The writes that were not replicated were caused by the semi sync unblocker, which
 		//       performed writes after ERS.
-		require.Equal(c, "NOT_SERVING", tablets[0].VttabletProcess.GetTabletStatus())
-		require.Equal(c, "replica", tablets[0].VttabletProcess.GetTabletType())
+		assert.Equal(c, "NOT_SERVING", tablets[0].VttabletProcess.GetTabletStatus())
+		assert.Equal(c, "replica", tablets[0].VttabletProcess.GetTabletType())
 
 		// Check the 2nd tablet becomes PRIMARY.
-		require.Equal(c, "SERVING", tablets[1].VttabletProcess.GetTabletStatus())
-		require.Equal(c, "primary", tablets[1].VttabletProcess.GetTabletType())
+		assert.Equal(c, "SERVING", tablets[1].VttabletProcess.GetTabletStatus())
+		assert.Equal(c, "primary", tablets[1].VttabletProcess.GetTabletType())
 	}, 30*time.Second, time.Second, "could not validate primary was demoted")
 }
 
@@ -369,7 +375,7 @@ func TestERSPromoteRdonly(t *testing.T) {
 
 	// We expect this one to fail because we have ignored all the replicas and have only the rdonly's which should not be promoted
 	out, err := utils.ErsIgnoreTablet(clusterInstance, nil, "30s", "30s", []*cluster.Vttablet{tablets[3]}, false)
-	require.NotNil(t, err, out)
+	require.Error(t, err, out)
 
 	out, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("GetShard", utils.KeyspaceShard)
 	require.NoError(t, err)

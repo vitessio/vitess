@@ -931,12 +931,15 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 	notCopying := sqltypes.MakeTestResult(copyStatusFields)
 	copying := sqltypes.MakeTestResult(copyStatusFields, "1")
 
+	invalidState := binlogdatapb.VReplicationWorkflowState(9999)
+
 	tests := []struct {
 		name                     string
 		request                  *tabletmanagerdatapb.UpdateVReplicationWorkflowRequest
 		query                    string
 		isCopying                bool
 		initiallyNonEmptyMessage bool
+		wantErr                  string
 	}{
 		{
 			name: "update cells",
@@ -1064,6 +1067,16 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 			query: fmt.Sprintf(`update _vt.vreplication set state = 'Running', source = 'keyspace:"%s" shard:"%s" filter:{rules:{match:"corder" filter:"select * from corder"} rules:{match:"customer" filter:"select * from customer"}}', cell = '%s', tablet_types = '', message = '', options = json_set(options, '$.config', json_object(), '$.config."password"', 'secret', '$.config."user"', 'admin') where id in (%d)`,
 				keyspace, shard, "zone2", vreplID),
 		},
+		{
+			name: "invalid state value",
+			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
+				Workflow:    workflow,
+				State:       &invalidState,
+				Cells:       textutil.SimulatedNullStringSlice,
+				TabletTypes: textutil.SimulatedNullTabletTypeSlice,
+			},
+			wantErr: fmt.Sprintf("invalid state value: %d", invalidState),
+		},
 	}
 
 	for _, tt := range tests {
@@ -1079,7 +1092,9 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 			}()
 
 			require.NotNil(t, tt.request, "No request provided")
-			require.NotEqual(t, "", tt.query, "No expected query provided")
+			if tt.wantErr == "" {
+				require.NotEmpty(t, tt.query, "No expected query provided")
+			}
 
 			// These are the same for each RPC call.
 			tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest("use "+sidecar.GetIdentifier(), &sqltypes.Result{}, nil)
@@ -1088,23 +1103,29 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 			} else {
 				tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(selectQuery, selectRes, nil)
 			}
-			if tt.request.State == nil || *tt.request.State == binlogdatapb.VReplicationWorkflowState_Running {
-				tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest("use "+sidecar.GetIdentifier(), &sqltypes.Result{}, nil)
-				if tt.isCopying {
-					tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(getCopyStateQuery, copying, nil)
-				} else {
-					tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(getCopyStateQuery, notCopying, nil)
+			if tt.wantErr == "" {
+				if tt.request.State == nil || *tt.request.State == binlogdatapb.VReplicationWorkflowState_Running {
+					tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest("use "+sidecar.GetIdentifier(), &sqltypes.Result{}, nil)
+					if tt.isCopying {
+						tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(getCopyStateQuery, copying, nil)
+					} else {
+						tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(getCopyStateQuery, notCopying, nil)
+					}
 				}
+				// This is our expected query, which will also short circuit
+				// the test with an error as at this point we've tested what
+				// we wanted to test.
+				tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest("use "+sidecar.GetIdentifier(), &sqltypes.Result{}, nil)
+				tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(idQuery, idRes, nil)
+				tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(tt.query, &sqltypes.Result{RowsAffected: 1}, errShortCircuit)
 			}
-			// This is our expected query, which will also short circuit
-			// the test with an error as at this point we've tested what
-			// we wanted to test.
-			tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest("use "+sidecar.GetIdentifier(), &sqltypes.Result{}, nil)
-			tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(idQuery, idRes, nil)
-			tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(tt.query, &sqltypes.Result{RowsAffected: 1}, errShortCircuit)
 			_, err = tenv.tmc.tablets[tabletUID].tm.UpdateVReplicationWorkflow(ctx, tt.request)
 			tenv.tmc.tablets[tabletUID].vrdbClient.Wait()
-			require.ErrorIs(t, err, errShortCircuit)
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+			} else {
+				require.ErrorIs(t, err, errShortCircuit)
+			}
 		})
 	}
 }
@@ -1174,7 +1195,7 @@ func TestUpdateVReplicationWorkflows(t *testing.T) {
 			}()
 
 			require.NotNil(t, tt.request, "No request provided")
-			require.NotEqual(t, "", tt.query, "No expected query provided")
+			require.NotEmpty(t, tt.query, "No expected query provided")
 
 			// These are the same for each RPC call.
 			tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest("use "+sidecar.GetIdentifier(), &sqltypes.Result{}, nil)
@@ -1575,7 +1596,7 @@ func TestFailedMoveTablesCreateCleanup(t *testing.T) {
 	// Check that there are no orphaned routing rules.
 	rules, err := topotools.GetRoutingRules(ctx, tenv.ts)
 	require.NoError(t, err, "failed to get routing rules")
-	require.Equal(t, 0, len(rules), "expected no routing rules to be present")
+	require.Empty(t, rules, "expected no routing rules to be present")
 
 	// Check that our vschema changes were also rolled back.
 	vs2, err := tenv.ts.GetVSchema(ctx, targetKs)
@@ -3916,8 +3937,8 @@ func TestMaterializerNoDDL(t *testing.T) {
 
 	err := ws.Materialize(ctx, ms)
 	require.EqualError(t, err, "target table t1 does not exist and there is no create ddl defined")
-	require.Equal(t, tenv.tmc.getSchemaRequestCount(100), 0)
-	require.Equal(t, tenv.tmc.getSchemaRequestCount(200), 1)
+	require.Equal(t, 0, tenv.tmc.getSchemaRequestCount(100))
+	require.Equal(t, 1, tenv.tmc.getSchemaRequestCount(200))
 }
 
 func TestMaterializerNoSourcePrimary(t *testing.T) {

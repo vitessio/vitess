@@ -100,9 +100,8 @@ func (wr *Wrangler) QueryResultForRowsAffected(results map[*topo.TabletInfo]*sql
 		Name: "RowsAffected",
 		Type: sqltypes.Uint64,
 	}}
-	var row2 []sqltypes.Value
 	for tablet, result := range results {
-		row2 = nil
+		row2 := make([]sqltypes.Value, 0, 2)
 		row2 = append(row2, sqltypes.NewVarBinary(tablet.AliasString()))
 		row2 = append(row2, sqltypes.NewUint64(result.RowsAffected))
 		qr.Rows = append(qr.Rows, row2)
@@ -117,14 +116,13 @@ func (wr *Wrangler) QueryResultForTabletResults(results map[*topo.TabletInfo]*sq
 		Name: "Tablet",
 		Type: sqltypes.VarBinary,
 	}}
-	var row2 []sqltypes.Value
 	for tablet, result := range results {
 		if qr.Fields == nil {
 			qr.Fields = append(qr.Fields, defaultFields...)
 			qr.Fields = append(qr.Fields, result.Fields...)
 		}
 		for _, row := range result.Rows {
-			row2 = nil
+			row2 := make([]sqltypes.Value, 0, 1+len(row))
 			row2 = append(row2, sqltypes.NewVarBinary(tablet.AliasString()))
 			row2 = append(row2, row...)
 			qr.Rows = append(qr.Rows, row2)
@@ -442,15 +440,15 @@ func (wr *Wrangler) execWorkflowAction(ctx context.Context, workflow, keyspace, 
 			// a default empty string value and a user provided empty value.
 			if !textutil.ValueIsSimulatedNull(rpcReq.Cells) {
 				changes = true
-				dryRunChanges.WriteString(fmt.Sprintf("  cells=%q\n", strings.Join(rpcReq.Cells, ",")))
+				fmt.Fprintf(&dryRunChanges, "  cells=%q\n", strings.Join(rpcReq.Cells, ","))
 			}
 			if !textutil.ValueIsSimulatedNull(rpcReq.TabletTypes) {
 				changes = true
-				dryRunChanges.WriteString(fmt.Sprintf("  tablet_types=%q\n", topoproto.MakeStringTypeCSV(rpcReq.TabletTypes)))
+				fmt.Fprintf(&dryRunChanges, "  tablet_types=%q\n", topoproto.MakeStringTypeCSV(rpcReq.TabletTypes))
 			}
 			if rpcReq.OnDdl != nil {
 				changes = true
-				dryRunChanges.WriteString(fmt.Sprintf("  on_ddl=%q\n", binlogdatapb.OnDDLAction_name[int32(*rpcReq.OnDdl)]))
+				fmt.Fprintf(&dryRunChanges, "  on_ddl=%q\n", binlogdatapb.OnDDLAction_name[int32(*rpcReq.OnDdl)])
 			}
 			if !changes {
 				return nil, errors.New("no updates were provided; use --cells, --tablet-types, or --on-ddl to specify new values")

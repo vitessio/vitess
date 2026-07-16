@@ -19,6 +19,7 @@ package tabletserver
 import (
 	"encoding/json"
 	"fmt"
+	"html"
 	"net/http"
 
 	"github.com/google/safehtml/template"
@@ -182,7 +183,7 @@ func twopczHandler(txe *DTExecutor, w http.ResponseWriter, r *http.Request) {
 	w.Write(gridTable)
 	w.Write([]byte("<h2>WARNING: Actions on this page can jeopardize data integrity.</h2>\n"))
 	if msg != "" {
-		fmt.Fprintln(w, msg)
+		fmt.Fprintln(w, html.EscapeString(msg))
 	}
 
 	w.Write(startTable)

@@ -349,6 +349,14 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 		qre.recordUserQuery("Stream", int64(time.Since(start)))
 	}(time.Now())
 
+	// DML on the streaming path runs checkPermissions and the request throttler
+	// inside streamDML, so its stats defer is registered before those checks and
+	// records per-table error stats for their rejections too, matching Execute.
+	switch qre.plan.PlanID {
+	case p.PlanInsert, p.PlanUpdate, p.PlanDelete, p.PlanUpdateLimit, p.PlanDeleteLimit:
+		return qre.streamDML(callback)
+	}
+
 	if err := qre.checkPermissions(); err != nil {
 		return err
 	}
@@ -389,7 +397,7 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 						// being shared
 
 						if replaceKeyspace != "" {
-							result.ReplaceKeyspace(replaceKeyspace)
+							result.ReplaceKeyspace(qre.tsv.config.DB.DBName, replaceKeyspace)
 						}
 						return callback(result)
 					})
@@ -397,8 +405,24 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 		}
 	}
 
-	// if we have a transaction id, let's use the txPool for this query
-	var conn *connpool.PooledConn
+	streamCallback := func(result *sqltypes.Result) error {
+		// this stream result is only used by the calling client, so it can be
+		// returned to the pool once the callback has fully returned
+		defer returnStreamResult(result)
+
+		if replaceKeyspace != "" {
+			result.ReplaceKeyspace(qre.tsv.config.DB.DBName, replaceKeyspace)
+		}
+		return callback(result)
+	}
+
+	// If we have a transaction id, stream on the txPool connection; otherwise
+	// stream on a stream pool connection. Each branch holds the concrete
+	// connection it must clean up. For a stored procedure call, a mid-stream
+	// error closes that connection — it may have left trailing resultsets or the
+	// final OK packet unread, or already be killed, and the client is gone, so we
+	// close rather than attempt a drain-and-recover — while a clean stream runs
+	// the post-stream safety checks.
 	if qre.connID != 0 {
 		txConn, err := qre.tsv.te.txPool.GetAndLock(qre.connID, "for streaming query")
 		if err != nil {
@@ -406,30 +430,159 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 		}
 		defer txConn.Unlock()
 		if qre.setting != nil {
-			if _, err = txConn.ApplySetting(qre.ctx, qre.setting); err != nil {
+			if _, err := txConn.ApplySetting(qre.ctx, qre.setting); err != nil {
 				return vterrors.Wrap(err, "failed to execute system setting on the connection")
 			}
 		}
-		conn = txConn.UnderlyingDBConn()
-	} else {
-		dbConn, err := qre.getStreamConn()
+
+		conn := txConn.UnderlyingDBConn()
+		err = qre.execStreamSQL(conn, true, sql, streamCallback)
+		if qre.plan.PlanID == p.PlanCallProc {
+			if err != nil {
+				txConn.Close()
+				return err
+			}
+			trailing, multipleResultsets, err := qre.streamedCallProcTrailingStatus(conn.Conn)
+			if err != nil {
+				txConn.Close()
+				return err
+			}
+			// The procedure must not change the transaction state.
+			changedTx := txConn.IsInTransaction() != trailing.IsInTransaction()
+			if changedTx {
+				txConn.Close()
+			}
+			if multipleResultsets {
+				return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "Multi-Resultset not supported in stored procedure")
+			}
+			if changedTx {
+				return vterrors.New(vtrpcpb.Code_CANCELED, "Transaction state change inside the stored procedure is not allowed")
+			}
+			return nil
+		}
+		return err
+	}
+
+	dbConn, err := qre.getStreamConn()
+	if err != nil {
+		return err
+	}
+	defer dbConn.Recycle()
+
+	err = qre.execStreamSQL(dbConn, false, sql, streamCallback)
+	if qre.plan.PlanID == p.PlanCallProc {
+		if err != nil {
+			dbConn.Close()
+			return err
+		}
+		trailing, multipleResultsets, err := qre.streamedCallProcTrailingStatus(dbConn.Conn)
+		if err != nil {
+			dbConn.Close()
+			return err
+		}
+		// The procedure must not leak a transaction onto the pooled connection.
+		leakedTx := trailing.IsInTransaction()
+		if leakedTx {
+			dbConn.Close()
+		}
+		if multipleResultsets {
+			return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "Multi-Resultset not supported in stored procedure")
+		}
+		if leakedTx {
+			return vterrors.New(vtrpcpb.Code_CANCELED, "Transaction not concluded inside the stored procedure, leaking transaction from stored procedure is not allowed")
+		}
+		return nil
+	}
+	return err
+}
+
+// streamDML executes a DML statement on the streaming path. A DML produces a
+// single rows-affected result with no rows to stream, so it runs through the
+// same transactional machinery as Execute (an implicit autocommit transaction
+// when none exists, or the active transaction when one does) and the result is
+// delivered through the streaming callback.
+func (qre *QueryExecutor) streamDML(callback StreamCallback) (err error) {
+	var reply *sqltypes.Result
+
+	// Apply the query timeout to autocommit DML, just like Execute does for a
+	// query without a transaction.
+	if qre.connID == 0 {
+		var cancel context.CancelFunc
+		qre.ctx, cancel = withTimeout(qre.ctx, qre.tsv.loadQueryTimeoutWithTxAndOptions(0, qre.options), qre.options)
+		defer cancel()
+	}
+
+	// Record the per-table and per-plan query stats, just like Execute's deferred
+	// block. Stream's own defer already records QueryTimings, QueryTimingsByTabletType
+	// and the user-query stats, so here we only add the stats the streaming path would
+	// otherwise miss for DML: the QueryEngine/plan counters (including error counts on
+	// the failure path), the query-log fields and the result histogram.
+	defer func(start time.Time) {
+		duration := time.Since(start)
+		mysqlTime := qre.logStats.MysqlResponseTime
+		// Plans without a single table (e.g. multi-table statements) have an
+		// empty TableName; bucket their stats under "Join", like Execute.
+		tableName := qre.plan.TableName().String()
+		if tableName == "" {
+			tableName = "Join"
+		}
+		errCode := vterrors.Code(err).String()
+
+		if reply == nil {
+			qre.tsv.qe.AddStats(qre.plan, tableName, qre.options.GetWorkloadName(), qre.targetTabletType, 1, duration, mysqlTime, 0, 0, 1, errCode)
+			qre.plan.AddStats(1, duration, mysqlTime, 0, 0, 1)
+			return
+		}
+
+		qre.tsv.qe.AddStats(qre.plan, tableName, qre.options.GetWorkloadName(), qre.targetTabletType, 1, duration, mysqlTime, int64(reply.RowsAffected), int64(len(reply.Rows)), 0, errCode)
+		qre.plan.AddStats(1, duration, mysqlTime, reply.RowsAffected, uint64(len(reply.Rows)), 0)
+		qre.logStats.RowsAffected = int(reply.RowsAffected)
+		qre.logStats.Rows = reply.Rows
+		qre.tsv.Stats().ResultHistogram.Add(int64(len(reply.Rows)))
+	}(time.Now())
+
+	if err = qre.checkPermissions(); err != nil {
+		return err
+	}
+
+	if err = qre.tsv.queryThrottler.Throttle(qre.ctx, qre.targetTabletType, qre.plan.FullQuery, qre.connID, qre.options); err != nil {
+		return err
+	}
+
+	switch {
+	case qre.connID != 0:
+		// Run the DML on the existing transaction or reserved connection, just
+		// like Execute's connID != 0 branch (e.g. a DML following Begin via
+		// BeginStreamExecute).
+		var conn *StatefulConnection
+		conn, err = qre.tsv.te.txPool.GetAndLock(qre.connID, "for query")
 		if err != nil {
 			return err
 		}
-		defer dbConn.Recycle()
-		conn = dbConn
-	}
-
-	return qre.execStreamSQL(conn, qre.connID != 0, sql, func(result *sqltypes.Result) error {
-		// this stream result is only used by the calling client, so it can be
-		// returned to the pool once the callback has fully returned
-		defer returnStreamResult(result)
-
-		if replaceKeyspace != "" {
-			result.ReplaceKeyspace(replaceKeyspace)
+		defer conn.Unlock()
+		if qre.setting != nil {
+			var applied bool
+			applied, err = conn.ApplySetting(qre.ctx, qre.setting)
+			if err != nil {
+				return vterrors.Wrap(err, "failed to execute system setting on the connection")
+			}
+			// If we have applied the settings on the connection, then we should record the query detail.
+			// This is required for redoing the transaction in case of a failure.
+			if applied {
+				conn.TxProperties().RecordQueryDetail(qre.setting.ApplyQuery(), nil)
+			}
 		}
-		return callback(result)
-	})
+		reply, err = qre.txConnExec(conn)
+	case qre.plan.PlanID == p.PlanUpdateLimit || qre.plan.PlanID == p.PlanDeleteLimit:
+		reply, err = qre.execAsTransaction(qre.txConnExec)
+	default:
+		reply, err = qre.execAutocommit(qre.txConnExec)
+	}
+	if err != nil {
+		return err
+	}
+	err = callback(reply)
+	return err
 }
 
 // MessageStream streams messages from a message table.
@@ -775,6 +928,9 @@ func (qre *QueryExecutor) execSelect() (*sqltypes.Result, error) {
 				startTime := time.Now()
 				q.Wait()
 				qre.tsv.stats.WaitTimings.Record("Consolidations", startTime)
+			} else if qre.tsv.config.ConsolidatorRejectOnCap {
+				q.AddWaiterCounter(-1)
+				return nil, vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "consolidator waiter cap exceeded")
 			} else {
 				// Waiter cap exceeded, fall back to independent query execution
 				waiterCapExceeded = true
@@ -1019,6 +1175,54 @@ func (qre *QueryExecutor) execProc(conn *StatefulConnection) (*sqltypes.Result, 
 	return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "Multi-Resultset not supported in stored procedure")
 }
 
+// streamedCallProcTrailingStatus reads what follows a streamed stored procedure
+// call's first resultset to determine the connection's final state. It returns
+// the trailing status — whose flags describe the post-call transaction state —
+// and whether the call produced more than one resultset (already drained). A
+// stored procedure call is always followed by a trailing status packet, so a
+// streamed resultset's EOF always reports more results; reading one more result
+// tells a single-resultset call (only the trailing packet remains) from a
+// multi-resultset one.
+func (qre *QueryExecutor) streamedCallProcTrailingStatus(conn *connpool.Conn) (trailing *sqltypes.Result, multipleResultsets bool, err error) {
+	if okResult := conn.StreamOKResult(); okResult != nil {
+		// No resultset was streamed, so the OK packet's status flags are all there
+		// is to inspect.
+		return &sqltypes.Result{StatusFlags: okResult.StatusFlags}, false, nil
+	}
+
+	trailing, err = conn.FetchNext(qre.ctx, mysql.FETCH_NO_ROWS, false)
+	if err != nil {
+		return nil, false, err
+	}
+	if !trailing.IsMoreResultsExists() {
+		// Only the trailing status packet followed the single resultset.
+		return trailing, false, nil
+	}
+
+	// More than one resultset: drain the rest without buffering so the final
+	// status reflects the connection state and the connection stays clean.
+	trailing, err = qre.drainStreamedResultSets(conn)
+	if err != nil {
+		return nil, true, err
+	}
+	return trailing, true, nil
+}
+
+// drainStreamedResultSets discards any remaining resultsets on a streaming
+// connection without buffering their rows and returns the final result, whose
+// status flags describe the connection state after the stored procedure.
+func (qre *QueryExecutor) drainStreamedResultSets(conn *connpool.Conn) (*sqltypes.Result, error) {
+	for {
+		qr, err := conn.FetchNext(qre.ctx, mysql.FETCH_NO_ROWS, false)
+		if err != nil {
+			return nil, err
+		}
+		if !qr.IsMoreResultsExists() {
+			return qr, nil
+		}
+	}
+}
+
 func (qre *QueryExecutor) execAlterMigration() (*sqltypes.Result, error) {
 	alterMigration, ok := qre.plan.FullStmt.(*sqlparser.AlterMigration)
 	if !ok {
@@ -1031,35 +1235,35 @@ func (qre *QueryExecutor) execAlterMigration() (*sqltypes.Result, error) {
 	case sqlparser.CleanupMigrationType:
 		return qre.tsv.onlineDDLExecutor.CleanupMigration(qre.ctx, alterMigration.UUID)
 	case sqlparser.CleanupAllMigrationType:
-		return qre.tsv.onlineDDLExecutor.CleanupAllMigrations(qre.ctx)
+		return qre.tsv.onlineDDLExecutor.CleanupAllMigrations(qre.ctx, alterMigration.Context)
 	case sqlparser.LaunchMigrationType:
 		return qre.tsv.onlineDDLExecutor.LaunchMigration(qre.ctx, alterMigration.UUID, alterMigration.Shards)
 	case sqlparser.LaunchAllMigrationType:
-		return qre.tsv.onlineDDLExecutor.LaunchMigrations(qre.ctx)
+		return qre.tsv.onlineDDLExecutor.LaunchMigrations(qre.ctx, alterMigration.Context)
 	case sqlparser.CompleteMigrationType:
 		return qre.tsv.onlineDDLExecutor.CompleteMigration(qre.ctx, alterMigration.UUID, alterMigration.Shards)
 	case sqlparser.CompleteAllMigrationType:
-		return qre.tsv.onlineDDLExecutor.CompletePendingMigrations(qre.ctx)
+		return qre.tsv.onlineDDLExecutor.CompletePendingMigrations(qre.ctx, alterMigration.Context)
 	case sqlparser.PostponeCompleteMigrationType:
 		return qre.tsv.onlineDDLExecutor.PostponeCompleteMigration(qre.ctx, alterMigration.UUID)
 	case sqlparser.PostponeCompleteAllMigrationType:
-		return qre.tsv.onlineDDLExecutor.PostponeCompletePendingMigrations(qre.ctx)
+		return qre.tsv.onlineDDLExecutor.PostponeCompletePendingMigrations(qre.ctx, alterMigration.Context)
 	case sqlparser.CancelMigrationType:
 		return qre.tsv.onlineDDLExecutor.CancelMigration(qre.ctx, alterMigration.UUID, "CANCEL issued by user", true)
 	case sqlparser.CancelAllMigrationType:
-		return qre.tsv.onlineDDLExecutor.CancelPendingMigrations(qre.ctx, "CANCEL ALL issued by user", true)
+		return qre.tsv.onlineDDLExecutor.CancelPendingMigrations(qre.ctx, alterMigration.Context, true)
 	case sqlparser.ThrottleMigrationType:
 		return qre.tsv.onlineDDLExecutor.ThrottleMigration(qre.ctx, alterMigration.UUID, alterMigration.Expire, alterMigration.Ratio)
 	case sqlparser.ThrottleAllMigrationType:
-		return qre.tsv.onlineDDLExecutor.ThrottleAllMigrations(qre.ctx, alterMigration.Expire, alterMigration.Ratio)
+		return qre.tsv.onlineDDLExecutor.ThrottleAllMigrations(qre.ctx, alterMigration.Expire, alterMigration.Ratio, alterMigration.Context)
 	case sqlparser.UnthrottleMigrationType:
 		return qre.tsv.onlineDDLExecutor.UnthrottleMigration(qre.ctx, alterMigration.UUID)
 	case sqlparser.UnthrottleAllMigrationType:
-		return qre.tsv.onlineDDLExecutor.UnthrottleAllMigrations(qre.ctx)
+		return qre.tsv.onlineDDLExecutor.UnthrottleAllMigrations(qre.ctx, alterMigration.Context)
 	case sqlparser.ForceCutOverMigrationType:
 		return qre.tsv.onlineDDLExecutor.ForceCutOverMigration(qre.ctx, alterMigration.UUID)
 	case sqlparser.ForceCutOverAllMigrationType:
-		return qre.tsv.onlineDDLExecutor.ForceCutOverPendingMigrations(qre.ctx)
+		return qre.tsv.onlineDDLExecutor.ForceCutOverPendingMigrations(qre.ctx, alterMigration.Context)
 	case sqlparser.SetCutOverThresholdMigrationType:
 		return qre.tsv.onlineDDLExecutor.SetMigrationCutOverThreshold(qre.ctx, alterMigration.UUID, alterMigration.Threshold)
 	}

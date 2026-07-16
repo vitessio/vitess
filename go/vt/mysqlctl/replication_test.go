@@ -138,11 +138,11 @@ func TestWaitForReplicationStart(t *testing.T) {
 	}()
 
 	err := WaitForReplicationStart(t.Context(), fakemysqld, 2)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	fakemysqld.ReplicationStatusError = errors.New("test error")
 	err = WaitForReplicationStart(t.Context(), fakemysqld, 2)
-	assert.ErrorContains(t, err, "test error")
+	require.ErrorContains(t, err, "test error")
 
 	params := db.ConnParams()
 	cp := *params
@@ -175,11 +175,11 @@ func TestGetMysqlPort(t *testing.T) {
 	defer cancel()
 	res, err := testMysqld.GetMysqlPort(ctx)
 	assert.Equal(t, int32(12), res)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	db.AddQuery("SHOW VARIABLES LIKE 'port'", &sqltypes.Result{})
 	res, err = testMysqld.GetMysqlPort(ctx)
-	assert.ErrorContains(t, err, "no port variable in mysql")
+	require.ErrorContains(t, err, "no port variable in mysql")
 	assert.Equal(t, int32(0), res)
 }
 
@@ -199,11 +199,11 @@ func TestGetServerID(t *testing.T) {
 	ctx := t.Context()
 	res, err := testMysqld.GetServerID(ctx)
 	assert.Equal(t, uint32(12), res)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	db.AddQuery("select @@global.server_id", &sqltypes.Result{})
 	res, err = testMysqld.GetServerID(ctx)
-	assert.ErrorContains(t, err, "no server_id in mysql")
+	require.ErrorContains(t, err, "no server_id in mysql")
 	assert.Equal(t, uint32(0), res)
 }
 
@@ -226,12 +226,12 @@ func TestGetServerUUID(t *testing.T) {
 	ctx := t.Context()
 	res, err := testMysqld.GetServerUUID(ctx)
 	assert.Equal(t, uuid, res)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	db.AddQuery("SELECT @@global.server_uuid", &sqltypes.Result{})
 	res, err = testMysqld.GetServerUUID(ctx)
-	assert.Error(t, err)
-	assert.Equal(t, "", res)
+	require.Error(t, err)
+	assert.Empty(t, res)
 }
 
 func TestWaitSourcePos(t *testing.T) {
@@ -250,7 +250,7 @@ func TestWaitSourcePos(t *testing.T) {
 
 	ctx := t.Context()
 	err := testMysqld.WaitSourcePos(ctx, replication.Position{GTIDSet: replication.Mysql56GTIDSet{}})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	db.AddQuery("SELECT @@global.gtid_executed", sqltypes.MakeTestResult(sqltypes.MakeTestFields("test_field", "varchar"), "invalid_id"))
 	err = testMysqld.WaitSourcePos(ctx, replication.Position{GTIDSet: replication.Mysql56GTIDSet{}})
@@ -272,12 +272,12 @@ func TestReplicationStatus(t *testing.T) {
 	defer testMysqld.Close()
 
 	res, err := testMysqld.ReplicationStatus(t.Context())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, res.ReplicationLagUnknown)
 
 	db.AddQuery("SHOW REPLICA STATUS", &sqltypes.Result{})
 	res, err = testMysqld.ReplicationStatus(t.Context())
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.False(t, res.ReplicationLagUnknown)
 }
 
@@ -299,9 +299,9 @@ func TestPrimaryStatus(t *testing.T) {
 
 	ctx := t.Context()
 	res, err := testMysqld.PrimaryStatus(ctx)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, res)
-	assert.EqualValues(t, "test_uuid", res.ServerUUID)
+	assert.Equal(t, "test_uuid", res.ServerUUID)
 
 	db.AddQuery("SHOW MASTER STATUS", &sqltypes.Result{})
 	db.AddQuery("SHOW BINARY LOG STATUS", &sqltypes.Result{})
@@ -326,13 +326,13 @@ func TestReplicationConfiguration(t *testing.T) {
 
 	ctx := t.Context()
 	replConfig, err := testMysqld.ReplicationConfiguration(ctx)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, replConfig)
 	require.EqualValues(t, math.Round(replConfig.HeartbeatInterval*2), replConfig.ReplicaNetTimeout)
 
 	db.AddQuery("SELECT * FROM performance_schema.replication_connection_configuration", sqltypes.MakeTestResult(sqltypes.MakeTestFields("test_field|HEARTBEAT_INTERVAL|field2", "varchar|float64|varchar")))
 	replConfig, err = testMysqld.ReplicationConfiguration(ctx)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Nil(t, replConfig)
 }
 
@@ -352,7 +352,7 @@ func TestGetGTIDPurged(t *testing.T) {
 
 	ctx := t.Context()
 	res, err := testMysqld.GetGTIDPurged(ctx)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8:12-17", res.String())
 }
 
@@ -371,7 +371,7 @@ func TestPrimaryPosition(t *testing.T) {
 	defer testMysqld.Close()
 
 	res, err := testMysqld.PrimaryPosition(t.Context())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8:12-17", res.String())
 }
 
@@ -397,7 +397,7 @@ func TestSetReplicationPosition(t *testing.T) {
 	pos.GTIDSet = pos.GTIDSet.AddGTID(replication.Mysql56GTID{Server: sid, Sequence: 1})
 
 	err := testMysqld.SetReplicationPosition(ctx, pos)
-	assert.Error(t, err)
+	require.Error(t, err)
 
 	// We expect this query to be executed
 	db.AddQuery("SET GLOBAL gtid_purged = '00010203-0405-0607-0809-0a0b0c0d0e0f:1'", &sqltypes.Result{})
@@ -426,8 +426,8 @@ func TestSetReplicationSource(t *testing.T) {
 
 	// We expect query containing passed host and port to be executed
 	err := testMysqld.SetReplicationSource(ctx, "test_host", 2, 0, true, true)
-	assert.ErrorContains(t, err, `SOURCE_HOST = 'test_host'`)
-	assert.ErrorContains(t, err, `SOURCE_PORT = 2`)
+	require.ErrorContains(t, err, `SOURCE_HOST = 'test_host'`)
+	require.ErrorContains(t, err, `SOURCE_PORT = 2`)
 	assert.ErrorContains(t, err, `CHANGE REPLICATION SOURCE TO`)
 }
 
@@ -448,7 +448,7 @@ func TestResetReplication(t *testing.T) {
 
 	ctx := t.Context()
 	err := testMysqld.ResetReplication(ctx)
-	assert.ErrorContains(t, err, "RESET REPLICA ALL")
+	require.ErrorContains(t, err, "RESET REPLICA ALL")
 
 	// We expect this query to be executed
 	db.AddQuery("RESET REPLICA ALL", &sqltypes.Result{})
@@ -480,7 +480,7 @@ func TestResetReplicationParameters(t *testing.T) {
 
 	ctx := t.Context()
 	err := testMysqld.ResetReplicationParameters(ctx)
-	assert.ErrorContains(t, err, "RESET REPLICA ALL")
+	require.ErrorContains(t, err, "RESET REPLICA ALL")
 
 	// We expect this query to be executed
 	db.AddQuery("RESET REPLICA ALL", &sqltypes.Result{})
@@ -502,7 +502,7 @@ func TestFindReplicas(t *testing.T) {
 	}
 
 	res, err := FindReplicas(t.Context(), fakemysqld)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	want, err := net.LookupHost("localhost")
 	require.NoError(t, err)
@@ -526,7 +526,7 @@ func TestGetBinlogInformation(t *testing.T) {
 
 	ctx := t.Context()
 	bin, logBin, replicaUpdate, rowImage, err := testMysqld.GetBinlogInformation(ctx)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "binlog", bin)
 	assert.Equal(t, "row_image", rowImage)
 	assert.True(t, logBin)
@@ -550,7 +550,7 @@ func TestGetGTIDMode(t *testing.T) {
 
 	ctx := t.Context()
 	res, err := testMysqld.GetGTIDMode(ctx)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, in, res)
 }
 
@@ -588,7 +588,7 @@ func TestGetBinaryLogs(t *testing.T) {
 	db.AddQuery("SHOW BINARY LOGS", sqltypes.MakeTestResult(sqltypes.MakeTestFields("field", "varchar"), "binlog1", "binlog2"))
 
 	res, err := testMysqld.GetBinaryLogs(t.Context())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Len(t, res, 2)
 	assert.Contains(t, res, "binlog1")
 	assert.Contains(t, res, "binlog2")
@@ -610,7 +610,7 @@ func TestGetPreviousGTIDs(t *testing.T) {
 
 	ctx := t.Context()
 	res, err := testMysqld.GetPreviousGTIDs(ctx, "binlog")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8", res)
 }
 
@@ -629,11 +629,11 @@ func TestSetSemiSyncEnabled(t *testing.T) {
 
 	// We expect this query to be executed
 	err := testMysqld.SetSemiSyncEnabled(t.Context(), true, true)
-	assert.ErrorIs(t, err, ErrNoSemiSync)
+	require.ErrorIs(t, err, ErrNoSemiSync)
 
 	// We expect this query to be executed
 	err = testMysqld.SetSemiSyncEnabled(t.Context(), true, false)
-	assert.ErrorIs(t, err, ErrNoSemiSync)
+	require.ErrorIs(t, err, ErrNoSemiSync)
 
 	// We expect this query to be executed
 	err = testMysqld.SetSemiSyncEnabled(t.Context(), false, true)
@@ -734,13 +734,13 @@ func TestSemiSyncReplicationStatus(t *testing.T) {
 	defer testMysqld.Close()
 
 	res, err := testMysqld.SemiSyncReplicationStatus(t.Context())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, res)
 
 	db.AddQuery("SHOW STATUS LIKE 'rpl_semi_sync_replica_status'", sqltypes.MakeTestResult(sqltypes.MakeTestFields("field1|field2", "varchar|uint64"), "rpl_semi_sync_replica_status|OFF"))
 
 	res, err = testMysqld.SemiSyncReplicationStatus(t.Context())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.False(t, res)
 }
 
@@ -760,12 +760,12 @@ func TestSemiSyncExtensionLoaded(t *testing.T) {
 	defer testMysqld.Close()
 
 	res, err := testMysqld.SemiSyncExtensionLoaded(ctx)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Contains(t, []mysql.SemiSyncType{mysql.SemiSyncTypeSource, mysql.SemiSyncTypeMaster}, res)
 
 	db.AddQuery("SHOW VARIABLES LIKE 'rpl_semi_sync_%_enabled'", &sqltypes.Result{})
 
 	res, err = testMysqld.SemiSyncExtensionLoaded(ctx)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, mysql.SemiSyncTypeOff, res)
 }

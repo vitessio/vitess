@@ -42,7 +42,7 @@ type ImpossibleApplyDiffOrderError struct {
 func (e *ImpossibleApplyDiffOrderError) Error() string {
 	var b strings.Builder
 	conflictingStatements := e.ConflictingStatements()
-	b.WriteString(fmt.Sprintf("no valid applicable order for diffs. %d diffs found conflicting:", len(conflictingStatements)))
+	fmt.Fprintf(&b, "no valid applicable order for diffs. %d diffs found conflicting:", len(conflictingStatements))
 	for _, s := range conflictingStatements {
 		b.WriteString("\n")
 		b.WriteString(s)
@@ -352,7 +352,8 @@ type ForeignKeyColumnTypeMismatchError struct {
 }
 
 func (e *ForeignKeyColumnTypeMismatchError) Error() string {
-	return fmt.Sprintf("mismatching column type %s.%s and %s.%s referenced by foreign key constraint %s in table %s",
+	return fmt.Sprintf(
+		"mismatching column type %s.%s and %s.%s referenced by foreign key constraint %s in table %s",
 		sqlescape.EscapeID(e.ReferencedTable),
 		sqlescape.EscapeID(e.ReferencedColumn),
 		sqlescape.EscapeID(e.Table),
@@ -369,10 +370,33 @@ type MissingForeignKeyReferencedIndexError struct {
 }
 
 func (e *MissingForeignKeyReferencedIndexError) Error() string {
-	return fmt.Sprintf("missing index in referenced table %s for foreign key constraint %s in table %s",
+	return fmt.Sprintf(
+		"missing index in referenced table %s for foreign key constraint %s in table %s",
 		sqlescape.EscapeID(e.ReferencedTable),
 		sqlescape.EscapeID(e.Constraint),
 		sqlescape.EscapeID(e.Table),
+	)
+}
+
+// ForeignKeyShadowConflictError indicates that a foreign key constraint present in the source schema
+// would survive on an OnlineDDL held table (`_vt_hld_…`) while the referenced parent table is
+// concurrently altered into a signature incompatible with that foreign key. Such a batch cannot be
+// safely executed under any ordering, and must be split into separate, time-spaced migrations.
+type ForeignKeyShadowConflictError struct {
+	Table            string
+	Constraint       string
+	ReferencedTable  string
+	ReferencedColumn string
+}
+
+func (e *ForeignKeyShadowConflictError) Error() string {
+	return fmt.Sprintf(
+		"foreign key constraint %s in table %s references %s.%s, which is altered incompatibly in the same batch; the original table would survive with this foreign key while %s is altered, corrupting it. These changes must be split into separate migrations",
+		sqlescape.EscapeID(e.Constraint),
+		sqlescape.EscapeID(e.Table),
+		sqlescape.EscapeID(e.ReferencedTable),
+		sqlescape.EscapeID(e.ReferencedColumn),
+		sqlescape.EscapeID(e.ReferencedTable),
 	)
 }
 
@@ -382,7 +406,8 @@ type IndexNeededByForeignKeyError struct {
 }
 
 func (e *IndexNeededByForeignKeyError) Error() string {
-	return fmt.Sprintf("key %s needed by a foreign key constraint in table %s",
+	return fmt.Sprintf(
+		"key %s needed by a foreign key constraint in table %s",
 		sqlescape.EscapeID(e.Key),
 		sqlescape.EscapeID(e.Table),
 	)
@@ -481,7 +506,7 @@ type SubsequentDiffRejectedError struct {
 
 func (e *SubsequentDiffRejectedError) Error() string {
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("multiple changes not allowed on table %s. Found:", sqlescape.EscapeID(e.Table)))
+	fmt.Fprintf(&b, "multiple changes not allowed on table %s. Found:", sqlescape.EscapeID(e.Table))
 	for _, d := range e.Diffs {
 		b.WriteString("\n")
 		b.WriteString(d.CanonicalStatementString())

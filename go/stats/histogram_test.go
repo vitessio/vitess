@@ -30,7 +30,7 @@ func TestHistogram(t *testing.T) {
 		h.Add(int64(i))
 	}
 
-	assert.Equal(t, h.String(), `{"1": 2, "5": 4, "inf": 4, "Count": 10, "Total": 45}`)
+	assert.Equal(t, `{"1": 2, "5": 4, "inf": 4, "Count": 10, "Total": 45}`, h.String())
 
 	counts := h.Counts()
 	counts["Count"] = h.Count()
@@ -42,15 +42,15 @@ func TestHistogram(t *testing.T) {
 		"Count": 10,
 		"Total": 45,
 	} {
-		assert.Equal(t, counts[key], want)
+		assert.Equal(t, want, counts[key])
 	}
 
-	assert.Equal(t, h.CountLabel(), "Count")
-	assert.Equal(t, h.TotalLabel(), "Total")
-	assert.Equal(t, h.Labels(), []string{"1", "5", "inf"})
-	assert.Equal(t, h.Cutoffs(), []int64{1, 5})
-	assert.Equal(t, h.Buckets(), []int64{2, 4, 4})
-	assert.Equal(t, h.Help(), "help")
+	assert.Equal(t, "Count", h.CountLabel())
+	assert.Equal(t, "Total", h.TotalLabel())
+	assert.Equal(t, []string{"1", "5", "inf"}, h.Labels())
+	assert.Equal(t, []int64{1, 5}, h.Cutoffs())
+	assert.Equal(t, []int64{2, 4, 4}, h.Buckets())
+	assert.Equal(t, "help", h.Help())
 }
 
 func TestGenericHistogram(t *testing.T) {
@@ -63,7 +63,7 @@ func TestGenericHistogram(t *testing.T) {
 		"count",
 		"total",
 	)
-	assert.Equal(t, h.String(), `{"one": 0, "five": 0, "max": 0, "count": 0, "total": 0}`)
+	assert.Equal(t, `{"one": 0, "five": 0, "max": 0, "count": 0, "total": 0}`, h.String())
 }
 
 func TestInvalidGenericHistogram(t *testing.T) {
@@ -71,7 +71,7 @@ func TestInvalidGenericHistogram(t *testing.T) {
 	defer func() {
 		r := recover()
 		assert.NotNil(t, r)
-		assert.Equal(t, r, "mismatched cutoff and label lengths")
+		assert.Equal(t, "mismatched cutoff and label lengths", r)
 	}()
 
 	clearStats()
@@ -97,7 +97,7 @@ func TestHistogramHook(t *testing.T) {
 
 	v := NewHistogram("hist2", "help", []int64{1})
 
-	assert.Equal(t, gotName, "hist2")
+	assert.Equal(t, "hist2", gotName)
 	assert.Equal(t, gotV, v)
 
 	// Check the results of AddHook function
@@ -110,8 +110,8 @@ func TestHistogramHook(t *testing.T) {
 	})
 
 	v.Add(42)
-	assert.Equal(t, hookCalled, true)
-	assert.Equal(t, addedValue, int64(42))
+	assert.True(t, hookCalled)
+	assert.Equal(t, int64(42), addedValue)
 
 	// Check the results of RegisterHistogramHook function
 	hookCalled = false
@@ -125,7 +125,7 @@ func TestHistogramHook(t *testing.T) {
 	})
 
 	v.Add(10)
-	assert.Equal(t, gotName, "hist2")
-	assert.Equal(t, hookCalled, true)
-	assert.Equal(t, addedValue, int64(10))
+	assert.Equal(t, "hist2", gotName)
+	assert.True(t, hookCalled)
+	assert.Equal(t, int64(10), addedValue)
 }

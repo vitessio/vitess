@@ -18,6 +18,7 @@ package grpctmclient
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"sync"
@@ -25,6 +26,8 @@ import (
 
 	"github.com/spf13/pflag"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/callerid"
@@ -53,6 +56,7 @@ type DialPoolGroup int
 const (
 	dialPoolGroupThrottler DialPoolGroup = iota
 	dialPoolGroupVTOrc
+	dialPoolGroupPing
 )
 
 type invalidatorFunc func()
@@ -133,6 +137,8 @@ type dialer interface {
 type poolDialer interface {
 	dialPool(ctx context.Context, tablet *topodatapb.Tablet) (tabletmanagerservicepb.TabletManagerClient, error)
 	dialDedicatedPool(ctx context.Context, dialPoolGroup DialPoolGroup, tablet *topodatapb.Tablet) (tabletmanagerservicepb.TabletManagerClient, invalidatorFunc, error)
+	closeDedicatedPool(dialPoolGroup DialPoolGroup)
+	closeDedicatedPoolEntry(dialPoolGroup DialPoolGroup, addr string)
 }
 
 // Client implements tmclient.TabletManagerClient.
@@ -164,13 +170,7 @@ func NewClient() *Client {
 // validateTablet confirms the tablet record contains the necessary fields
 // for talking gRPC.
 func validateTablet(tablet *topodatapb.Tablet) error {
-	// v24+ adds a TabletShutdownTime field that is set to "now" on clean shutdown.
 	if tablet.TabletShutdownTime != nil {
-		return vterrors.New(vtrpcpb.Code_UNAVAILABLE, "tablet is shutdown")
-	}
-
-	// <= v23 compatibility to similuate missing TabletShutdownTime field. Remove in v25.
-	if tablet.Hostname == "" && tablet.MysqlHostname == "" && tablet.PortMap == nil && tablet.Type != topodatapb.TabletType_UNKNOWN {
 		return vterrors.New(vtrpcpb.Code_UNAVAILABLE, "tablet is shutdown")
 	}
 
@@ -300,6 +300,17 @@ func (client *grpcClient) dialDedicatedPool(ctx context.Context, dialPoolGroup D
 	})
 
 	if entry.err != nil {
+		// A failed dial must not be cached forever. The entry is guarded by a
+		// sync.Once, so without eviction every future call returns this same
+		// error even after the peer recovers — which would permanently mark a
+		// reachable tablet as down. Evict the entry so the next call redials.
+		// Only evict THIS entry: a concurrent caller may already have installed
+		// a fresh one for the same addr.
+		client.rpcDialPoolMapMu.Lock()
+		if poolEntries, ok := client.rpcDialPoolMap[dialPoolGroup]; ok && poolEntries[addr] == entry {
+			delete(poolEntries, addr)
+		}
+		client.rpcDialPoolMapMu.Unlock()
 		return nil, nil, entry.err
 	}
 
@@ -311,11 +322,53 @@ func (client *grpcClient) dialDedicatedPool(ctx context.Context, dialPoolGroup D
 			entry.tmc.cc.Close()
 		}
 
-		if poolEntries, ok := client.rpcDialPoolMap[dialPoolGroup]; ok {
+		// Only delete THIS entry: a concurrent caller may already have installed a fresh entry for
+		// the same addr, and deleting that one here would orphan its still-open connection (we only
+		// closed ours). Mirrors the identity-guarded eviction on the failed-dial path above.
+		if poolEntries, ok := client.rpcDialPoolMap[dialPoolGroup]; ok && poolEntries[addr] == entry {
 			delete(poolEntries, addr)
 		}
 	}
 	return entry.tmc.client, invalidator, nil
+}
+
+// closeDedicatedPool closes and removes every pooled connection in the given dial-pool group,
+// leaving other groups (and the non-pooled connection cache) untouched. It lets a single feature
+// release the connections it opened without tearing down the whole client.
+func (client *grpcClient) closeDedicatedPool(dialPoolGroup DialPoolGroup) {
+	client.rpcDialPoolMapMu.Lock()
+	defer client.rpcDialPoolMapMu.Unlock()
+	poolEntries, ok := client.rpcDialPoolMap[dialPoolGroup]
+	if !ok {
+		return
+	}
+	for addr, entry := range poolEntries {
+		if entry != nil && entry.tmc != nil && entry.tmc.cc != nil {
+			entry.tmc.cc.Close()
+		}
+		delete(poolEntries, addr)
+	}
+}
+
+// closeDedicatedPoolEntry closes and removes the pooled connection to a single
+// address within the given dial-pool group, leaving the rest of the group (and
+// other groups) untouched. It lets a feature release the connection to a peer
+// it no longer probes (e.g. a demoted primary) without churning the others.
+func (client *grpcClient) closeDedicatedPoolEntry(dialPoolGroup DialPoolGroup, addr string) {
+	client.rpcDialPoolMapMu.Lock()
+	defer client.rpcDialPoolMapMu.Unlock()
+	poolEntries, ok := client.rpcDialPoolMap[dialPoolGroup]
+	if !ok {
+		return
+	}
+	entry, ok := poolEntries[addr]
+	if !ok {
+		return
+	}
+	if entry != nil && entry.tmc != nil && entry.tmc.cc != nil {
+		entry.tmc.cc.Close()
+	}
+	delete(poolEntries, addr)
 }
 
 // Close is part of the tmclient.TabletManagerClient interface.
@@ -353,23 +406,115 @@ func (client *grpcClient) Close() {
 // Various read-only methods
 //
 
-// Ping is part of the tmclient.TabletManagerClient interface.
+// Ping is part of the tmclient.TabletManagerClient interface. It dials a fresh connection
+// per call; high-frequency callers should prefer PingPooled.
 func (client *Client) Ping(ctx context.Context, tablet *topodatapb.Tablet) error {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
 		return err
 	}
 	defer closer.Close()
+	return client.ping(ctx, c, nil)
+}
+
+// PingPooled is like Ping but reuses a dedicated connection pool, so high-frequency liveness
+// probes (e.g. the vttablet shard-peer health monitor pinging every shard peer each interval)
+// do not pay for a fresh TCP/TLS handshake per probe. Pooled connections are held open until
+// Close, so one-shot callers should use Ping instead; a failed ping invalidates the pooled
+// connection so the next probe redials. Not part of the tmclient.TabletManagerClient interface.
+func (client *Client) PingPooled(ctx context.Context, tablet *topodatapb.Tablet) error {
+	var c tabletmanagerservicepb.TabletManagerClient
+	var invalidator invalidatorFunc
+	var err error
+	if poolDialer, ok := client.dialer.(poolDialer); ok {
+		c, invalidator, err = poolDialer.dialDedicatedPool(ctx, dialPoolGroupPing, tablet)
+		if err != nil {
+			return err
+		}
+	}
+
+	if c == nil {
+		var closer io.Closer
+		c, closer, err = client.dialer.dial(ctx, tablet)
+		if err != nil {
+			return err
+		}
+		defer closer.Close()
+	}
+
+	return client.ping(ctx, c, invalidator)
+}
+
+// CloseShardHealthPool closes the pooled connections opened by PingPooled for shard-health probes,
+// without tearing down the rest of the client. The vttablet shard-health monitor calls this when it
+// stops so its pooled connection to the primary is released promptly instead of lingering until the
+// whole tmclient is closed. Not part of the tmclient.TabletManagerClient interface.
+func (client *Client) CloseShardHealthPool() {
+	if poolDialer, ok := client.dialer.(poolDialer); ok {
+		poolDialer.closeDedicatedPool(dialPoolGroupPing)
+	}
+}
+
+// CloseShardHealthPoolEntry closes the pooled shard-health ping connection to a
+// single tablet, if one exists. The vttablet shard-health monitor calls this when
+// a peer leaves its probe set (e.g. after the primary changed) so the departed
+// peer's connection is released promptly instead of lingering until the monitor
+// stops. Not part of the tmclient.TabletManagerClient interface.
+func (client *Client) CloseShardHealthPoolEntry(tablet *topodatapb.Tablet) {
+	// Eviction is best-effort cleanup on shutdown/refresh paths, so a nil or
+	// partially-populated tablet record must not panic: without a hostname and
+	// grpc port no pool entry could have been dialed for it either, so there is
+	// nothing to evict. Note that we deliberately do not use validateTablet
+	// here: it rejects records with TabletShutdownTime set, and a shut-down
+	// peer is exactly the kind whose pooled connection we want to release.
+	if tablet == nil || tablet.Hostname == "" || tablet.PortMap["grpc"] <= 0 {
+		return
+	}
+	if poolDialer, ok := client.dialer.(poolDialer); ok {
+		poolDialer.closeDedicatedPoolEntry(dialPoolGroupPing, netutil.JoinHostPort(tablet.Hostname, int32(tablet.PortMap["grpc"])))
+	}
+}
+
+// ping runs the Ping RPC on an already-dialed connection, invalidating the pooled connection
+// (when an invalidator is provided) on a connection-level failure.
+func (client *Client) ping(ctx context.Context, c tabletmanagerservicepb.TabletManagerClient, invalidator invalidatorFunc) error {
 	result, err := c.Ping(ctx, &tabletmanagerdatapb.PingRequest{
 		Payload: "payload",
 	})
 	if err != nil {
+		// Only invalidate (close + redial) the pooled connection when the failure indicates the
+		// connection itself is broken. A DeadlineExceeded/Canceled means the RPC did not finish in
+		// time, not that the conn is bad — invalidating then would close + redial the pool on a
+		// momentarily slow but alive peer, adding churn exactly when it is already stressed.
+		if invalidator != nil && shouldInvalidatePooledConn(err) {
+			invalidator()
+		}
 		return vterrors.FromGRPC(err)
 	}
 	if result.Payload != "payload" {
 		return fmt.Errorf("bad ping result: %v", result.Payload)
 	}
 	return nil
+}
+
+// shouldInvalidatePooledConn reports whether a failed pooled RPC indicates the connection itself is
+// likely broken (so it should be closed and redialed) rather than a transient timeout or
+// cancellation. A dead/unreachable peer surfaces as Unavailable and still invalidates.
+func shouldInvalidatePooledConn(err error) bool {
+	// status.Code only recognizes gRPC status errors: a raw or wrapped
+	// context.Canceled / context.DeadlineExceeded (e.g. the monitor shutting
+	// down or a caller-side timeout firing before the RPC hits the wire) maps
+	// to codes.Unknown and would needlessly close and redial a healthy
+	// connection. Check the context errors directly first.
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+	switch status.Code(err) {
+	case codes.DeadlineExceeded, codes.Canceled:
+		return false
+	default:
+		return true
+	}
 }
 
 // Sleep is part of the tmclient.TabletManagerClient interface.

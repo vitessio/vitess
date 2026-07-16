@@ -37,7 +37,7 @@ export const notify = (error: Error, env: object, metadata?: object) => {
     BugsnagJS.notify(error, (event) => {
         event.addMetadata('env', env);
 
-        if (!!metadata) {
+        if (metadata) {
             event.addMetadata('metadata', metadata);
         }
     });

@@ -2193,7 +2193,7 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 						msg += fmt.Sprintf(" Tx time: %s.", time.Unix(st.TransactionTimestamp, 0).Format(time.ANSIC))
 					}
 				}
-				sSb2177.WriteString(fmt.Sprintf("id=%d on %s: Status: %s%s\n", st.ID, ksShard, st.State, msg))
+				fmt.Fprintf(&sSb2177, "id=%d on %s: Status: %s%s\n", st.ID, ksShard, st.State, msg)
 			}
 			sSb2175.WriteString(sSb2177.String())
 		}
@@ -2369,9 +2369,9 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 				if progress.SourceTableSize > 0 {
 					tableSizePct = 100.0 * progress.TargetTableSize / progress.SourceTableSize
 				}
-				sSb2360.WriteString(fmt.Sprintf("%s: rows copied %d/%d (%d%%), size copied %d/%d (%d%%)\n",
+				fmt.Fprintf(&sSb2360, "%s: rows copied %d/%d (%d%%), size copied %d/%d (%d%%)\n",
 					table, progress.TargetRowCount, progress.SourceRowCount, rowCountPct,
-					progress.TargetTableSize, progress.SourceTableSize, tableSizePct))
+					progress.TargetTableSize, progress.SourceTableSize, tableSizePct)
 			}
 			s += sSb2360.String()
 			wr.Logger().Printf("\n%s\n", s)

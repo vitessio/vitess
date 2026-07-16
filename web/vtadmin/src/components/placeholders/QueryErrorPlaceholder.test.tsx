@@ -71,8 +71,8 @@ describe('QueryErrorPlaceholder', () => {
 
         expect((httpAPI.fetchClusters as any).mock.calls.length).toEqual(1);
 
-        let placeholder = await screen.findByRole('status');
-        let button = within(placeholder).getByRole('button');
+        const placeholder = await screen.findByRole('status');
+        const button = within(placeholder).getByRole('button');
         expect(button).not.toBeNull();
         expect(button.textContent).toEqual('Try again');
 

@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"slices"
 	"sync"
 
 	"vitess.io/vitess/go/mysql"
@@ -235,7 +236,7 @@ func (bc *BinlogConnection) findFileBeforeTimestamp(ctx context.Context, timesta
 	}
 
 	// Start with the most recent binlog file until we find the right event.
-	for binlogIndex := len(binlogs.Rows) - 1; binlogIndex >= 0; binlogIndex-- {
+	for _, row := range slices.Backward(binlogs.Rows) {
 		// Exit the loop early if context is canceled.
 		select {
 		case <-ctx.Done():
@@ -243,7 +244,7 @@ func (bc *BinlogConnection) findFileBeforeTimestamp(ctx context.Context, timesta
 		default:
 		}
 
-		filename := binlogs.Rows[binlogIndex][0].ToString()
+		filename := row[0].ToString()
 		blTimestamp, err := bc.getBinlogTimeStamp(filename)
 		if err != nil {
 			return "", err

@@ -528,7 +528,7 @@ func resolveShardsMultiCol(ctx context.Context, vcursor VCursor, vindex vindexes
 // and eliminates duplicates, returning the values to be used for each column for a multi column
 // vindex in each shard.
 func buildMultiColumnVindexValues(shardsValues [][][]sqltypes.Value) [][][]*querypb.Value {
-	var shardsIds [][][]*querypb.Value
+	shardsIds := make([][][]*querypb.Value, 0, len(shardsValues))
 	for _, shardValues := range shardsValues {
 		// shardValues -> [[0,1], [0,2], [0,3]]
 		// shardIds -> [[0,0,0], [1,2,3]]
@@ -649,7 +649,7 @@ func generateRowColValues(ctx context.Context, vcursor VCursor, bindVars map[str
 // convert it into [1,2,4][1,2,5][1,3,4][1,3,5]
 // all combination of left and right side.
 func buildRowColValues(left [][]sqltypes.Value, right []sqltypes.Value) [][]sqltypes.Value {
-	var allCombinations [][]sqltypes.Value
+	allCombinations := make([][]sqltypes.Value, 0, len(left)*len(right))
 	for _, firstPart := range left {
 		for _, secondPart := range right {
 			allCombinations = append(allCombinations, append(firstPart, secondPart))

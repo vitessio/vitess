@@ -237,14 +237,10 @@ func New() (cmd *cobra.Command) {
 }
 
 func newEnv() (env *vttest.LocalTestEnv, err error) {
-	if basePort == 0 {
-		env, err = vttest.NewLocalTestEnv(0)
+	if config.DataDir == "" {
+		env, err = vttest.NewLocalTestEnv(basePort)
 	} else {
-		if config.DataDir == "" {
-			env, err = vttest.NewLocalTestEnv(basePort)
-		} else {
-			env, err = vttest.NewLocalTestEnvWithDirectory(basePort, config.DataDir)
-		}
+		env, err = vttest.NewLocalTestEnvWithDirectory(basePort, config.DataDir)
 	}
 	if err != nil {
 		return

@@ -77,7 +77,6 @@ export const Gates = () => {
             </WorkspaceHeader>
             <ContentContainer>
                 <DataFilter
-                    autoFocus
                     onChange={(e) => updateFilter(e.target.value)}
                     onClear={() => updateFilter('')}
                     placeholder="Filter gates"

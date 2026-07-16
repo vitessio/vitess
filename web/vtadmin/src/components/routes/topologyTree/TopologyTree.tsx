@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { useTopologyPath } from '../../../hooks/api';
 import { useDocumentTitle } from '../../../hooks/useDocumentTitle';

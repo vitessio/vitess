@@ -143,7 +143,7 @@ func TestMySQLShellBackupRestorePreCheck(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mysqlShellLoadFlags = tt.flags
 			shouldDeleteUsers, err := engine.restorePreCheck(t.Context(), RestoreParams{})
-			assert.ErrorIs(t, err, tt.err)
+			require.ErrorIs(t, err, tt.err)
 			assert.Equal(t, tt.shouldDeleteUsers, shouldDeleteUsers)
 		})
 	}

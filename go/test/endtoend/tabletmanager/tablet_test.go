@@ -130,7 +130,7 @@ func TestResetReplicationParameters(t *testing.T) {
 	// Recheck the replica status and this time is should be empty
 	res, err = tablet.VttabletProcess.QueryTablet("show replica status", keyspaceName, false)
 	require.NoError(t, err)
-	require.Len(t, res.Rows, 0)
+	require.Empty(t, res.Rows)
 }
 
 // TestGetGlobalStatusVars tests the GetGlobalStatusVars RPC
@@ -183,9 +183,11 @@ func TestStopReplicationAndGetStatus(t *testing.T) {
 		ctx, cancel := context.WithTimeout(t.Context(), time.Second*10)
 		defer cancel()
 		resp, err := tmcFullStatus(ctx, tablet.GrpcPort)
-		require.NoError(c, err)
-		require.True(c, resp.SemiSyncReplicaEnabled)
-		require.True(c, resp.SemiSyncReplicaStatus)
+		if !assert.NoError(c, err) {
+			return
+		}
+		assert.True(c, resp.SemiSyncReplicaEnabled)
+		assert.True(c, resp.SemiSyncReplicaStatus)
 	}, time.Second*45, time.Second)
 
 	ctx, cancel := context.WithTimeout(t.Context(), time.Second*10)
@@ -202,5 +204,5 @@ func TestStopReplicationAndGetStatus(t *testing.T) {
 func checkValueGreaterZero(t *testing.T, statusValues map[string]string, val string) {
 	valInMap, err := strconv.Atoi(statusValues[val])
 	require.NoError(t, err)
-	require.Greater(t, valInMap, 0)
+	require.Positive(t, valInMap)
 }

@@ -22,11 +22,11 @@ package txthrottler
 
 import (
 	"context"
-	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	"vitess.io/vitess/go/vt/discovery"
@@ -50,7 +50,7 @@ func TestDisabledThrottler(t *testing.T) {
 		Keyspace: "keyspace",
 		Shard:    "shard",
 	})
-	assert.Nil(t, throttler.Open())
+	require.NoError(t, throttler.Open())
 	assert.False(t, throttler.Throttle(0, "some-workload"))
 	throttlerImpl, _ := throttler.(*txThrottler)
 	assert.Zero(t, throttlerImpl.throttlerRunning.Get())
@@ -137,7 +137,7 @@ func TestEnabledThrottler(t *testing.T) {
 		Shard:    "shard",
 	})
 
-	assert.Nil(t, throttlerImpl.Open())
+	require.NoError(t, throttlerImpl.Open())
 	throttlerStateImpl, ok := throttlerImpl.state.(*txThrottlerStateImpl)
 	assert.True(t, ok)
 	assert.Equal(t, map[topodatapb.TabletType]bool{topodatapb.TabletType_REPLICA: true}, throttlerStateImpl.tabletTypes)
@@ -148,7 +148,7 @@ func TestEnabledThrottler(t *testing.T) {
 	throttlerStateImpl.done <- true
 
 	// 1 should not throttle due to return value of underlying Throttle(), despite high lag
-	atomic.StoreInt64(&throttlerStateImpl.maxLag, 20)
+	throttlerStateImpl.maxLag.Store(20)
 	assert.False(t, throttlerImpl.Throttle(100, "some-workload"))
 	assert.Equal(t, int64(1), throttlerImpl.requestsTotal.Counts()["some-workload"])
 	assert.Zero(t, throttlerImpl.requestsThrottled.Counts()["some-workload"])
@@ -178,11 +178,64 @@ func TestEnabledThrottler(t *testing.T) {
 	assert.Equal(t, int64(1), throttlerImpl.requestsThrottled.Counts()["some-workload"])
 
 	// 4 should not throttle despite return value of underlying Throttle() and priority = 100, due to low lag
-	atomic.StoreInt64(&throttlerStateImpl.maxLag, 1)
+	throttlerStateImpl.maxLag.Store(1)
 	assert.False(t, throttler.Throttle(100, "some-workload"))
 	assert.Equal(t, int64(4), throttlerImpl.requestsTotal.Counts()["some-workload"])
 	assert.Equal(t, int64(1), throttlerImpl.requestsThrottled.Counts()["some-workload"])
 
+	throttler.Close()
+	assert.Zero(t, throttlerImpl.throttlerRunning.Get())
+}
+
+// TestUpdateMaxLagTickerLowTargetLag verifies that a target replication lag of 1
+// second, which passes config verification, does not make the updateMaxLag
+// goroutine build a time.NewTicker with a non-positive interval and panic the
+// tablet. The old code computed TargetReplicationLagSec/2, which rounds down to 0
+// for a target of 1.
+func TestUpdateMaxLagTickerLowTargetLag(t *testing.T) {
+	ctx := t.Context()
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	defer resetTxThrottlerFactories()
+	ts := memorytopo.NewServer(ctx, "cell1")
+
+	mockHealthCheck := NewMockHealthCheck(mockCtrl)
+	mockHealthCheck.EXPECT().Subscribe("TxThrottler").AnyTimes()
+	mockHealthCheck.EXPECT().RegisterStats().AnyTimes()
+	mockHealthCheck.EXPECT().Close().AnyTimes()
+	healthCheckFactory = func(ctx context.Context, topoServer *topo.Server, cell, keyspace, shard string, cellsToWatch []string) (discovery.HealthCheck, error) {
+		return mockHealthCheck, nil
+	}
+
+	mockThrottler := NewMockThrottler(mockCtrl)
+	mockThrottler.EXPECT().UpdateConfiguration(gomock.Any(), true /* copyZeroValues */).AnyTimes()
+	mockThrottler.EXPECT().MaxLag(gomock.Any()).Return(uint32(0)).AnyTimes()
+	mockThrottler.EXPECT().Close().AnyTimes()
+	throttlerFactory = func(name, unit string, threadCount int, maxRate int64, maxReplicationLagConfig throttler.MaxReplicationLagModuleConfig) (throttler.Throttler, error) {
+		return mockThrottler, nil
+	}
+
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.EnableTxThrottler = true
+	cfg.TxThrottlerTabletTypes = &topoproto.TabletTypeListFlag{topodatapb.TabletType_REPLICA}
+	// A target replication lag of 1s is accepted by Verify (it only rejects < 1).
+	cfg.TxThrottlerConfig.Get().TargetReplicationLagSec = 1
+
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, t.Name())
+	throttler := NewTxThrottler(env, ts)
+	throttlerImpl, ok := throttler.(*txThrottler)
+	require.True(t, ok)
+	throttler.InitDBConfig(&querypb.Target{
+		Cell:     "cell1",
+		Keyspace: "keyspace",
+		Shard:    "shard",
+	})
+
+	// Open starts the updateMaxLag goroutine, which builds the ticker immediately.
+	// Close blocks until that goroutine has terminated, so a non-positive ticker
+	// interval panics within this test rather than being lost in a background crash.
+	require.NoError(t, throttlerImpl.Open())
 	throttler.Close()
 	assert.Zero(t, throttlerImpl.throttlerRunning.Get())
 }

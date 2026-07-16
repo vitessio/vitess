@@ -179,7 +179,7 @@ func TestSplitStatementToPieces(t *testing.T) {
 			stmtPieces, err := parser.SplitStatementToPieces(tcase.input)
 			require.NoError(t, err)
 			if tcase.lenWanted != 0 {
-				require.Equal(t, tcase.lenWanted, len(stmtPieces))
+				require.Len(t, stmtPieces, tcase.lenWanted)
 			}
 			out := strings.Join(stmtPieces, ";")
 			require.Equal(t, tcase.output, out)

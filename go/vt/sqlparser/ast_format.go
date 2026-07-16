@@ -321,50 +321,85 @@ func (node *AlterMigration) Format(buf *TrackedBuffer) {
 	case CleanupMigrationType:
 		alterType = "cleanup"
 	case CleanupAllMigrationType:
-		alterType = "cleanup all"
+		if node.Context != "" {
+			alterType = "cleanup"
+		} else {
+			alterType = "cleanup all"
+		}
 	case LaunchMigrationType:
 		alterType = "launch"
 	case LaunchAllMigrationType:
-		alterType = "launch all"
+		if node.Context != "" {
+			alterType = "launch"
+		} else {
+			alterType = "launch all"
+		}
 	case CompleteMigrationType:
 		alterType = "complete"
 	case CompleteAllMigrationType:
-		alterType = "complete all"
+		if node.Context != "" {
+			alterType = "complete"
+		} else {
+			alterType = "complete all"
+		}
 	case PostponeCompleteMigrationType:
 		alterType = "postpone complete"
 	case PostponeCompleteAllMigrationType:
-		alterType = "postpone complete all"
+		if node.Context != "" {
+			alterType = "postpone complete"
+		} else {
+			alterType = "postpone complete all"
+		}
 	case CancelMigrationType:
 		alterType = "cancel"
 	case CancelAllMigrationType:
-		alterType = "cancel all"
+		if node.Context != "" {
+			alterType = "cancel"
+		} else {
+			alterType = "cancel all"
+		}
 	case ThrottleMigrationType:
 		alterType = "throttle"
 	case ThrottleAllMigrationType:
-		alterType = "throttle all"
+		if node.Context != "" {
+			alterType = "throttle"
+		} else {
+			alterType = "throttle all"
+		}
 	case UnthrottleMigrationType:
 		alterType = "unthrottle"
 	case UnthrottleAllMigrationType:
-		alterType = "unthrottle all"
+		if node.Context != "" {
+			alterType = "unthrottle"
+		} else {
+			alterType = "unthrottle all"
+		}
 	case ForceCutOverMigrationType:
 		alterType = "force_cutover"
 	case ForceCutOverAllMigrationType:
-		alterType = "force_cutover all"
+		if node.Context != "" {
+			alterType = "force_cutover"
+		} else {
+			alterType = "force_cutover all"
+		}
 	case SetCutOverThresholdMigrationType:
 		alterType = "cutover_threshold"
 	}
 	buf.astPrintf(node, " %#s", alterType)
 	if node.Threshold != "" {
-		buf.astPrintf(node, " '%#s'", node.Threshold)
+		buf.astPrintf(node, " %#s", encodeSQLString(node.Threshold))
+	}
+	if node.Context != "" {
+		buf.astPrintf(node, " context %#s", encodeSQLString(node.Context))
 	}
 	if node.Expire != "" {
-		buf.astPrintf(node, " expire '%#s'", node.Expire)
+		buf.astPrintf(node, " expire %#s", encodeSQLString(node.Expire))
 	}
 	if node.Ratio != nil {
 		buf.astPrintf(node, " ratio %v", node.Ratio)
 	}
 	if node.Shards != "" {
-		buf.astPrintf(node, " vitess_shards '%#s'", node.Shards)
+		buf.astPrintf(node, " vitess_shards %#s", encodeSQLString(node.Shards))
 	}
 }
 

@@ -20,12 +20,13 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func createSocketPair(t *testing.T) (net.Listener, net.Conn, net.Conn) {
 	// Create a listener.
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	addr := listener.Addr().String()
 
 	// Dial a client, Accept a server.
@@ -68,7 +69,7 @@ func TestReadTimeout(t *testing.T) {
 
 	select {
 	case err := <-c:
-		assert.ErrorContains(t, err, "i/o timeout", "Expected error timeout")
+		require.ErrorContains(t, err, "i/o timeout", "Expected error timeout")
 	case <-time.After(10 * time.Second):
 		assert.Fail(t, "Timeout did not happen")
 	}
@@ -98,7 +99,7 @@ func TestWriteTimeout(t *testing.T) {
 
 	select {
 	case err := <-c:
-		assert.ErrorContains(t, err, "i/o timeout", "Expected error timeout")
+		require.ErrorContains(t, err, "i/o timeout", "Expected error timeout")
 	case <-time.After(10 * time.Second):
 		assert.Fail(t, "Timeout did not happen")
 	}

@@ -190,11 +190,11 @@ func TestNewValue(t *testing.T) {
 	for _, tcase := range testcases {
 		v, err := NewValue(tcase.inType, []byte(tcase.inVal))
 		if tcase.outErr != "" {
-			assert.ErrorContains(t, err, tcase.outErr)
+			require.ErrorContains(t, err, tcase.outErr)
 			continue
 		}
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, tcase.outVal, v)
 	}
 }
@@ -213,6 +213,14 @@ func TestNew(t *testing.T) {
 	got, err := NewJSON("invalid-json")
 	assert.Empty(t, got)
 	assert.ErrorContains(t, err, "invalid JSON value")
+}
+
+func TestNewFromBytes(t *testing.T) {
+	assert.Equal(t, NewDate("2021-02-03"), NewDateFromBytes([]byte("2021-02-03")))
+	assert.Equal(t, NewTime("12:34:56"), NewTimeFromBytes([]byte("12:34:56")))
+	assert.Equal(t, NewDatetime("2021-02-03 12:34:56"), NewDatetimeFromBytes([]byte("2021-02-03 12:34:56")))
+	assert.Equal(t, NewDecimal("3.14"), NewDecimalFromBytes([]byte("3.14")))
+	assert.Equal(t, NewVarBinary("\x00\x01"), NewVarBinaryFromBytes([]byte("\x00\x01")))
 }
 
 func TestMakeTrusted(t *testing.T) {
@@ -245,11 +253,11 @@ func TestIntegralValue(t *testing.T) {
 	for _, tcase := range testcases {
 		v, err := NewIntegral(tcase.in)
 		if tcase.outErr != "" {
-			assert.ErrorContains(t, err, tcase.outErr)
+			require.ErrorContains(t, err, tcase.outErr)
 			continue
 		}
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, tcase.outVal, v)
 	}
 }
@@ -280,7 +288,7 @@ func TestInterfaceValue(t *testing.T) {
 	for _, tcase := range testcases {
 		v, err := InterfaceToValue(tcase.in)
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, tcase.out, v)
 	}
 
@@ -306,17 +314,17 @@ func TestAccessors(t *testing.T) {
 
 	{
 		i, err := v.ToInt64()
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, int64(1), i)
 	}
 	{
 		i, err := v.ToUint64()
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, uint64(1), i)
 	}
 	{
 		b, err := v.ToBool()
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.True(t, b)
 	}
 }
@@ -329,12 +337,12 @@ func TestAccessorsNegative(t *testing.T) {
 
 	{
 		i, err := v.ToInt64()
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, int64(-1), i)
 	}
 	{
 		_, err := v.ToUint64()
-		assert.Error(t, err)
+		require.Error(t, err)
 	}
 	{
 		_, err := v.ToBool()

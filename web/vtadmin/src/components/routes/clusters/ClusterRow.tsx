@@ -64,9 +64,9 @@ const ClusterRow: React.FC<Props> = ({ cluster }) => {
                     )}
                     {!isIdle && error && (
                         <div className="w-full flex flex-col justify-center items-center">
-                            <span className="flex h-12 w-12 relative items-center justify-center">
+                            <div className="flex h-12 w-12 relative items-center justify-center">
                                 <Icon className="fill-current text-red-500" icon={Icons.alertFail} />
-                            </span>
+                            </div>
                             <div className="text-lg mt-3 font-bold text-center">
                                 There was an issue validating nodes in cluster {cluster.name}
                             </div>

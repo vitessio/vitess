@@ -993,13 +993,7 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 			if tsv.sm.target.Keyspace != tsv.config.DB.DBName && sqltypes.IncludeFieldsOrDefault(options) == querypb.ExecuteOptions_ALL {
 				switch qre.plan.PlanID {
 				case planbuilder.PlanSelect, planbuilder.PlanSelectImpossible:
-					dbName := tsv.config.DB.DBName
-					ksName := tsv.sm.target.Keyspace
-					for _, f := range result.Fields {
-						if f.Database == dbName {
-							f.Database = ksName
-						}
-					}
+					result.ReplaceKeyspace(tsv.config.DB.DBName, tsv.sm.target.Keyspace)
 				}
 			}
 			return nil
@@ -1124,6 +1118,17 @@ func (tsv *TabletServer) BeginStreamExecute(
 	options *querypb.ExecuteOptions,
 	callback func(*sqltypes.Result) error,
 ) (queryservice.TransactionState, error) {
+	// Disable hot row protection in case of reserve connection.
+	if tsv.enableHotRowProtection && reservedID == 0 {
+		txDone, err := tsv.beginWaitForSameRangeTransactions(ctx, target, options, sql, bindVariables)
+		if err != nil {
+			return queryservice.TransactionState{}, err
+		}
+		if txDone != nil {
+			defer txDone()
+		}
+	}
+
 	state, err := tsv.begin(ctx, target, postBeginQueries, reservedID, nil, options)
 	if err != nil {
 		return state, err

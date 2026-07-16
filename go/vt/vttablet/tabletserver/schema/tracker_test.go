@@ -19,6 +19,7 @@ package schema
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"testing/synctest"
@@ -27,6 +28,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -49,7 +51,7 @@ func TestTracker(t *testing.T) {
 		initialSchemaInserted = true
 	})
 	// simulates empty schema_version table, so initial schema should be inserted
-	db.AddQuery("select id from _vt.schema_version limit 1", &sqltypes.Result{Rows: [][]sqltypes.Value{}})
+	db.AddQuery("select pos from _vt.schema_version order by id desc limit 1", &sqltypes.Result{Rows: [][]sqltypes.Value{}})
 	// called to get current position
 	db.AddQuery("SELECT @@GLOBAL.gtid_executed", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"",
@@ -114,7 +116,7 @@ func TestTrackerRetriesAfterFailedSchemaSave(t *testing.T) {
 
 	db.AddQueryPattern("CREATE TABLE IF NOT EXISTS _vt.schema_version.*", &sqltypes.Result{})
 	db.AddQueryPatternWithCallback("insert into _vt.schema_version.*1-3.*", &sqltypes.Result{}, func(query string) {})
-	db.AddQuery("select id from _vt.schema_version limit 1", &sqltypes.Result{Rows: [][]sqltypes.Value{}})
+	db.AddQuery("select pos from _vt.schema_version order by id desc limit 1", &sqltypes.Result{Rows: [][]sqltypes.Value{}})
 	db.AddQuery("SELECT @@GLOBAL.gtid_executed", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"",
 		"varchar"),
@@ -184,7 +186,7 @@ func TestTrackerRetriesFromStartupGTIDWhenFirstStreamFailsBeforeGTID(t *testing.
 
 	db.AddQueryPattern("CREATE TABLE IF NOT EXISTS _vt.schema_version.*", &sqltypes.Result{})
 	db.AddQueryPattern("insert into _vt.schema_version.*1-3.*", &sqltypes.Result{})
-	db.AddQuery("select id from _vt.schema_version limit 1", &sqltypes.Result{Rows: [][]sqltypes.Value{}})
+	db.AddQuery("select pos from _vt.schema_version order by id desc limit 1", &sqltypes.Result{Rows: [][]sqltypes.Value{}})
 	db.AddQuery("SELECT @@GLOBAL.gtid_executed", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"",
 		"varchar"),
@@ -235,7 +237,7 @@ func TestTrackerRetriesFromLastSavedGTIDAfterSuccessfulFirstDDL(t *testing.T) {
 	db.AddQueryPatternWithCallback("insert into _vt.schema_version.*1-10.*", &sqltypes.Result{}, func(query string) {
 		gtid1Saves++
 	})
-	db.AddQuery("select id from _vt.schema_version limit 1", &sqltypes.Result{Rows: [][]sqltypes.Value{}})
+	db.AddQuery("select pos from _vt.schema_version order by id desc limit 1", &sqltypes.Result{Rows: [][]sqltypes.Value{}})
 	db.AddQuery("SELECT @@GLOBAL.gtid_executed", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"",
 		"varchar"),
@@ -274,6 +276,152 @@ func TestTrackerRetriesFromLastSavedGTIDAfterSuccessfulFirstDDL(t *testing.T) {
 	require.Equal(t, gtid1, startPositions[1])
 }
 
+// TestTrackerResumesFromLastSavedPosition proves that the tracker starts
+// streaming from the last position saved in the schema_version table instead
+// of the current position, so that any DDL whose save failed (cancelled, timed
+// out, or interrupted by a restart or reparent) is replayed and saved.
+func TestTrackerResumesFromLastSavedPosition(t *testing.T) {
+	se, db, cancel := getTestSchemaEngine(t, 0)
+	defer cancel()
+
+	const storedPos = "MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-42"
+
+	db.AddQueryPattern("CREATE TABLE IF NOT EXISTS _vt.schema_version.*", &sqltypes.Result{})
+	db.AddQuery("select pos from _vt.schema_version order by id desc limit 1", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"pos",
+		"varchar"),
+		storedPos,
+	))
+
+	var schemaSaves int
+	db.AddQueryPatternWithCallback("insert into _vt.schema_version.*", &sqltypes.Result{}, func(query string) {
+		schemaSaves++
+	})
+
+	vs := &fakeVstreamer{
+		done:   make(chan struct{}),
+		events: [][]*binlogdatapb.VEvent{{}},
+	}
+	cfg := se.env.Config()
+	cfg.TrackSchemaVersions = true
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TrackerResumeTest")
+	tracker := NewTracker(env, vs, se)
+
+	tracker.Open()
+	<-vs.done
+	tracker.Close()
+
+	startPositions := vs.getStartPositions()
+	require.NotEmpty(t, startPositions)
+	assert.Equal(t, storedPos, startPositions[0])
+	assert.Zero(t, schemaSaves)
+}
+
+// TestTrackerSavesSnapshotWhenStoredPositionIsInvalid proves that a stored
+// position that cannot be parsed does not wedge the tracker: it saves a fresh
+// snapshot of the current schema and resumes from the current position.
+func TestTrackerSavesSnapshotWhenStoredPositionIsInvalid(t *testing.T) {
+	se, db, cancel := getTestSchemaEngine(t, 0)
+	defer cancel()
+
+	const currentGTID = "MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-3"
+
+	db.AddQueryPattern("CREATE TABLE IF NOT EXISTS _vt.schema_version.*", &sqltypes.Result{})
+	db.AddQuery("select pos from _vt.schema_version order by id desc limit 1", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"pos",
+		"varchar"),
+		"this-is-not-a-valid-position",
+	))
+	db.AddQuery("SELECT @@GLOBAL.gtid_executed", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"",
+		"varchar"),
+		"7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-3",
+	))
+
+	var snapshotSaves int
+	db.AddQueryPatternWithCallback("insert into _vt.schema_version.*1-3.*", &sqltypes.Result{}, func(query string) {
+		snapshotSaves++
+	})
+
+	vs := &fakeVstreamer{
+		done:   make(chan struct{}),
+		events: [][]*binlogdatapb.VEvent{{}},
+	}
+	cfg := se.env.Config()
+	cfg.TrackSchemaVersions = true
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TrackerInvalidPosTest")
+	tracker := NewTracker(env, vs, se)
+
+	tracker.Open()
+	<-vs.done
+	tracker.Close()
+
+	startPositions := vs.getStartPositions()
+	require.NotEmpty(t, startPositions)
+	assert.Equal(t, currentGTID, startPositions[0])
+	assert.Equal(t, 1, snapshotSaves)
+}
+
+// TestTrackerSavesSnapshotWhenResumePositionIsPurged proves that when the
+// binlog can no longer serve the stored resume position (MySQL error 1236),
+// the tracker saves a fresh schema snapshot and resumes from the current
+// position instead of retrying the unservable position forever.
+func TestTrackerSavesSnapshotWhenResumePositionIsPurged(t *testing.T) {
+	se, db, cancel := getTestSchemaEngine(t, 0)
+	defer cancel()
+
+	const (
+		storedPos   = "MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-42"
+		currentGTID = "MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-45"
+	)
+
+	db.AddQueryPattern("CREATE TABLE IF NOT EXISTS _vt.schema_version.*", &sqltypes.Result{})
+	db.AddQuery("select pos from _vt.schema_version order by id desc limit 1", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"pos",
+		"varchar"),
+		storedPos,
+	))
+	db.AddQuery("SELECT @@GLOBAL.gtid_executed", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"",
+		"varchar"),
+		"7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-45",
+	))
+
+	var snapshotSaves int
+	db.AddQueryPatternWithCallback("insert into _vt.schema_version.*1-45.*", &sqltypes.Result{}, func(query string) {
+		snapshotSaves++
+	})
+
+	// The vstreamer flattens errors to text (its wrapError uses %v), so the
+	// tracker must recover the errno from the message rather than via errors.As.
+	purgedErr := fmt.Errorf("stream (at source tablet) error @ %s: %v", storedPos,
+		sqlerror.NewSQLError(sqlerror.ERMasterFatalReadingBinlog, sqlerror.SSUnknownSQLState,
+			"Cannot replicate because the master purged required binary logs"))
+
+	vs := &fakeVstreamer{
+		done: make(chan struct{}),
+		streamCalls: []fakeVstreamCall{
+			{err: purgedErr},
+			{},
+		},
+	}
+	cfg := se.env.Config()
+	cfg.TrackSchemaVersions = true
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TrackerPurgedPosTest")
+	tracker := NewTracker(env, vs, se)
+	tracker.wait = func(ctx context.Context, d time.Duration) bool { return waitWithContext(ctx, 0) }
+
+	tracker.Open()
+	<-vs.done
+	tracker.Close()
+
+	startPositions := vs.getStartPositions()
+	require.Greater(t, len(startPositions), 1)
+	assert.Equal(t, storedPos, startPositions[0])
+	assert.Equal(t, currentGTID, startPositions[1])
+	assert.Equal(t, 1, snapshotSaves)
+}
+
 func TestTrackerShouldNotInsertInitialSchema(t *testing.T) {
 	initialSchemaInserted := false
 	se, db, cancel := getTestSchemaEngine(t, 0)
@@ -281,16 +429,10 @@ func TestTrackerShouldNotInsertInitialSchema(t *testing.T) {
 
 	defer cancel()
 	// simulates existing rows in schema_version, so initial schema should not be inserted
-	db.AddQuery("select id from _vt.schema_version limit 1", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"id",
-		"int"),
-		"1",
-	))
-	// called to get current position
-	db.AddQuery("SELECT @@GLOBAL.gtid_executed", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"",
+	db.AddQuery("select pos from _vt.schema_version order by id desc limit 1", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"pos",
 		"varchar"),
-		"7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-3",
+		"MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-3",
 	))
 	db.AddQueryPatternWithCallback("insert into _vt.schema_version.*1-3.*", &sqltypes.Result{}, func(query string) {
 		initialSchemaInserted = true
@@ -425,10 +567,10 @@ func TestTrackerRequestsOnlyGTIDAndDDL(t *testing.T) {
 	se, db, cancel := getTestSchemaEngine(t, 0)
 	defer cancel()
 
-	db.AddQuery("select id from _vt.schema_version limit 1", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"id",
-		"int"),
-		"1",
+	db.AddQuery("select pos from _vt.schema_version order by id desc limit 1", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"pos",
+		"varchar"),
+		"MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-3",
 	))
 
 	vs := &fakeVstreamer{
@@ -473,4 +615,37 @@ func TestWaitWithContextStopsOnCancel(t *testing.T) {
 			require.FailNow(t, "waitWithContext did not stop after context cancellation")
 		}
 	})
+}
+
+// TestIsResumePositionUnavailable pins the contract that isResumePositionUnavailable
+// depends on: the MySQL 1236 errno must stay recoverable from the error text after
+// the source vstreamer wraps it (with %v) and after it is flattened across the gRPC
+// boundary. If any layer stops preserving the "(errno 1236) (sqlstate ...)" suffix
+// that SQLError.Error() emits, detection silently breaks and the tracker would retry
+// an unservable position forever, so this guards the real error shapes rather than
+// only a hand-built string.
+func TestIsResumePositionUnavailable(t *testing.T) {
+	const storedPos = "MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-42"
+	purged := sqlerror.NewSQLError(sqlerror.ERMasterFatalReadingBinlog, sqlerror.SSUnknownSQLState,
+		"Cannot replicate because the master purged required binary logs")
+	// wrapError in the source vstreamer wraps the error with exactly this format.
+	wrapped := fmt.Errorf("stream (at source tablet) error @ (including the GTID we failed to process) %s: %v", storedPos, purged)
+
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"nil", nil, false},
+		{"plain error", errors.New("some other failure"), false},
+		{"direct SQLError 1236", purged, true},
+		{"vstreamer-wrapped (%v)", wrapped, true},
+		{"gRPC-flattened message", fmt.Errorf("rpc error: code = Unknown desc = %s", wrapped.Error()), true},
+		{"different errno", sqlerror.NewSQLError(sqlerror.ERNoSuchTable, sqlerror.SSUnknownSQLState, "no such table"), false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, isResumePositionUnavailable(tc.err))
+		})
+	}
 }

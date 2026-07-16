@@ -69,4 +69,4 @@ if [[ -n "${JSON_OUTPUT:-}" ]]; then
 fi
 
 # shellcheck disable=SC2086
-go tool gotestsum $GOTESTSUM_ARGS --packages="$packages_with_tests" -- $VT_GO_PARALLEL $RACE_FLAG -count=1
+go tool -modfile=tools/gotestsum/go.mod gotestsum $GOTESTSUM_ARGS --packages="$packages_with_tests" -- $VT_GO_PARALLEL $RACE_FLAG -count=1

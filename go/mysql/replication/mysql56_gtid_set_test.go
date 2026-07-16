@@ -780,7 +780,7 @@ func TestMySQL56GTIDSetCount(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			gtidSet, _ := ParseMysql56GTIDSet(tt.gtidStr)
-			require.EqualValues(t, tt.wantCount, gtidSet.Count())
+			require.Equal(t, tt.wantCount, gtidSet.Count())
 		})
 	}
 }
@@ -850,7 +850,7 @@ func TestErrantGTIDsOnReplica(t *testing.T) {
 				require.ErrorContains(t, err, tt.wantErr)
 			} else {
 				require.NoError(t, err)
-				require.EqualValues(t, tt.errantGtidWanted, errantGTIDs)
+				require.Equal(t, tt.errantGtidWanted, errantGTIDs)
 			}
 		})
 	}
@@ -883,7 +883,7 @@ func TestMysql56GTIDSet_RemoveUUID(t *testing.T) {
 			sid, err := ParseSID(tt.uuid)
 			require.NoError(t, err)
 			gtidSet = gtidSet.RemoveUUID(sid)
-			require.EqualValues(t, tt.wantSet, gtidSet.String())
+			require.Equal(t, tt.wantSet, gtidSet.String())
 		})
 	}
 }

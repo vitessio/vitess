@@ -86,6 +86,7 @@ spec:
           cpu: 100m
           memory: 128Mi
       extraFlags:
+        cell: zone1
         instance-poll-time: 1s
         log-format: text
     partitionings:
@@ -124,6 +125,9 @@ spec:
   - name: customer
     durabilityPolicy: none
     turndownPolicy: Immediate
+    vitessOrchestrator:
+      extraFlags:
+        cell: zone1
     partitionings:
     - equal:
         parts: 1

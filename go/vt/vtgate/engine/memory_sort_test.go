@@ -636,7 +636,7 @@ func TestMemorySortExecuteNoVarChar(t *testing.T) {
 
 	_, err := ms.TryExecute(t.Context(), &noopVCursor{}, nil, false)
 	want := "cannot compare strings, collation is unknown or unsupported (collation ID: 0)"
-	assert.EqualErrorf(t, err, want, "Execute err: %v, want %v", err, want)
+	require.EqualErrorf(t, err, want, "Execute err: %v, want %v", err, want)
 
 	fp.rewind()
 	err = ms.TryStreamExecute(t.Context(), &noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {

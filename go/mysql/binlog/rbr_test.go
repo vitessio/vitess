@@ -481,6 +481,60 @@ func TestCellLengthAndData(t *testing.T) {
 		out: sqltypes.MakeTrusted(querypb.Type_DECIMAL,
 			[]byte("1.10")),
 	}, {
+		typ:      TypeNewDecimal,
+		metadata: 2<<8 | 1, // DECIMAL(2,1), value 0.1
+		data:     []byte{0x80, 0x01},
+		out: sqltypes.MakeTrusted(querypb.Type_DECIMAL,
+			[]byte("0.1")),
+	}, {
+		typ:      TypeNewDecimal,
+		metadata: 2<<8 | 1, // DECIMAL(2,1), value -0.1
+		data:     []byte{0x7F, 0xFE},
+		out: sqltypes.MakeTrusted(querypb.Type_DECIMAL,
+			[]byte("-0.1")),
+	}, {
+		typ:      TypeNewDecimal,
+		metadata: 1<<8 | 1, // DECIMAL(1,1), value 0.5
+		data:     []byte{0x85},
+		out: sqltypes.MakeTrusted(querypb.Type_DECIMAL,
+			[]byte("0.5")),
+	}, {
+		typ:      TypeNewDecimal,
+		metadata: 3<<8 | 2, // DECIMAL(3,2), value 0.05
+		data:     []byte{0x80, 0x05},
+		out: sqltypes.MakeTrusted(querypb.Type_DECIMAL,
+			[]byte("0.05")),
+	}, {
+		typ:      TypeNewDecimal,
+		metadata: 10<<8 | 9, // DECIMAL(10,9), scale is a multiple of 9, value 0.000000001
+		data:     []byte{0x80, 0x00, 0x00, 0x00, 0x01},
+		out: sqltypes.MakeTrusted(querypb.Type_DECIMAL,
+			[]byte("0.000000001")),
+	}, {
+		typ:      TypeNewDecimal,
+		metadata: 10<<8 | 9, // DECIMAL(10,9), scale is a multiple of 9, value -0.000000001
+		data:     []byte{0x7F, 0xFF, 0xFF, 0xFF, 0xFE},
+		out: sqltypes.MakeTrusted(querypb.Type_DECIMAL,
+			[]byte("-0.000000001")),
+	}, {
+		typ:      TypeNewDecimal,
+		metadata: 18<<8 | 9, // DECIMAL(18,9), full integral group of zeroes, value 0.123456789
+		data:     []byte{0x80, 0x00, 0x00, 0x00, 0x07, 0x5B, 0xCD, 0x15},
+		out: sqltypes.MakeTrusted(querypb.Type_DECIMAL,
+			[]byte("0.123456789")),
+	}, {
+		typ:      TypeNewDecimal,
+		metadata: 20 << 8, // DECIMAL(20,0), scale zero, full integral group of zeroes, value 1
+		data:     []byte{0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01},
+		out: sqltypes.MakeTrusted(querypb.Type_DECIMAL,
+			[]byte("1")),
+	}, {
+		typ:      TypeNewDecimal,
+		metadata: 20 << 8, // DECIMAL(20,0), scale zero, all-zero integral part, value 0
+		data:     []byte{0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+		out: sqltypes.MakeTrusted(querypb.Type_DECIMAL,
+			[]byte("0")),
+	}, {
 		typ:      TypeBlob,
 		metadata: 1,
 		data:     []byte{0x3, 'a', 'b', 'c'},

@@ -129,7 +129,7 @@ func TestUnicodeLooseXXHashMap(t *testing.T) {
 	}}
 	for _, tcase := range tcases {
 		got, err := charVindexXXHash.Map(t.Context(), nil, []sqltypes.Value{tcase.in})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		out := string(got[0].(key.DestinationKeyspaceID))
 		assert.Equalf(t, tcase.out, out, "Map(%#v): %#v, want %#v", tcase.in, out, tcase.out)
 	}

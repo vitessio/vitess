@@ -118,7 +118,7 @@ func (c *echoClient) Execute(
 	return c.fallbackClient.Execute(ctx, mysqlCtx, session, sql, bindVariables, prepared)
 }
 
-func (c *echoClient) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) (*vtgatepb.Session, error) {
+func (c *echoClient) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, prepared bool, callback func(*sqltypes.Result) error) (*vtgatepb.Session, error) {
 	if strings.HasPrefix(sql, EchoPrefix) {
 		callback(echoQueryResult(map[string]any{
 			"callerId": callerid.EffectiveCallerIDFromContext(ctx),
@@ -128,7 +128,7 @@ func (c *echoClient) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.M
 		}))
 		return session, nil
 	}
-	return c.fallbackClient.StreamExecute(ctx, mysqlCtx, session, sql, bindVariables, callback)
+	return c.fallbackClient.StreamExecute(ctx, mysqlCtx, session, sql, bindVariables, prepared, callback)
 }
 
 // ExecuteMulti is part of the VTGateService interface

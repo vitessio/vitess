@@ -303,7 +303,7 @@ func TestMain(m *testing.M) {
 func TestVindexHexTypes(t *testing.T) {
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	utils.Exec(t, conn, "INSERT INTO thex (id, field) VALUES "+
@@ -323,7 +323,7 @@ func TestVindexHexTypes(t *testing.T) {
 func TestVindexBindVarOverlap(t *testing.T) {
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	utils.Exec(t, conn, "INSERT INTO t1 (id, field, field2, field3, field4, field5, field6) VALUES "+

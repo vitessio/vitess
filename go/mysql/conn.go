@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"strings"
 	"sync"
@@ -31,6 +32,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/bucketpool"
+	"vitess.io/vitess/go/internal/ingress"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqlescape"
@@ -86,6 +88,14 @@ type Conn struct {
 	// fields, this is set to an empty array (but not nil).
 	fields []*querypb.Field
 
+	// streamOK holds the OK packet of a streaming query (ExecuteStreamFetch) that
+	// returned no resultset — e.g. a CALL of a procedure that performs DML. For
+	// such a query the OK packet is the only place its RowsAffected, InsertID,
+	// Info and status flags appear, and ExecuteStreamFetch consumes it, so they
+	// are captured here for the caller to inspect once streaming completes. It is
+	// nil when the query returned a resultset, exposed via StreamOKResult.
+	streamOK *sqltypes.Result
+
 	// salt is sent by the server during initial handshake to be used for authentication
 	salt []byte
 
@@ -109,6 +119,13 @@ type Conn struct {
 	// Calling Close() on the Conn will close this connection.
 	// If there are any ongoing reads or writes, they may get interrupted.
 	conn net.Conn
+
+	// bytesRead tracks the number of bytes read during the current command.
+	bytesRead uint64
+
+	// currentCommandIngressBytes is the number of bytes read for the command
+	// currently being handled, captured at command-read time.
+	currentCommandIngressBytes uint64
 
 	// flavor contains the auto-detected flavor for this client
 	// connection. It is unused for server-side connections.
@@ -154,6 +171,8 @@ type Conn struct {
 	// PrepareData is the map to use a prepared statement.
 	PrepareData map[uint32]*PrepareData
 
+	pendingLongDataIngressBytes map[uint32]uint64
+
 	// protects the bufferedWriter and bufferedReader
 	bufMu sync.Mutex
 
@@ -184,6 +203,9 @@ type Conn struct {
 	// It is only used by the server. These flags can be changed
 	// by Handler methods.
 	StatusFlags uint16
+
+	pendingMultiResultStatusFlags    uint16
+	hasPendingMultiResultStatusFlags bool
 
 	// CharacterSet is the charset for this connection, as negotiated
 	// in our handshake with the server. Note that although the MySQL protocol lists this
@@ -245,6 +267,20 @@ const (
 	execErr
 	connErr
 )
+
+func (c *Conn) SetPendingMultiResultStatusFlags(flags uint16) {
+	c.pendingMultiResultStatusFlags = flags
+	c.hasPendingMultiResultStatusFlags = true
+}
+
+func (c *Conn) consumePendingMultiResultStatusFlags() (uint16, bool) {
+	if !c.hasPendingMultiResultStatusFlags {
+		return 0, false
+	}
+	flags := c.pendingMultiResultStatusFlags
+	c.hasPendingMultiResultStatusFlags = false
+	return flags, true
+}
 
 // bufPool is used to allocate and free buffers in an efficient way.
 var bufPool = bucketpool.New(connBufferSize, MaxPacketSize)
@@ -515,6 +551,10 @@ func (c *Conn) readHeaderFrom(r io.Reader) (int, error) {
 	return int(uint32(c.header[0]) | uint32(c.header[1])<<8 | uint32(c.header[2])<<16), nil
 }
 
+func (c *Conn) recordPacketBytesRead(length int) {
+	c.bytesRead += uint64(PacketHeaderSize + length)
+}
+
 // readEphemeralPacket attempts to read a packet into buffer from sync.Pool.  Do
 // not use this method if the contents of the packet needs to be kept
 // after the next readEphemeralPacket.
@@ -539,6 +579,7 @@ func (c *Conn) readEphemeralPacket() ([]byte, error) {
 	if length == 0 {
 		// This can be caused by the packet after a packet of
 		// exactly size MaxPacketSize.
+		c.recordPacketBytesRead(length)
 		return nil, nil
 	}
 
@@ -548,6 +589,7 @@ func (c *Conn) readEphemeralPacket() ([]byte, error) {
 		if _, err := io.ReadFull(r, *c.currentEphemeralBuffer); err != nil {
 			return nil, vterrors.Wrapf(err, "io.ReadFull(packet body of length %v) failed", length)
 		}
+		c.recordPacketBytesRead(length)
 		return *c.currentEphemeralBuffer, nil
 	}
 
@@ -558,6 +600,7 @@ func (c *Conn) readEphemeralPacket() ([]byte, error) {
 	if _, err := io.ReadFull(r, data); err != nil {
 		return nil, vterrors.Wrapf(err, "io.ReadFull(packet body of length %v) failed", length)
 	}
+	c.recordPacketBytesRead(length)
 	for {
 		next, err := c.readOnePacket()
 		if err != nil {
@@ -599,6 +642,7 @@ func (c *Conn) readEphemeralPacketDirect() ([]byte, error) {
 	if length == 0 {
 		// This can be caused by the packet after a packet of
 		// exactly size MaxPacketSize.
+		c.recordPacketBytesRead(length)
 		return nil, nil
 	}
 
@@ -607,6 +651,7 @@ func (c *Conn) readEphemeralPacketDirect() ([]byte, error) {
 		if _, err := io.ReadFull(r, *c.currentEphemeralBuffer); err != nil {
 			return nil, vterrors.Wrapf(err, "io.ReadFull(packet body of length %v) failed", length)
 		}
+		c.recordPacketBytesRead(length)
 		return *c.currentEphemeralBuffer, nil
 	}
 
@@ -638,6 +683,7 @@ func (c *Conn) readOnePacket() ([]byte, error) {
 	if length == 0 {
 		// This can be caused by the packet after a packet of
 		// exactly size MaxPacketSize.
+		c.recordPacketBytesRead(length)
 		return nil, nil
 	}
 
@@ -645,6 +691,7 @@ func (c *Conn) readOnePacket() ([]byte, error) {
 	if _, err := io.ReadFull(r, data); err != nil {
 		return nil, vterrors.Wrapf(err, "io.ReadFull(packet body of length %v) failed", length)
 	}
+	c.recordPacketBytesRead(length)
 	return data, nil
 }
 
@@ -1055,6 +1102,7 @@ func (c *Conn) writeEOFPacket(flags uint16, warnings uint16) error {
 // incoming packets.
 func (c *Conn) handleNextCommand(handler Handler) bool {
 	c.sequence = 0
+	c.ResetBytesRead()
 	data, err := c.readEphemeralPacket()
 	if err != nil {
 		// Don't log EOF errors. They cause too much spam.
@@ -1064,12 +1112,16 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 		return false
 	}
 	if len(data) == 0 {
+		c.GetAndResetBytesRead()
 		return false
 	}
 	// before continue to process the packet, check if the connection should be closed or not.
 	if c.IsMarkedForClose() {
+		c.GetAndResetBytesRead()
 		return false
 	}
+
+	c.currentCommandIngressBytes = c.GetAndResetBytesRead()
 
 	switch data[0] {
 	case ComQuit:
@@ -1100,6 +1152,7 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 		c.recycleReadPacket()
 		if ok {
 			delete(c.PrepareData, stmtID)
+			delete(c.pendingLongDataIngressBytes, stmtID)
 		}
 	case ComStmtReset:
 		return c.handleComStmtReset(data)
@@ -1203,6 +1256,7 @@ func (c *Conn) handleComResetConnection(handler Handler) {
 	handler.ComResetConnection(c)
 	// Reset prepared statements
 	c.PrepareData = make(map[uint32]*PrepareData)
+	c.pendingLongDataIngressBytes = nil
 	err := c.writeOKPacket(&PacketOK{})
 	if err != nil {
 		c.writeErrorPacketFromError(err)
@@ -1232,6 +1286,7 @@ func (c *Conn) handleComStmtReset(data []byte) bool {
 			prepare.BindVars[k] = nil
 		}
 	}
+	delete(c.pendingLongDataIngressBytes, stmtID)
 
 	if err := c.writeOKPacket(&PacketOK{statusFlags: c.StatusFlags}); err != nil {
 		log.Error(fmt.Sprintf("Error writing ComStmtReset OK packet to client %v: %v", c.ConnectionID, err))
@@ -1261,6 +1316,14 @@ func (c *Conn) handleComStmtSendLongData(data []byte) bool {
 		return c.writeErrorPacketFromErrorAndLog(err)
 	}
 
+	// COM_STMT_SEND_LONG_DATA is preparatory state for a later COM_STMT_EXECUTE,
+	// not a separately logged query. Hold its ingress bytes so COM_STMT_EXECUTE
+	// accounts for the full client payload used to run the statement.
+	if c.pendingLongDataIngressBytes == nil {
+		c.pendingLongDataIngressBytes = make(map[uint32]uint64)
+	}
+	c.pendingLongDataIngressBytes[stmtID] += c.currentCommandIngressBytes
+
 	key := fmt.Sprintf("v%d", paramID+1)
 	if val, ok := prepare.BindVars[key]; ok {
 		val.Value = append(val.Value, chunk...)
@@ -1278,9 +1341,16 @@ func (c *Conn) handleComStmtExecute(handler Handler, data []byte) (kontinue bool
 			kontinue = false
 		}
 	}()
+	defer func() {
+		c.StatusFlags &^= ServerQueryWasSlow
+	}()
 	queryStart := time.Now()
 	stmtID, _, err := c.parseComStmtExecute(c.PrepareData, data)
 	c.recycleReadPacket()
+	if c.pendingLongDataIngressBytes != nil {
+		c.currentCommandIngressBytes += c.pendingLongDataIngressBytes[stmtID]
+		delete(c.pendingLongDataIngressBytes, stmtID)
+	}
 
 	if stmtID != uint32(0) {
 		defer func() {
@@ -1339,16 +1409,20 @@ func (c *Conn) handleComStmtExecute(handler Handler, data []byte) (kontinue bool
 		}
 	} else {
 		if err != nil {
-			// We can't send an error in the middle of a stream.
-			// All we can do is abort the send, which will cause a 2013.
-			log.Error(fmt.Sprintf("Error in the middle of a stream to %s: %v", c, err))
-			return false
-		}
-
-		// Send the end packet only sendFinished is false (results were streamed).
-		// In this case the affectedRows and lastInsertID are always 0 since it
-		// was a read operation.
-		if !sendFinished {
+			// An OK packet already terminated the result; we cannot safely
+			// append an ERR without desynchronizing the protocol for the
+			// next command. Tear down the connection instead.
+			if sendFinished {
+				log.Error("Error after OK-terminated result", slog.String("connection", c.String()), slog.Any("error", err))
+				return false
+			}
+			if !c.writeErrorPacketFromErrorAndLog(err) {
+				return false
+			}
+		} else if !sendFinished {
+			// Send the end packet only sendFinished is false (results were streamed).
+			// In this case the affectedRows and lastInsertID are always 0 since it
+			// was a read operation.
 			if err := c.writeEndResult(false, 0, 0, handler.WarningCount(c)); err != nil {
 				log.Error(fmt.Sprintf("Error writing result to %s: %v", c, err))
 				return false
@@ -1488,19 +1562,26 @@ func (c *Conn) execQueryMulti(query string, handler Handler) execResult {
 	needsEndPacket := false
 	callbackCalled := false
 	res := execSuccess
+	previousStatusFlags := c.StatusFlags
+	c.hasPendingMultiResultStatusFlags = false
+	defer func() {
+		c.StatusFlags &^= ServerQueryWasSlow
+	}()
 
 	err := handler.ComQueryMulti(c, query, func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error {
+		currentStatusFlags := c.StatusFlags
 		callbackCalled = true
-		flag := c.StatusFlags
-		if more {
-			flag |= ServerMoreResultsExists
-		}
 
 		// firstPacket tells us that this is the start of a new query result.
 		// If we haven't sent a last packet yet, we should send the end result packet.
 		if firstPacket && needsEndPacket {
-			if err := c.writeEndResult(true, 0, 0, handler.WarningCount(c)); err != nil {
-				log.Error(fmt.Sprintf("Error writing result to %s: %v", c, err))
+			if flags, ok := c.consumePendingMultiResultStatusFlags(); ok {
+				if err := c.writeEndResultWithFlags(flags, true, 0, 0, handler.WarningCount(c)); err != nil {
+					log.Error("Error writing result", slog.String("connection", c.String()), slog.Any("error", err))
+					return err
+				}
+			} else if err := c.writeEndResultWithFlags(previousStatusFlags, true, 0, 0, handler.WarningCount(c)); err != nil {
+				log.Error("Error writing result", slog.String("connection", c.String()), slog.Any("error", err))
 				return err
 			}
 		}
@@ -1521,7 +1602,12 @@ func (c *Conn) execQueryMulti(query string, handler Handler) execResult {
 			// So we reset the needsEndPacket variable to signify we haven't sent the last
 			// packet for this query.
 			needsEndPacket = true
+			previousStatusFlags = currentStatusFlags
 			if len(qr.QueryResult.Fields) == 0 {
+				flags := currentStatusFlags
+				if more {
+					flags |= ServerMoreResultsExists
+				}
 				// A successful callback with no fields means that this was a
 				// DML or other write-only operation.
 				//
@@ -1531,7 +1617,7 @@ func (c *Conn) execQueryMulti(query string, handler Handler) execResult {
 				ok := PacketOK{
 					affectedRows:     qr.QueryResult.RowsAffected,
 					lastInsertID:     qr.QueryResult.InsertID,
-					statusFlags:      flag,
+					statusFlags:      flags,
 					warnings:         handler.WarningCount(c),
 					info:             "",
 					sessionStateData: qr.QueryResult.SessionStateChanges,
@@ -1569,10 +1655,17 @@ func (c *Conn) execQueryMulti(query string, handler Handler) execResult {
 	}
 
 	if err != nil {
-		// We can't send an error in the middle of a stream.
-		// All we can do is abort the send, which will cause a 2013.
-		log.Error(fmt.Sprintf("Error in the middle of a stream to %s: %v", c, err))
-		return connErr
+		// An OK packet already terminated the last result; we cannot safely
+		// append an ERR without desynchronizing the protocol for the next
+		// command. Tear down the connection instead.
+		if !needsEndPacket {
+			log.Error("Error after OK-terminated result", slog.String("connection", c.String()), slog.Any("error", err))
+			return connErr
+		}
+		if !c.writeErrorPacketFromErrorAndLog(err) {
+			return connErr
+		}
+		return execErr
 	}
 
 	// If we haven't sent the final packet for the last query, we should send that too.
@@ -1587,6 +1680,17 @@ func (c *Conn) execQueryMulti(query string, handler Handler) execResult {
 }
 
 var errEmptyStatement = sqlerror.NewSQLError(sqlerror.EREmptyQuery, sqlerror.SSClientError, "Query was empty")
+
+// allocateQueryIngressBytes splits COM_QUERY ingress bytes across statements by
+// SQL text length. COM_QUERY ingress is measured once for the whole command
+// packet, but query log stats are emitted per statement.
+func allocateQueryIngressBytes(total uint64, queries []string) []uint64 {
+	weights := make([]int, len(queries))
+	for i, query := range queries {
+		weights[i] = len(query)
+	}
+	return ingress.SplitBytesByWeight(total, weights)
+}
 
 func (c *Conn) handleComQuery(handler Handler, data []byte) (kontinue bool) {
 	c.startWriterBuffering()
@@ -1617,7 +1721,24 @@ func (c *Conn) handleComQuery(handler Handler, data []byte) (kontinue bool) {
 		return c.writeErrorPacketFromErrorAndLog(errEmptyStatement)
 	}
 
+	if len(queries) == 1 {
+		// handleNextCommand already recorded the whole command's ingress bytes.
+		res := c.execQuery(queries[0], handler, false)
+		if res != execSuccess {
+			return res != connErr
+		}
+		timings.Record(queryTimingKey, queryStart)
+		return true
+	}
+
+	commandIngressBytes := c.currentCommandIngressBytes
+	queryIngressBytes := allocateQueryIngressBytes(commandIngressBytes, queries)
+	defer func() {
+		c.currentCommandIngressBytes = commandIngressBytes
+	}()
+
 	for index, sql := range queries {
+		c.currentCommandIngressBytes = queryIngressBytes[index]
 		more := false
 		if index != len(queries)-1 {
 			more = true
@@ -1636,6 +1757,9 @@ func (c *Conn) execQuery(query string, handler Handler, more bool) execResult {
 	callbackCalled := false
 	// sendFinished is set if the response should just be an OK packet.
 	sendFinished := false
+	defer func() {
+		c.StatusFlags &^= ServerQueryWasSlow
+	}()
 
 	err := handler.ComQuery(c, query, func(qr *sqltypes.Result) error {
 		flag := c.StatusFlags
@@ -1689,10 +1813,17 @@ func (c *Conn) execQuery(query string, handler Handler, more bool) execResult {
 		return execErr
 	}
 	if err != nil {
-		// We can't send an error in the middle of a stream.
-		// All we can do is abort the send, which will cause a 2013.
-		log.Error(fmt.Sprintf("Error in the middle of a stream to %s: %v", c, err))
-		return connErr
+		// An OK packet already terminated the result; we cannot safely
+		// append an ERR without desynchronizing the protocol for the
+		// next command. Tear down the connection instead.
+		if sendFinished {
+			log.Error("Error after OK-terminated result", slog.String("connection", c.String()), slog.Any("error", err))
+			return connErr
+		}
+		if !c.writeErrorPacketFromErrorAndLog(err) {
+			return connErr
+		}
+		return execErr
 	}
 
 	// Send the end packet only sendFinished is false (results were streamed).
@@ -1913,6 +2044,24 @@ func (c *Conn) IsClientUnixSocket() bool {
 // GetRawConn returns the raw net.Conn for nefarious purposes.
 func (c *Conn) GetRawConn() net.Conn {
 	return c.conn
+}
+
+// ResetBytesRead resets the bytes read counter to zero.
+func (c *Conn) ResetBytesRead() {
+	c.bytesRead = 0
+}
+
+// GetAndResetBytesRead returns the current bytes read count and resets it to zero.
+func (c *Conn) GetAndResetBytesRead() uint64 {
+	bytesRead := c.bytesRead
+	c.bytesRead = 0
+	return bytesRead
+}
+
+// IngressBytes returns the number of bytes read for the command currently
+// being handled.
+func (c *Conn) IngressBytes() uint64 {
+	return c.currentCommandIngressBytes
 }
 
 // CancelCtx aborts an existing running query

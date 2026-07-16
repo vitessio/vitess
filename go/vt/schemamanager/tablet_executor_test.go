@@ -254,10 +254,10 @@ func TestIsOnlineSchemaDDL(t *testing.T) {
 	for _, ts := range tt {
 		e := &TabletExecutor{}
 		err := e.SetDDLStrategy(ts.ddlStrategy)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		stmt, err := parser.Parse(ts.query)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		ddlStmt, ok := stmt.(sqlparser.DDLStatement)
 		assert.True(t, ok)
@@ -385,7 +385,7 @@ func TestAllSQLsAreCreateQueries(t *testing.T) {
 	for _, tcase := range tcases {
 		t.Run(tcase.name, func(t *testing.T) {
 			result, err := allSQLsAreCreateQueries(tcase.sqls, sqlparser.NewTestParser())
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tcase.expect, result)
 		})
 	}
@@ -420,7 +420,7 @@ func TestApplyAllowZeroInDate(t *testing.T) {
 	for _, tcase := range tcases {
 		t.Run(tcase.sql, func(t *testing.T) {
 			result, err := applyAllowZeroInDate(tcase.sql, sqlparser.NewTestParser())
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tcase.expect, result)
 		})
 	}

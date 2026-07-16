@@ -148,16 +148,16 @@ func TestStringMapWithMultiLabels(t *testing.T) {
 	m := c.StringMapFunc()
 	require.Len(t, m, 2)
 	require.Contains(t, m, "c1a.c1b")
-	require.Equal(t, m["c1a.c1b"], "1")
+	require.Equal(t, "1", m["c1a.c1b"])
 	require.Contains(t, m, "c2a.c2b")
-	require.Equal(t, m["c2a.c2b"], "1")
+	require.Equal(t, "1", m["c2a.c2b"])
 
 	keyLabels := c.KeyLabels()
 	require.Len(t, keyLabels, 2)
-	require.Equal(t, keyLabels[0], "aaa")
-	require.Equal(t, keyLabels[1], "bbb")
+	require.Equal(t, "aaa", keyLabels[0])
+	require.Equal(t, "bbb", keyLabels[1])
 
-	require.Equal(t, c.ValueLabel(), "ccc")
+	require.Equal(t, "ccc", c.ValueLabel())
 }
 
 func TestSafeJoinLabels(t *testing.T) {

@@ -68,6 +68,7 @@ func TestQuerylogzHandlerFormatting(t *testing.T) {
 		regexp.QuoteMeta("<td>select name,\u200b &#39;inject &lt;script&gt;alert()\u200b;&lt;/script&gt;&#39; from test_table limit 1000</td>"),
 		`<td>1</td>`,
 		`<td>1000</td>`,
+		`<td>false</td>`,
 		`<td></td>`,
 		`</tr>`,
 	}
@@ -98,6 +99,7 @@ func TestQuerylogzHandlerFormatting(t *testing.T) {
 		regexp.QuoteMeta("<td>select name,\u200b &#39;inject &lt;script&gt;alert()\u200b;&lt;/script&gt;&#39; from test_table limit 1000</td>"),
 		`<td>1</td>`,
 		`<td>1000</td>`,
+		`<td>false</td>`,
 		`<td></td>`,
 		`</tr>`,
 	}
@@ -111,6 +113,7 @@ func TestQuerylogzHandlerFormatting(t *testing.T) {
 	checkQuerylogzHasStats(t, mediumQueryPattern, logStats, body)
 
 	// slow query
+	logStats.SlowQuery = true
 	slowQueryPattern := []string{
 		`<tr class="high">`,
 		`<td>Execute</td>`,
@@ -128,6 +131,7 @@ func TestQuerylogzHandlerFormatting(t *testing.T) {
 		regexp.QuoteMeta("<td>select name,\u200b &#39;inject &lt;script&gt;alert()\u200b;&lt;/script&gt;&#39; from test_table limit 1000</td>"),
 		`<td>1</td>`,
 		`<td>1000</td>`,
+		`<td>true</td>`,
 		`<td></td>`,
 		`</tr>`,
 	}

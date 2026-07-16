@@ -147,7 +147,7 @@ func FindPositionsOfAllCandidates(
 	for alias, primaryStatus := range primaryStatusMap {
 		executedPosition, err := replication.DecodePosition(primaryStatus.Position)
 		if err != nil {
-			return nil, false, vterrors.Wrapf(err, "could not decode a primary status executed position for tablet %v: %v", alias, err)
+			return nil, false, vterrors.Wrapf(err, "could not decode a primary status executed position for tablet %v", alias)
 		}
 
 		positionMap[alias] = &RelayLogPositions{Combined: executedPosition}
@@ -291,7 +291,7 @@ func stopReplicationAndBuildStatusMaps(
 		res        = &replicationSnapshot{
 			statusMap:          map[string]*replicationdatapb.StopReplicationStatus{},
 			primaryStatusMap:   map[string]*replicationdatapb.PrimaryStatus{},
-			reachableTablets:   []*topodatapb.Tablet{},
+			reachableTablets:   make([]*topodatapb.Tablet, 0, len(tabletMap)),
 			tabletsBackupState: map[string]bool{},
 		}
 	)
@@ -323,10 +323,9 @@ func stopReplicationAndBuildStatusMaps(
 
 				primaryStatus, err = tmc.DemotePrimary(groupCtx, tabletInfo.Tablet, true /* force */)
 				if err != nil {
-					msg := "replica %v thinks it's primary but we failed to demote it: %v"
-					err = vterrors.Wrapf(err, msg, alias, err)
+					err = vterrors.Wrapf(err, "replica %v thinks it's primary but we failed to demote it", alias)
 
-					logger.Warningf(msg, alias, err)
+					logger.Warningf("replica %v thinks it's primary but we failed to demote it: %v", alias, err)
 					return
 				}
 
@@ -336,7 +335,7 @@ func stopReplicationAndBuildStatusMaps(
 				m.Unlock()
 			} else {
 				logger.Warningf("failed to get replication status from %v: %v", alias, err)
-				err = vterrors.Wrapf(err, "error when getting replication status for alias %v: %v", alias, err)
+				err = vterrors.Wrapf(err, "error when getting replication status for alias %v", alias)
 			}
 		} else {
 			isTakingBackup := false
@@ -429,7 +428,7 @@ func stopReplicationAndBuildStatusMaps(
 	// check that the tablets we were able to reach are sufficient for us to guarantee that no new write will be accepted by any tablet
 	revokeSuccessful := haveRevoked(durability, res.reachableTablets, allTablets)
 	if !revokeSuccessful {
-		return res, vterrors.Wrapf(errRecorder.Error(), "could not reach sufficient tablets to guarantee safety: %v", errRecorder.Error())
+		return res, vterrors.Wrapf(errRecorder.Error(), "could not reach sufficient tablets to guarantee safety")
 	}
 
 	return res, nil

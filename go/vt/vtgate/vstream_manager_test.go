@@ -623,7 +623,7 @@ func TestVStreamChunksOverSizeThreshold(t *testing.T) {
 
 	require.Error(t, err)
 	require.ErrorIs(t, vterrors.UnwrapAll(err), context.Canceled)
-	require.Equal(t, 2, len(completedTxs), "Should receive both transactions")
+	require.Len(t, completedTxs, 2, "Should receive both transactions")
 
 	var rowCounts []int
 	for _, tx := range completedTxs {
@@ -693,7 +693,7 @@ func TestVStreamMulti(t *testing.T) {
 	require.Error(t, err)
 	require.ErrorIs(t, vterrors.UnwrapAll(err), context.Canceled)
 
-	require.Equal(t, 4, len(receivedEvents))
+	require.Len(t, receivedEvents, 4)
 
 	var got *binlogdatapb.VGtid
 	for _, ev := range receivedEvents {
@@ -779,7 +779,7 @@ func TestVStreamsMetrics(t *testing.T) {
 
 	require.Error(t, err)
 	require.ErrorIs(t, vterrors.UnwrapAll(err), context.Canceled)
-	require.Equal(t, 2, len(receivedResponses))
+	require.Len(t, receivedResponses, 2)
 
 	counts := vsm.vstreamsCount.Counts()
 	require.Contains(t, counts, expectedLabels1, "Should have count for shard -20")
@@ -1064,7 +1064,7 @@ func TestVStreamRetriableErrors(t *testing.T) {
 			err := vsm.VStream(vstreamCtx, topodatapb.TabletType_REPLICA, vgtid, nil, &vtgatepb.VStreamFlags{Cells: strings.Join(cells, ",")}, func(events []*binlogdatapb.VEvent) error {
 				defer vstreamCancel()
 
-				require.Equal(t, 1, len(events))
+				require.Len(t, events, 1)
 				require.Equal(t, commit, events)
 
 				return nil
@@ -1147,7 +1147,7 @@ func TestVStreamShouldNotSendSourceHeartbeats(t *testing.T) {
 	require.Error(t, err)
 	require.ErrorIs(t, vterrors.UnwrapAll(err), context.Canceled)
 
-	require.Equal(t, 1, len(receivedResponses))
+	require.Len(t, receivedResponses, 1)
 	require.EqualExportedValues(t, want, receivedResponses[0])
 }
 
@@ -1251,7 +1251,7 @@ func TestVStreamJournalOneToMany(t *testing.T) {
 	require.Error(t, err)
 	require.ErrorIs(t, vterrors.UnwrapAll(err), context.Canceled)
 
-	require.Equal(t, 3, len(receivedEvents))
+	require.Len(t, receivedEvents, 3)
 
 	// First event should be the first transaction from the first shard.
 	require.EqualExportedValues(t, want1, receivedEvents[0])
@@ -1384,7 +1384,7 @@ func TestVStreamJournalManyToOne(t *testing.T) {
 	require.Error(t, err)
 	require.ErrorIs(t, vterrors.UnwrapAll(err), context.Canceled)
 
-	require.Equal(t, 3, len(receivedResponses))
+	require.Len(t, receivedResponses, 3)
 
 	require.EqualExportedValues(t, &binlogdatapb.VEvent{
 		Type: binlogdatapb.VEventType_VGTID,
@@ -1402,6 +1402,81 @@ func TestVStreamJournalManyToOne(t *testing.T) {
 	}, receivedResponses[1].Events[0])
 
 	require.EqualExportedValues(t, want1, receivedResponses[2])
+}
+
+func TestVStreamStopOnReshardEndsWhenParticipantsConverge(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx := t.Context()
+
+		ks := "TestVStream"
+		cell := "aa"
+		_ = createSandbox(ks)
+		hc := discovery.NewFakeHealthCheck(nil)
+		st := getSandboxTopo(ctx, cell, ks, []string{"-80", "80-"})
+		vsm := newTestVStreamManager(ctx, hc, st, cell)
+		sbc0 := hc.AddTestTablet(cell, "1.1.1.1", 1001, ks, "-80", topodatapb.TabletType_PRIMARY, true, 1, nil)
+		addTabletToSandboxTopo(t, ctx, st, ks, "-80", sbc0.Tablet())
+		sbc1 := hc.AddTestTablet(cell, "1.1.1.1", 1002, ks, "80-", topodatapb.TabletType_PRIMARY, true, 1, nil)
+		addTabletToSandboxTopo(t, ctx, st, ks, "80-", sbc1.Tablet())
+
+		journal := &binlogdatapb.Journal{
+			Id:            1,
+			MigrationType: binlogdatapb.MigrationType_SHARDS,
+			ShardGtids: []*binlogdatapb.ShardGtid{{
+				Keyspace: ks,
+				Shard:    "-40",
+				Gtid:     "pos40",
+			}, {
+				Keyspace: ks,
+				Shard:    "40-80",
+				Gtid:     "pos4080",
+			}, {
+				Keyspace: ks,
+				Shard:    "80-",
+				Gtid:     "pos80",
+			}},
+			Participants: []*binlogdatapb.KeyspaceShard{{
+				Keyspace: ks,
+				Shard:    "-80",
+			}, {
+				Keyspace: ks,
+				Shard:    "80-",
+			}},
+		}
+		journalEvents := []*binlogdatapb.VEvent{
+			{Type: binlogdatapb.VEventType_BEGIN},
+			{Type: binlogdatapb.VEventType_JOURNAL, Journal: journal},
+			{Type: binlogdatapb.VEventType_GTID, Gtid: "gtid"},
+			{Type: binlogdatapb.VEventType_COMMIT},
+		}
+		sbc0.AddVStreamEvents(journalEvents, nil)
+		sbc1.AddVStreamEvents(journalEvents, nil)
+
+		vgtid := &binlogdatapb.VGtid{
+			ShardGtids: []*binlogdatapb.ShardGtid{{
+				Keyspace: ks,
+				Shard:    "-80",
+				Gtid:     "pos80",
+			}, {
+				Keyspace: ks,
+				Shard:    "80-",
+				Gtid:     "pos80",
+			}},
+		}
+
+		var journalCount int
+		err := vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{StopOnReshard: true}, func(events []*binlogdatapb.VEvent) error {
+			for _, ev := range events {
+				if ev.Type == binlogdatapb.VEventType_JOURNAL {
+					journalCount++
+				}
+			}
+			return nil
+		})
+
+		require.NoError(t, err)
+		require.Equal(t, 2, journalCount)
+	})
 }
 
 func TestVStreamJournalNoMatch(t *testing.T) {
@@ -1546,7 +1621,7 @@ func TestVStreamJournalNoMatch(t *testing.T) {
 	require.Error(t, err)
 	require.ErrorIs(t, vterrors.UnwrapAll(err), context.Canceled)
 
-	require.Equal(t, 5, len(receivedResponses))
+	require.Len(t, receivedResponses, 5)
 
 	require.EqualExportedValues(t, want1, receivedResponses[0])
 	require.EqualExportedValues(t, wantjn1, receivedResponses[1])
@@ -1780,7 +1855,7 @@ func TestResolveVStreamParams(t *testing.T) {
 	for _, tcase := range testcases {
 		vgtid, filter, flags, err := vsm.resolveParams(t.Context(), topodatapb.TabletType_REPLICA, tcase.input, nil, nil)
 		if tcase.err != "" {
-			assert.ErrorContainsf(t, err, tcase.err, "resolve(%v) err: %v, must contain %v", tcase.input, err, tcase.err)
+			require.ErrorContainsf(t, err, tcase.err, "resolve(%v) err: %v, must contain %v", tcase.input, err, tcase.err)
 			continue
 		}
 		require.NoError(t, err, tcase.input)
@@ -1898,7 +1973,7 @@ func TestVStreamIdleHeartbeat(t *testing.T) {
 			require.Error(t, err)
 			require.ErrorIs(t, vterrors.UnwrapAll(err), context.DeadlineExceeded)
 
-			require.Equalf(t, heartbeatCount, tcase.want, "got %d, want %d", heartbeatCount, tcase.want)
+			require.Equalf(t, tcase.want, heartbeatCount, "got %d, want %d", heartbeatCount, tcase.want)
 		})
 	}
 }
@@ -2106,7 +2181,7 @@ func TestVStreamMaxStreamAgeBlockedSend(t *testing.T) {
 			slog.Any("code", vterrors.Code(err)),
 		)
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "vstream exceeded maximum age")
+		require.ErrorContains(t, err, "vstream exceeded maximum age")
 		assert.Equal(t, vtrpcpb.Code_UNAVAILABLE, vterrors.Code(err))
 		assert.Falsef(t, callbackInFlight.Load(),
 			"callback is still in-flight after VStream() returned; lifecycle violation")
@@ -2501,7 +2576,7 @@ func TestVStreamManagerHealthCheckResponseHandling(t *testing.T) {
 				source.SetStreamHealthResponse(tc.hcRes)
 			}
 
-			vstreamCtx, vstreamCancel := context.WithTimeout(ctx, 5*time.Second)
+			vstreamCtx, vstreamCancel := context.WithTimeout(ctx, 1*time.Second)
 			defer vstreamCancel()
 
 			// SandboxConn's VStream implementation always waits for the context to timeout.
@@ -2511,7 +2586,12 @@ func TestVStreamManagerHealthCheckResponseHandling(t *testing.T) {
 
 			if tc.wantErr != "" {
 				require.Error(t, err)
-				require.Contains(t, logger.String(), tc.wantErr)
+				// The message is logged by the health-check handling goroutine,
+				// which may not have run yet when VStream returns on context
+				// expiry, so poll for it.
+				require.EventuallyWithT(t, func(c *assert.CollectT) {
+					assert.Contains(c, logger.String(), tc.wantErr)
+				}, 30*time.Second, 10*time.Millisecond)
 			} else {
 				// Otherwise we simply expect the context to timeout
 				require.Error(t, err)

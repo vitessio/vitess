@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestServerVersionAtLeast(t *testing.T) {
@@ -111,7 +112,7 @@ func TestServerVersionAtLeast(t *testing.T) {
 		if tc.expectError {
 			assert.Error(t, err)
 		} else {
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tc.expect, result)
 		}
 	}
@@ -288,7 +289,7 @@ func TestMySQLVersionCapableOf(t *testing.T) {
 				return
 			}
 			isCapable, err := capableOf(tc.capability)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tc.isCapable, isCapable)
 		})
 	}

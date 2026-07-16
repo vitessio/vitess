@@ -60,7 +60,7 @@ func testMoveTablesMirrorTraffic(t *testing.T, flavor workflowFlavor) {
 	mt.Create()
 	confirmNoMirrorRules(t)
 
-	waitForWorkflowState(t, vc, defaultKsWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+	require.NoError(t, waitForWorkflowState(vc, defaultKsWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String()))
 
 	// Mirror rules can be created after a MoveTables workflow is created.
 	mt.MirrorTraffic()
@@ -156,7 +156,7 @@ func TestMoveTablesMirrorTraffic_AllowReads(t *testing.T) {
 	mt := newMoveTables(vc, mtwf, workflowFlavorVtctld)
 
 	mt.Create()
-	waitForWorkflowState(t, vc, defaultKsWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+	require.NoError(t, waitForWorkflowState(vc, defaultKsWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String()))
 
 	// Before mirroring: verify tables are in the deny list on target
 	validateTableInDenyList(t, vc, defaultTargetKs+":-80", "customer", true)
@@ -175,7 +175,7 @@ func TestMoveTablesMirrorTraffic_AllowReads(t *testing.T) {
 	// Test 1: SELECT queries should succeed on denied tables when allow_reads=true
 	qr, err := vtgateConn.ExecuteFetch("SELECT count(*) FROM customer", 1, false)
 	require.NoError(t, err, "SELECT should succeed on denied table when allow_reads=true")
-	require.NotZero(t, len(qr.Rows))
+	require.NotEmpty(t, qr.Rows)
 
 	// Test 2: INSERT should be blocked on denied tables
 	_, err = vtgateConn.ExecuteFetch("INSERT INTO customer(cid, name) VALUES (999, 'test')", 1, false)

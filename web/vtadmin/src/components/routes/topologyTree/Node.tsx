@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { useTopologyPath } from '../../../hooks/api';
 import { buildChildNodes, TopologyNode } from './TopologyTree';
@@ -49,9 +49,13 @@ export const Node = ({ topologyNode, clusterID }: NodeParams) => {
     const nodeTitle = `${isOpen ? '▼' : '►'} ${node.name}`;
     return (
         <div className="border-l border-x-zinc-300 pl-2 mt-4">
-            <div className="w-fit cursor-pointer font-bold text-blue-500" onClick={() => setIsOpen(!isOpen)}>
+            <button
+                className="w-fit cursor-pointer border-0 bg-transparent p-0 text-left font-bold text-blue-500"
+                type="button"
+                onClick={() => setIsOpen(!isOpen)}
+            >
                 {nodeTitle}
-            </div>
+            </button>
 
             {isOpen && (
                 <div className="w-fit ml-4">

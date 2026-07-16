@@ -104,12 +104,12 @@ export const Tablet = () => {
 
             <ContentContainer>
                 <TabContainer>
-                    <Tab text="QPS" to="qps" />
-                    <Tab text="Full Status" to="full-status" />
-                    <Tab text="JSON" to="json" />
-                    <Tab text="JSON Tree" to="json_tree" />
+                    <Tab text="QPS" to={`/tablet/${clusterID}/${alias}/qps`} />
+                    <Tab text="Full Status" to={`/tablet/${clusterID}/${alias}/full-status`} />
+                    <Tab text="JSON" to={`/tablet/${clusterID}/${alias}/json`} />
+                    <Tab text="JSON Tree" to={`/tablet/${clusterID}/${alias}/json_tree`} />
                     <ReadOnlyGate>
-                        <Tab text="Advanced" to="advanced" />
+                        <Tab text="Advanced" to={`/tablet/${clusterID}/${alias}/advanced`} />
                     </ReadOnlyGate>
                 </TabContainer>
 

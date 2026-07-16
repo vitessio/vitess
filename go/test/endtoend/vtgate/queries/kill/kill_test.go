@@ -188,13 +188,13 @@ func TestKillStmtOnHugeData(t *testing.T) {
 	t.Run("olap - kill conn", func(t *testing.T) {
 		testHugeData(t, "olap", execFunc, func(conn *mysql.Conn, killConn *mysql.Conn) {
 			utils.ExecAllowError(t, killConn, fmt.Sprintf("kill query %d", conn.ConnectionID))
-		}, "context canceled (errno 1317) (sqlstate 70100)", "EOF (errno 2013) (sqlstate HY000)")
+		}, "context canceled (errno 1317) (sqlstate 70100)")
 	})
 
 	t.Run("olap - kill query", func(t *testing.T) {
 		testHugeData(t, "olap", execFunc, func(conn *mysql.Conn, killConn *mysql.Conn) {
 			utils.ExecAllowError(t, killConn, fmt.Sprintf("kill query %d", conn.ConnectionID))
-		}, "context canceled (errno 1317) (sqlstate 70100)", "EOF (errno 2013) (sqlstate HY000)")
+		}, "context canceled (errno 1317) (sqlstate 70100)")
 	})
 }
 

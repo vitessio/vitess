@@ -304,7 +304,7 @@ func TestDialSecureDialOptionError(t *testing.T) {
 	proxy, err := New(t.Context(), cfg)
 
 	// Verify that the error comes from TLS configuration
-	assert.Error(t, err, "New should fail with invalid TLS files")
+	require.Error(t, err, "New should fail with invalid TLS files")
 	assert.Nil(t, proxy, "proxy should be nil when New fails")
 
 	// The error should be from certificate parsing

@@ -492,7 +492,7 @@ func visitSelectExprs(node *sqlparser.SelectExprs, cursor *sqlparser.Cursor, vis
 			},
 			/*restore*/ func() {
 				if removed {
-					front := make([]sqlparser.SelectExpr, idx)
+					front := make([]sqlparser.SelectExpr, idx, idx+1)
 					copy(front, node.Exprs[:idx])
 					back := make([]sqlparser.SelectExpr, len(node.Exprs)-idx)
 					copy(back, node.Exprs[idx:])
@@ -586,7 +586,7 @@ func visitOrderBy(node sqlparser.OrderBy, cursor *sqlparser.Cursor, visit func(e
 			},
 			/*restore*/ func() {
 				if removed {
-					front := make(sqlparser.OrderBy, idx)
+					front := make(sqlparser.OrderBy, idx, idx+1)
 					copy(front, node[:idx])
 					back := make(sqlparser.OrderBy, len(node)-idx)
 					copy(back, node[idx:])
@@ -683,7 +683,7 @@ func visitExpressions(
 			},
 			/*restore*/ func() {
 				if removed {
-					front := make([]sqlparser.Expr, idx)
+					front := make([]sqlparser.Expr, idx, idx+1)
 					copy(front, exprs[:idx])
 					back := make([]sqlparser.Expr, len(exprs)-idx)
 					copy(back, exprs[idx:])

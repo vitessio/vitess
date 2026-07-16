@@ -274,7 +274,7 @@ func TestMaxResultSize(t *testing.T) {
 	client := framework.NewClient()
 	query := "select * from vitess_test"
 	_, err := client.Execute(query, nil)
-	assert.Error(t, err)
+	require.Error(t, err)
 	want := "Row count exceeded"
 	assert.Contains(t, err.Error(), want, "Error: %v, must start with %s", err, want)
 	verifyIntValue(t, framework.DebugVars(), "MaxResultSize", 2)

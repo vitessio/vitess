@@ -29,6 +29,7 @@ import (
 	clientv3 "go.etcd.io/etcd/client/v3"
 
 	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/testfiles"
 	"vitess.io/vitess/go/vt/topo"
 )
 
@@ -41,7 +42,7 @@ import (
 // behavior accidentally/uinintentionally.
 func TestWatchTopoVersion(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
-	etcdServerAddr, _ := startEtcd(t, 0)
+	etcdServerAddr, _ := startEtcd(t, testfiles.GoVtTopoEtcd2topoPort, testfiles.GoVtTopoEtcd2topoPeerPort)
 	root := "/vitess/test"
 	name := "testkey"
 	path := path.Join(root, name)

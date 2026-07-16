@@ -31,8 +31,6 @@ import (
 	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/protoutil"
@@ -796,7 +794,8 @@ func (s *Server) LookupVindexInternalize(ctx context.Context, req *vtctldatapb.L
 		if err != nil {
 			return err
 		}
-		query, err := sqlparser.ParseAndBind(SqlUnfreezeWorkflow,
+		query, err := sqlparser.ParseAndBind(
+			SqlUnfreezeWorkflow,
 			sqltypes.StringBindVariable(tabletInfo.DbName()),
 			sqltypes.StringBindVariable(req.Name),
 		)
@@ -3798,12 +3797,6 @@ func (s *Server) validateShardsHaveVReplicationPermissions(ctx context.Context, 
 			req := &tabletmanagerdatapb.ValidateVReplicationPermissionsRequest{}
 			res, err := s.tmc.ValidateVReplicationPermissions(validateCtx, tablet.Tablet, req)
 			if err != nil {
-				// This older tablet handling can be removed in v22 or later.
-				if st, ok := status.FromError(err); ok && st.Code() == codes.Unimplemented {
-					// This is a pre v21 tablet, so don't return an error since the
-					// permissions not being there should be very rare.
-					return nil
-				}
 				return vterrors.Wrapf(err, "failed to validate required vreplication metadata permissions on tablet %s",
 					topoproto.TabletAliasString(tablet.Alias))
 			}

@@ -357,7 +357,7 @@ func TestTxEngineBegin(t *testing.T) {
 
 		te.transition(Transitioning)
 		_, _, err = exec()
-		assert.EqualError(t, err, "tx engine can't accept new connections in state Transitioning")
+		require.EqualError(t, err, "tx engine can't accept new connections in state Transitioning")
 
 		te.transition(NotServing)
 		_, _, err = exec()
@@ -905,23 +905,23 @@ func TestTxEngineFailReserve(t *testing.T) {
 
 	options := &querypb.ExecuteOptions{}
 	_, err := te.Reserve(ctx, options, 0, nil)
-	assert.EqualError(t, err, "tx engine can't accept new connections in state NotServing")
+	require.EqualError(t, err, "tx engine can't accept new connections in state NotServing")
 
 	_, _, err = te.ReserveBegin(ctx, options, nil)
-	assert.EqualError(t, err, "tx engine can't accept new connections in state NotServing")
+	require.EqualError(t, err, "tx engine can't accept new connections in state NotServing")
 
 	te.AcceptReadOnly()
 
 	db.AddRejectedQuery("dummy_query", errors.New("failed executing dummy_query"))
 	_, err = te.Reserve(ctx, options, 0, []string{"dummy_query"})
-	assert.EqualError(t, err, "unknown error: failed executing dummy_query (errno 1105) (sqlstate HY000) during query: dummy_query")
+	require.EqualError(t, err, "unknown error: failed executing dummy_query (errno 1105) (sqlstate HY000) during query: dummy_query")
 
 	_, _, err = te.ReserveBegin(ctx, options, []string{"dummy_query"})
-	assert.EqualError(t, err, "unknown error: failed executing dummy_query (errno 1105) (sqlstate HY000) during query: dummy_query")
+	require.EqualError(t, err, "unknown error: failed executing dummy_query (errno 1105) (sqlstate HY000) during query: dummy_query")
 
 	nonExistingID := int64(42)
 	_, err = te.Reserve(ctx, options, nonExistingID, nil)
-	assert.EqualError(t, err, "transaction 42: not found (potential transaction timeout)")
+	require.EqualError(t, err, "transaction 42: not found (potential transaction timeout)")
 
 	txID, _, _, err := te.Begin(ctx, 0, nil, options)
 	require.NoError(t, err)
@@ -930,7 +930,7 @@ func TestTxEngineFailReserve(t *testing.T) {
 	conn.Unlock() // but we keep holding on to it... sneaky....
 
 	_, err = te.Reserve(ctx, options, txID, []string{"dummy_query"})
-	assert.EqualError(t, err, "unknown error: failed executing dummy_query (errno 1105) (sqlstate HY000) during query: dummy_query")
+	require.EqualError(t, err, "unknown error: failed executing dummy_query (errno 1105) (sqlstate HY000) during query: dummy_query")
 
 	connID, _, err := te.Commit(ctx, txID)
 	require.Error(t, err)
@@ -1170,14 +1170,14 @@ func TestPrepareTx(t *testing.T) {
 			te.AcceptReadWrite()
 			db.ResetQueryLog()
 			failed, err := te.prepareTx(t.Context(), tt.preparedTx)
-			require.EqualValues(t, tt.requireFailure, failed)
+			require.Equal(t, tt.requireFailure, failed)
 			if tt.errWanted != "" {
 				require.ErrorContains(t, err, tt.errWanted)
 				return
 			}
 			require.NoError(t, err)
-			require.EqualValues(t, 1, len(te.preparedPool.conns))
-			require.EqualValues(t, tt.queryLogWanted, db.QueryLog())
+			require.Len(t, te.preparedPool.conns, 1)
+			require.Equal(t, tt.queryLogWanted, db.QueryLog())
 		})
 	}
 }

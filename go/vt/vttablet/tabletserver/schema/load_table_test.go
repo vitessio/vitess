@@ -206,7 +206,7 @@ func TestLoadTableMessage(t *testing.T) {
 
 	// Missing property
 	_, err = newTestLoadTable("USER_TABLE", "vitess_message,vt_ack_wait=30", db)
-	assert.ErrorContains(t, err, "not specified for message table", "newTestLoadTable")
+	require.ErrorContains(t, err, "not specified for message table", "newTestLoadTable")
 
 	mockLoadTableQueries(db)
 	_, err = newTestLoadTable("USER_TABLE", "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30", db)
@@ -229,7 +229,7 @@ func newTestLoadTable(tableType string, comment string, db *fakesqldb.DB) (*Tabl
 	}
 	defer conn.Recycle()
 
-	return LoadTable(conn, "fakesqldb", "test_table", tableType, comment, collations.MySQL8())
+	return LoadTable(conn, "fakesqldb", "test_table", tableType, comment, collations.MySQL8(), false)
 }
 
 func mockLoadTableQueries(db *fakesqldb.DB) {

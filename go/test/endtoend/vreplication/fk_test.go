@@ -100,7 +100,7 @@ func TestFKWorkflow(t *testing.T) {
 	}, testWorkflowFlavor)
 	mt.Create()
 
-	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+	require.NoError(t, waitForWorkflowState(vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String()))
 	targetKs := vc.Cells[cellName].Keyspaces[targetKeyspace]
 	targetTab := targetKs.Shards["0"].Tablets[fmt.Sprintf("%s-%d", cellName, targetTabletId)].Vttablet
 
@@ -123,7 +123,7 @@ func TestFKWorkflow(t *testing.T) {
 	time.Sleep(2 * vttablet.GetDefaultVReplicationConfig().RetryDelay)
 
 	// Verify workflow is still running and hasn't terminated due to errors
-	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+	require.NoError(t, waitForWorkflowState(vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String()))
 
 	// Restart the source database to allow workflow to continue
 	err = sourceTab.DbServer.StartProvideInit(false)
@@ -273,7 +273,8 @@ func (ls *fkLoadSimulator) simulateLoad() {
 
 func (ls *fkLoadSimulator) getNumRowsParent(vtgateConn *mysql.Conn) int {
 	t := ls.t
-	qr := execVtgateQuery(t, vtgateConn, "fksource", "SELECT COUNT(*) FROM parent")
+	qr, err := execVtgateQuery(vtgateConn, "fksource", "SELECT COUNT(*) FROM parent")
+	require.NoError(t, err)
 	require.NotNil(t, qr)
 	numRows, err := strconv.Atoi(qr.Rows[0][0].ToString())
 	require.NoError(t, err)
@@ -347,7 +348,8 @@ func (ls *fkLoadSimulator) exec(query string) *sqltypes.Result {
 	t := ls.t
 	vtgateConn, closeConn := getVTGateConn()
 	defer closeConn()
-	qr := execVtgateQuery(t, vtgateConn, "fksource", query)
+	qr, err := execVtgateQuery(vtgateConn, "fksource", query)
+	require.NoError(t, err)
 	require.NotNil(t, qr)
 	return qr
 }
@@ -370,6 +372,6 @@ func testFKCancel(t *testing.T, vc *VitessCluster) {
 		atomicCopy:     true,
 	}, testWorkflowFlavor)
 	mt.Create()
-	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+	require.NoError(t, waitForWorkflowState(vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String()))
 	mt.Cancel()
 }

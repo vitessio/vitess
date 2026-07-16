@@ -66,18 +66,11 @@ func setupHookDir(t *testing.T) (outputFile string) {
 	return outputFile
 }
 
-func waitForHookOutput(t *testing.T, outputFile string) string {
+func readHookOutput(t *testing.T, outputFile string) string {
 	t.Helper()
-	var content string
-	assert.Eventually(t, func() bool {
-		data, err := os.ReadFile(outputFile)
-		if err != nil {
-			return false
-		}
-		content = string(data)
-		return len(content) > 0
-	}, 5*time.Second, 50*time.Millisecond)
-	return content
+	data, err := os.ReadFile(outputFile)
+	require.NoError(t, err, "hook output file should exist after synchronous execution")
+	return string(data)
 }
 
 func TestInvokeRestoreDoneHook_BackupEngine(t *testing.T) {
@@ -87,7 +80,7 @@ func TestInvokeRestoreDoneHook_BackupEngine(t *testing.T) {
 	startTime := time.Now().Add(-10 * time.Second)
 	tm.invokeRestoreDoneHook(startTime, nil, "xtrabackup")
 
-	content := waitForHookOutput(t, outputFile)
+	content := readHookOutput(t, outputFile)
 
 	assert.Contains(t, content, "TM_RESTORE_DATA_BACKUP_ENGINE=xtrabackup")
 	assert.Contains(t, content, "TM_RESTORE_DATA_START_TS=")
@@ -105,7 +98,7 @@ func TestInvokeRestoreDoneHook_EmptyBackupEngine(t *testing.T) {
 
 	tm.invokeRestoreDoneHook(time.Now(), nil, "")
 
-	content := waitForHookOutput(t, outputFile)
+	content := readHookOutput(t, outputFile)
 
 	assert.NotContains(t, content, "TM_RESTORE_DATA_BACKUP_ENGINE=")
 }
@@ -117,7 +110,7 @@ func TestInvokeRestoreDoneHook_WithError(t *testing.T) {
 	restoreErr := errors.New("restore failed: connection refused")
 	tm.invokeRestoreDoneHook(time.Now(), restoreErr, "builtin")
 
-	content := waitForHookOutput(t, outputFile)
+	content := readHookOutput(t, outputFile)
 
 	assert.Contains(t, content, "TM_RESTORE_DATA_BACKUP_ENGINE=builtin")
 	assert.Contains(t, content, "TM_RESTORE_DATA_ERROR=restore failed: connection refused")
@@ -130,7 +123,7 @@ func TestInvokeRestoreDoneHook_ErrorWithoutBackupEngine(t *testing.T) {
 	restoreErr := errors.New("no backup found")
 	tm.invokeRestoreDoneHook(time.Now(), restoreErr, "")
 
-	content := waitForHookOutput(t, outputFile)
+	content := readHookOutput(t, outputFile)
 
 	assert.Contains(t, content, "TM_RESTORE_DATA_ERROR=no backup found")
 	assert.NotContains(t, content, "TM_RESTORE_DATA_BACKUP_ENGINE=")
@@ -143,7 +136,7 @@ func TestInvokeRestoreDoneHook_Timestamps(t *testing.T) {
 	startTime := time.Date(2024, 1, 15, 10, 30, 0, 0, time.UTC)
 	tm.invokeRestoreDoneHook(startTime, nil, "xtrabackup")
 
-	content := waitForHookOutput(t, outputFile)
+	content := readHookOutput(t, outputFile)
 
 	assert.Contains(t, content, "TM_RESTORE_DATA_START_TS=2024-01-15T10:30:00Z")
 	// Verify the duration is present and contains a non-zero value.

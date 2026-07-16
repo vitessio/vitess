@@ -118,7 +118,7 @@ func TestEvictEntries(t *testing.T) {
 	for _, rm := range removed {
 		require.True(t, strings.HasSuffix(string(rm.key), ":1"))
 	}
-	require.Equal(t, 9, len(removed))
+	require.Len(t, removed, 9)
 	require.Equal(t, 500, tlfu.slru.probation.len)
 	require.Equal(t, 0, tlfu.slru.protected.len)
 
@@ -128,7 +128,7 @@ func TestEvictEntries(t *testing.T) {
 	new.frequency.Store(10)
 	tlfu.Set(new)
 	removed = tlfu.EvictEntries()
-	require.Equal(t, 449, len(removed))
+	require.Len(t, removed, 449)
 	require.Equal(t, 500, tlfu.slru.probation.len)
 	require.Equal(t, 0, tlfu.slru.protected.len)
 
@@ -138,7 +138,7 @@ func TestEvictEntries(t *testing.T) {
 	new.frequency.Store(10)
 	tlfu.Set(new)
 	removed = tlfu.EvictEntries()
-	require.Equal(t, 41, len(removed))
+	require.Len(t, removed, 41)
 	require.Equal(t, 460, tlfu.slru.probation.len)
 	require.Equal(t, 0, tlfu.slru.protected.len)
 
@@ -149,7 +149,7 @@ func TestEvictEntries(t *testing.T) {
 	new.cost.Store(600)
 	tlfu.UpdateCost(new, 140)
 	removed = tlfu.EvictEntries()
-	require.Equal(t, 1, len(removed))
+	require.Len(t, removed, 1)
 	require.Equal(t, 0, tlfu.slru.probation.len)
 	require.Equal(t, 0, tlfu.slru.protected.len)
 }

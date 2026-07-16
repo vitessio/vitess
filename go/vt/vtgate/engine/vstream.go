@@ -75,10 +75,11 @@ func (v *VStream) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVar
 			}
 			switch ev.Type {
 			case binlogdatapb.VEventType_FIELD:
-				lastFields = []*querypb.Field{{
+				lastFields = make([]*querypb.Field, 0, 1+len(ev.FieldEvent.Fields))
+				lastFields = append(lastFields, &querypb.Field{
 					Name: "op",
 					Type: querypb.Type_VARCHAR,
-				}}
+				})
 				lastFields = append(lastFields, ev.FieldEvent.Fields...)
 			case binlogdatapb.VEventType_ROW:
 				result.Fields = lastFields

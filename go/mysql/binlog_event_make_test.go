@@ -378,7 +378,7 @@ func TestRotateRotateEvent(t *testing.T) {
 	require.NotNil(t, event)
 	assert.True(t, event.IsRotate())
 	nextFile, pos, err := event.NextLogFile(f)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, 456, int(pos))
 	assert.Equal(t, "mysql-bin.000123", nextFile)
 }
@@ -391,7 +391,7 @@ func TestFakeRotateEvent(t *testing.T) {
 	require.NotNil(t, event)
 	assert.True(t, event.IsRotate())
 	nextFile, pos, err := event.NextLogFile(f)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, 4, int(pos))
 	assert.Equal(t, "mysql-bin.000123", nextFile)
 }

@@ -191,6 +191,7 @@ var keywords = []keyword{
 	{"constraint_catalog", CONSTRAINT_CATALOG},
 	{"constraint_name", CONSTRAINT_NAME},
 	{"constraint_schema", CONSTRAINT_SCHEMA},
+	{"context", CONTEXT},
 	{"continue", CONTINUE},
 	{"convert", CONVERT},
 	{"copy", COPY},

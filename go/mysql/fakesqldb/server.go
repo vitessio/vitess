@@ -848,14 +848,32 @@ func (db *DB) MockQueriesForTable(table string, result *sqltypes.Result) {
 	for _, field := range result.Fields {
 		cols = append(cols, field.Name)
 	}
-	db.AddQueryPattern(fmt.Sprintf(mysql.GetColumnNamesQueryPatternForTable, table), sqltypes.MakeTestResult(
+	db.AddQueryPattern(fmt.Sprintf(GetColumnNamesQueryPatternForTable, table), sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"column_name",
 			"varchar",
 		),
 		cols...,
 	))
+
+	// mock the query that fetches the table's ENUM/SET column type definitions,
+	// returning no rows by default
+	db.AddQueryPattern(fmt.Sprintf(enumSetColumnTypesQueryPattern, table), &sqltypes.Result{})
 }
+
+const (
+	// GetColumnNamesQueryPatternForTable matches the information_schema query
+	// that fetches a table's column names (see mysqlctl.GetColumnNamesQuery);
+	// %s is the table name. It is exported for tests that mock the query with
+	// a result other than MockQueriesForTable's default.
+	GetColumnNamesQueryPatternForTable = `SELECT COLUMN_NAME.*TABLE_NAME.*%s.*`
+
+	// enumSetColumnTypesQueryPattern matches the query that the tabletserver's
+	// schema engine issues when loading a table to fetch the type definitions of
+	// its ENUM/SET columns (see enumSetColumnTypesQuery in
+	// go/vt/vttablet/tabletserver/schema); %s is the table name.
+	enumSetColumnTypesQueryPattern = `select isc\.column_name, isc\.column_type from information_schema\.columns.*table_name='%s' and isc\.data_type in \('enum', 'set'\)`
+)
 
 // GetRejectedQueryResult checks if we should reject the query.
 func (db *DB) GetRejectedQueryResult(key string) error {

@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 import cx from 'classnames';
-import * as React from 'react';
 import { Link, LinkProps } from 'react-router-dom';
 
 import style from './PaginationNav.module.scss';

@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"slices"
 	"sync"
 	"time"
 
@@ -305,7 +306,7 @@ func (rs *rowStreamer) buildSelect(st *binlogdatapb.MinimalTable) (string, error
 		// (col1 = 1 and col2 > 2) or (col1 > 1).
 		// A tuple inequality like (col1,col2) > (1,2) ends up
 		// being a full table scan for MySQL.
-		for lastcol := len(rs.pkColumns) - 1; lastcol >= 0; lastcol-- {
+		for lastcol, pkCol := range slices.Backward(rs.pkColumns) {
 			buf.Myprintf("%s(", prefix)
 			prefix = " or "
 			for i, pk := range rs.pkColumns[:lastcol] {
@@ -313,7 +314,7 @@ func (rs *rowStreamer) buildSelect(st *binlogdatapb.MinimalTable) (string, error
 				rs.lastpk[i].EncodeSQL(buf)
 				buf.Myprintf(" and ")
 			}
-			buf.Myprintf("%v > ", sqlparser.NewIdentifierCI(rs.plan.Table.Fields[rs.pkColumns[lastcol]].Name))
+			buf.Myprintf("%v > ", sqlparser.NewIdentifierCI(rs.plan.Table.Fields[pkCol].Name))
 			rs.lastpk[lastcol].EncodeSQL(buf)
 			buf.Myprintf(")")
 		}

@@ -100,7 +100,7 @@ func TestPRSWithDrainedLaggingTablet(t *testing.T) {
 
 	// assert that there is indeed only 1 row in tablets[1
 	res := utils.RunSQL(t.Context(), t, `select msg from vt_insert_test`, tablets[1])
-	assert.Equal(t, 1, len(res.Rows))
+	assert.Len(t, res.Rows, 1)
 
 	// Perform a graceful reparent operation
 	utils.Prs(t, clusterInstance, tablets[2])
@@ -126,12 +126,14 @@ func TestReparentReplicaOffline(t *testing.T) {
 	// Confirm the tablet shutdown via the topo.
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		tabletInfo, err := clusterInstance.VtctldClientProcess.GetTablet(killTablet.Alias)
-		require.NoError(c, err)
+		if !assert.NoError(c, err) {
+			return
+		}
 
-		require.Nil(c, tabletInfo.TabletStartTime)
-		require.NotNil(c, tabletInfo.TabletShutdownTime)
+		assert.Nil(c, tabletInfo.TabletStartTime)
+		assert.NotNil(c, tabletInfo.TabletShutdownTime)
 		shutdownTime := protoutil.TimeFromProto(tabletInfo.TabletShutdownTime)
-		require.WithinRange(c, shutdownTime, startKillTime, time.Now())
+		assert.WithinRange(c, shutdownTime, startKillTime, time.Now())
 	}, time.Second, time.Second*31)
 
 	// Perform a graceful reparent operation.
@@ -459,7 +461,7 @@ func TestFullStatus(t *testing.T) {
 	// For a primary tablet there is no replication status
 	assert.Nil(t, primaryStatus.ReplicationStatus)
 	assert.Contains(t, primaryStatus.PrimaryStatus.String(), "vt-0000000101-bin")
-	assert.Equal(t, primaryStatus.GtidPurged, "MySQL56/")
+	assert.Equal(t, "MySQL56/", primaryStatus.GtidPurged)
 	assert.False(t, primaryStatus.ReadOnly)
 	assert.False(t, primaryStatus.SuperReadOnly)
 	assert.True(t, primaryStatus.SemiSyncPrimaryEnabled)
@@ -511,9 +513,9 @@ func TestFullStatus(t *testing.T) {
 	assert.True(t, replicaStatus.ReplicationStatus.AutoPosition)
 	assert.Equal(t, replicaStatus.ReplicationStatus.SourceHost, utils.Hostname)
 	assert.EqualValues(t, replicaStatus.ReplicationStatus.SourcePort, tablets[0].MySQLPort)
-	assert.Equal(t, replicaStatus.ReplicationStatus.SourceUser, "vt_repl")
+	assert.Equal(t, "vt_repl", replicaStatus.ReplicationStatus.SourceUser)
 	assert.Contains(t, replicaStatus.PrimaryStatus.String(), "vt-0000000102-bin")
-	assert.Equal(t, replicaStatus.GtidPurged, "MySQL56/")
+	assert.Equal(t, "MySQL56/", replicaStatus.GtidPurged)
 	assert.True(t, replicaStatus.ReadOnly)
 	assert.True(t, replicaStatus.SuperReadOnly)
 	assert.False(t, replicaStatus.SemiSyncPrimaryEnabled)
@@ -569,7 +571,7 @@ func fileNameFromPosition(pos string) string {
 }
 
 func TestFileNameFromPosition(t *testing.T) {
-	assert.Equal(t, "", fileNameFromPosition("shouldfail"))
+	assert.Empty(t, fileNameFromPosition("shouldfail"))
 	assert.Equal(t, "FilePos/vt-0000000101-bin.000001", fileNameFromPosition("FilePos/vt-0000000101-bin.000001:123456789"))
 }
 

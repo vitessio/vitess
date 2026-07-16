@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -119,10 +120,10 @@ func TestFindColVindex(t *testing.T) {
 		}
 		cv, err := lvs.FindColVindex(tcase.tablename)
 		if err != nil {
-			assert.EqualError(t, err, tcase.err, tcase.tablename)
+			require.EqualError(t, err, tcase.err, tcase.tablename)
 			continue
 		}
-		assert.NoError(t, err, tcase.tablename)
+		require.NoError(t, err, tcase.tablename)
 		assert.Equal(t, cv.Name, tcase.vindexname, tcase.tablename)
 	}
 }
@@ -186,13 +187,13 @@ func TestFindOrCreateVindex(t *testing.T) {
 	for _, tcase := range testcases {
 		vindex, err := lvs.FindOrCreateVindex(tcase.name)
 		if err != nil {
-			assert.EqualError(t, err, tcase.err, tcase.name)
+			require.EqualError(t, err, tcase.err, tcase.name)
 			continue
 		}
-		assert.NoError(t, err, tcase.name)
+		require.NoError(t, err, tcase.name)
 		splits := strings.Split(tcase.name, ".")
 		want := splits[len(splits)-1]
-		assert.Equal(t, vindex.String(), want, tcase.name)
+		assert.Equal(t, want, vindex.String(), tcase.name)
 	}
 }
 
@@ -232,10 +233,10 @@ func TestFindTable(t *testing.T) {
 		}
 		table, err := lvs.findTable(tcase.tablename)
 		if err != nil {
-			assert.EqualError(t, err, tcase.err, tcase.keyspace, tcase.tablename)
+			require.EqualError(t, err, tcase.err, tcase.keyspace, tcase.tablename)
 			continue
 		}
-		assert.NoError(t, err, tcase.keyspace, tcase.tablename)
+		require.NoError(t, err, tcase.keyspace, tcase.tablename)
 		assert.Equal(t, table.Name.String(), tcase.tablename, tcase.keyspace, tcase.tablename)
 	}
 }
@@ -257,7 +258,7 @@ func TestFindTableWithKeyspaceError(t *testing.T) {
 	}
 
 	_, err := lvs.findTable("customer")
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "table customer not found in keyspace ks_with_error")
 	assert.Contains(t, err.Error(), "keyspace has error")
 	assert.Contains(t, err.Error(), "vindex initialization failed")

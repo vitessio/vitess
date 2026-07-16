@@ -20,6 +20,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -105,7 +106,6 @@ func TestMain(m *testing.M) {
 		// Set extra tablet args for lock timeout
 		clusterInstance.VtTabletExtraArgs = []string{
 			"--lock-tables-timeout", "5s",
-			"--watch-replication-stream",
 			"--enable-replication-reporter",
 			"--heartbeat-interval", "250ms",
 			"--heartbeat-on-demand-duration", onDemandHeartbeatDuration.String(),
@@ -202,27 +202,35 @@ func waitForThrottleCheckStatus(t *testing.T, tablet *cluster.Vttablet, wantCode
 	return resp.Check, ok
 }
 
-func vtgateExec(t *testing.T, query string, expectError string) *sqltypes.Result {
-	t.Helper()
-
-	// Use context.Background() because this helper is called from goroutines that
-	// can outlive the test/sub-test that spawned them (see TestCustomQuery's
-	// "generate running queries" sub-test, which spawns goroutines that run while
-	// other sub-tests proceed). t.Context() would be cancelled when its sub-test
-	// returned, leaving the goroutines to call require.* on a completed *testing.T.
+// vtgateExec runs query against vtgate and returns its result. It returns an
+// error rather than asserting, because it is called from goroutines that can
+// outlive the test/sub-test that spawned them (see TestCustomQuery's "generate
+// running queries" sub-test, which spawns goroutines that run while other
+// sub-tests proceed); require.* on a completed *testing.T would not work.
+func vtgateExec(query string, expectError string) (*sqltypes.Result, error) {
+	// Use context.Background() for the same reason: t.Context() would be
+	// cancelled when the spawning sub-test returned.
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	if err != nil {
+		return nil, err
+	}
 	defer conn.Close()
 
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 	if expectError == "" {
-		require.NoError(t, err)
+		if err != nil {
+			return nil, err
+		}
 	} else {
-		require.Error(t, err, "error should not be nil")
-		assert.Contains(t, err.Error(), expectError, "Unexpected error")
+		if err == nil {
+			return nil, fmt.Errorf("expected error containing %q, got nil", expectError)
+		}
+		if !strings.Contains(err.Error(), expectError) {
+			return nil, fmt.Errorf("unexpected error: got %q, want substring %q", err.Error(), expectError)
+		}
 	}
-	return qr
+	return qr, nil
 }
 
 func TestInitialThrottler(t *testing.T) {
@@ -232,7 +240,7 @@ func TestInitialThrottler(t *testing.T) {
 	t.Run("enabling throttler with very low threshold", func(t *testing.T) {
 		req := &vtctldatapb.UpdateThrottlerConfigRequest{Enable: true, Threshold: unreasonablyLowThreshold.Seconds()}
 		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		// Wait for the throttler to be enabled everywhere with the new config.
 		for _, tablet := range clusterInstance.Keyspaces[0].Shards[0].Vttablets {
@@ -245,7 +253,7 @@ func TestInitialThrottler(t *testing.T) {
 	t.Run("disabling throttler", func(t *testing.T) {
 		req := &vtctldatapb.UpdateThrottlerConfigRequest{Disable: true, Threshold: unreasonablyLowThreshold.Seconds()}
 		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		// Wait for the throttler to be disabled everywhere.
 		for _, tablet := range clusterInstance.Keyspaces[0].Shards[0].Vttablets {
@@ -260,7 +268,7 @@ func TestInitialThrottler(t *testing.T) {
 		// to the default threshold.
 		req := &vtctldatapb.UpdateThrottlerConfigRequest{Enable: true}
 		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		// Wait for the throttler to be enabled everywhere again with the default config.
 		for _, tablet := range clusterInstance.Keyspaces[0].Shards[0].Vttablets {
@@ -274,17 +282,17 @@ func TestInitialThrottler(t *testing.T) {
 		{
 			req := &vtctldatapb.UpdateThrottlerConfigRequest{MetricName: base.LoadAvgMetricName.String(), Threshold: 5555}
 			_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 		}
 		{
 			req := &vtctldatapb.UpdateThrottlerConfigRequest{MetricName: base.MysqldLoadAvgMetricName.String(), Threshold: 5555}
 			_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 		}
 
 		req := &vtctldatapb.UpdateThrottlerConfigRequest{Threshold: extremelyHighThreshold.Seconds()}
 		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		// Wait for the throttler to be enabled everywhere with new config.
 		for _, tablet := range []cluster.Vttablet{*primaryTablet, *replicaTablet} {
@@ -310,7 +318,7 @@ func TestInitialThrottler(t *testing.T) {
 	t.Run("setting low threshold", func(t *testing.T) {
 		req := &vtctldatapb.UpdateThrottlerConfigRequest{Threshold: throttler.DefaultThreshold.Seconds()}
 		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		// Wait for the throttler to be enabled everywhere with new config.
 		for _, tablet := range clusterInstance.Keyspaces[0].Shards[0].Vttablets {
@@ -335,9 +343,9 @@ func TestInitialThrottler(t *testing.T) {
 			assert.Equal(t, base.ShardScope.String(), metrics.Scope)
 		}
 
-		if !assert.EqualValues(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, resp.Check.ResponseCode, "Unexpected response from throttler: %+v", resp) {
+		if !assert.Equal(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, resp.Check.ResponseCode, "Unexpected response from throttler: %+v", resp) {
 			rs, err := replicaTablet.VttabletProcess.QueryTablet("show replica status", keyspaceName, false)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			t.Logf("Seconds_Behind_Source: %s", rs.Named().Row()["Seconds_Behind_Source"].ToString())
 			t.Logf("throttler primary status: %+v", throttleStatus(t, primaryTablet))
 			t.Logf("throttler replica status: %+v", throttleStatus(t, replicaTablet))
@@ -353,9 +361,9 @@ func TestInitialThrottler(t *testing.T) {
 		for _, metrics := range resp.Check.Metrics {
 			assert.Equal(t, base.ShardScope.String(), metrics.Scope)
 		}
-		if !assert.EqualValues(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, resp.Check.ResponseCode, "Unexpected response from throttler: %+v", resp) {
+		if !assert.Equal(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, resp.Check.ResponseCode, "Unexpected response from throttler: %+v", resp) {
 			rs, err := replicaTablet.VttabletProcess.QueryTablet("show replica status", keyspaceName, false)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			t.Logf("Seconds_Behind_Source: %s", rs.Named().Row()["Seconds_Behind_Source"].ToString())
 			t.Logf("throttler primary status: %+v", throttleStatus(t, primaryTablet))
 			t.Logf("throttler replica status: %+v", throttleStatus(t, replicaTablet))
@@ -386,7 +394,7 @@ func TestThrottleViaApplySchema(t *testing.T) {
 		require.True(t, ok, "throttled apps: %v", keyspace.Keyspace.ThrottlerConfig.ThrottledApps)
 		require.NotNil(t, appRule)
 		assert.Equal(t, throttlerapp.OnlineDDLName.String(), appRule.Name)
-		assert.EqualValues(t, 1.0, appRule.Ratio)
+		assert.Equal(t, 1.0, appRule.Ratio)
 		expireAt := time.Unix(appRule.ExpiresAt.Seconds, int64(appRule.ExpiresAt.Nanoseconds))
 		assert.True(t, expireAt.After(time.Now()), "expected rule to expire in the future: %v", expireAt)
 	})
@@ -422,12 +430,12 @@ func TestThrottlerAfterMetricsCollected(t *testing.T) {
 	t.Run("validating primary check self", func(t *testing.T) {
 		resp, err := throttleCheckSelf(primaryTablet)
 		require.NoError(t, err)
-		assert.EqualValues(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, resp.Check.ResponseCode, "Unexpected response from throttler: %+v", resp)
+		assert.Equal(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, resp.Check.ResponseCode, "Unexpected response from throttler: %+v", resp)
 	})
 	t.Run("validating replica check self", func(t *testing.T) {
 		resp, err := throttleCheckSelf(replicaTablet)
 		require.NoError(t, err)
-		assert.EqualValues(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, resp.Check.ResponseCode, "Unexpected response from throttler: %+v", resp)
+		assert.Equal(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, resp.Check.ResponseCode, "Unexpected response from throttler: %+v", resp)
 	})
 }
 
@@ -453,7 +461,7 @@ func TestLag(t *testing.T) {
 	t.Run("expecting throttler push back", func(t *testing.T) {
 		resp, err := throttleCheck(primaryTablet, false)
 		require.NoError(t, err)
-		assert.EqualValues(t, tabletmanagerdatapb.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED, resp.Check.ResponseCode, "Unexpected response from throttler: %+v", resp)
+		assert.Equal(t, tabletmanagerdatapb.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED, resp.Check.ResponseCode, "Unexpected response from throttler: %+v", resp)
 	})
 	t.Run("primary self-check should still be fine", func(t *testing.T) {
 		resp, err := throttleCheckSelf(primaryTablet)
@@ -463,7 +471,7 @@ func TestLag(t *testing.T) {
 			assert.Equal(t, base.SelfScope.String(), metrics.Scope)
 		}
 		// self (on primary) is unaffected by replication lag
-		if !assert.EqualValues(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, resp.Check.ResponseCode, "Unexpected response from throttler: %+v", resp) {
+		if !assert.Equal(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, resp.Check.ResponseCode, "Unexpected response from throttler: %+v", resp) {
 			t.Logf("throttler primary status: %+v", throttleStatus(t, primaryTablet))
 			t.Logf("throttler replica status: %+v", throttleStatus(t, replicaTablet))
 		}
@@ -475,7 +483,7 @@ func TestLag(t *testing.T) {
 		for _, metrics := range resp.Check.Metrics {
 			assert.Equal(t, base.SelfScope.String(), metrics.Scope)
 		}
-		assert.EqualValues(t, tabletmanagerdatapb.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED, resp.Check.ResponseCode, "Unexpected response from throttler: %+v", resp)
+		assert.Equal(t, tabletmanagerdatapb.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED, resp.Check.ResponseCode, "Unexpected response from throttler: %+v", resp)
 	})
 	t.Run("exempting test app", func(t *testing.T) {
 		appRule := &topodatapb.ThrottledAppRule{
@@ -485,7 +493,7 @@ func TestLag(t *testing.T) {
 		}
 		req := &vtctldatapb.UpdateThrottlerConfigRequest{Threshold: throttler.DefaultThreshold.Seconds()}
 		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, appRule, nil)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		waitForThrottleCheckStatus(t, primaryTablet, tabletmanagerdatapb.CheckThrottlerResponseCode_OK)
 	})
 	t.Run("unexempting test app", func(t *testing.T) {
@@ -495,7 +503,7 @@ func TestLag(t *testing.T) {
 		}
 		req := &vtctldatapb.UpdateThrottlerConfigRequest{Threshold: throttler.DefaultThreshold.Seconds()}
 		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, appRule, nil)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		waitForThrottleCheckStatus(t, primaryTablet, tabletmanagerdatapb.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED)
 	})
 	t.Run("exempting all apps", func(t *testing.T) {
@@ -506,7 +514,7 @@ func TestLag(t *testing.T) {
 		}
 		req := &vtctldatapb.UpdateThrottlerConfigRequest{Threshold: throttler.DefaultThreshold.Seconds()}
 		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, appRule, nil)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		waitForThrottleCheckStatus(t, primaryTablet, tabletmanagerdatapb.CheckThrottlerResponseCode_OK)
 	})
 	t.Run("throttling test app", func(t *testing.T) {
@@ -517,7 +525,7 @@ func TestLag(t *testing.T) {
 		}
 		req := &vtctldatapb.UpdateThrottlerConfigRequest{Threshold: throttler.DefaultThreshold.Seconds()}
 		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, appRule, nil)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		waitForThrottleCheckStatus(t, primaryTablet, tabletmanagerdatapb.CheckThrottlerResponseCode_APP_DENIED)
 	})
 	t.Run("unthrottling test app", func(t *testing.T) {
@@ -527,7 +535,7 @@ func TestLag(t *testing.T) {
 		}
 		req := &vtctldatapb.UpdateThrottlerConfigRequest{Threshold: throttler.DefaultThreshold.Seconds()}
 		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, appRule, nil)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		waitForThrottleCheckStatus(t, primaryTablet, tabletmanagerdatapb.CheckThrottlerResponseCode_OK)
 	})
 	t.Run("unexempting all apps", func(t *testing.T) {
@@ -537,7 +545,7 @@ func TestLag(t *testing.T) {
 		}
 		req := &vtctldatapb.UpdateThrottlerConfigRequest{Threshold: throttler.DefaultThreshold.Seconds()}
 		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, appRule, nil)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		waitForThrottleCheckStatus(t, primaryTablet, tabletmanagerdatapb.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED)
 	})
 
@@ -552,19 +560,19 @@ func TestLag(t *testing.T) {
 		resp, err := throttleCheckSelf(primaryTablet)
 		require.NoError(t, err)
 		// self (on primary) is unaffected by replication lag
-		assert.EqualValues(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, resp.Check.ResponseCode, "Unexpected response from throttler: %+v", resp)
+		assert.Equal(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, resp.Check.ResponseCode, "Unexpected response from throttler: %+v", resp)
 	})
 	t.Run("replica self-check should be fine", func(t *testing.T) {
 		resp, err := throttleCheckSelf(replicaTablet)
 		require.NoError(t, err)
-		assert.EqualValues(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, resp.Check.ResponseCode, "Unexpected response from throttler: %+v", resp)
+		assert.Equal(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, resp.Check.ResponseCode, "Unexpected response from throttler: %+v", resp)
 	})
 }
 
 func TestNoReplicas(t *testing.T) {
 	t.Run("changing replica to RDONLY", func(t *testing.T) {
 		err := clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", replicaTablet.Alias, "RDONLY")
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		// This makes no REPLICA servers available. We expect something like:
 		// {"StatusCode":200,"Value":0,"Threshold":1,"Message":""}
@@ -572,7 +580,7 @@ func TestNoReplicas(t *testing.T) {
 	})
 	t.Run("restoring to REPLICA", func(t *testing.T) {
 		err := clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", replicaTablet.Alias, "REPLICA")
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		waitForThrottleCheckStatus(t, primaryTablet, tabletmanagerdatapb.CheckThrottlerResponseCode_OK)
 	})
@@ -582,7 +590,7 @@ func TestCustomQuery(t *testing.T) {
 	t.Run("enabling throttler with custom query and threshold", func(t *testing.T) {
 		req := &vtctldatapb.UpdateThrottlerConfigRequest{Enable: true, Threshold: customThreshold, CustomQuery: customQuery}
 		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		// Wait for the throttler to be enabled everywhere with new custom config.
 		expectConfig := &throttler.Config{Query: customQuery, Threshold: customThreshold}
@@ -598,6 +606,10 @@ func TestCustomQuery(t *testing.T) {
 	t.Run("test threads running", func(t *testing.T) {
 		sleepDuration := 20 * time.Second
 		var wg sync.WaitGroup
+		var (
+			queryMu  sync.Mutex
+			queryErr error
+		)
 		t.Run("generate running queries", func(t *testing.T) {
 			for i := range customThreshold + 1 {
 				// Generate different Sleep() calls, all at minimum sleepDuration.
@@ -607,7 +619,13 @@ func TestCustomQuery(t *testing.T) {
 					// Make sure to generate a different query in each goroutine, so that vtgate does not oversmart us
 					// and optimizes connections/caching.
 					query := fmt.Sprintf("select sleep(%d) + %d", int(sleepDuration.Seconds()), i)
-					vtgateExec(t, query, "")
+					if _, err := vtgateExec(query, ""); err != nil {
+						queryMu.Lock()
+						if queryErr == nil {
+							queryErr = err
+						}
+						queryMu.Unlock()
+					}
 				}(i)
 			}
 		})
@@ -619,18 +637,19 @@ func TestCustomQuery(t *testing.T) {
 			{
 				resp, err := throttleCheckSelf(primaryTablet)
 				require.NoError(t, err)
-				assert.EqualValues(t, tabletmanagerdatapb.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED, resp.Check.ResponseCode, "Unexpected response from throttler: %+v", resp)
+				assert.Equal(t, tabletmanagerdatapb.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED, resp.Check.ResponseCode, "Unexpected response from throttler: %+v", resp)
 			}
 		})
 		t.Run("wait for queries to terminate", func(t *testing.T) {
 			wg.Wait()
+			require.NoError(t, queryErr)
 		})
 		t.Run("restored below threshold", func(t *testing.T) {
 			waitForThrottleCheckStatus(t, primaryTablet, tabletmanagerdatapb.CheckThrottlerResponseCode_OK)
 			{
 				resp, err := throttleCheckSelf(primaryTablet)
 				require.NoError(t, err)
-				assert.EqualValues(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, resp.Check.ResponseCode, "Unexpected response from throttler: %+v", resp)
+				assert.Equal(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, resp.Check.ResponseCode, "Unexpected response from throttler: %+v", resp)
 			}
 		})
 	})
@@ -641,7 +660,7 @@ func TestRestoreDefaultQuery(t *testing.T) {
 	t.Run("enabling throttler with default query and threshold", func(t *testing.T) {
 		req := &vtctldatapb.UpdateThrottlerConfigRequest{Enable: true, Threshold: throttler.DefaultThreshold.Seconds()}
 		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		// Wait for the throttler to be up and running everywhere again with the default config.
 		for _, tablet := range clusterInstance.Keyspaces[0].Shards[0].Vttablets {
@@ -651,7 +670,7 @@ func TestRestoreDefaultQuery(t *testing.T) {
 	t.Run("validating OK response from throttler with default threshold, heartbeats running", func(t *testing.T) {
 		resp, err := throttleCheck(primaryTablet, false)
 		require.NoError(t, err)
-		assert.EqualValues(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, resp.Check.ResponseCode, "Unexpected response from throttler: %+v", resp)
+		assert.Equal(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, resp.Check.ResponseCode, "Unexpected response from throttler: %+v", resp)
 	})
 	t.Run("validating pushback response from throttler on default threshold once heartbeats go stale", func(t *testing.T) {
 		time.Sleep(2 * onDemandHeartbeatDuration) // just... really wait long enough, make sure on-demand stops
@@ -663,7 +682,7 @@ func TestUpdateMetricThresholds(t *testing.T) {
 	t.Run("validating pushback from throttler", func(t *testing.T) {
 		req := &vtctldatapb.UpdateThrottlerConfigRequest{Threshold: throttler.DefaultThreshold.Seconds()}
 		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		// Wait for the throttler to be enabled everywhere with new config.
 		for _, tablet := range []cluster.Vttablet{*primaryTablet, *replicaTablet} {
 			throttler.WaitForThrottlerStatusEnabled(t, &clusterInstance.VtctldClientProcess, &tablet, true, &throttler.Config{Query: throttler.DefaultQuery, Threshold: throttler.DefaultThreshold.Seconds()}, throttlerEnabledTimeout)
@@ -674,12 +693,12 @@ func TestUpdateMetricThresholds(t *testing.T) {
 		{
 			req := &vtctldatapb.UpdateThrottlerConfigRequest{MetricName: "lag", Threshold: extremelyHighThreshold.Seconds()}
 			_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 		}
 		{
 			req := &vtctldatapb.UpdateThrottlerConfigRequest{Threshold: unreasonablyLowThreshold.Seconds()}
 			_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 		}
 		// Wait for the throttler to be enabled everywhere with new config.
 		for _, tablet := range []cluster.Vttablet{*primaryTablet, *replicaTablet} {
@@ -701,7 +720,7 @@ func TestUpdateMetricThresholds(t *testing.T) {
 	t.Run("restoring standard threshold", func(t *testing.T) {
 		req := &vtctldatapb.UpdateThrottlerConfigRequest{Threshold: throttler.DefaultThreshold.Seconds()}
 		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		// Wait for the throttler to be enabled everywhere with new config.
 		for _, tablet := range []cluster.Vttablet{*primaryTablet, *replicaTablet} {
 			throttler.WaitForThrottlerStatusEnabled(t, &clusterInstance.VtctldClientProcess, &tablet, true, &throttler.Config{Query: throttler.DefaultQuery, Threshold: throttler.DefaultThreshold.Seconds()}, throttlerEnabledTimeout)
@@ -718,7 +737,7 @@ func TestUpdateAppCheckedMetrics(t *testing.T) {
 	t.Run("validating pushback from throttler", func(t *testing.T) {
 		req := &vtctldatapb.UpdateThrottlerConfigRequest{Threshold: throttler.DefaultThreshold.Seconds()}
 		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		// Wait for the throttler to be enabled everywhere with new config.
 		for _, tablet := range []cluster.Vttablet{*primaryTablet, *replicaTablet} {
 			throttler.WaitForThrottlerStatusEnabled(t, &clusterInstance.VtctldClientProcess, &tablet, true, &throttler.Config{Query: throttler.DefaultQuery, Threshold: throttler.DefaultThreshold.Seconds()}, throttlerEnabledTimeout)
@@ -729,7 +748,7 @@ func TestUpdateAppCheckedMetrics(t *testing.T) {
 		{
 			req := &vtctldatapb.UpdateThrottlerConfigRequest{MetricName: base.ThreadsRunningMetricName.String(), Threshold: 7777}
 			_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 		}
 		{
 			req := &vtctldatapb.UpdateThrottlerConfigRequest{}
@@ -737,12 +756,12 @@ func TestUpdateAppCheckedMetrics(t *testing.T) {
 				testAppName.String(): {Names: []string{base.ThreadsRunningMetricName.String()}},
 			}
 			_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, appCheckedMetrics)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 		}
 		{
 			req := &vtctldatapb.UpdateThrottlerConfigRequest{Threshold: unreasonablyLowThreshold.Seconds()}
 			_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 		}
 		// Wait for the throttler to be enabled everywhere with new config.
 		for _, tablet := range []cluster.Vttablet{*primaryTablet, *replicaTablet} {
@@ -762,12 +781,12 @@ func TestUpdateAppCheckedMetrics(t *testing.T) {
 				testAppName.String(): {Names: []string{base.ThreadsRunningMetricName.String(), base.LagMetricName.String()}},
 			}
 			_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, appCheckedMetrics)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 		}
 		{
 			req := &vtctldatapb.UpdateThrottlerConfigRequest{Threshold: unreasonablyLowThreshold.Seconds()}
 			_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 		}
 		// Wait for the throttler to be enabled everywhere with new config.
 		for _, tablet := range []cluster.Vttablet{*primaryTablet, *replicaTablet} {
@@ -781,12 +800,12 @@ func TestUpdateAppCheckedMetrics(t *testing.T) {
 		{
 			req := &vtctldatapb.UpdateThrottlerConfigRequest{MetricName: base.MysqldDatadirUsedRatioMetricName.String(), Threshold: 0.9999}
 			_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 		}
 		{
 			req := &vtctldatapb.UpdateThrottlerConfigRequest{MetricName: base.MysqldLoadAvgMetricName.String(), Threshold: 5555}
 			_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 		}
 		{
 			req := &vtctldatapb.UpdateThrottlerConfigRequest{}
@@ -794,12 +813,12 @@ func TestUpdateAppCheckedMetrics(t *testing.T) {
 				testAppName.String(): {Names: []string{base.MysqldDatadirUsedRatioMetricName.String(), base.MysqldLoadAvgMetricName.String()}},
 			}
 			_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, appCheckedMetrics)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 		}
 		{
 			req := &vtctldatapb.UpdateThrottlerConfigRequest{Threshold: extremelyHighThreshold.Seconds()}
 			_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 		}
 		// Wait for the throttler to be enabled everywhere with new config.
 		for _, tablet := range []cluster.Vttablet{*primaryTablet, *replicaTablet} {
@@ -823,7 +842,7 @@ func TestUpdateAppCheckedMetrics(t *testing.T) {
 		{
 			req := &vtctldatapb.UpdateThrottlerConfigRequest{MetricName: base.ThreadsRunningMetricName.String(), Threshold: 0}
 			_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 		}
 		{
 			req := &vtctldatapb.UpdateThrottlerConfigRequest{}
@@ -831,12 +850,12 @@ func TestUpdateAppCheckedMetrics(t *testing.T) {
 				testAppName.String(): {Names: []string{}},
 			}
 			_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, appCheckedMetrics)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 		}
 		{
 			req := &vtctldatapb.UpdateThrottlerConfigRequest{Threshold: throttler.DefaultThreshold.Seconds()}
 			_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 		}
 		// Wait for the throttler to be enabled everywhere with new config.
 		for _, tablet := range []cluster.Vttablet{*primaryTablet, *replicaTablet} {

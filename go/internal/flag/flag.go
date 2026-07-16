@@ -263,7 +263,7 @@ type maybeBoolFlag interface {
 func isZeroValue(f *goflag.Flag, value string) bool {
 	typ := reflect.TypeOf(f.Value)
 	var z reflect.Value
-	if typ.Kind() == reflect.Ptr {
+	if typ.Kind() == reflect.Pointer {
 		z = reflect.New(typ.Elem())
 	} else {
 		z = reflect.Zero(typ)

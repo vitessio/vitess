@@ -33,7 +33,7 @@ import (
 type VTGateService interface {
 	Execute(ctx context.Context, mysqlCtx MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, prepared bool) (*vtgatepb.Session, *sqltypes.Result, error)
 	ExecuteBatch(ctx context.Context, session *vtgatepb.Session, sqlList []string, bindVariablesList []map[string]*querypb.BindVariable) (*vtgatepb.Session, []sqltypes.QueryResponse, error)
-	StreamExecute(ctx context.Context, mysqlCtx MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) (*vtgatepb.Session, error)
+	StreamExecute(ctx context.Context, mysqlCtx MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, prepared bool, callback func(*sqltypes.Result) error) (*vtgatepb.Session, error)
 	// Prepare statement support
 	Prepare(ctx context.Context, session *vtgatepb.Session, sql string) (*vtgatepb.Session, []*querypb.Field, uint16, error)
 
@@ -66,4 +66,10 @@ type MySQLConnection interface {
 	KillQuery(uint32) error
 	// KillConnection closes the connection and also stops any executing query on it.
 	KillConnection(context.Context, uint32) error
+	// SetQueryWasSlow stores whether the most recently completed statement
+	// should be marked as slow on the MySQL protocol connection.
+	SetQueryWasSlow(bool)
+	// IngressBytes returns the number of bytes read for the command currently
+	// being handled.
+	IngressBytes() uint64
 }

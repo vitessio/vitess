@@ -14,13 +14,14 @@
  * limitations under the License.
  */
 import js from '@eslint/js';
+import { defineConfig } from 'eslint/config'
 import tseslint from 'typescript-eslint';
 import react from 'eslint-plugin-react';
 import reactHooks from 'eslint-plugin-react-hooks';
 import jsxA11y from 'eslint-plugin-jsx-a11y';
 import globals from 'globals';
 
-export default tseslint.config(
+export default defineConfig(
     {
         ignores: ['build/**', 'node_modules/**', 'src/proto/**'],
     },
@@ -54,7 +55,7 @@ export default tseslint.config(
         },
         rules: {
             // Carried over from eslint-config-react-app
-            '@typescript-eslint/no-unused-vars': ['warn', { args: 'none', ignoreRestSiblings: true }],
+            '@typescript-eslint/no-unused-vars': ['error', { args: 'none', ignoreRestSiblings: true }],
             '@typescript-eslint/no-explicit-any': 'off',
             '@typescript-eslint/no-empty-object-type': 'off',
             '@typescript-eslint/no-unsafe-function-type': 'off',
@@ -73,23 +74,22 @@ export default tseslint.config(
                 'statusbar', 'stop', 'toolbar', 'top',
             ],
 
-            // Not enabled in eslint-config-react-app; disable to keep migration clean
-            'prefer-const': 'off',
-            'no-extra-boolean-cast': 'off',
-            'no-var': 'off',
-            'no-case-declarations': 'off',
+            'prefer-const': 'error',
+            'no-extra-boolean-cast': 'error',
+            'no-var': 'error',
+            'no-case-declarations': 'error',
 
             // React
             'react/prop-types': 'off', // TypeScript handles prop validation
             'react/display-name': 'off',
-            'react/jsx-key': 'warn',
-            'react/jsx-no-target-blank': 'warn',
+            'react/jsx-key': 'error',
+            'react/jsx-no-target-blank': 'error',
             'react/no-unescaped-entities': 'off',
 
             // Accessibility: match eslint-config-react-app (warn, not error)
-            'jsx-a11y/no-autofocus': 'warn',
-            'jsx-a11y/click-events-have-key-events': 'warn',
-            'jsx-a11y/no-static-element-interactions': 'warn',
+            'jsx-a11y/no-autofocus': 'error',
+            'jsx-a11y/click-events-have-key-events': 'error',
+            'jsx-a11y/no-static-element-interactions': 'error',
 
             // react-hooks plugin v7 added these; not in eslint-config-react-app
             'react-hooks/immutability': 'off',

@@ -27,6 +27,6 @@ interface Props {
 }
 
 export const ShardServingPip = ({ isLoading, isServing }: Props) => {
-    let state: PipState = isServing ? 'success' : 'danger';
+    const state: PipState = isServing ? 'success' : 'danger';
     return <Pip state={isLoading ? null : state} />;
 };

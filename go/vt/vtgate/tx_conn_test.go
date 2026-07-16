@@ -219,7 +219,7 @@ func TestTxConnCommitFailureAfterNonAtomicCommitMaxShards(t *testing.T) {
 
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
 	for i := range 17 {
-		assert.EqualValues(t, 1, sbcs[i].CommitCount.Load(), fmt.Sprintf("sbc%d.CommitCount", i))
+		assert.EqualValues(t, 1, sbcs[i].CommitCount.Load(), "sbc%d.CommitCount", i)
 	}
 
 	require.Equal(t, nonAtomicCommitCount+1, warnings.Counts()["NonAtomicCommit"])
@@ -273,7 +273,7 @@ func TestTxConnCommitFailureBeforeNonAtomicCommitMaxShards(t *testing.T) {
 
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
 	for i := range 16 {
-		assert.EqualValues(t, 1, sbcs[i].CommitCount.Load(), fmt.Sprintf("sbc%d.CommitCount", i))
+		assert.EqualValues(t, 1, sbcs[i].CommitCount.Load(), "sbc%d.CommitCount", i)
 	}
 
 	require.Equal(t, nonAtomicCommitCount+1, warnings.Counts()["NonAtomicCommit"])
@@ -1179,7 +1179,7 @@ func TestTxConnReservedRollbackFailure(t *testing.T) {
 	sc.ExecuteMultiShard(ctx, nil, rss01, twoQueries, session, false, false, nullResultsObserver{}, false)
 
 	sbc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
-	assert.Error(t,
+	require.Error(t,
 		sc.txConn.Rollback(ctx, session))
 
 	expectErr := NewShardError(vterrors.New(
