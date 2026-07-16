@@ -341,7 +341,7 @@ func (dte *DTExecutor) StartCommit(transactionID int64, dtid string) (querypb.St
 		// transition, so the outcome is a definite failure and vtgate can
 		// roll back the distributed transaction immediately.
 		if _, ok := errors.AsType[*commitNotAttempted](err); ok {
-			return querypb.StartCommitState_Fail, err
+			return querypb.StartCommitState_Fail, vterrors.Wrap(err, vterrors.CommitNotAttempted)
 		}
 		return querypb.StartCommitState_Unknown, err
 	}

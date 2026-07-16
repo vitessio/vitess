@@ -139,9 +139,9 @@ func (s *startCommitService) HandlePanic(err *error) {}
 
 // TestGRPCTabletConnStartCommitState verifies how the client reconstructs the
 // StartCommit state when the RPC carries an error, since gRPC drops the
-// response message on error. A tablet state transition rejects the commit
-// before it reaches MySQL, so it must map to Fail. Any other error leaves the
-// outcome unknown.
+// response message on error. Only an error marked commit-not-attempted maps
+// to Fail. Any other error, including a generic state transition rejection
+// from before the commit handler ran, leaves the outcome unknown.
 func TestGRPCTabletConnStartCommitState(t *testing.T) {
 	tcases := []struct {
 		name     string
@@ -154,10 +154,16 @@ func TestGRPCTabletConnStartCommitState(t *testing.T) {
 		state:    querypb.StartCommitState_Success,
 		expState: querypb.StartCommitState_Success,
 	}, {
-		name:     "state transition rejection is a definite failure",
+		name:     "commit not attempted is a definite failure",
+		state:    querypb.StartCommitState_Fail,
+		err:      vterrors.New(vtrpcpb.Code_CLUSTER_EVENT, vterrors.CommitNotAttempted+": "+vterrors.ShuttingDown),
+		expState: querypb.StartCommitState_Fail,
+		expErr:   vterrors.ShuttingDown,
+	}, {
+		name:     "generic state transition rejection leaves the outcome unknown",
 		state:    querypb.StartCommitState_Fail,
 		err:      vterrors.New(vtrpcpb.Code_CLUSTER_EVENT, vterrors.ShuttingDown),
-		expState: querypb.StartCommitState_Fail,
+		expState: querypb.StartCommitState_Unknown,
 		expErr:   vterrors.ShuttingDown,
 	}, {
 		name:     "other errors leave the outcome unknown",

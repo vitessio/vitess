@@ -18,6 +18,7 @@ package vterrors
 
 import (
 	"regexp"
+	"strings"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
@@ -35,6 +36,18 @@ var RxOp = regexp.MustCompile("operation not allowed in state (NOT_SERVING|SHUTT
 // tablet state transition.
 func IsStateTransitionError(err error) bool {
 	return Code(err) == vtrpcpb.Code_CLUSTER_EVENT && RxOp.MatchString(err.Error())
+}
+
+// CommitNotAttempted marks a StartCommit rejection that happened before any
+// COMMIT reached MySQL, so the transaction is deterministically not
+// committed.
+const CommitNotAttempted = "commit not attempted"
+
+// IsCommitNotAttemptedError reports whether the error is a StartCommit
+// rejection from before any COMMIT was sent. Only the code and message text
+// survive gRPC, so the marker is matched as a substring.
+func IsCommitNotAttemptedError(err error) bool {
+	return Code(err) == vtrpcpb.Code_CLUSTER_EVENT && strings.Contains(err.Error(), CommitNotAttempted)
 }
 
 // Constants for error messages

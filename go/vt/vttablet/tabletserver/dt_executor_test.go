@@ -463,6 +463,7 @@ func TestExecutorStartCommitRejectedByClusterAction(t *testing.T) {
 
 	state, err := txe.StartCommit(txid, "aa")
 	require.ErrorContains(t, err, vterrors.ShuttingDown)
+	require.ErrorContains(t, err, vterrors.CommitNotAttempted)
 	assert.Equal(t, querypb.StartCommitState_Fail, state)
 }
 
@@ -686,12 +687,14 @@ func TestTransactionNotifier(t *testing.T) {
 	defer tsv.StopService()
 	db.AddQueryPattern(
 		"select count\\(\\*\\) from _vt\\.redo_state where time_created.*",
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("count(*)", "int64"), "0"))
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("count(*)", "int64"), "0"),
+	)
 
 	// zero unresolved transactions
 	db.AddQueryPattern(
 		"select count\\(\\*\\) from _vt\\.dt_state where time_created.*",
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("count(*)", "int64"), "0"))
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("count(*)", "int64"), "0"),
+	)
 	notifyCh := make(chan any)
 	tsv.te.dxNotify = func() {
 		notifyCh <- nil
@@ -705,7 +708,8 @@ func TestTransactionNotifier(t *testing.T) {
 	// non zero unresolved transactions
 	db.AddQueryPattern(
 		"select count\\(\\*\\) from _vt\\.dt_state where time_created.*",
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("count(*)", "int64"), "1"))
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("count(*)", "int64"), "1"),
+	)
 	select {
 	case <-notifyCh:
 	case <-time.After(1 * time.Second):

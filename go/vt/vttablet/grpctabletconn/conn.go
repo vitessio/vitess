@@ -374,7 +374,7 @@ func (conn *gRPCQueryClient) StartCommit(ctx context.Context, target *querypb.Ta
 		return resp.State, err
 	}
 
-	if vterrors.IsStateTransitionError(err) {
+	if vterrors.IsCommitNotAttemptedError(err) {
 		return querypb.StartCommitState_Fail, err
 	}
 
