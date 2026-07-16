@@ -160,21 +160,22 @@ func TestVStreamClientFlushesOnHeartbeat(t *testing.T) {
 	heartbeatSinceLastRow := false
 
 	flushes := make(chan flush, 2)
-	vstreamClient := te.newDefaultClient(t, t.Name(), []vstreamclient.TableConfig{{
-		Keyspace:        "customer",
-		Table:           "customer",
-		Query:           "select * from customer where id between 500 and 599",
-		MaxRowsPerFlush: 10,
-		DataType:        &Customer{},
-		FlushFn: func(_ context.Context, rows []vstreamclient.Row, meta vstreamclient.FlushMeta) error {
-			batch := make([]*Customer, 0, len(rows))
-			for _, row := range rows {
-				batch = append(batch, row.Data.(*Customer))
-			}
-			flushes <- flush{customers: batch, reason: meta.FlushReason, heartbeatSinceLastRow: heartbeatSinceLastRow}
-			return nil
-		},
-	}},
+	vstreamClient := te.newDefaultClient(
+		t, t.Name(), []vstreamclient.TableConfig{{
+			Keyspace:        "customer",
+			Table:           "customer",
+			Query:           "select * from customer where id between 500 and 599",
+			MaxRowsPerFlush: 10,
+			DataType:        &Customer{},
+			FlushFn: func(_ context.Context, rows []vstreamclient.Row, meta vstreamclient.FlushMeta) error {
+				batch := make([]*Customer, 0, len(rows))
+				for _, row := range rows {
+					batch = append(batch, row.Data.(*Customer))
+				}
+				flushes <- flush{customers: batch, reason: meta.FlushReason, heartbeatSinceLastRow: heartbeatSinceLastRow}
+				return nil
+			},
+		}},
 		vstreamclient.WithMinFlushDuration(5*time.Second),
 		vstreamclient.WithEventFunc(func(_ context.Context, _ *binlogdatapb.VEvent) error {
 			heartbeatSinceLastRow = false

@@ -38,6 +38,8 @@ func TestVStreamClientDisambiguatesSameTableNames(t *testing.T) {
 	te := newTestEnv(t)
 	var gotFieldEvents []string
 	var gotRowEvents []string
+	customerRows := &rowCollector[*Customer]{}
+	accountingRows := &rowCollector[*Customer]{}
 	vstreamClient := te.newDefaultClient(
 		t, t.Name(), []vstreamclient.TableConfig{
 			{
@@ -46,7 +48,10 @@ func TestVStreamClientDisambiguatesSameTableNames(t *testing.T) {
 				Query:           "select * from customer where id between 200 and 399",
 				MaxRowsPerFlush: 2,
 				DataType:        &Customer{},
-				FlushFn:         func(_ context.Context, _ []vstreamclient.Row, _ vstreamclient.FlushMeta) error { return nil },
+				FlushFn: func(_ context.Context, rows []vstreamclient.Row, _ vstreamclient.FlushMeta) error {
+					customerRows.collect(rows)
+					return nil
+				},
 			},
 			{
 				Keyspace:        "accounting",
@@ -54,7 +59,10 @@ func TestVStreamClientDisambiguatesSameTableNames(t *testing.T) {
 				Query:           "select * from customer where id between 200 and 399",
 				MaxRowsPerFlush: 2,
 				DataType:        &Customer{},
-				FlushFn:         func(_ context.Context, _ []vstreamclient.Row, _ vstreamclient.FlushMeta) error { return nil },
+				FlushFn: func(_ context.Context, rows []vstreamclient.Row, _ vstreamclient.FlushMeta) error {
+					accountingRows.collect(rows)
+					return nil
+				},
 			},
 		},
 		vstreamclient.WithEventFunc(func(_ context.Context, ev *binlogdatapb.VEvent) error {
@@ -82,6 +90,11 @@ func TestVStreamClientDisambiguatesSameTableNames(t *testing.T) {
 	assert.Contains(t, gotFieldEvents, "accounting:accounting.customer")
 	assert.Contains(t, gotRowEvents, "customer:customer.customer")
 	assert.Contains(t, gotRowEvents, "accounting:accounting.customer")
+
+	// each row must reach only its own keyspace's FlushFn; misrouting between the two
+	// same-named tables would swap or duplicate these
+	assert.Equal(t, []*Customer{{ID: 201, Email: "multi-customer@domain.com"}}, customerRows.snapshot())
+	assert.Equal(t, []*Customer{{ID: 301, Email: "multi-accounting@domain.com"}}, accountingRows.snapshot())
 }
 
 // TestVStreamClientStreamsMultipleTablesInOneKeyspace verifies one client can

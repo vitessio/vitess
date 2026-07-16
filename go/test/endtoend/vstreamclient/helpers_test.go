@@ -96,19 +96,29 @@ func (te *testEnv) exec(t *testing.T, query string, bindVariables map[string]*qu
 	require.NoError(t, err)
 }
 
-// execBackground uses context.Background() on purpose: it is called from t.Cleanup and from
-// FlushFns that must outlive a canceled run context, both of which run after t.Context() is done.
+// backgroundQueryCtx returns a context for queries issued from t.Cleanup or from FlushFns that
+// must outlive a canceled run context. WithoutCancel detaches from the test's cancellation while
+// preserving its values, and the generous timeout keeps a stuck VTGate from hanging the whole
+// package indefinitely.
+func (te *testEnv) backgroundQueryCtx() (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(te.qCtx), time.Minute)
+}
+
 func (te *testEnv) execBackground(t *testing.T, query string, bindVariables map[string]*querypb.BindVariable) {
 	t.Helper()
 
-	_, err := te.session.Execute(context.Background(), query, bindVariables, false)
+	ctx, cancel := te.backgroundQueryCtx()
+	defer cancel()
+	_, err := te.session.Execute(ctx, query, bindVariables, false)
 	require.NoError(t, err)
 }
 
 func (te *testEnv) execBackgroundAllowMissingColumn(t *testing.T, query string, bindVariables map[string]*querypb.BindVariable) {
 	t.Helper()
 
-	_, err := te.session.Execute(context.Background(), query, bindVariables, false)
+	ctx, cancel := te.backgroundQueryCtx()
+	defer cancel()
+	_, err := te.session.Execute(ctx, query, bindVariables, false)
 	if err == nil {
 		return
 	}
