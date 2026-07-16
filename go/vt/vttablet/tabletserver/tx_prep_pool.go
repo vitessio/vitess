@@ -211,6 +211,21 @@ func (pp *TxPreparedPool) FetchAllForRollback() []*StatefulConnection {
 	reserved := make(map[string]error)
 	redoCommitStarted := make(map[string]struct{}, len(pp.redoCommitStarted))
 
+	// Keep entries for dtids not held in the pool, such as a commit in
+	// flight or a failed commit awaiting resolution. Rebuilding from
+	// pp.conns alone would erase their outcome.
+	for dtid, err := range pp.reserved {
+		if _, ok := pp.conns[dtid]; !ok {
+			reserved[dtid] = err
+		}
+	}
+
+	for dtid := range pp.redoCommitStarted {
+		if _, ok := pp.conns[dtid]; !ok {
+			redoCommitStarted[dtid] = struct{}{}
+		}
+	}
+
 	for dtid, conn := range pp.conns {
 		conns = append(conns, conn)
 

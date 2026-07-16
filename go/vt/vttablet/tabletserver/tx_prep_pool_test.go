@@ -132,6 +132,34 @@ func TestPrepFetchAllKeepsRedoStartedDTIDsInDoubt(t *testing.T) {
 	require.False(t, pp.RedoCommitStarted("aa"))
 }
 
+// TestPrepFetchAllKeepsUnheldReservations verifies that shutdown rollback
+// keeps the reservations and redo flags of dtids not held in the pool.
+func TestPrepFetchAllKeepsUnheldReservations(t *testing.T) {
+	pp := createAndOpenPreparedPool(3)
+	committing := &StatefulConnection{}
+	held := &StatefulConnection{}
+
+	require.NoError(t, pp.Put(committing, "aa"))
+	pp.MarkRedoCommitStarted("aa")
+	got, err := pp.FetchForCommit("aa")
+	require.NoError(t, err)
+	require.Equal(t, committing, got)
+
+	pp.SetFailed("cc")
+
+	require.NoError(t, pp.Put(held, "bb"))
+	pp.MarkRedoCommitStarted("bb")
+
+	conns := pp.FetchAllForRollback()
+	require.ElementsMatch(t, []*StatefulConnection{held}, conns)
+
+	require.Equal(t, errPrepCommitting, pp.reserved["aa"])
+	require.True(t, pp.RedoCommitStarted("aa"))
+	require.Equal(t, errPrepFailed, pp.reserved["cc"])
+	require.Equal(t, errPrepRolledBackForShutdown, pp.reserved["bb"])
+	require.True(t, pp.RedoCommitStarted("bb"))
+}
+
 // createAndOpenPreparedPool creates a new transaction prepared pool and opens it.
 // Used as a helper function for testing.
 func createAndOpenPreparedPool(capacity int) *TxPreparedPool {
