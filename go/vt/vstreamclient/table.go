@@ -156,6 +156,12 @@ func (v *VStreamClient) initTables(tables []TableConfig) error {
 		if table.Table == "" {
 			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: table in keyspace %q has no table name", table.Keyspace)
 		}
+
+		// vstreamer interprets rule matches beginning with "/" as regular expressions, so a legal
+		// quoted MySQL table name starting with "/" would silently become a pattern match
+		if strings.HasPrefix(table.Table, "/") {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: table name %q is not supported: names beginning with '/' are interpreted as regular expressions by vstream", table.Table)
+		}
 		if table.FlushFn == nil {
 			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: table %s.%s has no flush function", table.Keyspace, table.Table)
 		}
@@ -187,7 +193,10 @@ func (v *VStreamClient) initTables(tables []TableConfig) error {
 
 		if table.MaxRowsPerFlush == 0 {
 			table.MaxRowsPerFlush = DefaultMaxRowsPerFlush
-		} else if table.MaxRowsPerFlush < 0 {
+		}
+		// revalidate after applying the default: DefaultMaxRowsPerFlush is a mutable package
+		// variable, and a non-positive effective value would panic later during chunking
+		if table.MaxRowsPerFlush <= 0 {
 			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: max rows per flush must be positive for table %s.%s, got %d", table.Keyspace, table.Table, table.MaxRowsPerFlush)
 		}
 

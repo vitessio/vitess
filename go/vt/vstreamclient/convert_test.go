@@ -692,6 +692,34 @@ func TestInitTables_AllowsSameTableAcrossKeyspaces(t *testing.T) {
 	assert.Contains(t, v.tables, qualifiedTableName("ks2", "t"))
 }
 
+func TestInitTables_RejectsSlashPrefixedTableNames(t *testing.T) {
+	v := &VStreamClient{
+		shardsByKeyspace: map[string][]string{"ks1": {"0"}},
+		tables:           make(map[string]*TableConfig),
+	}
+
+	err := v.initTables([]TableConfig{
+		{Keyspace: "ks1", Table: "/evil.*", DataType: &testRowSmall{}, FlushFn: func(context.Context, []Row, FlushMeta) error { return nil }},
+	})
+	require.ErrorContains(t, err, "interpreted as regular expressions")
+}
+
+func TestInitTables_RejectsInvalidDefaultMaxRowsPerFlush(t *testing.T) {
+	original := DefaultMaxRowsPerFlush
+	t.Cleanup(func() { DefaultMaxRowsPerFlush = original })
+	DefaultMaxRowsPerFlush = 0
+
+	v := &VStreamClient{
+		shardsByKeyspace: map[string][]string{"ks1": {"0"}},
+		tables:           make(map[string]*TableConfig),
+	}
+
+	err := v.initTables([]TableConfig{
+		{Keyspace: "ks1", Table: "t", DataType: &testRowSmall{}, FlushFn: func(context.Context, []Row, FlushMeta) error { return nil }},
+	})
+	require.ErrorContains(t, err, "max rows per flush must be positive")
+}
+
 func TestInitTables_RejectsDuplicateTables(t *testing.T) {
 	v := &VStreamClient{
 		shardsByKeyspace: map[string][]string{"ks1": {"0"}},
