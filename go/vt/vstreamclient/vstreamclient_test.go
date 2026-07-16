@@ -163,6 +163,12 @@ func (r *testVStreamReader) Recv() ([]*binlogdatapb.VEvent, error) {
 	return nil, io.EOF
 }
 
+func TestFlushReason_StringNeverPanics(t *testing.T) {
+	assert.Equal(t, "unknown(0)", FlushReason(0).String())
+	assert.Equal(t, "unknown(99)", FlushReason(99).String())
+	assert.Equal(t, "minDuration", FlushReasonMinDuration.String())
+}
+
 func TestResolveLatestVGtid(t *testing.T) {
 	explicit := &binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/1"}},
