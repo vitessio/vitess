@@ -158,9 +158,20 @@ func WithStateTable(keyspace, table string) Option {
 			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: keyspace %s not found", keyspace)
 		}
 
-		// this could allow for shard pinning, but we can support that if it becomes useful
-		if len(shards) > 1 {
+		// unsharded keyspaces always have exactly one shard named "0". A sharded keyspace can
+		// currently have a single shard (named "-") and can gain shards through resharding, so
+		// checking the shard count alone is not enough.
+		if len(shards) != 1 || shards[0] != "0" {
 			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: keyspace %s is sharded, only unsharded keyspaces are supported", keyspace)
+		}
+
+		// checkpoint writes are themselves transactions: if the state keyspace is also a source
+		// keyspace, every checkpoint advances the stream position and schedules another
+		// checkpoint, creating a self-sustaining write loop on an otherwise idle stream
+		for _, tbl := range v.tables {
+			if tbl.Keyspace == keyspace {
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: state keyspace %s is also a streamed source keyspace; store checkpoints in a keyspace that is not being streamed", keyspace)
+			}
 		}
 
 		v.cfg.vgtidStateKeyspace = sqlescape.EscapeID(keyspace)
