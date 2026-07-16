@@ -66,7 +66,7 @@ func testReplicationBase(t *testing.T, isClientCertPassed bool) {
 		})
 	}
 
-	cluster, err := vitesst.NewCluster(
+	cluster, err := vitesst.NewCluster(t,
 		vitesst.WithoutVTGate(),
 		vitesst.WithTabletFiles(tabletFiles...),
 		vitesst.WithTabletEnv(map[string]string{"EXTRA_MY_CNF": "/vt/files/secure.cnf"}),
@@ -88,13 +88,10 @@ func testReplicationBase(t *testing.T, isClientCertPassed bool) {
 	)
 	require.NoError(t, err, "setup failed")
 
-	cleanup, err := cluster.Start(ctx)
+	cleanup, err := cluster.Start(t, ctx)
 	require.NoError(t, err, "setup failed")
 	defer func() {
 		cctx := context.WithoutCancel(ctx)
-		if t.Failed() {
-			cluster.DumpDiagnostics(cctx, t.Logf)
-		}
 		if err := cleanup(cctx); err != nil {
 			t.Logf("cluster teardown: %v", err)
 		}
@@ -117,6 +114,6 @@ func testReplicationBase(t *testing.T, isClientCertPassed bool) {
 		require.Error(t, err)
 	}
 
-	_, err = cluster.AddVTOrc(ctx, "")
+	_, err = cluster.AddVTOrc(t, ctx, "")
 	require.NoError(t, err)
 }

@@ -25,22 +25,18 @@ limitations under the License.
 // under test. The VITESST_IMAGE environment variable overrides the image
 // entirely, and a keyspace's tablets take another image with WithImage.
 //
-// Test-scoped usage:
+// Usage:
 //
 //	func TestSomething(t *testing.T) {
-//	    c, err := vitesst.NewCluster(
+//	    c, err := vitesst.NewCluster(t,
 //	        vitesst.WithKeyspace("ks").
 //	            WithSchema(`CREATE TABLE users (id INT PRIMARY KEY)`).
 //	            WithVSchema(`{"sharded": false, "tables": {"users": {}}}`),
 //	    )
 //	    require.NoError(t, err)
-//	    cleanup, err := c.Start(t.Context())
+//	    cleanup, err := c.Start(t, t.Context())
 //	    t.Cleanup(func() {
-//	        ctx := context.WithoutCancel(t.Context())
-//	        if t.Failed() {
-//	            c.DumpDiagnostics(ctx, t.Logf)
-//	        }
-//	        if err := cleanup(ctx); err != nil {
+//	        if err := cleanup(context.WithoutCancel(t.Context())); err != nil {
 //	            t.Logf("cluster teardown: %v", err)
 //	        }
 //	    })
@@ -52,37 +48,6 @@ limitations under the License.
 //	    vitesst.Exec(t, conn, "INSERT INTO ks.users (id) VALUES (1)")
 //	}
 //
-// The dominant one-cluster-per-package pattern starts the cluster from
-// TestMain instead:
-//
-//	func TestMain(m *testing.M) {
-//	    exitCode := func() int {
-//	        // Start and cleanup honor the context deadline, so bound cluster
-//	        // bring-up rather than letting a stuck image pull hang the run.
-//	        ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-//	        defer cancel()
-//	        c, err := vitesst.NewCluster(
-//	            vitesst.WithKeyspace("ks").WithSchema(schemaSQL),
-//	        )
-//	        if err != nil {
-//	            fmt.Fprintln(os.Stderr, err)
-//	            return 1
-//	        }
-//	        cleanup, err := c.Start(ctx)
-//	        if err != nil {
-//	            fmt.Fprintln(os.Stderr, err)
-//	            return 1
-//	        }
-//	        defer func() {
-//	            if err := cleanup(ctx); err != nil {
-//	                fmt.Fprintln(os.Stderr, "cluster teardown:", err)
-//	            }
-//	        }()
-//
-//	        cluster = c
-//	        vtParams = c.VTParams(ctx, "")
-//	        return m.Run()
-//	    }()
-//	    os.Exit(exitCode)
-//	}
+// Every component's log lines stream to one file per component under the
+// test's artifact directory. Run go test with -artifacts to retain them.
 package vitesst

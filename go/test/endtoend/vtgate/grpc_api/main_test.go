@@ -78,7 +78,7 @@ func setupCluster(t *testing.T) *vitesst.Cluster {
 	t.Helper()
 
 	ctx := t.Context()
-	cluster, err := vitesst.NewCluster(
+	cluster, err := vitesst.NewCluster(t,
 		vitesst.WithKeyspace(keyspaceName).
 			WithReplicas(1).
 			WithSchema(sqlSchema),
@@ -104,7 +104,7 @@ func setupCluster(t *testing.T) *vitesst.Cluster {
 	)
 	require.NoError(t, err)
 
-	cleanup, err := cluster.Start(ctx)
+	cleanup, err := cluster.Start(t, ctx)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		if err := cleanup(context.WithoutCancel(ctx)); err != nil {

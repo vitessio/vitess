@@ -73,7 +73,7 @@ func setup(t *testing.T) {
 	testsFilter = os.Getenv(testFilterEnvVar)
 	ctx := t.Context()
 
-	cluster, err := vitesst.NewCluster(
+	cluster, err := vitesst.NewCluster(t,
 		vitesst.WithVTCtldArgs(
 			"--schema-change-dir", schemaChangeDirectory,
 			"--schema-change-controller", "local",
@@ -89,14 +89,11 @@ func setup(t *testing.T) {
 			WithShardNames("1"),
 	)
 	require.NoError(t, err)
-	cleanup, err := cluster.Start(ctx)
+	cleanup, err := cluster.Start(t, ctx)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Minute)
 		defer cancel()
-		if t.Failed() {
-			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
-		}
 		if err := cleanup(cleanupCtx); err != nil {
 			t.Logf("cluster teardown: %v", err)
 		}

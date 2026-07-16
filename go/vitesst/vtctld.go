@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"testing"
 
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/network"
@@ -166,7 +167,7 @@ func (v *Vtctld) Shard(ctx context.Context, keyspace, shard string) (*vtctldatap
 }
 
 // startVtctld starts the vtctld container.
-func (c *Cluster) startVtctld(ctx context.Context) error {
+func (c *Cluster) startVtctld(t testing.TB, ctx context.Context) error {
 	args := []string{"vtctld"}
 	args = append(args, c.TopoFlags()...)
 	args = append(
@@ -196,7 +197,7 @@ func (c *Cluster) startVtctld(ctx context.Context) error {
 		network.WithNetwork([]string{c.vtctld.name}, c.network),
 		testcontainers.WithTmpfs(map[string]string{vtDataRoot: "uid=999,gid=999"}),
 		testcontainers.WithEnv(map[string]string{"VTTEST": "endtoend"}),
-		testcontainers.WithLogConsumers(c.newLogConsumer(c.vtctld.name)),
+		testcontainers.WithLogConsumers(c.newFileLogConsumer(t, c.vtctld.name)),
 		testcontainers.WithWaitStrategyAndDeadline(
 			defaultStartupTimeout,
 			wait.ForHTTP("/debug/vars").

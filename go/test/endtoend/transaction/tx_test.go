@@ -42,7 +42,7 @@ var (
 func startCluster(t *testing.T) mysql.ConnParams {
 	t.Helper()
 
-	cluster, err := vitesst.NewCluster(
+	cluster, err := vitesst.NewCluster(t,
 		vitesst.WithVTTabletArgs("--twopc-abandon-age", "3600"),
 		vitesst.WithKeyspace(keyspaceName).
 			WithShardNames("-80", "80-").
@@ -53,13 +53,10 @@ func startCluster(t *testing.T) mysql.ConnParams {
 	)
 	require.NoError(t, err)
 
-	cleanup, err := cluster.Start(t.Context())
+	cleanup, err := cluster.Start(t, t.Context())
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Minute)
 		defer cancel()
-		if t.Failed() {
-			cluster.DumpDiagnostics(ctx, t.Logf)
-		}
 		if err := cleanup(ctx); err != nil {
 			t.Logf("cluster teardown: %v", err)
 		}

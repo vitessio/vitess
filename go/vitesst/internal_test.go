@@ -17,14 +17,12 @@ limitations under the License.
 package vitesst
 
 import (
-	"fmt"
 	"os"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/testcontainers/testcontainers-go"
 )
 
 func TestSpliceInitDBSQL(t *testing.T) {
@@ -63,30 +61,6 @@ func TestShellQuoteAll(t *testing.T) {
 		`'$HOME'`,
 	}
 	assert.Equal(t, want, got)
-}
-
-func TestRingLogConsumer(t *testing.T) {
-	rc := newRingLogConsumer("test")
-
-	rc.Accept(testcontainers.Log{Content: []byte("first\n")})
-	rc.Accept(testcontainers.Log{Content: []byte("second\n")})
-	assert.Equal(t, []string{"first", "second"}, rc.snapshot())
-	assert.Equal(t, []string{"second"}, rc.tail(1))
-
-	for i := range logRingCapacity + 10 {
-		rc.Accept(testcontainers.Log{Content: fmt.Appendf(nil, "line-%d\n", i)})
-	}
-	all := rc.snapshot()
-	require.Len(t, all, logRingCapacity)
-	assert.Equal(t, fmt.Sprintf("line-%d", logRingCapacity+9), all[len(all)-1])
-
-	var dumped []string
-	rc.dump(func(format string, args ...any) {
-		dumped = append(dumped, fmt.Sprintf(format, args...))
-	}, 5)
-	require.Len(t, dumped, 6, "5 lines plus the omission notice")
-	assert.Contains(t, dumped[0], "earlier lines omitted")
-	assert.Equal(t, fmt.Sprintf("[test] line-%d", logRingCapacity+9), dumped[len(dumped)-1])
 }
 
 func TestClusterOptionsValidation(t *testing.T) {

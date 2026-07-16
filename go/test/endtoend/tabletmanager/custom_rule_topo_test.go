@@ -65,7 +65,7 @@ func TestTopoCustomRule(t *testing.T) {
 	require.Nil(t, err, "error should be Nil")
 
 	// Start a new Tablet with the topo custom rule
-	rTablet, err := clusterInstance.AddTablet(ctx, cell, keyspaceName, shardName, "replica")
+	rTablet, err := clusterInstance.AddTablet(t, ctx, cell, keyspaceName, shardName, "replica")
 	require.Nil(t, err, "error should be Nil")
 
 	err = rTablet.StopVttablet(ctx)

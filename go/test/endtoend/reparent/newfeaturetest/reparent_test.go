@@ -285,7 +285,7 @@ func TestSemiSyncBlockDueToDisruption(t *testing.T) {
 
 	// Starting VTOrc later now, because we don't want it to fix the heartbeat interval
 	// on the replica's before the disruption has been introduced.
-	_, err := clusterInstance.AddVTOrc(t.Context(), cell1)
+	_, err := clusterInstance.AddVTOrc(t, t.Context(), cell1)
 	require.NoError(t, err)
 	go func() {
 		for {

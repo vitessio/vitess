@@ -111,6 +111,7 @@ func setupSessionBalancer(
 
 	// Start vtgate in cell1 with session mode
 	vtgate, err := cluster.AddVTGate(
+		t,
 		ctx,
 		"--vtgate-balancer-mode", "session",
 	)

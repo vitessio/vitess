@@ -49,7 +49,7 @@ func setup(t *testing.T) (*vitesst.Cluster, mysql.ConnParams, mysql.ConnParams) 
 	uSQL := readFile("schemas/main.sql")
 
 	// TODO: (@GuptaManan100/@systay): Also run the tests with normalizer on.
-	cluster, err := vitesst.NewCluster(
+	cluster, err := vitesst.NewCluster(t,
 		vitesst.WithKeyspace(uks).
 			WithSchema(uSQL).
 			WithVSchema(mainVs),
@@ -64,20 +64,17 @@ func setup(t *testing.T) (*vitesst.Cluster, mysql.ConnParams, mysql.ConnParams) 
 	)
 	require.NoError(t, err)
 
-	cleanup, err := cluster.Start(ctx)
+	cleanup, err := cluster.Start(t, ctx)
 	t.Cleanup(func() {
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
 		defer cancel()
-		if t.Failed() {
-			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
-		}
 		if cleanupErr := cleanup(cleanupCtx); cleanupErr != nil {
 			t.Logf("cluster teardown: %v", cleanupErr)
 		}
 	})
 	require.NoError(t, err)
 
-	mysqlParams, mysqlCleanup, err := vitesst.NewMySQL(ctx, cluster, sks, sSQL, uSQL)
+	mysqlParams, mysqlCleanup, err := vitesst.NewMySQL(t, ctx, cluster, sks, sSQL, uSQL)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)

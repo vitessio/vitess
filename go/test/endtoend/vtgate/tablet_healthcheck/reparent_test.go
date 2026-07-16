@@ -85,7 +85,7 @@ func setup(t *testing.T) *vitesst.Cluster {
 	t.Helper()
 
 	ctx := t.Context()
-	cluster, err := vitesst.NewCluster(
+	cluster, err := vitesst.NewCluster(t,
 		vitesst.WithCells(cell),
 		vitesst.WithVTTabletArgs("--health-check-interval", "1s"),
 		vitesst.WithVTGateArgs("--tablet-refresh-interval", tabletRefreshInterval.String()),
@@ -95,7 +95,7 @@ func setup(t *testing.T) *vitesst.Cluster {
 			WithVSchema(vSchema),
 	)
 	require.NoError(t, err)
-	cleanup, err := cluster.Start(ctx)
+	cleanup, err := cluster.Start(t, ctx)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
@@ -120,7 +120,7 @@ func TestHealthCheckExternallyReparentNewTablet(t *testing.T) {
 
 	// add a new tablet
 	reparentTabletType := "rdonly"
-	tablet, err := clusterInstance.AddTablet(ctx, "", keyspaceName, shards[0], reparentTabletType)
+	tablet, err := clusterInstance.AddTablet(t, ctx, "", keyspaceName, shards[0], reparentTabletType)
 	require.NoError(t, err)
 
 	// promote the new tablet to the primary

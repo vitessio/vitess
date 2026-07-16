@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"strconv"
 	"sync"
+	"testing"
 
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/network"
@@ -65,7 +66,7 @@ func (c *Cluster) VTOrcs() []*VTOrc {
 
 // AddVTOrc starts a VTOrc instance on the running cluster in the given cell
 // ("" means the first cell), with optional extra arguments.
-func (c *Cluster) AddVTOrc(ctx context.Context, cell string, extraArgs ...string) (*VTOrc, error) {
+func (c *Cluster) AddVTOrc(t testing.TB, ctx context.Context, cell string, extraArgs ...string) (*VTOrc, error) {
 	if cell == "" {
 		cell = c.firstCell()
 	}
@@ -91,7 +92,7 @@ func (c *Cluster) AddVTOrc(ctx context.Context, cell string, extraArgs ...string
 		extraArgs: args,
 	}
 
-	ctr, err := c.runVTOrcContainer(ctx, name, cell, args)
+	ctr, err := c.runVTOrcContainer(t, ctx, name, cell, args)
 	if err != nil {
 		return nil, fmt.Errorf("starting %s: %w", name, err)
 	}
@@ -141,29 +142,29 @@ func (v *VTOrc) callRecoveriesAPI(ctx context.Context, path string) error {
 // Restart recreates the VTOrc container behind this handle with the same
 // network alias and a fresh config file. When extraArgs are given they
 // replace the previous extra args.
-func (v *VTOrc) Restart(ctx context.Context, extraArgs ...string) error {
+func (v *VTOrc) Restart(t testing.TB, ctx context.Context, extraArgs ...string) error {
 	v.argsMu.Lock()
 	if len(extraArgs) > 0 {
 		v.extraArgs = withVTOrcPollArgs(extraArgs)
 	}
 	args := v.extraArgs
 	v.argsMu.Unlock()
-	return v.restart(ctx, args)
+	return v.restart(t, ctx, args)
 }
 
 // RestartWithBuiltinConfig recreates the VTOrc container with no command-line
 // flags beyond the ones VTOrc needs to reach the cluster, so that every
 // configuration value reported by /api/config is VTOrc's own default.
-func (v *VTOrc) RestartWithBuiltinConfig(ctx context.Context) error {
+func (v *VTOrc) RestartWithBuiltinConfig(t testing.TB, ctx context.Context) error {
 	v.argsMu.Lock()
 	v.extraArgs = nil
 	v.argsMu.Unlock()
-	return v.restart(ctx, nil)
+	return v.restart(t, ctx, nil)
 }
 
 // restart terminates the current container and runs a new one with the given
 // extra args.
-func (v *VTOrc) restart(ctx context.Context, args []string) error {
+func (v *VTOrc) restart(t testing.TB, ctx context.Context, args []string) error {
 	v.argsMu.Lock()
 	cell := v.cell
 	v.argsMu.Unlock()
@@ -175,7 +176,7 @@ func (v *VTOrc) restart(ctx context.Context, args []string) error {
 		}
 	}
 
-	ctr, err := v.cluster.runVTOrcContainer(ctx, v.name, cell, args)
+	ctr, err := v.cluster.runVTOrcContainer(t, ctx, v.name, cell, args)
 	if err != nil {
 		return fmt.Errorf("restarting %s: %w", v.name, err)
 	}
@@ -199,7 +200,7 @@ func withVTOrcPollArgs(extraArgs []string) []string {
 
 // runVTOrcContainer starts one VTOrc container with the given network alias,
 // cell, and extra args.
-func (c *Cluster) runVTOrcContainer(ctx context.Context, name, cell string, extraArgs []string) (testcontainers.Container, error) {
+func (c *Cluster) runVTOrcContainer(t testing.TB, ctx context.Context, name, cell string, extraArgs []string) (testcontainers.Container, error) {
 	args := []string{"vtorc"}
 	args = append(args, c.TopoFlags()...)
 	args = append(
@@ -228,7 +229,7 @@ func (c *Cluster) runVTOrcContainer(ctx context.Context, name, cell string, extr
 		network.WithNetwork([]string{name}, c.network),
 		testcontainers.WithEnv(map[string]string{"VTTEST": "endtoend"}),
 		filesOpt,
-		testcontainers.WithLogConsumers(c.newLogConsumer(name)),
+		testcontainers.WithLogConsumers(c.newFileLogConsumer(t, name)),
 		testcontainers.WithWaitStrategyAndDeadline(
 			defaultStartupTimeout,
 			wait.ForHTTP("/debug/health").

@@ -105,7 +105,7 @@ var (
 // launchPITRCluster starts the cluster the tests run against: a single shard with a primary, a
 // replica, an rdonly tablet and a spare tablet, file backup storage, and the backup engine
 // requested by the test case.
-func launchPITRCluster(ctx context.Context, setupType int, streamMode string, stripes int, cDetails *CompressionDetails) (int, error) {
+func launchPITRCluster(t *testing.T, ctx context.Context, setupType int, streamMode string, stripes int, cDetails *CompressionDetails) (int, error) {
 	currentSetupType = setupType
 
 	tabletExtraArgs = getDefaultCommonArgs()
@@ -146,7 +146,7 @@ func launchPITRCluster(ctx context.Context, setupType int, streamMode string, st
 			spec.ExtraArgs = append(spec.ExtraArgs, mysqlShellTabletArgs(setupType, spec.UID)...)
 		})
 
-	cluster, err := vitesst.NewCluster(
+	cluster, err := vitesst.NewCluster(t,
 		vitesst.WithBackupStorage(),
 		vitesst.WithVTOrc(),
 		vitesst.WithTabletFiles(vitesst.ContainerFile{
@@ -160,7 +160,7 @@ func launchPITRCluster(ctx context.Context, setupType int, streamMode string, st
 		return 1, err
 	}
 
-	cleanup, err := cluster.Start(ctx)
+	cleanup, err := cluster.Start(t, ctx)
 	clusterCleanup = cleanup
 	if err != nil {
 		return 1, err
@@ -212,9 +212,6 @@ func mysqlShellTabletArgs(setupType int, tabletUID int) []string {
 func tearDownPITRCluster(t *testing.T) {
 	ctx := context.WithoutCancel(t.Context())
 
-	if vitessCluster != nil && t.Failed() {
-		vitessCluster.DumpDiagnostics(ctx, t.Logf)
-	}
 	if clusterCleanup != nil {
 		if err := clusterCleanup(ctx); err != nil {
 			t.Logf("cluster teardown: %v", err)
@@ -580,7 +577,7 @@ func waitForReplica(t *testing.T, replicaIndex int) int {
 func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase) {
 	t.Run(tcase.Name, func(t *testing.T) {
 		// setup cluster for the testing
-		code, err := launchPITRCluster(t.Context(), tcase.SetupType, "xbstream", 0, tcase.ComprssDetails)
+		code, err := launchPITRCluster(t, t.Context(), tcase.SetupType, "xbstream", 0, tcase.ComprssDetails)
 		require.NoError(t, err, "setup failed with status code %d", code)
 		defer tearDownPITRCluster(t)
 
@@ -828,7 +825,7 @@ func ExecTestIncrementalBackupAndRestoreToTimestamp(t *testing.T, tcase *PITRTes
 
 	t.Run(tcase.Name, func(t *testing.T) {
 		// setup cluster for the testing
-		code, err := launchPITRCluster(t.Context(), tcase.SetupType, "xbstream", 0, &CompressionDetails{
+		code, err := launchPITRCluster(t, t.Context(), tcase.SetupType, "xbstream", 0, &CompressionDetails{
 			CompressorEngineName: "pgzip",
 		})
 		require.NoError(t, err, "setup failed with status code %d", code)
@@ -1086,7 +1083,7 @@ func ExecTestIncrementalBackupAndRestoreToTimestamp(t *testing.T, tcase *PITRTes
 func ExecTestIncrementalBackupOnTwoTablets(t *testing.T, tcase *PITRTestCase) {
 	t.Run(tcase.Name, func(t *testing.T) {
 		// setup cluster for the testing
-		code, err := launchPITRCluster(t.Context(), tcase.SetupType, "xbstream", 0, tcase.ComprssDetails)
+		code, err := launchPITRCluster(t, t.Context(), tcase.SetupType, "xbstream", 0, tcase.ComprssDetails)
 		require.NoError(t, err, "setup failed with status code %d", code)
 		defer tearDownPITRCluster(t)
 

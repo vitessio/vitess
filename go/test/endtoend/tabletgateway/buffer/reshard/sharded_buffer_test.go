@@ -71,7 +71,7 @@ func reshard02(t *testing.T, clusterInstance *vitesst.Cluster, keyspaceName stri
 	ctx := t.Context()
 
 	for _, shardName := range []string{"-80", "80-"} {
-		_, err := clusterInstance.AddShard(ctx, keyspaceName, shardName, 1, 0)
+		_, err := clusterInstance.AddShard(t, ctx, keyspaceName, shardName, 1, 0)
 		require.NoError(t, err)
 	}
 	workflowName := "buf2buf"

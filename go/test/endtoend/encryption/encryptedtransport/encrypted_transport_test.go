@@ -157,7 +157,7 @@ func TestSecureTransport(t *testing.T) {
 	tabletArgs = append(tabletArgs, serverExtraArguments(containerCertDir, "vttablet-server-instance", "vttablet-client")...)
 	tabletArgs = append(tabletArgs, tmclientExtraArgs(containerCertDir, "vttablet-client-1")...)
 
-	clusterInstance, err = vitesst.NewCluster(
+	clusterInstance, err = vitesst.NewCluster(t,
 		vitesst.WithoutVTGate(),
 		vitesst.WithVTOrc(),
 		vitesst.WithVTTabletArgs(tabletArgs...),
@@ -175,7 +175,7 @@ func TestSecureTransport(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	cleanup, err := clusterInstance.Start(ctx)
+	cleanup, err := clusterInstance.Start(t, ctx)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		if err := cleanup(context.WithoutCancel(ctx)); err != nil {
@@ -196,7 +196,7 @@ func TestSecureTransport(t *testing.T) {
 	// clients with its own server certificate.
 	vtgateArgs := tabletConnExtraArgs(containerCertDir, "vttablet-client-1")
 	vtgateArgs = append(vtgateArgs, serverExtraArguments(containerCertDir, "vtgate-server-instance", "vtgate-client")...)
-	_, err = clusterInstance.AddVTGate(ctx, vtgateArgs...)
+	_, err = clusterInstance.AddVTGate(t, ctx, vtgateArgs...)
 	require.NoError(t, err)
 
 	grpcAddress := vtgateGRPCAddress(ctx, t)
@@ -234,7 +234,7 @@ func useEffectiveCallerID(ctx context.Context, t *testing.T) {
 	// into immediate caller id.
 	vtgateArgs := []string{"--grpc-use-effective-callerid"}
 	vtgateArgs = append(vtgateArgs, tabletConnExtraArgs(containerCertDir, "vttablet-client-1")...)
-	err := clusterInstance.VTGate().Restart(ctx, vtgateArgs...)
+	err := clusterInstance.VTGate().Restart(t, ctx, vtgateArgs...)
 	require.NoError(t, err)
 
 	grpcAddress := vtgateGRPCAddress(ctx, t)
@@ -283,7 +283,7 @@ func useEffectiveGroups(ctx context.Context, t *testing.T) {
 	// into immediate caller id.
 	vtgateArgs := []string{"--grpc-use-effective-callerid", "--grpc-use-effective-groups"}
 	vtgateArgs = append(vtgateArgs, tabletConnExtraArgs(containerCertDir, "vttablet-client-1")...)
-	err := clusterInstance.VTGate().Restart(ctx, vtgateArgs...)
+	err := clusterInstance.VTGate().Restart(t, ctx, vtgateArgs...)
 	require.NoError(t, err)
 
 	grpcAddress := vtgateGRPCAddress(ctx, t)

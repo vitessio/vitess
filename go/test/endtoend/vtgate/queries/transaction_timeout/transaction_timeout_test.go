@@ -39,20 +39,20 @@ var (
 func createCluster(t *testing.T, vttabletArgs ...string) func() {
 	ctx := t.Context()
 
-	cluster, err := vitesst.NewCluster(
+	cluster, err := vitesst.NewCluster(t,
 		vitesst.WithKeyspace(uks).
 			WithSchema(uschemaSQL),
 		vitesst.WithVTTabletArgs(vttabletArgs...),
 	)
 	require.NoError(t, err)
 
-	cleanup, err := cluster.Start(ctx)
+	cleanup, err := cluster.Start(t, ctx)
 	require.NoError(t, err)
 
 	clusterInstance = cluster
 	vtParams = cluster.VTParams(ctx, "")
 
-	_, closer, err := vitesst.NewMySQL(ctx, cluster, uks, uschemaSQL)
+	_, closer, err := vitesst.NewMySQL(t, ctx, cluster, uks, uschemaSQL)
 	require.NoError(t, err)
 
 	return func() {

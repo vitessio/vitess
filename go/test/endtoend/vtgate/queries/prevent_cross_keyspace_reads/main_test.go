@@ -51,7 +51,7 @@ func setup(t testing.TB) {
 	t.Helper()
 	ctx := t.Context()
 
-	cluster, err := vitesst.NewCluster(
+	cluster, err := vitesst.NewCluster(t,
 		// ks1 has prevent_cross_keyspace_reads: true in vschema.
 		vitesst.WithKeyspace(ks1Name).
 			WithSchema(ks1SchemaSQL).
@@ -63,13 +63,10 @@ func setup(t testing.TB) {
 	)
 	require.NoError(t, err)
 
-	cleanup, err := cluster.Start(ctx)
+	cleanup, err := cluster.Start(t, ctx)
 	t.Cleanup(func() {
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Minute)
 		defer cancel()
-		if t.Failed() {
-			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
-		}
 		if cleanupErr := cleanup(cleanupCtx); cleanupErr != nil {
 			t.Logf("cluster teardown: %v", cleanupErr)
 		}

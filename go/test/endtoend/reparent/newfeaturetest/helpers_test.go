@@ -102,7 +102,7 @@ func SetupShardedReparentCluster(t *testing.T, durability string, extraVttabletF
 		WithSchema(sqlSchema).
 		WithVSchema(shardedVSchema)
 
-	clusterInstance, err := vitesst.NewCluster(
+	clusterInstance, err := vitesst.NewCluster(t,
 		vitesst.WithMySQLVersion(mysqlVersion),
 		vitesst.WithVTTabletArgs(tabletArgs...),
 		vitesst.WithVTGateArgs(
@@ -117,7 +117,7 @@ func SetupShardedReparentCluster(t *testing.T, durability string, extraVttabletF
 	)
 	require.NoError(t, err)
 
-	cleanup, err := clusterInstance.Start(ctx)
+	cleanup, err := clusterInstance.Start(t, ctx)
 	require.NoError(t, err)
 
 	cleanupsMu.Lock()
@@ -140,9 +140,6 @@ func GetInsertMultipleValuesQuery(idx1, idx2, idx3, idx4 int) string {
 // TeardownCluster is used to teardown the reparent cluster.
 func TeardownCluster(t *testing.T, clusterInstance *vitesst.Cluster) {
 	ctx := context.WithoutCancel(t.Context())
-	if t.Failed() {
-		clusterInstance.DumpDiagnostics(ctx, t.Logf)
-	}
 
 	cleanupsMu.Lock()
 	cleanup := cleanups[clusterInstance]
@@ -176,7 +173,7 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 			next++
 		})
 
-	clusterInstance, err := vitesst.NewCluster(
+	clusterInstance, err := vitesst.NewCluster(t,
 		vitesst.WithMySQLVersion(mysqlVersion),
 		vitesst.WithCells(cells...),
 		vitesst.WithVTTabletArgs(
@@ -199,7 +196,7 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 	)
 	require.NoError(t, err)
 
-	cleanup, err := clusterInstance.Start(ctx)
+	cleanup, err := clusterInstance.Start(t, ctx)
 	require.NoError(t, err)
 
 	cleanupsMu.Lock()

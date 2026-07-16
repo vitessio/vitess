@@ -171,7 +171,7 @@ func TestMigration(t *testing.T) {
 			})
 			spec.ExtraArgs = append(spec.ExtraArgs, "--tablet-config", tabletConfigPath)
 		})
-	_, err := clusterInstance.AddKeyspace(ctx, commerce)
+	_, err := clusterInstance.AddKeyspace(t, ctx, commerce)
 	require.NoError(t, err)
 
 	err = clusterInstance.Vtctld().ExecuteCommand(ctx, "RebuildKeyspaceGraph", "commerce")
@@ -186,7 +186,7 @@ func TestMigration(t *testing.T) {
 
 	// vtgate starts once the streams are running, so it waits for the
 	// restarted primary of the commerce keyspace to be healthy.
-	_, err = clusterInstance.AddVTGate(ctx)
+	_, err = clusterInstance.AddVTGate(t, ctx)
 	require.NoError(t, err)
 
 	testcases := []struct {
@@ -275,7 +275,7 @@ func startStreams(ctx context.Context, t *testing.T, vttablet *vitesst.Tablet) {
 }
 
 func startCluster(ctx context.Context, t *testing.T) string {
-	cluster, err := vitesst.NewCluster(
+	cluster, err := vitesst.NewCluster(t,
 		vitesst.WithCells(cell),
 		vitesst.WithoutVTGate(),
 		vitesst.WithInitDBSQLExtra(externalUsers),
@@ -284,12 +284,9 @@ func startCluster(ctx context.Context, t *testing.T) string {
 	)
 	require.NoError(t, err)
 
-	cleanup, err := cluster.Start(ctx)
+	cleanup, err := cluster.Start(t, ctx)
 	t.Cleanup(func() {
 		cleanupCtx := context.WithoutCancel(ctx)
-		if t.Failed() {
-			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
-		}
 		if err := cleanup(cleanupCtx); err != nil {
 			t.Logf("cluster teardown: %v", err)
 		}

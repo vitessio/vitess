@@ -53,14 +53,14 @@ func setupCluster(t testing.TB) {
 	t.Helper()
 	ctx := t.Context()
 
-	cluster, err := vitesst.NewCluster(
+	cluster, err := vitesst.NewCluster(t,
 		vitesst.WithKeyspace(uks).
 			WithSchema(uschemaSQL),
 		vitesst.WithVTAdmin(),
 		vitesst.WithVTAdminClusterID("local_test"),
 	)
 	require.NoError(t, err)
-	cleanup, err := cluster.Start(ctx)
+	cleanup, err := cluster.Start(t, ctx)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		require.NoError(t, cleanup(context.WithoutCancel(ctx)))

@@ -135,7 +135,7 @@ func setup(t *testing.T) (*vitesst.Cluster, mysql.ConnParams, *otlpCollector) {
 	go func() { _ = collector.srv.Serve(lis) }()
 	t.Cleanup(collector.srv.GracefulStop)
 
-	cluster, err := vitesst.NewCluster(
+	cluster, err := vitesst.NewCluster(t,
 		vitesst.WithKeyspace(keyspaceName).
 			WithSchema(schemaSQL).
 			WithVSchema(vschema),
@@ -147,7 +147,7 @@ func setup(t *testing.T) (*vitesst.Cluster, mysql.ConnParams, *otlpCollector) {
 		),
 	)
 	require.NoError(t, err)
-	cleanup, err := cluster.Start(ctx)
+	cleanup, err := cluster.Start(t, ctx)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)

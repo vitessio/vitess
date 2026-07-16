@@ -135,7 +135,7 @@ func setupCluster(t testing.TB) {
 	ctx := t.Context()
 	dbInfo.KeyspaceName = uks
 
-	cluster, err := vitesst.NewCluster(
+	cluster, err := vitesst.NewCluster(t,
 		vitesst.WithKeyspace(uks).
 			WithReplicas(1).
 			WithSchema(uSQLSchema).
@@ -156,7 +156,7 @@ func setupCluster(t testing.TB) {
 		),
 	)
 	require.NoError(t, err)
-	cleanup, err := cluster.Start(ctx)
+	cleanup, err := cluster.Start(t, ctx)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		require.NoError(t, cleanup(context.WithoutCancel(ctx)))

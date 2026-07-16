@@ -25,6 +25,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"testing"
 	"time"
 
 	"github.com/moby/moby/api/types/container"
@@ -529,7 +530,7 @@ func matchesDebugVar(body, name string, wanted []string) bool {
 
 // startTablet starts one tablet container and waits for the tablet to report
 // SERVING or NOT_SERVING.
-func (c *Cluster) startTablet(ctx context.Context, spec *TabletSpec) (*Tablet, error) {
+func (c *Cluster) startTablet(tb testing.TB, ctx context.Context, spec *TabletSpec) (*Tablet, error) {
 	alias := c.name(fmt.Sprintf("vttablet-%d", spec.UID))
 
 	t := &Tablet{
@@ -579,7 +580,7 @@ func (c *Cluster) startTablet(ctx context.Context, spec *TabletSpec) (*Tablet, e
 			hc.Init = &initTrue
 		}),
 		filesOpt,
-		testcontainers.WithLogConsumers(c.newLogConsumer(alias)),
+		testcontainers.WithLogConsumers(c.newFileLogConsumer(tb, alias)),
 		testcontainers.WithWaitStrategyAndDeadline(
 			tabletStartupTimeout,
 			wait.ForHTTP("/debug/vars").

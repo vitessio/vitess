@@ -63,7 +63,7 @@ func setup(t *testing.T) {
 	t.Helper()
 	ctx := t.Context()
 
-	cluster, err := vitesst.NewCluster(
+	cluster, err := vitesst.NewCluster(t,
 		vitesst.WithVTTabletArgs("--health-check-interval", "1s", "--shutdown-grace-period", "3s"),
 		vitesst.WithVTOrc(),
 		vitesst.WithKeyspace(keyspaceName).
@@ -74,13 +74,10 @@ func setup(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	cleanup, err := cluster.Start(ctx)
+	cleanup, err := cluster.Start(t, ctx)
 	t.Cleanup(func() {
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
 		defer cancel()
-		if t.Failed() {
-			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
-		}
 		if cleanupErr := cleanup(cleanupCtx); cleanupErr != nil {
 			t.Logf("cluster teardown: %v", cleanupErr)
 		}

@@ -86,7 +86,7 @@ func setup(t *testing.T) {
 	t.Helper()
 	ctx := t.Context()
 
-	cluster, err := vitesst.NewCluster(
+	cluster, err := vitesst.NewCluster(t,
 		vitesst.WithCells(cell1, cell2),
 		vitesst.WithVTOrc(),
 		vitesst.WithVTTabletArgs(commonTabletArg...),
@@ -107,13 +107,10 @@ func setup(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	cleanup, err := cluster.Start(ctx)
+	cleanup, err := cluster.Start(t, ctx)
 	t.Cleanup(func() {
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Minute)
 		defer cancel()
-		if t.Failed() {
-			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
-		}
 		if err := cleanup(cleanupCtx); err != nil {
 			t.Logf("cluster teardown: %v", err)
 		}
@@ -162,7 +159,7 @@ func TestAlias(t *testing.T) {
 		"region_east_coast")
 	require.NoError(t, err)
 
-	vtgateInstance, err := clusterInstance.AddVTGate(ctx, "--tablet-types-to-wait", "PRIMARY,REPLICA")
+	vtgateInstance, err := clusterInstance.AddVTGate(t, ctx, "--tablet-types-to-wait", "PRIMARY,REPLICA")
 	require.NoError(t, err)
 
 	waitTillAllTabletsAreHealthyInVtgate(t, vtgateInstance, shard1.Name, shard2.Name)
@@ -177,7 +174,7 @@ func TestAlias(t *testing.T) {
 	require.NoError(t, err)
 
 	// restarts the vtgate process
-	err = vtgateInstance.Restart(ctx, "--tablet-types-to-wait", "PRIMARY")
+	err = vtgateInstance.Restart(t, ctx, "--tablet-types-to-wait", "PRIMARY")
 	require.NoError(t, err)
 
 	// since replica and rdonly tablets of all shards in cell2, the last 2 assertion is expected to fail
@@ -207,7 +204,7 @@ func TestAddAliasWhileVtgateUp(t *testing.T) {
 	checkSrvKeyspace(t, cell2, keyspaceName, expectedPartitions)
 
 	// only primary is in vtgate's "cell", other tablet types are not visible because they are in the other cell
-	vtgateInstance, err := clusterInstance.AddVTGate(ctx, "--tablet-types-to-wait", "PRIMARY")
+	vtgateInstance, err := clusterInstance.AddVTGate(t, ctx, "--tablet-types-to-wait", "PRIMARY")
 	require.NoError(t, err)
 
 	// since replica and rdonly tablets of all shards in cell2, the last 2 assertion is expected to fail

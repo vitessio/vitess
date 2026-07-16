@@ -44,14 +44,14 @@ func newDBTestTablet(ctx context.Context, t *testing.T) *vitesst.Tablet {
 	t.Helper()
 
 	if clusterInstance.Keyspace(dbTestKeyspace) == nil {
-		keyspace, err := clusterInstance.AddKeyspace(ctx, vitesst.WithKeyspace(dbTestKeyspace).
+		keyspace, err := clusterInstance.AddKeyspace(t, ctx, vitesst.WithKeyspace(dbTestKeyspace).
 			WithShardNames("0").
 			WithoutPrimaryElection())
 		require.NoError(t, err)
 		return keyspace.Shard("0").Tablets()[0]
 	}
 
-	tablet, err := clusterInstance.AddTablet(ctx, cell, dbTestKeyspace, "0", "replica")
+	tablet, err := clusterInstance.AddTablet(t, ctx, cell, dbTestKeyspace, "0", "replica")
 	require.NoError(t, err)
 	return tablet
 }
@@ -169,7 +169,7 @@ func TestGetGlobalStatusVars(t *testing.T) {
 func TestStopReplicationAndGetStatus(t *testing.T) {
 	setup(t)
 	// Create new tablet
-	tablet, err := clusterInstance.AddTablet(t.Context(), cell, keyspaceName, shardName, "replica")
+	tablet, err := clusterInstance.AddTablet(t, t.Context(), cell, keyspaceName, shardName, "replica")
 	require.NoError(t, err)
 	defer killTablets(t.Context(), tablet)
 

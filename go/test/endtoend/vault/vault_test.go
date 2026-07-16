@@ -135,7 +135,7 @@ func TestVaultAuth(t *testing.T) {
 	}
 	caFile := vitesst.ContainerFile{HostPath: filepath.Join(certDir, caCertFile), ContainerPath: "/vt/files/vault-ca.pem"}
 
-	clusterInstance, err := vitesst.NewCluster(
+	clusterInstance, err := vitesst.NewCluster(t,
 		vitesst.WithNetwork(nw),
 		vitesst.WithVTTabletArgs(commonTabletArg...),
 		vitesst.WithVTTabletArgs(vaultTabletArg...),
@@ -155,12 +155,9 @@ func TestVaultAuth(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	cleanup, err := clusterInstance.Start(ctx)
+	cleanup, err := clusterInstance.Start(t, ctx)
 	t.Cleanup(func() {
 		cctx := context.WithoutCancel(ctx)
-		if t.Failed() {
-			clusterInstance.DumpDiagnostics(cctx, t.Logf)
-		}
 		if err := cleanup(cctx); err != nil {
 			t.Logf("cluster teardown: %v", err)
 		}

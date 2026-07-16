@@ -21,11 +21,11 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
 	"sync"
+	"testing"
 
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/network"
@@ -61,6 +61,10 @@ type (
 		// backupVolume is the Docker volume backing the shared backup storage.
 		backupVolume string
 
+		// artifactDir receives every component's log lines as they arrive,
+		// one file per component.
+		artifactDir string
+
 		// logf receives framework progress messages; NewCluster wires it to
 		// t.Logf.
 		logf func(format string, args ...any)
@@ -85,17 +89,17 @@ type (
 		// tabletSeq hands out tablet UIDs. It never goes backwards, so a
 		// removed tablet's UID is not reused by a later one, whose alias and
 		// data directory would otherwise collide with a live tablet's.
-		tabletSeq    int
-		keyspaces    []*Keyspace
-		tablets      []*Tablet
-		logConsumers []*ringLogConsumer
+		tabletSeq int
+		keyspaces []*Keyspace
+		tablets   []*Tablet
 	}
 )
 
 // NewCluster creates a Vitess cluster from the given options, validating
 // them. Nothing runs until Start is called. Requires at least one keyspace to
-// be configured.
-func NewCluster(opts ...ClusterOption) (*Cluster, error) {
+// be configured. Every component's log lines stream to one file per component
+// under t.ArtifactDir().
+func NewCluster(t testing.TB, opts ...ClusterOption) (*Cluster, error) {
 	config := newClusterOptions(opts)
 	if err := config.validate(); err != nil {
 		return nil, err
@@ -109,10 +113,11 @@ func NewCluster(opts ...ClusterOption) (*Cluster, error) {
 	}
 
 	c := &Cluster{
-		opts:  config,
-		cells: config.cells,
-		image: vitesstImage(config.mysqlVersion),
-		logf:  logf,
+		opts:        config,
+		cells:       config.cells,
+		image:       vitesstImage(config.mysqlVersion),
+		logf:        logf,
+		artifactDir: t.ArtifactDir(),
 	}
 	c.vtctld = &Vtctld{component: component{
 		name:     c.name("vtctld"),
@@ -133,7 +138,7 @@ func (c *Cluster) name(base string) string {
 // given context has no deadline. It is non-nil even on error, so cleanup
 // registration and error handling can come in either order. On error,
 // everything already started has been torn down.
-func (c *Cluster) Start(ctx context.Context) (cleanup func(context.Context) error, err error) {
+func (c *Cluster) Start(t testing.TB, ctx context.Context) (cleanup func(context.Context) error, err error) {
 	cleanup = c.terminate
 
 	if c.network != nil {
@@ -170,12 +175,12 @@ func (c *Cluster) Start(ctx context.Context) (cleanup func(context.Context) erro
 	}
 
 	c.logf("starting topo server")
-	if err = c.startTopo(ctx); err != nil {
+	if err = c.startTopo(t, ctx); err != nil {
 		return cleanup, err
 	}
 
 	c.logf("starting vtctld")
-	if err = c.startVtctld(ctx); err != nil {
+	if err = c.startVtctld(t, ctx); err != nil {
 		return cleanup, err
 	}
 
@@ -194,7 +199,7 @@ func (c *Cluster) Start(ctx context.Context) (cleanup func(context.Context) erro
 	}
 
 	for i := range c.opts.keyspaces {
-		if err = c.startKeyspace(ctx, &c.opts.keyspaces[i]); err != nil {
+		if err = c.startKeyspace(t, ctx, &c.opts.keyspaces[i]); err != nil {
 			return cleanup, err
 		}
 	}
@@ -203,14 +208,14 @@ func (c *Cluster) Start(ctx context.Context) (cleanup func(context.Context) erro
 	if !c.opts.withoutVTGate {
 		group.Go(func() error {
 			c.logf("starting vtgate")
-			_, err := c.AddVTGate(groupCtx)
+			_, err := c.AddVTGate(t, groupCtx)
 			return err
 		})
 	}
 	if c.opts.vtorcEnabled {
 		group.Go(func() error {
 			c.logf("starting vtorc")
-			_, err := c.AddVTOrc(groupCtx, "", c.opts.vtorcArgs...)
+			_, err := c.AddVTOrc(t, groupCtx, "", c.opts.vtorcArgs...)
 			return err
 		})
 	}
@@ -220,7 +225,7 @@ func (c *Cluster) Start(ctx context.Context) (cleanup func(context.Context) erro
 
 	if c.opts.vtadminEnabled {
 		c.logf("starting vtadmin")
-		if err = c.startVTAdmin(ctx); err != nil {
+		if err = c.startVTAdmin(t, ctx); err != nil {
 			return cleanup, err
 		}
 	}
@@ -231,7 +236,7 @@ func (c *Cluster) Start(ctx context.Context) (cleanup func(context.Context) erro
 
 // startKeyspace creates one keyspace in topology, starts its tablets, elects
 // primaries, applies the schema, and then applies the vschema.
-func (c *Cluster) startKeyspace(ctx context.Context, kc *keyspaceConfig) error {
+func (c *Cluster) startKeyspace(t testing.TB, ctx context.Context, kc *keyspaceConfig) error {
 	c.logf("creating keyspace %s", kc.name)
 	if err := c.vtctld.createKeyspace(ctx, kc); err != nil {
 		return err
@@ -285,7 +290,7 @@ func (c *Cluster) startKeyspace(ctx context.Context, kc *keyspaceConfig) error {
 		}
 
 		group.Go(func() error {
-			return c.startShard(groupCtx, shard, specs, kc.withoutPrimaryElection)
+			return c.startShard(t, groupCtx, shard, specs, kc.withoutPrimaryElection)
 		})
 	}
 	if err := group.Wait(); err != nil {
@@ -309,14 +314,14 @@ func (c *Cluster) startKeyspace(ctx context.Context, kc *keyspaceConfig) error {
 
 // startShard starts all of a shard's tablets concurrently, records them on
 // the Shard, and elects the first tablet as primary.
-func (c *Cluster) startShard(ctx context.Context, shard *Shard, specs []*TabletSpec, withoutPrimaryElection bool) error {
+func (c *Cluster) startShard(t testing.TB, ctx context.Context, shard *Shard, specs []*TabletSpec, withoutPrimaryElection bool) error {
 	tablets := make([]*Tablet, len(specs))
 
 	group, groupCtx := errgroup.WithContext(ctx)
 	for i, spec := range specs {
 		group.Go(func() error {
 			c.logf("starting tablet %s-%d (%s) for %s", spec.Cell, spec.UID, spec.Type, shard.Ref())
-			tablet, err := c.startTablet(groupCtx, spec)
+			tablet, err := c.startTablet(t, groupCtx, spec)
 			if err != nil {
 				return err
 			}
@@ -410,7 +415,7 @@ GRANT PROXY ON ''@'' TO '%[1]s'@'%%' WITH GRANT OPTION;
 
 // AddKeyspace creates and starts an additional keyspace on the running
 // cluster: topology record, tablets, primary election, schema, and vschema.
-func (c *Cluster) AddKeyspace(ctx context.Context, kb *keyspaceBuilder) (*Keyspace, error) {
+func (c *Cluster) AddKeyspace(t testing.TB, ctx context.Context, kb *keyspaceBuilder) (*Keyspace, error) {
 	kc := kb.config
 	if err := kc.validate(); err != nil {
 		return nil, err
@@ -426,7 +431,7 @@ func (c *Cluster) AddKeyspace(ctx context.Context, kb *keyspaceBuilder) (*Keyspa
 	config := &c.opts.keyspaces[len(c.opts.keyspaces)-1]
 	c.mu.Unlock()
 
-	if err := c.startKeyspace(ctx, config); err != nil {
+	if err := c.startKeyspace(t, ctx, config); err != nil {
 		return nil, err
 	}
 	return c.Keyspace(kc.name), nil
@@ -437,7 +442,7 @@ func (c *Cluster) AddKeyspace(ctx context.Context, kb *keyspaceBuilder) (*Keyspa
 // primary election. Resharding tests use it to bring up the target shards; the
 // schema reaches them through the reshard itself or a later ApplySchema, and
 // the vschema and routing rules stay with the test.
-func (c *Cluster) AddShard(ctx context.Context, keyspace, shardName string, replicas, rdonly int) (*Shard, error) {
+func (c *Cluster) AddShard(t testing.TB, ctx context.Context, keyspace, shardName string, replicas, rdonly int) (*Shard, error) {
 	ks := c.Keyspace(keyspace)
 	if ks == nil {
 		return nil, fmt.Errorf("keyspace %s does not exist", keyspace)
@@ -481,7 +486,7 @@ func (c *Cluster) AddShard(ctx context.Context, keyspace, shardName string, repl
 	}
 
 	c.logf("starting shard %s/%s", keyspace, shardName)
-	if err := c.startShard(ctx, shard, specs, false); err != nil {
+	if err := c.startShard(t, ctx, shard, specs, false); err != nil {
 		return nil, err
 	}
 	return shard, nil
@@ -546,7 +551,7 @@ func (c *Cluster) keyspaceConfig(name string) *keyspaceConfig {
 // serving an existing shard on the running cluster, in the given cell (""
 // means the first cell). It joins as a replica of the shard's primary and is
 // recorded on the Shard.
-func (c *Cluster) AddTablet(ctx context.Context, cell, keyspace, shard, tabletType string) (*Tablet, error) {
+func (c *Cluster) AddTablet(t testing.TB, ctx context.Context, cell, keyspace, shard, tabletType string) (*Tablet, error) {
 	ks := c.Keyspace(keyspace)
 	if ks == nil {
 		return nil, fmt.Errorf("keyspace %s does not exist", keyspace)
@@ -566,7 +571,7 @@ func (c *Cluster) AddTablet(ctx context.Context, cell, keyspace, shard, tabletTy
 		Shard:    shard,
 		Type:     tabletType,
 	}
-	tablet, err := c.startTablet(ctx, spec)
+	tablet, err := c.startTablet(t, ctx, spec)
 	if err != nil {
 		return nil, err
 	}
@@ -680,56 +685,6 @@ func (c *Cluster) AddCell(ctx context.Context, cell string) error {
 // "8.4.8".
 func (c *Cluster) MySQLVersion() string {
 	return c.mysqlVersion
-}
-
-// DumpDiagnostics writes the tail of every component's logs through logf,
-// and, when the VITESST_ARTIFACTS environment variable names a directory,
-// writes full logs and container state there for CI upload.
-func (c *Cluster) DumpDiagnostics(ctx context.Context, logf func(format string, args ...any)) {
-	c.dumpLogs(logf)
-
-	dir := os.Getenv("VITESST_ARTIFACTS")
-	if dir == "" {
-		return
-	}
-	if err := c.writeArtifacts(ctx, dir); err != nil {
-		logf("writing artifacts to %s: %v", dir, err)
-	}
-}
-
-// writeArtifacts writes full component logs and mysqld error logs to dir.
-func (c *Cluster) writeArtifacts(ctx context.Context, dir string) error {
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
-	}
-
-	c.mu.Lock()
-	consumers := make([]*ringLogConsumer, len(c.logConsumers))
-	copy(consumers, c.logConsumers)
-	tablets := make([]*Tablet, len(c.tablets))
-	copy(tablets, c.tablets)
-	c.mu.Unlock()
-
-	for _, rc := range consumers {
-		content := strings.Join(rc.snapshot(), "\n") + "\n"
-		if err := os.WriteFile(filepath.Join(dir, rc.name+".log"), []byte(content), 0o644); err != nil {
-			return err
-		}
-	}
-
-	for _, tablet := range tablets {
-		if !tablet.IsRunning() {
-			continue
-		}
-		_, output, err := containerExec(ctx, tablet.container(), []string{"cat", tablet.tabletDir() + "/error.log"})
-		if err != nil {
-			continue
-		}
-		if err := os.WriteFile(filepath.Join(dir, tablet.name+"-mysqld-error.log"), []byte(output), 0o644); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // terminate tears down all of the cluster's containers and its network. It

@@ -34,7 +34,7 @@ func setupCluster(t *testing.T) (*vitesst.Cluster, mysql.ConnParams) {
 	t.Helper()
 
 	ctx := t.Context()
-	cluster, err := vitesst.NewCluster(
+	cluster, err := vitesst.NewCluster(t,
 		vitesst.WithVTGateArgs(
 			"--dbddl-plugin", "noop",
 			"--mysql-server-query-timeout", "60s",
@@ -45,7 +45,7 @@ func setupCluster(t *testing.T) (*vitesst.Cluster, mysql.ConnParams) {
 	)
 	require.NoError(t, err)
 
-	cleanup, err := cluster.Start(ctx)
+	cleanup, err := cluster.Start(t, ctx)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		if err := cleanup(context.WithoutCancel(ctx)); err != nil {
@@ -103,7 +103,7 @@ func TestDBDDLPlugin(t *testing.T) {
 }
 
 func start(t *testing.T, clusterInstance *vitesst.Cluster, ksName string) {
-	_, err := clusterInstance.AddKeyspace(t.Context(), vitesst.WithKeyspace(ksName))
+	_, err := clusterInstance.AddKeyspace(t, t.Context(), vitesst.WithKeyspace(ksName))
 	require.NoError(t, err, "new database creation failed")
 }
 

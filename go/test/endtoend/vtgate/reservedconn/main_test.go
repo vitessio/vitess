@@ -102,7 +102,7 @@ func setup(t testing.TB) {
 
 	// This test requires setting the mysql-server-version vtgate flag
 	// to 5.7 regardless of the actual MySQL version used for the tests.
-	cluster, err := vitesst.NewCluster(
+	cluster, err := vitesst.NewCluster(t,
 		vitesst.WithVTTabletArgs("--queryserver-config-transaction-timeout", "5s"),
 		vitesst.WithVTGateArgs(
 			"--lock-heartbeat-time", "2s",
@@ -117,14 +117,11 @@ func setup(t testing.TB) {
 	)
 	require.NoError(t, err)
 
-	cleanup, err := cluster.Start(ctx)
+	cleanup, err := cluster.Start(t, ctx)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
 		defer cancel()
-		if t.Failed() {
-			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
-		}
 		if err := cleanup(cleanupCtx); err != nil {
 			t.Logf("cluster teardown: %v", err)
 		}

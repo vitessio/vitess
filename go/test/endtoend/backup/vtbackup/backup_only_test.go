@@ -145,7 +145,7 @@ func prepareCluster(t *testing.T) (*vitesst.Cluster, *vitesst.Tablet, *vitesst.T
 
 	// Bring up the primary, restoring it from the initial backup. It stays
 	// NOT_SERVING and read-only until it is made the shard primary.
-	primary, err := cluster.AddTablet(ctx, cell, keyspaceName, shardName, "replica")
+	primary, err := cluster.AddTablet(t, ctx, cell, keyspaceName, shardName, "replica")
 	require.NoError(t, err)
 	waitForRestoreComplete(t, primary, 180*time.Second)
 
@@ -161,7 +161,7 @@ func prepareCluster(t *testing.T) (*vitesst.Cluster, *vitesst.Tablet, *vitesst.T
 
 	// Bring up the first replica, restoring it from the same backup, and let it
 	// replicate from the new primary.
-	replica1, err := cluster.AddTablet(ctx, cell, keyspaceName, shardName, "replica")
+	replica1, err := cluster.AddTablet(t, ctx, cell, keyspaceName, shardName, "replica")
 	require.NoError(t, err)
 	require.NoError(t, replica1.WaitForTabletStatus(ctx, 180*time.Second, "SERVING"))
 
@@ -239,7 +239,7 @@ func firstBackupTest(t *testing.T, cluster *vitesst.Cluster, primary, replica1 *
 	verifyRowsInTablet(t, replica1, 2)
 
 	// now bring up the other replica, letting it restore from backup.
-	replica2, err := cluster.AddTablet(ctx, cell, keyspaceName, shardName, "replica")
+	replica2, err := cluster.AddTablet(t, ctx, cell, keyspaceName, shardName, "replica")
 	require.NoError(t, err)
 	// check the new replica has the data
 	verifyRowsInTablet(t, replica2, 2)
@@ -273,7 +273,7 @@ func startVtBackup(t *testing.T, cluster *vitesst.Cluster, initialBackup, restar
 	defer cancel()
 
 	log.Info(fmt.Sprintf("starting backup tablet %s", time.Now()))
-	vtbackup, err := cluster.StartVtbackup(ctx, vitesst.VtbackupSpec{
+	vtbackup, err := cluster.StartVtbackup(t, ctx, vitesst.VtbackupSpec{
 		Keyspace:      keyspaceName,
 		Shard:         shardName,
 		InitialBackup: initialBackup,

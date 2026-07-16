@@ -44,14 +44,14 @@ var (
 
 func setup(t *testing.T) {
 	ctx := t.Context()
-	cluster, err := vitesst.NewCluster(
+	cluster, err := vitesst.NewCluster(t,
 		vitesst.WithKeyspace(shardedKs).
 			WithShardNames(shardedKsShards...).
 			WithSchema(shardedSchemaSQL).
 			WithVSchema(shardedVSchema),
 	)
 	require.NoError(t, err)
-	cleanup, err := cluster.Start(ctx)
+	cleanup, err := cluster.Start(t, ctx)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		if err := cleanup(context.WithoutCancel(ctx)); err != nil {
@@ -63,7 +63,7 @@ func setup(t *testing.T) {
 	err = cluster.Vtctld().ExecuteCommand(ctx, "RebuildVSchemaGraph")
 	require.NoError(t, err)
 	vtParams = cluster.VTParams(ctx, "")
-	conn, closer, err := vitesst.NewMySQL(ctx, cluster, shardedKs, shardedSchemaSQL)
+	conn, closer, err := vitesst.NewMySQL(t, ctx, cluster, shardedKs, shardedSchemaSQL)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)

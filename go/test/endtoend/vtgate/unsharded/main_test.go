@@ -153,7 +153,7 @@ func setup(t *testing.T) (*vitesst.Cluster, mysql.ConnParams) {
 	t.Helper()
 
 	ctx := t.Context()
-	cluster, err := vitesst.NewCluster(
+	cluster, err := vitesst.NewCluster(t,
 		vitesst.WithVTTabletArgs("--queryserver-config-transaction-timeout", "3s", "--queryserver-config-max-result-size", "30"),
 		vitesst.WithVTGateArgs("--warn-sharded-only=true"),
 		vitesst.WithKeyspace(KeyspaceName).
@@ -161,7 +161,7 @@ func setup(t *testing.T) (*vitesst.Cluster, mysql.ConnParams) {
 			WithVSchema(VSchema),
 	)
 	require.NoError(t, err)
-	cleanup, err := cluster.Start(ctx)
+	cleanup, err := cluster.Start(t, ctx)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)

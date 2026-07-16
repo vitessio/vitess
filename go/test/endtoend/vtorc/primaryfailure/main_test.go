@@ -93,7 +93,7 @@ func setupVttablets(t *testing.T, numReplicas, numRdonly int, durability string,
 			idx++
 		})
 
-	clusterInstance, err := vitesst.NewCluster(
+	clusterInstance, err := vitesst.NewCluster(t,
 		vitesst.WithCells(cell1, cell2),
 		vitesst.WithoutVTGate(),
 		vitesst.WithVTTabletArgs("--lock-tables-timeout", "5s"),
@@ -101,12 +101,9 @@ func setupVttablets(t *testing.T, numReplicas, numRdonly int, durability string,
 	)
 	require.NoError(t, err)
 
-	cleanup, err := clusterInstance.Start(ctx)
+	cleanup, err := clusterInstance.Start(t, ctx)
 	t.Cleanup(func() {
 		cleanupCtx := context.WithoutCancel(ctx)
-		if t.Failed() {
-			clusterInstance.DumpDiagnostics(cleanupCtx, t.Logf)
-		}
 		if cleanupErr := cleanup(cleanupCtx); cleanupErr != nil {
 			t.Logf("cluster teardown: %v", cleanupErr)
 		}
@@ -125,7 +122,7 @@ func setupVttablets(t *testing.T, numReplicas, numRdonly int, durability string,
 // startVTOrc starts a VTOrc instance in cell1 with the given extra arguments.
 func startVTOrc(ctx context.Context, t *testing.T, clusterInstance *vitesst.Cluster, extraArgs ...string) *vitesst.VTOrc {
 	t.Helper()
-	vtorc, err := clusterInstance.AddVTOrc(ctx, cell1, extraArgs...)
+	vtorc, err := clusterInstance.AddVTOrc(t, ctx, cell1, extraArgs...)
 	require.NoError(t, err)
 	return vtorc
 }
@@ -148,7 +145,7 @@ func startVttablet(ctx context.Context, t *testing.T, clusterInstance *vitesst.C
 	if isRdonly {
 		tabletType = "rdonly"
 	}
-	tablet, err := clusterInstance.AddTablet(ctx, cell, keyspaceName, shardName, tabletType)
+	tablet, err := clusterInstance.AddTablet(t, ctx, cell, keyspaceName, shardName, tabletType)
 	require.NoError(t, err)
 	return tablet
 }

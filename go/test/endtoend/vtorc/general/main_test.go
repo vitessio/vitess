@@ -63,7 +63,7 @@ type vtorcCluster struct {
 func setupVtorcCluster(t *testing.T) *vtorcCluster {
 	t.Helper()
 
-	vc, err := createClusterAndStartTopo(t.Context())
+	vc, err := createClusterAndStartTopo(t, t.Context())
 	if vc != nil {
 		vc.tmClient = tmc.NewClient()
 		t.Cleanup(func() {
@@ -82,7 +82,7 @@ func setupVtorcCluster(t *testing.T) *vtorcCluster {
 // createClusterAndStartTopo starts a cluster: one keyspace with four
 // replica tablets and one rdonly tablet in zone1, with a second empty cell
 // registered, and no primary elected.
-func createClusterAndStartTopo(ctx context.Context) (*vtorcCluster, error) {
+func createClusterAndStartTopo(t *testing.T, ctx context.Context) (*vtorcCluster, error) {
 	nextUID := 100
 	keyspace := vitesst.WithKeyspace(keyspaceName).
 		WithShardNames(shardName).
@@ -95,7 +95,7 @@ func createClusterAndStartTopo(ctx context.Context) (*vtorcCluster, error) {
 			nextUID++
 		})
 
-	cluster, err := vitesst.NewCluster(
+	cluster, err := vitesst.NewCluster(t,
 		vitesst.WithCells(cell1, cell2),
 		vitesst.WithoutVTGate(),
 		vitesst.WithVTTabletArgs("--lock-tables-timeout", "5s"),
@@ -105,7 +105,7 @@ func createClusterAndStartTopo(ctx context.Context) (*vtorcCluster, error) {
 		return nil, err
 	}
 
-	cleanup, err := cluster.Start(ctx)
+	cleanup, err := cluster.Start(t, ctx)
 	vc := &vtorcCluster{cluster: cluster, cleanup: cleanup, lastUsedValue: 100}
 	if err != nil {
 		return vc, err
@@ -258,7 +258,7 @@ func (vc *vtorcCluster) startVTOrcs(t *testing.T, orcExtraArgs []string, prevent
 		args = append(args, "--prevent-cross-cell-failover")
 	}
 	for range count {
-		vtorc, err := vc.cluster.AddVTOrc(ctx, cell1, args...)
+		vtorc, err := vc.cluster.AddVTOrc(t, ctx, cell1, args...)
 		require.NoError(t, err)
 		vc.vtorcs = append(vc.vtorcs, vtorc)
 	}
@@ -291,14 +291,14 @@ func setupNewClusterSemiSync(t *testing.T) *vtorcCluster {
 			nextUID++
 		})
 
-	cluster, err := vitesst.NewCluster(
+	cluster, err := vitesst.NewCluster(t,
 		vitesst.WithoutVTGate(),
 		vitesst.WithVTTabletArgs("--lock-tables-timeout", "5s"),
 		keyspace,
 	)
 	require.NoError(t, err)
 
-	cleanup, err := cluster.Start(ctx)
+	cleanup, err := cluster.Start(t, ctx)
 	require.NoError(t, err)
 
 	vc := &vtorcCluster{cluster: cluster, cleanup: cleanup, lastUsedValue: 100}
@@ -342,7 +342,7 @@ func addSemiSyncKeyspace(t *testing.T, vc *vtorcCluster) *vitesst.Keyspace {
 			nextUID++
 		})
 
-	ks, err := vc.cluster.AddKeyspace(ctx, keyspace)
+	ks, err := vc.cluster.AddKeyspace(t, ctx, keyspace)
 	require.NoError(t, err)
 	return ks
 }

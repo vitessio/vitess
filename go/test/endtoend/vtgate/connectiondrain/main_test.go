@@ -44,7 +44,7 @@ const drainTimeout = time.Minute
 func setupCluster(t *testing.T) (*vitesst.Cluster, mysql.ConnParams) {
 	ctx := t.Context()
 
-	clusterInstance, err := vitesst.NewCluster(
+	clusterInstance, err := vitesst.NewCluster(t,
 		vitesst.WithCells(cell),
 		vitesst.WithKeyspace(keyspaceName).
 			WithSchema(schemaSQL),
@@ -52,7 +52,7 @@ func setupCluster(t *testing.T) (*vitesst.Cluster, mysql.ConnParams) {
 	)
 	require.NoError(t, err)
 
-	cleanup, err := clusterInstance.Start(ctx)
+	cleanup, err := clusterInstance.Start(t, ctx)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		if err := cleanup(context.WithoutCancel(ctx)); err != nil {

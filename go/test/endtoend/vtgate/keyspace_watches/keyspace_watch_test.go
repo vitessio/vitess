@@ -46,7 +46,7 @@ var (
 	vschemaDDLError = "Error 1105 (HY000): cannot update VSchema as the topology server connection is read-only"
 )
 
-func createCluster(ctx context.Context, extraVTGateArgs ...string) (*vitesst.Cluster, func(context.Context) error, error) {
+func createCluster(t *testing.T, ctx context.Context, extraVTGateArgs ...string) (*vitesst.Cluster, func(context.Context) error, error) {
 	SQLConfig := `{
 		"testuser1": {
 			"Password": "testpassword1",
@@ -61,7 +61,7 @@ func createCluster(ctx context.Context, extraVTGateArgs ...string) (*vitesst.Clu
 	}
 	vtGateArgs = append(vtGateArgs, extraVTGateArgs...)
 
-	clusterInstance, err := vitesst.NewCluster(
+	clusterInstance, err := vitesst.NewCluster(t,
 		vitesst.WithVTGateArgs(vtGateArgs...),
 		vitesst.WithVTGateFiles(vitesst.ContainerFile{
 			Content:       []byte(SQLConfig),
@@ -75,7 +75,7 @@ func createCluster(ctx context.Context, extraVTGateArgs ...string) (*vitesst.Clu
 	if err != nil {
 		return nil, nil, err
 	}
-	cleanup, err := clusterInstance.Start(ctx)
+	cleanup, err := clusterInstance.Start(t, ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -84,7 +84,7 @@ func createCluster(ctx context.Context, extraVTGateArgs ...string) (*vitesst.Clu
 
 func TestRoutingWithKeyspacesToWatch(t *testing.T) {
 	ctx := t.Context()
-	clusterInstance, cleanup, err := createCluster(ctx)
+	clusterInstance, cleanup, err := createCluster(t, ctx)
 	require.NoError(t, err)
 	defer func() {
 		if err := cleanup(context.WithoutCancel(ctx)); err != nil {
@@ -107,7 +107,7 @@ func TestRoutingWithKeyspacesToWatch(t *testing.T) {
 
 func TestVSchemaDDLWithKeyspacesToWatch(t *testing.T) {
 	ctx := t.Context()
-	clusterInstance, cleanup, err := createCluster(ctx, "--vschema-ddl-authorized-users", "%")
+	clusterInstance, cleanup, err := createCluster(t, ctx, "--vschema-ddl-authorized-users", "%")
 	require.NoError(t, err)
 	defer func() {
 		if err := cleanup(context.WithoutCancel(ctx)); err != nil {

@@ -71,7 +71,7 @@ GRANT BACKUP_ADMIN ON *.* TO 'vt_clone'@'%';`
 func setup(t *testing.T) {
 	t.Helper()
 
-	cluster, err := vitesst.NewCluster(
+	cluster, err := vitesst.NewCluster(t,
 		vitesst.WithCells(cell),
 		vitesst.WithoutVTGate(),
 		vitesst.WithTabletEnv(map[string]string{"EXTRA_MY_CNF": cloneCnfPath}),
@@ -86,13 +86,10 @@ func setup(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	cleanup, err := cluster.Start(t.Context())
+	cleanup, err := cluster.Start(t, t.Context())
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Minute)
 		defer cancel()
-		if t.Failed() {
-			cluster.DumpDiagnostics(ctx, t.Logf)
-		}
 		if cleanupErr := cleanup(ctx); cleanupErr != nil {
 			t.Logf("cluster teardown: %v", cleanupErr)
 		}

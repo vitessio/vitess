@@ -117,7 +117,7 @@ func setup(t *testing.T) (*vitesst.Cluster, mysql.ConnParams) {
 	t.Helper()
 	ctx := t.Context()
 
-	cluster, err := vitesst.NewCluster(
+	cluster, err := vitesst.NewCluster(t,
 		vitesst.WithKeyspace(KeyspaceName).
 			WithShards(2).
 			WithReplicas(2).
@@ -129,14 +129,11 @@ func setup(t *testing.T) (*vitesst.Cluster, mysql.ConnParams) {
 	)
 	require.NoError(t, err)
 
-	cleanup, err := cluster.Start(ctx)
+	cleanup, err := cluster.Start(t, ctx)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Minute)
 		defer cancel()
-		if t.Failed() {
-			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
-		}
 		if err := cleanup(cleanupCtx); err != nil {
 			t.Logf("cluster teardown: %v", err)
 		}
@@ -157,7 +154,7 @@ func setup(t *testing.T) (*vitesst.Cluster, mysql.ConnParams) {
 		require.NoError(t, cluster.WaitForHealthyShard(ctx, KeyspaceName, shard.Name, 5*time.Minute))
 	}
 
-	_, err = cluster.AddVTOrc(ctx, "")
+	_, err = cluster.AddVTOrc(t, ctx, "")
 	require.NoError(t, err)
 	require.NoError(t, waitForVTGateHealthy(ctx, cluster, 5*time.Minute))
 

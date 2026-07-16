@@ -433,7 +433,7 @@ func setup(t *testing.T) {
 	// this test suite, and so the low setting ensures we hit the more interesting code paths.
 	//
 	// No need for replicas in this stress test
-	newCluster, err := vitesst.NewCluster(
+	newCluster, err := vitesst.NewCluster(t,
 		vitesst.WithCells(cell),
 		vitesst.WithVTCtldArgs(
 			"--schema-change-dir", schemaChangeDirectory,
@@ -452,14 +452,11 @@ func setup(t *testing.T) {
 		vitesst.WithKeyspace(keyspaceName).WithShardNames("1"),
 	)
 	require.NoError(t, err)
-	cleanup, err := newCluster.Start(ctx)
+	cleanup, err := newCluster.Start(t, ctx)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Minute)
 		defer cancel()
-		if t.Failed() {
-			newCluster.DumpDiagnostics(cleanupCtx, t.Logf)
-		}
 		if err := cleanup(cleanupCtx); err != nil {
 			t.Logf("cluster teardown: %v", err)
 		}

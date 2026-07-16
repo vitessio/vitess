@@ -95,11 +95,11 @@ func TestPreventCrossKeyspaceReadsVTGateFlag(t *testing.T) {
 	ctx := t.Context()
 
 	// Restart vtgate with the --prevent-cross-keyspace-reads flag.
-	require.NoError(t, clusterInstance.VTGate().Restart(ctx, "--prevent-cross-keyspace-reads=true"))
+	require.NoError(t, clusterInstance.VTGate().Restart(t, ctx, "--prevent-cross-keyspace-reads=true"))
 	vtParams = clusterInstance.VTParams(ctx, "")
 	t.Cleanup(func() {
 		rollbackCtx := context.WithoutCancel(ctx)
-		require.NoError(t, clusterInstance.VTGate().Restart(rollbackCtx, "--prevent-cross-keyspace-reads=false"))
+		require.NoError(t, clusterInstance.VTGate().Restart(t, rollbackCtx, "--prevent-cross-keyspace-reads=false"))
 		vtParams = clusterInstance.VTParams(rollbackCtx, "")
 	})
 

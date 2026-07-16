@@ -70,7 +70,7 @@ func setup(t testing.TB) {
 	mysqlParams = mysql.ConnParams{}
 
 	ctx := t.Context()
-	cluster, err := vitesst.NewCluster(
+	cluster, err := vitesst.NewCluster(t,
 		vitesst.WithCells(Cell),
 		vitesst.WithVTGateArgs("--schema-change-signal"),
 		vitesst.WithVTTabletArgs("--queryserver-config-schema-change-signal"),
@@ -88,7 +88,7 @@ func setup(t testing.TB) {
 	)
 	require.NoError(t, err)
 
-	cleanup, err := cluster.Start(ctx)
+	cleanup, err := cluster.Start(t, ctx)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), 30*time.Second)
@@ -104,7 +104,7 @@ func setup(t testing.TB) {
 	clusterInstance = cluster
 	vtParams = cluster.VTParams(ctx, "")
 
-	conn, closer, err := vitesst.NewMySQL(ctx, cluster, shardedKs, shardedSchemaSQL)
+	conn, closer, err := vitesst.NewMySQL(t, ctx, cluster, shardedKs, shardedSchemaSQL)
 	require.NoError(t, err)
 	mysqlParams = conn
 	t.Cleanup(func() {

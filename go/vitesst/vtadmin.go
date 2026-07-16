@@ -19,6 +19,7 @@ package vitesst
 import (
 	"context"
 	"fmt"
+	"testing"
 
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/network"
@@ -76,7 +77,7 @@ func (c *Cluster) VTAdmin() *VTAdmin {
 
 // startVTAdmin starts the vtadmin API container, discovering the cluster's
 // vtctld and vtgate through their static network aliases.
-func (c *Cluster) startVTAdmin(ctx context.Context) error {
+func (c *Cluster) startVTAdmin(t testing.TB, ctx context.Context) error {
 	vtadmin := &VTAdmin{
 		component: component{
 			name:     c.name("vtadmin"),
@@ -142,7 +143,7 @@ func (c *Cluster) startVTAdmin(ctx context.Context) error {
 		network.WithNetwork([]string{vtadmin.name}, c.network),
 		testcontainers.WithEnv(map[string]string{"VTTEST": "endtoend"}),
 		filesOpt,
-		testcontainers.WithLogConsumers(c.newLogConsumer(vtadmin.name)),
+		testcontainers.WithLogConsumers(c.newFileLogConsumer(t, vtadmin.name)),
 		testcontainers.WithWaitStrategyAndDeadline(
 			defaultStartupTimeout,
 			wait.ForListeningPort(vtadmin.httpPort).

@@ -85,7 +85,7 @@ func TestCloneRestore(t *testing.T) {
 	verifyRowsInTablet(t, primary, 3)
 
 	// Bring up replica2 using clone from primary.
-	replica2, err := cluster.AddTablet(ctx, cell, keyspaceName, shardName, "replica")
+	replica2, err := cluster.AddTablet(t, ctx, cell, keyspaceName, shardName, "replica")
 	require.NoError(t, err)
 	require.NoError(t, replica2.WaitForTabletStatus(ctx, time.Minute, "SERVING"))
 

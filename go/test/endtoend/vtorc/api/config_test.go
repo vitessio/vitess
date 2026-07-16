@@ -40,7 +40,7 @@ func TestDynamicConfigs(t *testing.T) {
 	vtorc := clusterInstance.VTOrc()
 
 	// Restart VTOrc without any flag overrides so that all the configurations can be tested.
-	require.NoError(t, vtorc.RestartWithBuiltinConfig(ctx))
+	require.NoError(t, vtorc.RestartWithBuiltinConfig(t, ctx))
 
 	// Call API with retry to ensure VTOrc is up
 	status, resp := makeAPICallRetry(ctx, t, vtorc, "/debug/health", func(code int, response string) bool {

@@ -56,7 +56,7 @@ func setup(t *testing.T) {
 	t.Helper()
 	ctx := t.Context()
 
-	cluster, err := vitesst.NewCluster(
+	cluster, err := vitesst.NewCluster(t,
 		vitesst.WithoutVTGate(),
 		vitesst.WithVTCtldArgs(
 			"--schema-change-dir", schemaChangeDirectory,
@@ -69,13 +69,10 @@ func setup(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	cleanup, err := cluster.Start(ctx)
+	cleanup, err := cluster.Start(t, ctx)
 	t.Cleanup(func() {
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
 		defer cancel()
-		if t.Failed() {
-			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
-		}
 		if cleanupErr := cleanup(cleanupCtx); cleanupErr != nil {
 			t.Logf("cluster teardown: %v", cleanupErr)
 		}
@@ -362,6 +359,6 @@ func testCopySchemaShardWithDifferentDB(t *testing.T, shard int) {
 
 // addNewShard adds a new shard dynamically
 func addNewShard(t *testing.T, shard int) {
-	_, err := clusterInstance.AddShard(t.Context(), keyspaceName, strconv.Itoa(shard), 1, 0)
+	_, err := clusterInstance.AddShard(t, t.Context(), keyspaceName, strconv.Itoa(shard), 1, 0)
 	require.Nil(t, err)
 }

@@ -64,7 +64,7 @@ func setup(b *testing.B) {
 	b.StopTimer()
 	ctx := b.Context()
 
-	cluster, err := vitesst.NewCluster(
+	cluster, err := vitesst.NewCluster(b,
 		vitesst.WithKeyspace(sKs1).
 			WithShardNames(shards4...).
 			WithSchema(sSchemaSQL1).
@@ -80,14 +80,11 @@ func setup(b *testing.B) {
 	)
 	require.NoError(b, err)
 
-	cleanup, err := cluster.Start(ctx)
+	cleanup, err := cluster.Start(b, ctx)
 	require.NoError(b, err)
 	b.Cleanup(func() {
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(b.Context()), time.Minute)
 		defer cancel()
-		if b.Failed() {
-			cluster.DumpDiagnostics(cleanupCtx, b.Logf)
-		}
 		if err := cleanup(cleanupCtx); err != nil {
 			b.Logf("cluster teardown: %v", err)
 		}

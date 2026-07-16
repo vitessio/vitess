@@ -64,7 +64,7 @@ func setupCluster(t testing.TB) {
 	t.Helper()
 	ctx := t.Context()
 
-	cluster, err := vitesst.NewCluster(
+	cluster, err := vitesst.NewCluster(t,
 		vitesst.WithKeyspace(keyspaceName).
 			WithShardNames("-80", "80-").
 			WithSchema(schemaSQL).
@@ -73,7 +73,7 @@ func setupCluster(t testing.TB) {
 		vitesst.WithVTTabletArgs("--queryserver-config-schema-change-signal"),
 	)
 	require.NoError(t, err)
-	cleanup, err := cluster.Start(ctx)
+	cleanup, err := cluster.Start(t, ctx)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		require.NoError(t, cleanup(context.WithoutCancel(ctx)))
@@ -82,7 +82,7 @@ func setupCluster(t testing.TB) {
 	clusterInstance = cluster
 	vtParams = cluster.VTParams(ctx, "")
 
-	conn, closer, err := vitesst.NewMySQL(ctx, cluster, keyspaceName, schemaSQL)
+	conn, closer, err := vitesst.NewMySQL(t, ctx, cluster, keyspaceName, schemaSQL)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)

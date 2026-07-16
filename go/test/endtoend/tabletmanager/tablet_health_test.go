@@ -59,7 +59,7 @@ func TestTabletReshuffle(t *testing.T) {
 	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")] [VARCHAR("b")]]`)
 
 	// Create new tablet
-	rTablet, err := clusterInstance.AddTablet(ctx, cell, keyspaceName, shardName, "replica")
+	rTablet, err := clusterInstance.AddTablet(t, ctx, cell, keyspaceName, shardName, "replica")
 	require.NoError(t, err)
 
 	// mycnf-server-id prevents vttablet from reading the mycnf
@@ -101,7 +101,7 @@ func TestHealthCheck(t *testing.T) {
 	disableVTOrcRecoveries(t)
 	defer enableVTOrcRecoveries(t)
 
-	rTablet, err := clusterInstance.AddTablet(ctx, cell, keyspaceName, shardName, "replica")
+	rTablet, err := clusterInstance.AddTablet(t, ctx, cell, keyspaceName, shardName, "replica")
 	require.NoError(t, err)
 
 	// the tablet should be in SERVING state as we already have a primary
@@ -199,7 +199,7 @@ func TestHealthCheckSchemaChangeSignal(t *testing.T) {
 	verifyHealthStreamSchemaChangeSignals(t, conn, primaryTablet, false)
 
 	// We start a new vttablet, this time with `--queryserver-enable-views` flag specified.
-	tempTablet, err := clusterInstance.AddTablet(ctx, cell, keyspaceName, shardName, "replica")
+	tempTablet, err := clusterInstance.AddTablet(t, ctx, cell, keyspaceName, shardName, "replica")
 	require.NoError(t, err)
 	err = tempTablet.StopVttablet(ctx)
 	require.NoError(t, err)

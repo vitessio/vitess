@@ -295,7 +295,7 @@ func AddShardsToKeyspace(t *testing.T, clusterInstance *vitesst.Cluster, keyspac
 	t.Helper()
 	ctx := t.Context()
 	for _, shardName := range shardNames {
-		shard, err := clusterInstance.AddShard(ctx, keyspaceName, shardName, 2, 0)
+		shard, err := clusterInstance.AddShard(t, ctx, keyspaceName, shardName, 2, 0)
 		require.NoError(t, err)
 		for _, tablet := range shard.Tablets() {
 			err = tablet.WaitForTabletStatus(ctx, 2*time.Minute, "SERVING")

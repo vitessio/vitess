@@ -77,7 +77,7 @@ func setup(t *testing.T) {
 	})
 
 	ctx := t.Context()
-	cluster, err := vitesst.NewCluster(
+	cluster, err := vitesst.NewCluster(t,
 		vitesst.WithVTGateArgs("--grpc-use-effective-callerid"),
 		vitesst.WithVTGateFiles(vitesst.ContainerFile{
 			Content:       []byte(`{"transaction_mode":"TWOPC"}` + "\n"),
@@ -101,13 +101,10 @@ func setup(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	cleanup, err := cluster.Start(ctx)
+	cleanup, err := cluster.Start(t, ctx)
 	t.Cleanup(func() {
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
 		defer cancel()
-		if t.Failed() {
-			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
-		}
 		if err := cleanup(cleanupCtx); err != nil {
 			t.Logf("cluster teardown: %v", err)
 		}
@@ -117,7 +114,7 @@ func setup(t *testing.T) {
 	clusterInstance = cluster
 	vtParams = cluster.VTParams(ctx, "")
 
-	mysqlConn, closeMySQL, err := vitesst.NewMySQL(ctx, cluster, keyspaceName, SchemaSQL)
+	mysqlConn, closeMySQL, err := vitesst.NewMySQL(t, ctx, cluster, keyspaceName, SchemaSQL)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)

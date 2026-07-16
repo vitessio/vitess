@@ -226,7 +226,7 @@ func (bt *BufferingTest) createCluster(t *testing.T) (*vitesst.Cluster, func(con
 	}
 	vtgateArgs = append(vtgateArgs, bt.VtGateExtraArgs...)
 
-	clusterInstance, err := vitesst.NewCluster(
+	clusterInstance, err := vitesst.NewCluster(t,
 		keyspace,
 		vitesst.WithVTCtldArgs("--remote-operation-timeout", "30s", "--topo-etcd-lease-ttl", "40"),
 		vitesst.WithVTTabletArgs(
@@ -239,7 +239,7 @@ func (bt *BufferingTest) createCluster(t *testing.T) (*vitesst.Cluster, func(con
 		return nil, nil, err
 	}
 
-	cleanup, err := clusterInstance.Start(ctx)
+	cleanup, err := clusterInstance.Start(t, ctx)
 	return clusterInstance, cleanup, err
 }
 
@@ -267,9 +267,6 @@ func (bt *BufferingTest) Test(t *testing.T) {
 	if clusterInstance != nil {
 		t.Cleanup(func() {
 			cleanupCtx := context.WithoutCancel(ctx)
-			if t.Failed() {
-				clusterInstance.DumpDiagnostics(cleanupCtx, t.Logf)
-			}
 			if cleanupErr := cleanup(cleanupCtx); cleanupErr != nil {
 				t.Logf("cluster teardown: %v", cleanupErr)
 			}

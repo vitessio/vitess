@@ -55,7 +55,7 @@ func setup(t *testing.T) (*vitesst.Cluster, mysql.ConnParams) {
 	// column info). The vschema is set explicitly rather than left to a
 	// default so the test always pins down the routing-rules-only +
 	// schema-tracker scenario regardless of vtctld defaults.
-	cluster, err := vitesst.NewCluster(
+	cluster, err := vitesst.NewCluster(t,
 		vitesst.WithKeyspace(ksA).
 			WithSchema(schemaA).
 			WithVSchema(emptyVSchema),
@@ -65,14 +65,11 @@ func setup(t *testing.T) (*vitesst.Cluster, mysql.ConnParams) {
 	)
 	require.NoError(t, err)
 
-	cleanup, err := cluster.Start(ctx)
+	cleanup, err := cluster.Start(t, ctx)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Minute)
 		defer cancel()
-		if t.Failed() {
-			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
-		}
 		if err := cleanup(cleanupCtx); err != nil {
 			t.Logf("cluster teardown: %v", err)
 		}

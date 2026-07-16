@@ -102,7 +102,7 @@ func Setup(t *testing.T, useXtrabackup bool) {
 		WithReplicas(3).
 		WithDurabilityPolicy("semi_sync")
 
-	cluster, err := vitesst.NewCluster(
+	cluster, err := vitesst.NewCluster(t,
 		vitesst.WithCells(cell),
 		vitesst.WithBackupStorage(),
 		vitesst.WithoutVTGate(),
@@ -117,13 +117,10 @@ func Setup(t *testing.T, useXtrabackup bool) {
 	)
 	require.NoError(t, err)
 
-	cleanup, err := cluster.Start(ctx)
+	cleanup, err := cluster.Start(t, ctx)
 	t.Cleanup(func() {
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Minute)
 		defer cancel()
-		if t.Failed() {
-			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
-		}
 		if err := cleanup(cleanupCtx); err != nil {
 			t.Logf("cluster teardown: %v", err)
 		}
@@ -268,7 +265,7 @@ func TestRecoveryImpl(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "test1", qr.Rows[0][0].ToString())
 
-	vtgateInstance, err := localCluster.AddVTGate(ctx, "--tablet-types-to-wait", "REPLICA")
+	vtgateInstance, err := localCluster.AddVTGate(t, ctx, "--tablet-types-to-wait", "REPLICA")
 	assert.NoError(t, err)
 	assert.NoError(t, waitForTabletsInVTGate(t, vtgateInstance, fmt.Sprintf("%s.%s.primary", keyspaceName, shardName), 1, 30*time.Second))
 	assert.NoError(t, waitForTabletsInVTGate(t, vtgateInstance, fmt.Sprintf("%s.%s.replica", keyspaceName, shardName), 1, 30*time.Second))

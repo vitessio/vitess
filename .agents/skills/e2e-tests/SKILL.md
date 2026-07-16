@@ -56,12 +56,12 @@ The doubled `$$` passes a literal `$` to the `go test` regular expression.
 
 Use `-v` to show test progress and `t.Log` output.
 
-Set `VITESST_ARTIFACTS` to retain full failure artifacts:
+Every component's container logs stream to one file per component under the
+test's artifact directory. Pass `-artifacts` to retain them:
 
 ```bash
-rm -rf /tmp/vitesst-artifacts
-VITESST_ARTIFACTS=/tmp/vitesst-artifacts \
-  make e2e 'PKG=./go/test/endtoend/<package> -run ^TestName$$ -v'
+mkdir -p /tmp/vitesst-artifacts
+make e2e 'PKG=./go/test/endtoend/<package> -run ^TestName$$ -v -artifacts -outputdir /tmp/vitesst-artifacts'
 ```
 
 When a test fails, inspect its verbose output and the files under the artifact

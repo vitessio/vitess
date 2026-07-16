@@ -25,6 +25,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"testing"
 	"time"
 
 	"github.com/testcontainers/testcontainers-go"
@@ -146,7 +147,7 @@ func (g *VTGate) QueryLog(ctx context.Context) (string, error) {
 // network alias. When extraArgs are given they replace the vtgate's previous
 // extra args, so tests can restart vtgate with new flags. Mapped host ports
 // change across a restart; use the address accessors to re-resolve them.
-func (g *VTGate) Restart(ctx context.Context, extraArgs ...string) error {
+func (g *VTGate) Restart(t testing.TB, ctx context.Context, extraArgs ...string) error {
 	g.specMu.Lock()
 	if len(extraArgs) > 0 {
 		g.spec.ExtraArgs = extraArgs
@@ -161,7 +162,7 @@ func (g *VTGate) Restart(ctx context.Context, extraArgs ...string) error {
 		}
 	}
 
-	ctr, err := g.cluster.runVTGateContainer(ctx, g.name, spec)
+	ctr, err := g.cluster.runVTGateContainer(t, ctx, g.name, spec)
 	if err != nil {
 		return fmt.Errorf("restarting %s: %w", g.name, err)
 	}
@@ -182,13 +183,13 @@ func (c *Cluster) VTGate() *VTGate {
 // AddVTGate starts an additional vtgate with its own network alias for
 // multi-vtgate tests, in the cluster's first cell and watching every cell. The
 // given extraArgs apply to it in place of the cluster-wide vtgate args.
-func (c *Cluster) AddVTGate(ctx context.Context, extraArgs ...string) (*VTGate, error) {
-	return c.AddVTGateSpec(ctx, VTGateSpec{ExtraArgs: extraArgs})
+func (c *Cluster) AddVTGate(t testing.TB, ctx context.Context, extraArgs ...string) (*VTGate, error) {
+	return c.AddVTGateSpec(t, ctx, VTGateSpec{ExtraArgs: extraArgs})
 }
 
 // AddVTGateSpec starts an additional vtgate with its own network alias, placed
 // in the spec's cell and watching the spec's cells.
-func (c *Cluster) AddVTGateSpec(ctx context.Context, spec VTGateSpec) (*VTGate, error) {
+func (c *Cluster) AddVTGateSpec(t testing.TB, ctx context.Context, spec VTGateSpec) (*VTGate, error) {
 	if spec.Cell == "" {
 		spec.Cell = c.firstCell()
 	}
@@ -218,7 +219,7 @@ func (c *Cluster) AddVTGateSpec(ctx context.Context, spec VTGateSpec) (*VTGate, 
 		spec: spec,
 	}
 
-	ctr, err := c.runVTGateContainer(ctx, name, spec)
+	ctr, err := c.runVTGateContainer(t, ctx, name, spec)
 	if err != nil {
 		return nil, fmt.Errorf("starting %s: %w", name, err)
 	}
@@ -232,7 +233,7 @@ func (c *Cluster) AddVTGateSpec(ctx context.Context, spec VTGateSpec) (*VTGate, 
 
 // runVTGateContainer starts one vtgate container with the given network alias,
 // from a spec whose cell and watched cells are already resolved.
-func (c *Cluster) runVTGateContainer(ctx context.Context, name string, spec VTGateSpec) (testcontainers.Container, error) {
+func (c *Cluster) runVTGateContainer(t testing.TB, ctx context.Context, name string, spec VTGateSpec) (testcontainers.Container, error) {
 	args := []string{"vtgate"}
 	args = append(args, c.TopoFlags()...)
 	args = append(
@@ -274,7 +275,7 @@ func (c *Cluster) runVTGateContainer(ctx context.Context, name string, spec VTGa
 		network.WithNetwork([]string{name}, c.network),
 		testcontainers.WithEnv(mergeEnv(map[string]string{"VTTEST": "endtoend"}, c.opts.vtgateEnv)),
 		filesOpt,
-		testcontainers.WithLogConsumers(c.newLogConsumer(name)),
+		testcontainers.WithLogConsumers(c.newFileLogConsumer(t, name)),
 		testcontainers.WithWaitStrategyAndDeadline(
 			defaultStartupTimeout,
 			wait.ForHTTP("/debug/vars").

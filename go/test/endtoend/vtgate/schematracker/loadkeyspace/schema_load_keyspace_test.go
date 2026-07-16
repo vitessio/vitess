@@ -53,13 +53,13 @@ var (
 func TestLoadKeyspaceWithNoTablet(t *testing.T) {
 	ctx := t.Context()
 
-	cluster, err := vitesst.NewCluster(
+	cluster, err := vitesst.NewCluster(t,
 		vitesst.WithKeyspace(keyspaceName).
 			WithSchema(sqlSchema),
 		vitesst.WithVTTabletArgs("--queryserver-config-schema-change-signal"),
 	)
 	require.NoError(t, err)
-	cleanup, err := cluster.Start(ctx)
+	cleanup, err := cluster.Start(t, ctx)
 	t.Cleanup(func() {
 		require.NoError(t, cleanup(context.WithoutCancel(ctx)))
 	})
@@ -71,7 +71,7 @@ func TestLoadKeyspaceWithNoTablet(t *testing.T) {
 	}
 
 	// Start vtgate with the schema-change-signal flag
-	vtgate, err := cluster.AddVTGate(ctx, "--schema-change-signal")
+	vtgate, err := cluster.AddVTGate(t, ctx, "--schema-change-signal")
 	require.NoError(t, err)
 
 	// After starting VTGate we need to leave enough time for resolveAndLoadKeyspace to reach
@@ -85,11 +85,11 @@ func TestLoadKeyspaceWithNoTablet(t *testing.T) {
 func TestNoInitialKeyspace(t *testing.T) {
 	ctx := t.Context()
 
-	cluster, err := vitesst.NewCluster(
+	cluster, err := vitesst.NewCluster(t,
 		vitesst.WithKeyspace(keyspaceName),
 	)
 	require.NoError(t, err)
-	cleanup, err := cluster.Start(ctx)
+	cleanup, err := cluster.Start(t, ctx)
 	t.Cleanup(func() {
 		require.NoError(t, cleanup(context.WithoutCancel(ctx)))
 	})
@@ -102,7 +102,7 @@ func TestNoInitialKeyspace(t *testing.T) {
 	require.NoError(t, cluster.Vtctld().ExecuteCommand(ctx, "DeleteKeyspace", "--recursive", keyspaceName))
 
 	// Start vtgate with the schema-change-signal flag
-	vtgate, err := cluster.AddVTGate(ctx, "--schema-change-signal")
+	vtgate, err := cluster.AddVTGate(t, ctx, "--schema-change-signal")
 	require.NoError(t, err)
 
 	// check logs

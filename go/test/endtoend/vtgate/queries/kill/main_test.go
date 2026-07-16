@@ -46,7 +46,7 @@ var (
 func setup(t *testing.T) {
 	ctx := t.Context()
 	var maxGrpcSize int64 = 256 * 1024 * 1024
-	cluster, err := vitesst.NewCluster(
+	cluster, err := vitesst.NewCluster(t,
 		vitesst.WithKeyspace(ks).
 			WithShardNames("-80", "80-").
 			WithSchema(schema).
@@ -62,7 +62,7 @@ func setup(t *testing.T) {
 		),
 	)
 	require.NoError(t, err)
-	cleanup, err := cluster.Start(ctx)
+	cleanup, err := cluster.Start(t, ctx)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		if err := cleanup(context.WithoutCancel(ctx)); err != nil {

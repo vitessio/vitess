@@ -40,8 +40,8 @@ const comparisonMySQLUID = 1
 // cluster, for MySQL-comparison tests. It returns connection parameters and a
 // cleanup that terminates the container. The schema statements are applied to
 // the given database before returning.
-func NewMySQL(ctx context.Context, cluster *Cluster, dbName string, schemaSQL ...string) (mysql.ConnParams, func(context.Context) error, error) {
-	params, cleanup, err := newMySQLContainer(ctx, cluster, dbName)
+func NewMySQL(t testing.TB, ctx context.Context, cluster *Cluster, dbName string, schemaSQL ...string) (mysql.ConnParams, func(context.Context) error, error) {
+	params, cleanup, err := newMySQLContainer(t, ctx, cluster, dbName)
 	if err != nil {
 		return mysql.ConnParams{}, nil, err
 	}
@@ -57,7 +57,7 @@ func NewMySQL(ctx context.Context, cluster *Cluster, dbName string, schemaSQL ..
 }
 
 // newMySQLContainer starts the standalone mysqld container.
-func newMySQLContainer(ctx context.Context, cluster *Cluster, dbName string) (mysql.ConnParams, func(context.Context) error, error) {
+func newMySQLContainer(t testing.TB, ctx context.Context, cluster *Cluster, dbName string) (mysql.ConnParams, func(context.Context) error, error) {
 	initSQL := fmt.Sprintf(`SET GLOBAL super_read_only='OFF';
 CREATE DATABASE IF NOT EXISTS %s;
 CREATE USER '%s'@'%%';
@@ -86,7 +86,7 @@ GRANT ALL ON *.* TO '%s'@'%%' WITH GRANT OPTION;
 			ContainerFilePath: initPath,
 			FileMode:          0o644,
 		}),
-		testcontainers.WithLogConsumers(cluster.newLogConsumer(name)),
+		testcontainers.WithLogConsumers(cluster.newFileLogConsumer(t, name)),
 		testcontainers.WithWaitStrategyAndDeadline(
 			tabletStartupTimeout,
 			wait.ForExec(probe).

@@ -43,7 +43,7 @@ func setup(t *testing.T) {
 
 	// The keyspace starts two tablets without electing a primary, so
 	// TestAutoDetect drives the first flavor-detecting reparent itself.
-	cluster, err := vitesst.NewCluster(
+	cluster, err := vitesst.NewCluster(t,
 		vitesst.WithoutVTGate(),
 		vitesst.WithKeyspace(keyspaceName).
 			WithReplicas(1).
@@ -51,13 +51,10 @@ func setup(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	cleanup, err := cluster.Start(t.Context())
+	cleanup, err := cluster.Start(t, t.Context())
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Minute)
 		defer cancel()
-		if t.Failed() {
-			cluster.DumpDiagnostics(ctx, t.Logf)
-		}
 		if cleanupErr := cleanup(ctx); cleanupErr != nil {
 			t.Logf("cluster teardown: %v", cleanupErr)
 		}

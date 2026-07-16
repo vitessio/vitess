@@ -138,7 +138,7 @@ func TestQueryTimeoutWithoutVTGateDefault(t *testing.T) {
 
 	// disable query timeout
 	require.NoError(t,
-		clusterInstance.VTGate().Restart(ctx, "--query-timeout", "0"))
+		clusterInstance.VTGate().Restart(t, ctx, "--query-timeout", "0"))
 
 	// update vtgate params
 	vtParams = clusterInstance.VTParams(ctx, "")

@@ -116,7 +116,7 @@ func setup(t testing.TB) {
 	mysqlParams = mysql.ConnParams{}
 
 	ctx := t.Context()
-	cluster, err := vitesst.NewCluster(
+	cluster, err := vitesst.NewCluster(t,
 		vitesst.WithMySQLVersion(mysqlVersion),
 		vitesst.WithTabletFiles(vitesst.ContainerFile{
 			HostPath:      "extra_my.cnf",
@@ -146,7 +146,7 @@ func setup(t testing.TB) {
 	)
 	require.NoError(t, err)
 
-	cleanup, err := cluster.Start(ctx)
+	cleanup, err := cluster.Start(t, ctx)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), 30*time.Second)

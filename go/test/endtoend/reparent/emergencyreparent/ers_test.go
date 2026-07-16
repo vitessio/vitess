@@ -137,7 +137,7 @@ func TestEmergencyReparentWithBlockedPrimary(t *testing.T) {
 	ctx := t.Context()
 
 	// start vtgate w/disabled buffering
-	vtgate, err := clusterInstance.AddVTGate(ctx,
+	vtgate, err := clusterInstance.AddVTGate(t, ctx,
 		"--enable-buffer=false",
 		"--query-timeout", "3000")
 	require.NoError(t, err)
@@ -504,7 +504,7 @@ func TestERSForInitialization(t *testing.T) {
 		WithDurabilityPolicy(policy.DurabilitySemiSync).
 		WithoutPrimaryElection()
 
-	clusterInstance, err := vitesst.NewCluster(
+	clusterInstance, err := vitesst.NewCluster(t,
 		vitesst.WithoutVTGate(),
 		vitesst.WithVTTabletArgs(
 			"--lock-tables-timeout", "5s",

@@ -47,7 +47,7 @@ func setup(t *testing.T) {
 	t.Helper()
 	ctx := t.Context()
 
-	cluster, err := vitesst.NewCluster(
+	cluster, err := vitesst.NewCluster(t,
 		vitesst.WithKeyspace(keyspaceName).
 			WithShardNames("-80", "80-").
 			WithSchema(schemaSQL).
@@ -57,14 +57,11 @@ func setup(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	cleanup, err := cluster.Start(ctx)
+	cleanup, err := cluster.Start(t, ctx)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Minute)
 		defer cancel()
-		if t.Failed() {
-			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
-		}
 		if err := cleanup(cleanupCtx); err != nil {
 			t.Logf("cluster teardown: %v", err)
 		}
@@ -73,7 +70,7 @@ func setup(t *testing.T) {
 	clusterInstance = cluster
 	vtParams = cluster.VTParams(ctx, "")
 
-	conn, closer, err := vitesst.NewMySQL(ctx, cluster, keyspaceName, schemaSQL)
+	conn, closer, err := vitesst.NewMySQL(t, ctx, cluster, keyspaceName, schemaSQL)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Minute)

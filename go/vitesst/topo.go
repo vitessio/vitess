@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"testing"
 	"time"
 
 	"github.com/testcontainers/testcontainers-go"
@@ -55,21 +56,21 @@ func (c *Cluster) EtcdAddr(ctx context.Context) (string, error) {
 }
 
 // startTopo starts the topology server container for the configured flavor.
-func (c *Cluster) startTopo(ctx context.Context) error {
+func (c *Cluster) startTopo(t testing.TB, ctx context.Context) error {
 	switch c.opts.topoFlavor {
 	case "etcd2":
-		return c.startEtcd(ctx)
+		return c.startEtcd(t, ctx)
 	case "consul":
-		return c.startConsul(ctx)
+		return c.startConsul(t, ctx)
 	case "zk2":
-		return c.startZookeeper(ctx)
+		return c.startZookeeper(t, ctx)
 	default:
 		return fmt.Errorf("unsupported topo flavor %q", c.opts.topoFlavor)
 	}
 }
 
 // startEtcd starts the etcd topology server container.
-func (c *Cluster) startEtcd(ctx context.Context) error {
+func (c *Cluster) startEtcd(t testing.TB, ctx context.Context) error {
 	topo := &component{
 		name:     c.name("etcd"),
 		httpPort: fmt.Sprintf("%d/tcp", etcdClientPort),
@@ -85,7 +86,7 @@ func (c *Cluster) startEtcd(ctx context.Context) error {
 		),
 		testcontainers.WithExposedPorts(topo.httpPort),
 		network.WithNetwork([]string{topo.name}, c.network),
-		testcontainers.WithLogConsumers(c.newLogConsumer(topo.name)),
+		testcontainers.WithLogConsumers(c.newFileLogConsumer(t, topo.name)),
 		testcontainers.WithWaitStrategyAndDeadline(
 			defaultStartupTimeout,
 			wait.ForHTTP("/health").
@@ -104,7 +105,7 @@ func (c *Cluster) startEtcd(ctx context.Context) error {
 }
 
 // startConsul starts the consul topology server container.
-func (c *Cluster) startConsul(ctx context.Context) error {
+func (c *Cluster) startConsul(t testing.TB, ctx context.Context) error {
 	topo := &component{
 		name:     c.name("consul"),
 		httpPort: fmt.Sprintf("%d/tcp", consulClientPort),
@@ -119,7 +120,7 @@ func (c *Cluster) startConsul(ctx context.Context) error {
 		),
 		testcontainers.WithExposedPorts(topo.httpPort),
 		network.WithNetwork([]string{topo.name}, c.network),
-		testcontainers.WithLogConsumers(c.newLogConsumer(topo.name)),
+		testcontainers.WithLogConsumers(c.newFileLogConsumer(t, topo.name)),
 		testcontainers.WithWaitStrategyAndDeadline(
 			defaultStartupTimeout,
 			wait.ForHTTP("/v1/kv/?keys").
@@ -138,7 +139,7 @@ func (c *Cluster) startConsul(ctx context.Context) error {
 }
 
 // startZookeeper starts the zookeeper topology server container.
-func (c *Cluster) startZookeeper(ctx context.Context) error {
+func (c *Cluster) startZookeeper(t testing.TB, ctx context.Context) error {
 	topo := &component{
 		name:     c.name("zk"),
 		httpPort: fmt.Sprintf("%d/tcp", zkClientPort),
@@ -164,7 +165,7 @@ done`
 		testcontainers.WithEntrypoint("bash", "-c", script),
 		testcontainers.WithExposedPorts(topo.httpPort),
 		network.WithNetwork([]string{topo.name}, c.network),
-		testcontainers.WithLogConsumers(c.newLogConsumer(topo.name)),
+		testcontainers.WithLogConsumers(c.newFileLogConsumer(t, topo.name)),
 		testcontainers.WithWaitStrategyAndDeadline(
 			defaultStartupTimeout,
 			wait.ForListeningPort(topo.httpPort).

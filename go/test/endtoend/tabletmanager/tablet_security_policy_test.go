@@ -27,7 +27,7 @@ import (
 func TestFallbackSecurityPolicy(t *testing.T) {
 	setup(t)
 	ctx := t.Context()
-	mTablet, err := clusterInstance.AddTablet(ctx, cell, keyspaceName, shardName, "replica")
+	mTablet, err := clusterInstance.AddTablet(t, ctx, cell, keyspaceName, shardName, "replica")
 	require.NoError(t, err)
 
 	// Requesting an unregistered security-policy should fallback to deny-all.
@@ -69,7 +69,7 @@ func assertAllowedURLTest(t *testing.T, tablet *vitesst.Tablet, path string) {
 func TestDenyAllSecurityPolicy(t *testing.T) {
 	setup(t)
 	ctx := t.Context()
-	mTablet, err := clusterInstance.AddTablet(ctx, cell, keyspaceName, shardName, "replica")
+	mTablet, err := clusterInstance.AddTablet(t, ctx, cell, keyspaceName, shardName, "replica")
 	require.NoError(t, err)
 
 	// Requesting a deny-all security-policy.
@@ -96,7 +96,7 @@ func TestDenyAllSecurityPolicy(t *testing.T) {
 func TestReadOnlySecurityPolicy(t *testing.T) {
 	setup(t)
 	ctx := t.Context()
-	mTablet, err := clusterInstance.AddTablet(ctx, cell, keyspaceName, shardName, "replica")
+	mTablet, err := clusterInstance.AddTablet(t, ctx, cell, keyspaceName, shardName, "replica")
 	require.NoError(t, err)
 
 	// Requesting a read-only security-policy.

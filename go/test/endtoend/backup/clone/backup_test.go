@@ -88,7 +88,7 @@ func TestCloneBackup(t *testing.T) {
 	// Now bring up replica2 and restore from the backup we just created.
 	// This verifies the clone-based backup actually contains the data.
 	log.Info("Restoring replica2 from backup to verify clone worked")
-	replica2, err := cluster.AddTablet(ctx, cell, keyspaceName, shardName, "replica")
+	replica2, err := cluster.AddTablet(t, ctx, cell, keyspaceName, shardName, "replica")
 	require.NoError(t, err)
 	require.NoError(t, replica2.WaitForTabletStatus(ctx, time.Minute, "SERVING"))
 
@@ -120,7 +120,7 @@ func vtbackupWithClone(t *testing.T, cluster *vitesst.Cluster) error {
 	}
 
 	log.Info(fmt.Sprintf("Starting vtbackup with clone args: %v", extraArgs))
-	_, err := cluster.RunVtbackup(t.Context(), vitesst.VtbackupSpec{
+	_, err := cluster.RunVtbackup(t, t.Context(), vitesst.VtbackupSpec{
 		Keyspace:  keyspaceName,
 		Shard:     shardName,
 		ExtraArgs: extraArgs,

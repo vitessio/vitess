@@ -51,15 +51,12 @@ func startCluster(t *testing.T, opts ...vitesst.ClusterOption) *vitesst.Cluster 
 		vitesst.WithVTTabletArgs(commonTabletArg...),
 	}
 
-	cluster, err := vitesst.NewCluster(append(base, opts...)...)
+	cluster, err := vitesst.NewCluster(t, append(base, opts...)...)
 	require.NoError(t, err)
 
-	cleanup, err := cluster.Start(t.Context())
+	cleanup, err := cluster.Start(t, t.Context())
 	t.Cleanup(func() {
 		ctx := context.WithoutCancel(t.Context())
-		if t.Failed() {
-			cluster.DumpDiagnostics(ctx, t.Logf)
-		}
 		if err := cleanup(ctx); err != nil {
 			t.Logf("cluster teardown: %v", err)
 		}

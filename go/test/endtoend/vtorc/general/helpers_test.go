@@ -678,5 +678,4 @@ func printVTOrcLogsOnFailure(t *testing.T, ctx context.Context, vc *vtorcCluster
 		}
 		t.Logf("VTOrc %s logs:\n%s", vtorc.Name(), logs)
 	}
-	vc.cluster.DumpDiagnostics(ctx, t.Logf)
 }

@@ -94,9 +94,6 @@ func SetupRangeBasedCluster(ctx context.Context, t *testing.T) *vitesst.Cluster 
 // TeardownCluster is used to teardown the reparent cluster.
 func TeardownCluster(t *testing.T, clusterInstance *vitesst.Cluster) {
 	ctx := context.WithoutCancel(t.Context())
-	if t.Failed() {
-		clusterInstance.DumpDiagnostics(ctx, t.Logf)
-	}
 
 	cleanupsMu.Lock()
 	cleanup := cleanups[clusterInstance]
@@ -130,7 +127,7 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 			next++
 		})
 
-	clusterInstance, err := vitesst.NewCluster(
+	clusterInstance, err := vitesst.NewCluster(t,
 		vitesst.WithCells(cells...),
 		vitesst.WithoutVTGate(),
 		vitesst.WithVTTabletArgs(
@@ -148,7 +145,7 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 	)
 	require.NoError(t, err)
 
-	cleanup, err := clusterInstance.Start(ctx)
+	cleanup, err := clusterInstance.Start(t, ctx)
 	require.NoError(t, err)
 
 	cleanupsMu.Lock()
@@ -167,7 +164,7 @@ func shardTablets(clusterInstance *vitesst.Cluster) []*vitesst.Tablet {
 
 // StartNewVTTablet starts a new vttablet instance and joins it to the shard.
 func StartNewVTTablet(t *testing.T, clusterInstance *vitesst.Cluster) *vitesst.Tablet {
-	tablet, err := clusterInstance.AddTablet(t.Context(), "", KeyspaceName, ShardName, "replica")
+	tablet, err := clusterInstance.AddTablet(t, t.Context(), "", KeyspaceName, ShardName, "replica")
 	require.NoError(t, err)
 	return tablet
 }

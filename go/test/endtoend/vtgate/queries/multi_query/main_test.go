@@ -43,7 +43,7 @@ var (
 
 func setup(t *testing.T) {
 	ctx := t.Context()
-	cluster, err := vitesst.NewCluster(
+	cluster, err := vitesst.NewCluster(t,
 		vitesst.WithVTGateArgs("--mysql-server-multi-query-protocol"),
 		vitesst.WithKeyspace(keyspaceName).
 			WithShardNames("-80", "80-").
@@ -51,7 +51,7 @@ func setup(t *testing.T) {
 			WithVSchema(vschema),
 	)
 	require.NoError(t, err)
-	cleanup, err := cluster.Start(ctx)
+	cleanup, err := cluster.Start(t, ctx)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		if err := cleanup(context.WithoutCancel(ctx)); err != nil {
@@ -61,7 +61,7 @@ func setup(t *testing.T) {
 
 	clusterInstance = cluster
 	vtParams = cluster.VTParams(ctx, "")
-	conn, closer, err := vitesst.NewMySQL(ctx, cluster, keyspaceName, schemaSQL)
+	conn, closer, err := vitesst.NewMySQL(t, ctx, cluster, keyspaceName, schemaSQL)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)

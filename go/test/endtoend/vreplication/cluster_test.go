@@ -339,12 +339,12 @@ func (vc *VitessCluster) AddKeyspace(t *testing.T, cells []*Cell, ksName string,
 
 	log.Info("Adding keyspace " + ksName)
 	if vc.Cluster == nil {
-		c, err := vitesst.NewCluster(append(vc.clusterOptions(), kb)...)
+		c, err := vitesst.NewCluster(t, append(vc.clusterOptions(), kb)...)
 		require.NoError(t, err)
 
 		ctx, cancel := context.WithTimeout(t.Context(), clusterOperationTimeout)
 		defer cancel()
-		cleanup, err := c.Start(ctx)
+		cleanup, err := c.Start(t, ctx)
 		vc.Cluster = c
 		vc.cleanup = cleanup
 		require.NoError(t, err)
@@ -353,7 +353,7 @@ func (vc *VitessCluster) AddKeyspace(t *testing.T, cells []*Cell, ksName string,
 		vc.withRecoveriesDisabled(t, func() {
 			ctx, cancel := context.WithTimeout(t.Context(), clusterOperationTimeout)
 			defer cancel()
-			_, err := vc.Cluster.AddKeyspace(ctx, kb)
+			_, err := vc.Cluster.AddKeyspace(t, ctx, kb)
 			require.NoError(t, err)
 		})
 	}
@@ -388,7 +388,7 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 
 			log.Info("Adding Shard " + shardName)
 			ctx, cancel := context.WithTimeout(t.Context(), clusterOperationTimeout)
-			_, err := vc.Cluster.AddShard(ctx, keyspace.Name, shardName, replicas, rdonly)
+			_, err := vc.Cluster.AddShard(t, ctx, keyspace.Name, shardName, replicas, rdonly)
 			cancel()
 			require.NoError(t, err)
 			log.Info("Finished creating shard " + shardName)
@@ -626,7 +626,7 @@ func (vc *VitessCluster) StartVtgate(t testing.TB, cell *Cell, cellsToWatch stri
 	ctx, cancel := context.WithTimeout(context.Background(), clusterOperationTimeout)
 	defer cancel()
 
-	vtgate, err := vc.Cluster.AddVTGateSpec(ctx, vitesst.VTGateSpec{
+	vtgate, err := vc.Cluster.AddVTGateSpec(t, ctx, vitesst.VTGateSpec{
 		Cell:         cell.Name,
 		CellsToWatch: strings.Split(cellsToWatch, ","),
 		ExtraArgs:    vc.vtgateArgs,
@@ -670,9 +670,6 @@ func (vc *VitessCluster) TearDown() {
 	ctx, cancel := context.WithTimeout(context.Background(), clusterOperationTimeout)
 	defer cancel()
 
-	if vc.Cluster != nil && vc.t.Failed() {
-		vc.Cluster.DumpDiagnostics(ctx, vc.t.Logf)
-	}
 	if vc.cleanup != nil {
 		if err := vc.cleanup(ctx); err != nil {
 			log.Error("Error in cluster teardown - " + err.Error())

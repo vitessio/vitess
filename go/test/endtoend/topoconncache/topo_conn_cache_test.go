@@ -118,9 +118,9 @@ func addCellback(t *testing.T) {
 	// create new vttablets. They should come up as serving since the primary
 	// for each shard already exists.
 	for _, shard := range []string{"-80", "80-"} {
-		_, err = clusterInstance.AddTablet(ctx, cell2, keyspaceName, shard, "replica")
+		_, err = clusterInstance.AddTablet(t, ctx, cell2, keyspaceName, shard, "replica")
 		require.NoError(t, err)
-		_, err = clusterInstance.AddTablet(ctx, cell2, keyspaceName, shard, "rdonly")
+		_, err = clusterInstance.AddTablet(t, ctx, cell2, keyspaceName, shard, "rdonly")
 		require.NoError(t, err)
 	}
 

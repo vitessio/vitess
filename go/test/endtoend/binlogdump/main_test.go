@@ -53,20 +53,17 @@ func setup(target testing.TB) {
 	// This is needed to stream large binlog events (>16MB default).
 	grpcMaxMsgSize := "--grpc-max-message-size=67108864" // 64MB
 
-	cluster, err := vitesst.NewCluster(
+	cluster, err := vitesst.NewCluster(target,
 		vitesst.WithKeyspace(keyspaceName).WithShardNames("0").WithReplicas(0).WithSchema(sqlSchema),
 		vitesst.WithVTTabletArgs(grpcMaxMsgSize, "--pprof-http"),
 		vitesst.WithVTGateArgs(grpcMaxMsgSize, "--enable-binlog-dump", "--binlog-dump-authorized-users=%", "--pprof-http"),
 	)
 	require.NoError(target, err)
 
-	cleanup, err := cluster.Start(target.Context())
+	cleanup, err := cluster.Start(target, target.Context())
 	target.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.WithoutCancel(target.Context()), time.Minute)
 		defer cancel()
-		if target.Failed() {
-			cluster.DumpDiagnostics(ctx, target.Logf)
-		}
 		if cleanupErr := cleanup(ctx); cleanupErr != nil {
 			target.Logf("cluster teardown: %v", cleanupErr)
 		}

@@ -220,12 +220,12 @@ func LaunchCluster(t *testing.T, setupType int, streamMode string, stripes int, 
 		opts = append(opts, vitesst.WithMysqlctld())
 	}
 
-	cluster, err := vitesst.NewCluster(opts...)
+	cluster, err := vitesst.NewCluster(t, opts...)
 	if err != nil {
 		return 1, err
 	}
 
-	cleanup, err := cluster.Start(ctx)
+	cleanup, err := cluster.Start(t, ctx)
 	clusterCleanup = cleanup
 	if err != nil {
 		return 1, err
@@ -438,9 +438,6 @@ func updateCompressorArgs(commonArgs []string, cDetails *CompressionDetails) []s
 func TearDownCluster(t *testing.T) {
 	ctx := context.WithoutCancel(t.Context())
 
-	if vitessCluster != nil && t.Failed() {
-		vitessCluster.DumpDiagnostics(ctx, t.Logf)
-	}
 	if clusterCleanup != nil {
 		if err := clusterCleanup(ctx); err != nil {
 			t.Logf("cluster teardown: %v", err)

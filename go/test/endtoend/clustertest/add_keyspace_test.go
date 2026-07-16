@@ -64,6 +64,7 @@ func TestAddKeyspace(t *testing.T) {
 	ctx := t.Context()
 
 	_, err := clusterInstance.AddKeyspace(
+		t,
 		ctx,
 		vitesst.WithKeyspace(addKeyspaceName).
 			WithShardNames("-80", "80-").
@@ -72,7 +73,7 @@ func TestAddKeyspace(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	require.NoError(t, clusterInstance.VTGate().Restart(ctx))
+	require.NoError(t, clusterInstance.VTGate().Restart(t, ctx))
 	vtParams = clusterInstance.VTParams(ctx, "")
 
 	require.Eventually(t, func() bool {

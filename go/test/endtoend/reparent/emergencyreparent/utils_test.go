@@ -86,7 +86,7 @@ func setupReparentCluster(t *testing.T, durability string) *vitesst.Cluster {
 			idx++
 		})
 
-	clusterInstance, err := vitesst.NewCluster(
+	clusterInstance, err := vitesst.NewCluster(t,
 		vitesst.WithCells(cell1, cell2),
 		vitesst.WithoutVTGate(),
 		vitesst.WithVTTabletArgs(
@@ -126,12 +126,9 @@ func startCluster(t *testing.T, clusterInstance *vitesst.Cluster) {
 	t.Helper()
 	ctx := t.Context()
 
-	cleanup, err := clusterInstance.Start(ctx)
+	cleanup, err := clusterInstance.Start(t, ctx)
 	t.Cleanup(func() {
 		cleanupCtx := context.WithoutCancel(ctx)
-		if t.Failed() {
-			clusterInstance.DumpDiagnostics(cleanupCtx, t.Logf)
-		}
 		if cleanupErr := cleanup(cleanupCtx); cleanupErr != nil {
 			t.Logf("cluster teardown: %v", cleanupErr)
 		}

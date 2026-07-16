@@ -539,7 +539,7 @@ func TestScalarAggregate(t *testing.T) {
 
 	// disable schema tracking to have weight_string column added to query send down to mysql.
 	require.NoError(t,
-		clusterInstance.VTGate().Restart(ctx, "--enable-system-settings=true", "--schema-change-signal=false"))
+		clusterInstance.VTGate().Restart(t, ctx, "--enable-system-settings=true", "--schema-change-signal=false"))
 
 	// update vtgate params
 	vtParams = clusterInstance.VTParams(ctx, "")
@@ -548,7 +548,7 @@ func TestScalarAggregate(t *testing.T) {
 		// roll it back
 		rollbackCtx := context.WithoutCancel(ctx)
 		require.NoError(t,
-			clusterInstance.VTGate().Restart(rollbackCtx, "--schema-change-signal", "--enable-system-settings=true"))
+			clusterInstance.VTGate().Restart(t, rollbackCtx, "--schema-change-signal", "--enable-system-settings=true"))
 		//  update vtgate params
 		vtParams = clusterInstance.VTParams(rollbackCtx, "")
 	}()

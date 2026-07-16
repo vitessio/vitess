@@ -48,7 +48,7 @@ const selfTestVSchema = `{
 func TestClusterBootstrap(t *testing.T) {
 	t.Parallel()
 
-	c, err := vitesst.NewCluster(
+	c, err := vitesst.NewCluster(t,
 		vitesst.WithCells("zone1", "zone2"),
 		vitesst.WithKeyspace("uks").
 			WithReplicas(1).
@@ -59,12 +59,9 @@ func TestClusterBootstrap(t *testing.T) {
 			WithVSchema(selfTestVSchema),
 	)
 	require.NoError(t, err)
-	cleanup, err := c.Start(t.Context())
+	cleanup, err := c.Start(t, t.Context())
 	t.Cleanup(func() {
 		ctx := context.WithoutCancel(t.Context())
-		if t.Failed() {
-			c.DumpDiagnostics(ctx, t.Logf)
-		}
 		if err := cleanup(ctx); err != nil {
 			t.Logf("cluster teardown: %v", err)
 		}
@@ -142,17 +139,14 @@ func TestClusterBootstrap(t *testing.T) {
 func bootstrapTopoFlavor(t *testing.T, flavor string) {
 	t.Helper()
 
-	c, err := vitesst.NewCluster(
+	c, err := vitesst.NewCluster(t,
 		vitesst.WithTopo(flavor),
 		vitesst.WithKeyspace("ks").WithSchema(selfTestSchema),
 	)
 	require.NoError(t, err)
-	cleanup, err := c.Start(t.Context())
+	cleanup, err := c.Start(t, t.Context())
 	t.Cleanup(func() {
 		ctx := context.WithoutCancel(t.Context())
-		if t.Failed() {
-			c.DumpDiagnostics(ctx, t.Logf)
-		}
 		if err := cleanup(ctx); err != nil {
 			t.Logf("cluster teardown: %v", err)
 		}
@@ -182,18 +176,15 @@ func TestClusterBootstrapZookeeper(t *testing.T) {
 func TestTabletProcessLifecycle(t *testing.T) {
 	t.Parallel()
 
-	c, err := vitesst.NewCluster(
+	c, err := vitesst.NewCluster(t,
 		vitesst.WithKeyspace("ks").
 			WithReplicas(1).
 			WithSchema(selfTestSchema),
 	)
 	require.NoError(t, err)
-	cleanup, err := c.Start(t.Context())
+	cleanup, err := c.Start(t, t.Context())
 	t.Cleanup(func() {
 		ctx := context.WithoutCancel(t.Context())
-		if t.Failed() {
-			c.DumpDiagnostics(ctx, t.Logf)
-		}
 		if err := cleanup(ctx); err != nil {
 			t.Logf("cluster teardown: %v", err)
 		}
@@ -252,19 +243,16 @@ func TestTabletProcessLifecycle(t *testing.T) {
 func TestAddShard(t *testing.T) {
 	t.Parallel()
 
-	c, err := vitesst.NewCluster(
+	c, err := vitesst.NewCluster(t,
 		vitesst.WithKeyspace("ks").
 			WithShardNames("0").
 			WithSchema(selfTestSchema).
 			WithVSchema(selfTestVSchema),
 	)
 	require.NoError(t, err)
-	cleanup, err := c.Start(t.Context())
+	cleanup, err := c.Start(t, t.Context())
 	t.Cleanup(func() {
 		ctx := context.WithoutCancel(t.Context())
-		if t.Failed() {
-			c.DumpDiagnostics(ctx, t.Logf)
-		}
 		if err := cleanup(ctx); err != nil {
 			t.Logf("cluster teardown: %v", err)
 		}
@@ -279,7 +267,7 @@ func TestAddShard(t *testing.T) {
 
 	var targets []*vitesst.Shard
 	for _, name := range []string{"-80", "80-"} {
-		shard, err := c.AddShard(ctx, "ks", name, 1, 0)
+		shard, err := c.AddShard(t, ctx, "ks", name, 1, 0)
 		require.NoError(t, err)
 		require.NotNil(t, shard.Primary(), "shard %s should have an elected primary", name)
 		require.Len(t, shard.Replicas(), 1)
@@ -308,19 +296,16 @@ func TestAddShard(t *testing.T) {
 func TestBackupCycle(t *testing.T) {
 	t.Parallel()
 
-	c, err := vitesst.NewCluster(
+	c, err := vitesst.NewCluster(t,
 		vitesst.WithBackupStorage(),
 		vitesst.WithKeyspace("ks").
 			WithReplicas(1).
 			WithSchema(selfTestSchema),
 	)
 	require.NoError(t, err)
-	cleanup, err := c.Start(t.Context())
+	cleanup, err := c.Start(t, t.Context())
 	t.Cleanup(func() {
 		ctx := context.WithoutCancel(t.Context())
-		if t.Failed() {
-			c.DumpDiagnostics(ctx, t.Logf)
-		}
 		if err := cleanup(ctx); err != nil {
 			t.Logf("cluster teardown: %v", err)
 		}
@@ -343,7 +328,7 @@ func TestBackupCycle(t *testing.T) {
 	require.Len(t, backups, 1, "vtctld Backup should store one backup")
 
 	// vtbackup takes another one, reading the same volume.
-	_, err = c.RunVtbackup(ctx, vitesst.VtbackupSpec{Keyspace: "ks", Shard: "-"})
+	_, err = c.RunVtbackup(t, ctx, vitesst.VtbackupSpec{Keyspace: "ks", Shard: "-"})
 	require.NoError(t, err)
 	backups, err = c.ListBackups(ctx, "ks", "-")
 	require.NoError(t, err)
@@ -368,16 +353,13 @@ func TestBackupCycle(t *testing.T) {
 func TestVTGateRestart(t *testing.T) {
 	t.Parallel()
 
-	c, err := vitesst.NewCluster(
+	c, err := vitesst.NewCluster(t,
 		vitesst.WithKeyspace("ks").WithSchema(selfTestSchema),
 	)
 	require.NoError(t, err)
-	cleanup, err := c.Start(t.Context())
+	cleanup, err := c.Start(t, t.Context())
 	t.Cleanup(func() {
 		ctx := context.WithoutCancel(t.Context())
-		if t.Failed() {
-			c.DumpDiagnostics(ctx, t.Logf)
-		}
 		if err := cleanup(ctx); err != nil {
 			t.Logf("cluster teardown: %v", err)
 		}
@@ -389,7 +371,7 @@ func TestVTGateRestart(t *testing.T) {
 	require.NoError(t, err)
 	conn.Close()
 
-	require.NoError(t, c.VTGate().Restart(t.Context(), "--mysql-server-version", "9.9.9-vitesst-test"))
+	require.NoError(t, c.VTGate().Restart(t, t.Context(), "--mysql-server-version", "9.9.9-vitesst-test"))
 
 	// A fresh connection re-resolves the new mapped port, sees the new flag,
 	// and the data written before the restart.
@@ -405,23 +387,20 @@ func TestVTGateRestart(t *testing.T) {
 func TestNewMySQLComparison(t *testing.T) {
 	t.Parallel()
 
-	c, err := vitesst.NewCluster(
+	c, err := vitesst.NewCluster(t,
 		vitesst.WithKeyspace("ks").WithSchema(selfTestSchema),
 	)
 	require.NoError(t, err)
-	cleanup, err := c.Start(t.Context())
+	cleanup, err := c.Start(t, t.Context())
 	t.Cleanup(func() {
 		ctx := context.WithoutCancel(t.Context())
-		if t.Failed() {
-			c.DumpDiagnostics(ctx, t.Logf)
-		}
 		if err := cleanup(ctx); err != nil {
 			t.Logf("cluster teardown: %v", err)
 		}
 	})
 	require.NoError(t, err)
 
-	mysqlParams, mysqlCleanup, err := vitesst.NewMySQL(t.Context(), c, "ks", selfTestSchema)
+	mysqlParams, mysqlCleanup, err := vitesst.NewMySQL(t, t.Context(), c, "ks", selfTestSchema)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		if err := mysqlCleanup(context.WithoutCancel(t.Context())); err != nil {

@@ -136,7 +136,7 @@ func setup(t *testing.T) {
 	ctx := t.Context()
 
 	// No need for replicas in this stress test
-	cluster, err := vitesst.NewCluster(
+	cluster, err := vitesst.NewCluster(t,
 		vitesst.WithCells(cell),
 		vitesst.WithVTCtldArgs(
 			"--schema-change-dir", schemaChangeDirectory,
@@ -154,14 +154,11 @@ func setup(t *testing.T) {
 		vitesst.WithKeyspace(keyspaceName).WithShardNames("1"),
 	)
 	require.NoError(t, err)
-	cleanup, err := cluster.Start(ctx)
+	cleanup, err := cluster.Start(t, ctx)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Minute)
 		defer cancel()
-		if t.Failed() {
-			cluster.DumpDiagnostics(cleanupCtx, t.Logf)
-		}
 		if err := cleanup(cleanupCtx); err != nil {
 			t.Logf("cluster teardown: %v", err)
 		}

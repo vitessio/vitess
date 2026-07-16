@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"testing"
 	"time"
 
 	"github.com/moby/moby/api/types/container"
@@ -153,8 +154,8 @@ func (c *Cluster) removeBackupVolume(ctx context.Context) error {
 
 // RunVtbackup runs one vtbackup container to completion and returns its
 // output. The container shares the cluster's backup volume and network.
-func (c *Cluster) RunVtbackup(ctx context.Context, spec VtbackupSpec) (string, error) {
-	vb, err := c.StartVtbackup(ctx, spec)
+func (c *Cluster) RunVtbackup(t testing.TB, ctx context.Context, spec VtbackupSpec) (string, error) {
+	vb, err := c.StartVtbackup(t, ctx, spec)
 	if err != nil {
 		return "", err
 	}
@@ -170,7 +171,7 @@ func (c *Cluster) RunVtbackup(ctx context.Context, spec VtbackupSpec) (string, e
 // StartVtbackup starts a vtbackup container and returns immediately, so tests
 // can observe its ephemeral mysqld and files while it runs. Wait blocks until
 // it exits; the container is torn down with the cluster.
-func (c *Cluster) StartVtbackup(ctx context.Context, spec VtbackupSpec) (*Vtbackup, error) {
+func (c *Cluster) StartVtbackup(t testing.TB, ctx context.Context, spec VtbackupSpec) (*Vtbackup, error) {
 	if !c.opts.backupStorage {
 		return nil, errors.New("cluster has no backup storage, use WithBackupStorage")
 	}
@@ -211,7 +212,7 @@ func (c *Cluster) StartVtbackup(ctx context.Context, spec VtbackupSpec) (*Vtback
 		testcontainers.WithEnv(mergeEnv(map[string]string{"VTTEST": "endtoend"}, c.opts.tabletEnv)),
 		c.backupMount(),
 		filesOpt,
-		testcontainers.WithLogConsumers(c.newLogConsumer(name)),
+		testcontainers.WithLogConsumers(c.newFileLogConsumer(t, name)),
 		// vtbackup runs to completion on its own; nothing to wait for at start.
 		testcontainers.WithWaitStrategy(wait.ForLog("")),
 	)

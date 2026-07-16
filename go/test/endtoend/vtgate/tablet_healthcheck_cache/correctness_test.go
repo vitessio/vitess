@@ -84,7 +84,7 @@ func setup(t *testing.T) (*vitesst.Cluster, mysql.ConnParams) {
 	t.Helper()
 
 	ctx := t.Context()
-	cluster, err := vitesst.NewCluster(
+	cluster, err := vitesst.NewCluster(t,
 		vitesst.WithCells(cell),
 		vitesst.WithVTTabletArgs("--health-check-interval", "1s"),
 		vitesst.WithVTGateArgs("--tablet-refresh-interval", tabletRefreshInterval.String()),
@@ -95,7 +95,7 @@ func setup(t *testing.T) (*vitesst.Cluster, mysql.ConnParams) {
 			WithVSchema(vSchema),
 	)
 	require.NoError(t, err)
-	cleanup, err := cluster.Start(ctx)
+	cleanup, err := cluster.Start(t, ctx)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
@@ -154,7 +154,7 @@ func TestHealthCheckCacheWithTabletChurn(t *testing.T) {
 }
 
 func addTablet(ctx context.Context, t *testing.T, cluster *vitesst.Cluster, tabletType string) *vitesst.Tablet {
-	tablet, err := cluster.AddTablet(ctx, "", keyspaceName, shards[0], tabletType)
+	tablet, err := cluster.AddTablet(t, ctx, "", keyspaceName, shards[0], tabletType)
 	require.Nil(t, err)
 
 	name := fmt.Sprintf("%s.%s.%s", keyspaceName, shards[0], tabletType)
