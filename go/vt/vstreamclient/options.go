@@ -19,11 +19,13 @@ package vstreamclient
 import (
 	"math"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqlescape"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -243,21 +245,55 @@ func WithEventFunc(fn EventFunc, eventTypes ...binlogdatapb.VEventType) Option {
 // WithStartingVGtid sets the starting VGtid for the VStreamClient. This is useful for resuming a stream from a
 // specific point, vs what might be stored in the state table.
 //
-// The position is persisted with copy_completed=true and becomes the durable restart point, so every
-// shard gtid must be a concrete position: symbolic positions like "current" are resolved afresh by
-// VTGate on every run, which would silently skip rows delivered between a crash and the restart.
+// The position is persisted with copy_completed=true and becomes the durable restart point, so it
+// is validated strictly: every shard gtid must be a parseable, concrete position (symbolic
+// positions like "current" are resolved afresh by VTGate on every run, which would silently skip
+// rows delivered between a crash and the restart), must belong to a configured source keyspace,
+// and together they must cover every shard of every configured source keyspace, since VTGate only
+// opens streams for the listed shards.
 func WithStartingVGtid(vgtid *binlogdatapb.VGtid) Option {
 	return func(v *VStreamClient) error {
 		if vgtid == nil || len(vgtid.ShardGtids) == 0 {
 			return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: starting vgtid must include at least one shard gtid")
 		}
 
+		configuredKeyspaces := make(map[string]bool, len(v.tables))
+		for _, table := range v.tables {
+			configuredKeyspaces[table.Keyspace] = true
+		}
+
+		seen := make(map[string]bool, len(vgtid.ShardGtids))
 		for _, shardGtid := range vgtid.ShardGtids {
 			if shardGtid == nil || shardGtid.Keyspace == "" || shardGtid.Shard == "" {
 				return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: every starting shard gtid must name a keyspace and shard")
 			}
 			if shardGtid.Gtid == "" || strings.EqualFold(shardGtid.Gtid, "current") {
 				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: starting gtid for %s/%s must be a concrete position, got %q: symbolic or empty positions cannot be persisted as a restart point", shardGtid.Keyspace, shardGtid.Shard, shardGtid.Gtid)
+			}
+			if _, err := replication.DecodePosition(shardGtid.Gtid); err != nil {
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: starting gtid for %s/%s is not a parseable position: %v", shardGtid.Keyspace, shardGtid.Shard, err)
+			}
+			if !configuredKeyspaces[shardGtid.Keyspace] {
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: starting vgtid names keyspace %s, which is not a configured source keyspace", shardGtid.Keyspace)
+			}
+			if !slices.Contains(v.shardsByKeyspace[shardGtid.Keyspace], shardGtid.Shard) {
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: starting vgtid names shard %s/%s, which does not exist in the cluster", shardGtid.Keyspace, shardGtid.Shard)
+			}
+
+			key := shardGtid.Keyspace + "/" + shardGtid.Shard
+			if seen[key] {
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: starting vgtid names shard %s more than once", key)
+			}
+			seen[key] = true
+		}
+
+		// VTGate only opens streams for the listed shards, so a partial position would silently
+		// never consume the omitted shards
+		for keyspace := range configuredKeyspaces {
+			for _, shard := range v.shardsByKeyspace[keyspace] {
+				if !seen[keyspace+"/"+shard] {
+					return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: starting vgtid does not cover shard %s/%s; every shard of every configured source keyspace needs a position", keyspace, shard)
+				}
 			}
 		}
 

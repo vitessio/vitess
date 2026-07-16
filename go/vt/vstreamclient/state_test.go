@@ -306,7 +306,7 @@ func TestNew_ExplicitStartingVGtidPersistsWithCopyCompleted(t *testing.T) {
 	conn, impl := newStateTestConn(t, shardsAndStateTableResponses(nil)...)
 
 	explicit := &binlogdatapb.VGtid{
-		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/42"}},
+		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: testConcretePosition}},
 	}
 
 	v, err := New(t.Context(), "stream", conn, []TableConfig{newStateTestTableConfig()},
@@ -348,7 +348,7 @@ func TestNew_ExplicitStartingVGtidOverridesStoredState(t *testing.T) {
 	))...)
 
 	explicit := &binlogdatapb.VGtid{
-		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/42"}},
+		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: testConcretePosition}},
 	}
 
 	v, err := New(t.Context(), "stream", conn, []TableConfig{newStateTestTableConfig()},

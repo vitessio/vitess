@@ -45,6 +45,27 @@ func TestWithFlags_RejectsStreamKeyspaceHeartbeats(t *testing.T) {
 	require.ErrorContains(t, err, "StreamKeyspaceHeartbeats is not supported")
 }
 
+// testConcretePosition is a parseable MySQL56 position for starting-vgtid tests.
+const testConcretePosition = "MySQL56/16b1039f-22b6-11ed-b765-0a43f95f28a3:1-5"
+
+// newStartingVGtidClient returns a client configured with two source shards (ks/-80, ks/80-),
+// which the starting vgtid must fully cover.
+func newStartingVGtidClient() *VStreamClient {
+	return &VStreamClient{
+		tables: map[string]*TableConfig{
+			"ks.t": {Keyspace: "ks", Table: "t"},
+		},
+		shardsByKeyspace: map[string][]string{
+			"ks":    {"-80", "80-"},
+			"other": {"0"},
+		},
+	}
+}
+
+func startingShardGtid(shard string) *binlogdatapb.ShardGtid {
+	return &binlogdatapb.ShardGtid{Keyspace: "ks", Shard: shard, Gtid: testConcretePosition}
+}
+
 func TestWithStartingVGtid_Validation(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -55,33 +76,60 @@ func TestWithStartingVGtid_Validation(t *testing.T) {
 		{name: "empty", vgtid: &binlogdatapb.VGtid{}, wantErr: "at least one shard gtid"},
 		{
 			name:    "missing keyspace",
-			vgtid:   &binlogdatapb.VGtid{ShardGtids: []*binlogdatapb.ShardGtid{{Shard: "0", Gtid: "MySQL56/1"}}},
+			vgtid:   &binlogdatapb.VGtid{ShardGtids: []*binlogdatapb.ShardGtid{{Shard: "-80", Gtid: testConcretePosition}}},
 			wantErr: "must name a keyspace and shard",
 		},
 		{
 			name:    "empty gtid",
-			vgtid:   &binlogdatapb.VGtid{ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0"}}},
+			vgtid:   &binlogdatapb.VGtid{ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "-80"}}},
 			wantErr: "must be a concrete position",
 		},
 		{
 			name:    "symbolic current",
-			vgtid:   &binlogdatapb.VGtid{ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "current"}}},
+			vgtid:   &binlogdatapb.VGtid{ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "-80", Gtid: "current"}}},
 			wantErr: "must be a concrete position",
+		},
+		{
+			name:    "unparseable position",
+			vgtid:   &binlogdatapb.VGtid{ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "-80", Gtid: "garbage"}}},
+			wantErr: "not a parseable position",
+		},
+		{
+			name:    "foreign keyspace",
+			vgtid:   &binlogdatapb.VGtid{ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "other", Shard: "0", Gtid: testConcretePosition}}},
+			wantErr: "not a configured source keyspace",
+		},
+		{
+			name:    "unknown shard",
+			vgtid:   &binlogdatapb.VGtid{ShardGtids: []*binlogdatapb.ShardGtid{startingShardGtid("-40")}},
+			wantErr: "does not exist in the cluster",
+		},
+		{
+			name: "duplicate shard",
+			vgtid: &binlogdatapb.VGtid{ShardGtids: []*binlogdatapb.ShardGtid{
+				startingShardGtid("-80"), startingShardGtid("-80"),
+			}},
+			wantErr: "more than once",
+		},
+		{
+			name:    "missing shard coverage",
+			vgtid:   &binlogdatapb.VGtid{ShardGtids: []*binlogdatapb.ShardGtid{startingShardGtid("-80")}},
+			wantErr: "does not cover shard ks/80-",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := WithStartingVGtid(tt.vgtid)(&VStreamClient{})
+			err := WithStartingVGtid(tt.vgtid)(newStartingVGtidClient())
 			require.ErrorContains(t, err, tt.wantErr)
 		})
 	}
 }
 
 func TestWithStartingVGtid_ClonesInput(t *testing.T) {
-	v := &VStreamClient{}
+	v := newStartingVGtidClient()
 	vgtid := &binlogdatapb.VGtid{
-		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/1"}},
+		ShardGtids: []*binlogdatapb.ShardGtid{startingShardGtid("-80"), startingShardGtid("80-")},
 	}
 
 	err := WithStartingVGtid(vgtid)(v)
@@ -89,7 +137,7 @@ func TestWithStartingVGtid_ClonesInput(t *testing.T) {
 	require.NotSame(t, vgtid, v.latestVgtid)
 
 	vgtid.ShardGtids[0].Gtid = "mutated"
-	assert.Equal(t, "MySQL56/1", v.latestVgtid.ShardGtids[0].Gtid)
+	assert.Equal(t, testConcretePosition, v.latestVgtid.ShardGtids[0].Gtid)
 }
 
 func TestWithStateTable_RequiresTableName(t *testing.T) {
