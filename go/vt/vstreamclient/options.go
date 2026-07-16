@@ -21,6 +21,8 @@ import (
 	"os"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	"vitess.io/vitess/go/sqlescape"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -184,7 +186,12 @@ func WithFlags(flags *vtgatepb.VStreamFlags) Option {
 		if flags.HeartbeatInterval == 0 {
 			return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: HeartbeatInterval must be positive")
 		}
-		v.cfg.flags = flags
+		if flags.StreamKeyspaceHeartbeats {
+			return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: StreamKeyspaceHeartbeats is not supported: it streams internal sidecar heartbeat table events that have no TableConfig")
+		}
+
+		// clone so later caller mutations can't change stream behavior or bypass the validation above
+		v.cfg.flags = proto.Clone(flags).(*vtgatepb.VStreamFlags)
 		return nil
 	}
 }
