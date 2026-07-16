@@ -152,47 +152,14 @@ cross-install: cross-build
 	cp "${VTROOTBIN}/${GOOS}_${GOARCH}/"{mysqlctl,mysqlctld,vtorc,vtadmin,vtctld,vtctlclient,vtctldclient,vtgate,vttablet,vtbackup} "$${PREFIX}/bin/"
 
 # vitesst_images builds the vitesst e2e test images (vitesst:mysql80,
-# vitesst:mysql84 and vitesst:mariadb) from the current source tree. Binaries
-# are cross-compiled on the host for the Docker server architecture, so image
-# rebuilds after source changes only cost a COPY layer.
+# vitesst:mysql84 and vitesst:mariadb) from the current source tree.
+#
 # Usage: make vitesst_images
 vitesst_images:
 ifndef NOBANNER
 	echo $$(date): Building vitesst images
 endif
-	${MAKE} cross-install GOOS=linux GOARCH=$$(docker version --format '{{.Server.Arch}}') PREFIX=${PWD}/.vitesst_install
 	docker buildx bake --load -f go/vitesst/docker-bake.hcl
-
-# vitesst-images-debug2pc builds the vitesst image variant whose binaries
-# carry the debug2PC build tag, for the transaction/twopc fault-injection
-# suites. Run with VITESST_IMAGE=vitesst:mysql84-debug2pc.
-vitesst-images-debug2pc:
-	EXTRA_BUILD_TAGS=debug2PC ${MAKE} cross-install GOOS=linux GOARCH=$$(docker version --format '{{.Server.Arch}}') PREFIX=${PWD}/.vitesst_install_debug2pc
-	docker buildx bake --load -f go/vitesst/docker-bake.hcl mysql84-debug2pc
-
-# vitesst-image-ref bakes a vitesst image from a directory of already-compiled
-# binaries, tagging it as requested. The upgrade/downgrade suite uses it to
-# build the previous release's image: CI checks out that release into its own
-# tree, cross-compiles it into a bin directory under this repo root, then bakes
-# those binaries onto this tree's base MySQL layers. The previous release lacks
-# the Dockerfile and bake config, so the build drives from the current tree
-# while copying the other tree's binaries.
-#
-# BIN_DIR is relative to the repo root (the bake context) and defaults to the
-# base target's compiled-in path. IMAGE_TAG names the output image. VITESST_REF_TARGET
-# selects the base flavor target and defaults to mysql84.
-# Usage: make vitesst-image-ref BIN_DIR=.vitesst_install_prev/bin IMAGE_TAG=vitesst:mysql84-prev
-VITESST_REF_TARGET ?= mysql84
-vitesst-image-ref:
-ifndef IMAGE_TAG
-	$(error IMAGE_TAG is required, e.g. IMAGE_TAG=vitesst:mysql84-prev)
-endif
-ifndef BIN_DIR
-	$(error BIN_DIR is required, e.g. BIN_DIR=.vitesst_install_prev/bin)
-endif
-	docker buildx bake --load -f go/vitesst/docker-bake.hcl ${VITESST_REF_TARGET} \
-		--set ${VITESST_REF_TARGET}.args.BIN_DIR=${BIN_DIR} \
-		--set ${VITESST_REF_TARGET}.tags=${IMAGE_TAG}
 
 # Install local install the binaries needed to run vitess locally
 # Usage: make install-local PREFIX=/path/to/install/root

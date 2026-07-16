@@ -2,8 +2,8 @@
 #
 #   make vitesst_images
 #
-# which cross-compiles the Vitess binaries into .vitesst_install/bin first.
-# With the binaries in place the images can be baked directly:
+# The Vitess binaries are compiled in the Dockerfile's builder stage, so the
+# images can also be baked directly:
 #
 #   docker buildx bake --load -f go/vitesst/docker-bake.hcl
 #
@@ -59,10 +59,10 @@ target "mysql84-debug2pc" {
   context    = "."
   dockerfile = "go/vitesst/Dockerfile"
   args = {
-    FLAVOR        = "mysql84"
-    BASE_IMAGE    = "debian:trixie-slim"
-    MYSQL_VERSION = "8.4.8"
-    BIN_DIR       = ".vitesst_install_debug2pc/bin"
+    FLAVOR           = "mysql84"
+    BASE_IMAGE       = "debian:trixie-slim"
+    MYSQL_VERSION    = "8.4.8"
+    EXTRA_BUILD_TAGS = "debug2PC"
   }
   tags = ["vitesst:mysql84-debug2pc"]
 }

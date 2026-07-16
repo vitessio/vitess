@@ -79,32 +79,24 @@ jobs:
           echo $previous_release_ref
           echo "previous_release_ref=${previous_release_ref}" >> $GITHUB_OUTPUT
 
-      - name: Set up Go
-        if: steps.changes.outputs.end_to_end == 'true'
-        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
-        with:
-          go-version-file: go.mod
-
       - name: Set up Docker Buildx
         if: steps.changes.outputs.end_to_end == 'true'
         uses: docker/setup-buildx-action@8d2750c60ea24b2b1cbcdd0c2b71dbf0a01b3d55 # v3.12.0
 
-      # The current binaries are cross-compiled on the runner and copied into
-      # the image as its last layer, so the MySQL layers stay cached across
-      # source changes.
+      # The binaries are compiled in the Dockerfile's builder stage and copied
+      # into the image as its last layer, so the MySQL layers stay cached
+      # across source changes.
       - name: Build current vitesst image
         if: steps.changes.outputs.end_to_end == 'true'
         run: |
-          make cross-install GOOS=linux GOARCH=amd64 PREFIX=${PWD}/.vitesst_install
-          docker buildx bake --load -f go/test/vitesst/docker-bake.hcl mysql84 \
+          docker buildx bake --load -f go/vitesst/docker-bake.hcl mysql84 \
             --set '*.platform=linux/amd64' \
             --set '*.cache-from=type=gha,scope=vitesst' \
             --set '*.cache-to=type=gha,mode=max,scope=vitesst'
 
       # The previous release predates the vitesst framework and its Dockerfile,
-      # so it is only a source of binaries. It is checked out into a sibling
-      # tree and cross-compiled into the current tree's build context, then the
-      # current tree's bake wraps those binaries in the image.
+      # so it is checked out into a sibling tree and built with the current
+      # tree's Dockerfile.
       - name: Check out the previous release (${{ steps.output-previous-release-ref.outputs.previous_release_ref }})
         if: steps.changes.outputs.end_to_end == 'true'
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -115,9 +107,7 @@ jobs:
 
       - name: Build previous release vitesst image
         if: steps.changes.outputs.end_to_end == 'true'
-        run: |
-          make -C vitess-previous cross-install GOOS=linux GOARCH=amd64 PREFIX=${PWD}/.vitesst_install_prev
-          make vitesst-image-ref BIN_DIR=.vitesst_install_prev/bin IMAGE_TAG=vitesst-previous:mysql84
+        run: make vitesst-image-ref SRC_DIR=vitess-previous IMAGE_TAG=vitesst-previous:mysql84
 
       - name: Save vitesst images
         if: steps.changes.outputs.end_to_end == 'true'

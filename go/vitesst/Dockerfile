@@ -13,22 +13,37 @@
 # limitations under the License.
 
 # The vitesst e2e test image: a MySQL flavor installed by the repo's standard
-# install script, plus Vitess binaries cross-compiled on the host into
-# .vitesst_install/bin (see `make vitesst_images`). The binaries are copied
-# last so the MySQL layers cache across source changes.
+# install script, plus Vitess binaries compiled in the builder stage. The
+# binaries are copied last so the MySQL layers cache across source changes.
 #
 # Build from the repo root, e.g.:
 #   docker buildx bake --load -f go/vitesst/docker-bake.hcl
 
 ARG BASE_IMAGE=debian:trixie-slim
 
+FROM golang:1.26-alpine AS builder
+
+WORKDIR /vt/src/vitess.io/vitess
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY config config
+COPY go go
+
+# Extra Go build tags. The debug2pc bake target sets debug2PC for the
+# transaction/twopc fault-injection suites.
+ARG EXTRA_BUILD_TAGS=""
+
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 go build -trimpath -tags "${EXTRA_BUILD_TAGS}" -o /vt/bin/ \
+    ./go/cmd/mysqlctl ./go/cmd/mysqlctld ./go/cmd/vtorc ./go/cmd/vtadmin \
+    ./go/cmd/vtctld ./go/cmd/vtctlclient ./go/cmd/vtctldclient \
+    ./go/cmd/vtgate ./go/cmd/vttablet ./go/cmd/vtbackup
+
 FROM ${BASE_IMAGE}
 
 ARG FLAVOR=mysql84
-
-# Directory of prebuilt Vitess binaries relative to the build context. The
-# debug2pc bake target points it at a tree built with -tags debug2PC.
-ARG BIN_DIR=".vitesst_install/bin"
 
 # MySQL version passed to install_dependencies.sh. Empty uses the script's
 # default; the bake file pins versions that exist on cdn.mysql.com, since the
@@ -64,6 +79,6 @@ ENV PATH=/vt/bin:$PATH
 RUN mkdir -p /vt/vtdataroot /vt/files /vt/backups && chown vitess:vitess /vt/vtdataroot /vt/files /vt/backups
 
 # Keep this last: it is the only layer that changes when sources change.
-COPY --chown=vitess:vitess ${BIN_DIR} /vt/bin
+COPY --from=builder --chown=vitess:vitess /vt/bin /vt/bin
 
 USER vitess
