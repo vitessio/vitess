@@ -53,10 +53,17 @@ type stateTestVTGateImpl struct {
 	rowImageErr bool
 
 	// vstreamErr makes VStream fail, exercising Run's failed-stream-setup path.
-	vstreamErr error
+	// vstreamBlocks makes VStream block until the context is canceled, exercising the
+	// startup-watchdog path for a hung stream setup.
+	vstreamErr    error
+	vstreamBlocks bool
 }
 
-func (t *stateTestVTGateImpl) VStream(context.Context, topodatapb.TabletType, *binlogdatapb.VGtid, *binlogdatapb.Filter, *vtgatepb.VStreamFlags) (vtgateconn.VStreamReader, error) {
+func (t *stateTestVTGateImpl) VStream(ctx context.Context, _ topodatapb.TabletType, _ *binlogdatapb.VGtid, _ *binlogdatapb.Filter, _ *vtgatepb.VStreamFlags) (vtgateconn.VStreamReader, error) {
+	if t.vstreamBlocks {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
 	if t.vstreamErr != nil {
 		return nil, t.vstreamErr
 	}
@@ -548,6 +555,29 @@ func TestRun_FailedStreamSetupDoesNotFenceIncumbent(t *testing.T) {
 			assert.NotContains(t, query, "owner_token")
 		}
 	}
+}
+
+func TestRun_BlockedStreamSetupSurfacesStartupTimeout(t *testing.T) {
+	conn, impl := newStateTestConn(t, shardsAndStateTableResponses(resumableStateRow(t))...)
+	impl.vstreamBlocks = true
+
+	v, err := New(t.Context(), "stream", conn, []TableConfig{newStateTestTableConfig()},
+		WithStateTable("stateks", "state"))
+	require.NoError(t, err)
+
+	// shrink the watchdog windows so the test completes quickly; the effective startup timeout
+	// is floored at the liveness window (1s here)
+	v.cfg.startupTimeout = 50 * time.Millisecond
+	v.cfg.heartbeatTimeoutMultiplier = 1
+	v.cfg.gracefulShutdownWaitDur = time.Millisecond
+
+	// the watchdog must cover a hung stream setup, and Run must surface the startup cause
+	// instead of the generic transport error
+	err = v.Run(t.Context())
+	require.ErrorIs(t, err, ErrStartupTimeout)
+
+	// a Run that never established its stream must not have taken ownership
+	require.Len(t, impl.queries, 3)
 }
 
 func TestNew_ClaimsStateOwnershipAfterValidatingState(t *testing.T) {

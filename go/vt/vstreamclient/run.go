@@ -156,6 +156,13 @@ func (v *VStreamClient) Run(ctx context.Context) error {
 	// initialize the streamer
 	reader, err := v.cfg.conn.VStream(ctx, v.cfg.tabletType, v.latestVgtid, v.cfg.filter, v.cfg.flags)
 	if err != nil {
+		// a blocked stream setup can be canceled by the startup watchdog; surface its cause
+		// (e.g. ErrStartupTimeout) instead of the generic transport error, like the Recv path
+		if ctx.Err() != nil {
+			if cause := context.Cause(ctx); !errors.Is(cause, ctx.Err()) {
+				return fmt.Errorf("vstreamclient: stream canceled: %w", cause)
+			}
+		}
 		return fmt.Errorf("vstreamclient: failed to create vstream: %w", err)
 	}
 
