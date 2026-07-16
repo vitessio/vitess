@@ -236,6 +236,11 @@ func TestVStreamClientGracefulShutdownClosesMultiTableClient(t *testing.T) {
 		}
 	}
 
+	// wait for the copy phase to be checkpointed before shutting down: a shutdown mid-copy
+	// correctly restarts the copy on the next client (at-least-once), which would make the
+	// no-replay assertion below meaningless
+	require.Eventually(t, te.copyCompleted(t.Name()), 30*time.Second, 50*time.Millisecond)
+
 	// no fallback cancellation here: GracefulShutdown alone must end the run, otherwise a
 	// no-op shutdown implementation could pass on the strength of the cancel
 	vstreamClient.GracefulShutdown(15 * time.Second)
