@@ -27,7 +27,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	tmc "vitess.io/vitess/go/vt/vttablet/grpctmclient"
 )
@@ -156,7 +155,7 @@ func TestChangeTypePrimaryCompletesWithBlockedCommit(t *testing.T) {
 	oldPrimary, err := clusterInstance.VtctldClientProcess.GetTablet(primary.Alias)
 	require.NoError(t, err)
 
-	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
 	tmClient := tmc.NewClient()
