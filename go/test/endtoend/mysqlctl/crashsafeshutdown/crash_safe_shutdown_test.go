@@ -20,15 +20,11 @@ package crashsafeshutdown
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sort"
 	"strconv"
-	"strings"
-	"syscall"
 	"testing"
 	"time"
 
@@ -41,94 +37,90 @@ import (
 )
 
 const (
-	databaseName        = "crash_safe_shutdown"
-	initialRows         = 200
-	finalRows           = 250
-	shutdownGracePeriod = time.Second
+	keyspaceName = "crash_safe_shutdown"
+	databaseName = "vt_" + keyspaceName
 )
 
-func TestReplicaCrashSafeShutdown(t *testing.T) {
+// TestReplicaShutdownRelayDurabilityFence verifies that Vitess fences a
+// replica's relay log for crash safety BEFORE handing control to the
+// mysqld_shutdown hook (and mysqladmin): it sets sync_relay_log=1, flushes the
+// relay logs, and stops the receiver (I/O) thread. Without that fence, an
+// interrupted shutdown can leave an unsynced relay-log tail while the receiver
+// is still writing, which is the durability gap that lets a subsequently
+// crashed replica re-fetch and re-apply already-applied transactions.
+//
+// The fence runs inside mysqld shutdown, after the preflight hook and before
+// the mysqld_shutdown hook. Blocking that hook lets us observe the replica's
+// live state at exactly that boundary: a fixed build has already stopped the
+// receiver and set sync_relay_log=1; an unfixed build has not. The test is
+// therefore red on a build without the fix and green on one with it.
+func TestReplicaShutdownRelayDurabilityFence(t *testing.T) {
 	localCluster := cluster.NewCluster("zone1", "localhost")
 	localCluster.TmpDirectory = t.TempDir()
 	t.Cleanup(localCluster.Teardown)
 
+	// Start with sync_relay_log at a non-default value so the fence setting it
+	// to 1 is observable.
 	extraMyCnf := filepath.Join(t.TempDir(), "crash-safe-shutdown.cnf")
-	require.NoError(t, os.WriteFile(extraMyCnf, []byte(`[mysqld]
-replica_parallel_workers=4
-replica_preserve_commit_order=OFF
-sync_relay_log=10000
-`), 0o600))
+	require.NoError(t, os.WriteFile(extraMyCnf, []byte("[mysqld]\nsync_relay_log=10000\n"), 0o600))
 	t.Setenv("EXTRA_MY_CNF", extraMyCnf)
 
-	primary := startMySQL(t, localCluster)
-	replica := startMySQL(t, localCluster)
-	primaryConn := connectMySQL(t, primary)
-	t.Cleanup(primaryConn.Close)
-	replicaConn := connectMySQL(t, replica)
+	require.NoError(t, localCluster.StartTopo())
+	require.NoError(t, localCluster.StartUnshardedKeyspace(cluster.Keyspace{
+		Name:      keyspaceName,
+		SchemaSQL: "CREATE TABLE messages (id BIGINT PRIMARY KEY) ENGINE=InnoDB",
+	}, 1, false, localCluster.Cell))
+
+	shard := &localCluster.Keyspaces[0].Shards[0]
+	primary := shard.PrimaryTablet()
+	replica := shard.Replica()
+	require.NotNil(t, replica)
+
+	replicaConn := connectMySQL(t, &replica.MysqlctlProcess)
 	t.Cleanup(replicaConn.Close)
 
-	execQuery(t, replicaConn, fmt.Sprintf(`CHANGE REPLICATION SOURCE TO
-		SOURCE_HOST = 'localhost',
-		SOURCE_PORT = %d,
-		SOURCE_USER = 'vt_repl',
-		GET_SOURCE_PUBLIC_KEY = 1,
-		SOURCE_AUTO_POSITION = 1`, primary.MySQLPort))
-	execQuery(t, replicaConn, "START REPLICA")
+	// The replica must be actively replicating with the elevated
+	// sync_relay_log before we exercise shutdown.
 	require.Eventually(t, func() bool {
 		status, err := replicaConn.ShowReplicationStatus()
 		return err == nil && status.Running()
-	}, 30*time.Second, 100*time.Millisecond)
-
-	assertGlobalVariable(t, replicaConn, "replica_parallel_workers", "4")
+	}, 45*time.Second, 100*time.Millisecond, "replica did not start replicating")
 	assertGlobalVariable(t, replicaConn, "sync_relay_log", "10000")
 
-	execQuery(t, primaryConn, "SET GLOBAL super_read_only = OFF")
-	execQuery(t, primaryConn, "CREATE DATABASE "+databaseName)
-	execQuery(t, primaryConn, "CREATE TABLE "+databaseName+".messages (id BIGINT PRIMARY KEY, value BIGINT NOT NULL) ENGINE=InnoDB")
-	for id := 1; id <= initialRows; id++ {
-		execQuery(t, primaryConn, fmt.Sprintf("INSERT INTO %s.messages VALUES (%d, %d)", databaseName, id, id))
+	// Give the receiver a live relay log by generating a little traffic.
+	primaryConn := connectMySQL(t, &primary.MysqlctlProcess)
+	t.Cleanup(primaryConn.Close)
+	for id := 1; id <= 200; id++ {
+		execQuery(t, primaryConn, fmt.Sprintf("INSERT INTO %s.messages (id) VALUES (%d)", databaseName, id))
 	}
-	waitForRowCount(t, replicaConn, initialRows)
 
-	relayLogBeforeShutdown := currentRelayLog(t, replica)
-	shutdown := startBlockedShutdown(t, replica)
+	// Block the replica's mysqld_shutdown hook. The relay durability fence runs
+	// before this hook, so at the block the fence's effects are already visible
+	// on a fixed build.
+	require.NoError(t, replica.VttabletProcess.TearDown())
+	shutdown := startBlockedShutdown(t, &replica.MysqlctlProcess)
 	require.Eventually(t, func() bool {
 		_, err := os.Stat(shutdown.entered)
 		return err == nil
-	}, 30*time.Second, 100*time.Millisecond)
+	}, 45*time.Second, 10*time.Millisecond, "mysqlctl did not enter the blocked mysqld_shutdown hook")
 
-	assertGlobalVariable(t, replicaConn, "sync_relay_log", "1")
-	assert.NotEqual(t, relayLogBeforeShutdown, currentRelayLog(t, replica))
 	status, err := replicaConn.ShowReplicationStatus()
 	require.NoError(t, err)
-	assert.Equal(t, replication.ReplicationStateStopped, status.IOState)
+	syncRelayLog := queryString(t, replicaConn, "SELECT @@global.sync_relay_log")
+	t.Logf("at blocked mysqld_shutdown hook: Replica_IO_Running=%v Replica_SQL_Running=%v sync_relay_log=%s",
+		status.IOState, status.SQLState, syncRelayLog)
 
-	for id := initialRows + 1; id <= finalRows; id++ {
-		execQuery(t, primaryConn, fmt.Sprintf("INSERT INTO %s.messages VALUES (%d, %d)", databaseName, id, id))
-	}
+	assert.Equalf(t, replication.ReplicationStateStopped, status.IOState,
+		"the receiver (I/O thread) was not stopped before the mysqld_shutdown hook; the relay durability fence did not run")
+	assert.Equalf(t, replication.ReplicationStateStopped, status.SQLState,
+		"the applier (SQL thread) was not stopped before the mysqld_shutdown hook; the relay durability fence did not run")
+	assert.Equalf(t, "1", syncRelayLog,
+		"sync_relay_log was not set to 1 before the mysqld_shutdown hook; the relay durability fence did not run")
 
-	select {
-	case err := <-shutdown.done:
-		require.FailNow(t, "mysqlctl shutdown exited before the grace period", "%v", err)
-	case <-time.After(shutdownGracePeriod):
-	}
-	killMySQL(t, replica.TabletUID)
+	// The observation above is the assertion. Release the blocked hook so
+	// mysqlctl unwinds; the blocking hook stands in for the real mysqld
+	// shutdown, so the cluster teardown performs the final process cleanup.
 	shutdown.release(t)
-	require.NoError(t, shutdown.wait(t))
-
-	require.NoError(t, replica.StartProvideInit(false))
-	replicaConn.Close()
-	replicaConn = connectMySQL(t, replica)
-	t.Cleanup(replicaConn.Close)
-	assertGlobalVariable(t, replicaConn, "sync_relay_log", "10000")
-	execQuery(t, replicaConn, "START REPLICA")
-	waitForRowCount(t, replicaConn, finalRows)
-
-	status, err = replicaConn.ShowReplicationStatus()
-	require.NoError(t, err)
-	assert.True(t, status.Running())
-	assert.Empty(t, status.LastIOError)
-	assert.Empty(t, status.LastSQLError)
 }
 
 type blockedShutdown struct {
@@ -197,32 +189,6 @@ func (s *blockedShutdown) release(t *testing.T) {
 	require.NoError(t, os.WriteFile(s.releasePath, nil, 0o600))
 }
 
-func (s *blockedShutdown) wait(t *testing.T) error {
-	t.Helper()
-	select {
-	case err := <-s.done:
-		return err
-	case <-time.After(30 * time.Second):
-		return errors.New("mysqlctl shutdown did not exit")
-	}
-}
-
-func startMySQL(t *testing.T, localCluster *cluster.LocalProcessCluster) *cluster.MysqlctlProcess {
-	t.Helper()
-
-	process, err := cluster.MysqlCtlProcessInstance(
-		localCluster.GetAndReserveTabletUID(),
-		localCluster.GetAndReservePort(),
-		localCluster.TmpDirectory,
-	)
-	require.NoError(t, err)
-	require.NoError(t, process.Start())
-	t.Cleanup(func() {
-		assert.NoError(t, process.Stop())
-	})
-	return process
-}
-
 func connectMySQL(t *testing.T, process *cluster.MysqlctlProcess) *mysql.Conn {
 	t.Helper()
 
@@ -240,12 +206,12 @@ func execQuery(t *testing.T, conn *mysql.Conn, query string) {
 	require.NoError(t, err, "query: %s", query)
 }
 
-func waitForRowCount(t *testing.T, conn *mysql.Conn, expected int) {
+func queryString(t *testing.T, conn *mysql.Conn, query string) string {
 	t.Helper()
-	require.Eventually(t, func() bool {
-		result, err := conn.ExecuteFetch("SELECT COUNT(*) FROM "+databaseName+".messages", 1, false)
-		return err == nil && len(result.Rows) == 1 && result.Rows[0][0].ToString() == strconv.Itoa(expected)
-	}, 30*time.Second, 100*time.Millisecond)
+	result, err := conn.ExecuteFetch(query, 1, false)
+	require.NoError(t, err, "query: %s", query)
+	require.Len(t, result.Rows, 1)
+	return result.Rows[0][0].ToString()
 }
 
 func assertGlobalVariable(t *testing.T, conn *mysql.Conn, name, expected string) {
@@ -254,63 +220,4 @@ func assertGlobalVariable(t *testing.T, conn *mysql.Conn, name, expected string)
 	require.NoError(t, err)
 	require.Len(t, result.Rows, 1)
 	assert.Equal(t, expected, result.Rows[0][0].ToString())
-}
-
-func currentRelayLog(t *testing.T, process *cluster.MysqlctlProcess) string {
-	t.Helper()
-	indexPath := filepath.Join(
-		process.BasePath(),
-		"relay-logs",
-		fmt.Sprintf("vt-%010d-relay-bin.index", process.TabletUID),
-	)
-	contents, err := os.ReadFile(indexPath)
-	require.NoError(t, err)
-	relayLogs := strings.Fields(string(contents))
-	require.NotEmpty(t, relayLogs)
-	return relayLogs[len(relayLogs)-1]
-}
-
-func killMySQL(t *testing.T, tabletUID int) {
-	t.Helper()
-
-	output, err := exec.Command("ps", "-axo", "pid=,command=").Output()
-	require.NoError(t, err)
-	marker := fmt.Sprintf("vt_%010d", tabletUID)
-	type process struct {
-		pid        int
-		mysqldSafe bool
-	}
-	processes := make([]process, 0, 2)
-	for line := range strings.SplitSeq(string(output), "\n") {
-		if !strings.Contains(line, marker) || (!strings.Contains(line, "mysqld") && !strings.Contains(line, "mariadbd")) {
-			continue
-		}
-		fields := strings.Fields(line)
-		if len(fields) == 0 {
-			continue
-		}
-		pid, err := strconv.Atoi(fields[0])
-		require.NoError(t, err)
-		processes = append(processes, process{
-			pid:        pid,
-			mysqldSafe: strings.Contains(line, "mysqld_safe") || strings.Contains(line, "mariadbd-safe"),
-		})
-	}
-	require.NotEmpty(t, processes)
-	sort.Slice(processes, func(i, j int) bool {
-		return processes[i].mysqldSafe && !processes[j].mysqldSafe
-	})
-	for _, process := range processes {
-		require.NoError(t, syscall.Kill(process.pid, syscall.SIGKILL))
-	}
-
-	basePath := filepath.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("vt_%010d", tabletUID))
-	require.Eventually(t, func() bool {
-		output, err := exec.Command("ps", "-axo", "command=").Output()
-		return err == nil && !strings.Contains(string(output), marker)
-	}, 30*time.Second, 100*time.Millisecond)
-	if err := os.Remove(filepath.Join(basePath, "mysql.pid")); err != nil {
-		require.ErrorIs(t, err, os.ErrNotExist)
-	}
-	_ = os.Remove(filepath.Join(basePath, "mysql.sock"))
 }

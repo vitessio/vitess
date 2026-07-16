@@ -176,6 +176,16 @@ func (mysqld *Mysqld) prepareReplicaForShutdown(ctx context.Context) error {
 			slog.Any("error", err),
 		)
 	}
+	// Stopping the applier lets the (multi-threaded) worker queue drain to a
+	// gap-free, position-consistent point, so an interrupted shutdown or crash
+	// has less in-flight work to recover. Best effort and bounded by ctx: a
+	// hung applier flush must not block shutdown.
+	if err := mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.Conn.StopSQLThreadCommand()}); err != nil {
+		log.Warn(
+			"failed to stop the replication applier before shutdown; continuing because the relay log durability fence completed",
+			slog.Any("error", err),
+		)
+	}
 	return nil
 }
 

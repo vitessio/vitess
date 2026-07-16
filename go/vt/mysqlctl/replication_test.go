@@ -163,6 +163,7 @@ func TestPrepareReplicaForShutdown(t *testing.T) {
 		setSyncRelayLog = "SET GLOBAL sync_relay_log = 1"
 		flushRelayLogs  = "FLUSH RELAY LOGS"
 		stopIOThread    = "STOP REPLICA IO_THREAD"
+		stopSQLThread   = "STOP REPLICA SQL_THREAD"
 	)
 	replicaStatus := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("Source_Host|Replica_IO_Running|Replica_SQL_Running", "varchar|varchar|varchar"),
@@ -178,13 +179,15 @@ func TestPrepareReplicaForShutdown(t *testing.T) {
 		wantSet       int
 		wantFlush     int
 		wantStop      int
+		wantStopSQL   int
 	}{
 		{
-			name:      "replica",
-			status:    replicaStatus,
-			wantSet:   1,
-			wantFlush: 1,
-			wantStop:  1,
+			name:        "replica",
+			status:      replicaStatus,
+			wantSet:     1,
+			wantFlush:   1,
+			wantStop:    1,
+			wantStopSQL: 1,
 		},
 		{
 			name:   "not a replica",
@@ -215,6 +218,17 @@ func TestPrepareReplicaForShutdown(t *testing.T) {
 			wantSet:       1,
 			wantFlush:     1,
 			wantStop:      1,
+			wantStopSQL:   1,
+		},
+		{
+			name:          "interrupted applier stop",
+			status:        replicaStatus,
+			rejectedQuery: stopSQLThread,
+			rejectedError: context.DeadlineExceeded,
+			wantSet:       1,
+			wantFlush:     1,
+			wantStop:      1,
+			wantStopSQL:   1,
 		},
 	}
 
@@ -224,7 +238,7 @@ func TestPrepareReplicaForShutdown(t *testing.T) {
 			defer db.Close()
 			db.AddQuery("SELECT 1", &sqltypes.Result{})
 			db.AddQuery("SHOW REPLICA STATUS", testCase.status)
-			for _, query := range []string{setSyncRelayLog, flushRelayLogs, stopIOThread} {
+			for _, query := range []string{setSyncRelayLog, flushRelayLogs, stopIOThread, stopSQLThread} {
 				if query == testCase.rejectedQuery {
 					db.AddRejectedQuery(query, testCase.rejectedError)
 					continue
@@ -247,6 +261,7 @@ func TestPrepareReplicaForShutdown(t *testing.T) {
 			assert.Equal(t, testCase.wantSet, db.GetQueryCalledNum(setSyncRelayLog))
 			assert.Equal(t, testCase.wantFlush, db.GetQueryCalledNum(flushRelayLogs))
 			assert.Equal(t, testCase.wantStop, db.GetQueryCalledNum(stopIOThread))
+			assert.Equal(t, testCase.wantStopSQL, db.GetQueryCalledNum(stopSQLThread))
 		})
 	}
 }
