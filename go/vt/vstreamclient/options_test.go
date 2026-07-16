@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
@@ -42,6 +43,53 @@ func TestWithFlags_RejectsStreamKeyspaceHeartbeats(t *testing.T) {
 
 	err := WithFlags(&vtgatepb.VStreamFlags{HeartbeatInterval: 1, StreamKeyspaceHeartbeats: true})(v)
 	require.ErrorContains(t, err, "StreamKeyspaceHeartbeats is not supported")
+}
+
+func TestWithStartingVGtid_Validation(t *testing.T) {
+	tests := []struct {
+		name    string
+		vgtid   *binlogdatapb.VGtid
+		wantErr string
+	}{
+		{name: "nil", vgtid: nil, wantErr: "at least one shard gtid"},
+		{name: "empty", vgtid: &binlogdatapb.VGtid{}, wantErr: "at least one shard gtid"},
+		{
+			name:    "missing keyspace",
+			vgtid:   &binlogdatapb.VGtid{ShardGtids: []*binlogdatapb.ShardGtid{{Shard: "0", Gtid: "MySQL56/1"}}},
+			wantErr: "must name a keyspace and shard",
+		},
+		{
+			name:    "empty gtid",
+			vgtid:   &binlogdatapb.VGtid{ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0"}}},
+			wantErr: "must be a concrete position",
+		},
+		{
+			name:    "symbolic current",
+			vgtid:   &binlogdatapb.VGtid{ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "current"}}},
+			wantErr: "must be a concrete position",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := WithStartingVGtid(tt.vgtid)(&VStreamClient{})
+			require.ErrorContains(t, err, tt.wantErr)
+		})
+	}
+}
+
+func TestWithStartingVGtid_ClonesInput(t *testing.T) {
+	v := &VStreamClient{}
+	vgtid := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/1"}},
+	}
+
+	err := WithStartingVGtid(vgtid)(v)
+	require.NoError(t, err)
+	require.NotSame(t, vgtid, v.latestVgtid)
+
+	vgtid.ShardGtids[0].Gtid = "mutated"
+	assert.Equal(t, "MySQL56/1", v.latestVgtid.ShardGtids[0].Gtid)
 }
 
 func TestWithStateTable_RequiresTableName(t *testing.T) {

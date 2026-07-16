@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/sqltypes"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -288,8 +289,10 @@ func TestNew_ExplicitStartingVGtidPersistsWithCopyCompleted(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, string(expectedVGtidJSON), string(impl.bindVars[4]["latest_vgtid"].Value))
 
-	assert.Same(t, explicit, v.latestVgtid)
-	assert.Same(t, explicit, v.lastFlushedVgtid)
+	// the client stores a clone of the caller-owned vgtid
+	assert.NotSame(t, explicit, v.latestVgtid)
+	assert.True(t, proto.Equal(explicit, v.latestVgtid))
+	assert.Same(t, v.latestVgtid, v.lastFlushedVgtid)
 }
 
 func TestNew_ExplicitStartingVGtidOverridesStoredState(t *testing.T) {
@@ -319,7 +322,7 @@ func TestNew_ExplicitStartingVGtidOverridesStoredState(t *testing.T) {
 	expectedVGtidJSON, err := protojson.Marshal(explicit)
 	require.NoError(t, err)
 	assert.Equal(t, string(expectedVGtidJSON), string(impl.bindVars[4]["latest_vgtid"].Value))
-	assert.Same(t, explicit, v.latestVgtid)
+	assert.True(t, proto.Equal(explicit, v.latestVgtid))
 }
 
 func TestNew_RestartsIncompleteCopyFromScratch(t *testing.T) {
