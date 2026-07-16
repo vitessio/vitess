@@ -25,6 +25,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	"vitess.io/vitess/go/vt/vstreamclient"
 )
 
@@ -147,37 +149,60 @@ func TestVStreamClientFlushChunking(t *testing.T) {
 func TestVStreamClientFlushesOnHeartbeat(t *testing.T) {
 	te := newTestEnv(t)
 
-	flushes := make(chan []*Customer, 2)
+	type flush struct {
+		customers             []*Customer
+		reason                vstreamclient.FlushReason
+		heartbeatSinceLastRow bool
+	}
+
+	// the hooks and FlushFn all run on the Run goroutine, so this needs no synchronization;
+	// the test goroutine only observes it through the flushes channel payloads
+	heartbeatSinceLastRow := false
+
+	flushes := make(chan flush, 2)
 	vstreamClient := te.newDefaultClient(t, t.Name(), []vstreamclient.TableConfig{{
 		Keyspace:        "customer",
 		Table:           "customer",
 		Query:           "select * from customer where id between 500 and 599",
 		MaxRowsPerFlush: 10,
 		DataType:        &Customer{},
-		FlushFn: func(_ context.Context, rows []vstreamclient.Row, _ vstreamclient.FlushMeta) error {
+		FlushFn: func(_ context.Context, rows []vstreamclient.Row, meta vstreamclient.FlushMeta) error {
 			batch := make([]*Customer, 0, len(rows))
 			for _, row := range rows {
 				batch = append(batch, row.Data.(*Customer))
 			}
-			flushes <- batch
+			flushes <- flush{customers: batch, reason: meta.FlushReason, heartbeatSinceLastRow: heartbeatSinceLastRow}
 			return nil
 		},
-	}}, vstreamclient.WithMinFlushDuration(1500*time.Millisecond))
+	}},
+		vstreamclient.WithMinFlushDuration(5*time.Second),
+		vstreamclient.WithEventFunc(func(_ context.Context, _ *binlogdatapb.VEvent) error {
+			heartbeatSinceLastRow = false
+			return nil
+		}, binlogdatapb.VEventType_ROW),
+		vstreamclient.WithEventFunc(func(_ context.Context, _ *binlogdatapb.VEvent) error {
+			heartbeatSinceLastRow = true
+			return nil
+		}, binlogdatapb.VEventType_HEARTBEAT),
+	)
 
 	te.exec(t, "insert into customer.customer(id, email) values (501, 'heartbeat-initial@domain.com')", nil)
 	runCtx, cancelRun, runErrCh := te.runAsync(vstreamClient, 30*time.Second)
 	defer cancelRun()
 
 	firstFlush := recvOrFail(t, flushes, "first flush")
-	assert.Equal(t, []*Customer{{ID: 501, Email: "heartbeat-initial@domain.com"}}, firstFlush)
+	assert.Equal(t, []*Customer{{ID: 501, Email: "heartbeat-initial@domain.com"}}, firstFlush.customers)
+	assert.Equal(t, vstreamclient.FlushReasonCopyCompleted, firstFlush.reason)
 
-	// with no further writes after this insert, only a heartbeat (or min-duration) boundary can
-	// flush the buffered row; asserting on elapsed wall-clock time here is inherently flaky on
-	// loaded CI runners, so only the delivery itself is pinned
+	// with no further writes after this insert, the buffered row can only be delivered by a
+	// heartbeat boundary once minFlushDuration elapses: the row's own COMMIT arrives well
+	// inside the 5s window, so it cannot be the flush boundary
 	te.exec(t, "insert into customer.customer(id, email) values (502, 'heartbeat-late@domain.com')", nil)
 
 	secondFlush := recvOrFail(t, flushes, "second flush")
-	assert.Equal(t, []*Customer{{ID: 502, Email: "heartbeat-late@domain.com"}}, secondFlush)
+	assert.Equal(t, []*Customer{{ID: 502, Email: "heartbeat-late@domain.com"}}, secondFlush.customers)
+	assert.Equal(t, vstreamclient.FlushReasonMinDuration, secondFlush.reason)
+	assert.True(t, secondFlush.heartbeatSinceLastRow, "the flush boundary should have been a heartbeat, not the row's own commit")
 
 	cancelRun()
 	err := <-runErrCh
@@ -186,19 +211,34 @@ func TestVStreamClientFlushesOnHeartbeat(t *testing.T) {
 	}
 }
 
-// TestVStreamClientTransactionBoundaries verifies rows from one transaction are
-// flushed together after COMMIT, which preserves transactional consistency.
+// TestVStreamClientTransactionBoundaries verifies rows from one transaction are flushed
+// together after COMMIT — even with TransactionChunkSize enabled, which makes VTGate deliver the
+// transaction's rows in separate chunks — which preserves transactional consistency. The
+// deterministic mid-transaction heartbeat interleavings are pinned by the package unit test
+// TestHandleEvents_HeartbeatMidTransactionDefersFlush.
 func TestVStreamClientTransactionBoundaries(t *testing.T) {
 	te := newTestEnv(t)
 
-	flushes := make(chan []*Customer, 1)
-	vstreamClient := te.newDefaultClient(t, t.Name(), []vstreamclient.TableConfig{{
-		Keyspace:        "customer",
-		Table:           "customer",
-		Query:           "select * from customer where id between 1300 and 1399",
-		MaxRowsPerFlush: 10,
-		DataType:        &Customer{},
-		FlushFn: func(_ context.Context, rows []vstreamclient.Row, _ vstreamclient.FlushMeta) error {
+	newClient := func(flushFn vstreamclient.FlushFunc, opts ...vstreamclient.Option) *vstreamclient.VStreamClient {
+		return te.newDefaultClient(t, t.Name(), []vstreamclient.TableConfig{{
+			Keyspace:        "customer",
+			Table:           "customer",
+			Query:           "select * from customer where id between 1300 and 1399",
+			MaxRowsPerFlush: 10,
+			DataType:        &Customer{},
+			FlushFn:         flushFn,
+		}}, opts...)
+	}
+
+	// complete the copy phase first, so the chunked transaction below arrives through streaming
+	te.runUntilCopyCompleted(t, newClient(func(_ context.Context, _ []vstreamclient.Row, _ vstreamclient.FlushMeta) error { return nil }), t.Name())
+
+	flushes := make(chan []*Customer, 4)
+	var flushCalls atomic.Int32
+	var heartbeats atomic.Int32
+	client := newClient(
+		func(_ context.Context, rows []vstreamclient.Row, _ vstreamclient.FlushMeta) error {
+			flushCalls.Add(1)
 			batch := make([]*Customer, 0, len(rows))
 			for _, row := range rows {
 				batch = append(batch, row.Data.(*Customer))
@@ -206,17 +246,33 @@ func TestVStreamClientTransactionBoundaries(t *testing.T) {
 			flushes <- batch
 			return nil
 		},
-	}})
+		// TransactionChunkSize makes VTGate deliver the transaction's rows in separate chunks,
+		// exercising the path where a flush boundary could otherwise split the transaction
+		vstreamclient.WithFlags(&vtgatepb.VStreamFlags{HeartbeatInterval: 1, TransactionChunkSize: 1}),
+		vstreamclient.WithEventFunc(func(_ context.Context, _ *binlogdatapb.VEvent) error {
+			heartbeats.Add(1)
+			return nil
+		}, binlogdatapb.VEventType_HEARTBEAT),
+	)
 
-	runCtx, cancelRun, runErrCh := te.runAsync(vstreamClient, 30*time.Second)
+	runCtx, cancelRun, runErrCh := te.runAsync(client, 30*time.Second)
 	defer cancelRun()
 
 	te.exec(t, "begin", nil)
 	te.exec(t, "insert into customer.customer(id, email) values (1301, 'tx-a@domain.com'), (1302, 'tx-b@domain.com')", nil)
+
+	// hold the transaction open across several heartbeats: the stream is demonstrably live,
+	// and nothing may be flushed before the transaction commits
+	heartbeatBase := heartbeats.Load()
+	require.Eventually(t, func() bool { return heartbeats.Load() >= heartbeatBase+2 }, 30*time.Second, 50*time.Millisecond)
+	assert.Zero(t, flushCalls.Load(), "no rows may be delivered before COMMIT")
+
 	te.exec(t, "commit", nil)
 
+	// both chunked rows must arrive in a single flush at the commit boundary
 	batch := recvOrFail(t, flushes, "transaction flush")
 	assert.ElementsMatch(t, []*Customer{{ID: 1301, Email: "tx-a@domain.com"}, {ID: 1302, Email: "tx-b@domain.com"}}, batch)
+	assert.Equal(t, int32(1), flushCalls.Load(), "the transaction's rows must not be split across flushes")
 
 	cancelRun()
 	err := <-runErrCh
