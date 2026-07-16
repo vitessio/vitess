@@ -13,5 +13,5 @@
 - `NewPrimaryAlias` is not a bypass for safety checks. An explicitly-requested primary must still pass every guard: no errant GTIDs, at least as advanced as the winning position, no `MustNot` promotion rule, in-cell if `PreventCrossCellPromotion`, and able to establish forward progress with reachable tablets
 - The most-advanced tablet becomes the intermediate source, which is a replication source and not an automatic winner: the final primary must come from the filtered valid candidates, and catch up to the intermediate source before the switch
 - `PopulateReparentJournal` on the promoted primary is the system of record for promotions: errant GTID detection counts journal rows to decide which tablets can serve as evidence, so every promotion must write it
-- The reparent sorter and the durability helpers are shared with `PlannedReparentShard`'s `ElectNewPrimary`: changes to candidate ordering or semi-sync accounting affect PRS too
+- The reparent sorter (via `ElectNewPrimary`) and durability helpers like `canEstablishForTablet` are shared with `PlannedReparentShard`: changes to candidate ordering or semi-sync accounting affect PRS too
 - Any new pipeline step that stops replication on a tablet must add that tablet to `replicasToRestart`, so the deferred cleanup can recover it if ERS aborts. The code can't enforce this — review carefully
