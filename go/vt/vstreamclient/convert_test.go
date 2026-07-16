@@ -518,7 +518,8 @@ func TestSQLValueToDriverValue_Branches(t *testing.T) {
 		{name: "decimal keeps exact text", value: sqltypes.NewDecimal("12.34"), want: "12.34"},
 		{name: "date in location", value: sqltypes.MakeTrusted(sqltypes.Date, []byte("2024-01-02")), want: time.Date(2024, 1, 2, 0, 0, 0, 0, denver)},
 		{name: "datetime in location", value: sqltypes.MakeTrusted(sqltypes.Datetime, []byte("2024-01-02 03:04:05")), want: time.Date(2024, 1, 2, 3, 4, 5, 0, denver)},
-		{name: "integral zero-or-one bool fallback", value: sqltypes.MakeTrusted(sqltypes.Year, []byte("1")), want: true},
+		{name: "year as int64", value: sqltypes.MakeTrusted(sqltypes.Year, []byte("2024")), want: int64(2024)},
+		{name: "year one stays numeric", value: sqltypes.MakeTrusted(sqltypes.Year, []byte("1")), want: int64(1)},
 		{name: "text bytes fallback", value: sqltypes.NewVarChar("hello"), want: []byte("hello")},
 	}
 

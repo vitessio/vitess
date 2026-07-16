@@ -248,7 +248,7 @@ func sqlValueToDriverValue(rowValue sqltypes.Value, loc *time.Location) (driver.
 	case sqltypes.Int8, sqltypes.Int16, sqltypes.Int24, sqltypes.Int32, sqltypes.Int64:
 		return rowValue.ToInt64()
 
-	case sqltypes.Uint8, sqltypes.Uint16, sqltypes.Uint24, sqltypes.Uint32:
+	case sqltypes.Uint8, sqltypes.Uint16, sqltypes.Uint24, sqltypes.Uint32, sqltypes.Year:
 		rowVal, err := rowValue.ToUint64()
 		if err != nil {
 			return nil, err
@@ -275,10 +275,8 @@ func sqlValueToDriverValue(rowValue sqltypes.Value, loc *time.Location) (driver.
 		return rowValue.ToTime(loc)
 	}
 
-	if rowVal, err := rowValue.ToBool(); err == nil {
-		return rowVal, nil
-	}
-
+	// every integral type is handled above, so anything else (text, blobs, json, bit, enum,
+	// set, time, ...) is passed through as bytes for the scanner to interpret
 	return rowValue.ToBytes()
 }
 
