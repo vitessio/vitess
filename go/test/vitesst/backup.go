@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"strconv"
 	"strings"
 	"time"
@@ -282,21 +281,6 @@ func (v *Vtbackup) Wait(ctx context.Context) (string, error) {
 		case <-time.After(defaultPollInterval):
 		}
 	}
-}
-
-// readContainerLog returns a container's full log from the Docker daemon.
-func (c *Cluster) readContainerLog(ctx context.Context, ctr testcontainers.Container) (string, error) {
-	rc, err := ctr.Logs(ctx)
-	if err != nil {
-		return "", fmt.Errorf("reading container log: %w", err)
-	}
-	defer rc.Close()
-
-	content, err := io.ReadAll(rc)
-	if err != nil {
-		return "", fmt.Errorf("reading container log: %w", err)
-	}
-	return string(content), nil
 }
 
 // ListBackups returns the backups stored for a shard, newest last.

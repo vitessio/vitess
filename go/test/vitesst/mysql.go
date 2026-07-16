@@ -190,13 +190,13 @@ func (c *Cluster) VTParams(ctx context.Context, dbName string) mysql.ConnParams 
 // no default database selected.
 func (c *Cluster) Connect(t testing.TB) *mysql.Conn {
 	t.Helper()
-	return c.ConnectDB(t, "")
+	return c.connectDB(t, "")
 }
 
-// ConnectDB returns a new MySQL connection to the cluster's first vtgate with
+// connectDB returns a new MySQL connection to the cluster's first vtgate with
 // the given default database (a keyspace name, optionally with a tablet-type
 // suffix such as "ks@replica").
-func (c *Cluster) ConnectDB(t testing.TB, dbName string) *mysql.Conn {
+func (c *Cluster) connectDB(t testing.TB, dbName string) *mysql.Conn {
 	t.Helper()
 
 	ctx := t.Context()

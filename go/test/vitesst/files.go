@@ -49,8 +49,6 @@ type (
 
 	vtgateFilesOption []ContainerFile
 
-	initDBSQLOption string
-
 	initDBSQLExtraOption string
 )
 
@@ -113,18 +111,6 @@ func (o vtgateFilesOption) apply(opts *clusterOptions) {
 // WithVTGateFiles places files into every vtgate container before it starts.
 func WithVTGateFiles(files ...ContainerFile) ClusterOption {
 	return vtgateFilesOption(files)
-}
-
-func (o initDBSQLOption) apply(opts *clusterOptions) {
-	opts.initDBSQL = string(o)
-}
-
-// WithInitDBSQL replaces the init_db.sql content used by mysqlctl init in
-// every tablet container. The framework does not modify the given content, so
-// it must grant whatever host access the test needs (the default content
-// grants vt_dba access from the host).
-func WithInitDBSQL(sql string) ClusterOption {
-	return initDBSQLOption(sql)
 }
 
 func (o initDBSQLExtraOption) apply(opts *clusterOptions) {

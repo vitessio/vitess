@@ -38,25 +38,21 @@ type (
 	// unbounded memory growth. When follow is set, lines are also forwarded
 	// to the cluster log as they arrive.
 	ringLogConsumer struct {
-		name   string
-		follow func(format string, args ...any)
+		name string
 
 		mu    sync.Mutex
 		lines []string
 		next  int
 		total int
 	}
-
-	followLogsOption []string
 )
 
 var _ testcontainers.LogConsumer = (*ringLogConsumer)(nil)
 
-func newRingLogConsumer(name string, follow func(format string, args ...any)) *ringLogConsumer {
+func newRingLogConsumer(name string) *ringLogConsumer {
 	return &ringLogConsumer{
-		name:   name,
-		follow: follow,
-		lines:  make([]string, 0, logRingCapacity),
+		name:  name,
+		lines: make([]string, 0, logRingCapacity),
 	}
 }
 
@@ -73,10 +69,6 @@ func (rc *ringLogConsumer) Accept(l testcontainers.Log) {
 	rc.next = (rc.next + 1) % logRingCapacity
 	rc.total++
 	rc.mu.Unlock()
-
-	if rc.follow != nil {
-		rc.follow("[%s] %s", rc.name, line)
-	}
 }
 
 // tail returns up to n trailing log lines in arrival order.
@@ -123,30 +115,6 @@ func (rc *ringLogConsumer) dump(logf func(format string, args ...any), tail int)
 	}
 }
 
-func (o followLogsOption) apply(opts *clusterOptions) {
-	opts.followLogs = append(opts.followLogs, o...)
-}
-
-// WithFollowLogs streams the named components' container logs to the cluster
-// log as they arrive, in addition to the always-on bounded ring buffer used
-// for failure diagnostics. Names are matched by prefix against component
-// names such as "etcd", "vtctld", "vtgate", "vtorc", "vttablet" or a specific
-// "vttablet-101". WithFollowLogs("all") follows everything.
-func WithFollowLogs(components ...string) ClusterOption {
-	return followLogsOption(components)
-}
-
-// shouldFollow reports whether a component's logs were requested with
-// WithFollowLogs.
-func (c *Cluster) shouldFollow(name string) bool {
-	for _, f := range c.opts.followLogs {
-		if f == "all" || strings.HasPrefix(name, f) {
-			return true
-		}
-	}
-	return false
-}
-
 // newLogConsumer returns the ring-buffer consumer for a component,
 // registering it for failure diagnostics. A component that recreates its
 // container, like VTGate.Restart, keeps its existing ring so the pre-restart
@@ -161,12 +129,7 @@ func (c *Cluster) newLogConsumer(name string) *ringLogConsumer {
 		}
 	}
 
-	var follow func(format string, args ...any)
-	if c.shouldFollow(name) {
-		follow = func(format string, args ...any) { c.logf(format, args...) }
-	}
-
-	rc := newRingLogConsumer(name, follow)
+	rc := newRingLogConsumer(name)
 	c.logConsumers = append(c.logConsumers, rc)
 	return rc
 }

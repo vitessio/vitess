@@ -179,15 +179,6 @@ func (c *Cluster) VTGate() *VTGate {
 	return c.vtgates[0]
 }
 
-// VTGates returns all of the cluster's vtgates.
-func (c *Cluster) VTGates() []*VTGate {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	out := make([]*VTGate, len(c.vtgates))
-	copy(out, c.vtgates)
-	return out
-}
-
 // AddVTGate starts an additional vtgate with its own network alias for
 // multi-vtgate tests, in the cluster's first cell and watching every cell. The
 // given extraArgs apply to it in place of the cluster-wide vtgate args.
@@ -202,7 +193,7 @@ func (c *Cluster) AddVTGateSpec(ctx context.Context, spec VTGateSpec) (*VTGate, 
 		spec.Cell = c.firstCell()
 	}
 	if len(spec.CellsToWatch) == 0 {
-		spec.CellsToWatch = c.Cells()
+		spec.CellsToWatch = c.cellNames()
 	}
 	if len(spec.ExtraArgs) == 0 {
 		spec.ExtraArgs = c.opts.vtgateArgs

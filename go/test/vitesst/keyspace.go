@@ -17,12 +17,10 @@ limitations under the License.
 package vitesst
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"slices"
 	"sync"
-	"time"
 )
 
 type (
@@ -56,11 +54,6 @@ type (
 
 		// sidecarDBName overrides the keyspace's sidecar database name.
 		sidecarDBName string
-
-		// baseKeyspace and snapshotTime make this a snapshot keyspace of
-		// another keyspace at a point in time.
-		baseKeyspace string
-		snapshotTime string
 
 		// image, when set, is the Docker image this keyspace's tablets run,
 		// instead of the cluster image.
@@ -189,15 +182,6 @@ func (kb *keyspaceBuilder) WithDurabilityPolicy(policy string) *keyspaceBuilder 
 // default is "_vt".
 func (kb *keyspaceBuilder) WithSidecarDBName(name string) *keyspaceBuilder {
 	kb.config.sidecarDBName = name
-	return kb
-}
-
-// WithSnapshotOf makes this a snapshot keyspace of another keyspace at the
-// given time (RFC 3339), for recovery tests. Its tablets restore from the base
-// keyspace's backups.
-func (kb *keyspaceBuilder) WithSnapshotOf(baseKeyspace, snapshotTime string) *keyspaceBuilder {
-	kb.config.baseKeyspace = baseKeyspace
-	kb.config.snapshotTime = snapshotTime
 	return kb
 }
 
@@ -342,49 +326,4 @@ func (s *Shard) Tablets() []*Tablet {
 	tablets = append(tablets, s.replicas...)
 	tablets = append(tablets, s.rdonly...)
 	return tablets
-}
-
-// CurrentPrimary reads the shard's topology record and returns the tablet the
-// topology currently names as primary, or nil if the shard has no primary.
-// Unlike Primary, it reflects the live topology after reparents.
-func (s *Shard) CurrentPrimary(ctx context.Context) (*Tablet, error) {
-	record, err := s.cluster.Vtctld().Shard(ctx, s.Keyspace.Name, s.Name)
-	if err != nil {
-		return nil, err
-	}
-
-	alias := record.GetShard().GetPrimaryAlias()
-	if alias.GetUid() == 0 {
-		return nil, nil
-	}
-
-	for _, t := range s.Tablets() {
-		if t.Cell == alias.GetCell() && t.UID == int(alias.GetUid()) {
-			return t, nil
-		}
-	}
-
-	return nil, fmt.Errorf("shard %s/%s primary %s-%d is not a tracked tablet", s.Keyspace.Name, s.Name, alias.GetCell(), alias.GetUid())
-}
-
-// WaitForPrimary polls the shard's topology record until it names a primary,
-// then returns that tablet.
-func (s *Shard) WaitForPrimary(ctx context.Context, timeout time.Duration) (*Tablet, error) {
-	ctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
-	var lastErr error
-	for {
-		primary, err := s.CurrentPrimary(ctx)
-		lastErr = err
-		if err == nil && primary != nil {
-			return primary, nil
-		}
-
-		select {
-		case <-ctx.Done():
-			return nil, fmt.Errorf("shard %s/%s did not get a primary within %s: %w", s.Keyspace.Name, s.Name, timeout, errFirst(lastErr, ctx.Err()))
-		case <-time.After(healthyShardPollInterval):
-		}
-	}
 }

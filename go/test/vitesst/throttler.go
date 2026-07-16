@@ -69,23 +69,9 @@ type (
 	}
 )
 
-const (
-	// DefaultThrottlerQuery is the standard replication-lag metric query.
-	DefaultThrottlerQuery = "select unix_timestamp(now(6))-max(ts/1000000000) as replication_lag from _vt.heartbeat"
-
-	// DefaultThrottlerThreshold is the standard replication-lag threshold.
-	DefaultThrottlerThreshold = 5 * time.Second
-
-	// throttlerConfigTimeout bounds the retry loops that wait for a newly
-	// created keyspace's SrvKeyspace record to exist before a config applies.
-	throttlerConfigTimeout = 60 * time.Second
-)
-
-// DefaultThrottlerConfig is the standard replication-lag configuration.
-var DefaultThrottlerConfig = &ThrottlerConfig{
-	Query:     DefaultThrottlerQuery,
-	Threshold: DefaultThrottlerThreshold.Seconds(),
-}
+// throttlerConfigTimeout bounds the retry loops that wait for a newly created
+// keyspace's SrvKeyspace record to exist before a config applies.
+const throttlerConfigTimeout = 60 * time.Second
 
 // Throttler returns a handle for driving and observing this tablet's throttler.
 func (t *Tablet) Throttler() *TabletThrottler {
@@ -102,8 +88,8 @@ func (c *Cluster) Throttler() *ClusterThrottler {
 	return &ClusterThrottler{cluster: c}
 }
 
-// CheckRaw runs vtctldclient CheckThrottler and returns its raw output.
-func (tt *TabletThrottler) CheckRaw(ctx context.Context, appName throttlerapp.Name, flags *throttle.CheckFlags) (string, error) {
+// checkRaw runs vtctldclient CheckThrottler and returns its raw output.
+func (tt *TabletThrottler) checkRaw(ctx context.Context, appName throttlerapp.Name, flags *throttle.CheckFlags) (string, error) {
 	args := []string{"CheckThrottler"}
 	if flags == nil {
 		flags = &throttle.CheckFlags{
@@ -127,9 +113,9 @@ func (tt *TabletThrottler) CheckRaw(ctx context.Context, appName throttlerapp.Na
 	return tt.tablet.cluster.Vtctld().ExecuteCommandWithOutput(ctx, args...)
 }
 
-// Check runs vtctldclient CheckThrottler and parses the response.
-func (tt *TabletThrottler) Check(ctx context.Context, appName throttlerapp.Name, flags *throttle.CheckFlags) (*vtctldatapb.CheckThrottlerResponse, error) {
-	output, err := tt.CheckRaw(ctx, appName, flags)
+// check runs vtctldclient CheckThrottler and parses the response.
+func (tt *TabletThrottler) check(ctx context.Context, appName throttlerapp.Name, flags *throttle.CheckFlags) (*vtctldatapb.CheckThrottlerResponse, error) {
+	output, err := tt.checkRaw(ctx, appName, flags)
 	if err != nil {
 		return nil, err
 	}
@@ -141,14 +127,14 @@ func (tt *TabletThrottler) Check(ctx context.Context, appName throttlerapp.Name,
 	return &resp, nil
 }
 
-// StatusRaw runs vtctldclient GetThrottlerStatus and returns its raw output.
-func (tt *TabletThrottler) StatusRaw(ctx context.Context) (string, error) {
+// statusRaw runs vtctldclient GetThrottlerStatus and returns its raw output.
+func (tt *TabletThrottler) statusRaw(ctx context.Context) (string, error) {
 	return tt.tablet.cluster.Vtctld().ExecuteCommandWithOutput(ctx, "GetThrottlerStatus", tt.tablet.Alias())
 }
 
 // Status runs vtctldclient GetThrottlerStatus and parses the response.
 func (tt *TabletThrottler) Status(ctx context.Context) (*tabletmanagerdatapb.GetThrottlerStatusResponse, error) {
-	output, err := tt.StatusRaw(ctx)
+	output, err := tt.statusRaw(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -213,50 +199,6 @@ func (tt *TabletThrottler) WaitForStatusEnabled(ctx context.Context, t *testing.
 	}
 }
 
-// WaitForApp waits for the tablet to report the given app as
-// throttled/unthrottled.
-func (tt *TabletThrottler) WaitForApp(ctx context.Context, t *testing.T, app throttlerapp.Name, expectThrottled bool, timeout time.Duration) {
-	ctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
-
-	for {
-		status, err := tt.Status(ctx)
-		require.NoError(t, err)
-		throttledApps := status.ThrottledApps
-		require.NotEmpty(t, throttledApps) // "always-throttled-app" is always there.
-		appFoundThrottled := false
-		for _, throttledApp := range throttledApps {
-			expiresAt := protoutil.TimeFromProto(throttledApp.ExpiresAt)
-			if throttledApp.Name == app.String() && expiresAt.After(time.Now()) {
-				appFoundThrottled = true
-				break
-			}
-		}
-		if appFoundThrottled == expectThrottled {
-			return
-		}
-
-		// If the tablet is Not Serving due to e.g. being involved in a
-		// Reshard where its QueryService is explicitly disabled, then
-		// we should not fail the test as the throttler will not be Open.
-		if tt.notServing(ctx) {
-			log.Info(fmt.Sprintf("tablet %s is Not Serving, so ignoring throttler status as the throttler will not be Opened", tt.tablet.Alias()))
-			return
-		}
-
-		select {
-		case <-ctx.Done():
-			assert.Fail(t, "timeout", "waiting for the %s tablet's throttled apps with the correct config (expecting %s to be %v) after %v; last seen throttled apps: %+v",
-				tt.tablet.Alias(), app.String(), expectThrottled, timeout, throttledApps)
-			return
-		case <-ticker.C:
-		}
-	}
-}
-
 // WaitForCheckResult waits for the tablet's throttler check to return the
 // wanted response code.
 func (tt *TabletThrottler) WaitForCheckResult(ctx context.Context, t *testing.T, appName throttlerapp.Name, flags *throttle.CheckFlags, wantCode tabletmanagerdatapb.CheckThrottlerResponseCode, timeout time.Duration) (*vtctldatapb.CheckThrottlerResponse, bool) {
@@ -267,7 +209,7 @@ func (tt *TabletThrottler) WaitForCheckResult(ctx context.Context, t *testing.T,
 	defer ticker.Stop()
 
 	for {
-		resp, err := tt.Check(ctx, appName, flags)
+		resp, err := tt.check(ctx, appName, flags)
 		require.NoError(t, err)
 		if resp.Check.ResponseCode == wantCode {
 			return resp, true
@@ -411,94 +353,6 @@ func (ct *ClusterThrottler) UpdateConfig(
 	var res strings.Builder
 	for _, ks := range ct.cluster.Keyspaces() {
 		ires, err := ks.Throttler().UpdateConfig(ctx, opts, appRule, appCheckedMetrics)
-		if err != nil {
-			rec.RecordError(err)
-		}
-		res.WriteString(ires)
-	}
-	if rec.HasErrors() {
-		return res.String(), rec.Error()
-	}
-	return res.String(), nil
-}
-
-// ThrottleAppAndWaitUntilTabletsConfirm throttles an app on every keyspace and
-// waits until every tablet reports it as throttled.
-func (ct *ClusterThrottler) ThrottleAppAndWaitUntilTabletsConfirm(ctx context.Context, t *testing.T, app throttlerapp.Name) (string, error) {
-	res, err := ct.throttleApp(ctx, app, true)
-	if err != nil {
-		return res, err
-	}
-
-	ct.WaitUntilTabletsConfirmThrottledApp(ctx, t, app, true)
-	return res, nil
-}
-
-// UnthrottleAppAndWaitUntilTabletsConfirm unthrottles an app on every keyspace
-// and waits until every tablet reports it as no longer throttled.
-func (ct *ClusterThrottler) UnthrottleAppAndWaitUntilTabletsConfirm(ctx context.Context, t *testing.T, app throttlerapp.Name) (string, error) {
-	res, err := ct.throttleApp(ctx, app, false)
-	if err != nil {
-		return res, err
-	}
-
-	ct.WaitUntilTabletsConfirmThrottledApp(ctx, t, app, false)
-	return res, nil
-}
-
-// WaitUntilTabletsConfirmThrottledApp waits for every tablet to report the given
-// app as throttled/unthrottled.
-func (ct *ClusterThrottler) WaitUntilTabletsConfirmThrottledApp(ctx context.Context, t *testing.T, app throttlerapp.Name, expectThrottled bool) {
-	for _, tablet := range ct.cluster.Tablets() {
-		tablet.Throttler().WaitForApp(ctx, t, app, expectThrottled, throttlerConfigTimeout)
-	}
-}
-
-// EnableLagAndWaitForStatus enables the replication-lag throttler on every
-// keyspace and waits until every tablet confirms it is running.
-func (ct *ClusterThrottler) EnableLagAndWaitForStatus(ctx context.Context, t *testing.T) {
-	req := &vtctldatapb.UpdateThrottlerConfigRequest{Enable: true}
-	_, err := ct.UpdateConfig(ctx, req, nil, nil)
-	require.NoError(t, err)
-
-	for _, tablet := range ct.cluster.Tablets() {
-		tablet.Throttler().WaitForStatusEnabled(ctx, t, true, nil, time.Minute)
-	}
-}
-
-// WaitForSrvKeyspace waits until the given SrvKeyspace entry appears in the cell.
-func (ct *ClusterThrottler) WaitForSrvKeyspace(ctx context.Context, cell, keyspace string) error {
-	args := []string{"GetSrvKeyspaceNames", cell}
-
-	ctx, cancel := context.WithTimeout(ctx, throttlerConfigTimeout)
-	defer cancel()
-
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
-
-	for {
-		result, err := ct.cluster.Vtctld().ExecuteCommandWithOutput(ctx, args...)
-		if err != nil {
-			return err
-		}
-		if strings.Contains(result, `"`+keyspace+`"`) {
-			return nil
-		}
-
-		select {
-		case <-ctx.Done():
-			return fmt.Errorf("timed out waiting for GetSrvKeyspaceNames to contain '%v'", keyspace)
-		case <-ticker.C:
-		}
-	}
-}
-
-// throttleApp throttles or unthrottles an app on every keyspace in the cluster.
-func (ct *ClusterThrottler) throttleApp(ctx context.Context, app throttlerapp.Name, throttle bool) (string, error) {
-	rec := concurrency.AllErrorRecorder{}
-	var res strings.Builder
-	for _, ks := range ct.cluster.Keyspaces() {
-		ires, err := ks.Throttler().throttleAppRaw(ctx, app, throttle)
 		if err != nil {
 			rec.RecordError(err)
 		}

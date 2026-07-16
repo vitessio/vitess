@@ -252,7 +252,7 @@ func (c *Cluster) startKeyspace(ctx context.Context, kc *keyspaceConfig) error {
 	c.mu.Unlock()
 
 	group, groupCtx := errgroup.WithContext(ctx)
-	cells := c.Cells()
+	cells := c.cellNames()
 	cellIndex := 0
 	for _, shardName := range shardNames {
 		shard := &Shard{Name: shardName, Keyspace: ks, cluster: c}
@@ -379,11 +379,6 @@ func (c *Cluster) detectMySQLVersion(ctx context.Context) error {
 // the image's copy of config/init_db.sql with host access for vt_dba and any
 // WithInitDBSQLExtra content spliced in at the custom-SQL marker.
 func (c *Cluster) assembleInitDBSQL(ctx context.Context) error {
-	if c.opts.initDBSQL != "" {
-		c.initDBSQL = c.opts.initDBSQL
-		return nil
-	}
-
 	base, err := mustExec(ctx, c.vtctld.container(), []string{"cat", imageInitDBPath})
 	if err != nil {
 		return fmt.Errorf("reading %s from image: %w", imageInitDBPath, err)
@@ -461,7 +456,7 @@ func (c *Cluster) AddShard(ctx context.Context, keyspace, shardName string, repl
 	ks.shards = append(ks.shards, shard)
 	ks.mu.Unlock()
 
-	cells := c.Cells()
+	cells := c.cellNames()
 	specs := make([]*TabletSpec, 0, 1+replicas+rdonly)
 	for i := range 1 + replicas + rdonly {
 		typ := "replica"
@@ -642,8 +637,8 @@ func (c *Cluster) Tablets() []*Tablet {
 	return out
 }
 
-// Cells returns the cluster's cell names.
-func (c *Cluster) Cells() []string {
+// cellNames returns the cluster's cell names.
+func (c *Cluster) cellNames() []string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	out := make([]string, len(c.cells))
@@ -666,7 +661,7 @@ func (c *Cluster) AddCell(ctx context.Context, cell string) error {
 	if cell == "" {
 		return errors.New("cell name must not be empty")
 	}
-	if slices.Contains(c.Cells(), cell) {
+	if slices.Contains(c.cellNames(), cell) {
 		return fmt.Errorf("cell %s already exists", cell)
 	}
 

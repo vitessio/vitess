@@ -90,13 +90,6 @@ type (
 		// namePrefix is prepended to every component's network alias.
 		namePrefix string
 
-		// followLogs lists component name prefixes whose container logs are
-		// streamed to the cluster log as they arrive.
-		followLogs []string
-
-		// initDBSQL, when set, fully replaces the init_db.sql content.
-		initDBSQL string
-
 		// initDBSQLExtra is spliced into the default init_db.sql at its
 		// custom-SQL marker.
 		initDBSQLExtra string

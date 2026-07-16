@@ -91,14 +91,6 @@ func (v *Vtctld) createKeyspace(ctx context.Context, kc *keyspaceConfig) error {
 	if kc.durabilityPolicy != "" {
 		args = append(args, "--durability-policy", kc.durabilityPolicy)
 	}
-	if kc.baseKeyspace != "" {
-		args = append(
-			args,
-			"--type", "SNAPSHOT",
-			"--base-keyspace", kc.baseKeyspace,
-			"--snapshot-timestamp", kc.snapshotTime,
-		)
-	}
 	args = append(args, kc.name)
 	return v.ExecuteCommand(ctx, args...)
 }
@@ -129,13 +121,6 @@ func (v *Vtctld) initializeShard(ctx context.Context, keyspace, shard, primaryAl
 // returns the command's output. Extra vtctldclient flags may be passed through.
 func (v *Vtctld) PlannedReparentShard(ctx context.Context, keyspace, shard, newPrimaryAlias string, extraArgs ...string) (string, error) {
 	args := append([]string{"PlannedReparentShard", keyspace + "/" + shard, "--new-primary", newPrimaryAlias}, extraArgs...)
-	return v.ExecuteCommandWithOutput(ctx, args...)
-}
-
-// PlannedReparentShardAvoid runs a PlannedReparentShard that promotes any
-// eligible replica other than avoidPrimaryAlias, returning the command output.
-func (v *Vtctld) PlannedReparentShardAvoid(ctx context.Context, keyspace, shard, avoidPrimaryAlias string, extraArgs ...string) (string, error) {
-	args := append([]string{"PlannedReparentShard", keyspace + "/" + shard, "--avoid-primary", avoidPrimaryAlias}, extraArgs...)
 	return v.ExecuteCommandWithOutput(ctx, args...)
 }
 

@@ -65,7 +65,7 @@ func TestShellQuoteAll(t *testing.T) {
 }
 
 func TestRingLogConsumer(t *testing.T) {
-	rc := newRingLogConsumer("test", nil)
+	rc := newRingLogConsumer("test")
 
 	rc.Accept(testcontainers.Log{Content: []byte("first\n")})
 	rc.Accept(testcontainers.Log{Content: []byte("second\n")})
