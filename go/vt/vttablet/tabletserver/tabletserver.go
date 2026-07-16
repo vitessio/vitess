@@ -926,6 +926,15 @@ func (tsv *TabletServer) Execute(ctx context.Context, session queryservice.Sessi
 	// predating this option runs the fallback query on a throwaway pooled
 	// connection instead of a reserved one.
 	if options.GetReservedConnKeepAlive() {
+		// Validate the target before refreshing anything, exactly as a normal
+		// query would be. A reserved connection whose tablet has since changed
+		// type (e.g. REPLICA->RDONLY) is unreachable by its session — a normal
+		// query to that target is rejected as a wrong tablet — so its keepalive
+		// must be rejected too, letting vtgate drop the now-orphaned registration
+		// instead of pinning the reservation open past the tablet's idle timeout.
+		if err := tsv.sm.VerifyTarget(ctx, target); err != nil {
+			return nil, err
+		}
 		ids := options.GetReservedConnKeepAliveIds()
 		if reservedID == 0 && len(ids) == 0 {
 			return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "reserved connection keepalive requires at least one reserved ID")

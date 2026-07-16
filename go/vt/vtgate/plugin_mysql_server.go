@@ -389,21 +389,27 @@ func (vh *vtgateHandler) startTempTableHeartbeat(ctx context.Context) {
 // connection by its tablet, so the whole registry is locked once per interval
 // and each tablet can then be refreshed with a single batched touch RPC.
 func (vh *vtgateHandler) snapshotTempTableBeats() map[string][]tempTableBeatItem {
-	byTablet := make(map[string][]tempTableBeatItem)
+	byRoute := make(map[string][]tempTableBeatItem)
 	vh.tempTableConns.Range(func(key, value any) bool {
 		c := key.(*mysql.Conn)
 		ttc := value.(*tempTableConn)
 		ttc.mu.Lock()
 		if !ttc.closed {
 			for _, t := range ttc.targets {
-				alias := topoproto.TabletAliasString(t.alias)
-				byTablet[alias] = append(byTablet[alias], tempTableBeatItem{c: c, ttc: ttc, gen: ttc.gen, target: t})
+				// Group by tablet type as well as alias, so every id in one beat
+				// shares a single routing target. The tablet validates that one
+				// target; if it rejects it as a wrong tablet (the tablet changed
+				// type), every id in the beat is genuinely orphaned. A beat mixing
+				// a tablet's pre- and post-transition reservations could not be
+				// judged that cleanly — the rejection would condemn valid ids too.
+				route := topoproto.TabletAliasString(t.alias) + "/" + t.target.GetTabletType().String()
+				byRoute[route] = append(byRoute[route], tempTableBeatItem{c: c, ttc: ttc, gen: ttc.gen, target: t})
 			}
 		}
 		ttc.mu.Unlock()
 		return true
 	})
-	return byTablet
+	return byRoute
 }
 
 // tempTableFailingBeatConcurrency bounds how many failing tablets are beaten at
@@ -463,13 +469,13 @@ func tempTableBeatItemsFailing(items []tempTableBeatItem) bool {
 // and it clears within one budget.
 func (vh *vtgateHandler) dispatchTempTableBeats(ctx context.Context) *sync.WaitGroup {
 	wg := &sync.WaitGroup{}
-	for alias, items := range vh.snapshotTempTableBeats() {
-		if _, inFlight := vh.tempTableBeatInFlight.LoadOrStore(alias, struct{}{}); inFlight {
+	for route, items := range vh.snapshotTempTableBeats() {
+		if _, inFlight := vh.tempTableBeatInFlight.LoadOrStore(route, struct{}{}); inFlight {
 			continue
 		}
 		failing := tempTableBeatItemsFailing(items)
 		wg.Go(func() {
-			defer vh.tempTableBeatInFlight.Delete(alias)
+			defer vh.tempTableBeatInFlight.Delete(route)
 			if failing {
 				// Queue behind the bounded failing lane rather than dropping the
 				// tablet when the lane is full. A slot freed by a completed beat is
@@ -625,10 +631,21 @@ func (vh *vtgateHandler) beatTempTableChunk(ctx context.Context, batch []tempTab
 	}
 }
 
-// applyTempTableBeatResult applies one reserved connection's touch outcome to
-// its client connection's registration: evicting it if the tablet reported it
-// gone, resetting its failure count on success, or counting a transient
-// failure (whole-tablet RPC error) so it is retried on the next sweep.
+// isWrongTabletErr reports whether err is a tablet rejecting a target whose type
+// no longer matches (as VerifyTarget returns after a type change). It is detected
+// the same way the query path detects it (see requireNewQS): a FAILED_PRECONDITION
+// carrying the wrong-tablet message, which survives the gateway's error wrapping.
+func isWrongTabletErr(err error) bool {
+	return err != nil &&
+		vterrors.Code(err) == vtrpcpb.Code_FAILED_PRECONDITION &&
+		vterrors.RxWrongTablet.MatchString(err.Error())
+}
+
+// applyTempTableBeatResult applies one reserved connection's touch outcome to its
+// client connection's registration: evicting it if the tablet reported it gone or
+// rejected its target as a wrong tablet, resetting its failure count on success,
+// or counting a transient failure (whole-tablet RPC error) so it is retried on
+// the next sweep.
 func (vh *vtgateHandler) applyTempTableBeatResult(item tempTableBeatItem, gone bool, err error) {
 	key := newTempTableTargetKey(item.target)
 	ttc := item.ttc
@@ -655,6 +672,24 @@ func (vh *vtgateHandler) applyTempTableBeatResult(item tempTableBeatItem, gone b
 		log.Warn("temp-table connection is gone, stopping its keepalives",
 			slog.Int64("reserved_id", item.target.reservedID),
 			slog.String("tablet", topoproto.TabletAliasString(item.target.alias)))
+		delete(ttc.targets, key)
+		if len(ttc.targets) == 0 {
+			vh.tempTableConns.Delete(item.c)
+		}
+		return
+	}
+	if isWrongTabletErr(err) {
+		// The tablet's type changed (e.g. REPLICA->RDONLY): a normal query to this
+		// target is now rejected as a wrong tablet, so the session can no longer
+		// reach this reserved connection. Stop refreshing it — otherwise the
+		// keepalive would pin an orphaned reservation open past the tablet's idle
+		// timeout — and let the tablet reclaim it; the session self-heals by re-
+		// reserving on its next query. All ids in a beat share one routing target,
+		// so a wrong-tablet result condemns exactly this stale group.
+		log.Warn("temp-table connection target is no longer valid (tablet type changed), stopping its keepalives",
+			slog.Int64("reserved_id", item.target.reservedID),
+			slog.String("tablet", topoproto.TabletAliasString(item.target.alias)),
+			slog.String("tablet_type", item.target.target.GetTabletType().String()))
 		delete(ttc.targets, key)
 		if len(ttc.targets) == 0 {
 			vh.tempTableConns.Delete(item.c)

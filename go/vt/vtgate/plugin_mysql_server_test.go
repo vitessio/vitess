@@ -51,6 +51,7 @@ import (
 	"vitess.io/vitess/go/vt/tlstest"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/binlogacl"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
@@ -2337,6 +2338,36 @@ func TestTempTableHeartbeatBeatOutcomeSurvivesRepublish(t *testing.T) {
 	require.Equal(t, 1, ttc.targets[key].failures,
 		"a beat outcome must apply to a target that survived a mid-flight republish")
 	ttc.mu.Unlock()
+}
+
+// TestTempTableHeartbeatEvictsOnTabletTypeChange proves a beat rejected as a
+// wrong tablet — as happens once the tablet's type changes out from under the
+// reservation (REPLICA -> RDONLY), making it unreachable by its session — evicts
+// the registration instead of refreshing it forever, so the orphaned reservation
+// is reclaimed at the tablet's idle timeout rather than pinned open.
+func TestTempTableHeartbeatEvictsOnTabletTypeChange(t *testing.T) {
+	executor, _, _, _, ctx := createExecutorEnv(t)
+	vsm := newVStreamManager(executor.resolver.resolver, executor.serv, "aa")
+	vtg := newVTGate(executor, executor.resolver, vsm, nil, executor.scatterConn.gateway)
+	vh := newVtgateHandler(vtg)
+	hc := executor.scatterConn.gateway.hc.(*discovery.FakeHealthCheck)
+
+	wrongTablet := vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s: REPLICA, want: RDONLY", vterrors.WrongTablet)
+	qs := hc.AddFakeTablet("aa", "changedhost", 1, "changedks", "0", topodatapb.TabletType_REPLICA, true, 1, nil,
+		func(tablet *topodatapb.Tablet) queryservice.QueryService {
+			return &gatedBeatConn{SandboxConn: sandboxconn.NewSandboxConn(tablet), err: wrongTablet}
+		})
+	gc := qs.(*gatedBeatConn)
+	st := gc.Tablet()
+	c := &mysql.Conn{ConnectionID: 1}
+	vh.tempTableConns.Store(c, &tempTableConn{targets: tempTargets(tempTableHeartbeatTarget{
+		target: &querypb.Target{Keyspace: st.Keyspace, Shard: st.Shard, TabletType: st.Type}, alias: st.Alias, reservedID: 5,
+	})})
+
+	vh.sendTempTableHeartbeats(ctx)
+
+	_, ok := vh.tempTableConns.Load(c)
+	require.False(t, ok, "a wrong-tablet beat must evict the stale registration, not keep refreshing it")
 }
 
 // TestTempTableHeartbeatTouchesRegistrationWithinOneInterval covers the

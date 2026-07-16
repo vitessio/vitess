@@ -2994,5 +2994,18 @@ func TestReservedConnKeepAliveBatch(t *testing.T) {
 		&querypb.ExecuteOptions{ReservedConnKeepAlive: true, ReservedConnKeepAliveIds: huge})
 	require.ErrorContains(t, err, "exceeds the limit")
 
+	// A keepalive whose target type no longer matches this tablet (as after a
+	// REPLICA->RDONLY transition) is rejected as a wrong tablet, exactly like a
+	// normal query, so vtgate can drop the now-unreachable registration instead
+	// of pinning the orphaned reservation open. The live reserved id is untouched.
+	wrongTarget := querypb.Target{TabletType: topodatapb.TabletType_RDONLY}
+	_, err = tsv.Execute(ctx, nil, &wrongTarget, "/* keepalive */ select 1", nil, 0, 0,
+		&querypb.ExecuteOptions{ReservedConnKeepAlive: true, ReservedConnKeepAliveIds: []int64{s1.ReservedID}})
+	require.ErrorContains(t, err, vterrors.WrongTablet)
+	res, err = tsv.Execute(ctx, nil, &target, "/* keepalive */ select 1", nil, 0, 0,
+		&querypb.ExecuteOptions{ReservedConnKeepAlive: true, ReservedConnKeepAliveIds: []int64{s1.ReservedID}})
+	require.NoError(t, err)
+	require.Empty(t, res.Rows, "the reserved connection must survive a rejected wrong-target keepalive")
+
 	require.NoError(t, tsv.Release(ctx, &target, 0, s1.ReservedID))
 }
