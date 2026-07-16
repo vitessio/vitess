@@ -998,3 +998,7 @@ options:PassthroughDMLs
   "FullQuery": "create temporary table temp (\n\ta int\n)",
   "NeedsReservedConn": true
 }
+
+# reject writes to Vitess internal tables
+"insert into _vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_ (id) values (1)"
+"VT09033: modification of internal table '_vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_' is not allowed"

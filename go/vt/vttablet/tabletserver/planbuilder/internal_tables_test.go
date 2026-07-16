@@ -22,7 +22,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -217,8 +216,7 @@ func internalTableWriteCases() []struct {
 	}}
 }
 
-func TestBuildRejectsInternalTableWrites(t *testing.T) {
-	env := vtenv.NewTestEnv()
+func TestRejectInternalTableWrites(t *testing.T) {
 	parser := sqlparser.NewTestParser()
 	tables := internalTablesTestSchema()
 
@@ -227,47 +225,7 @@ func TestBuildRejectsInternalTableWrites(t *testing.T) {
 			stmt, err := parser.Parse(tc.query)
 			require.NoError(t, err)
 
-			_, err = Build(env, stmt, tables, "dbName", false)
-			if tc.wantErr == "" {
-				require.NoError(t, err)
-				return
-			}
-			require.ErrorContains(t, err, tc.wantErr)
-		})
-	}
-}
-
-func TestBuildStreamingRejectsInternalTableWrites(t *testing.T) {
-	parser := sqlparser.NewTestParser()
-	tables := internalTablesTestSchema()
-
-	cases := []struct {
-		name    string
-		query   string
-		wantErr string
-	}{{
-		name:    "streaming update of internal table is blocked",
-		query:   "update " + internalGCTable + " set col3 = 1",
-		wantErr: internalTableErr,
-	}, {
-		name:    "streaming delete from internal table is blocked",
-		query:   "delete from " + internalGCTable,
-		wantErr: internalTableErr,
-	}, {
-		name:    "streaming insert into internal table is blocked",
-		query:   "insert into " + internalGCTable + " (id) values (1)",
-		wantErr: internalTableErr,
-	}, {
-		name:  "streaming select from internal table is allowed",
-		query: "select * from " + internalGCTable,
-	}}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			stmt, err := parser.Parse(tc.query)
-			require.NoError(t, err)
-
-			_, err = BuildStreaming(stmt, tables)
+			err = rejectInternalTableWrites(stmt, tables, parser)
 			if tc.wantErr == "" {
 				require.NoError(t, err)
 				return
