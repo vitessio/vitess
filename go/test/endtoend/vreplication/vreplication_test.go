@@ -291,9 +291,20 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 }
 
 func TestBasicVreplicationWorkflow(t *testing.T) {
-	defaultSourceKsOpts["DBTypeVersion"] = "mysql-8.0"
-	defaultTargetKsOpts["DBTypeVersion"] = "mysql-8.0"
+	setKeyspaceDBTypeVersions(t, "mysql-8.0", "mysql-8.0")
 	testBasicVreplicationWorkflow(t, "noblob")
+}
+
+// setKeyspaceDBTypeVersions pins the source and target keyspace DB versions
+// for the duration of the test, restoring the defaults afterwards so later
+// tests in the package are unaffected.
+func setKeyspaceDBTypeVersions(t *testing.T, source, target string) {
+	defaultSourceKsOpts["DBTypeVersion"] = source
+	defaultTargetKsOpts["DBTypeVersion"] = target
+	t.Cleanup(func() {
+		delete(defaultSourceKsOpts, "DBTypeVersion")
+		delete(defaultTargetKsOpts, "DBTypeVersion")
+	})
 }
 
 func TestVreplicationCopyParallel(t *testing.T) {
@@ -399,33 +410,32 @@ func testVreplicationWorkflows(t *testing.T, limited bool, binlogRowImage string
 		require.NoError(t, err, "error executing LookupVindex create: %v", err)
 		require.NoError(t, waitForWorkflowState(vc, fmt.Sprintf("%s.%s", defaultSourceKs, vindexName), binlogdatapb.VReplicationWorkflowState_Running.String()))
 		waitForRowCount(t, vtgateConn, defaultSourceKs, vindexName, int(rows))
-		customerVSchema, err = vc.VtctldClient.ExecuteCommandWithOutput("GetVSchema", defaultTargetKs)
+		targetVSchema, err := vc.VtctldClient.ExecuteCommandWithOutput("GetVSchema", defaultTargetKs)
 		require.NoError(t, err, "error executing GetVSchema: %v", err)
-		vdx := gjson.Get(customerVSchema, "vindexes."+vindexName)
+		vdx := gjson.Get(targetVSchema, "vindexes."+vindexName)
 		require.NotNil(t, vdx, "lookup vindex %s not found", vindexName)
 		require.Equal(t, "true", vdx.Get("params.write_only").String(), "expected write_only parameter to be true")
 
 		err = vc.VtctldClient.ExecuteCommand("LookupVindex", "--name", vindexName, "--table-keyspace", defaultSourceKs, "externalize", "--keyspace", defaultTargetKs)
 		require.NoError(t, err, "error executing LookupVindex externalize: %v", err)
-		customerVSchema, err = vc.VtctldClient.ExecuteCommandWithOutput("GetVSchema", defaultTargetKs)
+		targetVSchema, err = vc.VtctldClient.ExecuteCommandWithOutput("GetVSchema", defaultTargetKs)
 		require.NoError(t, err, "error executing GetVSchema: %v", err)
-		vdx = gjson.Get(customerVSchema, "vindexes."+vindexName)
+		vdx = gjson.Get(targetVSchema, "vindexes."+vindexName)
 		require.NotNil(t, vdx, "lookup vindex %s not found", vindexName)
 		require.NotEqual(t, "true", vdx.Get("params.write_only").String(), "did not expect write_only parameter to be true")
 
 		err = vc.VtctldClient.ExecuteCommand("LookupVindex", "--name", vindexName, "--table-keyspace", defaultSourceKs, "internalize", "--keyspace", defaultTargetKs)
 		require.NoError(t, err, "error executing LookupVindex internalize: %v", err)
-		customerVSchema, err = vc.VtctldClient.ExecuteCommandWithOutput("GetVSchema", defaultTargetKs)
+		targetVSchema, err = vc.VtctldClient.ExecuteCommandWithOutput("GetVSchema", defaultTargetKs)
 		require.NoError(t, err, "error executing GetVSchema: %v", err)
-		vdx = gjson.Get(customerVSchema, "vindexes."+vindexName)
+		vdx = gjson.Get(targetVSchema, "vindexes."+vindexName)
 		require.NotNil(t, vdx, "lookup vindex %s not found", vindexName)
 		require.Equal(t, "true", vdx.Get("params.write_only").String(), "expected write_only parameter to be true")
 	})
 }
 
 func TestV2WorkflowsAcrossDBVersions(t *testing.T) {
-	defaultSourceKsOpts["DBTypeVersion"] = "mysql-8.0"
-	defaultTargetKsOpts["DBTypeVersion"] = "mysql-8.4"
+	setKeyspaceDBTypeVersions(t, "mysql-8.0", "mysql-8.4")
 	testBasicVreplicationWorkflow(t, "")
 }
 
@@ -433,8 +443,7 @@ func TestV2WorkflowsAcrossDBVersions(t *testing.T) {
 // and a MySQL target as while MariaDB is not supported in Vitess v14+ we want
 // MariaDB users to have a way to migrate into Vitess.
 func TestMoveTablesMariaDBToMySQL(t *testing.T) {
-	defaultSourceKsOpts["DBTypeVersion"] = "mariadb-10.10"
-	defaultTargetKsOpts["DBTypeVersion"] = "mysql-8.0"
+	setKeyspaceDBTypeVersions(t, "mariadb-10.10", "mysql-8.0")
 	testVreplicationWorkflows(t, true /* only do MoveTables */, "")
 }
 
