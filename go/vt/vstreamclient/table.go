@@ -63,9 +63,6 @@ type TableConfig struct {
 	// minFlushDuration has passed, or the maxRowsPerFlush has been exceeded.
 	FlushFn FlushFunc
 
-	// TODO: translate this to *sql.Tx so we can pass it to the flush function
-	FlushInTx bool
-
 	// purposefully not exported, so we don't have to use a mutex to access it. The idea is that the consumer only
 	// needs to access this when they are flushing the rows, so they can copy the data if they want to keep it. If
 	// there is a use case for accessing this outside of the flush function, we can add a getter method.
