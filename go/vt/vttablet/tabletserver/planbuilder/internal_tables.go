@@ -38,9 +38,9 @@ func internalTableModificationError(tableName string) error {
 	return vterrors.VT09033(tableName)
 }
 
-// isInternalOperationTableName reports whether tableName uses the Vitess
+// isVitessInternalTableNameFormat reports whether tableName uses the Vitess
 // internal table name format.
-func isInternalOperationTableName(tableName string) bool {
+func isVitessInternalTableNameFormat(tableName string) bool {
 	isInternal, _, _, _, _ := vtschema.AnalyzeInternalTableName(strings.ToLower(tableName))
 	return isInternal
 }
@@ -82,14 +82,14 @@ func rejectInternalTableUpdate(stmt *sqlparser.Update, schemaTables map[string]*
 			// The tablet schema attributes it when it resolves to exactly
 			// one table, otherwise it is passed through unchecked.
 			name, ok := updateColumnTable(tables, schemaTables, updateExpr.Name)
-			if ok && isInternalOperationTableName(name) {
+			if ok && isVitessInternalTableNameFormat(name) {
 				return internalTableModificationError(name)
 			}
 			continue
 		}
 
 		for _, table := range tables {
-			if table.key == qualifier && isInternalOperationTableName(table.name) {
+			if table.key == qualifier && isVitessInternalTableNameFormat(table.name) {
 				return internalTableModificationError(table.name)
 			}
 		}
@@ -146,7 +146,7 @@ func rejectInternalTableDelete(stmt *sqlparser.Delete) error {
 			}
 		}
 
-		if isInternalOperationTableName(name) {
+		if isVitessInternalTableNameFormat(name) {
 			return internalTableModificationError(name)
 		}
 	}
@@ -188,7 +188,7 @@ func dmlTables(tableExprs ...sqlparser.TableExpr) []dmlTable {
 // internal operation table.
 func rejectInternalDMLTables(tables []dmlTable) error {
 	for _, table := range tables {
-		if isInternalOperationTableName(table.name) {
+		if isVitessInternalTableNameFormat(table.name) {
 			return internalTableModificationError(table.name)
 		}
 	}
@@ -210,7 +210,7 @@ func rejectInternalTableDDL(stmt sqlparser.DDLStatement, tables map[string]*sche
 
 	for _, tableName := range stmt.AffectedTables() {
 		name := tableName.Name.String()
-		if isInternalOperationTableName(name) {
+		if isVitessInternalTableNameFormat(name) {
 			return internalTableModificationError(name)
 		}
 	}
@@ -228,7 +228,7 @@ func rejectInternalTableDDL(stmt sqlparser.DDLStatement, tables map[string]*sche
 	}
 
 	name := partitionSpec.TableName.Name.String()
-	if isInternalOperationTableName(name) {
+	if isVitessInternalTableNameFormat(name) {
 		return internalTableModificationError(name)
 	}
 
