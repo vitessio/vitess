@@ -620,6 +620,11 @@ func (sm *stateManager) terminateAllQueries(wg *sync.WaitGroup) (cancel func()) 
 		if err := timer.SleepContext(ctx, sm.shutdownGracePeriod); err != nil {
 			return
 		}
+
+		if ctx.Err() != nil {
+			return
+		}
+
 		// Prevent any new queries from being added before we kill all the queries in the list.
 		sm.markClusterAction(ClusterActionNoQueries)
 		log.Info(fmt.Sprintf("Grace Period %v exceeded. Killing all OLTP queries.", sm.shutdownGracePeriod))
@@ -627,8 +632,18 @@ func (sm *stateManager) terminateAllQueries(wg *sync.WaitGroup) (cancel func()) 
 		log.Info("Killed all stateless OLTP queries.")
 		sm.statefulql.TerminateAll()
 		log.Info("Killed all OLTP queries.")
+
+		if ctx.Err() != nil {
+			return
+		}
+
 		sm.te.TerminateActiveCommits()
 		log.Info("Killed all active COMMIT statements.")
+
+		if ctx.Err() != nil {
+			return
+		}
+
 		// We can rollback prepared transactions only after we have killed all the write queries in progress.
 		// This is essential because when we rollback a prepared transaction, it lets go of the locks it was holding.
 		// If there were some other conflicting write in progress that hadn't been killed, then it could potentially go through
