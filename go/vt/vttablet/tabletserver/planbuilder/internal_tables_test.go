@@ -165,6 +165,18 @@ func internalTableWriteCases() []struct {
 		name:  "alter regular table is allowed",
 		query: "alter table t1 add column foo int",
 	}, {
+		name:  "update user table matching pt-osc pattern is allowed",
+		query: "update _orders_old set id = 1",
+	}, {
+		name:  "rename to user table matching pt-osc pattern is allowed",
+		query: "rename table t1 to _orders_old",
+	}, {
+		name:  "update legacy pt-osc artifact is allowed",
+		query: "update _4e5dcf80_354b_11eb_82cd_f875a4d24e90_20201203114013_new set id = 1",
+	}, {
+		name:  "update legacy gh-ost artifact is allowed",
+		query: "update _4e5dcf80_354b_11eb_82cd_f875a4d24e90_20201203114014_gho set id = 1",
+	}, {
 		name:    "procedure body inserting into internal table is blocked",
 		query:   "create procedure p () begin insert into " + internalGCTable + " (id) values (1); end",
 		wantErr: internalTableErr,

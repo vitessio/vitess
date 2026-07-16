@@ -38,10 +38,11 @@ func internalTableModificationError(tableName string) error {
 	return vterrors.VT09033(tableName)
 }
 
-// isInternalOperationTableName reports whether tableName is reserved for
-// internal Vitess operations.
+// isInternalOperationTableName reports whether tableName uses the Vitess
+// internal table name format.
 func isInternalOperationTableName(tableName string) bool {
-	return vtschema.IsInternalOperationTableName(strings.ToLower(tableName))
+	isInternal, _, _, _, _ := vtschema.AnalyzeInternalTableName(strings.ToLower(tableName))
+	return isInternal
 }
 
 // rejectInternalTableWrites returns an error when statement modifies a Vitess
