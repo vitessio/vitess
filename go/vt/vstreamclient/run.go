@@ -129,6 +129,8 @@ func (r FlushReason) String() string {
 //   - the context is canceled or times out while Run is still active
 //   - the client shuts itself down because no events were received; the returned error
 //     wraps ErrHeartbeatTimeout or ErrStartupTimeout, so callers can match with errors.Is
+//   - taking ownership of the state row fails because another client with the same stream
+//     name claimed it since New read state; the returned error wraps ErrFenced
 //   - a registered event hook returns an error
 //   - row decoding or table lookup fails
 //   - FlushFn returns an error
@@ -155,6 +157,15 @@ func (v *VStreamClient) Run(ctx context.Context) error {
 	reader, err := v.cfg.conn.VStream(ctx, v.cfg.tabletType, v.latestVgtid, v.cfg.filter, v.cfg.flags)
 	if err != nil {
 		return fmt.Errorf("vstreamclient: failed to create vstream: %w", err)
+	}
+
+	// take ownership of the state row only once the stream is established, so an abandoned
+	// constructor or a failed stream setup never fences the incumbent consumer. The takeover
+	// fails with an error wrapping ErrFenced if another client claimed the stream since New
+	// read its state.
+	err = v.takeStateOwnership(ctx)
+	if err != nil {
+		return err
 	}
 
 	// to prevent an immediate flush, we initialize LastFlushedAt here, even if it wasn't technically flushed

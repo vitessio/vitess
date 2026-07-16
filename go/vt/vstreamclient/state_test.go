@@ -51,6 +51,16 @@ type stateTestVTGateImpl struct {
 	// rowImageErr makes the probe fail, exercising the warn-and-continue path.
 	rowImage    string
 	rowImageErr bool
+
+	// vstreamErr makes VStream fail, exercising Run's failed-stream-setup path.
+	vstreamErr error
+}
+
+func (t *stateTestVTGateImpl) VStream(context.Context, topodatapb.TabletType, *binlogdatapb.VGtid, *binlogdatapb.Filter, *vtgatepb.VStreamFlags) (vtgateconn.VStreamReader, error) {
+	if t.vstreamErr != nil {
+		return nil, t.vstreamErr
+	}
+	return t.reader, nil
 }
 
 func (t *stateTestVTGateImpl) Execute(ctx context.Context, session *vtgatepb.Session, query string, bindVars map[string]*querypb.BindVariable, prepared bool) (*vtgatepb.Session, *sqltypes.Result, error) {
@@ -245,14 +255,15 @@ func TestNew_ResumeThenIdleFlushSkipsCheckpointWrite(t *testing.T) {
 		FlushFn:         func(context.Context, []Row, FlushMeta) error { return nil },
 	}}, WithStateTable("stateks", "state"))
 	require.NoError(t, err)
-	queriesAfterNew := len(impl.queries)
+	require.NoError(t, v.takeStateOwnership(t.Context()))
+	queriesAfterTakeover := len(impl.queries)
 
 	// an idle stream after resume has no buffered rows and an unchanged vgtid, so a flush
 	// (e.g. triggered by a heartbeat after minFlushDuration) must not rewrite the checkpoint:
 	// MySQL reports RowsAffected=0 for a no-op update, which updateLatestVGtid treats as an error
 	err = v.flush(t.Context(), false)
 	require.NoError(t, err)
-	assert.Len(t, impl.queries, queriesAfterNew)
+	assert.Len(t, impl.queries, queriesAfterTakeover)
 }
 
 func newStateTestTableConfig() TableConfig {
@@ -295,6 +306,10 @@ func TestNew_ExplicitStartingVGtidPersistsWithCopyCompleted(t *testing.T) {
 		WithStateTable("stateks", "state"), WithStartingVGtid(explicit))
 	require.NoError(t, err)
 
+	// New itself must not write state; the takeover happens on Run
+	require.Len(t, impl.queries, 3)
+	require.NoError(t, v.takeStateOwnership(t.Context()))
+
 	// the caller provided a starting point and no state row exists, so a single insert persists
 	// the explicit vgtid together with copy_completed, and no copy phase runs, now or on restart
 	require.Len(t, impl.queries, 4)
@@ -333,6 +348,10 @@ func TestNew_ExplicitStartingVGtidOverridesStoredState(t *testing.T) {
 		WithStateTable("stateks", "state"), WithStartingVGtid(explicit))
 	require.NoError(t, err)
 
+	// New itself must not write state; the takeover happens on Run
+	require.Len(t, impl.queries, 3)
+	require.NoError(t, v.takeStateOwnership(t.Context()))
+
 	// the row exists, so the explicit position lands via a single compare-and-swap update that
 	// claims ownership and persists the position atomically
 	require.Len(t, impl.queries, 4)
@@ -365,6 +384,10 @@ func TestNew_RestartsIncompleteCopyFromScratch(t *testing.T) {
 		WithStateTable("stateks", "state"))
 	require.NoError(t, err)
 
+	// New itself must not write state; the takeover happens on Run
+	require.Len(t, impl.queries, 3)
+	require.NoError(t, v.takeStateOwnership(t.Context()))
+
 	// the row exists, so the fresh copy position lands via a single compare-and-swap update
 	// that claims ownership atomically, and copy_completed is explicitly reset so a crash
 	// mid-copy is never mistaken for completed state
@@ -386,6 +409,39 @@ func TestNew_RestartsIncompleteCopyFromScratch(t *testing.T) {
 	assert.Same(t, v.latestVgtid, v.lastFlushedVgtid)
 }
 
+func TestRun_FailedStreamSetupDoesNotFenceIncumbent(t *testing.T) {
+	vgtidJSON, err := protojson.Marshal(&binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/1"}},
+	})
+	require.NoError(t, err)
+
+	conn, impl := newStateTestConn(
+		t,
+		shardsAndStateTableResponses(stateRowResult(
+			sqltypes.NewVarBinary(string(vgtidJSON)),
+			sqltypes.NewVarBinary(`{"ks.t":{"Keyspace":"ks","Table":"t","Query":"select * from t"}}`),
+			sqltypes.NewInt64(1),
+		))...,
+	)
+	impl.vstreamErr = errors.New("vstream unavailable")
+
+	v, err := New(t.Context(), "stream", conn, []TableConfig{newStateTestTableConfig()},
+		WithStateTable("stateks", "state"))
+	require.NoError(t, err)
+
+	err = v.Run(t.Context())
+	require.ErrorContains(t, err, "failed to create vstream")
+
+	// a Run that could not establish its stream must not have taken ownership: the incumbent
+	// consumer keeps checkpointing undisturbed
+	require.Len(t, impl.queries, 3)
+	for _, query := range impl.queries {
+		if strings.HasPrefix(query, "update ") || strings.HasPrefix(query, "insert ") {
+			assert.NotContains(t, query, "owner_token")
+		}
+	}
+}
+
 func TestNew_ClaimsStateOwnershipAfterValidatingState(t *testing.T) {
 	vgtidJSON, err := protojson.Marshal(&binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/1"}},
@@ -405,8 +461,11 @@ func TestNew_ClaimsStateOwnershipAfterValidatingState(t *testing.T) {
 		WithStateTable("stateks", "state"))
 	require.NoError(t, err)
 
-	// the ownership claim must run after state is read and validated, so a constructor that
-	// fails validation can never fence a healthy running client
+	// the ownership claim must run after state is read and validated (and only once Run has
+	// established the stream), so a constructor that fails validation, is abandoned, or cannot
+	// open its stream can never fence a healthy running client
+	require.Len(t, impl.queries, 3)
+	require.NoError(t, v.takeStateOwnership(t.Context()))
 	require.Len(t, impl.queries, 4)
 	assert.Contains(t, impl.queries[2], "select latest_vgtid")
 	assert.Contains(t, impl.queries[3], "set owner_token = :owner_token")

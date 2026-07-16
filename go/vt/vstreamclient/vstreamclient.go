@@ -30,6 +30,8 @@ import (
 
 	"github.com/google/uuid"
 
+	"vitess.io/vitess/go/sqltypes"
+
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -71,6 +73,11 @@ type VStreamClient struct {
 	// transaction across multiple batches while heartbeats keep arriving independently, so
 	// heartbeat-triggered flushes must be deferred until the transaction terminates.
 	inTransaction bool
+
+	// pendingTakeover carries the state write New prepared but deliberately did not execute:
+	// taking ownership is deferred until Run has established the stream, so a
+	// constructed-but-never-run client can never fence the incumbent consumer.
+	pendingTakeover *stateTakeover
 
 	stats VStreamStats
 
@@ -116,6 +123,19 @@ type clientConfig struct {
 
 	// eventFuncs is a map of event type to the user provided function that should be called for that event type.
 	eventFuncs map[binlogdatapb.VEventType]EventFunc
+}
+
+// stateTakeover is the state write prepared during New and executed by Run once the stream is
+// established: either a claim-only ownership rotation (resume) or a full persist of the starting
+// position, both as a compare-and-swap against the owner token observed when state was read.
+type stateTakeover struct {
+	// persistVGtid is the position to persist together with the ownership claim; nil means the
+	// stream resumes from stored state and only the ownership claim is needed
+	persistVGtid         *binlogdatapb.VGtid
+	persistCopyCompleted bool
+
+	rowExists          bool
+	observedOwnerToken sqltypes.Value
 }
 
 type lifecycleState struct {
@@ -302,33 +322,54 @@ func New(ctx context.Context, name string, conn *vtgateconn.VTGateConn, tables [
 		// resume from the stored checkpoint; nothing to persist beyond claiming ownership
 	}
 
-	// claiming ownership and persisting the starting state are the only state-mutating steps,
-	// and they run last, as a single compare-and-swap against the owner token observed when
-	// state was read: it fences out a still-running client with the same stream name, while a
-	// stale constructor that lost the race fails with ErrFenced instead of stealing ownership
-	// back from a newer client.
-	if rowExists {
-		if persistVGtid != nil {
-			err = updateStateRow(ctx, v.session, v.cfg.name, v.cfg.vgtidStateKeyspace, v.cfg.vgtidStateTable, v.cfg.ownerToken, observedOwnerToken, persistVGtid, v.tables, persistCopyCompleted)
-		} else {
-			err = claimStateOwnership(ctx, v.session, v.cfg.name, v.cfg.vgtidStateKeyspace, v.cfg.vgtidStateTable, v.cfg.ownerToken, observedOwnerToken)
-		}
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		err = insertStateRow(ctx, v.session, v.cfg.name, v.cfg.vgtidStateKeyspace, v.cfg.vgtidStateTable, v.cfg.ownerToken, persistVGtid, v.tables, persistCopyCompleted)
-		if err != nil {
-			return nil, err
-		}
+	// New deliberately performs no state mutation: the ownership takeover (a compare-and-swap
+	// against the owner token observed above) is deferred until Run has established the stream,
+	// so a constructed-but-abandoned client or a failed stream setup never fences the incumbent
+	// consumer. See takeStateOwnership.
+	v.pendingTakeover = &stateTakeover{
+		persistVGtid:         persistVGtid,
+		persistCopyCompleted: persistCopyCompleted,
+		rowExists:            rowExists,
+		observedOwnerToken:   observedOwnerToken,
 	}
 
-	// every branch above leaves the state table holding exactly latestVgtid, so seed lastFlushedVgtid
-	// with it. Otherwise the first flush on an idle stream would issue a no-op update, which MySQL
-	// reports as RowsAffected=0 and updateLatestVGtid would treat as a missing state row.
+	return v, nil
+}
+
+// takeStateOwnership executes the state write prepared by New: it claims ownership of the state
+// row (fencing out a still-running client with the same stream name) and persists the starting
+// position when needed. It runs from Run once the stream is established, as a compare-and-swap
+// against the owner token observed when state was read, so a stale constructor that lost a race
+// fails with ErrFenced instead of stealing ownership back from a newer client.
+func (v *VStreamClient) takeStateOwnership(ctx context.Context) error {
+	takeover := v.pendingTakeover
+	if takeover == nil {
+		return nil
+	}
+
+	var err error
+	switch {
+	case !takeover.rowExists:
+		err = insertStateRow(ctx, v.session, v.cfg.name, v.cfg.vgtidStateKeyspace, v.cfg.vgtidStateTable, v.cfg.ownerToken, takeover.persistVGtid, v.tables, takeover.persistCopyCompleted)
+
+	case takeover.persistVGtid != nil:
+		err = updateStateRow(ctx, v.session, v.cfg.name, v.cfg.vgtidStateKeyspace, v.cfg.vgtidStateTable, v.cfg.ownerToken, takeover.observedOwnerToken, takeover.persistVGtid, v.tables, takeover.persistCopyCompleted)
+
+	default:
+		err = claimStateOwnership(ctx, v.session, v.cfg.name, v.cfg.vgtidStateKeyspace, v.cfg.vgtidStateTable, v.cfg.ownerToken, takeover.observedOwnerToken)
+	}
+	if err != nil {
+		return err
+	}
+
+	v.pendingTakeover = nil
+
+	// the takeover leaves the state table holding exactly latestVgtid, so seed lastFlushedVgtid
+	// with it. Otherwise the first flush on an idle stream would issue a no-op update, which
+	// MySQL reports as RowsAffected=0 and updateLatestVGtid would treat as a missing state row.
 	v.lastFlushedVgtid = v.latestVgtid
 
-	return v, nil
+	return nil
 }
 
 func resolveLatestVGtid(explicit, stored *binlogdatapb.VGtid) (*binlogdatapb.VGtid, bool) {
