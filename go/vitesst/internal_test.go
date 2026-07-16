@@ -28,7 +28,7 @@ import (
 func TestSpliceInitDBSQL(t *testing.T) {
 	// Use the repo's real init_db.sql so this test also pins that the marker
 	// the framework depends on still exists there.
-	base, err := os.ReadFile("../../../config/init_db.sql")
+	base, err := os.ReadFile("../../config/init_db.sql")
 	require.NoError(t, err)
 
 	out, err := spliceInitDBSQL(string(base), "")
