@@ -669,24 +669,26 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 	// will never have seen their transactions commit - they will already have received an error.
 	//
 	// The demoted primary will end up with errant GTIDs, but that's unavoidable in this scenario.
+	revertPrimarySemiSync := func() {
+		if finalErr != nil && revertPartialFailure && wasPrimary {
+			log.Info("reverting primary-side semi-sync to enabled")
+
+			ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), topo.RemoteOperationTimeout)
+			defer cancel()
+
+			if err := tm.fixSemiSync(ctx, topodatapb.TabletType_PRIMARY, SemiSyncActionSet); err != nil {
+				log.Warn(fmt.Sprintf("fixSemiSync(PRIMARY) failed during revert: %v", err))
+			}
+		}
+	}
+
 	if force && isSemiSyncBlocked {
 		log.Info("checking primary-side semi-sync state")
 		if tm.isPrimarySideSemiSyncEnabled(ctx) {
 			// Disable the primary side semi-sync to unblock the writes.
 			log.Info("disabling primary-side semi-sync to unblock stuck writes")
 
-			defer func() {
-				if finalErr != nil && revertPartialFailure && wasPrimary {
-					log.Info("reverting primary-side semi-sync to enabled")
-
-					ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), topo.RemoteOperationTimeout)
-					defer cancel()
-
-					if err := tm.fixSemiSync(ctx, topodatapb.TabletType_PRIMARY, SemiSyncActionSet); err != nil {
-						log.Warn(fmt.Sprintf("fixSemiSync(PRIMARY) failed during revert: %v", err))
-					}
-				}
-			}()
+			defer revertPrimarySemiSync()
 
 			if err := tm.fixSemiSync(ctx, topodatapb.TabletType_REPLICA, SemiSyncActionSet); err != nil {
 				return nil, err
@@ -752,18 +754,7 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 		// If using semi-sync, we need to disable primary-side.
 		log.Info("disabling primary-side semi-sync")
 
-		defer func() {
-			if finalErr != nil && revertPartialFailure && wasPrimary {
-				log.Info("reverting primary-side semi-sync to enabled")
-
-				ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), topo.RemoteOperationTimeout)
-				defer cancel()
-
-				if err := tm.fixSemiSync(ctx, topodatapb.TabletType_PRIMARY, SemiSyncActionSet); err != nil {
-					log.Warn(fmt.Sprintf("fixSemiSync(PRIMARY) failed during revert: %v", err))
-				}
-			}
-		}()
+		defer revertPrimarySemiSync()
 
 		if err := tm.fixSemiSync(ctx, topodatapb.TabletType_REPLICA, SemiSyncActionSet); err != nil {
 			return nil, err
