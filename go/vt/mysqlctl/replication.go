@@ -408,9 +408,8 @@ func (mysqld *Mysqld) execSetSuperReadOnly(ctx context.Context, on bool, options
 	}
 
 	execErr := mysqld.executeSuperQueryListConn(ctx, conn, []string{query})
-	// Discard the connection so the modified session never returns to the
-	// pool. Recycling a closed connection opens a replacement.
-	conn.Close()
+	// Taint the connection so the modified session never returns to the pool.
+	conn.Taint()
 
 	return execErr
 }
