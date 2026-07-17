@@ -483,7 +483,30 @@ func TestRedoPreparedTransactionsSetsReadWriteWithFreshTimeout(t *testing.T) {
 		),
 	)
 
-	require.NoError(t, tm.redoPreparedTransactionsAndSetReadWrite(ctx))
+	require.NoError(t, tm.redoPreparedTransactionsAndSetReadWrite(context.WithoutCancel(ctx)))
+}
+
+func TestRedoPreparedTransactionsHonorsCallerCancellation(t *testing.T) {
+	tm, mockMysqlDaemon := newDemotePrimaryRollbackTM(t)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	// Simulate the caller losing its shard lock during the replay.
+	tm.QueryServiceControl = &redoHookController{
+		Controller: tm.QueryServiceControl.(*tabletservermock.Controller),
+		onRedo:     cancel,
+	}
+
+	gomock.InOrder(
+		mockMysqlDaemon.EXPECT().SetSuperReadOnly(gomock.Any(), false).Return(nil, nil),
+		mockMysqlDaemon.EXPECT().SetReadOnly(gomock.Any(), false).DoAndReturn(
+			func(ctx context.Context, on bool) error {
+				require.Error(t, ctx.Err())
+				return ctx.Err()
+			},
+		),
+	)
+
+	require.ErrorIs(t, tm.redoPreparedTransactionsAndSetReadWrite(ctx), context.Canceled)
 }
 
 func TestDemotePrimarySemiSyncErrorRunsRollback(t *testing.T) {

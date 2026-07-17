@@ -729,9 +729,9 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 			// setting read_only OFF will also set super_read_only OFF if it was set
 			log.Info("reverting read-only by redoing prepared transactions")
 
-			ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), topo.RemoteOperationTimeout)
-			defer cancel()
-
+			// The caller's context might have already reached its deadline or been canceled. We want to ensure
+			// we restore read-write, so we create and detach a new context.
+			ctx := context.WithoutCancel(ctx)
 			if err = tm.redoPreparedTransactionsAndSetReadWrite(ctx); err != nil {
 				log.Warn(fmt.Sprintf("RedoPreparedTransactionsAndSetReadWrite failed during revert: %v", err))
 			}
