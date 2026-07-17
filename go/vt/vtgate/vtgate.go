@@ -628,14 +628,15 @@ func (vtg *VTGate) ExecuteMulti(
 		return session, nil, sqlparser.ErrEmpty
 	}
 	var qr *sqltypes.Result
-	var cancel context.CancelFunc
 	for _, query := range queries {
 		func() {
+			queryCtx := ctx
+			var cancel context.CancelFunc
 			if mysqlQueryTimeout != 0 {
-				ctx, cancel = context.WithTimeout(ctx, mysqlQueryTimeout)
+				queryCtx, cancel = context.WithTimeout(queryCtx, mysqlQueryTimeout)
 				defer cancel()
 			}
-			session, qr, err = vtg.Execute(ctx, mysqlCtx, session, query, make(map[string]*querypb.BindVariable), false)
+			session, qr, err = vtg.Execute(queryCtx, mysqlCtx, session, query, make(map[string]*querypb.BindVariable), false)
 		}()
 		if err != nil {
 			return session, qrs, err
@@ -723,18 +724,19 @@ func (vtg *VTGate) StreamExecuteMulti(ctx context.Context, mysqlCtx vtgateservic
 	if len(queries) == 0 {
 		return session, sqlparser.ErrEmpty
 	}
-	var cancel context.CancelFunc
 	firstPacket := true
 	more := true
 	for idx, query := range queries {
 		firstPacket = true
 		more = idx < len(queries)-1
 		func() {
+			queryCtx := ctx
+			var cancel context.CancelFunc
 			if mysqlQueryTimeout != 0 {
-				ctx, cancel = context.WithTimeout(ctx, mysqlQueryTimeout)
+				queryCtx, cancel = context.WithTimeout(queryCtx, mysqlQueryTimeout)
 				defer cancel()
 			}
-			session, err = vtg.StreamExecute(ctx, mysqlCtx, session, query, make(map[string]*querypb.BindVariable), false, func(result *sqltypes.Result) error {
+			session, err = vtg.StreamExecute(queryCtx, mysqlCtx, session, query, make(map[string]*querypb.BindVariable), false, func(result *sqltypes.Result) error {
 				defer func() {
 					firstPacket = false
 				}()
