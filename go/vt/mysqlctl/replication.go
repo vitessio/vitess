@@ -412,10 +412,19 @@ func (mysqld *Mysqld) execSetSuperReadOnly(ctx context.Context, on bool, options
 	}
 
 	execErr := mysqld.executeSuperQueryListConn(ctx, conn, []string{query})
-	// Taint the connection so the modified session never returns to the pool.
-	conn.Taint()
+	if execErr != nil {
+		// The connection may be mid-query, so it must not return to the pool.
+		conn.Taint()
+		return execErr
+	}
 
-	return execErr
+	// Restore the session so the connection can return to the pool.
+	restoreQuery := "SET SESSION lock_wait_timeout = @@global.lock_wait_timeout"
+	if err := mysqld.executeSuperQueryListConn(ctx, conn, []string{restoreQuery}); err != nil {
+		conn.Taint()
+	}
+
+	return nil
 }
 
 // WaitSourcePos lets replicas wait for the given replication position to

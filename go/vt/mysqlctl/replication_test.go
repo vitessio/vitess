@@ -783,6 +783,7 @@ func TestSetSuperReadOnlyLockWaitTimeout(t *testing.T) {
 		db.AddQuery("SELECT 1", &sqltypes.Result{})
 		db.AddQuery("SELECT @@global.super_read_only", sqltypes.MakeTestResult(sqltypes.MakeTestFields("@@global.super_read_only", "int64"), "0"))
 		db.AddQuery("SET SESSION lock_wait_timeout = 1", &sqltypes.Result{})
+		db.AddQuery("SET SESSION lock_wait_timeout = @@global.lock_wait_timeout", &sqltypes.Result{})
 		db.AddQuery("SET GLOBAL super_read_only = 'ON'", &sqltypes.Result{})
 
 		testMysqld := NewMysqld(dbc)
@@ -803,6 +804,7 @@ func TestSetSuperReadOnlyLockWaitTimeout(t *testing.T) {
 		require.NotEqual(t, -1, setIdx, "expected the session lock_wait_timeout to be set, got queries: %s", queryLog)
 		require.NotEqual(t, -1, enableIdx, "expected super_read_only to be enabled, got queries: %s", queryLog)
 		assert.Less(t, setIdx, enableIdx, "lock_wait_timeout must be set before enabling super_read_only")
+		assert.Equal(t, 1, db.GetQueryCalledNum("SET SESSION lock_wait_timeout = @@global.lock_wait_timeout"), "the session lock_wait_timeout must be restored on success")
 	})
 
 	t.Run("rounds the timeout up to whole seconds", func(t *testing.T) {
@@ -834,6 +836,7 @@ func TestSetSuperReadOnlyLockWaitTimeout(t *testing.T) {
 
 		_, err := testMysqld.SetSuperReadOnly(t.Context(), true, WithLockWaitTimeout(time.Second))
 		require.ErrorContains(t, err, "Lock wait timeout exceeded")
+		assert.Equal(t, 0, db.GetQueryCalledNum("SET SESSION lock_wait_timeout = @@global.lock_wait_timeout"), "must not run the restore on a failed connection")
 	})
 
 	t.Run("reset function does not apply the lock_wait_timeout", func(t *testing.T) {
@@ -859,6 +862,6 @@ func TestSetSuperReadOnlyLockWaitTimeout(t *testing.T) {
 		assert.NotNil(t, resetFunc)
 
 		assert.Equal(t, 1, db.GetQueryCalledNum("SET GLOBAL super_read_only = 'ON'"))
-		assert.NotContains(t, db.QueryLog(), "lock_wait_timeout = default", "must not restore a lock_wait_timeout that was never set")
+		assert.Equal(t, 0, db.GetQueryCalledNum("SET SESSION lock_wait_timeout = @@global.lock_wait_timeout"), "must not restore a lock_wait_timeout that was never set")
 	})
 }
