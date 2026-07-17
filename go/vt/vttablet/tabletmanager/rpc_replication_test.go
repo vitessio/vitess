@@ -39,6 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/semisyncmonitor"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
+	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -434,6 +435,38 @@ func TestDemotePrimarySetSuperReadOnlyErrorRunsRollback(t *testing.T) {
 	_, err = tm.demotePrimary(ctx, true /* revertPartialFailure */, false /* force */)
 	require.ErrorIs(t, err, setSuperReadOnlyErr)
 	assert.False(t, superReadOnly)
+}
+
+func TestDemotePrimarySetServingTypeErrorRunsRollback(t *testing.T) {
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "cell1")
+	tm := newTestTM(t, ts, 1, "ks", "0", nil)
+	err := tm.ChangeType(ctx, topodatapb.TabletType_PRIMARY, false)
+	require.NoError(t, err)
+
+	qsc := tm.QueryServiceControl.(*tabletservermock.Controller)
+	require.True(t, qsc.IsServing())
+	for len(qsc.StateChanges) > 0 {
+		<-qsc.StateChanges
+	}
+
+	mockCtrl := gomock.NewController(t)
+	mockMysqlDaemon := mysqlctlmock.NewMockMysqlDaemon(mockCtrl)
+	tm.MysqlDaemon = mockMysqlDaemon
+	mockMysqlDaemon.EXPECT().IsReadOnly(gomock.Any()).Return(false, nil)
+
+	qsc.SetServingTypeError = errors.New("set serving type failed after applying change")
+
+	_, err = tm.demotePrimary(ctx, true /* revertPartialFailure */, false /* force */)
+	require.ErrorContains(t, err, "SetServingType(serving=false) failed")
+
+	var changes []*tabletservermock.StateChange
+	for len(qsc.StateChanges) > 0 {
+		changes = append(changes, <-qsc.StateChanges)
+	}
+	require.Len(t, changes, 2)
+	assert.False(t, changes[0].Serving)
+	assert.True(t, changes[1].Serving)
 }
 
 func TestDemotePrimarySemiSyncErrorRunsRollback(t *testing.T) {

@@ -625,17 +625,19 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 		// considered successful. If we are already not serving, this will be
 		// idempotent.
 		log.Info("DemotePrimary disabling query service")
-		if err := tm.QueryServiceControl.SetServingType(tablet.Type, protoutil.TimeFromProto(tablet.PrimaryTermStartTime).UTC(), false, "demotion in progress"); err != nil {
-			return nil, vterrors.Wrap(err, "SetServingType(serving=false) failed")
-		}
 		defer func() {
 			if finalErr != nil && revertPartialFailure && wasServing {
 				log.Info("reverting query service to serving")
+
 				if err := tm.QueryServiceControl.SetServingType(tablet.Type, protoutil.TimeFromProto(tablet.PrimaryTermStartTime).UTC(), true, ""); err != nil {
 					log.Warn(fmt.Sprintf("SetServingType(serving=true) failed during revert: %v", err))
 				}
 			}
 		}()
+
+		if err := tm.QueryServiceControl.SetServingType(tablet.Type, protoutil.TimeFromProto(tablet.PrimaryTermStartTime).UTC(), false, "demotion in progress"); err != nil {
+			return nil, vterrors.Wrap(err, "SetServingType(serving=false) failed")
+		}
 	}
 
 	log.Info("checking semi-sync status")
