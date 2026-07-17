@@ -21,6 +21,7 @@ import (
 	"sort"
 
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -30,26 +31,18 @@ import (
 
 var unknownVersion = mysqlctl.ServerVersion{Major: math.MaxInt, Minor: math.MaxInt, Patch: math.MaxInt}
 
-// usableMySQLVersions returns mysqlVersions unchanged when it is safe to use them
-// as an election tiebreaker, or nil to disable version-aware ordering entirely.
+// sameFlavorFamily reports whether all the given flavors belong to a single
+// replication-compatibility family, so their version numbers can be meaningfully
+// compared.
 //
-// Version ordering is only meaningful when every candidate belongs to the same
-// replication-compatibility family. MySQL and Percona share a version lineage
-// and are comparable, so a mix of the two is fine; MariaDB has its own lineage
-// (10.x/11.x), so comparing it against MySQL/Percona is nonsensical (10 > 8 does
-// not mean MariaDB is "newer" in any compatibility sense). When candidates span
-// more than one family we fall back to the pre-version ordering. Candidates
-// whose flavor could not be determined (FlavorUnknown) do not by themselves
-// disable ordering — they are handled by the unknownVersion sentinel, which
-// sorts them last while still comparing the known candidates against each other.
-//
-// mysqlVersions and flavors are parallel slices; a nil/empty mysqlVersions is
-// returned unchanged (version ordering already disabled).
-func usableMySQLVersions(mysqlVersions []mysqlctl.ServerVersion, flavors []mysqlctl.MySQLFlavor) []mysqlctl.ServerVersion {
-	if len(mysqlVersions) == 0 {
-		return mysqlVersions
-	}
-
+// Version ordering is only meaningful within one family. MySQL and Percona share
+// a version lineage and are comparable, so a mix of the two is fine; MariaDB has
+// its own lineage (10.x/11.x), so comparing it against MySQL/Percona is
+// nonsensical (10 > 8 does not mean MariaDB is "newer" in any compatibility
+// sense). Flavors whose family could not be determined (FlavorFamilyUnknown) are
+// ignored — they are handled by the unknownVersion sentinel, which sorts them
+// last while still comparing the known candidates against each other.
+func sameFlavorFamily(flavors []mysqlctl.MySQLFlavor) bool {
 	var knownFamily mysqlctl.FlavorFamily
 	for _, f := range flavors {
 		family := f.ReplicationFamily()
@@ -61,13 +54,50 @@ func usableMySQLVersions(mysqlVersions []mysqlctl.ServerVersion, flavors []mysql
 			continue
 		}
 		if family != knownFamily {
-			// Candidates span multiple flavor families: version comparison is
-			// meaningless, so disable version-aware ordering and fall back to
-			// position/promotion ordering.
-			return nil
+			return false
 		}
 	}
+	return true
+}
+
+// usableMySQLVersions returns mysqlVersions unchanged when it is safe to use them
+// as an election tiebreaker, or nil to disable version-aware ordering when the
+// candidates span more than one flavor family (see sameFlavorFamily).
+//
+// mysqlVersions and flavors are parallel slices; a nil/empty mysqlVersions is
+// returned unchanged (version ordering already disabled).
+func usableMySQLVersions(mysqlVersions []mysqlctl.ServerVersion, flavors []mysqlctl.MySQLFlavor) []mysqlctl.ServerVersion {
+	if len(mysqlVersions) == 0 {
+		return mysqlVersions
+	}
+	if !sameFlavorFamily(flavors) {
+		return nil
+	}
 	return mysqlVersions
+}
+
+// scopedVersionMap returns versionMap when it is safe to use as an election
+// tiebreaker for the given candidate set, or nil to disable version-aware
+// ordering when those candidates span more than one flavor family (see
+// sameFlavorFamily).
+//
+// The guard is scoped to the passed candidates specifically — not to every
+// tablet in versionMap/flavorMap — so a non-candidate tablet elsewhere in the
+// shard (e.g. one dropped for errant GTIDs) cannot disable version comparison for
+// the tablets actually being elected among. Used on the ERS election path where
+// versions and flavors are keyed by tablet alias.
+func scopedVersionMap(candidates []*topodatapb.Tablet, versionMap map[string]mysqlctl.ServerVersion, flavorMap map[string]mysqlctl.MySQLFlavor) map[string]mysqlctl.ServerVersion {
+	if len(versionMap) == 0 {
+		return versionMap
+	}
+	flavors := make([]mysqlctl.MySQLFlavor, 0, len(candidates))
+	for _, c := range candidates {
+		flavors = append(flavors, flavorMap[topoproto.TabletAliasString(c.Alias)])
+	}
+	if !sameFlavorFamily(flavors) {
+		return nil
+	}
+	return versionMap
 }
 
 // SortMode controls the priority order used when sorting reparent candidates.

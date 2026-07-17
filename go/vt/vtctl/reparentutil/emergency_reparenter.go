@@ -298,6 +298,9 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	// Here we also check for split brain scenarios and check that the selected replica must be more advanced than all the other valid candidates.
 	// We fail in case there is a split brain detected.
 	// The validCandidateTablets list is sorted by the replication positions with ties broken by promotion rules.
+	// Version-aware election is scoped per candidate set: each step below applies the flavor-family guard
+	// to the tablets it actually chooses among, so a non-candidate tablet elsewhere in the shard does not
+	// disable version comparison for the real candidates.
 	intermediateSource, validCandidateTablets, err = erp.findMostAdvanced(validCandidates, tabletMap, stoppedReplicationSnapshot.mysqlVersions, stoppedReplicationSnapshot.mysqlFlavors, opts)
 	if err != nil {
 		return err
@@ -316,7 +319,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 
 	// Check whether the intermediate source candidate selected is ideal or if it can be improved later.
 	// If the intermediateSource is ideal, then we can be certain that it is part of the valid candidates list.
-	isIdeal, err = erp.isIntermediateSourceIdeal(intermediateSource, validCandidateTablets, tabletMap, stoppedReplicationSnapshot.mysqlVersions, opts)
+	isIdeal, err = erp.isIntermediateSourceIdeal(intermediateSource, validCandidateTablets, tabletMap, stoppedReplicationSnapshot.mysqlVersions, stoppedReplicationSnapshot.mysqlFlavors, opts)
 	if err != nil {
 		return err
 	}
@@ -346,7 +349,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		// try to find a better candidate using the list we got back
 		// We prefer to choose a candidate which is in the same cell as our previous primary and of the best possible durability rule.
 		// However, if there is an explicit request from the user to promote a specific tablet, then we choose that tablet.
-		betterCandidate, err = erp.identifyPrimaryCandidate(intermediateSource, validReplacementCandidates, tabletMap, stoppedReplicationSnapshot.mysqlVersions, opts)
+		betterCandidate, err = erp.identifyPrimaryCandidate(intermediateSource, validReplacementCandidates, tabletMap, stoppedReplicationSnapshot.mysqlVersions, stoppedReplicationSnapshot.mysqlFlavors, opts)
 		if err != nil {
 			return err
 		}
@@ -544,6 +547,9 @@ func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 }
 
 // findMostAdvanced finds the intermediate source for ERS. We always choose the most advanced one from our valid candidates list. Further ties are broken by looking at the promotion rules.
+//
+// versionMap and flavorMap are keyed by tablet alias over all reachable tablets;
+// the flavor-family guard is applied over only the candidates being sorted here.
 func (erp *EmergencyReparenter) findMostAdvanced(
 	validCandidates map[string]*RelayLogPositions,
 	tabletMap map[string]*topo.TabletInfo,
@@ -561,30 +567,25 @@ func (erp *EmergencyReparenter) findMostAdvanced(
 		return nil, nil, err
 	}
 
-	// build parallel version and flavor slices for sorting
-	mysqlVersions := make([]mysqlctl.ServerVersion, len(validTablets))
-	mysqlFlavors := make([]mysqlctl.MySQLFlavor, len(validTablets))
-
-	for i, tablet := range validTablets {
-		alias := topoproto.TabletAliasString(tablet.Alias)
-		v, ok := versionMap[alias]
-		if !ok {
-			v = unknownVersion
-		}
-		mysqlVersions[i] = v
-		f, ok := flavorMap[alias]
-		if !ok {
-			f = mysqlctl.FlavorUnknown
-		}
-		mysqlFlavors[i] = f
+	// Scope the flavor-family guard to the candidates actually being sorted;
+	// scopedVersion is nil (disabling version ordering) when they span more than
+	// one family.
+	scopedVersion := scopedVersionMap(validTablets, versionMap, flavorMap)
+	if scopedVersion == nil && len(versionMap) > 0 {
+		erp.logger.Warningf("reparent candidates span multiple MySQL flavor families; skipping version-aware election")
 	}
 
-	// Disable version-aware ordering when candidates span multiple flavor
-	// families (e.g. MariaDB alongside MySQL/Percona), where version comparison
-	// is meaningless. Falls through to the position/promotion ordering.
-	if usableMySQLVersions(mysqlVersions, mysqlFlavors) == nil {
-		erp.logger.Warningf("reparent candidates span multiple MySQL flavor families; skipping version-aware election")
-		mysqlVersions = nil
+	// build the version slice for sorting; nil scopedVersion disables version ordering
+	var mysqlVersions []mysqlctl.ServerVersion
+	if len(scopedVersion) > 0 {
+		mysqlVersions = make([]mysqlctl.ServerVersion, len(validTablets))
+		for i, tablet := range validTablets {
+			v, ok := scopedVersion[topoproto.TabletAliasString(tablet.Alias)]
+			if !ok {
+				v = unknownVersion
+			}
+			mysqlVersions[i] = v
+		}
 	}
 
 	// sort the tablets for finding the best intermediate source in ERS — position first to minimize data loss
@@ -869,21 +870,27 @@ func (erp *EmergencyReparenter) isIntermediateSourceIdeal(
 	validCandidates []*topodatapb.Tablet,
 	tabletMap map[string]*topo.TabletInfo,
 	versionMap map[string]mysqlctl.ServerVersion,
+	flavorMap map[string]mysqlctl.MySQLFlavor,
 	opts EmergencyReparentOptions,
 ) (bool, error) {
-	candidate, err := erp.identifyPrimaryCandidate(intermediateSource, validCandidates, tabletMap, versionMap, opts)
+	candidate, err := erp.identifyPrimaryCandidate(intermediateSource, validCandidates, tabletMap, versionMap, flavorMap, opts)
 	if err != nil {
 		return false, err
 	}
 	return candidate == intermediateSource, nil
 }
 
-// identifyPrimaryCandidate is used to find the final candidate for ERS promotion
+// identifyPrimaryCandidate is used to find the final candidate for ERS promotion.
+//
+// versionMap and flavorMap are keyed by tablet alias over all reachable tablets;
+// the flavor-family guard is applied over only the candidates considered in each
+// promotion tier.
 func (erp *EmergencyReparenter) identifyPrimaryCandidate(
 	intermediateSource *topodatapb.Tablet,
 	validCandidates []*topodatapb.Tablet,
 	tabletMap map[string]*topo.TabletInfo,
 	versionMap map[string]mysqlctl.ServerVersion,
+	flavorMap map[string]mysqlctl.MySQLFlavor,
 	opts EmergencyReparentOptions,
 ) (candidate *topodatapb.Tablet, err error) {
 	defer func() {
@@ -921,7 +928,10 @@ func (erp *EmergencyReparenter) identifyPrimaryCandidate(
 	// If versions are equal, we still prefer the intermediate source to avoid catch-up.
 	for _, promotionRule := range promotionrule.AllPromotionRules() {
 		candidates := getTabletsWithPromotionRules(opts.durability, validCandidates, promotionRule)
-		candidate = findCandidate(intermediateSource, candidates, versionMap)
+		// Scope the flavor-family guard to this tier's candidates: nil disables
+		// version comparison when they span more than one family.
+		scopedVersion := scopedVersionMap(candidates, versionMap, flavorMap)
+		candidate = findCandidate(intermediateSource, candidates, scopedVersion)
 		if candidate != nil {
 			return candidate, nil
 		}

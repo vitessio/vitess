@@ -404,6 +404,15 @@ func findCandidate(
 	// major.minor (and by patch within the pre-8.0.34 MySQL 8.0 series; see
 	// ServerVersion.CompareForReplication). Among candidates that compare equal,
 	// prefer the intermediate source to avoid catch-up.
+	//
+	// Note: versionMap is scoped by the caller to a single flavor family for the
+	// tier's candidates, but the intermediate source is frequently NOT in this
+	// tier, so sourceVersion below can be a cross-family version — which
+	// CompareForReplication's precondition otherwise forbids. This is deliberately
+	// harmless: the source-preference at the end only takes effect when the source
+	// is actually found in possibleCandidates (and is therefore in-family), so a
+	// cross-family comparison result is always discarded. Keep that invariant if
+	// editing the source-preference block below.
 	sourceAlias := topoproto.TabletAliasString(intermediateSource.Alias)
 	sourceVersion, ok := versionMap[sourceAlias]
 	if !ok {
