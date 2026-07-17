@@ -507,3 +507,32 @@ error: 'Access denied for user 'vt_dba'@'localhost' (using password: NO)'`,
 		})
 	}
 }
+
+// TestBoundShutdownWaitContext pins the contract that surfaced in review of
+// the mysqladmin aborted-wait handling: the pid/socket file wait must run to
+// a caller-supplied deadline (e.g. the remaining --builtinbackup-mysqld-timeout
+// budget) and must never be shortened to the grace period; only callers with
+// no deadline get the grace bound.
+func TestBoundShutdownWaitContext(t *testing.T) {
+	t.Run("caller deadline is preserved", func(t *testing.T) {
+		parent, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+		defer cancel()
+		parentDeadline, ok := parent.Deadline()
+		require.True(t, ok)
+
+		bounded, boundedCancel := boundShutdownWaitContext(parent)
+		defer boundedCancel()
+		deadline, ok := bounded.Deadline()
+		require.True(t, ok)
+		assert.Equal(t, parentDeadline, deadline)
+	})
+
+	t.Run("no deadline gets the grace bound", func(t *testing.T) {
+		before := time.Now()
+		bounded, boundedCancel := boundShutdownWaitContext(context.Background())
+		defer boundedCancel()
+		deadline, ok := bounded.Deadline()
+		require.True(t, ok)
+		assert.WithinDuration(t, before.Add(MysqldShutdownGracePeriod), deadline, 5*time.Second)
+	})
+}
