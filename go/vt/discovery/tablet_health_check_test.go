@@ -23,10 +23,9 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// TestNextHealthCheckRetryDelay verifies the reconnection back-off doubles while
-// below the cap and never grows past maxHealthCheckRetryDelay. Capping the
-// back-off well below healthCheckTimeout (default 1m) is what lets vtgate
-// rediscover a recovered tablet promptly. See #19894.
+// TestNextHealthCheckRetryDelay verifies the back-off doubles below the cap,
+// caps at maxHealthCheckRetryDelay, and leaves an already-above-cap delay
+// unchanged rather than reducing it. See #19894.
 func TestNextHealthCheckRetryDelay(t *testing.T) {
 	// Doubles while comfortably below the cap.
 	assert.Equal(t, 20*time.Millisecond, nextHealthCheckRetryDelay(10*time.Millisecond))
@@ -36,8 +35,8 @@ func TestNextHealthCheckRetryDelay(t *testing.T) {
 	assert.Equal(t, maxHealthCheckRetryDelay, nextHealthCheckRetryDelay(6*time.Second))
 	assert.Equal(t, maxHealthCheckRetryDelay, nextHealthCheckRetryDelay(maxHealthCheckRetryDelay))
 
-	// Never exceeds the cap, even from an already-huge delay.
-	assert.Equal(t, maxHealthCheckRetryDelay, nextHealthCheckRetryDelay(time.Hour))
+	// A delay already above the cap is left unchanged, not reduced.
+	assert.Equal(t, time.Hour, nextHealthCheckRetryDelay(time.Hour))
 
 	// The cap stays well under the default health check timeout, so a recovered
 	// tablet is not stranded behind a back-off grown to the silence timeout.

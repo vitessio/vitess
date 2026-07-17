@@ -335,14 +335,11 @@ func (thc *tabletHealthCheck) checkConn(hc *HealthCheckImpl) {
 const maxHealthCheckRetryDelay = 10 * time.Second
 
 // nextHealthCheckRetryDelay doubles the current back-off delay, capping it at
-// maxHealthCheckRetryDelay so the retry interval never grows to the health
-// check timeout. See #19894.
+// maxHealthCheckRetryDelay. A delay already above the cap (operator-configured)
+// is left unchanged, never reduced. See #19894.
 func nextHealthCheckRetryDelay(current time.Duration) time.Duration {
 	next := current * 2
-	if next > maxHealthCheckRetryDelay {
-		return maxHealthCheckRetryDelay
-	}
-	return next
+	return min(next, max(current, maxHealthCheckRetryDelay))
 }
 
 func (thc *tabletHealthCheck) closeConnection(ctx context.Context, err error) {
