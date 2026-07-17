@@ -1012,14 +1012,14 @@ func (td *tableDiffer) getSourcePKCols() error {
 		}
 	}
 
-	sourcePKColumns := make(map[string]struct{}, len(sourceTable.PrimaryKeyColumns))
+	colIndex := make(map[string]int, len(td.table.Columns))
+	for i, col := range td.table.Columns {
+		colIndex[col] = i
+	}
 	td.tablePlan.sourcePkCols = make([]int, 0, len(sourceTable.PrimaryKeyColumns))
 	for _, pkc := range sourceTable.PrimaryKeyColumns {
-		sourcePKColumns[pkc] = struct{}{}
-	}
-	for i, pkc := range td.table.Columns {
-		if _, ok := sourcePKColumns[pkc]; ok {
-			td.tablePlan.sourcePkCols = append(td.tablePlan.sourcePkCols, i)
+		if idx, ok := colIndex[pkc]; ok {
+			td.tablePlan.sourcePkCols = append(td.tablePlan.sourcePkCols, idx)
 		}
 	}
 
