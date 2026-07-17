@@ -671,15 +671,33 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 	if shutdownTimeout > 0 {
 		preparationTimeout = min(preparationTimeout, shutdownTimeout)
 	}
+	// Bound the crash-safety preparation at this boundary so a hung MySQL
+	// connection cannot delay shutdown past preparationTimeout: some probes it
+	// runs (the connection pool's liveness SELECT 1 and SHOW REPLICA STATUS)
+	// execute outside context control, so enforcing the deadline here is more
+	// reliable than relying on each probe to honor it. The preparation is best
+	// effort -- its failure or timeout is logged and shutdown continues -- so it
+	// never affects whether Shutdown reports success.
 	preparationCtx, cancelPreparation := context.WithTimeout(ctx, preparationTimeout)
-	replicaSafetyErr := mysqld.prepareReplicaForShutdown(preparationCtx)
-	cancelPreparation()
-	if replicaSafetyErr != nil {
+	prepared := make(chan error, 1)
+	go func() {
+		prepared <- mysqld.prepareReplicaForShutdown(preparationCtx)
+	}()
+	select {
+	case err := <-prepared:
+		if err != nil {
+			log.Error(
+				"failed to make replica crash-safe before shutdown; continuing with shutdown",
+				slog.Any("error", err),
+			)
+		}
+	case <-preparationCtx.Done():
 		log.Error(
-			"failed to make replica crash-safe before shutdown; continuing with shutdown",
-			slog.Any("error", replicaSafetyErr),
+			"timed out preparing replica for crash-safe shutdown; continuing with shutdown",
+			slog.Any("error", preparationCtx.Err()),
 		)
 	}
+	cancelPreparation()
 
 	// try the mysqld shutdown hook, if any
 	h = hook.NewSimpleHook("mysqld_shutdown")
@@ -735,7 +753,11 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 			return err
 		}
 	}
-	return replicaSafetyErr
+	// The crash-safety preparation above is best effort and already logged on
+	// failure; a successful process shutdown must still report success so that
+	// callers which restart or clean up afterwards are not misled into treating
+	// mysqld as still running.
+	return nil
 }
 
 // StartAfterExit waits for a mysqld process that shut itself down (e.g. after a
