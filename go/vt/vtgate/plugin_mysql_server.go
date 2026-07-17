@@ -377,9 +377,21 @@ func (vh *vtgateHandler) startTempTableHeartbeat(ctx context.Context) {
 	}()
 }
 
+// tempTableRouteKey identifies the beat a reserved connection belongs to: its
+// tablet alias and type. Type is part of the key, not just the alias, so every
+// id in one beat shares a single routing target. The tablet validates that one
+// target; if it rejects it as a wrong tablet (the tablet changed type), every id
+// in the beat is genuinely orphaned. A beat mixing a tablet's pre- and post-
+// transition reservations could not be judged that cleanly — the rejection would
+// condemn valid ids too.
+func tempTableRouteKey(t tempTableHeartbeatTarget) string {
+	return topoproto.TabletAliasString(t.alias) + "/" + t.target.GetTabletType().String()
+}
+
 // snapshotTempTableBeats scans the registry once and groups every reserved
-// connection by its tablet, so the whole registry is locked once per interval
-// and each tablet can then be refreshed with a single batched touch RPC.
+// connection by its route (tablet + type), so the whole registry is locked once
+// per interval and each route can then be refreshed with a single batched touch
+// RPC.
 func (vh *vtgateHandler) snapshotTempTableBeats() map[string][]tempTableBeatItem {
 	byRoute := make(map[string][]tempTableBeatItem)
 	vh.tempTableConns.Range(func(key, value any) bool {
@@ -388,13 +400,7 @@ func (vh *vtgateHandler) snapshotTempTableBeats() map[string][]tempTableBeatItem
 		ttc.mu.Lock()
 		if !ttc.closed {
 			for _, t := range ttc.targets {
-				// Group by tablet type as well as alias, so every id in one beat
-				// shares a single routing target. The tablet validates that one
-				// target; if it rejects it as a wrong tablet (the tablet changed
-				// type), every id in the beat is genuinely orphaned. A beat mixing
-				// a tablet's pre- and post-transition reservations could not be
-				// judged that cleanly — the rejection would condemn valid ids too.
-				route := topoproto.TabletAliasString(t.alias) + "/" + t.target.GetTabletType().String()
+				route := tempTableRouteKey(t)
 				byRoute[route] = append(byRoute[route], tempTableBeatItem{c: c, ttc: ttc, target: t})
 			}
 		}
@@ -402,6 +408,32 @@ func (vh *vtgateHandler) snapshotTempTableBeats() map[string][]tempTableBeatItem
 		return true
 	})
 	return byRoute
+}
+
+// snapshotTempTableRoute re-collects the current beat items for a single route.
+// A failing route waits in the semaphore queue with a snapshot taken before the
+// wait; by the time it runs, a command may have added reservations to the route
+// that the original snapshot missed — and that in-flight suppression kept the
+// next sweep from picking up while this beat held the route. Re-collecting just
+// before the beat refreshes those too, so a reservation added while the route was
+// queued is not stranded (and left to time out) until this beat finishes.
+func (vh *vtgateHandler) snapshotTempTableRoute(route string) []tempTableBeatItem {
+	var items []tempTableBeatItem
+	vh.tempTableConns.Range(func(key, value any) bool {
+		c := key.(*mysql.Conn)
+		ttc := value.(*tempTableConn)
+		ttc.mu.Lock()
+		if !ttc.closed {
+			for _, t := range ttc.targets {
+				if tempTableRouteKey(t) == route {
+					items = append(items, tempTableBeatItem{c: c, ttc: ttc, target: t})
+				}
+			}
+		}
+		ttc.mu.Unlock()
+		return true
+	})
+	return items
 }
 
 // tempTableFailingBeatConcurrency bounds how many failing tablets are beaten at
@@ -468,6 +500,7 @@ func (vh *vtgateHandler) dispatchTempTableBeats(ctx context.Context) *sync.WaitG
 		failing := tempTableBeatItemsFailing(items)
 		wg.Go(func() {
 			defer vh.tempTableBeatInFlight.Delete(route)
+			beatItems := items
 			if failing {
 				// Queue behind the bounded failing lane rather than dropping the
 				// tablet when the lane is full. A slot freed by a completed beat is
@@ -484,8 +517,13 @@ func (vh *vtgateHandler) dispatchTempTableBeats(ctx context.Context) *sync.WaitG
 				case <-ctx.Done():
 					return
 				}
+				// Re-snapshot after the wait: a reservation added to this route
+				// while it was queued is missed by the pre-wait snapshot, and
+				// in-flight suppression kept the next sweep from picking it up, so
+				// this beat is its only chance to be refreshed before it times out.
+				beatItems = vh.snapshotTempTableRoute(route)
 			}
-			vh.beatTempTableTablet(ctx, items)
+			vh.beatTempTableTablet(ctx, beatItems)
 		})
 	}
 	return wg

@@ -2187,10 +2187,20 @@ type gatedBeatConn struct {
 	execCount atomic.Int64
 	release   chan struct{}
 	err       error
+	idsMu     sync.Mutex
+	beatIDs   map[int64]bool
 }
 
 func (c *gatedBeatConn) Execute(ctx context.Context, session queryservice.Session, target *querypb.Target, sql string, bindVars map[string]*querypb.BindVariable, transactionID, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	c.execCount.Add(1)
+	c.idsMu.Lock()
+	if c.beatIDs == nil {
+		c.beatIDs = make(map[int64]bool)
+	}
+	for _, id := range options.GetReservedConnKeepAliveIds() {
+		c.beatIDs[id] = true
+	}
+	c.idsMu.Unlock()
 	if c.release != nil {
 		select {
 		case <-c.release:
@@ -2202,6 +2212,14 @@ func (c *gatedBeatConn) Execute(ctx context.Context, session queryservice.Sessio
 		return nil, c.err
 	}
 	return &sqltypes.Result{}, nil
+}
+
+// hasBeatID reports whether the given reserved id was carried by any beat this
+// tablet received.
+func (c *gatedBeatConn) hasBeatID(id int64) bool {
+	c.idsMu.Lock()
+	defer c.idsMu.Unlock()
+	return c.beatIDs[id]
 }
 
 // storeGatedFailingTablet registers a tablet backed by a gatedBeatConn and a
@@ -2357,6 +2375,80 @@ func TestTempTableHeartbeatQueuedBeatSurvivesRepublish(t *testing.T) {
 	release <- struct{}{}
 	require.Eventually(t, func() bool { return queued.execCount.Load() >= 1 }, 5*time.Second, time.Millisecond,
 		"a queued beat must still contact the tablet after a mid-queue republish")
+}
+
+// TestTempTableHeartbeatReSnapshotsQueuedRoute proves a reservation added to a
+// route while its beat is queued behind the failing lane is refreshed by that
+// beat when it runs. The pre-wait snapshot misses the new reservation, and
+// in-flight suppression keeps the next sweep from picking it up while the beat
+// holds the route — so without re-snapshotting, the new reservation would get no
+// keepalive until the queued beat finished and a later sweep ran, and could
+// expire during a deep outage backlog even though its command succeeded.
+func TestTempTableHeartbeatReSnapshotsQueuedRoute(t *testing.T) {
+	origInterval := tempTableHeartbeatTime
+	tempTableHeartbeatTime = 30 * time.Second
+	t.Cleanup(func() { tempTableHeartbeatTime = origInterval })
+
+	executor, _, _, _, ctx := createExecutorEnv(t)
+	vsm := newVStreamManager(executor.resolver.resolver, executor.serv, "aa")
+	vtg := newVTGate(executor, executor.resolver, vsm, nil, executor.scatterConn.gateway)
+	vh := newVtgateHandler(vtg)
+	hc := executor.scatterConn.gateway.hc.(*discovery.FakeHealthCheck)
+
+	// Fill every failing-lane slot so the route under test must queue.
+	release := make(chan struct{})
+	var stuck []*gatedBeatConn
+	for i := range tempTableFailingBeatConcurrency {
+		stuck = append(stuck, storeGatedFailingTablet(vh, hc, i, release, assert.AnError))
+	}
+	hbCtx, hbCancel := context.WithCancel(ctx)
+	var wgs []*sync.WaitGroup
+	t.Cleanup(func() {
+		hbCancel()
+		close(release)
+		for _, wg := range wgs {
+			wg.Wait()
+		}
+	})
+	wgs = append(wgs, vh.dispatchTempTableBeats(hbCtx))
+	inFlight := func() int64 {
+		var n int64
+		for _, c := range stuck {
+			n += c.execCount.Load()
+		}
+		return n
+	}
+	require.Eventually(t, func() bool { return inFlight() == int64(tempTableFailingBeatConcurrency) }, 5*time.Second, time.Millisecond,
+		"every failing-lane slot must fill")
+
+	// A failing route with one reserved id; its beat queues behind the full lane.
+	qs := hc.AddFakeTablet("aa", "routehost", 9999, "routeks", "0", topodatapb.TabletType_PRIMARY, true, 1, nil,
+		func(tablet *topodatapb.Tablet) queryservice.QueryService {
+			return &gatedBeatConn{SandboxConn: sandboxconn.NewSandboxConn(tablet)}
+		})
+	route := qs.(*gatedBeatConn)
+	rt := route.Tablet()
+	rtarget := &querypb.Target{Keyspace: rt.Keyspace, Shard: rt.Shard, TabletType: rt.Type}
+	const id1, id2 = 501, 502
+	cA := &mysql.Conn{ConnectionID: 801}
+	vh.tempTableConns.Store(cA, &tempTableConn{targets: tempTargets(tempTableHeartbeatTarget{
+		target: rtarget, alias: rt.Alias, reservedID: id1, failures: 1,
+	})})
+	wgs = append(wgs, vh.dispatchTempTableBeats(hbCtx))
+	require.Never(t, func() bool { return route.execCount.Load() > 0 }, 200*time.Millisecond, 10*time.Millisecond,
+		"the route's beat must queue while the lane is full")
+
+	// While it is queued, a command adds a second reservation on the same route.
+	cB := &mysql.Conn{ConnectionID: 802}
+	vh.tempTableConns.Store(cB, &tempTableConn{targets: tempTargets(tempTableHeartbeatTarget{
+		target: rtarget, alias: rt.Alias, reservedID: id2,
+	})})
+
+	// Freeing a slot lets the queued beat run: it must re-snapshot the route and
+	// refresh both the original and the newly added reservation.
+	release <- struct{}{}
+	require.Eventually(t, func() bool { return route.hasBeatID(id1) && route.hasBeatID(id2) }, 5*time.Second, time.Millisecond,
+		"the queued beat must refresh both the original and the reservation added while it waited")
 }
 
 // TestTempTableHeartbeatBeatOutcomeSurvivesRepublish proves a beat's outcome is
