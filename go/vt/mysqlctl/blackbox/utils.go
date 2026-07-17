@@ -179,6 +179,13 @@ func SetBuiltinBackupMysqldDeadline(t time.Duration) time.Duration {
 	return old
 }
 
+func SetMysqldShutdownGracePeriod(t time.Duration) time.Duration {
+	old := mysqlctl.MysqldShutdownGracePeriod
+	mysqlctl.MysqldShutdownGracePeriod = t
+
+	return old
+}
+
 func createBackupDir(root string, dirs ...string) error {
 	for _, dir := range dirs {
 		if err := os.MkdirAll(path.Join(root, dir), 0o755); err != nil {
