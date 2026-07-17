@@ -278,20 +278,29 @@ func TestDemotePrimaryWithSemiSyncProgressDetection(t *testing.T) {
 	require.True(t, fakeMysqlDaemon.SuperReadOnly.Load())
 }
 
-func TestDemotePrimaryRollbackUsesDetachedContext(t *testing.T) {
+// newDemotePrimaryRollbackTM returns a primary TabletManager whose MysqlDaemon
+// is a gomock mock, for tests exercising demotePrimary rollback paths.
+func newDemotePrimaryRollbackTM(t *testing.T) (*TabletManager, *mysqlctlmock.MockMysqlDaemon) {
+	t.Helper()
+
 	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	tm := newTestTM(t, ts, 1, "ks", "0", nil)
 	err := tm.ChangeType(ctx, topodatapb.TabletType_PRIMARY, false)
 	require.NoError(t, err)
 
-	demoteCtx, cancelDemote := context.WithCancel(ctx)
-	t.Cleanup(cancelDemote)
-	primaryStatusErr := errors.New("primary status failed after demotion")
-
 	mockCtrl := gomock.NewController(t)
 	mockMysqlDaemon := mysqlctlmock.NewMockMysqlDaemon(mockCtrl)
 	tm.MysqlDaemon = mockMysqlDaemon
+	return tm, mockMysqlDaemon
+}
+
+func TestDemotePrimaryRollbackUsesDetachedContext(t *testing.T) {
+	tm, mockMysqlDaemon := newDemotePrimaryRollbackTM(t)
+
+	demoteCtx, cancelDemote := context.WithCancel(t.Context())
+	t.Cleanup(cancelDemote)
+	primaryStatusErr := errors.New("primary status failed after demotion")
 
 	gomock.InOrder(
 		mockMysqlDaemon.EXPECT().IsReadOnly(gomock.Any()).Return(false, nil),
@@ -335,24 +344,16 @@ func TestDemotePrimaryRollbackUsesDetachedContext(t *testing.T) {
 		),
 	)
 
-	_, err = tm.demotePrimary(demoteCtx, true /* revertPartialFailure */, false /* force */)
+	_, err := tm.demotePrimary(demoteCtx, true /* revertPartialFailure */, false /* force */)
 	require.ErrorIs(t, err, primaryStatusErr)
 }
 
 func TestDemotePrimaryForceSemiSyncRollbackUsesDetachedContext(t *testing.T) {
-	ctx := t.Context()
-	ts := memorytopo.NewServer(ctx, "cell1")
-	tm := newTestTM(t, ts, 1, "ks", "0", nil)
-	err := tm.ChangeType(ctx, topodatapb.TabletType_PRIMARY, false)
-	require.NoError(t, err)
+	tm, mockMysqlDaemon := newDemotePrimaryRollbackTM(t)
 
-	demoteCtx, cancelDemote := context.WithCancel(ctx)
+	demoteCtx, cancelDemote := context.WithCancel(t.Context())
 	t.Cleanup(cancelDemote)
 	primaryStatusErr := errors.New("primary status failed after force demotion")
-
-	mockCtrl := gomock.NewController(t)
-	mockMysqlDaemon := mysqlctlmock.NewMockMysqlDaemon(mockCtrl)
-	tm.MysqlDaemon = mockMysqlDaemon
 
 	gomock.InOrder(
 		mockMysqlDaemon.EXPECT().IsReadOnly(gomock.Any()).Return(false, nil),
@@ -397,22 +398,15 @@ func TestDemotePrimaryForceSemiSyncRollbackUsesDetachedContext(t *testing.T) {
 		),
 	)
 
-	_, err = tm.demotePrimary(demoteCtx, true /* revertPartialFailure */, true /* force */)
+	_, err := tm.demotePrimary(demoteCtx, true /* revertPartialFailure */, true /* force */)
 	require.ErrorIs(t, err, primaryStatusErr)
 }
 
 func TestDemotePrimarySetSuperReadOnlyErrorRunsRollback(t *testing.T) {
-	ctx := t.Context()
-	ts := memorytopo.NewServer(ctx, "cell1")
-	tm := newTestTM(t, ts, 1, "ks", "0", nil)
-	err := tm.ChangeType(ctx, topodatapb.TabletType_PRIMARY, false)
-	require.NoError(t, err)
+	tm, mockMysqlDaemon := newDemotePrimaryRollbackTM(t)
 
 	setSuperReadOnlyErr := errors.New("set super read only failed after applying change")
 	superReadOnly := false
-	mockCtrl := gomock.NewController(t)
-	mockMysqlDaemon := mysqlctlmock.NewMockMysqlDaemon(mockCtrl)
-	tm.MysqlDaemon = mockMysqlDaemon
 
 	gomock.InOrder(
 		mockMysqlDaemon.EXPECT().IsReadOnly(gomock.Any()).Return(false, nil),
@@ -432,17 +426,13 @@ func TestDemotePrimarySetSuperReadOnlyErrorRunsRollback(t *testing.T) {
 		mockMysqlDaemon.EXPECT().SetReadOnly(gomock.Any(), false).Return(nil),
 	)
 
-	_, err = tm.demotePrimary(ctx, true /* revertPartialFailure */, false /* force */)
+	_, err := tm.demotePrimary(t.Context(), true /* revertPartialFailure */, false /* force */)
 	require.ErrorIs(t, err, setSuperReadOnlyErr)
 	assert.False(t, superReadOnly)
 }
 
 func TestDemotePrimarySetServingTypeErrorRunsRollback(t *testing.T) {
-	ctx := t.Context()
-	ts := memorytopo.NewServer(ctx, "cell1")
-	tm := newTestTM(t, ts, 1, "ks", "0", nil)
-	err := tm.ChangeType(ctx, topodatapb.TabletType_PRIMARY, false)
-	require.NoError(t, err)
+	tm, mockMysqlDaemon := newDemotePrimaryRollbackTM(t)
 
 	qsc := tm.QueryServiceControl.(*tabletservermock.Controller)
 	require.True(t, qsc.IsServing())
@@ -450,14 +440,11 @@ func TestDemotePrimarySetServingTypeErrorRunsRollback(t *testing.T) {
 		<-qsc.StateChanges
 	}
 
-	mockCtrl := gomock.NewController(t)
-	mockMysqlDaemon := mysqlctlmock.NewMockMysqlDaemon(mockCtrl)
-	tm.MysqlDaemon = mockMysqlDaemon
 	mockMysqlDaemon.EXPECT().IsReadOnly(gomock.Any()).Return(false, nil)
 
 	qsc.SetServingTypeError = errors.New("set serving type failed after applying change")
 
-	_, err = tm.demotePrimary(ctx, true /* revertPartialFailure */, false /* force */)
+	_, err := tm.demotePrimary(t.Context(), true /* revertPartialFailure */, false /* force */)
 	require.ErrorContains(t, err, "SetServingType(serving=false) failed")
 
 	var changes []*tabletservermock.StateChange
@@ -480,17 +467,10 @@ func TestDemotePrimarySemiSyncErrorRunsRollback(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := t.Context()
-			ts := memorytopo.NewServer(ctx, "cell1")
-			tm := newTestTM(t, ts, 1, "ks", "0", nil)
-			err := tm.ChangeType(ctx, topodatapb.TabletType_PRIMARY, false)
-			require.NoError(t, err)
+			tm, mockMysqlDaemon := newDemotePrimaryRollbackTM(t)
 
 			setSemiSyncErr := errors.New("set semi-sync failed after applying change")
 			primarySemiSync := true
-			mockCtrl := gomock.NewController(t)
-			mockMysqlDaemon := mysqlctlmock.NewMockMysqlDaemon(mockCtrl)
-			tm.MysqlDaemon = mockMysqlDaemon
 
 			mockMysqlDaemon.EXPECT().IsReadOnly(gomock.Any()).Return(false, nil)
 			mockMysqlDaemon.EXPECT().IsSemiSyncBlocked(gomock.Any()).Return(tt.force, nil)
@@ -515,7 +495,7 @@ func TestDemotePrimarySemiSyncErrorRunsRollback(t *testing.T) {
 				mockMysqlDaemon.EXPECT().SetReadOnly(gomock.Any(), false).Return(nil)
 			}
 
-			_, err = tm.demotePrimary(ctx, true /* revertPartialFailure */, tt.force)
+			_, err := tm.demotePrimary(t.Context(), true /* revertPartialFailure */, tt.force)
 			require.ErrorIs(t, err, setSemiSyncErr)
 			assert.True(t, primarySemiSync)
 		})
