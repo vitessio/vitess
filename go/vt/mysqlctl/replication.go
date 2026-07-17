@@ -270,7 +270,8 @@ func (mysqld *Mysqld) GetGlobalStatusVars(ctx context.Context, variables []strin
 		if err != nil {
 			return nil, err
 		}
-		query, err = sqlparser.ParseAndBind(getGlobalStatusQuery+" WHERE variable_name IN %a",
+		query, err = sqlparser.ParseAndBind(
+			getGlobalStatusQuery+" WHERE variable_name IN %a",
 			statusBv,
 		)
 		if err != nil {
@@ -356,7 +357,7 @@ func (mysqld *Mysqld) SetSuperReadOnly(ctx context.Context, on bool, opts ...Set
 		resetFunc = func() error {
 			resetCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), topo.RemoteOperationTimeout)
 			defer cancel()
-			return mysqld.execSetSuperReadOnly(resetCtx, superReadOnlyEnabled, options)
+			return mysqld.execSetSuperReadOnly(resetCtx, superReadOnlyEnabled, setSuperReadOnlyOptions{})
 		}
 	}
 

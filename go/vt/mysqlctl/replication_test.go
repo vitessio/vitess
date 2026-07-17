@@ -836,7 +836,7 @@ func TestSetSuperReadOnlyLockWaitTimeout(t *testing.T) {
 		require.ErrorContains(t, err, "Lock wait timeout exceeded")
 	})
 
-	t.Run("reset function applies the lock_wait_timeout", func(t *testing.T) {
+	t.Run("reset function does not apply the lock_wait_timeout", func(t *testing.T) {
 		db, testMysqld := newTestMysqld(t)
 		db.AddQuery("SET GLOBAL super_read_only = 'OFF'", &sqltypes.Result{})
 
@@ -847,7 +847,7 @@ func TestSetSuperReadOnlyLockWaitTimeout(t *testing.T) {
 		require.NoError(t, resetFunc())
 
 		assert.Equal(t, 1, db.GetQueryCalledNum("SET GLOBAL super_read_only = 'OFF'"))
-		assert.Equal(t, 2, db.GetQueryCalledNum("SET SESSION lock_wait_timeout = 1"), "the reset must bound its lock wait like the original call")
+		assert.Equal(t, 1, db.GetQueryCalledNum("SET SESSION lock_wait_timeout = 1"), "the reset must not bound its lock wait")
 	})
 
 	t.Run("unknown lock_wait_timeout proceeds without a bound", func(t *testing.T) {
