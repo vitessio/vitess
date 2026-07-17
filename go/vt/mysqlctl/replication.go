@@ -41,6 +41,7 @@ import (
 	"vitess.io/vitess/go/vt/proto/replicationdata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -353,7 +354,9 @@ func (mysqld *Mysqld) SetSuperReadOnly(ctx context.Context, on bool, opts ...Set
 	var resetFunc ResetSuperReadOnlyFunc
 	if on != superReadOnlyEnabled {
 		resetFunc = func() error {
-			return mysqld.execSetSuperReadOnly(context.Background(), superReadOnlyEnabled, options)
+			resetCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), topo.RemoteOperationTimeout)
+			defer cancel()
+			return mysqld.execSetSuperReadOnly(resetCtx, superReadOnlyEnabled, options)
 		}
 	}
 
