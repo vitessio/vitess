@@ -15,7 +15,6 @@ import (
 	time "time"
 
 	gomock "go.uber.org/mock/gomock"
-
 	mysql "vitess.io/vitess/go/mysql"
 	replication "vitess.io/vitess/go/mysql/replication"
 	sqltypes "vitess.io/vitess/go/sqltypes"

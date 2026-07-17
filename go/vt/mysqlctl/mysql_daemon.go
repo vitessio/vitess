@@ -32,7 +32,7 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
-//go:generate mockgen -destination mock/mysqldaemon.go -package mock vitess.io/vitess/go/vt/mysqlctl MysqlDaemon
+//go:generate go run go.uber.org/mock/mockgen -destination mock/mysqldaemon.go -package mock vitess.io/vitess/go/vt/mysqlctl MysqlDaemon
 
 // MysqlDaemon is the interface we use for abstracting Mysqld.
 type MysqlDaemon interface {
