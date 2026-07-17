@@ -159,7 +159,7 @@ vitesst_images:
 ifndef NOBANNER
 	echo $$(date): Building vitesst images
 endif
-	docker buildx bake --load -f go/vitesst/docker-bake.hcl
+	docker buildx bake --load -f go/vitesst/docker-bake.hcl $(BAKE_ARGS)
 
 # Install local install the binaries needed to run vitess locally
 # Usage: make install-local PREFIX=/path/to/install/root
@@ -225,10 +225,12 @@ unit_test: build dependency_check demo
 
 # e2e runs the containerized end-to-end tests. It builds the images
 # from the current source first, so the containers run the code under test.
-# Usage: make e2e [PKG=./go/test/endtoend/vtgate/...]
+# Usage: make e2e [PKG=./go/test/endtoend/vtgate/...] [GOTEST_FLAGS="-json"]
 e2e: vitesst_images
+ifndef NOBANNER
 	echo $$(date): Running endtoend tests
-	go test -count=1 -timeout 60m $(or $(PKG),./go/test/endtoend/...)
+endif
+	go test -count=1 -timeout 60m $(GOTEST_FLAGS) $(or $(PKG),./go/test/endtoend/...)
 
 # e2e_race runs the containerized end-to-end tests with the race detector.
 # Usage: make e2e_race [PKG=./go/test/endtoend/vtgate/...]
