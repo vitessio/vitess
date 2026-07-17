@@ -147,6 +147,10 @@ func TestDemotePrimaryStalled(t *testing.T) {
 // with a 1 second lock_wait_timeout, so that it fails fast instead of stalling
 // behind metadata locks held by in-flight queries.
 func TestDemotePrimaryLockWaitTimeout(t *testing.T) {
+	old := demotePrimaryLockWaitTimeout
+	demotePrimaryLockWaitTimeout = time.Second
+	t.Cleanup(func() { demotePrimaryLockWaitTimeout = old })
+
 	fakeDb := newTestMysqlDaemon(t, 1)
 	tm := &TabletManager{
 		actionSema:  semaphore.NewWeighted(1),
@@ -165,6 +169,31 @@ func TestDemotePrimaryLockWaitTimeout(t *testing.T) {
 
 	assert.True(t, fakeDb.SuperReadOnly.Load(), "demotePrimary must enable super_read_only")
 	assert.Equal(t, time.Second, fakeDb.SetSuperReadOnlyLockWaitTimeout, "demotePrimary must enable super_read_only with a 1s lock_wait_timeout")
+}
+
+// TestDemotePrimaryLockWaitTimeoutDisabledByDefault checks that a demotion does not pass a
+// lock_wait_timeout bound when demotePrimaryLockWaitTimeout is left at its zero-value default.
+func TestDemotePrimaryLockWaitTimeoutDisabledByDefault(t *testing.T) {
+	require.Zero(t, demotePrimaryLockWaitTimeout, "test requires the flag to be at its default value")
+
+	fakeDb := newTestMysqlDaemon(t, 1)
+	tm := &TabletManager{
+		actionSema:  semaphore.NewWeighted(1),
+		MysqlDaemon: fakeDb,
+		tmState: &tmState{
+			displayState: displayState{
+				tablet: newTestTablet(t, 100, "ks", "-", map[string]string{}),
+			},
+		},
+		QueryServiceControl: tabletservermock.NewController(),
+		SemiSyncMonitor:     semisyncmonitor.CreateTestSemiSyncMonitor(fakeDb.DB(), exporter),
+	}
+
+	_, err := tm.demotePrimary(t.Context(), false /* revertPartialFailure */, false /* force */)
+	require.NoError(t, err)
+
+	assert.True(t, fakeDb.SuperReadOnly.Load(), "demotePrimary must enable super_read_only")
+	assert.Zero(t, fakeDb.SetSuperReadOnlyLockWaitTimeout, "demotePrimary must not bound lock_wait_timeout when the flag is disabled")
 }
 
 // TestDemotePrimaryWaitingForSemiSyncUnblock tests that demote primary unblocks if the primary is blocked on semi-sync ACKs

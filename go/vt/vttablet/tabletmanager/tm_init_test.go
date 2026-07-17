@@ -1350,3 +1350,17 @@ func TestInitReplicationRecovery(t *testing.T) {
 	require.Equal(t, fmt.Sprintf("%s/%s", gtidFlavor, gtidPosition), gotPosition)
 	require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
 }
+
+func TestValidateFlags(t *testing.T) {
+	oldTimeout := demotePrimaryLockWaitTimeout
+	t.Cleanup(func() { demotePrimaryLockWaitTimeout = oldTimeout })
+
+	demotePrimaryLockWaitTimeout = -1 * time.Second
+	require.ErrorContains(t, validateFlags(), "--demote-primary-lock-wait-timeout cannot be negative")
+
+	demotePrimaryLockWaitTimeout = 0
+	require.NoError(t, validateFlags())
+
+	demotePrimaryLockWaitTimeout = time.Second
+	require.NoError(t, validateFlags())
+}

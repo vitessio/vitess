@@ -67,10 +67,6 @@ type (
 // the option: the server's value is left untouched and the wait is unbounded.
 func WithLockWaitTimeout(timeout time.Duration) SetSuperReadOnlyOption {
 	return func(options *setSuperReadOnlyOptions) {
-		if timeout <= 0 {
-			log.Warn("ignoring non-positive lock_wait_timeout, leaving the lock wait unbounded", slog.Duration("lock_wait_timeout", timeout))
-		}
-
 		options.lockWaitTimeout = timeout
 	}
 }
