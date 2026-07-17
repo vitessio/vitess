@@ -831,8 +831,13 @@ func (tm *TabletManager) redoPreparedTransactionsAndSetReadWrite(ctx context.Con
 		}
 	}
 	tm.QueryServiceControl.RedoPreparedTransactions()
-	err = tm.MysqlDaemon.SetReadOnly(ctx, false)
-	return err
+
+	// The replay above ignores ctx and can outlive its deadline. Give the
+	// final state change a fresh timeout so a slow replay cannot leave
+	// MySQL read-only.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), topo.RemoteOperationTimeout)
+	defer cancel()
+	return tm.MysqlDaemon.SetReadOnly(ctx, false)
 }
 
 func (tm *TabletManager) initTablet(ctx context.Context) error {
