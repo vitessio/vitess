@@ -41,13 +41,16 @@ import (
 	"vitess.io/vitess/go/vt/proto/replicationdata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
 const (
 	// Queries used for RPCs
 	getGlobalStatusQuery = "SELECT variable_name, variable_value FROM performance_schema.global_status"
+
+	// superReadOnlyResetTimeout bounds the reset function returned by
+	// SetSuperReadOnly.
+	superReadOnlyResetTimeout = 15 * time.Second
 )
 
 type (
@@ -355,7 +358,7 @@ func (mysqld *Mysqld) SetSuperReadOnly(ctx context.Context, on bool, opts ...Set
 	var resetFunc ResetSuperReadOnlyFunc
 	if on != superReadOnlyEnabled {
 		resetFunc = func() error {
-			resetCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), topo.RemoteOperationTimeout)
+			resetCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), superReadOnlyResetTimeout)
 			defer cancel()
 			return mysqld.execSetSuperReadOnly(resetCtx, superReadOnlyEnabled, setSuperReadOnlyOptions{})
 		}
