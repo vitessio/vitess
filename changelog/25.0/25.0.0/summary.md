@@ -236,6 +236,8 @@ Versions are compared by major.minor. The patch component is normally ignored (p
 
 Tablets that do not report a version (e.g. running an older Vitess build) are treated as "unknown version" and sorted last, preserving existing behavior.
 
+**Former-primary tie-breaking:** as part of this change, an ERS candidate that was the former primary and is equally advanced (same replication position) as a replica now participates in the promotion-rule and version tie-breakers. Previously such a candidate was treated as slightly behind and could lose the election to an equally-advanced replica, because its executed position was left uninitialized.
+
 **Flavor compatibility:** version comparison is only applied when all candidates belong to the same flavor family. MySQL and Percona Server share a version lineage and are compared against each other; MariaDB is a separate lineage, so a shard mixing MariaDB with MySQL/Percona disables version-aware election and falls back to the previous position/promotion ordering (with a warning logged).
 
 See [#20211](https://github.com/vitessio/vitess/pull/20211) for details.

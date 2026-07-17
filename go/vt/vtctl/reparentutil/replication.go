@@ -151,7 +151,13 @@ func FindPositionsOfAllCandidates(
 			return nil, false, vterrors.Wrapf(err, "could not decode a primary status executed position for tablet %v", alias)
 		}
 
-		positionMap[alias] = &RelayLogPositions{Combined: executedPosition}
+		// A demoted/former primary applies no relay log, so its executed position
+		// is authoritative. Initialize Executed as well as Combined so that in
+		// RelayLogPositions.AtLeast it compares equal to an equally-advanced
+		// replica (whose Executed is reconciled up after its relay-log wait),
+		// letting election fall through to the promotion-rule/version tiebreakers
+		// instead of ranking the former primary behind.
+		positionMap[alias] = &RelayLogPositions{Combined: executedPosition, Executed: executedPosition}
 	}
 
 	return positionMap, isGTIDBased, nil

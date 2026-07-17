@@ -6554,6 +6554,71 @@ func TestEmergencyReparenter_findMostAdvanced_versionTiebreakerAfterCatchUp_File
 	require.True(t, topoproto.TabletAliasEqual(intermediateSource.Alias, &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}))
 }
 
+// TestEmergencyReparenter_findMostAdvanced_primaryVersionTiebreakerAfterCatchUp_FilePos
+// is the file-position (non-GTID) analogue that exercises a former-PRIMARY
+// candidate. FindPositionsOfAllCandidates initializes a PrimaryStatus candidate's
+// Executed from its executed position (a demoted primary applied no relay log, so
+// its executed position is authoritative). A replica, by contrast, is stored with
+// Executed zero and only has it advanced by the post-wait reconcile. Without the
+// primary Executed initialization, an equally-advanced former primary would lose
+// the RelayLogPositions.AtLeast Executed tiebreak to the reconciled replica and
+// the version tiebreaker would never be reached — so a newer replica could beat an
+// equally-advanced older primary. Here the former primary is on the lower version
+// and must win the tie once positions are equal.
+func TestEmergencyReparenter_findMostAdvanced_primaryVersionTiebreakerAfterCatchUp_FilePos(t *testing.T) {
+	// The former primary's executed file position; the replica's relay log has
+	// downloaded up to the equivalent position and applies it during the wait.
+	appliedStr := "FilePos/mysql-bin.0001:100"
+	// The replica's pre-wait executed position is behind.
+	replicaExecutedStr := "FilePos/mysql-bin.0001:90"
+
+	// Former primary (uid 100) is not in the status map, so waitForAllRelayLogsToApply
+	// skips it; its position comes straight from FindPositionsOfAllCandidates.
+	primaryStatusMap := map[string]*replicationdatapb.PrimaryStatus{
+		"zone1-0000000100": {Position: appliedStr},
+	}
+	// Replica (uid 101) is non-GTID: RelayLogPosition empty, so the wait targets
+	// RelayLogSourceBinlogEquivalentPosition and the reconcile advances it to that.
+	statusMap := map[string]*replicationdatapb.StopReplicationStatus{
+		"zone1-0000000101": {After: &replicationdatapb.Status{
+			Position:                               replicaExecutedStr,
+			RelayLogSourceBinlogEquivalentPosition: appliedStr,
+		}},
+	}
+
+	validCandidates, isGTIDBased, err := FindPositionsOfAllCandidates(statusMap, primaryStatusMap)
+	require.NoError(t, err)
+	require.False(t, isGTIDBased)
+
+	tabletMap := map[string]*topo.TabletInfo{
+		"zone1-0000000100": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}, Type: topodatapb.TabletType_REPLICA}},
+		"zone1-0000000101": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}, Type: topodatapb.TabletType_REPLICA}},
+	}
+	versionMap := map[string]mysqlctl.ServerVersion{
+		"zone1-0000000100": {Major: 8, Minor: 0, Patch: 35}, // former primary, lower version
+		"zone1-0000000101": {Major: 8, Minor: 4, Patch: 0},  // replica, higher version
+	}
+
+	durability, err := policy.GetDurabilityPolicy(policy.DurabilityNone)
+	require.NoError(t, err)
+
+	// The replica catches up to the former primary's executed position during the
+	// wait, reconciling its Combined/Executed to that position. Both candidates are
+	// then equally advanced, so the version tiebreaker selects the lower-version
+	// former primary rather than the newer replica.
+	tmc := &testutil.TabletManagerClient{
+		WaitForPositionResults: map[string]map[string]error{
+			"zone1-0000000101": {appliedStr: nil},
+		},
+	}
+	erp := NewEmergencyReparenter(nil, tmc, logutil.NewMemoryLogger())
+	require.NoError(t, erp.waitForAllRelayLogsToApply(t.Context(), validCandidates, tabletMap, statusMap, 30*time.Second))
+
+	intermediateSource, _, err := erp.findMostAdvanced(validCandidates, tabletMap, versionMap, nil, EmergencyReparentOptions{durability: durability})
+	require.NoError(t, err)
+	require.True(t, topoproto.TabletAliasEqual(intermediateSource.Alias, &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}))
+}
+
 // TestEmergencyReparenter_findMostAdvanced_splitBrainSurvivesReconcile guards the
 // interaction between the post-wait position reconcile and split-brain
 // detection: reconciling each candidate to its own applied position must not

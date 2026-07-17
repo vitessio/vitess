@@ -208,6 +208,53 @@ func TestFindPositionsOfAllCandidates(t *testing.T) {
 	}
 }
 
+// TestFindPositionsOfAllCandidates_PrimaryExecutedInitialized verifies that a
+// PrimaryStatus candidate has its Executed position initialized to its executed
+// position, not left as the zero position. A demoted/former primary applies no
+// relay log, so its executed position is authoritative. If Executed were left
+// zero, RelayLogPositions.AtLeast would rank an equally-advanced replica (whose
+// Executed is reconciled up after its relay-log wait) strictly ahead of the
+// former primary, so ERS would never reach the promotion-rule/version
+// tiebreakers for that primary.
+func TestFindPositionsOfAllCandidates_PrimaryExecutedInitialized(t *testing.T) {
+	t.Parallel()
+
+	const gtid = "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5"
+
+	positionMap, isGTIDBased, err := FindPositionsOfAllCandidates(
+		map[string]*replicationdatapb.StopReplicationStatus{
+			"r1": {After: &replicationdatapb.Status{
+				SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+				RelayLogPosition: gtid,
+				Position:         gtid,
+			}},
+		},
+		map[string]*replicationdatapb.PrimaryStatus{
+			"p1": {Position: gtid},
+		},
+	)
+	require.NoError(t, err)
+	require.True(t, isGTIDBased)
+
+	primary := positionMap["p1"]
+	require.NotNil(t, primary)
+
+	executed, err := replication.DecodePosition(gtid)
+	require.NoError(t, err)
+	assert.True(t, primary.Executed.Equal(executed),
+		"primary candidate Executed must be initialized to its executed position, got %v", primary.Executed)
+
+	// The former primary and an equally-advanced replica must compare equal, so
+	// election falls through to the promotion-rule/version tiebreakers rather
+	// than treating the primary as behind.
+	replica := positionMap["r1"]
+	require.NotNil(t, replica)
+	assert.True(t, primary.AtLeast(replica),
+		"former primary must be at least as advanced as an equally-advanced replica")
+	assert.True(t, replica.AtLeast(primary),
+		"equally-advanced replica must be at least as advanced as the former primary")
+}
+
 // TestFindPositionsOfAllCandidates_ErrorNotDuplicated verifies that when
 // FindPositionsOfAllCandidates wraps an error the underlying cause message is
 // not repeated twice in the output. vterrors.Wrapf already appends the cause
