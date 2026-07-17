@@ -156,19 +156,13 @@ func newTempTableTargetKey(t tempTableHeartbeatTarget) tempTableTargetKey {
 // without holding mu across the RPC, so the sweeper's own lock never blocks a
 // foreground command and a long command never starves the keepalives.
 type tempTableConn struct {
-	// mu guards gen, targets, and closed. It is held only for the
-	// microseconds it takes to snapshot or replace the targets — never
-	// across a beat RPC — so a slow keepalive cannot delay foreground
-	// commands here, and keepalives are never starved by a long command.
-	// (On the tablet, a command colliding with a keepalive's own
-	// microseconds-long hold of the reserved connection waits it out; see
-	// TxPool.GetAndLock.)
+	// mu guards targets and closed. It is held only for the microseconds it
+	// takes to snapshot or replace the targets — never across a beat RPC — so a
+	// slow keepalive cannot delay foreground commands here, and keepalives are
+	// never starved by a long command. (On the tablet, a command colliding with
+	// a keepalive's own microseconds-long hold of the reserved connection waits
+	// it out; see TxPool.GetAndLock.)
 	mu sync.Mutex
-	// gen increments whenever the connection's own goroutine replaces the
-	// targets (command end, reset, close). A sweep snapshots targets and
-	// gen, sends its beats without holding mu, and applies the results only
-	// if gen is unchanged — results for a superseded snapshot are discarded.
-	gen uint64
 	// targets is keyed by (tablet, reserved id) so the sweeper can find,
 	// update, and evict a single reserved connection in O(1) rather than
 	// scanning — a session left in reserved mode after a scatter can hold
@@ -308,7 +302,6 @@ func (vh *vtgateHandler) tempTableCommandEnd(c *mysql.Conn) {
 	ttc := v.(*tempTableConn)
 	ttc.mu.Lock()
 	defer ttc.mu.Unlock()
-	ttc.gen++
 	if len(targets) == 0 {
 		// The temporary tables are gone (session reset or reserved
 		// connections released): deregister.
@@ -345,7 +338,6 @@ func (vh *vtgateHandler) stopTempTableHeartbeats(c *mysql.Conn) {
 	ttc := v.(*tempTableConn)
 	ttc.mu.Lock()
 	ttc.closed = true
-	ttc.gen++
 	ttc.targets = nil
 	vh.tempTableConns.Delete(c)
 	ttc.mu.Unlock()
@@ -403,7 +395,7 @@ func (vh *vtgateHandler) snapshotTempTableBeats() map[string][]tempTableBeatItem
 				// a tablet's pre- and post-transition reservations could not be
 				// judged that cleanly — the rejection would condemn valid ids too.
 				route := topoproto.TabletAliasString(t.alias) + "/" + t.target.GetTabletType().String()
-				byRoute[route] = append(byRoute[route], tempTableBeatItem{c: c, ttc: ttc, gen: ttc.gen, target: t})
+				byRoute[route] = append(byRoute[route], tempTableBeatItem{c: c, ttc: ttc, target: t})
 			}
 		}
 		ttc.mu.Unlock()
@@ -540,23 +532,27 @@ func (vh *vtgateHandler) sendTempTableHeartbeats(ctx context.Context) {
 type tempTableBeatItem struct {
 	c      *mysql.Conn
 	ttc    *tempTableConn
-	gen    uint64
 	target tempTableHeartbeatTarget
 }
 
 // beatTempTableTablet refreshes all of one tablet's reserved connections with a
 // single batched touch RPC and applies the result to each connection.
 func (vh *vtgateHandler) beatTempTableTablet(ctx context.Context, items []tempTableBeatItem) {
-	// Claim each item under its connection's lock: skip it — without counting
-	// a beat — if the connection is closing or its snapshot is superseded.
-	// Counting a beat only for an item that actually runs (rather than for
-	// everything enqueued) means a closing connection waits out only its beats
-	// already in flight, and stale items cost nothing.
+	// Claim each item under its connection's lock: skip it — without counting a
+	// beat — if the connection is closing or the target no longer exists. We
+	// validate the reserved connection by its target key, not by a connection-
+	// wide generation: a beat can wait behind the failing-lane semaphore while a
+	// command republishes this same reservation, and rejecting it on a stale
+	// generation would refresh nothing while the in-flight marker suppressed the
+	// intervening sweeps — letting the reserved connection time out. Counting a
+	// beat only for an item that actually runs (rather than for everything
+	// enqueued) means a closing connection waits out only its beats already in
+	// flight, and stale items cost nothing.
 	valid := items[:0]
 	for _, item := range items {
 		ttc := item.ttc
 		ttc.mu.Lock()
-		if _, ok := ttc.targets[newTempTableTargetKey(item.target)]; !ttc.closed && ttc.gen == item.gen && ok {
+		if _, ok := ttc.targets[newTempTableTargetKey(item.target)]; !ttc.closed && ok {
 			ttc.beats.Add(1)
 			valid = append(valid, item)
 		}

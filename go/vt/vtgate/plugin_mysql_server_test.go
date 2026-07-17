@@ -1994,12 +1994,13 @@ func TestTempTableCommandTracking(t *testing.T) {
 	require.Len(t, registered.targets, 1)
 	require.Equal(t, int64(42), firstTempTarget(t, registered.targets).reservedID)
 
-	// Republishing the targets bumps the generation, so a sweep that
-	// snapshotted the previous targets discards its results instead of
-	// applying them to the new ones.
-	genBefore := registered.gen
+	// Republishing the same targets keeps the reservation registered under the
+	// same key. The sweeper validates a beat by that key rather than a generation
+	// counter, so a beat snapshotted before a republish still applies afterwards
+	// (see TestTempTableHeartbeatQueuedBeatSurvivesRepublish).
 	vh.tempTableCommandEnd(c)
-	require.Greater(t, registered.gen, genBefore, "command end must supersede in-flight sweeps")
+	require.Len(t, registered.targets, 1, "a republish must keep the surviving target registered")
+	require.Equal(t, int64(42), firstTempTarget(t, registered.targets).reservedID)
 
 	// A surviving target's consecutive-failure count is carried across a
 	// republish. A command republishes the targets every time it settles, but an
@@ -2278,6 +2279,84 @@ func TestTempTableHeartbeatFailingLaneContactsRecovered(t *testing.T) {
 	release <- struct{}{}
 	require.Eventually(t, func() bool { return recovered.execCount.Load() >= 1 }, 5*time.Second, time.Millisecond,
 		"a recovered tablet must be contacted as soon as a lane slot frees")
+}
+
+// TestTempTableHeartbeatQueuedBeatSurvivesRepublish proves a beat that waits
+// behind the failing-lane semaphore is still delivered after a command
+// republishes its (unchanged) reservation while it waits. The claim step
+// validates the target key, not a connection-wide generation; validating the
+// generation would discard the queued beat — refreshing nothing while in-flight
+// suppression skipped the intervening sweeps — and let the reserved connection
+// time out during outage recovery.
+func TestTempTableHeartbeatQueuedBeatSurvivesRepublish(t *testing.T) {
+	origInterval := tempTableHeartbeatTime
+	tempTableHeartbeatTime = 30 * time.Second
+	t.Cleanup(func() { tempTableHeartbeatTime = origInterval })
+
+	executor, _, _, _, ctx := createExecutorEnv(t)
+	vsm := newVStreamManager(executor.resolver.resolver, executor.serv, "aa")
+	vtg := newVTGate(executor, executor.resolver, vsm, nil, executor.scatterConn.gateway)
+	vh := newVtgateHandler(vtg)
+	hc := executor.scatterConn.gateway.hc.(*discovery.FakeHealthCheck)
+
+	// Fill every failing-lane slot with a stuck tablet so the next failing beat
+	// must queue behind the semaphore.
+	release := make(chan struct{})
+	var stuck []*gatedBeatConn
+	for i := range tempTableFailingBeatConcurrency {
+		stuck = append(stuck, storeGatedFailingTablet(vh, hc, i, release, assert.AnError))
+	}
+	hbCtx, hbCancel := context.WithCancel(ctx)
+	var wgs []*sync.WaitGroup
+	t.Cleanup(func() {
+		hbCancel()
+		close(release)
+		for _, wg := range wgs {
+			wg.Wait()
+		}
+	})
+	wgs = append(wgs, vh.dispatchTempTableBeats(hbCtx))
+	inFlight := func() int64 {
+		var n int64
+		for _, c := range stuck {
+			n += c.execCount.Load()
+		}
+		return n
+	}
+	require.Eventually(t, func() bool { return inFlight() == int64(tempTableFailingBeatConcurrency) }, 5*time.Second, time.Millisecond,
+		"every failing-lane slot must fill")
+
+	// Register a failing tablet backed by a real session, so its target can be
+	// republished. It returns success once contacted.
+	const reservedID = 4242
+	qs := hc.AddFakeTablet("aa", "queuedhost", 9999, "queuedks", "0", topodatapb.TabletType_PRIMARY, true, 1, nil,
+		func(tablet *topodatapb.Tablet) queryservice.QueryService {
+			return &gatedBeatConn{SandboxConn: sandboxconn.NewSandboxConn(tablet)}
+		})
+	queued := qs.(*gatedBeatConn)
+	qt := queued.Tablet()
+	qtarget := &querypb.Target{Keyspace: qt.Keyspace, Shard: qt.Shard, TabletType: qt.Type}
+	qc := &mysql.Conn{ConnectionID: 777}
+	qc.ClientData = &vtgatepb.Session{
+		Options:       &querypb.ExecuteOptions{HasCreatedTempTables: true},
+		ShardSessions: []*vtgatepb.Session_ShardSession{{Target: qtarget, TabletAlias: qt.Alias, ReservedId: reservedID}},
+	}
+	vh.tempTableConns.Store(qc, &tempTableConn{targets: tempTargets(tempTableHeartbeatTarget{
+		target: qtarget, alias: qt.Alias, reservedID: reservedID, failures: 1,
+	})})
+
+	// Its beat queues behind the full lane.
+	wgs = append(wgs, vh.dispatchTempTableBeats(hbCtx))
+	require.Never(t, func() bool { return queued.execCount.Load() > 0 }, 200*time.Millisecond, 10*time.Millisecond,
+		"the beat must queue while the lane is full")
+
+	// A command settles and republishes the same target while the beat is queued.
+	vh.tempTableCommandEnd(qc)
+
+	// Freeing a slot lets the queued beat run: it must still contact the tablet.
+	release <- struct{}{}
+	require.Eventually(t, func() bool { return queued.execCount.Load() >= 1 }, 5*time.Second, time.Millisecond,
+		"a queued beat must still contact the tablet after a mid-queue republish")
 }
 
 // TestTempTableHeartbeatBeatOutcomeSurvivesRepublish proves a beat's outcome is
@@ -2948,10 +3027,10 @@ func TestTempTableHeartbeatSweep(t *testing.T) {
 	// A result for a target that no longer exists — the reserved connection was
 	// released, or the connection closed, while the beat was in flight — is
 	// ignored and must not disturb other targets. (A target that merely survived
-	// a mid-flight generation bump is still applied; see
+	// a mid-flight republish is still applied; see
 	// TestTempTableHeartbeatBeatOutcomeSurvivesRepublish.)
 	missing := tempTableHeartbeatTarget{target: target, alias: tablet.Alias, reservedID: 12345}
-	vh.applyTempTableBeatResult(tempTableBeatItem{c: c, ttc: ttc, gen: ttc.gen, target: missing}, true /* gone */, assert.AnError)
+	vh.applyTempTableBeatResult(tempTableBeatItem{c: c, ttc: ttc, target: missing}, true /* gone */, assert.AnError)
 	require.Len(t, ttc.targets, 1, "a result for an unknown target must not touch other targets")
 
 	// A reserved connection the tablet reports gone is evicted so it is not
