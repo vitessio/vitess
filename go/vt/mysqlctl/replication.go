@@ -24,6 +24,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"strconv"
 	"strings"
@@ -320,16 +321,30 @@ func (mysqld *Mysqld) SetSuperReadOnly(ctx context.Context, on bool) (ResetSuper
 		resetCtx, cancel := context.WithTimeout(context.Background(), superReadOnlyResetTimeout)
 		defer cancel()
 
-		done := make(chan error, 1)
-		go func() {
-			done <- mysqld.ExecuteSuperQuery(resetCtx, "SET GLOBAL super_read_only = '"+value+"'")
-		}()
-		select {
-		case err := <-done:
-			return err
-		case <-resetCtx.Done():
-			return vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "timed out resetting super_read_only to '%s'", value)
+		// Use a dedicated connection so every step honors the context: the
+		// connect is bounded by resetCtx, and on timeout execBounded closes
+		// the connection and joins its worker, so nothing is left running or
+		// held when this returns.
+		conn, err := mysqld.GetDbaConnection(resetCtx)
+		if err != nil {
+			return vterrors.Wrapf(err, "failed to get a connection to reset super_read_only to '%s'", value)
 		}
+		defer conn.Close()
+
+		err = execBounded(resetCtx, conn, "SET GLOBAL super_read_only = '"+value+"'")
+		if !errors.Is(err, context.DeadlineExceeded) {
+			return err
+		}
+		// The statement may still be pending server-side; a best-effort KILL
+		// makes a recovering server abort it instead of applying it later.
+		if killErr := mysqld.killConnectionBounded(superReadOnlyResetTimeout, conn.ID()); killErr != nil {
+			log.Warn(
+				"failed to kill the timed-out super_read_only reset query",
+				slog.Int64("conn_id", conn.ID()),
+				slog.Any("error", killErr),
+			)
+		}
+		return vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "timed out resetting super_read_only to '%s'", value)
 	}
 
 	//  return function for switching `OFF` super_read_only

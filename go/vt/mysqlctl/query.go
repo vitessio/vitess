@@ -168,6 +168,45 @@ func (mysqld *Mysqld) executeFetchContext(ctx context.Context, conn *dbconnpool.
 	}
 }
 
+// execBounded runs query on conn. If ctx expires first, it closes conn so the
+// blocked ExecuteFetch fails fast, joins the worker, and returns ctx.Err() —
+// nothing is left running on the connection when it returns.
+func execBounded(ctx context.Context, conn *dbconnpool.DBConnection, query string) error {
+	done := make(chan error, 1)
+	go func() {
+		_, err := conn.ExecuteFetch(query, 10000, false)
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		return err
+	case <-ctx.Done():
+		// Prefer the query result if it raced with the deadline.
+		select {
+		case err := <-done:
+			return err
+		default:
+		}
+		conn.Close()
+		<-done
+		return ctx.Err()
+	}
+}
+
+// killConnectionBounded issues a KILL for connID on a dedicated connection,
+// bounding both the connect and the KILL itself so it cannot block past
+// timeout even when the server is unresponsive.
+func (mysqld *Mysqld) killConnectionBounded(timeout time.Duration, connID int64) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	conn, err := mysqld.GetDbaConnection(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	return execBounded(ctx, conn, fmt.Sprintf("kill %d", connID))
+}
+
 // killConnection issues a MySQL KILL command for the given connection ID.
 func (mysqld *Mysqld) killConnection(connID int64) error {
 	// There's no other interface that both types of connection implement.

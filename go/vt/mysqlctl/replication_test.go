@@ -23,6 +23,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -838,12 +839,17 @@ func TestSetSuperReadOnlyResetTimesOut(t *testing.T) {
 	db.AddQuery("SET GLOBAL super_read_only = 'ON'", &sqltypes.Result{})
 	db.AddQuery("SET GLOBAL super_read_only = 'OFF'", &sqltypes.Result{})
 
+	// Block the reset query; the KILL aborts it, as a healthy server would.
 	unblock := make(chan struct{})
 	var once sync.Once
 	release := func() { once.Do(func() { close(unblock) }) }
 	t.Cleanup(release)
 	db.SetBeforeFunc("SET GLOBAL super_read_only = 'OFF'", func() { <-unblock })
-	db.AddQueryPatternWithCallback("kill.*", &sqltypes.Result{}, func(string) { release() })
+	var killed atomic.Bool
+	db.AddQueryPatternWithCallback("kill.*", &sqltypes.Result{}, func(string) {
+		killed.Store(true)
+		release()
+	})
 
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
@@ -856,10 +862,14 @@ func TestSetSuperReadOnlyResetTimesOut(t *testing.T) {
 	go func() { done <- resetFunc() }()
 
 	select {
-	case <-done:
+	case err := <-done:
+		require.ErrorContains(t, err, "timed out")
 	case <-time.After(30 * time.Second):
-		require.Fail(t, "resetFunc did not return; the reset context is not bounded")
+		require.Fail(t, "resetFunc did not return; the reset is not bounded")
 	}
+	// The stuck statement must be killed so a recovering server aborts it
+	// instead of applying it later.
+	assert.Eventually(t, killed.Load, 30*time.Second, 10*time.Millisecond)
 }
 
 func TestSetSuperReadOnlyResetBoundedWhenKillFails(t *testing.T) {
@@ -877,10 +887,12 @@ func TestSetSuperReadOnlyResetBoundedWhenKillFails(t *testing.T) {
 	db.AddQuery("SET GLOBAL super_read_only = 'ON'", &sqltypes.Result{})
 	db.AddQuery("SET GLOBAL super_read_only = 'OFF'", &sqltypes.Result{})
 
-	// Block the reset query and register no KILL handler: cancellation cannot
-	// be delivered, so the inner execution path never unblocks on its own.
+	// Block both the reset query and the KILL: cancellation cannot be
+	// delivered, mimicking a fully unresponsive server, so nothing on the
+	// server side ever unblocks on its own.
 	unblock := make(chan struct{})
 	db.SetBeforeFunc("SET GLOBAL super_read_only = 'OFF'", func() { <-unblock })
+	db.AddQueryPatternWithCallback("kill.*", &sqltypes.Result{}, func(string) { <-unblock })
 
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
