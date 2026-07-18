@@ -1555,6 +1555,71 @@ func TestExecutorDeniedErrorNoBuffer(t *testing.T) {
 	})
 }
 
+// TestVTGateExecuteMultiTimeoutUsesParentContextPerStatement verifies that
+// each statement in an ExecuteMulti request receives a timeout derived from the
+// original request context.
+func TestVTGateExecuteMultiTimeoutUsesParentContextPerStatement(t *testing.T) {
+	executor, sbc1, sbc2, _, ctx := createExecutorEnv(t)
+
+	oldTimeout := mysqlQueryTimeout
+	mysqlQueryTimeout = 100 * time.Millisecond
+	sbc1.ExecDelayResponse = 5 * time.Millisecond
+	t.Cleanup(func() {
+		mysqlQueryTimeout = oldTimeout
+		sbc1.ExecDelayResponse = 0
+	})
+
+	session := &vtgatepb.Session{
+		Autocommit:   true,
+		TargetString: "TestExecutor",
+	}
+	vtg := newVTGate(executor, nil, nil, nil, nil)
+
+	_, results, err := vtg.ExecuteMulti(ctx, nil, session, "select id from user where id = 1; select id from user where id = 1")
+
+	require.NoError(t, err)
+	require.Len(t, results, 2)
+	require.EqualValues(t, 2, sbc1.ExecCount.Load())
+	require.Zero(t, sbc2.ExecCount.Load())
+}
+
+// TestVTGateStreamExecuteMultiTimeoutUsesParentContextPerStatement verifies
+// that each statement in a StreamExecuteMulti request receives a timeout
+// derived from the original request context.
+func TestVTGateStreamExecuteMultiTimeoutUsesParentContextPerStatement(t *testing.T) {
+	executor, sbc1, sbc2, _, ctx := createExecutorEnv(t)
+
+	oldTimeout := mysqlQueryTimeout
+	mysqlQueryTimeout = 100 * time.Millisecond
+	sbc1.ExecDelayResponse = 5 * time.Millisecond
+	t.Cleanup(func() {
+		mysqlQueryTimeout = oldTimeout
+		sbc1.ExecDelayResponse = 0
+	})
+
+	session := &vtgatepb.Session{
+		Autocommit:   true,
+		TargetString: "TestExecutor",
+	}
+	vtg := newVTGate(executor, nil, nil, nil, nil)
+	var moreFlags []bool
+
+	_, err := vtg.StreamExecuteMulti(ctx, nil, session, "select id from user where id = 1; select id from user where id = 1", func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error {
+		if qr.QueryError != nil {
+			return qr.QueryError
+		}
+		if firstPacket {
+			moreFlags = append(moreFlags, more)
+		}
+		return nil
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, []bool{true, false}, moreFlags)
+	require.EqualValues(t, 2, sbc1.ExecCount.Load())
+	require.Zero(t, sbc2.ExecCount.Load())
+}
+
 // TestVSchemaStats makes sure the building and displaying of the
 // VSchemaStats works.
 func TestVSchemaStats(t *testing.T) {
@@ -2872,6 +2937,18 @@ func TestExecutorTruncateErrors(t *testing.T) {
 
 	_, _, err = executor.Prepare(t.Context(), "TestExecute", session, "invalid statement")
 	assert.EqualError(t, err, "[BUG] unrecognized p [TRUNCATED]")
+}
+
+func TestPrepareDoesNotStartTransaction(t *testing.T) {
+	// MySQL does not start an implicit transaction for COM_STMT_PREPARE, even
+	// with autocommit disabled; the transaction starts at first execution.
+	executor, _, _, _, ctx := createExecutorEnv(t)
+
+	session := &vtgatepb.Session{TargetString: KsTestUnsharded, Autocommit: false}
+
+	_, _, err := executorPrepare(ctx, executor, session, "select id from main1 where id = ?")
+	require.NoError(t, err)
+	require.False(t, session.InTransaction)
 }
 
 func TestExecutorFlushStmt(t *testing.T) {

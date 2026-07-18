@@ -195,6 +195,13 @@ type RestoreEngine interface {
 	ShouldStartMySQLAfterRestore() bool
 }
 
+// versionCheckSkipper is an optional interface a RestoreEngine may implement to
+// opt out of the MySQL version compatibility check when restoring its backups.
+// Engines that don't implement it are treated as requiring the check.
+type versionCheckSkipper interface {
+	ShouldSkipVersionCheck() bool
+}
+
 // BackupRestoreEngine is a combination of BackupEngine and RestoreEngine.
 type BackupRestoreEngine interface {
 	BackupEngine
@@ -570,8 +577,18 @@ func FindBackupToRestore(ctx context.Context, params RestoreParams, bhs []backup
 				}
 				bh := manifestHandleMap.Handle(bm)
 
-				// check if the backup can be used with this MySQL version.
-				if bm.MySQLVersion != "" {
+				// check if the backup can be used with this MySQL version, unless
+				// the engine that created the backup opts out of the version check.
+				engineName := bm.BackupMethod
+				if engineName == "" {
+					// The builtin engine is the only one that ever left BackupMethod unset.
+					engineName = builtinBackupEngineName
+				}
+				skipVersionCheck := false
+				if skipper, ok := BackupRestoreEngineMap[engineName].(versionCheckSkipper); ok {
+					skipVersionCheck = skipper.ShouldSkipVersionCheck()
+				}
+				if bm.MySQLVersion != "" && !skipVersionCheck {
 					if err := validateMySQLVersionUpgradeCompatible(mysqlVersion, bm.MySQLVersion, bm.UpgradeSafe); err != nil {
 						params.Logger.Warningf("Skipping backup %v/%v with incompatible MySQL version %v (upgrade safe: %v): %v", backupDir, bh.Name(), bm.MySQLVersion, bm.UpgradeSafe, err)
 						continue
