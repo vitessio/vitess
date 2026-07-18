@@ -123,20 +123,20 @@ func mergeUnionInputs(
 	// Otherwise the other side's routing is retained, but only when it targets
 	// the none side's keyspace: the none side's tables exist nowhere else.
 	case a == none && b == dual:
-		return createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, &AnyShardRouting{keyspace: routingA.Keyspace()}, nil)
+		return createTrivialMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, &AnyShardRouting{keyspace: routingA.Keyspace()}, lhsRoute)
 	case b == none && a == dual:
-		return createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, &AnyShardRouting{keyspace: routingB.Keyspace()}, nil)
+		return createTrivialMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, &AnyShardRouting{keyspace: routingB.Keyspace()}, rhsRoute)
 	case a == none && sameKeyspace:
-		return createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingB, nil)
+		return createTrivialMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingB, rhsRoute)
 	case b == none && sameKeyspace:
-		return createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingA, nil)
+		return createTrivialMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingA, lhsRoute)
 
 	// if either side is a dual query, we can always merge them together
 	// an unsharded/reference route can be merged with anything going to that keyspace
 	case b == dual || (b == anyShard && sameKeyspace):
-		return createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingA, nil)
+		return createTrivialMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingA, lhsRoute)
 	case a == dual || (a == anyShard && sameKeyspace):
-		return createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingB, nil)
+		return createTrivialMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingB, rhsRoute)
 
 	case a == sharded && b == sharded && sameKeyspace:
 		res, exprs := tryMergeUnionShardedRouting(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct)
@@ -171,6 +171,34 @@ func tryMergeUnionShardedRouting(
 		return createMergedUnion(ctx, routeA, routeB, exprsA, exprsB, distinct, tblB, nil)
 
 	case tblA.RouteOpCode == engine.EqualUnique && tblB.RouteOpCode == engine.EqualUnique:
+		// If both sides route to the same shard even without the join predicates
+		// pushed down from an ApplyJoin above, prefer that routing: it does not
+		// depend on join arguments, so the merged route can later be merged with
+		// the join producing those arguments. The routing an argument-based merge
+		// would have installed is kept as a fallback, so sources routed elsewhere
+		// can still merge with this route the way they otherwise would have.
+		if canReplayWithoutJoinPredicates(routeA, tblA) && canReplayWithoutJoinPredicates(routeB, tblB) {
+			freeA := tblA.withoutJoinPredicates(ctx)
+			freeB := tblB.withoutJoinPredicates(ctx)
+			if freeA != nil && freeB != nil &&
+				(tblA.hasJoinPredicates() || tblB.hasJoinPredicates()) &&
+				freeA.RouteOpCode == tblA.RouteOpCode &&
+				freeA.RouteOpCode == freeB.RouteOpCode &&
+				freeA.SelectedVindex() == freeB.SelectedVindex() {
+				equal, conditions := gen4ValuesEqual(ctx, freeA.VindexExpressions(), freeB.VindexExpressions())
+				if equal {
+					allCond := append(routeA.Conditions, routeB.Conditions...)
+					allCond = append(allCond, conditions...)
+					op, exprs := createMergedUnion(ctx, routeA, routeB, exprsA, exprsB, distinct, freeA, allCond)
+					if route, ok := op.(*Route); ok {
+						if fb := unionMergeFallback(ctx, routeA, routeB, tblA, tblB); fb != freeA {
+							route.MergeFallback = fb
+						}
+					}
+					return op, exprs
+				}
+			}
+		}
 		fallthrough
 	case tblA.RouteOpCode == engine.Equal && tblB.RouteOpCode == engine.Equal:
 		fallthrough
@@ -184,12 +212,115 @@ func tryMergeUnionShardedRouting(
 			if equal {
 				allCond := append(routeA.Conditions, routeB.Conditions...)
 				allCond = append(allCond, conditions...)
-				return createMergedUnion(ctx, routeA, routeB, exprsA, exprsB, distinct, tblA, allCond)
+				op, exprs := createMergedUnion(ctx, routeA, routeB, exprsA, exprsB, distinct, tblA, allCond)
+				if routeA.MergeFallback != nil || routeB.MergeFallback != nil {
+					if route, ok := op.(*Route); ok {
+						if fb := unionMergeFallback(ctx, routeA, routeB, tblA, tblB); fb != tblA {
+							route.MergeFallback = fb
+						}
+					}
+				}
+				return op, exprs
+			}
+		}
+
+		// One of the sides may have been merged onto a routing that ignores join
+		// predicates and carry the argument-based routing it displaced as a
+		// fallback. Comparing the fallbacks merges the routes exactly the way the
+		// displaced routings would have merged.
+		fbA := unionMergeRouting(routeA, tblA)
+		fbB := unionMergeRouting(routeB, tblB)
+		if (fbA != tblA || fbB != tblB) &&
+			fbA.RouteOpCode == fbB.RouteOpCode &&
+			fbA.SelectedVindex() == fbB.SelectedVindex() {
+			equal, conditions := gen4ValuesEqual(ctx, fbA.VindexExpressions(), fbB.VindexExpressions())
+			if equal {
+				allCond := append(routeA.Conditions, routeB.Conditions...)
+				allCond = append(allCond, conditions...)
+				return createMergedUnion(ctx, routeA, routeB, exprsA, exprsB, distinct, fbA, allCond)
 			}
 		}
 	}
 
 	return nil, nil
+}
+
+// unionMergeRouting returns the routing to use when comparing this route against
+// another union source: the argument-based routing recorded when a merge pinned
+// this route onto a join-predicate-free routing, or the given routing itself.
+func unionMergeRouting(route *Route, tbl *ShardedRouting) *ShardedRouting {
+	if route.MergeFallback != nil {
+		return route.MergeFallback
+	}
+	return tbl
+}
+
+// unionMergeFallback computes the MergeFallback for a pair of union sources that
+// is about to be merged onto a join-predicate-free routing: the routing an
+// argument-based merge would have installed instead. That routing must provably
+// cover both sides, so it is only returned when both sides route identically
+// under it, with no extra conditions attached to the proof. Sides that already
+// carry a fallback contribute that fallback, keeping the recorded routing valid
+// for every source of the merged union. Callers skip recording when the result
+// is the very routing they are installing (a routing without join predicates
+// falls back to itself), so a recorded fallback is always a separate object
+// that predicates pushed into the merged route later cannot mutate.
+func unionMergeFallback(ctx *plancontext.PlanningContext, routeA, routeB *Route, tblA, tblB *ShardedRouting) *ShardedRouting {
+	fbA := unionMergeRouting(routeA, tblA)
+	fbB := unionMergeRouting(routeB, tblB)
+	if fbA.RouteOpCode != fbB.RouteOpCode || fbA.SelectedVindex() != fbB.SelectedVindex() {
+		return nil
+	}
+	equal, conditions := gen4ValuesEqual(ctx, fbA.VindexExpressions(), fbB.VindexExpressions())
+	if !equal || len(conditions) != 0 {
+		return nil
+	}
+	return fbA
+}
+
+// canReplayWithoutJoinPredicates reports whether the route's routing can soundly be
+// re-derived from its seen predicates alone. Once a merged UNION sits under a route,
+// the routing keeps the seen predicates of just one of the union's sources (see
+// createMergedUnion), so replaying them could produce a routing that does not cover
+// the other sources - such as a shard pin that only one source satisfies. Merging
+// several sources on argument equality and then replaying without join predicates
+// would collapse differently pinned sources onto one shard and silently lose rows.
+// A routing without join predicates is always safe: withoutJoinPredicates returns
+// it unchanged, so no re-derivation takes place.
+func canReplayWithoutJoinPredicates(route *Route, tr *ShardedRouting) bool {
+	return !tr.hasJoinPredicates() || !containsUnion(route.Source)
+}
+
+func containsUnion(op Operator) bool {
+	if _, ok := op.(*Union); ok {
+		return true
+	}
+	for _, input := range op.Inputs() {
+		if containsUnion(input) {
+			return true
+		}
+	}
+	return false
+}
+
+// createTrivialMergedUnion merges a union pair where one side trivially adopts
+// the owning side's routing: the dual, anyShard and none cases. The owning
+// route's MergeFallback must survive the merge, so that a later source routed
+// elsewhere can still merge with the result through the argument-based routing
+// recorded there.
+func createTrivialMergedUnion(
+	ctx *plancontext.PlanningContext,
+	lhsRoute, rhsRoute *Route,
+	lhsExprs, rhsExprs []sqlparser.SelectExpr,
+	distinct bool,
+	routing Routing,
+	owner *Route,
+) (Operator, []sqlparser.SelectExpr) {
+	op, exprs := createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routing, nil)
+	if route, ok := op.(*Route); ok {
+		route.MergeFallback = owner.MergeFallback
+	}
+	return op, exprs
 }
 
 func createMergedUnion(

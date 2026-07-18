@@ -1924,6 +1924,1083 @@
     }
   },
   {
+    "comment": "join to a derived table containing a UNION where every source is pinned to the same shard",
+    "query": "select refs.seg, u.id, u.col from user_extra as ue join user as u on u.id = ue.user_id join (select music.user_id, music.id as seg from music where music.user_id = 5 union select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 5) as refs on refs.user_id = ue.user_id where ue.user_id = 5 group by refs.seg, u.id, u.col",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select refs.seg, u.id, u.col from user_extra as ue join user as u on u.id = ue.user_id join (select music.user_id, music.id as seg from music where music.user_id = 5 union select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 5) as refs on refs.user_id = ue.user_id where ue.user_id = 5 group by refs.seg, u.id, u.col",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select refs.seg, u.id, u.col from (select music.user_id, music.id as seg from music where 1 != 1 union select ue2.user_id, ue2.id from user_extra as ue2 where 1 != 1) as refs, user_extra as ue, `user` as u where 1 != 1 group by refs.seg, u.id, u.col",
+        "Query": "select refs.seg, u.id, u.col from (select music.user_id, music.id as seg from music where music.user_id = 5 union select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 5) as refs, user_extra as ue, `user` as u where ue.user_id = 5 and u.id = ue.user_id and refs.user_id = ue.user_id group by refs.seg, u.id, u.col",
+        "Values": [
+          "5"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "join to a derived table containing a UNION ALL where every source is pinned to the same shard",
+    "query": "select refs.seg, u.id, u.col from user_extra as ue join user as u on u.id = ue.user_id join (select music.user_id, music.id as seg from music where music.user_id = 5 union all select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 5) as refs on refs.user_id = ue.user_id where ue.user_id = 5 group by refs.seg, u.id, u.col",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select refs.seg, u.id, u.col from user_extra as ue join user as u on u.id = ue.user_id join (select music.user_id, music.id as seg from music where music.user_id = 5 union all select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 5) as refs on refs.user_id = ue.user_id where ue.user_id = 5 group by refs.seg, u.id, u.col",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select refs.seg, u.id, u.col from (select music.user_id, music.id as seg from music where 1 != 1 union all select ue2.user_id, ue2.id from user_extra as ue2 where 1 != 1) as refs, user_extra as ue, `user` as u where 1 != 1 group by refs.seg, u.id, u.col",
+        "Query": "select refs.seg, u.id, u.col from (select music.user_id, music.id as seg from music where music.user_id = 5 union all select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 5) as refs, user_extra as ue, `user` as u where ue.user_id = 5 and u.id = ue.user_id and refs.user_id = ue.user_id group by refs.seg, u.id, u.col",
+        "Values": [
+          "5"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "join to a derived table containing a UNION where every source is pinned to the same bind variable",
+    "query": "select refs.seg, u.id, u.col from user_extra as ue join user as u on u.id = ue.user_id join (select music.user_id, music.id as seg from music where music.user_id = :v union select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = :v) as refs on refs.user_id = ue.user_id where ue.user_id = :v group by refs.seg, u.id, u.col",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select refs.seg, u.id, u.col from user_extra as ue join user as u on u.id = ue.user_id join (select music.user_id, music.id as seg from music where music.user_id = :v union select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = :v) as refs on refs.user_id = ue.user_id where ue.user_id = :v group by refs.seg, u.id, u.col",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select refs.seg, u.id, u.col from (select music.user_id, music.id as seg from music where 1 != 1 union select ue2.user_id, ue2.id from user_extra as ue2 where 1 != 1) as refs, user_extra as ue, `user` as u where 1 != 1 group by refs.seg, u.id, u.col",
+        "Query": "select refs.seg, u.id, u.col from (select music.user_id, music.id as seg from music where music.user_id = :v union select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = :v) as refs, user_extra as ue, `user` as u where ue.user_id = :v and u.id = ue.user_id and refs.user_id = ue.user_id group by refs.seg, u.id, u.col",
+        "Values": [
+          ":v"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "left join to a derived table containing a UNION where every source is pinned to the same shard",
+    "query": "select refs.seg, u.id, u.col from user_extra as ue join user as u on u.id = ue.user_id left join (select music.user_id, music.id as seg from music where music.user_id = 5 union select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 5) as refs on refs.user_id = ue.user_id where ue.user_id = 5 group by refs.seg, u.id, u.col",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select refs.seg, u.id, u.col from user_extra as ue join user as u on u.id = ue.user_id left join (select music.user_id, music.id as seg from music where music.user_id = 5 union select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 5) as refs on refs.user_id = ue.user_id where ue.user_id = 5 group by refs.seg, u.id, u.col",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select refs.seg, u.id, u.col from (user_extra as ue, `user` as u) left join (select music.user_id, music.id as seg from music where 1 != 1 union select ue2.user_id, ue2.id from user_extra as ue2 where 1 != 1) as refs on refs.user_id = ue.user_id where 1 != 1 group by refs.seg, u.id, u.col",
+        "Query": "select refs.seg, u.id, u.col from (user_extra as ue, `user` as u) left join (select music.user_id, music.id as seg from music where music.user_id = 5 union select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 5) as refs on refs.user_id = ue.user_id where ue.user_id = 5 and u.id = ue.user_id group by refs.seg, u.id, u.col",
+        "Values": [
+          "5"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "join on an unpinned column to a derived table containing a UNION where every source is pinned to the same shard",
+    "query": "select refs.seg from user_extra as ue join (select music.user_id, music.id as seg from music where music.user_id = 5 union select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 5) as refs on refs.user_id = ue.col where ue.user_id = 5",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select refs.seg from user_extra as ue join (select music.user_id, music.id as seg from music where music.user_id = 5 union select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 5) as refs on refs.user_id = ue.col where ue.user_id = 5",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select refs.seg from (select music.user_id, music.id as seg from music where 1 != 1 union select ue2.user_id, ue2.id from user_extra as ue2 where 1 != 1) as refs, user_extra as ue where 1 != 1",
+        "Query": "select refs.seg from (select music.user_id, music.id as seg from music where music.user_id = 5 union select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 5) as refs, user_extra as ue where ue.user_id = 5 and refs.user_id = ue.col",
+        "Values": [
+          "5"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "join to a derived table containing a three-source UNION where every source is pinned to the same shard",
+    "query": "select refs.seg from user_extra as ue join (select music.user_id, music.id as seg from music where music.user_id = 5 union select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 5 union select m2.user_id, m2.id from music as m2 where m2.user_id = 5) as refs on refs.user_id = ue.user_id where ue.user_id = 5",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select refs.seg from user_extra as ue join (select music.user_id, music.id as seg from music where music.user_id = 5 union select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 5 union select m2.user_id, m2.id from music as m2 where m2.user_id = 5) as refs on refs.user_id = ue.user_id where ue.user_id = 5",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select refs.seg from (select music.user_id, music.id as seg from music where 1 != 1 union select ue2.user_id, ue2.id from user_extra as ue2 where 1 != 1 union select m2.user_id, m2.id from music as m2 where 1 != 1) as refs, user_extra as ue where 1 != 1",
+        "Query": "select refs.seg from (select music.user_id, music.id as seg from music where music.user_id = 5 union select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 5 union select m2.user_id, m2.id from music as m2 where m2.user_id = 5) as refs, user_extra as ue where ue.user_id = 5 and refs.user_id = ue.user_id",
+        "Values": [
+          "5"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "join to a derived table containing a nested UNION and UNION ALL where every source is pinned to the same shard",
+    "query": "select refs.seg from user_extra as ue join (select music.user_id, music.id as seg from music where music.user_id = 5 union select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 5 union all select m2.user_id, m2.id from music as m2 where m2.user_id = 5) as refs on refs.user_id = ue.user_id where ue.user_id = 5",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select refs.seg from user_extra as ue join (select music.user_id, music.id as seg from music where music.user_id = 5 union select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 5 union all select m2.user_id, m2.id from music as m2 where m2.user_id = 5) as refs on refs.user_id = ue.user_id where ue.user_id = 5",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select refs.seg from (select music.user_id, music.id as seg from music where 1 != 1 union select ue2.user_id, ue2.id from user_extra as ue2 where 1 != 1 union all select m2.user_id, m2.id from music as m2 where 1 != 1) as refs, user_extra as ue where 1 != 1",
+        "Query": "select refs.seg from (select music.user_id, music.id as seg from music where music.user_id = 5 union select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 5 union all select m2.user_id, m2.id from music as m2 where m2.user_id = 5) as refs, user_extra as ue where ue.user_id = 5 and refs.user_id = ue.user_id",
+        "Values": [
+          "5"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "join on an unpinned column to a derived table containing a UNION where every source is pinned to the same shard and the outer table is not pinned",
+    "query": "select refs.seg from user_extra as ue join (select music.user_id, music.id as seg from music where music.user_id = 5 union select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 5) as refs on refs.user_id = ue.col",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select refs.seg from user_extra as ue join (select music.user_id, music.id as seg from music where music.user_id = 5 union select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 5) as refs on refs.user_id = ue.col",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "R:0",
+        "JoinVars": {
+          "ue_col": 0
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select ue.col from user_extra as ue where 1 != 1",
+            "Query": "select ue.col from user_extra as ue"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select refs.seg from (select music.user_id, music.id as seg from music where 1 != 1 union select ue2.user_id, ue2.id from user_extra as ue2 where 1 != 1) as refs where 1 != 1",
+            "Query": "select refs.seg from (select music.user_id, music.id as seg from music where music.user_id = 5 and user_id = :ue_col /* INT16 */ union select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 5 and user_id = :ue_col /* INT16 */) as refs",
+            "Values": [
+              "5"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "join to a derived table containing a UNION with sources pinned to the same shard where only one source exposes the vindex column",
+    "query": "select refs.user_id from user_extra as ue join (select music.user_id from music where music.user_id = 5 union select ue2.col from user_extra as ue2 where ue2.user_id = 5) as refs on refs.user_id = ue.col where ue.user_id = 5",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select refs.user_id from user_extra as ue join (select music.user_id from music where music.user_id = 5 union select ue2.col from user_extra as ue2 where ue2.user_id = 5) as refs on refs.user_id = ue.col where ue.user_id = 5",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select refs.user_id from (select music.user_id from music where 1 != 1 union select ue2.col from user_extra as ue2 where 1 != 1) as refs, user_extra as ue where 1 != 1",
+        "Query": "select refs.user_id from (select music.user_id from music where music.user_id = 5 union select ue2.col from user_extra as ue2 where ue2.user_id = 5) as refs, user_extra as ue where ue.user_id = 5 and refs.user_id = ue.col",
+        "Values": [
+          "5"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "join on an unpinned column to a derived table containing a UNION with sources pinned to different shards must not be merged",
+    "query": "select refs.seg from user_extra as ue join (select music.user_id, music.id as seg from music where music.user_id = 5 union select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 6) as refs on refs.user_id = ue.col where ue.user_id = 5",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select refs.seg from user_extra as ue join (select music.user_id, music.id as seg from music where music.user_id = 5 union select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 6) as refs on refs.user_id = ue.col where ue.user_id = 5",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "R:0",
+        "JoinVars": {
+          "ue_col": 0
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select ue.col from user_extra as ue where 1 != 1",
+            "Query": "select ue.col from user_extra as ue where ue.user_id = 5",
+            "Values": [
+              "5"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select refs.seg from (select music.user_id, music.id as seg from music where 1 != 1 union select ue2.user_id, ue2.id from user_extra as ue2 where 1 != 1) as refs where 1 != 1",
+            "Query": "select refs.seg from (select music.user_id, music.id as seg from music where music.user_id = 5 and user_id = :ue_col /* INT16 */ union select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 6 and user_id = :ue_col /* INT16 */) as refs",
+            "Values": [
+              ":ue_col"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "join on the pinned column to a derived table containing a UNION with sources pinned to different shards must not be merged",
+    "query": "select refs.seg from user_extra as ue join (select music.user_id, music.id as seg from music where music.user_id = 5 union select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 6) as refs on refs.user_id = ue.user_id where ue.user_id = 5",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select refs.seg from user_extra as ue join (select music.user_id, music.id as seg from music where music.user_id = 5 union select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 6) as refs on refs.user_id = ue.user_id where ue.user_id = 5",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "R:0",
+        "JoinVars": {
+          "ue_user_id": 0
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select ue.user_id from user_extra as ue where 1 != 1",
+            "Query": "select ue.user_id from user_extra as ue where ue.user_id = 5",
+            "Values": [
+              "5"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select refs.seg from (select music.user_id, music.id as seg from music where 1 != 1 union select ue2.user_id, ue2.id from user_extra as ue2 where 1 != 1) as refs where 1 != 1",
+            "Query": "select refs.seg from (select music.user_id, music.id as seg from music where music.user_id = 5 and user_id = :ue_user_id union select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 6 and user_id = :ue_user_id) as refs",
+            "Values": [
+              ":ue_user_id"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "join on an unpinned column to a derived table containing a three-source UNION with sources pinned to different shards must not collapse onto one shard",
+    "query": "select refs.seg from user_extra as ue join (select music.user_id, music.id as seg from music where music.user_id = 5 union select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 6 union select m2.user_id, m2.id from music as m2 where m2.user_id = 5) as refs on refs.user_id = ue.col where ue.user_id = 5",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select refs.seg from user_extra as ue join (select music.user_id, music.id as seg from music where music.user_id = 5 union select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 6 union select m2.user_id, m2.id from music as m2 where m2.user_id = 5) as refs on refs.user_id = ue.col where ue.user_id = 5",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "R:0",
+        "JoinVars": {
+          "ue_col": 0
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select ue.col from user_extra as ue where 1 != 1",
+            "Query": "select ue.col from user_extra as ue where ue.user_id = 5",
+            "Values": [
+              "5"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select refs.seg from (select music.user_id, music.id as seg from music where 1 != 1 union select ue2.user_id, ue2.id from user_extra as ue2 where 1 != 1 union select m2.user_id, m2.id from music as m2 where 1 != 1) as refs where 1 != 1",
+            "Query": "select refs.seg from (select music.user_id, music.id as seg from music where music.user_id = 5 and user_id = :ue_col /* INT16 */ union select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 6 and user_id = :ue_col /* INT16 */ union select m2.user_id, m2.id from music as m2 where m2.user_id = 5 and user_id = :ue_col /* INT16 */) as refs",
+            "Values": [
+              ":ue_col"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "join on an unpinned column to a derived table containing a three-source UNION ALL with sources pinned to different shards must not collapse onto one shard",
+    "query": "select refs.seg from user_extra as ue join (select music.user_id, music.id as seg from music where music.user_id = 5 union all select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 6 union all select m2.user_id, m2.id from music as m2 where m2.user_id = 5) as refs on refs.user_id = ue.col where ue.user_id = 5",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select refs.seg from user_extra as ue join (select music.user_id, music.id as seg from music where music.user_id = 5 union all select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 6 union all select m2.user_id, m2.id from music as m2 where m2.user_id = 5) as refs on refs.user_id = ue.col where ue.user_id = 5",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "R:0",
+        "JoinVars": {
+          "ue_col": 0
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select ue.col from user_extra as ue where 1 != 1",
+            "Query": "select ue.col from user_extra as ue where ue.user_id = 5",
+            "Values": [
+              "5"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select refs.seg from (select music.user_id, music.id as seg from music where 1 != 1 union all select ue2.user_id, ue2.id from user_extra as ue2 where 1 != 1 union all select m2.user_id, m2.id from music as m2 where 1 != 1) as refs where 1 != 1",
+            "Query": "select refs.seg from (select music.user_id, music.id as seg from music where music.user_id = 5 and user_id = :ue_col /* INT16 */ union all select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 6 and user_id = :ue_col /* INT16 */ union all select m2.user_id, m2.id from music as m2 where m2.user_id = 5 and user_id = :ue_col /* INT16 */) as refs",
+            "Values": [
+              ":ue_col"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "join on an unpinned column to a derived table containing a nested UNION and UNION ALL with sources pinned to different shards must not collapse onto one shard",
+    "query": "select refs.seg from user_extra as ue join (select music.user_id, music.id as seg from music where music.user_id = 5 union select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 6 union all select m2.user_id, m2.id from music as m2 where m2.user_id = 5) as refs on refs.user_id = ue.col where ue.user_id = 5",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select refs.seg from user_extra as ue join (select music.user_id, music.id as seg from music where music.user_id = 5 union select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 6 union all select m2.user_id, m2.id from music as m2 where m2.user_id = 5) as refs on refs.user_id = ue.col where ue.user_id = 5",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "R:0",
+        "JoinVars": {
+          "ue_col": 0
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select ue.col from user_extra as ue where 1 != 1",
+            "Query": "select ue.col from user_extra as ue where ue.user_id = 5",
+            "Values": [
+              "5"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select refs.seg from (select music.user_id, music.id as seg from music where 1 != 1 union select ue2.user_id, ue2.id from user_extra as ue2 where 1 != 1 union all select m2.user_id, m2.id from music as m2 where 1 != 1) as refs where 1 != 1",
+            "Query": "select refs.seg from (select music.user_id, music.id as seg from music where music.user_id = 5 and user_id = :ue_col /* INT16 */ union select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 6 and user_id = :ue_col /* INT16 */ union all select m2.user_id, m2.id from music as m2 where m2.user_id = 5 and user_id = :ue_col /* INT16 */) as refs",
+            "Values": [
+              ":ue_col"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "join on an unpinned column to a derived table containing a three-source UNION with two sources pinned to the same shard and one pinned to a different shard must not collapse onto one shard",
+    "query": "select refs.seg from user_extra as ue join (select music.user_id, music.id as seg from music where music.user_id = 5 union select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 5 union select m2.user_id, m2.id from music as m2 where m2.user_id = 6) as refs on refs.user_id = ue.col where ue.user_id = 5",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select refs.seg from user_extra as ue join (select music.user_id, music.id as seg from music where music.user_id = 5 union select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 5 union select m2.user_id, m2.id from music as m2 where m2.user_id = 6) as refs on refs.user_id = ue.col where ue.user_id = 5",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "R:0",
+        "JoinVars": {
+          "ue_col": 0
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select ue.col from user_extra as ue where 1 != 1",
+            "Query": "select ue.col from user_extra as ue where ue.user_id = 5",
+            "Values": [
+              "5"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select refs.seg from (select music.user_id, music.id as seg from music where 1 != 1 union select ue2.user_id, ue2.id from user_extra as ue2 where 1 != 1 union select m2.user_id, m2.id from music as m2 where 1 != 1) as refs where 1 != 1",
+            "Query": "select refs.seg from (select music.user_id, music.id as seg from music where music.user_id = 5 and user_id = :ue_col /* INT16 */ union select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 5 and user_id = :ue_col /* INT16 */ union select m2.user_id, m2.id from music as m2 where m2.user_id = 6 and user_id = :ue_col /* INT16 */) as refs",
+            "Values": [
+              ":ue_col"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "join on an unpinned column to a derived table containing a three-source UNION ALL with two sources pinned to the same shard and one pinned to a different shard must not collapse onto one shard",
+    "query": "select refs.seg from user_extra as ue join (select music.user_id, music.id as seg from music where music.user_id = 5 union all select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 5 union all select m2.user_id, m2.id from music as m2 where m2.user_id = 6) as refs on refs.user_id = ue.col where ue.user_id = 5",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select refs.seg from user_extra as ue join (select music.user_id, music.id as seg from music where music.user_id = 5 union all select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 5 union all select m2.user_id, m2.id from music as m2 where m2.user_id = 6) as refs on refs.user_id = ue.col where ue.user_id = 5",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "R:0",
+        "JoinVars": {
+          "ue_col": 0
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select ue.col from user_extra as ue where 1 != 1",
+            "Query": "select ue.col from user_extra as ue where ue.user_id = 5",
+            "Values": [
+              "5"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select refs.seg from (select music.user_id, music.id as seg from music where 1 != 1 union all select ue2.user_id, ue2.id from user_extra as ue2 where 1 != 1 union all select m2.user_id, m2.id from music as m2 where 1 != 1) as refs where 1 != 1",
+            "Query": "select refs.seg from (select music.user_id, music.id as seg from music where music.user_id = 5 and user_id = :ue_col /* INT16 */ union all select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 5 and user_id = :ue_col /* INT16 */ union all select m2.user_id, m2.id from music as m2 where m2.user_id = 6 and user_id = :ue_col /* INT16 */) as refs",
+            "Values": [
+              ":ue_col"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "join on an unpinned column to a derived table containing a four-source UNION with source pairs pinned to two different shards must not collapse onto one shard",
+    "query": "select refs.seg from user_extra as ue join (select music.user_id, music.id as seg from music where music.user_id = 5 union select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 5 union select m2.user_id, m2.id from music as m2 where m2.user_id = 6 union select ue3.user_id, ue3.id from user_extra as ue3 where ue3.user_id = 6) as refs on refs.user_id = ue.col where ue.user_id = 5",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select refs.seg from user_extra as ue join (select music.user_id, music.id as seg from music where music.user_id = 5 union select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 5 union select m2.user_id, m2.id from music as m2 where m2.user_id = 6 union select ue3.user_id, ue3.id from user_extra as ue3 where ue3.user_id = 6) as refs on refs.user_id = ue.col where ue.user_id = 5",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "R:0",
+        "JoinVars": {
+          "ue_col": 0
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select ue.col from user_extra as ue where 1 != 1",
+            "Query": "select ue.col from user_extra as ue where ue.user_id = 5",
+            "Values": [
+              "5"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select refs.seg from (select music.user_id, music.id as seg from music where 1 != 1 union select ue2.user_id, ue2.id from user_extra as ue2 where 1 != 1 union select m2.user_id, m2.id from music as m2 where 1 != 1 union select ue3.user_id, ue3.id from user_extra as ue3 where 1 != 1) as refs where 1 != 1",
+            "Query": "select refs.seg from (select music.user_id, music.id as seg from music where music.user_id = 5 and user_id = :ue_col /* INT16 */ union select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 5 and user_id = :ue_col /* INT16 */ union select m2.user_id, m2.id from music as m2 where m2.user_id = 6 and user_id = :ue_col /* INT16 */ union select ue3.user_id, ue3.id from user_extra as ue3 where ue3.user_id = 6 and user_id = :ue_col /* INT16 */) as refs",
+            "Values": [
+              ":ue_col"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "join on an unpinned column to a derived table containing a nested UNION pinned to one shard and a UNION ALL source pinned to a different shard must not collapse onto one shard",
+    "query": "select refs.seg from user_extra as ue join (select music.user_id, music.id as seg from music where music.user_id = 5 union select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 5 union all select m2.user_id, m2.id from music as m2 where m2.user_id = 6) as refs on refs.user_id = ue.col where ue.user_id = 5",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select refs.seg from user_extra as ue join (select music.user_id, music.id as seg from music where music.user_id = 5 union select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 5 union all select m2.user_id, m2.id from music as m2 where m2.user_id = 6) as refs on refs.user_id = ue.col where ue.user_id = 5",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "R:0",
+        "JoinVars": {
+          "ue_col": 0
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select ue.col from user_extra as ue where 1 != 1",
+            "Query": "select ue.col from user_extra as ue where ue.user_id = 5",
+            "Values": [
+              "5"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select refs.seg from (select music.user_id, music.id as seg from music where 1 != 1 union select ue2.user_id, ue2.id from user_extra as ue2 where 1 != 1 union all select m2.user_id, m2.id from music as m2 where 1 != 1) as refs where 1 != 1",
+            "Query": "select refs.seg from (select music.user_id, music.id as seg from music where music.user_id = 5 and user_id = :ue_col /* INT16 */ union select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 5 and user_id = :ue_col /* INT16 */ union all select m2.user_id, m2.id from music as m2 where m2.user_id = 6 and user_id = :ue_col /* INT16 */) as refs",
+            "Values": [
+              ":ue_col"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "join on an unpinned column to a derived table containing a UNION ALL of two derived tables pinned to the same shard and a source pinned to a different shard must not collapse onto one shard",
+    "query": "select refs.seg from user_extra as ue join (select t1.user_id, t1.seg from (select music.user_id, music.id as seg from music where music.user_id = 5 union select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 5) as t1 union all select t2.user_id, t2.seg from (select m2.user_id, m2.id as seg from music as m2 where m2.user_id = 5 union select ue3.user_id, ue3.id from user_extra as ue3 where ue3.user_id = 5) as t2 union all select m3.user_id, m3.id from music as m3 where m3.user_id = 6) as refs on refs.user_id = ue.col where ue.user_id = 5",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select refs.seg from user_extra as ue join (select t1.user_id, t1.seg from (select music.user_id, music.id as seg from music where music.user_id = 5 union select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 5) as t1 union all select t2.user_id, t2.seg from (select m2.user_id, m2.id as seg from music as m2 where m2.user_id = 5 union select ue3.user_id, ue3.id from user_extra as ue3 where ue3.user_id = 5) as t2 union all select m3.user_id, m3.id from music as m3 where m3.user_id = 6) as refs on refs.user_id = ue.col where ue.user_id = 5",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "R:0",
+        "JoinVars": {
+          "ue_col": 0
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select ue.col from user_extra as ue where 1 != 1",
+            "Query": "select ue.col from user_extra as ue where ue.user_id = 5",
+            "Values": [
+              "5"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select refs.seg from (select t1.user_id, t1.seg from (select music.user_id, music.id as seg from music where 1 != 1 union select ue2.user_id, ue2.id from user_extra as ue2 where 1 != 1) as t1 where 1 != 1 union all select t2.user_id, t2.seg from (select m2.user_id, m2.id as seg from music as m2 where 1 != 1 union select ue3.user_id, ue3.id from user_extra as ue3 where 1 != 1) as t2 where 1 != 1 union all select m3.user_id, m3.id from music as m3 where 1 != 1) as refs where 1 != 1",
+            "Query": "select refs.seg from (select t1.user_id, t1.seg from (select music.user_id, music.id as seg from music where music.user_id = 5 and user_id = :ue_col /* INT16 */ union select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 5 and user_id = :ue_col /* INT16 */) as t1 union all select t2.user_id, t2.seg from (select m2.user_id, m2.id as seg from music as m2 where m2.user_id = 5 and user_id = :ue_col /* INT16 */ union select ue3.user_id, ue3.id from user_extra as ue3 where ue3.user_id = 5 and user_id = :ue_col /* INT16 */) as t2 union all select m3.user_id, m3.id from music as m3 where m3.user_id = 6 and user_id = :ue_col /* INT16 */) as refs",
+            "Values": [
+              ":ue_col"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "join on an unpinned column to a derived table containing a UNION ALL of two derived tables pinned to two different shards",
+    "query": "select refs.seg from user_extra as ue join (select t1.user_id, t1.seg from (select music.user_id, music.id as seg from music where music.user_id = 5 union select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 5) as t1 union all select t2.user_id, t2.seg from (select m2.user_id, m2.id as seg from music as m2 where m2.user_id = 6 union select ue3.user_id, ue3.id from user_extra as ue3 where ue3.user_id = 6) as t2) as refs on refs.user_id = ue.col where ue.user_id = 5",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select refs.seg from user_extra as ue join (select t1.user_id, t1.seg from (select music.user_id, music.id as seg from music where music.user_id = 5 union select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 5) as t1 union all select t2.user_id, t2.seg from (select m2.user_id, m2.id as seg from music as m2 where m2.user_id = 6 union select ue3.user_id, ue3.id from user_extra as ue3 where ue3.user_id = 6) as t2) as refs on refs.user_id = ue.col where ue.user_id = 5",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "R:0",
+        "JoinVars": {
+          "ue_col": 0
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select ue.col from user_extra as ue where 1 != 1",
+            "Query": "select ue.col from user_extra as ue where ue.user_id = 5",
+            "Values": [
+              "5"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select refs.seg from (select t1.user_id, t1.seg from (select music.user_id, music.id as seg from music where 1 != 1 union select ue2.user_id, ue2.id from user_extra as ue2 where 1 != 1) as t1 where 1 != 1 union all select t2.user_id, t2.seg from (select m2.user_id, m2.id as seg from music as m2 where 1 != 1 union select ue3.user_id, ue3.id from user_extra as ue3 where 1 != 1) as t2 where 1 != 1) as refs where 1 != 1",
+            "Query": "select refs.seg from (select t1.user_id, t1.seg from (select music.user_id, music.id as seg from music where music.user_id = 5 and user_id = :ue_col /* INT16 */ union select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 5 and user_id = :ue_col /* INT16 */) as t1 union all select t2.user_id, t2.seg from (select m2.user_id, m2.id as seg from music as m2 where m2.user_id = 6 and user_id = :ue_col /* INT16 */ union select ue3.user_id, ue3.id from user_extra as ue3 where ue3.user_id = 6 and user_id = :ue_col /* INT16 */) as t2) as refs",
+            "Values": [
+              ":ue_col"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "join on an unpinned column to a derived table containing a four-source UNION with a dual source interposed between a same-shard pair and a differently pinned source: the recorded fallback must survive the dual merge",
+    "query": "select refs.seg from user_extra as ue join (select music.user_id, music.id as seg from music where music.user_id = 5 union select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 5 union select 5, 42 from dual union select m2.user_id, m2.id from music as m2 where m2.user_id = 6) as refs on refs.user_id = ue.col where ue.user_id = 5",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select refs.seg from user_extra as ue join (select music.user_id, music.id as seg from music where music.user_id = 5 union select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 5 union select 5, 42 from dual union select m2.user_id, m2.id from music as m2 where m2.user_id = 6) as refs on refs.user_id = ue.col where ue.user_id = 5",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "R:0",
+        "JoinVars": {
+          "ue_col": 0
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select ue.col from user_extra as ue where 1 != 1",
+            "Query": "select ue.col from user_extra as ue where ue.user_id = 5",
+            "Values": [
+              "5"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select refs.seg from (select music.user_id, music.id as seg from music where 1 != 1 union select ue2.user_id, ue2.id from user_extra as ue2 where 1 != 1 union select 5, 42 from dual where 1 != 1 union select m2.user_id, m2.id from music as m2 where 1 != 1) as refs where 1 != 1",
+            "Query": "select refs.seg from (select music.user_id, music.id as seg from music where music.user_id = 5 and user_id = :ue_col /* INT16 */ union select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = 5 and user_id = :ue_col /* INT16 */ union select 5, 42 from dual where 5 = :ue_col /* INT16 */ union select m2.user_id, m2.id from music as m2 where m2.user_id = 6 and user_id = :ue_col /* INT16 */) as refs",
+            "Values": [
+              ":ue_col"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "union of two single-shard joins pinned to the same shard",
+    "query": "select music.id as seg, u.id, u.col from music join user as u on u.id = music.user_id where music.user_id = 5 union select ue2.id, u2.id, u2.col from user_extra as ue2 join user as u2 on u2.id = ue2.user_id where ue2.user_id = 5",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select music.id as seg, u.id, u.col from music join user as u on u.id = music.user_id where music.user_id = 5 union select ue2.id, u2.id, u2.col from user_extra as ue2 join user as u2 on u2.id = ue2.user_id where ue2.user_id = 5",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id as seg, u.id, u.col from music, `user` as u where 1 != 1 union select ue2.id, u2.id, u2.col from user_extra as ue2, `user` as u2 where 1 != 1",
+        "Query": "select music.id as seg, u.id, u.col from music, `user` as u where music.user_id = 5 and u.id = music.user_id union select ue2.id, u2.id, u2.col from user_extra as ue2, `user` as u2 where ue2.user_id = 5 and u2.id = ue2.user_id",
+        "Values": [
+          "5"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "union all of two single-shard selects pinned to the same shard",
+    "query": "select id from music where user_id = 5 union all select id from user_extra where user_id = 5",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select id from music where user_id = 5 union all select id from user_extra where user_id = 5",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from music where 1 != 1 union all select id from user_extra where 1 != 1",
+        "Query": "select id from music where user_id = 5 union all select id from user_extra where user_id = 5",
+        "Values": [
+          "5"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "join on an unpinned column to a derived table containing a UNION with sources pinned to the same non-unique vindex value",
+    "query": "select refs.x from user_extra as ue join (select u1.name as x, u1.id from user as u1 where u1.name = 'a' union select u2.name, u2.id from user as u2 where u2.name = 'a') as refs on refs.x = ue.col where ue.user_id = 5",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select refs.x from user_extra as ue join (select u1.name as x, u1.id from user as u1 where u1.name = 'a' union select u2.name, u2.id from user as u2 where u2.name = 'a') as refs on refs.x = ue.col where ue.user_id = 5",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "R:0",
+        "JoinVars": {
+          "ue_col": 0
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select ue.col from user_extra as ue where 1 != 1",
+            "Query": "select ue.col from user_extra as ue where ue.user_id = 5",
+            "Values": [
+              "5"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Distinct",
+            "Collations": [
+              "(0:2)",
+              "(1:3)"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "VindexLookup",
+                "Variant": "Equal",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "Values": [
+                  ":ue_col"
+                ],
+                "Vindex": "name_user_map",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "IN",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+                    "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+                    "Values": [
+                      "::name"
+                    ],
+                    "Vindex": "user_index"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "ByDestination",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select u1.`name` as x, u1.id, weight_string(u1.`name`), weight_string(u1.id) from `user` as u1 where 1 != 1 union select u2.`name`, u2.id, weight_string(u2.`name`), weight_string(u2.id) from `user` as u2 where 1 != 1",
+                    "Query": "select u1.`name` as x, u1.id, weight_string(u1.`name`), weight_string(u1.id) from `user` as u1 where u1.`name` = 'a' and `name` = :ue_col /* INT16 */ union select u2.`name`, u2.id, weight_string(u2.`name`), weight_string(u2.id) from `user` as u2 where u2.`name` = 'a' and `name` = :ue_col /* INT16 */"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "join on an unpinned column to a derived table containing a UNION with sources pinned to the same IN list",
+    "query": "select refs.col from user_extra as ue join (select m1.col from music as m1 where m1.user_id in (1, 2) union select m2.col from music as m2 where m2.user_id in (1, 2)) as refs on refs.col = ue.col where ue.user_id = 5",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select refs.col from user_extra as ue join (select m1.col from music as m1 where m1.user_id in (1, 2) union select m2.col from music as m2 where m2.user_id in (1, 2)) as refs on refs.col = ue.col where ue.user_id = 5",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "R:0",
+        "JoinVars": {
+          "ue_col": 0
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select ue.col from user_extra as ue where 1 != 1",
+            "Query": "select ue.col from user_extra as ue where ue.user_id = 5",
+            "Values": [
+              "5"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Distinct",
+            "Collations": [
+              "(0:1)"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "IN",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select m1.col, weight_string(m1.col) from music as m1 where 1 != 1 union select m2.col, weight_string(m2.col) from music as m2 where 1 != 1",
+                "Query": "select m1.col, weight_string(m1.col) from music as m1 where m1.user_id in ::__vals and col = :ue_col /* INT16 */ union select m2.col, weight_string(m2.col) from music as m2 where m2.user_id in (1, 2) and col = :ue_col /* INT16 */",
+                "Values": [
+                  "(1, 2)"
+                ],
+                "Vindex": "user_index"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
     "comment": "Select literals from table union Select literals from table",
     "query": "SELECT 1 from user UNION SELECT 2 from user",
     "plan": {
