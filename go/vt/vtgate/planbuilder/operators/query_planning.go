@@ -162,6 +162,19 @@ func tryMergeApplyJoin(in *ApplyJoin, ctx *plancontext.PlanningContext) (_ Opera
 			}
 			original[id] = oldExpr
 			ctx.PredTracker.Set(id, col.Original)
+
+			// Per-source copies of the predicate (created when it was pushed into a UNION)
+			// cannot be restored to column form - inside a derived table they would
+			// reference sibling tables. After the merge, nothing produces their arguments
+			// anymore, so they have to be skipped.
+			for _, childID := range ctx.PredTracker.DescendantIDs(id) {
+				childExpr, err := ctx.PredTracker.Get(childID)
+				if err != nil {
+					panic(err)
+				}
+				original[childID] = childExpr
+				ctx.PredTracker.Skip(childID)
+			}
 		}
 	}
 
