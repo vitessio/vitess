@@ -240,6 +240,69 @@ func TestUpdateMaxLagTickerLowTargetLag(t *testing.T) {
 	assert.Zero(t, throttlerImpl.throttlerRunning.Get())
 }
 
+// TestRestartHealthCheckStreamKeepsStateContextAlive verifies that restarting the
+// healthcheck stream, which is what updateHealthCheckCells does when the topology
+// cell list changes, does not cancel the state context. If it does,
+// healthChecksProcessor returns on ts.ctx.Done() and the throttler stops seeing
+// replication lag for the rest of the tablet's life.
+func TestRestartHealthCheckStreamKeepsStateContextAlive(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	defer resetTxThrottlerFactories()
+	mockHealthCheck := NewMockHealthCheck(mockCtrl)
+	mockHealthCheck.EXPECT().Subscribe("TxThrottler").AnyTimes()
+	mockHealthCheck.EXPECT().Close().AnyTimes()
+	healthCheckFactory = func(ctx context.Context, topoServer *topo.Server, cell, keyspace, shard string, cellsToWatch []string) (discovery.HealthCheck, error) {
+		return mockHealthCheck, nil
+	}
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	ts := &txThrottlerStateImpl{
+		ctx:    ctx,
+		cancel: cancel,
+	}
+	target := &querypb.Target{Cell: "cell1", Keyspace: "keyspace", Shard: "shard"}
+
+	require.NoError(t, ts.initHealthCheckStream(nil, target))
+	// updateHealthCheckCells restarts the stream by closing then re-initializing it.
+	ts.closeHealthCheckStream()
+	require.NoError(t, ts.initHealthCheckStream(nil, target))
+
+	assert.NoError(t, ts.ctx.Err())
+}
+
+// TestHealthChecksProcessorReturnsOnClosedChannel verifies that healthChecksProcessor
+// exits when its subscriber channel is closed (which is what HealthCheck.Close does
+// during teardown) instead of receiving the zero value and forwarding it to
+// StatsUpdate.
+func TestHealthChecksProcessorReturnsOnClosedChannel(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	ch := make(chan *discovery.TabletHealth)
+	ts := &txThrottlerStateImpl{
+		ctx:             ctx,
+		cancel:          cancel,
+		healthCheckChan: ch,
+	}
+
+	done := make(chan struct{})
+	go func() {
+		ts.healthChecksProcessor(nil, &querypb.Target{})
+		close(done)
+	}()
+
+	close(ch)
+
+	select {
+	case <-done:
+	case <-time.After(30 * time.Second):
+		require.Fail(t, "healthChecksProcessor did not return after its channel was closed")
+	}
+}
+
 func TestFetchKnownCells(t *testing.T) {
 	ctx := t.Context()
 	{
