@@ -862,6 +862,46 @@ func TestSetSuperReadOnlyResetTimesOut(t *testing.T) {
 	}
 }
 
+func TestSetSuperReadOnlyResetBoundedWhenKillFails(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	params := db.ConnParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+
+	withTestSuperReadOnlyResetTimeout(t, 100*time.Millisecond)
+
+	db.AddQuery("SELECT 1", &sqltypes.Result{})
+	db.AddQuery("SELECT @@global.super_read_only", sqltypes.MakeTestResult(sqltypes.MakeTestFields("sro", "int64"), "0"))
+	db.AddQuery("SET GLOBAL super_read_only = 'ON'", &sqltypes.Result{})
+	db.AddQuery("SET GLOBAL super_read_only = 'OFF'", &sqltypes.Result{})
+
+	// Block the reset query and register no KILL handler: cancellation cannot
+	// be delivered, so the inner execution path never unblocks on its own.
+	unblock := make(chan struct{})
+	db.SetBeforeFunc("SET GLOBAL super_read_only = 'OFF'", func() { <-unblock })
+
+	testMysqld := NewMysqld(dbc)
+	defer testMysqld.Close()
+	// Release the blocked handler before pool close so teardown does not hang.
+	defer close(unblock)
+
+	resetFunc, err := testMysqld.SetSuperReadOnly(t.Context(), true)
+	require.NoError(t, err)
+	require.NotNil(t, resetFunc)
+
+	done := make(chan error, 1)
+	go func() { done <- resetFunc() }()
+
+	select {
+	case err := <-done:
+		require.ErrorContains(t, err, "timed out")
+	case <-time.After(30 * time.Second):
+		require.Fail(t, "resetFunc did not return; reset is not hard-bounded when KILL cannot be delivered")
+	}
+}
+
 func TestSetSuperReadOnlyResetDetachedFromParentContext(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()

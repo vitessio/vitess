@@ -319,7 +319,17 @@ func (mysqld *Mysqld) SetSuperReadOnly(ctx context.Context, on bool) (ResetSuper
 	resetSuperReadOnly := func(value string) error {
 		resetCtx, cancel := context.WithTimeout(context.Background(), superReadOnlyResetTimeout)
 		defer cancel()
-		return mysqld.ExecuteSuperQuery(resetCtx, "SET GLOBAL super_read_only = '"+value+"'")
+
+		done := make(chan error, 1)
+		go func() {
+			done <- mysqld.ExecuteSuperQuery(resetCtx, "SET GLOBAL super_read_only = '"+value+"'")
+		}()
+		select {
+		case err := <-done:
+			return err
+		case <-resetCtx.Done():
+			return vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "timed out resetting super_read_only to '%s'", value)
+		}
 	}
 
 	//  return function for switching `OFF` super_read_only
