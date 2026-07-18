@@ -46,6 +46,8 @@ const (
 	getGlobalStatusQuery = "SELECT variable_name, variable_value FROM performance_schema.global_status"
 )
 
+var superReadOnlyResetTimeout = 15 * time.Second
+
 type ResetSuperReadOnlyFunc func() error
 
 // WaitForReplicationStart waits until the deadline for replication to start.
@@ -314,19 +316,21 @@ func (mysqld *Mysqld) SetReadOnly(ctx context.Context, on bool) error {
 // SetSuperReadOnly set/unset the super_read_only flag.
 // Returns a function which is called to set super_read_only back to its original value.
 func (mysqld *Mysqld) SetSuperReadOnly(ctx context.Context, on bool) (ResetSuperReadOnlyFunc, error) {
+	resetSuperReadOnly := func(value string) error {
+		resetCtx, cancel := context.WithTimeout(context.Background(), superReadOnlyResetTimeout)
+		defer cancel()
+		return mysqld.ExecuteSuperQuery(resetCtx, "SET GLOBAL super_read_only = '"+value+"'")
+	}
+
 	//  return function for switching `OFF` super_read_only
 	var resetFunc ResetSuperReadOnlyFunc
 	disableFunc := func() error {
-		query := "SET GLOBAL super_read_only = 'OFF'"
-		err := mysqld.ExecuteSuperQuery(context.Background(), query)
-		return err
+		return resetSuperReadOnly("OFF")
 	}
 
 	//  return function for switching `ON` super_read_only.
 	enableFunc := func() error {
-		query := "SET GLOBAL super_read_only = 'ON'"
-		err := mysqld.ExecuteSuperQuery(context.Background(), query)
-		return err
+		return resetSuperReadOnly("ON")
 	}
 
 	superReadOnlyEnabled, err := mysqld.IsSuperReadOnly(ctx)
