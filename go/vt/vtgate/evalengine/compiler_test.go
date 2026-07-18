@@ -202,6 +202,11 @@ func TestCompilerSingle(t *testing.T) {
 			result:     "INT64(2)",
 		},
 		{
+			// LIKE must collapse a NULL right operand before outer expressions consume the result.
+			expression: "null <=> ('foo' like null)",
+			result:     "INT64(1)",
+		},
+		{
 			expression: "1 + column0",
 			values:     []sqltypes.Value{sqltypes.NewFloat64(1)},
 			result:     "FLOAT64(2)",
