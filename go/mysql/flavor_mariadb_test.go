@@ -20,6 +20,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"vitess.io/vitess/go/vt/vttls"
 )
 
 func TestMariadbSetReplicationSourceCommand(t *testing.T) {
@@ -85,4 +87,27 @@ func TestMariadbSetReplicationSourceCommandSSL(t *testing.T) {
 	conn := &Conn{flavor: mariadbFlavor101{}}
 	got := conn.SetReplicationSourceCommand(params, host, port, 0, connectRetry)
 	assert.Equal(t, want, got, "mariadbFlavor.SetReplicationSourceCommand(%#v, %#v, %#v, %#v) = %#v, want %#v", params, host, port, connectRetry, got, want)
+}
+
+// TestMariadbSetReplicationSourceCommandPreferredSSLWithUnixSocket verifies that
+// a Unix socket for direct connections does not disable TLS for TCP replication.
+func TestMariadbSetReplicationSourceCommandPreferredSSLWithUnixSocket(t *testing.T) {
+	params := &ConnParams{
+		Uname:      "username",
+		Pass:       "password",
+		UnixSocket: "/var/run/mysqld/mysqld.sock",
+		SslMode:    vttls.Preferred,
+	}
+	want := `CHANGE MASTER TO
+  MASTER_HOST = 'primary.example.com',
+  MASTER_PORT = 3306,
+  MASTER_USER = 'username',
+  MASTER_PASSWORD = 'password',
+  MASTER_CONNECT_RETRY = 10,
+  MASTER_SSL = 1,
+  MASTER_USE_GTID = current_pos`
+
+	conn := &Conn{flavor: mariadbFlavor101{}}
+	got := conn.SetReplicationSourceCommand(params, "primary.example.com", 3306, 0, 10)
+	assert.Equal(t, want, got)
 }
