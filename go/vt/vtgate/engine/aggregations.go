@@ -17,10 +17,14 @@ limitations under the License.
 package engine
 
 import (
+	"cmp"
 	"fmt"
+	"slices"
 	"strconv"
+	"strings"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/sqltypes"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -336,6 +340,161 @@ func (a *aggregatorGroupConcat) reset() {
 	a.concat = nil // not safe to reuse this byte slice as it's returned as MakeTrusted
 }
 
+// aggregatorJSONArrayMerge merges the per-shard results of a pushed-down
+// json_arrayagg into a single JSON array by splicing the raw element bytes:
+// MySQL separates array elements with ", ", so the result is byte-identical
+// to MySQL's own output for the combined rows. A NULL input means the shard
+// had no rows for this group and is skipped.
+type aggregatorJSONArrayMerge struct {
+	from     int
+	hasValue bool
+	elems    []byte // merged elements, without the enclosing brackets
+}
+
+func (a *aggregatorJSONArrayMerge) add(row []sqltypes.Value) error {
+	value := row[a.from]
+	if value.IsNull() {
+		return nil
+	}
+	raw := value.Raw()
+	// Partials are trusted MySQL-generated array documents: check the root
+	// shape without reparsing the potentially large payload.
+	if len(raw) < 2 || raw[0] != '[' || raw[len(raw)-1] != ']' {
+		return vterrors.VT13001(fmt.Sprintf("unexpected json_arrayagg partial: %q", raw))
+	}
+	inner := raw[1 : len(raw)-1]
+	if len(a.elems) > 0 && len(inner) > 0 {
+		a.elems = append(a.elems, ", "...)
+	}
+	a.elems = append(a.elems, inner...)
+	a.hasValue = true
+	return nil
+}
+
+func (a *aggregatorJSONArrayMerge) finish(*evalengine.ExpressionEnv, collations.ID) (sqltypes.Value, error) {
+	if !a.hasValue {
+		return sqltypes.NULL, nil
+	}
+	merged := make([]byte, 0, len(a.elems)+2)
+	merged = append(merged, '[')
+	merged = append(merged, a.elems...)
+	merged = append(merged, ']')
+	return sqltypes.MakeTrusted(sqltypes.TypeJSON, merged), nil
+}
+
+func (a *aggregatorJSONArrayMerge) reset() {
+	a.hasValue = false
+	a.elems = a.elems[:0] // safe to reuse: finish copies the bytes before returning them
+}
+
+// aggregatorJSONObjectMerge merges the per-shard results of a pushed-down
+// json_objectagg into a single JSON object. Duplicate keys resolve with
+// MySQL's "last duplicate key wins" rule in partial-arrival order —
+// nondeterministic across shards, as MySQL documents for unordered rows. The
+// merged object is emitted with members sorted by key length and then byte
+// order, matching MySQL's JSON object normalization. A NULL input means the
+// shard had no rows for this group and is skipped.
+type aggregatorJSONObjectMerge struct {
+	from int
+
+	hasValue bool
+	keys     []string
+	vals     map[string]*json.Value
+}
+
+func (a *aggregatorJSONObjectMerge) add(row []sqltypes.Value) error {
+	value := row[a.from]
+	if value.IsNull() {
+		return nil
+	}
+	// One-shot parser: the returned values keep the parser's private copy of the
+	// input alive, so they remain valid after the parser goes out of scope.
+	var p json.Parser
+	parsed, err := p.ParseBytes(value.Raw())
+	if err != nil {
+		return vterrors.VT13001(fmt.Sprintf("unexpected json_objectagg partial: %v", err))
+	}
+	obj, ok := parsed.Object()
+	if !ok {
+		return vterrors.VT13001(fmt.Sprintf("unexpected json_objectagg partial: %q", value.Raw()))
+	}
+	a.hasValue = true
+	if a.vals == nil {
+		a.vals = make(map[string]*json.Value, obj.Len())
+	}
+	for _, k := range obj.Keys() {
+		if _, seen := a.vals[k]; !seen {
+			a.keys = append(a.keys, k)
+		}
+		a.vals[k] = obj.Get(k)
+	}
+	return nil
+}
+
+func (a *aggregatorJSONObjectMerge) finish(*evalengine.ExpressionEnv, collations.ID) (sqltypes.Value, error) {
+	if !a.hasValue {
+		return sqltypes.NULL, nil
+	}
+	// MySQL normalizes JSON object members by key length first, then by byte order.
+	slices.SortFunc(a.keys, func(x, y string) int {
+		if c := cmp.Compare(len(x), len(y)); c != 0 {
+			return c
+		}
+		return strings.Compare(x, y)
+	})
+	merged := []byte{'{'}
+	for i, k := range a.keys {
+		if i > 0 {
+			merged = append(merged, ',', ' ')
+		}
+		merged = json.NewString(k).MarshalTo(merged)
+		merged = append(merged, ':', ' ')
+		merged = appendJSONPreservingNumbers(merged, a.vals[k])
+	}
+	merged = append(merged, '}')
+	return sqltypes.MakeTrusted(sqltypes.TypeJSON, merged), nil
+}
+
+func (a *aggregatorJSONObjectMerge) reset() {
+	a.hasValue = false
+	a.keys = nil
+	a.vals = nil // not safe to reuse: the merged values alias the parsed partials
+}
+
+// appendJSONPreservingNumbers appends the JSON text of a parsed value, emitting
+// numbers via their raw parsed literal: MarshalTo reformats non-integer numbers
+// through float64, which corrupts wide decimals produced by MySQL.
+func appendJSONPreservingNumbers(dst []byte, v *json.Value) []byte {
+	if obj, ok := v.Object(); ok {
+		dst = append(dst, '{')
+		first := true
+		obj.Visit(func(key string, val *json.Value) {
+			if !first {
+				dst = append(dst, ',', ' ')
+			}
+			first = false
+			dst = json.NewString(key).MarshalTo(dst)
+			dst = append(dst, ':', ' ')
+			dst = appendJSONPreservingNumbers(dst, val)
+		})
+		return append(dst, '}')
+	}
+	if arr, ok := v.Array(); ok {
+		dst = append(dst, '[')
+		for i, el := range arr {
+			if i > 0 {
+				dst = append(dst, ',', ' ')
+			}
+			dst = appendJSONPreservingNumbers(dst, el)
+		}
+		return append(dst, ']')
+	}
+	if v.NumberType() != json.NumberTypeUnknown {
+		return append(dst, v.Raw()...)
+	}
+	return v.MarshalTo(dst)
+}
+
 type aggregatorGtid struct {
 	from   int
 	shards []*binlogdatapb.ShardGtid
@@ -506,6 +665,17 @@ func newAggregation(fields []*querypb.Field, aggregates []*AggregateParams, env 
 
 		case opcode.AggregateConstant:
 			ag = &aggregatorConstant{expr: aggr.EExpr}
+
+		case opcode.AggregateJSONArrayMerge:
+			ag = &aggregatorJSONArrayMerge{from: aggr.Col}
+
+		case opcode.AggregateJSONObjectMerge:
+			ag = &aggregatorJSONObjectMerge{from: aggr.Col}
+
+		case opcode.AggregateJSONArrayAgg, opcode.AggregateJSONObjectAgg:
+			// These opcodes are only ever pushed down into the shard queries; plans that
+			// would need to evaluate them at the vtgate level are rejected at plan time.
+			return nil, nil, vterrors.VT13001(aggr.Opcode.String() + " must be pushed down to MySQL")
 
 		default:
 			panic("BUG: unexpected Aggregation opcode")

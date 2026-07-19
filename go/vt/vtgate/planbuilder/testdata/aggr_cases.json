@@ -7410,6 +7410,510 @@
     }
   },
   {
+    "comment": "json_arrayagg on top of scatter route",
+    "query": "select json_arrayagg(intcol) from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select json_arrayagg(intcol) from user",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "json_arrayagg_merge(0) AS json_arrayagg(intcol)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select json_arrayagg(intcol) from `user` where 1 != 1",
+            "Query": "select json_arrayagg(intcol) from `user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "raw output of a merged json_arrayagg of decimal values stays supported",
+    "query": "select json_arrayagg(cast(intcol as decimal(20,8))) from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select json_arrayagg(cast(intcol as decimal(20,8))) from user",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "json_arrayagg_merge(0) AS json_arrayagg(cast(intcol as decimal(20,8)))",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select json_arrayagg(cast(intcol as decimal(20, 8))) from `user` where 1 != 1",
+            "Query": "select json_arrayagg(cast(intcol as decimal(20, 8))) from `user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "json_objectagg on top of scatter route",
+    "query": "select json_objectagg(col, intcol) from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select json_objectagg(col, intcol) from user",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "json_objectagg_merge(0) AS json_objectagg(col, intcol)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select json_objectagg(col, intcol) from `user` where 1 != 1",
+            "Query": "select json_objectagg(col, intcol) from `user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "json_arrayagg with group by on top of scatter route",
+    "query": "select intcol, json_arrayagg(foo) from user group by intcol",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select intcol, json_arrayagg(foo) from user group by intcol",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "json_arrayagg_merge(1) AS json_arrayagg(foo)",
+        "GroupBy": "0",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select intcol, json_arrayagg(foo) from `user` where 1 != 1 group by intcol",
+            "OrderBy": "0 ASC",
+            "Query": "select intcol, json_arrayagg(foo) from `user` group by intcol order by intcol asc"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "json_objectagg with group by on top of scatter route",
+    "query": "select intcol, json_objectagg(col, foo) from user group by intcol",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select intcol, json_objectagg(col, foo) from user group by intcol",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "json_objectagg_merge(1) AS json_objectagg(col, foo)",
+        "GroupBy": "0",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select intcol, json_objectagg(col, foo) from `user` where 1 != 1 group by intcol",
+            "OrderBy": "0 ASC",
+            "Query": "select intcol, json_objectagg(col, foo) from `user` group by intcol order by intcol asc"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "json_arrayagg grouped by a unique vindex is fully pushed down",
+    "query": "select id, json_arrayagg(intcol) from user group by id",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select id, json_arrayagg(intcol) from user group by id",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id, json_arrayagg(intcol) from `user` where 1 != 1 group by id",
+        "Query": "select id, json_arrayagg(intcol) from `user` group by id"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "LIKE on a merged json_arrayagg stays supported as a string operation",
+    "query": "select json_arrayagg(intcol) like '[%' from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select json_arrayagg(intcol) like '[%' from user",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "json_arrayagg(intcol) like '[%' as json_arrayagg(intcol) like '[%'"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "json_arrayagg_merge(0) AS json_arrayagg(intcol), constant_aggr('[%') AS [%",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select json_arrayagg(intcol), '[%' from `user` where 1 != 1",
+                "Query": "select json_arrayagg(intcol), '[%' from `user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "REGEXP on a merged json_arrayagg stays supported as a string operation",
+    "query": "select json_arrayagg(intcol) regexp '.*' from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select json_arrayagg(intcol) regexp '.*' from user",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "REGEXP_LIKE(json_arrayagg(intcol), '.*') as json_arrayagg(intcol) regexp '.*'"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "json_arrayagg_merge(0) AS json_arrayagg(intcol), constant_aggr('.*') AS .*",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select json_arrayagg(intcol), '.*' from `user` where 1 != 1",
+                "Query": "select json_arrayagg(intcol), '.*' from `user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "having on the result of a merged json_arrayagg plans with evalengine string-scalar comparison semantics",
+    "query": "select col from user group by col having json_arrayagg(intcol) = '[1]'",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select col from user group by col having json_arrayagg(intcol) = '[1]'",
+      "Instructions": {
+        "OperatorType": "Filter",
+        "Predicate": "json_arrayagg(intcol) = '[1]'",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Ordered",
+            "Aggregates": "json_arrayagg_merge(1) AS json_arrayagg(intcol)",
+            "GroupBy": "0",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select col, json_arrayagg(intcol) from `user` where 1 != 1 group by col",
+                "OrderBy": "0 ASC",
+                "Query": "select col, json_arrayagg(intcol) from `user` group by col order by col asc"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "having comparing a scalar extracted from a merged json_arrayagg",
+    "query": "select intcol from user group by intcol having json_extract(json_arrayagg(intcol), '$[0]') = 1",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select intcol from user group by intcol having json_extract(json_arrayagg(intcol), '$[0]') = 1",
+      "Instructions": {
+        "OperatorType": "Filter",
+        "Predicate": "json_extract(json_arrayagg(intcol), '$[0]') = 1",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Ordered",
+            "Aggregates": "json_arrayagg_merge(1) AS json_arrayagg(intcol)",
+            "GroupBy": "0",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select intcol, json_arrayagg(intcol) from `user` where 1 != 1 group by intcol",
+                "OrderBy": "0 ASC",
+                "Query": "select intcol, json_arrayagg(intcol) from `user` group by intcol order by intcol asc"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "json_arrayagg inside another expression on top of scatter route",
+    "query": "select json_extract(json_arrayagg(intcol), '$[0]') from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select json_extract(json_arrayagg(intcol), '$[0]') from user",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "JSON_EXTRACT(json_arrayagg(intcol), '$[0]') as json_extract(json_arrayagg(intcol), '$[0]')"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "json_arrayagg_merge(0) AS json_arrayagg(intcol), constant_aggr('$[0]') AS $[0]",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select json_arrayagg(intcol), '$[0]' from `user` where 1 != 1",
+                "Query": "select json_arrayagg(intcol), '$[0]' from `user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "json_arrayagg in a derived table merged above the route",
+    "query": "select t.j from (select intcol, json_arrayagg(foo) j from user group by intcol) t",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select t.j from (select intcol, json_arrayagg(foo) j from user group by intcol) t",
+      "Instructions": {
+        "OperatorType": "SimpleProjection",
+        "Columns": "1",
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Ordered",
+            "Aggregates": "json_arrayagg_merge(1) AS j",
+            "GroupBy": "0",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select intcol, json_arrayagg(foo) as j from `user` where 1 != 1 group by intcol",
+                "OrderBy": "0 ASC",
+                "Query": "select intcol, json_arrayagg(foo) as j from `user` group by intcol order by intcol asc"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "mixed count star and json_arrayagg on top of scatter route",
+    "query": "select count(*), json_arrayagg(intcol) from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select count(*), json_arrayagg(intcol) from user",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_star(0) AS count(*), json_arrayagg_merge(1) AS json_arrayagg(intcol)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select count(*), json_arrayagg(intcol) from `user` where 1 != 1",
+            "Query": "select count(*), json_arrayagg(intcol) from `user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "mixed distinct aggregation and json_arrayagg on top of scatter route",
+    "query": "select count(distinct col), json_arrayagg(intcol) from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select count(distinct col), json_arrayagg(intcol) from user",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "count_distinct(0) AS count(distinct col), json_arrayagg_merge(1) AS json_arrayagg(intcol)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select col, json_arrayagg(intcol) from `user` where 1 != 1 group by col",
+            "OrderBy": "0 ASC",
+            "Query": "select col, json_arrayagg(intcol) from `user` group by col order by col asc"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "json_arrayagg over a join that merges into a single route",
+    "query": "select json_arrayagg(u.intcol) from user u join user_extra ue on u.id = ue.user_id",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select json_arrayagg(u.intcol) from user u join user_extra ue on u.id = ue.user_id",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "json_arrayagg_merge(0) AS json_arrayagg(u.intcol)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select json_arrayagg(u.intcol) from `user` as u, user_extra as ue where 1 != 1",
+            "Query": "select json_arrayagg(u.intcol) from `user` as u, user_extra as ue where u.id = ue.user_id"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "json_arrayagg over an unmergeable join is not supported",
+    "query": "select json_arrayagg(u.a) from user u join user_extra ue",
+    "plan": "VT12001: unsupported: aggregation function 'json_arrayagg(u.a)' must be pushed down to MySQL"
+  },
+  {
+    "comment": "json_objectagg over an unmergeable join is not supported",
+    "query": "select json_objectagg(u.col, u.a) from user u join user_extra ue",
+    "plan": "VT12001: unsupported: aggregation function 'json_objectagg(u.col, u.a)' must be pushed down to MySQL"
+  },
+  {
+    "comment": "json_arrayagg on top of a limit is not supported",
+    "query": "select json_arrayagg(intcol) from (select intcol from user limit 3) t",
+    "plan": "VT12001: unsupported: aggregation function 'json_arrayagg(intcol)' must be pushed down to MySQL"
+  },
+  {
+    "comment": "json_objectagg on top of a limit is not supported",
+    "query": "select json_objectagg(col, intcol) from (select col, intcol from user limit 3) t",
+    "plan": "VT12001: unsupported: aggregation function 'json_objectagg(col, intcol)' must be pushed down to MySQL"
+  },
+  {
     "comment": "vtgate-evaluated aggregate compared against a literal IN value list keeps the tuple structure",
     "query": "select count(foo) in (1, 2) from user",
     "plan": {
@@ -7481,6 +7985,1319 @@
       "TablesUsed": [
         "user.user"
       ]
+    }
+  },
+  {
+    "comment": "merged json_arrayagg compared with a string plans with string-scalar comparison semantics",
+    "query": "select json_arrayagg(intcol) = '[]' from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select json_arrayagg(intcol) = '[]' from user",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "json_arrayagg(intcol) = '[]' as json_arrayagg(intcol) = '[]'"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "json_arrayagg_merge(0) AS json_arrayagg(intcol), constant_aggr('[]') AS []",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select json_arrayagg(intcol), '[]' from `user` where 1 != 1",
+                "Query": "select json_arrayagg(intcol), '[]' from `user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "string comparison with a merged json_arrayagg through a derived table",
+    "query": "select * from (select json_arrayagg(intcol) as j from user) t where t.j = '[]'",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select * from (select json_arrayagg(intcol) as j from user) t where t.j = '[]'",
+      "Instructions": {
+        "OperatorType": "Filter",
+        "Predicate": "t.j = '[]'",
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "json_arrayagg_merge(0) AS j",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select json_arrayagg(intcol) as j from `user` where 1 != 1",
+                "Query": "select json_arrayagg(intcol) as j from `user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "null-safe and ordering comparisons over a merged json_arrayagg",
+    "query": "select json_arrayagg(intcol) <=> '[]', json_arrayagg(intcol) > '[]' from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select json_arrayagg(intcol) <=> '[]', json_arrayagg(intcol) > '[]' from user",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "json_arrayagg(intcol) <=> '[]' as json_arrayagg(intcol) <=> '[]'",
+          "json_arrayagg(intcol) > '[]' as json_arrayagg(intcol) > '[]'"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "json_arrayagg_merge(0) AS json_arrayagg(intcol), constant_aggr('[]') AS [], json_arrayagg_merge(2) AS json_arrayagg(intcol), constant_aggr('[]') AS []",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select json_arrayagg(intcol), '[]', json_arrayagg(intcol), '[]' from `user` where 1 != 1",
+                "Query": "select json_arrayagg(intcol), '[]', json_arrayagg(intcol), '[]' from `user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "NULLIF over a merged json_arrayagg of a non-lossy column",
+    "query": "select nullif(json_arrayagg(intcol), '[]') from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select nullif(json_arrayagg(intcol), '[]') from user",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "case when json_arrayagg(intcol) = '[]' then null else json_arrayagg(intcol) as nullif(json_arrayagg(intcol), '[]')"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "json_arrayagg_merge(0) AS json_arrayagg(intcol), constant_aggr('[]') AS []",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select json_arrayagg(intcol), '[]' from `user` where 1 != 1",
+                "Query": "select json_arrayagg(intcol), '[]' from `user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "explicit text conversion of a merged json_arrayagg compares as a string",
+    "query": "select cast(json_arrayagg(intcol) as char) = '[1, 2]' from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select cast(json_arrayagg(intcol) as char) = '[1, 2]' from user",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "convert(json_arrayagg(intcol), CHAR character set utf8mb4_0900_ai_ci) = '[1, 2]' as cast(json_arrayagg(intcol) as char) = '[1, 2]'"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "json_arrayagg_merge(0) AS json_arrayagg(intcol), constant_aggr('[1, 2]') AS [1, 2]",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select json_arrayagg(intcol), '[1, 2]' from `user` where 1 != 1",
+                "Query": "select json_arrayagg(intcol), '[1, 2]' from `user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "explicit text conversion clears the subtype-loss restriction",
+    "query": "select cast(json_arrayagg(cast(intcol as binary)) as char) = 'x' from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select cast(json_arrayagg(cast(intcol as binary)) as char) = 'x' from user",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "convert(json_arrayagg(cast(intcol as binary)), CHAR character set utf8mb4_0900_ai_ci) = 'x' as cast(json_arrayagg(cast(intcol as binary)) as char) = 'x'"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "json_arrayagg_merge(0) AS json_arrayagg(cast(intcol as binary)), constant_aggr('x') AS x",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select json_arrayagg(cast(intcol as binary)), 'x' from `user` where 1 != 1",
+                "Query": "select json_arrayagg(cast(intcol as binary)), 'x' from `user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "an unrelated JSON comparison next to a merged json_arrayagg derived column",
+    "query": "select j, json_object() = '{}' from (select json_arrayagg(intcol) as j from user) t",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select j, json_object() = '{}' from (select json_arrayagg(intcol) as j from user) t",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          ":0 as j",
+          "0 as json_object() = '{}'"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "json_arrayagg_merge(0) AS j",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select json_arrayagg(intcol) as j from `user` where 1 != 1",
+                "Query": "select json_arrayagg(intcol) as j from `user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "a JSON expression over a count offset is independent of a sibling merged json_arrayagg",
+    "query": "select j, c, json_object('k', c) = '{}' from (select json_arrayagg(intcol) as j, count(*) as c from user) t",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select j, c, json_object('k', c) = '{}' from (select json_arrayagg(intcol) as j, count(*) as c from user) t",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          ":0 as j",
+          ":1 as c",
+          "JSON_OBJECT('k', c) = '{}' as json_object('k', c) = '{}'"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "json_arrayagg_merge(0) AS j, sum_count_star(1) AS c",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select json_arrayagg(intcol) as j, count(*) as c from `user` where 1 != 1",
+                "Query": "select json_arrayagg(intcol) as j, count(*) as c from `user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "a filter reading only the count offset is independent of a sibling merged json_arrayagg",
+    "query": "select j, c from (select json_arrayagg(intcol) as j, count(*) as c from user) t where json_object('k', c) = '{}'",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select j, c from (select json_arrayagg(intcol) as j, count(*) as c from user) t where json_object('k', c) = '{}'",
+      "Instructions": {
+        "OperatorType": "Filter",
+        "Predicate": "json_object('k', c) = '{}'",
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "json_arrayagg_merge(0) AS j, sum_count_star(1) AS c",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select json_arrayagg(intcol) as j, count(*) as c from `user` where 1 != 1",
+                "Query": "select json_arrayagg(intcol) as j, count(*) as c from `user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "raw aggregation over binary values stays supported",
+    "query": "select json_arrayagg(cast(intcol as binary)) from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select json_arrayagg(cast(intcol as binary)) from user",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "json_arrayagg_merge(0) AS json_arrayagg(cast(intcol as binary))",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select json_arrayagg(cast(intcol as binary)) from `user` where 1 != 1",
+            "Query": "select json_arrayagg(cast(intcol as binary)) from `user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "a list bind variable IN next to a merged json_arrayagg is independent",
+    "query": "select json_arrayagg(intcol), 0 in ::vals from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select json_arrayagg(intcol), 0 in ::vals from user",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "json_arrayagg_merge(0) AS json_arrayagg(intcol), constant_aggr(0 in ::vals) AS 0 in ::vals",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select json_arrayagg(intcol), 0 in ::vals from `user` where 1 != 1",
+            "Query": "select json_arrayagg(intcol), 0 in ::vals from `user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "counting a merged json_arrayagg derived column",
+    "query": "select count(j) from (select json_arrayagg(intcol) as j from user) t",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select count(j) from (select json_arrayagg(intcol) as j from user) t",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "count(0) AS count(j)",
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "json_arrayagg_merge(0) AS j",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select json_arrayagg(intcol) as j from `user` where 1 != 1",
+                "Query": "select json_arrayagg(intcol) as j from `user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "minimum over a merged json_arrayagg derived column",
+    "query": "select min(j) from (select json_arrayagg(intcol) as j from user) t",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select min(j) from (select json_arrayagg(intcol) as j from user) t",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "min(0) AS min(j)",
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "json_arrayagg_merge(0) AS j",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select json_arrayagg(intcol) as j from `user` where 1 != 1",
+                "Query": "select json_arrayagg(intcol) as j from `user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "a count of a merged json_arrayagg derived column is not JSON and IN stays supported",
+    "query": "select count(j) in (1, 2) from (select json_arrayagg(intcol) as j from user) t",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select count(j) in (1, 2) from (select json_arrayagg(intcol) as j from user) t",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "count(j) in (1, 2) as count(j) in (1, 2)"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "count(0) AS count(j), constant_aggr(1) AS 1, constant_aggr(2) AS 2",
+            "Inputs": [
+              {
+                "OperatorType": "Projection",
+                "Expressions": [
+                  ":0 as j",
+                  "1 as 1",
+                  "2 as 2"
+                ],
+                "Inputs": [
+                  {
+                    "OperatorType": "Aggregate",
+                    "Variant": "Scalar",
+                    "Aggregates": "json_arrayagg_merge(0) AS j",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select json_arrayagg(intcol) as j from `user` where 1 != 1",
+                        "Query": "select json_arrayagg(intcol) as j from `user`"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "minimum over a merged json_arrayagg derived column keeps merged JSON comparison semantics",
+    "query": "select min(j) = '[]' from (select json_arrayagg(intcol) as j from user) t",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select min(j) = '[]' from (select json_arrayagg(intcol) as j from user) t",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "min(j) = '[]' as min(j) = '[]'"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "min(0) AS min(j), constant_aggr('[]') AS []",
+            "Inputs": [
+              {
+                "OperatorType": "Projection",
+                "Expressions": [
+                  ":0 as j",
+                  "'[]' as []"
+                ],
+                "Inputs": [
+                  {
+                    "OperatorType": "Aggregate",
+                    "Variant": "Scalar",
+                    "Aggregates": "json_arrayagg_merge(0) AS j",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select json_arrayagg(intcol) as j from `user` where 1 != 1",
+                        "Query": "select json_arrayagg(intcol) as j from `user`"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "comparing a merged json_arrayagg with a TEXT-typed vtgate expression",
+    "query": "select t.j = cast(t.x as char) from (select json_arrayagg(intcol) as j, max(textcol1) as x from user) t",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select t.j = cast(t.x as char) from (select json_arrayagg(intcol) as j, max(textcol1) as x from user) t",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "t.j = convert(t.x, CHAR character set utf8mb4_0900_ai_ci) as t.j = cast(t.x as char)"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "json_arrayagg_merge(0) AS j, max(1 COLLATE latin1_swedish_ci) AS x",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select json_arrayagg(intcol) as j, max(textcol1) as x from `user` where 1 != 1",
+                "Query": "select json_arrayagg(intcol) as j, max(textcol1) as x from `user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "merged json_arrayagg inside an IN value list plans with evalengine comparison-domain semantics",
+    "query": "select 1 in (json_arrayagg(intcol)) from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select 1 in (json_arrayagg(intcol)) from user",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "1 in (json_arrayagg(intcol)) as 1 in (json_arrayagg(intcol))"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "constant_aggr(1) AS 1, json_arrayagg_merge(1) AS json_arrayagg(intcol)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1, json_arrayagg(intcol) from `user` where 1 != 1",
+                "Query": "select 1, json_arrayagg(intcol) from `user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "merged json_arrayagg as a simple CASE operand in HAVING plans with evalengine comparison-domain semantics",
+    "query": "select intcol from user group by intcol having case json_arrayagg(intcol) when '[]' then 1 else 0 end = 1",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select intcol from user group by intcol having case json_arrayagg(intcol) when '[]' then 1 else 0 end = 1",
+      "Instructions": {
+        "OperatorType": "Filter",
+        "Predicate": "case json_arrayagg(intcol) when '[]' then 1 else 0 end = 1",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Ordered",
+            "Aggregates": "json_arrayagg_merge(1) AS json_arrayagg(intcol)",
+            "GroupBy": "0",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select intcol, json_arrayagg(intcol) from `user` where 1 != 1 group by intcol",
+                "OrderBy": "0 ASC",
+                "Query": "select intcol, json_arrayagg(intcol) from `user` group by intcol order by intcol asc"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "merged json_arrayagg as a simple CASE operand with a numeric WHEN value",
+    "query": "select case json_arrayagg(intcol) when 1 then 1 else 0 end from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select case json_arrayagg(intcol) when 1 then 1 else 0 end from user",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "case when json_arrayagg(intcol) = 1 then 1 else 0 as case json_arrayagg(intcol) when 1 then 1 else 0 end"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "json_arrayagg_merge(0) AS json_arrayagg(intcol), constant_aggr(1) AS 1, constant_aggr(1) AS 1, constant_aggr(0) AS 0",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select json_arrayagg(intcol), 1, 1, 0 from `user` where 1 != 1",
+                "Query": "select json_arrayagg(intcol), 1, 1, 0 from `user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "a JSON-returning wrapper around a non-lossy merged json_arrayagg inside an IN value list",
+    "query": "select 0 in (json_extract(json_arrayagg(intcol), '$'), '0') from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select 0 in (json_extract(json_arrayagg(intcol), '$'), '0') from user",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "0 in (JSON_EXTRACT(json_arrayagg(intcol), '$'), '0') as 0 in (json_extract(json_arrayagg(intcol), '$'), '0')"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "constant_aggr(0) AS 0, json_arrayagg_merge(1) AS json_arrayagg(intcol), constant_aggr('$') AS $, constant_aggr('0') AS 0",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 0, json_arrayagg(intcol), '$', '0' from `user` where 1 != 1",
+                "Query": "select 0, json_arrayagg(intcol), '$', '0' from `user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "a JSON-returning wrapper around a non-lossy merged json_arrayagg compared using BETWEEN",
+    "query": "select json_object('k', json_arrayagg(intcol)) between '{}' and 0 from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select json_object('k', json_arrayagg(intcol)) between '{}' and 0 from user",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "JSON_OBJECT('k', json_arrayagg(intcol)) between '{}' and 0 as json_object('k', json_arrayagg(intcol)) between '{}' and 0"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "constant_aggr('k') AS k, json_arrayagg_merge(1) AS json_arrayagg(intcol), constant_aggr('{}') AS {}, constant_aggr(0) AS 0",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 'k', json_arrayagg(intcol), '{}', 0 from `user` where 1 != 1",
+                "Query": "select 'k', json_arrayagg(intcol), '{}', 0 from `user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "a JSON-returning wrapper around a non-lossy merged json_arrayagg as a simple CASE operand",
+    "query": "select case json_array(json_arrayagg(intcol)) when 0 then 1 when '[]' then 2 else 3 end from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select case json_array(json_arrayagg(intcol)) when 0 then 1 when '[]' then 2 else 3 end from user",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "case when JSON_ARRAY(json_arrayagg(intcol)) = 0 then 1 when JSON_ARRAY(json_arrayagg(intcol)) = '[]' then 2 else 3 as case json_array(json_arrayagg(intcol)) when 0 then 1 when '[]' then 2 else 3 end"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "json_arrayagg_merge(0) AS json_arrayagg(intcol), constant_aggr(0) AS 0, constant_aggr(1) AS 1, constant_aggr('[]') AS [], constant_aggr(2) AS 2, constant_aggr(3) AS 3",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select json_arrayagg(intcol), 0, 1, '[]', 2, 3 from `user` where 1 != 1",
+                "Query": "select json_arrayagg(intcol), 0, 1, '[]', 2, 3 from `user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "merged json_arrayagg on the left of a list bind variable IN",
+    "query": "select json_arrayagg(intcol) in ::vals from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select json_arrayagg(intcol) in ::vals from user",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "json_arrayagg(intcol) in ::vals as json_arrayagg(intcol) in ::vals"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "json_arrayagg_merge(0) AS json_arrayagg(intcol)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select json_arrayagg(intcol) from `user` where 1 != 1",
+                "Query": "select json_arrayagg(intcol) from `user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "minimum over a non-lossy merged json_arrayagg derived column compared using IN",
+    "query": "select min(j) in ('[]', '[1]') from (select json_arrayagg(intcol) as j from user) t",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select min(j) in ('[]', '[1]') from (select json_arrayagg(intcol) as j from user) t",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "min(j) in ('[]', '[1]') as min(j) in ('[]', '[1]')"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "min(0) AS min(j), constant_aggr('[]') AS [], constant_aggr('[1]') AS [1]",
+            "Inputs": [
+              {
+                "OperatorType": "Projection",
+                "Expressions": [
+                  ":0 as j",
+                  "'[]' as []",
+                  "'[1]' as [1]"
+                ],
+                "Inputs": [
+                  {
+                    "OperatorType": "Aggregate",
+                    "Variant": "Scalar",
+                    "Aggregates": "json_arrayagg_merge(0) AS j",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select json_arrayagg(intcol) as j from `user` where 1 != 1",
+                        "Query": "select json_arrayagg(intcol) as j from `user`"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "comparison of a non-lossy merged json_arrayagg flowing through a UNION ALL",
+    "query": "select t.j = '[]' from (select json_arrayagg(intcol) as j from user union all select json_arrayagg(intcol) from user) t",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select t.j = '[]' from (select json_arrayagg(intcol) as j from user union all select json_arrayagg(intcol) from user) t",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "t.j = '[]' as t.j = '[]'"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Aggregate",
+                "Variant": "Scalar",
+                "Aggregates": "json_arrayagg_merge(0) AS j",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select json_arrayagg(intcol) as j from `user` where 1 != 1",
+                    "Query": "select json_arrayagg(intcol) as j from `user`"
+                  }
+                ]
+              },
+              {
+                "OperatorType": "Aggregate",
+                "Variant": "Scalar",
+                "Aggregates": "json_arrayagg_merge(0) AS json_arrayagg(intcol)",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select json_arrayagg(intcol) from `user` where 1 != 1",
+                    "Query": "select json_arrayagg(intcol) from `user`"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "IN over a non-lossy merged json_arrayagg flowing through a UNION ALL",
+    "query": "select 1 from (select json_arrayagg(intcol) as j from user union all select json_arrayagg(intcol) from user) t where t.j in ('[]', '[1]')",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select 1 from (select json_arrayagg(intcol) as j from user union all select json_arrayagg(intcol) from user) t where t.j in ('[]', '[1]')",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "1 as 1"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Filter",
+                "Predicate": "json_arrayagg(intcol) in ('[]', '[1]')",
+                "Inputs": [
+                  {
+                    "OperatorType": "Aggregate",
+                    "Variant": "Scalar",
+                    "Aggregates": "json_arrayagg_merge(0) AS j",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select json_arrayagg(intcol) as j from `user` where 1 != 1",
+                        "Query": "select json_arrayagg(intcol) as j from `user`"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "OperatorType": "Filter",
+                "Predicate": "json_arrayagg(intcol) in ('[]', '[1]')",
+                "Inputs": [
+                  {
+                    "OperatorType": "Aggregate",
+                    "Variant": "Scalar",
+                    "Aggregates": "json_arrayagg_merge(0) AS json_arrayagg(intcol)",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select json_arrayagg(intcol) from `user` where 1 != 1",
+                        "Query": "select json_arrayagg(intcol) from `user`"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "vtgate grouping on a non-lossy merged json_arrayagg derived column",
+    "query": "select j, count(*) from (select json_arrayagg(intcol) as j from user) t group by j",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select j, count(*) from (select json_arrayagg(intcol) as j from user) t group by j",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "count_star(1) AS count(*)",
+        "GroupBy": "0",
+        "Inputs": [
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              ":0 as j",
+              "1 as 1"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Aggregate",
+                "Variant": "Scalar",
+                "Aggregates": "json_arrayagg_merge(0) AS j",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select json_arrayagg(intcol) as j from `user` where 1 != 1",
+                    "OrderBy": "0 ASC",
+                    "Query": "select json_arrayagg(intcol) as j from `user` order by json_arrayagg(intcol) asc"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "vtgate DISTINCT over a non-lossy merged json_arrayagg derived column",
+    "query": "select distinct j from (select json_arrayagg(intcol) as j from user) t",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select distinct j from (select json_arrayagg(intcol) as j from user) t",
+      "Instructions": {
+        "OperatorType": "Distinct",
+        "Collations": [
+          "0"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "json_arrayagg_merge(0) AS j",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select json_arrayagg(intcol) as j from `user` where 1 != 1",
+                "Query": "select json_arrayagg(intcol) as j from `user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "vtgate memory sort on a non-lossy merged json_arrayagg",
+    "query": "select json_arrayagg(intcol) as j from user group by col order by j limit 1",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select json_arrayagg(intcol) as j from user group by col order by j limit 1",
+      "Instructions": {
+        "OperatorType": "Limit",
+        "Count": "1",
+        "Inputs": [
+          {
+            "OperatorType": "Sort",
+            "Variant": "Memory",
+            "OrderBy": "0 ASC",
+            "ResultColumns": 1,
+            "Inputs": [
+              {
+                "OperatorType": "Aggregate",
+                "Variant": "Ordered",
+                "Aggregates": "json_arrayagg_merge(0) AS j",
+                "GroupBy": "1",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select json_arrayagg(intcol) as j, col from `user` where 1 != 1 group by col",
+                    "OrderBy": "1 ASC",
+                    "Query": "select json_arrayagg(intcol) as j, col from `user` group by col order by col asc"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "hash join keyed on non-lossy merged json_arrayagg derived columns",
+    "query": "select 1 from (select json_arrayagg(intcol) as j from user) t1 join (select json_arrayagg(intcol) as j from user) t2 on t1.j = t2.j",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select 1 from (select json_arrayagg(intcol) as j from user) t1 join (select json_arrayagg(intcol) as j from user) t2 on t1.j = t2.j",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "1 as 1"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "HashJoin",
+            "Collation": "utf8mb4_0900_ai_ci",
+            "ComparisonType": "JSON",
+            "Predicate": "t1.j = t2.j",
+            "Inputs": [
+              {
+                "OperatorType": "Aggregate",
+                "Variant": "Scalar",
+                "Aggregates": "json_arrayagg_merge(0) AS j",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select json_arrayagg(intcol) as j from `user` where 1 != 1",
+                    "Query": "select json_arrayagg(intcol) as j from `user`"
+                  }
+                ]
+              },
+              {
+                "OperatorType": "Aggregate",
+                "Variant": "Scalar",
+                "Aggregates": "json_arrayagg_merge(0) AS j",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select json_arrayagg(intcol) as j from `user` where 1 != 1",
+                    "Query": "select json_arrayagg(intcol) as j from `user`"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "scalar subquery pullout of a non-lossy merged json_arrayagg",
+    "query": "select (select json_arrayagg(intcol) from user) = '[]'",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select (select json_arrayagg(intcol) from user) = '[]'",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "json_arrayagg_merge(0) AS json_arrayagg(intcol)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select json_arrayagg(intcol) from `user` where 1 != 1",
+                "Query": "select json_arrayagg(intcol) from `user`"
+              }
+            ]
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select :__sq1 /* JSON */ = '[]' as `(select json_arrayagg(intcol) from user) = '[]'` from dual where 1 != 1",
+            "Query": "select :__sq1 /* JSON */ = '[]' as `(select json_arrayagg(intcol) from user) = '[]'` from dual"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "EXISTS over a merged json_arrayagg subquery is constant-folded: a scalar aggregate always returns one row",
+    "query": "select exists (select json_arrayagg(cast(intcol as binary)) from user)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select exists (select json_arrayagg(cast(intcol as binary)) from user)",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "1 as true"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
+      }
     }
   }
 ]
