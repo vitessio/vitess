@@ -275,6 +275,11 @@ func transformSubQuery(ctx *plancontext.PlanningContext, op *operators.SubQuery)
 	if err != nil {
 		return nil, err
 	}
+
+	if err := validateSubQueryPulloutOverMergedJSON(ctx, op); err != nil {
+		return nil, err
+	}
+
 	if len(cols) == 0 {
 		// no correlation, so uncorrelated it is
 		return &engine.UncorrelatedSubquery{
@@ -284,6 +289,10 @@ func transformSubQuery(ctx *plancontext.PlanningContext, op *operators.SubQuery)
 			Subquery:       inner,
 			Outer:          outer,
 		}, nil
+	}
+
+	if err := validateJoinBindVarsOverMergedJSON(ctx, op.Outer, op.Vars); err != nil {
+		return nil, err
 	}
 
 	return &engine.SemiJoin{
@@ -332,6 +341,10 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 		return nil, err
 	}
 
+	if err := validateAggregatorOverMergedJSON(ctx, op); err != nil {
+		return nil, err
+	}
+
 	var aggregates []*engine.AggregateParams
 	var groupByKeys []*engine.GroupByParams
 
@@ -342,6 +355,10 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 		case opcode.AggregateUDF:
 			message := fmt.Sprintf("Aggregate UDF '%s' must be pushed down to MySQL", sqlparser.String(aggr.Original.Expr))
 			return nil, vterrors.VT12001(message)
+		case opcode.AggregateJSONArrayAgg, opcode.AggregateJSONObjectAgg:
+			// The build form reaching the engine means the aggregation could not
+			// be pushed below a Route; vtgate cannot evaluate it over raw values.
+			return nil, vterrors.VT12001(fmt.Sprintf("aggregation function '%s' must be pushed down to MySQL", sqlparser.String(aggr.Original)))
 		case opcode.AggregateConstant:
 			// For AnyValue aggregations (literals, parameters), translate to evalengine
 			// This allows evaluation even when no input rows are present (empty result sets)
@@ -403,6 +420,10 @@ func transformDistinct(ctx *plancontext.PlanningContext, op *operators.Distinct)
 		return nil, err
 	}
 
+	if err := validateDistinctOverMergedJSON(ctx, op); err != nil {
+		return nil, err
+	}
+
 	return &engine.Distinct{
 		Source:    src,
 		CheckCols: op.Columns,
@@ -420,6 +441,10 @@ func transformOrdering(ctx *plancontext.PlanningContext, op *operators.Ordering)
 }
 
 func createMemorySort(ctx *plancontext.PlanningContext, src engine.Primitive, ordering *operators.Ordering) (engine.Primitive, error) {
+	if err := validateOrderingOverMergedJSON(ctx, ordering); err != nil {
+		return nil, err
+	}
+
 	prim := &engine.MemorySort{
 		Input:               src,
 		TruncateColumnCount: ordering.ResultColumns,
@@ -456,6 +481,14 @@ func transformProjection(ctx *plancontext.PlanningContext, op *operators.Project
 
 	ap, err := op.GetAliasedProjections()
 	if err != nil {
+		return nil, err
+	}
+
+	evalExprs := make([]sqlparser.Expr, 0, len(ap))
+	for _, pe := range ap {
+		evalExprs = append(evalExprs, pe.EvalExpr)
+	}
+	if err := validateMergedJSONComparisons(ctx, op.Source, evalExprs...); err != nil {
 		return nil, err
 	}
 
@@ -519,6 +552,10 @@ func transformFilter(ctx *plancontext.PlanningContext, op *operators.Filter) (en
 		panic("this should have already been done")
 	}
 
+	if err := validateMergedJSONComparisons(ctx, op.Source, op.PredicateASTWithOffsets); err != nil {
+		return nil, err
+	}
+
 	return &engine.Filter{
 		Input:        src,
 		Predicate:    predicate,
@@ -539,6 +576,10 @@ func transformApplyJoinPlan(ctx *plancontext.PlanningContext, n *operators.Apply
 	opCode := engine.InnerJoin
 	if !n.JoinType.IsInner() {
 		opCode = engine.LeftJoin
+	}
+
+	if err := validateJoinBindVarsOverMergedJSON(ctx, n.LHS, n.Vars); err != nil {
+		return nil, err
 	}
 
 	return &engine.Join{
@@ -965,6 +1006,10 @@ func transformHashJoin(ctx *plancontext.PlanningContext, op *operators.HashJoin)
 		return nil, vterrors.VT12001("hash joins must have exactly one join predicate")
 	}
 
+	if err := validateHashJoinOverMergedJSON(ctx, op); err != nil {
+		return nil, err
+	}
+
 	joinOp := engine.InnerJoin
 	if op.LeftJoin {
 		joinOp = engine.LeftJoin
@@ -983,7 +1028,8 @@ func transformHashJoin(ctx *plancontext.PlanningContext, op *operators.HashJoin)
 
 	if len(missingTypes) > 0 {
 		return nil, vterrors.VT12001(
-			fmt.Sprintf("missing type information for [%s]", strings.Join(missingTypes, ", ")))
+			fmt.Sprintf("missing type information for [%s]", strings.Join(missingTypes, ", ")),
+		)
 	}
 
 	comparisonType, err := evalengine.CoerceTypes(ltyp, rtyp, ctx.VSchema.Environment().CollationEnv())
