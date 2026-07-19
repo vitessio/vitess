@@ -443,5 +443,120 @@
     "comment": "window function in derived table on scatter route",
     "query": "select * from (select rank() over (partition by col) as r from user) as t",
     "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "json_arrayagg with an OVER clause stays on the window path",
+    "query": "select json_arrayagg(intcol) over () from user",
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "IN over a merged json_arrayagg of an untyped column classifies as subtype-lossy and stays rejected",
+    "query": "select count(1) from user group by n_id having json_arrayagg(a_id) in ('[]', '[1]')",
+    "plan": "VT12001: unsupported: IN consumes a vtgate-merged JSON aggregate whose MySQL binary, bit, decimal, or temporal scalar subtype is not preserved across shard serialization: json_arrayagg(a_id) in ('[]', '[1]')"
+  },
+  {
+    "comment": "NOT IN over a merged json_arrayagg of an untyped column classifies as subtype-lossy and stays rejected",
+    "query": "select count(1) from user group by n_id having 1 not in (json_arrayagg(a_id))",
+    "plan": "VT12001: unsupported: NOT IN consumes a vtgate-merged JSON aggregate whose MySQL binary, bit, decimal, or temporal scalar subtype is not preserved across shard serialization: 1 not in (json_arrayagg(a_id))"
+  },
+  {
+    "comment": "BETWEEN over a merged json_arrayagg of an untyped column classifies as subtype-lossy and stays rejected",
+    "query": "select intcol from user group by intcol having json_arrayagg(foo) between '[]' and '[1]'",
+    "plan": "VT12001: unsupported: BETWEEN consumes a vtgate-merged JSON aggregate whose MySQL binary, bit, decimal, or temporal scalar subtype is not preserved across shard serialization: json_arrayagg(foo) between '[]' and '[1]'"
+  },
+  {
+    "comment": "BETWEEN with numeric bounds over a merged json_arrayagg of an untyped column classifies as subtype-lossy and stays rejected",
+    "query": "select intcol from user group by intcol having json_arrayagg(foo) between 1 and 2",
+    "plan": "VT12001: unsupported: BETWEEN consumes a vtgate-merged JSON aggregate whose MySQL binary, bit, decimal, or temporal scalar subtype is not preserved across shard serialization: json_arrayagg(foo) between 1 and 2"
+  },
+  {
+    "comment": "merged json_arrayagg as a GREATEST argument, which MySQL evaluates only with warning 1235 and different result metadata",
+    "query": "select greatest(json_arrayagg(foo), 2) from user",
+    "plan": "VT12001: unsupported: GREATEST over a vtgate-merged JSON aggregate is not yet supported (MySQL evaluates it with warning 1235 and different result metadata): greatest(json_arrayagg(foo), 2)"
+  },
+  {
+    "comment": "merged json_arrayagg as a LEAST argument, which MySQL evaluates only with warning 1235 and different result metadata",
+    "query": "select least(json_arrayagg(foo), 2) from user",
+    "plan": "VT12001: unsupported: LEAST over a vtgate-merged JSON aggregate is not yet supported (MySQL evaluates it with warning 1235 and different result metadata): least(json_arrayagg(foo), 2)"
+  },
+  {
+    "comment": "NULLIF over a subtype-lossy merged json_arrayagg of binary values",
+    "query": "select intcol from user group by intcol having nullif(json_arrayagg(cast(intcol as binary)), '[]') is null",
+    "plan": "VT12001: unsupported: comparison consumes a vtgate-merged JSON aggregate whose MySQL binary, bit, decimal, or temporal scalar subtype is not preserved across shard serialization: nullif(json_arrayagg(cast(intcol as binary)), '[]')"
+  },
+  {
+    "comment": "ordinary comparison over a subtype-lossy merged json_arrayagg of binary values",
+    "query": "select json_arrayagg(cast(intcol as binary)) = '[]' from user",
+    "plan": "VT12001: unsupported: comparison consumes a vtgate-merged JSON aggregate whose MySQL binary, bit, decimal, or temporal scalar subtype is not preserved across shard serialization: json_arrayagg(cast(intcol as binary)) = '[]'"
+  },
+  {
+    "comment": "ordinary comparison over a subtype-lossy merged json_arrayagg of temporal values",
+    "query": "select json_arrayagg(cast(textcol1 as date)) = '[]' from user",
+    "plan": "VT12001: unsupported: comparison consumes a vtgate-merged JSON aggregate whose MySQL binary, bit, decimal, or temporal scalar subtype is not preserved across shard serialization: json_arrayagg(cast(textcol1 as date)) = '[]'"
+  },
+  {
+    "comment": "ordinary comparison over a subtype-lossy merged json_arrayagg of decimal values, whose opaque decimal subtype in MySQL's aggregated JSON is distinct from a reparsed JSON number",
+    "query": "select json_arrayagg(cast(intcol as decimal(20,8))) = '[]' from user",
+    "plan": "VT12001: unsupported: comparison consumes a vtgate-merged JSON aggregate whose MySQL binary, bit, decimal, or temporal scalar subtype is not preserved across shard serialization: json_arrayagg(cast(intcol as decimal(20, 8))) = '[]'"
+  },
+  {
+    "comment": "ordinary comparison over a subtype-lossy merged json_objectagg with decimal member values",
+    "query": "select json_objectagg(col, cast(intcol as decimal(20,8))) = '{}' from user",
+    "plan": "VT12001: unsupported: comparison consumes a vtgate-merged JSON aggregate whose MySQL binary, bit, decimal, or temporal scalar subtype is not preserved across shard serialization: json_objectagg(col, cast(intcol as decimal(20, 8))) = '{}'"
+  },
+  {
+    "comment": "comparison of a scalar extracted from a merged json_arrayagg of an untyped column fails closed",
+    "query": "select intcol from user group by intcol having json_extract(json_arrayagg(foo), '$[0]') = 1",
+    "plan": "VT12001: unsupported: comparison consumes a vtgate-merged JSON aggregate whose MySQL binary, bit, decimal, or temporal scalar subtype is not preserved across shard serialization: json_extract(json_arrayagg(foo), '$[0]') = 1"
+  },
+  {
+    "comment": "minimum over a subtype-lossy merged json_arrayagg derived column",
+    "query": "select min(j) from (select json_arrayagg(cast(intcol as binary)) as j from user) t",
+    "plan": "VT12001: unsupported: MIN consumes a vtgate-merged JSON aggregate whose MySQL binary, bit, decimal, or temporal scalar subtype is not preserved across shard serialization: min(j)"
+  },
+  {
+    "comment": "comparison of a subtype-lossy merged json_arrayagg flowing through a UNION ALL, whose sources are positionally aligned",
+    "query": "select t.j = '[]' from (select json_arrayagg(cast(intcol as binary)) as j from user union all select json_arrayagg(cast(intcol as binary)) from user) t",
+    "plan": "VT12001: unsupported: comparison consumes a vtgate-merged JSON aggregate whose MySQL binary, bit, decimal, or temporal scalar subtype is not preserved across shard serialization: t.j = '[]'"
+  },
+  {
+    "comment": "vtgate grouping on a subtype-lossy merged json_arrayagg: json_arrayagg(cast('1' as binary)) and json_arrayagg(cast('\"base64:type15:MQ==\"' as json)) both serialize as [\"base64:type15:MQ==\"] across the shard protocol, so the group keys collide where a single MySQL server distinguishes them",
+    "query": "select j, count(*) from (select json_arrayagg(cast(intcol as binary)) as j from user) t group by j",
+    "plan": "VT12001: unsupported: GROUP BY consumes a vtgate-merged JSON aggregate whose MySQL binary, bit, decimal, or temporal scalar subtype is not preserved across shard serialization: j"
+  },
+  {
+    "comment": "vtgate DISTINCT over a subtype-lossy merged json_arrayagg derived column",
+    "query": "select distinct j from (select json_arrayagg(cast(intcol as binary)) as j from user) t",
+    "plan": "VT12001: unsupported: DISTINCT consumes a vtgate-merged JSON aggregate whose MySQL binary, bit, decimal, or temporal scalar subtype is not preserved across shard serialization: json_arrayagg(cast(intcol as binary))"
+  },
+  {
+    "comment": "vtgate memory sort on a subtype-lossy merged json_arrayagg",
+    "query": "select json_arrayagg(cast(intcol as binary)) as j from user group by col order by j limit 1",
+    "plan": "VT12001: unsupported: ORDER BY consumes a vtgate-merged JSON aggregate whose MySQL binary, bit, decimal, or temporal scalar subtype is not preserved across shard serialization: json_arrayagg(cast(`user`.intcol as binary))"
+  },
+  {
+    "comment": "hash join keyed on subtype-lossy merged json_arrayagg derived columns",
+    "query": "select 1 from (select json_arrayagg(cast(intcol as binary)) as j from user) t1 join (select json_arrayagg(cast(intcol as binary)) as j from user) t2 on t1.j = t2.j",
+    "plan": "VT12001: unsupported: join comparison consumes a vtgate-merged JSON aggregate whose MySQL binary, bit, decimal, or temporal scalar subtype is not preserved across shard serialization: t1.j"
+  },
+  {
+    "comment": "scalar subquery pullout of a subtype-lossy merged json_arrayagg, which would reach MySQL as a JSON bind variable after subtype erasure",
+    "query": "select json_extract((select json_arrayagg(cast(intcol as binary)) from user), '$[0]') = cast('1' as binary)",
+    "plan": "VT12001: unsupported: scalar subquery consumes a vtgate-merged JSON aggregate whose MySQL binary, bit, decimal, or temporal scalar subtype is not preserved across shard serialization: json_extract((select json_arrayagg(cast(intcol as binary)) from `user`), '$[0]') = cast('1' as binary)"
+  },
+  {
+    "comment": "IN subquery pullout of values extracted from a subtype-lossy merged json_arrayagg, which would reach MySQL as a list bind variable after subtype erasure",
+    "query": "select intcol from user where cast(intcol as binary) in (select json_extract(json_arrayagg(cast(intcol as binary)), '$[0]') from user)",
+    "plan": "VT12001: unsupported: IN subquery consumes a vtgate-merged JSON aggregate whose MySQL binary, bit, decimal, or temporal scalar subtype is not preserved across shard serialization: cast(intcol as binary) in (select json_extract(json_arrayagg(cast(intcol as binary)), '$[0]') from `user`)"
+  },
+  {
+    "comment": "join pushing a subtype-lossy merged json_arrayagg into the other side's shard queries as a bind variable",
+    "query": "select u.id from (select json_arrayagg(cast(intcol as binary)) as j from user) t join user u on u.textcol1 = t.j",
+    "plan": "VT12001: unsupported: join bind variable consumes a vtgate-merged JSON aggregate whose MySQL binary, bit, decimal, or temporal scalar subtype is not preserved across shard serialization: json_arrayagg(cast(intcol as binary))"
+  },
+  {
+    "comment": "correlated EXISTS pushing a subtype-lossy merged json_arrayagg into the subquery's shard queries as a bind variable",
+    "query": "select 1 from (select json_arrayagg(cast(intcol as binary)) as j from user) t where exists (select 1 from user u where u.textcol1 = t.j)",
+    "plan": "VT12001: unsupported: join bind variable consumes a vtgate-merged JSON aggregate whose MySQL binary, bit, decimal, or temporal scalar subtype is not preserved across shard serialization: t.j"
   }
 ]
