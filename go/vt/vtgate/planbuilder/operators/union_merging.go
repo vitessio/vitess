@@ -115,17 +115,28 @@ func mergeUnionInputs(
 	}
 
 	switch {
+	// a none routing resolves to no shards at execution time, so its side of the
+	// union contributes no rows. These cases must be handled before the dual and
+	// anyShard cases below: those would retain the none routing and incorrectly
+	// discard the other side's rows. A dual side has no keyspace and no tables of
+	// its own, so any shard in the none side's keyspace can produce its rows.
+	// Otherwise the other side's routing is retained, but only when it targets
+	// the none side's keyspace: the none side's tables exist nowhere else.
+	case a == none && b == dual:
+		return createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, &AnyShardRouting{keyspace: routingA.Keyspace()}, nil)
+	case b == none && a == dual:
+		return createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, &AnyShardRouting{keyspace: routingB.Keyspace()}, nil)
+	case a == none && sameKeyspace:
+		return createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingB, nil)
+	case b == none && sameKeyspace:
+		return createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingA, nil)
+
 	// if either side is a dual query, we can always merge them together
 	// an unsharded/reference route can be merged with anything going to that keyspace
 	case b == dual || (b == anyShard && sameKeyspace):
 		return createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingA, nil)
 	case a == dual || (a == anyShard && sameKeyspace):
 		return createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingB, nil)
-
-	case a == none:
-		return createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingB, nil)
-	case b == none:
-		return createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingA, nil)
 
 	case a == sharded && b == sharded && sameKeyspace:
 		res, exprs := tryMergeUnionShardedRouting(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct)
