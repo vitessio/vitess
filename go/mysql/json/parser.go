@@ -809,12 +809,11 @@ func (v *Value) MarshalTo(dst []byte) []byte {
 	case TypeBlob, TypeBit:
 		const prefix = "base64:type15:"
 
-		size := 2 + len(prefix) + base64.StdEncoding.EncodedLen(len(v.s))
-		dst := make([]byte, size)
-		dst[0] = '"'
-		copy(dst[1:], prefix)
-		base64.StdEncoding.Encode(dst[len(prefix)+1:], []byte(v.s))
-		dst[size-1] = '"'
+		dst = slices.Grow(dst, 2+len(prefix)+base64.StdEncoding.EncodedLen(len(v.s)))
+		dst = append(dst, '"')
+		dst = append(dst, prefix...)
+		dst = base64.StdEncoding.AppendEncode(dst, []byte(v.s))
+		dst = append(dst, '"')
 		return dst
 	case TypeNumber:
 		if v.NumberType() == NumberTypeFloat {
