@@ -138,6 +138,20 @@ func TestOuterTableNullability(t *testing.T) {
 	}
 }
 
+// TestTypeForExprTuple tests that a tuple expression is typed by calculation
+// even though it cannot be stored in the ExprTypes cache: sqlparser.ValTuple
+// is a slice type, so using it as a map key would panic.
+func TestTypeForExprTuple(t *testing.T) {
+	ctx := createPlanContext(semantics.EmptySemTable())
+	tuple := sqlparser.ValTuple{sqlparser.NewIntLiteral("1"), sqlparser.NewIntLiteral("2")}
+
+	typ, found := ctx.TypeForExpr(tuple)
+
+	require.True(t, found)
+	assert.Equal(t, sqltypes.Tuple, typ.Type())
+	assert.Empty(t, ctx.SemTable.ExprTypes)
+}
+
 func prepareContextAndFindColumns(t *testing.T, query string) (ctx *PlanningContext, columns []*sqlparser.ColName) {
 	parser := sqlparser.NewTestParser()
 	ast, err := parser.Parse(query)
