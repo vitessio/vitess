@@ -36,6 +36,11 @@ type Filter struct {
 	// It contains the ANDed predicates in Predicates, with ColName:s replaced by Offset:s
 	PredicateWithOffsets evalengine.Expr
 
+	// PredicateASTWithOffsets is the offset-rewritten AST that
+	// PredicateWithOffsets was translated from. Planner-only: never
+	// serialized into a primitive.
+	PredicateASTWithOffsets sqlparser.Expr
+
 	ResultColumns int
 }
 
@@ -117,6 +122,7 @@ func (f *Filter) planOffsets(ctx *plancontext.PlanningContext) Operator {
 		panic(err)
 	}
 
+	f.PredicateASTWithOffsets = rewritten
 	f.PredicateWithOffsets = eexpr
 	return nil
 }
