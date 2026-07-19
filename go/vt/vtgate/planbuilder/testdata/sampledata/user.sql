@@ -21,3 +21,24 @@ VALUES (200, 'foo', 2);
 
 INSERT INTO rerouted_ref (id, ref_col, name)
 VALUES (200, 'bar', 'baz');
+
+INSERT INTO user (id, col, intcol, name, costly, col1, textcol1, foo)
+VALUES (5, 5, 5, '5', 'c5', 'a5', 't5', 'f5');
+
+INSERT INTO user (id, col, intcol, name, costly, col1, textcol1, foo)
+VALUES (6, 6, 6, '6', 'c6', 'a6', 't6', 'f6');
+
+INSERT INTO music (id, user_id, col)
+VALUES (101, 5, 'foo5');
+
+INSERT INTO music (id, user_id, col)
+VALUES (102, 6, 'foo6');
+
+INSERT INTO user_extra (id, user_id, extra_id, col)
+VALUES (1, 5, 1, 5);
+
+INSERT INTO user_extra (id, user_id, extra_id, col)
+VALUES (2, 6, 2, 6);
+
+INSERT INTO unsharded (id, col, col1, col2, name, baz)
+VALUES (300, 'x1', 'ua1', 'ub1', 'un1', 0);
