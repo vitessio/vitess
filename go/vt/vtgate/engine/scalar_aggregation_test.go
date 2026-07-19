@@ -420,3 +420,317 @@ func TestScalarGroupConcat(t *testing.T) {
 		})
 	}
 }
+
+// TestScalarJSONArrayAgg tests merging shard-level json_arrayagg partials
+// without grouping.
+func TestScalarJSONArrayAgg(t *testing.T) {
+	fields := sqltypes.MakeTestFields(
+		"json_arrayagg(c2)",
+		"json",
+	)
+
+	varcharFields := sqltypes.MakeTestFields(
+		"json_arrayagg(c2)",
+		"varchar",
+	)
+
+	tcases := []struct {
+		name        string
+		inputResult *sqltypes.Result
+		expResult   *sqltypes.Result
+	}{{
+		name: "two shard partials",
+		inputResult: sqltypes.MakeTestResult(fields,
+			`["a", "b"]`, `[1, null]`),
+		expResult: sqltypes.MakeTestResult(fields,
+			`["a", "b", 1, null]`),
+	}, {
+		name: "null partials are skipped",
+		inputResult: sqltypes.MakeTestResult(fields,
+			"null", `[{"a": 1}]`, "null"),
+		expResult: sqltypes.MakeTestResult(fields,
+			`[{"a": 1}]`),
+	}, {
+		name: "empty array partials do not add separators",
+		inputResult: sqltypes.MakeTestResult(fields,
+			`[]`, `[1, 2]`, `[]`),
+		expResult: sqltypes.MakeTestResult(fields,
+			`[1, 2]`),
+	}, {
+		name: "all shards empty",
+		inputResult: sqltypes.MakeTestResult(fields,
+			"null", "null"),
+		expResult: sqltypes.MakeTestResult(fields,
+			"null"),
+	}, {
+		name:        "no rows at all",
+		inputResult: sqltypes.MakeTestResult(fields),
+		expResult: sqltypes.MakeTestResult(fields,
+			"null"),
+	}, {
+		name: "single partial is returned verbatim",
+		inputResult: sqltypes.MakeTestResult(fields,
+			`[1, 2, 3]`),
+		expResult: sqltypes.MakeTestResult(fields,
+			`[1, 2, 3]`),
+	}, {
+		name: "output field type is rewritten to json",
+		inputResult: sqltypes.MakeTestResult(varcharFields,
+			`[1]`, `[2]`),
+		expResult: sqltypes.MakeTestResult(fields,
+			`[1, 2]`),
+	}, {
+		name: "wide decimal elements pass through the splice verbatim",
+		inputResult: sqltypes.MakeTestResult(fields,
+			`[123456789012.12345678]`),
+		expResult: sqltypes.MakeTestResult(fields,
+			`[123456789012.12345678]`),
+	}}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			fp := &fakePrimitive{results: []*sqltypes.Result{tcase.inputResult}}
+			oa := &ScalarAggregate{
+				Aggregates: []*AggregateParams{{
+					Opcode: AggregateJSONArrayAgg,
+					Col:    0,
+				}},
+				Input: fp,
+			}
+			qr, err := oa.TryExecute(t.Context(), &noopVCursor{}, nil, false)
+			require.NoError(t, err)
+			assert.Equal(t, tcase.expResult, qr)
+
+			fp.rewind()
+			results := &sqltypes.Result{}
+			err = oa.TryStreamExecute(t.Context(), &noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
+				if qr.Fields != nil {
+					results.Fields = qr.Fields
+				}
+				results.Rows = append(results.Rows, qr.Rows...)
+				return nil
+			})
+			require.NoError(t, err)
+			assert.Equal(t, tcase.expResult, results)
+		})
+	}
+}
+
+// TestScalarJSONArrayAggMalformedPartial tests that json_arrayagg fails loudly
+// when an input is not a shard-level JSON array partial.
+func TestScalarJSONArrayAggMalformedPartial(t *testing.T) {
+	fields := sqltypes.MakeTestFields(
+		"json_arrayagg(c2)",
+		"json",
+	)
+
+	// `[1], [2]` passes the bracket check but is not a single JSON array; only
+	// the full parse rejects it.
+	for _, partial := range []string{`abc`, `{"a": 1}`, `1`, `[1], [2]`} {
+		t.Run(partial, func(t *testing.T) {
+			fp := &fakePrimitive{results: []*sqltypes.Result{sqltypes.MakeTestResult(fields, partial)}}
+			oa := &ScalarAggregate{
+				Aggregates: []*AggregateParams{{
+					Opcode: AggregateJSONArrayAgg,
+					Col:    0,
+				}},
+				Input: fp,
+			}
+			_, err := oa.TryExecute(t.Context(), &noopVCursor{}, nil, false)
+			require.ErrorContains(t, err, "unexpected json_arrayagg partial")
+
+			fp.rewind()
+			err = oa.TryStreamExecute(t.Context(), &noopVCursor{}, nil, true, func(*sqltypes.Result) error {
+				return nil
+			})
+			require.ErrorContains(t, err, "unexpected json_arrayagg partial")
+		})
+	}
+}
+
+// TestScalarJSONObjectAgg tests merging shard-level json_objectagg partials
+// without grouping.
+func TestScalarJSONObjectAgg(t *testing.T) {
+	fields := sqltypes.MakeTestFields(
+		"json_objectagg(c1, c2)",
+		"json",
+	)
+
+	tcases := []struct {
+		name        string
+		inputResult *sqltypes.Result
+		expResult   *sqltypes.Result
+	}{{
+		name: "last duplicate key wins and members sort by length then bytes",
+		inputResult: sqltypes.MakeTestResult(fields,
+			`{"a": 1, "b": 2}`, `{"b": 3, "ccc": 4}`),
+		expResult: sqltypes.MakeTestResult(fields,
+			`{"a": 1, "b": 3, "ccc": 4}`),
+	}, {
+		name: "shorter keys sort first",
+		inputResult: sqltypes.MakeTestResult(fields,
+			`{"bb": 1}`, `{"a": 2}`, `{"z": 3}`),
+		expResult: sqltypes.MakeTestResult(fields,
+			`{"a": 2, "z": 3, "bb": 1}`),
+	}, {
+		name: "escaped keys round-trip",
+		inputResult: sqltypes.MakeTestResult(fields,
+			`{"a\"b": 1}`, `{"c": 2}`),
+		expResult: sqltypes.MakeTestResult(fields,
+			`{"c": 2, "a\"b": 1}`),
+	}, {
+		name: "null member values are preserved",
+		inputResult: sqltypes.MakeTestResult(fields,
+			`{"k": null}`, `{"m": 1}`),
+		expResult: sqltypes.MakeTestResult(fields,
+			`{"k": null, "m": 1}`),
+	}, {
+		name: "null partials are skipped",
+		inputResult: sqltypes.MakeTestResult(fields,
+			"null", `{"a": 1}`, "null"),
+		expResult: sqltypes.MakeTestResult(fields,
+			`{"a": 1}`),
+	}, {
+		name: "all shards empty",
+		inputResult: sqltypes.MakeTestResult(fields,
+			"null", "null"),
+		expResult: sqltypes.MakeTestResult(fields,
+			"null"),
+	}, {
+		name:        "no rows at all",
+		inputResult: sqltypes.MakeTestResult(fields),
+		expResult: sqltypes.MakeTestResult(fields,
+			"null"),
+	}, {
+		name: "single partial is returned in normalized order",
+		inputResult: sqltypes.MakeTestResult(fields,
+			`{"b": 1, "aa": 2}`),
+		expResult: sqltypes.MakeTestResult(fields,
+			`{"b": 1, "aa": 2}`),
+	}, {
+		name: "wide decimal member values are preserved verbatim",
+		inputResult: sqltypes.MakeTestResult(fields,
+			`{"a": 123456789012.12345678}`),
+		expResult: sqltypes.MakeTestResult(fields,
+			`{"a": 123456789012.12345678}`),
+	}, {
+		name: "numbers wider than uint64 are preserved verbatim",
+		inputResult: sqltypes.MakeTestResult(fields,
+			`{"a": 12345678901234567890123456789}`),
+		expResult: sqltypes.MakeTestResult(fields,
+			`{"a": 12345678901234567890123456789}`),
+	}, {
+		name: "trailing zeros in member values are preserved verbatim",
+		inputResult: sqltypes.MakeTestResult(fields,
+			`{"a": 1.230}`),
+		expResult: sqltypes.MakeTestResult(fields,
+			`{"a": 1.230}`),
+	}, {
+		name: "nested wide decimal member values are preserved verbatim",
+		inputResult: sqltypes.MakeTestResult(fields,
+			`{"a": {"b": 99999999999999999999999999.5}}`),
+		expResult: sqltypes.MakeTestResult(fields,
+			`{"a": {"b": 99999999999999999999999999.5}}`),
+	}, {
+		name: "merged partials preserve number literals",
+		inputResult: sqltypes.MakeTestResult(fields,
+			`{"a": 1.10000000}`, `{"b": 2.20000000}`),
+		expResult: sqltypes.MakeTestResult(fields,
+			`{"a": 1.10000000, "b": 2.20000000}`),
+	}}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			fp := &fakePrimitive{results: []*sqltypes.Result{tcase.inputResult}}
+			oa := &ScalarAggregate{
+				Aggregates: []*AggregateParams{{
+					Opcode: AggregateJSONObjectAgg,
+					Col:    0,
+				}},
+				Input: fp,
+			}
+			qr, err := oa.TryExecute(t.Context(), &noopVCursor{}, nil, false)
+			require.NoError(t, err)
+			assert.Equal(t, tcase.expResult, qr)
+
+			fp.rewind()
+			results := &sqltypes.Result{}
+			err = oa.TryStreamExecute(t.Context(), &noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
+				if qr.Fields != nil {
+					results.Fields = qr.Fields
+				}
+				results.Rows = append(results.Rows, qr.Rows...)
+				return nil
+			})
+			require.NoError(t, err)
+			assert.Equal(t, tcase.expResult, results)
+		})
+	}
+}
+
+// TestScalarJSONObjectAggMalformedPartial tests that json_objectagg fails
+// loudly when an input is not a shard-level JSON object partial.
+func TestScalarJSONObjectAggMalformedPartial(t *testing.T) {
+	fields := sqltypes.MakeTestFields(
+		"json_objectagg(c1, c2)",
+		"json",
+	)
+
+	for _, partial := range []string{`abc`, `[1]`, `1`} {
+		t.Run(partial, func(t *testing.T) {
+			fp := &fakePrimitive{results: []*sqltypes.Result{sqltypes.MakeTestResult(fields, partial)}}
+			oa := &ScalarAggregate{
+				Aggregates: []*AggregateParams{{
+					Opcode: AggregateJSONObjectAgg,
+					Col:    0,
+				}},
+				Input: fp,
+			}
+			_, err := oa.TryExecute(t.Context(), &noopVCursor{}, nil, false)
+			require.ErrorContains(t, err, "unexpected json_objectagg partial")
+
+			fp.rewind()
+			err = oa.TryStreamExecute(t.Context(), &noopVCursor{}, nil, true, func(*sqltypes.Result) error {
+				return nil
+			})
+			require.ErrorContains(t, err, "unexpected json_objectagg partial")
+		})
+	}
+}
+
+// TestScalarJSONAggMergeAssociativity tests that merging an already-merged
+// partial with further partials gives the same result as merging all the
+// partials at once. This is what makes multi-level vtgate aggregators
+// (e.g. a route split under a subquery split) correct.
+func TestScalarJSONAggMergeAssociativity(t *testing.T) {
+	runMerge := func(t *testing.T, oc AggregateOpcode, partials ...string) string {
+		fields := sqltypes.MakeTestFields("agg", "json")
+		fp := &fakePrimitive{results: []*sqltypes.Result{sqltypes.MakeTestResult(fields, partials...)}}
+		oa := &ScalarAggregate{
+			Aggregates: []*AggregateParams{{
+				Opcode: oc,
+				Col:    0,
+			}},
+			Input: fp,
+		}
+		qr, err := oa.TryExecute(t.Context(), &noopVCursor{}, nil, false)
+		require.NoError(t, err)
+		return qr.Rows[0][0].ToString()
+	}
+
+	t.Run("json_arrayagg", func(t *testing.T) {
+		all := runMerge(t, AggregateJSONArrayAgg, `[1]`, `[2, 3]`, `[4]`)
+		assert.Equal(t, `[1, 2, 3, 4]`, all)
+
+		merged := runMerge(t, AggregateJSONArrayAgg, `[1]`, `[2, 3]`)
+		assert.Equal(t, all, runMerge(t, AggregateJSONArrayAgg, merged, `[4]`))
+	})
+
+	t.Run("json_objectagg", func(t *testing.T) {
+		all := runMerge(t, AggregateJSONObjectAgg, `{"a": 1}`, `{"bb": 2, "a": 9}`, `{"c": 3}`)
+		assert.Equal(t, `{"a": 9, "c": 3, "bb": 2}`, all)
+
+		merged := runMerge(t, AggregateJSONObjectAgg, `{"a": 1}`, `{"bb": 2, "a": 9}`)
+		assert.Equal(t, all, runMerge(t, AggregateJSONObjectAgg, merged, `{"c": 3}`))
+	})
+}

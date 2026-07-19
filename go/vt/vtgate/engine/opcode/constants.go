@@ -79,7 +79,9 @@ const (
 	AggregateAvg
 	AggregateUDF      // This is an opcode used to represent UDFs
 	AggregateConstant // This is an opcode used to represent constants that are not grouped
-	_NumOfOpCodes     // This line must be last of the opcodes!
+	AggregateJSONArrayAgg
+	AggregateJSONObjectAgg
+	_NumOfOpCodes // This line must be last of the opcodes!
 )
 
 // SupportedAggregates maps the list of supported aggregate
@@ -99,6 +101,8 @@ var SupportedAggregates = map[string]AggregateOpcode{
 	"any_value":      AggregateAnyValue,
 	"group_concat":   AggregateGroupConcat,
 	"constant_aggr":  AggregateGroupConcat,
+	"json_arrayagg":  AggregateJSONArrayAgg,
+	"json_objectagg": AggregateJSONObjectAgg,
 }
 
 var AggregateName = map[AggregateOpcode]string{
@@ -114,6 +118,8 @@ var AggregateName = map[AggregateOpcode]string{
 	AggregateAnyValue:      "any_value",
 	AggregateAvg:           "avg",
 	AggregateConstant:      "constant_aggr",
+	AggregateJSONArrayAgg:  "json_arrayagg",
+	AggregateJSONObjectAgg: "json_objectagg",
 }
 
 func (code AggregateOpcode) String() string {
@@ -157,6 +163,9 @@ func (code AggregateOpcode) SQLType(typ querypb.Type) querypb.Type {
 		return sqltypes.Int64
 	case AggregateGtid:
 		return sqltypes.VarChar
+	case AggregateJSONArrayAgg, AggregateJSONObjectAgg:
+		// Both functions always return JSON regardless of the input type.
+		return sqltypes.TypeJSON
 	case AggregateUDF, AggregateConstant: // TODO: we can probably figure out the type here
 		return sqltypes.Unknown
 	default:

@@ -141,6 +141,12 @@ func (ab *aggBuilder) handleAggr(ctx *plancontext.PlanningContext, aggr Aggr) er
 		// and later will try pushing the column instead.
 		// TODO: this should be handled better by pushing the function down.
 		return errAbortAggrPushing
+	case opcode.AggregateJSONArrayAgg, opcode.AggregateJSONObjectAgg:
+		// JSON aggregation cannot be pushed under a join: merging shard-level
+		// documents is only valid when the whole function was pushed down, and
+		// the vtgate engine cannot build JSON documents from raw values.
+		// Abort the push; transformAggregator rejects the resulting shape.
+		return errAbortAggrPushing
 	case opcode.AggregateUnassigned:
 		panic(vterrors.VT12001(fmt.Sprintf("in scatter query: aggregation function '%s'", sqlparser.String(aggr.Original))))
 	case opcode.AggregateGtid:

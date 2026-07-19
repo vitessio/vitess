@@ -7408,5 +7408,343 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "json_arrayagg on scatter query",
+    "query": "select json_arrayagg(foo) from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select json_arrayagg(foo) from user",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "json_arrayagg(0) AS json_arrayagg(foo)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select json_arrayagg(foo) from `user` where 1 != 1",
+            "Query": "select json_arrayagg(foo) from `user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "json_arrayagg aggregation on top of route",
+    "query": "select intcol, json_arrayagg(foo) from user group by intcol",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select intcol, json_arrayagg(foo) from user group by intcol",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "json_arrayagg(1) AS json_arrayagg(foo)",
+        "GroupBy": "0",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select intcol, json_arrayagg(foo) from `user` where 1 != 1 group by intcol",
+            "OrderBy": "0 ASC",
+            "Query": "select intcol, json_arrayagg(foo) from `user` group by intcol order by intcol asc"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "json_objectagg on scatter query",
+    "query": "select json_objectagg(name, foo) from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select json_objectagg(name, foo) from user",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "json_objectagg(0) AS json_objectagg(name, foo)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select json_objectagg(`name`, foo) from `user` where 1 != 1",
+            "Query": "select json_objectagg(`name`, foo) from `user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "json_objectagg aggregation on top of route",
+    "query": "select intcol, json_objectagg(name, foo) from user group by intcol",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select intcol, json_objectagg(name, foo) from user group by intcol",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "json_objectagg(1) AS json_objectagg(name, foo)",
+        "GroupBy": "0",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select intcol, json_objectagg(`name`, foo) from `user` where 1 != 1 group by intcol",
+            "OrderBy": "0 ASC",
+            "Query": "select intcol, json_objectagg(`name`, foo) from `user` group by intcol order by intcol asc"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "json_arrayagg grouped on unique vindex is pushed down entirely",
+    "query": "select id, json_arrayagg(foo) from user group by id",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select id, json_arrayagg(foo) from user group by id",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id, json_arrayagg(foo) from `user` where 1 != 1 group by id",
+        "Query": "select id, json_arrayagg(foo) from `user` group by id"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "json_arrayagg in having",
+    "query": "select intcol from user group by intcol having json_arrayagg(foo) = '[1]'",
+    "plan": "VT12001: unsupported: comparison of a JSON aggregation result with a string or untyped value: json_arrayagg(foo) = '[1]'"
+  },
+  {
+    "comment": "json_arrayagg in having compared via an extracted scalar",
+    "query": "select intcol from user group by intcol having json_extract(json_arrayagg(foo), '$[0]') = 1",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select intcol from user group by intcol having json_extract(json_arrayagg(foo), '$[0]') = 1",
+      "Instructions": {
+        "OperatorType": "Filter",
+        "Predicate": "json_extract(json_arrayagg(foo), '$[0]') = 1",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Ordered",
+            "Aggregates": "json_arrayagg(1) AS json_arrayagg(foo)",
+            "GroupBy": "0",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select intcol, json_arrayagg(foo) from `user` where 1 != 1 group by intcol",
+                "OrderBy": "0 ASC",
+                "Query": "select intcol, json_arrayagg(foo) from `user` group by intcol order by intcol asc"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "json_arrayagg inside another expression",
+    "query": "select json_extract(json_arrayagg(foo), '$[0]') from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select json_extract(json_arrayagg(foo), '$[0]') from user",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "JSON_EXTRACT(json_arrayagg(foo), '$[0]') as json_extract(json_arrayagg(foo), '$[0]')"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "json_arrayagg(0) AS json_arrayagg(foo), constant_aggr('$[0]') AS $[0]",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select json_arrayagg(foo), '$[0]' from `user` where 1 != 1",
+                "Query": "select json_arrayagg(foo), '$[0]' from `user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "json_arrayagg in derived table",
+    "query": "select t.a from (select intcol, json_arrayagg(foo) a from user group by intcol) t",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select t.a from (select intcol, json_arrayagg(foo) a from user group by intcol) t",
+      "Instructions": {
+        "OperatorType": "SimpleProjection",
+        "Columns": "1",
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Ordered",
+            "Aggregates": "json_arrayagg(1) AS a",
+            "GroupBy": "0",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select intcol, json_arrayagg(foo) as a from `user` where 1 != 1 group by intcol",
+                "OrderBy": "0 ASC",
+                "Query": "select intcol, json_arrayagg(foo) as a from `user` group by intcol order by intcol asc"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "json_arrayagg mixed with other aggregations",
+    "query": "select count(*), json_arrayagg(foo) from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select count(*), json_arrayagg(foo) from user",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_star(0) AS count(*), json_arrayagg(1) AS json_arrayagg(foo)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select count(*), json_arrayagg(foo) from `user` where 1 != 1",
+            "Query": "select count(*), json_arrayagg(foo) from `user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "json_arrayagg mixed with distinct aggregation",
+    "query": "select count(distinct col), json_arrayagg(intcol) from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select count(distinct col), json_arrayagg(intcol) from user",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "count_distinct(0) AS count(distinct col), json_arrayagg(1) AS json_arrayagg(intcol)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select col, json_arrayagg(intcol) from `user` where 1 != 1 group by col",
+            "OrderBy": "0 ASC",
+            "Query": "select col, json_arrayagg(intcol) from `user` group by col order by col asc"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "json_arrayagg on cross-shard join is not supported",
+    "query": "select json_arrayagg(u.foo) from user u join user_extra e on u.col = e.col",
+    "plan": "VT12001: unsupported: aggregation function 'json_arrayagg(u.foo)' must be pushed down to MySQL"
+  },
+  {
+    "comment": "json_objectagg on cross-shard join is not supported",
+    "query": "select json_objectagg(u.name, u.foo) from user u join user_extra e on u.col = e.col",
+    "plan": "VT12001: unsupported: aggregation function 'json_objectagg(u.`name`, u.foo)' must be pushed down to MySQL"
+  },
+  {
+    "comment": "json_arrayagg over limit is not supported",
+    "query": "select json_arrayagg(foo) from (select foo from user limit 3) t",
+    "plan": "VT12001: unsupported: aggregation function 'json_arrayagg(foo)' must be pushed down to MySQL"
+  },
+  {
+    "comment": "json_objectagg over limit is not supported",
+    "query": "select json_objectagg(col, foo) from (select col, foo from user limit 3) t",
+    "plan": "VT12001: unsupported: aggregation function 'json_objectagg(col, foo)' must be pushed down to MySQL"
   }
 ]

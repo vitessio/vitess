@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -344,6 +345,13 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 		case opcode.AggregateUDF:
 			message := fmt.Sprintf("Aggregate UDF '%s' must be pushed down to MySQL", sqlparser.String(aggr.Original.Expr))
 			return nil, vterrors.VT12001(message)
+		case opcode.AggregateJSONArrayAgg, opcode.AggregateJSONObjectAgg:
+			if !op.Pushed {
+				// The engine can only merge shard-level JSON documents; it cannot
+				// build them from raw values. If the aggregation was not pushed
+				// below (cross-shard join / non-pushable source), reject the plan.
+				return nil, vterrors.VT12001(fmt.Sprintf("aggregation function '%s' must be pushed down to MySQL", sqlparser.String(aggr.Original.Expr)))
+			}
 		case opcode.AggregateConstant:
 			// For AnyValue aggregations (literals, parameters), translate to evalengine
 			// This allows evaluation even when no input rows are present (empty result sets)
@@ -461,6 +469,12 @@ func transformProjection(ctx *plancontext.PlanningContext, op *operators.Project
 		return nil, err
 	}
 
+	for _, pe := range ap {
+		if err := rejectJSONAggComparisons(ctx, op.Source, pe.EvalExpr); err != nil {
+			return nil, err
+		}
+	}
+
 	var evalengineExprs []evalengine.Expr
 	var columnNames []string
 	for _, pe := range ap {
@@ -510,7 +524,144 @@ func newSimpleProjection(cols []int, colNames []string, src engine.Primitive) en
 	}
 }
 
+// sourceHasJSONAgg reports whether the operator tree contains a JSON
+// aggregation that is merged at the vtgate level. It does not look inside
+// Routes: aggregations under a Route are fully evaluated by MySQL.
+func sourceHasJSONAgg(op operators.Operator) bool {
+	if _, isRoute := op.(*operators.Route); isRoute {
+		return false
+	}
+	if agg, isAggr := op.(*operators.Aggregator); isAggr {
+		for _, a := range agg.Aggregations {
+			switch a.OpCode {
+			case opcode.AggregateJSONArrayAgg, opcode.AggregateJSONObjectAgg:
+				return true
+			}
+		}
+	}
+	for _, in := range op.Inputs() {
+		if sourceHasJSONAgg(in) {
+			return true
+		}
+	}
+	return false
+}
+
+// rejectJSONAggComparisons fails planning when a comparison evaluated at the
+// vtgate level could involve a JSON aggregation result and a string or untyped
+// operand: the evalengine compares such operands as JSON string scalars, while
+// MySQL parses them as JSON documents, silently producing different results.
+func rejectJSONAggComparisons(ctx *plancontext.PlanningContext, source operators.Operator, exprs ...sqlparser.Expr) error {
+	if !sourceHasJSONAgg(source) {
+		return nil
+	}
+	unwrap := func(e sqlparser.Expr) sqlparser.Expr {
+		if offset, ok := e.(*sqlparser.Offset); ok {
+			return offset.Original
+		}
+		return e
+	}
+	isJSON := func(e sqlparser.Expr) bool {
+		if !semantics.ValidAsMapKey(e) {
+			return false
+		}
+		typ, ok := ctx.TypeForExpr(e)
+		return ok && typ.Type() == sqltypes.TypeJSON
+	}
+	isStringOrUntyped := func(e sqlparser.Expr) bool {
+		if !semantics.ValidAsMapKey(e) {
+			return true
+		}
+		typ, ok := ctx.TypeForExpr(e)
+		return !ok || typ.Type() == sqltypes.Unknown || sqltypes.IsText(typ.Type())
+	}
+	divergent := func(a, b sqlparser.Expr) bool {
+		aJSON, bJSON := isJSON(a), isJSON(b)
+		if aJSON == bJSON {
+			return false
+		}
+		other := b
+		if bJSON {
+			other = a
+		}
+		return isStringOrUntyped(other)
+	}
+	reject := func(node sqlparser.Expr) (bool, error) {
+		return false, vterrors.VT12001(fmt.Sprintf("comparison of a JSON aggregation result with a string or untyped value: %s", sqlparser.String(node)))
+	}
+	for _, expr := range exprs {
+		err := sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+			switch node := node.(type) {
+			case *sqlparser.ComparisonExpr:
+				left, right := unwrap(node.Left), unwrap(node.Right)
+				if !divergent(left, right) {
+					return true, nil
+				}
+				printable := *node
+				printable.Left, printable.Right = left, right
+				return reject(&printable)
+			case *sqlparser.BetweenExpr:
+				// The evalengine desugars BETWEEN into ordered comparisons
+				// of the operand with each bound.
+				left, from, to := unwrap(node.Left), unwrap(node.From), unwrap(node.To)
+				if !divergent(left, from) && !divergent(left, to) {
+					return true, nil
+				}
+				printable := *node
+				printable.Left, printable.From, printable.To = left, from, to
+				return reject(&printable)
+			case *sqlparser.CaseExpr:
+				// A CASE with an operand compares the operand with each
+				// WHEN value for equality in the evalengine.
+				if node.Expr == nil {
+					return true, nil
+				}
+				operand := unwrap(node.Expr)
+				found := false
+				for _, when := range node.Whens {
+					if divergent(operand, unwrap(when.Cond)) {
+						found = true
+						break
+					}
+				}
+				if !found {
+					return true, nil
+				}
+				printable := *node
+				printable.Expr = operand
+				printable.Whens = make([]*sqlparser.When, 0, len(node.Whens))
+				for _, when := range node.Whens {
+					printable.Whens = append(printable.Whens, &sqlparser.When{Cond: unwrap(when.Cond), Val: when.Val})
+				}
+				return reject(&printable)
+			case *sqlparser.FuncExpr:
+				// The evalengine rewrites NULLIF(a, b) into
+				// CASE WHEN a = b THEN NULL ELSE a END.
+				if node.Name.Lowered() != "nullif" || len(node.Exprs) != 2 {
+					return true, nil
+				}
+				left, right := unwrap(node.Exprs[0]), unwrap(node.Exprs[1])
+				if !divergent(left, right) {
+					return true, nil
+				}
+				printable := *node
+				printable.Exprs = []sqlparser.Expr{left, right}
+				return reject(&printable)
+			}
+			return true, nil
+		}, expr)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func transformFilter(ctx *plancontext.PlanningContext, op *operators.Filter) (engine.Primitive, error) {
+	if err := rejectJSONAggComparisons(ctx, op.Source, op.Predicates...); err != nil {
+		return nil, err
+	}
+
 	src, err := transformToPrimitive(ctx, op.Source)
 	if err != nil {
 		return nil, err

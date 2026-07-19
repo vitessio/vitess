@@ -17,6 +17,7 @@ limitations under the License.
 package aggregation
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/rand/v2"
 	"slices"
@@ -816,4 +817,114 @@ func TestJsonAggregation(t *testing.T) {
 
 	mcmp.Exec("select count(1) from t3 where id6 = 2 group by id7 having json_arrayagg(id5+1) = json_array(2, 6)")
 	mcmp.Exec(`select count(1) from t3 where id6 = 2 group by id7 having json_objectagg(id5+1, id7) = json_object("2",1,"6",1)`)
+}
+
+// TestJsonAggregationCrossShard tests json_arrayagg and json_objectagg over
+// scatter queries: each shard computes a complete JSON document for its rows
+// and vtgate merges the shard-level partial documents.
+func TestJsonAggregationCrossShard(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	// id6 = 1 hashes to shard -80 and id6 = 4 hashes to shard 80-, so the
+	// inserted rows genuinely span both shards.
+	mcmp.Exec("insert into t3(id5, id6, id7) values (1,1,10), (2,1,10), (3,1,20), (4,4,30), (5,4,30), (10,4,40)")
+
+	// Check the plan shape once: a scatter route with the merge happening in
+	// a vtgate-level aggregation.
+	res, err := mcmp.VtConn.ExecuteFetch("vexplain plan select id7, json_arrayagg(id5) from t3 group by id7", 100, false)
+	require.NoError(t, err)
+	require.Contains(t, fmt.Sprintf("%v", res.Rows), "json_arrayagg(1) AS json_arrayagg(id5)")
+	require.Contains(t, fmt.Sprintf("%v", res.Rows), "Scatter")
+
+	// Every id7 group lives on a single shard, so the per-group results are
+	// byte-identical to MySQL while the plan is still a scatter with a
+	// vtgate-side merge.
+	mcmp.Exec("select id7, json_arrayagg(id5) from t3 group by id7 order by id7")
+	mcmp.Exec("select id7, json_objectagg(id5, id6) from t3 group by id7 order by id7")
+
+	// The aggregate inside another expression evaluated at the vtgate level.
+	mcmp.Exec("select id7, json_extract(json_arrayagg(id5), '$[0]') from t3 group by id7 order by id7")
+
+	// HAVING over the merged value. JSON-typed comparands such as
+	// json_array(1, 2) constant-fold to a JSON literal that the evalengine
+	// compiler cannot push for cross-shard filters (UNIMPLEMENTED:
+	// unsupported literal kind '*json.Value'), so compare an extracted
+	// scalar instead.
+	mcmp.Exec("select id7 from t3 group by id7 having json_extract(json_arrayagg(id5), '$[0]') = 1 order by id7")
+
+	// Comparing the merged document against a string is rejected at planning
+	// time: the evalengine would treat the string as a JSON string scalar
+	// where MySQL parses it as a JSON document.
+	utils.AssertContainsError(t, mcmp.VtConn,
+		"select id7 from t3 group by id7 having json_arrayagg(id5) = '[1, 2]'",
+		"VT12001")
+
+	// The same applies to constructs the evalengine lowers to comparisons,
+	// such as BETWEEN, a CASE operand, and NULLIF.
+	utils.AssertContainsError(t, mcmp.VtConn,
+		"select id7 from t3 group by id7 having json_arrayagg(id5) between '[]' and '[9]'",
+		"VT12001")
+
+	// A true multi-shard merge: both shards contribute a non-NULL partial.
+	// The cross-shard element order is undefined, so the arrays are compared
+	// as multisets.
+	mQr, vtQr := mcmp.ExecNoCompare("select json_arrayagg(id5) from t3")
+	compareJSONArrayAggRows(t, mQr, vtQr, 0)
+
+	// A true multi-shard json_objectagg merge: the keys are globally unique
+	// and of differing lengths, and the merged object is emitted in MySQL's
+	// key-length-then-bytes member order, so the bytes match MySQL exactly.
+	mcmp.Exec("select json_objectagg(id5, id7) from t3")
+
+	// Wide DECIMAL member values must survive the cross-shard merge verbatim:
+	// re-encoding them through float64 would corrupt the literals. id = 1, 2
+	// hash to shard -80 and id = 4 to 80-.
+	mcmp.Exec("insert into bet_logs(id, merchant_game_id, bet_amount, game_id) values " +
+		"(1, 1, 123456789012.12345678, 1), (2, 1, 1.50000000, 1), (4, 2, 99999999999.00000001, 2)")
+	mcmp.Exec("select json_objectagg(id, bet_amount) from bet_logs")
+
+	// A NULL key makes the shard's MySQL fail the statement; the shard error
+	// is propagated as is.
+	mcmp.AssertContainsError("select json_objectagg(null, id5) from t3", "JSON documents may not contain NULL member names")
+
+	// Aggregation over a cross-shard join would require vtgate to build the
+	// JSON documents from raw values, which is not supported.
+	utils.AssertContainsError(t, mcmp.VtConn, "select json_arrayagg(t3.id5) from t3 join t9",
+		"VT12001: unsupported: aggregation function 'json_arrayagg(t3.id5)' must be pushed down to MySQL")
+
+	// SQL NULL rows are kept as JSON null elements, unlike other aggregates
+	// that skip NULL values. id1 = 1, 2 hash to shard -80 and id1 = 4 to 80-.
+	mcmp.Exec("insert into t9(id1, id2, id3) values (1,'a',null), (2,'b','x'), (4,'c',null)")
+	mQr, vtQr = mcmp.ExecNoCompare("select json_arrayagg(id3) from t9")
+	compareJSONArrayAggRows(t, mQr, vtQr, 0)
+
+	// Shards without rows contribute a SQL NULL partial that the merge must
+	// skip: only shard -80 still has rows, but the plan is still a scatter.
+	mcmp.Exec("delete from t3 where id6 = 4")
+	mcmp.Exec("select json_arrayagg(id7) from t3")
+	mcmp.Exec("select json_objectagg(id5, id7) from t3")
+
+	// Aggregating no rows at all must return SQL NULL, never [] or {}.
+	mcmp.Exec("delete from t3")
+	mcmp.Exec("select json_arrayagg(id7) from t3")
+	mcmp.Exec("select json_objectagg(id5, id7) from t3")
+}
+
+// compareJSONArrayAggRows compares a json_arrayagg column of MySQL and vtgate
+// results as multisets: MySQL documents the element order of json_arrayagg as
+// undefined, and the cross-shard merge order is not reproducible, so the
+// arrays are compared after sorting their elements.
+func compareJSONArrayAggRows(t *testing.T, mRes, vtRes *sqltypes.Result, col int) {
+	t.Helper()
+	require.Len(t, vtRes.Rows, len(mRes.Rows), "mysql and vitess result count does not match")
+	for i, vtRow := range vtRes.Rows {
+		var mElems, vtElems []json.RawMessage
+		require.NoError(t, json.Unmarshal(mRes.Rows[i][col].Raw(), &mElems))
+		require.NoError(t, json.Unmarshal(vtRow[col].Raw(), &vtElems))
+		sortRaw := func(a, b json.RawMessage) int { return strings.Compare(string(a), string(b)) }
+		slices.SortFunc(mElems, sortRaw)
+		slices.SortFunc(vtElems, sortRaw)
+		require.Equal(t, mElems, vtElems, "mysql and vitess arrays contain different elements: vitess:%v, mysql:%v", vtRes.Rows, mRes.Rows)
+	}
 }

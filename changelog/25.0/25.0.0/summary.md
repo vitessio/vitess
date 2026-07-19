@@ -23,6 +23,7 @@
         - [New controls for cross-keyspace reads](#vtgate-cross-keyspace-reads)
         - [Streaming errors no longer surface as connection loss](#vtgate-streamexecute-real-errors)
         - [SHA256-hashed passwords in the static gRPC auth plugin](#vtgate-grpc-static-auth-sha256)
+        - [Cross-shard `JSON_ARRAYAGG` and `JSON_OBJECTAGG`](#vtgate-cross-shard-json-aggregation)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
     - **[VTTablet](#minor-changes-vttablet)**
@@ -204,6 +205,19 @@ When an entry sets `CachingSha2Password`, it takes precedence over the plaintext
 The hash is validated and hex-decoded once when the plugin loads. An entry whose `CachingSha2Password` is not valid hex, or does not decode to a 32-byte SHA256 digest, causes the plugin to fail to initialize. No new plugin or flag is introduced.
 
 See [#19250](https://github.com/vitessio/vitess/pull/19250) for details.
+
+#### <a id="vtgate-cross-shard-json-aggregation"/>Cross-shard `JSON_ARRAYAGG` and `JSON_OBJECTAGG`</a>
+
+The aggregation functions `JSON_ARRAYAGG(expr)` and `JSON_OBJECTAGG(key, value)` are now supported in cross-shard queries (scatter aggregation, with or without `GROUP BY`, including use in `HAVING` and inside other expressions). Previously these functions were only supported when the whole query could be routed to a single shard, and cross-shard usage failed with `VT12001: unsupported: in scatter query: aggregation function ...`.
+
+Each shard computes the aggregate for its own rows and VTGate merges the shard-level JSON documents. Notes:
+
+- The order of elements produced by `JSON_ARRAYAGG` across shards follows the order in which shard results are merged. MySQL documents the element order of `JSON_ARRAYAGG` as undefined, so results are spec-conforming but may be ordered differently than on an unsharded MySQL.
+- For `JSON_OBJECTAGG`, MySQL's "last duplicate key wins" rule is applied when merging shard results. As in MySQL (where the result "can depend on the order in which the rows are returned, which is not guaranteed"), the surviving value for a key that occurs on several shards is nondeterministic.
+- Member values of a merged `JSON_OBJECTAGG` that are themselves nested JSON objects may be serialized with a different (but semantically equivalent) member order than MySQL produces.
+- Comparing one of these aggregates (or any JSON-typed value derived from them, including via a derived table) against a string or untyped value at the VTGate level — whether written as a comparison operator, `BETWEEN`, a `CASE` operand, or `NULLIF` — is rejected at planning time with `VT12001: unsupported: comparison of a JSON aggregation result with a string or untyped value`, because VTGate's expression engine does not apply MySQL's implicit string-to-JSON-document parse in comparisons. Compare extracted scalars instead (for example `having json_extract(json_arrayagg(a), '$[0]') = 1`). JSON-literal comparands such as `json_array(...)` currently fail with an `UNIMPLEMENTED: unsupported literal kind` error.
+
+Queries where the aggregate cannot be pushed down to MySQL — for example over cross-shard joins — are not supported and now fail with the more precise error `VT12001: unsupported: aggregation function '<expr>' must be pushed down to MySQL`.
 
 ### <a id="minor-changes-vttablet"/>VTTablet</a>
 

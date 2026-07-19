@@ -1189,3 +1189,129 @@ func TestGroupConcat(t *testing.T) {
 		})
 	}
 }
+
+// TestJSONArrayAgg tests merging shard-level json_arrayagg partials per group.
+func TestJSONArrayAgg(t *testing.T) {
+	fields := sqltypes.MakeTestFields(
+		"c1|json_arrayagg(c2)",
+		"int64|json",
+	)
+
+	tcases := []struct {
+		name        string
+		inputResult *sqltypes.Result
+		expResult   *sqltypes.Result
+	}{{
+		name: "multiple grouping keys",
+		inputResult: sqltypes.MakeTestResult(fields,
+			`10|[1, 2]`, `10|[3]`,
+			`20|["a"]`,
+			`30|[null]`, `30|null`,
+			`40|null`),
+		expResult: sqltypes.MakeTestResult(fields,
+			`10|[1, 2, 3]`,
+			`20|["a"]`,
+			`30|[null]`,
+			`40|null`),
+	}, {
+		name:        "empty result",
+		inputResult: sqltypes.MakeTestResult(fields),
+		expResult:   sqltypes.MakeTestResult(fields),
+	}}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			fp := &fakePrimitive{results: []*sqltypes.Result{tcase.inputResult}}
+			oa := &OrderedAggregate{
+				Aggregates:  []*AggregateParams{NewAggregateParam(AggregateJSONArrayAgg, 1, nil, "", collations.MySQL8())},
+				GroupByKeys: []*GroupByParams{{KeyCol: 0}},
+				Input:       fp,
+			}
+			qr, err := oa.TryExecute(t.Context(), &noopVCursor{}, nil, false)
+			require.NoError(t, err)
+			if len(qr.Rows) == 0 {
+				qr.Rows = nil // just to make the expectation.
+				// empty slice or nil both are valid and will not cause any issue.
+			}
+			assert.Equal(t, tcase.expResult, qr)
+
+			fp.rewind()
+			results := &sqltypes.Result{}
+			err = oa.TryStreamExecute(t.Context(), &noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
+				if qr.Fields != nil {
+					results.Fields = qr.Fields
+				}
+				results.Rows = append(results.Rows, qr.Rows...)
+				return nil
+			})
+			require.NoError(t, err)
+			assert.Equal(t, tcase.expResult, results)
+		})
+	}
+}
+
+// TestJSONObjectAgg tests merging shard-level json_objectagg partials per group.
+func TestJSONObjectAgg(t *testing.T) {
+	fields := sqltypes.MakeTestFields(
+		"c1|json_objectagg(c2, c3)",
+		"int64|json",
+	)
+
+	tcases := []struct {
+		name        string
+		inputResult *sqltypes.Result
+		expResult   *sqltypes.Result
+	}{{
+		name: "multiple grouping keys",
+		inputResult: sqltypes.MakeTestResult(fields,
+			`10|{"a": 1}`, `10|{"bb": 2}`,
+			`20|{"a": 5, "b": 6}`,
+			`30|null`,
+			`40|{"k": 1}`, `40|{"k": 2}`),
+		expResult: sqltypes.MakeTestResult(fields,
+			`10|{"a": 1, "bb": 2}`,
+			`20|{"a": 5, "b": 6}`,
+			`30|null`,
+			`40|{"k": 2}`),
+	}, {
+		name: "wide decimal member values are preserved verbatim",
+		inputResult: sqltypes.MakeTestResult(fields,
+			`10|{"a": 123456789012.12345678}`, `10|{"b": 1.230}`),
+		expResult: sqltypes.MakeTestResult(fields,
+			`10|{"a": 123456789012.12345678, "b": 1.230}`),
+	}, {
+		name:        "empty result",
+		inputResult: sqltypes.MakeTestResult(fields),
+		expResult:   sqltypes.MakeTestResult(fields),
+	}}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			fp := &fakePrimitive{results: []*sqltypes.Result{tcase.inputResult}}
+			oa := &OrderedAggregate{
+				Aggregates:  []*AggregateParams{NewAggregateParam(AggregateJSONObjectAgg, 1, nil, "", collations.MySQL8())},
+				GroupByKeys: []*GroupByParams{{KeyCol: 0}},
+				Input:       fp,
+			}
+			qr, err := oa.TryExecute(t.Context(), &noopVCursor{}, nil, false)
+			require.NoError(t, err)
+			if len(qr.Rows) == 0 {
+				qr.Rows = nil // just to make the expectation.
+				// empty slice or nil both are valid and will not cause any issue.
+			}
+			assert.Equal(t, tcase.expResult, qr)
+
+			fp.rewind()
+			results := &sqltypes.Result{}
+			err = oa.TryStreamExecute(t.Context(), &noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
+				if qr.Fields != nil {
+					results.Fields = qr.Fields
+				}
+				results.Rows = append(results.Rows, qr.Rows...)
+				return nil
+			})
+			require.NoError(t, err)
+			assert.Equal(t, tcase.expResult, results)
+		})
+	}
+}

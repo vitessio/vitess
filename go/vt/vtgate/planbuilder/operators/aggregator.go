@@ -436,6 +436,12 @@ func (aggr Aggr) getPushColumn() sqlparser.Expr {
 			panic(vterrors.VT12001("group_concat with more than 1 column"))
 		}
 		return aggr.Func.GetArg()
+	case opcode.AggregateJSONObjectAgg:
+		// Two-argument aggregate: there is no single column to push on the
+		// not-pushed path, and the engine cannot build JSON objects from raw
+		// values. transformAggregator would reject this shape anyway; fail
+		// here with the same message.
+		panic(vterrors.VT12001(fmt.Sprintf("aggregation function '%s' must be pushed down to MySQL", sqlparser.String(aggr.Original.Expr))))
 	default:
 		if len(aggr.Func.GetArgs()) > 1 {
 			panic(vterrors.VT03001(sqlparser.String(aggr.Func)))

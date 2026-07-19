@@ -443,5 +443,45 @@
     "comment": "window function in derived table on scatter route",
     "query": "select * from (select rank() over (partition by col) as r from user) as t",
     "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "json_arrayagg as window function on scatter query",
+    "query": "select json_arrayagg(foo) over () from user",
+    "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "json aggregation compared with a string in the select list",
+    "query": "select json_arrayagg(intcol) = '[]' from user",
+    "plan": "VT12001: unsupported: comparison of a JSON aggregation result with a string or untyped value: json_arrayagg(intcol) = '[]'"
+  },
+  {
+    "comment": "json aggregation compared with a string through a derived table",
+    "query": "select * from (select json_arrayagg(intcol) as j from user) t where t.j = '[]'",
+    "plan": "VT12001: unsupported: comparison of a JSON aggregation result with a string or untyped value: t.j = '[]'"
+  },
+  {
+    "comment": "json aggregation compared with a list of strings",
+    "query": "select intcol from user group by intcol having json_arrayagg(a_id) in ('[]', '[1]')",
+    "plan": "VT12001: unsupported: comparison of a JSON aggregation result with a string or untyped value: json_arrayagg(a_id) in ('[]', '[1]')"
+  },
+  {
+    "comment": "json aggregation compared with a JSON literal comparand",
+    "query": "select intcol from user group by intcol having json_arrayagg(foo) = json_array(1)",
+    "plan": "unsupported literal kind '*json.Value'"
+  },
+  {
+    "comment": "merged json_arrayagg compared with string bounds using BETWEEN",
+    "query": "select intcol from user group by intcol having json_arrayagg(foo) between '[]' and '[1]'",
+    "plan": "VT12001: unsupported: comparison of a JSON aggregation result with a string or untyped value: json_arrayagg(foo) between '[]' and '[1]'"
+  },
+  {
+    "comment": "merged json_arrayagg compared with a string through a CASE operand",
+    "query": "select intcol from user group by intcol having case json_arrayagg(foo) when '[]' then 1 else 0 end = 1",
+    "plan": "VT12001: unsupported: comparison of a JSON aggregation result with a string or untyped value: case json_arrayagg(foo) when '[]' then 1 else 0 end"
+  },
+  {
+    "comment": "merged json_arrayagg compared with a string through NULLIF",
+    "query": "select intcol from user group by intcol having nullif(json_arrayagg(foo), '[]') is null",
+    "plan": "VT12001: unsupported: comparison of a JSON aggregation result with a string or untyped value: nullif(json_arrayagg(foo), '[]')"
   }
 ]
