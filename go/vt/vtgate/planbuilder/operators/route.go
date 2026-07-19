@@ -535,6 +535,16 @@ func createAlternateRoutesFromVSchemaTable(
 }
 
 func (r *Route) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
+	// If we are planning the recursive part of a CTE and this predicate references
+	// the recursion table, it cannot be evaluated as a column reference on this
+	// route: unless the whole CTE later merges into a single route, the recursion
+	// data is only available through bind variables supplied per iteration by the
+	// RecurseCTE primitive. Rewrite recursion columns into reserved arguments and
+	// remember the original shape - mergeCTE restores it if the CTE fully merges.
+	if cte := ctx.ActiveCTE(); cte != nil && ctx.SemTable.DirectDeps(expr).IsOverlapping(cte.Id) {
+		expr = addCTEPredicate(ctx, expr, cte)
+	}
+
 	// first we see if the predicate changes how we route
 	newRouting := UpdateRoutingLogic(ctx, expr, r.Routing)
 	r.Routing = newRouting
