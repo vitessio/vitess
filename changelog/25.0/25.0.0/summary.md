@@ -28,6 +28,7 @@
     - **[VTTablet](#minor-changes-vttablet)**
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
         - [Skip MySQL version check when restoring from a mysql-shell backup](#vttablet-mysql-shell-restore-skip-version-check)
+        - [Optional strict startup for file based custom query rules](#vttablet-filecustomrules-strict)
     - **[Backup/Restore](#minor-changes-backup)**
         - [Chunked backup/restore for the builtinbackupengine](#backup-chunked-builtin)
     - **[General](#minor-changes-general)**
@@ -237,6 +238,14 @@ A new `--mysql-shell-restore-skip-version-check` flag (default `false`) has been
 Because mysql-shell performs a logical restore, its backups are not tied to the on-disk data dictionary format the way physical backups are, so restoring across otherwise-incompatible MySQL versions can be safe. This flag lets operators opt into that behavior.
 
 **Impact**: With this flag set, VTTablet may select and restore a `mysqlshell` backup whose MySQL version would otherwise be rejected as incompatible. Leave it unset to preserve the existing behavior.
+
+#### <a id="vttablet-filecustomrules-strict"/>Optional strict startup for file based custom query rules</a>
+
+Previously, when the file passed via `--filecustomrules` failed to load at startup (missing file, malformed JSON, or an invalid rule), vttablet logged a warning and continued serving with **no** file based custom rules applied. Since custom rules are typically protective, this fail-open behavior could silently disable them.
+
+A new `--filecustomrules-strict` flag (default `false`) makes such a load failure fatal: vttablet exits instead of serving without its configured rules. The default behavior is unchanged, but the load failure is now logged as an error rather than a warning.
+
+See [#20522](https://github.com/vitessio/vitess/issues/20522) for details.
 
 ### <a id="minor-changes-backup"/>Backup/Restore</a>
 
