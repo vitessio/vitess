@@ -23,11 +23,6 @@ if [[ -n "$JUNIT_OUTPUT" ]]; then
 	GOTESTSUM_ARGS+=("--junitfile" "$JUNIT_OUTPUT")
 fi
 
-<<<<<<< HEAD
-go tool -modfile=tools/gotestsum/go.mod gotestsum "${GOTESTSUM_ARGS[@]}" --packages "$PACKAGES" -- -v -count=1 "$@" -args -alsologtostderr
-||||||| parent of ad9dd184b3 (test: fix topo-flavor e2e shards silently running zero tests (#20556))
-go tool -modfile=tools/gotestsum/go.mod gotestsum "${GOTESTSUM_ARGS[@]}" --packages "$PACKAGES" -- -v -count=1 "$@"
-=======
 # The test packages must come before "$@" on the go test command line: "$@"
 # can contain test-binary flags such as --topo-flavor or -keep-data, which
 # go test only forwards to the test binary when they appear after the package
@@ -38,5 +33,4 @@ go tool -modfile=tools/gotestsum/go.mod gotestsum "${GOTESTSUM_ARGS[@]}" --packa
 # this command; go test applies the -run flag (the last occurrence wins) and
 # hands the trailing package string to the test binary, which ignores it.
 # shellcheck disable=SC2086
-go tool -modfile=tools/gotestsum/go.mod gotestsum "${GOTESTSUM_ARGS[@]}" --raw-command -- go test -json -v -count=1 $PACKAGES "$@"
->>>>>>> ad9dd184b3 (test: fix topo-flavor e2e shards silently running zero tests (#20556))
+go tool -modfile=tools/gotestsum/go.mod gotestsum "${GOTESTSUM_ARGS[@]}" --raw-command -- go test -json -v -count=1 $PACKAGES "$@" -args -alsologtostderr
