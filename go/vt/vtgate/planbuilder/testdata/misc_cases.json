@@ -70,6 +70,11 @@
     }
   },
   {
+    "comment": "prepare statement from a positional parameter",
+    "query": "prepare prep from ?",
+    "plan": "VT12001: unsupported: PREPARE with a positional parameter as the statement text"
+  },
+  {
     "comment": "prepare statement with non existing variable",
     "query": "prepare prep from @foo",
     "plan": {
