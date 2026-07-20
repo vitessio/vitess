@@ -22,6 +22,8 @@
         - [New controls for cross-keyspace reads](#vtgate-cross-keyspace-reads)
         - [Streaming errors no longer surface as connection loss](#vtgate-streamexecute-real-errors)
         - [SHA256-hashed passwords in the static gRPC auth plugin](#vtgate-grpc-static-auth-sha256)
+        - [PREPARE statements no longer report the prepared statement's tables](#vtgate-prepare-tables-used)
+        - [Preparing a statement no longer starts an implicit transaction](#vtgate-prepare-no-implicit-tx)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
     - **[VTTablet](#minor-changes-vttablet)**
@@ -190,6 +192,20 @@ When an entry sets `CachingSha2Password`, it takes precedence over the plaintext
 The hash is validated and hex-decoded once when the plugin loads. An entry whose `CachingSha2Password` is not valid hex, or does not decode to a 32-byte SHA256 digest, causes the plugin to fail to initialize. No new plugin or flag is introduced.
 
 See [#19250](https://github.com/vitessio/vitess/pull/19250) for details.
+
+#### <a id="vtgate-prepare-tables-used"/>PREPARE statements no longer report the prepared statement's tables</a>
+
+Plans for SQL-level `PREPARE` statements no longer record the tables of the statement text being prepared. `PREPARE` only plans the statement text and registers it in the session; it does not access any tables. As a result, VTGate query logs no longer list those tables in `TablesUsed` for `PREPARE` statements, and the `QueryExecutionsByTable` metric no longer counts a `PREPARE` as an execution against them. `EXECUTE` is unchanged and still reports the tables of the statement it runs.
+
+See [#20562](https://github.com/vitessio/vitess/pull/20562) for details.
+
+#### <a id="vtgate-prepare-no-implicit-tx"/>Preparing a statement no longer starts an implicit transaction</a>
+
+With autocommit disabled, preparing a statement no longer opens an implicit transaction. This applies both to preparing over the MySQL binary protocol (`COM_STMT_PREPARE`) and to the SQL-level `PREPARE` and `DEALLOCATE PREPARE` statements, which previously started an implicit transaction like any other statement.
+
+This matches MySQL's behavior: preparing a statement doesn't access table data, so the transaction only starts when the prepared statement is executed. `EXECUTE` and `COM_STMT_EXECUTE` still start an implicit transaction as before.
+
+See [#20538](https://github.com/vitessio/vitess/pull/20538) and [#20562](https://github.com/vitessio/vitess/pull/20562) for details.
 
 ### <a id="minor-changes-vttablet"/>VTTablet</a>
 
