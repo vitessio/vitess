@@ -610,8 +610,14 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 		}
 		defer txConn.Unlock()
 		if qre.setting != nil {
-			if _, err := txConn.ApplySetting(qre.ctx, qre.setting); err != nil {
+			applied, err := txConn.ApplySetting(qre.ctx, qre.setting)
+			if err != nil {
 				return vterrors.Wrap(err, "failed to execute system setting on the connection")
+			}
+			// If we have applied the settings on the connection, then we should record the query detail.
+			// This is required for redoing the transaction in case of a failure.
+			if applied {
+				txConn.TxProperties().RecordQueryDetail(qre.setting.ApplyQuery(), nil)
 			}
 		}
 

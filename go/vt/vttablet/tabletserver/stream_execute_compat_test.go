@@ -32,6 +32,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/callerid"
@@ -859,6 +860,42 @@ func TestStreamExecuteCompat_StreamDispatchCoversExecute(t *testing.T) {
 		require.False(t, streamRejected,
 			"%s is dispatched by Execute but rejected by Stream's dispatch tables", id.String())
 	}
+}
+
+// A connection setting first applied by a streamed query on a transaction
+// connection must be recorded in the transaction properties, like Execute
+// records it: a 2PC recovery replays the recorded queries, and later DML on
+// the same connection sees the setting already applied and does not record
+// it, so the first query's bookkeeping is the only record.
+func TestStreamExecuteCompat_AppliedSettingRecordedForReplay(t *testing.T) {
+	ctx := t.Context()
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+
+	const applyQuery = "set @@sql_mode = ''"
+	db.AddQuery(applyQuery, &sqltypes.Result{})
+	query := "select * from test_table"
+	db.AddQuery(query, &sqltypes.Result{Fields: getTestTableFields()})
+
+	target := tsv.sm.Target()
+	txID := newTransaction(tsv, nil)
+	defer func() { _, _ = tsv.Rollback(ctx, target, txID) }()
+
+	qre := newTestQueryExecutorStreaming(ctx, tsv, query, txID)
+	qre.setting = smartconnpool.NewSetting(applyQuery, "set @@sql_mode = default")
+	require.NoError(t, qre.Stream(func(*sqltypes.Result) error { return nil }))
+
+	conn, err := tsv.te.txPool.GetAndLock(txID, "for query inspection")
+	require.NoError(t, err)
+	defer conn.Unlock()
+	recorded := make([]string, 0, len(conn.TxProperties().Queries))
+	for _, q := range conn.TxProperties().Queries {
+		recorded = append(recorded, q.Sql)
+	}
+	require.Contains(t, recorded, applyQuery,
+		"a setting applied by a streamed query must be recorded for transaction replay")
 }
 
 // ACL stats keys don't contain "SelectStream".
