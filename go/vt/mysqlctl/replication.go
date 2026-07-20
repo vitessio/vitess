@@ -412,8 +412,8 @@ func (mysqld *Mysqld) execSetSuperReadOnly(ctx context.Context, on bool, options
 	}
 
 	execErr := mysqld.executeSuperQueryListConn(ctx, conn, []string{query})
-	if execErr != nil {
-		// The connection may be mid-query, so it must not return to the pool.
+	if execErr != nil && ctx.Err() != nil {
+		// The connection was interrupted mid-query, so it must not return to the pool.
 		conn.Taint()
 		return execErr
 	}
@@ -425,7 +425,7 @@ func (mysqld *Mysqld) execSetSuperReadOnly(ctx context.Context, on bool, options
 		conn.Taint()
 	}
 
-	return nil
+	return execErr
 }
 
 // WaitSourcePos lets replicas wait for the given replication position to

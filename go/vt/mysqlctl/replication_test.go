@@ -836,7 +836,7 @@ func TestSetSuperReadOnlyLockWaitTimeout(t *testing.T) {
 
 		_, err := testMysqld.SetSuperReadOnly(t.Context(), true, WithLockWaitTimeout(time.Second))
 		require.ErrorContains(t, err, "Lock wait timeout exceeded")
-		assert.Equal(t, 0, db.GetQueryCalledNum("SET SESSION lock_wait_timeout = @@global.lock_wait_timeout"), "must not run the restore on a failed connection")
+		assert.Equal(t, 1, db.GetQueryCalledNum("SET SESSION lock_wait_timeout = @@global.lock_wait_timeout"), "the session must be restored after a clean statement failure")
 	})
 
 	t.Run("reset function does not apply the lock_wait_timeout", func(t *testing.T) {
