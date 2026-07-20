@@ -82,8 +82,8 @@ const (
 	// PlanSelectStream is deprecated and never produced by the planner. It
 	// survives only as a plan name in query rules: a rule using it matches
 	// the statement shapes that streamed reads carried before v25 (see
-	// MatchesSelectStreamRule), and only on the streaming path. To be
-	// removed in v26.
+	// LegacyStreamRulePlan), and only on the streaming path. To be removed
+	// in v26.
 	PlanSelectStream
 	NumPlans
 )
@@ -150,19 +150,21 @@ func PlanByNameIC(s string) (pt PlanType, ok bool) {
 	return NumPlans, false
 }
 
-// MatchesSelectStreamRule reports whether a query rule using the deprecated
-// SelectStream plan name applies to a plan of this type on the streaming
-// path. Before v25 the streaming planner labeled every SELECT (including
-// lock-function, impossible-WHERE, and next-value selects), SHOW, UNION, and
-// EXPLAIN as SelectStream; these are the plan types those statements produce
-// today. To be removed in v26 along with PlanSelectStream.
-func (pt PlanType) MatchesSelectStreamRule() bool {
-	switch pt {
-	case PlanSelect, PlanSelectImpossible, PlanSelectLockFunc, PlanNextval,
-		PlanShow, PlanShowMigrations, PlanOtherRead:
-		return true
+// LegacyStreamRulePlan returns the plan type the pre-v25 streaming planner
+// assigned to this statement, for backward-compatible query-rule matching on
+// the streaming path. Every SELECT (including lock-function, impossible-WHERE,
+// and next-value selects), UNION, EXPLAIN, and SHOW was PlanSelectStream;
+// ANALYZE was PlanOtherRead and plans as PlanSelect today. Statements the
+// pre-v25 streaming planner rejected have no legacy plan. To be removed in
+// v26 along with PlanSelectStream.
+func LegacyStreamRulePlan(statement sqlparser.Statement) (pt PlanType, ok bool) {
+	switch statement.(type) {
+	case *sqlparser.Select, *sqlparser.Union, sqlparser.Explain, *sqlparser.Show:
+		return PlanSelectStream, true
+	case *sqlparser.Analyze:
+		return PlanOtherRead, true
 	}
-	return false
+	return NumPlans, false
 }
 
 // MarshalJSON returns a json string for PlanType.

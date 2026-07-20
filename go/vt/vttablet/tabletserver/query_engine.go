@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
@@ -432,15 +433,25 @@ func (qe *QueryEngine) getStreamPlan(curSchema *currentSchema, sql string) (*Tab
 	}
 
 	plan := &TabletPlan{Plan: splan, Original: sql}
-	// Rules using the deprecated SelectStream plan name keep matching the
-	// statement shapes streamed reads carried before v25, and only here on
-	// the streaming path; the planner never produces PlanSelectStream. To be
-	// removed in v26 along with the plan name.
+	// Rules keyed on a statement's pre-v25 streaming plan type keep matching
+	// it here on the streaming path: the deprecated SelectStream name for
+	// SELECT, UNION, EXPLAIN, and SHOW, and OtherRead for ANALYZE (which
+	// plans as Select today). To be removed in v26 along with the
+	// SelectStream plan name.
 	ruleIDs := []planbuilder.PlanType{plan.PlanID}
-	if plan.PlanID.MatchesSelectStreamRule() {
-		ruleIDs = append(ruleIDs, planbuilder.PlanSelectStream)
+	if legacyID, ok := planbuilder.LegacyStreamRulePlan(statement); ok {
+		ruleIDs = append(ruleIDs, legacyID)
 	}
 	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, ruleIDs, plan.TableNames()...)
+	// The OtherRead plan name is not deprecated, so an ANALYZE rule match
+	// through it cannot be flagged when the rules file is loaded; warn when
+	// the legacy plan type is what made a rule apply. Plans are cached and
+	// ANALYZE statements are rare, so the second filter pass is negligible.
+	if _, isAnalyze := statement.(*sqlparser.Analyze); isAnalyze {
+		if !plan.Rules.Equal(qe.queryRuleSources.FilterByPlan(sql, ruleIDs[:1], plan.TableNames()...)) {
+			warnAnalyzeLegacyRuleMatch(sql)
+		}
+	}
 	plan.buildAuthorized()
 
 	if sqlparser.CachePlan(statement) {
@@ -472,6 +483,20 @@ func (qe *QueryEngine) GetStreamPlan(ctx context.Context, logStats *tabletenv.Lo
 		err = nil
 	}
 	return plan, err
+}
+
+// analyzeLegacyRuleMatchOnce limits the ANALYZE legacy-rule warning to one
+// line per process: the same statement can be re-planned on every schema
+// change or cache eviction, and the warning is equally actionable however
+// often it fires.
+var analyzeLegacyRuleMatchOnce sync.Once
+
+func warnAnalyzeLegacyRuleMatch(sql string) {
+	analyzeLegacyRuleMatchOnce.Do(func() {
+		log.Warn("a query rule matched a streamed ANALYZE statement only through its pre-v25 streaming plan type OtherRead; "+
+			"this compatibility matching will be removed in v26, key the rule on the Select plan or a Query pattern to keep matching streamed ANALYZE",
+			slog.String("query", sql))
+	})
 }
 
 // gets key used to cache stream query plan

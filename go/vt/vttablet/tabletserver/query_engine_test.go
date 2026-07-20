@@ -377,6 +377,7 @@ func TestSelectStreamRuleAppliesOnlyToStreamingPlans(t *testing.T) {
 		{"impossible-where select", "select pk from test_table_01 where 1 != 1", planbuilder.PlanSelectImpossible},
 		{"lock-function select", "select get_lock('foo', 10)", planbuilder.PlanSelectLockFunc},
 		{"next-value select", "select next value from seq", planbuilder.PlanNextval},
+		{"explain", "explain test_table_01", planbuilder.PlanSelect},
 		{"show", "show tables", planbuilder.PlanShow},
 		{"show vitess_migrations", "show vitess_migrations", planbuilder.PlanShowMigrations},
 		{"show other", "show engine innodb status", planbuilder.PlanOtherRead},
@@ -403,6 +404,59 @@ func TestSelectStreamRuleAppliesOnlyToStreamingPlans(t *testing.T) {
 				"SelectStream rule must not apply to the buffered-execution plan")
 		})
 	}
+}
+
+// Streamed ANALYZE keeps matching rules keyed on OtherRead — its pre-v25
+// streaming plan type — and does not match legacy SelectStream rules. On the
+// buffered path, where ANALYZE has always planned as Select, neither rule
+// applies.
+func TestStreamedAnalyzeLegacyRuleMatching(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	schematest.AddDefaultQueries(db)
+
+	qe := newTestQueryEngine(10*time.Second, true, newDBConfigs(db))
+	qe.se.Open()
+	qe.Open()
+	defer qe.Close()
+
+	const sourceName = "test analyze legacy rules"
+	qrs := rules.New()
+	otherReadRule := rules.NewQueryRule("deny other reads", "deny_other_read", rules.QRFail)
+	otherReadRule.AddPlanCond(planbuilder.PlanOtherRead)
+	qrs.Add(otherReadRule)
+	selectStreamRule := rules.NewQueryRule("deny streamed reads", "deny_streamed_reads", rules.QRFail)
+	selectStreamRule.AddPlanCond(planbuilder.PlanSelectStream)
+	qrs.Add(selectStreamRule)
+	qe.queryRuleSources.RegisterSource(sourceName)
+	defer qe.queryRuleSources.UnRegisterSource(sourceName)
+	require.NoError(t, qe.queryRuleSources.SetRules(sourceName, qrs))
+
+	curSchema := &currentSchema{
+		tables: map[string]*schema.Table{
+			"test_table_01": {Name: sqlparser.NewIdentifierCS("test_table_01")},
+		},
+	}
+
+	streamPlan, err := qe.getStreamPlan(curSchema, "analyze table test_table_01")
+	if err != nil {
+		require.ErrorIs(t, err, errNoCache)
+	}
+	require.Equal(t, planbuilder.PlanSelect, streamPlan.PlanID)
+	require.NotNil(t, streamPlan.Rules.Find("deny_other_read"),
+		"an OtherRead rule must keep applying to streamed ANALYZE")
+	require.Nil(t, streamPlan.Rules.Find("deny_streamed_reads"),
+		"a SelectStream rule must not apply to streamed ANALYZE")
+
+	execPlan, err := qe.getPlan(curSchema, "analyze table test_table_01", false)
+	if err != nil {
+		require.ErrorIs(t, err, errNoCache)
+	}
+	require.Equal(t, planbuilder.PlanSelect, execPlan.PlanID)
+	require.Nil(t, execPlan.Rules.Find("deny_other_read"),
+		"an OtherRead rule must not apply to buffered ANALYZE")
+	require.Nil(t, execPlan.Rules.Find("deny_streamed_reads"),
+		"a SelectStream rule must not apply to buffered ANALYZE")
 }
 
 func TestNoStreamQueryPlanCache(t *testing.T) {
