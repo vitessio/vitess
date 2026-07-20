@@ -1858,25 +1858,6 @@
         "binlog-compression"
       ]
     },
-    "vreplication_vtctldclient_materialize": {
-      "File": "unused.go",
-      "Packages": [
-        "vitess.io/vitess/go/test/endtoend/vreplication"
-      ],
-      "Args": [
-        "-run",
-        "TestMaterializeVtctldClient"
-      ],
-      "Command": [],
-      "Manual": false,
-      "Shard": "vreplication_partial_movetables_and_materialize",
-      "Tags": [],
-      "Needs": [
-        "larger-runner",
-        "limit-resources",
-        "binlog-compression"
-      ]
-    },
     "vreplication_cellalias": {
       "File": "unused.go",
       "Packages": [
@@ -2511,7 +2492,7 @@
       ],
       "Args": [
         "-run",
-        "TestLookupIndex"
+        "TestLookupVindex"
       ],
       "Command": [],
       "Manual": false,
