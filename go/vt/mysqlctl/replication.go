@@ -421,6 +421,7 @@ func (mysqld *Mysqld) execSetSuperReadOnly(ctx context.Context, on bool, options
 	// Restore the session so the connection can return to the pool.
 	restoreQuery := "SET SESSION lock_wait_timeout = @@global.lock_wait_timeout"
 	if err := mysqld.executeSuperQueryListConn(ctx, conn, []string{restoreQuery}); err != nil {
+		log.Warn("failed to restore the session lock_wait_timeout, discarding the connection", slog.Any("error", err))
 		conn.Taint()
 	}
 
