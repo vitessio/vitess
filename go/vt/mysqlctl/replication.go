@@ -24,6 +24,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"strconv"
 	"strings"
@@ -45,6 +46,8 @@ const (
 	// Queries used for RPCs
 	getGlobalStatusQuery = "SELECT variable_name, variable_value FROM performance_schema.global_status"
 )
+
+var superReadOnlyResetTimeout = 15 * time.Second
 
 type ResetSuperReadOnlyFunc func() error
 
@@ -314,19 +317,45 @@ func (mysqld *Mysqld) SetReadOnly(ctx context.Context, on bool) error {
 // SetSuperReadOnly set/unset the super_read_only flag.
 // Returns a function which is called to set super_read_only back to its original value.
 func (mysqld *Mysqld) SetSuperReadOnly(ctx context.Context, on bool) (ResetSuperReadOnlyFunc, error) {
+	resetSuperReadOnly := func(value string) error {
+		resetCtx, cancel := context.WithTimeout(context.Background(), superReadOnlyResetTimeout)
+		defer cancel()
+
+		// Use a dedicated connection so every step honors the context: the
+		// connect is bounded by resetCtx, and on timeout execBounded closes
+		// the connection and joins its worker, so nothing is left running or
+		// held when this returns.
+		conn, err := mysqld.GetDbaConnection(resetCtx)
+		if err != nil {
+			return vterrors.Wrapf(err, "failed to get a connection to reset super_read_only to '%s'", value)
+		}
+		defer conn.Close()
+
+		err = execBounded(resetCtx, conn, "SET GLOBAL super_read_only = '"+value+"'")
+		if !errors.Is(err, context.DeadlineExceeded) {
+			return err
+		}
+		// The statement may still be pending server-side; a best-effort KILL
+		// makes a recovering server abort it instead of applying it later.
+		if killErr := mysqld.killConnectionBounded(superReadOnlyResetTimeout, conn.ID()); killErr != nil {
+			log.Warn(
+				"failed to kill the timed-out super_read_only reset query",
+				slog.Int64("conn_id", conn.ID()),
+				slog.Any("error", killErr),
+			)
+		}
+		return vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "timed out resetting super_read_only to '%s'", value)
+	}
+
 	//  return function for switching `OFF` super_read_only
 	var resetFunc ResetSuperReadOnlyFunc
 	disableFunc := func() error {
-		query := "SET GLOBAL super_read_only = 'OFF'"
-		err := mysqld.ExecuteSuperQuery(context.Background(), query)
-		return err
+		return resetSuperReadOnly("OFF")
 	}
 
 	//  return function for switching `ON` super_read_only.
 	enableFunc := func() error {
-		query := "SET GLOBAL super_read_only = 'ON'"
-		err := mysqld.ExecuteSuperQuery(context.Background(), query)
-		return err
+		return resetSuperReadOnly("ON")
 	}
 
 	superReadOnlyEnabled, err := mysqld.IsSuperReadOnly(ctx)

@@ -22,6 +22,8 @@ import (
 	"math"
 	"net"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -768,4 +770,173 @@ func TestSemiSyncExtensionLoaded(t *testing.T) {
 	res, err = testMysqld.SemiSyncExtensionLoaded(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, mysql.SemiSyncTypeOff, res)
+}
+
+func withTestSuperReadOnlyResetTimeout(t *testing.T, d time.Duration) {
+	t.Helper()
+	orig := superReadOnlyResetTimeout
+	superReadOnlyResetTimeout = d
+	t.Cleanup(func() { superReadOnlyResetTimeout = orig })
+}
+
+func TestSetSuperReadOnly(t *testing.T) {
+	tests := []struct {
+		name       string
+		on         bool
+		current    string
+		wantReset  bool
+		resetQuery string
+	}{
+		{name: "enable when disabled returns reset", on: true, current: "0", wantReset: true, resetQuery: "SET GLOBAL super_read_only = 'OFF'"},
+		{name: "disable when enabled returns reset", on: false, current: "1", wantReset: true, resetQuery: "SET GLOBAL super_read_only = 'ON'"},
+		{name: "enable when already enabled is a no-op", on: true, current: "1", wantReset: false},
+		{name: "disable when already disabled is a no-op", on: false, current: "0", wantReset: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db := fakesqldb.New(t)
+			defer db.Close()
+
+			params := db.ConnParams()
+			cp := *params
+			dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+
+			db.AddQuery("SELECT 1", &sqltypes.Result{})
+			db.AddQuery("SELECT @@global.super_read_only", sqltypes.MakeTestResult(sqltypes.MakeTestFields("sro", "int64"), tt.current))
+			db.AddQuery("SET GLOBAL super_read_only = 'ON'", &sqltypes.Result{})
+			db.AddQuery("SET GLOBAL super_read_only = 'OFF'", &sqltypes.Result{})
+
+			testMysqld := NewMysqld(dbc)
+			defer testMysqld.Close()
+
+			resetFunc, err := testMysqld.SetSuperReadOnly(t.Context(), tt.on)
+			require.NoError(t, err)
+
+			if !tt.wantReset {
+				assert.Nil(t, resetFunc)
+				return
+			}
+
+			require.NotNil(t, resetFunc)
+			require.NoError(t, resetFunc())
+			assert.NotZero(t, db.GetQueryCalledNum(tt.resetQuery))
+		})
+	}
+}
+
+func TestSetSuperReadOnlyResetTimesOut(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	params := db.ConnParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+
+	withTestSuperReadOnlyResetTimeout(t, 100*time.Millisecond)
+
+	db.AddQuery("SELECT 1", &sqltypes.Result{})
+	db.AddQuery("SELECT @@global.super_read_only", sqltypes.MakeTestResult(sqltypes.MakeTestFields("sro", "int64"), "0"))
+	db.AddQuery("SET GLOBAL super_read_only = 'ON'", &sqltypes.Result{})
+	db.AddQuery("SET GLOBAL super_read_only = 'OFF'", &sqltypes.Result{})
+
+	// Block the reset query; the KILL aborts it, as a healthy server would.
+	unblock := make(chan struct{})
+	var once sync.Once
+	release := func() { once.Do(func() { close(unblock) }) }
+	t.Cleanup(release)
+	db.SetBeforeFunc("SET GLOBAL super_read_only = 'OFF'", func() { <-unblock })
+	var killed atomic.Bool
+	db.AddQueryPatternWithCallback("kill.*", &sqltypes.Result{}, func(string) {
+		killed.Store(true)
+		release()
+	})
+
+	testMysqld := NewMysqld(dbc)
+	defer testMysqld.Close()
+
+	resetFunc, err := testMysqld.SetSuperReadOnly(t.Context(), true)
+	require.NoError(t, err)
+	require.NotNil(t, resetFunc)
+
+	done := make(chan error, 1)
+	go func() { done <- resetFunc() }()
+
+	select {
+	case err := <-done:
+		require.ErrorContains(t, err, "timed out")
+	case <-time.After(30 * time.Second):
+		require.Fail(t, "resetFunc did not return; the reset is not bounded")
+	}
+	// The stuck statement must be killed so a recovering server aborts it
+	// instead of applying it later.
+	assert.Eventually(t, killed.Load, 30*time.Second, 10*time.Millisecond)
+}
+
+func TestSetSuperReadOnlyResetBoundedWhenKillFails(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	params := db.ConnParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+
+	withTestSuperReadOnlyResetTimeout(t, 100*time.Millisecond)
+
+	db.AddQuery("SELECT 1", &sqltypes.Result{})
+	db.AddQuery("SELECT @@global.super_read_only", sqltypes.MakeTestResult(sqltypes.MakeTestFields("sro", "int64"), "0"))
+	db.AddQuery("SET GLOBAL super_read_only = 'ON'", &sqltypes.Result{})
+	db.AddQuery("SET GLOBAL super_read_only = 'OFF'", &sqltypes.Result{})
+
+	// Block both the reset query and the KILL: cancellation cannot be
+	// delivered, mimicking a fully unresponsive server, so nothing on the
+	// server side ever unblocks on its own.
+	unblock := make(chan struct{})
+	db.SetBeforeFunc("SET GLOBAL super_read_only = 'OFF'", func() { <-unblock })
+	db.AddQueryPatternWithCallback("kill.*", &sqltypes.Result{}, func(string) { <-unblock })
+
+	testMysqld := NewMysqld(dbc)
+	defer testMysqld.Close()
+	// Release the blocked handler before pool close so teardown does not hang.
+	defer close(unblock)
+
+	resetFunc, err := testMysqld.SetSuperReadOnly(t.Context(), true)
+	require.NoError(t, err)
+	require.NotNil(t, resetFunc)
+
+	done := make(chan error, 1)
+	go func() { done <- resetFunc() }()
+
+	select {
+	case err := <-done:
+		require.ErrorContains(t, err, "timed out")
+	case <-time.After(30 * time.Second):
+		require.Fail(t, "resetFunc did not return; reset is not hard-bounded when KILL cannot be delivered")
+	}
+}
+
+func TestSetSuperReadOnlyResetDetachedFromParentContext(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	params := db.ConnParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+
+	db.AddQuery("SELECT 1", &sqltypes.Result{})
+	db.AddQuery("SELECT @@global.super_read_only", sqltypes.MakeTestResult(sqltypes.MakeTestFields("sro", "int64"), "0"))
+	db.AddQuery("SET GLOBAL super_read_only = 'ON'", &sqltypes.Result{})
+	db.AddQuery("SET GLOBAL super_read_only = 'OFF'", &sqltypes.Result{})
+
+	testMysqld := NewMysqld(dbc)
+	defer testMysqld.Close()
+
+	ctx, cancel := context.WithCancel(t.Context())
+	resetFunc, err := testMysqld.SetSuperReadOnly(ctx, true)
+	require.NoError(t, err)
+	require.NotNil(t, resetFunc)
+
+	cancel()
+
+	require.NoError(t, resetFunc())
+	assert.NotZero(t, db.GetQueryCalledNum("SET GLOBAL super_read_only = 'OFF'"))
 }
