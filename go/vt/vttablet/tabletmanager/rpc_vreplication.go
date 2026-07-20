@@ -855,7 +855,7 @@ func (tm *TabletManager) updateSequenceValue(ctx context.Context, seq *tabletman
 
 		if err := tm.createSequenceTable(ctx, backingTableNameEscaped); err != nil {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL,
-				"failed to create the backing sequence table %s in the global-keyspace %s: %v",
+				"failed to create the backing sequence table %s in keyspace %s: %v",
 				backingTableNameEscaped, tm.Tablet().Keyspace, err)
 		}
 		// Table has been created, so we fall through and try again on the next loop iteration.

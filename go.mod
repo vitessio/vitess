@@ -1,6 +1,6 @@
 module vitess.io/vitess
 
-go 1.26.4
+go 1.26.5
 
 tool (
 	github.com/planetscale/vtprotobuf/cmd/protoc-gen-go-vtproto
@@ -34,7 +34,7 @@ require (
 	github.com/hashicorp/consul/api/v2 v2.0.0
 	github.com/hashicorp/go-immutable-radix v1.3.1 // indirect
 	github.com/hashicorp/serf v0.10.2 // indirect
-	github.com/klauspost/compress v1.18.7
+	github.com/klauspost/compress v1.19.0
 	github.com/klauspost/pgzip v1.2.6
 	github.com/minio/minio-go v6.0.14+incompatible
 	github.com/olekukonko/tablewriter v1.1.4
@@ -64,7 +64,7 @@ require (
 	golang.org/x/mod v0.37.0 // indirect
 	golang.org/x/net v0.56.0
 	golang.org/x/oauth2 v0.36.0
-	golang.org/x/sys v0.46.0
+	golang.org/x/sys v0.47.0
 	golang.org/x/term v0.44.0
 	golang.org/x/text v0.38.0 // indirect
 	golang.org/x/time v0.15.0
@@ -99,7 +99,7 @@ require (
 	github.com/lmittmann/tint v1.1.3
 	github.com/mattn/go-isatty v0.0.22
 	github.com/nsf/jsondiff v0.0.0-20210926074059-1e845ec5d249
-	github.com/shirou/gopsutil/v4 v4.26.5
+	github.com/shirou/gopsutil/v4 v4.26.6
 	github.com/spf13/afero v1.15.0
 	github.com/spf13/jwalterweatherman v1.1.0
 	github.com/xlab/treeprint v1.2.0

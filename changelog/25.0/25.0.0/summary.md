@@ -6,10 +6,13 @@
 
 - **[Major Changes](#major-changes)**
     - **[New Support](#new-support)**
+        - [VTOrc failover of an unreachable primary `vttablet` via replica quorum](#vtorc-quorum-unreachable-primary)
     - **[Breaking Changes](#breaking-changes)**
         - [`--watch-replication-stream` flag removed](#vttablet-watch-replication-stream-removed)
+        - [VRLog feature removed](#vttablet-vrlog-removed)
         - [Snapshot Topology feature removed](#vtorc-snapshot-topology-removed)
         - [VTOrc `--cell` flag is now required](#vtorc-cell-required)
+        - [`BackupHandle` interface gains `Wait()` method](#backup-handle-wait-method)
     - **[Deprecations](#deprecations)**
         - [CLI Flags](#deprecated-cli-flags)
         - [Legacy streaming-path plan types in query rules](#deprecated-selectstream-rule-plan)
@@ -20,17 +23,44 @@
         - [Ingress bytes in query LogStats](#vtgate-logstats-ingress-bytes)
         - [New controls for cross-keyspace reads](#vtgate-cross-keyspace-reads)
         - [Streaming errors no longer surface as connection loss](#vtgate-streamexecute-real-errors)
+        - [SHA256-hashed passwords in the static gRPC auth plugin](#vtgate-grpc-static-auth-sha256)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
         - [Query timeout for state-changing statements on the streaming path](#vttablet-stream-query-timeout)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
+        - [Skip MySQL version check when restoring from a mysql-shell backup](#vttablet-mysql-shell-restore-skip-version-check)
+    - **[Backup/Restore](#minor-changes-backup)**
+        - [Chunked backup/restore for the builtinbackupengine](#backup-chunked-builtin)
     - **[General](#minor-changes-general)**
         - [Build version metadata now sourced from VCS stamping](#build-info-from-vcs)
 
 ## <a id="major-changes"/>Major Changes</a>
 
 ### <a id="new-support"/>New Support</a>
+
+#### <a id="vtorc-quorum-unreachable-primary"/>VTOrc failover of an unreachable primary `vttablet` via replica quorum</a>
+
+VTOrc can now run an Emergency Reparent Shard (ERS) when a `PRIMARY` tablet's `vttablet` process is unreachable while its MySQL keeps running — a case the existing replication-based detection misses, because the replicas keep replicating from the still-running MySQL.
+
+To avoid acting on VTOrc's own connectivity problems (for example, a network partition between VTOrc and the primary), the failover requires a quorum: a configurable fraction of the shard's `REPLICA`/`RDONLY` tablets must also report the primary's `vttablet` unreachable, in addition to VTOrc's own failed check. The liveness signal is gathered over the existing `Ping` and `FullStatus` RPCs — there is no new protocol or service.
+
+The feature is opt-in and disabled by default:
+
+- On `vttablet`, set `--track-shard-tablet-health` so the tablet periodically pings its shard's current primary and reports the primary's `vttablet` liveness in `FullStatus`.
+- On VTOrc, set `--emergency-reparent-on-primary-tablet-unreachable` to act on the quorum. The strictness is tunable via `--shard-tablet-health-quorum-fraction` (default `1.0`, i.e. unanimous), `--shard-tablet-health-quorum-min-observers`, `--shard-tablet-health-failure-threshold`, and `--shard-tablet-health-freshness`.
+
+The quorum decision is observable: VTOrc logs why it did or did not fail over an unreachable primary, records the per-observer vote tally in the recovery audit message, and exposes the live per-shard quorum state — the primary, the verdict, and each observer's vote — at the read-only `/api/shard-tablet-health-quorum` endpoint.
+
+Detection and decision latency is bounded by the tunables: an observer considers the primary down after `--shard-tablet-health-failure-threshold` consecutive failed pings at `--shard-tablet-health-interval` (defaults: 3 × 1s), its report reaches VTOrc with the next `FullStatus` poll of that observer, and the report counts toward quorum only while younger than `--shard-tablet-health-freshness` (default `15s`, measured from the observer's underlying ping). VTOrc therefore acts on evidence that is at most one freshness window old — and immediately before reparenting it re-polls the observers and the primary itself and re-evaluates the analysis under the shard lock, so a primary whose `vttablet` recovered in the meantime aborts the failover. Note that `--shard-tablet-health-quorum-fraction` values below `1.0` make detection more tolerant of partial agreement, but give up the default (unanimous) guarantee that a single fresh "up" report vetoes the failover.
+
+For the quorum to add protection beyond VTOrc's own view, the shard's observers should sit in failure domains independent of VTOrc and of one another: if VTOrc and a majority of observers share a network segment that is partitioned from a still-serving primary, the failover can still fire on a live primary. The strict-majority gate requires a genuine majority of the shard's `REPLICA`/`RDONLY` tablets, counted from topology — so unreported (e.g. down) replicas still count toward the denominator, and for shards with two or more eligible observers no single flaky report can drive a reparent. A shard whose only eligible observer is a single `REPLICA`/`RDONLY` therefore rests on that one observer plus VTOrc's own failed check; raise `--shard-tablet-health-quorum-min-observers` if you want quorum ERS to require more than one observer (at the cost of not failing such single-observer shards over automatically).
+
+A graceful `vttablet` shutdown records a shutdown marker in the topology server so that intentionally stopped primaries (e.g. during rolling restarts) are not failed over by the quorum. That marker write is best-effort: if it fails — which requires the topology server to be unavailable at shutdown time — the graceful shutdown is indistinguishable from a crash and may be failed over. In that situation VTOrc's own topology access is typically degraded as well, which further gates any recovery.
+
+Note that in this scenario the old primary's MySQL keeps running, and because its `vttablet` is the unreachable component, it cannot be demoted until that `vttablet` comes back and discovers the shard has a new primary. As with any emergency reparent away from an unreachable primary, a semi-sync durability policy (e.g. `semi_sync`) is what prevents the old primary from acknowledging new writes in the meantime; with `none` durability, anything writing directly to the old MySQL (bypassing `vtgate`) could cause a split brain.
+
+See [#19918](https://github.com/vitessio/vitess/issues/19918).
 
 ### <a id="breaking-changes"/>Breaking Changes</a>
 
@@ -43,6 +73,14 @@ The deprecated `--watch-replication-stream` VTTablet flag has been removed.
 **Impact**: VTTablet will fail to start if `--watch-replication-stream` is still passed.
 
 See [#20048](https://github.com/vitessio/vitess/pull/20048) for the removal and [#19204](https://github.com/vitessio/vitess/pull/19204) for the original deprecation.
+
+#### <a id="vttablet-vrlog-removed"/>VRLog feature removed</a>
+
+The VRLog feature — a streaming log of VReplication events served at VTTablet's `/debug/vrlog` HTTP endpoint, [disabled by default since v22](../../22.0/22.0.0/changelog.md) — has been removed. The `--vreplication-enable-http-log` flag that enabled it is now a deprecated no-op and will be removed in v26.
+
+**Migration**: remove `--vreplication-enable-http-log` from VTTablet startup arguments.
+
+**Impact**: The `/debug/vrlog` endpoint no longer exists. Passing `--vreplication-enable-http-log` logs a deprecation warning and has no effect.
 
 #### <a id="vtorc-snapshot-topology-removed"/>Snapshot Topology feature removed</a>
 
@@ -64,6 +102,18 @@ The `--cell` VTOrc flag, [introduced in v24](../../24.0/24.0.0/summary.md#vtorc-
 
 See [#20048](https://github.com/vitessio/vitess/pull/20048) for the removal and [#19047](https://github.com/vitessio/vitess/pull/19047) for the original `--cell` flag introduction.
 
+#### <a id="backup-handle-wait-method"/>`BackupHandle` interface gains `Wait()` method</a>
+
+The `backupstorage.BackupHandle` interface now requires a `Wait()` method. This method blocks until all pending asynchronous `AddFile` operations complete without finalizing the backup. It is idempotent and safe to call multiple times.
+
+**Impact**: Any out-of-tree or custom `BackupHandle` implementation will fail to compile until a `Wait()` method is added. For synchronous backends, a no-op implementation is sufficient:
+
+```go
+func (bh *MyBackupHandle) Wait() {}
+```
+
+See [#20167](https://github.com/vitessio/vitess/pull/20167) for details.
+
 ### <a id="deprecations"/>Deprecations</a>
 
 #### <a id="deprecated-cli-flags"/>CLI Flags</a>
@@ -73,6 +123,10 @@ The VTGate flag `--legacy-replication-lag-algorithm` is now deprecated and is a 
 The flag will be removed entirely in v26. This deprecation is tracked in https://github.com/vitessio/vitess/issues/18914.
 
 **Impact**: Remove any usage of the `--legacy-replication-lag-algorithm` flag from VTGate startup scripts or configuration.
+
+The VTTablet flag `--vreplication-enable-http-log` is now deprecated and is a no-op, as the [VRLog feature it enabled has been removed](#vttablet-vrlog-removed). The flag will be removed entirely in v26.
+
+**Impact**: Remove any usage of the `--vreplication-enable-http-log` flag from VTTablet startup scripts or configuration.
 
 #### <a id="deprecated-selectstream-rule-plan"/>Legacy streaming-path plan types in query rules</a>
 
@@ -149,6 +203,23 @@ This affects all three streaming code paths in `go/mysql`: `COM_QUERY` (text pro
 
 **Impact**: Application error-handling and retry logic that branched on `2013 / Lost connection` will now see the real error code — for example, `errno 1317 / context canceled` after a `KILL QUERY` against a streaming session, or planner errors such as `specifying two different database in the query is not supported`.
 
+#### <a id="vtgate-grpc-static-auth-sha256"/>SHA256-hashed passwords in the static gRPC auth plugin</a>
+
+The static gRPC authentication plugin (`--grpc-auth-static-password-file`) now accepts SHA256-hashed passwords in addition to plaintext ones. Each entry in the credentials file gains an optional `CachingSha2Password` field holding the hex-encoded `SHA256(SHA256(password))`, with an optional leading `*`. This is the same format the MySQL protocol's static auth server uses for its own `CachingSha2Password` field, so a single stored credential can authenticate a user on both the MySQL and gRPC endpoints, and existing `caching_sha2_password`-style hashes can be copied over verbatim.
+
+When an entry sets `CachingSha2Password`, it takes precedence over the plaintext `Password` field. A single credentials file may mix plaintext and hashed entries:
+
+```json
+[
+  {"Username": "user1", "Password": "plaintext_password"},
+  {"Username": "user2", "CachingSha2Password": "*49bbd275dd4bfb1170ced93e839a8ec1d5b86eab6acb0842502130a31702390d"}
+]
+```
+
+The hash is validated and hex-decoded once when the plugin loads. An entry whose `CachingSha2Password` is not valid hex, or does not decode to a 32-byte SHA256 digest, causes the plugin to fail to initialize. No new plugin or flag is introduced.
+
+See [#19250](https://github.com/vitessio/vitess/pull/19250) for details.
+
 ### <a id="minor-changes-vttablet"/>VTTablet</a>
 
 #### <a id="vttablet-consolidator-reject-on-cap"/>Consolidator Reject on Waiter Cap</a>
@@ -179,6 +250,29 @@ Two changes:
 Tablets that already have more tracked schema objects than the configured limit will reload fine — only new creations are gated. Operators who need to support more tables and views should increase the flag and ensure both vttablet and mysqld have enough memory to comfortably hold the larger schema.
 
 See [#19978](https://github.com/vitessio/vitess/issues/19978) for details.
+
+#### <a id="vttablet-mysql-shell-restore-skip-version-check"/>Skip MySQL version check when restoring from a mysql-shell backup</a>
+
+A new `--mysql-shell-restore-skip-version-check` flag (default `false`) has been added to VTTablet and VTBackup. When enabled, the MySQL version compatibility check that normally gates restores is skipped, but only for backups taken with the `mysqlshell` engine. Backups taken with other engines still go through the usual version check regardless of this flag.
+
+Because mysql-shell performs a logical restore, its backups are not tied to the on-disk data dictionary format the way physical backups are, so restoring across otherwise-incompatible MySQL versions can be safe. This flag lets operators opt into that behavior.
+
+**Impact**: With this flag set, VTTablet may select and restore a `mysqlshell` backup whose MySQL version would otherwise be rejected as incompatible. Leave it unset to preserve the existing behavior.
+
+### <a id="minor-changes-backup"/>Backup/Restore</a>
+
+#### <a id="backup-chunked-builtin"/>Chunked backup/restore for the `builtinbackupengine`</a>
+
+The builtin backup engine now supports splitting large files into chunks for parallel backup and restore. This significantly improves restore throughput for keyspaces dominated by a small number of large InnoDB files, as individual chunks can be restored concurrently via parallel writes.
+
+Two new flags control chunking behavior:
+
+- `--builtinbackup-file-chunk-threshold` (default `0`, chunking disabled): files larger than this size in bytes are split into chunks during backup.
+- `--builtinbackup-file-chunk-size` (default `1073741824` / 1 GiB): the target size in bytes for each chunk.
+
+**Compatibility note:** Backups created with chunking enabled are **not restorable by older Vitess versions** that do not understand the `Chunks` field in the backup MANIFEST. Non-chunked backups (the default) remain fully compatible with older versions.
+
+See [#20167](https://github.com/vitessio/vitess/pull/20167) for details.
 
 ### <a id="minor-changes-general"/>General</a>
 

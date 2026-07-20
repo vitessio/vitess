@@ -11,6 +11,32 @@ runs:
       shell: bash -e {0}
       run: |
         export DEBIAN_FRONTEND="noninteractive"
+
+        # archive.ubuntu.com resolves to multiple IP addresses, and some of
+        # them intermittently do not respond to HTTPS requests, so a plain
+        # curl/wget call can fail even though the archive is healthy. Resolve
+        # the host ourselves and try each IPv4 address in turn.
+        download_with_ip_failover() {
+          local url="$1"
+          local out="$2"
+          local host ips ip
+          host="$(echo "$url" | awk -F/ '{print $3}')"
+
+          mapfile -t ips < <(getent ahostsv4 "$host" | awk '{print $1}' | sort -u)
+          echo "Resolved IPs for $host: ${ips[*]}"
+
+          for ip in "${ips[@]}"; do
+            echo "Trying $host via $ip ..."
+            if curl -fsSL --connect-timeout 10 --max-time 30 --retry 2 --retry-delay 2 --resolve "$host:443:$ip" -o "$out" "$url"; then
+              echo "Succeeded via $ip"
+              return 0
+            fi
+          done
+
+          echo "All resolved IPs for $host failed"
+          return 1
+        }
+
         sudo apt-get update
 
         # Uninstall any previously installed MySQL first
@@ -37,11 +63,9 @@ runs:
           # Note: these commands must stay separate statements: `set -e` does
           # not fire for failures inside a `&&` chain, and the install must
           # fail right here rather than in a later, unrelated apt-get run.
-          wget \
-            --tries=3 \
-            --waitretry=2 \
-            --timeout=30 \
-            https://archive.ubuntu.com/ubuntu/pool/main/liba/libaio/libaio1_0.3.112-13build1_amd64.deb || {
+          download_with_ip_failover \
+            https://archive.ubuntu.com/ubuntu/pool/main/liba/libaio/libaio1_0.3.112-13build1_amd64.deb \
+            libaio1_0.3.112-13build1_amd64.deb || {
             echo "Failed to download libaio1. The pinned version may have been superseded and removed from archive.ubuntu.com; check https://archive.ubuntu.com/ubuntu/pool/main/liba/libaio/ for the current version."
             exit 1
           }
@@ -62,9 +86,9 @@ runs:
             sudo apt-get update
             # libtinfo5 is also needed for older MySQL 5.7 builds. Separate
             # statements for the same fail-fast reason as libaio1 above.
-            curl -fsSL -O https://archive.ubuntu.com/ubuntu/pool/universe/n/ncurses/libtinfo5_6.3-2ubuntu0.2_amd64.deb \
-              --retry 3 \
-              --retry-delay 2 || {
+            download_with_ip_failover \
+              https://archive.ubuntu.com/ubuntu/pool/universe/n/ncurses/libtinfo5_6.3-2ubuntu0.2_amd64.deb \
+              libtinfo5_6.3-2ubuntu0.2_amd64.deb || {
               echo "Failed to download libtinfo5. The pinned version may have been superseded and removed from archive.ubuntu.com; check https://archive.ubuntu.com/ubuntu/pool/universe/n/ncurses/ for the current version."
               exit 1
             }

@@ -192,7 +192,17 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 		SuperReadOnly:               superReadOnly,
 		ReplicationConfiguration:    replConfiguration,
 		TabletType:                  tm.Tablet().Type,
+		ShardPeerHealth:             tm.shardPeerHealthSnapshot(),
 	}, nil
+}
+
+// shardPeerHealthSnapshot returns the latest shard-peer liveness signals, or nil when
+// the shard health monitor is not enabled.
+func (tm *TabletManager) shardPeerHealthSnapshot() []*replicationdatapb.ShardPeerHealth {
+	if tm.shardHealthMonitor == nil {
+		return nil
+	}
+	return tm.shardHealthMonitor.snapshot()
 }
 
 // PrimaryStatus returns the replication status for a primary tablet.
