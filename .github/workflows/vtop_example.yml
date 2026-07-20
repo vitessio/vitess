@@ -45,6 +45,7 @@ jobs:
           filters: |
             end_to_end:
               - 'go/**/!(*_test).go'
+              - 'go/**/*.s'
               - 'go/vt/sidecardb/**/*.sql'
               - 'go/mysql/collations/colldata/**'
               - 'go/mysql/icuregex/internal/icudata/**'

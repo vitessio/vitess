@@ -113,6 +113,7 @@ jobs:
               - 'test/config.json'
               - 'test/config_partial_keyspace.json'
               - 'go/**/!(*_test).go'
+              - 'go/**/*.s'
               - 'go/test/endtoend/**'
               - 'go/vt/sidecardb/**/*.sql'
               - 'go/mysql/collations/colldata/**'

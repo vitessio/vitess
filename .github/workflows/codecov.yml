@@ -49,13 +49,16 @@ jobs:
       with:
         token: ''
         # With 'every', a file is relevant only if it matches all patterns: any
-        # path from the brace-list, and not an endtoend-only test file (those
-        # cannot be imported by unit tests).
+        # path from the brace-list, and not a test file in one of the endtoend
+        # test packages, which the coverage run never tests and which cannot
+        # be imported by unit tests. The endtoend trees are enumerated explicitly
+        # so that testdata fixtures whose paths merely contain an endtoend
+        # directory (e.g. under go/tools/ci-config) still count as relevant.
         predicate-quantifier: 'every'
         filters: |
           changed_files:
             - '{.github/workflows/codecov.yml,.github/actions/setup-mysql/action.yml,go/**,go.mod,go.sum,Makefile}'
-            - '!go/test/endtoend/**/*_test.go'
+            - '!{go/test/endtoend,go/flags/endtoend,go/mysql/endtoend,go/vt/vtctl/endtoend,go/vt/vtctl/grpcvtctldserver/endtoend,go/vt/vtgate/endtoend,go/vt/vttablet/endtoend}/**/*_test.go'
 
     - name: Set up Go
       if: steps.mode.outputs.is_full_run == 'true' || steps.changes.outputs.changed_files == 'true'

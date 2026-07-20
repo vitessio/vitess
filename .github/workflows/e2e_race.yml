@@ -39,7 +39,12 @@ jobs:
         filters: |
           end_to_end:
             - 'go/**/!(*_test).go'
-            - 'go/**/endtoend/**'
+            - 'go/**/*.s'
+            # Package-level endtoend suites (go/mysql/endtoend, go/vt/vtgate/endtoend, ...).
+            # The cluster test tree go/test/endtoend is excluded: its packages are not run
+            # here, and its non-test .go helpers already match the first pattern.
+            - 'go/!(test)/**/endtoend/**'
+            - 'go/vt/sidecardb/**/*.sql'
             - 'go/mysql/collations/colldata/**'
             - 'go/mysql/icuregex/internal/icudata/**'
             - 'test.go'
