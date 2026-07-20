@@ -742,12 +742,7 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 	// idempotent.
 	log.Info("enabling super_read_only")
 
-	var setSuperReadOnlyOpts []mysqlctl.SetSuperReadOnlyOption
-	if demotePrimaryLockWaitTimeout > 0 {
-		setSuperReadOnlyOpts = append(setSuperReadOnlyOpts, mysqlctl.WithLockWaitTimeout(demotePrimaryLockWaitTimeout))
-	}
-
-	if _, err := tm.MysqlDaemon.SetSuperReadOnly(ctx, true, setSuperReadOnlyOpts...); err != nil {
+	if _, err := tm.MysqlDaemon.SetSuperReadOnly(ctx, true, mysqlctl.WithLockWaitTimeout(demotePrimaryLockWaitTimeout)); err != nil {
 		if sqlErr, ok := errors.AsType[*sqlerror.SQLError](err); ok && sqlErr.Number() == sqlerror.ERUnknownSystemVariable {
 			log.Warn("server does not know about super_read_only, continuing anyway...")
 		} else {
