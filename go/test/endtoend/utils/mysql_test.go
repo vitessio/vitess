@@ -267,6 +267,10 @@ func TestSetSuperReadOnlyLockWaitTimeoutMySQL(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, isSuperReadOnly, "super_read_only should still be set to False")
 
+	isReadOnly, err := mysqld.IsReadOnly(t.Context())
+	require.NoError(t, err)
+	assert.False(t, isReadOnly, "the failed statement should not leave read_only enabled")
+
 	// Once the lock is released, the same call succeeds.
 	Exec(t, conn, "unlock tables")
 	retFunc, err := mysqld.SetSuperReadOnly(t.Context(), true, mysqlctl.WithLockWaitTimeout(time.Second))
