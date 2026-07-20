@@ -2956,6 +2956,46 @@ func TestSQLPrepareDoesNotStartTransaction(t *testing.T) {
 	}
 }
 
+func TestPrepareRejectsNonPreparableStatements(t *testing.T) {
+	// MySQL rejects preparing statements that manage prepared statements
+	// (PREPARE, EXECUTE, DEALLOCATE PREPARE) with ER_UNSUPPORTED_PS.
+	// Accepting them would let an EXECUTE re-enter the session's
+	// prepared-statement state — for example a statement that deallocates
+	// itself while it runs.
+	executor, _, _, _, ctx := createExecutorEnv(t)
+
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
+
+	tcases := []struct {
+		name string
+		sql  string
+	}{{
+		name: "nested prepare",
+		sql:  "prepare prep from 'prepare prep_inner from ''select 1'''",
+	}, {
+		name: "nested execute",
+		sql:  "prepare prep from 'execute prep'",
+	}, {
+		name: "nested deallocate",
+		sql:  "prepare prep from 'deallocate prepare prep'",
+	}, {
+		name: "nested drop prepare",
+		sql:  "prepare prep from 'drop prepare prep'",
+	}}
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			_, err := executorExecSession(ctx, executor, session, "prepare prep from 'select 1'", nil)
+			require.NoError(t, err)
+
+			_, err = executorExecSession(ctx, executor, session, tcase.sql, nil)
+			require.ErrorContains(t, err, "This command is not supported in the prepared statement protocol yet")
+			// A failed PREPARE deallocates the statement previously
+			// registered under the same name.
+			require.Nil(t, session.PrepareStatement["prep"])
+		})
+	}
+}
+
 func TestExecutorFlushStmt(t *testing.T) {
 	executor, _, _, _, _ := createExecutorEnv(t)
 

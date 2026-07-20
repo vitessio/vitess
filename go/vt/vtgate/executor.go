@@ -1874,6 +1874,19 @@ func (e *Executor) ReleaseLock(ctx context.Context, session *econtext.SafeSessio
 
 // PlanPrepareStmt implements the IExecutor interface
 func (e *Executor) PlanPrepareStmt(ctx context.Context, safeSession *econtext.SafeSession, query string) (*engine.Plan, error) {
+	stmt, _, err := parseAndValidateQuery(query, e.env.Parser())
+	if err != nil {
+		return nil, err
+	}
+	switch stmt.(type) {
+	case *sqlparser.PrepareStmt, *sqlparser.ExecuteStmt, *sqlparser.DeallocateStmt:
+		// MySQL rejects preparing statements that manage prepared statements.
+		// Accepting them would let an EXECUTE re-enter the session's
+		// prepared-statement state, e.g. a statement that deallocates itself
+		// while it runs.
+		return nil, vterrors.NewErrorf(vtrpcpb.Code_UNIMPLEMENTED, vterrors.UnsupportedPS, "This command is not supported in the prepared statement protocol yet")
+	}
+
 	// creating this log stats to not interfere with the original log stats.
 	lStats := logstats.NewLogStats(ctx, "prepare", query, safeSession.GetSessionUUID(), nil, streamlog.GetQueryLogConfig())
 	plan, _, _, err := e.fetchOrCreatePlan(ctx, safeSession, query, nil, false, true, lStats, false)
