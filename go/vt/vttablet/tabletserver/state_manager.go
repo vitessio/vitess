@@ -608,12 +608,14 @@ func (sm *stateManager) handleShutdownGracePeriod(wg *sync.WaitGroup) {
 	}
 }
 
-func (sm *stateManager) terminateAllQueries(wg *sync.WaitGroup) (cancel func()) {
+func (sm *stateManager) terminateAllQueries(wg *sync.WaitGroup) func() {
 	if sm.shutdownGracePeriod == 0 {
 		return func() {}
 	}
 	ctx, cancel := context.WithCancel(context.TODO())
+	done := make(chan struct{})
 	go func() {
+		defer close(done)
 		if wg != nil {
 			defer wg.Done()
 		}
@@ -633,16 +635,8 @@ func (sm *stateManager) terminateAllQueries(wg *sync.WaitGroup) (cancel func()) 
 		sm.statefulql.TerminateAll()
 		log.Info("Killed all OLTP queries.")
 
-		if ctx.Err() != nil {
-			return
-		}
-
 		sm.te.TerminateActiveCommits()
 		log.Info("Killed all active COMMIT statements.")
-
-		if ctx.Err() != nil {
-			return
-		}
 
 		// We can rollback prepared transactions only after we have killed all the write queries in progress.
 		// This is essential because when we rollback a prepared transaction, it lets go of the locks it was holding.
@@ -651,7 +645,10 @@ func (sm *stateManager) terminateAllQueries(wg *sync.WaitGroup) (cancel func()) 
 		sm.te.RollbackPrepared()
 		log.Info("Rollbacked all prepared transactions")
 	}()
-	return cancel
+	return func() {
+		cancel()
+		<-done
+	}
 }
 
 func (sm *stateManager) closeAll() {
