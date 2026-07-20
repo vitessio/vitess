@@ -2976,6 +2976,11 @@ func TestPrepareRejectsNonPreparableStatements(t *testing.T) {
 		name: "nested execute",
 		sql:  "prepare prep from 'execute prep'",
 	}, {
+		// ER_UNSUPPORTED_PS takes precedence over the unknown-statement
+		// error the nested EXECUTE would fail to plan with, like in MySQL.
+		name: "nested execute of an unknown statement",
+		sql:  "prepare prep from 'execute prep_unknown'",
+	}, {
 		name: "nested deallocate",
 		sql:  "prepare prep from 'deallocate prepare prep'",
 	}, {

@@ -1874,23 +1874,25 @@ func (e *Executor) ReleaseLock(ctx context.Context, session *econtext.SafeSessio
 
 // PlanPrepareStmt implements the IExecutor interface
 func (e *Executor) PlanPrepareStmt(ctx context.Context, safeSession *econtext.SafeSession, query string) (*engine.Plan, error) {
-	stmt, _, err := parseAndValidateQuery(query, e.env.Parser())
+	// creating this log stats to not interfere with the original log stats.
+	lStats := logstats.NewLogStats(ctx, "prepare", query, safeSession.GetSessionUUID(), nil, streamlog.GetQueryLogConfig())
+	plan, _, stmt, err := e.fetchOrCreatePlan(ctx, safeSession, query, nil, false, true, lStats, false)
+
+	// MySQL rejects preparing statements that manage prepared statements.
+	// Accepting them would let an EXECUTE re-enter the session's
+	// prepared-statement state, e.g. a statement that deallocates itself
+	// while it runs. The check runs before the error return so that it
+	// takes precedence over planning errors, like in MySQL. A nil stmt
+	// means the plan came from the plan cache, which such statements never
+	// enter: sqlparser.CachePlan only admits plain queries and DML.
+	switch stmt.(type) {
+	case *sqlparser.PrepareStmt, *sqlparser.ExecuteStmt, *sqlparser.DeallocateStmt:
+		return nil, vterrors.NewErrorf(vtrpcpb.Code_UNIMPLEMENTED, vterrors.UnsupportedPS, "This command is not supported in the prepared statement protocol yet")
+	}
 	if err != nil {
 		return nil, err
 	}
-	switch stmt.(type) {
-	case *sqlparser.PrepareStmt, *sqlparser.ExecuteStmt, *sqlparser.DeallocateStmt:
-		// MySQL rejects preparing statements that manage prepared statements.
-		// Accepting them would let an EXECUTE re-enter the session's
-		// prepared-statement state, e.g. a statement that deallocates itself
-		// while it runs.
-		return nil, vterrors.NewErrorf(vtrpcpb.Code_UNIMPLEMENTED, vterrors.UnsupportedPS, "This command is not supported in the prepared statement protocol yet")
-	}
-
-	// creating this log stats to not interfere with the original log stats.
-	lStats := logstats.NewLogStats(ctx, "prepare", query, safeSession.GetSessionUUID(), nil, streamlog.GetQueryLogConfig())
-	plan, _, _, err := e.fetchOrCreatePlan(ctx, safeSession, query, nil, false, true, lStats, false)
-	return plan, err
+	return plan, nil
 }
 
 func (e *Executor) Close() {
