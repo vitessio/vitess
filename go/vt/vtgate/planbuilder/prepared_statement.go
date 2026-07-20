@@ -36,8 +36,10 @@ func prepareStmt(pStmt *sqlparser.PrepareStmt) (*planResult, error) {
 		prep.UserDefinedVariable = expr.Name.Lowered()
 	case *sqlparser.Argument:
 		// The grammar accepts PREPARE ... FROM ?, but a positional parameter
-		// cannot supply the statement text.
-		return nil, vterrors.VT12001("PREPARE with a positional parameter as the statement text")
+		// cannot supply the statement text. The primitive fails at execution
+		// time, after deallocating any statement previously registered under
+		// the name, like any other failing PREPARE.
+		prep.FromPositionalParameter = true
 	default:
 		return nil, vterrors.VT13002("prepare statement should not have : %T", pStmt.Statement)
 	}

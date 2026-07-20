@@ -72,7 +72,16 @@
   {
     "comment": "prepare statement from a positional parameter",
     "query": "prepare prep from ?",
-    "plan": "VT12001: unsupported: PREPARE with a positional parameter as the statement text"
+    "plan": {
+      "Type": "Local",
+      "QueryType": "PREPARE",
+      "Original": "prepare prep from ?",
+      "Instructions": {
+        "OperatorType": "PREPARE",
+        "Name": "prep",
+        "PositionalParameter": true
+      }
+    }
   },
   {
     "comment": "prepare statement with non existing variable",
