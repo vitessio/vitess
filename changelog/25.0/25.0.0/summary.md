@@ -24,6 +24,7 @@
         - [SHA256-hashed passwords in the static gRPC auth plugin](#vtgate-grpc-static-auth-sha256)
         - [PREPARE statements no longer report the prepared statement's tables](#vtgate-prepare-tables-used)
         - [Preparing a statement no longer starts an implicit transaction](#vtgate-prepare-no-implicit-tx)
+        - [Stricter validation of SQL-level PREPARE statements](#vtgate-prepare-stricter-validation)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
     - **[VTTablet](#minor-changes-vttablet)**
@@ -206,6 +207,14 @@ With autocommit disabled, preparing a statement no longer opens an implicit tran
 This matches MySQL's behavior: preparing a statement doesn't access table data, so the transaction only starts when the prepared statement is executed. `EXECUTE` and `COM_STMT_EXECUTE` still start an implicit transaction as before.
 
 See [#20538](https://github.com/vitessio/vitess/pull/20538) and [#20562](https://github.com/vitessio/vitess/pull/20562) for details.
+
+#### <a id="vtgate-prepare-stricter-validation"/>Stricter validation of SQL-level PREPARE statements</a>
+
+SQL-level `PREPARE` now rejects statement text that itself manages prepared statements (`PREPARE`, `EXECUTE`, `DEALLOCATE PREPARE`) with MySQL's `ER_UNSUPPORTED_PS` error (1295). Previous versions accepted most of these and performed the nested statement's session changes while planning the outer one; MySQL rejects them all at PREPARE time.
+
+Additionally, `PREPARE ... FROM ?` is now a syntax error, matching MySQL: the grammar accidentally accepted a positional parameter as the statement text, but no value could ever reach it and the statement always failed. This also affects programs that parse SQL using the `go/vt/sqlparser` package directly.
+
+See [#20562](https://github.com/vitessio/vitess/pull/20562) for details.
 
 ### <a id="minor-changes-vttablet"/>VTTablet</a>
 
