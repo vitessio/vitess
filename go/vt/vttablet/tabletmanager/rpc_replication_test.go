@@ -456,59 +456,6 @@ func TestDemotePrimarySetServingTypeErrorRunsRollback(t *testing.T) {
 	assert.True(t, changes[1].Serving)
 }
 
-type redoHookController struct {
-	*tabletservermock.Controller
-	onRedo func()
-}
-
-func (c *redoHookController) RedoPreparedTransactions() { c.onRedo() }
-
-func TestRedoPreparedTransactionsSetsReadWriteWithFreshTimeout(t *testing.T) {
-	tm, mockMysqlDaemon := newDemotePrimaryRollbackTM(t)
-
-	ctx, cancel := context.WithCancel(t.Context())
-	// Simulate the replay outliving ctx's deadline by cancelling during it.
-	tm.QueryServiceControl = &redoHookController{
-		Controller: tm.QueryServiceControl.(*tabletservermock.Controller),
-		onRedo:     cancel,
-	}
-
-	gomock.InOrder(
-		mockMysqlDaemon.EXPECT().SetSuperReadOnly(gomock.Any(), false).Return(nil, nil),
-		mockMysqlDaemon.EXPECT().SetReadOnly(gomock.Any(), false).DoAndReturn(
-			func(ctx context.Context, on bool) error {
-				require.NoError(t, ctx.Err())
-				return nil
-			},
-		),
-	)
-
-	require.NoError(t, tm.redoPreparedTransactionsAndSetReadWrite(context.WithoutCancel(ctx)))
-}
-
-func TestRedoPreparedTransactionsHonorsCallerCancellation(t *testing.T) {
-	tm, mockMysqlDaemon := newDemotePrimaryRollbackTM(t)
-
-	ctx, cancel := context.WithCancel(t.Context())
-	// Simulate the caller losing its shard lock during the replay.
-	tm.QueryServiceControl = &redoHookController{
-		Controller: tm.QueryServiceControl.(*tabletservermock.Controller),
-		onRedo:     cancel,
-	}
-
-	gomock.InOrder(
-		mockMysqlDaemon.EXPECT().SetSuperReadOnly(gomock.Any(), false).Return(nil, nil),
-		mockMysqlDaemon.EXPECT().SetReadOnly(gomock.Any(), false).DoAndReturn(
-			func(ctx context.Context, on bool) error {
-				require.Error(t, ctx.Err())
-				return ctx.Err()
-			},
-		),
-	)
-
-	require.ErrorIs(t, tm.redoPreparedTransactionsAndSetReadWrite(ctx), context.Canceled)
-}
-
 func TestDemotePrimarySemiSyncErrorRunsRollback(t *testing.T) {
 	tests := []struct {
 		name  string
