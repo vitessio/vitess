@@ -70,18 +70,9 @@
     }
   },
   {
-    "comment": "prepare statement from a positional parameter",
+    "comment": "prepare statement from a positional parameter is a syntax error, like in MySQL",
     "query": "prepare prep from ?",
-    "plan": {
-      "Type": "Local",
-      "QueryType": "PREPARE",
-      "Original": "prepare prep from ?",
-      "Instructions": {
-        "OperatorType": "PREPARE",
-        "Name": "prep",
-        "PositionalParameter": true
-      }
-    }
+    "plan": "syntax error at position 20 near ':v1'"
   },
   {
     "comment": "prepare statement with non existing variable",

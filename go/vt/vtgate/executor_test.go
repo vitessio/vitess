@@ -2936,10 +2936,6 @@ func TestSQLPrepareDoesNotStartTransaction(t *testing.T) {
 		sql:     "prepare prep_bad from 'wrong query syntax'",
 		wantErr: "syntax error",
 	}, {
-		name:    "prepare from a positional parameter",
-		sql:     "prepare prep_pos from ?",
-		wantErr: "unsupported: PREPARE with a positional parameter as the statement text",
-	}, {
 		name: "deallocate",
 		sql:  "deallocate prepare prep",
 	}, {

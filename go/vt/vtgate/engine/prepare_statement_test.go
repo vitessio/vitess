@@ -112,23 +112,6 @@ func TestPrepareStmtFromUndefinedUserDefinedVariable(t *testing.T) {
 	require.NotContains(t, vc.prepareData, "p1")
 }
 
-func TestPrepareStmtFromPositionalParameter(t *testing.T) {
-	// The planner builds this primitive for PREPARE ... FROM ?, which cannot
-	// supply the statement text. Failing it must deallocate the statement
-	// previously registered under the same name, like any other PREPARE
-	// whose statement text cannot be resolved.
-	vc := &prepareStmtVCursor{
-		prepareData: map[string]*vtgatepb.PrepareData{
-			"p1": {PrepareStatement: "select 1"},
-		},
-	}
-	prep := &PrepareStmt{Name: "p1", FromPositionalParameter: true}
-
-	_, err := prep.TryExecute(t.Context(), vc, nil, false)
-	require.ErrorContains(t, err, "unsupported: PREPARE with a positional parameter as the statement text")
-	require.NotContains(t, vc.prepareData, "p1")
-}
-
 func TestPrepareStmtPlanningFailure(t *testing.T) {
 	// A PREPARE whose statement text fails to plan must fail and, per MySQL
 	// semantics, deallocate the statement previously registered under the

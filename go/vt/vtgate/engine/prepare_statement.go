@@ -45,12 +45,6 @@ type (
 		// UserDefinedVariable is the name of the user defined variable
 		// holding the statement text.
 		UserDefinedVariable string
-		// FromPositionalParameter is set when the statement text is a
-		// positional parameter (PREPARE ... FROM ?), which the grammar
-		// accepts but cannot supply the statement text. Execution fails
-		// after deallocating any statement previously registered under the
-		// name, like any other PREPARE whose text cannot be resolved.
-		FromPositionalParameter bool
 	}
 
 	// DeallocateStmt executes a SQL-level DEALLOCATE PREPARE statement: it
@@ -102,9 +96,6 @@ func (p *PrepareStmt) GetFields(ctx context.Context, vcursor VCursor, bindVars m
 // statementText returns the statement text to prepare, resolving it from the
 // session when it comes from a user defined variable.
 func (p *PrepareStmt) statementText(vcursor VCursor) (string, error) {
-	if p.FromPositionalParameter {
-		return "", vterrors.VT12001("PREPARE with a positional parameter as the statement text")
-	}
 	if p.UserDefinedVariable == "" {
 		return p.Query, nil
 	}
@@ -123,12 +114,9 @@ func (p *PrepareStmt) description() PrimitiveDescription {
 	other := map[string]any{
 		"Name": p.Name,
 	}
-	switch {
-	case p.FromPositionalParameter:
-		other["PositionalParameter"] = true
-	case p.UserDefinedVariable != "":
+	if p.UserDefinedVariable != "" {
 		other["UserDefinedVariable"] = p.UserDefinedVariable
-	default:
+	} else {
 		other["Query"] = p.Query
 	}
 	return PrimitiveDescription{
