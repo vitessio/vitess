@@ -3132,6 +3132,9 @@ func TestPrepareUnsupportedStatements(t *testing.T) {
 		"prepare p1 from 'select 1'",
 		"execute p1",
 		"deallocate prepare p1",
+		// The alternate DEALLOCATE syntax previously slipped past the
+		// keyword-based Preview gate as DDL and returned an empty success.
+		"drop prepare p1",
 	}
 	for _, sql := range queries {
 		t.Run(sql, func(t *testing.T) {
