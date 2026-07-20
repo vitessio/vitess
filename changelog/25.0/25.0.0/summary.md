@@ -232,7 +232,7 @@ See [#19836](https://github.com/vitessio/vitess/pull/19836) for details.
 
 #### <a id="vttablet-stream-query-timeout"/>Query timeout for state-changing statements on the streaming path</a>
 
-Streaming reads (`StreamExecute` outside a transaction) remain exempt from the tablet query timeout so OLAP results can stream indefinitely. State-changing statements served over the streaming path — DML, DDL, `FLUSH`, sequence allocation, migration commands, and similar — are now bounded by the same query timeout that buffered execution applies. Previously, some of these could run without a timeout when issued over the streaming path.
+Streaming reads (`StreamExecute` outside a transaction) remain exempt from the tablet query timeout so OLAP results can stream indefinitely. State-changing statements served over the streaming path — DML, DDL, `FLUSH`, sequence allocation, migration commands, and similar — are bounded by the same query timeout that buffered execution applies. In v24 and earlier, these statements were rejected on the streaming path entirely; v25 introduces support for them, bounded by the standard query timeout from the start. Only streaming reads retain the unbounded exemption, unchanged from previous releases.
 
 See [#20499](https://github.com/vitessio/vitess/pull/20499) for details.
 
