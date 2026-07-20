@@ -16,6 +16,7 @@ GOTESTSUM_ARGS=(
 	--rerun-fails-run-root-test
 	--format-hide-empty-pkg
 	--hide-summary=skipped
+	--post-run-command "bash tools/assert_tests_ran.sh"
 )
 
 if [[ -n "$JUNIT_OUTPUT" ]]; then
