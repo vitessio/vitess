@@ -50,7 +50,7 @@ const (
 
 	// superReadOnlyResetTimeout bounds the reset function returned by
 	// SetSuperReadOnly.
-	superReadOnlyResetTimeout = 15 * time.Second
+	superReadOnlyResetTimeout = 1 * time.Minute
 )
 
 type (
