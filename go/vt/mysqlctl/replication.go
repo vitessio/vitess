@@ -166,31 +166,43 @@ func (mysqld *Mysqld) prepareReplicaForShutdown(ctx context.Context) error {
 	// and sync_binlog=1 re-enable per-commit InnoDB redo and binary log flushing
 	// (both are often relaxed together to speed up replica catch-up),
 	// sync_relay_log=1 protects relay writes that race an interrupted receiver
-	// stop, and FLUSH RELAY LOGS makes the existing relay log durable. Stopping
-	// the receiver and applier is then best effort.
+	// stop, and flushing the relay logs makes the existing relay log durable.
+	// The flush must be NO_WRITE_TO_BINLOG: a plain FLUSH RELAY LOGS is written
+	// to the binary log and, on a GTID server, is assigned a transaction from
+	// this replica's own UUID -- an errant GTID that later blocks reparents and
+	// keeps the replica from rejoining. Stopping the receiver and applier is
+	// then best effort.
 	if err := mysqld.executeSuperQueryListConn(ctx, conn, []string{
 		"SET GLOBAL innodb_flush_log_at_trx_commit = 1",
 		"SET GLOBAL sync_binlog = 1",
 		"SET GLOBAL sync_relay_log = 1",
-		"FLUSH RELAY LOGS",
+		"FLUSH NO_WRITE_TO_BINLOG RELAY LOGS",
 	}); err != nil {
 		return vterrors.Wrap(err, "failed to establish the crash-safety durability fence before shutdown")
 	}
-	if err := mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.Conn.StopIOThreadCommand()}); err != nil {
-		log.Warn(
-			"failed to stop the replication receiver before shutdown; continuing because the relay log durability fence completed",
-			slog.Any("error", err),
-		)
+	// The receiver/applier stop commands are empty for flavors that do not use
+	// classic replication threads (e.g. MySQL Group Replication, whose members
+	// are managed by an external orchestrator); skip them there rather than
+	// issue an empty query that always fails.
+	if stopReceiver := conn.Conn.StopIOThreadCommand(); stopReceiver != "" {
+		if err := mysqld.executeSuperQueryListConn(ctx, conn, []string{stopReceiver}); err != nil {
+			log.Warn(
+				"failed to stop the replication receiver before shutdown; continuing because the relay log durability fence completed",
+				slog.Any("error", err),
+			)
+		}
 	}
 	// Stopping the applier lets the (multi-threaded) worker queue drain to a
 	// gap-free, position-consistent point, so an interrupted shutdown or crash
 	// has less in-flight work to recover. Best effort and bounded by ctx: a
 	// hung applier flush must not block shutdown.
-	if err := mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.Conn.StopSQLThreadCommand()}); err != nil {
-		log.Warn(
-			"failed to stop the replication applier before shutdown; continuing because the relay log durability fence completed",
-			slog.Any("error", err),
-		)
+	if stopApplier := conn.Conn.StopSQLThreadCommand(); stopApplier != "" {
+		if err := mysqld.executeSuperQueryListConn(ctx, conn, []string{stopApplier}); err != nil {
+			log.Warn(
+				"failed to stop the replication applier before shutdown; continuing because the relay log durability fence completed",
+				slog.Any("error", err),
+			)
+		}
 	}
 	return nil
 }

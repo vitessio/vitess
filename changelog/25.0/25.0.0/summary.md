@@ -231,7 +231,6 @@ Tablets that already have more tracked schema objects than the configured limit 
 
 See [#19978](https://github.com/vitessio/vitess/issues/19978) for details.
 
-<<<<<<< HEAD
 #### <a id="vttablet-replica-crash-safe-shutdown"/>Replicas are placed in a crash-safe state before shutdown</a>
 
 When VTTablet gracefully shuts down a `REPLICA`/`RDONLY` MySQL, it now proactively puts the server into a crash-safe state first, so that an interrupted shutdown or a host crash during shutdown cannot leave the replica with unsynced writes that are lost or re-applied on restart.
@@ -242,12 +241,12 @@ Just before handing off to the shutdown hook, VTTablet, on replicas only:
 - sets `sync_relay_log=1` and issues `FLUSH RELAY LOGS` to make the relay-log tail durable, and
 - stops the replication receiver (I/O) and applier (SQL) threads so the multi-threaded applier queue drains to a gap-free, position-consistent point.
 
-Restoring the durability settings is required for the fence to hold and will fail the shutdown path if it cannot be done; stopping the threads is best-effort and bounded, so a hung thread cannot wedge shutdown.
+The whole preparation is best effort: if any step fails, or the (bounded) preparation times out, the error is logged and shutdown proceeds regardless, so making a replica crash-safe never blocks or fails the shutdown itself.
 
-**Impact**: On graceful replica shutdown you will now see `innodb_flush_log_at_trx_commit`, `sync_binlog`, and `sync_relay_log` set to `1` and both replication threads stopped, regardless of their prior runtime values. This does not affect `PRIMARY` tablets.
+**Impact**: On a graceful replica shutdown that completes the preparation, `innodb_flush_log_at_trx_commit`, `sync_binlog`, and `sync_relay_log` are set to `1` and both replication threads are stopped, regardless of their prior runtime values; if the preparation cannot complete, it is skipped and logged. This does not affect `PRIMARY` tablets.
 
 See [#20599](https://github.com/vitessio/vitess/pull/20599) for details.
-=======
+
 #### <a id="vttablet-mysql-shell-restore-skip-version-check"/>Skip MySQL version check when restoring from a mysql-shell backup</a>
 
 A new `--mysql-shell-restore-skip-version-check` flag (default `false`) has been added to VTTablet and VTBackup. When enabled, the MySQL version compatibility check that normally gates restores is skipped, but only for backups taken with the `mysqlshell` engine. Backups taken with other engines still go through the usual version check regardless of this flag.
@@ -255,7 +254,6 @@ A new `--mysql-shell-restore-skip-version-check` flag (default `false`) has been
 Because mysql-shell performs a logical restore, its backups are not tied to the on-disk data dictionary format the way physical backups are, so restoring across otherwise-incompatible MySQL versions can be safe. This flag lets operators opt into that behavior.
 
 **Impact**: With this flag set, VTTablet may select and restore a `mysqlshell` backup whose MySQL version would otherwise be rejected as incompatible. Leave it unset to preserve the existing behavior.
->>>>>>> origin/main
 
 ### <a id="minor-changes-backup"/>Backup/Restore</a>
 

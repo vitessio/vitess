@@ -163,7 +163,7 @@ func TestPrepareReplicaForShutdown(t *testing.T) {
 		setFlushLog     = "SET GLOBAL innodb_flush_log_at_trx_commit = 1"
 		setSyncBinlog   = "SET GLOBAL sync_binlog = 1"
 		setSyncRelayLog = "SET GLOBAL sync_relay_log = 1"
-		flushRelayLogs  = "FLUSH RELAY LOGS"
+		flushRelayLogs  = "FLUSH NO_WRITE_TO_BINLOG RELAY LOGS"
 		stopIOThread    = "STOP REPLICA IO_THREAD"
 		stopSQLThread   = "STOP REPLICA SQL_THREAD"
 	)
