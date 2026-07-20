@@ -391,9 +391,34 @@ func (qre *QueryExecutor) txConnStreamExec() (*sqltypes.Result, error) {
 	return qre.txConnExec(conn)
 }
 
+// planStreamsUnbounded reports whether a plan is exempt from the query
+// timeout on the streaming path. Transactionless streaming carries no query
+// timeout so OLAP reads can stream indefinitely; that exemption is only for
+// reads, including CALL, which can stream a procedure's result set and ran
+// without a timeout before state-changing plans were admitted to this path.
+func planStreamsUnbounded(planID p.PlanType) bool {
+	switch planID {
+	case p.PlanSelect, p.PlanSelectImpossible, p.PlanSelectLockFunc, p.PlanShow,
+		p.PlanOtherRead, p.PlanCallProc, p.PlanShowMigrations, p.PlanShowMigrationLogs,
+		p.PlanShowThrottledApps, p.PlanShowThrottlerStatus:
+		return true
+	}
+	return false
+}
+
 // Stream performs a streaming query execution.
 func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 	qre.logStats.PlanType = qre.plan.PlanID.String()
+
+	// State-changing plans get the query timeout Execute would apply, since
+	// the streaming path's unbounded execution is only for OLAP reads. Inside
+	// a transaction this stacks with the transaction timeout applied by
+	// streamExecute, like Execute's own min(query, transaction) bound.
+	if !planStreamsUnbounded(qre.plan.PlanID) {
+		var cancel context.CancelFunc
+		qre.ctx, cancel = withTimeout(qre.ctx, qre.tsv.loadQueryTimeoutWithOptions(qre.options), qre.options)
+		defer cancel()
+	}
 
 	defer func(start time.Time) {
 		qre.tsv.stats.QueryTimings.Record(qre.plan.PlanID.String(), start)
@@ -690,13 +715,8 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 func (qre *QueryExecutor) streamDML(callback StreamCallback) (err error) {
 	var reply *sqltypes.Result
 
-	// Apply the query timeout to autocommit DML, just like Execute does for a
-	// query without a transaction.
-	if qre.connID == 0 {
-		var cancel context.CancelFunc
-		qre.ctx, cancel = withTimeout(qre.ctx, qre.tsv.loadQueryTimeoutWithTxAndOptions(0, qre.options), qre.options)
-		defer cancel()
-	}
+	// The query timeout is already applied by Stream, which dispatches every
+	// DML plan here.
 
 	// Record the per-table and per-plan query stats, just like Execute's deferred
 	// block. Stream's own defer already records QueryTimings, QueryTimingsByTabletType

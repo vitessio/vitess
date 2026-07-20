@@ -22,6 +22,7 @@
         - [Streaming errors no longer surface as connection loss](#vtgate-streamexecute-real-errors)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
+        - [Query timeout for state-changing statements on the streaming path](#vttablet-stream-query-timeout)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
     - **[General](#minor-changes-general)**
@@ -157,6 +158,12 @@ A new `--consolidator-reject-on-cap` flag (default `false`) has been added to VT
 **Important:** The cap is enforced against the consolidator's global `totalWaiterCount` across all queries, not a per-query waiter count. This means a duplicate for query B can be rejected because query A has already consumed most of the global waiter budget. This provides backpressure when the consolidator as a whole is saturated, rather than when any single query has too many waiters.
 
 See [#19836](https://github.com/vitessio/vitess/pull/19836) for details.
+
+#### <a id="vttablet-stream-query-timeout"/>Query timeout for state-changing statements on the streaming path</a>
+
+Streaming reads (`StreamExecute` outside a transaction) remain exempt from the tablet query timeout so OLAP results can stream indefinitely. State-changing statements served over the streaming path — DML, DDL, `FLUSH`, sequence allocation, migration commands, and similar — are now bounded by the same query timeout that buffered execution applies. Previously, some of these could run without a timeout when issued over the streaming path.
+
+See [#20499](https://github.com/vitessio/vitess/pull/20499) for details.
 
 ### <a id="minor-changes-vttablet"/>VTTablet</a>
 

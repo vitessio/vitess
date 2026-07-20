@@ -24,6 +24,7 @@ import (
 	"math/rand/v2"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -896,6 +897,45 @@ func TestStreamExecuteCompat_AppliedSettingRecordedForReplay(t *testing.T) {
 	}
 	require.Contains(t, recorded, applyQuery,
 		"a setting applied by a streamed query must be recorded for transaction replay")
+}
+
+// State-changing plans on the streaming path are bounded by the query
+// timeout, like Execute; the unbounded streaming exemption covers only reads.
+func TestStreamExecuteCompat_QueryTimeoutForStateChangingPlans(t *testing.T) {
+	ctx := t.Context()
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+	tsv.QueryTimeout.Store(int64(100 * time.Millisecond))
+
+	// The DDL blocks until the test releases it, so the only way Stream can
+	// return before the release is the query timeout firing. The failsafe
+	// release keeps a missing timeout from blocking the whole test run: the
+	// DDL then completes without an error and the assertions below fail.
+	ddl := "alter table test_table add zipcode int"
+	rewritten := "alter table test_table add column zipcode int"
+	release := make(chan struct{})
+	releaseOnce := sync.OnceFunc(func() { close(release) })
+	db.AddQuery(rewritten, &sqltypes.Result{})
+	db.SetBeforeFunc(rewritten, func() { <-release })
+	defer releaseOnce()
+	failsafe := time.AfterFunc(30*time.Second, releaseOnce)
+	defer failsafe.Stop()
+
+	qre := newTestQueryExecutorStreaming(ctx, tsv, ddl, 0)
+	err := qre.Stream(func(*sqltypes.Result) error { return nil })
+	require.Error(t, err, "streamed DDL must be bounded by the query timeout")
+	require.ErrorContains(t, err, "maximum statement execution time exceeded")
+
+	// A read outlives the query timeout: it holds the connection well past
+	// the timeout and must still complete.
+	query := "select * from test_table"
+	db.AddQuery(query, &sqltypes.Result{Fields: getTestTableFields()})
+	db.SetBeforeFunc(query, func() { time.Sleep(time.Second) })
+	qre = newTestQueryExecutorStreaming(ctx, tsv, query, 0)
+	require.NoError(t, qre.Stream(func(*sqltypes.Result) error { return nil }),
+		"streamed reads must stay exempt from the query timeout")
 }
 
 // ACL stats keys don't contain "SelectStream".
