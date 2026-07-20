@@ -228,10 +228,17 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 	defaultCell := vc.Cells[cell]
 	// To test vstreamer source throttling for the MoveTables operation
 	maxSourceTrxHistory := int64(5)
+	// The throttle is held engaged by an open transaction that pins the InnoDB
+	// history list length above the threshold. That transaction must outlive
+	// everything the test waits on afterwards, otherwise the tablet's transaction
+	// reaper releases it, the history list drains, and the copy phase proceeds
+	// before we observe it throttled. The reaper timeout is therefore set above
+	// the sum of the wait budgets that run while the transaction is open
+	// (waitForInnoDBHistoryLength + waitForWorkflowState + confirmWorkflowHasCopiedNoData),
+	// with headroom for workflow creation and polling overhead on a slow runner.
+	sourceTrxTimeout := (defaultTimeout + workflowStateTimeout + defaultTimeout) * 2
 	extraVTTabletArgs = []string{
-		// We rely on holding open transactions to generate innodb history so extend the timeout
-		// to avoid flakiness when the CI is very slow.
-		"--queryserver-config-transaction-timeout=" + (defaultTimeout * 3).String(),
+		"--queryserver-config-transaction-timeout=" + sourceTrxTimeout.String(),
 		fmt.Sprintf("%s=%d", "--vreplication-copy-phase-max-innodb-history-list-length", maxSourceTrxHistory),
 		parallelInsertWorkers,
 	}
