@@ -227,7 +227,7 @@ func (qt *QueryThrottler) InitDBConfig(keyspace string) {
 // Throttle checks if the tablet is under heavy load and enforces throttling by rejecting the incoming request if necessary.
 // Note: The hot path uses a single atomic load of the snapshot — no lock is taken — so concurrent config updates never tear the (cfg, strategy) pair.
 // Config updates are rare  compared to query frequency, and the snapshot pointer is swapped atomically by HandleConfigUpdate.
-func (qt *QueryThrottler) Throttle(ctx context.Context, tabletType topodatapb.TabletType, parsedQuery *sqlparser.ParsedQuery, transactionID int64, options *querypb.ExecuteOptions) error {
+func (qt *QueryThrottler) Throttle(ctx context.Context, tabletType topodatapb.TabletType, parsedQuery *sqlparser.ParsedQuery, statementType sqlparser.StatementType, transactionID int64, options *querypb.ExecuteOptions) error {
 	// Single atomic load gives a consistent (cfg, strategy) pair for this call.
 	snap := qt.snapshot.Load()
 	tCfg := snap.cfg
@@ -255,7 +255,7 @@ func (qt *QueryThrottler) Throttle(ctx context.Context, tabletType topodatapb.Ta
 	}()
 
 	// Evaluate the throttling decision
-	decision := tStrategy.Evaluate(ctx, tabletType, parsedQuery, transactionID, attrs)
+	decision := tStrategy.Evaluate(ctx, tabletType, parsedQuery, statementType, transactionID, attrs)
 
 	// Record evaluate-window latency immediately after Evaluate returns
 	evaluateLatency.Record(labels, startTime)

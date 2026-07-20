@@ -31,9 +31,11 @@ import (
 type ThrottlingStrategyHandler interface {
 	// Evaluate determines whether a query should be throttled and returns detailed information about the decision.
 	// This method separates the decision-making logic from the enforcement action, enabling features like dry-run mode.
+	// statementType is the statement type resolved from the parsed AST (sqlparser.ASTToStatementType) so that
+	// rule matching is correct for CTE queries, which a textual scan (sqlparser.Preview) misclassifies.
 	// QueryAttributes contains pre-computed workload and priority information to avoid re computation.
 	// It returns a ThrottleDecision struct containing all relevant information about the throttling decision.
-	Evaluate(ctx context.Context, targetTabletType topodatapb.TabletType, parsedQuery *sqlparser.ParsedQuery, transactionID int64, attrs QueryAttributes) ThrottleDecision
+	Evaluate(ctx context.Context, targetTabletType topodatapb.TabletType, parsedQuery *sqlparser.ParsedQuery, statementType sqlparser.StatementType, transactionID int64, attrs QueryAttributes) ThrottleDecision
 
 	// Start initializes and starts the throttling strategy.
 	// This method should be called when the strategy becomes active.

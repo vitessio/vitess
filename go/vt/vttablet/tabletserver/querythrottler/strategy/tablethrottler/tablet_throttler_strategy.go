@@ -351,7 +351,7 @@ func (s *TabletThrottlerStrategy) isStale(state *cacheState) bool {
 //
 // Returns:
 //   - ThrottleDecision containing detailed information about the throttling decision.
-func (s *TabletThrottlerStrategy) Evaluate(ctx context.Context, targetTabletType topodatapb.TabletType, parsedQuery *sqlparser.ParsedQuery, transactionID int64, attrs registry.QueryAttributes) registry.ThrottleDecision {
+func (s *TabletThrottlerStrategy) Evaluate(ctx context.Context, targetTabletType topodatapb.TabletType, parsedQuery *sqlparser.ParsedQuery, statementType sqlparser.StatementType, transactionID int64, attrs registry.QueryAttributes) registry.ThrottleDecision {
 	// FOR DDL statements parsedQuery can be nil because ParsedQuery is `plan.FullQuery` which is nil for DDL statements.
 	// `plan.go` file has `func Build(env *vtenv.Environment, statement sqlparser.Statement, tables map[string]*schema.Table, dbName string, viewsEnabled bool) (plan *Plan, err error)`
 	// This function for ALTER MIGRATION and REVERT MIGRATION does not pass FullQuery and hence parsedQuery comes as nil here.
@@ -380,7 +380,10 @@ func (s *TabletThrottlerStrategy) Evaluate(ctx context.Context, targetTabletType
 	// Use pre-computed query attributes to avoid recomputation
 	workloadName := attrs.WorkloadName
 	priority := attrs.Priority
-	stmtType := sqlparser.Preview(parsedQuery.Query).String()
+	// statementType is resolved from the parsed AST by the caller (sqlparser.ASTToStatementType),
+	// so CTE queries (WITH ... SELECT/DML) match the same rules as their non-CTE counterparts.
+	// A textual scan (sqlparser.Preview) would classify "WITH ..." as UNKNOWN and fail open.
+	stmtType := statementType.String()
 
 	// Step 1: Early priority-based throttling check
 	// Similar to tx_throttler.go: lower priority values (higher priority) are less likely to be throttled

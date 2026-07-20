@@ -148,6 +148,7 @@ func TestTabletThrottlerStrategy_Evaluate_NilParsedQuery(t *testing.T) {
 		context.Background(),
 		topodatapb.TabletType_PRIMARY,
 		nil,
+		sqlparser.StmtSelect,
 		12345,
 		registry.QueryAttributes{
 			WorkloadName: "test-workload",
@@ -171,6 +172,7 @@ func TestTabletThrottlerStrategy_ThrottleIfNeeded_Legacy(t *testing.T) {
 		giveThrottleCheckOK   bool
 		giveTabletType        topodatapb.TabletType
 		giveSQL               string
+		giveStmtType          sqlparser.StatementType
 		giveTxnID             int64
 		giveOptions           *querypb.ExecuteOptions
 		giveCfg               *querythrottlerpb.TabletStrategyConfig
@@ -187,6 +189,7 @@ func TestTabletThrottlerStrategy_ThrottleIfNeeded_Legacy(t *testing.T) {
 				makeThresholds(10, 10, 25, 25, 50, 50),
 			),
 			giveSQL:        "SELECT * from A where X=1",
+			giveStmtType:   sqlparser.StmtSelect,
 			giveTxnID:      1,
 			giveTabletType: topodatapb.TabletType_REPLICA,
 		},
@@ -200,6 +203,7 @@ func TestTabletThrottlerStrategy_ThrottleIfNeeded_Legacy(t *testing.T) {
 				makeThresholds(10, 10, 25, 25, 50, 50),
 			),
 			giveSQL:             "SELECT * from A where X=1",
+			giveStmtType:        sqlparser.StmtSelect,
 			giveTxnID:           1,
 			giveCheckResult:     &throttle.CheckResult{},
 			giveThrottleCheckOK: true,
@@ -213,8 +217,9 @@ func TestTabletThrottlerStrategy_ThrottleIfNeeded_Legacy(t *testing.T) {
 				"lag",
 				makeThresholds(10, 10, 25, 25, 50, 50),
 			),
-			giveSQL:   "SELECT * from A where X=1",
-			giveTxnID: 1,
+			giveSQL:      "SELECT * from A where X=1",
+			giveStmtType: sqlparser.StmtSelect,
+			giveTxnID:    1,
 			giveCheckResult: &throttle.CheckResult{
 				Metrics: map[string]*throttle.MetricResult{
 					"lag": {
@@ -241,8 +246,9 @@ func TestTabletThrottlerStrategy_ThrottleIfNeeded_Legacy(t *testing.T) {
 				"lag",
 				makeThresholds(1, 100),
 			),
-			giveSQL:   "SELECT * from critical_table",
-			giveTxnID: 1,
+			giveSQL:      "SELECT * from critical_table",
+			giveStmtType: sqlparser.StmtSelect,
+			giveTxnID:    1,
 			giveCheckResult: &throttle.CheckResult{
 				Metrics: map[string]*throttle.MetricResult{
 					"lag": {
@@ -254,6 +260,60 @@ func TestTabletThrottlerStrategy_ThrottleIfNeeded_Legacy(t *testing.T) {
 			giveThrottleCheckOK:   false,
 			giveRandValue:         0.01,
 			givePriorityRandValue: 99,
+		},
+		{
+			// Regression: CTE SELECT (WITH ... SELECT) must match the SELECT rule.
+			// sqlparser.Preview classifies "WITH ..." as UNKNOWN, which would fail open;
+			// the caller now supplies the AST-resolved type (sqlparser.StmtSelect).
+			name:           "CTE SELECT matches SELECT rule and is throttled",
+			giveTabletType: topodatapb.TabletType_PRIMARY,
+			giveCfg: makeTabletStrategyConfig(
+				topodatapb.TabletType_PRIMARY.String(),
+				"SELECT",
+				"lag",
+				makeThresholds(10, 100),
+			),
+			giveSQL:      "WITH cte AS (SELECT id FROM A) SELECT * FROM cte",
+			giveStmtType: sqlparser.StmtSelect,
+			giveTxnID:    1,
+			giveCheckResult: &throttle.CheckResult{
+				Metrics: map[string]*throttle.MetricResult{
+					"lag": {
+						ResponseCode: tabletmanagerdata.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED,
+						Value:        20,
+					},
+				},
+			},
+			giveThrottleCheckOK:   false,
+			giveRandValue:         0.5,
+			givePriorityRandValue: 99,
+			wantErr:               "[VTTabletThrottler] query throttled: stmtType=SELECT workload=unknown priority=100 metric=lag value=20.00 breached threshold=10.00 throttle=100%",
+		},
+		{
+			// Regression: CTE DML (WITH ... DELETE) must match the DELETE rule.
+			name:           "CTE DELETE matches DELETE rule and is throttled",
+			giveTabletType: topodatapb.TabletType_PRIMARY,
+			giveCfg: makeTabletStrategyConfig(
+				topodatapb.TabletType_PRIMARY.String(),
+				"DELETE",
+				"lag",
+				makeThresholds(10, 100),
+			),
+			giveSQL:      "WITH cte AS (SELECT id FROM A) DELETE FROM A WHERE id IN (SELECT id FROM cte)",
+			giveStmtType: sqlparser.StmtDelete,
+			giveTxnID:    1,
+			giveCheckResult: &throttle.CheckResult{
+				Metrics: map[string]*throttle.MetricResult{
+					"lag": {
+						ResponseCode: tabletmanagerdata.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED,
+						Value:        20,
+					},
+				},
+			},
+			giveThrottleCheckOK:   false,
+			giveRandValue:         0.5,
+			givePriorityRandValue: 99,
+			wantErr:               "[VTTabletThrottler] query throttled: stmtType=DELETE workload=unknown priority=100 metric=lag value=20.00 breached threshold=10.00 throttle=100%",
 		},
 	}
 	for _, tt := range tests {
@@ -271,7 +331,7 @@ func TestTabletThrottlerStrategy_ThrottleIfNeeded_Legacy(t *testing.T) {
 			defer tts.Stop()
 			tts.refreshCache()
 
-			decision := tts.Evaluate(context.Background(), tt.giveTabletType, &sqlparser.ParsedQuery{Query: tt.giveSQL}, tt.giveTxnID, toQueryAttributesForTest(tt.giveOptions))
+			decision := tts.Evaluate(context.Background(), tt.giveTabletType, &sqlparser.ParsedQuery{Query: tt.giveSQL}, tt.giveStmtType, tt.giveTxnID, toQueryAttributesForTest(tt.giveOptions))
 			if tt.wantErr != "" {
 				require.True(t, decision.Throttle, "Expected throttling decision")
 				require.Equal(t, tt.wantErr, decision.Message, "Throttle message should match expected error")
@@ -334,8 +394,8 @@ func TestTabletThrottlerStrategy_CachingBehavior(t *testing.T) {
 	// Before Start(): the strategy is not running, so Evaluate() must not make
 	// synchronous ThrottleCheckOK calls. getCachedThrottleResult fails open
 	// (returns checkOk=true) to keep the hot path bounded in latency.
-	_ = strategy.Evaluate(context.Background(), topodatapb.TabletType_PRIMARY, &sqlparser.ParsedQuery{Query: "SELECT * FROM table"}, 1, toQueryAttributesForTest(options))
-	_ = strategy.Evaluate(context.Background(), topodatapb.TabletType_PRIMARY, &sqlparser.ParsedQuery{Query: "SELECT * FROM table"}, 1, toQueryAttributesForTest(options))
+	_ = strategy.Evaluate(context.Background(), topodatapb.TabletType_PRIMARY, &sqlparser.ParsedQuery{Query: "SELECT * FROM table"}, sqlparser.StmtSelect, 1, toQueryAttributesForTest(options))
+	_ = strategy.Evaluate(context.Background(), topodatapb.TabletType_PRIMARY, &sqlparser.ParsedQuery{Query: "SELECT * FROM table"}, sqlparser.StmtSelect, 1, toQueryAttributesForTest(options))
 	require.Equal(t, 0, ftcw.GetCallCount(), "Expected no synchronous throttler calls before Start()")
 
 	strategy.Start()
@@ -347,9 +407,9 @@ func TestTabletThrottlerStrategy_CachingBehavior(t *testing.T) {
 
 	ftcw.ResetCallCount()
 
-	_ = strategy.Evaluate(context.Background(), topodatapb.TabletType_PRIMARY, &sqlparser.ParsedQuery{Query: "SELECT * FROM table"}, 1, toQueryAttributesForTest(options))
-	_ = strategy.Evaluate(context.Background(), topodatapb.TabletType_PRIMARY, &sqlparser.ParsedQuery{Query: "SELECT * FROM table"}, 1, toQueryAttributesForTest(options))
-	_ = strategy.Evaluate(context.Background(), topodatapb.TabletType_PRIMARY, &sqlparser.ParsedQuery{Query: "SELECT * FROM table"}, 1, toQueryAttributesForTest(options))
+	_ = strategy.Evaluate(context.Background(), topodatapb.TabletType_PRIMARY, &sqlparser.ParsedQuery{Query: "SELECT * FROM table"}, sqlparser.StmtSelect, 1, toQueryAttributesForTest(options))
+	_ = strategy.Evaluate(context.Background(), topodatapb.TabletType_PRIMARY, &sqlparser.ParsedQuery{Query: "SELECT * FROM table"}, sqlparser.StmtSelect, 1, toQueryAttributesForTest(options))
+	_ = strategy.Evaluate(context.Background(), topodatapb.TabletType_PRIMARY, &sqlparser.ParsedQuery{Query: "SELECT * FROM table"}, sqlparser.StmtSelect, 1, toQueryAttributesForTest(options))
 
 	callCount := ftcw.GetCallCount()
 	require.LessOrEqual(t, callCount, 2, "Cache should significantly reduce calls to ThrottleCheckOK")
@@ -667,6 +727,7 @@ func TestTabletThrottlerStrategy_Evaluate_NilCachedResultFailsOpen(t *testing.T)
 			context.Background(),
 			topodatapb.TabletType_PRIMARY,
 			&sqlparser.ParsedQuery{Query: "SELECT * FROM t"},
+			sqlparser.StmtSelect,
 			1,
 			toQueryAttributesForTest(options),
 		)

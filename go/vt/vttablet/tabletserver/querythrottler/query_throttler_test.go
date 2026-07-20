@@ -263,6 +263,7 @@ func TestQueryThrottler_DryRunMode(t *testing.T) {
 				t.Context(),
 				topodatapb.TabletType_REPLICA,
 				&sqlparser.ParsedQuery{Query: "SELECT * FROM test_table WHERE id = 1"},
+				sqlparser.StmtSelect,
 				12345,
 				&querypb.ExecuteOptions{
 					WorkloadName: "test-workload",
@@ -965,7 +966,7 @@ func TestQueryThrottler_ConcurrentThrottleAndConfigUpdate(t *testing.T) {
 					return
 				default:
 					_ = qt.Throttle(ctx, topodatapb.TabletType_REPLICA,
-						&sqlparser.ParsedQuery{Query: "SELECT 1"}, 0,
+						&sqlparser.ParsedQuery{Query: "SELECT 1"}, sqlparser.StmtSelect, 0,
 						&querypb.ExecuteOptions{WorkloadName: "w", Priority: "50"})
 				}
 			}
