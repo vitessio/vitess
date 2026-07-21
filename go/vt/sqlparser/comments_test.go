@@ -690,6 +690,9 @@ func TestQueryTimeout(t *testing.T) {
 		query:      "select /*vt+ QUERY_TIMEOUT_MS=0 */ * from another_table",
 		expTimeout: 0,
 	}, {
+		query:      "values /*vt+ QUERY_TIMEOUT_MS=21 */ row(1)",
+		expTimeout: 21,
+	}, {
 		query:     "select /*vt+ PRIORITY=-42 */ * from another_table",
 		noTimeout: true,
 	}}
@@ -703,8 +706,22 @@ func TestQueryTimeout(t *testing.T) {
 			if tc.noTimeout {
 				assert.Nil(t, qh.Timeout)
 			} else {
+				require.NotNil(t, qh.Timeout)
 				assert.Equal(t, tc.expTimeout, *qh.Timeout)
 			}
 		})
 	}
+}
+
+func TestValuesStatementSetComments(t *testing.T) {
+	stmt, err := NewTestParser().Parse("values row(1)")
+	require.NoError(t, err)
+	values, ok := stmt.(*ValuesStatement)
+	require.True(t, ok)
+
+	values.SetComments(Comments{"/*vt+ QUERY_TIMEOUT_MS=21 */"})
+	qh, err := BuildQueryHints(values)
+	require.NoError(t, err)
+	require.NotNil(t, qh.Timeout)
+	assert.Equal(t, 21, *qh.Timeout)
 }

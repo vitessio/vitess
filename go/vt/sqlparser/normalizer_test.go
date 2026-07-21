@@ -467,6 +467,38 @@ func TestNormalize(t *testing.T) {
 	}
 }
 
+func TestNormalizeValuesStatementSQLSelectLimit(t *testing.T) {
+	parser := NewTestParser()
+	tests := []struct {
+		name     string
+		query    string
+		expected string
+	}{{
+		name:     "top-level values",
+		query:    "values row(1), row(2), row(3)",
+		expected: "values row(1), row(2), row(3) limit 2",
+	}, {
+		name:     "explicit limit",
+		query:    "values row(1), row(2), row(3) limit 1",
+		expected: "values row(1), row(2), row(3) limit 1",
+	}, {
+		name:     "derived values",
+		query:    "select * from (values row(1), row(2), row(3)) as dt",
+		expected: "select * from (values row(1), row(2), row(3)) as dt limit 2",
+	}}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stmt, known, err := parser.Parse2(tt.query)
+			require.NoError(t, err)
+
+			result, err := Normalize(stmt, NewReservedVars("vtg", known), map[string]*querypb.BindVariable{}, false, "ks", 2, "", nil, nil, nil)
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, String(result.AST))
+		})
+	}
+}
+
 func TestNormalizeInvalidDates(t *testing.T) {
 	testcases := []struct {
 		in  string

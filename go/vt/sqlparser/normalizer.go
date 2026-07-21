@@ -173,7 +173,7 @@ func (nz *normalizer) determineQueryRewriteStrategy(in Statement) {
 
 // walkDown processes nodes when traversing down the AST.
 // It handles normalization logic based on node types.
-func (nz *normalizer) walkDown(node, _ SQLNode) bool {
+func (nz *normalizer) walkDown(node, parent SQLNode) bool {
 	switch node := node.(type) {
 	case *Begin, *Commit, *Rollback, *Savepoint, *SRollback, *Release, *OtherAdmin, *Analyze,
 		*PrepareStmt, *ExecuteStmt, *FramePoint, *ColName, TableName, *ConvertType, *CreateProcedure:
@@ -187,6 +187,10 @@ func (nz *normalizer) walkDown(node, _ SQLNode) bool {
 	case *Select:
 		nz.inSelect++
 		if nz.selectLimit > 0 && node.Limit == nil && nz.inSelect == 1 {
+			node.Limit = &Limit{Rowcount: NewIntLiteral(strconv.Itoa(nz.selectLimit))}
+		}
+	case *ValuesStatement:
+		if _, topLevel := parent.(*RootNode); nz.selectLimit > 0 && node.Limit == nil && topLevel {
 			node.Limit = &Limit{Rowcount: NewIntLiteral(strconv.Itoa(nz.selectLimit))}
 		}
 	case *AliasedExpr:
