@@ -19,12 +19,19 @@ runs:
         # out of the repository cache quota.
         cache: false
 
-    # Runs that are not branch pushes only restore. A cache saved from a pull
-    # request run is scoped to that pull request and can only be reused by its
-    # own re-runs, while it still counts against the repository quota and
-    # evicts the shared branch-scoped entries.
+    # Only pushes to main and the release branches save caches; everything
+    # else restores. Caches saved from any other run are scoped to a ref that
+    # pull requests do not restore from, while still counting against the
+    # repository quota and evicting the shared entries.
+    - name: Determine cache mode
+      id: cache-mode
+      shell: bash
+      env:
+        SAVE: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release-')) }}
+      run: echo "save=${SAVE}" >> "${GITHUB_OUTPUT}"
+
     - name: Restore Go module cache
-      if: inputs.cache == 'true' && (github.event_name != 'push' || !startsWith(github.ref, 'refs/heads/'))
+      if: inputs.cache == 'true' && steps.cache-mode.outputs.save == 'false'
       uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
       with:
         path: ~/go/pkg/mod
@@ -33,7 +40,7 @@ runs:
           go-mod-
 
     - name: Restore Go build cache
-      if: inputs.cache == 'true' && (github.event_name != 'push' || !startsWith(github.ref, 'refs/heads/'))
+      if: inputs.cache == 'true' && steps.cache-mode.outputs.save == 'false'
       uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
       with:
         path: ~/.cache/go-build
@@ -41,21 +48,21 @@ runs:
         restore-keys: |
           go-build-${{ toLower(runner.os) }}-${{ toLower(runner.arch) }}-go${{ steps.setup-go.outputs.go-version }}-
 
-    # Branch pushes save the entries every other run restores from. The saves
-    # deliberately start from an empty cache instead of a restored one, so a
-    # go.sum change produces a minimal entry without stale module versions or
-    # dead build cache contents. actions/cache saves in its post step, after
-    # the job has populated the caches, and only when the job succeeds and the
-    # key does not exist yet.
+    # Pushes to main and the release branches save the entries every other run
+    # restores from. The saves deliberately start from an empty cache instead
+    # of a restored one, so a go.sum change produces a minimal entry without
+    # stale module versions or dead build cache contents. actions/cache saves
+    # in its post step, after the job has populated the caches, and only when
+    # the job succeeds and the key does not exist yet.
     - name: Cache Go modules
-      if: inputs.cache == 'true' && github.event_name == 'push' && startsWith(github.ref, 'refs/heads/')
+      if: inputs.cache == 'true' && steps.cache-mode.outputs.save == 'true'
       uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
       with:
         path: ~/go/pkg/mod
         key: go-mod-${{ hashFiles('go.sum', 'tools/**/go.sum') }}
 
     - name: Cache Go build cache
-      if: inputs.cache == 'true' && github.event_name == 'push' && startsWith(github.ref, 'refs/heads/')
+      if: inputs.cache == 'true' && steps.cache-mode.outputs.save == 'true'
       uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
       with:
         path: ~/.cache/go-build
