@@ -32,7 +32,7 @@ runs:
 
     - name: Restore Go module cache
       if: inputs.cache == 'true' && steps.cache-mode.outputs.save == 'false'
-      uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/go/pkg/mod
         key: go-mod-${{ hashFiles('go.sum', 'tools/**/go.sum') }}
@@ -41,7 +41,7 @@ runs:
 
     - name: Restore Go build cache
       if: inputs.cache == 'true' && steps.cache-mode.outputs.save == 'false'
-      uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/.cache/go-build
         key: go-build-${{ runner.os }}-${{ runner.arch }}-go${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('go.sum', 'tools/**/go.sum') }}
@@ -56,14 +56,14 @@ runs:
     # the job succeeds and the key does not exist yet.
     - name: Cache Go modules
       if: inputs.cache == 'true' && steps.cache-mode.outputs.save == 'true'
-      uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/go/pkg/mod
         key: go-mod-${{ hashFiles('go.sum', 'tools/**/go.sum') }}
 
     - name: Cache Go build cache
       if: inputs.cache == 'true' && steps.cache-mode.outputs.save == 'true'
-      uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/.cache/go-build
         key: go-build-${{ runner.os }}-${{ runner.arch }}-go${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('go.sum', 'tools/**/go.sum') }}
