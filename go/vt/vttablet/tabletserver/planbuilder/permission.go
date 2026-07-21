@@ -107,6 +107,10 @@ func buildSubqueryPermissions(stmt sqlparser.Statement, role tableacl.Role, perm
 			if node.With != nil {
 				cteScopes = append(cteScopes, gatherCTEs(node.With))
 			}
+		case *sqlparser.ValuesStatement:
+			if node.With != nil {
+				cteScopes = append(cteScopes, gatherCTEs(node.With))
+			}
 		}
 		return true
 	}, func(cursor *sqlparser.Cursor) bool {
