@@ -52,6 +52,10 @@ const vschema = `
 // tablet can leave serving while a COMMIT is in flight.
 func TestChangeTypePrimaryCompletesWithBlockedCommit(t *testing.T) {
 	clusterInstance := cluster.NewCluster(cell, hostname)
+	if topoFlavor := *clusterInstance.TopoFlavorString(); topoFlavor != "etcd2" {
+		t.Skipf("requires etcd2 topology, got %s", topoFlavor)
+	}
+
 	defer clusterInstance.Teardown()
 
 	err := clusterInstance.StartTopo()
