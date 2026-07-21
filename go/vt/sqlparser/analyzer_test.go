@@ -99,7 +99,7 @@ func TestPreview(t *testing.T) {
 
 func TestASTToStatementTypeValues(t *testing.T) {
 	stmt, err := NewTestParser().Parse("values row(1)")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, StmtSelect, ASTToStatementType(stmt))
 }
 
