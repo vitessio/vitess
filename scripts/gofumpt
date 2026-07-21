@@ -2,6 +2,11 @@
 
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+script_path="${BASH_SOURCE[0]}"
+if [ -L "$script_path" ]; then
+  script_path="$(readlink "$script_path")"
+fi
+
+repo_root="$(cd "$(dirname "$script_path")/.." && pwd)"
 
 exec go tool -modfile="$repo_root/tools/gofumpt/go.mod" gofumpt "$@"
