@@ -24,6 +24,7 @@ import (
 	"os"
 	"os/signal"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -119,8 +120,8 @@ func registerPluginFlags(fs *pflag.FlagSet) {
 }
 
 // tempTableHeartbeatTarget identifies one reserved connection that must be
-// kept alive because its session holds temporary tables. Target slices are
-// replaced wholesale under tempTableConn.mu, never mutated in place.
+// kept alive because its session holds temporary tables. The targets map is
+// only read and written under tempTableConn.mu.
 type tempTableHeartbeatTarget struct {
 	target     *querypb.Target
 	alias      *topodatapb.TabletAlias
@@ -151,7 +152,7 @@ func newTempTableTargetKey(t tempTableHeartbeatTarget) tempTableTargetKey {
 
 // tempTableConn tracks the reserved connections the background heartbeat
 // sweeper keeps alive for one client connection. The connection's command
-// goroutine republishes the targets at the end of each command (bumping gen);
+// goroutine republishes the targets at the end of each command;
 // the sweeper snapshots them under mu and refreshes them (batched per tablet)
 // without holding mu across the RPC, so the sweeper's own lock never blocks a
 // foreground command and a long command never starves the keepalives.
@@ -168,12 +169,12 @@ type tempTableConn struct {
 	// scanning — a session left in reserved mode after a scatter can hold
 	// many targets.
 	targets map[tempTableTargetKey]tempTableHeartbeatTarget
-	// closed marks the connection as shutting down so no further beats
-	// start; beats tracks the in-flight ones so close can wait them out
-	// before the session's reserved connections are released. Add only
-	// happens under mu while !closed, so it cannot race Wait.
+	// closed marks the connection as shutting down so no further beats start.
+	// A beat already in flight is harmless: the tablet tolerates a beat racing
+	// the session's release in both directions (a keepalive hold is waited out
+	// by GetAndLock, and a beat that loses the race gets a gone result, which
+	// the apply step discards against the cleared targets).
 	closed bool
-	beats  sync.WaitGroup
 }
 
 // vtgateHandler implements the Listener interface.
@@ -270,9 +271,10 @@ func tempTableHeartbeatTargets(session *vtgatepb.Session) map[tempTableTargetKey
 }
 
 // tempTableCommandEnd must be called once a client command settles: it
-// republishes the session's keepalive targets (registering or deregistering
-// the connection as needed) and bumps the generation so any sweep started
-// against the previous targets discards its results.
+// republishes the session's keepalive targets, registering or deregistering
+// the connection as needed. A sweep in flight validates each reserved
+// connection by its target key, so a republish that keeps a key leaves that
+// beat valid and one that removes a key retires it.
 func (vh *vtgateHandler) tempTableCommandEnd(c *mysql.Conn) {
 	targets := tempTableHeartbeatTargets(vh.session(c))
 	v, ok := vh.tempTableConns.Load(c)
@@ -327,9 +329,12 @@ func (vh *vtgateHandler) tempTableCommandEnd(c *mysql.Conn) {
 	vh.tempTableConns.Store(c, ttc)
 }
 
-// stopTempTableHeartbeats deregisters the connection and waits out any beat
-// in flight, so the caller can safely release the session's reserved
-// connections afterwards without a beat racing the release at the tablet.
+// stopTempTableHeartbeats deregisters the connection so no further beats
+// start for it. It does not wait for a beat already in flight: a beat racing
+// the session's release is safe at the tablet in both directions (see
+// tempTableConn.closed), and waiting here would stall the client's disconnect
+// path for up to a whole beat budget when the beat's tablet is unreachable —
+// delaying the release of the session's reserved connections on healthy shards.
 func (vh *vtgateHandler) stopTempTableHeartbeats(c *mysql.Conn) {
 	v, ok := vh.tempTableConns.Load(c)
 	if !ok {
@@ -341,7 +346,6 @@ func (vh *vtgateHandler) stopTempTableHeartbeats(c *mysql.Conn) {
 	ttc.targets = nil
 	vh.tempTableConns.Delete(c)
 	ttc.mu.Unlock()
-	ttc.beats.Wait()
 }
 
 // startTempTableHeartbeat launches the background sweeper that keeps reserved
@@ -416,24 +420,11 @@ func (vh *vtgateHandler) snapshotTempTableBeats() map[string][]tempTableBeatItem
 // that the original snapshot missed — and that in-flight suppression kept the
 // next sweep from picking up while this beat held the route. Re-collecting just
 // before the beat refreshes those too, so a reservation added while the route was
-// queued is not stranded (and left to time out) until this beat finishes.
+// queued is not stranded (and left to time out) until this beat finishes. It
+// reuses the full grouped snapshot — a per-route filter would walk the whole
+// registry anyway, and one traversal means one set of snapshot rules.
 func (vh *vtgateHandler) snapshotTempTableRoute(route string) []tempTableBeatItem {
-	var items []tempTableBeatItem
-	vh.tempTableConns.Range(func(key, value any) bool {
-		c := key.(*mysql.Conn)
-		ttc := value.(*tempTableConn)
-		ttc.mu.Lock()
-		if !ttc.closed {
-			for _, t := range ttc.targets {
-				if tempTableRouteKey(t) == route {
-					items = append(items, tempTableBeatItem{c: c, ttc: ttc, target: t})
-				}
-			}
-		}
-		ttc.mu.Unlock()
-		return true
-	})
-	return items
+	return vh.snapshotTempTableBeats()[route]
 }
 
 // tempTableFailingBeatConcurrency bounds how many failing tablets are beaten at
@@ -556,14 +547,6 @@ func tempTableBeatWorstCaseGap(interval time.Duration) time.Duration {
 	return interval + tempTableBeatBudget(interval)
 }
 
-// sendTempTableHeartbeats dispatches a beat for every registered tablet and
-// waits for the beats it launched to finish. It is a synchronous helper for
-// tests; the background loop uses dispatchTempTableBeats directly and never
-// waits.
-func (vh *vtgateHandler) sendTempTableHeartbeats(ctx context.Context) {
-	vh.dispatchTempTableBeats(ctx).Wait()
-}
-
 // tempTableBeatItem is one reserved connection to keep alive: one target of
 // one client connection. Items are grouped by tablet so all of a tablet's
 // reserved connections are refreshed with a single batched touch RPC.
@@ -576,22 +559,18 @@ type tempTableBeatItem struct {
 // beatTempTableTablet refreshes all of one tablet's reserved connections with a
 // single batched touch RPC and applies the result to each connection.
 func (vh *vtgateHandler) beatTempTableTablet(ctx context.Context, items []tempTableBeatItem) {
-	// Claim each item under its connection's lock: skip it — without counting a
-	// beat — if the connection is closing or the target no longer exists. We
-	// validate the reserved connection by its target key, not by a connection-
-	// wide generation: a beat can wait behind the failing-lane semaphore while a
-	// command republishes this same reservation, and rejecting it on a stale
-	// generation would refresh nothing while the in-flight marker suppressed the
-	// intervening sweeps — letting the reserved connection time out. Counting a
-	// beat only for an item that actually runs (rather than for everything
-	// enqueued) means a closing connection waits out only its beats already in
-	// flight, and stale items cost nothing.
+	// Filter each item under its connection's lock: skip it if the connection
+	// is closing or the target no longer exists. We validate the reserved
+	// connection by its target key, not by a connection-wide generation: a beat
+	// can wait behind the failing-lane semaphore while a command republishes
+	// this same reservation, and rejecting it on a stale generation would
+	// refresh nothing while the in-flight marker suppressed the intervening
+	// sweeps — letting the reserved connection time out.
 	valid := items[:0]
 	for _, item := range items {
 		ttc := item.ttc
 		ttc.mu.Lock()
 		if _, ok := ttc.targets[newTempTableTargetKey(item.target)]; !ttc.closed && ok {
-			ttc.beats.Add(1)
 			valid = append(valid, item)
 		}
 		ttc.mu.Unlock()
@@ -599,25 +578,10 @@ func (vh *vtgateHandler) beatTempTableTablet(ctx context.Context, items []tempTa
 	if len(valid) == 0 {
 		return
 	}
-	defer func() {
-		for _, item := range valid {
-			item.ttc.beats.Done()
-		}
-	}()
 
-	// A tablet that predates the keepalive option runs the touch as a real
-	// query; because the RPC's reserved id is left zero (see sendTempTableBeat),
-	// that query runs on a throwaway pooled connection and can never kill a
-	// reserved connection or its temp tables — those simply are not kept alive
-	// until the tablet is upgraded. On an up-to-date tablet the touch
-	// short-circuits before the ACL check, so the first connection's caller
-	// identity carried by the batch is not used there.
 	// Every reserved id goes in the batch list and the RPC's reserved id is
-	// left zero. On an up-to-date tablet the touch refreshes them all; on a
-	// tablet predating the option, the fallback query runs on a throwaway
-	// pooled connection (reserved id zero) instead of a reserved one, so it can
-	// never kill a reserved connection and its temporary tables. Those
-	// connections simply are not kept alive until the tablet is upgraded.
+	// left zero; see sendTempTableBeat for how that keeps the touch safe on
+	// tablets that predate the option.
 	// The tablet rejects a keepalive carrying more than
 	// queryservice.ReservedConnKeepAliveMaxBatch ids, so split a tablet's reserved
 	// connections into chunks of at most that many rather than send one oversized
@@ -633,8 +597,7 @@ func (vh *vtgateHandler) beatTempTableTablet(ctx context.Context, items []tempTa
 	// beat stays in flight until its last chunk finishes, the next sweep would be
 	// suppressed for the sum of the chunks' budgets rather than just one.
 	var wg sync.WaitGroup
-	for start := 0; start < len(valid); start += maxBatch {
-		batch := valid[start:min(start+maxBatch, len(valid))]
+	for batch := range slices.Chunk(valid, maxBatch) {
 		wg.Go(func() {
 			vh.beatTempTableChunk(ctx, batch)
 		})
@@ -651,7 +614,7 @@ func (vh *vtgateHandler) beatTempTableChunk(ctx context.Context, batch []tempTab
 	for _, item := range batch {
 		ids = append(ids, item.target.reservedID)
 	}
-	bctx, cancel := context.WithTimeout(tempTableBeatContext(ctx, batch[0].c), tempTableBeatBudget(tempTableHeartbeatTime))
+	bctx, cancel := context.WithTimeout(mysqlConnCallerContext(ctx, batch[0].c), tempTableBeatBudget(tempTableHeartbeatTime))
 	gone, err := vh.sendTempTableBeat(bctx, batch[0].target, ids)
 	cancel()
 
@@ -665,14 +628,30 @@ func (vh *vtgateHandler) beatTempTableChunk(ctx context.Context, batch []tempTab
 	}
 }
 
-// isWrongTabletErr reports whether err is a tablet rejecting a target whose type
-// no longer matches (as VerifyTarget returns after a type change). It is detected
-// the same way the query path detects it (see requireNewQS): a FAILED_PRECONDITION
-// carrying the wrong-tablet message, which survives the gateway's error wrapping.
-func isWrongTabletErr(err error) bool {
-	return err != nil &&
-		vterrors.Code(err) == vtrpcpb.Code_FAILED_PRECONDITION &&
-		vterrors.RxWrongTablet.MatchString(err.Error())
+// isStaleTargetErr reports whether err is a tablet permanently rejecting the
+// beat's target, so the registration is stale and retrying can never succeed.
+// Two flavors, both from the tablet's target validation (VerifyTarget): a
+// tablet-type change (FAILED_PRECONDITION carrying the wrong-tablet message,
+// detected the same way the query path detects it — see requireNewQS), and a
+// keyspace/shard mismatch (INVALID_ARGUMENT "invalid keyspace/shard ... does
+// not match expected ..."), which happens when a tablet alias is reused by a
+// reprovisioned tablet serving a different keyspace or shard. The message is
+// matched specifically — the tablet returns INVALID_ARGUMENT for other
+// keepalive problems too (empty or oversized batches) and those must stay
+// transient. Both messages survive the gateway's error wrapping.
+func isStaleTargetErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	switch vterrors.Code(err) {
+	case vtrpcpb.Code_FAILED_PRECONDITION:
+		return vterrors.RxWrongTablet.MatchString(err.Error())
+	case vtrpcpb.Code_INVALID_ARGUMENT:
+		msg := err.Error()
+		return strings.Contains(msg, "does not match expected") &&
+			(strings.Contains(msg, "invalid keyspace") || strings.Contains(msg, "invalid shard"))
+	}
+	return false
 }
 
 // applyTempTableBeatResult applies one reserved connection's touch outcome to its
@@ -712,18 +691,21 @@ func (vh *vtgateHandler) applyTempTableBeatResult(item tempTableBeatItem, gone b
 		}
 		return
 	}
-	if isWrongTabletErr(err) {
-		// The tablet's type changed (e.g. REPLICA->RDONLY): a normal query to this
-		// target is now rejected as a wrong tablet, so the session can no longer
-		// reach this reserved connection. Stop refreshing it — otherwise the
-		// keepalive would pin an orphaned reservation open past the tablet's idle
-		// timeout — and let the tablet reclaim it; the session self-heals by re-
-		// reserving on its next query. All ids in a beat share one routing target,
-		// so a wrong-tablet result condemns exactly this stale group.
-		log.Warn("temp-table connection target is no longer valid (tablet type changed), stopping its keepalives",
+	if isStaleTargetErr(err) {
+		// The tablet permanently rejects this target — its type changed (e.g.
+		// REPLICA->RDONLY) or its alias was reused by a tablet serving a
+		// different keyspace/shard — so the session can no longer reach this
+		// reserved connection and retrying can never succeed. Stop refreshing
+		// it — otherwise the keepalive would retry forever, occupying a
+		// failing-lane slot — and let the tablet reclaim it; the session
+		// self-heals by re-reserving on its next query. All ids in a beat share
+		// one routing target, so a stale-target result condemns exactly this
+		// stale group.
+		log.Warn("temp-table connection target is no longer valid (tablet type or keyspace/shard changed), stopping its keepalives",
 			slog.Int64("reserved_id", item.target.reservedID),
 			slog.String("tablet", topoproto.TabletAliasString(item.target.alias)),
-			slog.String("tablet_type", item.target.target.GetTabletType().String()))
+			slog.String("tablet_type", item.target.target.GetTabletType().String()),
+			slog.Any("error", err))
 		delete(ttc.targets, key)
 		if len(ttc.targets) == 0 {
 			vh.tempTableConns.Delete(item.c)
@@ -758,16 +740,18 @@ func (vh *vtgateHandler) applyTempTableBeatResult(item tempTableBeatItem, gone b
 	}
 }
 
-// tempTableBeatContext returns ctx carrying a client connection's caller
-// identity, built exactly as the command path builds it. On an up-to-date
-// tablet a keepalive touch short-circuits before the ACL and query-log path,
-// so the identity is not used there. It matters only on a not-yet-upgraded
-// tablet, where the touch runs as a real "select 1" on a throwaway pooled
-// connection; the batch carries the first connection's identity so that query
-// is attributed to a real user in the tablet's query log. The identity fields
-// on the connection are set at authentication time and immutable after, so
-// reading them from the sweeper is safe.
-func tempTableBeatContext(ctx context.Context, c *mysql.Conn) context.Context {
+// mysqlConnCallerContext returns ctx carrying the connection's caller identity
+// (effective caller id from the authenticated user, immediate caller id from
+// its UserData). Every command path and the temp-table keepalive sweeper build
+// the identity through this one helper, so attribution cannot drift between
+// them. On an up-to-date tablet a keepalive touch short-circuits before the
+// ACL and query-log path, so the identity is not used there; it matters on a
+// not-yet-upgraded tablet, where the touch runs as a real "select 1" and the
+// batch carries the first connection's identity so that query is attributed to
+// a real user in the tablet's query log. The identity fields are set at
+// authentication time and immutable after, so reading them from any goroutine
+// is safe.
+func mysqlConnCallerContext(ctx context.Context, c *mysql.Conn) context.Context {
 	if c.UserData == nil {
 		return ctx
 	}
@@ -805,8 +789,11 @@ func (vh *vtgateHandler) sendTempTableBeat(ctx context.Context, routing tempTabl
 	}
 	// Only an up-to-date tablet returns the gone-id result. A tablet that ran
 	// the fallback query returns its own result, whose rows must not be parsed
-	// as gone reserved ids.
-	if len(result.Fields) != 1 || result.Fields[0].GetName() != queryservice.ReservedConnKeepAliveGoneField {
+	// as gone reserved ids. A nil result with a nil error is not produced by
+	// any in-tree tablet, but the proto contract permits it (a third-party
+	// QueryService could send an empty response), and this runs on a bare
+	// sweeper goroutine where a nil deref would crash the whole vtgate.
+	if result == nil || len(result.Fields) != 1 || result.Fields[0].GetName() != queryservice.ReservedConnKeepAliveGoneField {
 		return nil, nil
 	}
 	for _, row := range result.Rows {
@@ -1000,8 +987,9 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 	}
 	defer span.Finish()
 
-	// Lock out the temp-table heartbeat sweeper for the duration of the
-	// command; once it settles, republish the session's heartbeat targets.
+	// Republish the session's temp-table heartbeat targets once the command
+	// settles. Beats run concurrently with commands; a collision on the
+	// reserved connection is resolved tablet-side (see TxPool.GetAndLock).
 	defer vh.tempTableCommandEnd(c)
 
 	ctx = callinfo.MysqlCallInfo(ctx, c)
@@ -1011,12 +999,7 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 	// returned, use the User. This lets the plugin map a MySQL
 	// user used for authentication to a Vitess User used for
 	// Table ACLs and Vitess authentication in general.
-	im := c.UserData.Get()
-	ef := callerid.NewEffectiveCallerID(
-		c.User,                  /* principal: who */
-		c.RemoteAddr().String(), /* component: running client process */
-		"VTGate MySQL Connector" /* subcomponent: part of the client */)
-	ctx = callerid.NewContext(ctx, ef, im)
+	ctx = mysqlConnCallerContext(ctx, c)
 	mysqlCtx := &vtgateMySQLConnection{handler: vh, conn: c}
 
 	if !session.InTransaction {
@@ -1066,8 +1049,15 @@ func (vh *vtgateHandler) ComQueryMulti(c *mysql.Conn, sql string, callback func(
 	}
 	defer span.Finish()
 
-	// Lock out the temp-table heartbeat sweeper for the duration of the
-	// command; once it settles, republish the session's heartbeat targets.
+	// Republish the session's temp-table heartbeat targets once the command
+	// settles. Beats run concurrently with commands; a collision on the
+	// reserved connection is resolved tablet-side (see TxPool.GetAndLock).
+	// Known coverage gap: a temporary table created partway through this
+	// multi-statement batch has no heartbeat registration until the whole
+	// batch settles, so a later statement in the same batch that runs on a
+	// different shard for longer than the tablet's reserved-connection timeout
+	// can still lose the temp table mid-batch — the same exposure such a batch
+	// had before the keepalive existed.
 	defer vh.tempTableCommandEnd(c)
 
 	ctx = callinfo.MysqlCallInfo(ctx, c)
@@ -1077,12 +1067,7 @@ func (vh *vtgateHandler) ComQueryMulti(c *mysql.Conn, sql string, callback func(
 	// returned, use the User. This lets the plugin map a MySQL
 	// user used for authentication to a Vitess User used for
 	// Table ACLs and Vitess authentication in general.
-	im := c.UserData.Get()
-	ef := callerid.NewEffectiveCallerID(
-		c.User,                  /* principal: who */
-		c.RemoteAddr().String(), /* component: running client process */
-		"VTGate MySQL Connector" /* subcomponent: part of the client */)
-	ctx = callerid.NewContext(ctx, ef, im)
+	ctx = mysqlConnCallerContext(ctx, c)
 	mysqlCtx := &vtgateMySQLConnection{handler: vh, conn: c}
 
 	if !session.InTransaction {
@@ -1253,8 +1238,9 @@ func (vh *vtgateHandler) ComPrepare(c *mysql.Conn, query string) ([]*querypb.Fie
 		ctx = context.Background()
 	}
 
-	// Lock out the temp-table heartbeat sweeper for the duration of the
-	// command; once it settles, republish the session's heartbeat targets.
+	// Republish the session's temp-table heartbeat targets once the command
+	// settles. Beats run concurrently with commands; a collision on the
+	// reserved connection is resolved tablet-side (see TxPool.GetAndLock).
 	defer vh.tempTableCommandEnd(c)
 
 	ctx = callinfo.MysqlCallInfo(ctx, c)
@@ -1264,12 +1250,7 @@ func (vh *vtgateHandler) ComPrepare(c *mysql.Conn, query string) ([]*querypb.Fie
 	// returned, use the User. This lets the plugin map a MySQL
 	// user used for authentication to a Vitess User used for
 	// Table ACLs and Vitess authentication in general.
-	im := c.UserData.Get()
-	ef := callerid.NewEffectiveCallerID(
-		c.User,                  /* principal: who */
-		c.RemoteAddr().String(), /* component: running client process */
-		"VTGate MySQL Connector" /* subcomponent: part of the client */)
-	ctx = callerid.NewContext(ctx, ef, im)
+	ctx = mysqlConnCallerContext(ctx, c)
 	ctx = vtgateservice.ContextWithIngressBytes(ctx, c.IngressBytes())
 
 	session := vh.session(c)
@@ -1305,8 +1286,9 @@ func (vh *vtgateHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareDat
 	}
 	defer span.Finish()
 
-	// Lock out the temp-table heartbeat sweeper for the duration of the
-	// command; once it settles, republish the session's heartbeat targets.
+	// Republish the session's temp-table heartbeat targets once the command
+	// settles. Beats run concurrently with commands; a collision on the
+	// reserved connection is resolved tablet-side (see TxPool.GetAndLock).
 	defer vh.tempTableCommandEnd(c)
 
 	ctx = callinfo.MysqlCallInfo(ctx, c)
@@ -1316,12 +1298,7 @@ func (vh *vtgateHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareDat
 	// returned, use the User. This lets the plugin map a MySQL
 	// user used for authentication to a Vitess User used for
 	// Table ACLs and Vitess authentication in general.
-	im := c.UserData.Get()
-	ef := callerid.NewEffectiveCallerID(
-		c.User,                  /* principal: who */
-		c.RemoteAddr().String(), /* component: running client process */
-		"VTGate MySQL Connector" /* subcomponent: part of the client */)
-	ctx = callerid.NewContext(ctx, ef, im)
+	ctx = mysqlConnCallerContext(ctx, c)
 	mysqlCtx := &vtgateMySQLConnection{handler: vh, conn: c}
 
 	session := vh.session(c)
@@ -1422,12 +1399,7 @@ func (vh *vtgateHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos
 	// returned, use the User. This lets the plugin map a MySQL
 	// user used for authentication to a Vitess User used for
 	// Table ACLs and Vitess authentication in general.
-	im := c.UserData.Get()
-	ef := callerid.NewEffectiveCallerID(
-		c.User,                  /* principal: who */
-		c.RemoteAddr().String(), /* component: running client process */
-		"VTGate MySQL Connector" /* subcomponent: part of the client */)
-	ctx = callerid.NewContext(ctx, ef, im)
+	ctx = mysqlConnCallerContext(ctx, c)
 
 	// Check if binlog dump is enabled globally
 	if !enableBinlogDump.Get() {
@@ -1436,6 +1408,7 @@ func (vh *vtgateHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos
 	}
 
 	// Check user authorization for binlog dump
+	im := c.UserData.Get()
 	if !binlogacl.Authorized(im) {
 		binlogDumpRequests.Add("denied", 1)
 		return vterrors.NewErrorf(vtrpcpb.Code_PERMISSION_DENIED, vterrors.AccessDeniedError, "User '%s' is not authorized to perform binlog dump operations", im.GetUsername())

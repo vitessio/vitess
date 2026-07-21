@@ -739,14 +739,14 @@ func executeWithTimeout(
 // or the call hangs forever after ctx expired.
 func TestDBExecOnceNotInTxnFallsBackToConnKill(t *testing.T) {
 	db := fakesqldb.New(t)
-	defer db.Close()
+	t.Cleanup(db.Close)
 	connPool := newPool()
 	params := dbconfigs.New(db.ConnParams())
 	connPool.Open(params, params, params)
-	defer connPool.Close()
-	dbConn, err := newPooledConn(context.Background(), connPool, params)
+	t.Cleanup(connPool.Close)
+	dbConn, err := newPooledConn(t.Context(), connPool, params)
 	if dbConn != nil {
-		defer dbConn.Close()
+		t.Cleanup(dbConn.Close)
 	}
 	require.NoError(t, err)
 
@@ -766,7 +766,7 @@ func TestDBExecOnceNotInTxnFallsBackToConnKill(t *testing.T) {
 		connKilled.Store(true)
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
 	defer cancel()
 
 	// The call must return (not hang) once ctx expires, and the connection
@@ -782,4 +782,46 @@ func TestDBExecOnceNotInTxnFallsBackToConnKill(t *testing.T) {
 		require.FailNow(t, "ExecOnce hung after ctx expired despite the KILL QUERY failure")
 	}
 	assert.True(t, connKilled.Load(), "connection kill must be attempted when KILL QUERY fails")
+}
+
+// TestDBExecOnceNotInTxnEscalatesWhenKillQueryDoesNotUnblock verifies that a
+// KILL QUERY that mysqld accepts but that fails to actually terminate the
+// statement (a thread wedged in a phase where the kill flag is not checked)
+// escalates to killing the connection after one kill timeout: the socket close
+// is the only unconditional unblock, and a blocked stateful connection would
+// otherwise stay in use — invisible to the transaction killer — forever.
+func TestDBExecOnceNotInTxnEscalatesWhenKillQueryDoesNotUnblock(t *testing.T) {
+	db := fakesqldb.New(t)
+	t.Cleanup(db.Close)
+	connPool := newPool()
+	params := dbconfigs.New(db.ConnParams())
+	connPool.Open(params, params, params)
+	t.Cleanup(connPool.Close)
+	dbConn, err := newPooledConn(t.Context(), connPool, params)
+	require.NoError(t, err)
+	t.Cleanup(dbConn.Close)
+
+	query := "select 1"
+	db.AddQuery(query, &sqltypes.Result{})
+	db.SetBeforeFunc(query, func() {
+		// Outlasts the deadline plus the kill timeout: a statement that never
+		// honors the kill flag.
+		time.Sleep(2500 * time.Millisecond)
+	})
+	dbConn.killTimeout = 100 * time.Millisecond
+
+	// KILL QUERY is accepted — but the statement stays blocked anyway.
+	db.AddQueryPattern(`kill query \d+`, &sqltypes.Result{})
+	var connKilled atomic.Bool
+	db.AddQueryPatternWithCallback(`kill \d+`, &sqltypes.Result{}, func(string) {
+		connKilled.Store(true)
+	})
+
+	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	_, execErr := dbConn.ExecOnceKeepConnOnTimeout(ctx, query, 1, false)
+	require.Error(t, execErr)
+	require.True(t, connKilled.Load(), "the connection must be killed when KILL QUERY does not unblock the statement")
+	require.Less(t, time.Since(start), 2*time.Second, "the call must return via the connection kill, not by waiting out the statement")
 }

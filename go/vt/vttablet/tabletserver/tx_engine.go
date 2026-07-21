@@ -503,7 +503,7 @@ func (te *TxEngine) prepareTx(ctx context.Context, preparedTx *tx.PreparedTx) (f
 
 	for _, stmt := range preparedTx.Queries {
 		conn.TxProperties().RecordQuery(stmt, te.env.Environment().Parser())
-		if _, err = conn.Exec(ctx, stmt, 1, false); err != nil {
+		if _, err = conn.Exec(ctx, stmt, 1, false, false /* keepConnOnTimeout */); err != nil {
 			te.txPool.RollbackAndRelease(ctx, conn)
 			return
 		}
@@ -699,7 +699,7 @@ func (te *TxEngine) taintConn(ctx context.Context, conn *StatefulConnection, pre
 		return err
 	}
 	for _, query := range preQueries {
-		_, err := conn.Exec(ctx, query, 0 /*maxrows*/, false /*wantFields*/)
+		_, err := conn.Exec(ctx, query, 0 /*maxrows*/, false /*wantFields*/, false /* keepConnOnTimeout */)
 		if err != nil {
 			conn.Releasef("error during connection setup: %s\n%v", query, err)
 			return err

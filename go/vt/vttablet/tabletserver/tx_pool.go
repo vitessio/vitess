@@ -138,7 +138,7 @@ func (tp *TxPool) transactionKiller() {
 			conn.Close()
 			tp.env.Stats().KillCounters.Add("ReservedConnection", 1)
 		case conn.IsInTransaction():
-			_, err := conn.Exec(context.Background(), "rollback", 1, false)
+			_, err := conn.Exec(context.Background(), "rollback", 1, false, false /* keepConnOnTimeout */)
 			if err != nil {
 				conn.Close()
 			}
@@ -259,7 +259,7 @@ func (tp *TxPool) Commit(ctx context.Context, txConn *StatefulConnection) (strin
 		return "", nil
 	}
 
-	if _, err := txConn.Exec(ctx, "commit", 1, false); err != nil {
+	if _, err := txConn.Exec(ctx, "commit", 1, false, false /* keepConnOnTimeout */); err != nil {
 		txConn.Close()
 		return "", err
 	}
@@ -287,7 +287,7 @@ func (tp *TxPool) Rollback(ctx context.Context, txConn *StatefulConnection) erro
 		return nil
 	}
 	defer tp.txComplete(txConn, tx.TxRollback)
-	if _, err := txConn.Exec(ctx, "rollback", 1, false); err != nil {
+	if _, err := txConn.Exec(ctx, "rollback", 1, false, false /* keepConnOnTimeout */); err != nil {
 		txConn.Close()
 		return err
 	}

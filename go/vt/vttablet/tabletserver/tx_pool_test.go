@@ -57,7 +57,7 @@ func TestTxPoolExecuteCommit(t *testing.T) {
 	// get the connection and execute a query on it
 	conn2, err := txPool.GetAndLock(id, "")
 	require.NoError(t, err)
-	_, _ = conn2.Exec(ctx, sql, 1, true)
+	_, _ = conn2.Exec(ctx, sql, 1, true, false /* keepConnOnTimeout */)
 	conn2.Unlock()
 
 	// get the connection again and now commit it
@@ -172,7 +172,7 @@ func TestTxPoolAutocommit(t *testing.T) {
 
 	// run a query to see it in the query log
 	query := "select 3"
-	conn1.Exec(ctx, query, 1, false)
+	conn1.Exec(ctx, query, 1, false, false /* keepConnOnTimeout */)
 
 	_, err = txPool.Commit(ctx, conn1)
 	require.NoError(t, err)
@@ -318,7 +318,7 @@ func TestTxPoolRollbackFailIsPassedThrough(t *testing.T) {
 	conn1, _, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	require.NoError(t, err)
 
-	_, err = conn1.Exec(ctx, sql, 1, true)
+	_, err = conn1.Exec(ctx, sql, 1, true, false /* keepConnOnTimeout */)
 	require.NoError(t, err)
 
 	// rollback is refused by the underlying db and the error is passed on
@@ -888,6 +888,46 @@ func setupWithEnv(t *testing.T, env tabletenv.Env) (*fakesqldb.DB, *TxPool, *fak
 		txPool.Close()
 		db.Close()
 	}
+}
+
+// TestStatefulConnExecTimeoutConnFate verifies that the caller decides a
+// timed-out statement's connection fate. A statement declared safe to keep
+// (reads, DML — a kill leaves no session state behind) keeps the connection on
+// a mid-statement deadline (KILL QUERY); an unsafe statement (SET, lock
+// functions — whose session-scope effects a kill does not roll back) loses the
+// whole connection, so state that vtgate never recorded cannot survive on a
+// connection the keepalive would then pin alive.
+func TestStatefulConnExecTimeoutConnFate(t *testing.T) {
+	ctx := t.Context()
+	db, txPool, _, closer := setup(t)
+	defer closer()
+
+	const slow = "select 1"
+	db.AddQuery(slow, &sqltypes.Result{})
+	db.SetBeforeFunc(slow, func() {
+		// Outlasts the context deadline so the statement is interrupted.
+		time.Sleep(1 * time.Second)
+	})
+
+	conn, err := txPool.scp.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
+	require.NoError(t, err)
+	defer conn.Unlock()
+
+	// Safe statement: the deadline kills only the query; the connection (and
+	// with it the session's temp tables and settings) survives.
+	execCtx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+	_, err = conn.Exec(execCtx, slow, 1, false, true /* keepConnOnTimeout */)
+	cancel()
+	require.Error(t, err)
+	require.False(t, conn.IsClosed(), "a timed-out safe statement must keep its connection")
+
+	// Unsafe statement: the deadline kills the whole connection, exactly as on
+	// main, so a half-applied SET or a racing lock grant cannot linger.
+	execCtx, cancel = context.WithTimeout(ctx, 100*time.Millisecond)
+	_, err = conn.Exec(execCtx, slow, 1, false, false /* keepConnOnTimeout */)
+	cancel()
+	require.Error(t, err)
+	require.True(t, conn.IsClosed(), "a timed-out unsafe statement must lose its connection")
 }
 
 // TestTxPoolKeepAliveReserved verifies the reserved-connection keepalive:

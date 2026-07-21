@@ -1164,9 +1164,15 @@ func (qre *QueryExecutor) execProc(conn *StatefulConnection) (*sqltypes.Result, 
 		// a transaction before failing would leave mysqld in a transaction
 		// while Vitess believes the connection is idle — and the keepalive
 		// would hold it (and its locks) open indefinitely. Close the connection
-		// on any CALL error, mirroring the streaming path, so no untracked
-		// transaction survives.
-		conn.Close()
+		// on a CALL error so no untracked transaction survives — but only
+		// outside a Vitess-tracked transaction: inside one, a query timeout
+		// still kills the whole connection (ExecOnce insideTxn), so the hazard
+		// does not exist, and closing here on a benign statement error (a
+		// SIGNAL from the procedure, a typo'd name) would destroy the client's
+		// open transaction, which MySQL itself leaves usable.
+		if !conn.IsInTransaction() {
+			conn.Close()
+		}
 		return nil, rewriteOUTParamError(err)
 	}
 	if !qr.IsMoreResultsExists() {
@@ -1418,6 +1424,25 @@ func (qre *QueryExecutor) execDBConn(conn *connpool.Conn, sql string, wantfields
 	return exec, nil
 }
 
+// planKeepsConnOnTimeout reports whether a timed-out statement of this plan
+// type may keep its stateful connection (KILL QUERY only) instead of losing it.
+// Only reads and DML qualify: a killed read leaves nothing behind, and InnoDB
+// rolls a killed DML statement back atomically. Everything else — SET (whose
+// session-scope assignments apply left-to-right and are not rolled back by a
+// kill), lock functions (a lock can be granted just as the kill lands), CALL,
+// DDL, admin statements — can leave session or server state the session never
+// recorded, so a timeout kills the whole connection, exactly as it always did,
+// and the session self-heals by re-reserving and re-applying its settings.
+func planKeepsConnOnTimeout(planID p.PlanType) bool {
+	switch planID {
+	case p.PlanSelect, p.PlanSelectImpossible, p.PlanSelectNoLimit, p.PlanShow,
+		p.PlanInsert, p.PlanUpdate, p.PlanDelete, p.PlanInsertMessage,
+		p.PlanUpdateLimit, p.PlanDeleteLimit:
+		return true
+	}
+	return false
+}
+
 func (qre *QueryExecutor) execStatefulConn(conn *StatefulConnection, sql string, wantfields bool) (*sqltypes.Result, error) {
 	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.execStatefulConn")
 	defer span.Finish()
@@ -1434,7 +1459,7 @@ func (qre *QueryExecutor) execStatefulConn(conn *StatefulConnection, sql string,
 		return nil, err
 	}
 
-	exec, err := conn.Exec(ctx, sql, qre.getMaxResultSize(), wantfields)
+	exec, err := conn.Exec(ctx, sql, qre.getMaxResultSize(), wantfields, planKeepsConnOnTimeout(qre.plan.PlanID))
 	if err != nil {
 		return nil, err
 	}

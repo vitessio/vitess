@@ -926,15 +926,6 @@ func (tsv *TabletServer) Execute(ctx context.Context, session queryservice.Sessi
 	// predating this option runs the fallback query on a throwaway pooled
 	// connection instead of a reserved one.
 	if options.GetReservedConnKeepAlive() {
-		// Validate the target before refreshing anything, exactly as a normal
-		// query would be. A reserved connection whose tablet has since changed
-		// type (e.g. REPLICA->RDONLY) is unreachable by its session — a normal
-		// query to that target is rejected as a wrong tablet — so its keepalive
-		// must be rejected too, letting vtgate drop the now-orphaned registration
-		// instead of pinning the reservation open past the tablet's idle timeout.
-		if err := tsv.sm.VerifyTarget(ctx, target); err != nil {
-			return nil, err
-		}
 		ids := options.GetReservedConnKeepAliveIds()
 		if reservedID == 0 && len(ids) == 0 {
 			return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "reserved connection keepalive requires at least one reserved ID")
@@ -946,7 +937,28 @@ func (tsv *TabletServer) Execute(ctx context.Context, session queryservice.Sessi
 		if len(ids) > queryservice.ReservedConnKeepAliveMaxBatch {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "reserved connection keepalive batch of %d exceeds the limit of %d", len(ids), queryservice.ReservedConnKeepAliveMaxBatch)
 		}
-		return tsv.keepAliveReservedConns(reservedID, ids), nil
+		// Run through execRequest like every other stateful RPC, so the
+		// keepalive is subject to the same gates as a normal query: target
+		// validation (a tablet that changed type rejects it as a wrong tablet,
+		// letting vtgate drop the now-orphaned registration) and serving state
+		// (a tablet that rejects all queries — not serving, replication
+		// unhealthy, stalled demotion, shutting down — must not keep
+		// refreshing reserved connections it cannot serve; they die at the
+		// tablet timeout exactly as every other request-path resource on an
+		// unhealthy tablet does).
+		err = tsv.execRequest(
+			ctx, tsv.loadQueryTimeout(),
+			"KeepAliveReserved", "/* reserved-conn keepalive */", nil,
+			target, options, false, /* allowOnShutdown */
+			func(_ context.Context, _ *tabletenv.LogStats) error {
+				result = tsv.keepAliveReservedConns(reservedID, ids)
+				return nil
+			},
+		)
+		if err != nil {
+			return nil, err
+		}
+		return result, nil
 	}
 
 	return tsv.execute(ctx, target, sql, bindVariables, transactionID, reservedID, nil, options)

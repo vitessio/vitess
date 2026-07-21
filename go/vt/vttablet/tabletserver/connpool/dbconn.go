@@ -179,11 +179,13 @@ func (dbc *Conn) execOnce(ctx context.Context, query string, maxrows int, wantfi
 	// and channel overhead on the happy path.
 	var wg sync.WaitGroup
 	wg.Add(1)
+	fetchDone := make(chan struct{})
 	stop := context.AfterFunc(ctx, func() {
 		defer wg.Done()
-		dbc.terminate(ctx, insideTxn, now)
+		dbc.terminate(ctx, insideTxn, now, fetchDone)
 	})
 	result, err := dbc.conn.ExecuteFetch(query, maxrows, wantfields)
+	close(fetchDone)
 	if !stop() {
 		// The context was cancelled and terminate has started. Wait for
 		// it to finish so that the kill statement completes and the dba
@@ -213,8 +215,10 @@ func (dbc *Conn) getErrorMessageFromContextError(ctx context.Context) string {
 	return errMsg
 }
 
-// terminate kills the query or connection based on the transaction status
-func (dbc *Conn) terminate(ctx context.Context, insideTxn bool, now time.Time) {
+// terminate kills the query or connection based on the transaction status.
+// fetchDone closes when the interrupted fetch call returns; it tells terminate
+// whether the kill actually unblocked the statement.
+func (dbc *Conn) terminate(ctx context.Context, insideTxn bool, now time.Time, fetchDone <-chan struct{}) {
 	errMsg := dbc.getErrorMessageFromContextError(ctx)
 	if insideTxn {
 		// we can't safely kill a query in a transaction, we need to kill the connection
@@ -228,6 +232,21 @@ func (dbc *Conn) terminate(ctx context.Context, insideTxn bool, now time.Time) {
 	// killing the connection, which closes the client socket and unblocks
 	// the call. Preserving the connection is best-effort; unblocking is not.
 	if err := dbc.KillQuery(errMsg, time.Since(now)); err != nil {
+		_ = dbc.Kill(errMsg, time.Since(now))
+		return
+	}
+	// A successful KILL QUERY only sets the mysqld thread's kill flag, which
+	// the statement checks at execution checkpoints; a thread wedged in an
+	// uninterruptible phase (e.g. stalled storage I/O) may never honor it,
+	// and the blocked fetch would then hold the connection in use forever —
+	// invisible to the transaction killer, which skips in-use connections.
+	// Give the statement one kill timeout to actually return, then escalate
+	// to killing the connection: its socket close unblocks unconditionally.
+	timer := time.NewTimer(dbc.killTimeout)
+	defer timer.Stop()
+	select {
+	case <-fetchDone:
+	case <-timer.C:
 		_ = dbc.Kill(errMsg, time.Since(now))
 	}
 }
@@ -342,11 +361,13 @@ func (dbc *Conn) streamOnce(
 
 	var wg sync.WaitGroup
 	wg.Add(1)
+	fetchDone := make(chan struct{})
 	stop := context.AfterFunc(ctx, func() {
 		defer wg.Done()
-		dbc.terminate(ctx, insideTxn, now)
+		dbc.terminate(ctx, insideTxn, now, fetchDone)
 	})
 	err := dbc.conn.ExecuteStreamFetch(query, callback, alloc, streamBufferSize)
+	close(fetchDone)
 	if !stop() {
 		wg.Wait()
 		return dbc.Err()

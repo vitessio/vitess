@@ -3008,4 +3008,13 @@ func TestReservedConnKeepAliveBatch(t *testing.T) {
 	require.Empty(t, res.Rows, "the reserved connection must survive a rejected wrong-target keepalive")
 
 	require.NoError(t, tsv.Release(ctx, &target, 0, s1.ReservedID))
+
+	// A tablet that is not serving must reject keepalives just as it rejects
+	// queries: the keepalive goes through the same StartRequest gate, so
+	// reserved connections on a sick tablet are not pinned past the tablet
+	// timeout by a background refresh the tablet would never serve a query for.
+	require.NoError(t, tsv.SetServingType(topodatapb.TabletType_PRIMARY, time.Time{}, false, "test not serving"))
+	_, err = tsv.Execute(ctx, nil, &target, "/* keepalive */ select 1", nil, 0, 0,
+		&querypb.ExecuteOptions{ReservedConnKeepAlive: true, ReservedConnKeepAliveIds: []int64{1}})
+	require.Error(t, err, "a not-serving tablet must reject keepalives")
 }

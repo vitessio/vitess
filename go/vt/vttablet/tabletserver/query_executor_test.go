@@ -2399,4 +2399,43 @@ func TestExecProcClosesConnOnError(t *testing.T) {
 	_, err = qre.execProc(conn)
 	require.Error(t, err)
 	require.True(t, conn.IsClosed(), "a reserved connection must be closed when its CALL fails, so no untracked transaction survives")
+
+	// Inside a Vitess-tracked transaction the hazard does not exist: a query
+	// timeout still kills the whole connection (ExecOnce insideTxn), so no
+	// untracked in-proc transaction can outlive it. A benign CALL error — a
+	// SIGNAL from the procedure, a typo'd name — must therefore leave the
+	// transaction usable, exactly as it does on a direct MySQL connection.
+	txConn, _, _, err := tsv.te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
+	require.NoError(t, err)
+	defer txConn.Release(tx.TxRollback)
+	require.True(t, txConn.IsInTransaction())
+
+	qreTx := newTestQueryExecutor(ctx, tsv, query, txConn.ReservedID())
+	_, err = qreTx.execProc(txConn)
+	require.Error(t, err)
+	require.False(t, txConn.IsClosed(), "a benign CALL error inside a tracked transaction must not destroy the transaction")
+}
+
+// TestPlanKeepsConnOnTimeout pins which plan types may keep their stateful
+// connection when a timeout kills only the query: reads and DML (whose kill
+// leaves no session state behind), and nothing else — a killed SET or lock
+// function can leave session state the session never recorded, which the
+// temp-table keepalive would then preserve indefinitely.
+func TestPlanKeepsConnOnTimeout(t *testing.T) {
+	safe := []planbuilder.PlanType{
+		planbuilder.PlanSelect, planbuilder.PlanSelectImpossible, planbuilder.PlanSelectNoLimit, planbuilder.PlanShow,
+		planbuilder.PlanInsert, planbuilder.PlanUpdate, planbuilder.PlanDelete, planbuilder.PlanInsertMessage,
+		planbuilder.PlanUpdateLimit, planbuilder.PlanDeleteLimit,
+	}
+	for _, id := range safe {
+		assert.True(t, planKeepsConnOnTimeout(id), "%s must keep its connection on a query timeout", id)
+	}
+	unsafe := []planbuilder.PlanType{
+		planbuilder.PlanSet, planbuilder.PlanSelectLockFunc, planbuilder.PlanCallProc,
+		planbuilder.PlanDDL, planbuilder.PlanLoad, planbuilder.PlanFlush,
+		planbuilder.PlanOtherRead, planbuilder.PlanOtherAdmin, planbuilder.PlanUnlockTables,
+	}
+	for _, id := range unsafe {
+		assert.False(t, planKeepsConnOnTimeout(id), "%s must lose its connection on a query timeout", id)
+	}
 }

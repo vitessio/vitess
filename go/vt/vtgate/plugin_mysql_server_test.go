@@ -1938,10 +1938,6 @@ func TestGracefulShutdownWithTransaction(t *testing.T) {
 	require.True(t, mysqlConn.IsMarkedForClose())
 }
 
-// TestTempTableCommandTracking verifies that the command start/end hooks
-// register only reserved shard sessions of a session that holds temporary
-// tables, lock out the sweeper while a command is in flight, and deregister
-// the connection once the temporary tables are gone.
 // tempTargets builds a keepalive target map from the given targets, for tests.
 func tempTargets(ts ...tempTableHeartbeatTarget) map[tempTableTargetKey]tempTableHeartbeatTarget {
 	m := make(map[tempTableTargetKey]tempTableHeartbeatTarget, len(ts))
@@ -1961,6 +1957,9 @@ func firstTempTarget(t *testing.T, targets map[tempTableTargetKey]tempTableHeart
 	return tempTableHeartbeatTarget{}
 }
 
+// TestTempTableCommandTracking verifies that the command end hook registers
+// only reserved shard sessions of a session that holds temporary tables, and
+// deregisters the connection once the temporary tables are gone.
 func TestTempTableCommandTracking(t *testing.T) {
 	vh := &vtgateHandler{}
 	c := &mysql.Conn{ConnectionID: 7}
@@ -2060,7 +2059,7 @@ func TestTempTableHeartbeatBatchesPerTablet(t *testing.T) {
 
 	// A single sweep beats the tablet once, with a batch carrying both ids.
 	before := sbc.ExecCount.Load()
-	vh.sendTempTableHeartbeats(ctx)
+	vh.dispatchTempTableBeats(ctx).Wait()
 	require.Equal(t, before+1, sbc.ExecCount.Load(), "the tablet must be beaten with exactly one batched RPC")
 	opts := sbc.GetOptions()
 	require.NotEmpty(t, opts)
@@ -2087,7 +2086,7 @@ func TestTempTableHeartbeatSplitsOversizedBatch(t *testing.T) {
 		})})
 	}
 
-	vh.sendTempTableHeartbeats(ctx)
+	vh.dispatchTempTableBeats(ctx).Wait()
 
 	// Collect the reserved-id batches the tablet received.
 	batches := 0
@@ -2535,10 +2534,38 @@ func TestTempTableHeartbeatEvictsOnTabletTypeChange(t *testing.T) {
 		target: &querypb.Target{Keyspace: st.Keyspace, Shard: st.Shard, TabletType: st.Type}, alias: st.Alias, reservedID: 5,
 	})})
 
-	vh.sendTempTableHeartbeats(ctx)
+	vh.dispatchTempTableBeats(ctx).Wait()
 
 	_, ok := vh.tempTableConns.Load(c)
 	require.False(t, ok, "a wrong-tablet beat must evict the stale registration, not keep refreshing it")
+
+	// The other permanent VerifyTarget rejection: the tablet's alias was reused
+	// by a reprovisioned tablet serving a different keyspace/shard, which the
+	// tablet reports as INVALID_ARGUMENT. Retrying can never succeed, so it
+	// must evict too — not be misread as a transient failure and retried
+	// forever while occupying a failing-lane slot.
+	wrongKeyspace := vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid keyspace oldks does not match expected newks")
+	qs2 := hc.AddFakeTablet("aa", "reusedhost", 2, "newks", "0", topodatapb.TabletType_REPLICA, true, 1, nil,
+		func(tablet *topodatapb.Tablet) queryservice.QueryService {
+			return &gatedBeatConn{SandboxConn: sandboxconn.NewSandboxConn(tablet), err: wrongKeyspace}
+		})
+	gc2 := qs2.(*gatedBeatConn)
+	st2 := gc2.Tablet()
+	c2 := &mysql.Conn{ConnectionID: 2}
+	vh.tempTableConns.Store(c2, &tempTableConn{targets: tempTargets(tempTableHeartbeatTarget{
+		target: &querypb.Target{Keyspace: "oldks", Shard: st2.Shard, TabletType: st2.Type}, alias: st2.Alias, reservedID: 6,
+	})})
+
+	vh.dispatchTempTableBeats(ctx).Wait()
+
+	_, ok = vh.tempTableConns.Load(c2)
+	require.False(t, ok, "a keyspace-mismatch beat must evict the stale registration, not retry it forever")
+
+	// Other INVALID_ARGUMENT keepalive errors (e.g. an oversized batch) stay
+	// transient: the registration survives and is retried.
+	require.False(t, isStaleTargetErr(vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+		"reserved connection keepalive batch of 2000 exceeds the limit of 1024")),
+		"a batch-limit rejection must stay transient")
 }
 
 // TestTempTableHeartbeatTouchesRegistrationWithinOneInterval covers the
@@ -2557,7 +2584,7 @@ func TestTempTableHeartbeatTouchesRegistrationWithinOneInterval(t *testing.T) {
 	// One sweep runs and takes its snapshot (an existing connection is touched).
 	cOld := &mysql.Conn{ConnectionID: 1}
 	vh.tempTableConns.Store(cOld, &tempTableConn{targets: tempTargets(tempTableHeartbeatTarget{target: target, alias: tablet.Alias, reservedID: 1})})
-	vh.sendTempTableHeartbeats(ctx)
+	vh.dispatchTempTableBeats(ctx).Wait()
 
 	// A new connection registers immediately after that snapshot — the worst
 	// case the reviewer flagged. The current sweep has already snapshotted, so it
@@ -2566,7 +2593,7 @@ func TestTempTableHeartbeatTouchesRegistrationWithinOneInterval(t *testing.T) {
 	cNew := &mysql.Conn{ConnectionID: 2}
 	vh.tempTableConns.Store(cNew, &tempTableConn{targets: tempTargets(tempTableHeartbeatTarget{target: target, alias: tablet.Alias, reservedID: 2})})
 
-	vh.sendTempTableHeartbeats(ctx)
+	vh.dispatchTempTableBeats(ctx).Wait()
 	opts := sbc.GetOptions()
 	require.NotEmpty(t, opts)
 	require.Contains(t, opts[len(opts)-1].GetReservedConnKeepAliveIds(), int64(2),
@@ -2643,7 +2670,7 @@ func TestTempTableHeartbeatSlowTabletIndependence(t *testing.T) {
 	// Every tablet is touched concurrently. The slow tablet (t1) blocks its own
 	// goroutine, but the healthy tablet (t2) is in another goroutine and must be
 	// beaten promptly regardless.
-	go vh.sendTempTableHeartbeats(ctx)
+	go vh.dispatchTempTableBeats(ctx).Wait()
 	require.Eventually(t, func() bool { return sbc1.ExecCount.Load() >= 1 }, 30*time.Second, time.Millisecond,
 		"the slow tablet's beat must be in flight")
 	require.Eventually(t, func() bool { return sbc2.ExecCount.Load() >= 1 }, 2*time.Second, time.Millisecond,
@@ -2676,7 +2703,7 @@ func TestTempTableHeartbeatHealthyNotStarvedBySlowTablet(t *testing.T) {
 	healthy := &mysql.Conn{ConnectionID: uint32(slowConns + 1)}
 	vh.tempTableConns.Store(healthy, &tempTableConn{targets: tempTargets(tempTableHeartbeatTarget{target: target2, alias: t2.Alias, reservedID: 999999})})
 
-	go vh.sendTempTableHeartbeats(ctx)
+	go vh.dispatchTempTableBeats(ctx).Wait()
 
 	// The healthy connection's tablet (t2) must be beaten promptly, in its own
 	// goroutine, while the slow tablet (t1) blocks its own.
@@ -2900,7 +2927,7 @@ func TestTempTableHeartbeatMultiTargetNoStarvation(t *testing.T) {
 	healthy := &mysql.Conn{ConnectionID: uint32(multiConns + 1)}
 	vh.tempTableConns.Store(healthy, &tempTableConn{targets: tempTargets(tempTableHeartbeatTarget{target: target1, alias: t1.Alias, reservedID: 999999})})
 
-	go vh.sendTempTableHeartbeats(ctx)
+	go vh.dispatchTempTableBeats(ctx).Wait()
 
 	// The fast tablet's batched touch must run promptly on its own goroutine,
 	// without waiting on the slow t2 batch. Each tablet gets one batched RPC,
@@ -2936,7 +2963,7 @@ func TestTempTableHeartbeatReservedIDCollision(t *testing.T) {
 	// Only t2's reserved connection is gone; t1's is healthy.
 	sbc2.KeepAliveGoneIDs = map[int64]bool{5: true}
 
-	vh.sendTempTableHeartbeats(ctx)
+	vh.dispatchTempTableBeats(ctx).Wait()
 
 	v, ok := vh.tempTableConns.Load(c)
 	require.True(t, ok, "the healthy t1 target must keep the connection registered")
@@ -2994,7 +3021,7 @@ func TestTempTableHeartbeatSweepWithinBudget(t *testing.T) {
 	vh.tempTableConns.Store(c, &tempTableConn{targets: tempTargets(tempTableHeartbeatTarget{target: target, alias: tablet.Alias, reservedID: 1})})
 
 	start := time.Now()
-	vh.sendTempTableHeartbeats(ctx)
+	vh.dispatchTempTableBeats(ctx).Wait()
 	elapsed := time.Since(start)
 	require.Less(t, elapsed, tempTableHeartbeatTime,
 		"a sweep with an unreachable tablet must complete within the interval, not stretch cadence")
@@ -3026,7 +3053,7 @@ func TestTempTableHeartbeatDelayedDelivery(t *testing.T) {
 	vh.tempTableConns.Store(c, &tempTableConn{targets: tempTargets(tempTableHeartbeatTarget{target: target, alias: tablet.Alias, reservedID: 1})})
 
 	start := time.Now()
-	vh.sendTempTableHeartbeats(ctx)
+	vh.dispatchTempTableBeats(ctx).Wait()
 	elapsed := time.Since(start)
 
 	require.GreaterOrEqual(t, elapsed, delay,
@@ -3054,7 +3081,7 @@ func TestTempTableHeartbeatOldTabletSafe(t *testing.T) {
 	c := &mysql.Conn{ConnectionID: 1}
 	vh.tempTableConns.Store(c, &tempTableConn{targets: tempTargets(tempTableHeartbeatTarget{target: target, alias: tablet.Alias, reservedID: 7})})
 
-	vh.sendTempTableHeartbeats(ctx)
+	vh.dispatchTempTableBeats(ctx).Wait()
 
 	// The keepalive carried reserved id 0 (all ids in the list), so an old
 	// tablet's fallback never touches the reserved connection.
@@ -3105,7 +3132,7 @@ func TestTempTableHeartbeatSweep(t *testing.T) {
 
 	// A sweep pings the reserved connection.
 	before := sbc.ExecCount.Load()
-	vh.sendTempTableHeartbeats(ctx)
+	vh.dispatchTempTableBeats(ctx).Wait()
 	require.Greater(t, sbc.ExecCount.Load(), before)
 	found := slices.ContainsFunc(sbc.Queries, func(q *querypb.BoundQuery) bool {
 		return q.Sql == "/* temp-table keepalive */ select 1"
@@ -3128,7 +3155,7 @@ func TestTempTableHeartbeatSweep(t *testing.T) {
 	// A reserved connection the tablet reports gone is evicted so it is not
 	// beaten (and warned about) on every sweep.
 	sbc.KeepAliveGoneIDs = map[int64]bool{99: true}
-	vh.sendTempTableHeartbeats(ctx)
+	vh.dispatchTempTableBeats(ctx).Wait()
 	require.Empty(t, ttc.targets)
 	_, ok := vh.tempTableConns.Load(c)
 	require.False(t, ok)
@@ -3139,14 +3166,14 @@ func TestTempTableHeartbeatSweep(t *testing.T) {
 	ttc2 := &tempTableConn{targets: tempTargets(tempTableHeartbeatTarget{target: target, alias: tablet.Alias, reservedID: 100})}
 	vh.tempTableConns.Store(c2, ttc2)
 	sbc.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
-	vh.sendTempTableHeartbeats(ctx)
+	vh.dispatchTempTableBeats(ctx).Wait()
 	require.Len(t, ttc2.targets, 1)
 	require.Equal(t, 1, firstTempTarget(t, ttc2.targets).failures)
 	_, ok = vh.tempTableConns.Load(c2)
 	require.True(t, ok)
 
 	// A successful beat resets the consecutive-failure count.
-	vh.sendTempTableHeartbeats(ctx)
+	vh.dispatchTempTableBeats(ctx).Wait()
 	require.Len(t, ttc2.targets, 1)
 	require.Equal(t, 0, firstTempTarget(t, ttc2.targets).failures)
 
@@ -3156,7 +3183,7 @@ func TestTempTableHeartbeatSweep(t *testing.T) {
 	// keeps accumulating to gate the transition logging.
 	sbc.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 4
 	for range 4 {
-		vh.sendTempTableHeartbeats(ctx)
+		vh.dispatchTempTableBeats(ctx).Wait()
 	}
 	require.Len(t, ttc2.targets, 1)
 	require.Equal(t, 4, firstTempTarget(t, ttc2.targets).failures)
@@ -3169,7 +3196,7 @@ func TestTempTableHeartbeatSweep(t *testing.T) {
 // id, tablets running with --queryserver-config-strict-table-acl reject the
 // beat ("missing caller id") and the reserved connection would still be
 // reclaimed despite the heartbeats.
-func TestTempTableBeatContext(t *testing.T) {
+func TestMysqlConnCallerContext(t *testing.T) {
 	client, server := net.Pipe()
 	t.Cleanup(func() {
 		_ = client.Close()
@@ -3179,7 +3206,7 @@ func TestTempTableBeatContext(t *testing.T) {
 	c.User = "app_user"
 	c.UserData = &mysql.StaticUserData{Username: "acl_user", Groups: []string{"g1"}}
 
-	ctx := tempTableBeatContext(t.Context(), c)
+	ctx := mysqlConnCallerContext(t.Context(), c)
 	im := callerid.ImmediateCallerIDFromContext(ctx)
 	require.NotNil(t, im)
 	require.Equal(t, "acl_user", im.Username)
@@ -3190,7 +3217,7 @@ func TestTempTableBeatContext(t *testing.T) {
 
 	// A connection without auth-provided identity leaves the context bare.
 	bare := &mysql.Conn{ConnectionID: 3}
-	bareCtx := tempTableBeatContext(t.Context(), bare)
+	bareCtx := mysqlConnCallerContext(t.Context(), bare)
 	require.Nil(t, callerid.ImmediateCallerIDFromContext(bareCtx))
 }
 
