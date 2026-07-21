@@ -910,9 +910,23 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 		return err
 	}
 
+	// Check for recovery being disabled globally
+	if recoveryDisabledGlobally, err := IsRecoveryDisabled(); err != nil {
+		// Unexpected. Shouldn't get this
+		logger.Error(fmt.Sprintf("Unable to determine if recovery is disabled globally, still attempting to recover: %v", err))
+	} else if recoveryDisabledGlobally {
+		logger.Info(fmt.Sprintf("CheckAndRecover: Tablet: %+v: NOT Recovering host (disabled globally)",
+			analyzedInstanceAliasString))
+		recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipGlobalDisabled.String()), 1)
+
+		return err
+	}
+
 	// Check for recovery being suppressed by --cells-no-recovery. The detection
 	// record has already been inserted above, so the suppressed incident remains
 	// visible in recovery_detection even though no action is taken.
+	// Global-disable is checked first so it takes precedence when both conditions
+	// apply, keeping SkippedRecoveries accurate.
 	// ClusterHasNoPrimary is excluded: that analysis is shard-wide and has no
 	// specific failed tablet, so its AnalyzedCell comes from whichever replica
 	// row appeared first in the query and is non-deterministic. Gating the
@@ -927,18 +941,6 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 			analyzedInstanceAliasString, analysisEntry.AnalyzedCell))
 		recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipCellNoRecovery.String()), 1)
 		return nil
-	}
-
-	// Check for recovery being disabled globally
-	if recoveryDisabledGlobally, err := IsRecoveryDisabled(); err != nil {
-		// Unexpected. Shouldn't get this
-		logger.Error(fmt.Sprintf("Unable to determine if recovery is disabled globally, still attempting to recover: %v", err))
-	} else if recoveryDisabledGlobally {
-		logger.Info(fmt.Sprintf("CheckAndRecover: Tablet: %+v: NOT Recovering host (disabled globally)",
-			analyzedInstanceAliasString))
-		recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipGlobalDisabled.String()), 1)
-
-		return err
 	}
 
 	// Prioritise primary recovery.
