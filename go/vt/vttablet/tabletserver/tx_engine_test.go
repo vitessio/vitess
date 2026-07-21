@@ -966,6 +966,41 @@ func TestPrepareFromRedoKeepsReservationsOnReadFailure(t *testing.T) {
 	require.False(t, te.preparedPool.RedoCommitStarted("aa"))
 }
 
+func TestPrepareFromRedoFreshPoolKeepsDurableDtidInDoubt(t *testing.T) {
+	ctx := t.Context()
+	txe, tsv, db, closer := newTestTxExecutor(t, ctx)
+	defer closer()
+
+	te := tsv.te
+	db.AddQuery(te.twoPC.readAllRedo, &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Type: sqltypes.VarChar},
+			{Type: sqltypes.Int64},
+			{Type: sqltypes.Int64},
+			{Type: sqltypes.VarChar},
+			{Type: sqltypes.Text},
+		},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewVarBinary("aa"),
+			sqltypes.NewInt64(RedoStatePrepared),
+			sqltypes.NewVarBinary("1"),
+			sqltypes.NewVarBinary("update test_table set `name` = 2 where pk = 1 limit 10001"),
+			sqltypes.NULL,
+		}},
+	})
+	db.AddRejectedQuery(
+		"begin",
+		sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "lost connection"),
+	)
+
+	err := te.prepareFromRedo()
+	require.Error(t, err)
+
+	db.DeleteRejectedQuery("begin")
+	err = txe.CommitPrepared("aa")
+	require.ErrorContains(t, err, "in doubt during recovery")
+}
+
 func TestCheckReceivedError(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()

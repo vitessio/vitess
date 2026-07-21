@@ -28,6 +28,7 @@ import (
 var (
 	errPrepCommitting            = vterrors.VT09025("locked for committing")
 	errPrepFailed                = vterrors.VT09025("failed to commit")
+	errPrepInDoubt               = vterrors.VT09025("in doubt during recovery")
 	errPrepRolledBackForShutdown = vterrors.VT09025("rolled back for shutdown")
 )
 
@@ -75,10 +76,9 @@ func (pp *TxPreparedPool) Open() {
 	pp.open = true
 }
 
-// ResetReservations clears the reservations and redo flags of dtids absent
-// from the durable redo metadata. A durable dtid keeps its reservation until
-// replay swaps it for a connection or records the failure, so a replay error
-// cannot leave it looking already committed.
+// ResetReservations reconciles reservations and redo flags with durable redo
+// metadata. Durable dtids without a connection remain in doubt until replay
+// installs a connection or records the failure.
 func (pp *TxPreparedPool) ResetReservations(durable map[string]struct{}) {
 	pp.mu.Lock()
 	defer pp.mu.Unlock()
@@ -86,6 +86,16 @@ func (pp *TxPreparedPool) ResetReservations(durable map[string]struct{}) {
 	for dtid := range pp.reserved {
 		if _, ok := durable[dtid]; !ok {
 			delete(pp.reserved, dtid)
+		}
+	}
+
+	for dtid := range durable {
+		if _, ok := pp.conns[dtid]; ok {
+			continue
+		}
+
+		if _, ok := pp.reserved[dtid]; !ok {
+			pp.reserved[dtid] = errPrepInDoubt
 		}
 	}
 
