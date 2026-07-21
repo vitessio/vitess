@@ -158,6 +158,10 @@ func (f mysqlFlavor) startSQLThreadCommand() string {
 	return "START REPLICA SQL_THREAD"
 }
 
+func (f mysqlFlavor) startIOThreadCommand() string {
+	return "START REPLICA IO_THREAD"
+}
+
 // resetReplicationCommands is part of the Flavor interface.
 func (mysqlFlavor) resetReplicationCommands(c *Conn) []string {
 	resetCommands := []string{

@@ -160,9 +160,12 @@ func TestWaitForReplicationStart(t *testing.T) {
 
 func TestPrepareReplicaForShutdown(t *testing.T) {
 	const (
+		readDurability  = "SELECT @@global.innodb_flush_log_at_trx_commit, @@global.sync_binlog, @@global.sync_relay_log"
 		setFlushLog     = "SET GLOBAL innodb_flush_log_at_trx_commit = 1"
 		setSyncBinlog   = "SET GLOBAL sync_binlog = 1"
 		setSyncRelayLog = "SET GLOBAL sync_relay_log = 1"
+		flushEngineLogs = "FLUSH NO_WRITE_TO_BINLOG ENGINE LOGS"
+		flushBinaryLogs = "FLUSH NO_WRITE_TO_BINLOG BINARY LOGS"
 		flushRelayLogs  = "FLUSH NO_WRITE_TO_BINLOG RELAY LOGS"
 		stopIOThread    = "STOP REPLICA IO_THREAD"
 		stopSQLThread   = "STOP REPLICA SQL_THREAD"
@@ -171,33 +174,60 @@ func TestPrepareReplicaForShutdown(t *testing.T) {
 		sqltypes.MakeTestFields("Source_Host|Replica_IO_Running|Replica_SQL_Running", "varchar|varchar|varchar"),
 		"source|Yes|Yes",
 	)
+	relaxedDurability := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"@@global.innodb_flush_log_at_trx_commit|@@global.sync_binlog|@@global.sync_relay_log",
+			"int64|int64|int64",
+		),
+		"2|0|10000",
+	)
+	replicaState := &replicaShutdownState{
+		startReceiver:       true,
+		startApplier:        true,
+		flushLogAtTrxCommit: "2",
+		syncBinlog:          "0",
+		syncRelayLog:        "10000",
+	}
 
 	testCases := []struct {
-		name           string
-		status         *sqltypes.Result
-		rejectedQuery  string
-		rejectedError  error
-		wantError      string
-		wantFlushLog   int
-		wantSyncBinlog int
-		wantSet        int
-		wantFlush      int
-		wantStop       int
-		wantStopSQL    int
+		name            string
+		status          *sqltypes.Result
+		rejectedQuery   string
+		rejectedError   error
+		wantError       string
+		wantState       *replicaShutdownState
+		wantFlushLog    int
+		wantSyncBinlog  int
+		wantSet         int
+		wantFlushEngine int
+		wantFlushBinary int
+		wantFlush       int
+		wantStop        int
+		wantStopSQL     int
 	}{
 		{
-			name:           "replica",
-			status:         replicaStatus,
-			wantFlushLog:   1,
-			wantSyncBinlog: 1,
-			wantSet:        1,
-			wantFlush:      1,
-			wantStop:       1,
-			wantStopSQL:    1,
+			name:            "replica",
+			status:          replicaStatus,
+			wantState:       replicaState,
+			wantFlushLog:    1,
+			wantSyncBinlog:  1,
+			wantSet:         1,
+			wantFlushEngine: 1,
+			wantFlushBinary: 1,
+			wantFlush:       1,
+			wantStop:        1,
+			wantStopSQL:     1,
 		},
 		{
 			name:   "not a replica",
 			status: &sqltypes.Result{},
+		},
+		{
+			name:          "cannot read durability settings",
+			status:        replicaStatus,
+			rejectedQuery: readDurability,
+			rejectedError: assert.AnError,
+			wantError:     "failed to read the durability settings before shutdown",
 		},
 		{
 			name:          "cannot enable redo log flushing",
@@ -205,6 +235,7 @@ func TestPrepareReplicaForShutdown(t *testing.T) {
 			rejectedQuery: setFlushLog,
 			rejectedError: assert.AnError,
 			wantError:     "failed to establish the crash-safety durability fence before shutdown",
+			wantState:     replicaState,
 			wantFlushLog:  1,
 		},
 		{
@@ -213,6 +244,7 @@ func TestPrepareReplicaForShutdown(t *testing.T) {
 			rejectedQuery:  setSyncBinlog,
 			rejectedError:  assert.AnError,
 			wantError:      "failed to establish the crash-safety durability fence before shutdown",
+			wantState:      replicaState,
 			wantFlushLog:   1,
 			wantSyncBinlog: 1,
 		},
@@ -222,44 +254,79 @@ func TestPrepareReplicaForShutdown(t *testing.T) {
 			rejectedQuery:  setSyncRelayLog,
 			rejectedError:  assert.AnError,
 			wantError:      "failed to establish the crash-safety durability fence before shutdown",
+			wantState:      replicaState,
 			wantFlushLog:   1,
 			wantSyncBinlog: 1,
 			wantSet:        1,
 		},
 		{
-			name:           "cannot flush relay logs",
-			status:         replicaStatus,
-			rejectedQuery:  flushRelayLogs,
-			rejectedError:  assert.AnError,
-			wantError:      "failed to establish the crash-safety durability fence before shutdown",
-			wantFlushLog:   1,
-			wantSyncBinlog: 1,
-			wantSet:        1,
-			wantFlush:      1,
+			name:            "cannot flush engine logs",
+			status:          replicaStatus,
+			rejectedQuery:   flushEngineLogs,
+			rejectedError:   assert.AnError,
+			wantError:       "failed to establish the crash-safety durability fence before shutdown",
+			wantState:       replicaState,
+			wantFlushLog:    1,
+			wantSyncBinlog:  1,
+			wantSet:         1,
+			wantFlushEngine: 1,
 		},
 		{
-			name:           "interrupted receiver stop",
-			status:         replicaStatus,
-			rejectedQuery:  stopIOThread,
-			rejectedError:  context.DeadlineExceeded,
-			wantFlushLog:   1,
-			wantSyncBinlog: 1,
-			wantSet:        1,
-			wantFlush:      1,
-			wantStop:       1,
-			wantStopSQL:    1,
+			name:            "cannot flush binary logs",
+			status:          replicaStatus,
+			rejectedQuery:   flushBinaryLogs,
+			rejectedError:   assert.AnError,
+			wantError:       "failed to establish the crash-safety durability fence before shutdown",
+			wantState:       replicaState,
+			wantFlushLog:    1,
+			wantSyncBinlog:  1,
+			wantSet:         1,
+			wantFlushEngine: 1,
+			wantFlushBinary: 1,
 		},
 		{
-			name:           "interrupted applier stop",
-			status:         replicaStatus,
-			rejectedQuery:  stopSQLThread,
-			rejectedError:  context.DeadlineExceeded,
-			wantFlushLog:   1,
-			wantSyncBinlog: 1,
-			wantSet:        1,
-			wantFlush:      1,
-			wantStop:       1,
-			wantStopSQL:    1,
+			name:            "cannot flush relay logs",
+			status:          replicaStatus,
+			rejectedQuery:   flushRelayLogs,
+			rejectedError:   assert.AnError,
+			wantError:       "failed to establish the crash-safety durability fence before shutdown",
+			wantState:       replicaState,
+			wantFlushLog:    1,
+			wantSyncBinlog:  1,
+			wantSet:         1,
+			wantFlushEngine: 1,
+			wantFlushBinary: 1,
+			wantFlush:       1,
+		},
+		{
+			name:            "interrupted receiver stop",
+			status:          replicaStatus,
+			rejectedQuery:   stopIOThread,
+			rejectedError:   context.DeadlineExceeded,
+			wantState:       replicaState,
+			wantFlushLog:    1,
+			wantSyncBinlog:  1,
+			wantSet:         1,
+			wantFlushEngine: 1,
+			wantFlushBinary: 1,
+			wantFlush:       1,
+			wantStop:        1,
+			wantStopSQL:     1,
+		},
+		{
+			name:            "interrupted applier stop",
+			status:          replicaStatus,
+			rejectedQuery:   stopSQLThread,
+			rejectedError:   context.DeadlineExceeded,
+			wantState:       replicaState,
+			wantFlushLog:    1,
+			wantSyncBinlog:  1,
+			wantSet:         1,
+			wantFlushEngine: 1,
+			wantFlushBinary: 1,
+			wantFlush:       1,
+			wantStop:        1,
+			wantStopSQL:     1,
 		},
 	}
 
@@ -269,7 +336,12 @@ func TestPrepareReplicaForShutdown(t *testing.T) {
 			defer db.Close()
 			db.AddQuery("SELECT 1", &sqltypes.Result{})
 			db.AddQuery("SHOW REPLICA STATUS", testCase.status)
-			for _, query := range []string{setFlushLog, setSyncBinlog, setSyncRelayLog, flushRelayLogs, stopIOThread, stopSQLThread} {
+			if testCase.rejectedQuery == readDurability {
+				db.AddRejectedQuery(readDurability, testCase.rejectedError)
+			} else {
+				db.AddQuery(readDurability, relaxedDurability)
+			}
+			for _, query := range []string{setFlushLog, setSyncBinlog, setSyncRelayLog, flushEngineLogs, flushBinaryLogs, flushRelayLogs, stopIOThread, stopSQLThread} {
 				if query == testCase.rejectedQuery {
 					db.AddRejectedQuery(query, testCase.rejectedError)
 					continue
@@ -283,18 +355,118 @@ func TestPrepareReplicaForShutdown(t *testing.T) {
 			testMysqld := NewMysqld(dbc)
 			defer testMysqld.Close()
 
-			err := testMysqld.prepareReplicaForShutdown(t.Context())
+			state, err := testMysqld.prepareReplicaForShutdown(t.Context())
 			if testCase.wantError == "" {
 				require.NoError(t, err)
 			} else {
 				require.ErrorContains(t, err, testCase.wantError)
 			}
+			assert.Equal(t, testCase.wantState, state)
 			assert.Equal(t, testCase.wantFlushLog, db.GetQueryCalledNum(setFlushLog))
 			assert.Equal(t, testCase.wantSyncBinlog, db.GetQueryCalledNum(setSyncBinlog))
 			assert.Equal(t, testCase.wantSet, db.GetQueryCalledNum(setSyncRelayLog))
+			assert.Equal(t, testCase.wantFlushEngine, db.GetQueryCalledNum(flushEngineLogs))
+			assert.Equal(t, testCase.wantFlushBinary, db.GetQueryCalledNum(flushBinaryLogs))
 			assert.Equal(t, testCase.wantFlush, db.GetQueryCalledNum(flushRelayLogs))
 			assert.Equal(t, testCase.wantStop, db.GetQueryCalledNum(stopIOThread))
 			assert.Equal(t, testCase.wantStopSQL, db.GetQueryCalledNum(stopSQLThread))
+		})
+	}
+}
+
+func TestRestoreReplicaAfterFailedShutdown(t *testing.T) {
+	const (
+		restoreFlushLog     = "SET GLOBAL innodb_flush_log_at_trx_commit = 2"
+		restoreSyncBinlog   = "SET GLOBAL sync_binlog = 0"
+		restoreSyncRelayLog = "SET GLOBAL sync_relay_log = 10000"
+		startReplication    = "START REPLICA"
+		startSQLThread      = "START REPLICA SQL_THREAD"
+		startIOThread       = "START REPLICA IO_THREAD"
+	)
+	state := func(startReceiver, startApplier bool) *replicaShutdownState {
+		return &replicaShutdownState{
+			startReceiver:       startReceiver,
+			startApplier:        startApplier,
+			flushLogAtTrxCommit: "2",
+			syncBinlog:          "0",
+			syncRelayLog:        "10000",
+		}
+	}
+
+	testCases := []struct {
+		name          string
+		state         *replicaShutdownState
+		rejectedQuery string
+		wantSet       int
+		wantStart     string
+	}{
+		{
+			name:      "both threads were running",
+			state:     state(true, true),
+			wantSet:   1,
+			wantStart: startReplication,
+		},
+		{
+			name:      "only the applier was running",
+			state:     state(false, true),
+			wantSet:   1,
+			wantStart: startSQLThread,
+		},
+		{
+			name:      "only the receiver was running",
+			state:     state(true, false),
+			wantSet:   1,
+			wantStart: startIOThread,
+		},
+		{
+			name:    "no threads were running",
+			state:   state(false, false),
+			wantSet: 1,
+		},
+		{
+			name:          "settings restore fails but threads are still restarted",
+			state:         state(true, true),
+			rejectedQuery: restoreFlushLog,
+			wantSet:       1,
+			wantStart:     startReplication,
+		},
+		{
+			name:          "thread restart failure is tolerated",
+			state:         state(true, true),
+			rejectedQuery: startReplication,
+			wantSet:       1,
+			wantStart:     startReplication,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			db := fakesqldb.New(t)
+			defer db.Close()
+			db.AddQuery("SELECT 1", &sqltypes.Result{})
+			for _, query := range []string{restoreFlushLog, restoreSyncBinlog, restoreSyncRelayLog, startReplication, startSQLThread, startIOThread} {
+				if query == testCase.rejectedQuery {
+					db.AddRejectedQuery(query, assert.AnError)
+					continue
+				}
+				db.AddQuery(query, &sqltypes.Result{})
+			}
+
+			params := db.ConnParams()
+			cp := *params
+			dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+			testMysqld := NewMysqld(dbc)
+			defer testMysqld.Close()
+
+			testMysqld.restoreReplicaAfterFailedShutdown(t.Context(), testCase.state)
+			assert.Equal(t, testCase.wantSet, db.GetQueryCalledNum(restoreFlushLog))
+			for _, start := range []string{startReplication, startSQLThread, startIOThread} {
+				want := 0
+				if start == testCase.wantStart {
+					want = 1
+				}
+				assert.Equal(t, want, db.GetQueryCalledNum(start), "unexpected call count for %q", start)
+			}
 		})
 	}
 }

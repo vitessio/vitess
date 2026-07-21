@@ -679,16 +679,23 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 	// effort -- its failure or timeout is logged and shutdown continues -- so it
 	// never affects whether Shutdown reports success.
 	preparationCtx, cancelPreparation := context.WithTimeout(ctx, preparationTimeout)
-	prepared := make(chan error, 1)
+	type preparationResult struct {
+		state *replicaShutdownState
+		err   error
+	}
+	prepared := make(chan preparationResult, 1)
 	go func() {
-		prepared <- mysqld.prepareReplicaForShutdown(preparationCtx)
+		state, err := mysqld.prepareReplicaForShutdown(preparationCtx)
+		prepared <- preparationResult{state: state, err: err}
 	}()
+	var replicaState *replicaShutdownState
 	select {
-	case err := <-prepared:
-		if err != nil {
+	case p := <-prepared:
+		replicaState = p.state
+		if p.err != nil {
 			log.Error(
 				"failed to make replica crash-safe before shutdown; continuing with shutdown",
-				slog.Any("error", err),
+				slog.Any("error", p.err),
 			)
 		}
 	case <-preparationCtx.Done():
@@ -699,9 +706,46 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 	}
 	cancelPreparation()
 
+	shutdownErr := mysqld.executeShutdown(ctx, cnf, waitForMysqld, shutdownTimeout)
+	if shutdownErr == nil {
+		// The crash-safety preparation above is best effort and already logged
+		// on failure; a successful process shutdown must still report success
+		// so that callers which restart or clean up afterwards are not misled
+		// into treating mysqld as still running.
+		return nil
+	}
+	// The shutdown failed, so mysqld may still be running: make a best-effort
+	// attempt to restore what the crash-safety preparation changed, so that a
+	// live replica is not left with replication stopped and the durability
+	// settings altered indefinitely. Bound it like the preparation, on a fresh
+	// context because ctx may already be exhausted (e.g. a wait timeout).
+	if replicaState != nil {
+		restoreCtx, cancelRestore := context.WithTimeout(context.WithoutCancel(ctx), preparationTimeout)
+		restored := make(chan struct{})
+		go func() {
+			defer close(restored)
+			mysqld.restoreReplicaAfterFailedShutdown(restoreCtx, replicaState)
+		}()
+		select {
+		case <-restored:
+		case <-restoreCtx.Done():
+			log.Warn(
+				"timed out restoring the replica state after a failed shutdown",
+				slog.Any("error", restoreCtx.Err()),
+			)
+		}
+		cancelRestore()
+	}
+	return shutdownErr
+}
+
+// executeShutdown performs the mysqld shutdown itself -- via the
+// mysqld_shutdown hook when one exists, or mysqladmin otherwise -- and
+// optionally waits for the process to fully exit.
+func (mysqld *Mysqld) executeShutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bool, shutdownTimeout time.Duration) error {
 	// try the mysqld shutdown hook, if any
-	h = hook.NewSimpleHook("mysqld_shutdown")
-	hr = h.ExecuteContext(ctx)
+	h := hook.NewSimpleHook("mysqld_shutdown")
+	hr := h.ExecuteContext(ctx)
 	switch hr.ExitStatus {
 	case hook.HOOK_SUCCESS:
 		// hook exists and worked, we can keep going
@@ -753,10 +797,6 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 			return err
 		}
 	}
-	// The crash-safety preparation above is best effort and already logged on
-	// failure; a successful process shutdown must still report success so that
-	// callers which restart or clean up afterwards are not misled into treating
-	// mysqld as still running.
 	return nil
 }
 
