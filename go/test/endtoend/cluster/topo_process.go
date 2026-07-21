@@ -171,6 +171,12 @@ func (topo *TopoProcess) SetupZookeeper(cluster *LocalProcessCluster) error {
 	topo.proc = exec.Command(
 		topo.Binary,
 		"--zk.cfg", fmt.Sprintf("1@%v:%s", host, topo.ZKPorts),
+		// The ZooKeeper AdminServer listens on a fixed default port (8080)
+		// that is not covered by the reserved ports above, so a second
+		// ZooKeeper started by a test next to the suite's shared one fails
+		// with ERROR_STARTING_ADMIN_SERVER (exit code 4). Nothing in these
+		// tests uses the AdminServer, so disable it.
+		"--zk.extra", "admin.enableServer=false",
 		"init",
 	)
 
@@ -205,6 +211,8 @@ type PortsInfo struct {
 	SerfLan int `json:"serf_lan"`
 	SerfWan int `json:"serf_wan"`
 	Server  int `json:"server"`
+	GRPC    int `json:"grpc"`
+	GRPCTLS int `json:"grpc_tls"`
 }
 
 // SetupConsul spawns a new consul service and initializes it with the defaults.
@@ -240,6 +248,13 @@ func (topo *TopoProcess) SetupConsul(cluster *LocalProcessCluster) (err error) {
 			SerfLan: cluster.GetAndReservePort(),
 			SerfWan: cluster.GetAndReservePort(),
 			Server:  cluster.GetAndReservePort(),
+			// Consul 1.14+ binds the gRPC TLS listener on a fixed default
+			// port (8503) even without TLS configured, so a second consul
+			// started by a test next to the suite's shared one exits with
+			// "bind: address already in use". Vitess only talks to consul
+			// over HTTP, so disable both gRPC listeners.
+			GRPC:    -1,
+			GRPCTLS: -1,
 		},
 		DataDir: topo.DataDirectory,
 		LogFile: logFile,
