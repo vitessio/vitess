@@ -686,6 +686,15 @@ func (st *SemTable) TypeForExpr(e sqlparser.Expr) (evalengine.Type, bool) {
 		return evalengine.NewTypeEx(sqltypes.VarBinary, collations.CollationBinaryID, wt.Nullable(), 0, 0, nil), true
 	}
 
+	if subq, ok := e.(*sqlparser.Subquery); ok {
+		selectExprs := st.SelectExprs(subq.Select)
+		if len(selectExprs) > 0 {
+			if ae, ok := selectExprs[0].(*sqlparser.AliasedExpr); ok {
+				return st.TypeForExpr(ae.Expr)
+			}
+		}
+	}
+
 	return evalengine.NewUnknownType(), false
 }
 

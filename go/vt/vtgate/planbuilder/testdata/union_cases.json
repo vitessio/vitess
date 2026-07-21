@@ -23,6 +23,28 @@
     }
   },
   {
+    "comment": "union all with scalar subquery in select expression",
+    "query": "select (select id from unsharded) as col_2 union all select id as col_2 from unsharded",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select (select id from unsharded) as col_2 union all select id as col_2 from unsharded",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select (select id from unsharded where 1 != 1) as col_2 from dual where 1 != 1 union all select id as col_2 from unsharded where 1 != 1",
+        "Query": "select (select id from unsharded) as col_2 from dual union all select id as col_2 from unsharded"
+      },
+      "TablesUsed": [
+        "main.unsharded"
+      ]
+    }
+  },
+  {
     "comment": "union distinct between two scatter selects",
     "query": "select id from user union select id from music",
     "plan": {

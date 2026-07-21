@@ -106,11 +106,37 @@ func settleSubqueries(ctx *plancontext.PlanningContext, op Operator) Operator {
 			}
 		case *Ordering:
 			op.settleOrderingExpressions(ctx)
+		case *Union:
+			for _, selList := range op.Selects {
+				for _, selectExpr := range selList {
+					if aliased, ok := selectExpr.(*sqlparser.AliasedExpr); ok {
+						for arg, sq := range ctx.MergedSubqueries {
+							aliased.Expr = rewriteSubqueryArg(aliased.Expr, arg, sq)
+						}
+					}
+				}
+			}
 		}
 		return op, NoRewrite
 	}
 
 	return BottomUp(op, TableID, visit, nil)
+}
+
+func rewriteSubqueryArg(expr sqlparser.Expr, arg string, sq *sqlparser.Subquery) sqlparser.Expr {
+	return sqlparser.Rewrite(expr, nil, func(cursor *sqlparser.Cursor) bool {
+		switch node := cursor.Node().(type) {
+		case *sqlparser.ColName:
+			if node.Name.String() == arg {
+				cursor.Replace(sq)
+			}
+		case *sqlparser.Argument:
+			if node.Name == arg {
+				cursor.Replace(sq)
+			}
+		}
+		return true
+	}).(sqlparser.Expr)
 }
 
 func (o *Ordering) settleOrderingExpressions(ctx *plancontext.PlanningContext) {
