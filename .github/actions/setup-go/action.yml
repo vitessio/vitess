@@ -67,3 +67,31 @@ runs:
       with:
         path: ~/.cache/go-build
         key: go-build-${{ runner.os }}-${{ runner.arch }}-go${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('go.sum', 'tools/**/go.sum') }}
+
+    # Download the root module and every tool module, so a saved module cache
+    # always contains the full dependency set its key covers, no matter which
+    # job saves it first; the tool modules are otherwise only fetched on first
+    # use. On a cache hit this is a fast no-op. Retried because
+    # proxy.golang.org occasionally drops connections mid-download.
+    - name: Download Go modules
+      shell: bash
+      run: |
+        download() {
+          go mod download || return 1
+          local modfile
+          for modfile in tools/*/go.mod; do
+            go mod download -modfile="${modfile}" || return 1
+          done
+        }
+
+        for attempt in 1 2 3; do
+          if download; then
+            break
+          fi
+          if [ "${attempt}" = 3 ]; then
+            echo "go mod download failed after ${attempt} attempts"
+            exit 1
+          fi
+          echo "go mod download failed (attempt ${attempt}); retrying"
+          sleep 10
+        done

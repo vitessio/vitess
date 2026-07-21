@@ -154,19 +154,6 @@ jobs:
           export DEBIAN_FRONTEND="noninteractive"
           sudo apt-get install -y make unzip g++ curl git wget ${{ matrix.java && 'ant default-jre-headless' || '' }}
 
-          # proxy.golang.org occasionally drops connections mid-download.
-          for attempt in 1 2 3; do
-            if go mod download; then
-              break
-            fi
-            if [ "$attempt" = 3 ]; then
-              echo "go mod download failed after $attempt attempts"
-              exit 1
-            fi
-            echo "go mod download failed (attempt $attempt); retrying"
-            sleep 10
-          done
-
       - name: Run make tools
         if: steps.changes.outputs.unit_tests == 'true'
         timeout-minutes: 10
