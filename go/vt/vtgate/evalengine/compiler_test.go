@@ -207,6 +207,13 @@ func TestCompilerSingle(t *testing.T) {
 			result:     "INT64(1)",
 		},
 		{
+			// A NULL pattern from a column is not folded away, so this exercises the compiled
+			// program; a leftover operand would make IFNULL overflow the VM stack.
+			expression: "ifnull('foo' like column0, 7)",
+			values:     []sqltypes.Value{sqltypes.NULL},
+			result:     "INT64(7)",
+		},
+		{
 			expression: "1 + column0",
 			values:     []sqltypes.Value{sqltypes.NewFloat64(1)},
 			result:     "FLOAT64(2)",
