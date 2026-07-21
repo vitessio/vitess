@@ -352,8 +352,7 @@ func (p *Projection) addColumn(
 	}
 
 	// ok, we need to add the expression. let's check if we should rewrite a ws expression first
-	ws, ok := expr.(*sqlparser.WeightStringFuncExpr)
-	if ok {
+	if ws, ok := expr.(*sqlparser.WeightStringFuncExpr); ok {
 		cols, ok := p.Columns.(AliasedProjections)
 		if !ok {
 			panic(vterrors.VT09015())
@@ -365,6 +364,13 @@ func (p *Projection) addColumn(
 				ws.Expr = projExpr.EvalExpr
 			}
 		}
+	} else {
+		// Rewrite any reference to one of this projection's own output columns
+		// into that column's eval expression. For a derived-table projection
+		// this turns column_0 into dt.c0, so a helper such as column_0 + 0
+		// becomes dt.c0 + 0 rather than an unresolvable reference to the
+		// projected alias, and is evaluated over the materialized columns once.
+		expr = p.rewriteColsToEvalExprs(ctx, expr)
 	}
 
 	pe := newProjExprWithInner(ae, expr)
@@ -387,6 +393,34 @@ func (p *Projection) addColumn(
 
 	pe.Info = Offset(inputOffset) // since we already know the offset, let's save the information
 	return p.addProjExpr(pe)
+}
+
+// rewriteColsToEvalExprs rewrites every reference to one of this projection's
+// own output columns into that column's eval expression. It is used to build
+// the expression a new column is actually evaluated with: on a derived-table
+// projection (column_N -> dt.cN) this keeps a helper expression expressed in
+// terms the source understands and, crucially, evaluated over the materialized
+// columns exactly once.
+func (p *Projection) rewriteColsToEvalExprs(ctx *plancontext.PlanningContext, expr sqlparser.Expr) sqlparser.Expr {
+	cols, ok := p.Columns.(AliasedProjections)
+	if !ok {
+		return expr
+	}
+	return sqlparser.CopyOnRewrite(expr, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
+		node, ok := cursor.Node().(sqlparser.Expr)
+		if !ok {
+			return
+		}
+		for _, projExpr := range cols {
+			if ctx.SemTable.EqualsExprWithDeps(projExpr.ColExpr, projExpr.EvalExpr) {
+				continue
+			}
+			if ctx.SemTable.EqualsExprWithDeps(node, projExpr.ColExpr) {
+				cursor.Replace(projExpr.EvalExpr)
+				return
+			}
+		}
+	}, nil).(sqlparser.Expr)
 }
 
 func (po Offset) expr()             {}

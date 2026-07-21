@@ -114,6 +114,19 @@ func mergeUnionInputs(
 		return nil, nil
 	}
 
+	// A VALUES statement produces its rows at the vtgate, not on a shard, so
+	// merging a single-shard VALUES route into a route that targets more than
+	// one shard would return its rows once per shard. UNION DISTINCT dedups
+	// those copies at the vtgate; UNION ALL has no dedup, so the merge must be
+	// refused. The VALUES statement may be hidden behind a derived table or an
+	// already-merged intermediate Union, so we search the whole operator tree.
+	if !distinct &&
+		((valuesStatementInTree(lhsRoute) && lhsRoute.IsSingleShard() && !rhsRoute.IsSingleShard()) ||
+			(valuesStatementInTree(rhsRoute) && rhsRoute.IsSingleShard() && !lhsRoute.IsSingleShard())) {
+		checkCrossKeyspaceOp(ctx, lhs, rhs, "UNION")
+		return nil, nil
+	}
+
 	switch {
 	// if either side is a dual query, we can always merge them together
 	// an unsharded/reference route can be merged with anything going to that keyspace
@@ -138,6 +151,26 @@ func mergeUnionInputs(
 	checkCrossKeyspaceOp(ctx, lhs, rhs, "UNION")
 
 	return nil, nil
+}
+
+// valuesStatementInTree reports whether the operator tree rooted at op contains
+// a Horizon whose query is a bare VALUES statement, walking every input
+// including all sources of a Union. Unlike valuesStatementUnderRoute, it does
+// not stop at derived horizons or at operators with more than one input: a
+// VALUES statement produces its rows at the vtgate however it is wrapped, so
+// merging its single-shard route into a multi-shard route would duplicate those
+// rows once per shard.
+func valuesStatementInTree(op Operator) bool {
+	found := false
+	_ = Visit(op, func(inner Operator) error {
+		if horizon, isHorizon := inner.(*Horizon); isHorizon {
+			if _, isValues := horizon.Query.(*sqlparser.ValuesStatement); isValues {
+				found = true
+			}
+		}
+		return nil
+	})
+	return found
 }
 
 func tryMergeUnionShardedRouting(

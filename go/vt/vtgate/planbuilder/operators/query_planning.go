@@ -275,8 +275,14 @@ func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in *Horizon) (Operato
 		return expandHorizon(ctx, in)
 	}
 
+	// MySQL silently ignores ORDER BY on a VALUES statement, so an ordered
+	// VALUES horizon must be expanded and sorted at the vtgate level instead
+	// of being pushed down whole.
+	_, isValues := in.Query.(*sqlparser.ValuesStatement)
+	valuesNeedsSort := isValues && len(in.getQP(ctx).OrderExprs) > 0
+
 	rb, isRoute := in.src().(*Route)
-	if isRoute && rb.IsSingleShard() {
+	if isRoute && rb.IsSingleShard() && !valuesNeedsSort {
 		return Swap(in, rb, "push horizon into route")
 	}
 
@@ -595,6 +601,11 @@ func setUpperLimit(in *Limit) (Operator, *ApplyResult) {
 				return SkipChildren
 			}
 		case *Route:
+			if valuesStatementUnderRoute(op) {
+				// rows of a VALUES statement may still need to be sorted at the
+				// vtgate level, so they must not be cut short by an upper limit
+				return SkipChildren
+			}
 			ast := &sqlparser.Limit{Rowcount: sqlparser.NewArgument(engine.UpperLimitStr)}
 			src := op.Source
 			if len(orderToPush) > 0 {
@@ -636,9 +647,37 @@ func findOrderingInSourceChain(op Operator) []OrderBy {
 	}
 }
 
+// valuesStatementUnderRoute reports whether the query the route will send to
+// MySQL is a bare VALUES statement. MySQL silently ignores ORDER BY on a VALUES
+// statement, so sorting must stay at the vtgate level for such routes, and a
+// LIMIT above that sort must not be pushed under the route either.
+func valuesStatementUnderRoute(route *Route) bool {
+	op := route.Source
+	for {
+		if horizon, isHorizon := op.(*Horizon); isHorizon {
+			if horizon.IsDerived() {
+				// a derived table wraps the VALUES statement in a SELECT,
+				// which MySQL sorts and limits just fine
+				return false
+			}
+			_, isValues := horizon.Query.(*sqlparser.ValuesStatement)
+			return isValues
+		}
+		inputs := op.Inputs()
+		if len(inputs) != 1 {
+			return false
+		}
+		op = inputs[0]
+	}
+}
+
 func tryPushOrdering(ctx *plancontext.PlanningContext, in *Ordering) (Operator, *ApplyResult) {
 	switch src := in.Source.(type) {
 	case *Route:
+		if valuesStatementUnderRoute(src) {
+			debugNoRewrite("ordering push blocked: MySQL ignores ORDER BY on a VALUES statement")
+			return in, NoRewrite
+		}
 		return Swap(in, src, "push ordering under route")
 	case *Filter:
 		return Swap(in, src, "push ordering under filter")

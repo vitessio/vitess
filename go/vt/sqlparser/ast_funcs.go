@@ -1429,6 +1429,8 @@ func requiresParen(stmt TableStatement) bool {
 		return len(node.OrderBy) != 0 || node.Lock != 0 || node.Into != nil || node.Limit != nil
 	case *Select:
 		return len(node.OrderBy) != 0 || node.Lock != 0 || node.Into != nil || node.Limit != nil
+	case *ValuesStatement:
+		return len(node.Order) != 0 || node.Limit != nil
 	}
 
 	return false
@@ -2640,7 +2642,7 @@ func AndExpressions(exprs ...Expr) Expr {
 	case 1:
 		return exprs[0]
 	default:
-		result := (Expr)(nil)
+		result := Expr(nil)
 	outer:
 		// we'll loop and remove any duplicates
 		for i, expr := range exprs {
@@ -3202,10 +3204,6 @@ func (node *ValuesStatement) GetColumns() []SelectExpr {
 }
 
 func ValuesStatementHasSubquery(values *ValuesStatement) bool {
-	if len(values.Rows) == 0 {
-		return false
-	}
-
 	found := false
 	_ = Walk(func(node SQLNode) (bool, error) {
 		if _, ok := node.(*Subquery); ok {
@@ -3213,7 +3211,34 @@ func ValuesStatementHasSubquery(values *ValuesStatement) bool {
 			return false, nil
 		}
 		return !found, nil
-	}, values.Rows)
+	}, values.Rows, values.Order, values.Limit)
+	return found
+}
+
+// HasOrderedValuesOutsideDerivedTable reports whether the node contains a
+// VALUES statement with an ORDER BY outside a derived table — top-level, as a
+// CTE body or as a union arm. MySQL silently ignores ORDER BY on a VALUES
+// statement, so such queries must skip the unsharded shortcut and go through
+// full planning, which handles the ORDER BY correctly: a top-level VALUES is
+// sorted at the vtgate level, while in CTE/derived contexts the ORDER BY is
+// safely stripped, matching MySQL. Derived tables are exempt from this check:
+// their rows are unordered, so dropping the ORDER BY there is always fine.
+func HasOrderedValuesOutsideDerivedTable(node SQLNode) bool {
+	found := false
+	Rewrite(node, func(cursor *Cursor) bool {
+		if found {
+			return false
+		}
+		values, ok := cursor.Node().(*ValuesStatement)
+		if !ok || len(values.Order) == 0 {
+			return true
+		}
+		if _, isDerived := cursor.Parent().(*DerivedTable); !isDerived {
+			found = true
+			return false
+		}
+		return true
+	}, nil)
 	return found
 }
 

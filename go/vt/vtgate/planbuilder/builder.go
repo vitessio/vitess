@@ -131,8 +131,11 @@ func BuildFromStmt(ctx context.Context, query string, stmt sqlparser.Statement, 
 func statementHasValuesSubquery(stmt sqlparser.Statement) bool {
 	found := false
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
-		if values, ok := node.(*sqlparser.ValuesStatement); ok {
-			found = sqlparser.ValuesStatementHasSubquery(values)
+		if found {
+			return false, nil
+		}
+		if values, ok := node.(*sqlparser.ValuesStatement); ok && sqlparser.ValuesStatementHasSubquery(values) {
+			found = true
 		}
 		return !found, nil
 	}, stmt)

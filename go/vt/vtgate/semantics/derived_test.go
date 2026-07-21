@@ -125,6 +125,9 @@ func TestScopingWDerivedTables(t *testing.T) {
 			query:        "select * from (values row((select 1))) as sub",
 			errorMessage: "VT12001: unsupported: subqueries in VALUES statements",
 		}, {
+			query:        "select * from (values row(1) order by (select 1)) as sub",
+			errorMessage: "VT12001: unsupported: subqueries in VALUES statements",
+		}, {
 			query:        "select 1 from (values ::vals) as sub",
 			errorMessage: "VT12001: unsupported: VALUES list argument in derived table requires column aliases",
 		}, {

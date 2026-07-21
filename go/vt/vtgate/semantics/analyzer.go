@@ -443,6 +443,16 @@ func (a *analyzer) canShortCut(statement sqlparser.Statement) (canShortCut bool)
 		return false
 	}
 
+	// MySQL silently ignores ORDER BY on a VALUES statement, so an ordered
+	// VALUES outside a derived table needs the full analysis: full planning
+	// handles the ORDER BY correctly (sorting at the vtgate level for a
+	// top-level VALUES, safely stripping it in CTE/derived contexts to match
+	// MySQL), while the shortcut would send the query as-is and silently
+	// drop the ordering.
+	if sqlparser.HasOrderedValuesOutsideDerivedTable(statement) {
+		return false
+	}
+
 	defer func() {
 		a.canShortcut = canShortCut
 	}()

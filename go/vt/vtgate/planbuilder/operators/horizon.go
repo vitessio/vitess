@@ -152,10 +152,7 @@ func (h *Horizon) AddWSColumn(ctx *plancontext.PlanningContext, offset int, unde
 }
 
 func (h *Horizon) addColumnToValues(values *sqlparser.ValuesStatement, expr *sqlparser.AliasedExpr) int {
-	return h.addColumnToValuesUsingColumns(values, values.GetColumns(), expr)
-}
-
-func (h *Horizon) addColumnToValuesUsingColumns(values *sqlparser.ValuesStatement, columns []sqlparser.SelectExpr, expr *sqlparser.AliasedExpr) int {
+	columns := values.GetColumns()
 	if len(values.Rows) == 0 {
 		panic(errNoNewColumns)
 	}

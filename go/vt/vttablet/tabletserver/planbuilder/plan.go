@@ -284,7 +284,7 @@ func BuildStreaming(statement sqlparser.Statement, tables map[string]*schema.Tab
 			plan.NeedsReservedConn = true
 		}
 		plan.Table = lookupTables(stmt.From, tables)
-	case *sqlparser.Show, *sqlparser.Union, sqlparser.Explain:
+	case *sqlparser.Show, *sqlparser.Union, *sqlparser.ValuesStatement, sqlparser.Explain:
 		plan = &Plan{
 			PlanID:    PlanSelectStream,
 			FullQuery: GenerateFullQuery(statement),

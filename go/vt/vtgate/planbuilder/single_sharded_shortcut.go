@@ -37,6 +37,15 @@ func selectUnshardedShortcut(ctx *plancontext.PlanningContext, stmt sqlparser.Ta
 			cursor.Replace(sqlparser.TableName{
 				Name: node.Name,
 			})
+		case *sqlparser.ValuesStatement:
+			// MySQL silently ignores ORDER BY on a VALUES statement and
+			// rejects expressions in it with an unknown-column error, so
+			// don't send it. Only derived tables reach here (their rows are
+			// unordered anyway) — any other ordered VALUES skips the
+			// shortcut, see HasOrderedValuesOutsideDerivedTable.
+			if _, isDerived := cursor.Parent().(*sqlparser.DerivedTable); isDerived {
+				node.Order = nil
+			}
 		}
 		return true
 	})

@@ -6912,6 +6912,30 @@ func TestValidUnionCases(t *testing.T) {
 	testFile(t, "union_cases.txt", makeTestOutput(t))
 }
 
+// TestValuesUnionRoundTrip ensures that formatting a union containing a
+// VALUES statement with ORDER BY or LIMIT keeps the parentheses required
+// for the output to re-parse with the same meaning.
+func TestValuesUnionRoundTrip(t *testing.T) {
+	queries := []string{
+		"(values row(2), row(1) order by column_0) union select 3 from dual",
+		"(values row(1), row(2) limit 1) union select 3 from dual",
+		"select 3 from dual union (values row(1), row(2) limit 1)",
+		"(values row(1)) union (values row(2))",
+	}
+	parser := NewTestParser()
+	for _, query := range queries {
+		t.Run(query, func(t *testing.T) {
+			tree, err := parser.Parse(query)
+			require.NoError(t, err)
+			out := String(tree)
+			reparsed, err := parser.Parse(out)
+			require.NoError(t, err, "formatted query %q must re-parse", out)
+			assert.Equal(t, out, String(reparsed))
+			assert.True(t, Equals.Statement(tree, reparsed), "re-parsing %q must produce the same AST", out)
+		})
+	}
+}
+
 func TestValidSelectCases(t *testing.T) {
 	testFile(t, "select_cases.txt", makeTestOutput(t))
 }

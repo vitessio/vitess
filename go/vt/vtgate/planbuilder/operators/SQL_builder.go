@@ -692,6 +692,13 @@ func buildDerived(op *Horizon, qb *queryBuilder) {
 }
 
 func buildDerivedValues(op *Horizon, qb *queryBuilder, values *sqlparser.ValuesStatement) {
+	if values.Order != nil {
+		// MySQL silently ignores ORDER BY on a VALUES statement and rejects
+		// expressions in it with an unknown-column error, so don't send it.
+		// Rows of a derived table are unordered anyway.
+		values = sqlparser.Clone(values)
+		values.Order = nil
+	}
 	qb.addTableExpr(op.Alias, op.Alias, TableID(op), &sqlparser.DerivedTable{
 		Select: values,
 	}, nil, op.ColumnAliases)
@@ -737,7 +744,11 @@ func buildDerivedSelect(op *Horizon, qb *queryBuilder, sel *sqlparser.Select) {
 func buildHorizon(op *Horizon, qb *queryBuilder) {
 	buildQuery(op.Source, qb)
 	if values, ok := op.Query.(*sqlparser.ValuesStatement); ok {
-		qb.stmt = sqlparser.Clone(values)
+		values = sqlparser.Clone(values)
+		// MySQL silently ignores ORDER BY on a VALUES statement, so don't send
+		// it. Any ordering that has an effect is planned at the vtgate level.
+		values.Order = nil
+		qb.stmt = values
 		return
 	}
 	stripDownQuery(op.Query, qb.asSelectStatement())

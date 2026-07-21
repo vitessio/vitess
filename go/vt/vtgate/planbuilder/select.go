@@ -201,7 +201,10 @@ func newBuildSelectPlan(
 		return nil, nil, err
 	}
 
-	if ks, ok := ctx.SemTable.CanTakeSelectUnshardedShortcut(); ok {
+	// An ordered VALUES outside a derived table must not take the shortcut:
+	// MySQL ignores ORDER BY on VALUES, so the sort has to be planned at the
+	// vtgate level by the normal planning path.
+	if ks, ok := ctx.SemTable.CanTakeSelectUnshardedShortcut(); ok && !sqlparser.HasOrderedValuesOutsideDerivedTable(selStmt) {
 		plan, tablesUsed, err = selectUnshardedShortcut(ctx, selStmt, ks)
 		if err != nil {
 			return nil, nil, err
