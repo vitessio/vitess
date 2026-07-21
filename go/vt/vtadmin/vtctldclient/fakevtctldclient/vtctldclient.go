@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
@@ -113,6 +114,8 @@ type VtctldClient struct {
 		Response *vtctldatapb.GetWorkflowsResponse
 		Error    error
 	}
+	getWorkflowsRequestsMu       sync.Mutex
+	GetWorkflowsRequests         []*vtctldatapb.GetWorkflowsRequest
 	LaunchSchemaMigrationResults map[string]struct {
 		Response *vtctldatapb.LaunchSchemaMigrationResponse
 		Error    error
@@ -519,6 +522,10 @@ func (fake *VtctldClient) GetVSchema(ctx context.Context, req *vtctldatapb.GetVS
 
 // GetWorkflows is part of the vtctldclient.VtctldClient interface.
 func (fake *VtctldClient) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflowsRequest, opts ...grpc.CallOption) (*vtctldatapb.GetWorkflowsResponse, error) {
+	fake.getWorkflowsRequestsMu.Lock()
+	fake.GetWorkflowsRequests = append(fake.GetWorkflowsRequests, req)
+	fake.getWorkflowsRequestsMu.Unlock()
+
 	if fake.GetWorkflowsResults == nil {
 		return nil, fmt.Errorf("%w: GetWorkflowsResults not set on fake vtctldclient", assert.AnError)
 	}

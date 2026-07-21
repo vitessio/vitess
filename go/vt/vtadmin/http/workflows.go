@@ -56,10 +56,15 @@ func GetWorkflow(ctx context.Context, r Request, api *API) *JSONResponse {
 // - active_only
 // - keyspace: repeated
 // - ignore_keyspace: repeated
+// - summary_only
 func GetWorkflows(ctx context.Context, r Request, api *API) *JSONResponse {
 	query := r.URL.Query()
 
 	activeOnly, err := r.ParseQueryParamAsBool("active_only", false)
+	if err != nil {
+		return NewJSONResponse(nil, err)
+	}
+	summaryOnly, err := r.ParseQueryParamAsBool("summary_only", false)
 	if err != nil {
 		return NewJSONResponse(nil, err)
 	}
@@ -69,6 +74,7 @@ func GetWorkflows(ctx context.Context, r Request, api *API) *JSONResponse {
 		Keyspaces:       query["keyspace"],
 		IgnoreKeyspaces: query["ignore_keyspace"],
 		ActiveOnly:      activeOnly,
+		SummaryOnly:     summaryOnly,
 	})
 
 	return NewJSONResponse(workflows, err)
