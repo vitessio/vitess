@@ -14,4 +14,9 @@ fi
 
 repo_root="$(cd "$(dirname "$script_path")/.." && pwd)"
 
+if (( $# == 0 )); then
+  echo "Usage: scripts/fmt <go-files>" >&2
+  exit 2
+fi
+
 exec go tool -modfile="$repo_root/tools/golangci-lint/go.mod" golangci-lint fmt -c "$repo_root/.golangci.yml" "$@"
