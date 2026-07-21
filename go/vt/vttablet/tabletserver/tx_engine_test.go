@@ -1001,6 +1001,43 @@ func TestPrepareFromRedoFreshPoolKeepsDurableDtidInDoubt(t *testing.T) {
 	require.ErrorContains(t, err, "in doubt during recovery")
 }
 
+func TestPrepareFromRedoFailedRollbackDeleteKeepsDtidInDoubt(t *testing.T) {
+	ctx := t.Context()
+	txe, tsv, db, closer := newTestTxExecutor(t, ctx)
+	defer closer()
+
+	te := tsv.te
+	db.AddQuery(te.twoPC.readAllRedo, &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Type: sqltypes.VarChar},
+			{Type: sqltypes.Int64},
+			{Type: sqltypes.Int64},
+			{Type: sqltypes.VarChar},
+			{Type: sqltypes.Text},
+		},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewVarBinary("aa"),
+			sqltypes.NewInt64(RedoStateFailed),
+			sqltypes.NewVarBinary("1"),
+			sqltypes.NewVarBinary("update test_table set `name` = 2 where pk = 1 limit 10001"),
+			sqltypes.NewVarBinary("prepare failed"),
+		}},
+	})
+
+	err := te.prepareFromRedo()
+	require.NoError(t, err)
+
+	db.AddRejectedQuery(
+		"delete from _vt.redo_state where dtid = _binary'aa'",
+		errors.New("delete redo log failed"),
+	)
+	err = txe.RollbackPrepared("aa", 0)
+	require.ErrorContains(t, err, "delete redo log failed")
+
+	err = txe.CommitPrepared("aa")
+	require.ErrorContains(t, err, "failed to commit")
+}
+
 func TestCheckReceivedError(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()

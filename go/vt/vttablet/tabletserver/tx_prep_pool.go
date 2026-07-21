@@ -90,6 +90,8 @@ func (pp *TxPreparedPool) ResetReservations(durable map[string]struct{}) {
 	}
 
 	for dtid := range durable {
+		pp.redoCommitStarted[dtid] = struct{}{}
+
 		if _, ok := pp.conns[dtid]; ok {
 			continue
 		}
