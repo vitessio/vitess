@@ -1701,13 +1701,17 @@ func TestHandleComStmtExecuteErrorAfterMoreResultsOKSurfacesError(t *testing.T) 
 		BindVars:    map[string]*querypb.BindVariable{},
 	}
 
-	cConn.sequence = 0
-	buf, pos := cConn.startEphemeralPacketWithHeader(10)
-	pos = writeByte(buf, pos, ComStmtExecute)
-	pos = writeUint32(buf, pos, stmtID)
-	pos = writeByte(buf, pos, 0) // cursor type
-	_ = writeUint32(buf, pos, 1) // iteration count
-	require.NoError(t, cConn.writeEphemeralPacket())
+	writeComStmtExecute := func() {
+		cConn.sequence = 0
+		buf, pos := cConn.startEphemeralPacketWithHeader(10)
+		pos = writeByte(buf, pos, ComStmtExecute)
+		pos = writeUint32(buf, pos, stmtID)
+		pos = writeByte(buf, pos, 0) // cursor type
+		_ = writeUint32(buf, pos, 1) // iteration count
+		require.NoError(t, cConn.writeEphemeralPacket())
+	}
+
+	writeComStmtExecute()
 
 	handler := &testRun{err: sqlerror.NewSQLError(sqlerror.ERQueryInterrupted, sqlerror.SSQueryInterrupted, "context canceled")}
 	res := sConn.handleNextCommand(handler)
@@ -1727,6 +1731,35 @@ func TestHandleComStmtExecuteErrorAfterMoreResultsOKSurfacesError(t *testing.T) 
 	require.NotEmpty(t, data)
 	require.EqualValues(t, ErrPacket, data[0], "the next result must be the real error packet")
 	require.ErrorContains(t, ParseErrorPacket(data), "context canceled")
+
+	// Connection must still be usable for the next binary-protocol execution.
+	writeComStmtExecute()
+	// Switch to a non-error prepared statement to verify the round-trip works.
+	sConn.PrepareData[stmtID].PrepareStmt = "select rows"
+	res = sConn.handleNextCommand(handler)
+	require.True(t, res, "subsequent COM_STMT_EXECUTE must be handled on a still-alive connection")
+
+	// Read the full binary result of the follow-up execution and assert it is a
+	// real (non-error) response: every packet up to the result terminator must
+	// arrive without an ERR packet. The result set ends after two EOF packets
+	// (columns then rows, since CapabilityClientDeprecateEOF is off here).
+	// Bounded by a read deadline and packet count so a regression fails fast
+	// instead of stalling CI.
+	require.NoError(t, cConn.conn.SetReadDeadline(time.Now().Add(30*time.Second)))
+	var eofCount int
+	for range 16 {
+		data, err := cConn.ReadPacket()
+		require.NoError(t, err)
+		require.NotEmpty(t, data)
+		require.NotEqualf(t, byte(ErrPacket), data[0], "follow-up execution must return a result, not an error packet")
+		if cConn.isEOFPacket(data) {
+			eofCount++
+			if eofCount == 2 {
+				break
+			}
+		}
+	}
+	require.Equal(t, 2, eofCount, "follow-up binary result must terminate cleanly")
 }
 
 func TestInitDbAgainstWrongDbDoesNotDropConnection(t *testing.T) {
