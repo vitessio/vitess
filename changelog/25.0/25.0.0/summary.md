@@ -256,7 +256,7 @@ See [#20167](https://github.com/vitessio/vitess/pull/20167) for details.
 
 #### <a id="backup-mysqld-shutdown-timeout"/>Slow clean mysqld shutdowns no longer fail backups</a>
 
-The builtin backup engine's shutdown deadline (`--builtinbackup-mysqld-timeout`) is now raised to the backup request's mysqld shutdown timeout (e.g. vtbackup's `--mysql-shutdown-timeout`) plus a 30 second grace period whenever that is larger, so the two settings can no longer silently conflict.
+The builtin backup engine's shutdown deadline (`--builtinbackup-mysqld-timeout`) is now raised to the backup request's mysqld shutdown timeout (e.g. vtbackup's `--mysql-shutdown-timeout`) plus a 30 second grace period whenever that is larger, so the two settings can no longer silently conflict. The same grace period now pads the shutdown contexts of `mysqlctl`, `mysqlctld` and `vtbackup`, which moves `mysqlctld`'s derived `--onterm-timeout` default from `5m10s` to `5m30s`.
 
 In addition, when `mysqladmin` gives up waiting for mysqld to stop, the shutdown is no longer failed immediately: the `SHUTDOWN` command has already been delivered at that point, so Vitess keeps waiting on the pid/socket files until the caller's deadline expires (or for a 30 second grace period, when the caller has no deadline). Slow-but-clean shutdowns, such as upgrade-safe backups running with `innodb_fast_shutdown=0` on large databases, previously failed with `Aborted waiting on pid file` even though mysqld was stopping normally.
 

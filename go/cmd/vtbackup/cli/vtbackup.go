@@ -647,7 +647,9 @@ func runBackup(ctx context.Context, topoServer *topo.Server, mysqld *mysqlctl.My
 		}
 
 		// Shutdown, waiting for it to finish
-		if err := mysqld.Shutdown(ctx, mycnf, true, mysqlShutdownTimeout); err != nil {
+		shutdownCtx, shutdownCancel := context.WithTimeout(ctx, mysqlShutdownTimeout+mysqlctl.MysqldShutdownGracePeriod)
+		defer shutdownCancel()
+		if err := mysqld.Shutdown(shutdownCtx, mycnf, true, mysqlShutdownTimeout); err != nil {
 			return fmt.Errorf("Something went wrong during full MySQL shutdown: %v", err)
 		}
 
