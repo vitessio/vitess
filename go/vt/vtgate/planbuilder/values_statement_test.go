@@ -573,17 +573,26 @@ func TestValuesStatementUnionAgainstShardedTable(t *testing.T) {
 	require.NoError(t, err)
 	vw.Keyspace = vschema.Keyspaces["user"].Keyspace
 
+	t.Run("select id from user union values row(rand())", func(t *testing.T) {
+		// UNION DISTINCT must not merge the VALUES arm into the scatter route
+		// either: a volatile expression like rand() evaluates to a different
+		// value on every shard, so the vtgate-side Distinct cannot collapse
+		// the per-shard copies and the row would be returned once per shard.
+		plan, err := TestBuilder("select id from user union values row(rand())", vw, vw.CurrentDb())
+		require.NoError(t, err)
+
+		_, ok := plan.Instructions.(*engine.Distinct)
+		require.True(t, ok, "expected a vtgate-side Distinct on top of the plan")
+		assertValuesArmInOwnSingleShardRoute(t, plan, "values row(rand())")
+	})
+
 	t.Run("select id from user union values row(1)", func(t *testing.T) {
-		// UNION DISTINCT may merge the VALUES row into the scatter route:
-		// every shard returns the row, and the vtgate-side Distinct dedups it.
 		plan, err := TestBuilder("select id from user union values row(1)", vw, vw.CurrentDb())
 		require.NoError(t, err)
 
-		distinct, ok := plan.Instructions.(*engine.Distinct)
+		_, ok := plan.Instructions.(*engine.Distinct)
 		require.True(t, ok, "expected a vtgate-side Distinct on top of the plan")
-		route, routeIdx := findPrimitive[*engine.Route](collectPrimitives(distinct))
-		require.GreaterOrEqual(t, routeIdx, 0)
-		assert.Equal(t, engine.Scatter, route.Opcode)
+		assertValuesArmInOwnSingleShardRoute(t, plan, "values row(1)")
 	})
 
 	t.Run("select id from user union all values row(1)", func(t *testing.T) {
@@ -592,31 +601,36 @@ func TestValuesStatementUnionAgainstShardedTable(t *testing.T) {
 		// shard. The VALUES arm has to stay in its own single-shard route.
 		plan, err := TestBuilder("select id from user union all values row(1)", vw, vw.CurrentDb())
 		require.NoError(t, err)
-		prims := collectPrimitives(plan.Instructions)
-
-		_, concatIdx := findPrimitive[*engine.Concatenate](prims)
-		require.GreaterOrEqual(t, concatIdx, 0, "expected a vtgate-side Concatenate, not a merged route")
-
-		var scatterRoutes, valuesRoutes []*engine.Route
-		for _, prim := range prims {
-			route, ok := prim.(*engine.Route)
-			if !ok {
-				continue
-			}
-			if route.Opcode == engine.Scatter {
-				scatterRoutes = append(scatterRoutes, route)
-			}
-			if strings.Contains(route.Query, "values row(1)") {
-				valuesRoutes = append(valuesRoutes, route)
-			}
-		}
-
-		require.Len(t, scatterRoutes, 1)
-		assert.NotContains(t, scatterRoutes[0].Query, "values", "VALUES must not be sent to every shard")
-		require.Len(t, valuesRoutes, 1)
-		assert.True(t, valuesRoutes[0].Opcode.IsSingleShard(),
-			"the VALUES arm must target a single shard, got opcode %s", valuesRoutes[0].Opcode.String())
+		assertValuesArmInOwnSingleShardRoute(t, plan, "values row(1)")
 	})
+}
+
+func assertValuesArmInOwnSingleShardRoute(t *testing.T, plan *engine.Plan, valuesQuery string) {
+	t.Helper()
+	prims := collectPrimitives(plan.Instructions)
+
+	_, concatIdx := findPrimitive[*engine.Concatenate](prims)
+	require.GreaterOrEqual(t, concatIdx, 0, "expected a vtgate-side Concatenate, not a merged route")
+
+	var scatterRoutes, valuesRoutes []*engine.Route
+	for _, prim := range prims {
+		route, ok := prim.(*engine.Route)
+		if !ok {
+			continue
+		}
+		if route.Opcode == engine.Scatter {
+			scatterRoutes = append(scatterRoutes, route)
+		}
+		if strings.Contains(route.Query, valuesQuery) {
+			valuesRoutes = append(valuesRoutes, route)
+		}
+	}
+
+	require.Len(t, scatterRoutes, 1)
+	assert.NotContains(t, scatterRoutes[0].Query, "values", "VALUES must not be sent to every shard")
+	require.Len(t, valuesRoutes, 1)
+	assert.True(t, valuesRoutes[0].Opcode.IsSingleShard(),
+		"the VALUES arm must target a single shard, got opcode %s", valuesRoutes[0].Opcode.String())
 }
 
 // A VALUES arm that hides behind a derived table or behind an already-merged

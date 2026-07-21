@@ -928,6 +928,15 @@ func tryPushDistinct(in *Distinct) (Operator, *ApplyResult) {
 	}
 	switch src := in.Source.(type) {
 	case *Route:
+		if valuesStatementUnderRoute(src) {
+			// a bare VALUES statement cannot carry DISTINCT in SQL; its rows
+			// are produced at the vtgate, so dedup has to stay there too
+			if !in.Required {
+				return in.Source, Rewrote("drop performance distinct over a VALUES route")
+			}
+			debugNoRewrite("distinct push blocked: a VALUES statement cannot be made distinct")
+			return in, NoRewrite
+		}
 		if isDistinct(src.Source) && src.IsSingleShard() {
 			return src, Rewrote("distinct not needed")
 		}

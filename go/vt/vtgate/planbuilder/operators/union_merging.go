@@ -116,13 +116,15 @@ func mergeUnionInputs(
 
 	// A VALUES statement produces its rows at the vtgate, not on a shard, so
 	// merging a single-shard VALUES route into a route that targets more than
-	// one shard would return its rows once per shard. UNION DISTINCT dedups
-	// those copies at the vtgate; UNION ALL has no dedup, so the merge must be
-	// refused. The VALUES statement may be hidden behind a derived table or an
-	// already-merged intermediate Union, so we search the whole operator tree.
-	if !distinct &&
-		((valuesStatementInTree(lhsRoute) && lhsRoute.IsSingleShard() && !rhsRoute.IsSingleShard()) ||
-			(valuesStatementInTree(rhsRoute) && rhsRoute.IsSingleShard() && !lhsRoute.IsSingleShard())) {
+	// one shard would return its rows once per shard. UNION ALL has no dedup,
+	// and even under UNION DISTINCT the vtgate-side Distinct cannot be relied
+	// on: a volatile or shard-dependent expression (e.g. rand()) evaluates to
+	// a different value on every shard, so the per-shard copies would not
+	// collapse. The VALUES statement may be hidden behind a derived table or
+	// an already-merged intermediate Union, so we search the whole operator
+	// tree.
+	if (valuesStatementInTree(lhsRoute) && lhsRoute.IsSingleShard() && !rhsRoute.IsSingleShard()) ||
+		(valuesStatementInTree(rhsRoute) && rhsRoute.IsSingleShard() && !lhsRoute.IsSingleShard()) {
 		checkCrossKeyspaceOp(ctx, lhs, rhs, "UNION")
 		return nil, nil
 	}
