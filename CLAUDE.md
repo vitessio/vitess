@@ -195,8 +195,8 @@ return user.NeedsMigration() && migrate(user) || user
 - **No naked returns in non-trivial functions** - For functions with named return values, avoid bare `return` and explicitly return all result values (very small helpers are the only exception). This does not prohibit plain `return` in `func f() { ... }` when used for early-exit/guard clauses.
 - **Reduce nesting** - Prefer early returns and guard clauses over deeply nested `if` conditions
 - **Copyright header** - New Go files must include the project copyright header with the current year
-- **Always run `gofumpt -w`** on changed Go files before committing - this is mandatory
-- **Always run `goimports -local "vitess.io/vitess" -w`** on changed Go files before committing
+- **Always run `scripts/gofumpt -w <changed-go-files>`** before committing - this is mandatory
+- **Always run `scripts/goimports -local "vitess.io/vitess" -w <changed-go-files>`** before committing
 - **Use format verbs precisely** - Use `%s` for strings and `%d` for integers, not `%v` for everything
 - **Structured logging** - New log messages should use structured logging with `slog`-style fields (e.g., `log.Warn("message", slog.Any("error", err))`) rather than printf-style logging with format strings
 - **Reuse existing helpers** - Before writing new parsing/validation code, check for existing utilities (e.g., `sqlerror` package for MySQL error codes, `mysqlctl.ParseVersionString()`, `strings.Split()`, `topoproto.TabletAliasString()` for formatting tablet aliases)
@@ -412,8 +412,8 @@ Me: "Now let's optimize without breaking functionality"
 Before considering any work "done":
 - [ ] Tests pass and cover the feature
 - [ ] Code is clean and readable
-    - [ ] Golang code passes the `gofumpt` formatter
-    - [ ] Golang code passes the `goimports -local "vitess.io/vitess" -w ...` formatter
+    - [ ] Golang code passes `scripts/gofumpt -w <changed-go-files>`
+    - [ ] Golang code passes `scripts/goimports -local "vitess.io/vitess" -w <changed-go-files>`
 - [ ] Edge cases are handled
 - [ ] Performance is acceptable
 - [ ] Documentation is updated if needed
