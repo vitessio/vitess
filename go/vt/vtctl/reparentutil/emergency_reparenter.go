@@ -853,6 +853,7 @@ func (erp *EmergencyReparenter) reparentReplicas(
 	var (
 		replicasStartedReplication []*topodatapb.Tablet
 		replicaMutex               sync.Mutex
+		ackersRepointed            int
 	)
 
 	// WithoutCancel preserves ctx values (tracing, caller ID) but lets replicas
@@ -875,6 +876,19 @@ func (erp *EmergencyReparenter) reparentReplicas(
 	// opts.WaitReplicasTimeout plus some jitter.
 	replSuccessCtx, replSuccessCancel := context.WithCancel(context.Background())
 	allReplicasDoneCtx, allReplicasDoneCancel := context.WithCancel(context.Background())
+
+	// The reparent journal write on the new primary blocks until enough semi-sync
+	// ackers are connected to it, which only happens once their repoints below
+	// complete. A repoint can stall in STOP REPLICA behind a busy applier, so the
+	// promotion waits for this quorum before making the new primary read-write: it is
+	// the same wait the journal write would do implicitly, moved to where aborting is
+	// still clean. Repointed-but-not-started tablets don't count, they cannot ACK
+	ackerQuorumCtx, ackerQuorumCancel := context.WithCancel(context.Background())
+	defer ackerQuorumCancel()
+	ackersNeeded := policy.SemiSyncAckers(opts.durability, newPrimaryTablet)
+	if ackersNeeded == 0 {
+		ackerQuorumCancel()
+	}
 
 	now := time.Now().UnixNano()
 	replWg := sync.WaitGroup{}
@@ -917,7 +931,8 @@ func (erp *EmergencyReparenter) reparentReplicas(
 		erp.logger.Infof("setting new primary on replica %v", alias)
 
 		forceStart := false
-		if status, ok := statusMap[alias]; ok {
+		status, inStatusMap := statusMap[alias]
+		if inStatusMap {
 			fs, err := ReplicaWasRunning(status)
 			if err != nil {
 				err = vterrors.Wrapf(err, "tablet %v could not determine StopReplicationStatus", alias)
@@ -929,7 +944,8 @@ func (erp *EmergencyReparenter) reparentReplicas(
 			forceStart = fs
 		}
 
-		err := erp.tmc.SetReplicationSource(replCtx, ti.Tablet, newPrimaryTablet.Alias, 0, "", forceStart, policy.IsReplicaSemiSync(opts.durability, newPrimaryTablet, ti.Tablet), 0)
+		semiSync := policy.IsReplicaSemiSync(opts.durability, newPrimaryTablet, ti.Tablet)
+		err := erp.tmc.SetReplicationSource(replCtx, ti.Tablet, newPrimaryTablet.Alias, 0, "", forceStart, semiSync, 0)
 		if err != nil {
 			err = vterrors.Wrapf(err, "tablet %v SetReplicationSource failed", alias)
 			rec.RecordError(err)
@@ -939,6 +955,15 @@ func (erp *EmergencyReparenter) reparentReplicas(
 
 		replicaMutex.Lock()
 		replicasStartedReplication = append(replicasStartedReplication, ti.Tablet)
+		// The repoint leaves the tablet replicating, and therefore ACKing, when we asked
+		// for a start or when it had no replication configured at all (a demoted former
+		// primary or a fresh tablet: SetReplicationSource always starts those)
+		if semiSync && (forceStart || !inStatusMap) {
+			ackersRepointed++
+			if ackersRepointed >= ackersNeeded {
+				ackerQuorumCancel()
+			}
+		}
 		replicaMutex.Unlock()
 
 		// Signal that at least one goroutine succeeded to SetReplicationSource.
@@ -988,6 +1013,30 @@ func (erp *EmergencyReparenter) reparentReplicas(
 		}()
 		replWg.Wait()
 	}()
+
+	// Hold the promotion until the acker quorum is repointed; if every replica finished
+	// without reaching it, the journal write below could never complete and the shard is
+	// still clean to abort
+	if !intermediateReparent {
+		select {
+		case <-ackerQuorumCtx.Done():
+		case <-allReplicasDoneCtx.Done():
+			replicaMutex.Lock()
+			repointed := ackersRepointed
+			replicaMutex.Unlock()
+			if repointed < ackersNeeded {
+				replCancel()
+				err := vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "%d of %d needed semi-sync ackers were repointed", repointed, ackersNeeded)
+				if recErr := rec.Error(); recErr != nil {
+					err = recErr
+				}
+				return nil, vterrors.Wrapf(err, "not enough semi-sync ackers were reachable to guarantee the promotion of %v can make progress", topoproto.TabletAliasString(newPrimaryTablet.Alias))
+			}
+		case <-ctx.Done():
+			replCancel()
+			return nil, vterrors.Wrapf(ctx.Err(), "emergency reparent aborted before promoting %v", topoproto.TabletAliasString(newPrimaryTablet.Alias))
+		}
+	}
 
 	primaryErr := handlePrimary(topoproto.TabletAliasString(newPrimaryTablet.Alias), newPrimaryTablet)
 	if primaryErr != nil {

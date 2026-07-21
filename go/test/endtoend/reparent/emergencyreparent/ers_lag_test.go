@@ -316,3 +316,64 @@ func TestERSExcludesErrantGTIDCandidateAndRewaits(t *testing.T) {
 	// still points at the old primary's mysqld; recovering it is an operator decision.
 	require.Equal(t, strconv.Itoa(tablets[0].MySQLPort), replicaStatusField(t, tablets[2], "Source_Port"))
 }
+
+// TestERSWaitsForAckerRepointBeforePromotion checks that when the winner's sole semi-sync
+// acker cannot complete its repoint promptly — its applier is stuck mid-event-group on a
+// non-transactional table, which STOP REPLICA cannot roll back, so the STOP inside
+// SetReplicationSource waits — ERS fails cleanly before making the candidate read-write,
+// and succeeds once the applier is unblocked.
+func TestERSWaitsForAckerRepointBeforePromotion(t *testing.T) {
+	endtoendutils.SkipIfBinaryIsBelowVersion(t, 25, "vtctld")
+
+	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
+	defer utils.TeardownCluster(clusterInstance)
+	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+
+	utils.ConfirmReplication(t, tablets[0], tablets[1:])
+
+	// The cross-cell replica becomes an rdonly so it cannot ack: tablets[1] is then
+	// tablets[2]'s only semi-sync acker.
+	err := clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", tablets[3].Alias, "rdonly")
+	require.NoError(t, err)
+
+	// A non-transactional table: STOP REPLICA cannot roll back an event group that
+	// touched it, so a blocked write pins the applier for real.
+	utils.RunSQL(t.Context(), t, "create table vt_nontx (id bigint primary key, msg varchar(64)) engine=MyISAM", tablets[0])
+	require.Eventually(t, func() bool {
+		return len(utils.RunSQL(t.Context(), t, "show tables like 'vt_nontx'", tablets[1]).Rows) == 1
+	}, 30*time.Second, time.Second)
+
+	// Hold a read lock on the table on tablets[1] so its applier wedges on the write.
+	lockConn, err := utils.GetMySQLConn(t.Context(), tablets[1])
+	require.NoError(t, err)
+	defer lockConn.Close()
+	_, err = lockConn.ExecuteFetch("lock tables vt_nontx read", 1000, true)
+	require.NoError(t, err)
+
+	// This write reaches every tablet, but tablets[1]'s applier blocks mid-event-group.
+	utils.RunSQL(t.Context(), t, "insert into vt_nontx (id, msg) values (1, 'block')", tablets[0])
+	primaryPosition := strings.ReplaceAll(utils.RunSQL(t.Context(), t, `select @@global.gtid_executed`, tablets[0]).Rows[0][0].ToString(), "\n", "")
+	waitForReceivedPosition(t, tablets[1], primaryPosition)
+
+	utils.StopTablet(t, tablets[0], true)
+
+	// tablets[2] wins the election, but its sole acker tablets[1] cannot finish
+	// SetReplicationSource while its applier is pinned: ERS must fail before the
+	// promotion instead of leaving a read-write primary wedged on the journal write.
+	out, err := utils.Ers(clusterInstance, nil, "120s", "30s")
+	require.Error(t, err, out)
+	require.Contains(t, out, "not enough semi-sync ackers were reachable to guarantee the promotion")
+
+	// Nothing was promoted: the winner is still read-only.
+	res := utils.RunSQL(t.Context(), t, `select @@global.read_only, @@global.super_read_only`, tablets[2])
+	require.Equal(t, `[[INT64(1) INT64(1)]]`, fmt.Sprintf("%v", res.Rows))
+
+	// Unblock the applier and the same ERS succeeds.
+	_, err = lockConn.ExecuteFetch("unlock tables", 1000, true)
+	require.NoError(t, err)
+	out, err = utils.Ers(clusterInstance, nil, "120s", "30s")
+	require.NoError(t, err, out)
+
+	newPrimary := utils.GetNewPrimary(t, clusterInstance)
+	utils.ConfirmReplication(t, newPrimary, nil)
+}
