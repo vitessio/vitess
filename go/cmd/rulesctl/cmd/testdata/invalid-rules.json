@@ -1,0 +1,18 @@
+[
+  {
+    "Name": "good_rule",
+    "Description": "A valid rule",
+    "Action": "FAIL"
+  },
+  {
+    "Name": "bad_plan",
+    "Description": "References a plan type that does not exist",
+    "Plans": ["NotARealPlanType"],
+    "Action": "FAIL"
+  },
+  {
+    "Name": "bad_attribute",
+    "Description": "Contains an unknown attribute",
+    "Frobnicate": true
+  }
+]
