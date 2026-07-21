@@ -24,6 +24,9 @@ import (
 	"time"
 
 	"github.com/google/shlex"
+
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 var (
@@ -31,6 +34,7 @@ var (
 	cutOverThresholdFlagRegexp  = regexp.MustCompile(fmt.Sprintf(`^[-]{1,2}%s=(.*?)$`, cutOverThresholdFlag))
 	forceCutOverAfterFlagRegexp = regexp.MustCompile(fmt.Sprintf(`^[-]{1,2}%s=(.*?)$`, forceCutOverAfterFlag))
 	retainArtifactsFlagRegexp   = regexp.MustCompile(fmt.Sprintf(`^[-]{1,2}%s=(.*?)$`, retainArtifactsFlag))
+	sessionVariableNameRegexp   = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
 )
 
 const (
@@ -51,6 +55,7 @@ const (
 	retainArtifactsFlag    = "retain-artifacts"
 	vreplicationTestSuite  = "vreplication-test-suite"
 	allowForeignKeysFlag   = "unsafe-allow-foreign-keys"
+	sessionVariableFlag    = "session-variable"
 	analyzeTableFlag       = "analyze-table"
 )
 
@@ -84,6 +89,11 @@ type DDLStrategySetting struct {
 	Options  string      `json:"options,omitempty"`
 }
 
+type SessionVariable struct {
+	Name  string
+	Value string
+}
+
 // NewDDLStrategySetting instantiates a new setting
 func NewDDLStrategySetting(strategy DDLStrategy, options string) *DDLStrategySetting {
 	return &DDLStrategySetting{
@@ -115,6 +125,9 @@ func ParseDDLStrategy(strategyVariable string) (*DDLStrategySetting, error) {
 	if _, err := setting.RetainArtifactsDuration(); err != nil {
 		return nil, err
 	}
+	if _, err := setting.SessionVariables(); err != nil {
+		return nil, err
+	}
 	cutoverAfter, err := setting.ForceCutOverAfter()
 	if err != nil {
 		return nil, err
@@ -126,7 +139,6 @@ func ParseDDLStrategy(strategyVariable string) (*DDLStrategySetting, error) {
 			return nil, fmt.Errorf("--force-cut-over-after is only valid in 'vitess' strategy. Found %v value in '%v' strategy", cutoverAfter, setting.Strategy)
 		}
 	}
-
 	switch setting.Strategy {
 	case DDLStrategyVitess, DDLStrategyOnline, DDLStrategyMySQL, DDLStrategyDirect:
 		if opts := setting.RuntimeOptions(); len(opts) > 0 {
@@ -182,6 +194,64 @@ func (setting *DDLStrategySetting) IsSingletonTable() bool {
 // IsAllowZeroInDateFlag checks if strategy options include --allow-zero-in-date
 func (setting *DDLStrategySetting) IsAllowZeroInDateFlag() bool {
 	return setting.hasFlag(allowZeroInDateFlag)
+}
+
+func ValidateSessionVariable(variable SessionVariable) error {
+	if !sessionVariableNameRegexp.MatchString(variable.Name) {
+		return fmt.Errorf("invalid session variable name: %q", variable.Name)
+	}
+	return nil
+}
+
+func ValidateSessionVariables(variables []SessionVariable) error {
+	seen := map[string]struct{}{}
+	for _, variable := range variables {
+		if err := ValidateSessionVariable(variable); err != nil {
+			return err
+		}
+		normalizedName := strings.ToLower(variable.Name)
+		if _, ok := seen[normalizedName]; ok {
+			return fmt.Errorf("duplicate session variable name: %q", variable.Name)
+		}
+		seen[normalizedName] = struct{}{}
+	}
+	return nil
+}
+
+func (variable SessionVariable) SetStatement() (string, error) {
+	if err := ValidateSessionVariable(variable); err != nil {
+		return "", err
+	}
+	return sqlparser.ParseAndBind(
+		fmt.Sprintf("set @@session.%s=%%a", variable.Name),
+		sqltypes.StringBindVariable(variable.Value),
+	)
+}
+
+func (setting *DDLStrategySetting) SessionVariables() ([]SessionVariable, error) {
+	opts, err := shlex.Split(setting.Options)
+	if err != nil {
+		return nil, fmt.Errorf("invalid DDL strategy options: %w", err)
+	}
+	var variables []SessionVariable
+	for i := 0; i < len(opts); i++ {
+		if !isFlag(opts[i], sessionVariableFlag) {
+			continue
+		}
+		if i+1 >= len(opts) {
+			return nil, fmt.Errorf("--%s requires name=value", sessionVariableFlag)
+		}
+		i++
+		name, value, found := strings.Cut(opts[i], "=")
+		if !found {
+			return nil, fmt.Errorf("invalid --%s value %q: expected name=value", sessionVariableFlag, opts[i])
+		}
+		variables = append(variables, SessionVariable{Name: name, Value: value})
+	}
+	if err := ValidateSessionVariables(variables); err != nil {
+		return nil, err
+	}
+	return variables, nil
 }
 
 // IsPostponeLaunch checks if strategy options include --postpone-launch
@@ -309,7 +379,8 @@ func (setting *DDLStrategySetting) IsAnalyzeTableFlag() bool {
 func (setting *DDLStrategySetting) RuntimeOptions() []string {
 	opts, _ := shlex.Split(setting.Options)
 	validOpts := []string{}
-	for _, opt := range opts {
+	for i := 0; i < len(opts); i++ {
+		opt := opts[i]
 		if _, ok := isCutOverThresholdFlag(opt); ok {
 			continue
 		}
@@ -326,6 +397,8 @@ func (setting *DDLStrategySetting) RuntimeOptions() []string {
 		case isFlag(opt, singletonContextFlag):
 		case isFlag(opt, singletonTableFlag):
 		case isFlag(opt, allowZeroInDateFlag):
+		case isFlag(opt, sessionVariableFlag):
+			i++
 		case isFlag(opt, postponeLaunchFlag):
 		case isFlag(opt, postponeCompletionFlag):
 		case isFlag(opt, inOrderCompletionFlag):

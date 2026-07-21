@@ -485,6 +485,11 @@ func (e *Executor) executeDirectly(ctx context.Context, onlineDDL *schema.Online
 	if err != nil {
 		return false, err
 	}
+	restoreSessionVariablesFunc, err := e.initMigrationSessionVariables(ctx, onlineDDL, conn)
+	defer restoreSessionVariablesFunc()
+	if err != nil {
+		return false, err
+	}
 
 	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusRunning, false, progressPctStarted, etaSecondsUnknown, rowsCopiedUnknown, emptyHint)
 	if onlineDDL.StrategySetting().IsAllowForeignKeysFlag() {
@@ -1242,6 +1247,35 @@ func (e *Executor) initMigrationSQLMode(ctx context.Context, onlineDDL *schema.O
 	return deferFunc, nil
 }
 
+func (e *Executor) initMigrationSessionVariables(ctx context.Context, onlineDDL *schema.OnlineDDL, conn *dbconnpool.DBConnection) (deferFunc func(), err error) {
+	restoreQueries := []string{}
+	deferFunc = func() {
+		for _, restoreQuery := range slices.Backward(restoreQueries) {
+			conn.ExecuteFetch(restoreQuery, 0, false)
+		}
+	}
+	sessionVariables, err := onlineDDL.StrategySetting().SessionVariables()
+	if err != nil {
+		return deferFunc, err
+	}
+	for i, variable := range sessionVariables {
+		setQuery, err := variable.SetStatement()
+		if err != nil {
+			return deferFunc, err
+		}
+		savedVariableName := fmt.Sprintf("vt_onlineddl_session_variable_%d", i)
+		saveQuery := fmt.Sprintf("set @%s=@@session.%s", savedVariableName, variable.Name)
+		if _, err := conn.ExecuteFetch(saveQuery, 0, false); err != nil {
+			return deferFunc, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not read session variable %s: %v", variable.Name, err)
+		}
+		restoreQueries = append(restoreQueries, fmt.Sprintf("set @@session.%s=@%s", variable.Name, savedVariableName))
+		if _, err := conn.ExecuteFetch(setQuery, 0, false); err != nil {
+			return deferFunc, err
+		}
+	}
+	return deferFunc, nil
+}
+
 // initConnectionSessionTimeout saves the current value of the given session variable, sets it to the given duration,
 // and returns a deferred restore function.
 func (e *Executor) initConnectionSessionTimeout(ctx context.Context, conn *connpool.Conn, variable string, timeout time.Duration) (deferFunc func(), err error) {
@@ -1340,6 +1374,11 @@ func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, online
 	if err != nil {
 		return v, err
 	}
+	restoreSessionVariablesFunc, err := e.initMigrationSessionVariables(ctx, onlineDDL, conn)
+	defer restoreSessionVariablesFunc()
+	if err != nil {
+		return v, err
+	}
 
 	vreplTableName, err := schema.GenerateInternalTableName(schema.InternalTableVreplicationHint.String(), onlineDDL.UUID, time.Now())
 	if err != nil {
@@ -1396,6 +1435,11 @@ func (e *Executor) postInitVreplicationOriginalMigration(ctx context.Context, on
 	if v.analysis.SourceAutoIncrement > 0 && !v.alterTableAnalysis.IsAutoIncrementChangeRequested {
 		restoreSQLModeFunc, err := e.initMigrationSQLMode(ctx, onlineDDL, conn)
 		defer restoreSQLModeFunc()
+		if err != nil {
+			return err
+		}
+		restoreSessionVariablesFunc, err := e.initMigrationSessionVariables(ctx, onlineDDL, conn)
+		defer restoreSessionVariablesFunc()
 		if err != nil {
 			return err
 		}
@@ -2272,6 +2316,11 @@ func (e *Executor) evaluateDeclarativeDiff(ctx context.Context, onlineDDL *schem
 
 		restoreSQLModeFunc, err := e.initMigrationSQLMode(ctx, onlineDDL, conn)
 		defer restoreSQLModeFunc()
+		if err != nil {
+			return nil, err
+		}
+		restoreSessionVariablesFunc, err := e.initMigrationSessionVariables(ctx, onlineDDL, conn)
+		defer restoreSessionVariablesFunc()
 		if err != nil {
 			return nil, err
 		}

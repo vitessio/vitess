@@ -17,6 +17,7 @@ limitations under the License.
 package tabletmanager
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -136,6 +137,86 @@ func TestTabletManager_MysqlHostMetricsNilCnf(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 	assert.Nil(t, resp.HostMetrics)
+}
+
+func TestTabletManager_ExecuteMultiFetchAsDbaSessionVariables(t *testing.T) {
+	ctx := t.Context()
+	cp := mysql.ConnParams{}
+	db := fakesqldb.New(t)
+	db.AddQueryPattern(".*", &sqltypes.Result{})
+	daemon := mysqlctl.NewFakeMysqlDaemon(db)
+
+	dbName := "testdb"
+	tm := &TabletManager{
+		MysqlDaemon:            daemon,
+		DBConfigs:              dbconfigs.NewTestDBConfigs(cp, cp, dbName),
+		QueryServiceControl:    tabletservermock.NewController(),
+		_waitForGrantsComplete: make(chan struct{}),
+		Env:                    vtenv.NewTestEnv(),
+	}
+	close(tm._waitForGrantsComplete)
+
+	_, err := tm.ExecuteMultiFetchAsDba(ctx, &tabletmanagerdatapb.ExecuteMultiFetchAsDbaRequest{
+		Sql:     []byte("create table t (id int primary key)"),
+		DbName:  dbName,
+		MaxRows: 10,
+		SessionVariables: []*tabletmanagerdatapb.SessionVariable{
+			{Name: "innodb_strict_mode", Value: "off"},
+			{Name: "sql_mode", Value: "ANSI"},
+		},
+	})
+	require.NoError(t, err)
+
+	got := strings.Split(db.QueryLog(), ";")
+	require.Contains(t, got, "use `testdb`")
+	firstVariableIdx := -1
+	secondVariableIdx := -1
+	createIdx := -1
+	for i, q := range got {
+		q = strings.ToLower(strings.TrimSpace(q))
+		if q == "set @@session.innodb_strict_mode='off'" {
+			firstVariableIdx = i
+		}
+		if q == "set @@session.sql_mode='ansi'" {
+			secondVariableIdx = i
+		}
+		if strings.Contains(q, "create table t") {
+			createIdx = i
+		}
+	}
+	require.NotEqual(t, -1, firstVariableIdx, "expected first session variable setup in %v", got)
+	require.NotEqual(t, -1, secondVariableIdx, "expected second session variable setup in %v", got)
+	require.NotEqual(t, -1, createIdx, "expected schema SQL")
+	assert.Less(t, firstVariableIdx, secondVariableIdx)
+	assert.Less(t, secondVariableIdx, createIdx, "all session variables must be set before schema SQL")
+}
+
+func TestTabletManager_ExecuteMultiFetchAsDbaSessionVariableFailure(t *testing.T) {
+	ctx := t.Context()
+	cp := mysql.ConnParams{}
+	db := fakesqldb.New(t)
+	db.AddQueryPattern(".*", &sqltypes.Result{})
+	db.AddRejectedQuery("set @@session.sql_mode='ANSI'", errors.New("cannot set session variable"))
+	daemon := mysqlctl.NewFakeMysqlDaemon(db)
+
+	tm := &TabletManager{
+		MysqlDaemon:            daemon,
+		DBConfigs:              dbconfigs.NewTestDBConfigs(cp, cp, "testdb"),
+		QueryServiceControl:    tabletservermock.NewController(),
+		_waitForGrantsComplete: make(chan struct{}),
+		Env:                    vtenv.NewTestEnv(),
+	}
+	close(tm._waitForGrantsComplete)
+
+	_, err := tm.ExecuteMultiFetchAsDba(ctx, &tabletmanagerdatapb.ExecuteMultiFetchAsDbaRequest{
+		Sql:    []byte("create table t (id int primary key)"),
+		DbName: "testdb",
+		SessionVariables: []*tabletmanagerdatapb.SessionVariable{
+			{Name: "sql_mode", Value: "ANSI"},
+		},
+	})
+	require.ErrorContains(t, err, "cannot set session variable")
+	assert.NotContains(t, db.QueryLog(), "create table t")
 }
 
 func TestTabletManager_ExecuteFetchAsDba(t *testing.T) {
