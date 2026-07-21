@@ -104,14 +104,12 @@ func settleSubqueries(ctx *plancontext.PlanningContext, op Operator) Operator {
 					op.Columns[aggr.ColOffset].Expr = newExpr
 				}
 			}
-		case *Ordering:
-			op.settleOrderingExpressions(ctx)
 		case *Union:
 			for _, selList := range op.Selects {
 				for _, selectExpr := range selList {
 					if aliased, ok := selectExpr.(*sqlparser.AliasedExpr); ok {
-						for arg, sq := range ctx.MergedSubqueries {
-							aliased.Expr = rewriteSubqueryArg(aliased.Expr, arg, sq)
+						for placeholder, sq := range ctx.MergedSubqueries {
+							aliased.Expr = rewriteSubqueryArg(aliased.Expr, placeholder, sq)
 						}
 					}
 				}
@@ -123,17 +121,10 @@ func settleSubqueries(ctx *plancontext.PlanningContext, op Operator) Operator {
 	return BottomUp(op, TableID, visit, nil)
 }
 
-func rewriteSubqueryArg(expr sqlparser.Expr, arg string, sq *sqlparser.Subquery) sqlparser.Expr {
+func rewriteSubqueryArg(expr sqlparser.Expr, placeholder sqlparser.Expr, sq *sqlparser.Subquery) sqlparser.Expr {
 	return sqlparser.Rewrite(expr, nil, func(cursor *sqlparser.Cursor) bool {
-		switch node := cursor.Node().(type) {
-		case *sqlparser.ColName:
-			if node.Name.String() == arg {
-				cursor.Replace(sq)
-			}
-		case *sqlparser.Argument:
-			if node.Name == arg {
-				cursor.Replace(sq)
-			}
+		if cursor.Node() == placeholder {
+			cursor.Replace(sq)
 		}
 		return true
 	}).(sqlparser.Expr)
@@ -141,19 +132,11 @@ func rewriteSubqueryArg(expr sqlparser.Expr, arg string, sq *sqlparser.Subquery)
 
 func (o *Ordering) settleOrderingExpressions(ctx *plancontext.PlanningContext) {
 	for idx := range o.Order {
-		for arg, sq := range ctx.MergedSubqueries {
+		for placeholder, sq := range ctx.MergedSubqueries {
 			expr := sqlparser.Rewrite(o.Order[idx].SimplifiedExpr, nil, func(cursor *sqlparser.Cursor) bool {
-				switch expr := cursor.Node().(type) {
-				case *sqlparser.ColName:
-					if expr.Name.String() == arg {
-						cursor.Replace(sq)
-					}
-				case *sqlparser.Argument:
-					if expr.Name == arg {
-						cursor.Replace(sq)
-					}
+				if cursor.Node() == placeholder {
+					cursor.Replace(sq)
 				}
-
 				return true
 			})
 			o.Order[idx].SimplifiedExpr = expr.(sqlparser.Expr)
@@ -181,25 +164,14 @@ func rewriteMergedSubqueryExpr(ctx *plancontext.PlanningContext, se SubQueryExpr
 		// this is because we might have subqueries inside subqueries, and we need to merge them all
 		merged = false
 		for _, sq := range se {
-			if _, ok := ctx.MergedSubqueries[sq.ArgName]; !ok {
+			if sq.Placeholder == nil {
+				continue
+			}
+			if _, ok := ctx.MergedSubqueries[sq.Placeholder]; !ok {
 				continue
 			}
 			expr = sqlparser.Rewrite(expr, nil, func(cursor *sqlparser.Cursor) bool {
-				switch expr := cursor.Node().(type) {
-				case *sqlparser.ColName:
-					if expr.Name.String() != sq.ArgName { // TODO systay 2023.09.15 - This is not safe enough. We should figure out a better way.
-						return true
-					}
-				case *sqlparser.Argument:
-					if expr.Name != sq.ArgName {
-						return true
-					}
-				case sqlparser.ListArg:
-					// DML IN/NOT IN subqueries use ListArg placeholders, not Argument.
-					if string(expr) != sq.ArgName {
-						return true
-					}
-				default:
+				if cursor.Node() != sq.Placeholder {
 					return true
 				}
 				rewritten = true
@@ -367,7 +339,9 @@ func tryMergeWithRHS(ctx *plancontext.PlanningContext, inner *SubQuery, outer *A
 	}
 
 	outer.RHS = newOp
-	ctx.MergedSubqueries[inner.ArgName] = inner.originalSubquery
+	if inner.Placeholder != nil {
+		ctx.MergedSubqueries[inner.Placeholder] = inner.originalSubquery
+	}
 	return outer, Rewrote("merged subquery with rhs of join")
 }
 
@@ -583,7 +557,9 @@ func tryMergeSubqueryWithOuter(ctx *plancontext.PlanningContext, subQuery *SubQu
 	if outer.Comments != nil {
 		op.Comments = outer.Comments
 	}
-	ctx.MergedSubqueries[subQuery.ArgName] = subQuery.originalSubquery
+	if subQuery.Placeholder != nil {
+		ctx.MergedSubqueries[subQuery.Placeholder] = subQuery.originalSubquery
+	}
 	return op, Rewrote("merged subquery with outer")
 }
 

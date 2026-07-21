@@ -389,7 +389,7 @@ func (sqb *SubQueryBuilder) pullOutValueSubqueries(
 		sqInner := createSubquery(ctx, original, sq, outerID, original, argName, filterType, true)
 		allSubqs = append(allSubqs, sqInner)
 		sqb.Inner = append(sqb.Inner, sqInner)
-		sqb.replaceSubqueryNode(cursor, argName, filterType, isDML)
+		sqInner.Placeholder = sqb.replaceSubqueryNode(cursor, argName, filterType, isDML)
 	}
 
 	expr = sqlparser.Rewrite(expr, nil, func(cursor *sqlparser.Cursor) bool {
@@ -414,16 +414,19 @@ func (sqb *SubQueryBuilder) pullOutValueSubqueries(
 
 // replaceSubqueryNode replaces the current cursor node with the appropriate
 // argument placeholder for the given bind var name and opcode.
-func (sqb *SubQueryBuilder) replaceSubqueryNode(cursor *sqlparser.Cursor, argName string, filterType opcode.PulloutOpcode, isDML bool) {
+func (sqb *SubQueryBuilder) replaceSubqueryNode(cursor *sqlparser.Cursor, argName string, filterType opcode.PulloutOpcode, isDML bool) sqlparser.Expr {
+	var node sqlparser.Expr
 	if isDML {
 		if filterType.NeedsListArg() {
-			cursor.Replace(sqlparser.NewListArg(argName))
+			node = sqlparser.NewListArg(argName)
 		} else {
-			cursor.Replace(sqlparser.NewArgument(argName))
+			node = sqlparser.NewArgument(argName)
 		}
 	} else {
-		cursor.Replace(sqlparser.NewColName(argName))
+		node = sqlparser.NewColName(argName)
 	}
+	cursor.Replace(node)
+	return node
 }
 
 // getOpCodeFromParent determines the pullout opcode for a subquery based on its parent expression type.
