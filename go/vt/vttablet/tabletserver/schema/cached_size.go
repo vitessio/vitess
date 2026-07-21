@@ -37,13 +37,14 @@ func (cached *MessageInfo) CachedSize(alloc bool) int64 {
 	return size
 }
 
+//go:nocheckptr
 func (cached *Table) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(112)
+		size += int64(128)
 	}
 	// field Name vitess.io/vitess/go/vt/sqlparser.IdentifierCS
 	size += cached.Name.CachedSize(false)
@@ -57,6 +58,14 @@ func (cached *Table) CachedSize(alloc bool) int64 {
 	// field PKColumns []int
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.PKColumns)) * int64(8))
+	}
+	// field EnumSetColumnTypes map[string]string
+	if cached.EnumSetColumnTypes != nil {
+		size += hack.RuntimeMapSize(cached.EnumSetColumnTypes)
+		for k, v := range cached.EnumSetColumnTypes {
+			size += hack.RuntimeAllocSize(int64(len(k)))
+			size += hack.RuntimeAllocSize(int64(len(v)))
+		}
 	}
 	// field SequenceInfo *vitess.io/vitess/go/vt/vttablet/tabletserver/schema.SequenceInfo
 	if cached.SequenceInfo != nil {

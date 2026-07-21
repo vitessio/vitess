@@ -27,6 +27,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/google/safehtml/template"
@@ -126,7 +127,7 @@ func TestNewVTGateHealthCheckFilters(t *testing.T) {
 
 			filters, err := NewVTGateHealthCheckFilters()
 			if testCase.expectedError != "" {
-				assert.EqualError(t, err, testCase.expectedError)
+				require.EqualError(t, err, testCase.expectedError)
 			}
 			assert.Len(t, filters, len(testCase.expectedFilterTypes))
 			for i, filter := range filters {
@@ -272,7 +273,7 @@ func TestHealthCheck(t *testing.T) {
 	result = <-resultChan
 	// Ignore LastError because we're going to check it separately.
 	utils.MustMatchFn(".LastError", ".Conn")(t, want, result, "Wrong TabletHealth data")
-	assert.Error(t, result.LastError, "vttablet error: some error")
+	require.Error(t, result.LastError, "vttablet error: some error")
 	testChecksum(t, 1027934207, hc.stateChecksum()) // unchanged
 
 	// remove tablet
@@ -337,7 +338,7 @@ func TestHealthCheckStreamError(t *testing.T) {
 	result = <-resultChan
 	// Ignore LastError because we're going to check it separately.
 	utils.MustMatchFn(".LastError", ".Conn")(t, want, result, "Wrong TabletHealth data")
-	assert.Error(t, result.LastError, "some stream error")
+	require.Error(t, result.LastError, "some stream error")
 	// tablet should be removed from healthy list
 	a := hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA})
 	assert.Empty(t, a, "wrong result, expected empty list")
@@ -401,7 +402,7 @@ func TestHealthCheckErrorOnPrimary(t *testing.T) {
 	result = <-resultChan
 	// Ignore LastError because we're going to check it separately.
 	utils.MustMatchFn(".LastError", ".Conn")(t, want, result, "Wrong TabletHealth data")
-	assert.Error(t, result.LastError, "some stream error")
+	require.Error(t, result.LastError, "some stream error")
 	// tablet should be removed from healthy list
 	a := hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY})
 	assert.Empty(t, a, "wrong result, expected empty list")
@@ -582,7 +583,7 @@ func TestHealthCheckCloseWaitsForGoRoutines(t *testing.T) {
 	shr.PrimaryTermStartTimestamp = 11
 	// Close the healthcheck. Tablet connections are closed asynchronously and
 	// Close() will block until all Go routines (one per connection) are done.
-	assert.Nil(t, hc.Close(), "Close returned error")
+	require.NoError(t, hc.Close(), "Close returned error")
 	// Try to send more updates. They should be ignored and nothing should change
 	input <- shr
 
@@ -641,14 +642,14 @@ func TestHealthCheckTimeout(t *testing.T) {
 	input <- shr
 	result = <-resultChan
 	mustMatch(t, want, result, "Wrong TabletHealth data")
-	assert.Nil(t, checkErrorCounter("k", "s", topodatapb.TabletType_REPLICA, 0))
+	require.NoError(t, checkErrorCounter("k", "s", topodatapb.TabletType_REPLICA, 0))
 
 	// wait for timeout period
 	time.Sleep(hc.healthCheckTimeout + 100*time.Millisecond)
 	t.Logf(`Sleep(1.1 * timeout)`)
 	result = <-resultChan
 	assert.False(t, result.Serving, "tabletHealthCheck: %+v; want not serving", result)
-	assert.Nil(t, checkErrorCounter("k", "s", topodatapb.TabletType_REPLICA, 1))
+	require.NoError(t, checkErrorCounter("k", "s", topodatapb.TabletType_REPLICA, 1))
 	assert.True(t, fc.isCanceled(), "StreamHealth should be canceled after timeout, but is not")
 
 	// tablet should be removed from healthy list
@@ -661,7 +662,7 @@ func TestHealthCheckTimeout(t *testing.T) {
 
 	result = <-resultChan
 	assert.False(t, result.Serving, "tabletHealthCheck: %+v; want not serving", result)
-	assert.Nil(t, checkErrorCounter("k", "s", topodatapb.TabletType_REPLICA, 2))
+	require.NoError(t, checkErrorCounter("k", "s", topodatapb.TabletType_REPLICA, 2))
 	assert.True(t, fc.isCanceled(), "StreamHealth should be canceled again after timeout, but is not")
 
 	// send a healthcheck response, it should be serving again
@@ -703,7 +704,7 @@ func TestWaitForAllServingTablets(t *testing.T) {
 	defer cancel()
 
 	err := hc.WaitForAllServingTablets(ctx, targets)
-	assert.NotNil(t, err, "error should not be nil")
+	require.Error(t, err, "error should not be nil")
 
 	shr := &querypb.StreamHealthResponse{
 		TabletAlias:               tablet.Alias,
@@ -726,7 +727,7 @@ func TestWaitForAllServingTablets(t *testing.T) {
 	}
 
 	err = hc.WaitForAllServingTablets(ctx, targets)
-	assert.Nil(t, err, "error should be nil. Targets are found")
+	require.NoError(t, err, "error should be nil. Targets are found")
 
 	targets = []*querypb.Target{
 		{
@@ -742,7 +743,7 @@ func TestWaitForAllServingTablets(t *testing.T) {
 	}
 
 	err = hc.WaitForAllServingTablets(ctx, targets)
-	assert.NotNil(t, err, "error should not be nil (there are no tablets on this keyspace")
+	assert.Error(t, err, "error should not be nil (there are no tablets on this keyspace")
 }
 
 // TestRemoveTablet tests the behavior when a tablet goes away.
@@ -853,6 +854,74 @@ func TestRemoveTablet(t *testing.T) {
 	assert.Empty(t, a, "wrong result, expected empty list")
 	a = hc.GetTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_RDONLY})
 	assert.Empty(t, a, "wrong result, expected empty list")
+}
+
+// TestStaleUpdateFromCanceledCheckConn checks that a replaced tablet's
+// canceled checkConn cannot remove its healthy replacement from the routing
+// list with a final, stale updateHealth(Serving: false).
+func TestStaleUpdateFromCanceledCheckConn(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx := t.Context()
+		ts := memorytopo.NewServer(ctx, "cell")
+		t.Cleanup(func() { ts.Close() })
+		hc := createTestHc(ctx, ts)
+		t.Cleanup(func() { hc.Close() })
+
+		target := &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA}
+
+		// The tablet before the restart, with its stream gated on cancellation.
+		oldTablet := createTestTablet(0, "cell", "a")
+		oldTablet.Type = topodatapb.TabletType_REPLICA
+		oldInput := make(chan *querypb.StreamHealthResponse)
+		oldConn := createFakeConn(oldTablet, oldInput)
+		oldConn.releaseOnCancel = make(chan struct{})
+		releaseOldConn := sync.OnceFunc(func() { close(oldConn.releaseOnCancel) })
+		t.Cleanup(releaseOldConn)
+
+		// The same tablet after the restart: same alias, new ports.
+		newTablet := createTestTablet(0, "cell", "a")
+		newTablet.Type = topodatapb.TabletType_REPLICA
+		newTablet.PortMap["vt"] = 5
+		newTablet.PortMap["grpc"] = 6
+		newInput := make(chan *querypb.StreamHealthResponse)
+		createFakeConn(newTablet, newInput)
+
+		shr := &querypb.StreamHealthResponse{
+			TabletAlias:   oldTablet.Alias,
+			Target:        target,
+			Serving:       true,
+			RealtimeStats: &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
+		}
+
+		hc.AddTablet(oldTablet)
+		oldInput <- shr
+		synctest.Wait()
+		require.Len(t, hc.GetHealthyTabletStats(target), 1, "tablet should be healthy before the restart")
+
+		// The topology watcher notices the restarted tablet and replaces it.
+		// The old checkConn goroutine is canceled but stays parked inside its
+		// stream, before it runs its error path.
+		hc.ReplaceTablet(oldTablet, newTablet)
+
+		// The new connection reports Serving: true; the tablet becomes healthy.
+		newInput <- shr
+		synctest.Wait()
+		require.Len(t, hc.GetHealthyTabletStats(target), 1, "tablet should be healthy again after the replace")
+
+		// Release the canceled goroutine. Its stream now returns an error and
+		// the checkConn error path issues the final stale
+		// updateHealth(Serving: false) — after the replacement connection has
+		// already reported healthy.
+		releaseOldConn()
+		synctest.Wait()
+
+		// The healthcheck cache (healthData) shows a serving tablet with a
+		// live stream, so the healthy (routing) list must include it as well.
+		healthy := hc.GetHealthyTabletStats(target)
+		require.Len(t, healthy, 1,
+			"tablet is serving and streaming health but missing from the healthy list: stale update from the canceled checkConn poisoned the healthy list")
+		assert.True(t, healthy[0].Serving)
+	})
 }
 
 // When an external primary failover is performed,
@@ -1088,7 +1157,7 @@ func TestGetHealthyTablets(t *testing.T) {
 	// wait for result
 	<-resultChan
 	a = hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA})
-	assert.Equal(t, 2, len(a), "Wrong number of results")
+	assert.Len(t, a, 2, "Wrong number of results")
 	if a[0].Tablet.Alias.Uid == 11 {
 		a[0], a[1] = a[1], a[0]
 	}
@@ -1105,7 +1174,7 @@ func TestGetHealthyTablets(t *testing.T) {
 	// wait for result
 	<-resultChan
 	a = hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA})
-	assert.Equal(t, 1, len(a), "Wrong number of results")
+	assert.Len(t, a, 1, "Wrong number of results")
 
 	// second tablet turns into a primary
 	shr2 = &querypb.StreamHealthResponse{
@@ -1187,7 +1256,7 @@ func TestPrimaryInOtherCell(t *testing.T) {
 	ticker := time.NewTicker(1 * time.Second)
 	select {
 	case err := <-fc.cbErrCh:
-		require.Fail(t, "Unexpected error: %v", err)
+		require.Failf(t, "Unexpected error", "%v", err)
 	case <-resultChan:
 	case <-ticker.C:
 		require.Fail(t, "Timed out waiting for HealthCheck update")
@@ -1212,7 +1281,7 @@ func TestPrimaryInOtherCell(t *testing.T) {
 	ticker = time.NewTicker(1 * time.Second)
 	select {
 	case err := <-fc.cbErrCh:
-		require.Fail(t, "Unexpected error: %v", err)
+		require.Failf(t, "Unexpected error", "%v", err)
 	case got := <-resultChan:
 		// check that we DO receive health check update for PRIMARY in other cell
 		mustMatch(t, want, got, "Wrong TabletHealth data")
@@ -1222,7 +1291,7 @@ func TestPrimaryInOtherCell(t *testing.T) {
 
 	// check that PRIMARY tablet from other cell IS in healthy tablet list
 	a := hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY})
-	require.Len(t, a, 1, "")
+	require.Len(t, a, 1)
 	mustMatch(t, want, a[0], "Expecting healthy primary")
 }
 
@@ -1251,16 +1320,8 @@ func TestLoadTabletsTrigger(t *testing.T) {
 		Shard:    shard,
 	}
 
-	// We want to run updateHealth with arguments that always
-	// make it trigger load Tablets.
-	th := &TabletHealth{
-		Tablet: tablet1,
-		Target: &querypb.Target{
-			Keyspace:   ks,
-			Shard:      shard,
-			TabletType: topodatapb.TabletType_REPLICA,
-		},
-	}
+	// We want to run updateHealth with a previous target that always
+	// makes it trigger load Tablets.
 	prevTarget := &querypb.Target{
 		Keyspace:   ks,
 		Shard:      shard,
@@ -1268,13 +1329,16 @@ func TestLoadTabletsTrigger(t *testing.T) {
 	}
 	hc.AddTablet(tablet1)
 
+	thc := hc.registeredHealthCheck(tablet1.Alias)
+	require.NotNil(t, thc)
+
 	numTriggers := 10
 	for range numTriggers {
 		// Since the previous target was a primary, and there are no other
 		// primary tablets for the given keyspace shard, we will see the healtcheck
 		// send on the loadTablets trigger. We just want to verify the information
 		// there is correct.
-		hc.updateHealth(th, prevTarget, false, false)
+		hc.updateHealth(thc, prevTarget, false, false)
 	}
 
 	ch := hc.GetLoadTabletsTrigger()
@@ -1282,10 +1346,10 @@ func TestLoadTabletsTrigger(t *testing.T) {
 	for range numTriggers {
 		// Read from the channel and verify we indeed have the right values.
 		kss := <-ch
-		require.EqualValues(t, ks, kss.Keyspace)
-		require.EqualValues(t, shard, kss.Shard)
+		require.Equal(t, ks, kss.Keyspace)
+		require.Equal(t, shard, kss.Shard)
 	}
-	require.Len(t, ch, 0)
+	require.Empty(t, ch)
 }
 
 func TestReplicaInOtherCell(t *testing.T) {
@@ -1308,7 +1372,7 @@ func TestReplicaInOtherCell(t *testing.T) {
 	ticker := time.NewTicker(1 * time.Second)
 	select {
 	case err := <-fc.cbErrCh:
-		require.Fail(t, "Unexpected error: %v", err)
+		require.Failf(t, "Unexpected error", "%v", err)
 	case <-resultChan:
 	case <-ticker.C:
 		require.Fail(t, "Timed out waiting for HealthCheck update")
@@ -1333,7 +1397,7 @@ func TestReplicaInOtherCell(t *testing.T) {
 	ticker = time.NewTicker(1 * time.Second)
 	select {
 	case err := <-fc.cbErrCh:
-		require.Fail(t, "Unexpected error: %v", err)
+		require.Failf(t, "Unexpected error", "%v", err)
 	case got := <-resultChan:
 		// check that we DO receive health check update for REPLICA in other cell
 		mustMatch(t, want, got, "Wrong TabletHealth data")
@@ -1354,7 +1418,7 @@ func TestReplicaInOtherCell(t *testing.T) {
 	ticker = time.NewTicker(1 * time.Second)
 	select {
 	case err := <-fc2.cbErrCh:
-		require.Fail(t, "Unexpected error: %v", err)
+		require.Failf(t, "Unexpected error", "%v", err)
 	case <-resultChan2:
 	case <-ticker.C:
 		require.Fail(t, "Timed out waiting for HealthCheck update")
@@ -1379,7 +1443,7 @@ func TestReplicaInOtherCell(t *testing.T) {
 	ticker = time.NewTicker(1 * time.Second)
 	select {
 	case err := <-fc.cbErrCh:
-		require.Fail(t, "Unexpected error: %v", err)
+		require.Failf(t, "Unexpected error", "%v", err)
 	case got := <-resultChan2:
 		// check that we DO receive health check update for REPLICA in other cell
 		mustMatch(t, want2, got, "Wrong TabletHealth data")
@@ -1389,7 +1453,7 @@ func TestReplicaInOtherCell(t *testing.T) {
 
 	// check that only REPLICA tablet from cell1 is in healthy tablet list
 	a := hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA})
-	require.Len(t, a, 1, "")
+	require.Len(t, a, 1)
 	mustMatch(t, want, a[0], "Expecting healthy local replica")
 }
 
@@ -1404,7 +1468,7 @@ func TestCellAliases(t *testing.T) {
 	cellsAlias := &topodatapb.CellsAlias{
 		Cells: []string{"cell1", "cell2"},
 	}
-	assert.Nil(t, ts.CreateCellsAlias(t.Context(), "region1", cellsAlias), "failed to create cell alias")
+	require.NoError(t, ts.CreateCellsAlias(t.Context(), "region1", cellsAlias), "failed to create cell alias")
 	defer deleteCellsAlias(t, ts, "region1")
 
 	// add a tablet as replica in diff cell, same region
@@ -1420,7 +1484,7 @@ func TestCellAliases(t *testing.T) {
 	ticker := time.NewTicker(1 * time.Second)
 	select {
 	case err := <-fc.cbErrCh:
-		require.Fail(t, "Unexpected error: %v", err)
+		require.Failf(t, "Unexpected error", "%v", err)
 	case <-resultChan:
 	case <-ticker.C:
 		require.Fail(t, "Timed out waiting for HealthCheck update")
@@ -1445,7 +1509,7 @@ func TestCellAliases(t *testing.T) {
 	ticker = time.NewTicker(1 * time.Second)
 	select {
 	case err := <-fc.cbErrCh:
-		require.Fail(t, "Unexpected error: %v", err)
+		require.Failf(t, "Unexpected error", "%v", err)
 	case <-resultChan:
 	case <-ticker.C:
 		require.Fail(t, "Timed out waiting for HealthCheck update")
@@ -1501,10 +1565,10 @@ func TestTemplate(t *testing.T) {
 	}
 	templ := template.New("")
 	templ, err := templ.Parse(healthCheckTemplate)
-	require.Nil(t, err, "error parsing template: %v", err)
+	require.NoError(t, err, "error parsing template: %v", err)
 	wr := &bytes.Buffer{}
 	err = templ.Execute(wr, []*TabletsCacheStatus{tcs})
-	require.Nil(t, err, "error executing template: %v", err)
+	require.NoError(t, err, "error executing template: %v", err)
 }
 
 // TestHealthCheckImplSubscriberName tests that we have the subscirber name in the healthcheck.
@@ -1521,13 +1585,13 @@ func TestHealthCheckImplSubscriberName(t *testing.T) {
 
 	subsNames := maps.Values(hc.subscribers)
 	slices.Sort(subsNames)
-	require.Equal(t, 2, len(subsNames), "expected 2 subscribers")
-	require.EqualValues(t, []string{subsName, subsName2}, subsNames, "unexpected subscribers")
+	require.Len(t, subsNames, 2, "expected 2 subscribers")
+	require.Equal(t, []string{subsName, subsName2}, subsNames, "unexpected subscribers")
 
 	hc.Unsubscribe(ch)
 	subsNames = maps.Values(hc.subscribers)
-	require.Equal(t, 1, len(subsNames), "expected 1 subscriber")
-	require.EqualValues(t, []string{subsName2}, subsNames, "unexpected subscribers")
+	require.Len(t, subsNames, 1, "expected 1 subscriber")
+	require.Equal(t, []string{subsName2}, subsNames, "unexpected subscribers")
 
 	hc.Unsubscribe(ch2)
 	subsNames = maps.Values(hc.subscribers)
@@ -1556,10 +1620,10 @@ func TestDebugURLFormatting(t *testing.T) {
 	}
 	templ := template.New("")
 	templ, err := templ.Parse(healthCheckTemplate)
-	require.Nil(t, err, "error parsing template")
+	require.NoError(t, err, "error parsing template")
 	wr := &bytes.Buffer{}
 	err = templ.Execute(wr, []*TabletsCacheStatus{tcs})
-	require.Nil(t, err, "error executing template")
+	require.NoError(t, err, "error executing template")
 	expectedURL := `"https://host.bastion.cell.corp"`
 	require.Contains(t, wr.String(), expectedURL, "output missing formatted URL")
 }
@@ -1663,6 +1727,10 @@ type fakeConn struct {
 	errCh chan error
 	// cbErrCh is a channel which receives errors returned from the supplied callback.
 	cbErrCh chan error
+	// releaseOnCancel, if non-nil, parks a canceled stream until the channel
+	// is closed and then makes it return ctx.Err() like a real gRPC stream,
+	// instead of returning nil right away.
+	releaseOnCancel chan struct{}
 
 	mu       sync.Mutex
 	canceled bool
@@ -1706,6 +1774,10 @@ func (fc *fakeConn) StreamHealth(ctx context.Context, callback func(shr *querypb
 			fc.mu.Lock()
 			fc.canceled = true
 			fc.mu.Unlock()
+			if fc.releaseOnCancel != nil {
+				<-fc.releaseOnCancel
+				return ctx.Err()
+			}
 			return nil
 		}
 	}

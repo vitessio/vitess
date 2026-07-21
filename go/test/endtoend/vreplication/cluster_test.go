@@ -254,7 +254,7 @@ func downloadDBTypeVersion(dbType string, majorVersion string, path string) erro
 		url = "https://dev.mysql.com/get/Downloads/MySQL-8.0/" + versionFile
 	} else if dbType == "mariadb" && majorVersion == "10.10" {
 		versionFile = "mariadb-10.10.3-linux-systemd-x86_64.tar.gz"
-		url = "https://github.com/vitessio/vitess-resources/releases/download/v4.0/" + versionFile
+		url = "https://github.com/vitessio/vitess-resources/releases/download/v5.0/" + versionFile
 	} else {
 		return fmt.Errorf("invalid/unsupported major version: %s for database: %s", majorVersion, dbType)
 	}
@@ -382,7 +382,7 @@ func NewVitessCluster(t *testing.T, opts *clusterOptions) *VitessCluster {
 	topo := cluster.TopoProcessInstance(vc.ClusterConfig.topoPort, vc.ClusterConfig.topoPort+1, vc.ClusterConfig.hostname, "etcd2", "global")
 
 	require.NotNil(t, topo)
-	require.Nil(t, topo.Setup("etcd2", nil))
+	require.NoError(t, topo.Setup("etcd2", nil))
 	err := topo.ManageTopoDir("mkdir", "/vitess/global")
 	require.NoError(t, err)
 	vc.Topo = topo

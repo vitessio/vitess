@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/stats"
 )
@@ -55,16 +56,20 @@ func TestResilientQueryGetCurrentValueInitialization(t *testing.T) {
 	// Hammer the resilient query with multiple get requests just as it is created.
 	// We expect all of them to work.
 	wg := sync.WaitGroup{}
+	errs := make([]error, 10)
+	ress := make([]any, 10)
 	for i := range 10 {
 		// To test with both stale and not-stale, we use the modulo of our index.
 		stale := i%2 == 0
 		wg.Go(func() {
-			res, err := rq.getCurrentValue(ctx, cell, stale)
-			// Assert that we don't have any error and the value matches what we want.
-			assert.NoError(t, err)
-			assert.EqualValues(t, cell, res)
+			ress[i], errs[i] = rq.getCurrentValue(ctx, cell, stale)
 		})
 	}
 	// Wait for the wait group to be empty, otherwise the test is marked a success before any of the go routines finish completion!
 	wg.Wait()
+	// Assert that we don't have any error and the value matches what we want.
+	for i := range 10 {
+		require.NoError(t, errs[i])
+		assert.EqualValues(t, cell, ress[i])
+	}
 }

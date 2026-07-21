@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type mockWriteCloser struct{}
@@ -41,14 +42,14 @@ func (*mockWrite) Write([]byte) (int, error) {
 func TestMeteredWriter(t *testing.T) {
 	mwc := NewMeteredWriteCloser(&mockWriteCloser{}, testfn)
 	n, err := mwc.Write([]byte(""))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, 2, n)
 	assert.Equal(t, 2, calledBytes)
 	assert.Equal(t, calledDuration, mwc.Duration())
 
 	mw := NewMeteredWriter(&mockWrite{}, testfn)
 	n, err = mw.Write([]byte(""))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, 3, n)
 	assert.Equal(t, 3, calledBytes)
 	assert.Equal(t, calledDuration, mw.Duration())

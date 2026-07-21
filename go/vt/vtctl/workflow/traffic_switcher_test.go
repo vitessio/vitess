@@ -192,7 +192,7 @@ func TestAddTenantFilter(t *testing.T) {
 	ts.options.TenantId = "123"
 
 	filter, err := ts.addTenantFilter(ctx, fmt.Sprintf("select * from %s where id < 5", tableName))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "select * from t1 where tenant_id = 123 and id < 5", filter)
 }
 
@@ -265,14 +265,14 @@ func TestChangeShardRouting(t *testing.T) {
 	require.NoError(t, err)
 
 	err = ts.changeShardRouting(ctx)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	sourceShardInfo, err := env.ws.ts.GetShard(ctx, sourceKeyspaceName, "0")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.False(t, sourceShardInfo.IsPrimaryServing, "source shard shouldn't have it's primary serving after changeShardRouting() is called.")
 
 	targetShardInfo, err := env.ws.ts.GetShard(ctx, targetKeyspaceName, "0")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, targetShardInfo.IsPrimaryServing, "target shard should have it's primary serving after changeShardRouting() is called.")
 }
 
@@ -313,19 +313,19 @@ func TestAddParticipatingTablesToKeyspace(t *testing.T) {
 	require.NoError(t, err)
 
 	err = ts.addParticipatingTablesToKeyspace(ctx, sourceKeyspaceName, "")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	vs, err := env.ts.GetVSchema(ctx, sourceKeyspaceName)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, vs.Tables["t1"])
 	assert.Empty(t, vs.Tables["t1"])
 
 	specs := `{"t1":{"column_vindexes":[{"column":"col1","name":"v1"}, {"column":"col2","name":"v2"}]},"t2":{"column_vindexes":[{"column":"col2","name":"v2"}]}}`
 	err = ts.addParticipatingTablesToKeyspace(ctx, sourceKeyspaceName, specs)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	vs, err = env.ts.GetVSchema(ctx, sourceKeyspaceName)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	require.NotNil(t, vs.Tables["t1"])
 	require.NotNil(t, vs.Tables["t2"])
 	assert.Len(t, vs.Tables["t1"].ColumnVindexes, 2)

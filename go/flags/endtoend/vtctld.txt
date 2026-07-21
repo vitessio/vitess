@@ -34,6 +34,8 @@ Flags:
       --backup-storage-implementation string                             Which backup storage implementation to use for creating and restoring backups.
       --backup-storage-number-blocks int                                 if backup-storage-compress is true, backup-storage-number-blocks sets the number of blocks that can be processed, in parallel, before the writer blocks, during compression (default is 2). It should be equal to the number of CPUs available for compression. (default 2)
       --bind-address string                                              Bind address for the server. If empty, the server will listen on all available unicast and anycast IP addresses of the local system.
+      --builtinbackup-file-chunk-size uint                               Size of each chunk (in bytes) when splitting large files for parallel backup/restore. (default 1073741824)
+      --builtinbackup-file-chunk-threshold uint                          Files larger than this size (in bytes) are split into chunks for parallel backup/restore. 0 disables chunking.
       --builtinbackup-file-read-buffer-size uint                         read files using an IO buffer of this many bytes. Golang defaults are used when set to 0.
       --builtinbackup-file-write-buffer-size uint                        write files using an IO buffer of this many bytes. Golang defaults are used when set to 0. (default 2097152)
       --builtinbackup-incremental-restore-path string                    the directory where incremental restore files, namely binlog files, are extracted to. In k8s environments, this should be set to a directory that is shared between the vttablet and mysqld pods. The path should exist. When empty, the default OS temp dir is assumed.

@@ -469,7 +469,7 @@ func TestTableFilter(t *testing.T) {
 				assert.Error(t, err)
 				return
 			}
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			assert.Equal(t, len(tc.tables), len(f.tableNames)+len(f.tableREs))
 			assert.Equal(t, len(tc.excludeTables), len(f.excludeTableNames)+len(f.excludeTableREs))
@@ -640,7 +640,7 @@ func TestFilterTables(t *testing.T) {
 				require.Error(t, err)
 				require.Equal(t, tc.wantError, err)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Truef(t, proto.Equal(tc.want, got), "wanted: %v, got: %v", tc.want, got)
 			}
 		})

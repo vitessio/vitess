@@ -341,7 +341,7 @@ func TestPerformVDiffAction(t *testing.T) {
 				require.NoError(t, err, "post function failed: %v", err)
 			}
 			// No VDiffs should be running anymore.
-			require.Equal(t, 0, len(vdiffenv.vde.controllers), "expected no controllers to be running, but found %d",
+			require.Empty(t, vdiffenv.vde.controllers, "expected no controllers to be running, but found %d",
 				len(vdiffenv.vde.controllers))
 			require.Equal(t, int64(0), globalStats.numControllers(), "expected no controllers, but found %d")
 		})

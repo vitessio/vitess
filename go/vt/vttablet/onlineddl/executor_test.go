@@ -234,11 +234,11 @@ func TestSafeMigrationCutOverThreshold(t *testing.T) {
 		t.Run(tcase.threshold.String(), func(t *testing.T) {
 			threshold, err := safeMigrationCutOverThreshold(tcase.threshold)
 			if tcase.isErr {
-				assert.Error(t, err)
-				require.Equal(t, tcase.expect, defaultCutOverThreshold)
+				require.Error(t, err)
+				require.Equal(t, defaultCutOverThreshold, tcase.expect)
 				// And keep testing, because we then also expect the threshold to be the default
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 			assert.Equal(t, tcase.expect, threshold)
 		})

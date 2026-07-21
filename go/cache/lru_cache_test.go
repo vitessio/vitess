@@ -46,7 +46,7 @@ func TestSetInsertsValue(t *testing.T) {
 
 	v, ok := cache.Get(key)
 	assert.True(t, ok)
-	assert.EqualValues(t, v, data)
+	assert.Equal(t, v, data)
 
 	values := cache.Items()
 	require.Len(t, values, 1)
@@ -115,7 +115,7 @@ func TestCapacityIsObeyed(t *testing.T) {
 	cache.Set("key2", value)
 	cache.Set("key3", value)
 	sz := cache.UsedCapacity()
-	assert.EqualValues(t, size, sz)
+	assert.Equal(t, size, sz)
 	// Insert one more; something should be evicted to make room.
 	cache.Set("key4", value)
 	sz, evictions := cache.UsedCapacity(), cache.Evictions()
@@ -127,10 +127,10 @@ func TestCapacityIsObeyed(t *testing.T) {
 	assert.EqualValues(t, size, l)
 
 	s := cache.UsedCapacity()
-	assert.EqualValues(t, size, s)
+	assert.Equal(t, size, s)
 
 	c := cache.MaxCapacity()
-	assert.EqualValues(t, size, c)
+	assert.Equal(t, size, c)
 
 	hits := cache.Hits()
 	assert.Zero(t, hits)

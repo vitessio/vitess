@@ -201,7 +201,7 @@ func expectLog(ctx context.Context, t *testing.T, input any, ch <-chan []*binlog
 			case <-ctx.Done():
 				require.Fail(t, "expectLog: Done(), stream ended early")
 			case <-timer.C:
-				require.Fail(t, "expectLog: timed out waiting for events: %v", wantset)
+				require.Failf(t, "expectLog: timed out waiting for events", "%v", wantset)
 			}
 			if len(evs) != 0 {
 				break

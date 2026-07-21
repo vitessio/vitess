@@ -216,7 +216,7 @@ func checkWatcher(t *testing.T, refreshKnownTablets bool) {
 		t.PortMap["vt"] = 456
 		return nil
 	})
-	require.Nil(t, err, "UpdateTabletFields failed")
+	require.NoError(t, err, "UpdateTabletFields failed")
 
 	tw.loadTablets()
 	allTablets = fhc.GetAllTablets()
@@ -250,13 +250,13 @@ func checkWatcher(t *testing.T, refreshKnownTablets bool) {
 			tablet2 = t
 			return nil
 		})
-		require.Nil(t, err, "UpdateTabletFields failed")
+		require.NoError(t, err, "UpdateTabletFields failed")
 		_, err = ts.UpdateTabletFields(t.Context(), tablet.Alias, func(t *topodatapb.Tablet) error {
 			t.Hostname = "host3"
 			tablet = t
 			return nil
 		})
-		require.Nil(t, err, "UpdateTabletFields failed")
+		require.NoError(t, err, "UpdateTabletFields failed")
 		tw.loadTablets()
 		counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "GetTablet": 0, "ReplaceTablet": 2})
 		allTablets = fhc.GetAllTablets()
@@ -270,14 +270,14 @@ func checkWatcher(t *testing.T, refreshKnownTablets bool) {
 			tablet2 = t
 			return nil
 		})
-		require.Nil(t, err, "UpdateTabletFields failed")
+		require.NoError(t, err, "UpdateTabletFields failed")
 
 		_, err = ts.UpdateTabletFields(t.Context(), tablet.Alias, func(t *topodatapb.Tablet) error {
 			t.Hostname = origTablet.Hostname
 			tablet = t
 			return nil
 		})
-		require.Nil(t, err, "UpdateTabletFields failed")
+		require.NoError(t, err, "UpdateTabletFields failed")
 
 		tw.loadTablets()
 		counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "GetTablet": 0, "ReplaceTablet": 2})
@@ -287,7 +287,7 @@ func checkWatcher(t *testing.T, refreshKnownTablets bool) {
 	require.NoError(t, ts.DeleteTablet(t.Context(), tablet.Alias))
 
 	_, err = topo.FixShardReplication(t.Context(), ts, logger, "aa", "keyspace", "shard")
-	require.Nil(t, err, "FixShardReplication failed")
+	require.NoError(t, err, "FixShardReplication failed")
 	tw.loadTablets()
 	counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "GetTablet": 0, "RemoveTablet": 1})
 	checkChecksum(t, tw, 852159264)
@@ -306,13 +306,13 @@ func checkWatcher(t *testing.T, refreshKnownTablets bool) {
 	require.NoError(t, ts.DeleteTablet(t.Context(), tablet2.Alias))
 	require.NoError(t, ts.DeleteTablet(t.Context(), tablet3.Alias))
 	_, err = topo.FixShardReplication(t.Context(), ts, logger, "aa", "keyspace", "shard")
-	require.Nil(t, err, "FixShardReplication failed")
+	require.NoError(t, err, "FixShardReplication failed")
 	tw.loadTablets()
 	checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "GetTablet": 0, "RemoveTablet": 1})
 	checkChecksum(t, tw, 0)
 
 	allTablets = fhc.GetAllTablets()
-	assert.Len(t, allTablets, 0)
+	assert.Empty(t, allTablets)
 	key = TabletToMapKey(tablet)
 	assert.NotContains(t, allTablets, key)
 	key = TabletToMapKey(tablet2)
@@ -383,7 +383,7 @@ func TestFilterByShard(t *testing.T) {
 
 	for _, tc := range testcases {
 		fbs, err := NewFilterByShard(tc.filters)
-		require.Nil(t, err, "cannot create FilterByShard for filters %v", tc.filters)
+		require.NoError(t, err, "cannot create FilterByShard for filters %v", tc.filters)
 
 		tablet := &topodatapb.Tablet{
 			Keyspace: tc.keyspace,
@@ -805,16 +805,8 @@ func TestDeadlockBetweenTopologyWatcherAndHealthCheck(t *testing.T) {
 	hc.topoWatchers[0].loadTablets()
 	require.NoError(t, err)
 
-	// We want to run updateHealth with arguments that always
-	// make it trigger load Tablets.
-	th := &TabletHealth{
-		Tablet: tablet1,
-		Target: &querypb.Target{
-			Keyspace:   "keyspace",
-			Shard:      "shard",
-			TabletType: topodatapb.TabletType_REPLICA,
-		},
-	}
+	// We want to run updateHealth with a previous target that always
+	// makes it trigger load Tablets.
 	prevTarget := &querypb.Target{
 		Keyspace:   "keyspace",
 		Shard:      "shard",
@@ -834,6 +826,13 @@ func TestDeadlockBetweenTopologyWatcherAndHealthCheck(t *testing.T) {
 			return nil
 		})
 		require.NoError(t, err)
-		hc.updateHealth(th, prevTarget, false, false)
+		// Refetch the registered tabletHealthCheck each iteration: the topology
+		// watcher concurrently replaces it, and during the remove-to-add gap of
+		// ReplaceTablet there is none registered at all.
+		thc := hc.registeredHealthCheck(tablet1.Alias)
+		if thc == nil {
+			continue
+		}
+		hc.updateHealth(thc, prevTarget, false, false)
 	}
 }

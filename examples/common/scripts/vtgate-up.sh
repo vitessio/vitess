@@ -44,6 +44,7 @@ vtgate \
    --slow-query-threshold $slow_query_threshold \
    --pprof-http \
    --log-format text \
+   ${VTGATE_EXTRA_FLAGS:-} \
    >$VTDATAROOT/tmp/vtgate.out 2>&1 &
 
 # Block waiting for vtgate to be listening

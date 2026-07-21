@@ -300,6 +300,6 @@ func waitForVReplicationToCatchup(t *testing.T, vttablet *cluster.VttabletProces
 func execQuery(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	t.Helper()
 	qr, err := conn.ExecuteFetch(query, 10000, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	return qr
 }

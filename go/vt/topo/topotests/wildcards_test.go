@@ -57,12 +57,12 @@ func validateKeyspaceWildcard(t *testing.T, l *topoLayout, param string, expecte
 	r, err := ts.ResolveKeyspaceWildcard(ctx, param)
 	if err != nil {
 		if expected != nil {
-			assert.NoError(t, err)
+			require.NoError(t, err)
 		}
 		return
 	}
 
-	if !assert.Equalf(t, len(expected), len(r), "got wrong result: %v", r) {
+	if !assert.Lenf(t, r, len(expected), "got wrong result: %v", r) {
 		return
 	}
 	for i, e := range expected {
@@ -92,12 +92,12 @@ func validateShardWildcard(t *testing.T, l *topoLayout, param string, expected [
 	r, err := ts.ResolveShardWildcard(ctx, param)
 	if err != nil {
 		if expected != nil {
-			assert.NoError(t, err)
+			require.NoError(t, err)
 		}
 		return
 	}
 
-	if !assert.Equalf(t, len(expected), len(r), "got wrong result: %v", r) {
+	if !assert.Lenf(t, r, len(expected), "got wrong result: %v", r) {
 		return
 	}
 	for i, e := range expected {
@@ -187,12 +187,12 @@ func validateWildcards(t *testing.T, l *topoLayout, param string, expected []str
 	r, err := ts.ResolveWildcards(ctx, topo.GlobalCell, []string{param})
 	if err != nil {
 		if expected != nil {
-			assert.NoError(t, err)
+			require.NoError(t, err)
 		}
 		return
 	}
 
-	if !assert.Equalf(t, len(expected), len(r), "got wrong result: %v\nexpected: %v", r, expected) {
+	if !assert.Lenf(t, r, len(expected), "got wrong result: %v\nexpected: %v", r, expected) {
 		return
 	}
 	for i, e := range expected {

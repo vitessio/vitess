@@ -27,7 +27,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hashicorp/consul/api"
+	"github.com/hashicorp/consul/api/v2"
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/log"

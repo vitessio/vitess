@@ -356,7 +356,7 @@ func TestVStreamCopyUnspecifiedShardGtid(t *testing.T) {
 					cancel()
 				default:
 					log.Error(fmt.Sprintf("Returned err %v", err))
-					require.FailNow(t, "remote error: %v\n", err)
+					require.FailNowf(t, "remote error", "%v\n", err)
 				}
 			}
 		})

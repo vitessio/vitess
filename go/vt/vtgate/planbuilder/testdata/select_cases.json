@@ -109,7 +109,7 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select * from `user` where 1 != 1",
+        "FieldQuery": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from `user` where 1 != 1",
         "Query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from `user`",
         "QueryTimeout": 1000
       },
@@ -137,7 +137,7 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select count(*) from `user` where 1 != 1",
+            "FieldQuery": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ count(*) from `user` where 1 != 1",
             "Query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ count(*) from `user`",
             "QueryTimeout": 1000
           }
@@ -166,7 +166,7 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select * from `user` where 1 != 1",
+            "FieldQuery": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from `user` where 1 != 1",
             "Query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from `user` limit 10",
             "QueryTimeout": 1000
           }
@@ -191,7 +191,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select * from unsharded where 1 != 1",
+        "FieldQuery": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from unsharded where 1 != 1",
         "Query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from unsharded limit 10",
         "QueryTimeout": 1000
       },
@@ -215,7 +215,7 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select * from `user` where 1 != 1",
+        "FieldQuery": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS */ * from `user` where 1 != 1",
         "Query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS */ * from `user`",
         "ScatterErrorsAsWarnings": true
       },
@@ -243,7 +243,7 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select count(*) from `user` where 1 != 1",
+            "FieldQuery": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from `user` where 1 != 1",
             "Query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from `user`",
             "ScatterErrorsAsWarnings": true
           }
@@ -273,7 +273,7 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select count(*) from `user` where 1 != 1",
+            "FieldQuery": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from `user` where 1 != 1",
             "Query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from `user`",
             "ScatterErrorsAsWarnings": true
           }
@@ -302,7 +302,7 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select * from `user` where 1 != 1",
+            "FieldQuery": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from `user` where 1 != 1",
             "Query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from `user` limit 10",
             "ScatterErrorsAsWarnings": true
           }
@@ -913,7 +913,7 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select `user`.col from `user` where 1 != 1",
+            "FieldQuery": "select /* comment */ `user`.col from `user` where 1 != 1",
             "Query": "select /* comment */ `user`.col from `user`"
           },
           {
@@ -923,7 +923,7 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select 1 from user_extra where 1 != 1",
+            "FieldQuery": "select /* comment */ 1 from user_extra where 1 != 1",
             "Query": "select /* comment */ 1 from user_extra"
           }
         ]
@@ -949,7 +949,7 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select `user`.col from `user` where 1 != 1",
+        "FieldQuery": "select /* comment */ `user`.col from `user` where 1 != 1",
         "Query": "select /* comment */ `user`.col from `user` where id in (select id from `user` where id > 1 and id < 10)"
       },
       "TablesUsed": [
@@ -981,7 +981,7 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select id from `user` where 1 != 1",
+            "FieldQuery": "select /* comment */ id from `user` where 1 != 1",
             "Query": "select /* comment */ id from `user` where id > 1 and id < 10"
           },
           {
@@ -992,7 +992,7 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select `user`.col from `user` where 1 != 1",
+            "FieldQuery": "select /* comment */ `user`.col from `user` where 1 != 1",
             "Query": "select /* comment */ `user`.col from `user` where :__sq_has_values and foo in ::__sq1"
           }
         ]
@@ -2015,7 +2015,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select * from unsharded as route2 where 1 != 1",
+        "FieldQuery": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from unsharded as route2 where 1 != 1",
         "Query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from unsharded as route2",
         "QueryTimeout": 1000
       },

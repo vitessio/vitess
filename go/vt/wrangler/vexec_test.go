@@ -61,16 +61,16 @@ func TestVExec(t *testing.T) {
 
 	vx := newVExec(ctx, workflow, keyspace, query, wr)
 	err := vx.getPrimaries(nil)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	primaries := vx.primaries
 	require.NotNil(t, primaries)
-	require.Equal(t, len(primaries), 2)
+	require.Len(t, primaries, 2)
 	var shards []string
 	for _, primary := range primaries {
 		shards = append(shards, primary.Shard)
 	}
 	sort.Strings(shards)
-	require.Equal(t, fmt.Sprintf("%v", shards), "[-80 80-]")
+	require.Equal(t, "[-80 80-]", fmt.Sprintf("%v", shards))
 
 	plan, err := vx.parseAndPlan(ctx)
 	require.NoError(t, err)
@@ -241,7 +241,7 @@ func TestWorkflowListStreams(t *testing.T) {
 	}
 
 	results, err := wr.execWorkflowAction(ctx, workflow, keyspace, "stop", false, nil, nil)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// convert map to list and sort it for comparison
 	var gotResults []string
@@ -255,7 +255,7 @@ func TestWorkflowListStreams(t *testing.T) {
 
 	logger.Clear()
 	results, err = wr.execWorkflowAction(ctx, workflow, keyspace, "stop", true, nil, nil)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	require.Equal(t, "map[]", fmt.Sprintf("%v", results))
 	dryRunResult := `Query: update _vt.vreplication set state = 'Stopped' where db_name = 'vt_target' and workflow = 'wrWorkflow'
 will be run on the following streams in keyspace target for workflow wrWorkflow:
@@ -290,11 +290,11 @@ func TestWorkflowListAll(t *testing.T) {
 	wr := New(vtenv.NewTestEnv(), logger, env.topoServ, env.tmc)
 
 	workflows, err := wr.ListAllWorkflows(ctx, keyspace, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	require.Equal(t, []string{workflow}, workflows)
 
 	workflows, err = wr.ListAllWorkflows(ctx, keyspace, false)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	require.Equal(t, []string{workflow, "wrWorkflow2"}, workflows)
 	logger.Clear()
 }
@@ -448,7 +448,7 @@ func TestWorkflowUpdate(t *testing.T) {
 			_, err := wr.WorkflowAction(ctx, workflow, keyspace, "update", true, rpcReq, nil)
 			if tcase.wantErr != "" {
 				require.Error(t, err)
-				require.Equal(t, err.Error(), tcase.wantErr)
+				require.Equal(t, tcase.wantErr, err.Error())
 			} else {
 				// Logger.String() adds additional newlines to each log line.
 				output := strings.ReplaceAll(logger.String(), "\n\n", "\n")

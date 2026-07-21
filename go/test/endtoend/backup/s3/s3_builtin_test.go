@@ -40,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/mysqlctl/blackbox"
 	"vitess.io/vitess/go/vt/mysqlctl/s3backupstorage"
+	"vitess.io/vitess/go/vt/servenv"
 )
 
 /*
@@ -103,7 +104,8 @@ func TestMain(m *testing.M) {
 		minioAddress := net.JoinHostPort("localhost", strconv.Itoa(apiPort))
 		minioConsoleAddress := net.JoinHostPort("localhost", strconv.Itoa(consolePort))
 
-		cmd := exec.Command(minioPath, "server", dataDir,
+		cmd := exec.Command(
+			minioPath, "server", dataDir,
 			"--address", minioAddress,
 			"--console-address", minioConsoleAddress,
 		)
@@ -208,7 +210,7 @@ func runBackupTest(t *testing.T, cfg backupTestConfig) {
 	// (e.g., bh.AbortBackup(ctx)). t.Context() is cancelled before t.Cleanup runs,
 	// which would cause the cleanup S3 calls to fail with "context canceled".
 	ctx := context.Background()
-	backupRoot, keyspace, shard, ts := blackbox.SetupCluster(ctx, t, 2, 2)
+	backupRoot, keyspace, shard, ts := blackbox.SetupCluster(ctx, t, 2, 2, 13)
 
 	be := &mysqlctl.BuiltinBackupEngine{}
 
@@ -292,6 +294,28 @@ func TestExecuteBackupS3FailEachFileOnce(t *testing.T) {
 	})
 }
 
+func TestExecuteBackupS3FatalError(t *testing.T) {
+	runBackupTest(t, backupTestConfig{
+		concurrency: 1,
+
+		addFileReturnFn:   s3backupstorage.FailWithFatalError,
+		checkCleanupError: false,
+		expectedResult:    mysqlctl.BackupUnusable,
+
+		// FAILED_PRECONDITION must abort immediately without retrying.
+		// With 4 files and concurrency=1, only the first file is attempted.
+		// AddFile fails before any Destination stats are recorded.
+		expectedStats: blackbox.StatSummary{
+			DestinationCloseStats: 0,
+			DestinationOpenStats:  0,
+			DestinationWriteStats: 0,
+			SourceCloseStats:      1,
+			SourceOpenStats:       1,
+			SourceReadStats:       0,
+		},
+	})
+}
+
 func TestExecuteBackupS3FailEachFileTwice(t *testing.T) {
 	runBackupTest(t, backupTestConfig{
 		concurrency: 1,
@@ -322,9 +346,10 @@ func TestExecuteBackupS3FailEachFileTwice(t *testing.T) {
 }
 
 type restoreTestConfig struct {
-	readFileReturnFn func(s3 *s3backupstorage.S3BackupHandle, ctx context.Context, filename string, firstRead bool) (io.ReadCloser, error)
-	expectSuccess    bool
-	expectedStats    blackbox.StatSummary
+	readFileReturnFn         func(s3 *s3backupstorage.S3BackupHandle, ctx context.Context, filename string, firstRead bool) (io.ReadCloser, error)
+	expectSuccess            bool
+	expectedStats            blackbox.StatSummary
+	expectedReadFileAttempts int // if > 0, assert total ReadFile attempts on the restore handle
 }
 
 func runRestoreTest(t *testing.T, cfg restoreTestConfig) {
@@ -340,7 +365,7 @@ func runRestoreTest(t *testing.T, cfg restoreTestConfig) {
 	// (e.g., bh.AbortBackup(ctx)). t.Context() is cancelled before t.Cleanup runs,
 	// which would cause the cleanup S3 calls to fail with "context canceled".
 	ctx := context.Background()
-	backupRoot, keyspace, shard, ts := blackbox.SetupCluster(ctx, t, 2, 2)
+	backupRoot, keyspace, shard, ts := blackbox.SetupCluster(ctx, t, 2, 2, 13)
 
 	fakeStats := backupstats.NewFakeStats()
 	logger := logutil.NewMemoryLogger()
@@ -424,10 +449,10 @@ func runRestoreTest(t *testing.T, cfg restoreTestConfig) {
 	bm, err := be.ExecuteRestore(ctx, restoreParams, restoreBh)
 
 	if cfg.expectSuccess {
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.NotNil(t, bm)
 	} else {
-		assert.Error(t, err)
+		require.Error(t, err)
 	}
 
 	ss := blackbox.GetStats(fakeStats)
@@ -437,6 +462,10 @@ func runRestoreTest(t *testing.T, cfg restoreTestConfig) {
 	require.Equal(t, cfg.expectedStats.SourceCloseStats, ss.SourceCloseStats)
 	require.Equal(t, cfg.expectedStats.SourceOpenStats, ss.SourceOpenStats)
 	require.Equal(t, cfg.expectedStats.SourceReadStats, ss.SourceReadStats)
+
+	if cfg.expectedReadFileAttempts > 0 {
+		require.Equal(t, cfg.expectedReadFileAttempts, restoreBh.ReadFileAttempts())
+	}
 }
 
 func TestExecuteRestoreS3FailEachFileOnce(t *testing.T) {
@@ -471,4 +500,164 @@ func TestExecuteRestoreS3FailEachFileTwice(t *testing.T) {
 			SourceReadStats:       5,
 		},
 	})
+}
+
+func TestExecuteRestoreS3FatalError(t *testing.T) {
+	runRestoreTest(t, restoreTestConfig{
+		readFileReturnFn: s3backupstorage.FailWithFatalReadError,
+		expectSuccess:    false,
+
+		// FAILED_PRECONDITION must abort immediately without retrying.
+		// ReadFile fails before any stats are recorded.
+		expectedStats: blackbox.StatSummary{
+			DestinationCloseStats: 0,
+			DestinationOpenStats:  0,
+			DestinationWriteStats: 0,
+			SourceCloseStats:      0,
+			SourceOpenStats:       0,
+			SourceReadStats:       0,
+		},
+
+		// MANIFEST is read once (allowed), plus one data file attempt = 2 total.
+		// With retry (broken behavior), ReadFileCount would be 3+.
+		expectedReadFileAttempts: 2,
+	})
+}
+
+func TestExecuteBackupRestoreS3WithChunking(t *testing.T) {
+	checkEnvForS3(t)
+
+	const (
+		dirs        = 1
+		filesPerDir = 1
+		fileSize    = 5 * 1024 * 1024 // 5MiB — just over the minimum chunk size to produce 2 chunks
+		chunkSize   = 4 * 1024 * 1024 // 4MiB
+	)
+
+	// GetFlagSetFor re-registers all flags (including S3 ones) with their
+	// defaults, so it must be called before InitFlag to avoid overwriting
+	// the bucket/region/endpoint values.
+	fs := servenv.GetFlagSetFor("vtbackup")
+	oldThreshold := fs.Lookup("builtinbackup-file-chunk-threshold").Value.String()
+	oldSize := fs.Lookup("builtinbackup-file-chunk-size").Value.String()
+	require.NoError(t, fs.Set("builtinbackup-file-chunk-threshold", strconv.Itoa(chunkSize)))
+	require.NoError(t, fs.Set("builtinbackup-file-chunk-size", strconv.Itoa(chunkSize)))
+	t.Cleanup(func() {
+		fs.Set("builtinbackup-file-chunk-threshold", oldThreshold)
+		fs.Set("builtinbackup-file-chunk-size", oldSize)
+	})
+
+	s3backupstorage.InitFlag(s3backupstorage.FakeConfig{
+		Region:    os.Getenv("AWS_REGION"),
+		Endpoint:  os.Getenv("AWS_ENDPOINT"),
+		Bucket:    os.Getenv("AWS_BUCKET"),
+		ForcePath: true,
+	})
+
+	ctx := context.Background()
+	backupRoot, keyspace, shard, ts := blackbox.SetupCluster(ctx, t, dirs, filesPerDir, fileSize)
+
+	be := &mysqlctl.BuiltinBackupEngine{}
+
+	oldDeadline := blackbox.SetBuiltinBackupMysqldDeadline(time.Second)
+	defer blackbox.SetBuiltinBackupMysqldDeadline(oldDeadline)
+
+	fakeStats := backupstats.NewFakeStats()
+	logger := logutil.NewMemoryLogger()
+
+	dirName := time.Now().Format(mysqlctl.BackupTimestampFormat)
+	name := t.Name() + "-" + strconv.Itoa(int(time.Now().Unix()))
+	bh, err := s3backupstorage.NewFakeS3BackupHandle(ctx, name, dirName, logger, fakeStats)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, bh.AbortBackup(ctx))
+	})
+
+	fakedb := fakesqldb.New(t)
+	defer fakedb.Close()
+	mysqld := mysqlctl.NewFakeMysqlDaemon(fakedb)
+	defer mysqld.Close()
+	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "START REPLICA"}
+
+	backupResult, err := be.ExecuteBackup(ctx, mysqlctl.BackupParams{
+		Logger: logger,
+		Mysqld: mysqld,
+		Cnf: &mysqlctl.Mycnf{
+			InnodbDataHomeDir:     path.Join(backupRoot, "innodb"),
+			InnodbLogGroupHomeDir: path.Join(backupRoot, "log"),
+			DataDir:               path.Join(backupRoot, "datadir"),
+		},
+		Concurrency:          4,
+		HookExtraEnv:         map[string]string{},
+		TopoServer:           ts,
+		Keyspace:             keyspace,
+		Shard:                shard,
+		Stats:                fakeStats,
+		MysqlShutdownTimeout: blackbox.MysqlShutdownTimeout,
+	}, bh)
+
+	require.NoError(t, err)
+	require.Equal(t, mysqlctl.BackupUsable, backupResult)
+
+	ss := blackbox.GetStats(fakeStats)
+	totalFiles := dirs * filesPerDir
+	chunksPerFile := (fileSize + chunkSize - 1) / chunkSize
+	totalChunks := totalFiles * chunksPerFile
+	t.Logf("Backup stats: %d files, %d chunks total (%d chunks per file)", totalFiles, ss.DestinationCloseStats, chunksPerFile)
+	assert.Equal(t, totalChunks, ss.DestinationCloseStats)
+	assert.Equal(t, totalChunks, ss.DestinationOpenStats)
+	assert.Equal(t, totalChunks, ss.DestinationWriteStats)
+	assert.Equal(t, totalChunks, ss.SourceCloseStats)
+	assert.Equal(t, totalChunks, ss.SourceOpenStats)
+	assert.Equal(t, totalChunks, ss.SourceReadStats)
+
+	// Restore the chunked backup
+	restoreStats := backupstats.NewFakeStats()
+	restoreBh, err := s3backupstorage.NewFakeS3RestoreHandle(ctx, name, logger, restoreStats)
+	require.NoError(t, err)
+
+	fakedb = fakesqldb.New(t)
+	defer fakedb.Close()
+	mysqld = mysqlctl.NewFakeMysqlDaemon(fakedb)
+	defer mysqld.Close()
+	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "START REPLICA"}
+
+	restoreParams := mysqlctl.RestoreParams{
+		Cnf: &mysqlctl.Mycnf{
+			InnodbDataHomeDir:     path.Join(backupRoot, "innodb"),
+			InnodbLogGroupHomeDir: path.Join(backupRoot, "log"),
+			DataDir:               path.Join(backupRoot, "datadir"),
+			BinLogPath:            path.Join(backupRoot, "binlog"),
+			RelayLogPath:          path.Join(backupRoot, "relaylog"),
+			RelayLogIndexPath:     path.Join(backupRoot, "relaylogindex"),
+			RelayLogInfoPath:      path.Join(backupRoot, "relayloginfo"),
+		},
+		Logger:               logger,
+		Mysqld:               mysqld,
+		Concurrency:          4,
+		HookExtraEnv:         map[string]string{},
+		DeleteBeforeRestore:  false,
+		DbName:               "test",
+		Keyspace:             "test",
+		Shard:                "-",
+		StartTime:            time.Now(),
+		RestoreToPos:         replication.Position{},
+		RestoreToTimestamp:   time.Time{},
+		DryRun:               false,
+		Stats:                restoreStats,
+		MysqlShutdownTimeout: blackbox.MysqlShutdownTimeout,
+	}
+
+	bm, err := be.ExecuteRestore(ctx, restoreParams, restoreBh)
+	require.NoError(t, err)
+	assert.NotNil(t, bm)
+
+	restoreSS := blackbox.GetStats(restoreStats)
+	assert.Equal(t, totalChunks, restoreSS.DestinationOpenStats)
+	assert.Equal(t, totalChunks, restoreSS.DestinationCloseStats)
+	assert.Equal(t, totalChunks, restoreSS.DestinationWriteStats)
+	assert.Equal(t, totalFiles*fileSize, restoreSS.DestinationWriteBytes)
+	assert.Equal(t, totalChunks, restoreSS.SourceCloseStats)
+	assert.Equal(t, totalChunks, restoreSS.SourceOpenStats)
+	assert.Equal(t, totalChunks, restoreSS.SourceReadStats)
 }

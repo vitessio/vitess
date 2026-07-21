@@ -103,9 +103,9 @@ func failoverPlannedReparenting(t *testing.T, clusterInstance *cluster.LocalProc
 func assertFailover(t *testing.T, shard string, stats *buffer.VTGateBufferingStats) {
 	stopLabel := fmt.Sprintf("%s.%s", shard, "NewPrimarySeen")
 
-	assert.Greater(t, stats.BufferFailoverDurationSumMs[shard], 0)
-	assert.Greater(t, stats.BufferRequestsBuffered[shard], 0)
-	assert.Greater(t, stats.BufferStops[stopLabel], 0)
+	assert.Positive(t, stats.BufferFailoverDurationSumMs[shard])
+	assert.Positive(t, stats.BufferRequestsBuffered[shard])
+	assert.Positive(t, stats.BufferStops[stopLabel])
 
 	// Number of buffering stops must be equal to the number of seen failovers.
 	assert.Equal(t, stats.HealthcheckPrimaryPromoted[shard], stats.BufferStops[stopLabel])

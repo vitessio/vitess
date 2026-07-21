@@ -21,6 +21,7 @@ import (
 
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestRegisterFlags(t *testing.T) {
@@ -34,6 +35,6 @@ func TestRegisterFlags(t *testing.T) {
 	registerFlags(fs)
 
 	err := fs.Set("opentsdb-uri", "testURI")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "testURI", openTSDBURI)
 }

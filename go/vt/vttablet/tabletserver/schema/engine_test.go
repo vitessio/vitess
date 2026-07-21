@@ -1171,7 +1171,7 @@ func TestEngineMysqlTime(t *testing.T) {
 				require.ErrorContains(t, err, tt.wantErr)
 				return
 			}
-			require.EqualValues(t, tt.wantTime, gotTime)
+			require.Equal(t, tt.wantTime, gotTime)
 			require.NoError(t, db.LastError())
 		})
 	}
@@ -1770,7 +1770,7 @@ func TestGetTableForPosLegacy(t *testing.T) {
 				mysql.ShowPrimaryRow(table.String(), column),
 			},
 		})
-		db.AddQueryPattern(fmt.Sprintf(mysql.GetColumnNamesQueryPatternForTable, table.String()),
+		db.AddQueryPattern(fmt.Sprintf(fakesqldb.GetColumnNamesQueryPatternForTable, table.String()),
 			sqltypes.MakeTestResult(sqltypes.MakeTestFields("column_name", "varchar"), column))
 		db.AddQuery(fmt.Sprintf("SELECT `%s` FROM `fakesqldb`.`%v` WHERE 1 != 1", column, table.String()),
 			sqltypes.MakeTestResult(sqltypes.MakeTestFields(column, "varchar")))
@@ -1843,7 +1843,7 @@ func TestGetTableForPosLegacy(t *testing.T) {
 						mysql.ShowPrimaryRow(table.String(), "col2"),
 					},
 				})
-				db.AddQueryPattern(fmt.Sprintf(mysql.GetColumnNamesQueryPatternForTable, table.String()),
+				db.AddQueryPattern(fmt.Sprintf(fakesqldb.GetColumnNamesQueryPatternForTable, table.String()),
 					sqltypes.MakeTestResult(sqltypes.MakeTestFields("column_name", "varchar"), column, "col2"))
 				db.AddQuery(fmt.Sprintf("SELECT `%s`, `%s` FROM `fakesqldb`.`%v` WHERE 1 != 1",
 					column, "col2", table.String()), sqltypes.MakeTestResult(sqltypes.MakeTestFields(fmt.Sprintf("%s|%s", column, "col2"), "varchar|varchar")))
@@ -1967,7 +1967,7 @@ func TestGetTableForPos(t *testing.T) {
 				mysql.ShowPrimaryRow(table.String(), column),
 			},
 		})
-		db.AddQueryPattern(fmt.Sprintf(mysql.GetColumnNamesQueryPatternForTable, table.String()),
+		db.AddQueryPattern(fmt.Sprintf(fakesqldb.GetColumnNamesQueryPatternForTable, table.String()),
 			sqltypes.MakeTestResult(sqltypes.MakeTestFields("column_name", "varchar"), column))
 		db.AddQuery(fmt.Sprintf("SELECT `%s` FROM `fakesqldb`.`%v` WHERE 1 != 1", column, table.String()),
 			sqltypes.MakeTestResult(sqltypes.MakeTestFields(column, "varchar")))
@@ -2040,7 +2040,7 @@ func TestGetTableForPos(t *testing.T) {
 						mysql.ShowPrimaryRow(table.String(), "col2"),
 					},
 				})
-				db.AddQueryPattern(fmt.Sprintf(mysql.GetColumnNamesQueryPatternForTable, table.String()),
+				db.AddQueryPattern(fmt.Sprintf(fakesqldb.GetColumnNamesQueryPatternForTable, table.String()),
 					sqltypes.MakeTestResult(sqltypes.MakeTestFields("column_name", "varchar"), column, "col2"))
 				db.AddQuery(fmt.Sprintf("SELECT `%s`, `%s` FROM `fakesqldb`.`%v` WHERE 1 != 1",
 					column, "col2", table.String()), sqltypes.MakeTestResult(sqltypes.MakeTestFields(fmt.Sprintf("%s|%s", column, "col2"), "varchar|varchar")))
@@ -2132,4 +2132,121 @@ func TestEngineReloadIndependentOfMaxTableCount(t *testing.T) {
 	// All five user tables should be present despite MaxTableCount() == 1.
 	got := se.TableCount()
 	assert.GreaterOrEqual(t, got, 5, "reload must load all rows regardless of MaxTableCount")
+}
+
+// registerEnumSetTestTable registers the queries for loading a table with
+// ENUM and SET columns into the test schema engine.
+func registerEnumSetTestTable(t *testing.T, db *fakesqldb.DB) {
+	t.Helper()
+	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
+		Fields: mysql.BaseShowTablesFields,
+		Rows: [][]sqltypes.Value{
+			mysql.BaseShowTablesRow("t_enum_set", false, ""),
+		},
+	})
+	db.MockQueriesForTable("t_enum_set", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("id|plan|roles", "int64|enum|set")))
+}
+
+// enumSetColumnTypesFields is the result layout of enumSetColumnTypesQuery.
+var enumSetColumnTypesFields = sqltypes.MakeTestFields("column_name|column_type", "varchar|varchar")
+
+// TestMarshalMinimalSchemaEnumSetColumnTypes covers the ENUM/SET column type
+// definitions recorded for schema version tracking: the definitions are only
+// fetched when schema version tracking is enabled; a failed information_schema
+// lookup fails the table load (and thus the reload); a snapshot containing an
+// ENUM/SET column with no recorded type definition fails the save rather than
+// persisting a permanently lossy schema version; and recorded definitions are
+// persisted for exactly the ENUM/SET columns.
+func TestMarshalMinimalSchemaEnumSetColumnTypes(t *testing.T) {
+	typesQuery := fmt.Sprintf(enumSetColumnTypesQuery, "'fakesqldb'", "'t_enum_set'")
+
+	tests := []struct {
+		name             string
+		trackingDisabled bool
+		setup            func(db *fakesqldb.DB)
+		wantReloadErr    string
+		wantNoTypes      bool
+		wantMarshalErr   string
+		wantColumnTypes  map[string]string
+	}{
+		{
+			name:             "types not fetched when tracking is disabled",
+			trackingDisabled: true,
+			setup: func(db *fakesqldb.DB) {
+				// Tablets that do not track schema versions must not issue the
+				// type definitions query at all: rejecting it proves that.
+				db.AddRejectedQuery(typesQuery, errors.New("information_schema is unavailable"))
+			},
+			wantNoTypes: true,
+		},
+		{
+			name: "types lookup fails",
+			setup: func(db *fakesqldb.DB) {
+				db.AddRejectedQuery(typesQuery, errors.New("information_schema is unavailable"))
+			},
+			wantReloadErr: "failed to fetch ENUM/SET column types for table t_enum_set",
+		},
+		{
+			name: "type definitions missing",
+			setup: func(db *fakesqldb.DB) {
+				// MockQueriesForTable registers an empty result for the type
+				// definitions lookup by default, so no definitions get recorded
+				// for the ENUM and SET columns.
+			},
+			wantMarshalErr: "no type definition recorded for ENUM/SET column t_enum_set.plan",
+		},
+		{
+			name: "type definitions recorded",
+			setup: func(db *fakesqldb.DB) {
+				db.AddQuery(typesQuery, sqltypes.MakeTestResult(enumSetColumnTypesFields,
+					"plan|enum('free','standard')",
+					"roles|set('admin','user')",
+				))
+			},
+			wantColumnTypes: map[string]string{
+				"id":    "",
+				"plan":  "enum('free','standard')",
+				"roles": "set('admin','user')",
+			},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			se, db, cancel := getTestSchemaEngine(t, 0)
+			defer cancel()
+			se.env.Config().TrackSchemaVersions = !tc.trackingDisabled
+			registerEnumSetTestTable(t, db)
+			tc.setup(db)
+
+			err := se.Reload(t.Context())
+			if tc.wantReloadErr != "" {
+				require.ErrorContains(t, err, tc.wantReloadErr)
+				return
+			}
+			require.NoError(t, err)
+
+			if tc.wantNoTypes {
+				table := se.GetSchema()["t_enum_set"]
+				require.NotNil(t, table)
+				assert.Nil(t, table.EnumSetColumnTypes)
+				return
+			}
+
+			blob, err := se.MarshalMinimalSchema()
+			if tc.wantMarshalErr != "" {
+				require.ErrorContains(t, err, tc.wantMarshalErr)
+				return
+			}
+			require.NoError(t, err)
+			ms := &binlogdatapb.MinimalSchema{}
+			require.NoError(t, ms.UnmarshalVT(blob))
+			require.Len(t, ms.Tables, 1)
+			columnTypes := make(map[string]string)
+			for _, f := range ms.Tables[0].Fields {
+				columnTypes[f.Name] = f.ColumnType
+			}
+			assert.Equal(t, tc.wantColumnTypes, columnTypes)
+		})
+	}
 }

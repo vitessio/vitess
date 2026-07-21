@@ -62,7 +62,7 @@ func TestProcessDeque(t *testing.T) {
 
 	// move 0,1,2 entries to slru
 	store.Set(123, 123, 8, 0)
-	require.Equal(t, store.shards[index].deque.Len(), 3)
+	require.Equal(t, 3, store.shards[index].deque.Len())
 	var keys []keyint
 	for store.shards[index].deque.Len() != 0 {
 		e := store.shards[index].deque.PopBack()
@@ -74,9 +74,9 @@ func TestProcessDeque(t *testing.T) {
 func TestDoorKeeperDynamicSize(t *testing.T) {
 	store := NewStore[keyint, cachedint](200000, true)
 	shard := store.shards[0]
-	require.True(t, shard.doorkeeper.Capacity == 512)
+	require.Equal(t, 512, shard.doorkeeper.Capacity)
 	for i := range keyint(5000) {
 		shard.set(i, &Entry[keyint, cachedint]{})
 	}
-	require.True(t, shard.doorkeeper.Capacity > 100000)
+	require.Greater(t, shard.doorkeeper.Capacity, 100000)
 }

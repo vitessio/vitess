@@ -141,6 +141,11 @@ const (
 	SubsequentDiffStrategyReject
 )
 
+const (
+	ForeignKeyShadowConflictStrategyAllow int = iota
+	ForeignKeyShadowConflictStrategyReject
+)
+
 // DiffHints is an assortment of rules for diffing entities
 type DiffHints struct {
 	StrictIndexOrdering         bool
@@ -156,6 +161,8 @@ type DiffHints struct {
 	EnumReorderStrategy         int
 	ForeignKeyCheckStrategy     int
 	SubsequentDiffStrategy      int
+
+	ForeignKeyShadowConflictStrategy int
 }
 
 func EmptyDiffHints() *DiffHints {

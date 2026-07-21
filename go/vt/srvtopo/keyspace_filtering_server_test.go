@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -71,7 +72,7 @@ func TestFilteringServerReturnsUnderlyingServer(t *testing.T) {
 	ctx := t.Context()
 	_, _, f := newFiltering(ctx, nil)
 	got, gotErr := f.GetTopoServer()
-	assert.NoError(t, gotErr, "Got error getting topo.Server from FilteringServer")
+	require.NoError(t, gotErr, "Got error getting topo.Server from FilteringServer")
 
 	readOnly, err := got.IsReadOnly()
 	assert.Truef(t, err == nil && readOnly, "Got read-write topo.Server from FilteringServer -- must be read-only")

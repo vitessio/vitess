@@ -38,7 +38,7 @@ func TestColumnNames(t *testing.T) {
 
 	qr := utils.Exec(t, conn, "SELECT t1.id as t1id, t2.id as t2id, t2.phone as t2phn FROM ks.t1 cross join uks.t2 where t1.id = t2.id ORDER BY t2.phone")
 
-	assert.Equal(t, 3, len(qr.Fields))
+	assert.Len(t, qr.Fields, 3)
 	assert.Equal(t, "t1id", qr.Fields[0].Name)
 	assert.Equal(t, "t2id", qr.Fields[1].Name)
 	assert.Equal(t, "t2phn", qr.Fields[2].Name)

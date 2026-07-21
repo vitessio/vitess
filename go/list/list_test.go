@@ -17,6 +17,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestInitEmptyList(t *testing.T) {
@@ -132,4 +133,40 @@ func TestPushFrontValue(t *testing.T) {
 	l.PushFrontValue(a)
 	assert.Equal(t, a, l.Front())
 	assert.Equal(t, a, e.prev)
+}
+
+func TestRemoveIfPresent(t *testing.T) {
+	l := New[int]()
+	a := l.PushBack(1)
+	b := l.PushBack(2)
+
+	require.True(t, l.RemoveIfPresent(a))
+	require.Equal(t, 1, l.Len())
+	require.Equal(t, b, l.Front())
+
+	// already removed: no-op, no panic
+	require.False(t, l.RemoveIfPresent(a))
+	require.Equal(t, 1, l.Len())
+
+	// element of a different list: no-op
+	m := New[int]()
+	c := m.PushBack(3)
+	require.False(t, l.RemoveIfPresent(c))
+	require.Equal(t, 1, m.Len())
+	require.Equal(t, c, m.Front())
+
+	require.True(t, l.RemoveIfPresent(b))
+	require.Equal(t, 0, l.Len())
+	require.Nil(t, l.Front())
+}
+
+func TestRemoveIfPresentReinsert(t *testing.T) {
+	l := New[int]()
+	a := l.PushBack(1)
+
+	require.True(t, l.RemoveIfPresent(a))
+	l.PushBackValue(a)
+	require.Equal(t, 1, l.Len())
+	require.True(t, l.RemoveIfPresent(a))
+	require.Equal(t, 0, l.Len())
 }

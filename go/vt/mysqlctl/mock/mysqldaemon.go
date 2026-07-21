@@ -15,6 +15,7 @@ import (
 	time "time"
 
 	gomock "go.uber.org/mock/gomock"
+
 	mysql "vitess.io/vitess/go/mysql"
 	replication "vitess.io/vitess/go/mysql/replication"
 	sqltypes "vitess.io/vitess/go/sqltypes"
@@ -846,18 +847,23 @@ func (mr *MockMysqlDaemonMockRecorder) SetSemiSyncEnabled(ctx, source, replica a
 }
 
 // SetSuperReadOnly mocks base method.
-func (m *MockMysqlDaemon) SetSuperReadOnly(ctx context.Context, on bool) (mysqlctl.ResetSuperReadOnlyFunc, error) {
+func (m *MockMysqlDaemon) SetSuperReadOnly(ctx context.Context, on bool, opts ...mysqlctl.SetSuperReadOnlyOption) (mysqlctl.ResetSuperReadOnlyFunc, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetSuperReadOnly", ctx, on)
+	varargs := []any{ctx, on}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "SetSuperReadOnly", varargs...)
 	ret0, _ := ret[0].(mysqlctl.ResetSuperReadOnlyFunc)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // SetSuperReadOnly indicates an expected call of SetSuperReadOnly.
-func (mr *MockMysqlDaemonMockRecorder) SetSuperReadOnly(ctx, on any) *gomock.Call {
+func (mr *MockMysqlDaemonMockRecorder) SetSuperReadOnly(ctx, on any, opts ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetSuperReadOnly", reflect.TypeOf((*MockMysqlDaemon)(nil).SetSuperReadOnly), ctx, on)
+	varargs := append([]any{ctx, on}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetSuperReadOnly", reflect.TypeOf((*MockMysqlDaemon)(nil).SetSuperReadOnly), varargs...)
 }
 
 // Shutdown mocks base method.

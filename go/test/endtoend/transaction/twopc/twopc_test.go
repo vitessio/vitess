@@ -245,7 +245,7 @@ func TestDTRollback(t *testing.T) {
 
 	tableMap := make(map[string][]*querypb.Field)
 	logTable := retrieveTransitions(t, ch, tableMap, nil)
-	assert.Zero(t, len(logTable),
+	assert.Empty(t, logTable,
 		"no change in binlog expected: got: %s", prettyPrint(logTable))
 
 	// Update from multiple shard
@@ -255,7 +255,7 @@ func TestDTRollback(t *testing.T) {
 	utils.Exec(t, conn, "rollback")
 
 	logTable = retrieveTransitions(t, ch, tableMap, nil)
-	assert.Zero(t, len(logTable),
+	assert.Empty(t, logTable,
 		"no change in binlog expected: got: %s", prettyPrint(logTable))
 
 	// DELETE from multiple shard
@@ -265,7 +265,7 @@ func TestDTRollback(t *testing.T) {
 	utils.Exec(t, conn, "rollback")
 
 	logTable = retrieveTransitions(t, ch, tableMap, nil)
-	assert.Zero(t, len(logTable),
+	assert.Empty(t, logTable,
 		"no change in binlog expected: got: %s", prettyPrint(logTable))
 }
 
@@ -572,7 +572,7 @@ func TestDTPrepareFailOnRM(t *testing.T) {
 }
 
 func compareMaps(t *testing.T, expected, actual map[string][]string, flexibleExp map[string][2][]string) {
-	assert.Equal(t, len(expected), len(actual), "mismatch in number of keys: expected: %d, got: %d", len(expected), len(actual))
+	assert.Len(t, actual, len(expected), "mismatch in number of keys: expected: %d, got: %d", len(expected), len(actual))
 
 	for key, expectedValue := range expected {
 		actualValue, ok := actual[key]
@@ -1012,7 +1012,7 @@ func testWarningAndTransactionStatus(t *testing.T, conn *vtgateconn.VTGateSessio
 
 	// extract transaction ID
 	indx := strings.Index(w.Msg, " ")
-	require.Greater(t, indx, 0)
+	require.Positive(t, indx)
 	dtid := w.Msg[:indx]
 
 	qr, err = conn.Execute(context.Background(), fmt.Sprintf(`show transaction status for '%v'`, dtid), nil, false)
@@ -1506,7 +1506,7 @@ func TestReadTransactionStatus(t *testing.T) {
 	res, err := tmc.GetTransactionInfo(ctx, primaryTablet, unresTransaction.Dtid)
 	require.NoError(t, err)
 	assert.Equal(t, "PREPARED", res.State)
-	assert.Equal(t, "", res.Message)
+	assert.Empty(t, res.Message)
 	assert.Equal(t, []string{"insert into twopc_t1(id, col) values (9, 4)"}, res.Statements)
 
 	// Also try running the RPC from vtctld and verify we see the same values.
@@ -1858,7 +1858,7 @@ func TestVindexes(t *testing.T) {
 			// Below check ensures that the transaction is resolved by the resolver on receiving unresolved transaction signal from MM.
 			logTable := retrieveTransitionsWithTimeout(t, ch, tableMap, dtMap, 2*time.Second)
 			for key, val := range tt.logExpected {
-				assert.EqualValues(t, val, logTable[key], key)
+				assert.Equal(t, val, logTable[key], key)
 			}
 		})
 	}

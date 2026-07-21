@@ -97,7 +97,7 @@ func TestList(t *testing.T) {
 			got, err := io.ReadAll(r)
 			require.NoError(t, err)
 
-			require.EqualValues(t, tt.expectedOutput, string(got))
+			require.Equal(t, tt.expectedOutput, string(got))
 		})
 	}
 }

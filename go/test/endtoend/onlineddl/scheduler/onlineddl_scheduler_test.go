@@ -178,7 +178,8 @@ func waitForReadyToComplete(t *testing.T, uuid string, expected bool) {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	for {
-		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+		rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
+		require.NoError(t, err)
 		require.NotNil(t, rs)
 		for _, row := range rs.Named().Rows {
 			readyToComplete := row.AsInt64("ready_to_complete", 0)
@@ -211,7 +212,8 @@ func waitForMessage(t *testing.T, uuid string, messageSubstring string) {
 
 	var lastMessage string
 	for {
-		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+		rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
+		require.NoError(t, err)
 		require.NotNil(t, rs)
 		for _, row := range rs.Named().Rows {
 			lastMessage = row.AsString("message", "")
@@ -224,11 +226,11 @@ func waitForMessage(t *testing.T, uuid string, messageSubstring string) {
 		case <-ctx.Done():
 			{
 				resp, err := throttler.CheckThrottler(&clusterInstance.VtctldClientProcess, primaryTablet, throttlerapp.TestingName, nil)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				fmt.Println("Throttler check response: ", resp)
 
 				output, err := throttler.GetThrottlerStatusRaw(&clusterInstance.VtctldClientProcess, primaryTablet)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				fmt.Println("Throttler status response: ", output)
 			}
 			require.Failf(t, "timeout waiting for message", "expected: %s. Last seen: %s", messageSubstring, lastMessage)
@@ -317,7 +319,7 @@ func TestSchedulerSchemaChanges(t *testing.T) {
 
 func testScheduler(t *testing.T) {
 	shards = clusterInstance.Keyspaces[0].Shards
-	require.Equal(t, 1, len(shards))
+	require.Len(t, shards, 1)
 
 	ddlStrategy := "vitess"
 
@@ -409,7 +411,8 @@ func testScheduler(t *testing.T) {
 	)
 
 	testReadTimestamp := func(t *testing.T, uuid string, timestampColumn string) (timestamp string) {
-		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+		rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
+		require.NoError(t, err)
 		require.NotNil(t, rs)
 		for _, row := range rs.Named().Rows {
 			timestamp = row.AsString(timestampColumn, "")
@@ -443,7 +446,8 @@ func testScheduler(t *testing.T) {
 	}
 	testAllowConcurrent := func(t *testing.T, name string, uuid string, expect int64) {
 		t.Run("verify allow_concurrent: "+name, func(t *testing.T) {
-			rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				allowConcurrent := row.AsInt64("allow_concurrent", 0)
@@ -483,7 +487,8 @@ func testScheduler(t *testing.T) {
 	t.Run("Postpone launch CREATE", func(t *testing.T) {
 		t1uuid = testOnlineDDLStatement(t, createParams(createT1IfNotExistsStatement, ddlStrategy+" --postpone-launch --cut-over-threshold=14s", "vtgate", "", "", true)) // skip wait
 		time.Sleep(2 * time.Second)
-		rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+		rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+		require.NoError(t, err)
 		require.NotNil(t, rs)
 		for _, row := range rs.Named().Rows {
 			postponeLaunch := row.AsInt64("postpone_launch", 0)
@@ -493,7 +498,8 @@ func testScheduler(t *testing.T) {
 
 		t.Run("launch all shards", func(t *testing.T) {
 			onlineddl.CheckLaunchMigration(t, &vtParams, shards, t1uuid, "", true)
-			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				postponeLaunch := row.AsInt64("postpone_launch", 0)
@@ -511,7 +517,8 @@ func testScheduler(t *testing.T) {
 	t.Run("Postpone launch ALTER", func(t *testing.T) {
 		t1uuid = testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy+" --postpone-launch", "vtgate", "", "", true)) // skip wait
 		time.Sleep(2 * time.Second)
-		rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+		rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+		require.NoError(t, err)
 		require.NotNil(t, rs)
 		for _, row := range rs.Named().Rows {
 			postponeLaunch := row.AsInt64("postpone_launch", 0)
@@ -523,7 +530,8 @@ func testScheduler(t *testing.T) {
 			someOtherUUID := "00000000_1111_2222_3333_444444444444"
 			onlineddl.CheckLaunchMigration(t, &vtParams, shards, someOtherUUID, "", false)
 			time.Sleep(2 * time.Second)
-			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				postponeLaunch := row.AsInt64("postpone_launch", 0)
@@ -534,7 +542,8 @@ func testScheduler(t *testing.T) {
 		t.Run("launch irrelevant shards", func(t *testing.T) {
 			onlineddl.CheckLaunchMigration(t, &vtParams, shards, t1uuid, "x,y,z", false)
 			time.Sleep(2 * time.Second)
-			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				postponeLaunch := row.AsInt64("postpone_launch", 0)
@@ -544,7 +553,8 @@ func testScheduler(t *testing.T) {
 		})
 		t.Run("launch relevant shard", func(t *testing.T) {
 			onlineddl.CheckLaunchMigration(t, &vtParams, shards, t1uuid, "x, y, 1", true)
-			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				postponeLaunch := row.AsInt64("postpone_launch", 0)
@@ -566,7 +576,8 @@ func testScheduler(t *testing.T) {
 
 		t.Run("wait for ready_to_complete", func(t *testing.T) {
 			waitForReadyToComplete(t, t1uuid, true)
-			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				assert.True(t, row["shadow_analyzed_timestamp"].IsNull())
@@ -576,7 +587,8 @@ func testScheduler(t *testing.T) {
 		})
 
 		t.Run("check postpone_completion", func(t *testing.T) {
-			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				postponeCompletion := row.AsInt64("postpone_completion", 0)
@@ -593,7 +605,8 @@ func testScheduler(t *testing.T) {
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
 		})
 		t.Run("check no postpone_completion", func(t *testing.T) {
-			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				postponeCompletion := row.AsInt64("postpone_completion", 0)
@@ -618,7 +631,8 @@ func testScheduler(t *testing.T) {
 
 		t.Run("wait for ready_to_complete", func(t *testing.T) {
 			waitForReadyToComplete(t, t1uuid, true)
-			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				assert.True(t, row["shadow_analyzed_timestamp"].IsNull())
@@ -628,7 +642,8 @@ func testScheduler(t *testing.T) {
 		})
 
 		t.Run("check postpone_completion", func(t *testing.T) {
-			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				postponeCompletion := row.AsInt64("postpone_completion", 0)
@@ -642,7 +657,8 @@ func testScheduler(t *testing.T) {
 			// Migration should still be in running state
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
 			// postpone_completion should still be set
-			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				postponeCompletion := row.AsInt64("postpone_completion", 0)
@@ -656,7 +672,8 @@ func testScheduler(t *testing.T) {
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
 		})
 		t.Run("check no postpone_completion", func(t *testing.T) {
-			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				postponeCompletion := row.AsInt64("postpone_completion", 0)
@@ -678,7 +695,8 @@ func testScheduler(t *testing.T) {
 		})
 
 		t.Run("check postpone_completion", func(t *testing.T) {
-			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				postponeCompletion := row.AsInt64("postpone_completion", 0)
@@ -689,7 +707,8 @@ func testScheduler(t *testing.T) {
 			onlineddl.CheckPostponeCompleteMigration(t, &vtParams, shards, t1uuid, true)
 		})
 		t.Run("check postpone_completion set", func(t *testing.T) {
-			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				postponeCompletion := row.AsInt64("postpone_completion", 0)
@@ -709,7 +728,8 @@ func testScheduler(t *testing.T) {
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
 		})
 		t.Run("check no postpone_completion", func(t *testing.T) {
-			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				postponeCompletion := row.AsInt64("postpone_completion", 0)
@@ -742,7 +762,8 @@ func testScheduler(t *testing.T) {
 			defer cancel()
 
 			t.Run("populate t1_test", func(t *testing.T) {
-				onlineddl.VtgateExecQuery(t, &vtParams, populateT1Statement, "")
+				_, err := onlineddl.VtgateExecQuery(t.Context(), &vtParams, populateT1Statement)
+				require.NoError(t, err)
 			})
 			t1uuid = testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy+" --postpone-completion", "vtgate", "", "", true)) // skip wait
 
@@ -778,7 +799,8 @@ func testScheduler(t *testing.T) {
 				}()
 			})
 			t.Run("check no force_cutover", func(t *testing.T) {
-				rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+				rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+				require.NoError(t, err)
 				require.NotNil(t, rs)
 				for _, row := range rs.Named().Rows {
 					forceCutOver := row.AsInt64("force_cutover", 0)
@@ -798,7 +820,8 @@ func testScheduler(t *testing.T) {
 				onlineddl.CheckForceMigrationCutOver(t, &vtParams, shards, t1uuid, true)
 			})
 			t.Run("check force_cutover", func(t *testing.T) {
-				rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+				rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+				require.NoError(t, err)
 				require.NotNil(t, rs)
 				for _, row := range rs.Named().Rows {
 					forceCutOver := row.AsInt64("force_cutover", 0)
@@ -820,7 +843,7 @@ func testScheduler(t *testing.T) {
 				// the transaction's connection.
 				select {
 				case err := <-transactionErrorChan:
-					assert.ErrorContains(t, err, "broken pipe")
+					require.ErrorContains(t, err, "broken pipe")
 				case <-ctx.Done():
 					assert.Fail(t, ctx.Err().Error())
 				}
@@ -872,7 +895,8 @@ func testScheduler(t *testing.T) {
 				}()
 			})
 			t.Run("check no force_cutover", func(t *testing.T) {
-				rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+				rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+				require.NoError(t, err)
 				require.NotNil(t, rs)
 				for _, row := range rs.Named().Rows {
 					forceCutOver := row.AsInt64("force_cutover", 0)
@@ -892,7 +916,8 @@ func testScheduler(t *testing.T) {
 				onlineddl.CheckForceMigrationCutOver(t, &vtParams, shards, t1uuid, true)
 			})
 			t.Run("check force_cutover", func(t *testing.T) {
-				rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+				rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+				require.NoError(t, err)
 				require.NotNil(t, rs)
 				for _, row := range rs.Named().Rows {
 					forceCutOver := row.AsInt64("force_cutover", 0)
@@ -917,7 +942,8 @@ func testScheduler(t *testing.T) {
 			defer cancel()
 
 			t.Run("populate t1_test", func(t *testing.T) {
-				onlineddl.VtgateExecQuery(t, &vtParams, populateT1Statement, "")
+				_, err := onlineddl.VtgateExecQuery(t.Context(), &vtParams, populateT1Statement)
+				require.NoError(t, err)
 			})
 
 			commitTransactionChan := make(chan any)
@@ -935,7 +961,8 @@ func testScheduler(t *testing.T) {
 				onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
 			})
 			t.Run("check special_plan", func(t *testing.T) {
-				rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+				rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+				require.NoError(t, err)
 				require.NotNil(t, rs)
 				for _, row := range rs.Named().Rows {
 					specialPlan := row.AsString("special_plan", "")
@@ -952,7 +979,7 @@ func testScheduler(t *testing.T) {
 				// the transaction's connection.
 				select {
 				case err := <-transactionErrorChan:
-					assert.ErrorContains(t, err, "broken pipe")
+					require.ErrorContains(t, err, "broken pipe")
 				case <-ctx.Done():
 					assert.Fail(t, ctx.Err().Error())
 				}
@@ -1185,14 +1212,16 @@ func testScheduler(t *testing.T) {
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t2uuid, schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady)
 
-			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				userThrotteRatio := row.AsFloat64("user_throttle_ratio", 0)
-				assert.EqualValues(t, 1.0, userThrotteRatio)
+				assert.Equal(t, 1.0, userThrotteRatio)
 			}
 			// t2uuid migration is not in 'running' state, hence 'user_throttle_ratio' is not updated
-			rs = onlineddl.ReadMigrations(t, &vtParams, t2uuid)
+			rs, err = onlineddl.ReadMigrations(t.Context(), &vtParams, t2uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				userThrotteRatio := row.AsFloat64("user_throttle_ratio", 0)
@@ -1214,13 +1243,15 @@ func testScheduler(t *testing.T) {
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t2uuid, schema.OnlineDDLStatusRunning)
 
-			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				userThrotteRatio := row.AsFloat64("user_throttle_ratio", 0)
 				assert.EqualValues(t, 0, userThrotteRatio)
 			}
-			rs = onlineddl.ReadMigrations(t, &vtParams, t2uuid)
+			rs, err = onlineddl.ReadMigrations(t.Context(), &vtParams, t2uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				userThrotteRatio := row.AsFloat64("user_throttle_ratio", 0)
@@ -1230,17 +1261,19 @@ func testScheduler(t *testing.T) {
 		t.Run("throttle t2", func(t *testing.T) {
 			throttler.ThrottleAppAndWaitUntilTabletsConfirm(t, clusterInstance, throttlerapp.Name(t2uuid))
 			time.Sleep(ensureStateNotChangedTime)
-			rs := onlineddl.ReadMigrations(t, &vtParams, t2uuid)
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t2uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				userThrotteRatio := row.AsFloat64("user_throttle_ratio", 0)
-				assert.EqualValues(t, 1.0, userThrotteRatio)
+				assert.Equal(t, 1.0, userThrotteRatio)
 			}
 		})
 		t.Run("unthrottle t2", func(t *testing.T) {
 			throttler.UnthrottleAppAndWaitUntilTabletsConfirm(t, clusterInstance, throttlerapp.Name(t2uuid))
 			time.Sleep(ensureStateNotChangedTime)
-			rs := onlineddl.ReadMigrations(t, &vtParams, t2uuid)
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t2uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				userThrotteRatio := row.AsFloat64("user_throttle_ratio", 0)
@@ -1505,11 +1538,12 @@ func testScheduler(t *testing.T) {
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 
-			rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				retries := row.AsInt64("retries", 0)
-				assert.Greater(t, retries, int64(0))
+				assert.Positive(t, retries)
 
 				cutOverThresholdSeconds := row.AsInt64("cutover_threshold_seconds", 0)
 				// No explicit cut-over threshold given. Expect the default 10s
@@ -1552,11 +1586,12 @@ func testScheduler(t *testing.T) {
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 
-			rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				retries := row.AsInt64("retries", 0)
-				assert.Greater(t, retries, int64(0))
+				assert.Positive(t, retries)
 
 				cutOverThresholdSeconds := row.AsInt64("cutover_threshold_seconds", 0)
 				// Teh default remains unchanged.
@@ -1566,7 +1601,8 @@ func testScheduler(t *testing.T) {
 	})
 
 	readCleanupsTimetamps := func(t *testing.T, migrationsLike string) (rows int64, cleanedUp int64, needCleanup int64, artifacts []string) {
-		rs := onlineddl.ReadMigrations(t, &vtParams, migrationsLike)
+		rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, migrationsLike)
+		require.NoError(t, err)
 		require.NotNil(t, rs)
 		for _, row := range rs.Named().Rows {
 			rows++
@@ -1593,14 +1629,15 @@ func testScheduler(t *testing.T) {
 		})
 		var artifacts []string
 		t.Run("validate artifact exists", func(t *testing.T) {
-			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			row := rs.Named().Row()
 			require.NotNil(t, row)
 
 			artifacts = textutil.SplitDelimitedList(row.AsString("artifacts", ""))
 			assert.NotEmpty(t, artifacts)
-			assert.Equal(t, 1, len(artifacts))
+			assert.Len(t, artifacts, 1)
 			checkTable(t, artifacts[0], true)
 
 			retainArtifactsSeconds := row.AsInt64("retain_artifacts_seconds", 0)
@@ -1686,7 +1723,8 @@ func testScheduler(t *testing.T) {
 		})
 		var artifacts []string
 		t.Run("validate artifact exists", func(t *testing.T) {
-			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			row := rs.Named().Row()
 			require.NotNil(t, row)
@@ -1789,7 +1827,8 @@ func testScheduler(t *testing.T) {
 		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
 
-		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+		rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
+		require.NoError(t, err)
 		require.NotNil(t, rs)
 		for _, row := range rs.Named().Rows {
 			message := row["message"].ToString()
@@ -1824,7 +1863,8 @@ func testScheduler(t *testing.T) {
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
 
-			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				artifacts := row.AsString("artifacts", "-")
@@ -1933,7 +1973,8 @@ func testScheduler(t *testing.T) {
 				fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusFailed)
 
-				rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+				rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
+				require.NoError(t, err)
 				require.NotNil(t, rs)
 				for _, row := range rs.Named().Rows {
 					message := row["message"].ToString()
@@ -1964,8 +2005,10 @@ func testScheduler(t *testing.T) {
 			}
 			assert.EventuallyWithT(t, func(c *assert.CollectT) {
 				for i, uuid := range vuuids {
-					rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
-					require.NotNil(t, rs)
+					rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
+					if !assert.NoError(c, err) {
+						return
+					}
 					for _, row := range rs.Named().Rows {
 						inOrderCompletionPendingCount := row.AsUint64("in_order_completion_pending_count", 0)
 						assert.EqualValues(c, i, inOrderCompletionPendingCount)
@@ -2184,27 +2227,31 @@ func testScheduler(t *testing.T) {
 		onlineddl.ThrottleContextMigrations(t, &vtParams, "ctx-throttle-by-context")
 		time.Sleep(ensureStateNotChangedTime)
 		// Verify both migrations are throttled.
-		rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+		rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+		require.NoError(t, err)
 		require.NotNil(t, rs)
 		for _, row := range rs.Named().Rows {
-			assert.EqualValues(t, 1.0, row.AsFloat64("user_throttle_ratio", 0))
+			assert.Equal(t, 1.0, row.AsFloat64("user_throttle_ratio", 0))
 		}
-		rs = onlineddl.ReadMigrations(t, &vtParams, t2uuid)
+		rs, err = onlineddl.ReadMigrations(t.Context(), &vtParams, t2uuid)
+		require.NoError(t, err)
 		require.NotNil(t, rs)
 		for _, row := range rs.Named().Rows {
-			assert.EqualValues(t, 1.0, row.AsFloat64("user_throttle_ratio", 0))
+			assert.Equal(t, 1.0, row.AsFloat64("user_throttle_ratio", 0))
 		}
 
 		// Unthrottle by context.
 		onlineddl.UnthrottleContextMigrations(t, &vtParams, "ctx-throttle-by-context")
 		time.Sleep(ensureStateNotChangedTime)
 		// Verify both migrations are unthrottled.
-		rs = onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+		rs, err = onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+		require.NoError(t, err)
 		require.NotNil(t, rs)
 		for _, row := range rs.Named().Rows {
 			assert.EqualValues(t, 0, row.AsFloat64("user_throttle_ratio", 0))
 		}
-		rs = onlineddl.ReadMigrations(t, &vtParams, t2uuid)
+		rs, err = onlineddl.ReadMigrations(t.Context(), &vtParams, t2uuid)
+		require.NoError(t, err)
 		require.NotNil(t, rs)
 		for _, row := range rs.Named().Rows {
 			assert.EqualValues(t, 0, row.AsFloat64("user_throttle_ratio", 0))
@@ -2219,7 +2266,7 @@ func testScheduler(t *testing.T) {
 
 func testSingleton(t *testing.T) {
 	shards = clusterInstance.Keyspaces[0].Shards
-	require.Equal(t, 1, len(shards))
+	require.Len(t, shards, 1)
 
 	createParams := func(ddlStatement string, ddlStrategy string, executeStrategy string, migrationContext string, expectHint string, expectError string, skipWait bool) *testOnlineDDLStatementParams {
 		return &testOnlineDDLStatementParams{
@@ -2389,7 +2436,7 @@ DROP TABLE IF EXISTS stress_test
 	t.Run("postponed migrations, singleton-context", func(t *testing.T) {
 		uuidList := testOnlineDDLStatement(t, createParams(multiAlterTableThrottlingStatement, "vitess --singleton-context --postpone-completion", "vtctl", "", "hint_col", "", false))
 		throttledUUIDs = strings.Split(uuidList, "\n")
-		assert.Equal(t, 3, len(throttledUUIDs))
+		assert.Len(t, throttledUUIDs, 3)
 		for _, uuid := range throttledUUIDs {
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady, schema.OnlineDDLStatusRunning)
 		}
@@ -2412,7 +2459,7 @@ DROP TABLE IF EXISTS stress_test
 	t.Run("successful multiple statement, singleton-context, vtctl", func(t *testing.T) {
 		uuidList := testOnlineDDLStatement(t, createParams(multiDropStatements, onlineSingletonContextDDLStrategy, "vtctl", "", "", "", false))
 		uuidSlice := strings.Split(uuidList, "\n")
-		assert.Equal(t, 3, len(uuidSlice))
+		assert.Len(t, uuidSlice, 3)
 		for _, uuid := range uuidSlice {
 			uuid = strings.TrimSpace(uuid)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
@@ -2591,8 +2638,10 @@ DROP TABLE IF EXISTS stress_test
 		// A2's in_order_completion_pending_count must be 1: A1 precedes it in ctx-a, but
 		// B1 (ctx-b) must not be counted even though B1 precedes A2 in the global queue.
 		assert.EventuallyWithT(t, func(c *assert.CollectT) {
-			rs := onlineddl.ReadMigrations(t, &vtParams, uuidA2)
-			require.NotNil(t, rs)
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuidA2)
+			if !assert.NoError(c, err) {
+				return
+			}
 			for _, row := range rs.Named().Rows {
 				assert.EqualValues(c, 1, row.AsUint64("in_order_completion_pending_count", 0))
 			}
@@ -2614,7 +2663,7 @@ DROP TABLE IF EXISTS stress_test
 
 func testDeclarative(t *testing.T) {
 	shards = clusterInstance.Keyspaces[0].Shards
-	require.Equal(t, 1, len(shards))
+	require.Len(t, shards, 1)
 
 	var (
 		tableName         = `stress_test`
@@ -2809,12 +2858,12 @@ func testDeclarative(t *testing.T) {
 
 		ctx := t.Context()
 		conn, err := mysql.Connect(ctx, &vtParams)
-		require.Nil(t, err)
+		require.NoError(t, err)
 		defer conn.Close()
 
 		writeMetrics.Clear()
 		_, err = conn.ExecuteFetch(truncateStatement, 1000, true)
-		require.Nil(t, err)
+		require.NoError(t, err)
 
 		for i := 0; i < maxTableRows/2; i++ {
 			generateInsert(t, conn)
@@ -2835,11 +2884,11 @@ func testDeclarative(t *testing.T) {
 
 		ctx := t.Context()
 		conn, err := mysql.Connect(ctx, &vtParams)
-		require.Nil(t, err)
+		require.NoError(t, err)
 		defer conn.Close()
 
 		rs, err := conn.ExecuteFetch(selectCountRowsStatement, 1000, true)
-		require.Nil(t, err)
+		require.NoError(t, err)
 
 		row := rs.Named().Row()
 		require.NotNil(t, row)
@@ -3256,7 +3305,8 @@ func testDeclarative(t *testing.T) {
 		// the table existed, so we expect no changes in this non-declarative DDL
 		checkTable(t, tableName, true)
 
-		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+		rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
+		require.NoError(t, err)
 		require.NotNil(t, rs)
 		for _, row := range rs.Named().Rows {
 			message := row["message"].ToString()
@@ -3270,7 +3320,8 @@ func testDeclarative(t *testing.T) {
 		// the table existed, so we expect no changes in this non-declarative DDL
 		checkTable(t, tableName, true)
 
-		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+		rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
+		require.NoError(t, err)
 		require.NotNil(t, rs)
 		for _, row := range rs.Named().Rows {
 			message := row["message"].ToString()
@@ -3483,7 +3534,8 @@ func testForeignKeys(t *testing.T) {
 			t.Run("populate tables", func(t *testing.T) {
 				for _, statement := range insertStatements {
 					t.Run(statement, func(t *testing.T) {
-						onlineddl.VtgateExecQuery(t, &vtParams, statement, "")
+						_, err := onlineddl.VtgateExecQuery(t.Context(), &vtParams, statement)
+						require.NoError(t, err)
 					})
 				}
 			})
@@ -3491,8 +3543,9 @@ func testForeignKeys(t *testing.T) {
 				// Due to how OnlineDDL works, the name of the foreign key constraint will not be the one we used in the CREATE TABLE statement.
 				// There's a specific test where we drop said constraint. So speficially for that test (or any similar future tests), we need to dynamically
 				// evaluate the constraint name.
-				rs := onlineddl.VtgateExecQuery(t, &vtParams, "select CONSTRAINT_NAME from information_schema.REFERENTIAL_CONSTRAINTS where TABLE_NAME='child_table'", "")
-				assert.Equal(t, 1, len(rs.Rows))
+				rs, err := onlineddl.VtgateExecQuery(t.Context(), &vtParams, "select CONSTRAINT_NAME from information_schema.REFERENTIAL_CONSTRAINTS where TABLE_NAME='child_table'")
+				require.NoError(t, err)
+				assert.Len(t, rs.Rows, 1)
 				row := rs.Named().Row()
 				assert.NotNil(t, row)
 				childTableConstraintName := row.AsString("CONSTRAINT_NAME", "")
@@ -3505,7 +3558,7 @@ func testForeignKeys(t *testing.T) {
 				if testcase.allowForeignKeys {
 					output := testStatement(t, testcase.sql, ddlStrategyAllowFK, testcase.expectHint, false)
 					uuids := strings.Split(output, "\n")
-					assert.Equal(t, testcase.expectCountUUIDs, len(uuids))
+					assert.Len(t, uuids, testcase.expectCountUUIDs)
 					uuid = uuids[0] // in case of multiple statements, we only check the first
 					onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 				} else {
@@ -3518,7 +3571,8 @@ func testForeignKeys(t *testing.T) {
 			t.Run("cleanup", func(t *testing.T) {
 				var artifacts []string
 				if uuid != "" {
-					rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+					rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
+					require.NoError(t, err)
 					require.NotNil(t, rs)
 					row := rs.Named().Row()
 					require.NotNil(t, row)
@@ -3582,10 +3636,10 @@ func testOnlineDDLStatement(t *testing.T, params *testOnlineDDLStatementParams) 
 			}
 			uuid = output
 		case "":
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			uuid = output
 		default:
-			assert.Error(t, err)
+			require.Error(t, err)
 			assert.Contains(t, output, params.expectError)
 		}
 	}
@@ -3619,10 +3673,10 @@ func testRevertMigration(t *testing.T, params *testRevertMigrationParams) (uuid 
 	} else {
 		output, err := clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(keyspaceName, revertQuery, cluster.ApplySchemaParams{DDLStrategy: params.ddlStrategy, MigrationContext: params.migrationContext})
 		if params.expectError == "" {
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			uuid = output
 		} else {
-			assert.Error(t, err)
+			require.Error(t, err)
 			assert.Contains(t, output, params.expectError)
 		}
 	}
@@ -3656,8 +3710,8 @@ func checkTable(t *testing.T, showTableName string, expectExists bool) bool {
 func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName string, expectCount int) bool {
 	query := fmt.Sprintf(`show tables like '%%%s%%';`, showTableName)
 	queryResult, err := tablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
-	require.Nil(t, err)
-	return assert.Equalf(t, expectCount, len(queryResult.Rows), "checkTablesCount cannot find table like '%%%s%%'", showTableName)
+	require.NoError(t, err)
+	return assert.Lenf(t, queryResult.Rows, expectCount, "checkTablesCount cannot find table like '%%%s%%'", showTableName)
 }
 
 // checkMigratedTables checks the CREATE STATEMENT of a table after migration
@@ -3671,24 +3725,37 @@ func checkMigratedTable(t *testing.T, tableName, expectHint string) {
 // getCreateTableStatement returns the CREATE TABLE statement for a given table
 func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName string) (statement string) {
 	queryResult, err := tablet.VttabletProcess.QueryTablet(fmt.Sprintf("show create table %s;", tableName), keyspaceName, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
-	assert.Equal(t, len(queryResult.Rows), 1)
+	assert.Len(t, queryResult.Rows, 1)
 	assert.GreaterOrEqual(t, len(queryResult.Rows[0]), 2) // table name, create statement, and if it's a view then additional columns
 	statement = queryResult.Rows[0][1].ToString()
 	return statement
 }
 
 func runInTransaction(t *testing.T, ctx context.Context, tablet *cluster.Vttablet, query string, commitTransactionChan chan any, transactionErrorChan chan error) error {
+	// fail reports a setup error back to the caller through transactionErrorChan
+	// (the only signal the caller has, since this runs in a goroutine) instead of
+	// asserting here, where require's FailNow would not work.
+	fail := func(err error) error {
+		if transactionErrorChan != nil {
+			transactionErrorChan <- err
+		}
+		return err
+	}
 	conn, err := tablet.VttabletProcess.TabletConn(keyspaceName, true)
-	require.NoError(t, err)
+	if err != nil {
+		return fail(err)
+	}
 	defer conn.Close()
 
-	_, err = conn.ExecuteFetch("begin", 0, false)
-	require.NoError(t, err)
+	if _, err := conn.ExecuteFetch("begin", 0, false); err != nil {
+		return fail(err)
+	}
 
-	_, err = conn.ExecuteFetch(query, 10000, false)
-	require.NoError(t, err)
+	if _, err := conn.ExecuteFetch(query, 10000, false); err != nil {
+		return fail(err)
+	}
 
 	if commitTransactionChan != nil {
 		// Wait for instruction to commit
@@ -3714,7 +3781,7 @@ func TestMigrationMetrics(t *testing.T) {
 	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance)
 
 	shards = clusterInstance.Keyspaces[0].Shards
-	require.Equal(t, 1, len(shards))
+	require.Len(t, shards, 1)
 
 	// Helper function to get metric value from /debug/vars
 	getMetric := func(metricName string) int64 {

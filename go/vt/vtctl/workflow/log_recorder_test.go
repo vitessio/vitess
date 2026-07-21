@@ -31,5 +31,5 @@ func TestLogRecorder(t *testing.T) {
 	lr.Logf("log 3 with params: %s, %v, %d", "param1", now, 3)
 	lr.LogSlice([]string{"log 4", "log 5"})
 	want := []string{"log 1", "log 2", "log 3 with params: param1, August, 3", "log 4", "log 5"}
-	assert.Equal(t, lr.GetLogs(), want)
+	assert.Equal(t, want, lr.GetLogs())
 }

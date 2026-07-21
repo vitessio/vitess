@@ -153,11 +153,6 @@ var (
 	once              sync.Once
 )
 
-type LogExpectation struct {
-	Type   string
-	Detail string
-}
-
 func init() {
 	tabletconn.RegisterDialer("test", func(ctx context.Context, tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
 		vdiffenv.mu.Lock()
@@ -617,7 +612,7 @@ func newTestVDiffEnv(t *testing.T) *testVDiffEnv {
 	vdiffenv.dbClient.ExpectRequest("select * from _vt.vdiff where state in ('started','pending') and db_name = "+encodeString(vdiffDBName), noResults, nil)
 	vdiffenv.vde.Open(t.Context(), vdiffenv.vre)
 	assert.True(t, vdiffenv.vde.IsOpen())
-	assert.Equal(t, 0, len(vdiffenv.vde.controllers))
+	assert.Empty(t, vdiffenv.vde.controllers)
 
 	resetBinlogClient()
 

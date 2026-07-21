@@ -82,7 +82,7 @@ func TestMain(m *testing.M) {
 func start(t *testing.T) (*mysql.Conn, func()) {
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	deleteAll := func() {
 		_, _ = utils.ExecAllowError(t, conn, "set workload = oltp")

@@ -66,9 +66,48 @@
   "FullQuery": "explain foo"
 }
 
-# dml
+# dml update
 "update a set b = 1"
-"UPDATE not allowed for streaming"
+{
+  "PlanID": "UpdateLimit",
+  "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
+  "FullQuery": "update a set b = 1 limit :#maxLimit"
+}
+
+# dml insert
+"insert into a(foo) values (1)"
+{
+  "PlanID": "Insert",
+  "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
+  "FullQuery": "insert into a(foo) values (1)"
+}
+
+# dml delete
+"delete from a where foo = 1"
+{
+  "PlanID": "DeleteLimit",
+  "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
+  "FullQuery": "delete from a where foo = 1 limit :#maxLimit",
+  "WhereClause": " where foo = 1"
+}
 
 # syntax error
 "syntax error"

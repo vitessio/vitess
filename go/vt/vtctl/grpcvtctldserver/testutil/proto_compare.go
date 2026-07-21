@@ -60,16 +60,16 @@ func AssertLogutilEventsMatch(t testing.TB, expected []*logutilpb.Event, actual 
 	actual = clearEvents(actual, f)
 
 	expectedBytes, err := json.Marshal(expected)
-	if !assert.NoError(t, err, "could not marshal expected events as json, assertion messages will be impacted") {
+	if err != nil {
 		expectedBytes = nil
 	}
 
 	actualBytes, err := json.Marshal(actual)
-	if !assert.NoError(t, err, "could not marshal actual events as json, assertion messages will be impacted") {
+	if err != nil {
 		actualBytes = nil
 	}
 
-	if !assert.Equal(t, len(expected), len(actual), "differing number of events; expected %d, have %d\nexpected bytes: %s\nactual bytes: %s\n", len(expected), len(actual), expectedBytes, actualBytes) {
+	if !assert.Len(t, actual, len(expected), "differing number of events; expected %d, have %d\nexpected bytes: %s\nactual bytes: %s\n", len(expected), len(actual), expectedBytes, actualBytes) {
 		return
 	}
 
@@ -130,7 +130,7 @@ func AssertLogutilEventsOccurred(t *testing.T, container interface{ GetEvents() 
 		return
 	}
 
-	assert.Greater(t, len(container.GetEvents()), 0, msgAndArgs...)
+	assert.NotEmpty(t, container.GetEvents(), msgAndArgs...)
 }
 
 // AssertNoLogutilEventsOccurred asserts that for something containing a slice
@@ -148,7 +148,7 @@ func AssertNoLogutilEventsOccurred(t *testing.T, container interface{ GetEvents(
 		return
 	}
 
-	assert.Equal(t, len(container.GetEvents()), 0, msgAndArgs...)
+	assert.Empty(t, container.GetEvents(), msgAndArgs...)
 }
 
 // EventValueSorter implements sort.Interface for slices of logutil.Event,

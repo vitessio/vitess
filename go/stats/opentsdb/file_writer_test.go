@@ -21,15 +21,16 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestFileWriter(t *testing.T) {
 	tempFile, err := os.CreateTemp("", "tempfile")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer os.Remove(tempFile.Name())
 
 	w, err := newFileWriter(tempFile.Name())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	dp := []*DataPoint{
 		{
@@ -43,12 +44,12 @@ func TestFileWriter(t *testing.T) {
 	}
 
 	err = w.Write(dp)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	err = tempFile.Close()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	content, err := os.ReadFile(tempFile.Name())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "testMetric 1.000000 2.000000 key1=value1\n", string(content))
 }

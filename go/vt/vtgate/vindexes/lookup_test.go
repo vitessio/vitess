@@ -625,7 +625,7 @@ func TestLookupNonUniqueCreate(t *testing.T) {
 
 	// With ignore_nulls off
 	err = lnu.(Lookup).Create(t.Context(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(2)}, {sqltypes.NULL}}, [][]byte{[]byte("test2"), []byte("test1")}, true /* ignoreMode */)
-	assert.EqualError(t, err, "VT03028: Column 'fromc' cannot be null on row 1, col 0")
+	require.EqualError(t, err, "VT03028: Column 'fromc' cannot be null on row 1, col 0")
 
 	// With ignore_nulls on
 	vc.queries = nil
@@ -644,7 +644,7 @@ func TestLookupNonUniqueCreate(t *testing.T) {
 	// Test query fail.
 	vc.mustFail = true
 	err = lnu.(Lookup).Create(t.Context(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")}, false /* ignoreMode */)
-	assert.EqualError(t, err, "lookup.Create: execute failed")
+	require.EqualError(t, err, "lookup.Create: execute failed")
 	vc.mustFail = false
 
 	// Test column mismatch.
@@ -710,7 +710,7 @@ func TestLookupNonUniqueDelete(t *testing.T) {
 	// Test query fail.
 	vc.mustFail = true
 	err = lnu.(Lookup).Delete(t.Context(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, []byte("\x16k@\xb4J\xbaK\xd6"))
-	assert.EqualError(t, err, "lookup.Delete: execute failed")
+	require.EqualError(t, err, "lookup.Delete: execute failed")
 	vc.mustFail = false
 
 	// Test column count fail.

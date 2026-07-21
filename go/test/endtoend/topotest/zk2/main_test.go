@@ -154,7 +154,7 @@ func TestTopoDownServingQuery(t *testing.T) {
 		Port: clusterInstance.VtgateMySQLPort,
 	}
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	defer utils.Exec(t, conn, `delete from t1`)

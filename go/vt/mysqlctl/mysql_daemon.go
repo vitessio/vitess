@@ -91,7 +91,7 @@ type MysqlDaemon interface {
 	IsReadOnly(ctx context.Context) (bool, error)
 	IsSuperReadOnly(ctx context.Context) (bool, error)
 	SetReadOnly(ctx context.Context, on bool) error
-	SetSuperReadOnly(ctx context.Context, on bool) (ResetSuperReadOnlyFunc, error)
+	SetSuperReadOnly(ctx context.Context, on bool, opts ...SetSuperReadOnlyOption) (ResetSuperReadOnlyFunc, error)
 	SetReplicationPosition(ctx context.Context, pos replication.Position) error
 	SetReplicationSource(ctx context.Context, host string, port int32, heartbeatInterval float64, stopReplicationBefore bool, startReplicationAfter bool) error
 	WaitForReparentJournal(ctx context.Context, timeCreatedNS int64) error

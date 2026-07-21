@@ -1180,6 +1180,18 @@
       "Tags": [],
       "Needs": []
     },
+    "mysql_utils": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/utils"
+      ],
+      "Args": [],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vtgate_queries",
+      "Tags": [],
+      "Needs": []
+    },
     "vtgate_kill": {
       "File": "unused.go",
       "Packages": [
@@ -1380,7 +1392,7 @@
     "vtgate_reserved_conn1": {
       "File": "unused.go",
       "Packages": [
-        "vitess.io/vitess/go/test/endtoend/vtgate/reservedconn/reconnect1"
+        "vitess.io/vitess/go/test/endtoend/vtgate/reservedconn/servingchange"
       ],
       "Args": [],
       "Command": [],
@@ -1392,7 +1404,7 @@
     "vtgate_reserved_conn2": {
       "File": "unused.go",
       "Packages": [
-        "vitess.io/vitess/go/test/endtoend/vtgate/reservedconn/reconnect2"
+        "vitess.io/vitess/go/test/endtoend/vtgate/reservedconn/tabletchange"
       ],
       "Args": [],
       "Command": [],
@@ -1404,7 +1416,7 @@
     "vtgate_reserved_conn3": {
       "File": "unused.go",
       "Packages": [
-        "vitess.io/vitess/go/test/endtoend/vtgate/reservedconn/reconnect3"
+        "vitess.io/vitess/go/test/endtoend/vtgate/reservedconn/mysqldown"
       ],
       "Args": [],
       "Command": [],
@@ -1416,7 +1428,7 @@
     "vtgate_reserved_conn4": {
       "File": "unused.go",
       "Packages": [
-        "vitess.io/vitess/go/test/endtoend/vtgate/reservedconn/reconnect4"
+        "vitess.io/vitess/go/test/endtoend/vtgate/reservedconn/vttabletdown"
       ],
       "Args": [],
       "Command": [],
@@ -1899,14 +1911,14 @@
         "binlog-compression"
       ]
     },
-    "vreplication_vtctldclient_materialize": {
+    "vreplication_reference_table_materialization": {
       "File": "unused.go",
       "Packages": [
         "vitess.io/vitess/go/test/endtoend/vreplication"
       ],
       "Args": [
         "-run",
-        "TestMaterializeVtctldClient"
+        "TestReferenceTableMaterializationAndRouting"
       ],
       "Command": [],
       "Manual": false,
@@ -2070,6 +2082,44 @@
         "binlog-compression"
       ]
     },
+    "vreplication_movetables_mirror_traffic": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/vreplication"
+      ],
+      "Args": [
+        "-run",
+        "TestMoveTablesMirrorTraffic"
+      ],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vreplication_cellalias",
+      "Tags": [],
+      "Needs": [
+        "larger-runner",
+        "limit-resources",
+        "binlog-compression"
+      ]
+    },
+    "vreplication_ddl_handling": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/vreplication"
+      ],
+      "Args": [
+        "-run",
+        "TestVReplicationDDLHandling"
+      ],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vreplication_cellalias",
+      "Tags": [],
+      "Needs": [
+        "larger-runner",
+        "limit-resources",
+        "binlog-compression"
+      ]
+    },
     "sidecardb": {
       "File": "unused.go",
       "Packages": [
@@ -2118,6 +2168,25 @@
         "TestVreplicationCopyParallel",
         "-timeout",
         "20m"
+      ],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vreplication_copy_parallel",
+      "Tags": [],
+      "Needs": [
+        "larger-runner",
+        "limit-resources",
+        "binlog-compression"
+      ]
+    },
+    "vreplication_copy_throttling": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/vreplication"
+      ],
+      "Args": [
+        "-run",
+        "TestVreplicationCopyThrottling"
       ],
       "Command": [],
       "Manual": false,
@@ -2263,6 +2332,83 @@
       "Tags": [],
       "Needs": []
     },
+    "vstream_copy_multi_keyspace_reshard": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/vreplication"
+      ],
+      "Args": [
+        "-run",
+        "TestVStreamCopyMultiKeyspaceReshard",
+        "-timeout",
+        "15m"
+      ],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vstream",
+      "Tags": [],
+      "Needs": []
+    },
+    "vstream_heartbeats": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/vreplication"
+      ],
+      "Args": [
+        "-run",
+        "TestVStreamHeartbeats"
+      ],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vstream",
+      "Tags": [],
+      "Needs": []
+    },
+    "vstream_lagging_ddl_row_events": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/vreplication"
+      ],
+      "Args": [
+        "-run",
+        "TestVStreamLaggingDDLRowEvents"
+      ],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vstream",
+      "Tags": [],
+      "Needs": []
+    },
+    "vstream_pushdown_filters": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/vreplication"
+      ],
+      "Args": [
+        "-run",
+        "TestVStreamPushdownFilters"
+      ],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vstream",
+      "Tags": [],
+      "Needs": []
+    },
+    "vstream_with_tables_to_skip_copy_flag": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/vreplication"
+      ],
+      "Args": [
+        "-run",
+        "TestVStreamWithTablesToSkipCopyFlag"
+      ],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vstream",
+      "Tags": [],
+      "Needs": []
+    },
     "vtop_example": {
       "File": "",
       "Packages": [],
@@ -2279,6 +2425,21 @@
       "File": "unused.go",
       "Packages": [
         "vitess.io/vitess/go/test/endtoend/vtorc/primaryfailure"
+      ],
+      "Args": [],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vtorc",
+      "Tags": [],
+      "Needs": [
+        "larger-runner",
+        "memory-check"
+      ]
+    },
+    "vtorc_tablet_health": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/vtorc/tablethealth"
       ],
       "Args": [],
       "Command": [],
@@ -2344,6 +2505,46 @@
       "Tags": [],
       "Needs": [
         "consul"
+      ]
+    },
+    "vreplication_performance": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/vreplication"
+      ],
+      "Args": [
+        "-run",
+        "TestReplicationStress"
+      ],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vreplication_v2",
+      "Tags": [],
+      "Needs": [
+        "larger-runner",
+        "limit-resources",
+        "binlog-compression"
+      ]
+    },
+    "vreplication_switch_traffic_order": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/vreplication"
+      ],
+      "Args": [
+        "-run",
+        "TestSwitchReadsWritesInAnyOrder",
+        "-timeout",
+        "30m"
+      ],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vreplication_v2",
+      "Tags": [],
+      "Needs": [
+        "larger-runner",
+        "limit-resources",
+        "binlog-compression"
       ]
     },
     "vreplication_v2": {
@@ -2552,7 +2753,7 @@
       ],
       "Args": [
         "-run",
-        "TestLookupIndex"
+        "TestLookupVindex"
       ],
       "Command": [],
       "Manual": false,

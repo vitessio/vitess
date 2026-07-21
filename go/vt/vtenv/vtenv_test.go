@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/config"
@@ -28,7 +29,7 @@ import (
 
 func TestNewDefaults(t *testing.T) {
 	e, err := New(Options{})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, config.DefaultMySQLVersion, e.MySQLVersion())
 	assert.Equal(t, collations.MySQL8(), e.CollationEnv())
 	assert.Equal(t, 0, e.Parser().GetTruncateErrLen())
@@ -42,7 +43,7 @@ func TestNewCustom(t *testing.T) {
 		TruncateErrLen:     15,
 		TruncateUILen:      16,
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "8.0.34", e.MySQLVersion())
 	assert.Equal(t, collations.MySQL8(), e.CollationEnv())
 	assert.Equal(t, 15, e.Parser().GetTruncateErrLen())

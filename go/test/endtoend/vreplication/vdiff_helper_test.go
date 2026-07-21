@@ -66,11 +66,18 @@ func waitForVDiff2ToCompleteWithTimeout(t *testing.T, ksWorkflow, cells, uuid st
 	first := true
 	previousProgress := vdiff2.ProgressReport{}
 	ch := make(chan bool, 1)
+	// performVDiff2Action waits for the workflow to be Running internally using
+	// the error-returning waitForWorkflowState, so it is safe to call from this
+	// goroutine (go-require).
 	go func() {
 		defer func() { ch <- true }()
 		for {
 			time.Sleep(vdiffStatusCheckInterval)
-			_, jsonStr = performVDiff2Action(t, ksWorkflow, cells, "show", uuid, false)
+			var err error
+			_, jsonStr, err = performVDiff2Action(t, ksWorkflow, cells, "show", uuid, false)
+			if !assert.NoError(t, err) {
+				return
+			}
 			info = getVDiffInfo(jsonStr)
 			if !assert.NotNil(t, info) {
 				return
@@ -144,7 +151,8 @@ func doVtctldclientVDiffWithTimeout(t *testing.T, keyspace, workflow, cells stri
 		if len(extraFlags) > 0 {
 			flags = append(flags, extraFlags...)
 		}
-		uuid, _ := performVDiff2Action(t, ksWorkflow, cells, "create", "", false, flags...)
+		uuid, _, err := performVDiff2Action(t, ksWorkflow, cells, "create", "", false, flags...)
+		require.NoError(t, err)
 		info := waitForVDiff2ToCompleteWithTimeout(t, ksWorkflow, cells, uuid, time.Time{}, timeout)
 		require.NotNil(t, info)
 		require.Equal(t, workflow, info.Workflow)
@@ -166,11 +174,18 @@ func doVtctldclientVDiffWithTimeout(t *testing.T, keyspace, workflow, cells stri
 	})
 }
 
-func performVDiff2Action(t *testing.T, ksWorkflow, cells, action, actionArg string, expectError bool, extraFlags ...string) (uuid string, output string) {
-	var err error
+// performVDiff2Action runs a vdiff action and returns an error instead of
+// asserting, so it can be called from a goroutine (go-require). It first waits
+// for the workflow to reach the Running state using the error-returning
+// waitForWorkflowState, which keeps the entire call require-free.
+func performVDiff2Action(t *testing.T, ksWorkflow, cells, action, actionArg string, expectError bool, extraFlags ...string) (uuid string, output string, err error) {
+	if err := waitForWorkflowState(vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String()); err != nil {
+		return "", "", err
+	}
 	targetKeyspace, workflowName, ok := strings.Cut(ksWorkflow, ".")
-	require.True(t, ok, "invalid keyspace.workflow value: %s", ksWorkflow)
-	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+	if !ok {
+		return "", "", fmt.Errorf("invalid keyspace.workflow value: %s", ksWorkflow)
+	}
 	args := []string{"VDiff", "--target-keyspace", targetKeyspace, "--workflow", workflowName, "--format=json", action}
 	if strings.ToLower(action) == string(vdiff2.CreateAction) {
 		// This will always result in us using a PRIMARY tablet, which is all
@@ -189,15 +204,19 @@ func performVDiff2Action(t *testing.T, ksWorkflow, cells, action, actionArg stri
 	output, err = execVDiffWithRetry(t, expectError, args)
 	log.Info(fmt.Sprintf("vdiff output: %+v (err: %+v)", output, err))
 	if !expectError {
-		require.NoError(t, err)
+		if err != nil {
+			return "", output, err
+		}
 		ouuid := gjson.Get(output, "UUID").String()
 		if action == "create" || (action == "show" && actionArg != "all") { // A UUID is returned
-			require.NotEmpty(t, ouuid)
+			if ouuid == "" {
+				return "", output, fmt.Errorf("expected a non-empty UUID in vdiff output: %s", output)
+			}
 			uuid = ouuid
 		}
 	}
 
-	return uuid, output
+	return uuid, output, nil
 }
 
 // During SwitchTraffic, due to changes in the cluster, vdiff can return transient errors. isVDiffRetryable() is used to
@@ -302,7 +321,8 @@ func generateMoreCustomers(t *testing.T, keyspace string, numCustomers int64) {
 	vtgateConn, closeConn := getVTGateConn()
 	defer closeConn()
 	log.Info(fmt.Sprintf("Generating more test data with an additional %d customers", numCustomers))
-	res := execVtgateQuery(t, vtgateConn, keyspace, "select max(cid) from customer")
+	res, err := execVtgateQuery(vtgateConn, keyspace, "select max(cid) from customer")
+	require.NoError(t, err)
 	startingID, _ := res.Rows[0][0].ToInt64()
 	insert := strings.Builder{}
 	insert.WriteString("insert into customer(cid, name, typ) values ")
@@ -314,5 +334,6 @@ func generateMoreCustomers(t *testing.T, keyspace string, numCustomers int64) {
 			insert.WriteString(", ")
 		}
 	}
-	execVtgateQuery(t, vtgateConn, keyspace, insert.String())
+	_, err = execVtgateQuery(vtgateConn, keyspace, insert.String())
+	require.NoError(t, err)
 }

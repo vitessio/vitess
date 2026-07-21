@@ -912,7 +912,7 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select `user`.col from `user` where 1 != 1",
+                "FieldQuery": "select /*vt+ PLANNER=left2right */ `user`.col from `user` where 1 != 1",
                 "Query": "select /*vt+ PLANNER=left2right */ `user`.col from `user`"
               },
               {
@@ -922,7 +922,7 @@
                   "Name": "main",
                   "Sharded": false
                 },
-                "FieldQuery": "select 1 from unsharded as m1 where 1 != 1",
+                "FieldQuery": "select /*vt+ PLANNER=left2right */ 1 from unsharded as m1 where 1 != 1",
                 "Query": "select /*vt+ PLANNER=left2right */ 1 from unsharded as m1"
               }
             ]
@@ -934,7 +934,7 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select 1 from unsharded as m2 where 1 != 1",
+            "FieldQuery": "select /*vt+ PLANNER=left2right */ 1 from unsharded as m2 where 1 != 1",
             "Query": "select /*vt+ PLANNER=left2right */ 1 from unsharded as m2"
           }
         ]

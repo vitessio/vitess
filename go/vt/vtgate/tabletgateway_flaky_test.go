@@ -73,7 +73,7 @@ func TestGatewayBufferingWhenPrimarySwitchesServingState(t *testing.T) {
 		for _, buffering := tg.kev.ShouldStartBufferingForTarget(ctx, target); buffering != enabled; _, buffering = tg.kev.ShouldStartBufferingForTarget(ctx, target) {
 			select {
 			case <-timer.C:
-				require.Fail(t, "timed out waiting for buffering of enabled: %t", enabled)
+				require.Failf(t, "timed out waiting for buffering of enabled", "%t", enabled)
 			default:
 			}
 			time.Sleep(10 * time.Millisecond)
@@ -218,7 +218,7 @@ func TestGatewayBufferingWhileReparenting(t *testing.T) {
 		hc.Broadcast(primaryTablet)
 		hc.Broadcast(primaryTablet)
 
-		require.Len(t, tg.hc.GetHealthyTabletStats(target), 0, "GetHealthyTabletStats has tablets even though it shouldn't")
+		require.Empty(t, tg.hc.GetHealthyTabletStats(target), "GetHealthyTabletStats has tablets even though it shouldn't")
 		_, shouldStartBuffering := tg.kev.ShouldStartBufferingForTarget(ctx, target)
 		require.True(t, shouldStartBuffering)
 

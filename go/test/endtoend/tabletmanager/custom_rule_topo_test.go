@@ -53,7 +53,7 @@ func TestTopoCustomRule(t *testing.T) {
 
 	// Copy config file into topo.
 	err = clusterInstance.VtctldClientProcess.ExecuteCommand("--server", "internal", "WriteTopologyPath", topoCustomRulePath, topoCustomRuleFile)
-	require.Nil(t, err, "error should be Nil")
+	require.NoError(t, err, "error should be Nil")
 
 	// Set extra tablet args for topo custom rule
 	clusterInstance.VtTabletExtraArgs = []string{
@@ -65,14 +65,14 @@ func TestTopoCustomRule(t *testing.T) {
 
 	// Start Mysql Processes
 	err = cluster.StartMySQL(ctx, rTablet, username, clusterInstance.TmpDirectory)
-	require.Nil(t, err, "error should be Nil")
+	require.NoError(t, err, "error should be Nil")
 
 	// Start Vttablet
 	err = clusterInstance.StartVttablet(rTablet, false, "SERVING", false, cell, keyspaceName, hostname, shardName)
-	require.Nil(t, err, "error should be Nil")
+	require.NoError(t, err, "error should be Nil")
 
 	err = clusterInstance.VtctldClientProcess.ExecuteCommand("Validate")
-	require.Nil(t, err, "error should be Nil")
+	require.NoError(t, err, "error should be Nil")
 
 	// And wait until the query is working.
 	// We need a wait here because the instance we have created is a replica
@@ -99,7 +99,7 @@ func TestTopoCustomRule(t *testing.T) {
 	require.NoError(t, err)
 
 	err = clusterInstance.VtctldClientProcess.ExecuteCommand("--server", "internal", "WriteTopologyPath", topoCustomRulePath, topoCustomRuleFile)
-	require.Nil(t, err, "error should be Nil")
+	require.NoError(t, err, "error should be Nil")
 
 	// And wait until the query fails with the right error.
 	timeout = time.Now().Add(10 * time.Second)

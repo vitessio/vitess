@@ -996,7 +996,7 @@ func TestRowReplicationTypes(t *testing.T) {
 	stmt += " from replicationtypes"
 	result, err = dConn.ExecuteFetch(stmt, 2, false)
 	require.NoError(t, err, "select failed: %v", err)
-	require.Equal(t, 2, len(result.Rows), "unexpected result for select: %v", result)
+	require.Len(t, result.Rows, 2, "unexpected result for select: %v", result)
 
 	for i, tcase := range testcases {
 		assert.True(t, reflect.DeepEqual(result.Rows[0][i+1], result.Rows[1][i+1]), "Field %v is not the same, got %v and %v", tcase.name, result.Rows[0][i+1], result.Rows[1][i+1])

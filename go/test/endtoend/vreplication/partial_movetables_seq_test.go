@@ -223,7 +223,7 @@ func (tc *vrepTestCase) initData() {
 func (tc *vrepTestCase) setupKeyspaces(keyspaces []string) {
 	for _, keyspace := range keyspaces {
 		ks, ok := tc.keyspaces[keyspace]
-		require.Equal(tc.t, true, ok, "keyspace %s not found", keyspace)
+		require.True(tc.t, ok, "keyspace %s not found", keyspace)
 		tc.setupKeyspace(ks)
 	}
 }
@@ -277,7 +277,7 @@ func (wf *workflow) create() {
 		panic("unknown workflow type: " + wf.typ)
 	}
 	require.NoError(t, err)
-	waitForWorkflowState(t, wf.tc.vc, fmt.Sprintf("%s.%s", wf.toKeyspace, wf.name), binlogdatapb.VReplicationWorkflowState_Running.String())
+	require.NoError(t, waitForWorkflowState(wf.tc.vc, fmt.Sprintf("%s.%s", wf.toKeyspace, wf.name), binlogdatapb.VReplicationWorkflowState_Running.String()))
 	ks2 := wf.tc.vc.Cells[cell].Keyspaces[wf.toKeyspace]
 	var i int64
 	for _, shardName := range wf.tc.keyspaces[wf.toKeyspace].shards {
@@ -331,7 +331,8 @@ func TestSequenceResetOnSwitchTraffic(t *testing.T) {
 		defer closeConn()
 
 		getSequenceNextID := func() int64 {
-			qr := execVtgateQuery(t, vtgateConn, "", "SELECT next_id FROM seqSrc.customer_seq WHERE id = 0")
+			qr, err := execVtgateQuery(vtgateConn, "", "SELECT next_id FROM seqSrc.customer_seq WHERE id = 0")
+			require.NoError(t, err)
 			nextID, _ := qr.Rows[0][0].ToInt64()
 			return nextID
 		}
@@ -641,7 +642,8 @@ var (
 func getCustomerCount(t *testing.T, msg string) int64 {
 	vtgateConn, closeConn := getVTGateConn()
 	defer closeConn()
-	qr := execVtgateQuery(t, vtgateConn, "", "select count(*) from customer")
+	qr, err := execVtgateQuery(vtgateConn, "", "select count(*) from customer")
+	require.NoError(t, err)
 	require.NotNil(t, qr)
 	count, err := qr.Rows[0][0].ToInt64()
 	require.NoError(t, err)
@@ -651,7 +653,8 @@ func getCustomerCount(t *testing.T, msg string) int64 {
 func confirmLastCustomerIdHasIncreased(t *testing.T) {
 	vtgateConn, closeConn := getVTGateConn()
 	defer closeConn()
-	qr := execVtgateQuery(t, vtgateConn, "", "select cid from customer order by cid desc limit 1")
+	qr, err := execVtgateQuery(vtgateConn, "", "select cid from customer order by cid desc limit 1")
+	require.NoError(t, err)
 	require.NotNil(t, qr)
 	currentCustomerId, err := qr.Rows[0][0].ToInt64()
 	require.NoError(t, err)
@@ -663,7 +666,8 @@ func insertCustomers(t *testing.T) {
 	vtgateConn, closeConn := getVTGateConn()
 	defer closeConn()
 	for i := int64(1); i < newCustomerCount+1; i++ {
-		execVtgateQuery(t, vtgateConn, "customer@primary", fmt.Sprintf("insert into customer(name) values ('name-%d')", currentCustomerCount+i))
+		_, err := execVtgateQuery(vtgateConn, "customer@primary", fmt.Sprintf("insert into customer(name) values ('name-%d')", currentCustomerCount+i))
+		require.NoError(t, err)
 	}
 	customerCount = getCustomerCount(t, "")
 	require.Equal(t, currentCustomerCount+newCustomerCount, customerCount)

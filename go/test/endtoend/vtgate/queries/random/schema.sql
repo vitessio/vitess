@@ -7,6 +7,9 @@ CREATE TABLE emp (
  SAL bigint,
  COMM bigint,
  DEPTNO bigint,
+ GRADE ENUM('A', 'B', 'C', 'D', 'E'),
+ SKILLS SET('sql', 'go', 'java', 'python'),
+ META JSON,
  PRIMARY KEY (EMPNO)
 ) Engine = InnoDB
   COLLATE = utf8mb4_general_ci;

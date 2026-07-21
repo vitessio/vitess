@@ -105,7 +105,7 @@ func TestSetUDV(t *testing.T) {
 		t.Run(fmt.Sprintf("%d-%s", i, q.query), func(t *testing.T) {
 			qr := utils2.Exec(t, conn, q.query)
 			assert.EqualValues(t, q.rowsAffected, qr.RowsAffected, "rows affected wrong for query: %s", q.query)
-			assert.EqualValues(t, q.rowsReturned, len(qr.Rows), "rows returned wrong for query: %s", q.query)
+			assert.Len(t, qr.Rows, q.rowsReturned, "rows returned wrong for query: %s", q.query)
 			if q.expectedRows != "" {
 				result := fmt.Sprintf("%v", qr.Rows)
 				if diff := cmp.Diff(q.expectedRows, result); diff != "" {

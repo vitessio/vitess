@@ -34,11 +34,11 @@ func TestQPS(t *testing.T) {
 		Port: clusterInstance.VtgateMySQLPort,
 	}
 	vtGateConn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer vtGateConn.Close()
 
 	replicaConn, err := mysql.Connect(ctx, &replicaTabletParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer replicaConn.Close()
 
 	// Sanity Check
@@ -65,7 +65,7 @@ func TestQPS(t *testing.T) {
 	timeout := time.Now().Add(12 * time.Second)
 	for time.Now().Before(timeout) {
 		shrs, err := clusterInstance.StreamTabletHealth(ctx, &primaryTablet, 1)
-		require.Nil(t, err)
+		require.NoError(t, err)
 
 		streamHealthResponse := shrs[0]
 		realTimeStats := streamHealthResponse.GetRealtimeStats()

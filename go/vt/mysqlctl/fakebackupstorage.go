@@ -20,12 +20,15 @@ import (
 	"context"
 	"errors"
 	"io"
+	"sync"
 
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	mysqlctlerrors "vitess.io/vitess/go/vt/mysqlctl/errors"
 )
 
 type FakeBackupHandle struct {
+	mu sync.Mutex
+
 	Dir      string
 	NameV    string
 	ReadOnly bool
@@ -36,6 +39,7 @@ type FakeBackupHandle struct {
 	AddFileCalls      []FakeBackupHandleAddFileCall
 	AddFileReturn     FakeBackupHandleAddFileReturn
 	AddFileReturnF    func(filename string) FakeBackupHandleAddFileReturn
+	WaitCalls         int
 	EndBackupCalls    []context.Context
 	EndBackupReturn   error
 	ReadFileCalls     []FakeBackupHandleReadFileCall
@@ -67,31 +71,51 @@ func (fbh *FakeBackupHandle) Name() string {
 }
 
 func (fbh *FakeBackupHandle) AddFile(ctx context.Context, filename string, filesize int64) (io.WriteCloser, error) {
+	fbh.mu.Lock()
 	fbh.AddFileCalls = append(fbh.AddFileCalls, FakeBackupHandleAddFileCall{ctx, filename, filesize})
+	// Capture return fields under the lock since AddFile is called from concurrent goroutines.
+	returnF := fbh.AddFileReturnF
+	returnVal := fbh.AddFileReturn
+	fbh.mu.Unlock()
 
-	if fbh.AddFileReturnF != nil {
-		r := fbh.AddFileReturnF(filename)
+	if returnF != nil {
+		r := returnF(filename)
 		return r.WriteCloser, r.Err
 	}
-	return fbh.AddFileReturn.WriteCloser, fbh.AddFileReturn.Err
+	return returnVal.WriteCloser, returnVal.Err
+}
+
+func (fbh *FakeBackupHandle) Wait() {
+	fbh.mu.Lock()
+	fbh.WaitCalls++
+	fbh.mu.Unlock()
 }
 
 func (fbh *FakeBackupHandle) EndBackup(ctx context.Context) error {
+	fbh.mu.Lock()
 	fbh.EndBackupCalls = append(fbh.EndBackupCalls, ctx)
+	fbh.mu.Unlock()
 	return fbh.EndBackupReturn
 }
 
 func (fbh *FakeBackupHandle) AbortBackup(ctx context.Context) error {
+	fbh.mu.Lock()
 	fbh.AbortBackupCalls = append(fbh.AbortBackupCalls, ctx)
+	fbh.mu.Unlock()
 	return fbh.AbortBackupReturn
 }
 
 func (fbh *FakeBackupHandle) ReadFile(ctx context.Context, filename string) (io.ReadCloser, error) {
+	fbh.mu.Lock()
 	fbh.ReadFileCalls = append(fbh.ReadFileCalls, FakeBackupHandleReadFileCall{ctx, filename})
-	if fbh.ReadFileReturnF == nil {
+	// Capture return field under the lock since ReadFile may be called from concurrent goroutines.
+	readF := fbh.ReadFileReturnF
+	fbh.mu.Unlock()
+
+	if readF == nil {
 		return nil, errors.New("FakeBackupHandle has not defined a ReadFileReturnF")
 	}
-	return fbh.ReadFileReturnF(ctx, filename)
+	return readF(ctx, filename)
 }
 
 type FakeBackupStorage struct {

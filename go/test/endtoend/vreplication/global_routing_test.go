@@ -118,7 +118,7 @@ func (h *grHelpers) waitForTableAvailability(t *testing.T, vtgateConn *mysql.Con
 		}
 		select {
 		case <-timer.C:
-			require.FailNow(t, "timed out waiting for table availability for %s", table)
+			require.FailNowf(t, "timed out waiting for table availability for", "%s", table)
 		default:
 			time.Sleep(defaultTick)
 		}

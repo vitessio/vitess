@@ -183,7 +183,7 @@ func TestCanSwitch(t *testing.T) {
 					require.Greater(t, curLag, allowedLag, "current lag %d should be strictly greater than allowed lag %d (from reason %q)", curLag, allowedLag, reason)
 				default:
 					// unexpected regexp, fail loudly
-					require.Fail(t, "unknown reason regexp %s -- did you add a new test case?", tc.expectedReason)
+					require.Failf(t, "unknown reason regexp", "%s -- did you add a new test case?", tc.expectedReason)
 				}
 			} else {
 				require.Empty(t, reason, "should be able to switch, but cannot because %s", reason)
@@ -486,7 +486,7 @@ func validateRoutingRuleCount(ctx context.Context, t *testing.T, ts *topo.Server
 	require.NoError(t, err)
 	require.NotNil(t, rr)
 	rules := rr.Rules
-	require.Equal(t, cnt, len(rules))
+	require.Len(t, rules, cnt)
 }
 
 func checkIfTableExistInVSchema(ctx context.Context, t *testing.T, ts *topo.Server, keyspace string, table string) bool {

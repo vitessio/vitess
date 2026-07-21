@@ -17,7 +17,6 @@ limitations under the License.
 package balancer
 
 import (
-	"fmt"
 	"slices"
 	"testing"
 
@@ -103,12 +102,12 @@ func TestSessionPickLocalOnly(t *testing.T) {
 
 	// Pick again with same session hash, should return same tablet
 	picked2 := b.Pick(target, tablets, WithSessionUUID("a"))
-	require.Equal(t, picked1, picked2, fmt.Sprintf("expected %s, got %s", tabletAlias(picked1), tabletAlias(picked2)))
+	require.Equal(t, picked1, picked2, "expected %s, got %s", tabletAlias(picked1), tabletAlias(picked2))
 
 	// Pick with different session hash, empirically know that it should return tablet2
 	picked3 := b.Pick(target, tablets, WithSessionUUID("b"))
 	require.NotNil(t, picked3)
-	require.NotEqual(t, picked2, picked3, fmt.Sprintf("expected different tablets, got %s for both", tabletAlias(picked3)))
+	require.NotEqual(t, picked2, picked3, "expected different tablets, got %s for both", tabletAlias(picked3))
 }
 
 func TestSessionPickPreferLocal(t *testing.T) {
@@ -185,7 +184,7 @@ func TestSessionPickPreferLocal(t *testing.T) {
 	// Pick should pick the same tablet consistently
 	for range 20 {
 		picked := b.Pick(target, tablets, WithSessionUUID("a"))
-		require.Equal(t, picked1, picked, fmt.Sprintf("expected %s, got %s", tabletAlias(picked1), tabletAlias(picked)))
+		require.Equal(t, picked1, picked, "expected %s, got %s", tabletAlias(picked1), tabletAlias(picked))
 	}
 }
 
@@ -244,7 +243,7 @@ func TestSessionPickNoLocal(t *testing.T) {
 	// Pick should pick the same tablet consistently
 	for range 20 {
 		picked := b.Pick(target, tablets, WithSessionUUID("a"))
-		require.Equal(t, picked1, picked, fmt.Sprintf("expected %s, got %s", tabletAlias(picked1), tabletAlias(picked)))
+		require.Equal(t, picked1, picked, "expected %s, got %s", tabletAlias(picked1), tabletAlias(picked))
 	}
 }
 

@@ -130,9 +130,9 @@ func TestVStreamCopyFilterValidations(t *testing.T) {
 			require.Error(t, uvs.init(), expectedError)
 			return
 		}
-		require.Equalf(t, len(expected), len(uvs.plans), "Plans: %+v", uvs.plans)
+		require.Lenf(t, uvs.plans, len(expected), "Plans: %+v", uvs.plans)
 		for _, tableName := range expected {
-			require.True(t, uvs.plans[tableName].tablePK.TableName == tableName)
+			require.Equal(t, uvs.plans[tableName].tablePK.TableName, tableName)
 			if tablePKs == nil {
 				require.Nil(t, uvs.plans[tableName].tablePK.Lastpk)
 			}
@@ -341,12 +341,12 @@ func resetMetrics(t *testing.T) {
 
 func validateMetrics(t *testing.T) {
 	require.Equal(t, engine.vstreamerEventsStreamed.Get(), int64(len(allEvents)))
-	require.Equal(t, engine.resultStreamerNumRows.Get(), int64(0))
-	require.Equal(t, engine.rowStreamerNumRows.Get(), int64(31))
-	require.Equal(t, engine.vstreamerPhaseTimings.Counts()["VStreamerTest.copy"], int64(3))
-	require.Equal(t, engine.vstreamerPhaseTimings.Counts()["VStreamerTest.catchup"], int64(2))
-	require.Equal(t, engine.vstreamerPhaseTimings.Counts()["VStreamerTest.fastforward"], int64(2))
-	require.Equal(t, engine.rowStreamerWaits.Counts()["VStreamerTest.waitForMySQL"], int64(0))
+	require.Equal(t, int64(0), engine.resultStreamerNumRows.Get())
+	require.Equal(t, int64(31), engine.rowStreamerNumRows.Get())
+	require.Equal(t, int64(3), engine.vstreamerPhaseTimings.Counts()["VStreamerTest.copy"])
+	require.Equal(t, int64(2), engine.vstreamerPhaseTimings.Counts()["VStreamerTest.catchup"])
+	require.Equal(t, int64(2), engine.vstreamerPhaseTimings.Counts()["VStreamerTest.fastforward"])
+	require.Equal(t, int64(0), engine.rowStreamerWaits.Counts()["VStreamerTest.waitForMySQL"])
 }
 
 func insertMultipleRows(t *testing.T, table string, idx int, numRows int) {
@@ -488,7 +488,7 @@ func startVStreamCopy(ctx context.Context, t *testing.T, filter *binlogdatapb.Fi
 			}
 			return nil
 		}, nil)
-		if !assert.Nil(t, err) {
+		if !assert.NoError(t, err) {
 			return
 		}
 	}()
