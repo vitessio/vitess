@@ -104,6 +104,8 @@ func settleSubqueries(ctx *plancontext.PlanningContext, op Operator) Operator {
 					op.Columns[aggr.ColOffset].Expr = newExpr
 				}
 			}
+		case *Ordering:
+			op.settleOrderingExpressions(ctx)
 		case *Union:
 			for _, selList := range op.Selects {
 				for _, selectExpr := range selList {
