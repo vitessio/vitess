@@ -859,8 +859,6 @@ func (erp *EmergencyReparenter) reparentReplicas(
 	// WithoutCancel preserves ctx values (tracing, caller ID) but lets replicas
 	// finish SetReplicationSource RPCs after the parent context is cancelled.
 	replCtx, replCancel := context.WithTimeout(context.WithoutCancel(ctx), opts.WaitReplicasTimeout)
-	primaryCtx, primaryCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
-	defer primaryCancel()
 
 	event.DispatchUpdate(ev, "reparenting all tablets")
 
@@ -894,7 +892,7 @@ func (erp *EmergencyReparenter) reparentReplicas(
 	replWg := sync.WaitGroup{}
 	rec := concurrency.AllErrorRecorder{}
 
-	handlePrimary := func(alias string, tablet *topodatapb.Tablet) error {
+	handlePrimary := func(primaryCtx context.Context, alias string, tablet *topodatapb.Tablet) error {
 		if !intermediateReparent {
 			var position string
 			var err error
@@ -1016,7 +1014,10 @@ func (erp *EmergencyReparenter) reparentReplicas(
 
 	// Hold the promotion until the acker quorum is repointed; if every replica finished
 	// without reaching it, the journal write below could never complete and the shard is
-	// still clean to abort
+	// still clean to abort. A completed repoint doesn't prove the acker's IO thread has
+	// connected yet, but the ackers this wait exists for were receiving from the old
+	// primary moments ago; a tablet that can't connect at all is the same exposure the
+	// journal write always had
 	if !intermediateReparent {
 		select {
 		case <-ackerQuorumCtx.Done():
@@ -1036,9 +1037,21 @@ func (erp *EmergencyReparenter) reparentReplicas(
 			replCancel()
 			return nil, vterrors.Wrapf(ctx.Err(), "emergency reparent aborted before promoting %v", topoproto.TabletAliasString(newPrimaryTablet.Alias))
 		}
+
+		// The quorum wait can outlast the caller's last lock check, and promoting after
+		// losing the shard lock could create a second read-write primary under whoever
+		// holds it now
+		if err := topo.CheckShardLocked(ctx, ev.ShardInfo.Keyspace(), ev.ShardInfo.ShardName()); err != nil {
+			replCancel()
+			return nil, vterrors.Wrap(err, lostTopologyLockMsg)
+		}
 	}
 
-	primaryErr := handlePrimary(topoproto.TabletAliasString(newPrimaryTablet.Alias), newPrimaryTablet)
+	// The promotion budget starts here, after the quorum wait, so a slow-but-successful
+	// repoint can't leave the journal write with an already-drained context
+	primaryCtx, primaryCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer primaryCancel()
+	primaryErr := handlePrimary(primaryCtx, topoproto.TabletAliasString(newPrimaryTablet.Alias), newPrimaryTablet)
 	if primaryErr != nil {
 		erp.logger.Errorf("failed to promote %s to primary", topoproto.TabletAliasString(newPrimaryTablet.Alias))
 		replCancel()
