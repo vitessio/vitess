@@ -195,6 +195,7 @@ func TestParseDDLStrategy(t *testing.T) {
 		fastOverRevertible   bool
 		fastRangeRotation    bool
 		allowForeignKeys     bool
+		sessionVariables     []SessionVariable
 		analyzeTable         bool
 		cutOverThreshold     time.Duration
 		forceCutOverAfter    time.Duration
@@ -353,7 +354,43 @@ func TestParseDDLStrategy(t *testing.T) {
 			runtimeOptions:   "",
 			analyzeTable:     true,
 		},
-
+		{
+			strategyVariable: "online --session-variable innodb_strict_mode=off --session-variable 'sql_mode=STRICT_TRANS_TABLES,NO_ZERO_DATE'",
+			strategy:         DDLStrategyOnline,
+			options:          "--session-variable innodb_strict_mode=off --session-variable 'sql_mode=STRICT_TRANS_TABLES,NO_ZERO_DATE'",
+			runtimeOptions:   "",
+			sessionVariables: []SessionVariable{
+				{Name: "innodb_strict_mode", Value: "off"},
+				{Name: "sql_mode", Value: "STRICT_TRANS_TABLES,NO_ZERO_DATE"},
+			},
+		},
+		{
+			strategyVariable: "direct --session-variable sql_mode='ANSI QUOTES'",
+			strategy:         DDLStrategyDirect,
+			options:          "--session-variable sql_mode='ANSI QUOTES'",
+			runtimeOptions:   "",
+			sessionVariables: []SessionVariable{{Name: "sql_mode", Value: "ANSI QUOTES"}},
+		},
+		{
+			strategyVariable: "direct --session-variable",
+			expectError:      "--session-variable requires name=value",
+		},
+		{
+			strategyVariable: "direct --session-variable sql_mode",
+			expectError:      "expected name=value",
+		},
+		{
+			strategyVariable: "direct --session-variable 1sql_mode=ANSI",
+			expectError:      "invalid session variable name",
+		},
+		{
+			strategyVariable: "direct --session-variable sql-mode=ANSI",
+			expectError:      "invalid session variable name",
+		},
+		{
+			strategyVariable: "direct --session-variable sql_mode=ANSI --session-variable SQL_MODE=TRADITIONAL",
+			expectError:      "duplicate session variable name",
+		},
 		{
 			strategyVariable: "vitess --alow-concrrnt", // intentional typo
 			strategy:         DDLStrategyVitess,
@@ -387,6 +424,9 @@ func TestParseDDLStrategy(t *testing.T) {
 			assert.Equal(t, ts.fastOverRevertible, setting.IsPreferInstantDDL())
 			assert.Equal(t, ts.allowForeignKeys, setting.IsAllowForeignKeysFlag())
 			assert.Equal(t, ts.analyzeTable, setting.IsAnalyzeTableFlag())
+			sessionVariables, err := setting.SessionVariables()
+			require.NoError(t, err)
+			assert.Equal(t, ts.sessionVariables, sessionVariables)
 			cutOverThreshold, err := setting.CutOverThreshold()
 			require.NoError(t, err)
 			assert.Equal(t, ts.cutOverThreshold, cutOverThreshold)
@@ -414,4 +454,13 @@ func TestParseDDLStrategy(t *testing.T) {
 		_, err := ParseDDLStrategy("online --retain-artifacts=3")
 		assert.Error(t, err)
 	}
+}
+
+func TestSessionVariableSetStatement(t *testing.T) {
+	query, err := (SessionVariable{
+		Name:  "innodb_strict_mode",
+		Value: "off'; drop table t; --",
+	}).SetStatement()
+	require.NoError(t, err)
+	assert.Equal(t, "set @@session.innodb_strict_mode='off\\'; drop table t; --'", query)
 }

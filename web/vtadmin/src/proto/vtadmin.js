@@ -75277,6 +75277,296 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         return ExecuteFetchAsDbaResponse;
     })();
 
+    tabletmanagerdata.SessionVariable = (function() {
+
+        /**
+         * Properties of a SessionVariable.
+         * @typedef {Object} tabletmanagerdata.SessionVariable.$Properties
+         * @property {string|null} [name] SessionVariable name
+         * @property {string|null} [value] SessionVariable value
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+
+        /**
+         * Properties of a SessionVariable.
+         * @memberof tabletmanagerdata
+         * @interface ISessionVariable
+         * @augments tabletmanagerdata.SessionVariable.$Properties
+         * @deprecated Use tabletmanagerdata.SessionVariable.$Properties instead.
+         */
+
+        /**
+         * Shape of a SessionVariable.
+         * @typedef {tabletmanagerdata.SessionVariable.$Properties} tabletmanagerdata.SessionVariable.$Shape
+         */
+
+        /**
+         * Constructs a new SessionVariable.
+         * @memberof tabletmanagerdata
+         * @classdesc Represents a SessionVariable.
+         * @constructor
+         * @param {tabletmanagerdata.SessionVariable.$Properties=} [properties] Properties to set
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+        const SessionVariable = function (properties) {
+            if (properties)
+                for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                        this[keys[i]] = properties[keys[i]];
+        };
+
+        /**
+         * SessionVariable name.
+         * @member {string} name
+         * @memberof tabletmanagerdata.SessionVariable
+         * @instance
+         */
+        SessionVariable.prototype.name = "";
+
+        /**
+         * SessionVariable value.
+         * @member {string} value
+         * @memberof tabletmanagerdata.SessionVariable
+         * @instance
+         */
+        SessionVariable.prototype.value = "";
+
+        /**
+         * Creates a new SessionVariable instance using the specified properties.
+         * @function create
+         * @memberof tabletmanagerdata.SessionVariable
+         * @static
+         * @param {tabletmanagerdata.SessionVariable.$Properties=} [properties] Properties to set
+         * @returns {tabletmanagerdata.SessionVariable} SessionVariable instance
+         * @type {{
+         *   (properties: tabletmanagerdata.SessionVariable.$Shape): tabletmanagerdata.SessionVariable & tabletmanagerdata.SessionVariable.$Shape;
+         *   (properties?: tabletmanagerdata.SessionVariable.$Properties): tabletmanagerdata.SessionVariable;
+         * }}
+         */
+        SessionVariable.create = function(properties) {
+            return new SessionVariable(properties);
+        };
+
+        /**
+         * Encodes the specified SessionVariable message. Does not implicitly {@link tabletmanagerdata.SessionVariable.verify|verify} messages.
+         * @function encode
+         * @memberof tabletmanagerdata.SessionVariable
+         * @static
+         * @param {tabletmanagerdata.SessionVariable.$Properties} message SessionVariable message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        SessionVariable.encode = function (message, writer, _depth) {
+            if (!writer)
+                writer = $Writer.create();
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.name);
+            if (message.value != null && $Object.hasOwnProperty.call(message, "value"))
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.value);
+            if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
+                for (let i = 0; i < message.$unknowns.length; ++i)
+                    writer.raw(message.$unknowns[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified SessionVariable message, length delimited. Does not implicitly {@link tabletmanagerdata.SessionVariable.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof tabletmanagerdata.SessionVariable
+         * @static
+         * @param {tabletmanagerdata.SessionVariable.$Properties} message SessionVariable message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        SessionVariable.encodeDelimited = function(message, writer) {
+            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+        };
+
+        /**
+         * Decodes a SessionVariable message from the specified reader or buffer.
+         * @function decode
+         * @memberof tabletmanagerdata.SessionVariable
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {tabletmanagerdata.SessionVariable & tabletmanagerdata.SessionVariable.$Shape} SessionVariable
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        SessionVariable.decode = function (reader, length, _end, _depth, _target) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $Reader.recursionLimit)
+                throw $Error("max depth exceeded");
+            let end = length === $undefined ? reader.len : reader.pos + length, message = _target || new $root.tabletmanagerdata.SessionVariable(), value;
+            while (reader.pos < end) {
+                let start = reader.pos;
+                let tag = reader.tag();
+                if (tag === _end) {
+                    _end = $undefined;
+                    break;
+                }
+                let wireType = tag & 7;
+                switch (tag >>>= 3) {
+                case 1: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.name = value;
+                        else
+                            delete message.name;
+                        continue;
+                    }
+                case 2: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.value = value;
+                        else
+                            delete message.value;
+                        continue;
+                    }
+                }
+                reader.skipType(wireType, _depth, tag);
+                if (!reader.discardUnknown) {
+                    $util.makeProp(message, "$unknowns", false);
+                    (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
+                }
+            }
+            if (_end !== $undefined)
+                throw $Error("missing end group");
+            return message;
+        };
+
+        /**
+         * Decodes a SessionVariable message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof tabletmanagerdata.SessionVariable
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {tabletmanagerdata.SessionVariable & tabletmanagerdata.SessionVariable.$Shape} SessionVariable
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        SessionVariable.decodeDelimited = function(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a SessionVariable message.
+         * @function verify
+         * @memberof tabletmanagerdata.SessionVariable
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        SessionVariable.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+                if (!$util.isString(message.name))
+                    return "name: string expected";
+            if (message.value != null && $Object.hasOwnProperty.call(message, "value"))
+                if (!$util.isString(message.value))
+                    return "value: string expected";
+            return null;
+        };
+
+        /**
+         * Creates a SessionVariable message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof tabletmanagerdata.SessionVariable
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {tabletmanagerdata.SessionVariable} SessionVariable
+         */
+        SessionVariable.fromObject = function (object, _depth) {
+            if (object instanceof $root.tabletmanagerdata.SessionVariable)
+                return object;
+            if (!$util.isObject(object))
+                throw $TypeError(".tabletmanagerdata.SessionVariable: object expected");
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let message = new $root.tabletmanagerdata.SessionVariable();
+            if (object.name != null)
+                if (typeof object.name !== "string" || object.name.length)
+                    message.name = $String(object.name);
+            if (object.value != null)
+                if (typeof object.value !== "string" || object.value.length)
+                    message.value = $String(object.value);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a SessionVariable message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof tabletmanagerdata.SessionVariable
+         * @static
+         * @param {tabletmanagerdata.SessionVariable} message SessionVariable
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        SessionVariable.toObject = function (message, options, _depth) {
+            if (!options)
+                options = {};
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let object = {};
+            if (options.defaults) {
+                object.name = "";
+                object.value = "";
+            }
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+                object.name = message.name;
+            if (message.value != null && $Object.hasOwnProperty.call(message, "value"))
+                object.value = message.value;
+            return object;
+        };
+
+        /**
+         * Converts this SessionVariable to JSON.
+         * @function toJSON
+         * @memberof tabletmanagerdata.SessionVariable
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        SessionVariable.prototype.toJSON = function() {
+            return SessionVariable.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the type url for SessionVariable
+         * @function getTypeUrl
+         * @memberof tabletmanagerdata.SessionVariable
+         * @static
+         * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns {string} The type url
+         */
+        SessionVariable.getTypeUrl = function(prefix) {
+            if (prefix === $undefined)
+                prefix = "type.googleapis.com";
+            return prefix + "/tabletmanagerdata.SessionVariable";
+        };
+
+        return SessionVariable;
+    })();
+
     tabletmanagerdata.ExecuteMultiFetchAsDbaRequest = (function() {
 
         /**
@@ -75288,6 +75578,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @property {boolean|null} [disable_binlogs] ExecuteMultiFetchAsDbaRequest disable_binlogs
          * @property {boolean|null} [reload_schema] ExecuteMultiFetchAsDbaRequest reload_schema
          * @property {boolean|null} [disable_foreign_key_checks] ExecuteMultiFetchAsDbaRequest disable_foreign_key_checks
+         * @property {Array.<tabletmanagerdata.SessionVariable.$Properties>|null} [session_variables] ExecuteMultiFetchAsDbaRequest session_variables
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -75313,6 +75604,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ExecuteMultiFetchAsDbaRequest = function (properties) {
+            this.session_variables = [];
             if (properties)
                 for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null && keys[i] !== "__proto__")
@@ -75368,6 +75660,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         ExecuteMultiFetchAsDbaRequest.prototype.disable_foreign_key_checks = false;
 
         /**
+         * ExecuteMultiFetchAsDbaRequest session_variables.
+         * @member {Array.<tabletmanagerdata.SessionVariable.$Properties>} session_variables
+         * @memberof tabletmanagerdata.ExecuteMultiFetchAsDbaRequest
+         * @instance
+         */
+        ExecuteMultiFetchAsDbaRequest.prototype.session_variables = $util.emptyArray;
+
+        /**
          * Creates a new ExecuteMultiFetchAsDbaRequest instance using the specified properties.
          * @function create
          * @memberof tabletmanagerdata.ExecuteMultiFetchAsDbaRequest
@@ -75411,6 +75711,9 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 writer.uint32(/* id 5, wireType 0 =*/40).bool(message.reload_schema);
             if (message.disable_foreign_key_checks != null && $Object.hasOwnProperty.call(message, "disable_foreign_key_checks"))
                 writer.uint32(/* id 6, wireType 0 =*/48).bool(message.disable_foreign_key_checks);
+            if (message.session_variables != null && message.session_variables.length)
+                for (let i = 0; i < message.session_variables.length; ++i)
+                    $root.tabletmanagerdata.SessionVariable.encode(message.session_variables[i], writer.uint32(/* id 7, wireType 2 =*/58).fork(), _depth + 1).ldelim();
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -75512,6 +75815,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                             delete message.disable_foreign_key_checks;
                         continue;
                     }
+                case 7: {
+                        if (wireType !== 2)
+                            break;
+                        if (!(message.session_variables && message.session_variables.length))
+                            message.session_variables = [];
+                        message.session_variables.push($root.tabletmanagerdata.SessionVariable.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -75573,6 +75884,15 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             if (message.disable_foreign_key_checks != null && $Object.hasOwnProperty.call(message, "disable_foreign_key_checks"))
                 if (typeof message.disable_foreign_key_checks !== "boolean")
                     return "disable_foreign_key_checks: boolean expected";
+            if (message.session_variables != null && $Object.hasOwnProperty.call(message, "session_variables")) {
+                if (!$Array.isArray(message.session_variables))
+                    return "session_variables: array expected";
+                for (let i = 0; i < message.session_variables.length; ++i) {
+                    let error = $root.tabletmanagerdata.SessionVariable.verify(message.session_variables[i], _depth + 1);
+                    if (error)
+                        return "session_variables." + error;
+                }
+            }
             return null;
         };
 
@@ -75622,6 +75942,16 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             if (object.disable_foreign_key_checks != null)
                 if (object.disable_foreign_key_checks)
                     message.disable_foreign_key_checks = $Boolean(object.disable_foreign_key_checks);
+            if (object.session_variables) {
+                if (!$Array.isArray(object.session_variables))
+                    throw $TypeError(".tabletmanagerdata.ExecuteMultiFetchAsDbaRequest.session_variables: array expected");
+                message.session_variables = $Array(object.session_variables.length);
+                for (let i = 0; i < object.session_variables.length; ++i) {
+                    if (!$util.isObject(object.session_variables[i]))
+                        throw $TypeError(".tabletmanagerdata.ExecuteMultiFetchAsDbaRequest.session_variables: object expected");
+                    message.session_variables[i] = $root.tabletmanagerdata.SessionVariable.fromObject(object.session_variables[i], _depth + 1);
+                }
+            }
             return message;
         };
 
@@ -75642,6 +75972,8 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
             let object = {};
+            if (options.arrays || options.defaults)
+                object.session_variables = [];
             if (options.defaults) {
                 if (options.bytes === $String)
                     object.sql = "";
@@ -75677,6 +76009,11 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 object.reload_schema = message.reload_schema;
             if (message.disable_foreign_key_checks != null && $Object.hasOwnProperty.call(message, "disable_foreign_key_checks"))
                 object.disable_foreign_key_checks = message.disable_foreign_key_checks;
+            if (message.session_variables && message.session_variables.length) {
+                object.session_variables = $Array(message.session_variables.length);
+                for (let j = 0; j < message.session_variables.length; ++j)
+                    object.session_variables[j] = $root.tabletmanagerdata.SessionVariable.toObject(message.session_variables[j], options, _depth + 1);
+            }
             return object;
         };
 

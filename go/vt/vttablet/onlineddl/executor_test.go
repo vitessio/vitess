@@ -22,6 +22,8 @@ package onlineddl
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -294,6 +296,107 @@ func TestInitDBConnectionLockWaitTimeout(t *testing.T) {
 
 	deferFunc()
 	assert.Contains(t, db.QueryLog(), "set @@session.lock_wait_timeout=@lock_wait_timeout")
+}
+
+func TestInitMigrationSessionVariables(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	params := db.ConnParams()
+	connector := dbconfigs.NewTestDBConfigs(*params, *params, params.DbName).DbaWithDB()
+	conn, err := dbconnpool.NewDBConnection(t.Context(), connector)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	db.AddQuery("set @vt_onlineddl_session_variable_0=@@session.innodb_strict_mode", &sqltypes.Result{})
+	db.AddQuery("set @@session.innodb_strict_mode='off'", &sqltypes.Result{})
+	db.AddQuery("set @vt_onlineddl_session_variable_1=@@session.sql_mode", &sqltypes.Result{})
+	db.AddQuery("set @@session.sql_mode='ANSI'", &sqltypes.Result{})
+	db.AddQuery("set @@session.sql_mode=@vt_onlineddl_session_variable_1", &sqltypes.Result{})
+	db.AddQuery("set @@session.innodb_strict_mode=@vt_onlineddl_session_variable_0", &sqltypes.Result{})
+
+	executor := &Executor{}
+	onlineDDL := &schema.OnlineDDL{
+		Strategy: schema.DDLStrategyOnline,
+		Options:  "--session-variable innodb_strict_mode=off --session-variable sql_mode=ANSI",
+	}
+	deferFunc, err := executor.initMigrationSessionVariables(t.Context(), onlineDDL, conn)
+	require.NoError(t, err)
+	queryLog := db.QueryLog()
+	assert.Contains(t, queryLog, "set @@session.innodb_strict_mode='off'")
+	assert.Contains(t, queryLog, "set @@session.sql_mode='ansi'")
+
+	deferFunc()
+	queryLog = db.QueryLog()
+	assert.Contains(t, queryLog, "set @@session.sql_mode=@vt_onlineddl_session_variable_1")
+	assert.Contains(t, queryLog, "set @@session.innodb_strict_mode=@vt_onlineddl_session_variable_0")
+}
+
+func TestMigrationSessionVariablesAreSetBeforeDDL(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	params := db.ConnParams()
+	connector := dbconfigs.NewTestDBConfigs(*params, *params, params.DbName).DbaWithDB()
+	conn, err := dbconnpool.NewDBConnection(t.Context(), connector)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	db.AddQuery("set @vt_onlineddl_session_variable_0=@@session.innodb_strict_mode", &sqltypes.Result{})
+	db.AddQuery("set @@session.innodb_strict_mode='off'", &sqltypes.Result{})
+	db.AddQuery("set @@session.innodb_strict_mode=@vt_onlineddl_session_variable_0", &sqltypes.Result{})
+	db.AddQuery("create table _vrepl_shadow (id int primary key)", &sqltypes.Result{})
+
+	executor := &Executor{}
+	onlineDDL := &schema.OnlineDDL{
+		Strategy: schema.DDLStrategyOnline,
+		Options:  "--session-variable innodb_strict_mode=off",
+	}
+	restoreSessionVariablesFunc, err := executor.initMigrationSessionVariables(t.Context(), onlineDDL, conn)
+	require.NoError(t, err)
+	defer restoreSessionVariablesFunc()
+
+	_, err = conn.ExecuteFetch("create table _vrepl_shadow (id int primary key)", 0, false)
+	require.NoError(t, err)
+
+	got := strings.Split(db.QueryLog(), ";")
+	sessionVariableIdx := -1
+	createIdx := -1
+	for i, q := range got {
+		q = strings.TrimSpace(strings.ToLower(q))
+		if strings.Contains(q, "innodb_strict_mode='off'") {
+			sessionVariableIdx = i
+		}
+		if strings.Contains(q, "create table _vrepl_shadow") {
+			createIdx = i
+		}
+	}
+	require.NotEqual(t, -1, sessionVariableIdx)
+	require.NotEqual(t, -1, createIdx)
+	assert.Less(t, sessionVariableIdx, createIdx, "session variables must be set before shadow CREATE/ALTER DDL")
+}
+
+func TestMigrationSessionVariableFailurePreventsDDL(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	params := db.ConnParams()
+	connector := dbconfigs.NewTestDBConfigs(*params, *params, params.DbName).DbaWithDB()
+	conn, err := dbconnpool.NewDBConnection(t.Context(), connector)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	db.AddQuery("set @vt_onlineddl_session_variable_0=@@session.sql_mode", &sqltypes.Result{})
+	db.AddRejectedQuery("set @@session.sql_mode='ANSI'", errors.New("cannot set session variable"))
+	db.AddQuery("set @@session.sql_mode=@vt_onlineddl_session_variable_0", &sqltypes.Result{})
+	db.AddQuery("create table _vrepl_shadow (id int primary key)", &sqltypes.Result{})
+
+	executor := &Executor{}
+	onlineDDL := &schema.OnlineDDL{
+		Strategy: schema.DDLStrategyOnline,
+		Options:  "--session-variable sql_mode=ANSI",
+	}
+	restoreSessionVariablesFunc, err := executor.initMigrationSessionVariables(t.Context(), onlineDDL, conn)
+	defer restoreSessionVariablesFunc()
+	require.ErrorContains(t, err, "cannot set session variable")
+	assert.NotContains(t, db.QueryLog(), "create table _vrepl_shadow")
 }
 
 func TestExecuteDirectlySetsLockWaitTimeout(t *testing.T) {

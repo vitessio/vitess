@@ -17,13 +17,16 @@ limitations under the License.
 package schemamanager
 
 import (
+	"context"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 
@@ -423,5 +426,44 @@ func TestApplyAllowZeroInDate(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, tcase.expect, result)
 		})
+	}
+}
+
+type capturingMultiFetchClient struct {
+	*fakeTabletManagerClient
+	mu   sync.Mutex
+	reqs []*tabletmanagerdatapb.ExecuteMultiFetchAsDbaRequest
+}
+
+func (client *capturingMultiFetchClient) ExecuteMultiFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteMultiFetchAsDbaRequest) ([]*querypb.QueryResult, error) {
+	client.mu.Lock()
+	client.reqs = append(client.reqs, req)
+	client.mu.Unlock()
+	return []*querypb.QueryResult{{RowsAffected: 1}}, nil
+}
+
+func (client *capturingMultiFetchClient) requests() []*tabletmanagerdatapb.ExecuteMultiFetchAsDbaRequest {
+	client.mu.Lock()
+	defer client.mu.Unlock()
+	return append([]*tabletmanagerdatapb.ExecuteMultiFetchAsDbaRequest(nil), client.reqs...)
+}
+
+func TestTabletExecutorPropagatesSessionVariables(t *testing.T) {
+	ctx := t.Context()
+	client := &capturingMultiFetchClient{fakeTabletManagerClient: newFakeTabletManagerClient()}
+	executor := NewTabletExecutor("TestTabletExecutorPropagatesSessionVariables", newFakeTopo(t), client, logutil.NewConsoleLogger(), testWaitReplicasTimeout, 0, sqlparser.NewTestParser())
+	require.NoError(t, executor.SetDDLStrategy("direct --session-variable innodb_strict_mode=off --session-variable sql_mode=ANSI"))
+	require.NoError(t, executor.Open(ctx, "test_keyspace"))
+	defer executor.Close()
+
+	result := executor.Execute(ctx, []string{"create table t (id int primary key)"})
+	require.Empty(t, result.ExecutorErr)
+	requests := client.requests()
+	require.NotEmpty(t, requests)
+	for _, request := range requests {
+		assert.Equal(t, []*tabletmanagerdatapb.SessionVariable{
+			{Name: "innodb_strict_mode", Value: "off"},
+			{Name: "sql_mode", Value: "ANSI"},
+		}, request.SessionVariables)
 	}
 }
