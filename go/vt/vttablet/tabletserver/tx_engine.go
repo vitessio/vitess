@@ -594,11 +594,13 @@ func (te *TxEngine) prepareTx(ctx context.Context, preparedTx *tx.PreparedTx) (f
 	// We should not use the external Prepare because
 	// we don't want to write again to the redo log.
 	err = te.preparedPool.PutRecovered(conn, preparedTx.Dtid)
-	if err == nil {
-		te.preparedPool.MarkRedoCommitStarted(preparedTx.Dtid)
+	if err != nil {
+		te.txPool.RollbackAndRelease(ctx, conn)
+		return failed, err
 	}
 
-	return
+	te.preparedPool.MarkRedoCommitStarted(preparedTx.Dtid)
+	return failed, nil
 }
 
 // checkErrorAndMarkFailed check that the error is retryable or non-retryable error.

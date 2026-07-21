@@ -1216,3 +1216,23 @@ func TestPrepareTx(t *testing.T) {
 		})
 	}
 }
+
+func TestPrepareTxReleasesConnectionWhenPutRecoveredFails(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	db.AddQueryPattern(".*", &sqltypes.Result{})
+
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.DB = newDBConfigs(db)
+	cfg.TwoPCAbandonAge = 200 * time.Second
+	te := NewTxEngine(tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TabletServerTest"), nil)
+	te.AcceptReadWrite()
+	te.preparedPool.Close()
+
+	_, err := te.prepareTx(t.Context(), &tx.PreparedTx{
+		Dtid:    "aa",
+		Queries: []string{"insert into vitess_test (intval) values(40)"},
+	})
+	require.ErrorContains(t, err, "pool is shutdown")
+	require.Equal(t, 1, db.GetQueryCalledNum("rollback"))
+}
