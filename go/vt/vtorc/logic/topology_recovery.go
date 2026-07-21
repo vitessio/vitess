@@ -711,24 +711,6 @@ func getCheckAndRecoverFunctionCode(analysisEntry *inst.DetectionAnalysis) (reco
 	// case inst.AllPrimaryReplicasStale:
 	//   recoveryFunc = recoverGenericProblemFunc
 
-	// If --cells-no-recovery contains the analyzed tablet's cell, skip the
-	// recovery action while still surfacing detection through the rest of the
-	// pipeline. Discovery is unaffected, so VTOrc retains a complete view of
-	// the topology and never mistakes a primary in another cell for "no primary".
-	// ClusterHasNoPrimary is excluded from this gate: that analysis is shard-wide
-	// (no single failed tablet's cell), so its AnalyzedCell comes from whichever
-	// replica row appeared first in the query and is therefore non-deterministic.
-	// Gating on it would make election behavior depend on row order rather than
-	// the topology. Use --prevent-cross-cell-promotion if you need to restrict
-	// which cells ERS may promote into.
-	if recoverySkipCode == RecoverySkipNone &&
-		hasActionableRecovery(recoveryFunc) &&
-		analysisEntry.Analysis != inst.ClusterHasNoPrimary &&
-		len(cellsNoRecovery) > 0 &&
-		slices.Contains(cellsNoRecovery, analysisEntry.AnalyzedCell) {
-		recoverySkipCode = RecoverySkipCellNoRecovery
-	}
-
 	return recoveryFunc, recoverySkipCode
 }
 
@@ -926,6 +908,25 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 	if err != nil {
 		logger.Error(fmt.Sprintf("executeCheckAndRecoverFunction: error inserting recovery detection record, aborting recovery: %+v", err))
 		return err
+	}
+
+	// Check for recovery being suppressed by --cells-no-recovery. The detection
+	// record has already been inserted above, so the suppressed incident remains
+	// visible in recovery_detection even though no action is taken.
+	// ClusterHasNoPrimary is excluded: that analysis is shard-wide and has no
+	// specific failed tablet, so its AnalyzedCell comes from whichever replica
+	// row appeared first in the query and is non-deterministic. Gating the
+	// election on it would make recovery behavior depend on row order rather
+	// than topology. Use --prevent-cross-cell-promotion to restrict which cells
+	// ERS may promote into.
+	if isActionableRecovery &&
+		analysisEntry.Analysis != inst.ClusterHasNoPrimary &&
+		len(cellsNoRecovery) > 0 &&
+		slices.Contains(cellsNoRecovery, analysisEntry.AnalyzedCell) {
+		logger.Info(fmt.Sprintf("CheckAndRecover: Tablet: %+v: NOT Recovering host (cell %v is in --cells-no-recovery)",
+			analyzedInstanceAliasString, analysisEntry.AnalyzedCell))
+		recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipCellNoRecovery.String()), 1)
+		return nil
 	}
 
 	// Check for recovery being disabled globally

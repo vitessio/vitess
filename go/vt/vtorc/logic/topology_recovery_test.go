@@ -252,7 +252,6 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 		name                         string
 		ersEnabled                   bool
 		convertTabletWithErrantGTIDs bool
-		cellsNoRecovery              []string
 		analysisEntry                *inst.DetectionAnalysis
 		wantRecoveryFunction         recoveryFunction
 		wantRecoverySkipCode         RecoverySkipCode
@@ -462,91 +461,6 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 				AnalyzedShardEmergencyReparentDisabled: true,
 			},
 			wantRecoveryFunction: restartAllDirectReplicasFunc,
-		}, {
-			name:            "DeadPrimary skipped because cell is in --cells-no-recovery",
-			ersEnabled:      true,
-			cellsNoRecovery: []string{"zone1"},
-			analysisEntry: &inst.DetectionAnalysis{
-				Analysis:         inst.DeadPrimary,
-				AnalyzedKeyspace: keyspace,
-				AnalyzedShard:    shard,
-				AnalyzedCell:     "zone1",
-			},
-			wantRecoveryFunction: recoverDeadPrimaryFunc,
-			wantRecoverySkipCode: RecoverySkipCellNoRecovery,
-		}, {
-			name:            "DeadPrimary not skipped: cell is not in --cells-no-recovery",
-			ersEnabled:      true,
-			cellsNoRecovery: []string{"zone1"},
-			analysisEntry: &inst.DetectionAnalysis{
-				Analysis:         inst.DeadPrimary,
-				AnalyzedKeyspace: keyspace,
-				AnalyzedShard:    shard,
-				AnalyzedCell:     "zone2",
-			},
-			wantRecoveryFunction: recoverDeadPrimaryFunc,
-		}, {
-			name:            "DeadPrimary not skipped: --cells-no-recovery empty",
-			ersEnabled:      true,
-			cellsNoRecovery: nil,
-			analysisEntry: &inst.DetectionAnalysis{
-				Analysis:         inst.DeadPrimary,
-				AnalyzedKeyspace: keyspace,
-				AnalyzedShard:    shard,
-				AnalyzedCell:     "zone1",
-			},
-			wantRecoveryFunction: recoverDeadPrimaryFunc,
-		}, {
-			name:            "ReplicaIsWritable skipped because cell is in --cells-no-recovery",
-			ersEnabled:      true,
-			cellsNoRecovery: []string{"zone1", "zone2"},
-			analysisEntry: &inst.DetectionAnalysis{
-				Analysis:         inst.ReplicaIsWritable,
-				AnalyzedKeyspace: keyspace,
-				AnalyzedShard:    shard,
-				AnalyzedCell:     "zone2",
-			},
-			wantRecoveryFunction: fixReplicaFunc,
-			wantRecoverySkipCode: RecoverySkipCellNoRecovery,
-		}, {
-			name:            "Non-actionable recovery is not skipped even when cell is in --cells-no-recovery",
-			ersEnabled:      true,
-			cellsNoRecovery: []string{"zone1"},
-			analysisEntry: &inst.DetectionAnalysis{
-				Analysis:         inst.DeadPrimaryAndReplicas,
-				AnalyzedKeyspace: keyspace,
-				AnalyzedShard:    shard,
-				AnalyzedCell:     "zone1",
-			},
-			wantRecoveryFunction: recoverGenericProblemFunc,
-		}, {
-			name:            "ERS-disabled skip wins over cells-no-recovery skip",
-			ersEnabled:      false,
-			cellsNoRecovery: []string{"zone1"},
-			analysisEntry: &inst.DetectionAnalysis{
-				Analysis:         inst.DeadPrimary,
-				AnalyzedKeyspace: keyspace,
-				AnalyzedShard:    shard,
-				AnalyzedCell:     "zone1",
-			},
-			wantRecoveryFunction: recoverDeadPrimaryFunc,
-			wantRecoverySkipCode: RecoverySkipERSDisabled,
-		}, {
-			// ClusterHasNoPrimary is shard-wide — its AnalyzedCell comes from
-			// whichever replica row appeared first in the query and is therefore
-			// non-deterministic. Gating the election on it would let row order
-			// determine whether a shard gets a primary, so we exclude it from the
-			// cell deny-list check entirely.
-			name:            "ClusterHasNoPrimary is not skipped even when analyzed cell is in --cells-no-recovery",
-			ersEnabled:      true,
-			cellsNoRecovery: []string{"zone1"},
-			analysisEntry: &inst.DetectionAnalysis{
-				Analysis:         inst.ClusterHasNoPrimary,
-				AnalyzedKeyspace: keyspace,
-				AnalyzedShard:    shard,
-				AnalyzedCell:     "zone1",
-			},
-			wantRecoveryFunction: electNewPrimaryFunc,
 		},
 	}
 
@@ -559,10 +473,6 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 			convertErrantVal := config.ConvertTabletWithErrantGTIDs()
 			config.SetConvertTabletWithErrantGTIDs(tt.convertTabletWithErrantGTIDs)
 			defer config.SetConvertTabletWithErrantGTIDs(convertErrantVal)
-
-			prevCellsNoRecovery := cellsNoRecovery
-			cellsNoRecovery = tt.cellsNoRecovery
-			defer func() { cellsNoRecovery = prevCellsNoRecovery }()
 
 			gotFunc, recoverySkipCode := getCheckAndRecoverFunctionCode(tt.analysisEntry)
 			require.Equal(t, tt.wantRecoveryFunction, gotFunc)
