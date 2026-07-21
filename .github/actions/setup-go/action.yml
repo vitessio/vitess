@@ -44,9 +44,9 @@ runs:
       uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
       with:
         path: ~/.cache/go-build
-        key: go-build-${{ toLower(runner.os) }}-${{ toLower(runner.arch) }}-go${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('go.sum', 'tools/**/go.sum') }}
+        key: go-build-${{ runner.os }}-${{ runner.arch }}-go${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('go.sum', 'tools/**/go.sum') }}
         restore-keys: |
-          go-build-${{ toLower(runner.os) }}-${{ toLower(runner.arch) }}-go${{ steps.setup-go.outputs.go-version }}-
+          go-build-${{ runner.os }}-${{ runner.arch }}-go${{ steps.setup-go.outputs.go-version }}-
 
     # Pushes to main and the release branches save the entries every other run
     # restores from. The saves deliberately start from an empty cache instead
@@ -66,4 +66,4 @@ runs:
       uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
       with:
         path: ~/.cache/go-build
-        key: go-build-${{ toLower(runner.os) }}-${{ toLower(runner.arch) }}-go${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('go.sum', 'tools/**/go.sum') }}
+        key: go-build-${{ runner.os }}-${{ runner.arch }}-go${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('go.sum', 'tools/**/go.sum') }}
