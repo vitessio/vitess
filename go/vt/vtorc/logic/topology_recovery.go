@@ -714,17 +714,16 @@ func getCheckAndRecoverFunctionCode(analysisEntry *inst.DetectionAnalysis) (reco
 	// If --cells-no-recovery contains the analyzed tablet's cell, skip the
 	// recovery action while still surfacing detection through the rest of the
 	// pipeline. Discovery is unaffected, so VTOrc retains a complete view of
-	// the topology and never mistakes a primary in another cell for "no
-	// primary". Two caveats follow from gating purely on the analyzed tablet's
-	// cell:
-	//  - It does not by itself stop ERS, triggered by a failure in an allowed
-	//    cell, from choosing a promotion candidate that lives in a no-recovery
-	//    cell; use --prevent-cross-cell-promotion for that.
-	//  - It applies to every actionable recovery, including electNewPrimaryFunc
-	//    (ClusterHasNoPrimary), so it can suppress an initial primary election
-	//    when the analyzed tablet for that analysis is in a no-recovery cell.
+	// the topology and never mistakes a primary in another cell for "no primary".
+	// ClusterHasNoPrimary is excluded from this gate: that analysis is shard-wide
+	// (no single failed tablet's cell), so its AnalyzedCell comes from whichever
+	// replica row appeared first in the query and is therefore non-deterministic.
+	// Gating on it would make election behavior depend on row order rather than
+	// the topology. Use --prevent-cross-cell-promotion if you need to restrict
+	// which cells ERS may promote into.
 	if recoverySkipCode == RecoverySkipNone &&
 		hasActionableRecovery(recoveryFunc) &&
+		analysisEntry.Analysis != inst.ClusterHasNoPrimary &&
 		len(cellsNoRecovery) > 0 &&
 		slices.Contains(cellsNoRecovery, analysisEntry.AnalyzedCell) {
 		recoverySkipCode = RecoverySkipCellNoRecovery

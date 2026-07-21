@@ -531,6 +531,22 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 			},
 			wantRecoveryFunction: recoverDeadPrimaryFunc,
 			wantRecoverySkipCode: RecoverySkipERSDisabled,
+		}, {
+			// ClusterHasNoPrimary is shard-wide — its AnalyzedCell comes from
+			// whichever replica row appeared first in the query and is therefore
+			// non-deterministic. Gating the election on it would let row order
+			// determine whether a shard gets a primary, so we exclude it from the
+			// cell deny-list check entirely.
+			name:            "ClusterHasNoPrimary is not skipped even when analyzed cell is in --cells-no-recovery",
+			ersEnabled:      true,
+			cellsNoRecovery: []string{"zone1"},
+			analysisEntry: &inst.DetectionAnalysis{
+				Analysis:         inst.ClusterHasNoPrimary,
+				AnalyzedKeyspace: keyspace,
+				AnalyzedShard:    shard,
+				AnalyzedCell:     "zone1",
+			},
+			wantRecoveryFunction: electNewPrimaryFunc,
 		},
 	}
 
