@@ -25,6 +25,7 @@
         - [SHA256-hashed passwords in the static gRPC auth plugin](#vtgate-grpc-static-auth-sha256)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
+        - [New `--demote-primary-lock-wait-timeout` flag](#vttablet-demote-primary-lock-wait-timeout)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
         - [Skip MySQL version check when restoring from a mysql-shell backup](#vttablet-mysql-shell-restore-skip-version-check)
@@ -214,6 +215,14 @@ A new `--consolidator-reject-on-cap` flag (default `false`) has been added to VT
 **Important:** The cap is enforced against the consolidator's global `totalWaiterCount` across all queries, not a per-query waiter count. This means a duplicate for query B can be rejected because query A has already consumed most of the global waiter budget. This provides backpressure when the consolidator as a whole is saturated, rather than when any single query has too many waiters.
 
 See [#19836](https://github.com/vitessio/vitess/pull/19836) for details.
+
+#### <a id="vttablet-demote-primary-lock-wait-timeout"/>New `--demote-primary-lock-wait-timeout` flag</a>
+
+A new VTTablet flag, `--demote-primary-lock-wait-timeout` (default `0`, disabled), bounds how long enabling `super_read_only` waits for metadata locks during a primary demotion. Long-running queries hold metadata locks that block `SET GLOBAL super_read_only`, which can stall a `PlannedReparentShard` or `EmergencyReparentShard` behind them. With the flag set, the demotion applies a session `lock_wait_timeout` (rounded up to whole seconds) so the statement fails fast with a lock-wait-timeout error instead of waiting indefinitely.
+
+When disabled (the default), demotion behavior is unchanged and the wait is unbounded.
+
+See [#20285](https://github.com/vitessio/vitess/pull/20285) for details.
 
 ### <a id="minor-changes-vttablet"/>VTTablet</a>
 
