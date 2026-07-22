@@ -99,8 +99,8 @@ var (
 	minPartSize int64 = 5 * 1024 * 1024 // 5MiB - AWS requirement
 
 	// download part size and concurrency for parallel downloads via transfer manager
-	downloadPartSize    int64
-	downloadConcurrency int
+	downloadPartSize    int64 = 8 * 1024 * 1024 // 8MiB - transfer manager default
+	downloadConcurrency int   = 5               // transfer manager default
 
 	ErrPartSize = errors.New("minimum S3 part size must be between 5MiB and 5GiB")
 )
@@ -116,8 +116,8 @@ func registerFlags(fs *pflag.FlagSet) {
 	utils.SetFlagStringVar(fs, &requiredLogLevel, "s3-backup-log-level", "LogOff", "determine the S3 loglevel to use from LogOff, LogDebug, LogDebugWithSigning, LogDebugWithHTTPBody, LogDebugWithRequestRetries, LogDebugWithRequestErrors.")
 	utils.SetFlagStringVar(fs, &sse, "s3-backup-server-side-encryption", "", "server-side encryption algorithm (e.g., AES256, aws:kms, sse_c:/path/to/key/file).")
 	utils.SetFlagInt64Var(fs, &minPartSize, "s3-backup-aws-min-partsize", minPartSize, "Minimum part size to use, defaults to 5MiB but can be increased due to the dataset size.")
-	utils.SetFlagInt64Var(fs, &downloadPartSize, "s3-backup-download-part-size", 0, "Part size in bytes for parallel S3 downloads via transfer manager. 0 uses the transfer manager default (8MiB).")
-	utils.SetFlagIntVar(fs, &downloadConcurrency, "s3-backup-download-concurrency", 0, "Number of parallel goroutines for S3 downloads via transfer manager. 0 uses the transfer manager default (5).")
+	utils.SetFlagInt64Var(fs, &downloadPartSize, "s3-backup-download-part-size", 8*1024*1024, "Part size in bytes for parallel S3 downloads via transfer manager. (default 8MiB)")
+	utils.SetFlagIntVar(fs, &downloadConcurrency, "s3-backup-download-concurrency", 5, "Number of parallel goroutines for S3 downloads via transfer manager.")
 }
 
 func init() {
@@ -336,53 +336,78 @@ func (bh *S3BackupHandle) ReadFile(ctx context.Context, filename string) (io.Rea
 	sendStats := bh.bs.params.Stats.Scope(stats.Operation("AWS:Request:Send"))
 	timedClient := &timedS3Client{client: bh.s3Client, sendStats: sendStats}
 
-	// SSE-C requires encryption params on every request including HeadObject.
-	// The transfer manager's internal HeadObject does not forward SSE-C params,
-	// so we fall back to a single GetObject call for SSE-C encrypted objects.
+	if downloadPartSize < minPartSize {
+		return nil, fmt.Errorf("--s3-backup-download-part-size must be >= %d (5MiB), got %d", minPartSize, downloadPartSize)
+	}
+	if downloadConcurrency < 1 {
+		return nil, fmt.Errorf("--s3-backup-download-concurrency must be >= 1, got %d", downloadConcurrency)
+	}
+
+	// The transfer manager calls HeadObject internally to determine object size,
+	// but does not forward SSE-C params to that call (aws-sdk-go-v2 bug). We work
+	// around this by wrapping the client to inject SSE-C params into HeadObject.
+	var tmS3Client transfermanager.S3APIClient = timedClient
 	if bh.bs.s3SSE.customerAlg != nil {
-		out, err := timedClient.GetObject(ctx, &s3.GetObjectInput{
-			Bucket:               &bucket,
-			Key:                  &object,
-			SSECustomerAlgorithm: bh.bs.s3SSE.customerAlg,
-			SSECustomerKey:       bh.bs.s3SSE.customerKey,
-			SSECustomerKeyMD5:    bh.bs.s3SSE.customerMd5,
-		})
-		if err != nil {
-			return nil, err
+		tmS3Client = &sseCClient{
+			S3APIClient: timedClient,
+			alg:         bh.bs.s3SSE.customerAlg,
+			key:         bh.bs.s3SSE.customerKey,
+			keyMD5:      bh.bs.s3SSE.customerMd5,
 		}
-		return out.Body, nil
 	}
 
-	if downloadPartSize < 0 {
-		return nil, fmt.Errorf("--s3-backup-download-part-size must be non-negative, got %d", downloadPartSize)
-	}
-	if downloadConcurrency < 0 {
-		return nil, fmt.Errorf("--s3-backup-download-concurrency must be non-negative, got %d", downloadConcurrency)
-	}
-
-	tmClient := transfermanager.New(timedClient, func(o *transfermanager.Options) {
+	tmClient := transfermanager.New(tmS3Client, func(o *transfermanager.Options) {
 		// GetObjectRanges uses byte-range GETs sized by PartSizeBytes.
 		// The default (GetObjectParts) reuses original multipart part numbers
 		// and ignores PartSizeBytes entirely.
 		o.GetObjectType = tmtypes.GetObjectRanges
-		if downloadPartSize > 0 {
-			o.PartSizeBytes = downloadPartSize
-		}
-		if downloadConcurrency > 0 {
-			o.Concurrency = downloadConcurrency
-		}
+		o.PartSizeBytes = downloadPartSize
+		o.Concurrency = downloadConcurrency
 	})
 
-	out, err := tmClient.GetObject(ctx, &transfermanager.GetObjectInput{
-		Bucket: &bucket,
-		Key:    &object,
+	readCtx, cancel := context.WithCancel(ctx)
+	out, err := tmClient.GetObject(readCtx, &transfermanager.GetObjectInput{
+		Bucket:               &bucket,
+		Key:                  &object,
+		SSECustomerAlgorithm: bh.bs.s3SSE.customerAlg,
+		SSECustomerKey:       bh.bs.s3SSE.customerKey,
+		SSECustomerKeyMD5:    bh.bs.s3SSE.customerMd5,
 	})
 	if err != nil {
+		cancel()
 		return nil, err
 	}
-	// Transfer manager's GetObjectOutput.Body is an io.Reader (concurrentReader),
-	// not an io.ReadCloser — wrap so callers can call Close() uniformly.
-	return io.NopCloser(out.Body), nil
+	return &cancelingReader{Reader: out.Body, cancel: cancel}, nil
+}
+
+// cancelingReader wraps an io.Reader and cancels its context on Close,
+// aborting any in-flight transfer-manager ranged GETs.
+type cancelingReader struct {
+	io.Reader
+	cancel context.CancelFunc
+}
+
+func (r *cancelingReader) Close() error {
+	r.cancel()
+	return nil
+}
+
+// sseCClient wraps an S3APIClient to inject SSE-C encryption params into
+// HeadObject calls. This works around a transfer manager bug where its
+// internal HeadObject (used to discover object size) omits SSE-C fields,
+// causing 403 errors for customer-encrypted objects.
+type sseCClient struct {
+	transfermanager.S3APIClient
+	alg    *string
+	key    *string
+	keyMD5 *string
+}
+
+func (c *sseCClient) HeadObject(ctx context.Context, input *s3.HeadObjectInput, optFns ...func(*s3.Options)) (*s3.HeadObjectOutput, error) {
+	input.SSECustomerAlgorithm = c.alg
+	input.SSECustomerKey = c.key
+	input.SSECustomerKeyMD5 = c.keyMD5
+	return c.S3APIClient.HeadObject(ctx, input, optFns...)
 }
 
 var _ backupstorage.BackupHandle = (*S3BackupHandle)(nil)
