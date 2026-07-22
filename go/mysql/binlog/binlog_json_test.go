@@ -560,3 +560,20 @@ func TestMarshalJSONToSQL(t *testing.T) {
 		})
 	}
 }
+
+// TestFillJSONDiff pins the invariant that FillJSONDiff substitutes only the
+// leading base column placeholder. ParseBinaryJSONDiff always writes the
+// placeholder first, before any path or value bytes, so any later "%s"
+// originating from a JSON path or value must be left untouched. This keeps a
+// future generator change from silently re-introducing printf-style corruption.
+func TestFillJSONDiff(t *testing.T) {
+	// A generator-shaped diff whose path and value both contain a literal "%s".
+	diff := `JSON_INSERT(%s, _utf8mb4'$."a%sb"', CAST(JSON_QUOTE(_utf8mb4'100%s done') as JSON))`
+	got := FillJSONDiff(diff, "`c1`")
+	want := "JSON_INSERT(`c1`, _utf8mb4'$.\"a%sb\"', CAST(JSON_QUOTE(_utf8mb4'100%s done') as JSON))"
+	require.Equal(t, want, got)
+
+	// A diff with no placeholder, such as a bare JSON null literal, is returned
+	// unchanged.
+	require.Equal(t, "CAST(_utf8mb4'null' as JSON)", FillJSONDiff("CAST(_utf8mb4'null' as JSON)", "`c1`"))
+}

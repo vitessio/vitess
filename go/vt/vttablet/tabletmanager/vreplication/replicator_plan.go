@@ -25,6 +25,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/bytes2"
+	"vitess.io/vitess/go/mysql/binlog"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/mysql/collations/colldata"
@@ -643,8 +644,8 @@ func (tp *TablePlan) bindAfterJSONFieldVals(rowChange *binlogdatapb.RowChange, a
 				tp.clearEmptyPartialJSONDataColumns(rowChange, afterVals)
 				newVal = new(sqltypes.MakeTrusted(querypb.Type_EXPRESSION, nil))
 			} else {
-				newVal = new(sqltypes.MakeTrusted(querypb.Type_EXPRESSION,
-					fmt.Appendf(nil, afterVals[i].RawStr(), sqlescape.EscapeID(field.Name))))
+				expr := binlog.FillJSONDiff(afterVals[i].RawStr(), sqlescape.EscapeID(field.Name))
+				newVal = new(sqltypes.MakeTrusted(querypb.Type_EXPRESSION, []byte(expr)))
 			}
 		default: // A JSON value (which may be a JSON null literal value)
 			newVal, err = vjson.MarshalSQLValue(afterVals[i].Raw())
@@ -805,8 +806,8 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 						buf.WriteByte('\'')
 						buf.Write(beforeVal)
 						buf.WriteByte('\'')
-						newVal := sqltypes.MakeTrusted(querypb.Type_EXPRESSION,
-							fmt.Appendf(nil, diff, buf.String()))
+						expr := binlog.FillJSONDiff(diff, buf.String())
+						newVal := sqltypes.MakeTrusted(querypb.Type_EXPRESSION, []byte(expr))
 						bv, err := tp.bindFieldVal(field, &newVal)
 						if err != nil {
 							return nil, vterrors.Wrapf(err, "failed to bind field value for %s.%s when building insert query",
