@@ -323,13 +323,23 @@ func (thc *tabletHealthCheck) checkConn(hc *HealthCheckImpl) {
 			return
 		case <-time.After(retryDelay):
 			// Exponentially back-off to prevent tight-loop.
-			retryDelay *= 2
-			// Limit the retry delay backoff to the health check timeout
-			if retryDelay > hc.healthCheckTimeout {
-				retryDelay = hc.healthCheckTimeout
-			}
+			retryDelay = nextHealthCheckRetryDelay(retryDelay)
 		}
 	}
+}
+
+// maxHealthCheckRetryDelay caps the exponential back-off between healthcheck
+// reconnection attempts. Capping well below healthCheckTimeout (default 1m)
+// ensures vtgate rediscovers a recovered tablet promptly instead of sleeping
+// out a back-off that had grown to the silence timeout. See #19894.
+const maxHealthCheckRetryDelay = 10 * time.Second
+
+// nextHealthCheckRetryDelay doubles the current back-off delay, capping it at
+// maxHealthCheckRetryDelay. A delay already above the cap (operator-configured)
+// is left unchanged, never reduced. See #19894.
+func nextHealthCheckRetryDelay(current time.Duration) time.Duration {
+	next := current * 2
+	return min(next, max(current, maxHealthCheckRetryDelay))
 }
 
 func (thc *tabletHealthCheck) closeConnection(ctx context.Context, err error) {
