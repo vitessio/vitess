@@ -376,6 +376,10 @@ func TestParseDDLStrategy(t *testing.T) {
 			expectError:      "--session-variable requires name=value",
 		},
 		{
+			strategyVariable: "online --session-variable --allow-concurrent",
+			expectError:      `invalid --session-variable value "--allow-concurrent": expected name=value`,
+		},
+		{
 			strategyVariable: "direct --session-variable sql_mode",
 			expectError:      "expected name=value",
 		},
