@@ -18,7 +18,10 @@ package tabletserver
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -30,10 +33,31 @@ func TestDiskHealthMonitor_noStall(t *testing.T) {
 	mockFileWriter := &sequencedMockWriter{}
 	diskHealthMonitor := newPollingDiskHealthMonitor(ctx, mockFileWriter.mockWriteFunction, 50*time.Millisecond, 25*time.Millisecond)
 
-	time.Sleep(300 * time.Millisecond)
-	totalCreateCalls := mockFileWriter.getTotalCreateCalls()
-	require.Equalf(t, 5, totalCreateCalls, "expected 5 calls to createFile, got %d", totalCreateCalls)
+	require.Eventually(t, func() bool {
+		return mockFileWriter.getTotalCreateCalls() >= 5
+	}, 500*time.Millisecond, 10*time.Millisecond)
 	require.False(t, diskHealthMonitor.IsDiskStalled(), "expected isStalled to be false")
+	require.False(t, diskHealthMonitor.IsDiskFull(), "expected isFull to be false")
+}
+
+func TestAttemptFileWriteUsesFreshProbeFile(t *testing.T) {
+	oldStalledDiskWriteDir := stalledDiskWriteDir
+	stalledDiskWriteDir = t.TempDir()
+	t.Cleanup(func() {
+		stalledDiskWriteDir = oldStalledDiskWriteDir
+	})
+
+	reusableProbePath := filepath.Join(stalledDiskWriteDir, ".stalled_disk_check")
+	require.NoError(t, os.WriteFile(reusableProbePath, []byte("preserve"), 0o600))
+
+	require.NoError(t, attemptFileWrite())
+
+	probeContents, err := os.ReadFile(reusableProbePath)
+	require.NoError(t, err)
+	require.Equal(t, "preserve", string(probeContents))
+	entries, err := os.ReadDir(stalledDiskWriteDir)
+	require.NoError(t, err)
+	require.Len(t, entries, 1)
 }
 
 func TestDiskHealthMonitor_stallAndRecover(t *testing.T) {
@@ -45,11 +69,13 @@ func TestDiskHealthMonitor_stallAndRecover(t *testing.T) {
 	totalCreateCalls := mockFileWriter.getTotalCreateCalls()
 	require.Equalf(t, 2, totalCreateCalls, "expected 2 calls to createFile, got %d", totalCreateCalls)
 	require.True(t, diskHealthMonitor.IsDiskStalled(), "expected isStalled to be true")
+	require.False(t, diskHealthMonitor.IsDiskFull(), "expected isFull to be false")
 
 	time.Sleep(300 * time.Millisecond)
 	totalCreateCalls = mockFileWriter.getTotalCreateCalls()
 	require.GreaterOrEqualf(t, totalCreateCalls, 5, "expected at least 5 calls to createFile, got %d", totalCreateCalls)
 	require.False(t, diskHealthMonitor.IsDiskStalled(), "expected isStalled to be false")
+	require.False(t, diskHealthMonitor.IsDiskFull(), "expected isFull to be false")
 }
 
 func TestDiskHealthMonitor_stallDetected(t *testing.T) {
@@ -61,6 +87,40 @@ func TestDiskHealthMonitor_stallDetected(t *testing.T) {
 	totalCreateCalls := mockFileWriter.getTotalCreateCalls()
 	require.Equalf(t, 5, totalCreateCalls, "expected 5 calls to createFile, got %d", totalCreateCalls)
 	require.True(t, diskHealthMonitor.IsDiskStalled(), "expected isStalled to be true")
+	require.False(t, diskHealthMonitor.IsDiskFull(), "expected isFull to be false")
+}
+
+// TestDiskHealthMonitor_diskFullAndRecover exercises both ENOSPC (filesystem
+// out of space) and EDQUOT (quota exceeded on xfs/ext4/NFS) as disk-full
+// signals — without EDQUOT handling, quota-bound tablets would be misrouted
+// through the stalled-disk recovery flag.
+func TestDiskHealthMonitor_diskFullAndRecover(t *testing.T) {
+	ctx := t.Context()
+	mockFileWriter := &sequencedMockWriter{
+		sequencedWriteFunctions: []writeFunction{
+			delayedWriteFunction(10*time.Millisecond, syscall.ENOSPC),
+			delayedWriteFunction(10*time.Millisecond, nil),
+			delayedWriteFunction(10*time.Millisecond, syscall.EDQUOT),
+			delayedWriteFunction(10*time.Millisecond, nil),
+		},
+	}
+	diskHealthMonitor := newPollingDiskHealthMonitor(ctx, mockFileWriter.mockWriteFunction, 50*time.Millisecond, 25*time.Millisecond)
+
+	require.Eventually(t, func() bool {
+		return diskHealthMonitor.IsDiskFull() && !diskHealthMonitor.IsDiskStalled()
+	}, 300*time.Millisecond, 10*time.Millisecond, "expected IsDiskFull=true after ENOSPC")
+
+	require.Eventually(t, func() bool {
+		return !diskHealthMonitor.IsDiskFull() && !diskHealthMonitor.IsDiskStalled()
+	}, 300*time.Millisecond, 10*time.Millisecond, "expected IsDiskFull=false after ENOSPC recovery")
+
+	require.Eventually(t, func() bool {
+		return diskHealthMonitor.IsDiskFull() && !diskHealthMonitor.IsDiskStalled()
+	}, 300*time.Millisecond, 10*time.Millisecond, "expected IsDiskFull=true after EDQUOT")
+
+	require.Eventually(t, func() bool {
+		return !diskHealthMonitor.IsDiskFull() && !diskHealthMonitor.IsDiskStalled()
+	}, 300*time.Millisecond, 10*time.Millisecond, "expected IsDiskFull=false after EDQUOT recovery")
 }
 
 type sequencedMockWriter struct {

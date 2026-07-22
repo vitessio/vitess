@@ -222,7 +222,8 @@ func TestDemotePrimaryWaitingForSemiSyncUnblock(t *testing.T) {
 	fakeDb.AddQuery("SELECT /*+ MAX_EXECUTION_TIME(500) */ variable_name, variable_value FROM performance_schema.global_status WHERE REGEXP_LIKE(variable_name, 'Rpl_semi_sync_(source|master)_(wait_sessions|yes_tx)')", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"),
 		"Rpl_semi_sync_source_wait_sessions|1",
-		"Rpl_semi_sync_source_yes_tx|5"))
+		"Rpl_semi_sync_source_yes_tx|5",
+	))
 
 	// Verify that in the beginning the tablet is serving.
 	require.True(t, tm.QueryServiceControl.IsServing())
@@ -252,7 +253,8 @@ func TestDemotePrimaryWaitingForSemiSyncUnblock(t *testing.T) {
 	fakeDb.AddQuery("SELECT /*+ MAX_EXECUTION_TIME(1000) */ variable_name, variable_value FROM performance_schema.global_status WHERE REGEXP_LIKE(variable_name, 'Rpl_semi_sync_(source|master)_(wait_sessions|yes_tx)')", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"),
 		"Rpl_semi_sync_source_wait_sessions|0",
-		"Rpl_semi_sync_source_yes_tx|5"))
+		"Rpl_semi_sync_source_yes_tx|5",
+	))
 	close(ch)
 
 	// This should unblock the demote primary operation eventually.
@@ -287,14 +289,16 @@ func TestDemotePrimaryWithSemiSyncProgressDetection(t *testing.T) {
 		fakeDb.AddQuery("SELECT /*+ MAX_EXECUTION_TIME(1000) */ variable_name, variable_value FROM performance_schema.global_status WHERE REGEXP_LIKE(variable_name, 'Rpl_semi_sync_(source|master)_(wait_sessions|yes_tx)')", sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"),
 			"Rpl_semi_sync_source_wait_sessions|1",
-			"Rpl_semi_sync_source_yes_tx|5"))
+			"Rpl_semi_sync_source_yes_tx|5",
+		))
 	}
 	// Next calls: waiting sessions present, but ackedTrxs=6 (progress!).
 	for range 10 {
 		fakeDb.AddQuery("SELECT /*+ MAX_EXECUTION_TIME(1000) */ variable_name, variable_value FROM performance_schema.global_status WHERE REGEXP_LIKE(variable_name, 'Rpl_semi_sync_(source|master)_(wait_sessions|yes_tx)')", sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"),
 			"Rpl_semi_sync_source_wait_sessions|1",
-			"Rpl_semi_sync_source_yes_tx|6"))
+			"Rpl_semi_sync_source_yes_tx|6",
+		))
 	}
 
 	// Verify that in the beginning the tablet is serving.
@@ -348,13 +352,15 @@ func TestDemotePrimaryWhenSemiSyncBecomesUnblockedBetweenChecks(t *testing.T) {
 	fakeDb.AddQuery("SELECT /*+ MAX_EXECUTION_TIME(1000) */ variable_name, variable_value FROM performance_schema.global_status WHERE REGEXP_LIKE(variable_name, 'Rpl_semi_sync_(source|master)_(wait_sessions|yes_tx)')", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"),
 		"Rpl_semi_sync_source_wait_sessions|2",
-		"Rpl_semi_sync_source_yes_tx|5"))
+		"Rpl_semi_sync_source_yes_tx|5",
+	))
 	// Second and subsequent calls: no waiting sessions (unblocked!).
 	for range 10 {
 		fakeDb.AddQuery("SELECT /*+ MAX_EXECUTION_TIME(1000) */ variable_name, variable_value FROM performance_schema.global_status WHERE REGEXP_LIKE(variable_name, 'Rpl_semi_sync_(source|master)_(wait_sessions|yes_tx)')", sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"),
 			"Rpl_semi_sync_source_wait_sessions|0",
-			"Rpl_semi_sync_source_yes_tx|5"))
+			"Rpl_semi_sync_source_yes_tx|5",
+		))
 	}
 
 	// Verify that in the beginning the tablet is serving.
@@ -522,6 +528,52 @@ func TestRestartReplicationRecoversFromRecoverableReplicationInitializationError
 	err := tm.RestartReplication(t.Context(), false)
 	require.NoError(t, err)
 	require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
+}
+
+// TestFullStatusShortCircuitsOnDiskHealth pins the `diskStalled || diskFull`
+// OR semantics: any single flag short-circuits, neither falls through to MySQL.
+func TestFullStatusShortCircuitsOnDiskHealth(t *testing.T) {
+	tests := []struct {
+		name             string
+		diskStalled      bool
+		diskFull         bool
+		wantShortCircuit bool
+	}{
+		{name: "disk full only", diskFull: true, wantShortCircuit: true},
+		{name: "disk stalled only", diskStalled: true, wantShortCircuit: true},
+		{name: "both flags set", diskStalled: true, diskFull: true, wantShortCircuit: true},
+		{name: "neither flag set", wantShortCircuit: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+			tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), fakeMysqlDaemon, nil)
+			qsc := tabletservermock.NewController()
+			qsc.DiskStalled = tt.diskStalled
+			qsc.DiskFull = tt.diskFull
+			tm.QueryServiceControl = qsc
+
+			status, err := tm.FullStatus(t.Context())
+			require.True(t, qsc.MethodCalled["IsDiskStalled"])
+			require.True(t, qsc.MethodCalled["IsDiskFull"])
+
+			if tt.wantShortCircuit {
+				require.NoError(t, err)
+				require.Equal(t, tt.diskStalled, status.DiskStalled)
+				require.Equal(t, tt.diskFull, status.DiskFull)
+				// ServerId is unset on the short-circuit response and
+				// would be 1 (from the fake) if MySQL was queried.
+				require.Zero(t, status.ServerId)
+				return
+			}
+			// No short-circuit: function proceeded to MysqlDaemon. Either it
+			// succeeded with ServerId=1 or failed because of missing query
+			// expectations — both are fine; neither flag should be set.
+			if err == nil {
+				require.Equal(t, uint32(1), status.ServerId)
+			}
+		})
+	}
 }
 
 // TestFixSemiSyncAndReplicationRecoversFromRecoverableReplicationInitializationError verifies semi-sync restart path self-heals recoverable init failures.

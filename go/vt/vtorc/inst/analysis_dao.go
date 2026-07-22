@@ -276,7 +276,8 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 			DISTINCT case when replica_instance.log_bin
 			AND replica_instance.log_replica_updates then replica_instance.major_version else NULL end
 		) AS count_distinct_logging_major_versions,
-		primary_instance.is_disk_stalled != 0 AS is_disk_stalled
+		primary_instance.is_disk_stalled != 0 AS is_disk_stalled,
+		primary_instance.is_disk_full != 0 AS is_disk_full
 	FROM
 		vitess_tablet
 		JOIN vitess_keyspace ON (
@@ -440,6 +441,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 
 		a.IsReadOnly = m.GetUint("read_only") == 1
 		a.IsDiskStalled = m.GetBool("is_disk_stalled")
+		a.IsDiskFull = m.GetBool("is_disk_full")
 
 		if !a.LastCheckValid {
 			analysisMessage := fmt.Sprintf(
@@ -482,12 +484,33 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 			return nil
 		}
 		isInvalid := m.GetBool("is_invalid")
+		// A primary with a recoverable disk-health issue must not match any
+		// other analysis (e.g. DeadPrimary, InvalidPrimary) — only ERS can
+		// resolve it, and the disk analysis names the root cause. Each disk
+		// flag only masks when its recovery flag is enabled: a disabled
+		// recovery also disables the disk analysis (gated in its MatchFunc),
+		// so the flag — possibly preserved from a prior poll while the tablet
+		// is unreachable — must fall through to DeadPrimary* instead of
+		// leaving the shard with an analysis whose recovery is skipped.
+		// Evaluating both flags together tolerates both being set on the same
+		// poll: either enabled disk analysis can still fire (problem-ordering
+		// picks the winner) instead of silently filtering both out.
+		diskHealthMasksPrimaryAnalyses := a.IsClusterPrimary &&
+			((a.IsDiskFull && config.GetFullDiskPrimaryRecovery()) ||
+				(a.IsDiskStalled && config.GetStalledDiskPrimaryRecovery()))
 		var matchedProblems []*DetectionAnalysisProblem
 		for _, problem := range detectionAnalysisProblems {
 			// When isInvalid is true, instance data is unreliable (never been reached).
 			// Only InvalidPrimary/InvalidReplica should match; postProcessAnalyses
 			// handles upgrading InvalidPrimary to DeadPrimary if needed.
 			if isInvalid && problem.Meta.Analysis != InvalidPrimary && problem.Meta.Analysis != InvalidReplica {
+				continue
+			}
+			if a.IsDiskFull && topo.IsReplicaType(a.TabletType) && problem.Meta.Analysis != ReplicaDiskFull {
+				continue
+			}
+			if diskHealthMasksPrimaryAnalyses &&
+				problem.Meta.Analysis != PrimaryDiskFull && problem.Meta.Analysis != PrimaryDiskStalled {
 				continue
 			}
 			if problem.HasMatch(a, ca, primaryTablet, tablet, isInvalid, isStaleBinlogCoordinates) {
@@ -547,7 +570,8 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 				// it to the chosen problem so the recovery targets it.
 				survives := func(p *DetectionAnalysisProblem) bool {
 					return declaresBefore(p, ca.shardWideAnalysisCode) ||
-						declaresAfter(ca.shardWideProblem, p.Meta.Analysis)
+						declaresAfter(ca.shardWideProblem, p.Meta.Analysis) ||
+						slices.Contains(p.PreserveWithShardWideAnalyses, ca.shardWideAnalysisCode)
 				}
 				if survives(chosenProblem) {
 					key := fmt.Sprintf("%s.%s.%s.%s.%s", tabletAliasString, a.AnalyzedKeyspace, a.AnalyzedShard, chosenProblem.Meta.Analysis, ca.shardWideAnalysisCode)

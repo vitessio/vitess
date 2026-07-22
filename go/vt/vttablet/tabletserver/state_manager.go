@@ -785,7 +785,7 @@ func (sm *stateManager) IsServing() bool {
 }
 
 func (sm *stateManager) isServingLocked() bool {
-	return sm.state == StateServing && sm.wantState == StateServing && sm.replHealthy && !sm.demotePrimaryStalled && !sm.lameduck && !sm.diskHealthMonitor.IsDiskStalled()
+	return sm.state == StateServing && sm.wantState == StateServing && sm.replHealthy && !sm.demotePrimaryStalled && !sm.lameduck && !sm.diskHealthMonitor.IsDiskStalled() && !sm.diskHealthMonitor.IsDiskFull()
 }
 
 func (sm *stateManager) AppendDetails(details []*kv) []*kv {

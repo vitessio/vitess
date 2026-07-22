@@ -96,6 +96,7 @@ type Instance struct {
 	IsRecentlyChecked    bool
 	SecondsSinceLastSeen sql.NullInt64
 	StalledDisk          bool
+	FullDisk             bool
 
 	AllowTLS bool
 

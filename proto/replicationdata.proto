@@ -134,4 +134,5 @@ message FullStatus {
   // liveness observation of its shard's current primary's vttablet (not of all shard peers). VTOrc
   // uses it to form a quorum before failing over an unreachable primary vttablet.
   repeated ShardPeerHealth shard_peer_health = 26;
+  bool disk_full = 27;
 }

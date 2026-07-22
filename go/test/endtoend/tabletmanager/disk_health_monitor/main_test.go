@@ -28,11 +28,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"syscall"
 	"testing"
 	"time"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/tabletmanager/disk_health_monitor/testfs"
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -54,11 +54,11 @@ var (
 	clusterInstance *cluster.LocalProcessCluster
 	primaryTablet   *cluster.Vttablet
 
-	fuseHelperCmd     *exec.Cmd
-	fuseHelperBacking string
-	fuseHelperMount   string
+	testfsCmd     *exec.Cmd
+	testfsBacking string
+	testfsMount   string
 
-	// helperDied is closed by a single watcher goroutine once the fuse_helper
+	// helperDied is closed by a single watcher goroutine once the testfs
 	// subprocess exits, so any number of readers can check liveness via a
 	// non-blocking select without racing for the Wait() result.
 	helperDied    chan struct{}
@@ -84,26 +84,26 @@ func run(m *testing.M) int {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	fuseHelperBacking = filepath.Join(tmpDir, "backing")
-	fuseHelperMount = filepath.Join(tmpDir, "mount")
-	for _, d := range []string{fuseHelperBacking, fuseHelperMount} {
+	testfsBacking = filepath.Join(tmpDir, "backing")
+	testfsMount = filepath.Join(tmpDir, "mount")
+	for _, d := range []string{testfsBacking, testfsMount} {
 		if err := os.MkdirAll(d, 0o700); err != nil {
 			errf("mkdir %s: %v", d, err)
 			return 1
 		}
 	}
 
-	helperBin := filepath.Join(tmpDir, "fuse_helper")
-	if err := buildFuseHelper(helperBin); err != nil {
-		errf("build fuse_helper: %v", err)
+	helperBin := filepath.Join(tmpDir, "testfs")
+	if err := buildTestFS(helperBin); err != nil {
+		errf("build testfs: %v", err)
 		return 1
 	}
 
-	if err := startFuseHelper(helperBin); err != nil {
-		errf("start fuse_helper: %v", err)
+	if err := startTestFS(helperBin); err != nil {
+		errf("start testfs: %v", err)
 		return 1
 	}
-	defer stopFuseHelper()
+	defer stopTestFS()
 
 	clusterInstance = cluster.NewCluster(cell, hostname)
 	defer clusterInstance.Teardown()
@@ -113,7 +113,7 @@ func run(m *testing.M) int {
 	// vttablet's logs stay on real disk — keeping cluster I/O (including
 	// failure-path log reads in the harness) outside the gate.
 	clusterInstance.VtTabletExtraArgs = []string{
-		"--disk-write-dir", fuseHelperMount,
+		"--disk-write-dir", testfsMount,
 		"--disk-write-interval", diskWriteInterval.String(),
 		"--disk-write-timeout", diskWriteTimeout.String(),
 	}
@@ -143,15 +143,15 @@ func run(m *testing.M) int {
 	return m.Run()
 }
 
-func buildFuseHelper(out string) error {
-	build := exec.Command("go", "build", "-o", out, "./fuse_helper")
+func buildTestFS(out string) error {
+	build := exec.Command("go", "build", "-o", out, "./testfs/cmd/testfs")
 	build.Stdout = os.Stdout
 	build.Stderr = os.Stderr
 	return build.Run()
 }
 
-func startFuseHelper(bin string) error {
-	cmd := exec.Command(bin, "-mount", fuseHelperMount, "-backing", fuseHelperBacking)
+func startTestFS(bin string) error {
+	cmd := exec.Command(bin, "-mount", testfsMount, "-backing", testfsBacking)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return err
@@ -174,7 +174,7 @@ func startFuseHelper(bin string) error {
 		if err := scanner.Err(); err != nil {
 			ready <- err
 		} else {
-			ready <- errors.New("fuse_helper exited before printing READY")
+			ready <- errors.New("testfs exited before printing READY")
 		}
 	}()
 
@@ -186,38 +186,37 @@ func startFuseHelper(bin string) error {
 		}
 	case <-time.After(30 * time.Second):
 		_ = cmd.Process.Kill()
-		return errors.New("timed out waiting for fuse_helper READY")
+		return errors.New("timed out waiting for testfs READY")
 	}
 
-	fuseHelperCmd = cmd
+	testfsCmd = cmd
 	helperDied = make(chan struct{})
 	go func() {
 		helperWaitErr = cmd.Wait()
 		close(helperDied)
 	}()
-	log.Info("fuse_helper ready", slog.String("mount", fuseHelperMount), slog.Int("pid", cmd.Process.Pid))
+	log.Info("testfs ready", slog.String("mount", testfsMount), slog.Int("pid", cmd.Process.Pid))
 	return nil
 }
 
-func stopFuseHelper() {
-	if fuseHelperCmd == nil || fuseHelperCmd.Process == nil {
+func stopTestFS() {
+	if testfsCmd == nil || testfsCmd.Process == nil {
 		return
 	}
-	// Defensive: always send SIGHUP (clear) before SIGTERM so a test that
-	// panicked mid-stall doesn't leave the helper gating waiters and any
-	// in-flight ops wedged at unmount time.
-	_ = fuseHelperCmd.Process.Signal(syscall.SIGHUP)
-	_ = fuseHelperCmd.Process.Signal(syscall.SIGTERM)
+	// Always Clear before Close: a test that panicked mid-stall must not
+	// leave testfs gating waiters with in-flight ops wedged at unmount.
+	_ = testfs.Clear(testfsCmd.Process.Pid)
+	_ = testfs.Close(testfsCmd.Process.Pid)
 	select {
 	case <-helperDied:
 	case <-time.After(30 * time.Second):
-		errf("fuse_helper did not exit on SIGTERM, killing")
-		_ = fuseHelperCmd.Process.Kill()
+		errf("testfs did not exit on SIGTERM, killing")
+		_ = testfsCmd.Process.Kill()
 		<-helperDied
 	}
-	// Belt-and-suspenders: ensure the mount is gone before the temp dir is removed.
-	if err := exec.Command("fusermount", "-u", fuseHelperMount).Run(); err != nil {
-		_ = exec.Command("fusermount3", "-u", fuseHelperMount).Run()
+	// Belt-and-suspenders: unmount before the temp dir is removed.
+	if err := exec.Command("fusermount", "-u", testfsMount).Run(); err != nil {
+		_ = exec.Command("fusermount3", "-u", testfsMount).Run()
 	}
 }
 

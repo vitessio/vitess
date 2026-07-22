@@ -285,6 +285,20 @@ func TestCompareDetectionAnalysisProblems(t *testing.T) {
 			},
 			expected: -1,
 		},
+		{
+			// Production entries: stale semi_sync_blocked carried over by
+			// INSERT OR IGNORE must not mask the disk-full root cause.
+			name:     "PrimaryDiskFull beats PrimarySemiSyncBlocked",
+			a:        GetDetectionAnalysisProblem(PrimaryDiskFull),
+			b:        GetDetectionAnalysisProblem(PrimarySemiSyncBlocked),
+			expected: -1,
+		},
+		{
+			name:     "PrimaryDiskFull beats PrimarySemiSyncBlocked (reversed)",
+			a:        GetDetectionAnalysisProblem(PrimarySemiSyncBlocked),
+			b:        GetDetectionAnalysisProblem(PrimaryDiskFull),
+			expected: 1,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

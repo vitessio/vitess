@@ -2072,7 +2072,8 @@ func TestEmergencyReparenterRestartsStoppedIOThreadsOnStopReplicationFailure(t *
 		},
 	})
 
-	testutil.AddTablets(ctx, t, ts, nil,
+	testutil.AddTablets(
+		ctx, t, ts, nil,
 		&topodatapb.Tablet{
 			Alias: &topodatapb.TabletAlias{
 				Cell: "zone1",
@@ -2211,7 +2212,8 @@ func TestEmergencyReparenterRestartsStoppedIOThreadsOnFailure(t *testing.T) {
 			},
 		})
 
-		testutil.AddTablets(ctx, t, ts, nil,
+		testutil.AddTablets(
+			ctx, t, ts, nil,
 			&topodatapb.Tablet{
 				Alias: &topodatapb.TabletAlias{
 					Cell: "zone1",
@@ -3446,6 +3448,59 @@ func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestEmergencyReparenterPreventPromotionReplicaCanBeIntermediate(t *testing.T) {
+	sid := replication.SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+	gtid1 := replication.Mysql56GTID{Server: sid, Sequence: 1}
+	gtid2 := replication.Mysql56GTID{Server: sid, Sequence: 2}
+
+	positionWithGTIDs := func(gtids ...replication.Mysql56GTID) *RelayLogPositions {
+		pos := &RelayLogPositions{
+			Combined: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+			Executed: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+		}
+		for _, gtid := range gtids {
+			pos.Combined.GTIDSet = pos.Combined.GTIDSet.AddGTID(gtid)
+			pos.Executed.GTIDSet = pos.Executed.GTIDSet.AddGTID(gtid)
+		}
+		return pos
+	}
+
+	fullDiskTablet := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+		Type:  topodatapb.TabletType_REPLICA,
+	}
+	healthyTablet := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+		Type:  topodatapb.TabletType_REPLICA,
+	}
+	fullDiskAlias := topoproto.TabletAliasString(fullDiskTablet.Alias)
+	healthyAlias := topoproto.TabletAliasString(healthyTablet.Alias)
+	tabletMap := map[string]*topo.TabletInfo{
+		fullDiskAlias: {Tablet: fullDiskTablet},
+		healthyAlias:  {Tablet: healthyTablet},
+	}
+	validCandidates := map[string]*RelayLogPositions{
+		fullDiskAlias: positionWithGTIDs(gtid1, gtid2),
+		healthyAlias:  positionWithGTIDs(gtid1),
+	}
+	durability, err := policy.GetDurabilityPolicy(policy.DurabilityNone)
+	require.NoError(t, err)
+
+	opts := EmergencyReparentOptions{
+		PreventPromotionReplicas: sets.New[string](fullDiskAlias),
+		durability:               durability,
+	}
+	erp := NewEmergencyReparenter(nil, nil, logutil.NewMemoryLogger())
+
+	intermediate, validCandidateTablets, err := erp.findMostAdvanced(validCandidates, tabletMap, opts)
+	require.NoError(t, err)
+	require.True(t, topoproto.TabletAliasEqual(fullDiskTablet.Alias, intermediate.Alias))
+
+	finalCandidates, err := erp.filterValidCandidates(validCandidateTablets, []*topodatapb.Tablet{fullDiskTablet, healthyTablet}, nil, nil, opts)
+	require.NoError(t, err)
+	require.Equal(t, []*topodatapb.Tablet{healthyTablet}, finalCandidates)
 }
 
 func TestEmergencyReparenter_reparentReplicas(t *testing.T) {
@@ -4918,6 +4973,16 @@ func TestEmergencyReparenter_filterValidCandidates(t *testing.T) {
 			tabletsTakingBackup: replicaTakingBackup,
 			filteredTablets:     []*topodatapb.Tablet{replicaTablet},
 		}, {
+			name:                "filter prevent promotion replica",
+			durability:          policy.DurabilityNone,
+			validTablets:        allTablets,
+			tabletsReachable:    allTablets,
+			tabletsTakingBackup: noTabletsTakingBackup,
+			opts: EmergencyReparentOptions{
+				PreventPromotionReplicas: sets.New[string](topoproto.TabletAliasString(replicaTablet.Alias)),
+			},
+			filteredTablets: []*topodatapb.Tablet{primaryTablet, replicaCrossCellTablet},
+		}, {
 			name:                "filter cross cell",
 			durability:          policy.DurabilityNone,
 			validTablets:        allTablets,
@@ -4987,6 +5052,17 @@ func TestEmergencyReparenter_filterValidCandidates(t *testing.T) {
 				NewPrimaryAlias: primaryTablet.Alias,
 			},
 			errShouldContain: "proposed primary zone-1-0000000001 will not be able to make forward progress on being promoted",
+		}, {
+			name:                "error - requested primary is prevent promotion replica",
+			durability:          policy.DurabilityNone,
+			validTablets:        allTablets,
+			tabletsReachable:    allTablets,
+			tabletsTakingBackup: noTabletsTakingBackup,
+			opts: EmergencyReparentOptions{
+				NewPrimaryAlias:          replicaTablet.Alias,
+				PreventPromotionReplicas: sets.New[string](topoproto.TabletAliasString(replicaTablet.Alias)),
+			},
+			errShouldContain: "proposed primary zone-1-0000000002 is marked ineligible for promotion",
 		},
 	}
 	for _, tt := range tests {

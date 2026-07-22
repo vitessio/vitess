@@ -627,6 +627,7 @@ type FullStatus struct {
 	// liveness observation of its shard's current primary's vttablet (not of all shard peers). VTOrc
 	// uses it to form a quorum before failing over an unreachable primary vttablet.
 	ShardPeerHealth []*ShardPeerHealth `protobuf:"bytes,26,rep,name=shard_peer_health,json=shardPeerHealth,proto3" json:"shard_peer_health,omitempty"`
+	DiskFull        bool               `protobuf:"varint,27,opt,name=disk_full,json=diskFull,proto3" json:"disk_full,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -843,6 +844,13 @@ func (x *FullStatus) GetShardPeerHealth() []*ShardPeerHealth {
 	return nil
 }
 
+func (x *FullStatus) GetDiskFull() bool {
+	if x != nil {
+		return x.DiskFull
+	}
+	return false
+}
+
 var File_replicationdata_proto protoreflect.FileDescriptor
 
 const file_replicationdata_proto_rawDesc = "" +
@@ -899,7 +907,7 @@ const file_replicationdata_proto_rawDesc = "" +
 	"\x19consecutive_ping_failures\x18\x02 \x01(\x03R\x17consecutivePingFailures\x12>\n" +
 	"\x14last_successful_ping\x18\x03 \x01(\v2\f.vttime.TimeR\x12lastSuccessfulPing\x12<\n" +
 	"\x13last_attempted_ping\x18\x04 \x01(\v2\f.vttime.TimeR\x11lastAttemptedPing\x12T\n" +
-	"\x1etime_since_last_attempted_ping\x18\x05 \x01(\v2\x10.vttime.DurationR\x1atimeSinceLastAttemptedPing\"\x9c\n" +
+	"\x1etime_since_last_attempted_ping\x18\x05 \x01(\v2\x10.vttime.DurationR\x1atimeSinceLastAttemptedPing\"\xb9\n" +
 	"\n" +
 	"\n" +
 	"FullStatus\x12\x1b\n" +
@@ -932,7 +940,8 @@ const file_replicationdata_proto_rawDesc = "" +
 	"\x11semi_sync_blocked\x18\x18 \x01(\bR\x0fsemiSyncBlocked\x125\n" +
 	"\vtablet_type\x18\x19 \x01(\x0e2\x14.topodata.TabletTypeR\n" +
 	"tabletType\x12L\n" +
-	"\x11shard_peer_health\x18\x1a \x03(\v2 .replicationdata.ShardPeerHealthR\x0fshardPeerHealth*;\n" +
+	"\x11shard_peer_health\x18\x1a \x03(\v2 .replicationdata.ShardPeerHealthR\x0fshardPeerHealth\x12\x1b\n" +
+	"\tdisk_full\x18\x1b \x01(\bR\bdiskFull*;\n" +
 	"\x13StopReplicationMode\x12\x12\n" +
 	"\x0eIOANDSQLTHREAD\x10\x00\x12\x10\n" +
 	"\fIOTHREADONLY\x10\x01B.Z,vitess.io/vitess/go/vt/proto/replicationdatab\x06proto3"

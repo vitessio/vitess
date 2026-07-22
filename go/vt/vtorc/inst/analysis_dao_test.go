@@ -35,10 +35,10 @@ import (
 // The initialSQL is a set of insert commands copied from a dump of an actual running VTOrc instances. The relevant insert commands are here.
 // This is a dump taken from a test running 4 tablets, zone1-101 is the primary, zone1-100 is a replica, zone1-112 is a rdonly and zone2-200 is a cross-cell replica.
 var initialSQL = []string{
-	`INSERT INTO database_instance VALUES('zone1-0000000112','localhost',6747,3,'zone1','2022-12-28 07:26:04','2022-12-28 07:26:04',213696377,'8.0.31','ROW',1,1,'vt-0000000112-bin.000001',15963,'localhost',6714,8,4.0,1,1,'vt-0000000101-bin.000001',15583,'vt-0000000101-bin.000001',15583,0,0,1,'','',1,'vt-0000000112-relay-bin.000002',15815,1,0,0,0,0,1,'729a4cc4-8680-11ed-a104-47706090afbd:1-54','729a5138-8680-11ed-9240-92a06c3be3c2','2022-12-28 07:26:04','',1,0,0,'Homebrew','8.0','FULL',10816929,0,0,'ON',1,'729a4cc4-8680-11ed-a104-47706090afbd','','729a4cc4-8680-11ed-a104-47706090afbd,729a5138-8680-11ed-9240-92a06c3be3c2',1,1,1000000000000000000,1,0,0,0,false,false);`,
-	`INSERT INTO database_instance VALUES('zone1-0000000100','localhost',6711,2,'zone1','2022-12-28 07:26:04','2022-12-28 07:26:04',1094500338,'8.0.31','ROW',1,1,'vt-0000000100-bin.000001',15963,'localhost',6714,8,4.0,1,1,'vt-0000000101-bin.000001',15583,'vt-0000000101-bin.000001',15583,0,0,1,'','',1,'vt-0000000100-relay-bin.000002',15815,1,0,0,0,0,1,'729a4cc4-8680-11ed-a104-47706090afbd:1-54','729a5138-8680-11ed-acf8-d6b0ef9f4eaa','2022-12-28 07:26:04','',1,0,0,'Homebrew','8.0','FULL',10103920,0,1,'ON',1,'729a4cc4-8680-11ed-a104-47706090afbd','','729a4cc4-8680-11ed-a104-47706090afbd,729a5138-8680-11ed-acf8-d6b0ef9f4eaa',1,1,1000000000000000000,1,0,1,0,false,false);`,
-	`INSERT INTO database_instance VALUES('zone1-0000000101','localhost',6714,1,'zone1','2022-12-28 07:26:04','2022-12-28 07:26:04',390954723,'8.0.31','ROW',1,1,'vt-0000000101-bin.000001',15583,'',0,0,0,0,0,'',0,'',0,NULL,NULL,0,'','',0,'',0,0,0,0,0,0,1,'729a4cc4-8680-11ed-a104-47706090afbd:1-54','729a4cc4-8680-11ed-a104-47706090afbd','2022-12-28 07:26:04','',0,0,0,'Homebrew','8.0','FULL',11366095,1,1,'ON',1,'','','729a4cc4-8680-11ed-a104-47706090afbd',-1,-1,1000000000000000000,1,1,0,2,false,false);`,
-	`INSERT INTO database_instance VALUES('zone2-0000000200','localhost',6756,2,'zone2','2022-12-28 07:26:05','2022-12-28 07:26:05',444286571,'8.0.31','ROW',1,1,'vt-0000000200-bin.000001',15963,'localhost',6714,8,4.0,1,1,'vt-0000000101-bin.000001',15583,'vt-0000000101-bin.000001',15583,0,0,1,'','',1,'vt-0000000200-relay-bin.000002',15815,1,0,0,0,0,1,'729a4cc4-8680-11ed-a104-47706090afbd:1-54','729a497c-8680-11ed-8ad4-3f51d747db75','2022-12-28 07:26:05','',1,0,0,'Homebrew','8.0','FULL',10443112,0,1,'ON',1,'729a4cc4-8680-11ed-a104-47706090afbd','','729a4cc4-8680-11ed-a104-47706090afbd,729a497c-8680-11ed-8ad4-3f51d747db75',1,1,1000000000000000000,1,0,1,0,false,false);`,
+	`INSERT INTO database_instance VALUES('zone1-0000000112','localhost',6747,3,'zone1','2022-12-28 07:26:04','2022-12-28 07:26:04',213696377,'8.0.31','ROW',1,1,'vt-0000000112-bin.000001',15963,'localhost',6714,8,4.0,1,1,'vt-0000000101-bin.000001',15583,'vt-0000000101-bin.000001',15583,0,0,1,'','',1,'vt-0000000112-relay-bin.000002',15815,1,0,0,0,0,1,'729a4cc4-8680-11ed-a104-47706090afbd:1-54','729a5138-8680-11ed-9240-92a06c3be3c2','2022-12-28 07:26:04','',1,0,0,'Homebrew','8.0','FULL',10816929,0,0,'ON',1,'729a4cc4-8680-11ed-a104-47706090afbd','','729a4cc4-8680-11ed-a104-47706090afbd,729a5138-8680-11ed-9240-92a06c3be3c2',1,1,1000000000000000000,1,0,0,0,false,false,false);`,
+	`INSERT INTO database_instance VALUES('zone1-0000000100','localhost',6711,2,'zone1','2022-12-28 07:26:04','2022-12-28 07:26:04',1094500338,'8.0.31','ROW',1,1,'vt-0000000100-bin.000001',15963,'localhost',6714,8,4.0,1,1,'vt-0000000101-bin.000001',15583,'vt-0000000101-bin.000001',15583,0,0,1,'','',1,'vt-0000000100-relay-bin.000002',15815,1,0,0,0,0,1,'729a4cc4-8680-11ed-a104-47706090afbd:1-54','729a5138-8680-11ed-acf8-d6b0ef9f4eaa','2022-12-28 07:26:04','',1,0,0,'Homebrew','8.0','FULL',10103920,0,1,'ON',1,'729a4cc4-8680-11ed-a104-47706090afbd','','729a4cc4-8680-11ed-a104-47706090afbd,729a5138-8680-11ed-acf8-d6b0ef9f4eaa',1,1,1000000000000000000,1,0,1,0,false,false,false);`,
+	`INSERT INTO database_instance VALUES('zone1-0000000101','localhost',6714,1,'zone1','2022-12-28 07:26:04','2022-12-28 07:26:04',390954723,'8.0.31','ROW',1,1,'vt-0000000101-bin.000001',15583,'',0,0,0,0,0,'',0,'',0,NULL,NULL,0,'','',0,'',0,0,0,0,0,0,1,'729a4cc4-8680-11ed-a104-47706090afbd:1-54','729a4cc4-8680-11ed-a104-47706090afbd','2022-12-28 07:26:04','',0,0,0,'Homebrew','8.0','FULL',11366095,1,1,'ON',1,'','','729a4cc4-8680-11ed-a104-47706090afbd',-1,-1,1000000000000000000,1,1,0,2,false,false,false);`,
+	`INSERT INTO database_instance VALUES('zone2-0000000200','localhost',6756,2,'zone2','2022-12-28 07:26:05','2022-12-28 07:26:05',444286571,'8.0.31','ROW',1,1,'vt-0000000200-bin.000001',15963,'localhost',6714,8,4.0,1,1,'vt-0000000101-bin.000001',15583,'vt-0000000101-bin.000001',15583,0,0,1,'','',1,'vt-0000000200-relay-bin.000002',15815,1,0,0,0,0,1,'729a4cc4-8680-11ed-a104-47706090afbd:1-54','729a497c-8680-11ed-8ad4-3f51d747db75','2022-12-28 07:26:05','',1,0,0,'Homebrew','8.0','FULL',10443112,0,1,'ON',1,'729a4cc4-8680-11ed-a104-47706090afbd','','729a4cc4-8680-11ed-a104-47706090afbd,729a497c-8680-11ed-8ad4-3f51d747db75',1,1,1000000000000000000,1,0,1,0,false,false,false);`,
 	`INSERT INTO vitess_tablet VALUES('zone1-0000000100','localhost',6711,'ks','0','zone1',2,'0001-01-01 00:00:00 +0000 UTC',X'616c6961733a7b63656c6c3a227a6f6e653122207569643a3130307d20686f73746e616d653a226c6f63616c686f73742220706f72745f6d61703a7b6b65793a2267727063222076616c75653a363731307d20706f72745f6d61703a7b6b65793a227674222076616c75653a363730397d206b657973706163653a226b73222073686172643a22302220747970653a5245504c494341206d7973716c5f686f73746e616d653a226c6f63616c686f737422206d7973716c5f706f72743a363731312064625f7365727665725f76657273696f6e3a22382e302e3331222064656661756c745f636f6e6e5f636f6c6c6174696f6e3a3435');`,
 	`INSERT INTO vitess_tablet VALUES('zone1-0000000101','localhost',6714,'ks','0','zone1',1,'2022-12-28 07:23:25.129898 +0000 UTC',X'616c6961733a7b63656c6c3a227a6f6e653122207569643a3130317d20686f73746e616d653a226c6f63616c686f73742220706f72745f6d61703a7b6b65793a2267727063222076616c75653a363731337d20706f72745f6d61703a7b6b65793a227674222076616c75653a363731327d206b657973706163653a226b73222073686172643a22302220747970653a5052494d415259206d7973716c5f686f73746e616d653a226c6f63616c686f737422206d7973716c5f706f72743a36373134207072696d6172795f7465726d5f73746172745f74696d653a7b7365636f6e64733a31363732323132323035206e616e6f7365636f6e64733a3132393839383030307d2064625f7365727665725f76657273696f6e3a22382e302e3331222064656661756c745f636f6e6e5f636f6c6c6174696f6e3a3435');`,
 	`INSERT INTO vitess_tablet VALUES('zone1-0000000112','localhost',6747,'ks','0','zone1',3,'0001-01-01 00:00:00 +0000 UTC',X'616c6961733a7b63656c6c3a227a6f6e653122207569643a3131327d20686f73746e616d653a226c6f63616c686f73742220706f72745f6d61703a7b6b65793a2267727063222076616c75653a363734367d20706f72745f6d61703a7b6b65793a227674222076616c75653a363734357d206b657973706163653a226b73222073686172643a22302220747970653a52444f4e4c59206d7973716c5f686f73746e616d653a226c6f63616c686f737422206d7973716c5f706f72743a363734372064625f7365727665725f76657273696f6e3a22382e302e3331222064656661756c745f636f6e6e5f636f6c6c6174696f6e3a3435');`,
@@ -58,7 +58,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 		codeWanted     AnalysisCode
 		shardWanted    string
 		keyspaceWanted string
-		preFunc        func()
+		preFunc        func(t *testing.T)
 		wantErr        string
 	}{
 		{
@@ -123,7 +123,134 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 			}},
 			keyspaceWanted: "ks",
 			shardWanted:    "0",
-			codeWanted:     PrimaryDiskStalled,
+			preFunc: func(t *testing.T) {
+				config.SetStalledDiskPrimaryRecovery(true)
+				t.Cleanup(func() { config.SetStalledDiskPrimaryRecovery(false) })
+			},
+			codeWanted: PrimaryDiskStalled,
+		},
+		{
+			// With stalled-disk recovery disabled, a stalled-disk flag —
+			// possibly preserved from a prior poll — must not mask DeadPrimary,
+			// or the shard would be stuck with no recovery at all.
+			name: "StalledDiskPrimaryFallsBackToDeadPrimaryWhenRecoveryDisabled",
+			info: []*test.InfoForRecoveryAnalysis{{
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_PRIMARY,
+					MysqlHostname: "localhost",
+					MysqlPort:     6709,
+				},
+				DurabilityPolicy:              "none",
+				LastCheckValid:                0,
+				CountReplicas:                 4,
+				CountValidReplicas:            4,
+				CountValidReplicatingReplicas: 0,
+				IsPrimary:                     1,
+				IsStalledDisk:                 1,
+				CurrentTabletType:             int(topodatapb.TabletType_PRIMARY),
+			}},
+			keyspaceWanted: "ks",
+			shardWanted:    "0",
+			codeWanted:     DeadPrimary,
+		},
+		{
+			name: "FullDiskPrimary",
+			info: []*test.InfoForRecoveryAnalysis{{
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_PRIMARY,
+					MysqlHostname: "localhost",
+					MysqlPort:     6709,
+				},
+				DurabilityPolicy:              "none",
+				LastCheckValid:                0,
+				CountReplicas:                 4,
+				CountValidReplicas:            4,
+				CountValidReplicatingReplicas: 0,
+				IsPrimary:                     1,
+				IsFullDisk:                    1,
+				CurrentTabletType:             int(topodatapb.TabletType_PRIMARY),
+			}},
+			keyspaceWanted: "ks",
+			shardWanted:    "0",
+			preFunc: func(t *testing.T) {
+				config.SetFullDiskPrimaryRecovery(true)
+				t.Cleanup(func() { config.SetFullDiskPrimaryRecovery(false) })
+			},
+			codeWanted: PrimaryDiskFull,
+		},
+		{
+			// With full-disk recovery disabled, a full-disk flag — possibly
+			// preserved from a prior poll — must not mask DeadPrimary, or the
+			// shard would be stuck with no recovery at all.
+			name: "FullDiskPrimaryFallsBackToDeadPrimaryWhenRecoveryDisabled",
+			info: []*test.InfoForRecoveryAnalysis{{
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_PRIMARY,
+					MysqlHostname: "localhost",
+					MysqlPort:     6709,
+				},
+				DurabilityPolicy:              "none",
+				LastCheckValid:                0,
+				CountReplicas:                 4,
+				CountValidReplicas:            4,
+				CountValidReplicatingReplicas: 0,
+				IsPrimary:                     1,
+				IsFullDisk:                    1,
+				CurrentTabletType:             int(topodatapb.TabletType_PRIMARY),
+			}},
+			keyspaceWanted: "ks",
+			shardWanted:    "0",
+			codeWanted:     DeadPrimary,
+		},
+		{
+			name: "FullDiskReplica",
+			info: []*test.InfoForRecoveryAnalysis{
+				{
+					TabletInfo: &topodatapb.Tablet{
+						Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+						Hostname:      "primary",
+						Keyspace:      "ks",
+						Shard:         "0",
+						Type:          topodatapb.TabletType_PRIMARY,
+						MysqlHostname: "primary",
+						MysqlPort:     6709,
+					},
+					DurabilityPolicy:  "none",
+					LastCheckValid:    1,
+					IsPrimary:         1,
+					CurrentTabletType: int(topodatapb.TabletType_PRIMARY),
+				},
+				{
+					TabletInfo: &topodatapb.Tablet{
+						Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+						Hostname:      "replica",
+						Keyspace:      "ks",
+						Shard:         "0",
+						Type:          topodatapb.TabletType_REPLICA,
+						MysqlHostname: "replica",
+						MysqlPort:     6710,
+					},
+					DurabilityPolicy:  "none",
+					LastCheckValid:    0,
+					IsFullDisk:        1,
+					CurrentTabletType: int(topodatapb.TabletType_REPLICA),
+				},
+			},
+			keyspaceWanted: "ks",
+			shardWanted:    "0",
+			codeWanted:     ReplicaDiskFull,
 		},
 		{
 			name: "PrimarySemiSyncBlocked",
@@ -231,7 +358,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 			}},
 			keyspaceWanted: "ks",
 			shardWanted:    "0",
-			preFunc: func() {
+			preFunc: func(t *testing.T) {
 				RecordPrimaryHealthCheck(&topodatapb.TabletAlias{Cell: "zon1", Uid: 100}, true)
 				RecordPrimaryHealthCheck(&topodatapb.TabletAlias{Cell: "zon1", Uid: 100}, false)
 				RecordPrimaryHealthCheck(&topodatapb.TabletAlias{Cell: "zon1", Uid: 100}, false)
@@ -263,7 +390,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 			}},
 			keyspaceWanted: "ks",
 			shardWanted:    "0",
-			preFunc: func() {
+			preFunc: func(t *testing.T) {
 				RecordPrimaryHealthCheck(&topodatapb.TabletAlias{Cell: "zon1", Uid: 100}, true)
 				RecordPrimaryHealthCheck(&topodatapb.TabletAlias{Cell: "zon1", Uid: 100}, false)
 				RecordPrimaryHealthCheck(&topodatapb.TabletAlias{Cell: "zon1", Uid: 100}, false)
@@ -1058,7 +1185,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			resetPrimaryHealthState()
 			if tt.preFunc != nil {
-				tt.preFunc()
+				tt.preFunc(t)
 			}
 			oldDB := db.Db
 			defer func() {
@@ -1088,6 +1215,89 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 			require.Equal(t, tt.shardWanted, got[0].AnalyzedShard)
 		})
 	}
+}
+
+// fullDiskShardRows returns rows for a shard whose primary and only replica
+// both report a full disk and a failed last check.
+func fullDiskShardRows() []sqlutils.RowMap {
+	rows := []sqlutils.RowMap{}
+	for _, analysis := range []*test.InfoForRecoveryAnalysis{
+		{
+			TabletInfo: &topodatapb.Tablet{
+				Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+				Hostname:      "primary",
+				Keyspace:      "ks",
+				Shard:         "0",
+				Type:          topodatapb.TabletType_PRIMARY,
+				MysqlHostname: "primary",
+				MysqlPort:     6709,
+			},
+			DurabilityPolicy:              "none",
+			LastCheckValid:                0,
+			CountReplicas:                 1,
+			CountValidReplicas:            1,
+			CountValidReplicatingReplicas: 0,
+			IsPrimary:                     1,
+			IsFullDisk:                    1,
+			CurrentTabletType:             int(topodatapb.TabletType_PRIMARY),
+		},
+		{
+			TabletInfo: &topodatapb.Tablet{
+				Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+				Hostname:      "replica",
+				Keyspace:      "ks",
+				Shard:         "0",
+				Type:          topodatapb.TabletType_REPLICA,
+				MysqlHostname: "replica",
+				MysqlPort:     6710,
+			},
+			DurabilityPolicy:  "none",
+			LastCheckValid:    0,
+			IsFullDisk:        1,
+			CurrentTabletType: int(topodatapb.TabletType_REPLICA),
+		},
+	} {
+		analysis.SetValuesFromTabletInfo()
+		rows = append(rows, analysis.ConvertToRowMap())
+	}
+	return rows
+}
+
+func TestGetDetectionAnalysisDecisionDiskFull(t *testing.T) {
+	oldDB := db.Db
+	defer func() {
+		db.Db = oldDB
+	}()
+
+	config.SetFullDiskPrimaryRecovery(true)
+	t.Cleanup(func() { config.SetFullDiskPrimaryRecovery(false) })
+
+	db.Db = test.NewTestDB([][]sqlutils.RowMap{fullDiskShardRows()})
+
+	got, err := GetDetectionAnalysis("", "", &DetectionAnalysisHints{})
+	require.NoError(t, err)
+	require.Len(t, got, 2)
+	assert.ElementsMatch(t, []AnalysisCode{PrimaryDiskFull, ReplicaDiskFull}, []AnalysisCode{got[0].Analysis, got[1].Analysis})
+}
+
+// TestGetDetectionAnalysisDecisionDiskFullRecoveryDisabled is a regression
+// test for a full-disk primary when --enable-primary-disk-full-recovery is
+// off (the default): the full-disk flag — possibly preserved from a prior
+// poll after the tablet became unreachable — must not produce PrimaryDiskFull
+// (whose recovery would be skipped), but fall back to plain DeadPrimary so
+// the ordinary ERS recovery can run.
+func TestGetDetectionAnalysisDecisionDiskFullRecoveryDisabled(t *testing.T) {
+	oldDB := db.Db
+	defer func() {
+		db.Db = oldDB
+	}()
+
+	db.Db = test.NewTestDB([][]sqlutils.RowMap{fullDiskShardRows()})
+
+	got, err := GetDetectionAnalysis("", "", &DetectionAnalysisHints{})
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.Equal(t, DeadPrimary, got[0].Analysis)
 }
 
 // TestStalePrimary tests that an old primary that remains writable and is of tablet type PRIMARY

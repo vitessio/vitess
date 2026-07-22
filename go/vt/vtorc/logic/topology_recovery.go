@@ -32,6 +32,7 @@ import (
 	"github.com/patrickmn/go-cache"
 	"golang.org/x/sync/errgroup"
 
+	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -77,6 +78,7 @@ const (
 	RecoverySkipERSDisabled
 	RecoverySkipStaleAnalysis
 	RecoverySkipPrimaryRecovery
+	RecoverySkipDiskRecoveryDisabled
 )
 
 // String represents a RecoverySkip as a string.
@@ -92,6 +94,8 @@ func (rsc RecoverySkipCode) String() string {
 		return "StaleAnalysis"
 	case RecoverySkipPrimaryRecovery:
 		return "PrimaryRecovery"
+	case RecoverySkipDiskRecoveryDisabled:
+		return "DiskRecoveryDisabled"
 	default:
 		return "None"
 	}
@@ -331,6 +335,7 @@ func runEmergencyReparentOp(ctx context.Context, analysisEntry *inst.DetectionAn
 		return false, nil, err
 	}
 	logger.Info(fmt.Sprintf("Analysis: %v, %v %+v", analysisEntry.Analysis, recoveryName, analysisEntry.AnalyzedInstanceAlias))
+	preventPromotionReplicas := fullDiskAliasesToPreventPromotion(analysisEntry, logger)
 	var promotedReplica *inst.Instance
 	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
 	// So that after the active period passes, we are able to run other recoveries.
@@ -357,11 +362,12 @@ func runEmergencyReparentOp(ctx context.Context, analysisEntry *inst.DetectionAn
 			logger.Info("ERS - " + value)
 		}
 		_ = AuditTopologyRecovery(topologyRecovery, value)
-	})).ReparentShard(ctx,
+	})).ReparentShard(
+		ctx,
 		tablet.Keyspace,
 		tablet.Shard,
 		reparentutil.EmergencyReparentOptions{
-			IgnoreReplicas:            nil,
+			PreventPromotionReplicas:  preventPromotionReplicas,
 			WaitReplicasTimeout:       config.GetWaitReplicasTimeout(),
 			PreventCrossCellPromotion: config.GetPreventCrossCellFailover(),
 			WaitAllTablets:            waitForAllTablets,
@@ -376,6 +382,41 @@ func runEmergencyReparentOp(ctx context.Context, analysisEntry *inst.DetectionAn
 	}
 	postErsCompletion(topologyRecovery, analysisEntry, recoveryName, promotedReplica)
 	return true, topologyRecovery, err
+}
+
+// fullDiskAliasesToPreventPromotion returns the tablet aliases ERS must not
+// promote because their disks are full. A read failure is logged and treated
+// as "none known" so DeadPrimary recovery can still proceed.
+func fullDiskAliasesToPreventPromotion(analysisEntry *inst.DetectionAnalysis, logger *log.PrefixedLogger) sets.Set[string] {
+	preventPromotionReplicas := sets.New[string]()
+	if analysisEntry.Analysis == inst.PrimaryDiskFull {
+		preventPromotionReplicas.Insert(topoproto.TabletAliasString(analysisEntry.AnalyzedInstanceAlias))
+	}
+
+	aliases, err := inst.ReadFullDiskReplicas(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
+	if err != nil {
+		logger.Warn(
+			"failed to read full disk replicas, proceeding with ERS without those exclusions",
+			slog.String("keyspace", analysisEntry.AnalyzedKeyspace),
+			slog.String("shard", analysisEntry.AnalyzedShard),
+			slog.Any("error", err),
+		)
+	} else {
+		for _, alias := range aliases {
+			preventPromotionReplicas.Insert(topoproto.TabletAliasString(alias))
+		}
+	}
+
+	if preventPromotionReplicas.Len() == 0 {
+		return nil
+	}
+	logger.Info(
+		"ERS preventing promotion of full disk tablets",
+		slog.String("keyspace", analysisEntry.AnalyzedKeyspace),
+		slog.String("shard", analysisEntry.AnalyzedShard),
+		slog.Any("prevent_promotion_replicas", sets.List(preventPromotionReplicas)),
+	)
+	return preventPromotionReplicas
 }
 
 // recoverDeadPrimary checks a given analysis, decides whether to take action, and possibly takes action
@@ -653,10 +694,22 @@ func getCheckAndRecoverFunctionCode(analysisEntry *inst.DetectionAnalysis) (reco
 	analysisCode := analysisEntry.Analysis
 	switch analysisCode {
 	// primary
-	case inst.DeadPrimary, inst.DeadPrimaryAndSomeReplicas, inst.PrimaryDiskStalled, inst.PrimarySemiSyncBlocked, inst.PrimaryTabletUnreachableByQuorum:
-		// If ERS is disabled globally, on the keyspace or the shard, skip recovery.
-		if !isERSEnabled(analysisEntry) {
-			log.Info(fmt.Sprintf("VTOrc not configured to run EmergencyReparentShard, skipping recovering %v", analysisCode))
+	case inst.DeadPrimary, inst.DeadPrimaryAndSomeReplicas, inst.PrimaryDiskStalled, inst.PrimaryDiskFull, inst.PrimarySemiSyncBlocked, inst.PrimaryTabletUnreachableByQuorum:
+		// Disk-specific recovery flags can disable a disk-health recovery
+		// independent of the global ERS toggle. A disabled flag normally
+		// also gates the analysis itself (in its MatchFunc), so these cases
+		// are defensive: the flags are dynamic and may flip between
+		// detection and recovery dispatch.
+		switch {
+		case analysisCode == inst.PrimaryDiskStalled && !config.GetStalledDiskPrimaryRecovery():
+			log.Info("VTOrc not configured to recover from a stalled disk, skipping recovery", slog.Any("analysis", analysisCode))
+			recoverySkipCode = RecoverySkipDiskRecoveryDisabled
+		case analysisCode == inst.PrimaryDiskFull && !config.GetFullDiskPrimaryRecovery():
+			log.Info("VTOrc not configured to recover from a full disk, skipping recovery", slog.Any("analysis", analysisCode))
+			recoverySkipCode = RecoverySkipDiskRecoveryDisabled
+		case !isERSEnabled(analysisEntry):
+			// If ERS is disabled globally, on the keyspace or the shard, skip recovery.
+			log.Info("VTOrc not configured to run EmergencyReparentShard, skipping recovery", slog.Any("analysis", analysisCode))
 			recoverySkipCode = RecoverySkipERSDisabled
 		}
 		recoveryFunc = recoverDeadPrimaryFunc
@@ -675,6 +728,8 @@ func getCheckAndRecoverFunctionCode(analysisEntry *inst.DetectionAnalysis) (reco
 			recoverySkipCode = RecoverySkipNoRecoveryAction
 		}
 		recoveryFunc = recoverErrantGTIDDetectedFunc
+	case inst.ReplicaDiskFull:
+		recoverySkipCode = RecoverySkipNoRecoveryAction
 	case inst.PrimaryHasPrimary:
 		recoveryFunc = recoverPrimaryHasPrimaryFunc
 	case inst.ClusterHasNoPrimary:
@@ -819,13 +874,13 @@ func getRecoverFunctionName(recoveryFunctionCode recoveryFunction) string {
 // shardWideRecoveryIgnoredTablets returns the list of tablet aliases to skip
 // during the pre-recovery refresh for shard-wide recoveries. Dead primaries
 // are skipped because they are unreachable; reachable-but-unhealthy primaries
-// (PrimarySemiSyncBlocked, PrimaryDiskStalled) are NOT skipped so that
+// (PrimarySemiSyncBlocked, PrimaryDiskStalled, PrimaryDiskFull) are NOT skipped so that
 // checkIfAlreadyFixed evaluates fresh state.
 func shardWideRecoveryIgnoredTablets(recoveryFunctionCode recoveryFunction, analysisEntry *inst.DetectionAnalysis) []*topodatapb.TabletAlias {
 	var tabletsToIgnore []*topodatapb.TabletAlias
 	if recoveryFunctionCode == recoverDeadPrimaryFunc {
 		switch analysisEntry.Analysis {
-		case inst.PrimarySemiSyncBlocked, inst.PrimaryDiskStalled:
+		case inst.PrimarySemiSyncBlocked, inst.PrimaryDiskStalled, inst.PrimaryDiskFull:
 			// Reachable primary — refresh it so checkIfAlreadyFixed
 			// evaluates current state. The problem may have been
 			// resolved by a prior dependency recovery.
@@ -934,7 +989,8 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 	}
 
 	// We lock the shard here and then refresh the tablets information
-	ctx, unlock, err := LockShard(context.Background(), analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard,
+	ctx, unlock, err := LockShard(
+		context.Background(), analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard,
 		getLockAction(analysisEntry.AnalyzedInstanceAlias, analysisEntry.Analysis),
 	)
 	if err != nil {
@@ -1241,7 +1297,8 @@ func runPlannedReparentOp(ctx context.Context, analysisEntry *inst.DetectionAnal
 			logger.Error("PRS - " + value)
 		}
 		_ = AuditTopologyRecovery(topologyRecovery, value)
-	})).ReparentShard(ctx,
+	})).ReparentShard(
+		ctx,
 		analyzedTablet.Keyspace,
 		analyzedTablet.Shard,
 		reparentutil.PlannedReparentOptions{
@@ -1373,7 +1430,8 @@ func reconcileStaleTopoPrimary(ctx context.Context, analysisEntry *inst.Detectio
 	// Register the recovery before touching topology so multiple VTOrc instances do not race the demotion.
 	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry)
 	if topologyRecovery == nil {
-		logger.Warn("skipping recovery, active or recent recovery exists",
+		logger.Warn(
+			"skipping recovery, active or recent recovery exists",
 			slog.String("tablet", aliasString),
 			slog.String("recovery", ReconcileStaleTopoPrimaryRecoveryName),
 		)
@@ -1383,7 +1441,8 @@ func reconcileStaleTopoPrimary(ctx context.Context, analysisEntry *inst.Detectio
 		return false, nil, err
 	}
 
-	logger.Info("demoting stale topo primary",
+	logger.Info(
+		"demoting stale topo primary",
 		slog.String("analysis", string(analysisEntry.Analysis)),
 		slog.String("tablet", aliasString),
 	)
