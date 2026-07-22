@@ -225,7 +225,9 @@ func (variable SessionVariable) SetStatement() (string, error) {
 		return "", err
 	}
 	// A connection default or an earlier assignment may enable NO_BACKSLASH_ESCAPES.
-	// Use a hex literal so quotes and backslashes in the value are parsed safely
+	// In that mode, encoding O'Reilly as 'O\'Reilly' closes the string after
+	// the backslash; on a multi-statement DBA connection, a crafted suffix could
+	// then be parsed as another statement. A hex literal is parsed safely
 	// regardless of the active sql_mode.
 	return fmt.Sprintf("set @@session.%s=X'%x'", variable.Name, variable.Value), nil
 }
