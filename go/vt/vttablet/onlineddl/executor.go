@@ -480,13 +480,13 @@ func (e *Executor) executeDirectly(ctx context.Context, onlineDDL *schema.Online
 	}
 	defer conn.Close()
 
-	restoreSQLModeFunc, err := e.initMigrationSQLMode(ctx, onlineDDL, conn)
-	defer restoreSQLModeFunc()
+	restoreSessionVariablesFunc, err := e.initMigrationSessionVariables(ctx, onlineDDL, conn)
+	defer restoreSessionVariablesFunc()
 	if err != nil {
 		return false, err
 	}
-	restoreSessionVariablesFunc, err := e.initMigrationSessionVariables(ctx, onlineDDL, conn)
-	defer restoreSessionVariablesFunc()
+	restoreSQLModeFunc, err := e.initMigrationSQLMode(ctx, onlineDDL, conn)
+	defer restoreSQLModeFunc()
 	if err != nil {
 		return false, err
 	}
@@ -1371,13 +1371,13 @@ func (e *Executor) createDuplicateTableLike(ctx context.Context, newTableName st
 // - modify the vrepl table
 // - Create and return a VRepl instance
 func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, conn *dbconnpool.DBConnection) (v *VRepl, err error) {
-	restoreSQLModeFunc, err := e.initMigrationSQLMode(ctx, onlineDDL, conn)
-	defer restoreSQLModeFunc()
+	restoreSessionVariablesFunc, err := e.initMigrationSessionVariables(ctx, onlineDDL, conn)
+	defer restoreSessionVariablesFunc()
 	if err != nil {
 		return v, err
 	}
-	restoreSessionVariablesFunc, err := e.initMigrationSessionVariables(ctx, onlineDDL, conn)
-	defer restoreSessionVariablesFunc()
+	restoreSQLModeFunc, err := e.initMigrationSQLMode(ctx, onlineDDL, conn)
+	defer restoreSQLModeFunc()
 	if err != nil {
 		return v, err
 	}
@@ -1435,13 +1435,13 @@ func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, online
 // about the two, and about the transition between the two.
 func (e *Executor) postInitVreplicationOriginalMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, v *VRepl, conn *dbconnpool.DBConnection) (err error) {
 	if v.analysis.SourceAutoIncrement > 0 && !v.alterTableAnalysis.IsAutoIncrementChangeRequested {
-		restoreSQLModeFunc, err := e.initMigrationSQLMode(ctx, onlineDDL, conn)
-		defer restoreSQLModeFunc()
+		restoreSessionVariablesFunc, err := e.initMigrationSessionVariables(ctx, onlineDDL, conn)
+		defer restoreSessionVariablesFunc()
 		if err != nil {
 			return err
 		}
-		restoreSessionVariablesFunc, err := e.initMigrationSessionVariables(ctx, onlineDDL, conn)
-		defer restoreSessionVariablesFunc()
+		restoreSQLModeFunc, err := e.initMigrationSQLMode(ctx, onlineDDL, conn)
+		defer restoreSQLModeFunc()
 		if err != nil {
 			return err
 		}
@@ -2316,13 +2316,13 @@ func (e *Executor) evaluateDeclarativeDiff(ctx context.Context, onlineDDL *schem
 		ddlStmt.SetTable("", comparisonTableName)
 		modifiedCreateSQL := sqlparser.String(ddlStmt)
 
-		restoreSQLModeFunc, err := e.initMigrationSQLMode(ctx, onlineDDL, conn)
-		defer restoreSQLModeFunc()
+		restoreSessionVariablesFunc, err := e.initMigrationSessionVariables(ctx, onlineDDL, conn)
+		defer restoreSessionVariablesFunc()
 		if err != nil {
 			return nil, err
 		}
-		restoreSessionVariablesFunc, err := e.initMigrationSessionVariables(ctx, onlineDDL, conn)
-		defer restoreSessionVariablesFunc()
+		restoreSQLModeFunc, err := e.initMigrationSQLMode(ctx, onlineDDL, conn)
+		defer restoreSQLModeFunc()
 		if err != nil {
 			return nil, err
 		}

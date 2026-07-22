@@ -394,6 +394,10 @@ func TestParseDDLStrategy(t *testing.T) {
 			expectError:      "invalid session variable name",
 		},
 		{
+			strategyVariable: "direct --session-variable SQL_LOG_BIN=off",
+			expectError:      `session variable "SQL_LOG_BIN" is not allowed`,
+		},
+		{
 			strategyVariable: "direct --session-variable sql_mode=ANSI --session-variable SQL_MODE=TRADITIONAL",
 			expectError:      "duplicate session variable name",
 		},
