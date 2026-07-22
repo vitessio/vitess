@@ -27,7 +27,7 @@
     - **[VTTablet](#minor-changes-vttablet)**
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
         - [Query timeout for state-changing statements on the streaming path](#vttablet-stream-query-timeout)
-    - **[VTTablet](#minor-changes-vttablet)**
+        - [New `--demote-primary-lock-wait-timeout` flag](#vttablet-demote-primary-lock-wait-timeout)
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
         - [Skip MySQL version check when restoring from a mysql-shell backup](#vttablet-mysql-shell-restore-skip-version-check)
     - **[Backup/Restore](#minor-changes-backup)**
@@ -236,7 +236,13 @@ Streaming reads (`StreamExecute` outside a transaction) remain exempt from the t
 
 See [#20499](https://github.com/vitessio/vitess/pull/20499) for details.
 
-### <a id="minor-changes-vttablet"/>VTTablet</a>
+#### <a id="vttablet-demote-primary-lock-wait-timeout"/>New `--demote-primary-lock-wait-timeout` flag</a>
+
+A new VTTablet flag, `--demote-primary-lock-wait-timeout` (default `0`, disabled), bounds how long enabling `super_read_only` waits for metadata locks during a primary demotion. Long-running queries hold metadata locks that block `SET GLOBAL super_read_only`, which can stall a `PlannedReparentShard` or `EmergencyReparentShard` behind them. With the flag set, the demotion applies a session `lock_wait_timeout` (rounded up to whole seconds) so the statement fails fast with a lock-wait-timeout error instead of waiting indefinitely.
+
+When disabled (the default), demotion behavior is unchanged and the wait is unbounded.
+
+See [#20285](https://github.com/vitessio/vitess/pull/20285) for details.
 
 #### <a id="vttablet-schema-max-table-count"/>Schema engine table-count limit is now configurable</a>
 

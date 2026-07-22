@@ -107,21 +107,17 @@ jobs:
         id: changes
         with:
           token: ""
+          # With 'every', a file is relevant only if it matches all patterns: any
+          # path from the brace-list, and not a test file in one of the endtoend
+          # test packages, which the unit test runner never runs and which cannot
+          # be imported by unit tests. The endtoend trees are enumerated explicitly
+          # so that testdata fixtures whose paths merely contain an endtoend
+          # directory (e.g. under go/tools/ci-config) still count as relevant.
+          predicate-quantifier: 'every'
           filters: |
             unit_tests:
-              - 'test/config.json'
-              - 'go/**'
-              - 'test.go'
-              - 'Makefile'
-              - 'build.env'
-              - 'go.sum'
-              - 'go.mod'
-              - 'proto/*.proto'
-              - 'tools/**'
-              - 'config/**'
-              - 'bootstrap.sh'
-              - '.github/workflows/unit_test.yml'
-              - '.github/actions/setup-mysql/action.yml'
+              - '{test/config.json,go/**,test.go,Makefile,build.env,go.sum,go.mod,proto/*.proto,tools/**,config/**,bootstrap.sh,.github/workflows/unit_test.yml,.github/actions/setup-mysql/action.yml}'
+              - '!{go/test/endtoend,go/flags/endtoend,go/mysql/endtoend,go/vt/vtctl/endtoend,go/vt/vtctl/grpcvtctldserver/endtoend,go/vt/vtgate/endtoend,go/vt/vttablet/endtoend}/**/*_test.go'
 
       - name: Set up Go
         if: steps.changes.outputs.unit_tests == 'true'
@@ -136,6 +132,14 @@ jobs:
       - name: Set up python
         if: steps.changes.outputs.unit_tests == 'true'
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+
+      - name: Avoid the Oracle Cloud apt mirror
+        if: steps.changes.outputs.unit_tests == 'true' && matrix.arch == 'arm64'
+        run: |
+          # The Oracle Cloud regional apt mirror (e.g. us-sanjose-1-ad-1.clouds.ports.ubuntu.com)
+          # is extremely slow; point apt at the default Ubuntu ports archive instead.
+          sudo grep -rl '\.clouds\.ports\.ubuntu\.com' /etc/apt --include='*.list' --include='*.sources' \
+            | xargs -r sudo sed -i 's|https\?://[^/ ]*\.clouds\.ports\.ubuntu\.com|http://ports.ubuntu.com|g'
 
       - name: Tune the OS
         if: steps.changes.outputs.unit_tests == 'true'

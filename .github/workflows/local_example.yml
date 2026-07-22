@@ -48,7 +48,11 @@ jobs:
         filters: |
           examples:
             - 'test/config.json'
-            - 'go/**/*.go'
+            - 'go/**/!(*_test).go'
+            - 'go/**/*.s'
+            - 'go/vt/sidecardb/**/*.sql'
+            - 'go/mysql/collations/colldata/**'
+            - 'go/mysql/icuregex/internal/icudata/**'
             - 'test.go'
             - 'Makefile'
             - 'build.env'

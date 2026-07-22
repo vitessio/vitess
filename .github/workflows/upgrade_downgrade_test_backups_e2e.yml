@@ -54,8 +54,12 @@ jobs:
         filters: |
           end_to_end:
             - 'test/config.json'
-            - 'go/**'
-            - 'go/**/*.go'
+            - 'go/**/!(*_test).go'
+            - 'go/**/*.s'
+            - 'go/test/endtoend/**'
+            - 'go/vt/sidecardb/**/*.sql'
+            - 'go/mysql/collations/colldata/**'
+            - 'go/mysql/icuregex/internal/icudata/**'
             - 'test.go'
             - 'Makefile'
             - 'build.env'

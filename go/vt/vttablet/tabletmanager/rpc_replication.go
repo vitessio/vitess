@@ -24,6 +24,8 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/spf13/pflag"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
@@ -31,8 +33,10 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 
@@ -544,6 +548,21 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 	return tm.MysqlDaemon.WaitForReparentJournal(ctx, timeCreatedNS)
 }
 
+// demotePrimaryLockWaitTimeout is the session lock_wait_timeout used when
+// enabling super_read_only during a demotion. 0 leaves it unset and uses the
+// default of the MySQL server.
+var demotePrimaryLockWaitTimeout time.Duration
+
+func registerDemotePrimaryFlags(fs *pflag.FlagSet) {
+	utils.SetFlagDurationVar(fs, &demotePrimaryLockWaitTimeout, "demote-primary-lock-wait-timeout", demotePrimaryLockWaitTimeout,
+		"Sets the session lock_wait_timeout when enabling super_read_only during a primary demotion. 0 leaves it unset and uses the default of the MySQL server.")
+}
+
+func init() {
+	servenv.OnParseFor("vtcombo", registerDemotePrimaryFlags)
+	servenv.OnParseFor("vttablet", registerDemotePrimaryFlags)
+}
+
 // DemotePrimary prepares a PRIMARY tablet to give up leadership to another tablet.
 //
 // It attempts to idempotently ensure the following guarantees upon returning
@@ -722,7 +741,8 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 	// previous demotion, or because we are not primary anyway, this should be
 	// idempotent.
 	log.Info("enabling super_read_only")
-	if _, err := tm.MysqlDaemon.SetSuperReadOnly(ctx, true); err != nil {
+
+	if _, err := tm.MysqlDaemon.SetSuperReadOnly(ctx, true, mysqlctl.WithLockWaitTimeout(demotePrimaryLockWaitTimeout)); err != nil {
 		if sqlErr, ok := errors.AsType[*sqlerror.SQLError](err); ok && sqlErr.Number() == sqlerror.ERUnknownSystemVariable {
 			log.Warn("server does not know about super_read_only, continuing anyway...")
 		} else {
