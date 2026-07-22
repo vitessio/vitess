@@ -959,7 +959,8 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 	if analysisEntry.Analysis == inst.ClusterHasNoPrimary && len(cellsNoRecovery) > 0 {
 		shardCells, err := inst.GetCellsInShard(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
 		if err != nil {
-			logger.Error(fmt.Sprintf("CheckAndRecover: Tablet: %+v: error fetching shard cells for --cells-no-recovery check: %v", analyzedInstanceAliasString, err))
+			logger.Error(fmt.Sprintf("CheckAndRecover: Tablet: %+v: error fetching shard cells for --cells-no-recovery check, aborting recovery: %v", analyzedInstanceAliasString, err))
+			return err
 		} else if len(shardCells) > 0 && allCellsDenied(shardCells, cellsNoRecovery) {
 			logger.Info(fmt.Sprintf("CheckAndRecover: Tablet: %+v: NOT Recovering host (all shard cells are in --cells-no-recovery)", analyzedInstanceAliasString))
 			recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipCellNoRecovery.String()), 1)
