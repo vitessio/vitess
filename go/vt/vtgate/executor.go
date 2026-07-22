@@ -1307,18 +1307,18 @@ func (e *Executor) getCachedOrBuildPlan(
 
 	preparedPlan := planKey.Query != ""
 	if preparedPlan {
-		// MySQL rejects statement text that itself manages prepared
-		// statements with ER_UNSUPPORTED_PS. The check must run before the
-		// statement is planned: planning an EXECUTE plans its stored
-		// statement text, and the gRPC API lets clients store arbitrary
-		// text in the session's prepared-statement map, so nested EXECUTE
-		// text would otherwise recurse through the planner without bound.
-		// No statement is returned with the error so that a failed
-		// binary-protocol prepare does not fall back to accepting the
-		// statement with NULL field types.
-		switch stmt.(type) {
-		case *sqlparser.PrepareStmt, *sqlparser.ExecuteStmt, *sqlparser.DeallocateStmt:
-			return nil, false, nil, vterrors.NewErrorf(vtrpcpb.Code_UNIMPLEMENTED, vterrors.UnsupportedPS, "This command is not supported in the prepared statement protocol yet")
+		// MySQL only permits a subset of statement types in the prepared
+		// statement protocol and rejects everything else with
+		// ER_UNSUPPORTED_PS; vitess must not be more permissive. The check
+		// must run before the statement is planned: planning an EXECUTE
+		// plans its stored statement text, and the gRPC API lets clients
+		// store arbitrary text in the session's prepared-statement map, so
+		// nested EXECUTE text would otherwise recurse through the planner
+		// without bound. No statement is returned with the error so that a
+		// failed binary-protocol prepare does not fall back to accepting
+		// the statement with NULL field types.
+		if !preparableStatement(sqlparser.ASTToStatementType(stmt)) {
+			return nil, false, nil, errUnsupportedPS()
 		}
 	}
 
@@ -1924,6 +1924,13 @@ func (e *Executor) PlanPrepareStmt(ctx context.Context, safeSession *econtext.Sa
 	plan, _, _, err := e.fetchOrCreatePlan(ctx, safeSession, query, nil, false, true, lStats, false)
 	if err != nil {
 		return nil, err
+	}
+	// Non-preparable statement text is rejected before planning in
+	// getCachedOrBuildPlan. Checking the plan's query type here also
+	// covers plans fetched from the plan cache, which bypass that check:
+	// STREAM and VSTREAM statements are cachable but not preparable.
+	if !preparableStatement(plan.QueryType) {
+		return nil, errUnsupportedPS()
 	}
 	return plan, nil
 }
