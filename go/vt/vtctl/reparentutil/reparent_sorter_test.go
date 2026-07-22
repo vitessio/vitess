@@ -120,6 +120,33 @@ func TestReparentSorter(t *testing.T) {
 	positionIntermediate2.Combined.GTIDSet = positionIntermediate2.Combined.GTIDSet.AddGTID(mysqlGTID2)
 	positionIntermediate2.Executed.GTIDSet = positionIntermediate2.Executed.GTIDSet.AddGTID(mysqlGTID1)
 
+	// positions with GTIDs from servers no other position has seen, making them
+	// incomparable to every other position in this test
+	sid3 := replication.SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17}
+	sid4 := replication.SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 18}
+	mysqlGTID4 := replication.Mysql56GTID{
+		Server:   sid3,
+		Sequence: 12,
+	}
+	mysqlGTID5 := replication.Mysql56GTID{
+		Server:   sid4,
+		Sequence: 13,
+	}
+
+	positionDisjoint1 := &RelayLogPositions{
+		Combined: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+		Executed: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+	}
+	positionDisjoint1.Combined.GTIDSet = positionDisjoint1.Combined.GTIDSet.AddGTID(mysqlGTID4)
+	positionDisjoint1.Executed.GTIDSet = positionDisjoint1.Executed.GTIDSet.AddGTID(mysqlGTID4)
+
+	positionDisjoint2 := &RelayLogPositions{
+		Combined: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+		Executed: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+	}
+	positionDisjoint2.Combined.GTIDSet = positionDisjoint2.Combined.GTIDSet.AddGTID(mysqlGTID5)
+	positionDisjoint2.Executed.GTIDSet = positionDisjoint2.Executed.GTIDSet.AddGTID(mysqlGTID5)
+
 	testcases := []struct {
 		name             string
 		tablets          []*topodatapb.Tablet
@@ -170,6 +197,19 @@ func TestReparentSorter(t *testing.T) {
 			tablets:       []*topodatapb.Tablet{tabletReplica3_103, tabletReplica2_100, tabletReplica1_101, tabletReplica1_100},
 			positions:     []*RelayLogPositions{positionMostAdvanced, positionMostAdvanced, positionMostAdvanced, positionMostAdvanced},
 			sortedTablets: []*topodatapb.Tablet{tabletReplica1_100, tabletReplica1_101, tabletReplica3_103, tabletReplica2_100},
+		}, {
+			// an incomparable position must not shadow the ordering between two
+			// comparable positions: tabletReplica1_100 strictly dominates
+			// tabletReplica1_101 and must sort above it
+			name:          "dominated tablet sorts below an incomparable maximum",
+			tablets:       []*topodatapb.Tablet{tabletReplica1_101, tabletReplica2_100, tabletReplica1_100},
+			positions:     []*RelayLogPositions{positionIntermediate1, positionDisjoint1, positionIntermediate2},
+			sortedTablets: []*topodatapb.Tablet{tabletReplica1_100, tabletReplica1_101, tabletReplica2_100},
+		}, {
+			name:          "incomparable positions fall through to deterministic tiebreak",
+			tablets:       []*topodatapb.Tablet{tabletReplica2_100, tabletReplica1_101},
+			positions:     []*RelayLogPositions{positionDisjoint1, positionDisjoint2},
+			sortedTablets: []*topodatapb.Tablet{tabletReplica1_101, tabletReplica2_100},
 		},
 	}
 

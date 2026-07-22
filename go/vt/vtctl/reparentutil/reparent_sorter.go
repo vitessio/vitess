@@ -71,20 +71,32 @@ func (rs *reparentSorter) Less(i, j int) bool {
 		return true
 	}
 
-	// sort by combined positions. if equal, also sort by the executed GTID positions.
 	jPositions := rs.positions[j]
 	iPositions := rs.positions[i]
 
-	if !iPositions.AtLeast(jPositions) {
-		// [i] does not have all GTIDs that [j] does
-		return false
-	}
-	if !jPositions.AtLeast(iPositions) {
-		// [j] does not have all GTIDs that [i] does
+	// sort by dominance of the combined positions first. GTID positions are partially
+	// ordered, so a pair can also be incomparable (disjoint UUIDs); those fall through to
+	// the tiebreakers below to keep the sort deterministic. this can't make the sort a
+	// total order, so findMostAdvanced re-checks the winner after sorting.
+	if hasDominantPosition(iPositions.Combined, jPositions.Combined) {
 		return true
 	}
+	if hasDominantPosition(jPositions.Combined, iPositions.Combined) {
+		return false
+	}
 
-	// at this point, both have the same GTIDs
+	// if the combined positions are equal, sort by the executed GTID positions. this
+	// prefers tablets with less SQL delay, which would otherwise slow down the reparent.
+	if iPositions.Combined.Equal(jPositions.Combined) {
+		if hasDominantPosition(iPositions.Executed, jPositions.Executed) {
+			return true
+		}
+		if hasDominantPosition(jPositions.Executed, iPositions.Executed) {
+			return false
+		}
+	}
+
+	// at this point, neither tablet is ahead of the other
 	// so we check their promotion rules
 	jPromotionRule := policy.PromotionRule(rs.durability, rs.tablets[j])
 	iPromotionRule := policy.PromotionRule(rs.durability, rs.tablets[i])

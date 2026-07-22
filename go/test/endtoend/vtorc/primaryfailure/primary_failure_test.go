@@ -34,9 +34,38 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/logic"
 )
 
+// waitForReceivedPosition waits until the replica has received (not necessarily applied)
+// everything the source has executed.
+func waitForReceivedPosition(t *testing.T, source, replica *cluster.Vttablet) {
+	res, err := utils.RunSQL(t, `select @@global.gtid_executed`, source, "")
+	require.NoError(t, err)
+	require.Len(t, res.Rows, 1)
+	position := strings.ReplaceAll(res.Rows[0][0].ToString(), "\n", "")
+
+	require.Eventually(t, func() bool {
+		status, err := utils.RunSQL(t, `show replica status`, replica, "")
+		if err != nil || len(status.Rows) != 1 {
+			return false
+		}
+		var retrieved string
+		for i, field := range status.Fields {
+			if field.Name == "Retrieved_Gtid_Set" {
+				retrieved = strings.ReplaceAll(status.Rows[0][i].ToString(), "\n", "")
+			}
+		}
+		if retrieved == "" {
+			return false
+		}
+		res, err := utils.RunSQL(t, fmt.Sprintf(`select gtid_subset('%s', concat(@@global.gtid_executed, ',', '%s'))`, position, retrieved), replica, "")
+		return err == nil && len(res.Rows) == 1 && res.Rows[0][0].ToString() == "1"
+	}, 30*time.Second, time.Second)
+}
+
 // bring down primary, let orc promote replica
 // covers the test case master-failover from orchestrator
-// Also tests that VTOrc can handle multiple failures, if the durability policies allow it
+// Also tests that VTOrc can handle multiple failures, if the durability policies allow it.
+// A cross-cell replica is delayed on apply throughout the failover: a lagging replica that
+// can't win the election must not hold up or fail the VTOrc-driven recovery.
 func TestDownPrimary(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
 	// We specify the --wait-replicas-timeout to a small value because we spawn a cross-cell replica later in the test.
@@ -73,6 +102,22 @@ func TestDownPrimary(t *testing.T) {
 
 	// check that the replication is setup correctly before we failover
 	utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{rdonly, replica, crossCellReplica}, 10*time.Second)
+
+	// Delay applies on the cross-cell replica by an hour: it keeps receiving changes but
+	// stops applying them, and a lagging replica that can't win the election must not
+	// hold up or fail the failover below.
+	require.NoError(t, utils.RunSQLs(t, []string{
+		`STOP REPLICA SQL_THREAD`,
+		`CHANGE REPLICATION SOURCE TO SOURCE_DELAY = 3600`,
+		`START REPLICA SQL_THREAD`,
+	}, crossCellReplica, ""))
+
+	// One more write, applied everywhere but on the delayed replica; wait for the delayed
+	// replica to have received it before the primary goes away, since the semi-sync ACK
+	// can come from the other replicas.
+	utils.VerifyWritesSucceed(t, clusterInfo, curPrimary, []*cluster.Vttablet{rdonly, replica}, 10*time.Second)
+	waitForReceivedPosition(t, curPrimary, crossCellReplica)
+
 	// since all tablets are up and running, InstancePollSecondsExceeded should have `0` zero value
 	utils.WaitForInstancePollSecondsExceededCount(t, vtOrcProcess, 0, true)
 	// Make the rdonly vttablet unavailable
@@ -95,6 +140,13 @@ func TestDownPrimary(t *testing.T) {
 
 	// check that the replica gets promoted
 	utils.CheckPrimaryTablet(t, clusterInfo, replica, true)
+
+	// clear the apply delay (it survives the repoint) so the delayed replica can catch up
+	require.NoError(t, utils.RunSQLs(t, []string{
+		`STOP REPLICA`,
+		`CHANGE REPLICATION SOURCE TO SOURCE_DELAY = 0`,
+		`START REPLICA`,
+	}, crossCellReplica, ""))
 
 	// also check that the replication is working correctly after failover
 	utils.VerifyWritesSucceed(t, clusterInfo, replica, []*cluster.Vttablet{crossCellReplica}, 10*time.Second)

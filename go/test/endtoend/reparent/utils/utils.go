@@ -92,7 +92,8 @@ func SetupShardedReparentCluster(t *testing.T, durability string, extraVttabletF
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, extraVttabletFlags...)
 	}
 
-	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
+	clusterInstance.VtGateExtraArgs = append(
+		clusterInstance.VtGateExtraArgs,
 		"--enable-buffer",
 		// Long timeout in case failover is slow.
 		"--buffer-window", "10m",
@@ -281,7 +282,8 @@ func StartNewVTTablet(t *testing.T, clusterInstance *cluster.LocalProcessCluster
 			"--track-schema-versions=true",
 			"--queryserver-enable-online-ddl" + "=false",
 		},
-		clusterInstance.DefaultCharset)
+		clusterInstance.DefaultCharset,
+	)
 	tablet.VttabletProcess.SupportsBackup = supportsBackup
 
 	log.Info(fmt.Sprintf("Starting MySql for tablet %v", tablet.Alias))
@@ -310,6 +312,14 @@ func getMysqlConnParam(tablet *cluster.Vttablet) mysql.ConnParams {
 		UnixSocket: path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/mysql.sock", tablet.TabletUID)),
 	}
 	return connParams
+}
+
+// GetMySQLConn returns an open connection to the MySQL instance of a vttablet, for
+// callers that need to hold session state (locks, transactions) across other steps.
+// The caller must Close it.
+func GetMySQLConn(ctx context.Context, tablet *cluster.Vttablet) (*mysql.Conn, error) {
+	tabletParams := getMysqlConnParam(tablet)
+	return mysql.Connect(ctx, &tabletParams)
 }
 
 // RunSQLs is used to run SQL commands directly on the MySQL instance of a vttablet. All commands are
@@ -605,7 +615,8 @@ func DeleteTablet(t *testing.T, clusterInstance *cluster.LocalProcessCluster, ta
 	err := clusterInstance.VtctldClientProcess.ExecuteCommand(
 		"DeleteTablets",
 		"--allow-primary",
-		tab.Alias)
+		tab.Alias,
+	)
 	require.NoError(t, err)
 }
 
@@ -630,7 +641,8 @@ func GetNewPrimary(t *testing.T, clusterInstance *cluster.LocalProcessCluster) *
 // This should not generally be called directly, instead use the WaitForReplicationToCatchup method.
 func GetShardReplicationPositions(t *testing.T, clusterInstance *cluster.LocalProcessCluster, keyspaceName, shardName string, doPrint bool) []string {
 	output, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(
-		"ShardReplicationPositions", fmt.Sprintf("%s/%s", keyspaceName, shardName))
+		"ShardReplicationPositions", fmt.Sprintf("%s/%s", keyspaceName, shardName),
+	)
 	require.NoError(t, err)
 	strArray := strings.Split(output, "\n")
 	if strArray[len(strArray)-1] == "" {
