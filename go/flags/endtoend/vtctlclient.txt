@@ -19,8 +19,7 @@ Usage of vtctlclient:
   -h, --help                                                        display usage and exit
       --log-err-stacks                                              log stack traces for errors
       --log-format string                                           log output format: json for machine-readable JSON, text for human-readable colored output (default "json")
-      --log-level string                                            minimum log level when structured logging is enabled (debug, info, warn, error) (default "info")
-      --logbuflevel int                                             Buffer log messages logged at this level or lower (-1 means don't buffer; 0 means buffer INFO only; ...). Has limited applicability on non-prod platforms.
+      --log-level string                                            minimum log level (debug, info, warn, error) (default "info")
       --otel-endpoint string                                        OpenTelemetry collector endpoint (host:port for gRPC); if empty, the OTEL_EXPORTER_OTLP_ENDPOINT env var is used
       --otel-insecure                                               use insecure connection to OpenTelemetry collector
       --pprof strings                                               enable profiling

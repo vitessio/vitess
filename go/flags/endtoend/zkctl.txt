@@ -21,7 +21,7 @@ Flags:
   -h, --help                                                        help for zkctl
       --log-err-stacks                                              log stack traces for errors
       --log-format string                                           log output format: json for machine-readable JSON, text for human-readable colored output (default "json")
-      --log-level string                                            minimum log level when structured logging is enabled (debug, info, warn, error) (default "info")
+      --log-level string                                            minimum log level (debug, info, warn, error) (default "info")
       --pprof strings                                               enable profiling
       --pprof-http                                                  enable pprof http endpoints
   -v, --version                                                     print binary version

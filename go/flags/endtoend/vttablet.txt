@@ -218,7 +218,7 @@ Flags:
       --lock-timeout duration                                            Maximum time to wait when attempting to acquire a lock from the topo server (default 45s)
       --log-err-stacks                                                   log stack traces for errors
       --log-format string                                                log output format: json for machine-readable JSON, text for human-readable colored output (default "json")
-      --log-level string                                                 minimum log level when structured logging is enabled (debug, info, warn, error) (default "info")
+      --log-level string                                                 minimum log level (debug, info, warn, error) (default "info")
       --log-queries                                                      Enable query logging to syslog.
       --log-queries-to-file string                                       Enable query logging to the specified file
       --manifest-external-decompressor string                            command with arguments to store in the backup manifest when compressing a backup with an external compression engine.

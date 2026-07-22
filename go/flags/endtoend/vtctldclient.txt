@@ -132,8 +132,7 @@ Flags:
       --grpc-prometheus                          Enable gRPC monitoring with Prometheus.
   -h, --help                                     help for vtctldclient
       --log-format string                        log output format: json for machine-readable JSON, text for human-readable colored output (default "json")
-      --log-level string                         minimum log level when structured logging is enabled (debug, info, warn, error) (default "info")
-      --logbuflevel int                          Buffer log messages logged at this level or lower (-1 means don't buffer; 0 means buffer INFO only; ...). Has limited applicability on non-prod platforms.
+      --log-level string                         minimum log level (debug, info, warn, error) (default "info")
       --mysql-server-version string              MySQL server version to advertise. (default "8.4.6-Vitess")
       --security-policy string                   the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
       --server string                            server to use for the connection (required)
@@ -147,8 +146,7 @@ Flags:
       --topo-global-root string                  the path of the global topology data in the global topology server (default "/vitess/global")
       --topo-global-server-address strings       the address of the global topology server(s) (default [localhost:2379])
       --topo-implementation string               the topology implementation to use (default "etcd2")
-  -v, --v Level                                  log level for V logs
-      --version                                  version for vtctldclient
+  -v, --version                                  version for vtctldclient
       --vtctl-client-protocol string             Protocol to use to talk to the vtctl server. (default "grpc")
       --vtctld-grpc-ca string                    the server ca to use to validate servers when connecting
       --vtctld-grpc-cert string                  the cert to use to connect

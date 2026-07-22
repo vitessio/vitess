@@ -10,7 +10,7 @@ vtorc \
 	--topo-global-root /vitess/global \
 	--port 15000 \
 	--instance-poll-time "1s" \
-	--topo-information-refresh-duration "30s" \
+	--topo-information-refresh-duration "30s"
 
 Flags:
       --allow-emergency-reparent                                    Whether VTOrc should be allowed to run emergency reparent operation when it detects a dead primary (default true)
@@ -54,7 +54,7 @@ Flags:
       --lock-timeout duration                                       Maximum time to wait when attempting to acquire a lock from the topo server (default 45s)
       --log-err-stacks                                              log stack traces for errors
       --log-format string                                           log output format: json for machine-readable JSON, text for human-readable colored output (default "json")
-      --log-level string                                            minimum log level when structured logging is enabled (debug, info, warn, error) (default "info")
+      --log-level string                                            minimum log level (debug, info, warn, error) (default "info")
       --max-stack-size int                                          configure the maximum stack size in bytes (default 67108864)
       --onclose-timeout duration                                    wait no more than this for OnClose handlers before stopping (default 10s)
       --onterm-timeout duration                                     wait no more than this for OnTermSync handlers before stopping (default 10s)

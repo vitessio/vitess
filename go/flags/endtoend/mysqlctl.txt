@@ -63,7 +63,7 @@ Flags:
       --lameduck-period duration                                    keep running at least this long after SIGTERM before stopping (default 50ms)
       --log-err-stacks                                              log stack traces for errors
       --log-format string                                           log output format: json for machine-readable JSON, text for human-readable colored output (default "json")
-      --log-level string                                            minimum log level when structured logging is enabled (debug, info, warn, error) (default "info")
+      --log-level string                                            minimum log level (debug, info, warn, error) (default "info")
       --max-stack-size int                                          configure the maximum stack size in bytes (default 67108864)
       --mysql-port int                                              MySQL port. (default 3306)
       --mysql-server-version string                                 MySQL server version to advertise. (default "8.4.6-Vitess")

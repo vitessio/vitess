@@ -108,7 +108,7 @@ Flags:
       --lock-timeout duration                                            Maximum time to wait when attempting to acquire a lock from the topo server (default 45s)
       --log-err-stacks                                                   log stack traces for errors
       --log-format string                                                log output format: json for machine-readable JSON, text for human-readable colored output (default "json")
-      --log-level string                                                 minimum log level when structured logging is enabled (debug, info, warn, error) (default "info")
+      --log-level string                                                 minimum log level (debug, info, warn, error) (default "info")
       --log-queries-to-file string                                       Enable query logging to the specified file
       --max-memory-rows int                                              Maximum number of rows that will be held in memory for intermediate results as well as the final result. (default 300000)
       --max-payload-size int                                             The threshold for query payloads in bytes. A payload greater than this threshold will result in a failure to handle the query.

@@ -53,7 +53,7 @@ Flags:
       --ks-shard-map-file string                                    File containing json blob of keyspace name -> shard name -> ShardReference object
       --log-err-stacks                                              log stack traces for errors
       --log-format string                                           log output format: json for machine-readable JSON, text for human-readable colored output (default "json")
-      --log-level string                                            minimum log level when structured logging is enabled (debug, info, warn, error) (default "info")
+      --log-level string                                            minimum log level (debug, info, warn, error) (default "info")
       --mysql-server-version string                                 MySQL server version to advertise. (default "8.4.6-Vitess")
       --normalize                                                   Whether to enable vtgate normalization
       --output-mode string                                          Output in human-friendly text or json (default "text")
