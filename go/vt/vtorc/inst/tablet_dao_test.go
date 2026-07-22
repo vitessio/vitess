@@ -132,3 +132,37 @@ func TestReadTabletCountsByCell(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, map[string]int64{"cell1": 100}, tabletCounts)
 }
+
+func TestGetCellsInShard(t *testing.T) {
+	defer db.ClearVTOrcDatabase()
+
+	save := func(cell string, uid uint32) {
+		require.NoError(t, SaveTablet(&topodatapb.Tablet{
+			Alias:    &topodatapb.TabletAlias{Cell: cell, Uid: uid},
+			Keyspace: "ks",
+			Shard:    "0",
+		}))
+	}
+	save("zone1", 1)
+	save("zone1", 2)
+	save("zone2", 3)
+
+	cells, err := GetCellsInShard("ks", "0")
+	require.NoError(t, err)
+	require.ElementsMatch(t, []string{"zone1", "zone2"}, cells)
+
+	// different shard returns only its own cells
+	require.NoError(t, SaveTablet(&topodatapb.Tablet{
+		Alias:    &topodatapb.TabletAlias{Cell: "zone3", Uid: 10},
+		Keyspace: "ks",
+		Shard:    "-80",
+	}))
+	cells, err = GetCellsInShard("ks", "-80")
+	require.NoError(t, err)
+	require.Equal(t, []string{"zone3"}, cells)
+
+	// unknown shard returns empty slice
+	cells, err = GetCellsInShard("ks", "99")
+	require.NoError(t, err)
+	require.Empty(t, cells)
+}
