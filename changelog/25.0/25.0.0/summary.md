@@ -27,6 +27,7 @@
     - **[VTTablet](#minor-changes-vttablet)**
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
         - [Query timeout for state-changing statements on the streaming path](#vttablet-stream-query-timeout)
+        - [Query rules now apply to queries on the streaming path](#vttablet-rules-apply-to-streaming)
         - [New `--demote-primary-lock-wait-timeout` flag](#vttablet-demote-primary-lock-wait-timeout)
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
         - [Skip MySQL version check when restoring from a mysql-shell backup](#vttablet-mysql-shell-restore-skip-version-check)
@@ -233,6 +234,14 @@ See [#19836](https://github.com/vitessio/vitess/pull/19836) for details.
 #### <a id="vttablet-stream-query-timeout"/>Query timeout for state-changing statements on the streaming path</a>
 
 Streaming reads (`StreamExecute` outside a transaction) remain exempt from the tablet query timeout so OLAP results can stream indefinitely. State-changing statements served over the streaming path — DML, DDL, `FLUSH`, sequence allocation, migration commands, and similar — are bounded by the same query timeout that buffered execution applies. In v24 and earlier, these statements were rejected on the streaming path entirely; v25 introduces support for them, bounded by the standard query timeout from the start. Only streaming reads retain the unbounded exemption, unchanged from previous releases.
+
+See [#20499](https://github.com/vitessio/vitess/pull/20499) for details.
+
+#### <a id="vttablet-rules-apply-to-streaming"/>Query rules now apply to queries on the streaming path</a>
+
+Before v25, queries served over the streaming path (`workload=olap` connections and the `StreamExecute` API) carried the internal `SelectStream` plan type, so query rules keyed on concrete plan types such as `Select`, `Insert`, or `Show` matched only buffered execution. In v25 these queries produce the same plan types as buffered execution, so a query rule keyed on a concrete plan type now applies to both execution paths.
+
+**Impact**: Review existing query rules. A rule written for buffered queries — including one enforcing a `FAIL` or `BUFFER` policy — now also affects the same statements arriving over `workload=olap`/`StreamExecute` connections. See the [`SelectStream` deprecation note](#deprecated-selectstream-rule-plan) for the backward-compatibility behavior of rules keyed on the old streaming plan types.
 
 See [#20499](https://github.com/vitessio/vitess/pull/20499) for details.
 
