@@ -1496,12 +1496,6 @@ func (e *Executor) Prepare(ctx context.Context, method string, safeSession *econ
 }
 
 func (e *Executor) prepare(ctx context.Context, safeSession *econtext.SafeSession, sql string, logStats *logstats.LogStats) ([]*querypb.Field, uint16, error) {
-	// Start an implicit transaction if necessary.
-	if !safeSession.Autocommit && !safeSession.InTransaction() {
-		if err := e.txConn.Begin(ctx, safeSession, nil); err != nil {
-			return nil, 0, err
-		}
-	}
 	stmtType := sqlparser.Preview(sql)
 	logStats.StmtType = stmtType.String()
 
