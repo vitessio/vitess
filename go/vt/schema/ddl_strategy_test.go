@@ -179,6 +179,7 @@ func TestIsExpireArtifactsFlag(t *testing.T) {
 	}
 }
 
+// TestParseDDLStrategy verifies strategy parsing, including validation and ordering of repeatable session variables.
 func TestParseDDLStrategy(t *testing.T) {
 	tt := []struct {
 		strategyVariable     string
@@ -460,6 +461,7 @@ func TestParseDDLStrategy(t *testing.T) {
 	}
 }
 
+// TestSessionVariableSetStatement verifies values remain SQL string literals when they contain SQL syntax.
 func TestSessionVariableSetStatement(t *testing.T) {
 	query, err := (SessionVariable{
 		Name:  "innodb_strict_mode",

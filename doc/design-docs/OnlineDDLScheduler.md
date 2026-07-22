@@ -74,6 +74,16 @@ will kick a burst of additional ticks. This is done to speed up the progress of 
 
 By default, Vitess schedules all migrations to run sequentially. Only a single migration is expected to run at any given time. However, there are cases for concurrent execution of migrations, and the user may request concurrent execution via `--allow-concurrent` flag in `ddl_strategy`. Some migrations are eligible to run concurrently, other migrations are eligible to run specific phases concurrently, and some do not allow concurrency. See the user guides for up-to-date information.
 
+## Session variables
+
+`ApplySchema` accepts repeatable `--session-variable name=value` options within `ddl_strategy`. Vitess applies the assignments in order and in MySQL `SESSION` scope before executing schema DDL. For example:
+
+```shell
+vtctldclient ApplySchema --ddl-strategy="vitess --session-variable innodb_strict_mode=off" --sql="ALTER TABLE t MODIFY payload TEXT" commerce
+```
+
+The `direct` strategy applies the variables on the dedicated DBA connection before executing the requested statements. Online DDL applies them on each connection that performs migration DDL and restores the connection's prior values afterward. Invalid or duplicate variable names and failed assignments stop the operation before DDL executes.
+
 ## Who runs the migration
 
 Some migrations are executed by the scheduler itself, some by a sub-process, and some implicitly by vreplication, as follows:

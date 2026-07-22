@@ -139,6 +139,7 @@ func TestTabletManager_MysqlHostMetricsNilCnf(t *testing.T) {
 	assert.Nil(t, resp.HostMetrics)
 }
 
+// TestTabletManager_ExecuteMultiFetchAsDbaSessionVariables verifies assignments execute in order before schema DDL.
 func TestTabletManager_ExecuteMultiFetchAsDbaSessionVariables(t *testing.T) {
 	ctx := t.Context()
 	cp := mysql.ConnParams{}
@@ -191,6 +192,7 @@ func TestTabletManager_ExecuteMultiFetchAsDbaSessionVariables(t *testing.T) {
 	assert.Less(t, secondVariableIdx, createIdx, "all session variables must be set before schema SQL")
 }
 
+// TestTabletManager_ExecuteMultiFetchAsDbaSessionVariableFailure verifies a failed assignment prevents schema DDL.
 func TestTabletManager_ExecuteMultiFetchAsDbaSessionVariableFailure(t *testing.T) {
 	ctx := t.Context()
 	cp := mysql.ConnParams{}

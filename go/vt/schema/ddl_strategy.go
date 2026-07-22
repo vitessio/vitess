@@ -89,6 +89,7 @@ type DDLStrategySetting struct {
 	Options  string      `json:"options,omitempty"`
 }
 
+// SessionVariable is a MySQL system variable assignment applied in SESSION scope before schema DDL.
 type SessionVariable struct {
 	Name  string
 	Value string
@@ -197,6 +198,7 @@ func (setting *DDLStrategySetting) IsAllowZeroInDateFlag() bool {
 	return setting.hasFlag(allowZeroInDateFlag)
 }
 
+// ValidateSessionVariable ensures a variable name is safe to interpolate as a MySQL system variable identifier.
 func ValidateSessionVariable(variable SessionVariable) error {
 	if !sessionVariableNameRegexp.MatchString(variable.Name) {
 		return fmt.Errorf("invalid session variable name: %q", variable.Name)
@@ -204,6 +206,7 @@ func ValidateSessionVariable(variable SessionVariable) error {
 	return nil
 }
 
+// ValidateSessionVariables validates variable names and rejects case-insensitive duplicates.
 func ValidateSessionVariables(variables []SessionVariable) error {
 	seen := map[string]struct{}{}
 	for _, variable := range variables {
@@ -219,6 +222,7 @@ func ValidateSessionVariables(variables []SessionVariable) error {
 	return nil
 }
 
+// SetStatement returns a SET statement with the variable value encoded as a SQL string literal.
 func (variable SessionVariable) SetStatement() (string, error) {
 	if err := ValidateSessionVariable(variable); err != nil {
 		return "", err
@@ -229,6 +233,7 @@ func (variable SessionVariable) SetStatement() (string, error) {
 	)
 }
 
+// SessionVariables returns the ordered assignments from repeatable --session-variable name=value options.
 func (setting *DDLStrategySetting) SessionVariables() ([]SessionVariable, error) {
 	opts, err := shlex.Split(setting.Options)
 	if err != nil {
