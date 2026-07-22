@@ -464,10 +464,24 @@ func TestParseDDLStrategy(t *testing.T) {
 
 // TestSessionVariableSetStatement verifies values are safely encoded.
 func TestSessionVariableSetStatement(t *testing.T) {
-	query, err := (SessionVariable{
-		Name:  "innodb_strict_mode",
-		Value: "off'; drop table t; --",
-	}).SetStatement()
-	require.NoError(t, err)
-	assert.Equal(t, "set @@session.innodb_strict_mode=X'6f6666273b2064726f70207461626c6520743b202d2d'", query)
+	t.Run("hex value", func(t *testing.T) {
+		query, err := (SessionVariable{
+			Name:  "innodb_strict_mode",
+			Value: "off'; drop table t; --",
+		}).SetStatement()
+		require.NoError(t, err)
+		assert.Equal(t, "set @@session.innodb_strict_mode=X'6f6666273b2064726f70207461626c6520743b202d2d'", query)
+	})
+	t.Run("invalid name", func(t *testing.T) {
+		query, err := (SessionVariable{Name: "sql-mode", Value: "ANSI"}).SetStatement()
+		require.EqualError(t, err, `invalid session variable name: "sql-mode"`)
+		assert.Empty(t, query)
+	})
+}
+
+// TestSessionVariablesInvalidSyntax verifies malformed options return an error.
+func TestSessionVariablesInvalidSyntax(t *testing.T) {
+	setting := &DDLStrategySetting{Options: `--session-variable "sql_mode=ANSI`}
+	_, err := setting.SessionVariables()
+	require.Error(t, err)
 }
