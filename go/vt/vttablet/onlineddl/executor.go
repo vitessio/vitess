@@ -1247,6 +1247,7 @@ func (e *Executor) initMigrationSQLMode(ctx context.Context, onlineDDL *schema.O
 	return deferFunc, nil
 }
 
+// initMigrationSessionVariables saves and applies requested session variables, returning a function that restores them in reverse order.
 func (e *Executor) initMigrationSessionVariables(ctx context.Context, onlineDDL *schema.OnlineDDL, conn *dbconnpool.DBConnection) (deferFunc func(), err error) {
 	restoreQueries := []string{}
 	deferFunc = func() {
