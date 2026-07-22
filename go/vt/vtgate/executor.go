@@ -1305,6 +1305,23 @@ func (e *Executor) getCachedOrBuildPlan(
 		return nil, false, nil, err
 	}
 
+	preparedPlan := planKey.Query != ""
+	if preparedPlan {
+		// MySQL rejects statement text that itself manages prepared
+		// statements with ER_UNSUPPORTED_PS. The check must run before the
+		// statement is planned: planning an EXECUTE plans its stored
+		// statement text, and the gRPC API lets clients store arbitrary
+		// text in the session's prepared-statement map, so nested EXECUTE
+		// text would otherwise recurse through the planner without bound.
+		// No statement is returned with the error so that a failed
+		// binary-protocol prepare does not fall back to accepting the
+		// statement with NULL field types.
+		switch stmt.(type) {
+		case *sqlparser.PrepareStmt, *sqlparser.ExecuteStmt, *sqlparser.DeallocateStmt:
+			return nil, false, nil, vterrors.NewErrorf(vtrpcpb.Code_UNIMPLEMENTED, vterrors.UnsupportedPS, "This command is not supported in the prepared statement protocol yet")
+		}
+	}
+
 	defer func() {
 		if err == nil {
 			vcursor.CheckForReservedConnection(setVarComment, stmt)
@@ -1322,7 +1339,6 @@ func (e *Executor) getCachedOrBuildPlan(
 	vcursor.SetForeignKeyCheckState(qh.ForeignKeyChecks)
 
 	paramsCount := uint16(0)
-	preparedPlan := planKey.Query != ""
 	if preparedPlan {
 		// We need to count the number of arguments in the statement before we plan the query.
 		// Planning could add additional arguments to the statement.
@@ -1876,19 +1892,7 @@ func (e *Executor) ReleaseLock(ctx context.Context, session *econtext.SafeSessio
 func (e *Executor) PlanPrepareStmt(ctx context.Context, safeSession *econtext.SafeSession, query string) (*engine.Plan, error) {
 	// creating this log stats to not interfere with the original log stats.
 	lStats := logstats.NewLogStats(ctx, "prepare", query, safeSession.GetSessionUUID(), nil, streamlog.GetQueryLogConfig())
-	plan, _, stmt, err := e.fetchOrCreatePlan(ctx, safeSession, query, nil, false, true, lStats, false)
-
-	// MySQL rejects preparing statements that manage prepared statements.
-	// Accepting them would let an EXECUTE re-enter the session's
-	// prepared-statement state, e.g. a statement that deallocates itself
-	// while it runs. The check runs before the error return so that it
-	// takes precedence over planning errors, like in MySQL. A nil stmt
-	// means the plan came from the plan cache, which such statements never
-	// enter: sqlparser.CachePlan only admits plain queries and DML.
-	switch stmt.(type) {
-	case *sqlparser.PrepareStmt, *sqlparser.ExecuteStmt, *sqlparser.DeallocateStmt:
-		return nil, vterrors.NewErrorf(vtrpcpb.Code_UNIMPLEMENTED, vterrors.UnsupportedPS, "This command is not supported in the prepared statement protocol yet")
-	}
+	plan, _, _, err := e.fetchOrCreatePlan(ctx, safeSession, query, nil, false, true, lStats, false)
 	if err != nil {
 		return nil, err
 	}

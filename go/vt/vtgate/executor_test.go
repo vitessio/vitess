@@ -3001,6 +3001,53 @@ func TestPrepareRejectsNonPreparableStatements(t *testing.T) {
 	}
 }
 
+func TestExecuteRejectsStoredNonPreparableStatements(t *testing.T) {
+	// The gRPC API lets clients supply the session, including the
+	// prepared-statement map, so stored statement text is not guaranteed
+	// to have passed PREPARE's checks. Planning an EXECUTE plans its
+	// stored text, so text that is itself an EXECUTE would recurse
+	// through the planner without bound and crash vtgate with a stack
+	// overflow unless it is rejected before planning.
+	executor, _, _, _, ctx := createExecutorEnv(t)
+
+	tcases := []struct {
+		name   string
+		stored map[string]*vtgatepb.PrepareData
+	}{{
+		name: "self-referential execute",
+		stored: map[string]*vtgatepb.PrepareData{
+			"prep": {PrepareStatement: "execute prep"},
+		},
+	}, {
+		name: "mutually recursive execute",
+		stored: map[string]*vtgatepb.PrepareData{
+			"prep":  {PrepareStatement: "execute other"},
+			"other": {PrepareStatement: "execute prep"},
+		},
+	}, {
+		name: "stored prepare",
+		stored: map[string]*vtgatepb.PrepareData{
+			"prep": {PrepareStatement: "prepare prep_nested from 'select 1'"},
+		},
+	}, {
+		name: "stored deallocate",
+		stored: map[string]*vtgatepb.PrepareData{
+			"prep": {PrepareStatement: "deallocate prepare prep"},
+		},
+	}}
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			session := econtext.NewSafeSession(&vtgatepb.Session{
+				TargetString:     KsTestUnsharded,
+				PrepareStatement: tcase.stored,
+			})
+
+			_, err := executorExecSession(ctx, executor, session, "execute prep", nil)
+			require.ErrorContains(t, err, "This command is not supported in the prepared statement protocol yet")
+		})
+	}
+}
+
 func TestExecutorFlushStmt(t *testing.T) {
 	executor, _, _, _, _ := createExecutorEnv(t)
 
