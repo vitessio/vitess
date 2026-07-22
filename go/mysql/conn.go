@@ -1188,25 +1188,11 @@ func (c *Conn) handleComStmtExecute(handler Handler, data []byte) (kontinue bool
 		}
 	} else {
 		if err != nil {
-<<<<<<< HEAD
-			// An OK packet already terminated the result; we cannot safely
-			// append an ERR without desynchronizing the protocol for the
-			// next command. Tear down the connection instead.
-			if sendFinished {
-				log.Errorf("Error after OK-terminated result on %s: %v", c, err)
-||||||| parent of 8e0737e31e (`go/mysql`: send ERR instead of teardown after an OK carrying `SERVER_MORE_RESULTS_EXISTS` (#20563))
-			// An OK packet already terminated the result; we cannot safely
-			// append an ERR without desynchronizing the protocol for the
-			// next command. Tear down the connection instead.
-			if sendFinished {
-				log.Error("Error after OK-terminated result", slog.String("connection", c.String()), slog.Any("error", err))
-=======
 			// A final OK (no SERVER_MORE_RESULTS_EXISTS) already terminated
 			// the result. Appending an ERR would desynchronize the protocol,
 			// so tear down the connection instead.
 			if sendFinished && !okSentWithMoreResults {
-				log.Error("Error after OK-terminated result", slog.String("connection", c.String()), slog.Any("error", err))
->>>>>>> 8e0737e31e (`go/mysql`: send ERR instead of teardown after an OK carrying `SERVER_MORE_RESULTS_EXISTS` (#20563))
+				log.Errorf("Error after OK-terminated result on %s: %v", c, err)
 				return false
 			}
 			if !c.writeErrorPacketFromErrorAndLog(err) {
@@ -1408,7 +1394,7 @@ func (c *Conn) execQueryMulti(query string, handler Handler) execResult {
 					sessionStateData: qr.QueryResult.SessionStateChanges,
 				}
 				needsEndPacket = false
-				lastOKHadMoreResults = flags&ServerMoreResultsExists != 0
+				lastOKHadMoreResults = flag&ServerMoreResultsExists != 0
 				return c.writeOKPacket(&ok)
 			}
 
@@ -1441,25 +1427,11 @@ func (c *Conn) execQueryMulti(query string, handler Handler) execResult {
 	}
 
 	if err != nil {
-<<<<<<< HEAD
-		// An OK packet already terminated the last result; we cannot safely
-		// append an ERR without desynchronizing the protocol for the next
-		// command. Tear down the connection instead.
-		if !needsEndPacket {
-			log.Errorf("Error after OK-terminated result on %s: %v", c, err)
-||||||| parent of 8e0737e31e (`go/mysql`: send ERR instead of teardown after an OK carrying `SERVER_MORE_RESULTS_EXISTS` (#20563))
-		// An OK packet already terminated the last result; we cannot safely
-		// append an ERR without desynchronizing the protocol for the next
-		// command. Tear down the connection instead.
-		if !needsEndPacket {
-			log.Error("Error after OK-terminated result", slog.String("connection", c.String()), slog.Any("error", err))
-=======
 		// A final OK (no SERVER_MORE_RESULTS_EXISTS) already terminated the
 		// last result. Appending an ERR would desynchronize the protocol,
 		// so tear down the connection instead.
 		if !needsEndPacket && !lastOKHadMoreResults {
-			log.Error("Error after OK-terminated result", slog.String("connection", c.String()), slog.Any("error", err))
->>>>>>> 8e0737e31e (`go/mysql`: send ERR instead of teardown after an OK carrying `SERVER_MORE_RESULTS_EXISTS` (#20563))
+			log.Errorf("Error after OK-terminated result on %s: %v", c, err)
 			return connErr
 		}
 		if !c.writeErrorPacketFromErrorAndLog(err) {
@@ -1529,19 +1501,9 @@ func (c *Conn) execQuery(query string, handler Handler, more bool) execResult {
 	callbackCalled := false
 	// sendFinished is set if the response should just be an OK packet.
 	sendFinished := false
-<<<<<<< HEAD
-||||||| parent of 8e0737e31e (`go/mysql`: send ERR instead of teardown after an OK carrying `SERVER_MORE_RESULTS_EXISTS` (#20563))
-	defer func() {
-		c.StatusFlags &^= ServerQueryWasSlow
-	}()
-=======
 	// okSentWithMoreResults is set if that OK carried SERVER_MORE_RESULTS_EXISTS,
 	// meaning an ERR is still a protocol-legal next result after it.
 	okSentWithMoreResults := false
-	defer func() {
-		c.StatusFlags &^= ServerQueryWasSlow
-	}()
->>>>>>> 8e0737e31e (`go/mysql`: send ERR instead of teardown after an OK carrying `SERVER_MORE_RESULTS_EXISTS` (#20563))
 
 	err := handler.ComQuery(c, query, func(qr *sqltypes.Result) error {
 		flag := c.StatusFlags
@@ -1596,25 +1558,11 @@ func (c *Conn) execQuery(query string, handler Handler, more bool) execResult {
 		return execErr
 	}
 	if err != nil {
-<<<<<<< HEAD
-		// An OK packet already terminated the result; we cannot safely
-		// append an ERR without desynchronizing the protocol for the
-		// next command. Tear down the connection instead.
-		if sendFinished {
-			log.Errorf("Error after OK-terminated result on %s: %v", c, err)
-||||||| parent of 8e0737e31e (`go/mysql`: send ERR instead of teardown after an OK carrying `SERVER_MORE_RESULTS_EXISTS` (#20563))
-		// An OK packet already terminated the result; we cannot safely
-		// append an ERR without desynchronizing the protocol for the
-		// next command. Tear down the connection instead.
-		if sendFinished {
-			log.Error("Error after OK-terminated result", slog.String("connection", c.String()), slog.Any("error", err))
-=======
 		// A final OK (no SERVER_MORE_RESULTS_EXISTS) already terminated the
 		// result. Appending an ERR would desynchronize the protocol, so
 		// tear down the connection instead.
 		if sendFinished && !okSentWithMoreResults {
-			log.Error("Error after OK-terminated result", slog.String("connection", c.String()), slog.Any("error", err))
->>>>>>> 8e0737e31e (`go/mysql`: send ERR instead of teardown after an OK carrying `SERVER_MORE_RESULTS_EXISTS` (#20563))
+			log.Errorf("Error after OK-terminated result on %s: %v", c, err)
 			return connErr
 		}
 		if !c.writeErrorPacketFromErrorAndLog(err) {
