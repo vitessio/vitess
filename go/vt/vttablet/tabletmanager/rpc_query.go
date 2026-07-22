@@ -249,7 +249,7 @@ func (tm *TabletManager) ExecuteFetchAsDba(ctx context.Context, req *tabletmanag
 		req.ReloadSchema,
 		req.DisableBinlogs,
 		req.DisableForeignKeyChecks,
-		nil,
+		nil, /* sessionVariables */
 		func(queries []string, countCreate int) error {
 			// As of v23 we do not allow multi-statement SQL in ExecuteFetchAsDba at all, and
 			// ExecuteMultiFetchAsDba will be the only way to execute multiple statements.
