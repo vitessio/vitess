@@ -2215,6 +2215,39 @@ func TestJSON(t *testing.T) {
 	ts.Run()
 }
 
+// TestJSONNestedOpaque verifies that JSON documents containing binary and bit
+// values nested inside arrays and objects stream with the surrounding document
+// intact, since those values take a separate marshaling path from other JSON
+// scalars.
+func TestJSONNestedOpaque(t *testing.T) {
+	execStatements(t, []string{
+		"create table vitess_json_opaque(id int, val json, primary key(id))",
+	})
+	t.Cleanup(func() {
+		execStatements(t, []string{
+			"drop table vitess_json_opaque",
+		})
+	})
+
+	testcases := []testcase{{
+		input: []string{
+			"begin",
+			"insert into vitess_json_opaque values(1, JSON_OBJECT('k', CAST('foo' AS BINARY)))",
+			"insert into vitess_json_opaque values(2, JSON_ARRAY('a', b'1010'))",
+			"commit",
+		},
+		output: [][]string{{
+			"begin",
+			`type:FIELD field_event:{table_name:"vitess_json_opaque" fields:{name:"id" type:INT32 table:"vitess_json_opaque" org_table:"vitess_json_opaque" database:"vttest" org_name:"id" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:JSON table:"vitess_json_opaque" org_table:"vitess_json_opaque" database:"vttest" org_name:"val" column_length:4294967295 charset:63 column_type:"json"}}`,
+			`type:ROW row_event:{table_name:"vitess_json_opaque" row_changes:{after:{lengths:1 lengths:27 values:"1{\"k\": \"base64:type15:Zm9v\"}"}}}`,
+			`type:ROW row_event:{table_name:"vitess_json_opaque" row_changes:{after:{lengths:1 lengths:27 values:"2[\"a\", \"base64:type15:Cg==\"]"}}}`,
+			"gtid",
+			"commit",
+		}},
+	}}
+	runCases(t, nil, testcases, "", nil)
+}
+
 func TestExternalTable(t *testing.T) {
 	execStatements(t, []string{
 		"create database external",
