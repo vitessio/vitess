@@ -24,9 +24,6 @@ import (
 	"time"
 
 	"github.com/google/shlex"
-
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 var (
@@ -222,15 +219,15 @@ func ValidateSessionVariables(variables []SessionVariable) error {
 	return nil
 }
 
-// SetStatement returns a SET statement with the variable value encoded as a SQL string literal.
+// SetStatement returns a SET statement for the variable.
 func (variable SessionVariable) SetStatement() (string, error) {
 	if err := ValidateSessionVariable(variable); err != nil {
 		return "", err
 	}
-	return sqlparser.ParseAndBind(
-		fmt.Sprintf("set @@session.%s=%%a", variable.Name),
-		sqltypes.StringBindVariable(variable.Value),
-	)
+	// A connection default or an earlier assignment may enable NO_BACKSLASH_ESCAPES.
+	// Use a hex literal so quotes and backslashes in the value are parsed safely
+	// regardless of the active sql_mode.
+	return fmt.Sprintf("set @@session.%s=X'%x'", variable.Name, variable.Value), nil
 }
 
 // SessionVariables returns the ordered assignments from repeatable --session-variable name=value options.

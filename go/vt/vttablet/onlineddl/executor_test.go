@@ -309,9 +309,9 @@ func TestInitMigrationSessionVariables(t *testing.T) {
 	defer conn.Close()
 
 	db.AddQuery("set @vt_onlineddl_session_variable_0=@@session.innodb_strict_mode", &sqltypes.Result{})
-	db.AddQuery("set @@session.innodb_strict_mode='off'", &sqltypes.Result{})
+	db.AddQuery("set @@session.innodb_strict_mode=X'6f6666'", &sqltypes.Result{})
 	db.AddQuery("set @vt_onlineddl_session_variable_1=@@session.sql_mode", &sqltypes.Result{})
-	db.AddQuery("set @@session.sql_mode='ANSI'", &sqltypes.Result{})
+	db.AddQuery("set @@session.sql_mode=X'414e5349'", &sqltypes.Result{})
 	db.AddQuery("set @@session.sql_mode=@vt_onlineddl_session_variable_1", &sqltypes.Result{})
 	db.AddQuery("set @@session.innodb_strict_mode=@vt_onlineddl_session_variable_0", &sqltypes.Result{})
 
@@ -323,8 +323,8 @@ func TestInitMigrationSessionVariables(t *testing.T) {
 	deferFunc, err := executor.initMigrationSessionVariables(t.Context(), onlineDDL, conn)
 	require.NoError(t, err)
 	queryLog := db.QueryLog()
-	assert.Contains(t, queryLog, "set @@session.innodb_strict_mode='off'")
-	assert.Contains(t, queryLog, "set @@session.sql_mode='ansi'")
+	assert.Contains(t, queryLog, "set @@session.innodb_strict_mode=x'6f6666'")
+	assert.Contains(t, queryLog, "set @@session.sql_mode=x'414e5349'")
 
 	deferFunc()
 	queryLog = db.QueryLog()
@@ -343,7 +343,7 @@ func TestMigrationSessionVariablesAreSetBeforeDDL(t *testing.T) {
 	defer conn.Close()
 
 	db.AddQuery("set @vt_onlineddl_session_variable_0=@@session.innodb_strict_mode", &sqltypes.Result{})
-	db.AddQuery("set @@session.innodb_strict_mode='off'", &sqltypes.Result{})
+	db.AddQuery("set @@session.innodb_strict_mode=X'6f6666'", &sqltypes.Result{})
 	db.AddQuery("set @@session.innodb_strict_mode=@vt_onlineddl_session_variable_0", &sqltypes.Result{})
 	db.AddQuery("create table _vrepl_shadow (id int primary key)", &sqltypes.Result{})
 
@@ -364,7 +364,7 @@ func TestMigrationSessionVariablesAreSetBeforeDDL(t *testing.T) {
 	createIdx := -1
 	for i, q := range got {
 		q = strings.TrimSpace(strings.ToLower(q))
-		if strings.Contains(q, "innodb_strict_mode='off'") {
+		if strings.Contains(q, "innodb_strict_mode=x'6f6666'") {
 			sessionVariableIdx = i
 		}
 		if strings.Contains(q, "create table _vrepl_shadow") {
@@ -387,7 +387,7 @@ func TestMigrationSessionVariableFailurePreventsDDL(t *testing.T) {
 	defer conn.Close()
 
 	db.AddQuery("set @vt_onlineddl_session_variable_0=@@session.sql_mode", &sqltypes.Result{})
-	db.AddRejectedQuery("set @@session.sql_mode='ANSI'", errors.New("cannot set session variable"))
+	db.AddRejectedQuery("set @@session.sql_mode=X'414e5349'", errors.New("cannot set session variable"))
 	db.AddQuery("set @@session.sql_mode=@vt_onlineddl_session_variable_0", &sqltypes.Result{})
 	db.AddQuery("create table _vrepl_shadow (id int primary key)", &sqltypes.Result{})
 
@@ -400,6 +400,31 @@ func TestMigrationSessionVariableFailurePreventsDDL(t *testing.T) {
 	defer restoreSessionVariablesFunc()
 	require.ErrorContains(t, err, "cannot set session variable")
 	assert.NotContains(t, db.QueryLog(), "create table _vrepl_shadow")
+}
+
+// TestAlterViewSessionVariableFailurePreventsDDL verifies online view DDL initializes session state on its dedicated connection.
+func TestAlterViewSessionVariableFailurePreventsDDL(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	params := db.ConnParams()
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.DB = dbconfigs.NewTestDBConfigs(*params, *params, params.DbName)
+
+	db.AddQuery("set @vt_onlineddl_session_variable_0=@@session.sql_mode", &sqltypes.Result{})
+	db.AddRejectedQuery("set @@session.sql_mode=X'414e5349'", errors.New("cannot set session variable"))
+	db.AddQuery("set @@session.sql_mode=@vt_onlineddl_session_variable_0", &sqltypes.Result{})
+
+	executor := &Executor{
+		env: tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "ExecutorTest"),
+	}
+	onlineDDL := &schema.OnlineDDL{
+		SQL:      "alter view test_view as select 1",
+		Strategy: schema.DDLStrategyOnline,
+		Options:  "--session-variable sql_mode=ANSI",
+	}
+	err := executor.executeAlterViewOnline(t.Context(), onlineDDL)
+	require.ErrorContains(t, err, "cannot set session variable")
+	assert.NotContains(t, strings.ToLower(db.QueryLog()), "create or replace view")
 }
 
 func TestExecuteDirectlySetsLockWaitTimeout(t *testing.T) {

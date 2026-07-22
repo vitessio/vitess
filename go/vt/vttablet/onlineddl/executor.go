@@ -2673,6 +2673,11 @@ func (e *Executor) executeAlterViewOnline(ctx context.Context, onlineDDL *schema
 		return err
 	}
 	defer conn.Close()
+	restoreSessionVariablesFunc, err := e.initMigrationSessionVariables(ctx, onlineDDL, conn)
+	defer restoreSessionVariablesFunc()
+	if err != nil {
+		return err
+	}
 
 	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusRunning, false, progressPctStarted, etaSecondsUnknown, rowsCopiedUnknown, emptyHint)
 
