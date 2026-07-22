@@ -195,11 +195,11 @@ func TestParseDDLStrategy(t *testing.T) {
 		fastOverRevertible   bool
 		fastRangeRotation    bool
 		allowForeignKeys     bool
-		sessionVariables     []SessionVariable
 		analyzeTable         bool
 		cutOverThreshold     time.Duration
 		forceCutOverAfter    time.Duration
 		expireArtifacts      time.Duration
+		sessionVariables     []SessionVariable
 		runtimeOptions       string
 		expectError          string
 	}{
