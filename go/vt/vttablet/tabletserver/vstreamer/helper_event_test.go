@@ -299,7 +299,7 @@ func (ts *TestSpec) Init() {
 	ts.metadata = make(map[string][]string)
 	ts.pkColumns = make(map[string][]string)
 	// create tables
-	require.Equal(ts.t, len(ts.ddls), len(ts.schema.Tables()), "number of tables in ddls and schema do not match")
+	require.Len(ts.t, ts.schema.Tables(), len(ts.ddls), "number of tables in ddls and schema do not match")
 	for i, t := range ts.schema.Tables() {
 		execStatement(ts.t, ts.ddls[i])
 		fe := ts.getFieldEvent(t)

@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -54,7 +55,7 @@ func TestVisitSkipsNilQTableInTable(t *testing.T) {
 		return nil
 	})
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, realTable, found, "should find the real table, skipping the virtual dual")
 }
 

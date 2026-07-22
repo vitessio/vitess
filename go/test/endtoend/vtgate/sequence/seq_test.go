@@ -218,7 +218,7 @@ func TestSeq(t *testing.T) {
 		Port: clusterInstance.VtgateMySQLPort,
 	}
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	// Initialize seq table if needed
@@ -263,7 +263,7 @@ func TestSeq(t *testing.T) {
 	_, err = conn.ExecuteFetch("insert into sequence_test(val) values('g')", 1000, false)
 	utils.Exec(t, conn, "rollback")
 	want := "Duplicate entry"
-	assert.ErrorContainsf(t, err, want, "wrong insert: %v, must contain %s", err, want)
+	require.ErrorContainsf(t, err, want, "wrong insert: %v, must contain %s", err, want)
 
 	utils.Exec(t, conn, "DELETE FROM sequence_test_seq")
 	qr = utils.Exec(t, conn, "select * from sequence_test_seq")
@@ -308,7 +308,7 @@ func TestInsertAllDefaults(t *testing.T) {
 	// inserting into a table that has default values for all columns works well
 	utils.Exec(t, conn, `insert into allDefaults () values ()`)
 	result := utils.Exec(t, conn, `select * from uks.id_seq`)
-	assert.Equal(t, 1, len(result.Rows))
+	assert.Len(t, result.Rows, 1)
 
 	// inserting into a table that does not have default values for all columns fails
 	_, err = conn.ExecuteFetch("insert into lookup_vindex () values ()", 0, false)

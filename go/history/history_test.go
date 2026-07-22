@@ -31,7 +31,7 @@ func TestHistory(t *testing.T) {
 	}
 	want := []int{1, 0}
 	records := q.Records()
-	assert.EqualValues(t, len(want), len(records))
+	assert.Len(t, records, len(want))
 	for i, record := range records {
 		assert.Equal(t, want[i], record)
 	}
@@ -42,7 +42,7 @@ func TestHistory(t *testing.T) {
 
 	want = []int{5, 4, 3, 2}
 	records = q.Records()
-	assert.EqualValues(t, len(want), len(records))
+	assert.Len(t, records, len(want))
 	for i, record := range records {
 		assert.Equal(t, want[i], record)
 	}

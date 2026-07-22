@@ -51,6 +51,6 @@ func TestBuffer(t *testing.T) {
 
 	// Test Reset function
 	b.Reset()
-	assert.Equal(t, "", string(b.Bytes()))
+	assert.Empty(t, string(b.Bytes()))
 	assert.Equal(t, 0, b.Len())
 }

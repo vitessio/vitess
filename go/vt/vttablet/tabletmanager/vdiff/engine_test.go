@@ -88,7 +88,7 @@ func TestEngineOpen(t *testing.T) {
 			vdenv.vde.Open(t.Context(), vdiffenv.vre)
 			defer vdenv.vde.Close()
 			assert.True(t, vdenv.vde.IsOpen())
-			assert.Equal(t, 1, len(vdenv.vde.controllers))
+			assert.Len(t, vdenv.vde.controllers, 1)
 			vdenv.dbClient.Wait()
 		})
 	}
@@ -276,8 +276,8 @@ func TestEngineRetryErroredVDiffs(t *testing.T) {
 			}
 
 			err := vdiffenv.vde.retryVDiffs(vdiffenv.vde.ctx)
-			assert.NoError(t, err)
-			assert.Equal(t, expectedControllerCnt, len(vdiffenv.vde.controllers))
+			require.NoError(t, err)
+			assert.Len(t, vdiffenv.vde.controllers, expectedControllerCnt)
 			vdiffenv.dbClient.Wait()
 		})
 	}

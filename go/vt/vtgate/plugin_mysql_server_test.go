@@ -139,7 +139,7 @@ func TestConnectionUnixSocket(t *testing.T) {
 	}
 
 	c, err := mysql.Connect(t.Context(), params)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	c.Close()
 }
 
@@ -165,7 +165,7 @@ func TestConnectionStaleUnixSocket(t *testing.T) {
 	}
 
 	c, err := mysql.Connect(t.Context(), params)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	c.Close()
 }
 
@@ -179,7 +179,7 @@ func TestConnectionRespectsExistingUnixSocket(t *testing.T) {
 	os.Remove(unixSocket.Name())
 
 	l, err := newMysqlUnixSocket(unixSocket.Name(), authServer, th)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer l.Close()
 	go l.Accept()
 	_, err = newMysqlUnixSocket(unixSocket.Name(), authServer, th)
@@ -198,7 +198,7 @@ func TestNewConnectionSetsAutocommitStatusFlag(t *testing.T) {
 
 	vh.NewConnection(c)
 
-	assert.True(t, c.StatusFlags&mysql.ServerStatusAutocommit != 0,
+	assert.NotEqual(t, uint16(0), c.StatusFlags&mysql.ServerStatusAutocommit,
 		"NewConnection should set ServerStatusAutocommit flag to match VTGate's default session state")
 }
 
@@ -273,14 +273,14 @@ func TestSpanContextNotParsable(t *testing.T) {
 			return trace.NoopSpan{}, t.Context()
 		},
 		newFromStringError(t))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, hasRun, "Should have continued execution despite failure to parse VT_SPAN_CONTEXT")
 }
 
 func TestStartSpanFromPrepare_NoSpanContext(t *testing.T) {
 	prepare := &mysql.PrepareData{PrepareStmt: "SELECT 1"}
 	_, _, err := startSpanFromPrepareTestable(t.Context(), prepare, "someLabel", newSpanOK, newFromStringFail(t))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	require.NotNil(t, prepare.SpanContext)
 	assert.Empty(t, *prepare.SpanContext)
 }
@@ -289,7 +289,7 @@ func TestStartSpanFromPrepare_WithSpanContext(t *testing.T) {
 	prepare := &mysql.PrepareData{PrepareStmt: "/*VT_SPAN_CONTEXT=123*/SELECT 1"}
 	_, _, err := startSpanFromPrepareTestable(t.Context(), prepare, "someLabel",
 		newSpanFail(t), newFromStringExpect(t, "123"))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	require.NotNil(t, prepare.SpanContext)
 	assert.Equal(t, "123", *prepare.SpanContext)
 }
@@ -299,7 +299,7 @@ func TestStartSpanFromPrepare_CachesSpanContext(t *testing.T) {
 	// First call extracts and caches the span context.
 	_, _, err := startSpanFromPrepareTestable(t.Context(), prepare, "someLabel",
 		newSpanFail(t), newFromStringExpect(t, "456"))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	require.NotNil(t, prepare.SpanContext)
 	assert.Equal(t, "456", *prepare.SpanContext)
 
@@ -323,7 +323,7 @@ func TestStartSpanFromPrepare_SpanContextNotParsable(t *testing.T) {
 			newFromStringCalls++
 			return trace.NoopSpan{}, t.Context(), errors.New("parse error")
 		})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, 1, newFromStringCalls, "newFromString should be called on first execution")
 	assert.Equal(t, 1, newSpanCalls, "newSpan should be called as fallback")
 	// After the first failure, the cached SpanContext should be cleared so
@@ -343,7 +343,7 @@ func TestStartSpanFromPrepare_SpanContextNotParsable(t *testing.T) {
 			newFromStringCalls++
 			return trace.NoopSpan{}, t.Context(), errors.New("parse error")
 		})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, 0, newFromStringCalls, "newFromString should not be called after cached failure")
 	assert.Equal(t, 1, newSpanCalls, "newSpan should be called directly")
 }
@@ -414,10 +414,10 @@ func TestKillMethods(t *testing.T) {
 
 	// connection does not exist
 	err := vh.KillQuery(12345)
-	assert.ErrorContains(t, err, "Unknown thread id: 12345 (errno 1094) (sqlstate HY000)")
+	require.ErrorContains(t, err, "Unknown thread id: 12345 (errno 1094) (sqlstate HY000)")
 
 	err = vh.KillConnection(t.Context(), 12345)
-	assert.ErrorContains(t, err, "Unknown thread id: 12345 (errno 1094) (sqlstate HY000)")
+	require.ErrorContains(t, err, "Unknown thread id: 12345 (errno 1094) (sqlstate HY000)")
 
 	// add a connection
 	mysqlConn := mysql.GetTestConn()
@@ -432,7 +432,7 @@ func TestKillMethods(t *testing.T) {
 
 	// kill query
 	err = vh.KillQuery(1)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	require.EqualError(t, cancelCtx.Err(), "context canceled")
 
 	// updating context.
@@ -441,7 +441,7 @@ func TestKillMethods(t *testing.T) {
 
 	// kill connection
 	err = vh.KillConnection(t.Context(), 1)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	require.EqualError(t, cancelCtx.Err(), "context canceled")
 	require.True(t, mysqlConn.IsMarkedForClose())
 }
@@ -932,7 +932,7 @@ func TestComQueryMulti(t *testing.T) {
 				if tt.queryResponses[idx].QueryError != nil {
 					assert.Equal(t, tt.queryResponses[idx].QueryError.Error(), qr.QueryError.Error(), "Error Got: %v", qr.QueryError)
 				} else {
-					assert.Nil(t, qr.QueryError, "Error Got: %v", qr.QueryError)
+					require.NoError(t, qr.QueryError, "Error Got: %v", qr.QueryError)
 				}
 				assert.Equal(t, tt.more[idx], more, idx)
 				assert.Equal(t, tt.firstPacket[idx], firstPacket, idx)
@@ -987,6 +987,18 @@ func TestSlowQueryStatusFlagsComQuery(t *testing.T) {
 	assert.Zero(t, mysqlConn.StatusFlags&mysql.ServerQueryWasSlow)
 }
 
+// waitForConnectionsClosed waits until the handler has run ConnectionClosed
+// for every wire connection. Tests that accept real connections must drain
+// them before returning: the server-side connection goroutine reads package
+// globals (e.g. mysqlQueryTimeout) during teardown, which races with later
+// tests mutating them.
+func waitForConnectionsClosed(t *testing.T, vh *vtgateHandler) {
+	t.Helper()
+	require.Eventually(t, func() bool {
+		return vh.numConnections() == 0
+	}, 30*time.Second, time.Millisecond)
+}
+
 func TestSlowQueryStatusFlagsComQueryOKOnlyOLAPWire(t *testing.T) {
 	executor, sbc1, _, _, _ := createExecutorEnv(t)
 
@@ -1007,6 +1019,7 @@ func TestSlowQueryStatusFlagsComQueryOKOnlyOLAPWire(t *testing.T) {
 	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), vh, 0, 0, false, false, 0, 0, false)
 	require.NoError(t, err)
 	defer listener.Close()
+	defer waitForConnectionsClosed(t, vh)
 
 	go listener.Accept()
 
@@ -1048,6 +1061,7 @@ func TestSlowQueryStatusFlagsComQueryMultiOKOnlyOLAPFallbackWire(t *testing.T) {
 	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), vh, 0, 0, false, false, 0, 0, true)
 	require.NoError(t, err)
 	defer listener.Close()
+	defer waitForConnectionsClosed(t, vh)
 
 	go listener.Accept()
 
@@ -1082,6 +1096,7 @@ func TestComQueryMultiOLAPDeferredOKRefreshesTransactionStatusWire(t *testing.T)
 	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), vh, 0, 0, false, false, 0, 0, true)
 	require.NoError(t, err)
 	defer listener.Close()
+	defer waitForConnectionsClosed(t, vh)
 
 	go listener.Accept()
 
@@ -1222,6 +1237,7 @@ func TestSlowQueryStatusFlagsComQueryMulti(t *testing.T) {
 	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), vh, 0, 0, false, false, 0, 0, false)
 	require.NoError(t, err)
 	defer listener.Close()
+	defer waitForConnectionsClosed(t, vh)
 
 	go listener.Accept()
 
@@ -1319,6 +1335,7 @@ func TestSlowQueryStatusFlagsComQueryMultiOLAPErrorAfterSlowRowsWire(t *testing.
 	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), vh, 0, 0, false, false, 0, 0, true)
 	require.NoError(t, err)
 	defer listener.Close()
+	defer waitForConnectionsClosed(t, vh)
 
 	go listener.Accept()
 
@@ -1404,11 +1421,11 @@ func TestGracefulShutdown(t *testing.T) {
 	err = vh.ComQuery(mysqlConn, "select 1", func(result *sqltypes.Result) error {
 		return nil
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	err = vh.ComQueryMulti(mysqlConn, "select 1", func(res sqltypes.QueryResponse, more bool, firstPacket bool) error {
 		return nil
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	listener.Shutdown()
 
@@ -1843,24 +1860,24 @@ func TestGracefulShutdownWithTransaction(t *testing.T) {
 	err = vh.ComQuery(mysqlConn, "BEGIN", func(result *sqltypes.Result) error {
 		return nil
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	err = vh.ComQuery(mysqlConn, "select 1", func(result *sqltypes.Result) error {
 		return nil
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	listener.Shutdown()
 
 	err = vh.ComQuery(mysqlConn, "select 1", func(result *sqltypes.Result) error {
 		return nil
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	err = vh.ComQuery(mysqlConn, "COMMIT", func(result *sqltypes.Result) error {
 		return nil
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	require.False(t, mysqlConn.IsMarkedForClose())
 
@@ -1870,4 +1887,175 @@ func TestGracefulShutdownWithTransaction(t *testing.T) {
 	require.EqualError(t, err, "Server shutdown in progress (errno 1053) (sqlstate 08S01)")
 
 	require.True(t, mysqlConn.IsMarkedForClose())
+}
+
+// TestComQueryIngressBytes verifies that MySQL protocol query ingress bytes are
+// attached to VTGate query log stats.
+func TestComQueryIngressBytes(t *testing.T) {
+	vtgate, sbc, _ := createVtgateEnv(t)
+	query := "SELECT id FROM user WHERE id = 1"
+
+	sbc.SetResults([]*sqltypes.Result{{
+		Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT32}},
+		Rows:   []sqltypes.Row{{sqltypes.NewInt32(42)}},
+	}})
+
+	vh := newVtgateHandler(vtgate)
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), vh, 0, 0, false, false, 0, 0, false)
+	require.NoError(t, err)
+	defer listener.Close()
+	defer waitForConnectionsClosed(t, vh)
+
+	go listener.Accept()
+
+	addr := listener.Addr().(*net.TCPAddr)
+	params := &mysql.ConnParams{
+		Host:  addr.IP.String(),
+		Port:  addr.Port,
+		Uname: "user1",
+		Pass:  "password1",
+	}
+
+	conn, err := mysql.Connect(t.Context(), params)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	subscriber := vtgate.executor.queryLogger.Subscribe("test")
+	defer vtgate.executor.queryLogger.Unsubscribe(subscriber)
+
+	result, err := conn.ExecuteFetch(query, 100, true)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Len(t, result.Rows, 1)
+
+	select {
+	case sentStats := <-subscriber:
+		require.NotNil(t, sentStats)
+		assert.Equal(t, uint64(mysql.PacketHeaderSize+1+len(query)), sentStats.IngressBytes)
+		assert.Equal(t, "select id from `user` where id = :id /* INT64 */", sentStats.SQL)
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "LogStats should have been sent to queryLogger")
+	}
+}
+
+// TestComQueryMultiOLAPIngressBytes verifies that streaming multi-statement
+// queries attribute MySQL protocol ingress bytes to each logged statement.
+func TestComQueryMultiOLAPIngressBytes(t *testing.T) {
+	vtgate, sbc, _ := createVtgateEnv(t)
+	query := "SELECT id FROM user WHERE id = 1; SELECT id FROM user WHERE id = 1234567890"
+
+	oldDefaultWorkload := mysqlDefaultWorkload
+	mysqlDefaultWorkload = int32(querypb.ExecuteOptions_OLAP)
+	t.Cleanup(func() {
+		mysqlDefaultWorkload = oldDefaultWorkload
+	})
+
+	sbc.SetResults([]*sqltypes.Result{
+		{
+			Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT32}},
+			Rows:   []sqltypes.Row{{sqltypes.NewInt32(1)}},
+		},
+		{
+			Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT32}},
+			Rows:   []sqltypes.Row{{sqltypes.NewInt32(2)}},
+		},
+	})
+
+	vh := newVtgateHandler(vtgate)
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), vh, 0, 0, false, false, 0, 0, true)
+	require.NoError(t, err)
+	defer listener.Close()
+	defer waitForConnectionsClosed(t, vh)
+
+	go listener.Accept()
+
+	addr := listener.Addr().(*net.TCPAddr)
+	params := &mysql.ConnParams{
+		Host:  addr.IP.String(),
+		Port:  addr.Port,
+		Uname: "user1",
+		Pass:  "password1",
+		Flags: mysql.CapabilityClientMultiStatements,
+	}
+
+	conn, err := mysql.Connect(t.Context(), params)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	subscriber := vtgate.executor.queryLogger.Subscribe("test")
+	defer vtgate.executor.queryLogger.Unsubscribe(subscriber)
+
+	result, more, err := conn.ExecuteFetchMulti(query, 100, true)
+	require.NoError(t, err)
+	require.True(t, more)
+	require.Len(t, result.Rows, 1)
+
+	result, more, _, err = conn.ReadQueryResult(100, true)
+	require.NoError(t, err)
+	require.False(t, more)
+	require.Len(t, result.Rows, 1)
+
+	queries, err := vtgate.executor.Environment().Parser().SplitStatementToPieces(query)
+	require.NoError(t, err)
+	expectedIngressBytes := allocateStatementIngressBytes(uint64(mysql.PacketHeaderSize+1+len(query)), queries)
+
+	for i, expectedIngressBytes := range expectedIngressBytes {
+		select {
+		case sentStats := <-subscriber:
+			require.NotNil(t, sentStats)
+			assert.Equal(t, expectedIngressBytes, sentStats.IngressBytes, "query %d", i)
+		case <-time.After(30 * time.Second):
+			require.FailNow(t, "LogStats should have been sent to queryLogger")
+		}
+	}
+}
+
+// TestComPrepareIngressBytes verifies that MySQL protocol prepare ingress bytes
+// are attached to VTGate query log stats.
+func TestComPrepareIngressBytes(t *testing.T) {
+	vtgate, _, _ := createVtgateEnv(t)
+	query := "SELECT id FROM user WHERE id = ?"
+
+	vh := newVtgateHandler(vtgate)
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), vh, 0, 0, false, false, 0, 0, false)
+	require.NoError(t, err)
+	defer listener.Close()
+	defer waitForConnectionsClosed(t, vh)
+
+	go listener.Accept()
+
+	addr := listener.Addr().(*net.TCPAddr)
+	params := &mysql.ConnParams{
+		Host:  addr.IP.String(),
+		Port:  addr.Port,
+		Uname: "user1",
+		Pass:  "password1",
+	}
+
+	conn, err := mysql.Connect(t.Context(), params)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	subscriber := vtgate.executor.queryLogger.Subscribe("test")
+	defer vtgate.executor.queryLogger.Unsubscribe(subscriber)
+
+	packet := make([]byte, mysql.PacketHeaderSize+1+len(query))
+	payloadLength := 1 + len(query)
+	packet[0] = byte(payloadLength)
+	packet[1] = byte(payloadLength >> 8)
+	packet[2] = byte(payloadLength >> 16)
+	packet[3] = 0
+	packet[mysql.PacketHeaderSize] = mysql.ComPrepare
+	copy(packet[mysql.PacketHeaderSize+1:], query)
+	written, err := conn.GetRawConn().Write(packet)
+	require.NoError(t, err)
+	require.Equal(t, len(packet), written)
+
+	select {
+	case sentStats := <-subscriber:
+		require.NotNil(t, sentStats)
+		assert.Equal(t, uint64(mysql.PacketHeaderSize+1+len(query)), sentStats.IngressBytes)
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "LogStats should have been sent to queryLogger")
+	}
 }

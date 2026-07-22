@@ -66,7 +66,7 @@ func assertNotAllowedURLTest(t *testing.T, url string) {
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
-	assert.True(t, resp.StatusCode > 400)
+	assert.Greater(t, resp.StatusCode, 400)
 	assert.Contains(t, string(body), "Access denied: not allowed")
 }
 

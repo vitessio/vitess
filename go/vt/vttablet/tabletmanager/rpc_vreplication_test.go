@@ -1092,7 +1092,7 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 
 			require.NotNil(t, tt.request, "No request provided")
 			if tt.wantErr == "" {
-				require.NotEqual(t, "", tt.query, "No expected query provided")
+				require.NotEmpty(t, tt.query, "No expected query provided")
 			}
 
 			// These are the same for each RPC call.
@@ -1194,7 +1194,7 @@ func TestUpdateVReplicationWorkflows(t *testing.T) {
 			}()
 
 			require.NotNil(t, tt.request, "No request provided")
-			require.NotEqual(t, "", tt.query, "No expected query provided")
+			require.NotEmpty(t, tt.query, "No expected query provided")
 
 			// These are the same for each RPC call.
 			tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest("use "+sidecar.GetIdentifier(), &sqltypes.Result{}, nil)
@@ -1595,7 +1595,7 @@ func TestFailedMoveTablesCreateCleanup(t *testing.T) {
 	// Check that there are no orphaned routing rules.
 	rules, err := topotools.GetRoutingRules(ctx, tenv.ts)
 	require.NoError(t, err, "failed to get routing rules")
-	require.Equal(t, 0, len(rules), "expected no routing rules to be present")
+	require.Empty(t, rules, "expected no routing rules to be present")
 
 	// Check that our vschema changes were also rolled back.
 	vs2, err := tenv.ts.GetVSchema(ctx, targetKs)
@@ -3936,8 +3936,8 @@ func TestMaterializerNoDDL(t *testing.T) {
 
 	err := ws.Materialize(ctx, ms)
 	require.EqualError(t, err, "target table t1 does not exist and there is no create ddl defined")
-	require.Equal(t, tenv.tmc.getSchemaRequestCount(100), 0)
-	require.Equal(t, tenv.tmc.getSchemaRequestCount(200), 1)
+	require.Equal(t, 0, tenv.tmc.getSchemaRequestCount(100))
+	require.Equal(t, 1, tenv.tmc.getSchemaRequestCount(200))
 }
 
 func TestMaterializerNoSourcePrimary(t *testing.T) {

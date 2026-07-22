@@ -644,7 +644,7 @@ func TestParseShardingSpec(t *testing.T) {
 	}
 	for key, wanted := range goodTable {
 		r, err := ParseShardingSpec(key)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		if !assert.Len(t, r, len(wanted)) {
 			continue
 		}
@@ -1064,15 +1064,15 @@ func TestKeyRangeContains(t *testing.T) {
 
 	for _, el := range table {
 		s, err := hex.DecodeString(el.start)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		e, err := hex.DecodeString(el.end)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		kr := &topodatapb.KeyRange{
 			Start: s,
 			End:   e,
 		}
 		k, err := hex.DecodeString(el.kid)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		c := KeyRangeContains(kr, k)
 		assert.Equal(t, el.contained, c)
 
@@ -1572,7 +1572,7 @@ func TestGenerateShardRanges(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			assert.Equal(t, got, tt.want)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
@@ -1606,8 +1606,8 @@ func TestGenerateShardRangesWithHexCharacterCount(t *testing.T) {
 
 		require.NoError(t, err)
 
-		require.EqualValues(t, 7, len(ranges))
-		require.EqualValues(t, []string{"-2", "2-4", "4-6", "6-9", "9-b", "b-d", "d-"}, ranges)
+		require.Len(t, ranges, 7)
+		require.Equal(t, []string{"-2", "2-4", "4-6", "6-9", "9-b", "b-d", "d-"}, ranges)
 	}
 
 	{
@@ -1615,8 +1615,8 @@ func TestGenerateShardRangesWithHexCharacterCount(t *testing.T) {
 
 		require.NoError(t, err)
 
-		require.EqualValues(t, 7, len(ranges))
-		require.EqualValues(t, []string{"-24", "24-49", "49-6d", "6d-92", "92-b6", "b6-db", "db-"}, ranges)
+		require.Len(t, ranges, 7)
+		require.Equal(t, []string{"-24", "24-49", "49-6d", "6d-92", "92-b6", "b6-db", "db-"}, ranges)
 	}
 
 	{
@@ -1624,8 +1624,8 @@ func TestGenerateShardRangesWithHexCharacterCount(t *testing.T) {
 
 		require.NoError(t, err)
 
-		require.EqualValues(t, 7, len(ranges))
-		require.EqualValues(t, []string{"-249", "249-492", "492-6db", "6db-924", "924-b6d", "b6d-db6", "db6-"}, ranges)
+		require.Len(t, ranges, 7)
+		require.Equal(t, []string{"-249", "249-492", "492-6db", "6db-924", "924-b6d", "b6d-db6", "db6-"}, ranges)
 	}
 
 	{
@@ -1633,8 +1633,8 @@ func TestGenerateShardRangesWithHexCharacterCount(t *testing.T) {
 
 		require.NoError(t, err)
 
-		require.EqualValues(t, 7, len(ranges))
-		require.EqualValues(t, []string{"-2492", "2492-4924", "4924-6db6", "6db6-9249", "9249-b6db", "b6db-db6d", "db6d-"}, ranges)
+		require.Len(t, ranges, 7)
+		require.Equal(t, []string{"-2492", "2492-4924", "4924-6db6", "6db6-9249", "9249-b6db", "b6db-db6d", "db6d-"}, ranges)
 	}
 
 	{
@@ -1642,8 +1642,8 @@ func TestGenerateShardRangesWithHexCharacterCount(t *testing.T) {
 
 		require.NoError(t, err)
 
-		require.EqualValues(t, 8, len(ranges))
-		require.EqualValues(t, []string{"-2000", "2000-4000", "4000-6000", "6000-8000", "8000-a000", "a000-c000", "c000-e000", "e000-"}, ranges)
+		require.Len(t, ranges, 8)
+		require.Equal(t, []string{"-2000", "2000-4000", "4000-6000", "6000-8000", "8000-a000", "a000-c000", "c000-e000", "e000-"}, ranges)
 	}
 
 	{

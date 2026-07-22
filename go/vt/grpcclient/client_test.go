@@ -82,8 +82,8 @@ func TestRegisterGRPCClientFlags(t *testing.T) {
 	require.Equal(t, 10*time.Second, keepaliveTimeout)
 	require.Equal(t, 0, initialWindowSize)
 	require.Equal(t, 0, initialConnWindowSize)
-	require.Equal(t, "", compression)
-	require.Equal(t, "", credsFile)
+	require.Empty(t, compression)
+	require.Empty(t, credsFile)
 
 	flagMap := map[string]string{
 		"--grpc-keepalive-time":           "5s",

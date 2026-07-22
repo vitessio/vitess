@@ -1981,7 +1981,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 
 			err := erp.reparentShardLocked(ctx, ev, tt.keyspace, tt.shard, tt.emergencyReparentOps)
 			if tt.shouldErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 				assert.ErrorContains(t, err, tt.errShouldContain)
 				return
 			}
@@ -2728,7 +2728,7 @@ func TestEmergencyReparenter_promotionOfNewPrimary(t *testing.T) {
 			erp := NewEmergencyReparenter(ts, tt.tmc, logger)
 			_, err := erp.reparentReplicas(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, tt.emergencyReparentOps, false)
 			if tt.shouldErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.errShouldContain)
 				return
 			}
@@ -3104,8 +3104,8 @@ func TestEmergencyReparenterStats(t *testing.T) {
 	require.NoError(t, err)
 
 	// check the counter values
-	require.EqualValues(t, map[string]int64{"testkeyspace.-.success": 1}, ersCounter.Counts())
-	require.EqualValues(t, map[string]int64{"All": 1, "EmergencyReparentShard": 1}, reparentShardOpTimings.Counts())
+	require.Equal(t, map[string]int64{"testkeyspace.-.success": 1}, ersCounter.Counts())
+	require.Equal(t, map[string]int64{"All": 1, "EmergencyReparentShard": 1}, reparentShardOpTimings.Counts())
 
 	// set emergencyReparentOps to request a non existent tablet
 	emergencyReparentOps.NewPrimaryAlias = &topodatapb.TabletAlias{
@@ -3118,8 +3118,8 @@ func TestEmergencyReparenterStats(t *testing.T) {
 	require.Error(t, err)
 
 	// check the counter values
-	require.EqualValues(t, map[string]int64{"testkeyspace.-.success": 1, "testkeyspace.-.failure": 1}, ersCounter.Counts())
-	require.EqualValues(t, map[string]int64{"All": 2, "EmergencyReparentShard": 2}, reparentShardOpTimings.Counts())
+	require.Equal(t, map[string]int64{"testkeyspace.-.success": 1, "testkeyspace.-.failure": 1}, ersCounter.Counts())
+	require.Equal(t, map[string]int64{"All": 2, "EmergencyReparentShard": 2}, reparentShardOpTimings.Counts())
 }
 
 func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
@@ -3438,10 +3438,10 @@ func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
 			test.emergencyReparentOps.durability = durability
 			winningTablet, _, err := erp.findMostAdvanced(test.validCandidates, test.tabletMap, test.emergencyReparentOps)
 			if test.err != "" {
-				assert.Error(t, err)
+				require.Error(t, err)
 				assert.Contains(t, err.Error(), test.err)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.True(t, topoproto.TabletAliasEqual(test.result.Alias, winningTablet.Alias))
 			}
 		})
@@ -3964,7 +3964,7 @@ func TestEmergencyReparenter_reparentReplicas(t *testing.T) {
 			erp := NewEmergencyReparenter(ts, tt.tmc, logger)
 			_, err := erp.reparentReplicas(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, tt.emergencyReparentOps, false /* intermediateReparent */)
 			if tt.shouldErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.errShouldContain)
 				return
 			}
@@ -4543,15 +4543,15 @@ func TestEmergencyReparenter_promoteIntermediateSource(t *testing.T) {
 			erp := NewEmergencyReparenter(ts, tt.tmc, logger)
 			res, err := erp.promoteIntermediateSource(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, tt.validCandidateTablets, tt.emergencyReparentOps)
 			if tt.shouldErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.errShouldContain)
 				return
 			}
 
-			assert.NoError(t, err)
-			require.Equal(t, len(tt.result), len(res))
+			require.NoError(t, err)
+			require.Len(t, res, len(tt.result))
 			for idx, tablet := range res {
-				assert.EqualValues(t, topoproto.TabletAliasString(tt.result[idx].Alias), topoproto.TabletAliasString(tablet.Alias))
+				assert.Equal(t, topoproto.TabletAliasString(tt.result[idx].Alias), topoproto.TabletAliasString(tablet.Alias))
 			}
 		})
 	}
@@ -4758,7 +4758,7 @@ func TestEmergencyReparenter_identifyPrimaryCandidate(t *testing.T) {
 				assert.EqualError(t, err, test.err)
 				return
 			}
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.True(t, topoproto.TabletAliasEqual(res.Alias, test.result.Alias))
 		})
 	}
@@ -5002,7 +5002,7 @@ func TestEmergencyReparenter_filterValidCandidates(t *testing.T) {
 				require.Contains(t, err.Error(), tt.errShouldContain)
 			} else {
 				require.NoError(t, err)
-				require.EqualValues(t, tt.filteredTablets, tabletList)
+				require.Equal(t, tt.filteredTablets, tabletList)
 			}
 		})
 	}

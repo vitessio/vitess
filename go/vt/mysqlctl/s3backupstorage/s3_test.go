@@ -319,9 +319,9 @@ func TestAddFileStats(t *testing.T) {
 	require.Len(t, fakeStats.ScopeCalls, 4)
 	scopedStats := fakeStats.ScopeReturns[0]
 	require.Len(t, scopedStats.ScopeV, 1)
-	require.Equal(t, scopedStats.ScopeV[stats.ScopeOperation], "AWS:Request:Send")
+	require.Equal(t, "AWS:Request:Send", scopedStats.ScopeV[stats.ScopeOperation])
 	requireTimedIncrementAtLeast(t, scopedStats, 10*time.Millisecond)
-	require.Len(t, scopedStats.TimedIncrementBytesCalls, 0)
+	require.Empty(t, scopedStats.TimedIncrementBytesCalls)
 }
 
 func TestAddFileErrorStats(t *testing.T) {
@@ -368,9 +368,9 @@ func TestAddFileErrorStats(t *testing.T) {
 	require.Len(t, fakeStats.ScopeCalls, 1)
 	scopedStats := fakeStats.ScopeReturns[0]
 	require.Len(t, scopedStats.ScopeV, 1)
-	require.Equal(t, scopedStats.ScopeV[stats.ScopeOperation], "AWS:Request:Send")
+	require.Equal(t, "AWS:Request:Send", scopedStats.ScopeV[stats.ScopeOperation])
 	requireTimedIncrementAtLeast(t, scopedStats, 10*time.Millisecond)
-	require.Len(t, scopedStats.TimedIncrementBytesCalls, 0)
+	require.Empty(t, scopedStats.TimedIncrementBytesCalls)
 }
 
 func TestAddFileMultipartStats(t *testing.T) {
@@ -415,10 +415,10 @@ func TestAddFileMultipartStats(t *testing.T) {
 
 	scopedStats := fakeStats.ScopeReturns[0]
 	require.Len(t, scopedStats.ScopeV, 1)
-	require.Equal(t, scopedStats.ScopeV[stats.ScopeOperation], "AWS:Request:Send")
+	require.Equal(t, "AWS:Request:Send", scopedStats.ScopeV[stats.ScopeOperation])
 	require.Greater(t, len(scopedStats.TimedIncrementCalls), 1)
 	requireTimedIncrementAtLeast(t, scopedStats, 10*time.Millisecond)
-	require.Len(t, scopedStats.TimedIncrementBytesCalls, 0)
+	require.Empty(t, scopedStats.TimedIncrementBytesCalls)
 }
 
 func TestReadFileStats(t *testing.T) {
@@ -487,9 +487,9 @@ func TestReadFileStats(t *testing.T) {
 	require.Len(t, fakeStats.ScopeCalls, 1)
 	scopedStats := fakeStats.ScopeReturns[0]
 	require.Len(t, scopedStats.ScopeV, 1)
-	require.Equal(t, scopedStats.ScopeV[stats.ScopeOperation], "AWS:Request:Send")
+	require.Equal(t, "AWS:Request:Send", scopedStats.ScopeV[stats.ScopeOperation])
 	requireTimedIncrementAtLeast(t, scopedStats, 10*time.Millisecond)
-	require.Len(t, scopedStats.TimedIncrementBytesCalls, 0)
+	require.Empty(t, scopedStats.TimedIncrementBytesCalls)
 }
 
 func TestReadFileErrorStats(t *testing.T) {
@@ -534,9 +534,9 @@ func TestReadFileErrorStats(t *testing.T) {
 	require.Len(t, fakeStats.ScopeCalls, 1)
 	scopedStats := fakeStats.ScopeReturns[0]
 	require.Len(t, scopedStats.ScopeV, 1)
-	require.Equal(t, scopedStats.ScopeV[stats.ScopeOperation], "AWS:Request:Send")
+	require.Equal(t, "AWS:Request:Send", scopedStats.ScopeV[stats.ScopeOperation])
 	requireTimedIncrementAtLeast(t, scopedStats, 10*time.Millisecond)
-	require.Len(t, scopedStats.TimedIncrementBytesCalls, 0)
+	require.Empty(t, scopedStats.TimedIncrementBytesCalls)
 }
 
 func TestReadFile(t *testing.T) {

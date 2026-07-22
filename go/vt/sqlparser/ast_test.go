@@ -663,8 +663,8 @@ func TestParseMultipleIgnoreEmpty(t *testing.T) {
 			if tcase.wantErr {
 				assert.Error(t, err)
 			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tcase.stmts, len(statements))
+				require.NoError(t, err)
+				assert.Len(t, statements, tcase.stmts)
 			}
 		})
 	}
@@ -678,8 +678,7 @@ func TestTypeConversion(t *testing.T) {
 
 func TestDefaultStatus(t *testing.T) {
 	assert.Equal(t,
-		String(&Default{ColName: "status"}),
-		"default(`status`)")
+		"default(`status`)", String(&Default{ColName: "status"}))
 }
 
 func TestShowTableStatus(t *testing.T) {

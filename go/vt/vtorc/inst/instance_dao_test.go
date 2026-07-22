@@ -26,15 +26,20 @@ import (
 	"time"
 
 	"github.com/patrickmn/go-cache"
+	"github.com/sjmudd/stopwatch"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/log"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
+
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 var spacesRegexp = regexp.MustCompile(`[ \t\n\r]+`)
@@ -70,8 +75,8 @@ func TestMkInsertSingle(t *testing.T) {
 
 	sql, args, err := mkInsertForInstances(nil, true, true)
 	require.NoError(t, err)
-	require.Equal(t, sql, "")
-	require.Equal(t, len(args), 0)
+	require.Empty(t, sql)
+	require.Empty(t, args)
 
 	// one instance
 	s1 := `INSERT OR IGNORE INTO database_instance
@@ -196,7 +201,7 @@ func TestReadInstance(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, tt.instanceFound, found)
 			if tt.instanceFound {
-				require.EqualValues(t, tt.tabletAliasToRead, got.InstanceAlias)
+				require.Equal(t, tt.tabletAliasToRead, got.InstanceAlias)
 			}
 		})
 	}
@@ -470,7 +475,7 @@ func TestReadInstanceAllFields(t *testing.T) {
 	instance.SecondsSinceLastSeen = sql.NullInt64{}
 	instance.Problems = nil
 	instance.LastDiscoveryLatency = 0
-	require.EqualValues(t, wantInstance, instance)
+	require.Equal(t, wantInstance, instance)
 }
 
 // TestReadInstancesByCondition is used to test the functionality of readInstancesByCondition and verify its failure modes and successes.
@@ -532,7 +537,7 @@ func TestReadInstancesByCondition(t *testing.T) {
 			for _, instance := range instances {
 				tabletAliases = append(tabletAliases, topoproto.TabletAliasString(instance.InstanceAlias))
 			}
-			require.EqualValues(t, tt.instancesRequired, tabletAliases)
+			require.Equal(t, tt.instancesRequired, tabletAliases)
 		})
 	}
 }
@@ -618,7 +623,7 @@ from database_instance`, func(rowMap sqlutils.RowMap) error {
 			for _, tabletAlias := range tabletAliases {
 				tabletAliasStrings = append(tabletAliasStrings, topoproto.TabletAliasString(tabletAlias))
 			}
-			require.EqualValues(t, tt.instancesRequired, tabletAliasStrings)
+			require.Equal(t, tt.instancesRequired, tabletAliasStrings)
 		})
 	}
 }
@@ -796,7 +801,7 @@ func TestForgetInstanceAndInstanceIsForgotten(t *testing.T) {
 			for _, instance := range instances {
 				tabletAliases = append(tabletAliases, instance.InstanceAlias)
 			}
-			require.EqualValues(t, tt.tabletsExpected, tabletAliases)
+			require.Equal(t, tt.tabletsExpected, tabletAliases)
 		})
 	}
 }
@@ -869,7 +874,7 @@ func TestExpireTableData(t *testing.T) {
 				return nil
 			})
 			require.NoError(t, err)
-			require.EqualValues(t, tt.expectedRowCount, rowsCount)
+			require.Equal(t, tt.expectedRowCount, rowsCount)
 		})
 	}
 }
@@ -996,7 +1001,7 @@ func TestDetectErrantGTIDs(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			require.EqualValues(t, tt.wantErrantGTID, tt.instance.GtidErrant)
+			require.Equal(t, tt.wantErrantGTID, tt.instance.GtidErrant)
 		})
 	}
 }
@@ -1145,7 +1150,58 @@ func TestPrimaryErrantGTIDs(t *testing.T) {
 	instance.ExecutedGtidSet = "230ea8ea-81e3-11e4-972a-e25ec4bd140a:1-10589,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-34,316d193c-70e5-11e5-adb2-ecf4bb2262ff:1-351"
 	err = detectErrantGTIDs(instance, tablet)
 	require.NoError(t, err)
-	require.EqualValues(t, "", instance.GtidErrant)
+	require.Empty(t, instance.GtidErrant)
+}
+
+// TestReadTopologyInstanceRecordsObserverTypeFromFullStatus verifies that the shard-peer
+// observer type stored for quorum comes from the tablet's current self-reported
+// FullStatus.TabletType, not VTOrc's topo snapshot (tablet.Type), which can lag during
+// promotions/demotions. Here the topo says PRIMARY (stale) while FullStatus reports REPLICA;
+// quorum evaluation must count the observer as a REPLICA (a PRIMARY-typed observer is skipped),
+// so without the fix the observer would be dropped and the verdict would be no-quorum.
+func TestReadTopologyInstanceRecordsObserverTypeFromFullStatus(t *testing.T) {
+	_, err := db.OpenVTOrc()
+	require.NoError(t, err)
+	t.Cleanup(db.ClearVTOrcDatabase)
+	resetShardPeerHealth()
+	t.Cleanup(resetShardPeerHealth)
+
+	oldTmc := tmc
+	t.Cleanup(func() { tmc = oldTmc })
+
+	now := time.Now()
+	primary := alias(100)
+	observerAlias := alias(101)
+
+	require.NoError(t, SaveTablet(&topodatapb.Tablet{
+		Alias:         observerAlias,
+		Hostname:      "localhost",
+		MysqlHostname: "localhost",
+		MysqlPort:     17101,
+		Keyspace:      "ks",
+		Shard:         "0",
+		Type:          topodatapb.TabletType_PRIMARY, // stale topo type
+	}))
+
+	tmc = &testutil.TabletManagerClient{
+		FullStatusResult: &replicationdatapb.FullStatus{
+			TabletType:      topodatapb.TabletType_REPLICA, // current self-reported type
+			ShardPeerHealth: reportFor(primary, 5, 0, now),
+		},
+	}
+
+	latency := stopwatch.NewNamedStopwatch()
+	require.NoError(t, latency.AddMany([]string{"backend", "instance", "total"}))
+	// ReadTopologyInstance need not fully succeed against this minimal FullStatus; the
+	// shard-peer recording happens early in the read, which is what we assert on.
+	_, _ = ReadTopologyInstanceBufferable(observerAlias, latency)
+
+	opts := QuorumOptions{FailureThreshold: 3, Freshness: 5 * time.Second, Fraction: 1.0, MinObservers: 1}
+	r := EvaluatePrimaryQuorum(primary, "ks", "0", 1, opts, time.Now())
+	require.Len(t, r.Observers, 1)
+	assert.Equal(t, "REPLICA", r.Observers[0].TabletType)
+	assert.Equal(t, 1, r.TotalObservers)
+	assert.True(t, r.Down, "a fresh REPLICA observer reporting the primary down yields a quorum-down verdict")
 }
 
 // TestErrantGTIDCountGaugeIsResetWhenResolved verifies that the per-tablet

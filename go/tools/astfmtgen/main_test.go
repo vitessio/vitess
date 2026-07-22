@@ -401,7 +401,7 @@ func TestRewriteAstPrintf_SimpleFormats(t *testing.T) {
 				&ast.BasicLit{Kind: gotoken.STRING, Value: `""`},
 			},
 			verifyResult: func(t *testing.T, block *ast.BlockStmt) {
-				assert.Len(t, block.List, 0)
+				assert.Empty(t, block.List)
 			},
 		},
 	}

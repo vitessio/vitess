@@ -148,16 +148,16 @@ func TestDownPrimary_KeyspaceEmergencyReparentDisabled(t *testing.T) {
 
 	// disable ERS on the keyspace via SetVtorcEmergencyReparent --disable
 	_, err := clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetVtorcEmergencyReparent", "--disable", keyspace.Name)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	utils.WaitForShardERSDisabledState(t, vtOrcProcess, keyspace.Name, shard0.Name, true)
 	utils.CheckVarExists(t, vtOrcProcess, "EmergencyReparentShardDisabled")
 	utils.CheckMetricExists(t, vtOrcProcess, "vtorc_emergency_reparent_shard_disabled")
 
 	// make the current primary vttablet unavailable
 	err = curPrimary.VttabletProcess.TearDown()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	err = curPrimary.MysqlctlProcess.Stop()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer func() {
 		// we remove the tablet from our global list
 		utils.PermanentlyRemoveVttablet(clusterInfo, curPrimary)
@@ -176,7 +176,7 @@ func TestDownPrimary_KeyspaceEmergencyReparentDisabled(t *testing.T) {
 
 	// enable ERS on the keyspace via SetVtorcEmergencyReparent --enable
 	_, err = clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetVtorcEmergencyReparent", "--enable", keyspace.Name)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	utils.WaitForShardERSDisabledState(t, vtOrcProcess, keyspace.Name, shard0.Name, false)
 
 	// check that the replica gets promoted by vtorc
@@ -527,10 +527,10 @@ func TestLostRdonlyOnPrimaryFailure(t *testing.T) {
 	// assert that the replica and rdonly are indeed lagging and do not have the new insertion by checking the count of rows in the tables
 	out, err := utils.RunSQL(t, "SELECT * FROM vt_insert_test", replica, "vt_ks")
 	require.NoError(t, err)
-	require.Equal(t, 1, len(out.Rows))
+	require.Len(t, out.Rows, 1)
 	out, err = utils.RunSQL(t, "SELECT * FROM vt_insert_test", rdonly, "vt_ks")
 	require.NoError(t, err)
-	require.Equal(t, 1, len(out.Rows))
+	require.Len(t, out.Rows, 1)
 
 	// Make the current primary database unavailable.
 	err = curPrimary.MysqlctlProcess.Stop()
@@ -758,7 +758,7 @@ func TestDownPrimaryPromotionRuleWithLag(t *testing.T) {
 	// assert that the crossCellReplica is indeed lagging and does not have the new insertion by checking the count of rows in the table
 	out, err := utils.RunSQL(t, "SELECT * FROM vt_insert_test", crossCellReplica, "vt_ks")
 	require.NoError(t, err)
-	require.Equal(t, 1, len(out.Rows))
+	require.Len(t, out.Rows, 1)
 
 	// Make the current primary database unavailable.
 	err = curPrimary.MysqlctlProcess.Stop()
@@ -774,7 +774,7 @@ func TestDownPrimaryPromotionRuleWithLag(t *testing.T) {
 	// assert that the crossCellReplica has indeed caught up
 	out, err = utils.RunSQL(t, "SELECT * FROM vt_insert_test", crossCellReplica, "vt_ks")
 	require.NoError(t, err)
-	require.Equal(t, 2, len(out.Rows))
+	require.Len(t, out.Rows, 2)
 
 	// check that rdonly and replica are able to replicate from the crossCellReplica
 	utils.VerifyWritesSucceed(t, clusterInfo, crossCellReplica, []*cluster.Vttablet{replica, rdonly}, 15*time.Second)
@@ -838,7 +838,7 @@ func TestDownPrimaryPromotionRuleWithLagCrossCenter(t *testing.T) {
 	// assert that the replica is indeed lagging and does not have the new insertion by checking the count of rows in the table
 	out, err := utils.RunSQL(t, "SELECT * FROM vt_insert_test", replica, "vt_ks")
 	require.NoError(t, err)
-	require.Equal(t, 1, len(out.Rows))
+	require.Len(t, out.Rows, 1)
 
 	// Make the current primary database unavailable.
 	err = curPrimary.MysqlctlProcess.Stop()
@@ -854,7 +854,7 @@ func TestDownPrimaryPromotionRuleWithLagCrossCenter(t *testing.T) {
 	// assert that the replica has indeed caught up
 	out, err = utils.RunSQL(t, "SELECT * FROM vt_insert_test", replica, "vt_ks")
 	require.NoError(t, err)
-	require.Equal(t, 2, len(out.Rows))
+	require.Len(t, out.Rows, 2)
 
 	// check that rdonly and crossCellReplica are able to replicate from the replica
 	utils.VerifyWritesSucceed(t, clusterInfo, replica, []*cluster.Vttablet{crossCellReplica, rdonly}, 15*time.Second)

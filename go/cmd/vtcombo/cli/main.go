@@ -224,7 +224,7 @@ func run(cmd *cobra.Command, args []string) (err error) {
 			return err
 		}
 		servenv.OnClose(func() {
-			shutdownCtx, shutdownCancel := context.WithTimeout(cmd.Context(), mysqlctl.DefaultShutdownTimeout+10*time.Second)
+			shutdownCtx, shutdownCancel := context.WithTimeout(cmd.Context(), mysqlctl.DefaultShutdownTimeout+mysqlctl.MysqldShutdownGracePeriod)
 			defer shutdownCancel()
 			mysqld.Shutdown(shutdownCtx, cnf, true, mysqlctl.DefaultShutdownTimeout)
 		})
@@ -248,7 +248,7 @@ func run(cmd *cobra.Command, args []string) (err error) {
 	if err != nil {
 		// ensure we start mysql in the event we fail here
 		if startMysql {
-			startCtx, startCancel := context.WithTimeout(ctx, mysqlctl.DefaultShutdownTimeout+10*time.Second)
+			startCtx, startCancel := context.WithTimeout(ctx, mysqlctl.DefaultShutdownTimeout+mysqlctl.MysqldShutdownGracePeriod)
 			defer startCancel()
 			mysqld.Shutdown(startCtx, cnf, true, mysqlctl.DefaultShutdownTimeout)
 		}
@@ -297,7 +297,7 @@ func run(cmd *cobra.Command, args []string) (err error) {
 		err := topotools.RebuildKeyspace(cmd.Context(), logutil.NewConsoleLogger(), ts, ks.GetName(), tpb.Cells, false)
 		if err != nil {
 			if startMysql {
-				shutdownCtx, shutdownCancel := context.WithTimeout(cmd.Context(), mysqlctl.DefaultShutdownTimeout+10*time.Second)
+				shutdownCtx, shutdownCancel := context.WithTimeout(cmd.Context(), mysqlctl.DefaultShutdownTimeout+mysqlctl.MysqldShutdownGracePeriod)
 				defer shutdownCancel()
 				mysqld.Shutdown(shutdownCtx, cnf, true, mysqlctl.DefaultShutdownTimeout)
 			}

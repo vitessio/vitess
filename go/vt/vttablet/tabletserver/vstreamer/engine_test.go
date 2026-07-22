@@ -270,6 +270,6 @@ func TestVStreamerWaitForMySQL(t *testing.T) {
 		})
 	}
 
-	require.Equal(t, engine.rowStreamerWaits.Counts()["VStreamerTest.waitForMySQL"], expectedWaits)
-	require.Equal(t, engine.vstreamerPhaseTimings.Counts()["VStreamerTest."+tableName+":waitForMySQL"], expectedWaits)
+	require.Equal(t, expectedWaits, engine.rowStreamerWaits.Counts()["VStreamerTest.waitForMySQL"])
+	require.Equal(t, expectedWaits, engine.vstreamerPhaseTimings.Counts()["VStreamerTest."+tableName+":waitForMySQL"])
 }

@@ -214,7 +214,7 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 	for _, proc := range mysqlCtlProcessList {
 		if err := proc.Wait(); err != nil {
 			clusterInstance.PrintMysqlctlLogFiles()
-			require.FailNow(t, "Error starting mysql: %s", err.Error())
+			require.FailNowf(t, "Error starting mysql", "%s", err.Error())
 		}
 	}
 	clusterInstance.VtctldClientProcess = *cluster.VtctldClientProcessInstance(clusterInstance.VtctldProcess.GrpcPort, clusterInstance.TopoPort, "localhost", clusterInstance.TmpDirectory)
@@ -289,7 +289,7 @@ func StartNewVTTablet(t *testing.T, clusterInstance *cluster.LocalProcessCluster
 	require.NoError(t, err, "Error starting start mysql")
 	if err := proc.Wait(); err != nil {
 		clusterInstance.PrintMysqlctlLogFiles()
-		require.FailNow(t, "Error starting mysql: %s", err.Error())
+		require.FailNowf(t, "Error starting mysql", "%s", err.Error())
 	}
 
 	// The tablet should come up as serving since the primary for the shard already exists
@@ -317,7 +317,7 @@ func getMysqlConnParam(tablet *cluster.Vttablet) mysql.ConnParams {
 func RunSQLs(ctx context.Context, t *testing.T, sqls []string, tablet *cluster.Vttablet) (results []*sqltypes.Result) {
 	tabletParams := getMysqlConnParam(tablet)
 	conn, err := mysql.Connect(ctx, &tabletParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	for _, sql := range sqls {
@@ -331,7 +331,7 @@ func RunSQLs(ctx context.Context, t *testing.T, sqls []string, tablet *cluster.V
 func RunSQL(ctx context.Context, t *testing.T, sql string, tablet *cluster.Vttablet) *sqltypes.Result {
 	tabletParams := getMysqlConnParam(tablet)
 	conn, err := mysql.Connect(ctx, &tabletParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 	return execute(t, conn, sql)
 }
@@ -339,7 +339,7 @@ func RunSQL(ctx context.Context, t *testing.T, sql string, tablet *cluster.Vttab
 func execute(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	t.Helper()
 	qr, err := conn.ExecuteFetch(query, 1000, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	return qr
 }
 
@@ -478,7 +478,7 @@ func CheckPrimaryTablet(t *testing.T, clusterInstance *cluster.LocalProcessClust
 // isHealthyPrimaryTablet will return if tablet is primary AND healthy.
 func isHealthyPrimaryTablet(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tablet *cluster.Vttablet) bool {
 	tabletInfo, err := clusterInstance.VtctldClientProcess.GetTablet(tablet.Alias)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	if tabletInfo.GetType() != topodatapb.TabletType_PRIMARY {
 		return false
 	}
@@ -670,14 +670,14 @@ func CheckReplicaStatus(ctx context.Context, t *testing.T, tablet *cluster.Vttab
 	qr := RunSQL(ctx, t, "show replica status", tablet)
 	IOThreadRunning := fmt.Sprintf("%v", qr.Rows[0][10])
 	SQLThreadRunning := fmt.Sprintf("%v", qr.Rows[0][10])
-	assert.Equal(t, IOThreadRunning, "VARCHAR(\"No\")")
-	assert.Equal(t, SQLThreadRunning, "VARCHAR(\"No\")")
+	assert.Equal(t, "VARCHAR(\"No\")", IOThreadRunning)
+	assert.Equal(t, "VARCHAR(\"No\")", SQLThreadRunning)
 }
 
 // CheckReparentFromOutside checks that cluster was reparented from outside
 func CheckReparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tablet *cluster.Vttablet, downPrimary bool, baseTime int64) {
 	result, err := clusterInstance.VtctldClientProcess.GetShardReplication(KeyspaceName, ShardName, cell1)
-	require.Nil(t, err, "error should be Nil")
+	require.NoError(t, err, "error should be Nil")
 	require.NotNil(t, result[cell1], "result should not be nil")
 	if !downPrimary {
 		assert.Len(t, result[cell1].Nodes, 3)
@@ -698,8 +698,8 @@ func CheckReparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProces
 	require.NoError(t, err)
 	streamHealthResponse := shrs[0]
 
-	assert.Equal(t, streamHealthResponse.Target.TabletType, topodatapb.TabletType_PRIMARY)
-	assert.True(t, streamHealthResponse.PrimaryTermStartTimestamp >= baseTime)
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, streamHealthResponse.Target.TabletType)
+	assert.GreaterOrEqual(t, streamHealthResponse.PrimaryTermStartTimestamp, baseTime)
 }
 
 // WaitForReplicationPosition waits for tablet B to catch up to the replication position of tablet A.

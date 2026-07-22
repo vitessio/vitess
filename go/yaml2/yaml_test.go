@@ -40,8 +40,8 @@ func TestYamlVars(t *testing.T) {
 	var err error
 	t.Run("Marshal", func(t *testing.T) {
 		marshalData, err = Marshal(inputData)
-		assert.NoError(t, err)
-		require.EqualValues(t, `BoolField: true
+		require.NoError(t, err)
+		require.Equal(t, `BoolField: true
 Float64Field: 3.141
 IntField: 32
 StringField: tricky text to test text
@@ -52,7 +52,7 @@ StringField: tricky text to test text
 	t.Run("Unmarshal", func(t *testing.T) {
 		var unmarshalData TestStruct
 		err = Unmarshal(marshalData, &unmarshalData)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, inputData, unmarshalData)
 
 		unmarshalData.StringField = "changed text"

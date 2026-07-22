@@ -92,7 +92,7 @@ func TestWaitlistWaiterCap(t *testing.T) {
 	}
 
 	_, err := wl.waitForConn(t.Context(), nil, poolClose, maxWaiters)
-	assert.ErrorIs(t, err, ErrPoolWaiterCapReached)
+	require.ErrorIs(t, err, ErrPoolWaiterCapReached)
 	assert.Equal(t, maxWaiters, wl.waiting())
 
 	close(poolClose)

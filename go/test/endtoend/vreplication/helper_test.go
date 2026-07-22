@@ -209,8 +209,8 @@ func waitForNoWorkflowLag(t *testing.T, vc *VitessCluster, keyspace, worfklow st
 		output, err := vc.VtctldClient.ExecuteCommandWithOutput("workflow", "--keyspace", keyspace, "show", "--workflow", worfklow, "--include-logs=false")
 		require.NoError(t, err)
 		// Confirm that we got no log records back.
-		require.NotEmpty(t, len(gjson.Get(output, "workflows.0.shard_streams.*.streams.0").String()), "workflow %q had no streams listed in the output: %s", ksWorkflow, output)
-		require.Equal(t, 0, len(gjson.Get(output, "workflows.0.shard_streams.*.streams.0.logs").Array()), "workflow %q returned log records when we expected none", ksWorkflow)
+		require.NotEmpty(t, gjson.Get(output, "workflows.0.shard_streams.*.streams.0").String(), "workflow %q had no streams listed in the output: %s", ksWorkflow, output)
+		require.Empty(t, gjson.Get(output, "workflows.0.shard_streams.*.streams.0.logs").Array(), "workflow %q returned log records when we expected none", ksWorkflow)
 		lag = gjson.Get(output, "workflows.0.max_v_replication_lag").Int()
 		if lag == 0 {
 			return
@@ -541,7 +541,7 @@ func validateDryRunResults(t *testing.T, output string, want []string) {
 	t.Helper()
 	require.NotEmpty(t, output)
 	gotDryRun := strings.Split(output, "\n")
-	require.True(t, len(gotDryRun) > 3)
+	require.Greater(t, len(gotDryRun), 3)
 	var startRow int
 	if strings.HasPrefix(gotDryRun[1], "Parameters:") { // vtctldclient
 		startRow = 3
@@ -705,7 +705,7 @@ func confirmWorkflowHasCopiedNoData(t *testing.T, defaultTargetKs, workflow stri
 func getShardRoutingRules(t *testing.T) string {
 	output, err := osExec(t, "vtctldclient", []string{"--server", getVtctldGRPCURL(), "GetShardRoutingRules"})
 	log.Info(fmt.Sprintf("GetShardRoutingRules err: %+v, output: %+v", err, output))
-	require.Nilf(t, err, output)
+	require.NoErrorf(t, err, output)
 	require.NotNil(t, output)
 
 	// Sort the rules by shard,to_keyspace
@@ -750,7 +750,7 @@ func verifyCopyStateIsOptimized(t *testing.T, tablet *cluster.VttabletProcess) {
 		res, err := tablet.QueryTablet(query, "", false)
 		require.NoError(t, err)
 		require.NotNil(t, res)
-		require.Equal(t, 1, len(res.Rows))
+		require.Len(t, res.Rows, 1)
 		dataFree, err = res.Rows[0][0].ToInt64()
 		require.NoError(t, err)
 		autoIncrement, err = res.Rows[0][1].ToInt64()
@@ -808,7 +808,7 @@ func getPartialMetrics(t *testing.T, key string, tab *cluster.VttabletProcess) (
 func isBinlogRowImageNoBlob(t *testing.T, tablet *cluster.VttabletProcess) bool {
 	rs, err := tablet.QueryTablet("select @@global.binlog_row_image", "", false)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(rs.Rows))
+	require.Len(t, rs.Rows, 1)
 	mode := strings.ToLower(rs.Rows[0][0].ToString())
 	return mode == "noblob"
 }
@@ -1022,7 +1022,7 @@ func vexplain(t *testing.T, database, query string) *VExplainPlan {
 	qr, err := execVtgateQuery(vtgateConn, database, "vexplain "+query)
 	require.NoError(t, err)
 	require.NotNil(t, qr)
-	require.Equal(t, 1, len(qr.Rows))
+	require.Len(t, qr.Rows, 1)
 	json := qr.Rows[0][0].ToString()
 
 	var plan VExplainPlan
@@ -1058,7 +1058,7 @@ func getVReplicationConfig(t *testing.T, tab *cluster.VttabletProcess) map[strin
 	var config map[string]string
 	err = json2.Unmarshal([]byte(configJson), &config)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(config))
+	require.Len(t, config, 1)
 
 	configJson = config[maps.Keys(config)[0]]
 	config = nil
@@ -1090,7 +1090,7 @@ func validateOverrides(t *testing.T, tabs map[string]*cluster.VttabletProcess, w
 	for _, tab := range tabs {
 		config := getVReplicationConfig(t, tab)
 		for k, v := range want {
-			require.EqualValues(t, v, config[k])
+			require.Equal(t, v, config[k])
 		}
 	}
 }

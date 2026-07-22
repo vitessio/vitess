@@ -206,8 +206,8 @@ func TestGetAllManagedForeignKeys(t *testing.T) {
 				require.EqualError(t, err, tt.expectedErr)
 				return
 			}
-			require.EqualValues(t, tt.childFkWanted, childFk)
-			require.EqualValues(t, tt.parentFkWanted, parentFk)
+			require.Equal(t, tt.childFkWanted, childFk)
+			require.Equal(t, tt.parentFkWanted, parentFk)
 		})
 	}
 }
@@ -307,8 +307,8 @@ func TestFilterForeignKeysUsingUpdateExpressions(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			childFks, parentFks, _, err := tt.fkManager.filterForeignKeysUsingUpdateExpressions(tt.allChildFks, tt.allParentFks, tt.updExprs)
-			require.EqualValues(t, tt.childFksWanted, childFks)
-			require.EqualValues(t, tt.parentFksWanted, parentFks)
+			require.Equal(t, tt.childFksWanted, childFks)
+			require.Equal(t, tt.parentFksWanted, parentFks)
 			if tt.errWanted != "" {
 				require.EqualError(t, err, tt.errWanted)
 			} else {
@@ -546,9 +546,9 @@ func TestGetInvolvedForeignKeys(t *testing.T) {
 				require.EqualError(t, err, tt.expectedErr)
 				return
 			}
-			require.EqualValues(t, tt.childFksWanted, childFks)
-			require.EqualValues(t, tt.childFkUpdateExprsWanted, childFkUpdateExprs)
-			require.EqualValues(t, tt.parentFksWanted, parentFks)
+			require.Equal(t, tt.childFksWanted, childFks)
+			require.Equal(t, tt.childFkUpdateExprsWanted, childFkUpdateExprs)
+			require.Equal(t, tt.parentFksWanted, parentFks)
 		})
 	}
 }

@@ -138,21 +138,21 @@ func TestHealthCheckCacheWithTabletChurn(t *testing.T) {
 
 	// verify output of SHOW VITESS_TABLETS
 	vtgateConn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer vtgateConn.Close()
 	query := "show vitess_tablets"
 
 	// starting with two shards, each with 1 primary and 1 replica tablet)
 	// we'll be adding and removing a tablet of type churnTabletType with churnTabletUID
 	qr, _ := vtgateConn.ExecuteFetch(query, 100, true)
-	assert.Equal(t, expectedTabletHCcacheEntries, len(qr.Rows), "wrong number of tablet records in healthcheck cache, expected %d but had %d. Results: %v", expectedTabletHCcacheEntries, len(qr.Rows), qr.Rows)
+	assert.Len(t, qr.Rows, expectedTabletHCcacheEntries, "wrong number of tablet records in healthcheck cache, expected %d but had %d. Results: %v", expectedTabletHCcacheEntries, len(qr.Rows), qr.Rows)
 
 	for range tries {
 		tablet := addTablet(t, churnTabletUID, churnTabletType)
 		expectedTabletHCcacheEntries++
 
 		qr, _ := vtgateConn.ExecuteFetch(query, 100, true)
-		assert.Equal(t, expectedTabletHCcacheEntries, len(qr.Rows), "wrong number of tablet records in healthcheck cache, expected %d but had %d. Results: %v", expectedTabletHCcacheEntries, len(qr.Rows), qr.Rows)
+		assert.Len(t, qr.Rows, expectedTabletHCcacheEntries, "wrong number of tablet records in healthcheck cache, expected %d but had %d. Results: %v", expectedTabletHCcacheEntries, len(qr.Rows), qr.Rows)
 
 		deleteTablet(t, tablet)
 		expectedTabletHCcacheEntries--
@@ -163,12 +163,12 @@ func TestHealthCheckCacheWithTabletChurn(t *testing.T) {
 		time.Sleep(tabletRefreshInterval)
 
 		qr, _ = vtgateConn.ExecuteFetch(query, 100, true)
-		assert.Equal(t, expectedTabletHCcacheEntries, len(qr.Rows), "wrong number of tablet records in healthcheck cache, expected %d but had %d. Results: %v", expectedTabletHCcacheEntries, len(qr.Rows), qr.Rows)
+		assert.Len(t, qr.Rows, expectedTabletHCcacheEntries, "wrong number of tablet records in healthcheck cache, expected %d but had %d. Results: %v", expectedTabletHCcacheEntries, len(qr.Rows), qr.Rows)
 	}
 
 	// one final time, w/o the churning tablet
 	qr, _ = vtgateConn.ExecuteFetch(query, 100, true)
-	assert.Equal(t, expectedTabletHCcacheEntries, len(qr.Rows), "wrong number of tablet records in healthcheck cache, expected %d but had %d", expectedTabletHCcacheEntries, len(qr.Rows))
+	assert.Len(t, qr.Rows, expectedTabletHCcacheEntries, "wrong number of tablet records in healthcheck cache, expected %d but had %d", expectedTabletHCcacheEntries, len(qr.Rows))
 }
 
 func addTablet(t *testing.T, tabletUID int, tabletType string) *cluster.Vttablet {
@@ -182,10 +182,10 @@ func addTablet(t *testing.T, tabletUID int, tabletType string) *cluster.Vttablet
 	}
 	// Start Mysqlctl process
 	mysqlctlProcess, err := cluster.MysqlCtlProcessInstanceOptionalInit(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory, !clusterInstance.ReusingVTDATAROOT)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	tablet.MysqlctlProcess = *mysqlctlProcess
 	proc, err := tablet.MysqlctlProcess.StartProcess()
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// Start vttablet process
 	tablet.VttabletProcess = cluster.VttabletProcessInstance(
@@ -205,17 +205,17 @@ func addTablet(t *testing.T, tabletUID int, tabletType string) *cluster.Vttablet
 
 	// wait for mysqld to be ready
 	err = proc.Wait()
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	tablet.VttabletProcess.ServingStatus = ""
 	err = tablet.VttabletProcess.Setup()
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	serving := tablet.VttabletProcess.WaitForStatus("SERVING", time.Duration(60*time.Second))
-	assert.Equal(t, serving, true, "Tablet did not become ready within a reasonable time")
+	assert.True(t, serving, "Tablet did not become ready within a reasonable time")
 	err = clusterInstance.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.%s",
 		tablet.VttabletProcess.Keyspace, tablet.VttabletProcess.Shard, tablet.Type), 1, 30*time.Second)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	t.Logf("Added tablet: %s", tablet.Alias)
 	return tablet
@@ -233,7 +233,7 @@ func deleteTablet(t *testing.T, tablet *cluster.Vttablet) {
 	wg.Wait()
 
 	err := clusterInstance.VtctldClientProcess.ExecuteCommand("DeleteTablets", tablet.Alias)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	t.Logf("Deleted tablet: %s", tablet.Alias)
 }

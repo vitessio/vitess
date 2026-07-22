@@ -46,22 +46,14 @@ func init() {
 }
 
 // VtgateExecQuery runs a query on VTGate using given query params
-func VtgateExecQuery(t *testing.T, vtParams *mysql.ConnParams, query string, expectError string) *sqltypes.Result {
-	t.Helper()
-
-	ctx := t.Context()
+func VtgateExecQuery(ctx context.Context, vtParams *mysql.ConnParams, query string) (*sqltypes.Result, error) {
 	conn, err := mysql.Connect(ctx, vtParams)
-	require.Nil(t, err)
+	if err != nil {
+		return nil, err
+	}
 	defer conn.Close()
 
-	qr, err := conn.ExecuteFetch(query, -1, true)
-	if expectError == "" {
-		require.NoError(t, err)
-	} else {
-		require.Error(t, err, "error should not be nil")
-		assert.Contains(t, err.Error(), expectError, "Unexpected error")
-	}
-	return qr
+	return conn.ExecuteFetch(query, -1, true)
 }
 
 // VtgateExecQueryInTransaction runs a query on VTGate using given query params, inside a transaction
@@ -70,7 +62,7 @@ func VtgateExecQueryInTransaction(t *testing.T, vtParams *mysql.ConnParams, quer
 
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	_, err = conn.ExecuteFetch("begin", -1, true)
@@ -93,12 +85,12 @@ func VtgateExecDDL(t *testing.T, vtParams *mysql.ConnParams, ddlStrategy string,
 
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	setSession := fmt.Sprintf("set @@ddl_strategy='%s'", ddlStrategy)
 	_, err = conn.ExecuteFetch(setSession, 1000, true)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 	if expectError == "" {
@@ -116,7 +108,8 @@ func CheckRetryMigration(t *testing.T, vtParams *mysql.ConnParams, shards []clus
 		sqltypes.StringBindVariable(uuid),
 	)
 	require.NoError(t, err)
-	r := VtgateExecQuery(t, vtParams, query, "")
+	r, err := VtgateExecQuery(t.Context(), vtParams, query)
+	require.NoError(t, err)
 
 	if expectRetryPossible {
 		assert.Equal(t, len(shards), int(r.RowsAffected))
@@ -131,7 +124,8 @@ func CheckRetryPartialMigration(t *testing.T, vtParams *mysql.ConnParams, uuid s
 		sqltypes.StringBindVariable(uuid),
 	)
 	require.NoError(t, err)
-	r := VtgateExecQuery(t, vtParams, query, "")
+	r, err := VtgateExecQuery(t.Context(), vtParams, query)
+	require.NoError(t, err)
 
 	assert.GreaterOrEqual(t, expectAtLeastRowsAffected, r.RowsAffected)
 }
@@ -142,7 +136,8 @@ func CheckCancelMigration(t *testing.T, vtParams *mysql.ConnParams, shards []clu
 		sqltypes.StringBindVariable(uuid),
 	)
 	require.NoError(t, err)
-	r := VtgateExecQuery(t, vtParams, query, "")
+	r, err := VtgateExecQuery(t.Context(), vtParams, query)
+	require.NoError(t, err)
 
 	if expectCancelPossible {
 		assert.Equal(t, len(shards), int(r.RowsAffected))
@@ -157,7 +152,8 @@ func CheckCleanupMigration(t *testing.T, vtParams *mysql.ConnParams, shards []cl
 		sqltypes.StringBindVariable(uuid),
 	)
 	require.NoError(t, err)
-	r := VtgateExecQuery(t, vtParams, query, "")
+	r, err := VtgateExecQuery(t.Context(), vtParams, query)
+	require.NoError(t, err)
 
 	assert.Equal(t, len(shards), int(r.RowsAffected))
 }
@@ -168,7 +164,8 @@ func CheckCompleteMigration(t *testing.T, vtParams *mysql.ConnParams, shards []c
 		sqltypes.StringBindVariable(uuid),
 	)
 	require.NoError(t, err)
-	r := VtgateExecQuery(t, vtParams, query, "")
+	r, err := VtgateExecQuery(t.Context(), vtParams, query)
+	require.NoError(t, err)
 
 	if expectCompletePossible {
 		assert.Equal(t, len(shards), int(r.RowsAffected))
@@ -184,7 +181,8 @@ func CheckCompleteMigrationShards(t *testing.T, vtParams *mysql.ConnParams, shar
 		sqltypes.StringBindVariable(completeShards),
 	)
 	require.NoError(t, err)
-	r := VtgateExecQuery(t, vtParams, query, "")
+	r, err := VtgateExecQuery(t.Context(), vtParams, query)
+	require.NoError(t, err)
 
 	if expectCompletePossible {
 		assert.Equal(t, len(shards), int(r.RowsAffected))
@@ -199,7 +197,8 @@ func CheckPostponeCompleteMigration(t *testing.T, vtParams *mysql.ConnParams, sh
 		sqltypes.StringBindVariable(uuid),
 	)
 	require.NoError(t, err)
-	r := VtgateExecQuery(t, vtParams, query, "")
+	r, err := VtgateExecQuery(t.Context(), vtParams, query)
+	require.NoError(t, err)
 
 	if expectPotponePossible {
 		assert.Equal(t, len(shards), int(r.RowsAffected))
@@ -215,7 +214,8 @@ func CheckLaunchMigration(t *testing.T, vtParams *mysql.ConnParams, shards []clu
 		sqltypes.StringBindVariable(launchShards),
 	)
 	require.NoError(t, err)
-	r := VtgateExecQuery(t, vtParams, query, "")
+	r, err := VtgateExecQuery(t.Context(), vtParams, query)
+	require.NoError(t, err)
 
 	if expectLaunchPossible {
 		assert.Equal(t, len(shards), int(r.RowsAffected))
@@ -228,7 +228,8 @@ func CheckLaunchMigration(t *testing.T, vtParams *mysql.ConnParams, shards []clu
 // A negative value for expectCount indicates "don't care, no need to check"
 func CheckCompleteContextMigrations(t *testing.T, vtParams *mysql.ConnParams, migrationContext string, expectCount int) {
 	query := fmt.Sprintf("alter vitess_migration complete context '%s'", migrationContext)
-	r := VtgateExecQuery(t, vtParams, query, "")
+	r, err := VtgateExecQuery(t.Context(), vtParams, query)
+	require.NoError(t, err)
 
 	if expectCount >= 0 {
 		assert.Equal(t, expectCount, int(r.RowsAffected))
@@ -239,7 +240,8 @@ func CheckCompleteContextMigrations(t *testing.T, vtParams *mysql.ConnParams, mi
 // A negative value for expectCount indicates "don't care, no need to check"
 func CheckCompleteAllMigrations(t *testing.T, vtParams *mysql.ConnParams, expectCount int) {
 	completeQuery := "alter vitess_migration complete all"
-	r := VtgateExecQuery(t, vtParams, completeQuery, "")
+	r, err := VtgateExecQuery(t.Context(), vtParams, completeQuery)
+	require.NoError(t, err)
 
 	if expectCount >= 0 {
 		assert.Equal(t, expectCount, int(r.RowsAffected))
@@ -250,7 +252,8 @@ func CheckCompleteAllMigrations(t *testing.T, vtParams *mysql.ConnParams, expect
 // A negative value for expectCount indicates "don't care, no need to check"
 func CheckPostponeCompleteContextMigrations(t *testing.T, vtParams *mysql.ConnParams, migrationContext string, expectCount int) {
 	query := fmt.Sprintf("alter vitess_migration postpone complete context '%s'", migrationContext)
-	r := VtgateExecQuery(t, vtParams, query, "")
+	r, err := VtgateExecQuery(t.Context(), vtParams, query)
+	require.NoError(t, err)
 
 	if expectCount >= 0 {
 		assert.Equal(t, expectCount, int(r.RowsAffected))
@@ -261,7 +264,8 @@ func CheckPostponeCompleteContextMigrations(t *testing.T, vtParams *mysql.ConnPa
 // A negative value for expectCount indicates "don't care, no need to check"
 func CheckPostponeCompleteAllMigrations(t *testing.T, vtParams *mysql.ConnParams, expectCount int) {
 	completeQuery := "alter vitess_migration postpone complete all"
-	r := VtgateExecQuery(t, vtParams, completeQuery, "")
+	r, err := VtgateExecQuery(t.Context(), vtParams, completeQuery)
+	require.NoError(t, err)
 
 	if expectCount >= 0 {
 		assert.Equal(t, expectCount, int(r.RowsAffected))
@@ -272,7 +276,8 @@ func CheckPostponeCompleteAllMigrations(t *testing.T, vtParams *mysql.ConnParams
 // A negative value for expectCount indicates "don't care, no need to check"
 func CheckCancelAllMigrations(t *testing.T, vtParams *mysql.ConnParams, expectCount int) {
 	cancelQuery := "alter vitess_migration cancel all"
-	r := VtgateExecQuery(t, vtParams, cancelQuery, "")
+	r, err := VtgateExecQuery(t.Context(), vtParams, cancelQuery)
+	require.NoError(t, err)
 
 	if expectCount >= 0 {
 		assert.Equal(t, expectCount, int(r.RowsAffected))
@@ -283,7 +288,8 @@ func CheckCancelAllMigrations(t *testing.T, vtParams *mysql.ConnParams, expectCo
 // A negative value for expectCount indicates "don't care, no need to check"
 func CheckCancelContextMigrations(t *testing.T, vtParams *mysql.ConnParams, migrationContext string, expectCount int) {
 	cancelQuery := fmt.Sprintf("alter vitess_migration cancel context '%s'", migrationContext)
-	r := VtgateExecQuery(t, vtParams, cancelQuery, "")
+	r, err := VtgateExecQuery(t.Context(), vtParams, cancelQuery)
+	require.NoError(t, err)
 
 	if expectCount >= 0 {
 		assert.Equal(t, expectCount, int(r.RowsAffected))
@@ -294,7 +300,8 @@ func CheckCancelContextMigrations(t *testing.T, vtParams *mysql.ConnParams, migr
 // A negative value for expectCount indicates "don't care, no need to check"
 func CheckCleanupContextMigrations(t *testing.T, vtParams *mysql.ConnParams, migrationContext string, expectCount int) uint64 {
 	query := fmt.Sprintf("alter vitess_migration cleanup context '%s'", migrationContext)
-	r := VtgateExecQuery(t, vtParams, query, "")
+	r, err := VtgateExecQuery(t.Context(), vtParams, query)
+	require.NoError(t, err)
 
 	if expectCount >= 0 {
 		assert.Equal(t, expectCount, int(r.RowsAffected))
@@ -306,7 +313,8 @@ func CheckCleanupContextMigrations(t *testing.T, vtParams *mysql.ConnParams, mig
 // A negative value for expectCount indicates "don't care, no need to check"
 func CheckCleanupAllMigrations(t *testing.T, vtParams *mysql.ConnParams, expectCount int) uint64 {
 	cleanupQuery := "alter vitess_migration cleanup all"
-	r := VtgateExecQuery(t, vtParams, cleanupQuery, "")
+	r, err := VtgateExecQuery(t.Context(), vtParams, cleanupQuery)
+	require.NoError(t, err)
 
 	if expectCount >= 0 {
 		assert.Equal(t, expectCount, int(r.RowsAffected))
@@ -318,7 +326,8 @@ func CheckCleanupAllMigrations(t *testing.T, vtParams *mysql.ConnParams, expectC
 // A negative value for expectCount indicates "don't care, no need to check"
 func CheckLaunchContextMigrations(t *testing.T, vtParams *mysql.ConnParams, migrationContext string, expectCount int) {
 	query := fmt.Sprintf("alter vitess_migration launch context '%s'", migrationContext)
-	r := VtgateExecQuery(t, vtParams, query, "")
+	r, err := VtgateExecQuery(t.Context(), vtParams, query)
+	require.NoError(t, err)
 
 	if expectCount >= 0 {
 		assert.Equal(t, expectCount, int(r.RowsAffected))
@@ -329,7 +338,8 @@ func CheckLaunchContextMigrations(t *testing.T, vtParams *mysql.ConnParams, migr
 // A negative value for expectCount indicates "don't care, no need to check"
 func CheckLaunchAllMigrations(t *testing.T, vtParams *mysql.ConnParams, expectCount int) {
 	completeQuery := "alter vitess_migration launch all"
-	r := VtgateExecQuery(t, vtParams, completeQuery, "")
+	r, err := VtgateExecQuery(t.Context(), vtParams, completeQuery)
+	require.NoError(t, err)
 
 	if expectCount >= 0 {
 		assert.Equal(t, expectCount, int(r.RowsAffected))
@@ -340,7 +350,8 @@ func CheckLaunchAllMigrations(t *testing.T, vtParams *mysql.ConnParams, expectCo
 // A negative value for expectCount indicates "don't care, no need to check"
 func CheckForceCutOverContextMigrations(t *testing.T, vtParams *mysql.ConnParams, migrationContext string, expectCount int) {
 	query := fmt.Sprintf("alter vitess_migration force_cutover context '%s'", migrationContext)
-	r := VtgateExecQuery(t, vtParams, query, "")
+	r, err := VtgateExecQuery(t.Context(), vtParams, query)
+	require.NoError(t, err)
 
 	if expectCount >= 0 {
 		assert.Equal(t, expectCount, int(r.RowsAffected))
@@ -353,7 +364,8 @@ func CheckForceMigrationCutOver(t *testing.T, vtParams *mysql.ConnParams, shards
 		sqltypes.StringBindVariable(uuid),
 	)
 	require.NoError(t, err)
-	r := VtgateExecQuery(t, vtParams, query, "")
+	r, err := VtgateExecQuery(t.Context(), vtParams, query)
+	require.NoError(t, err)
 
 	if expectPossible {
 		assert.Equal(t, len(shards), int(r.RowsAffected))
@@ -369,7 +381,12 @@ func CheckSetMigrationCutOverThreshold(t *testing.T, vtParams *mysql.ConnParams,
 		sqltypes.StringBindVariable(threshold.String()),
 	)
 	require.NoError(t, err)
-	_ = VtgateExecQuery(t, vtParams, query, expectError)
+	_, err = VtgateExecQuery(t.Context(), vtParams, query)
+	if expectError == "" {
+		require.NoError(t, err)
+	} else {
+		require.ErrorContains(t, err, expectError)
+	}
 }
 
 // CheckMigrationStatus verifies that the migration indicated by given UUID has the given expected status
@@ -380,7 +397,8 @@ func CheckMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []clu
 	)
 	require.NoError(t, err)
 
-	r := VtgateExecQuery(t, vtParams, query, "")
+	r, err := VtgateExecQuery(t.Context(), vtParams, query)
+	require.NoError(t, err)
 	fmt.Printf("# output for `%s`:\n", query)
 	PrintQueryResult(os.Stdout, r)
 
@@ -422,7 +440,8 @@ func WaitForMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []c
 	lastKnownStatus := ""
 	for {
 		countMatchedShards := 0
-		r := VtgateExecQuery(t, vtParams, query, "")
+		r, err := VtgateExecQuery(t.Context(), vtParams, query)
+		require.NoError(t, err)
 		for _, row := range r.Named().Rows {
 			shardName := row["shard"].ToString()
 			if !shardNames[shardName] {
@@ -466,7 +485,8 @@ func WaitForMigrationReviewedTimestamp(t *testing.T, vtParams *mysql.ConnParams,
 
 	for {
 		countReviewed := 0
-		r := VtgateExecQuery(t, vtParams, query, "")
+		r, err := VtgateExecQuery(t.Context(), vtParams, query)
+		require.NoError(t, err)
 		for _, row := range r.Named().Rows {
 			shardName := row["shard"].ToString()
 			if !shardNames[shardName] {
@@ -490,9 +510,10 @@ func WaitForMigrationReviewedTimestamp(t *testing.T, vtParams *mysql.ConnParams,
 
 // CheckMigrationArtifacts verifies given migration exists, and checks if it has artifacts
 func CheckMigrationArtifacts(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, expectArtifacts bool) {
-	r := ReadMigrations(t, vtParams, uuid)
+	r, err := ReadMigrations(t.Context(), vtParams, uuid)
+	require.NoError(t, err)
 
-	assert.Equal(t, len(shards), len(r.Named().Rows))
+	assert.Len(t, r.Named().Rows, len(shards))
 	for _, row := range r.Named().Rows {
 		hasArtifacts := (row["artifacts"].ToString() != "")
 		assert.Equal(t, expectArtifacts, hasArtifacts)
@@ -500,13 +521,15 @@ func CheckMigrationArtifacts(t *testing.T, vtParams *mysql.ConnParams, shards []
 }
 
 // ReadMigrations reads migration entries
-func ReadMigrations(t *testing.T, vtParams *mysql.ConnParams, like string) *sqltypes.Result {
+func ReadMigrations(ctx context.Context, vtParams *mysql.ConnParams, like string) (*sqltypes.Result, error) {
 	query, err := sqlparser.ParseAndBind("show vitess_migrations like %a",
 		sqltypes.StringBindVariable(like),
 	)
-	require.NoError(t, err)
+	if err != nil {
+		return nil, err
+	}
 
-	return VtgateExecQuery(t, vtParams, query, "")
+	return VtgateExecQuery(ctx, vtParams, query)
 }
 
 // ReadMigrationLogs reads migration logs for a given migration, on all shards
@@ -516,7 +539,8 @@ func ReadMigrationLogs(t *testing.T, vtParams *mysql.ConnParams, uuid string) (l
 	)
 	require.NoError(t, err)
 
-	r := VtgateExecQuery(t, vtParams, query, "")
+	r, err := VtgateExecQuery(t.Context(), vtParams, query)
+	require.NoError(t, err)
 	for _, row := range r.Named().Rows {
 		migrationLog := row["migration_log"].ToString()
 		logs = append(logs, migrationLog)
@@ -527,25 +551,29 @@ func ReadMigrationLogs(t *testing.T, vtParams *mysql.ConnParams, uuid string) (l
 // ThrottleAllMigrations fully throttles online-ddl apps
 func ThrottleAllMigrations(t *testing.T, vtParams *mysql.ConnParams) {
 	query := "alter vitess_migration throttle all expire '24h' ratio 1"
-	_ = VtgateExecQuery(t, vtParams, query, "")
+	_, err := VtgateExecQuery(t.Context(), vtParams, query)
+	require.NoError(t, err)
 }
 
 // ThrottleContextMigrations throttles all pending migrations with a given context.
 func ThrottleContextMigrations(t *testing.T, vtParams *mysql.ConnParams, migrationContext string) {
 	query := fmt.Sprintf("alter vitess_migration throttle context '%s' expire '24h' ratio 1", migrationContext)
-	_ = VtgateExecQuery(t, vtParams, query, "")
+	_, err := VtgateExecQuery(t.Context(), vtParams, query)
+	require.NoError(t, err)
 }
 
 // UnthrottleAllMigrations cancels migration throttling
 func UnthrottleAllMigrations(t *testing.T, vtParams *mysql.ConnParams) {
 	query := "alter vitess_migration unthrottle all"
-	_ = VtgateExecQuery(t, vtParams, query, "")
+	_, err := VtgateExecQuery(t.Context(), vtParams, query)
+	require.NoError(t, err)
 }
 
 // UnthrottleContextMigrations unthrottles all pending migrations with a given context.
 func UnthrottleContextMigrations(t *testing.T, vtParams *mysql.ConnParams, migrationContext string) {
 	query := fmt.Sprintf("alter vitess_migration unthrottle context '%s'", migrationContext)
-	_ = VtgateExecQuery(t, vtParams, query, "")
+	_, err := VtgateExecQuery(t.Context(), vtParams, query)
+	require.NoError(t, err)
 }
 
 // CheckThrottledApps checks for existence or non-existence of an app in the throttled apps list
@@ -558,7 +586,8 @@ func CheckThrottledApps(t *testing.T, vtParams *mysql.ConnParams, throttlerApp t
 
 	for {
 		query := "show vitess_throttled_apps"
-		r := VtgateExecQuery(t, vtParams, query, "")
+		r, err := VtgateExecQuery(t.Context(), vtParams, query)
+		require.NoError(t, err)
 
 		appFound := false
 		for _, row := range r.Named().Rows {
@@ -588,7 +617,8 @@ func WaitForThrottledTimestamp(t *testing.T, vtParams *mysql.ConnParams, uuid st
 ) {
 	startTime := time.Now()
 	for time.Since(startTime) < timeout {
-		rs := ReadMigrations(t, vtParams, uuid)
+		rs, err := ReadMigrations(t.Context(), vtParams, uuid)
+		require.NoError(t, err)
 		require.NotNil(t, rs)
 		for _, row = range rs.Named().Rows {
 			startedTimestamp = row.AsString("started_timestamp", "")
@@ -608,7 +638,8 @@ func WaitForThrottledTimestamp(t *testing.T, vtParams *mysql.ConnParams, uuid st
 // ValidateSequentialMigrationIDs validates that schem_migrations.id column, which is an AUTO_INCREMENT, does
 // not have gaps
 func ValidateSequentialMigrationIDs(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard) {
-	r := VtgateExecQuery(t, vtParams, "show vitess_migrations", "")
+	r, err := VtgateExecQuery(t.Context(), vtParams, "show vitess_migrations")
+	require.NoError(t, err)
 	shardMin := map[string]uint64{}
 	shardMax := map[string]uint64{}
 	shardCount := map[string]uint64{}
@@ -633,9 +664,9 @@ func ValidateSequentialMigrationIDs(t *testing.T, vtParams *mysql.ConnParams, sh
 		shardCount[shard]++
 	}
 	require.NotEmpty(t, shards)
-	assert.Equal(t, len(shards), len(shardMin))
-	assert.Equal(t, len(shards), len(shardMax))
-	assert.Equal(t, len(shards), len(shardCount))
+	assert.Len(t, shardMin, len(shards))
+	assert.Len(t, shardMax, len(shards))
+	assert.Len(t, shardCount, len(shards))
 	for shard, count := range shardCount {
 		assert.NotZero(t, count)
 		assert.Equalf(t, count, shardMax[shard]-shardMin[shard]+1, "mismatch: shared=%v, count=%v, min=%v, max=%v", shard, count, shardMin[shard], shardMax[shard])
@@ -646,7 +677,8 @@ func ValidateSequentialMigrationIDs(t *testing.T, vtParams *mysql.ConnParams, sh
 // has a non-nil and valid `completed_timestamp` value.
 func ValidateCompletedTimestamp(t *testing.T, vtParams *mysql.ConnParams) {
 	require.False(t, testsStartupTime.IsZero())
-	r := VtgateExecQuery(t, vtParams, "show vitess_migrations", "")
+	r, err := VtgateExecQuery(t.Context(), vtParams, "show vitess_migrations")
+	require.NoError(t, err)
 
 	completedTimestampNumValidations := 0
 	for _, row := range r.Named().Rows {
@@ -661,7 +693,7 @@ func ValidateCompletedTimestamp(t *testing.T, vtParams *mysql.ConnParams) {
 				// Also make sure the timestamp is "real", and that it is recent.
 				timestamp := row.AsString("completed_timestamp", "")
 				completedTime, err := time.Parse(sqltypes.TimestampFormat, timestamp)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Greater(t, completedTime.Unix(), testsStartupTime.Unix())
 				completedTimestampNumValidations++
 			}

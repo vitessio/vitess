@@ -262,12 +262,17 @@ func (bh *AZBlobBackupHandle) AddFile(ctx context.Context, filename string, file
 	return writer, nil
 }
 
+// Wait implements BackupHandle.
+func (bh *AZBlobBackupHandle) Wait() {
+	bh.waitGroup.Wait()
+}
+
 // EndBackup implements BackupHandle.
 func (bh *AZBlobBackupHandle) EndBackup(ctx context.Context) error {
 	if bh.readOnly {
 		return errors.New("EndBackup cannot be called on read-only backup")
 	}
-	bh.waitGroup.Wait()
+	bh.Wait()
 	return bh.Error()
 }
 

@@ -20,6 +20,7 @@ import (
 	"context"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -428,6 +429,9 @@ func TestThrottlerMaxLag(t *testing.T) {
 	defer cancel()
 
 	var wg sync.WaitGroup
+	// nilCache records whether lagCacheByType ever returned nil; require.* is
+	// unsafe on the worker goroutines, so we assert this after wg.Wait().
+	var nilCache atomic.Bool
 
 	// run .add() and .MaxLag() concurrently to detect races
 	for _, tabletType := range testTabletTypes {
@@ -449,7 +453,10 @@ func TestThrottlerMaxLag(t *testing.T) {
 					return
 				default:
 					cache := throttler.maxReplicationLagModule.lagCacheByType(tabletType)
-					require.NotNil(t, cache)
+					if cache == nil {
+						nilCache.Store(true)
+						return
+					}
 					cache.add(replicationLagRecord{
 						time: time.Now(),
 						TabletHealth: discovery.TabletHealth{
@@ -473,6 +480,7 @@ func TestThrottlerMaxLag(t *testing.T) {
 	time.Sleep(time.Second)
 	cancel()
 	wg.Wait()
+	require.False(t, nilCache.Load(), "lagCacheByType returned a nil cache")
 
 	// check .MaxLag()
 	for _, tabletType := range testTabletTypes {

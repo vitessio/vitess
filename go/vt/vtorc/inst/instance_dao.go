@@ -168,7 +168,6 @@ func ReadTopologyInstanceBufferable(tabletAlias *topodatapb.TabletAlias, latency
 		}
 	}()
 
-	var waitGroup sync.WaitGroup
 	var tablet *topodatapb.Tablet
 	var fs *replicationdatapb.FullStatus
 	readingStartTime := time.Now()
@@ -227,6 +226,22 @@ func ReadTopologyInstanceBufferable(tabletAlias *topodatapb.TabletAlias, latency
 	{
 		// We begin with a few operations we can run concurrently, and which do not depend on anything
 		instance.ServerID = uint(fs.ServerId)
+		if len(fs.ShardPeerHealth) > 0 {
+			// Ingestion is intentionally not gated on --emergency-reparent-on-primary-tablet-unreachable: it
+			// only runs when a tablet opts in via --track-shard-tablet-health (otherwise ShardPeerHealth
+			// is empty), and the recorded data also feeds the read-only /api/shard-tablet-health-quorum endpoint, so
+			// operators can inspect the live quorum view before enabling quorum ERS. The flag gates only
+			// where the data is acted upon (the matcher and the InvalidPrimary upgrade), not where it is
+			// stored.
+			//
+			// Use fs.TabletType (the tablet's current self-reported type from
+			// tm.Tablet().Type), not tablet.Type from VTOrc's topo snapshot,
+			// which can lag during promotions/demotions. EvaluatePrimaryQuorum
+			// only counts REPLICA/RDONLY observers, so a stale topo type in the
+			// exact failover window this feature guards could miscount a current
+			// PRIMARY as an observer or drop a newly demoted replica.
+			RecordShardPeerHealth(tabletAlias, fs.TabletType, tablet.Keyspace, tablet.Shard, fs.ShardPeerHealth, time.Now())
+		}
 		instance.TabletType = fs.TabletType
 		instance.Version = fs.Version
 		instance.ReadOnly = fs.ReadOnly
@@ -351,7 +366,6 @@ func ReadTopologyInstanceBufferable(tabletAlias *topodatapb.TabletAlias, latency
 	}
 
 Cleanup:
-	waitGroup.Wait()
 	close(errorChan)
 	err = func() error {
 		if err != nil {
@@ -1144,6 +1158,10 @@ func ForgetInstance(tabletAlias *topodatapb.TabletAlias) error {
 
 	// Remove this tablet from errant GTID count metric.
 	currentErrantGTIDCount.Reset(tabletAliasString)
+
+	// Drop any shard-peer health reports from this tablet so a deleted observer
+	// stops counting toward the quorum denominator immediately.
+	RemoveShardPeerObserver(tabletAliasString)
 
 	// Delete from the 'vitess_tablet' table.
 	_, err := db.ExecVTOrc(`DELETE FROM

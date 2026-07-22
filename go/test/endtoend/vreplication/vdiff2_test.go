@@ -204,7 +204,7 @@ func TestVDiff2(t *testing.T) {
 	require.NoError(t, err, "failed to get VDiffRowsComparedTotal stat from %s-%d tablet: %v", statsTablet.Cell, statsTablet.TabletUID, err)
 	count, err := strconv.Atoi(countStr)
 	require.NoError(t, err, "failed to convert VDiffRowsComparedTotal stat string to int: %v", err)
-	require.Greater(t, count, 0, "expected VDiffRowsComparedTotal stat to be greater than 0 but got %d", count)
+	require.Positive(t, count, "expected VDiffRowsComparedTotal stat to be greater than 0 but got %d", count)
 
 	// The VDiffs should all be cleaned up so the VDiffRowsCompared value, which
 	// is produced from controller info, should be empty. Controller cleanup on
@@ -283,7 +283,7 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 		stat, err := getDebugVar(t, tablet.Port, []string{"VDiffRestartedTableDiffsCount"})
 		require.NoError(t, err, "failed to get VDiffRestartedTableDiffsCount stat: %v", err)
 		customerRestarts := gjson.Parse(stat).Get("customer").Int()
-		require.Greater(t, customerRestarts, int64(0), "expected VDiffRestartedTableDiffsCount stat to be greater than 0 for the customer table, got %d", customerRestarts)
+		require.Positive(t, customerRestarts, "expected VDiffRestartedTableDiffsCount stat to be greater than 0 for the customer table, got %d", customerRestarts)
 		leadRestarts := gjson.Parse(stat).Get("lead").Int()
 		require.Equal(t, int64(0), leadRestarts, "expected VDiffRestartedTableDiffsCount stat to be 0 for the Lead table, got %d", leadRestarts)
 
@@ -371,7 +371,7 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 	require.NoError(t, err)
 	logcnt, err := strconv.Atoi(strings.TrimSpace(string(out)))
 	require.NoError(t, err)
-	require.Greater(t, logcnt, 0)
+	require.Positive(t, logcnt)
 }
 
 func testCLIErrors(t *testing.T, ksWorkflow, cells string) {
@@ -451,13 +451,13 @@ func testCLIFlagHandling(t *testing.T, targetKs, workflowName string, cell *Cell
 		query := sqlparser.BuildParsedQuery("select options from %s.vdiff where vdiff_uuid = %s",
 			sidecarDBIdentifier, encodeString(vduuid.String())).Query
 		tablets := vc.getVttabletsInKeyspace(t, cell, targetKs, "PRIMARY")
-		require.Greater(t, len(tablets), 0, "no primary tablets found in keyspace %s", targetKs)
+		require.NotEmpty(t, tablets, "no primary tablets found in keyspace %s", targetKs)
 		tablet := maps.Values(tablets)[0]
 		qres, err := tablet.QueryTablet(query, targetKs, false)
 		require.NoError(t, err, "query %q failed: %v", query, err)
 		require.NotNil(t, qres, "query %q returned nil result", query) // Should never happen
-		require.Equal(t, 1, len(qres.Rows), "query %q returned %d rows, expected 1", query, len(qres.Rows))
-		require.Equal(t, 1, len(qres.Rows[0]), "query %q returned %d columns, expected 1", query, len(qres.Rows[0]))
+		require.Len(t, qres.Rows, 1, "query %q returned %d rows, expected 1", query, len(qres.Rows))
+		require.Len(t, qres.Rows[0], 1, "query %q returned %d columns, expected 1", query, len(qres.Rows[0]))
 		storedOptions := &tabletmanagerdatapb.VDiffOptions{}
 		bytes, err := qres.Rows[0][0].ToBytes()
 		require.NoError(t, err, "failed to convert result %+v to bytes: %v", qres.Rows[0], err)
@@ -534,7 +534,7 @@ func testNoOrphanedData(t *testing.T, keyspace, workflow string, shards []string
 		for _, shard := range shards {
 			res, err := vc.getPrimaryTablet(t, keyspace, shard).QueryTablet(query, keyspace, false)
 			require.NoError(t, err)
-			require.Equal(t, 0, len(res.Rows))
+			require.Empty(t, res.Rows)
 		}
 	})
 }
@@ -605,7 +605,7 @@ func testStop(t *testing.T, ksWorkflow, cells string) {
 		// to diff). There's no way to avoid this potential race so don't consider that a failure.
 		require.True(t, (jsonOutput.State == "stopped" || jsonOutput.State == "completed"), "expected vdiff state to be stopped or completed but it was %s", jsonOutput.State)
 		// Confirm that the context cancelled error was also cleared.
-		require.False(t, strings.Contains(output, `"Errors":`))
+		require.NotContains(t, output, `"Errors":`)
 	})
 }
 
@@ -676,7 +676,7 @@ func testCLICreateWait(t *testing.T, ksWorkflow string, cells string) {
 		defer tmr.Stop()
 		select {
 		case completed := <-chCompleted:
-			require.Equal(t, true, completed)
+			require.True(t, completed)
 		case <-tmr.C:
 			require.Fail(t, "timeout waiting for vdiff to complete")
 		}

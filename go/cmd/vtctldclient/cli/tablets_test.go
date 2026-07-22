@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestTabletTagsFromPosArgs(t *testing.T) {
@@ -27,19 +28,19 @@ func TestTabletTagsFromPosArgs(t *testing.T) {
 
 	{
 		tags, err := TabletTagsFromPosArgs([]string{"fail"})
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Nil(t, tags)
 	}
 	{
 		tags, err := TabletTagsFromPosArgs([]string{"hello=world"})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, map[string]string{
 			"hello": "world",
 		}, tags)
 	}
 	{
 		tags, err := TabletTagsFromPosArgs([]string{"hello=world", "test=123"})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, map[string]string{
 			"hello": "world",
 			"test":  "123",

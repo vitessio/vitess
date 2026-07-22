@@ -29,6 +29,8 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -112,10 +114,55 @@ func TestCreateMySQL(t *testing.T) {
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &mysqlParams)
 	require.NoError(t, err)
-	AssertMatches(t, conn, "show databases;", `[[VARCHAR("information_schema")] [VARCHAR("ks")] [VARCHAR("mysql")] [VARCHAR("performance_schema")] [VARCHAR("sys")]]`)
-	AssertMatches(t, conn, "show tables;", `[[VARCHAR("t1")]]`)
+	// Compare row values rather than the rendered field types: MySQL reports
+	// the SHOW columns as binary strings when lower_case_table_names=0 (the
+	// Linux default) and as non-binary otherwise, so the type is not portable.
+	assert.Equal(t, []string{"information_schema", "ks", "mysql", "performance_schema", "sys"}, rowStrings(t, Exec(t, conn, "show databases")))
+	assert.Equal(t, []string{"t1"}, rowStrings(t, Exec(t, conn, "show tables")))
 	Exec(t, conn, "insert into t1(id1, id2, id3) values (1, 1, 1), (2, 2, 2), (3, 3, 3)")
 	AssertMatches(t, conn, "select * from t1;", `[[INT64(1) INT64(1) INT64(1)] [INT64(2) INT64(2) INT64(2)] [INT64(3) INT64(3) INT64(3)]]`)
+}
+
+// rowStrings flattens a single-column result into its string values.
+func rowStrings(t *testing.T, qr *sqltypes.Result) []string {
+	t.Helper()
+	rows := make([]string, 0, len(qr.Rows))
+	for _, row := range qr.Rows {
+		require.Len(t, row, 1)
+		rows = append(rows, row[0].ToString())
+	}
+	return rows
+}
+
+// newReplicationSource starts a second mysqld that the shared test mysqld can
+// replicate from, and returns its port. Replicating from the shared mysqld
+// itself can never reach a running state: the IO thread stops because source
+// and replica would have equal server ids.
+//
+// The source's binlog and GTID history are cleared so that an auto-positioned
+// replica does not replay the source's own initialization (database and user
+// creation), which would conflict with the replica's local state.
+func newReplicationSource(t *testing.T) int32 {
+	t.Helper()
+
+	port := clusterInstance.GetAndReservePort()
+	_, sourceMysqld, _, closer, err := NewMySQLWithMysqld(port, clusterInstance.Hostname, "sourceks")
+	require.NoError(t, err)
+	t.Cleanup(closer)
+
+	// Detach the shared mysqld and restore a clean replication state for the
+	// tests that follow. Registered after closer so that it runs before the
+	// source is torn down. t.Context() is already canceled by the time cleanup
+	// runs, so use a fresh context.
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		assert.NoError(t, mysqld.ResetReplication(ctx))
+	})
+
+	err = sourceMysqld.ResetReplication(t.Context())
+	require.NoError(t, err)
+	return int32(port)
 }
 
 func TestSetSuperReadOnlyMySQL(t *testing.T) {
@@ -124,14 +171,14 @@ func TestSetSuperReadOnlyMySQL(t *testing.T) {
 	assert.False(t, isSuperReadOnly, "super_read_only should be set to False")
 	retFunc1, err := mysqld.SetSuperReadOnly(t.Context(), true)
 	assert.NotNil(t, retFunc1, "SetSuperReadOnly is supposed to return a defer function")
-	assert.NoError(t, err, "SetSuperReadOnly should not have failed")
+	require.NoError(t, err, "SetSuperReadOnly should not have failed")
 
 	isSuperReadOnly, _ = mysqld.IsSuperReadOnly(t.Context())
 	assert.True(t, isSuperReadOnly, "super_read_only should be set to True")
 	// if value is already true then retFunc2 will be nil
 	retFunc2, err := mysqld.SetSuperReadOnly(t.Context(), true)
 	assert.Nil(t, retFunc2, "SetSuperReadOnly is supposed to return a nil function")
-	assert.NoError(t, err, "SetSuperReadOnly should not have failed")
+	require.NoError(t, err, "SetSuperReadOnly should not have failed")
 
 	retFunc1()
 	isSuperReadOnly, _ = mysqld.IsSuperReadOnly(t.Context())
@@ -143,29 +190,104 @@ func TestSetSuperReadOnlyMySQL(t *testing.T) {
 	assert.False(t, isSuperReadOnly, "super_read_only should be set to False")
 	retFunc1, err = mysqld.SetSuperReadOnly(t.Context(), false)
 	assert.Nil(t, retFunc1, "SetSuperReadOnly is supposed to return a nil function")
-	assert.NoError(t, err, "SetSuperReadOnly should not have failed")
+	require.NoError(t, err, "SetSuperReadOnly should not have failed")
 
 	_, err = mysqld.SetSuperReadOnly(t.Context(), true)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	isSuperReadOnly, _ = mysqld.IsSuperReadOnly(t.Context())
 	assert.True(t, isSuperReadOnly, "super_read_only should be set to True")
 	retFunc1, err = mysqld.SetSuperReadOnly(t.Context(), false)
 	assert.NotNil(t, retFunc1, "SetSuperReadOnly is supposed to return a defer function")
-	assert.NoError(t, err, "SetSuperReadOnly should not have failed")
+	require.NoError(t, err, "SetSuperReadOnly should not have failed")
 
 	isSuperReadOnly, _ = mysqld.IsSuperReadOnly(t.Context())
 	assert.False(t, isSuperReadOnly, "super_read_only should be set to False")
 	// if value is already false then retFunc2 will be nil
 	retFunc2, err = mysqld.SetSuperReadOnly(t.Context(), false)
 	assert.Nil(t, retFunc2, "SetSuperReadOnly is supposed to return a nil function")
-	assert.NoError(t, err, "SetSuperReadOnly should not have failed")
+	require.NoError(t, err, "SetSuperReadOnly should not have failed")
 
 	retFunc1()
 	isSuperReadOnly, _ = mysqld.IsSuperReadOnly(t.Context())
 	assert.True(t, isSuperReadOnly, "super_read_only should be set to True")
 	isReadOnly, _ = mysqld.IsReadOnly(t.Context())
 	assert.True(t, isReadOnly, "read_only should be set to True")
+}
+
+// TestSetSuperReadOnlyLockWaitTimeoutMySQL checks that enabling super_read_only
+// with a lock_wait_timeout of 1 second fails fast when another session holds a
+// lock that blocks it, instead of waiting for the lock to be released.
+func TestSetSuperReadOnlyLockWaitTimeoutMySQL(t *testing.T) {
+	require.NotNil(t, mysqld)
+
+	// Restore the original read-only state even if an assertion fails mid-test,
+	// so tests that run after this one see the state they expect. t.Context()
+	// is already canceled by the time cleanup runs, so use a fresh context.
+	wasReadOnly, err := mysqld.IsReadOnly(t.Context())
+	require.NoError(t, err)
+	wasSuperReadOnly, err := mysqld.IsSuperReadOnly(t.Context())
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if wasSuperReadOnly {
+			_, err := mysqld.SetSuperReadOnly(ctx, true)
+			assert.NoError(t, err)
+			return
+		}
+		_, err := mysqld.SetSuperReadOnly(ctx, false)
+		assert.NoError(t, err)
+		assert.NoError(t, mysqld.SetReadOnly(ctx, wasReadOnly))
+	})
+
+	// Make sure the server is writable so the locking connection below can lock.
+	err = mysqld.SetReadOnly(t.Context(), false)
+	require.NoError(t, err)
+
+	// Hold an explicit table lock on a separate connection: enabling
+	// super_read_only blocks until explicit table locks are released.
+	conn, err := mysql.Connect(t.Context(), &mysqlParams)
+	require.NoError(t, err)
+	defer conn.Close()
+	Exec(t, conn, "lock tables t1 write")
+
+	// Bound the call so a regression fails the test instead of hanging it.
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	start := time.Now()
+	_, err = mysqld.SetSuperReadOnly(ctx, true, mysqlctl.WithLockWaitTimeout(time.Second))
+	elapsed := time.Since(start)
+
+	var sqlErr *sqlerror.SQLError
+	require.ErrorAs(t, err, &sqlErr, "enabling super_read_only while blocked should fail, took %v", elapsed)
+	assert.Equal(t, sqlerror.ERLockWaitTimeout, sqlErr.Number(), "expected a lock wait timeout error, got: %v", err)
+
+	isSuperReadOnly, err := mysqld.IsSuperReadOnly(t.Context())
+	require.NoError(t, err)
+	assert.False(t, isSuperReadOnly, "super_read_only should still be set to False")
+
+	isReadOnly, err := mysqld.IsReadOnly(t.Context())
+	require.NoError(t, err)
+	assert.False(t, isReadOnly, "the failed statement should not leave read_only enabled")
+
+	// Once the lock is released, the same call succeeds.
+	Exec(t, conn, "unlock tables")
+	retFunc, err := mysqld.SetSuperReadOnly(t.Context(), true, mysqlctl.WithLockWaitTimeout(time.Second))
+	require.NoError(t, err)
+	require.NotNil(t, retFunc, "SetSuperReadOnly is supposed to return a defer function")
+
+	isSuperReadOnly, err = mysqld.IsSuperReadOnly(t.Context())
+	require.NoError(t, err)
+	assert.True(t, isSuperReadOnly, "super_read_only should be set to True")
+
+	// The reset function restores the previous value. The t.Cleanup above is
+	// what guarantees the final state for the tests that follow.
+	err = retFunc()
+	require.NoError(t, err)
+	isSuperReadOnly, err = mysqld.IsSuperReadOnly(t.Context())
+	require.NoError(t, err)
+	assert.False(t, isSuperReadOnly, "the reset function should have restored super_read_only to False")
 }
 
 func TestGetMysqlPort(t *testing.T) {
@@ -186,11 +308,11 @@ func TestGetServerID(t *testing.T) {
 	require.NotNil(t, mysqld)
 
 	sid, err := mysqld.GetServerID(t.Context())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, mycnf.ServerID, sid)
 
 	suuid, err := mysqld.GetServerUUID(t.Context())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotEmpty(t, suuid)
 }
 
@@ -202,7 +324,7 @@ func TestReplicationStatus(t *testing.T) {
 
 	// Initially we should expect an error for no replication status
 	_, err := mysqld.ReplicationStatus(t.Context())
-	assert.ErrorContains(t, err, "no replication status")
+	require.ErrorContains(t, err, "no replication status")
 
 	conn, err := mysql.Connect(ctx, &mysqlParams)
 	require.NoError(t, err)
@@ -216,7 +338,7 @@ func TestReplicationStatus(t *testing.T) {
 	require.NotNil(t, res)
 
 	r, err := mysqld.ReplicationStatus(ctx)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, port, r.SourcePort)
 	assert.Equal(t, host, r.SourceHost)
 }
@@ -225,15 +347,15 @@ func TestPrimaryStatus(t *testing.T) {
 	require.NotNil(t, mysqld)
 
 	res, err := mysqld.PrimaryStatus(t.Context())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	r, err := mysqld.ReplicationStatus(t.Context())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	assert.True(t, res.Position.Equal(r.Position), "primary replication status should be same as replication status here")
 
 	suuid, err := mysqld.GetServerUUID(t.Context())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotEmpty(t, suuid)
 
 	// The server UUID read from primary status and GetServerUUID should match
@@ -244,7 +366,7 @@ func TestReplicationConfiguration(t *testing.T) {
 	require.NotNil(t, mysqld)
 
 	replConfig, err := mysqld.ReplicationConfiguration(t.Context())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	require.NotNil(t, replConfig)
 	// For a properly configured mysql, the heartbeat interval is half of the replication net timeout.
@@ -256,11 +378,11 @@ func TestGTID(t *testing.T) {
 
 	res, err := mysqld.GetGTIDPurged(t.Context())
 	assert.Empty(t, res.String())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	primaryPosition, err := mysqld.PrimaryPosition(t.Context())
 	assert.NotNil(t, primaryPosition)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Now we set gtid_purged for testing
 	conn, err := mysql.Connect(t.Context(), &mysqlParams)
@@ -271,11 +393,11 @@ func TestGTID(t *testing.T) {
 	require.NotNil(t, r)
 
 	res, err = mysqld.GetGTIDPurged(t.Context())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, gtid, res.String())
 
 	primaryPosition, err = mysqld.PrimaryPosition(t.Context())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Contains(t, primaryPosition.String(), gtid)
 }
 
@@ -287,11 +409,11 @@ func TestSetReplicationPosition(t *testing.T) {
 	pos.GTIDSet = pos.GTIDSet.AddGTID(replication.Mysql56GTID{Server: sid, Sequence: 1})
 
 	err := mysqld.SetReplicationPosition(t.Context(), pos)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	want := "00010203-0405-0607-0809-0a0b0c0d0e0f:1"
 	res, err := mysqld.GetGTIDPurged(t.Context())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Contains(t, res.String(), want)
 }
 
@@ -306,39 +428,39 @@ func TestSetAndResetReplication(t *testing.T) {
 
 	heartbeatInterval := 5.4
 	err = mysqld.SetReplicationSource(t.Context(), host, port, heartbeatInterval, true, true)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	r, err := mysqld.ReplicationStatus(t.Context())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, port, r.SourcePort)
 	assert.Equal(t, host, r.SourceHost)
 
 	replConfig, err := mysqld.ReplicationConfiguration(t.Context())
 	require.NoError(t, err)
-	assert.EqualValues(t, heartbeatInterval, replConfig.HeartbeatInterval)
+	assert.Equal(t, heartbeatInterval, replConfig.HeartbeatInterval)
 
 	err = mysqld.ResetReplication(t.Context())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	r, err = mysqld.ReplicationStatus(t.Context())
-	assert.ErrorContains(t, err, "no replication status")
-	assert.Equal(t, "", r.SourceHost)
+	require.ErrorContains(t, err, "no replication status")
+	assert.Empty(t, r.SourceHost)
 	assert.Equal(t, int32(0), r.SourcePort)
 
 	err = mysqld.SetReplicationSource(t.Context(), host, port, 0, true, true)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	r, err = mysqld.ReplicationStatus(t.Context())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, port, r.SourcePort)
 	assert.Equal(t, host, r.SourceHost)
 
 	err = mysqld.ResetReplication(t.Context())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	r, err = mysqld.ReplicationStatus(t.Context())
-	assert.ErrorContains(t, err, "no replication status")
-	assert.Equal(t, "", r.SourceHost)
+	require.ErrorContains(t, err, "no replication status")
+	assert.Empty(t, r.SourceHost)
 	assert.Equal(t, int32(0), r.SourcePort)
 }
 
@@ -347,7 +469,7 @@ func TestGetBinlogInformation(t *testing.T) {
 
 	// Default values
 	binlogFormat, logBin, logReplicaUpdates, binlogRowImage, err := mysqld.GetBinlogInformation(t.Context())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "ROW", binlogFormat)
 	assert.True(t, logBin)
 	assert.True(t, logReplicaUpdates)
@@ -363,7 +485,7 @@ func TestGetBinlogInformation(t *testing.T) {
 	require.NotNil(t, res)
 
 	binlogFormat, logBin, logReplicaUpdates, binlogRowImage, err = mysqld.GetBinlogInformation(t.Context())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "STATEMENT", binlogFormat)
 	assert.True(t, logBin)
 	assert.True(t, logReplicaUpdates)
@@ -383,7 +505,7 @@ func TestGetGTIDMode(t *testing.T) {
 	// Default value
 	ctx := t.Context()
 	res, err := mysqld.GetGTIDMode(ctx)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "ON", res)
 
 	conn, err := mysql.Connect(t.Context(), &mysqlParams)
@@ -394,7 +516,7 @@ func TestGetGTIDMode(t *testing.T) {
 	require.NotNil(t, r)
 
 	res, err = mysqld.GetGTIDMode(ctx)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "ON_PERMISSIVE", res)
 
 	// Back to default
@@ -406,14 +528,14 @@ func TestBinaryLogs(t *testing.T) {
 	require.NotNil(t, mysqld)
 
 	res, err := mysqld.GetBinaryLogs(t.Context())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	oldNumLogs := len(res)
 
 	err = mysqld.FlushBinaryLogs(t.Context())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	res, err = mysqld.GetBinaryLogs(t.Context())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	newNumLogs := len(res)
 	assert.Equal(t, 1, newNumLogs-oldNumLogs, "binary logs should have been flushed once")
 }
@@ -427,7 +549,7 @@ func TestGetPreviousGTIDs(t *testing.T) {
 
 	ctx := t.Context()
 	r, err := mysqld.GetPreviousGTIDs(ctx, res[0])
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Empty(t, r)
 
 	_, err = mysqld.GetPreviousGTIDs(ctx, "invalid_binlog_file")
@@ -438,14 +560,14 @@ func TestSemiSyncEnabled(t *testing.T) {
 	require.NotNil(t, mysqld)
 
 	err := mysqld.SetSemiSyncEnabled(t.Context(), true, false)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	p, r := mysqld.SemiSyncEnabled(t.Context())
 	assert.True(t, p)
 	assert.False(t, r)
 
 	err = mysqld.SetSemiSyncEnabled(t.Context(), false, true)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	p, r = mysqld.SemiSyncEnabled(t.Context())
 	assert.False(t, p)
@@ -455,46 +577,53 @@ func TestSemiSyncEnabled(t *testing.T) {
 func TestWaitForReplicationStart(t *testing.T) {
 	require.NotNil(t, mysqld)
 
-	err := mysqlctl.WaitForReplicationStart(t.Context(), mysqld, 1)
-	assert.ErrorContains(t, err, "no replication status")
-
-	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-	defer cancel()
-	port, err := mysqld.GetMysqlPort(ctx)
+	// Start from a clean state so the assertions below do not depend on what
+	// previous tests left behind.
+	err := mysqld.ResetReplication(t.Context())
 	require.NoError(t, err)
-	host := "localhost"
-
-	err = mysqld.SetReplicationSource(t.Context(), host, port, 0, true, true)
-	assert.NoError(t, err)
 
 	err = mysqlctl.WaitForReplicationStart(t.Context(), mysqld, 1)
-	assert.NoError(t, err)
+	require.ErrorContains(t, err, "no replication status")
 
-	err = mysqld.ResetReplication(t.Context())
+	sourcePort := newReplicationSource(t)
+
+	err = mysqld.SetReplicationSource(t.Context(), "localhost", sourcePort, 0, true, true)
+	require.NoError(t, err)
+
+	err = mysqlctl.WaitForReplicationStart(t.Context(), mysqld, 30)
 	require.NoError(t, err)
 }
 
 func TestStartReplication(t *testing.T) {
 	require.NotNil(t, mysqld)
 
-	err := mysqld.StartReplication(t.Context(), map[string]string{})
-	assert.ErrorContains(t, err, "The server is not configured as replica")
-
-	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-	defer cancel()
-	port, err := mysqld.GetMysqlPort(ctx)
+	// Start from a clean state so the assertions below do not depend on what
+	// previous tests left behind.
+	err := mysqld.ResetReplication(t.Context())
 	require.NoError(t, err)
-	host := "localhost"
-
-	// Set startReplicationAfter to false as we want to test StartReplication here
-	err = mysqld.SetReplicationSource(t.Context(), host, port, 0, true, false)
-	assert.NoError(t, err)
 
 	err = mysqld.StartReplication(t.Context(), map[string]string{})
-	assert.NoError(t, err)
+	require.ErrorContains(t, err, "The server is not configured as replica")
 
-	err = mysqld.ResetReplication(t.Context())
+	sourcePort := newReplicationSource(t)
+
+	// Set startReplicationAfter to false as we want to test StartReplication here
+	err = mysqld.SetReplicationSource(t.Context(), "localhost", sourcePort, 0, true, false)
 	require.NoError(t, err)
+
+	err = mysqld.StartReplication(t.Context(), map[string]string{})
+	require.NoError(t, err)
+
+	// Replication actually reaches a running state, not just a successful
+	// START REPLICA.
+	err = mysqlctl.WaitForReplicationStart(t.Context(), mysqld, 30)
+	require.NoError(t, err)
+
+	// WaitForReplicationStart also returns nil when the threads are stopped
+	// without a recorded error, so check the running state directly.
+	status, err := mysqld.ReplicationStatus(t.Context())
+	require.NoError(t, err)
+	assert.True(t, status.Running(), "replication should be running, got IO state %v and SQL state %v", status.IOState, status.SQLState)
 }
 
 func TestStopReplication(t *testing.T) {
@@ -507,19 +636,19 @@ func TestStopReplication(t *testing.T) {
 	host := "localhost"
 
 	err = mysqld.SetReplicationSource(t.Context(), host, port, 0, true, true)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	r, err := mysqld.ReplicationStatus(t.Context())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, host, r.SourceHost)
 	assert.Equal(t, port, r.SourcePort)
 	assert.Equal(t, replication.ReplicationStateRunning, r.SQLState)
 
 	err = mysqld.StopReplication(t.Context(), map[string]string{})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	r, err = mysqld.ReplicationStatus(t.Context())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, replication.ReplicationStateStopped, r.SQLState)
 }
 
@@ -533,18 +662,18 @@ func TestStopSQLThread(t *testing.T) {
 	host := "localhost"
 
 	err = mysqld.SetReplicationSource(t.Context(), host, port, 0, true, true)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	r, err := mysqld.ReplicationStatus(t.Context())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, host, r.SourceHost)
 	assert.Equal(t, port, r.SourcePort)
 	assert.Equal(t, replication.ReplicationStateRunning, r.SQLState)
 
 	err = mysqld.StopSQLThread(t.Context())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	r, err = mysqld.ReplicationStatus(t.Context())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, replication.ReplicationStateStopped, r.SQLState)
 }

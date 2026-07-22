@@ -153,7 +153,7 @@ func TestScatterConnStreamExecuteMulti(t *testing.T) {
 // type, and error code.
 func verifyScatterConnError(t *testing.T, err error, wantErr string, wantCode vtrpcpb.Code) {
 	t.Helper()
-	assert.EqualError(t, err, wantErr)
+	require.EqualError(t, err, wantErr)
 	assert.Equal(t, wantCode, vterrors.Code(err))
 }
 
@@ -177,7 +177,7 @@ func testScatterConnGeneric(t *testing.T, name string, f func(ctx context.Contex
 	_, err = f(ctx, sc, []string{"0"})
 	want := fmt.Sprintf("target: %v.0.replica: INVALID_ARGUMENT error", name)
 	// Verify server error string.
-	assert.EqualErrorf(t, err, want, "want %s, got %v", want, err)
+	require.EqualErrorf(t, err, want, "want %s, got %v", want, err)
 	// Ensure that we tried only once.
 	execCount := sbc.ExecCount.Load()
 	assert.Equalf(t, int64(1), execCount, "want 1, got %v", execCount)
@@ -331,7 +331,7 @@ func TestLegaceHealthCheckFailsOnReservedConnections(t *testing.T) {
 
 func executeOnShards(t *testing.T, ctx context.Context, res *srvtopo.Resolver, keyspace string, sc *ScatterConn, session *econtext.SafeSession, destinations []key.ShardDestination) {
 	t.Helper()
-	require.Empty(t, executeOnShardsReturnsErr(t, ctx, res, keyspace, sc, session, destinations))
+	require.NoError(t, executeOnShardsReturnsErr(t, ctx, res, keyspace, sc, session, destinations))
 }
 
 func executeOnShardsReturnsErr(t *testing.T, ctx context.Context, res *srvtopo.Resolver, keyspace string, sc *ScatterConn, session *econtext.SafeSession, destinations []key.ShardDestination) error {
@@ -571,7 +571,7 @@ func TestReservePrequeries(t *testing.T) {
 	destinations := []key.ShardDestination{key.DestinationShard("0")}
 
 	executeOnShards(t, ctx, res, keyspace, sc, session, destinations)
-	assert.Equal(t, 1+1, len(sbc0.StringQueries()))
+	assert.Len(t, sbc0.StringQueries(), 1+1)
 }
 
 func newTestScatterConn(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, cell string) *ScatterConn {

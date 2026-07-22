@@ -199,6 +199,7 @@ func init() {
 	servenv.RegisterGRPCServerFlags()
 	servenv.RegisterGRPCServerAuthFlags()
 	servenv.RegisterServiceMapFlag()
+	servenv.EnableGRPCIngressStats()
 
 	servenv.MoveFlagsToCobraCommand(Main)
 

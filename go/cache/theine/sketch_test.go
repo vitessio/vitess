@@ -28,13 +28,13 @@ import (
 func TestEnsureCapacity(t *testing.T) {
 	sketch := NewCountMinSketch()
 	sketch.EnsureCapacity(1)
-	require.Equal(t, 16, len(sketch.Table))
+	require.Len(t, sketch.Table, 16)
 }
 
 func TestSketch(t *testing.T) {
 	sketch := NewCountMinSketch()
 	sketch.EnsureCapacity(100)
-	require.Equal(t, 128, len(sketch.Table))
+	require.Len(t, sketch.Table, 128)
 	require.Equal(t, uint(1000), sketch.SampleSize)
 	// override sampleSize so test won't reset
 	sketch.SampleSize = 5120
@@ -59,11 +59,11 @@ func TestSketch(t *testing.T) {
 		if es2 > es1 {
 			failed++
 		}
-		require.True(t, es1 >= 5)
-		require.True(t, es2 >= 3)
+		require.GreaterOrEqual(t, es1, uint(5))
+		require.GreaterOrEqual(t, es2, uint(3))
 	}
-	require.True(t, float32(failed)/4000 < 0.1)
-	require.True(t, sketch.Additions > 3500)
+	require.Less(t, float32(failed)/4000, float32(0.1))
+	require.Greater(t, sketch.Additions, uint(3500))
 	a := sketch.Additions
 	sketch.reset()
 	require.Equal(t, a>>1, sketch.Additions)
