@@ -246,8 +246,14 @@ func (vttablet *VttabletProcess) GetConsolidations() (map[string]int, error) {
 		if splits[0] == "Length" {
 			continue
 		}
-		countS := splits[0]
-		countI, err := strconv.Atoi(countS)
+		// Lines are either "<count>: <query>" or "<label> <count>: <query>"
+		// (the label tags streaming vs non-streaming), so the count is the last
+		// whitespace-separated token before the colon.
+		fields := strings.Fields(splits[0])
+		if len(fields) == 0 {
+			return nil, fmt.Errorf("failed to parse consolidations line: %q", line)
+		}
+		countI, err := strconv.Atoi(fields[len(fields)-1])
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse consolidations count: %v", err)
 		}
