@@ -258,6 +258,10 @@ func JSONArray(yield Query) {
 			yield(fmt.Sprintf("JSON_ARRAY(%s, %s)", a, b), nil, false)
 		}
 	}
+	for _, b := range inputJSONBinaryValues {
+		yield(fmt.Sprintf("JSON_ARRAY(%s)", b), nil, false)
+		yield(fmt.Sprintf("JSON_ARRAY('a', %s)", b), nil, false)
+	}
 	yield("JSON_ARRAY()", nil, false)
 }
 
@@ -266,6 +270,9 @@ func JSONObject(yield Query) {
 		for _, b := range inputJSONPrimitives {
 			yield(fmt.Sprintf("JSON_OBJECT(%s, %s)", a, b), nil, false)
 		}
+	}
+	for _, b := range inputJSONBinaryValues {
+		yield(fmt.Sprintf("JSON_OBJECT('k', %s)", b), nil, false)
 	}
 	yield("JSON_OBJECT()", nil, false)
 }
