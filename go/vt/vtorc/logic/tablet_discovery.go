@@ -120,7 +120,7 @@ func getEmergencyReparentShardDisabledStats() map[string]int64 {
 // RegisterFlags registers the flags required by VTOrc
 func RegisterFlags(fs *pflag.FlagSet) {
 	utils.SetFlagStringSliceVar(fs, &clustersToWatch, "clusters-to-watch", clustersToWatch, "Comma-separated list of keyspaces or keyspace/keyranges that this instance will monitor and repair. Defaults to all clusters in the topology. Example: \"ks1,ks2/-80\"")
-	utils.SetFlagStringSliceVar(fs, &cellsNoRecovery, "cells-no-recovery", cellsNoRecovery, "Comma-separated list of cells in which VTOrc skips recovery actions when the analyzed tablet is in one of these cells. ClusterHasNoPrimary (no primary exists in the shard) is excluded from this gate because that analysis is shard-wide and its analyzed cell is non-deterministic. Detection still happens and discovery still spans all cells. Cells are validated against the topology at startup. Example: \"cell1,cell2\"")
+	utils.SetFlagStringSliceVar(fs, &cellsNoRecovery, "cells-no-recovery", cellsNoRecovery, "Comma-separated list of cells in which VTOrc skips recovery actions when the analyzed tablet is in one of these cells. Shard-wide analyses (ClusterHasNoPrimary) are excluded from this gate because they have no single analyzed tablet and their analyzed cell is non-deterministic; use --allow-recovery=false for a fully detection-only VTOrc that must also suppress shard-wide reparents. Detection still happens and discovery still spans all cells. Cells are validated against the topology at startup. Example: \"cell1,cell2\"")
 	utils.SetFlagDurationVar(fs, &shutdownWaitTime, "shutdown-wait-time", shutdownWaitTime, "Maximum time to wait for VTOrc to release all the locks that it is holding before shutting down on SIGTERM")
 }
 
