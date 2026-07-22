@@ -524,3 +524,29 @@ func TestParserParse(t *testing.T) {
 		require.Equalf(t, want, v.String(), "unexpected string representation for object")
 	})
 }
+
+// TestMarshalToBlob verifies that marshaling a blob or bit value appends to
+// the caller's buffer instead of discarding previously accumulated output.
+func TestMarshalToBlob(t *testing.T) {
+	// base64("foo") == "Zm9v".
+	const encoded = `"base64:type15:Zm9v"`
+
+	t.Run("bare", func(t *testing.T) {
+		require.Equal(t, encoded, string(NewBlob("foo").MarshalTo(nil)))
+		require.Equal(t, encoded, string(NewBit("foo").MarshalTo(nil)))
+	})
+
+	t.Run("inside-array", func(t *testing.T) {
+		v := NewArray([]*Value{NewString("a"), NewBlob("foo")})
+		require.Equal(t, `["a", `+encoded+`]`, string(v.MarshalTo(nil)))
+
+		v = NewArray([]*Value{NewString("a"), NewBit("foo")})
+		require.Equal(t, `["a", `+encoded+`]`, string(v.MarshalTo(nil)))
+	})
+
+	t.Run("inside-object", func(t *testing.T) {
+		var obj Object
+		obj.Add("k", NewBlob("foo"))
+		require.Equal(t, `{"k": `+encoded+`}`, string(NewObject(obj).MarshalTo(nil)))
+	})
+}
