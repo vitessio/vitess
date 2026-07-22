@@ -210,6 +210,16 @@
     "plan": "VT12001: unsupported: WITH expression in UPDATE statement"
   },
   {
+    "comment": "single-table update targeting an internal-shaped CTE",
+    "query": "with _vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_ as (select 1 as id, 'changed' as name) update _vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_ set name = 'new'",
+    "plan": "VT12001: unsupported: WITH expression in UPDATE statement"
+  },
+  {
+    "comment": "single-table delete targeting an internal-shaped CTE",
+    "query": "with _vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_ as (select 1 as id) delete from _vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+    "plan": "VT12001: unsupported: WITH expression in DELETE statement"
+  },
+  {
     "comment": "insert having subquery in row values",
     "query": "insert into user(id, name) values ((select 1 from user where id = 1), 'A')",
     "plan": "expr cannot be translated, not supported: (select 1 from `user` where id = 1)"

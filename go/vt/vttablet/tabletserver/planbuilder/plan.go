@@ -203,6 +203,10 @@ func (plan *Plan) TableNames() (names []string) {
 
 // Build builds a plan based on the schema.
 func Build(env *vtenv.Environment, statement sqlparser.Statement, tables map[string]*schema.Table, dbName string, noRowsLimit bool) (plan *Plan, err error) {
+	if err := rejectInternalTableWrites(statement, tables, env.Parser()); err != nil {
+		return nil, err
+	}
+
 	switch stmt := statement.(type) {
 	case *sqlparser.Union:
 		plan = analyzeUnion(stmt, noRowsLimit)
@@ -266,6 +270,10 @@ func Build(env *vtenv.Environment, statement sqlparser.Statement, tables map[str
 
 // BuildStreaming builds a streaming plan based on the schema.
 func BuildStreaming(statement sqlparser.Statement, tables map[string]*schema.Table) (*Plan, error) {
+	if err := rejectInternalTableWrites(statement, tables, nil); err != nil {
+		return nil, err
+	}
+
 	var plan *Plan
 	var err error
 	switch stmt := statement.(type) {

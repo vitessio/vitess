@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
 )
@@ -89,10 +90,13 @@ func TestSchemaChange(t *testing.T) {
 			return nil
 		})
 	}(ch)
+	conn, err := mysql.Connect(t.Context(), &connParams)
+	require.NoError(t, err)
+	t.Cleanup(conn.Close)
 
 	for _, tc := range tcs {
 		t.Run(tc.tName, func(t *testing.T) {
-			_, err := client.Execute(tc.ddl, nil)
+			_, err := conn.ExecuteFetch(tc.ddl, 0, false)
 			require.NoError(t, err)
 			timeout := time.After(5 * time.Second)
 			for {

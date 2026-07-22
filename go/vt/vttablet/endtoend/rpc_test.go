@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/callerid"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -197,15 +198,20 @@ func TestGetSchemaRPC(t *testing.T) {
 			client.UpdateContext(callerid.NewContext(
 				t.Context(),
 				&vtrpcpb.CallerID{},
-				&querypb.VTGateCallerID{Username: "dev"}))
+				&querypb.VTGateCallerID{Username: "dev"},
+			))
+
+			conn, err := mysql.Connect(t.Context(), &connParams)
+			require.NoError(t, err)
+			t.Cleanup(conn.Close)
 
 			for _, query := range testcase.queries {
-				_, err := client.Execute(query, nil)
+				_, err := conn.ExecuteFetch(query, 0, false)
 				require.NoError(t, err)
 			}
 			defer func() {
 				for _, query := range testcase.deferQueries {
-					_, err := client.Execute(query, nil)
+					_, err := conn.ExecuteFetch(query, 0, false)
 					require.NoError(t, err)
 				}
 			}()
@@ -254,7 +260,8 @@ func TestGetSchemaRPCWithViewsDisabled(t *testing.T) {
 	client.UpdateContext(callerid.NewContext(
 		t.Context(),
 		&vtrpcpb.CallerID{},
-		&querypb.VTGateCallerID{Username: "dev"}))
+		&querypb.VTGateCallerID{Username: "dev"},
+	))
 
 	// Create a view for testing (using vitess_view which is already in ACL)
 	_, err := client.Execute("create view vitess_view as select id from vitess_a", nil)
