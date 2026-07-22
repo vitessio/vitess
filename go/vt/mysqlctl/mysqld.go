@@ -84,6 +84,14 @@ const (
 	mysqldExitPollInterval = 100 * time.Millisecond
 )
 
+// MysqldShutdownGracePeriod bounds the pid/socket file wait in
+// Mysqld.Shutdown after mysqladmin has given up waiting, for callers
+// whose context has no deadline. It also pads the shutdown contexts
+// derived from the shutdown timeout by mysqlctl, mysqlctld, vtbackup,
+// vtcombo and the builtin backup engine, giving that wait a window to
+// observe the exit.
+const MysqldShutdownGracePeriod = 30 * time.Second
+
 var (
 	// DisableActiveReparents is a flag to disable active
 	// reparents for safety reasons. It is used in three places:
@@ -797,8 +805,27 @@ func (mysqld *Mysqld) executeShutdown(ctx context.Context, cnf *Mycnf, waitForMy
 		if err != nil {
 			return err
 		}
-		if _, _, err = execCmd(name, args, env, dir, nil); err != nil {
-			return err
+		if _, output, err := execCmd(name, args, env, dir, nil); err != nil {
+			// mysqladmin exits non-zero when its --shutdown-timeout expires
+			// while mysqld is still shutting down. The SHUTDOWN command has
+			// already been delivered at that point, so a slow-but-clean
+			// shutdown (e.g. innodb_fast_shutdown=0 purging large undo logs)
+			// should not be treated as a failure here; the pid/socket file
+			// wait below decides the outcome instead, running to the
+			// caller's deadline. Callers whose ctx has no deadline get a
+			// bounded grace window instead, so a truly hung mysqld still
+			// fails in finite time rather than waiting forever.
+			//
+			// The error is only suppressed when the wait below will run:
+			// for waitForMysqld=false callers a nil return would claim a
+			// shutdown nothing verified, so they get the error as before.
+			if !waitForMysqld || !mysqladminAbortedWaiting(output) {
+				return err
+			}
+			log.Warn("mysqladmin gave up waiting for mysqld to stop, waiting on pid/socket files instead", slog.Any("error", err))
+			var cancel context.CancelFunc
+			ctx, cancel = boundShutdownWaitContext(ctx)
+			defer cancel()
 		}
 	default:
 		// hook failed, we report error
@@ -825,6 +852,34 @@ func (mysqld *Mysqld) StartAfterExit(ctx context.Context, cnf *Mycnf) error {
 		return err
 	}
 	return mysqld.Start(ctx, cnf)
+}
+
+// boundShutdownWaitContext bounds ctx by MysqldShutdownGracePeriod when it
+// has no deadline, so a truly hung mysqld still fails in finite time after
+// mysqladmin has given up waiting. A caller-supplied deadline is never
+// shortened: the pid/socket file wait runs to it, e.g. to the remainder of
+// the builtin backup engine's --builtinbackup-mysqld-timeout budget.
+func boundShutdownWaitContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	if _, hasDeadline := ctx.Deadline(); hasDeadline {
+		return ctx, func() {}
+	}
+	return context.WithTimeout(ctx, MysqldShutdownGracePeriod)
+}
+
+// mysqladminAbortedWaiting reports whether mysqladmin output shows it
+// delivered the SHUTDOWN command but gave up waiting for mysqld to exit,
+// which happens when a clean shutdown outlives mysqladmin's
+// --shutdown-timeout ("Warning; Aborted waiting on pid file: '...' after
+// N seconds").
+//
+// This deliberately couples to mysqladmin's literal message, emitted by
+// wait_pidfile() in client/mysqladmin.cc and unchanged across MySQL 5.7,
+// 8.0 and 8.4. The coupling fails closed: if a future MySQL changes the
+// message, the match returns false and Shutdown reports the mysqladmin
+// error exactly as it did before this check existed. The endtoend mysqlctl
+// suite exercises this match against the real mysqladmin binary.
+func mysqladminAbortedWaiting(output string) bool {
+	return strings.Contains(output, "Aborted waiting on pid file")
 }
 
 // waitForMysqldExit polls until both socketFile and pidFile have been removed,

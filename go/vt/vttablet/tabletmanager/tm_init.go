@@ -369,8 +369,22 @@ func setTabletTagsStats(tablet *topodatapb.Tablet) {
 	}
 }
 
+// validateFlags returns an error when a tabletmanager flag has an invalid value.
+func validateFlags() error {
+	if demotePrimaryLockWaitTimeout < 0 {
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION,
+			"--demote-primary-lock-wait-timeout cannot be negative, got %v", demotePrimaryLockWaitTimeout)
+	}
+
+	return nil
+}
+
 // Start starts the TabletManager.
 func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.TabletConfig) error {
+	if err := validateFlags(); err != nil {
+		return err
+	}
+
 	defer func() {
 		log.Info(fmt.Sprintf("TabletManager Start took ~%d ms", time.Since(servenv.GetInitStartTime()).Milliseconds()))
 	}()

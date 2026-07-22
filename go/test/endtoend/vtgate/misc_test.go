@@ -17,7 +17,11 @@ limitations under the License.
 package vtgate
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -28,8 +32,14 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/vt/grpcclient"
+	"vitess.io/vitess/go/vt/vttablet/tabletconn"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 func TestInsertOnDuplicateKey(t *testing.T) {
@@ -378,6 +388,170 @@ func TestShardTargetedFailedDMLInOLAPRecordsErrorStats(t *testing.T) {
 	errCountAfter := tabletQueryStat(t, primary, "QueryErrorCounts", statKey)
 	require.Equal(t, errCountBefore+1, errCountAfter,
 		"failed streamed DML must record QueryErrorCounts on the tablet like the non-streaming path")
+}
+
+// TestShardTargetedFailedSelectInOLAPRecordsErrorStats verifies that a read that
+// fails on the streaming path records error stats on the tablet, just like the
+// non-streaming Execute path. A failed streamed read that only surfaces its
+// error to the client, without incrementing QueryErrorCounts, would leave the
+// per-table error stats blind to streaming failures.
+func TestShardTargetedFailedSelectInOLAPRecordsErrorStats(t *testing.T) {
+	conn, closer := start(t)
+	t.Cleanup(closer)
+
+	// The select below is shard-targeted to -80, so it runs on that shard's primary.
+	primary := shardPrimaryTablet(t, "-80")
+	const statKey = "t1.Select"
+	errCountBefore := tabletQueryStat(t, primary, "QueryErrorCounts", statKey)
+
+	utils.Exec(t, conn, "use `ks:-80`")
+	utils.Exec(t, conn, `set workload='olap'`)
+	// The tablet planbuilder doesn't validate columns, so this still plans as a
+	// t1 select and MySQL rejects it when the tablet runs it.
+	_, err := utils.ExecAllowError(t, conn, `select no_such_column from t1`)
+	require.ErrorContains(t, err, "errno 1054")
+
+	errCountAfter := tabletQueryStat(t, primary, "QueryErrorCounts", statKey)
+	require.Equal(t, errCountBefore+1, errCountAfter,
+		"failed streamed select must record QueryErrorCounts on the tablet like the non-streaming path")
+}
+
+// TestShardTargetedDDLInOLAPReloadsSchema verifies that DDL executed over the
+// streaming path reloads the tablet's schema engine, just like the non-streaming
+// Execute path. A streamed DDL that runs as generic SQL would leave the schema
+// engine unaware of the new table until the periodic schema reload.
+func TestShardTargetedDDLInOLAPReloadsSchema(t *testing.T) {
+	conn, closer := start(t)
+	t.Cleanup(closer)
+
+	primary := shardPrimaryTablet(t, "-80")
+
+	utils.Exec(t, conn, "use `ks:-80`")
+	t.Cleanup(func() {
+		utils.Exec(t, conn, `set workload='oltp'`)
+		utils.Exec(t, conn, "drop table if exists t_streamed_ddl")
+	})
+	utils.Exec(t, conn, `set workload='olap'`)
+	utils.Exec(t, conn, "create table t_streamed_ddl(id bigint primary key)")
+
+	require.Eventually(t, func() bool {
+		return tabletHasTableInSchema(primary, "t_streamed_ddl")
+	}, 30*time.Second, 500*time.Millisecond,
+		"streamed DDL must reload the tablet schema engine like the non-streaming path")
+}
+
+// TestStreamedSetWithSettingsIsNoOp verifies that a SET statement executed
+// over the streaming path with a settings list attached is not executed, just
+// like the non-streaming Execute path, which returns an empty result because
+// the settings list itself carries the session state to apply. Executing the
+// raw SET on a pooled connection instead would leak session state into the
+// connection pool; the global variable used here makes any execution directly
+// observable, as a value change or a privilege error.
+func TestStreamedSetWithSettingsIsNoOp(t *testing.T) {
+	primary := shardPrimaryTablet(t, "-80")
+	tablet, err := clusterInstance.VtctldClientProcess.GetTablet(primary.Alias)
+	require.NoError(t, err)
+
+	ctx := t.Context()
+	qsConn, err := tabletconn.GetDialer()(ctx, tablet, grpcclient.FailFast(false))
+	require.NoError(t, err)
+	t.Cleanup(func() { qsConn.Close(context.WithoutCancel(ctx)) })
+
+	readGlobal := func() string {
+		qr, err := primary.VttabletProcess.QueryTablet("select @@global.slow_launch_time", KeyspaceName, false)
+		require.NoError(t, err)
+		require.Len(t, qr.Rows, 1)
+		return qr.Rows[0][0].ToString()
+	}
+	before := readGlobal()
+	t.Cleanup(func() {
+		_, err := primary.VttabletProcess.QueryTablet("set @@global.slow_launch_time = "+before, KeyspaceName, false)
+		require.NoError(t, err)
+	})
+
+	target := &querypb.Target{Keyspace: KeyspaceName, Shard: "-80", TabletType: topodatapb.TabletType_PRIMARY}
+	_, err = qsConn.ReserveStreamExecute(ctx, nil, target, []string{"set sql_mode = ''"},
+		"set @@global.slow_launch_time = 42", nil, 0, nil,
+		func(*sqltypes.Result) error { return nil })
+	require.NoError(t, err)
+
+	require.Equal(t, before, readGlobal(),
+		"a streamed SET with a settings list must not execute, like the non-streaming path")
+}
+
+// TestShardTargetedMigrationStatementInTxParity verifies that a migration
+// admin statement issued inside a transaction fails identically in OLAP and
+// OLTP workloads. Execute rejects these statements inside a transaction, and
+// the streaming path must not instead run them through their dedicated
+// executors, ignoring the open transaction.
+func TestShardTargetedMigrationStatementInTxParity(t *testing.T) {
+	conn, closer := start(t)
+	t.Cleanup(closer)
+
+	utils.Exec(t, conn, "use `ks:-80`")
+
+	errByWorkload := map[string]string{}
+	for _, workload := range []string{"oltp", "olap"} {
+		utils.Exec(t, conn, "set workload='"+workload+"'")
+		utils.Exec(t, conn, "begin")
+		_, err := utils.ExecAllowError(t, conn, "alter vitess_migration 'aaa' cancel")
+		require.Errorf(t, err, "a migration statement inside a transaction must fail in %s mode", workload)
+		errByWorkload[workload] = err.Error()
+		utils.Exec(t, conn, "rollback")
+	}
+	require.Equal(t, errByWorkload["oltp"], errByWorkload["olap"],
+		"a migration statement inside a transaction must fail identically in OLTP and OLAP")
+}
+
+// TestStreamedUnlockTablesWithoutConnFails verifies that UNLOCK TABLES over
+// the streaming path without an existing transaction or reserved connection
+// fails like the non-streaming Execute path, instead of running it as a
+// silent no-op on a pooled connection while the client's locks stay held on
+// its own connection.
+func TestStreamedUnlockTablesWithoutConnFails(t *testing.T) {
+	primary := shardPrimaryTablet(t, "-80")
+	tablet, err := clusterInstance.VtctldClientProcess.GetTablet(primary.Alias)
+	require.NoError(t, err)
+
+	ctx := t.Context()
+	qsConn, err := tabletconn.GetDialer()(ctx, tablet, grpcclient.FailFast(false))
+	require.NoError(t, err)
+	t.Cleanup(func() { qsConn.Close(context.WithoutCancel(ctx)) })
+
+	target := &querypb.Target{Keyspace: KeyspaceName, Shard: "-80", TabletType: topodatapb.TabletType_PRIMARY}
+
+	_, execErr := qsConn.Execute(ctx, nil, target, "unlock tables", nil, 0, 0, nil)
+	require.ErrorContains(t, execErr, "unlock tables should be executed with an existing connection")
+
+	streamErr := qsConn.StreamExecute(ctx, nil, target, "unlock tables", nil, 0, 0, nil,
+		func(*sqltypes.Result) error { return nil })
+	require.ErrorContains(t, streamErr, "unlock tables should be executed with an existing connection",
+		"streamed UNLOCK TABLES without a connection must fail like the non-streaming path")
+}
+
+// tabletHasTableInSchema reports whether the tablet's schema engine knows the
+// table, via the /debug/schema endpoint.
+func tabletHasTableInSchema(tablet *cluster.Vttablet, tableName string) bool {
+	url := fmt.Sprintf("http://%s:%d/debug/schema", tablet.VttabletProcess.TabletHostname, tablet.VttabletProcess.Port)
+	client := http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Get(url)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return false
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return false
+	}
+	tables := make(map[string]json.RawMessage)
+	if err := json.Unmarshal(body, &tables); err != nil {
+		return false
+	}
+	_, ok := tables[tableName]
+	return ok
 }
 
 func shardPrimaryTablet(t *testing.T, shardName string) *cluster.Vttablet {
