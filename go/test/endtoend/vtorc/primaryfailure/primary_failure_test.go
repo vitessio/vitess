@@ -244,9 +244,9 @@ func TestDownPrimary_CellsNoRecovery(t *testing.T) {
 
 	// Phase 3: take down the primary.
 	err := curPrimary.VttabletProcess.TearDown()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	err = curPrimary.MysqlctlProcess.Stop()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer utils.PermanentlyRemoveVttablet(clusterInfo, curPrimary)
 
 	// Phase 4: vtorc detects DeadPrimary, but recovery is skipped with reason
