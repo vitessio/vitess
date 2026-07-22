@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/vt/proto/replicationdata"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttls"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
@@ -205,7 +206,8 @@ func (mariadbFlavor) setReplicationSourceCommand(params *ConnParams, host string
 		fmt.Sprintf("MASTER_PASSWORD = '%s'", params.Pass),
 		fmt.Sprintf("MASTER_CONNECT_RETRY = %d", connectRetry),
 	}
-	if params.SslEnabled() {
+	// Replication connects to the source over TCP, not params.UnixSocket.
+	if params.EffectiveSslMode() != vttls.Disabled {
 		args = append(args, "MASTER_SSL = 1")
 	}
 	if params.SslCa != "" {

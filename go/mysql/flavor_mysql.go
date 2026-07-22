@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/vt/proto/replicationdata"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttls"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
@@ -569,7 +570,8 @@ func (mysqlFlavor) setReplicationSourceCommand(params *ConnParams, host string, 
 		fmt.Sprintf("SOURCE_PASSWORD = '%s'", params.Pass),
 		fmt.Sprintf("SOURCE_CONNECT_RETRY = %d", connectRetry),
 	}
-	if params.SslEnabled() {
+	// Replication connects to the source over TCP, not params.UnixSocket.
+	if params.EffectiveSslMode() != vttls.Disabled {
 		args = append(args, "SOURCE_SSL = 1")
 	} else {
 		args = append(args, "GET_SOURCE_PUBLIC_KEY = 1")
