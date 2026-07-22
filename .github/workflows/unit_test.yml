@@ -116,18 +116,12 @@ jobs:
           predicate-quantifier: 'every'
           filters: |
             unit_tests:
-              - '{test/config.json,go/**,test.go,Makefile,build.env,go.sum,go.mod,proto/*.proto,tools/**,config/**,bootstrap.sh,.github/workflows/unit_test.yml,.github/actions/setup-mysql/action.yml}'
+              - '{test/config.json,go/**,test.go,Makefile,build.env,go.sum,go.mod,proto/*.proto,tools/**,config/**,bootstrap.sh,.github/workflows/unit_test.yml,.github/actions/setup-mysql/action.yml,.github/actions/setup-go/action.yml}'
               - '!{go/test/endtoend,go/flags/endtoend,go/mysql/endtoend,go/vt/vtctl/endtoend,go/vt/vtctl/grpcvtctldserver/endtoend,go/vt/vtgate/endtoend,go/vt/vttablet/endtoend}/**/*_test.go'
 
       - name: Set up Go
         if: steps.changes.outputs.unit_tests == 'true'
-        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
-        with:
-          go-version-file: go.mod
-          cache: ${{ (github.base_ref == 'main' || (github.base_ref == '' && github.ref_name == 'main')) && 'true' || 'false' }}
-          cache-dependency-path: |
-            go.sum
-            tools/**/go.sum
+        uses: ./.github/actions/setup-go
 
       - name: Set up python
         if: steps.changes.outputs.unit_tests == 'true'
@@ -159,8 +153,6 @@ jobs:
         run: |
           export DEBIAN_FRONTEND="noninteractive"
           sudo apt-get install -y make unzip g++ curl git wget ${{ matrix.java && 'ant default-jre-headless' || '' }}
-
-          go mod download
 
       - name: Run make tools
         if: steps.changes.outputs.unit_tests == 'true'
