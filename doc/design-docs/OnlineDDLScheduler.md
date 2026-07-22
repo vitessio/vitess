@@ -76,13 +76,22 @@ By default, Vitess schedules all migrations to run sequentially. Only a single m
 
 ## Session variables
 
-`ApplySchema` accepts repeatable `--session-variable name=value` options within `ddl_strategy`. Vitess applies the assignments in order and in MySQL `SESSION` scope before executing schema DDL. For example:
+`ApplySchema` accepts repeatable `--session-variable name=value` options within
+`ddl_strategy`. Vitess applies the assignments in order and in MySQL `SESSION`
+scope before executing schema DDL. For example:
 
 ```shell
-vtctldclient ApplySchema --ddl-strategy="vitess --session-variable innodb_strict_mode=off" --sql="ALTER TABLE t MODIFY payload TEXT" commerce
+vtctldclient ApplySchema \
+  --ddl-strategy="vitess --session-variable innodb_strict_mode=off" \
+  --sql="ALTER TABLE t MODIFY payload TEXT" commerce
 ```
 
-The `direct` strategy applies the variables on the dedicated DBA connection before executing the requested statements. Online DDL applies them on each connection that performs migration DDL and restores the connection's prior values afterward. Invalid or duplicate variable names and failed assignments stop the operation before DDL executes.
+The `direct` strategy applies the variables on the dedicated DBA connection
+before executing the requested statements. Online DDL applies them to dedicated
+connections that create or alter migration artifacts and restores each
+connection's prior values afterward. Invalid or duplicate variable names and
+failed assignments stop the operation before DDL executes. Variables on the
+deny list, including `sql_log_bin`, are rejected.
 
 ## Who runs the migration
 

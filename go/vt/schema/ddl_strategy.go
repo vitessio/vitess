@@ -32,6 +32,9 @@ var (
 	forceCutOverAfterFlagRegexp = regexp.MustCompile(fmt.Sprintf(`^[-]{1,2}%s=(.*?)$`, forceCutOverAfterFlag))
 	retainArtifactsFlagRegexp   = regexp.MustCompile(fmt.Sprintf(`^[-]{1,2}%s=(.*?)$`, retainArtifactsFlag))
 	sessionVariableNameRegexp   = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
+	deniedSessionVariables      = map[string]struct{}{
+		"sql_log_bin": {},
+	}
 )
 
 const (
@@ -201,6 +204,9 @@ func (setting *DDLStrategySetting) IsAllowZeroInDateFlag() bool {
 func ValidateSessionVariable(variable SessionVariable) error {
 	if !sessionVariableNameRegexp.MatchString(variable.Name) {
 		return fmt.Errorf("invalid session variable name: %q", variable.Name)
+	}
+	if _, ok := deniedSessionVariables[strings.ToLower(variable.Name)]; ok {
+		return fmt.Errorf("session variable %q is not allowed", variable.Name)
 	}
 	return nil
 }

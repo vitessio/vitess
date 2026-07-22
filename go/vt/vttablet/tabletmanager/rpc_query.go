@@ -161,6 +161,14 @@ func (tm *TabletManager) executeMultiFetchAsDba(
 	}
 	defer conn.Close()
 
+	// Apply requested session state before Vitess-enforced settings so callers
+	// cannot undo the guarantees provided by the request options.
+	for _, query := range sessionVariableQueries {
+		if _, err := conn.ExecuteFetch(query, 0, false); err != nil {
+			return nil, err
+		}
+	}
+
 	// Disable binlogs if necessary.
 	if disableBinlogs {
 		_, err := conn.ExecuteFetch("SET sql_log_bin = OFF", 0, false)
@@ -185,11 +193,6 @@ func (tm *TabletManager) executeMultiFetchAsDba(
 
 	if allowZeroInDate {
 		if _, err := conn.ExecuteFetch("set @@session.sql_mode=REPLACE(REPLACE(@@session.sql_mode, 'NO_ZERO_DATE', ''), 'NO_ZERO_IN_DATE', '')", 1, false); err != nil {
-			return nil, err
-		}
-	}
-	for _, query := range sessionVariableQueries {
-		if _, err := conn.ExecuteFetch(query, 0, false); err != nil {
 			return nil, err
 		}
 	}

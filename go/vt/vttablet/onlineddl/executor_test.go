@@ -516,7 +516,9 @@ func TestAlterViewSessionVariablesAreSetBeforeDDL(t *testing.T) {
 	assert.Contains(t, queryLog, "set @@session.sql_mode=@vt_onlineddl_session_variable_0")
 }
 
-func TestExecuteDirectlySetsLockWaitTimeout(t *testing.T) {
+// TestExecuteDirectlyAppliesEnforcedSettingsAfterSessionVariables verifies
+// internal connection settings take precedence over requested session state.
+func TestExecuteDirectlyAppliesEnforcedSettingsAfterSessionVariables(t *testing.T) {
 	ctx := t.Context()
 	db := fakesqldb.New(t)
 	defer db.Close()
@@ -526,6 +528,21 @@ func TestExecuteDirectlySetsLockWaitTimeout(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
+	db.AddQuery("set @vt_onlineddl_session_variable_0=@@session.sql_mode", &sqltypes.Result{})
+	db.AddQuery("set @@session.sql_mode=X'414e5349'", &sqltypes.Result{})
+	db.AddQuery(
+		"select @@session.sql_mode as sql_mode",
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("sql_mode", "varchar"),
+			"ANSI",
+		),
+	)
+	db.AddQuery(
+		"set @@session.sql_mode=REPLACE(REPLACE('ANSI', 'NO_ZERO_DATE', ''), 'NO_ZERO_IN_DATE', '')",
+		&sqltypes.Result{},
+	)
+	db.AddQuery("set @@session.sql_mode='ANSI'", &sqltypes.Result{})
+	db.AddQuery("set @@session.sql_mode=@vt_onlineddl_session_variable_0", &sqltypes.Result{})
 	db.AddQuery("set @lock_wait_timeout=@@session.lock_wait_timeout", &sqltypes.Result{})
 	db.AddQuery("set @@session.lock_wait_timeout=5", &sqltypes.Result{})
 	db.AddQuery("set @@session.lock_wait_timeout=@lock_wait_timeout", &sqltypes.Result{})
@@ -559,11 +576,25 @@ func TestExecuteDirectlySetsLockWaitTimeout(t *testing.T) {
 		ticks: timer.NewTimer(migrationCheckInterval),
 	}
 
-	onlineDDL := &schema.OnlineDDL{SQL: "create table test_lock_wait(id int)", CutOverThreshold: 5 * time.Second, UUID: "uuid"}
+	onlineDDL := &schema.OnlineDDL{
+		SQL:              "create table test_lock_wait(id int)",
+		Strategy:         schema.DDLStrategyOnline,
+		Options:          "--session-variable sql_mode=ANSI --allow-zero-in-date",
+		CutOverThreshold: 5 * time.Second,
+		UUID:             "uuid",
+	}
 	_, err = executor.executeDirectly(ctx, onlineDDL)
 	require.NoError(t, err)
 
 	queryLog := db.QueryLog()
+	sessionVariableIdx := strings.Index(queryLog, "set @@session.sql_mode=x'414e5349'")
+	allowZeroInDateIdx := strings.Index(queryLog, "set @@session.sql_mode=replace")
+	createIdx := strings.Index(queryLog, "create table test_lock_wait")
+	require.NotEqual(t, -1, sessionVariableIdx)
+	require.NotEqual(t, -1, allowZeroInDateIdx)
+	require.NotEqual(t, -1, createIdx)
+	assert.Less(t, sessionVariableIdx, allowZeroInDateIdx)
+	assert.Less(t, allowZeroInDateIdx, createIdx)
 	assert.Contains(t, queryLog, "set @lock_wait_timeout=@@session.lock_wait_timeout")
 	assert.Contains(t, queryLog, "set @@session.lock_wait_timeout=5")
 	assert.Contains(t, queryLog, "set @@session.lock_wait_timeout=@lock_wait_timeout")
