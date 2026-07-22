@@ -1220,6 +1220,19 @@ func TestGetDetectionAnalysis(t *testing.T) {
 			shardWanted:    "0",
 			cellWanted:     "zone1",
 		}, {
+			name: "PrimaryTabletDeleted cell comes from shard record, not surviving replica",
+			sql: []string{
+				// Simulate a cross-cell scenario: the shard's recorded primary is zone2-0000000200,
+				// but all surviving vitess_tablet rows are in zone1. Without the fix, AnalyzedCell
+				// would be zone1 (from the first replica row); with the fix it must be zone2.
+				`update vitess_shard set primary_alias = 'zone2-0000000200' where keyspace = 'ks' and shard = '0'`,
+				`delete from vitess_tablet where port = 6714`,
+			},
+			codeWanted:     PrimaryTabletDeleted,
+			keyspaceWanted: "ks",
+			shardWanted:    "0",
+			cellWanted:     "zone2",
+		}, {
 			name: "Removing Primary Tablet's MySQL record",
 			sql: []string{
 				// This query removes the primary tablet's database_instance record
