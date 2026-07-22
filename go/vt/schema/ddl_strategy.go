@@ -86,7 +86,8 @@ type DDLStrategySetting struct {
 	Options  string      `json:"options,omitempty"`
 }
 
-// SessionVariable is a MySQL system variable assignment applied in SESSION scope before schema DDL.
+// SessionVariable is a MySQL system variable assignment applied in SESSION
+// scope before schema DDL.
 type SessionVariable struct {
 	Name  string
 	Value string
@@ -195,7 +196,8 @@ func (setting *DDLStrategySetting) IsAllowZeroInDateFlag() bool {
 	return setting.hasFlag(allowZeroInDateFlag)
 }
 
-// ValidateSessionVariable ensures a variable name is safe to interpolate as a MySQL system variable identifier.
+// ValidateSessionVariable ensures a variable name is safe to interpolate as a
+// MySQL system variable identifier.
 func ValidateSessionVariable(variable SessionVariable) error {
 	if !sessionVariableNameRegexp.MatchString(variable.Name) {
 		return fmt.Errorf("invalid session variable name: %q", variable.Name)
@@ -203,7 +205,8 @@ func ValidateSessionVariable(variable SessionVariable) error {
 	return nil
 }
 
-// ValidateSessionVariables validates variable names and rejects case-insensitive duplicates.
+// ValidateSessionVariables validates variable names and rejects
+// case-insensitive duplicates.
 func ValidateSessionVariables(variables []SessionVariable) error {
 	seen := map[string]struct{}{}
 	for _, variable := range variables {
@@ -224,7 +227,8 @@ func (variable SessionVariable) SetStatement() (string, error) {
 	if err := ValidateSessionVariable(variable); err != nil {
 		return "", err
 	}
-	// A connection default or an earlier assignment may enable NO_BACKSLASH_ESCAPES.
+	// A connection default or an earlier assignment may enable
+	// NO_BACKSLASH_ESCAPES.
 	// In that mode, encoding O'Reilly as 'O\'Reilly' closes the string after
 	// the backslash; on a multi-statement DBA connection, a crafted suffix could
 	// then be parsed as another statement. A hex literal is parsed safely
@@ -232,7 +236,8 @@ func (variable SessionVariable) SetStatement() (string, error) {
 	return fmt.Sprintf("set @@session.%s=X'%x'", variable.Name, variable.Value), nil
 }
 
-// SessionVariables returns the ordered assignments from repeatable --session-variable name=value options.
+// SessionVariables returns the ordered assignments from repeatable
+// --session-variable name=value options.
 func (setting *DDLStrategySetting) SessionVariables() ([]SessionVariable, error) {
 	opts, err := shlex.Split(setting.Options)
 	if err != nil {

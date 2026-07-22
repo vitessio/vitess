@@ -298,7 +298,8 @@ func TestInitDBConnectionLockWaitTimeout(t *testing.T) {
 	assert.Contains(t, db.QueryLog(), "set @@session.lock_wait_timeout=@lock_wait_timeout")
 }
 
-// TestInitMigrationSessionVariables verifies requested values are applied in order and prior values are restored in reverse order.
+// TestInitMigrationSessionVariables verifies requested values are applied in
+// order and prior values are restored in reverse order.
 func TestInitMigrationSessionVariables(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
@@ -332,7 +333,8 @@ func TestInitMigrationSessionVariables(t *testing.T) {
 	assert.Contains(t, queryLog, "set @@session.innodb_strict_mode=@vt_onlineddl_session_variable_0")
 }
 
-// TestMigrationSessionVariablesAreSetBeforeDDL verifies migration DDL observes the requested session state.
+// TestMigrationSessionVariablesAreSetBeforeDDL verifies migration DDL observes
+// the requested session state.
 func TestMigrationSessionVariablesAreSetBeforeDDL(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
@@ -376,7 +378,8 @@ func TestMigrationSessionVariablesAreSetBeforeDDL(t *testing.T) {
 	assert.Less(t, sessionVariableIdx, createIdx, "session variables must be set before shadow CREATE/ALTER DDL")
 }
 
-// TestMigrationSessionVariableFailurePreventsDDL verifies a failed session assignment aborts before migration DDL executes.
+// TestMigrationSessionVariableFailurePreventsDDL verifies a failed session
+// assignment aborts before migration DDL executes.
 func TestMigrationSessionVariableFailurePreventsDDL(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
@@ -402,7 +405,8 @@ func TestMigrationSessionVariableFailurePreventsDDL(t *testing.T) {
 	assert.NotContains(t, db.QueryLog(), "create table _vrepl_shadow")
 }
 
-// TestAlterViewSessionVariableFailurePreventsDDL verifies online view DDL initializes session state on its dedicated connection.
+// TestAlterViewSessionVariableFailurePreventsDDL verifies online view DDL
+// initializes session state on its dedicated connection.
 func TestAlterViewSessionVariableFailurePreventsDDL(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
