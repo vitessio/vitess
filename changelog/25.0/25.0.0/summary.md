@@ -7,6 +7,7 @@
 - **[Major Changes](#major-changes)**
     - **[New Support](#new-support)**
     - **[Breaking Changes](#breaking-changes)**
+        - [`glog` logging removed](#glog-removed)
         - [`--watch-replication-stream` flag removed](#vttablet-watch-replication-stream-removed)
         - [Snapshot Topology feature removed](#vtorc-snapshot-topology-removed)
         - [VTOrc `--cell` flag is now required](#vtorc-cell-required)
@@ -30,6 +31,17 @@
 ### <a id="new-support"/>New Support</a>
 
 ### <a id="breaking-changes"/>Breaking Changes</a>
+
+#### <a id="glog-removed"/>`glog` logging removed</a>
+
+Vitess now uses structured logging exclusively. The deprecated `glog` backend, its command-line flags,
+`log.Flush`, and `log.V` have been removed.
+
+**Migration**: remove legacy logging flags from startup arguments. Use `--log-level=debug` for debug logs and
+`--log-format=text` for human-readable output.
+
+**Impact**: binaries will fail to start when passed removed logging flags. Go callers must replace `log.V` with
+`log.Debug` and remove calls to `log.Flush`.
 
 #### <a id="vttablet-watch-replication-stream-removed"/>`--watch-replication-stream` flag removed</a>
 

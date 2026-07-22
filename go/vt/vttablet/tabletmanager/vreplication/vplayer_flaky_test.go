@@ -3977,7 +3977,6 @@ func TestPlayerStalls(t *testing.T) {
 			),
 			postFunc: func() {
 				time.Sleep(vplayerProgressDeadline)
-				log.Flush()
 				require.Contains(t, logger.String(), relayLogIOStalledMsg, "expected log message not found")
 				execStatements(t, []string{"set @@session.binlog_format='ROW'"})
 			},
@@ -4013,7 +4012,6 @@ func TestPlayerStalls(t *testing.T) {
 				time.Sleep(to)
 				// Signal the preFunc goroutine to close the connection holding the row locks.
 				done <- struct{}{}
-				log.Flush()
 				logMessage := logger.String()
 				if !strings.Contains(logMessage, failedToRecordHeartbeatMsg) {
 					require.Contains(t, logMessage, "Lock wait timeout exceeded", "expected log message not found")

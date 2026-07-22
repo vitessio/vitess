@@ -384,7 +384,7 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 			// replica queries, so it doesn't make any sense to check for resharding or reparenting in that case.
 			if kev := gw.kev; kev != nil && target.TabletType == topodatapb.TabletType_PRIMARY {
 				if kev.TargetIsBeingResharded(ctx, target) {
-					log.V(2).Info(fmt.Sprintf("current keyspace is being resharded, retrying: %s: %s", target.Keyspace, debug.Stack()))
+					log.Debug(fmt.Sprintf("current keyspace is being resharded, retrying: %s: %s", target.Keyspace, debug.Stack()))
 					err = vterrors.Errorf(vtrpcpb.Code_CLUSTER_EVENT, buffer.ClusterEventReshardingInProgress)
 					continue
 				}

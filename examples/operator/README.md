@@ -31,7 +31,6 @@ kubectl apply -f 101_initial_cluster.yaml
 # VTAdmin's UI will be available at http://localhost:14000/
 ./pf.sh &
 alias mysql="mysql -h 127.0.0.1 -P 15306 -u user"
-alias vtctldclient="vtctldclient --server localhost:15999 --alsologtostderr"
 vtctldclient ApplySchema --sql="$(cat ../common/create_commerce_schema.sql)" commerce
 vtctldclient ApplyVSchema --vschema="$(cat ../common/vschema_commerce_initial.json)" commerce
 

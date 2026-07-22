@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/url"
 	"os"
 	"strings"
@@ -185,14 +186,12 @@ func azServiceURL(credentials *azblob.SharedKeyCredential) azblob.ServiceURL {
 			},
 			ShouldLog: func(level pipeline.LogLevel) bool {
 				switch level {
-				case pipeline.LogFatal, pipeline.LogPanic:
-					return bool(log.V(3))
-				case pipeline.LogError:
-					return bool(log.V(3))
+				case pipeline.LogFatal, pipeline.LogPanic, pipeline.LogError:
+					return log.Enabled(slog.LevelError)
 				case pipeline.LogWarning:
-					return bool(log.V(2))
+					return log.Enabled(slog.LevelWarn)
 				case pipeline.LogInfo, pipeline.LogDebug:
-					return bool(log.V(1))
+					return log.Enabled(slog.LevelDebug)
 				}
 				return false
 			},

@@ -177,9 +177,6 @@ func run(cmd *cobra.Command, args []string) (err error) {
 
 	// vtctld UI requires the cell flag
 	cmd.Flags().Set("cell", tpb.Cells[0])
-	if f := cmd.Flags().Lookup("log_dir"); f != nil && !f.Changed {
-		cmd.Flags().Set("log_dir", "$VTDATAROOT/tmp")
-	}
 
 	env, err = vtenv.New(vtenv.Options{
 		MySQLServerVersion: servenv.MySQLServerVersion(),

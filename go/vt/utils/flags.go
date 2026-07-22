@@ -99,11 +99,6 @@ var deprecationWarningsEmitted = make(map[string]bool)
 
 // Translate flag names from underscores to dashes and print a deprecation warning.
 func NormalizeUnderscoresToDashes(f *pflag.FlagSet, name string) pflag.NormalizedName {
-	// `log_dir`, `log_link` and `log_backtrace_at` are exceptions because they are used by glog.
-	if name == "log_dir" || name == "log_link" || name == "log_backtrace_at" {
-		return pflag.NormalizedName(name)
-	}
-
 	// We only want to normalize flags that purely use underscores.
 	if !strings.Contains(name, "_") || strings.Contains(name, "-") {
 		return pflag.NormalizedName(name)

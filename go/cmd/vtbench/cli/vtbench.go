@@ -166,7 +166,6 @@ func run(cmd *cobra.Command, args []string) error {
 	writer := logutil.NewLoggerWriter(logger)
 	cmd.SetOut(writer)
 	cmd.SetErr(writer)
-	_ = cmd.Flags().Set("logtostderr", "true")
 
 	servenv.Init()
 

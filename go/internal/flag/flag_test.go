@@ -25,29 +25,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestPreventGlogVFlagFromClobberingVersionFlagShorthand(t *testing.T) {
-	oldCommandLine := goflag.CommandLine
-	defer func() {
-		goflag.CommandLine = oldCommandLine
-	}()
-
-	goflag.CommandLine = goflag.NewFlagSet(os.Args[0], goflag.ExitOnError)
-
-	var v bool
-
-	goflag.BoolVar(&v, "v", true, "")
-
-	testFlagSet := pflag.NewFlagSet("testFlagSet", pflag.ExitOnError)
-	PreventGlogVFlagFromClobberingVersionFlagShorthand(testFlagSet)
-
-	f := testFlagSet.Lookup("v")
-	assert.NotNil(t, f)
-	assert.Equal(t, "", f.Shorthand)
-
-	// The function should not panic if -v flag is already defined
-	assert.NotPanics(t, func() { PreventGlogVFlagFromClobberingVersionFlagShorthand(testFlagSet) })
-}
-
 func TestParse(t *testing.T) {
 	oldCommandLine := goflag.CommandLine
 	defer func() {
