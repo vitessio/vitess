@@ -176,6 +176,19 @@ func (qrs *Rules) FilterByPlan(query string, planids []planbuilder.PlanType, tab
 	return &Rules{newrules}
 }
 
+// PlanMatchesExclusively reports whether any rule matches the query and tables
+// through exclusiveID but not through any of baseIDs — that is, exclusiveID is
+// the sole reason the rule applies. It is used to flag rules that only match a
+// statement through a deprecated compatibility plan type.
+func (qrs *Rules) PlanMatchesExclusively(query string, baseIDs []planbuilder.PlanType, exclusiveID planbuilder.PlanType, tableNames ...string) bool {
+	for _, qr := range qrs.rules {
+		if qr.matchesExclusively(query, baseIDs, exclusiveID, tableNames) {
+			return true
+		}
+	}
+	return false
+}
+
 // GetAction runs the input against the rules engine and returns the action to be performed.
 func (qrs *Rules) GetAction(
 	ip,
@@ -488,6 +501,16 @@ func (qr *Rule) FilterByPlan(query string, planids []planbuilder.PlanType, table
 	return newqr
 }
 
+// matchesExclusively reports whether the rule matches the query and tables
+// through exclusiveID but not through any of baseIDs. A rule with no plan
+// condition matches every plan id and so is never exclusive to one.
+func (qr *Rule) matchesExclusively(query string, baseIDs []planbuilder.PlanType, exclusiveID planbuilder.PlanType, tableNames []string) bool {
+	return reMatch(qr.query.Regexp, query) &&
+		tableMatch(qr.tableNames, tableNames) &&
+		planMatchOne(qr.plans, exclusiveID) &&
+		!planMatch(qr.plans, baseIDs)
+}
+
 // GetAction returns the action for a single rule.
 func (qr *Rule) GetAction(
 	ip,
@@ -536,6 +559,10 @@ func planMatch(plans []planbuilder.PlanType, planids []planbuilder.PlanType) boo
 	return slices.ContainsFunc(planids, func(planid planbuilder.PlanType) bool {
 		return slices.Contains(plans, planid)
 	})
+}
+
+func planMatchOne(plans []planbuilder.PlanType, planid planbuilder.PlanType) bool {
+	return plans == nil || slices.Contains(plans, planid)
 }
 
 func tableMatch(tableNames []string, otherNames []string) bool {

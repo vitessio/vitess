@@ -239,6 +239,79 @@ func TestFilterByPlan(t *testing.T) {
 	assert.Nil(t, qrsnil2.rules)
 }
 
+// TestPlanMatchesExclusively covers the ANALYZE compatibility case: ANALYZE
+// plans as PlanSelect but matched rules keyed on PlanOtherRead before v25. A
+// rule is exclusive to the legacy plan type only when it matches through
+// PlanOtherRead but not through PlanSelect.
+func TestPlanMatchesExclusively(t *testing.T) {
+	base := []planbuilder.PlanType{planbuilder.PlanSelect}
+	const legacy = planbuilder.PlanOtherRead
+
+	otherReadOnly := NewQueryRule("legacy", "legacy", QRFail)
+	otherReadOnly.AddPlanCond(legacy)
+
+	selectOnly := NewQueryRule("real", "real", QRFail)
+	selectOnly.AddPlanCond(planbuilder.PlanSelect)
+
+	both := NewQueryRule("both", "both", QRFail)
+	both.AddPlanCond(planbuilder.PlanSelect)
+	both.AddPlanCond(legacy)
+
+	matchAll := NewQueryRule("all", "all", QRFail)
+
+	otherReadOnlyQuery := NewQueryRule("legacy-query", "legacy-query", QRFail)
+	otherReadOnlyQuery.AddPlanCond(legacy)
+	otherReadOnlyQuery.SetQueryCond("analyze.*")
+
+	otherReadOnlyTable := NewQueryRule("legacy-table", "legacy-table", QRFail)
+	otherReadOnlyTable.AddPlanCond(legacy)
+	otherReadOnlyTable.AddTableCond("t1")
+
+	testcases := []struct {
+		name  string
+		rule  *Rule
+		query string
+		table string
+		want  bool
+	}{
+		{"legacy plan only", otherReadOnly, "analyze table t1", "t1", true},
+		{"real plan only", selectOnly, "analyze table t1", "t1", false},
+		{"both plans", both, "analyze table t1", "t1", false},
+		{"no plan condition", matchAll, "analyze table t1", "t1", false},
+		{"legacy plan, query matches", otherReadOnlyQuery, "analyze table t1", "t1", true},
+		{"legacy plan, query does not match", otherReadOnlyQuery, "select 1", "t1", false},
+		{"legacy plan, table matches", otherReadOnlyTable, "analyze table t1", "t1", true},
+		{"legacy plan, table does not match", otherReadOnlyTable, "analyze table t2", "t2", false},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			qrs := New()
+			qrs.Add(tc.rule)
+			assert.Equal(t, tc.want, qrs.PlanMatchesExclusively(tc.query, base, legacy, tc.table))
+		})
+	}
+
+	// Across many sources that each match only through the real plan type, no
+	// source is exclusive to the legacy type — regardless of map-iteration
+	// order. A single legacy-only source flips the result.
+	t.Run("multiple sources without legacy match", func(t *testing.T) {
+		m := NewMap()
+		for _, name := range []string{"s1", "s2", "s3"} {
+			m.RegisterSource(name)
+			qrs := New()
+			qrs.Add(selectOnly.Copy())
+			require.NoError(t, m.SetRules(name, qrs))
+		}
+		assert.False(t, m.PlanMatchesExclusively("analyze table t1", base, legacy, "t1"))
+
+		m.RegisterSource("legacy-source")
+		qrs := New()
+		qrs.Add(otherReadOnly.Copy())
+		require.NoError(t, m.SetRules("legacy-source", qrs))
+		assert.True(t, m.PlanMatchesExclusively("analyze table t1", base, legacy, "t1"))
+	})
+}
+
 func TestQueryRule(t *testing.T) {
 	qr := NewQueryRule("rule 1", "r1", QRFail)
 	err := qr.SetIPCond("123")

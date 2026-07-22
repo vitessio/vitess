@@ -439,18 +439,18 @@ func (qe *QueryEngine) getStreamPlan(curSchema *currentSchema, sql string) (*Tab
 	// plans as Select today). To be removed in v26 along with the
 	// SelectStream plan name.
 	ruleIDs := []planbuilder.PlanType{plan.PlanID}
-	if legacyID, ok := planbuilder.LegacyStreamRulePlan(statement); ok {
+	legacyID, hasLegacyID := planbuilder.LegacyStreamRulePlan(statement)
+	if hasLegacyID {
 		ruleIDs = append(ruleIDs, legacyID)
 	}
 	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, ruleIDs, plan.TableNames()...)
 	// The OtherRead plan name is not deprecated, so an ANALYZE rule match
-	// through it cannot be flagged when the rules file is loaded; warn when
-	// the legacy plan type is what made a rule apply. Plans are cached and
-	// ANALYZE statements are rare, so the second filter pass is negligible.
-	if _, isAnalyze := statement.(*sqlparser.Analyze); isAnalyze {
-		if !plan.Rules.Equal(qe.queryRuleSources.FilterByPlan(sql, ruleIDs[:1], plan.TableNames()...)) {
-			warnAnalyzeLegacyRuleMatch(sql)
-		}
+	// through it cannot be flagged when the rules file is loaded; warn when the
+	// legacy plan type is the sole reason a rule applied. (SelectStream rules
+	// are flagged at rule-load time, so the warning is only for ANALYZE.)
+	if _, isAnalyze := statement.(*sqlparser.Analyze); isAnalyze &&
+		qe.queryRuleSources.PlanMatchesExclusively(sql, []planbuilder.PlanType{plan.PlanID}, legacyID, plan.TableNames()...) {
+		warnAnalyzeLegacyRuleMatch(sql)
 	}
 	plan.buildAuthorized()
 

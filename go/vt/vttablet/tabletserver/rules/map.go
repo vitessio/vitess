@@ -96,6 +96,20 @@ func (qri *Map) FilterByPlan(query string, planids []planbuilder.PlanType, table
 	return newqrs
 }
 
+// PlanMatchesExclusively reports whether any query rule from any source matches
+// the query and tables through exclusiveID but not through any of baseIDs — that
+// is, exclusiveID is the sole reason the rule applies.
+func (qri *Map) PlanMatchesExclusively(query string, baseIDs []planbuilder.PlanType, exclusiveID planbuilder.PlanType, tableNames ...string) bool {
+	qri.mu.Lock()
+	defer qri.mu.Unlock()
+	for _, rules := range qri.queryRulesMap {
+		if rules.PlanMatchesExclusively(query, baseIDs, exclusiveID, tableNames...) {
+			return true
+		}
+	}
+	return false
+}
+
 // MarshalJSON marshals to JSON.
 func (qri *Map) MarshalJSON() ([]byte, error) {
 	qri.mu.Lock()
