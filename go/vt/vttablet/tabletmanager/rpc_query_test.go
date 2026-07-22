@@ -245,9 +245,9 @@ func TestTabletManager_ExecuteMultiFetchAsDbaSessionVariableFailure(t *testing.T
 	assert.NotContains(t, db.QueryLog(), "create table t")
 }
 
-// TestTabletManager_ExecuteMultiFetchAsDbaDeniedSessionVariable verifies RPC
+// TestTabletManager_ExecuteMultiFetchAsDbaDeniedSessionVariables verifies RPC
 // callers cannot bypass the session variable deny list.
-func TestTabletManager_ExecuteMultiFetchAsDbaDeniedSessionVariable(t *testing.T) {
+func TestTabletManager_ExecuteMultiFetchAsDbaDeniedSessionVariables(t *testing.T) {
 	cp := mysql.ConnParams{}
 	db := fakesqldb.New(t)
 	db.AddQueryPattern(".*", &sqltypes.Result{})
@@ -262,18 +262,26 @@ func TestTabletManager_ExecuteMultiFetchAsDbaDeniedSessionVariable(t *testing.T)
 	}
 	close(tm._waitForGrantsComplete)
 
-	_, err := tm.ExecuteMultiFetchAsDba(
-		t.Context(),
-		&tabletmanagerdatapb.ExecuteMultiFetchAsDbaRequest{
-			Sql:    []byte("create table t (id int primary key)"),
-			DbName: "testdb",
-			SessionVariables: []*tabletmanagerdatapb.SessionVariable{
-				{Name: "SQL_LOG_BIN", Value: "off"},
-			},
-		},
-	)
-	require.EqualError(t, err, `session variable "SQL_LOG_BIN" is not allowed`)
-	assert.NotContains(t, db.QueryLog(), "create table t")
+	for _, variableName := range []string{"SQL_LOG_BIN", "FOREIGN_KEY_CHECKS"} {
+		t.Run(variableName, func(t *testing.T) {
+			_, err := tm.ExecuteMultiFetchAsDba(
+				t.Context(),
+				&tabletmanagerdatapb.ExecuteMultiFetchAsDbaRequest{
+					Sql:    []byte("create table t (id int primary key)"),
+					DbName: "testdb",
+					SessionVariables: []*tabletmanagerdatapb.SessionVariable{
+						{Name: variableName, Value: "off"},
+					},
+				},
+			)
+			require.EqualError(
+				t,
+				err,
+				`session variable "`+variableName+`" is not allowed`,
+			)
+			assert.NotContains(t, db.QueryLog(), "create table t")
+		})
+	}
 }
 
 func TestTabletManager_ExecuteFetchAsDba(t *testing.T) {
