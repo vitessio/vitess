@@ -81,6 +81,7 @@ require (
 
 require (
 	github.com/DataDog/datadog-go/v5 v5.9.0
+	github.com/anishathalye/porcupine v1.3.0
 	github.com/aws/aws-sdk-go-v2 v1.42.0
 	github.com/aws/aws-sdk-go-v2/config v1.32.26
 	github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager v0.2.12
