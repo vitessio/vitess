@@ -179,7 +179,8 @@ func TestIsExpireArtifactsFlag(t *testing.T) {
 	}
 }
 
-// TestParseDDLStrategy verifies strategy parsing, including validation and ordering of repeatable session variables.
+// TestParseDDLStrategy verifies strategy parsing, including validation and
+// ordering of repeatable session variables.
 func TestParseDDLStrategy(t *testing.T) {
 	tt := []struct {
 		strategyVariable     string

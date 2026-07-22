@@ -448,7 +448,8 @@ func (client *capturingMultiFetchClient) requests() []*tabletmanagerdatapb.Execu
 	return append([]*tabletmanagerdatapb.ExecuteMultiFetchAsDbaRequest(nil), client.reqs...)
 }
 
-// TestTabletExecutorPropagatesSessionVariables verifies direct ApplySchema preserves ordered assignments in the tablet RPC.
+// TestTabletExecutorPropagatesSessionVariables verifies direct ApplySchema
+// preserves ordered assignments in the tablet RPC.
 func TestTabletExecutorPropagatesSessionVariables(t *testing.T) {
 	ctx := t.Context()
 	client := &capturingMultiFetchClient{fakeTabletManagerClient: newFakeTabletManagerClient()}
