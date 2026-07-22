@@ -461,12 +461,12 @@ func TestParseDDLStrategy(t *testing.T) {
 	}
 }
 
-// TestSessionVariableSetStatement verifies values remain SQL string literals when they contain SQL syntax.
+// TestSessionVariableSetStatement verifies values are safely encoded.
 func TestSessionVariableSetStatement(t *testing.T) {
 	query, err := (SessionVariable{
 		Name:  "innodb_strict_mode",
 		Value: "off'; drop table t; --",
 	}).SetStatement()
 	require.NoError(t, err)
-	assert.Equal(t, "set @@session.innodb_strict_mode='off\\'; drop table t; --'", query)
+	assert.Equal(t, "set @@session.innodb_strict_mode=X'6f6666273b2064726f70207461626c6520743b202d2d'", query)
 }

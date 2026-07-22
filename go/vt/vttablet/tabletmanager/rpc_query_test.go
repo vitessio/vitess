@@ -175,10 +175,10 @@ func TestTabletManager_ExecuteMultiFetchAsDbaSessionVariables(t *testing.T) {
 	createIdx := -1
 	for i, q := range got {
 		q = strings.ToLower(strings.TrimSpace(q))
-		if q == "set @@session.innodb_strict_mode='off'" {
+		if q == "set @@session.innodb_strict_mode=x'6f6666'" {
 			firstVariableIdx = i
 		}
-		if q == "set @@session.sql_mode='ansi'" {
+		if q == "set @@session.sql_mode=x'414e5349'" {
 			secondVariableIdx = i
 		}
 		if strings.Contains(q, "create table t") {
@@ -198,7 +198,7 @@ func TestTabletManager_ExecuteMultiFetchAsDbaSessionVariableFailure(t *testing.T
 	cp := mysql.ConnParams{}
 	db := fakesqldb.New(t)
 	db.AddQueryPattern(".*", &sqltypes.Result{})
-	db.AddRejectedQuery("set @@session.sql_mode='ANSI'", errors.New("cannot set session variable"))
+	db.AddRejectedQuery("set @@session.sql_mode=X'414e5349'", errors.New("cannot set session variable"))
 	daemon := mysqlctl.NewFakeMysqlDaemon(db)
 
 	tm := &TabletManager{
