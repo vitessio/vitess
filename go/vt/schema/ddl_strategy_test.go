@@ -398,6 +398,10 @@ func TestParseDDLStrategy(t *testing.T) {
 			expectError:      `session variable "SQL_LOG_BIN" is not allowed`,
 		},
 		{
+			strategyVariable: "online --session-variable FOREIGN_KEY_CHECKS=off",
+			expectError:      `session variable "FOREIGN_KEY_CHECKS" is not allowed`,
+		},
+		{
 			strategyVariable: "direct --session-variable sql_mode=ANSI --session-variable SQL_MODE=TRADITIONAL",
 			expectError:      "duplicate session variable name",
 		},

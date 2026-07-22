@@ -91,7 +91,7 @@ before executing the requested statements. Online DDL applies them to dedicated
 connections that create or alter migration artifacts and restores each
 connection's prior values afterward. Invalid or duplicate variable names and
 failed assignments stop the operation before DDL executes. Variables on the
-deny list, including `sql_log_bin`, are rejected.
+deny list, including `sql_log_bin` and `foreign_key_checks`, are rejected.
 
 ## Who runs the migration
 
