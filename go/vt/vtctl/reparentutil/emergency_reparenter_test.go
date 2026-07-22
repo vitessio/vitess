@@ -2982,6 +2982,81 @@ func TestEmergencyReparenter_waitForAllRelayLogsToApply(t *testing.T) {
 	}
 }
 
+func TestEmergencyReparenter_preferReplicaStatusCandidates(t *testing.T) {
+	t.Parallel()
+
+	replicaPos := &RelayLogPositions{}
+	formerPrimaryPos := &RelayLogPositions{}
+	otherPos := &RelayLogPositions{}
+
+	tests := []struct {
+		name             string
+		validCandidates  map[string]*RelayLogPositions
+		statusMap        map[string]*replicationdatapb.StopReplicationStatus
+		primaryStatusMap map[string]*replicationdatapb.PrimaryStatus
+		wantAliases      []string
+	}{
+		{
+			name: "exclude former primary when replica candidate exists",
+			validCandidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": replicaPos,
+				"zone1-0000000101": formerPrimaryPos,
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"zone1-0000000100": {After: &replicationdatapb.Status{}},
+			},
+			primaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{
+				"zone1-0000000101": {Position: "MySQL56/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:1-10"},
+			},
+			wantAliases: []string{"zone1-0000000100"},
+		},
+		{
+			name: "keep former primary when it is the only candidate",
+			validCandidates: map[string]*RelayLogPositions{
+				"zone1-0000000101": formerPrimaryPos,
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"zone1-0000000100": {After: &replicationdatapb.Status{}},
+			},
+			primaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{
+				"zone1-0000000101": {Position: "MySQL56/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:1-10"},
+			},
+			wantAliases: []string{"zone1-0000000101"},
+		},
+		{
+			name: "keep unknown candidates to avoid over-filtering",
+			validCandidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": replicaPos,
+				"zone1-0000000102": otherPos,
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"zone1-0000000100": {After: &replicationdatapb.Status{}},
+			},
+			primaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{
+				"zone1-0000000101": {Position: "MySQL56/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:1-10"},
+			},
+			wantAliases: []string{"zone1-0000000100", "zone1-0000000102"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			erp := NewEmergencyReparenter(nil, nil, logutil.NewMemoryLogger())
+			got := erp.preferReplicaStatusCandidates(tt.validCandidates, tt.statusMap, tt.primaryStatusMap)
+
+			aliases := make([]string, 0, len(got))
+			for alias := range got {
+				aliases = append(aliases, alias)
+			}
+			slices.Sort(aliases)
+			slices.Sort(tt.wantAliases)
+			require.Equal(t, tt.wantAliases, aliases)
+		})
+	}
+}
+
 func TestEmergencyReparenterStats(t *testing.T) {
 	ersCounter.ResetAll()
 	reparentShardOpTimings.Reset()

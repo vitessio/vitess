@@ -790,6 +790,87 @@ func TestRecoverShardAnalyses(t *testing.T) {
 	require.Equal(t, inst.ReplicaIsWritable, order[3])
 }
 
+func TestLockShardWithRetryEventuallySucceeds(t *testing.T) {
+	ctx := t.Context()
+
+	oldTS := ts
+	ts = memorytopo.NewServer(ctx, "zone1")
+	defer func() {
+		ts = oldTS
+	}()
+
+	require.NoError(t, ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{}))
+	require.NoError(t, ts.CreateShard(ctx, "ks", "0"))
+
+	_, heldUnlock, err := ts.LockShard(ctx, "ks", "0", "held-by-test")
+	require.NoError(t, err)
+
+	oldTimeout := shardLockRetryTimeout
+	oldBackoff := shardLockRetryBackoff
+	oldTryTimeout := shardLockTryTimeout
+	shardLockRetryTimeout = 500 * time.Millisecond
+	shardLockRetryBackoff = 20 * time.Millisecond
+	shardLockTryTimeout = 30 * time.Millisecond
+	defer func() {
+		shardLockRetryTimeout = oldTimeout
+		shardLockRetryBackoff = oldBackoff
+		shardLockTryTimeout = oldTryTimeout
+	}()
+
+	go func() {
+		time.Sleep(60 * time.Millisecond)
+		var unlockErr error
+		heldUnlock(&unlockErr)
+	}()
+
+	lockCtx, unlock, err := lockShardWithRetry(context.Background(), "ks", "0", "retry-lock", log.NewPrefixedLogger("test"))
+	require.NoError(t, err)
+	require.NotNil(t, lockCtx)
+	require.NoError(t, lockCtx.Err())
+	require.NotNil(t, unlock)
+
+	var unlockErr error
+	unlock(&unlockErr)
+	require.NoError(t, unlockErr)
+}
+
+func TestLockShardWithRetryTimesOutOnContention(t *testing.T) {
+	ctx := t.Context()
+
+	oldTS := ts
+	ts = memorytopo.NewServer(ctx, "zone1")
+	defer func() {
+		ts = oldTS
+	}()
+
+	require.NoError(t, ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{}))
+	require.NoError(t, ts.CreateShard(ctx, "ks", "0"))
+
+	_, heldUnlock, err := ts.LockShard(ctx, "ks", "0", "held-by-test")
+	require.NoError(t, err)
+	defer func() {
+		var unlockErr error
+		heldUnlock(&unlockErr)
+		require.NoError(t, unlockErr)
+	}()
+
+	oldTimeout := shardLockRetryTimeout
+	oldBackoff := shardLockRetryBackoff
+	oldTryTimeout := shardLockTryTimeout
+	shardLockRetryTimeout = 90 * time.Millisecond
+	shardLockRetryBackoff = 20 * time.Millisecond
+	shardLockTryTimeout = 30 * time.Millisecond
+	defer func() {
+		shardLockRetryTimeout = oldTimeout
+		shardLockRetryBackoff = oldBackoff
+		shardLockTryTimeout = oldTryTimeout
+	}()
+
+	_, _, err = lockShardWithRetry(context.Background(), "ks", "0", "retry-lock", log.NewPrefixedLogger("test"))
+	require.Error(t, err)
+	require.True(t, topo.IsErrType(err, topo.NodeExists) || topo.IsErrType(err, topo.Timeout) || errors.Is(err, context.DeadlineExceeded), "expected lock-contention style error, got: %v", err)
+}
+
 func TestRecoverIncapacitatedPrimary(t *testing.T) {
 	tests := []struct {
 		name        string

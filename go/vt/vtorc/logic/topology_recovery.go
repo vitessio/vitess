@@ -137,6 +137,15 @@ var (
 	// shardLockTimings measures the timing of LockShard operations.
 	shardLockTimingsActions = []string{"Lock", "Unlock"}
 	shardLockTimings        = stats.NewTimings("ShardLockTimings", "Timings of global shard locks", "Action", shardLockTimingsActions...)
+
+	// shardLockRetryTimeout controls how long recoveries keep retrying shard lock acquisition
+	// when they race another in-flight operation.
+	shardLockRetryTimeout = 15 * time.Second
+	// shardLockRetryBackoff controls the initial retry interval for lock contention retries.
+	shardLockRetryBackoff = 250 * time.Millisecond
+	// shardLockTryTimeout bounds each individual TryLockShard attempt. Some topo
+	// implementations can block before returning lock contention.
+	shardLockTryTimeout = 1 * time.Second
 )
 
 // recoveryFunction is the code of the recovery function to be used
@@ -258,6 +267,66 @@ func LockShard(ctx context.Context, keyspace, shard, lockAction string) (context
 		}()
 		unlock(e)
 	}, nil
+}
+
+// lockShardWithRetry retries shard lock acquisition for a bounded amount of time when
+// contention is detected. This allows actionable recoveries to proceed once an in-flight
+// operation releases the lock, instead of failing immediately on a transient collision.
+func lockShardWithRetry(ctx context.Context, keyspace, shard, lockAction string, logger *log.PrefixedLogger) (context.Context, func(*error), error) {
+	start := time.Now()
+	attempt := 0
+	var lastErr error
+
+	for {
+		attemptCtx := ctx
+		cancel := func() {}
+		if shardLockTryTimeout > 0 {
+			attemptCtx, cancel = context.WithTimeout(ctx, shardLockTryTimeout)
+		}
+
+		lockCtx, unlock, err := LockShard(attemptCtx, keyspace, shard, lockAction)
+		if err == nil {
+			cancel()
+			return context.WithoutCancel(lockCtx), unlock, nil
+		}
+		cancel()
+
+		lastErr = err
+		if ctx.Err() != nil {
+			return nil, nil, ctx.Err()
+		}
+
+		// Retry when lock contention is explicit (NodeExists) and when lock attempts
+		// time out waiting for another holder.
+		if !topo.IsErrType(err, topo.NodeExists) && !topo.IsErrType(err, topo.Timeout) && !errors.Is(err, context.DeadlineExceeded) {
+			return nil, nil, err
+		}
+
+		elapsed := time.Since(start)
+		if elapsed >= shardLockRetryTimeout {
+			return nil, nil, lastErr
+		}
+
+		backoffStep := min(attempt, 5)
+		sleepFor := shardLockRetryBackoff * time.Duration(1<<backoffStep)
+		remaining := shardLockRetryTimeout - elapsed
+		if sleepFor > remaining {
+			sleepFor = remaining
+		}
+
+		if logger != nil && (attempt == 0 || attempt%4 == 0) {
+			logger.Warn(fmt.Sprintf("Shard lock busy for %s/%s; retrying in %s (elapsed %s): %v", keyspace, shard, sleepFor, elapsed.Round(10*time.Millisecond), err))
+		}
+
+		timer := time.NewTimer(sleepFor)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil, nil, ctx.Err()
+		case <-timer.C:
+		}
+		attempt++
+	}
 }
 
 // AuditTopologyRecovery audits a single step in a topology recovery process.
@@ -934,8 +1003,9 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 	}
 
 	// We lock the shard here and then refresh the tablets information
-	ctx, unlock, err := LockShard(context.Background(), analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard,
+	ctx, unlock, err := lockShardWithRetry(context.Background(), analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard,
 		getLockAction(analysisEntry.AnalyzedInstanceAlias, analysisEntry.Analysis),
+		logger,
 	)
 	if err != nil {
 		logger.Error(fmt.Sprintf("Failed to lock shard, aborting recovery: %v", err))
