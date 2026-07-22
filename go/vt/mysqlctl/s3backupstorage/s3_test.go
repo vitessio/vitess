@@ -18,6 +18,7 @@ package s3backupstorage
 
 import (
 	"bytes"
+	"context"
 	"crypto/md5"
 	"crypto/rand"
 	"encoding/base64"
@@ -26,6 +27,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -605,6 +607,121 @@ func TestReadFile(t *testing.T) {
 
 	err = rc.Close()
 	require.NoError(t, err, "Close() should not error")
+}
+
+func TestReadFileInvalidDownloadFlags(t *testing.T) {
+	bh := &S3BackupHandle{
+		bs: &S3BackupStorage{
+			params: backupstorage.NoParams(),
+			s3SSE:  S3ServerSideEncryption{},
+		},
+		readOnly: true,
+	}
+
+	origPartSize := downloadPartSize
+	origConcurrency := downloadConcurrency
+	defer func() {
+		downloadPartSize = origPartSize
+		downloadConcurrency = origConcurrency
+	}()
+
+	// Part size below minimum (5MiB)
+	downloadPartSize = 1024
+	downloadConcurrency = 5
+	_, err := bh.ReadFile(t.Context(), "testfile")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "5MiB")
+
+	// Negative part size
+	downloadPartSize = -1
+	_, err = bh.ReadFile(t.Context(), "testfile")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "5MiB")
+
+	// Zero concurrency
+	downloadPartSize = 8 * 1024 * 1024
+	downloadConcurrency = 0
+	_, err = bh.ReadFile(t.Context(), "testfile")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), ">= 1")
+}
+
+func TestReadFileSSECHeaderForwarding(t *testing.T) {
+	testData := []byte("sse-c parallel download test data")
+	sseAlg := "AES256"
+	sseKey := "dGVzdC1lbmNyeXB0aW9uLWtleS0xMjM0NTY3ODk=" // base64 test key
+	sseMD5 := "dGVzdC1tZDU="
+
+	// Mock server that rejects HEAD requests without SSE-C headers (like real S3)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "HEAD" {
+			if r.Header.Get("X-Amz-Server-Side-Encryption-Customer-Algorithm") == "" {
+				w.WriteHeader(http.StatusForbidden)
+				w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+	<Code>AccessDenied</Code>
+	<Message>Requests specifying Server Side Encryption with Customer provided keys must provide an appropriate secret key.</Message>
+</Error>`))
+				return
+			}
+			w.Header().Set("Content-Length", strconv.Itoa(len(testData)))
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		if r.Method == "GET" {
+			w.Header().Set("Content-Range", fmt.Sprintf("bytes 0-%d/%d", len(testData)-1, len(testData)))
+			w.WriteHeader(http.StatusOK)
+			w.Write(testData)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	originalBucket := bucket
+	originalRoot := root
+	defer func() {
+		bucket = originalBucket
+		root = originalRoot
+	}()
+	bucket = "test-bucket"
+	root = ""
+
+	s3Client := s3.New(s3.Options{
+		Region:       "us-east-1",
+		BaseEndpoint: aws.String(server.URL),
+		UsePathStyle: true,
+		Credentials: aws.CredentialsProviderFunc(func(_ context.Context) (aws.Credentials, error) {
+			return aws.Credentials{AccessKeyID: "test", SecretAccessKey: "test"}, nil
+		}),
+		Retryer: func() aws.Retryer {
+			return retry.NewStandard(func(o *retry.StandardOptions) { o.MaxAttempts = 1 })
+		}(),
+	})
+
+	bh := &S3BackupHandle{
+		s3Client: s3Client,
+		bs: &S3BackupStorage{
+			params: backupstorage.NoParams(),
+			s3SSE: S3ServerSideEncryption{
+				customerAlg: &sseAlg,
+				customerKey: &sseKey,
+				customerMd5: &sseMD5,
+			},
+		},
+		dir:      "testdir",
+		name:     "testbackup",
+		readOnly: true,
+	}
+
+	rc, err := bh.ReadFile(t.Context(), "testfile")
+	require.NoError(t, err, "ReadFile with SSE-C should succeed via header forwarding workaround")
+	require.NotNil(t, rc)
+
+	data, err := io.ReadAll(rc)
+	require.NoError(t, err)
+	require.Equal(t, testData, data)
+	require.NoError(t, rc.Close())
 }
 
 func TestReadFileOnWriteHandle(t *testing.T) {
