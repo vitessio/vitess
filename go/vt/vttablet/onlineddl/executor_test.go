@@ -405,6 +405,54 @@ func TestMigrationSessionVariableFailurePreventsDDL(t *testing.T) {
 	assert.NotContains(t, db.QueryLog(), "create table _vrepl_shadow")
 }
 
+// TestInitMigrationSessionVariableReadFailure verifies setup stops if the
+// existing value cannot be saved for restoration.
+func TestInitMigrationSessionVariableReadFailure(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	params := db.ConnParams()
+	connector := dbconfigs.NewTestDBConfigs(*params, *params, params.DbName).DbaWithDB()
+	conn, err := dbconnpool.NewDBConnection(t.Context(), connector)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	db.AddRejectedQuery(
+		"set @vt_onlineddl_session_variable_0=@@session.sql_mode",
+		errors.New("cannot read session variable"),
+	)
+
+	executor := &Executor{}
+	onlineDDL := &schema.OnlineDDL{
+		Strategy: schema.DDLStrategyOnline,
+		Options:  "--session-variable sql_mode=ANSI",
+	}
+	restoreSessionVariablesFunc, err := executor.initMigrationSessionVariables(
+		t.Context(),
+		onlineDDL,
+		conn,
+	)
+	defer restoreSessionVariablesFunc()
+	require.ErrorContains(t, err, "could not read session variable sql_mode")
+	assert.NotContains(t, db.QueryLog(), "set @@session.sql_mode=")
+}
+
+// TestInitMigrationSessionVariablesInvalidOptions verifies malformed strategy
+// options fail before the connection is used.
+func TestInitMigrationSessionVariablesInvalidOptions(t *testing.T) {
+	executor := &Executor{}
+	onlineDDL := &schema.OnlineDDL{
+		Strategy: schema.DDLStrategyOnline,
+		Options:  `--session-variable "sql_mode=ANSI`,
+	}
+	restoreSessionVariablesFunc, err := executor.initMigrationSessionVariables(
+		t.Context(),
+		onlineDDL,
+		nil,
+	)
+	defer restoreSessionVariablesFunc()
+	require.Error(t, err)
+}
+
 // TestAlterViewSessionVariableFailurePreventsDDL verifies online view DDL
 // initializes session state on its dedicated connection.
 func TestAlterViewSessionVariableFailurePreventsDDL(t *testing.T) {
@@ -429,6 +477,43 @@ func TestAlterViewSessionVariableFailurePreventsDDL(t *testing.T) {
 	err := executor.executeAlterViewOnline(t.Context(), onlineDDL)
 	require.ErrorContains(t, err, "cannot set session variable")
 	assert.NotContains(t, strings.ToLower(db.QueryLog()), "create or replace view")
+}
+
+// TestAlterViewSessionVariablesAreSetBeforeDDL verifies successful setup on the
+// dedicated online view connection happens before its DDL.
+func TestAlterViewSessionVariablesAreSetBeforeDDL(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	params := db.ConnParams()
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.DB = dbconfigs.NewTestDBConfigs(*params, *params, params.DbName)
+
+	db.AddQuery("set @vt_onlineddl_session_variable_0=@@session.sql_mode", &sqltypes.Result{})
+	db.AddQuery("set @@session.sql_mode=X'414e5349'", &sqltypes.Result{})
+	db.AddQuery("set @@session.sql_mode=@vt_onlineddl_session_variable_0", &sqltypes.Result{})
+	db.RejectQueryPattern("create or replace .*view .*", "view DDL failed")
+
+	executor := &Executor{
+		env: tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "ExecutorTest"),
+		execQuery: func(context.Context, string) (*sqltypes.Result, error) {
+			return &sqltypes.Result{}, nil
+		},
+	}
+	onlineDDL := &schema.OnlineDDL{
+		SQL:      "alter view test_view as select 1",
+		Strategy: schema.DDLStrategyOnline,
+		Options:  "--session-variable sql_mode=ANSI",
+	}
+	err := executor.executeAlterViewOnline(t.Context(), onlineDDL)
+	require.ErrorContains(t, err, "view DDL failed")
+
+	queryLog := strings.ToLower(db.QueryLog())
+	setIdx := strings.Index(queryLog, "set @@session.sql_mode=x'414e5349'")
+	viewIdx := strings.Index(queryLog, "create or replace")
+	require.NotEqual(t, -1, setIdx)
+	require.NotEqual(t, -1, viewIdx)
+	assert.Less(t, setIdx, viewIdx)
+	assert.Contains(t, queryLog, "set @@session.sql_mode=@vt_onlineddl_session_variable_0")
 }
 
 func TestExecuteDirectlySetsLockWaitTimeout(t *testing.T) {
