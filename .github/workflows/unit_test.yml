@@ -137,7 +137,46 @@ jobs:
         with:
           persist-credentials: "false"
 
+<<<<<<< HEAD
+||||||| parent of a4400e3182 (ci: stop PR runs from saving Go caches, split module and build caches (#20646))
+      - name: Check for changes in relevant files
+        uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
+        id: changes
+        with:
+          token: ""
+          # With 'every', a file is relevant only if it matches all patterns: any
+          # path from the brace-list, and not a test file in one of the endtoend
+          # test packages, which the unit test runner never runs and which cannot
+          # be imported by unit tests. The endtoend trees are enumerated explicitly
+          # so that testdata fixtures whose paths merely contain an endtoend
+          # directory (e.g. under go/tools/ci-config) still count as relevant.
+          predicate-quantifier: 'every'
+          filters: |
+            unit_tests:
+              - '{test/config.json,go/**,test.go,Makefile,build.env,go.sum,go.mod,proto/*.proto,tools/**,config/**,bootstrap.sh,.github/workflows/unit_test.yml,.github/actions/setup-mysql/action.yml}'
+              - '!{go/test/endtoend,go/flags/endtoend,go/mysql/endtoend,go/vt/vtctl/endtoend,go/vt/vtctl/grpcvtctldserver/endtoend,go/vt/vtgate/endtoend,go/vt/vttablet/endtoend}/**/*_test.go'
+
+=======
+      - name: Check for changes in relevant files
+        uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
+        id: changes
+        with:
+          token: ""
+          # With 'every', a file is relevant only if it matches all patterns: any
+          # path from the brace-list, and not a test file in one of the endtoend
+          # test packages, which the unit test runner never runs and which cannot
+          # be imported by unit tests. The endtoend trees are enumerated explicitly
+          # so that testdata fixtures whose paths merely contain an endtoend
+          # directory (e.g. under go/tools/ci-config) still count as relevant.
+          predicate-quantifier: 'every'
+          filters: |
+            unit_tests:
+              - '{test/config.json,go/**,test.go,Makefile,build.env,go.sum,go.mod,proto/*.proto,tools/**,config/**,bootstrap.sh,.github/workflows/unit_test.yml,.github/actions/setup-mysql/action.yml,.github/actions/setup-go/action.yml}'
+              - '!{go/test/endtoend,go/flags/endtoend,go/mysql/endtoend,go/vt/vtctl/endtoend,go/vt/vtctl/grpcvtctldserver/endtoend,go/vt/vtgate/endtoend,go/vt/vttablet/endtoend}/**/*_test.go'
+
+>>>>>>> a4400e3182 (ci: stop PR runs from saving Go caches, split module and build caches (#20646))
       - name: Set up Go
+<<<<<<< HEAD
         if: needs.changes.outputs.unit_tests == 'true'
         # zizmor: ignore[cache-poisoning] this workflow publishes no artifacts
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -147,6 +186,19 @@ jobs:
           cache-dependency-path: |
             go.sum
             tools/**/go.sum
+||||||| parent of a4400e3182 (ci: stop PR runs from saving Go caches, split module and build caches (#20646))
+        if: steps.changes.outputs.unit_tests == 'true'
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+          cache: ${{ (github.base_ref == 'main' || (github.base_ref == '' && github.ref_name == 'main')) && 'true' || 'false' }}
+          cache-dependency-path: |
+            go.sum
+            tools/**/go.sum
+=======
+        if: steps.changes.outputs.unit_tests == 'true'
+        uses: ./.github/actions/setup-go
+>>>>>>> a4400e3182 (ci: stop PR runs from saving Go caches, split module and build caches (#20646))
 
       - name: Set up python
         if: needs.changes.outputs.unit_tests == 'true'
@@ -171,8 +223,6 @@ jobs:
           mkdir -p dist bin
           curl --max-time 10 --retry 3 --retry-max-time 45 -s -L https://github.com/coreos/etcd/releases/download/v3.5.25/etcd-v3.5.25-linux-amd64.tar.gz | tar -zxC dist
           mv dist/etcd-v3.5.25-linux-amd64/{etcd,etcdctl} bin/
-
-          go mod download
 
       - name: Run make tools
         if: needs.changes.outputs.unit_tests == 'true'
