@@ -689,8 +689,10 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 		prepared <- preparationResult{state: state, err: err}
 	}()
 	var replicaState *replicaShutdownState
+	preparationDone := false
 	select {
 	case p := <-prepared:
+		preparationDone = true
 		replicaState = p.state
 		if p.err != nil {
 			log.Error(
@@ -713,6 +715,21 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 		// so that callers which restart or clean up afterwards are not misled
 		// into treating mysqld as still running.
 		return nil
+	}
+	if !preparationDone {
+		// The preparation outlived its deadline, and any statement it had in
+		// flight can still land on the server. Its mutating statements are
+		// bound to the (now cancelled) preparation context, so the goroutine
+		// aborts promptly and delivers the state it recorded before mutating
+		// anything: wait briefly for that state so a late mutation is restored
+		// too. If nothing arrives, the preparation is hung in a pre-mutation
+		// probe and there is nothing to restore.
+		select {
+		case p := <-prepared:
+			replicaState = p.state
+		case <-time.After(preparationTimeout):
+			log.Warn("shutdown failed, but the crash-safety preparation state never became available; skipping the replica state restore")
+		}
 	}
 	// The shutdown failed, so mysqld may still be running: make a best-effort
 	// attempt to restore what the crash-safety preparation changed, so that a

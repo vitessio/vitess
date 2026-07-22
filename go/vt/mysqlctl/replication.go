@@ -261,9 +261,9 @@ func (mysqld *Mysqld) restoreReplicaAfterFailedShutdown(ctx context.Context, sta
 	defer conn.Recycle()
 
 	if err := mysqld.executeSuperQueryListConn(ctx, conn, []string{
-		fmt.Sprintf("SET GLOBAL innodb_flush_log_at_trx_commit = %s", state.flushLogAtTrxCommit),
-		fmt.Sprintf("SET GLOBAL sync_binlog = %s", state.syncBinlog),
-		fmt.Sprintf("SET GLOBAL sync_relay_log = %s", state.syncRelayLog),
+		"SET GLOBAL innodb_flush_log_at_trx_commit = " + state.flushLogAtTrxCommit,
+		"SET GLOBAL sync_binlog = " + state.syncBinlog,
+		"SET GLOBAL sync_relay_log = " + state.syncRelayLog,
 	}); err != nil {
 		log.Warn(
 			"failed to restore the durability settings after a failed shutdown",
