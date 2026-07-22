@@ -403,6 +403,33 @@ func addSeqQueries(db *fakesqldb.DB) {
 	db.AddQuery("update seq set next_id = 4 where id = 0", &sqltypes.Result{})
 }
 
+// A dedicated-executor result that carries rows is delivered as a fields-only
+// packet followed by a rows packet, matching the generic streaming path. vtgate
+// forwards each StreamExecute packet to gRPC clients verbatim, so a combined
+// fields+rows packet would repeat the fields mid-stream on a scatter.
+func TestStreamExecuteCompat_DedicatedResultStreamsFieldsThenRows(t *testing.T) {
+	ctx := t.Context()
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+	addSeqQueries(db)
+
+	qre := setUpSeqStreamPlan(t, ctx, tsv, nil)
+
+	var packets []*sqltypes.Result
+	require.NoError(t, qre.Stream(func(qr *sqltypes.Result) error {
+		packets = append(packets, qr)
+		return nil
+	}))
+
+	require.Len(t, packets, 2, "expected a fields packet followed by a rows packet")
+	assert.NotEmpty(t, packets[0].Fields, "first packet carries the fields")
+	assert.Empty(t, packets[0].Rows, "first packet carries no rows")
+	assert.Empty(t, packets[1].Fields, "row packet carries no fields")
+	assert.NotEmpty(t, packets[1].Rows, "row packet carries the rows")
+}
+
 // A dedicated-executor result honors the caller's field-metadata setting the
 // way Execute does: requesting only TYPE strips the field names.
 func TestStreamExecuteCompat_DedicatedResultHonorsIncludeFields(t *testing.T) {
@@ -453,10 +480,16 @@ func TestStreamExecuteCompat_AdminPlanDispatch(t *testing.T) {
 			qreExec := newTestQueryExecutor(ctx, tsv, query, 0)
 			execResult, execErr := qreExec.Execute()
 
+			// The streaming path delivers a result-set plan as a fields-only
+			// packet followed by row packets, so reassemble the packets to
+			// compare against Execute's single result.
 			qreStream := newTestQueryExecutorStreaming(ctx, tsv, query, 0)
-			var streamResult *sqltypes.Result
+			streamResult := &sqltypes.Result{}
 			streamErr := qreStream.Stream(func(qr *sqltypes.Result) error {
-				streamResult = qr
+				if len(qr.Fields) > 0 {
+					streamResult.Fields = qr.Fields
+				}
+				streamResult.Rows = append(streamResult.Rows, qr.Rows...)
 				return nil
 			})
 
@@ -467,7 +500,6 @@ func TestStreamExecuteCompat_AdminPlanDispatch(t *testing.T) {
 			}
 
 			require.NoError(t, streamErr, "Stream should handle %q like Execute", query)
-			require.NotNil(t, streamResult)
 			// Both paths strip field metadata to the caller's setting: Execute in
 			// tabletserver.execute, Stream before invoking the callback. These
 			// qre-level calls bypass Execute's wrapper, so strip its result the

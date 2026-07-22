@@ -541,7 +541,7 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 		// tabletserver.execute; the generic streaming path applies it through
 		// execStreamSQL's IncludeFields argument.
 		result = result.StripMetadata(sqltypes.IncludeFieldsOrDefault(qre.options))
-		return countingCallback(result)
+		return qre.streamSingleResult(result, countingCallback)
 	}
 
 	// Only the plan types enumerated here run as generic streaming SQL below.
@@ -709,6 +709,27 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 		return nil
 	}
 	return err
+}
+
+// streamSingleResult delivers a fully-materialized result from a dedicated
+// executor over the streaming callback, splitting it into the fields-then-rows
+// packet sequence the StreamExecute contract expects. vtgate's scatter merge
+// only suppresses field-only packets, so a combined fields+rows packet from one
+// shard would re-emit fields midstream; sending fields first keeps result-set
+// plans (SHOW VITESS_MIGRATIONS, throttler SHOWs, NEXT VALUE, ...) conforming.
+// Results with no fields (OK-packet plans like SET and DDL) carry no result set
+// to split and pass through unchanged.
+func (qre *QueryExecutor) streamSingleResult(result *sqltypes.Result, callback StreamCallback) error {
+	if len(result.Fields) == 0 {
+		return callback(result)
+	}
+	if err := callback(&sqltypes.Result{Fields: result.Fields}); err != nil {
+		return err
+	}
+	if len(result.Rows) == 0 {
+		return nil
+	}
+	return callback(&sqltypes.Result{Rows: result.Rows, RowsAffected: result.RowsAffected})
 }
 
 // streamDML executes a DML statement on the streaming path. A DML produces a
