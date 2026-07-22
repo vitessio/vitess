@@ -859,6 +859,20 @@ func isShardWideRecovery(recoveryFunctionCode recoveryFunction) bool {
 	}
 }
 
+// allCellsDenied returns true when every cell in shardCells appears in cellsNoRecovery.
+func allCellsDenied(shardCells, cellsNoRecovery []string) bool {
+	denied := make(map[string]bool, len(cellsNoRecovery))
+	for _, c := range cellsNoRecovery {
+		denied[c] = true
+	}
+	for _, c := range shardCells {
+		if !denied[c] {
+			return false
+		}
+	}
+	return true
+}
+
 // analysisEntriesHaveSameRecovery tells whether the two analysis entries have the same recovery function or not.
 func analysisEntriesHaveSameRecovery(prevAnalysis, newAnalysis *inst.DetectionAnalysis) bool {
 	prevRecoveryFunctionCode, prevSkipRecovery := getCheckAndRecoverFunctionCode(prevAnalysis)
@@ -927,12 +941,8 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 	// visible in recovery_detection even though no action is taken.
 	// Global-disable is checked first so it takes precedence when both conditions
 	// apply, keeping SkippedRecoveries accurate.
-	// ClusterHasNoPrimary is excluded: that analysis is shard-wide and has no
-	// specific failed tablet, so its AnalyzedCell comes from whichever replica
-	// row appeared first in the query and is non-deterministic. Gating the
-	// election on it would make recovery behavior depend on row order rather
-	// than topology. Use --prevent-cross-cell-promotion to restrict which cells
-	// ERS may promote into.
+	// Tablet-level cell check: skip recovery when the failed tablet's cell is denied.
+	// ClusterHasNoPrimary is handled separately below because it is shard-wide.
 	if isActionableRecovery &&
 		analysisEntry.Analysis != inst.ClusterHasNoPrimary &&
 		len(cellsNoRecovery) > 0 &&
@@ -941,6 +951,20 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 			analyzedInstanceAliasString, analysisEntry.AnalyzedCell))
 		recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipCellNoRecovery.String()), 1)
 		return nil
+	}
+
+	// Shard-level cell check for ClusterHasNoPrimary: suppress initial election when every
+	// cell that has tablets in the shard is denied. ClusterHasNoPrimary uses PRS (not ERS),
+	// so --prevent-cross-cell-failover does not constrain it.
+	if analysisEntry.Analysis == inst.ClusterHasNoPrimary && len(cellsNoRecovery) > 0 {
+		shardCells, err := inst.GetCellsInShard(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
+		if err != nil {
+			logger.Error(fmt.Sprintf("CheckAndRecover: Tablet: %+v: error fetching shard cells for --cells-no-recovery check: %v", analyzedInstanceAliasString, err))
+		} else if len(shardCells) > 0 && allCellsDenied(shardCells, cellsNoRecovery) {
+			logger.Info(fmt.Sprintf("CheckAndRecover: Tablet: %+v: NOT Recovering host (all shard cells are in --cells-no-recovery)", analyzedInstanceAliasString))
+			recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipCellNoRecovery.String()), 1)
+			return nil
+		}
 	}
 
 	// Prioritise primary recovery.
