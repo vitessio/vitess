@@ -139,6 +139,7 @@ func ParseDDLStrategy(strategyVariable string) (*DDLStrategySetting, error) {
 			return nil, fmt.Errorf("--force-cut-over-after is only valid in 'vitess' strategy. Found %v value in '%v' strategy", cutoverAfter, setting.Strategy)
 		}
 	}
+
 	switch setting.Strategy {
 	case DDLStrategyVitess, DDLStrategyOnline, DDLStrategyMySQL, DDLStrategyDirect:
 		if opts := setting.RuntimeOptions(); len(opts) > 0 {
