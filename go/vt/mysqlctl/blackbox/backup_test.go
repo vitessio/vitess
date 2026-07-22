@@ -207,12 +207,12 @@ func TestExecuteBackup(t *testing.T) {
 
 	// The engine's shutdown deadline is the larger of
 	// BuiltinBackupMysqldTimeout (1s here) and MysqlShutdownTimeout plus
-	// MysqldShutdownGracePeriod, so both are shrunk to make the deadline
-	// expire quickly while the fake mysqld is still shutting down.
-	oldGracePeriod := SetMysqldShutdownGracePeriod(time.Second)
-	defer SetMysqldShutdownGracePeriod(oldGracePeriod)
+	// MysqldShutdownGracePeriod, so a short parent context bounds the
+	// shutdown instead; the engine's child timeout cannot extend it.
+	shortCtx, shortCancel := context.WithTimeout(ctx, 2*time.Second)
+	defer shortCancel()
 
-	backupResult, err = be.ExecuteBackup(ctx, mysqlctl.BackupParams{
+	backupResult, err = be.ExecuteBackup(shortCtx, mysqlctl.BackupParams{
 		Logger: logutil.NewConsoleLogger(),
 		Mysqld: mysqld,
 		Cnf: &mysqlctl.Mycnf{

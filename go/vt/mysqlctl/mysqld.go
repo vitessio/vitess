@@ -85,11 +85,10 @@ const (
 // MysqldShutdownGracePeriod bounds the pid/socket file wait in
 // Mysqld.Shutdown after mysqladmin has given up waiting, for callers
 // whose context has no deadline. It also pads the shutdown contexts
-// derived from the shutdown timeout by mysqlctl, mysqlctld, vtbackup
-// and the builtin backup engine, giving that wait a window to observe
-// the exit.
-// Exported for testing.
-var MysqldShutdownGracePeriod = 30 * time.Second
+// derived from the shutdown timeout by mysqlctl, mysqlctld, vtbackup,
+// vtcombo and the builtin backup engine, giving that wait a window to
+// observe the exit.
+const MysqldShutdownGracePeriod = 30 * time.Second
 
 var (
 	// DisableActiveReparents is a flag to disable active
