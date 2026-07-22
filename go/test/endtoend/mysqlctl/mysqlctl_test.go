@@ -166,6 +166,19 @@ func TestAutoDetect(t *testing.T) {
 // mysqladminAbortedWaiting's match of the literal mysqladmin message
 // against the real mysqladmin binary of the MySQL version this suite runs.
 func TestShutdownWithTinyWaitTime(t *testing.T) {
+	// Restore mysqld for any tests that follow, registered before the
+	// shutdown is issued so a failed assertion below cannot leave the
+	// shared fixture down.
+	t.Cleanup(func() {
+		out, err := exec.Command(replicaTablet.MysqlctlProcess.Binary,
+			"--tablet-uid", strconv.Itoa(replicaTablet.TabletUID),
+			"--mysql-port", strconv.Itoa(replicaTablet.MysqlctlProcess.MySQLPort),
+			"--log-format", "text",
+			"start",
+		).CombinedOutput()
+		require.NoError(t, err, "mysqlctl start failed, output: %s", out)
+	})
+
 	out, err := exec.Command(replicaTablet.MysqlctlProcess.Binary,
 		"--tablet-uid", strconv.Itoa(replicaTablet.TabletUID),
 		"--log-format", "text",
@@ -181,13 +194,4 @@ func TestShutdownWithTinyWaitTime(t *testing.T) {
 	// clean InnoDB shutdown takes orders of magnitude longer than that.
 	require.Contains(t, string(out), "mysqladmin gave up waiting for mysqld to stop",
 		"expected the mysqladmin aborted-wait fallback to be exercised, output: %s", out)
-
-	// Bring mysqld back up for any tests that follow.
-	out, err = exec.Command(replicaTablet.MysqlctlProcess.Binary,
-		"--tablet-uid", strconv.Itoa(replicaTablet.TabletUID),
-		"--mysql-port", strconv.Itoa(replicaTablet.MysqlctlProcess.MySQLPort),
-		"--log-format", "text",
-		"start",
-	).CombinedOutput()
-	require.NoError(t, err, "mysqlctl start failed, output: %s", out)
 }
