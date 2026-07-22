@@ -33,6 +33,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/streamlog"
@@ -368,6 +369,67 @@ func TestStreamExecuteCompat_NextvalHandling(t *testing.T) {
 		"Stream should handle PlanNextval like Execute does")
 }
 
+// setUpSeqStreamPlan wires up the sequence table responses execNextval needs
+// and returns a streaming QueryExecutor for NEXT VALUE, which is a dedicated
+// executor that returns both fields and rows.
+func setUpSeqStreamPlan(t *testing.T, ctx context.Context, tsv *TabletServer, options *querypb.ExecuteOptions) *QueryExecutor {
+	t.Helper()
+	logStats := tabletenv.NewLogStats(ctx, "TestSeqStream", streamlog.NewQueryLogConfigForTest())
+	query := "select next 1 values from seq"
+	plan, err := tsv.qe.GetStreamPlan(ctx, logStats, query, false)
+	require.NoError(t, err)
+	return &QueryExecutor{
+		ctx:      ctx,
+		query:    query,
+		bindVars: make(map[string]*querypb.BindVariable),
+		options:  options,
+		plan:     plan,
+		logStats: logStats,
+		tsv:      tsv,
+	}
+}
+
+func addSeqQueries(db *fakesqldb.DB) {
+	db.AddQuery("select next_id, cache from seq where id = 0 for update", &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Name: "next_id", Type: sqltypes.Int64},
+			{Name: "cache", Type: sqltypes.Int64},
+		},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt64(1),
+			sqltypes.NewInt64(3),
+		}},
+	})
+	db.AddQuery("update seq set next_id = 4 where id = 0", &sqltypes.Result{})
+}
+
+// A dedicated-executor result honors the caller's field-metadata setting the
+// way Execute does: requesting only TYPE strips the field names.
+func TestStreamExecuteCompat_DedicatedResultHonorsIncludeFields(t *testing.T) {
+	ctx := t.Context()
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+	addSeqQueries(db)
+
+	qre := setUpSeqStreamPlan(t, ctx, tsv, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_TYPE_ONLY})
+
+	var fields []*querypb.Field
+	require.NoError(t, qre.Stream(func(qr *sqltypes.Result) error {
+		if len(qr.Fields) > 0 {
+			fields = qr.Fields
+		}
+		return nil
+	}))
+
+	require.NotEmpty(t, fields, "the fields packet must still be sent")
+	for _, f := range fields {
+		assert.Empty(t, f.Name, "TYPE_ONLY must strip the field name")
+		assert.Equal(t, sqltypes.Int64, f.Type, "the field type must be retained")
+	}
+}
+
 // Stream() dispatches the OnlineDDL and throttler admin plans to their
 // executors, matching Execute(). These plans carry a nil FullQuery, so the
 // generic SQL path would send the Vitess-internal statement (e.g. "show
@@ -406,6 +468,11 @@ func TestStreamExecuteCompat_AdminPlanDispatch(t *testing.T) {
 
 			require.NoError(t, streamErr, "Stream should handle %q like Execute", query)
 			require.NotNil(t, streamResult)
+			// Both paths strip field metadata to the caller's setting: Execute in
+			// tabletserver.execute, Stream before invoking the callback. These
+			// qre-level calls bypass Execute's wrapper, so strip its result the
+			// same way to compare like with like.
+			execResult = execResult.StripMetadata(sqltypes.IncludeFieldsOrDefault(nil))
 			assert.Equal(t, execResult.Fields, streamResult.Fields)
 			assert.Equal(t, execResult.Rows, streamResult.Rows)
 		})

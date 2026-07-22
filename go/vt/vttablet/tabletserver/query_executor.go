@@ -537,6 +537,10 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 		rowsAffected = result.RowsAffected
 		qre.logStats.RowsAffected = int(result.RowsAffected)
 		qre.logStats.Rows = result.Rows
+		// Honor the caller's field-metadata setting the way Execute does in
+		// tabletserver.execute; the generic streaming path applies it through
+		// execStreamSQL's IncludeFields argument.
+		result = result.StripMetadata(sqltypes.IncludeFieldsOrDefault(qre.options))
 		return countingCallback(result)
 	}
 
