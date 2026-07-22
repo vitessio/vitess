@@ -1303,6 +1303,9 @@ func (c *Conn) handleComStmtExecute(handler Handler, data []byte) (kontinue bool
 	receivedResult := false
 	// sendFinished is set if the response should just be an OK packet.
 	sendFinished := false
+	// okSentWithMoreResults is set if that OK carried SERVER_MORE_RESULTS_EXISTS,
+	// meaning an ERR is still a protocol-legal next result after it.
+	okSentWithMoreResults := false
 	prepare := c.PrepareData[stmtID]
 	err = handler.ComStmtExecute(c, prepare, func(qr *sqltypes.Result) error {
 		if sendFinished {
@@ -1315,6 +1318,7 @@ func (c *Conn) handleComStmtExecute(handler Handler, data []byte) (kontinue bool
 
 			if len(qr.Fields) == 0 {
 				sendFinished = true
+				okSentWithMoreResults = c.StatusFlags&ServerMoreResultsExists != 0
 				// We should not send any more packets after this.
 				ok := PacketOK{
 					affectedRows:     qr.RowsAffected,
@@ -1345,10 +1349,10 @@ func (c *Conn) handleComStmtExecute(handler Handler, data []byte) (kontinue bool
 		}
 	} else {
 		if err != nil {
-			// An OK packet already terminated the result; we cannot safely
-			// append an ERR without desynchronizing the protocol for the
-			// next command. Tear down the connection instead.
-			if sendFinished {
+			// A final OK (no SERVER_MORE_RESULTS_EXISTS) already terminated
+			// the result. Appending an ERR would desynchronize the protocol,
+			// so tear down the connection instead.
+			if sendFinished && !okSentWithMoreResults {
 				log.Error("Error after OK-terminated result", slog.String("connection", c.String()), slog.Any("error", err))
 				return false
 			}
@@ -1496,6 +1500,9 @@ func (c *Conn) execQueryMulti(query string, handler Handler) execResult {
 	// end packet after the query is done or not. Initially we don't need to send an end packet
 	// so we initialize this value to false.
 	needsEndPacket := false
+	// lastOKHadMoreResults is set if the last OK carried SERVER_MORE_RESULTS_EXISTS,
+	// meaning an ERR is still a protocol-legal next result after it.
+	lastOKHadMoreResults := false
 	callbackCalled := false
 	res := execSuccess
 
@@ -1547,6 +1554,7 @@ func (c *Conn) execQueryMulti(query string, handler Handler) execResult {
 					sessionStateData: qr.QueryResult.SessionStateChanges,
 				}
 				needsEndPacket = false
+				lastOKHadMoreResults = flag&ServerMoreResultsExists != 0
 				return c.writeOKPacket(&ok)
 			}
 
@@ -1579,10 +1587,10 @@ func (c *Conn) execQueryMulti(query string, handler Handler) execResult {
 	}
 
 	if err != nil {
-		// An OK packet already terminated the last result; we cannot safely
-		// append an ERR without desynchronizing the protocol for the next
-		// command. Tear down the connection instead.
-		if !needsEndPacket {
+		// A final OK (no SERVER_MORE_RESULTS_EXISTS) already terminated the
+		// last result. Appending an ERR would desynchronize the protocol,
+		// so tear down the connection instead.
+		if !needsEndPacket && !lastOKHadMoreResults {
 			log.Error("Error after OK-terminated result", slog.String("connection", c.String()), slog.Any("error", err))
 			return connErr
 		}
@@ -1653,6 +1661,9 @@ func (c *Conn) execQuery(query string, handler Handler, more bool) execResult {
 	callbackCalled := false
 	// sendFinished is set if the response should just be an OK packet.
 	sendFinished := false
+	// okSentWithMoreResults is set if that OK carried SERVER_MORE_RESULTS_EXISTS,
+	// meaning an ERR is still a protocol-legal next result after it.
+	okSentWithMoreResults := false
 
 	err := handler.ComQuery(c, query, func(qr *sqltypes.Result) error {
 		flag := c.StatusFlags
@@ -1669,6 +1680,7 @@ func (c *Conn) execQuery(query string, handler Handler, more bool) execResult {
 
 			if len(qr.Fields) == 0 {
 				sendFinished = true
+				okSentWithMoreResults = flag&ServerMoreResultsExists != 0
 
 				// A successful callback with no fields means that this was a
 				// DML or other write-only operation.
@@ -1706,10 +1718,10 @@ func (c *Conn) execQuery(query string, handler Handler, more bool) execResult {
 		return execErr
 	}
 	if err != nil {
-		// An OK packet already terminated the result; we cannot safely
-		// append an ERR without desynchronizing the protocol for the
-		// next command. Tear down the connection instead.
-		if sendFinished {
+		// A final OK (no SERVER_MORE_RESULTS_EXISTS) already terminated the
+		// result. Appending an ERR would desynchronize the protocol, so
+		// tear down the connection instead.
+		if sendFinished && !okSentWithMoreResults {
 			log.Error("Error after OK-terminated result", slog.String("connection", c.String()), slog.Any("error", err))
 			return connErr
 		}
