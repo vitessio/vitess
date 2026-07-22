@@ -1598,6 +1598,106 @@
     }
   },
   {
+    "comment": "values derived table",
+    "query": "select * from (values row(1, 1)) as sub",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select * from (values row(1, 1)) as sub",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select column_0, column_1 from (values row(1, 1) limit 0) as sub where 1 != 1",
+        "Query": "select column_0, column_1 from (values row(1, 1)) as sub"
+      }
+    }
+  },
+  {
+    "comment": "values derived table with explicit column aliases",
+    "query": "select sub.c1 from (values row(1, 1)) as sub(c1, c2)",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select sub.c1 from (values row(1, 1)) as sub(c1, c2)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select sub.c1 from (values row(1, 1) limit 0) as sub(c1, c2) where 1 != 1",
+        "Query": "select sub.c1 from (values row(1, 1)) as sub(c1, c2)"
+      }
+    }
+  },
+  {
+    "comment": "values list arg derived table",
+    "query": "select 1 from (values ::vals) as sub",
+    "plan": "VT12001: unsupported: VALUES list argument in derived table requires column aliases"
+  },
+  {
+    "comment": "values list arg derived table with explicit column aliases",
+    "query": "select sub.c1 from (values ::vals) as sub(c1, c2)",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select sub.c1 from (values ::vals) as sub(c1, c2)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select sub.c1 from (values ::vals limit 0) as sub(c1, c2) where 1 != 1",
+        "Query": "select sub.c1 from (values ::vals) as sub(c1, c2)"
+      }
+    }
+  },
+  {
+    "comment": "filtered values derived table",
+    "query": "select * from (values row(1, 1), row(2, 2)) as sub where sub.column_0 = 1",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select * from (values row(1, 1), row(2, 2)) as sub where sub.column_0 = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select column_0, column_1 from (values row(1, 1), row(2, 2) limit 0) as sub where 1 != 1",
+        "Query": "select column_0, column_1 from (values row(1, 1), row(2, 2)) as sub where sub.column_0 = 1"
+      }
+    }
+  },
+  {
+    "comment": "filtered values derived table with explicit column aliases",
+    "query": "select sub.c1 from (values row(1, 1), row(2, 2)) as sub(c1, c2) where sub.c1 = 1",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select sub.c1 from (values row(1, 1), row(2, 2)) as sub(c1, c2) where sub.c1 = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select sub.c1 from (values row(1, 1), row(2, 2) limit 0) as sub(c1, c2) where 1 != 1",
+        "Query": "select sub.c1 from (values row(1, 1), row(2, 2)) as sub(c1, c2) where sub.c1 = 1"
+      }
+    }
+  },
+  {
     "comment": "derived table",
     "query": "select id from (select id, col from user where id = 5) as t",
     "plan": {

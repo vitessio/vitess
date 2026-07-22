@@ -468,6 +468,10 @@ func columnMismatch(gen *Generate, ins *sqlparser.Insert, sel sqlparser.TableSta
 		return true
 	}
 	if origColCount > sel.GetColumnCount() {
+		if _, isValues := sel.(*sqlparser.ValuesStatement); isValues {
+			// VALUES rows can never contain a StarExpr, so this is always a mismatch.
+			return true
+		}
 		sel := getFirstSelect(sel)
 		var hasStarExpr bool
 		for _, sExpr := range sel.GetColumns() {
@@ -534,6 +538,8 @@ func valuesProvided(rows sqlparser.InsertRows) bool {
 		return len(values) >= 0 && len(values[0]) > 0
 	case sqlparser.SelectStatement:
 		return true
+	case *sqlparser.ValuesStatement:
+		return len(values.Rows) > 0
 	}
 	return false
 }
@@ -616,7 +622,7 @@ func modifyForAutoinc(ctx *plancontext.PlanningContext, ins *sqlparser.Insert, v
 	}
 	colNum, newColAdded := findOrAddColumn(ins, vTable.AutoIncrement.Column)
 	switch rows := ins.Rows.(type) {
-	case sqlparser.SelectStatement:
+	case sqlparser.SelectStatement, *sqlparser.ValuesStatement:
 		gen.Offset = colNum
 		gen.added = newColAdded
 	case sqlparser.Values:

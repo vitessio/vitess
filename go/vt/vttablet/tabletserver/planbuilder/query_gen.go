@@ -27,10 +27,10 @@ func GenerateFullQuery(statement sqlparser.Statement) *sqlparser.ParsedQuery {
 	return buf.ParsedQuery()
 }
 
-// GenerateLimitQuery generates a select query with a limit clause.
-func GenerateLimitQuery(selStmt sqlparser.SelectStatement) *sqlparser.ParsedQuery {
+// GenerateLimitQuery generates a table statement query with a limit clause.
+func GenerateLimitQuery(stmt sqlparser.TableStatement) *sqlparser.ParsedQuery {
 	buf := sqlparser.NewTrackedBuffer(nil)
-	switch sel := selStmt.(type) {
+	switch sel := stmt.(type) {
 	case *sqlparser.Select:
 		limit := sel.Limit
 		if limit == nil {
@@ -48,7 +48,15 @@ func GenerateLimitQuery(selStmt sqlparser.SelectStatement) *sqlparser.ParsedQuer
 				sel.Limit = nil
 			}()
 		}
+	case *sqlparser.ValuesStatement:
+		limit := sel.Limit
+		if limit == nil {
+			sel.Limit = execLimit
+			defer func() {
+				sel.Limit = nil
+			}()
+		}
 	}
-	buf.Myprintf("%v", selStmt)
+	buf.Myprintf("%v", stmt)
 	return buf.ParsedQuery()
 }

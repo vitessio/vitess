@@ -35,8 +35,50 @@ func expandHorizon(ctx *plancontext.PlanningContext, horizon *Horizon) (Operator
 		return expandSelectHorizon(ctx, horizon, sel)
 	case *sqlparser.Union:
 		return expandUnionHorizon(ctx, horizon, sel)
+	case *sqlparser.ValuesStatement:
+		return expandValuesHorizon(ctx, horizon, sel)
 	}
 	panic(vterrors.VT13001(fmt.Sprintf("unexpected statement type %T", statement)))
+}
+
+func expandValuesHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, values *sqlparser.ValuesStatement) (Operator, *ApplyResult) {
+	qp := horizon.getQP(ctx)
+
+	// MySQL silently ignores ORDER BY on a VALUES statement, so the sort (and
+	// any LIMIT, which must apply after the sort) has to happen at the vtgate
+	// level. The rows live in the horizon's query, so keep the horizon as the
+	// source of the new operators, but strip ORDER BY and LIMIT from the
+	// statement that will be pushed under the route. Clone before stripping so
+	// the caller's AST stays untouched.
+	stripped := sqlparser.Clone(values)
+	stripped.Order = nil
+	stripped.Limit = nil
+	horizon.Query = stripped
+	horizon.QP = nil
+
+	var op Operator = createProjectionWithoutAggr(ctx, qp, horizon)
+	extracted := []string{"Projection"}
+
+	if len(qp.OrderExprs) > 0 {
+		op = expandOrderBy(ctx, op, qp, horizon.Alias)
+		extracted = append(extracted, "Ordering")
+
+		// The sort adds a weight_string helper column for the ordering. The
+		// top-level truncation only reaches the plan root, so when this ordered
+		// VALUES is a UNION arm the helper column would leak into the
+		// Concatenate and make the arm wider than its siblings. Truncate the
+		// ordering to the user-visible columns here so every arm lines up.
+		if ordering, ok := op.(*Ordering); ok {
+			ordering.setTruncateColumnCount(len(qp.SelectExprs))
+		}
+	}
+
+	if values.Limit != nil {
+		op = newLimit(op, values.Limit, true)
+		extracted = append(extracted, "Limit")
+	}
+
+	return op, Rewrote(fmt.Sprintf("expand VALUES horizon into (%s)", strings.Join(extracted, ", ")))
 }
 
 func expandUnionHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, union *sqlparser.Union) (Operator, *ApplyResult) {

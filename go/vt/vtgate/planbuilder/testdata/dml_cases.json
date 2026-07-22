@@ -3886,6 +3886,91 @@
     "skip_e2e": true
   },
   {
+    "comment": "insert using values statement with more columns in insert",
+    "query": "insert into music(id, user_id) (values row(1))",
+    "plan": "VT03006: column count does not match value count with the row",
+    "skip_e2e": true
+  },
+  {
+    "comment": "insert using values statement with more columns in values",
+    "query": "insert into music(id) (values row(1, 2))",
+    "plan": "VT03006: column count does not match value count with the row",
+    "skip_e2e": true
+  },
+  {
+    "comment": "insert using values statement with auto-inc column present in the column list",
+    "query": "insert into user(name, id) (values row('a', 1))",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "INSERT",
+      "Original": "insert into user(name, id) (values row('a', 1))",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Select",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Offset(1)",
+        "VindexOffsetFromSelect": {
+          "costly_map": "[-1]",
+          "name_user_map": "[0]",
+          "user_index": "[1]"
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "values row('a', 1) limit 0",
+            "Query": "values row('a', 1)"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "insert using values statement, no col list with auto-inc and authoritative column list",
+    "query": "insert into unsharded_authoritative (values row(1, 'a'))",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "INSERT",
+      "Original": "insert into unsharded_authoritative (values row(1, 'a'))",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Select",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Offset(0)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "values row(1, 'a') limit 0",
+            "Query": "values row(1, 'a')"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded_authoritative"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
     "comment": "insert using select with more columns in select after accounting for star column",
     "query": "insert into music(id, user_id) select id, *, 2 from user",
     "plan": "syntax error at position 44",

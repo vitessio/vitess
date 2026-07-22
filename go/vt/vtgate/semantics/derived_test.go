@@ -107,6 +107,39 @@ func TestScopingWDerivedTables(t *testing.T) {
 			query:         "select uu.count from (select count(*) as `count` from t1) uu",
 			directDeps:    TS1,
 			recursiveDeps: TS0,
+		}, {
+			query:         "select sub.column_0 from (values row(1, 1)) as sub",
+			directDeps:    TS0,
+			recursiveDeps: NoTables,
+		}, {
+			query:         "select sub.c1 from (values row(1, 1)) as sub(c1, c2)",
+			directDeps:    TS0,
+			recursiveDeps: NoTables,
+		}, {
+			query:        "select sub.c1 from (values row(1, 1)) as sub(c1, c1)",
+			errorMessage: "Duplicate column name 'c1'",
+		}, {
+			query:        "select * from (values row(1, 1), row(2)) as sub",
+			errorMessage: "The used SELECT statements have a different number of columns: 2, 1",
+		}, {
+			query:        "select * from (values row((select 1))) as sub",
+			errorMessage: "VT12001: unsupported: subqueries in VALUES statements",
+		}, {
+			query:        "select * from (values row(1) order by (select 1)) as sub",
+			errorMessage: "VT12001: unsupported: subqueries in VALUES statements",
+		}, {
+			query:        "select 1 from (values ::vals) as sub",
+			errorMessage: "VT12001: unsupported: VALUES list argument in derived table requires column aliases",
+		}, {
+			query:        "select * from (values ::vals) as sub",
+			errorMessage: "VT12001: unsupported: VALUES list argument in derived table requires column aliases",
+		}, {
+			query:         "select sub.c1 from (values ::vals) as sub(c1, c2)",
+			directDeps:    TS0,
+			recursiveDeps: NoTables,
+		}, {
+			query:        "select sub.c1 from (values ::vals) as sub(c1, c1)",
+			errorMessage: "Duplicate column name 'c1'",
 		},
 	}
 	for _, query := range queries {
@@ -129,6 +162,36 @@ func TestScopingWDerivedTables(t *testing.T) {
 				sel := parse.(*sqlparser.Select)
 				assert.Equal(t, query.recursiveDeps, st.RecursiveDeps(extract(sel, 0)), "RecursiveDeps")
 				assert.Equal(t, query.directDeps, st.DirectDeps(extract(sel, 0)), "DirectDeps")
+			}
+		})
+	}
+}
+
+func TestSemTableSelectExprsValuesStatement(t *testing.T) {
+	tests := []struct {
+		query   string
+		columns []string
+	}{
+		{
+			query:   "values row(1, 2)",
+			columns: []string{"column_0", "column_1"},
+		},
+		{
+			query: "values ::vals",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.query, func(t *testing.T) {
+			stmt, err := sqlparser.NewTestParser().Parse(tt.query)
+			require.NoError(t, err)
+			values, ok := stmt.(*sqlparser.ValuesStatement)
+			require.True(t, ok)
+
+			selectExprs := EmptySemTable().SelectExprs(values)
+			require.Len(t, selectExprs, len(tt.columns))
+			for i, column := range tt.columns {
+				assert.Equal(t, column, sqlparser.String(selectExprs[i]))
 			}
 		})
 	}

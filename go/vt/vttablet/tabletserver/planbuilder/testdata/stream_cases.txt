@@ -66,6 +66,14 @@
   "FullQuery": "explain foo"
 }
 
+# values statement
+"values row(1)"
+{
+  "PlanID": "SelectStream",
+  "TableName": "",
+  "FullQuery": "values row(1)"
+}
+
 # dml update
 "update a set b = 1"
 {

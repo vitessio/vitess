@@ -85,6 +85,26 @@ func TestAddQueryHint(t *testing.T) {
 	}
 }
 
+func TestValuesStatementListArgColumns(t *testing.T) {
+	stmt, err := NewTestParser().Parse("values ::vals")
+	require.NoError(t, err)
+	values, ok := stmt.(*ValuesStatement)
+	require.True(t, ok)
+
+	assert.Equal(t, 0, values.GetColumnCount())
+	assert.Empty(t, values.GetColumns())
+}
+
+func TestValuesStatementIsTableStatementOnly(t *testing.T) {
+	stmt, err := NewTestParser().Parse("values row(1)")
+	require.NoError(t, err)
+
+	_, isTableStatement := stmt.(TableStatement)
+	assert.True(t, isTableStatement)
+	_, isSelectStatement := stmt.(SelectStatement)
+	assert.False(t, isSelectStatement)
+}
+
 func TestSQLTypeToQueryType(t *testing.T) {
 	tcs := []struct {
 		input    string
@@ -479,6 +499,48 @@ func TestVersionedCommentParsing(t *testing.T) {
 			}
 			require.NoError(t, err, "unexpected error for: %s", tt.query)
 			assert.Equal(t, tt.expected, String(stmt))
+		})
+	}
+}
+
+func TestValuesStatementHasSubquery(t *testing.T) {
+	tests := []struct {
+		query    string
+		expected bool
+	}{{
+		query:    "values row((select 1))",
+		expected: true,
+	}, {
+		query:    "values row(1), row(2) order by (select max(id) from user)",
+		expected: true,
+	}, {
+		query:    "values row(1) limit (select 1)",
+		expected: true,
+	}, {
+		query:    "values row(1), row(2) order by column_0",
+		expected: false,
+	}, {
+		query:    "values row(1), row(2) order by column_0 limit 1",
+		expected: false,
+	}, {
+		query:    "values row(1), row(2)",
+		expected: false,
+	}, {
+		query:    "with cte as (select (select 1) from dual) values row(1)",
+		expected: false,
+	}, {
+		query:    "with cte as (select 1 from dual) values row((select 1))",
+		expected: true,
+	}}
+
+	parser := NewTestParser()
+	for _, tt := range tests {
+		t.Run(tt.query, func(t *testing.T) {
+			stmt, err := parser.Parse(tt.query)
+			require.NoError(t, err)
+			values, ok := stmt.(*ValuesStatement)
+			require.True(t, ok)
+			assert.Equal(t, tt.expected, ValuesStatementHasSubquery(values))
 		})
 	}
 }

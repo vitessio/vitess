@@ -157,6 +157,9 @@ func (u *Union) GetSelectFor(source int) *sqlparser.Select {
 	for {
 		switch op := src.(type) {
 		case *Horizon:
+			if _, isValues := op.Query.(*sqlparser.ValuesStatement); isValues {
+				panic(vterrors.VT12001("filtering on a UNION containing a VALUES statement"))
+			}
 			return getFirstSelect(op.Query)
 		case *Route:
 			src = op.Source

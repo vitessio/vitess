@@ -44,6 +44,8 @@ func BuildPermissions(stmt sqlparser.Statement) []Permission {
 		permissions = buildSubqueryPermissions(node, role, permissions)
 	case *sqlparser.Union:
 		permissions = buildSubqueryPermissions(node, tableacl.READER, permissions)
+	case *sqlparser.ValuesStatement:
+		permissions = buildSubqueryPermissions(node, tableacl.READER, permissions)
 	case *sqlparser.Insert:
 		permissions = buildTableExprPermissions(node.Table, tableacl.WRITER, nil, permissions)
 		permissions = buildSubqueryPermissions(node, tableacl.READER, permissions)
@@ -102,6 +104,10 @@ func buildSubqueryPermissions(stmt sqlparser.Statement, role tableacl.Role, perm
 				cteScopes = append(cteScopes, gatherCTEs(node.With))
 			}
 		case *sqlparser.Union:
+			if node.With != nil {
+				cteScopes = append(cteScopes, gatherCTEs(node.With))
+			}
+		case *sqlparser.ValuesStatement:
 			if node.With != nil {
 				cteScopes = append(cteScopes, gatherCTEs(node.With))
 			}

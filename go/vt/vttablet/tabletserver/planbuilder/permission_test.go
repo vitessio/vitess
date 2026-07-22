@@ -115,6 +115,21 @@ func TestBuildPermissions(t *testing.T) {
 			Role:      tableacl.READER,
 		}},
 	}, {
+		input: "values row((select a from t2))",
+		output: []Permission{{
+			TableName: "t2",
+			Role:      tableacl.READER,
+		}},
+	}, {
+		input:  "with cte as (select 1) values row(1)",
+		output: nil,
+	}, {
+		input: "select * from (values row((select a from t2))) as v",
+		output: []Permission{{
+			TableName: "t2",
+			Role:      tableacl.READER,
+		}},
+	}, {
 		input: "insert into t1 values((select a from t2), 1)",
 		output: []Permission{{
 			TableName: "t1",

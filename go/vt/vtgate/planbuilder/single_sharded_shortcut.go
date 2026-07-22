@@ -27,7 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-func selectUnshardedShortcut(ctx *plancontext.PlanningContext, stmt sqlparser.SelectStatement, ks *vindexes.Keyspace) (engine.Primitive, []string, error) {
+func selectUnshardedShortcut(ctx *plancontext.PlanningContext, stmt sqlparser.TableStatement, ks *vindexes.Keyspace) (engine.Primitive, []string, error) {
 	// this method is used when the query we are handling has all tables in the same unsharded keyspace
 	sqlparser.SafeRewrite(stmt, nil, func(cursor *sqlparser.Cursor) bool {
 		switch node := cursor.Node().(type) {
@@ -37,6 +37,15 @@ func selectUnshardedShortcut(ctx *plancontext.PlanningContext, stmt sqlparser.Se
 			cursor.Replace(sqlparser.TableName{
 				Name: node.Name,
 			})
+		case *sqlparser.ValuesStatement:
+			// MySQL silently ignores ORDER BY on a VALUES statement and
+			// rejects expressions in it with an unknown-column error, so
+			// don't send it. Only derived tables reach here (their rows are
+			// unordered anyway) — any other ordered VALUES skips the
+			// shortcut, see HasOrderedValuesOutsideDerivedTable.
+			if _, isDerived := cursor.Parent().(*sqlparser.DerivedTable); isDerived {
+				node.Order = nil
+			}
 		}
 		return true
 	})

@@ -617,6 +617,7 @@ func TestSQLSelectLimit(t *testing.T) {
 		utils.Exec(t, conn, "set workload = "+workload)
 		utils.Exec(t, conn, "set sql_select_limit = 2")
 		utils.AssertMatches(t, conn, "select uid, msg from t7_xxhash order by uid", `[[VARCHAR("1") VARCHAR("a")] [VARCHAR("2") VARCHAR("b")]]`)
+		utils.AssertMatches(t, conn, "values row(1), row(2), row(3)", `[[INT64(1)] [INT64(2)]]`)
 		utils.AssertMatches(t, conn, "(select uid, msg from t7_xxhash order by uid)", `[[VARCHAR("1") VARCHAR("a")] [VARCHAR("2") VARCHAR("b")]]`)
 		utils.AssertMatches(t, conn, "select uid, msg from t7_xxhash order by uid limit 4", `[[VARCHAR("1") VARCHAR("a")] [VARCHAR("2") VARCHAR("b")] [VARCHAR("3") NULL] [VARCHAR("4") VARCHAR("a")]]`)
 

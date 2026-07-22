@@ -291,22 +291,18 @@ func containsStar(s []sqlparser.SelectExpr) bool {
 }
 
 func checkUnionColumns(union *sqlparser.Union) error {
-	lft, err := sqlparser.GetFirstSelect(union)
-	if err != nil {
-		return err
+	if unionHasValuesListArg(union) {
+		return vterrors.VT12001("VALUES list argument in UNION statements")
 	}
-	firstProj := lft.GetColumns()
+
+	firstProj := union.Left.GetColumns()
 	if containsStar(firstProj) {
 		// if we still have *, we can't figure out if the query is invalid or not
 		// we'll fail it at run time instead
 		return nil
 	}
 
-	rgt, err := sqlparser.GetFirstSelect(union.Right)
-	if err != nil {
-		return err
-	}
-	secondProj := rgt.GetColumns()
+	secondProj := union.Right.GetColumns()
 	if containsStar(secondProj) {
 		return nil
 	}
@@ -318,6 +314,30 @@ func checkUnionColumns(union *sqlparser.Union) error {
 	}
 
 	return nil
+}
+
+func unionHasValuesListArg(union *sqlparser.Union) bool {
+	return tableStatementHasValuesListArg(union.Left) || tableStatementHasValuesListArg(union.Right)
+}
+
+func tableStatementHasValuesListArg(stmt sqlparser.TableStatement) bool {
+	switch stmt := stmt.(type) {
+	case *sqlparser.ValuesStatement:
+		return stmt.ListArg != ""
+	case *sqlparser.Union:
+		return unionHasValuesListArg(stmt)
+	}
+	return false
+}
+
+func tableStatementHasValues(stmt sqlparser.TableStatement) bool {
+	switch stmt := stmt.(type) {
+	case *sqlparser.ValuesStatement:
+		return true
+	case *sqlparser.Union:
+		return tableStatementHasValues(stmt.Left) || tableStatementHasValues(stmt.Right)
+	}
+	return false
 }
 
 /*
@@ -349,9 +369,9 @@ func isParentDeleteOrUpdate(cursor *sqlparser.Cursor) bool {
 	return isDelete || isUpdate
 }
 
-func isParentSelectStatement(cursor *sqlparser.Cursor) bool {
-	_, isSelect := cursor.Parent().(sqlparser.SelectStatement)
-	return isSelect
+func isParentTableStatement(cursor *sqlparser.Cursor) bool {
+	_, isTableStatement := cursor.Parent().(sqlparser.TableStatement)
+	return isTableStatement
 }
 
 type originable interface {
@@ -420,6 +440,16 @@ func (a *analyzer) canShortCut(statement sqlparser.Statement) (canShortCut bool)
 	}
 
 	if a.fullAnalysis {
+		return false
+	}
+
+	// MySQL silently ignores ORDER BY on a VALUES statement, so an ordered
+	// VALUES outside a derived table needs the full analysis: full planning
+	// handles the ORDER BY correctly (sorting at the vtgate level for a
+	// top-level VALUES, safely stripping it in CTE/derived contexts to match
+	// MySQL), while the shortcut would send the query as-is and silently
+	// drop the ordering.
+	if sqlparser.HasOrderedValuesOutsideDerivedTable(statement) {
 		return false
 	}
 

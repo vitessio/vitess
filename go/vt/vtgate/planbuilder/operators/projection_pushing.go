@@ -82,6 +82,12 @@ func tryPushProjection(
 
 	switch src := p.Source.(type) {
 	case *Route:
+		if valuesStatementUnderRoute(src) {
+			// the SQL builder cannot add a projection to a bare VALUES
+			// statement, so the projection has to stay at the vtgate level
+			debugNoRewrite("projection push blocked: cannot project on a VALUES statement")
+			return p, NoRewrite
+		}
 		return Swap(p, src, "push projection under route")
 	case *Limit:
 		return Swap(p, src, "push projection under limit")

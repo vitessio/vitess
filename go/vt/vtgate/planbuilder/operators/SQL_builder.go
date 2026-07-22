@@ -198,8 +198,7 @@ func (qb *queryBuilder) pushUnionInsideDerived() {
 			As:   sqlparser.NewIdentifierCS("dt"),
 		}},
 	}
-	firstSelect := getFirstSelect(selStmt)
-	sel.SetSelectExprs(unionSelects(firstSelect.GetColumns())...)
+	sel.SetSelectExprs(unionSelects(selStmt.GetColumns())...)
 	qb.stmt = sel
 }
 
@@ -219,8 +218,7 @@ func unionSelects(exprs []sqlparser.SelectExpr) []sqlparser.SelectExpr {
 
 func checkUnionColumnByName(column *sqlparser.ColName, sel sqlparser.TableStatement) {
 	colName := column.Name.String()
-	firstSelect := getFirstSelect(sel)
-	exprs := firstSelect.GetColumns()
+	exprs := sel.GetColumns()
 	offset := slices.IndexFunc(exprs, func(expr sqlparser.SelectExpr) bool {
 		switch ae := expr.(type) {
 		case *sqlparser.StarExpr:
@@ -419,6 +417,17 @@ func stripDownQuery(from, to sqlparser.TableStatement) {
 		stripDownQuery(node.Left, toNode.Left)
 		stripDownQuery(node.Right, toNode.Right)
 		toNode.OrderBy = node.OrderBy
+		toNode.Limit = node.Limit
+	case *sqlparser.ValuesStatement:
+		toNode, ok := to.(*sqlparser.ValuesStatement)
+		if !ok {
+			panic(vterrors.VT13001("AST did not match"))
+		}
+		toNode.With = node.With
+		toNode.Rows = node.Rows
+		toNode.ListArg = node.ListArg
+		toNode.Comments = node.Comments
+		toNode.Order = node.Order
 		toNode.Limit = node.Limit
 	default:
 		panic(vterrors.VT13001(fmt.Sprintf("this should not happen - we have covered all implementations of SelectStatement %T", from)))
@@ -667,6 +676,10 @@ func buildDerived(op *Horizon, qb *queryBuilder) {
 
 	stmt := qb.stmt
 	qb.stmt = nil
+	if values, ok := op.Query.(*sqlparser.ValuesStatement); ok {
+		buildDerivedValues(op, qb, values)
+		return
+	}
 	switch sel := stmt.(type) {
 	case *sqlparser.Select:
 		buildDerivedSelect(op, qb, sel)
@@ -676,6 +689,22 @@ func buildDerived(op *Horizon, qb *queryBuilder) {
 		return
 	}
 	panic(fmt.Sprintf("unknown select statement type: %T", stmt))
+}
+
+func buildDerivedValues(op *Horizon, qb *queryBuilder, values *sqlparser.ValuesStatement) {
+	if values.Order != nil {
+		// MySQL silently ignores ORDER BY on a VALUES statement and rejects
+		// expressions in it with an unknown-column error, so don't send it.
+		// Rows of a derived table are unordered anyway.
+		values = sqlparser.Clone(values)
+		values.Order = nil
+	}
+	qb.addTableExpr(op.Alias, op.Alias, TableID(op), &sqlparser.DerivedTable{
+		Select: values,
+	}, nil, op.ColumnAliases)
+	for _, col := range op.Columns {
+		qb.addProjection(&sqlparser.AliasedExpr{Expr: col})
+	}
 }
 
 func buildDerivedUnion(op *Horizon, qb *queryBuilder, union *sqlparser.Union) {
@@ -714,6 +743,14 @@ func buildDerivedSelect(op *Horizon, qb *queryBuilder, sel *sqlparser.Select) {
 
 func buildHorizon(op *Horizon, qb *queryBuilder) {
 	buildQuery(op.Source, qb)
+	if values, ok := op.Query.(*sqlparser.ValuesStatement); ok {
+		values = sqlparser.Clone(values)
+		// MySQL silently ignores ORDER BY on a VALUES statement, so don't send
+		// it. Any ordering that has an effect is planned at the vtgate level.
+		values.Order = nil
+		qb.stmt = values
+		return
+	}
 	stripDownQuery(op.Query, qb.asSelectStatement())
 }
 

@@ -7,6 +7,7 @@
 - **[Major Changes](#major-changes)**
     - **[New Support](#new-support)**
         - [VTOrc failover of an unreachable primary `vttablet` via replica quorum](#vtorc-quorum-unreachable-primary)
+        - [VALUES statements](#values-statements)
     - **[Breaking Changes](#breaking-changes)**
         - [`--watch-replication-stream` flag removed](#vttablet-watch-replication-stream-removed)
         - [VRLog feature removed](#vttablet-vrlog-removed)
@@ -61,6 +62,14 @@ A graceful `vttablet` shutdown records a shutdown marker in the topology server 
 Note that in this scenario the old primary's MySQL keeps running, and because its `vttablet` is the unreachable component, it cannot be demoted until that `vttablet` comes back and discovers the shard has a new primary. As with any emergency reparent away from an unreachable primary, a semi-sync durability policy (e.g. `semi_sync`) is what prevents the old primary from acknowledging new writes in the meantime; with `none` durability, anything writing directly to the old MySQL (bypassing `vtgate`) could cause a split brain.
 
 See [#19918](https://github.com/vitessio/vitess/issues/19918).
+
+#### <a id="values-statements"/>VALUES statements</a>
+
+VTGate now supports MySQL `VALUES` statements as queries in their own right — as top-level statements (`VALUES ROW(1, 'a'), ROW(2, 'b')`), as derived tables (`SELECT * FROM (VALUES ROW(1), ROW(2)) AS t`), and combined with `SELECT` in `UNION`.
+
+One deliberate divergence from MySQL: MySQL silently ignores `ORDER BY` on a `VALUES` statement, while VTGate honors it and sorts the rows at the gateway for a top-level `VALUES` or a `VALUES` arm of a `UNION`. An `ORDER BY` on a `VALUES` statement inside a derived table or CTE is dropped, matching MySQL.
+
+See [#20209](https://github.com/vitessio/vitess/pull/20209) for details.
 
 ### <a id="breaking-changes"/>Breaking Changes</a>
 

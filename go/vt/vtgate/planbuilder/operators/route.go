@@ -629,8 +629,21 @@ func addColumnToInput(
 		}
 		return dtName, newOp, offset
 
-	// Horizon is another one of these - we can't really add new columns to it
+	// Horizon is another one of these - we can't really add new columns to it,
+	// except when it holds a VALUES statement. In that case we wrap the rows in
+	// a derived table so the new column is computed over the materialized VALUES
+	// columns (dt.cN). Computing it there instead of substituting it back into
+	// the rows means volatile expressions (e.g. rand()) are evaluated exactly
+	// once, so the ordering sort key matches the value that is returned.
 	case *Horizon:
+		if _, isValues := op.Query.(*sqlparser.ValuesStatement); isValues && !op.IsDerived() {
+			proj := wrapInDerivedProjection(ctx, op)
+			dtName, newOp, offset := addColumnToInput(ctx, proj, expr, reuse, addToGroupBy)
+			if newOp == nil {
+				newOp = proj
+			}
+			return dtName, newOp, offset
+		}
 		return op.Alias, nil, -1
 
 	case selectExpressions:

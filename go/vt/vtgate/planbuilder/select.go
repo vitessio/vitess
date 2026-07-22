@@ -33,7 +33,7 @@ import (
 func gen4SelectStmtPlanner(
 	query string,
 	plannerVersion querypb.ExecuteOptions_PlannerVersion,
-	stmt sqlparser.SelectStatement,
+	stmt sqlparser.TableStatement,
 	reservedVars *sqlparser.ReservedVars,
 	vschema plancontext.VSchema,
 ) (*planResult, error) {
@@ -57,7 +57,7 @@ func gen4SelectStmtPlanner(
 		sel.SQLCalcFoundRows = false
 	}
 
-	getPlan := func(selStatement sqlparser.SelectStatement) (engine.Primitive, []string, error) {
+	getPlan := func(selStatement sqlparser.TableStatement) (engine.Primitive, []string, error) {
 		return newBuildSelectPlan(selStatement, reservedVars, vschema, plannerVersion)
 	}
 
@@ -176,9 +176,9 @@ func buildSQLCalcFoundRowsPlan(
 	}, tablesUsed, nil
 }
 
-func gen4PredicateRewrite(stmt sqlparser.Statement, getPlan func(selStatement sqlparser.SelectStatement) (engine.Primitive, []string, error)) (engine.Primitive, []string) {
-	rewritten, isSel := sqlparser.RewritePredicate(stmt).(sqlparser.SelectStatement)
-	if !isSel {
+func gen4PredicateRewrite(stmt sqlparser.TableStatement, getPlan func(selStatement sqlparser.TableStatement) (engine.Primitive, []string, error)) (engine.Primitive, []string) {
+	rewritten, isTableStatement := sqlparser.RewritePredicate(stmt).(sqlparser.TableStatement)
+	if !isTableStatement {
 		// Fail-safe code, should never happen
 		return nil, nil
 	}
@@ -191,7 +191,7 @@ func gen4PredicateRewrite(stmt sqlparser.Statement, getPlan func(selStatement sq
 }
 
 func newBuildSelectPlan(
-	selStmt sqlparser.SelectStatement,
+	selStmt sqlparser.TableStatement,
 	reservedVars *sqlparser.ReservedVars,
 	vschema plancontext.VSchema,
 	version querypb.ExecuteOptions_PlannerVersion,
@@ -201,7 +201,10 @@ func newBuildSelectPlan(
 		return nil, nil, err
 	}
 
-	if ks, ok := ctx.SemTable.CanTakeSelectUnshardedShortcut(); ok {
+	// An ordered VALUES outside a derived table must not take the shortcut:
+	// MySQL ignores ORDER BY on VALUES, so the sort has to be planned at the
+	// vtgate level by the normal planning path.
+	if ks, ok := ctx.SemTable.CanTakeSelectUnshardedShortcut(); ok && !sqlparser.HasOrderedValuesOutsideDerivedTable(selStmt) {
 		plan, tablesUsed, err = selectUnshardedShortcut(ctx, selStmt, ks)
 		if err != nil {
 			return nil, nil, err
@@ -227,7 +230,7 @@ func newBuildSelectPlan(
 	return plan, operators.TablesUsed(op), nil
 }
 
-func createSelectOperator(ctx *plancontext.PlanningContext, selStmt sqlparser.SelectStatement) (operators.Operator, error) {
+func createSelectOperator(ctx *plancontext.PlanningContext, selStmt sqlparser.TableStatement) (operators.Operator, error) {
 	err := queryRewrite(ctx, selStmt)
 	if err != nil {
 		return nil, err

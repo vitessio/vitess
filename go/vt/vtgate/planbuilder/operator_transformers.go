@@ -617,11 +617,13 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (
 
 	hints := getHints(op.Comments)
 	switch stmt := stmt.(type) {
-	case sqlparser.SelectStatement:
+	case sqlparser.TableStatement:
 		if op.Lock != sqlparser.NoLock {
-			stmt.SetLock(op.Lock)
+			if sel, ok := stmt.(sqlparser.SelectStatement); ok {
+				sel.SetLock(op.Lock)
+			}
 		}
-		return buildRoutePrimitive(ctx, op, stmt, hints)
+		return buildTableRoutePrimitive(ctx, op, stmt, hints)
 	case *sqlparser.Update:
 		return buildUpdatePrimitive(ctx, op, dmlOp, stmt, hints)
 	case *sqlparser.Delete:
@@ -633,7 +635,7 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (
 	}
 }
 
-func buildRoutePrimitive(ctx *plancontext.PlanningContext, op *operators.Route, stmt sqlparser.SelectStatement, hints *queryHints) (engine.Primitive, error) {
+func buildTableRoutePrimitive(ctx *plancontext.PlanningContext, op *operators.Route, stmt sqlparser.TableStatement, hints *queryHints) (engine.Primitive, error) {
 	_ = updateSelectedVindexPredicate(op.Routing)
 
 	eroute, err := routeToEngineRoute(ctx, op, hints)

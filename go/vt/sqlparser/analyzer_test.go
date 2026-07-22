@@ -32,6 +32,9 @@ func TestPreview(t *testing.T) {
 		{"    select ...", StmtSelect},
 		{"(select ...", StmtSelect},
 		{"( select ...", StmtSelect},
+		{"values row(1)", StmtSelect},
+		{"    values row(1)", StmtSelect},
+		{"/* leading comment */ values row(1)", StmtSelect},
 		{"insert ...", StmtInsert},
 		{"replace ....", StmtReplace},
 		{"   update ...", StmtUpdate},
@@ -92,6 +95,12 @@ func TestPreview(t *testing.T) {
 			assert.Equalf(t, tcase.want, got, "Preview(%s): %v, want %v", tcase.sql, got, tcase.want)
 		}
 	}
+}
+
+func TestASTToStatementTypeValues(t *testing.T) {
+	stmt, err := NewTestParser().Parse("values row(1)")
+	require.NoError(t, err)
+	assert.Equal(t, StmtSelect, ASTToStatementType(stmt))
 }
 
 func TestIsDML(t *testing.T) {

@@ -443,5 +443,20 @@
     "comment": "window function in derived table on scatter route",
     "query": "select * from (select rank() over (partition by col) as r from user) as t",
     "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "filtering on a union with a VALUES statement as the first source",
+    "query": "select * from (values row(1) union select id from user) as dt where dt.column_0 = 1",
+    "plan": "VT12001: unsupported: filtering on a UNION containing a VALUES statement"
+  },
+  {
+    "comment": "filtering on a union with a VALUES statement as the second source",
+    "query": "select * from (select id from user union values row(1)) as dt where dt.id = 1",
+    "plan": "VT12001: unsupported: filtering on a UNION containing a VALUES statement"
+  },
+  {
+    "comment": "subquery in the ORDER BY of a VALUES statement",
+    "query": "values row(1), row(2) order by (select max(id) from user)",
+    "plan": "VT12001: unsupported: subqueries in VALUES statements"
   }
 ]
