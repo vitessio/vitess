@@ -245,7 +245,7 @@ Vitess ships a major release roughly every 6 months, each supported for 12 month
   - Never remove or change a default in the same release that introduces the deprecation warning
 - **Protobuf changes must be wire-compatible in both directions**: never renumber, retype, or reuse removed field numbers; new fields must tolerate being absent (an older peer never sends them) and their zero value must preserve existing behavior. The VTGate RPC protos are public API per `doc/internal/release/versioning.md`
 - **Data written by a live system** (topology data, Vitess-internal tables, on-disk formats) is covered by the same promise — a change that breaks the upgrade *or downgrade* path of a running cluster is a breaking change even if the data is "internal"
-- Experimental features are excluded from the compatibility promise
+- Experimental features are excluded from the compatibility promise and the deprecation rules
 
 ## :mag: Debugging & Troubleshooting
 
