@@ -643,7 +643,7 @@ func (expr *LikeExpr) compile(c *compiler) (ctype, error) {
 		return ctype{}, err
 	}
 
-	skip2 := c.compileNullCheck1(rt)
+	skip2 := c.compileNullCheck1r(rt)
 
 	if !lt.isTextual() {
 		c.asm.Convert_xc(2, sqltypes.VarChar, c.collation, nil)
