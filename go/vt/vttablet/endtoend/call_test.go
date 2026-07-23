@@ -128,6 +128,36 @@ func TestCallProcedureOutParam(t *testing.T) {
 	require.ErrorContains(t, err, "OUT and INOUT parameters are not supported")
 }
 
+// On a connection reused across the streaming and buffered paths, a buffered
+// single-resultset CALL must drain its own trailing OK packet before returning,
+// even when a previous streamed no-resultset CALL left captured OK-packet state
+// on the connection. If the buffered CALL mistakes that stale state for its own
+// trailing status and skips the drain, the unread trailing packet is consumed by
+// the next query and the connection desyncs.
+func TestCallProcedureBufferedAfterStreamedInTx(t *testing.T) {
+	client := framework.NewClient()
+
+	require.NoError(t, client.Begin(false))
+	t.Cleanup(func() { _ = client.Rollback() })
+
+	// A streamed no-resultset CALL inside the transaction captures the
+	// connection's OK-packet state without concluding the transaction.
+	_, err := client.StreamExecute("call in_parameter(999)", nil)
+	require.NoError(t, err)
+
+	// A buffered single-resultset CALL on the same connection returns its rows.
+	qr, err := client.Execute("call proc_select1()", nil)
+	require.NoError(t, err)
+	require.NotEmpty(t, qr.Rows, "single-resultset procedure should return its rows")
+
+	// The next query sees its own result, proving the CALL's trailing packet was
+	// drained rather than left on the connection.
+	qr, err = client.Execute("select 42", nil)
+	require.NoError(t, err)
+	require.Len(t, qr.Rows, 1)
+	require.Equal(t, "42", qr.Rows[0][0].ToString())
+}
+
 func TestCallProcedureStreaming(t *testing.T) {
 	client := framework.NewClient()
 	type testcases struct {
