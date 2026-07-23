@@ -193,6 +193,7 @@ func TestPrepareReplicaForShutdown(t *testing.T) {
 	testCases := []struct {
 		name            string
 		status          *sqltypes.Result
+		durability      *sqltypes.Result
 		rejectedQuery   string
 		rejectedError   error
 		wantError       string
@@ -229,6 +230,15 @@ func TestPrepareReplicaForShutdown(t *testing.T) {
 			rejectedQuery: readDurability,
 			rejectedError: assert.AnError,
 			wantError:     "failed to read the durability settings before shutdown",
+		},
+		{
+			name:   "malformed durability settings result",
+			status: replicaStatus,
+			durability: sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("@@global.innodb_flush_log_at_trx_commit", "int64"),
+				"2",
+			),
+			wantError: "unexpected result reading the durability settings before shutdown",
 		},
 		{
 			name:          "cannot enable redo log flushing",
@@ -339,6 +349,8 @@ func TestPrepareReplicaForShutdown(t *testing.T) {
 			db.AddQuery("SHOW REPLICA STATUS", testCase.status)
 			if testCase.rejectedQuery == readDurability {
 				db.AddRejectedQuery(readDurability, testCase.rejectedError)
+			} else if testCase.durability != nil {
+				db.AddQuery(readDurability, testCase.durability)
 			} else {
 				db.AddQuery(readDurability, relaxedDurability)
 			}
@@ -356,13 +368,17 @@ func TestPrepareReplicaForShutdown(t *testing.T) {
 			testMysqld := NewMysqld(dbc)
 			defer testMysqld.Close()
 
-			state, err := testMysqld.prepareReplicaForShutdown(t.Context())
+			var capturedState *replicaShutdownState
+			state, err := testMysqld.prepareReplicaForShutdown(t.Context(), func(state *replicaShutdownState) {
+				capturedState = state
+			})
 			if testCase.wantError == "" {
 				require.NoError(t, err)
 			} else {
 				require.ErrorContains(t, err, testCase.wantError)
 			}
 			assert.Equal(t, testCase.wantState, state)
+			assert.Equal(t, testCase.wantState, capturedState, "the captured state must be published before the mutating phase")
 			assert.Equal(t, testCase.wantFlushLog, db.GetQueryCalledNum(setFlushLog))
 			assert.Equal(t, testCase.wantSyncBinlog, db.GetQueryCalledNum(setSyncBinlog))
 			assert.Equal(t, testCase.wantSet, db.GetQueryCalledNum(setSyncRelayLog))
@@ -470,6 +486,309 @@ func TestRestoreReplicaAfterFailedShutdown(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestShutdownRestoresReplicaAfterLatePreparation covers the case where a
+// crash-safety mutation is still in flight when both bounded waits expire: the
+// shutdown must return without blocking on it, and the mutation landing later
+// must still trigger the replica state restore in the background.
+func TestShutdownRestoresReplicaAfterLatePreparation(t *testing.T) {
+	const (
+		readDurability      = "SELECT @@global.innodb_flush_log_at_trx_commit, @@global.sync_binlog, @@global.sync_relay_log"
+		setFlushLog         = "SET GLOBAL innodb_flush_log_at_trx_commit = 1"
+		restoreFlushLog     = "SET GLOBAL innodb_flush_log_at_trx_commit = 2"
+		restoreSyncBinlog   = "SET GLOBAL sync_binlog = 0"
+		restoreSyncRelayLog = "SET GLOBAL sync_relay_log = 10000"
+		startReplication    = "START REPLICA"
+	)
+
+	db := fakesqldb.New(t)
+	defer db.Close()
+	db.AddQuery("SELECT 1", &sqltypes.Result{})
+	db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("Source_Host|Replica_IO_Running|Replica_SQL_Running", "varchar|varchar|varchar"),
+		"source|Yes|Yes",
+	))
+	db.AddQuery(readDurability, sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"@@global.innodb_flush_log_at_trx_commit|@@global.sync_binlog|@@global.sync_relay_log",
+			"int64|int64|int64",
+		),
+		"2|0|10000",
+	))
+	for _, query := range []string{setFlushLog, restoreFlushLog, restoreSyncBinlog, restoreSyncRelayLog, startReplication} {
+		db.AddQuery(query, &sqltypes.Result{})
+	}
+	db.AddQueryPattern("kill .*", &sqltypes.Result{})
+
+	// Block the first mutating statement until released, so the preparation is
+	// still in flight when both of the shutdown's bounded waits expire.
+	release := make(chan struct{})
+	db.SetBeforeFunc(setFlushLog, func() { <-release })
+
+	params := db.ConnParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+	testMysqld := NewMysqld(dbc)
+	defer testMysqld.Close()
+
+	err := testMysqld.shutdownWithReplicaCrashSafety(t.Context(), 100*time.Millisecond, func() error {
+		return assert.AnError
+	})
+	require.ErrorIs(t, err, assert.AnError)
+	// The mutation is still blocked, so nothing has been restored yet.
+	assert.Zero(t, db.GetQueryCalledNum(restoreFlushLog))
+	assert.Zero(t, db.GetQueryCalledNum(startReplication))
+
+	// Let the blocked mutation land after the shutdown already returned: the
+	// background restore must now undo it.
+	close(release)
+	assert.Eventually(t, func() bool {
+		return db.GetQueryCalledNum(restoreFlushLog) == 1 &&
+			db.GetQueryCalledNum(restoreSyncBinlog) == 1 &&
+			db.GetQueryCalledNum(restoreSyncRelayLog) == 1 &&
+			db.GetQueryCalledNum(startReplication) == 1
+	}, 30*time.Second, 10*time.Millisecond, "the late-landing preparation was not restored in the background")
+}
+
+// TestCloseWaitsForPendingReplicaRestore covers the short-lived caller case
+// (the mysqlctl CLI defers Close right after Shutdown): Close must wait for a
+// background restoration armed by a failed shutdown instead of closing the
+// connection pools out from under it.
+func TestCloseWaitsForPendingReplicaRestore(t *testing.T) {
+	const (
+		readDurability      = "SELECT @@global.innodb_flush_log_at_trx_commit, @@global.sync_binlog, @@global.sync_relay_log"
+		setFlushLog         = "SET GLOBAL innodb_flush_log_at_trx_commit = 1"
+		restoreFlushLog     = "SET GLOBAL innodb_flush_log_at_trx_commit = 2"
+		restoreSyncBinlog   = "SET GLOBAL sync_binlog = 0"
+		restoreSyncRelayLog = "SET GLOBAL sync_relay_log = 10000"
+		startReplication    = "START REPLICA"
+	)
+
+	db := fakesqldb.New(t)
+	defer db.Close()
+	db.AddQuery("SELECT 1", &sqltypes.Result{})
+	db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("Source_Host|Replica_IO_Running|Replica_SQL_Running", "varchar|varchar|varchar"),
+		"source|Yes|Yes",
+	))
+	db.AddQuery(readDurability, sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"@@global.innodb_flush_log_at_trx_commit|@@global.sync_binlog|@@global.sync_relay_log",
+			"int64|int64|int64",
+		),
+		"2|0|10000",
+	))
+	for _, query := range []string{setFlushLog, restoreFlushLog, restoreSyncBinlog, restoreSyncRelayLog, startReplication} {
+		db.AddQuery(query, &sqltypes.Result{})
+	}
+	db.AddQueryPattern("kill .*", &sqltypes.Result{})
+
+	release := make(chan struct{})
+	db.SetBeforeFunc(setFlushLog, func() { <-release })
+
+	params := db.ConnParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+	testMysqld := NewMysqld(dbc)
+
+	err := testMysqld.shutdownWithReplicaCrashSafety(t.Context(), 100*time.Millisecond, func() error {
+		return assert.AnError
+	})
+	require.ErrorIs(t, err, assert.AnError)
+
+	// Close begins while the mutation is still blocked -- exactly what the CLI
+	// does via its deferred Close. It must wait for the restoration, so once
+	// the mutation lands the restore still finds live connection pools.
+	closed := make(chan struct{})
+	go func() {
+		defer close(closed)
+		testMysqld.Close()
+	}()
+	close(release)
+	select {
+	case <-closed:
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "Close did not return after the pending restoration completed")
+	}
+	assert.Equal(t, 1, db.GetQueryCalledNum(restoreFlushLog), "the restoration must complete before Close closes the pools")
+	assert.Equal(t, 1, db.GetQueryCalledNum(startReplication), "the restoration must complete before Close closes the pools")
+}
+
+// TestRestoreSurvivesClosedPools covers a server-side stop that outlives even
+// Close's patience: the owner has given up and closed the connection pools
+// while the stop is still draining. When the stop finally completes, the
+// restoration must still restart replication -- it must not depend on the
+// pools the owner already closed.
+func TestRestoreSurvivesClosedPools(t *testing.T) {
+	const (
+		readDurability      = "SELECT @@global.innodb_flush_log_at_trx_commit, @@global.sync_binlog, @@global.sync_relay_log"
+		setFlushLog         = "SET GLOBAL innodb_flush_log_at_trx_commit = 1"
+		setSyncBinlog       = "SET GLOBAL sync_binlog = 1"
+		setSyncRelayLog     = "SET GLOBAL sync_relay_log = 1"
+		flushEngineLogs     = "FLUSH NO_WRITE_TO_BINLOG ENGINE LOGS"
+		flushBinaryLogs     = "FLUSH NO_WRITE_TO_BINLOG BINARY LOGS"
+		flushRelayLogs      = "FLUSH NO_WRITE_TO_BINLOG RELAY LOGS"
+		stopIOThread        = "STOP REPLICA IO_THREAD"
+		stopSQLThread       = "STOP REPLICA SQL_THREAD"
+		restoreFlushLog     = "SET GLOBAL innodb_flush_log_at_trx_commit = 2"
+		restoreSyncBinlog   = "SET GLOBAL sync_binlog = 0"
+		restoreSyncRelayLog = "SET GLOBAL sync_relay_log = 10000"
+		startReplication    = "START REPLICA"
+	)
+
+	db := fakesqldb.New(t)
+	defer db.Close()
+	db.AddQuery("SELECT 1", &sqltypes.Result{})
+	db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("Source_Host|Replica_IO_Running|Replica_SQL_Running", "varchar|varchar|varchar"),
+		"source|Yes|Yes",
+	))
+	db.AddQuery(readDurability, sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"@@global.innodb_flush_log_at_trx_commit|@@global.sync_binlog|@@global.sync_relay_log",
+			"int64|int64|int64",
+		),
+		"2|0|10000",
+	))
+	for _, query := range []string{
+		setFlushLog, setSyncBinlog, setSyncRelayLog, flushEngineLogs, flushBinaryLogs, flushRelayLogs,
+		stopIOThread, stopSQLThread, restoreFlushLog, restoreSyncBinlog, restoreSyncRelayLog, startReplication,
+	} {
+		db.AddQuery(query, &sqltypes.Result{})
+	}
+	db.AddQueryPattern("kill .*", &sqltypes.Result{})
+
+	// Block the applier stop until released: the server-side stop is still
+	// draining when the shutdown fails and the owner gives up.
+	release := make(chan struct{})
+	db.SetBeforeFunc(stopSQLThread, func() { <-release })
+
+	params := db.ConnParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+	testMysqld := NewMysqld(dbc)
+
+	err := testMysqld.shutdownWithReplicaCrashSafety(t.Context(), 100*time.Millisecond, func() error {
+		return assert.AnError
+	})
+	require.ErrorIs(t, err, assert.AnError)
+
+	// The owner has given up waiting: the pools are closed while the stop is
+	// still draining, as after a timed-out Close.
+	testMysqld.dbaPool.Close()
+	testMysqld.appPool.Close()
+	assert.Zero(t, db.GetQueryCalledNum(restoreFlushLog))
+	assert.Zero(t, db.GetQueryCalledNum(startReplication))
+
+	// The stop finally completes: the restoration must still restart
+	// replication, using its dedicated connection.
+	close(release)
+	assert.Eventually(t, func() bool {
+		return db.GetQueryCalledNum(restoreFlushLog) == 1 &&
+			db.GetQueryCalledNum(restoreSyncBinlog) == 1 &&
+			db.GetQueryCalledNum(restoreSyncRelayLog) == 1 &&
+			db.GetQueryCalledNum(startReplication) == 1
+	}, 30*time.Second, 10*time.Millisecond, "the restoration must survive the closed pools and restart replication once the stop drains")
+}
+
+// TestShutdownSkipsRestoreForPreMutationHang covers a preparation hung in a
+// read-only probe: nothing was changed, so a failed shutdown must not arm a
+// background restoration (which would otherwise wait -- and on long-lived
+// callers leak -- indefinitely), and no restore statements may ever run.
+func TestShutdownSkipsRestoreForPreMutationHang(t *testing.T) {
+	const (
+		readDurability   = "SELECT @@global.innodb_flush_log_at_trx_commit, @@global.sync_binlog, @@global.sync_relay_log"
+		restoreFlushLog  = "SET GLOBAL innodb_flush_log_at_trx_commit = 2"
+		startReplication = "START REPLICA"
+	)
+
+	db := fakesqldb.New(t)
+	defer db.Close()
+	db.AddQuery("SELECT 1", &sqltypes.Result{})
+	db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("Source_Host|Replica_IO_Running|Replica_SQL_Running", "varchar|varchar|varchar"),
+		"source|Yes|Yes",
+	))
+	db.AddQuery(readDurability, sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"@@global.innodb_flush_log_at_trx_commit|@@global.sync_binlog|@@global.sync_relay_log",
+			"int64|int64|int64",
+		),
+		"2|0|10000",
+	))
+	db.AddQuery(restoreFlushLog, &sqltypes.Result{})
+	db.AddQuery(startReplication, &sqltypes.Result{})
+	db.AddQueryPattern("kill .*", &sqltypes.Result{})
+
+	// Hang the preparation in its read-only state capture, before any
+	// mutating statement is issued.
+	release := make(chan struct{})
+	db.SetBeforeFunc(readDurability, func() { <-release })
+
+	params := db.ConnParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+	testMysqld := NewMysqld(dbc)
+	defer testMysqld.Close()
+
+	err := testMysqld.shutdownWithReplicaCrashSafety(t.Context(), 100*time.Millisecond, func() error {
+		return assert.AnError
+	})
+	require.ErrorIs(t, err, assert.AnError)
+
+	// Even once the hung probe resolves, nothing was mutated, so no
+	// restoration may run.
+	close(release)
+	assert.Eventually(t, func() bool {
+		return db.GetQueryCalledNum(readDurability) == 1
+	}, 30*time.Second, 10*time.Millisecond, "the hung probe never resolved")
+	assert.Never(t, func() bool {
+		return db.GetQueryCalledNum(restoreFlushLog) > 0 || db.GetQueryCalledNum(startReplication) > 0
+	}, 2*time.Second, 50*time.Millisecond, "a preparation that never mutated anything must not trigger a restoration")
+}
+
+// TestReplicaShutdownPreparationBudget pins the mapping from the caller's
+// shutdown timeout to the crash-safety preparation budget: an immediate,
+// no-wait shutdown (mysqlctl shutdown --wait-time=0) must grant the
+// preparation no budget at all rather than its default one.
+func TestReplicaShutdownPreparationBudget(t *testing.T) {
+	assert.Zero(t, replicaShutdownPreparationBudget(0), "a no-wait shutdown must skip the preparation")
+	assert.Zero(t, replicaShutdownPreparationBudget(-time.Second), "a negative timeout must skip the preparation")
+	assert.Equal(t, 5*time.Second, replicaShutdownPreparationBudget(5*time.Second),
+		"a short timeout caps the preparation budget")
+	assert.Equal(t, replicaShutdownPreparationTimeout, replicaShutdownPreparationBudget(time.Hour),
+		"a long timeout leaves the default preparation budget")
+}
+
+// TestShutdownSkipsPreparationForZeroTimeout covers an immediate, no-wait
+// shutdown (mysqlctl shutdown --wait-time=0): the crash-safety preparation
+// must be skipped entirely rather than granted its own budget before the
+// shutdown is even issued.
+func TestShutdownSkipsPreparationForZeroTimeout(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	params := db.ConnParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+	testMysqld := NewMysqld(dbc)
+	defer testMysqld.Close()
+
+	shutdownCalled := false
+	err := testMysqld.shutdownWithReplicaCrashSafety(t.Context(), 0, func() error {
+		shutdownCalled = true
+		return nil
+	})
+	require.NoError(t, err)
+	assert.True(t, shutdownCalled, "the shutdown itself must still run")
+	assert.Zero(t, db.GetQueryCalledNum("SHOW REPLICA STATUS"), "the preparation must not run with a zero timeout")
+
+	err = testMysqld.shutdownWithReplicaCrashSafety(t.Context(), 0, func() error {
+		return assert.AnError
+	})
+	require.ErrorIs(t, err, assert.AnError, "a failing shutdown's error must pass through unchanged")
+	assert.Zero(t, db.GetQueryCalledNum("SHOW REPLICA STATUS"), "the preparation must not run with a zero timeout")
 }
 
 func TestGetMysqlPort(t *testing.T) {

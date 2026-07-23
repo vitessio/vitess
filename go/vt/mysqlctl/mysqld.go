@@ -70,7 +70,16 @@ import (
 // in strings containing MySQL version information.
 const versionStringPrefix = "Ver "
 
-const replicaShutdownPreparationTimeout = 10 * time.Second
+const (
+	replicaShutdownPreparationTimeout = 10 * time.Second
+
+	// replicaShutdownRestoreTimeout bounds the replica state restoration after
+	// a failed shutdown. It is generous because the restoring START REPLICA
+	// serializes behind -- i.e. waits out -- a server-side STOP REPLICA that is
+	// still draining, which in turn waits for the in-flight transaction or
+	// event group to finish applying.
+	replicaShutdownRestoreTimeout = 10 * time.Minute
+)
 
 // How many bytes from MySQL error log to sample for error messages
 const maxLogFileSampleSize = 4096
@@ -137,6 +146,10 @@ type Mysqld struct {
 	lockConn *dbconnpool.PooledDBConnection
 
 	capabilities capabilitySet
+
+	// pendingRestores tracks background replica-state restorations armed by a
+	// failed shutdown, so Close can wait for them before closing the pools.
+	pendingRestores sync.WaitGroup
 
 	// mutex protects the fields below.
 	mutex         sync.Mutex
@@ -675,25 +688,55 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 		return fmt.Errorf("preflight_mysqld_shutdown hook failed: %v", hr.String())
 	}
 
-	preparationTimeout := replicaShutdownPreparationTimeout
-	if shutdownTimeout > 0 {
-		preparationTimeout = min(preparationTimeout, shutdownTimeout)
+	return mysqld.shutdownWithReplicaCrashSafety(ctx, replicaShutdownPreparationBudget(shutdownTimeout), func() error {
+		return mysqld.executeShutdown(ctx, cnf, waitForMysqld, shutdownTimeout)
+	})
+}
+
+// replicaShutdownPreparationBudget returns how long the replica crash-safety
+// preparation may take for the given shutdown timeout. A zero (or negative)
+// shutdown timeout means the caller wants an immediate, no-wait shutdown
+// (mysqladmin --shutdown-timeout=0): honor that by granting the preparation
+// no budget at all rather than its default one.
+func replicaShutdownPreparationBudget(shutdownTimeout time.Duration) time.Duration {
+	if shutdownTimeout <= 0 {
+		return 0
+	}
+	return min(replicaShutdownPreparationTimeout, shutdownTimeout)
+}
+
+// shutdownWithReplicaCrashSafety runs the bounded replica crash-safety
+// preparation, executes the shutdown via executeShutdown, and -- when the
+// shutdown fails, leaving mysqld running -- makes a best-effort attempt to
+// restore the replica state the preparation changed.
+func (mysqld *Mysqld) shutdownWithReplicaCrashSafety(ctx context.Context, preparationTimeout time.Duration, executeShutdown func() error) error {
+	// A non-positive preparation budget means the caller asked for an
+	// immediate, no-wait shutdown: skip the preparation entirely.
+	if preparationTimeout <= 0 {
+		return executeShutdown()
 	}
 	// Bound the crash-safety preparation at this boundary so a hung MySQL
-	// connection cannot delay shutdown past preparationTimeout: some probes it
-	// runs (the connection pool's liveness SELECT 1 and SHOW REPLICA STATUS)
-	// execute outside context control, so enforcing the deadline here is more
-	// reliable than relying on each probe to honor it. The preparation is best
-	// effort -- its failure or timeout is logged and shutdown continues -- so it
-	// never affects whether Shutdown reports success.
+	// connection cannot delay shutdown past preparationTimeout: enforcing the
+	// deadline here keeps a slow preparation from delaying the shutdown, and
+	// the preparation's own context-aware executors kill its dedicated
+	// connection on expiry. The preparation is best effort -- its failure or
+	// timeout is logged and shutdown continues -- so it never affects whether
+	// Shutdown reports success.
 	preparationCtx, cancelPreparation := context.WithTimeout(ctx, preparationTimeout)
 	type preparationResult struct {
 		state *replicaShutdownState
 		err   error
 	}
 	prepared := make(chan preparationResult, 1)
+	// captured receives the recorded pre-change state the moment the
+	// preparation moves past its read-only probes and starts mutating: a
+	// timed-out preparation that never published here cannot have changed
+	// anything and can be abandoned outright.
+	captured := make(chan *replicaShutdownState, 1)
 	go func() {
-		state, err := mysqld.prepareReplicaForShutdown(preparationCtx)
+		state, err := mysqld.prepareReplicaForShutdown(preparationCtx, func(state *replicaShutdownState) {
+			captured <- state
+		})
 		prepared <- preparationResult{state: state, err: err}
 	}()
 	var replicaState *replicaShutdownState
@@ -716,7 +759,7 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 	}
 	cancelPreparation()
 
-	shutdownErr := mysqld.executeShutdown(ctx, cnf, waitForMysqld, shutdownTimeout)
+	shutdownErr := executeShutdown()
 	if shutdownErr == nil {
 		// The crash-safety preparation above is best effort and already logged
 		// on failure; a successful process shutdown must still report success
@@ -728,38 +771,58 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 		// The preparation outlived its deadline, and any statement it had in
 		// flight can still land on the server. Its mutating statements are
 		// bound to the (now cancelled) preparation context, so the goroutine
-		// aborts promptly and delivers the state it recorded before mutating
-		// anything: wait briefly for that state so a late mutation is restored
-		// too. If nothing arrives, the preparation is hung in a pre-mutation
-		// probe and there is nothing to restore.
+		// usually aborts promptly and delivers the state it recorded before
+		// mutating anything: wait briefly for that state so a late mutation is
+		// restored too.
 		select {
 		case p := <-prepared:
 			replicaState = p.state
 		case <-time.After(preparationTimeout):
-			log.Warn("shutdown failed, but the crash-safety preparation state never became available; skipping the replica state restore")
+			select {
+			case state := <-captured:
+				// The preparation reached its mutating phase and is still
+				// blocked inside a statement, which can land on the server
+				// after any client-side timeout (STOP REPLICA is documented to
+				// remain in effect, and a killed query may still complete).
+				// Shutdown must return, but a live replica must not be left
+				// silently altered if that happens: restore in the background
+				// once the in-flight statement resolves. The restoration is
+				// tracked so Close waits for it before the process exits,
+				// keeping it alive in short-lived callers like the mysqlctl
+				// CLI.
+				log.Warn("shutdown failed and the crash-safety preparation is still in flight; the replica state will be restored in the background when it completes")
+				mysqld.pendingRestores.Go(func() {
+					<-prepared
+					restoreCtx, cancelRestore := context.WithTimeout(context.WithoutCancel(ctx), replicaShutdownRestoreTimeout)
+					defer cancelRestore()
+					mysqld.restoreReplicaAfterFailedShutdown(restoreCtx, state)
+				})
+			default:
+				// The preparation never got past its read-only probes, so
+				// nothing was changed and there is nothing to restore -- do
+				// not leave a waiter behind for a probe that may be hung
+				// indefinitely.
+				log.Warn("shutdown failed and the crash-safety preparation hung before changing anything; nothing to restore")
+			}
+			return shutdownErr
 		}
 	}
 	// The shutdown failed, so mysqld may still be running: make a best-effort
 	// attempt to restore what the crash-safety preparation changed, so that a
 	// live replica is not left with replication stopped and the durability
-	// settings altered indefinitely. Bound it like the preparation, on a fresh
-	// context because ctx may already be exhausted (e.g. a wait timeout).
+	// settings altered indefinitely. The restoration runs in the tracked
+	// background with a generous deadline, because its START REPLICA may
+	// legitimately wait out a server-side stop that is still draining, and
+	// Shutdown must not block on that: Close (and the daemon lifetime) own its
+	// completion. It runs on a fresh context because ctx may already be
+	// exhausted (e.g. a wait timeout).
 	if replicaState != nil {
-		restoreCtx, cancelRestore := context.WithTimeout(context.WithoutCancel(ctx), preparationTimeout)
-		restored := make(chan struct{})
-		go func() {
-			defer close(restored)
-			mysqld.restoreReplicaAfterFailedShutdown(restoreCtx, replicaState)
-		}()
-		select {
-		case <-restored:
-		case <-restoreCtx.Done():
-			log.Warn(
-				"timed out restoring the replica state after a failed shutdown",
-				slog.Any("error", restoreCtx.Err()),
-			)
-		}
-		cancelRestore()
+		state := replicaState
+		mysqld.pendingRestores.Go(func() {
+			restoreCtx, cancelRestore := context.WithTimeout(context.WithoutCancel(ctx), replicaShutdownRestoreTimeout)
+			defer cancelRestore()
+			mysqld.restoreReplicaAfterFailedShutdown(restoreCtx, state)
+		})
 	}
 	return shutdownErr
 }
@@ -1461,6 +1524,29 @@ func (mysqld *Mysqld) GetFilteredConnection(ctx context.Context) (*dbconnpool.DB
 // Close will close this instance of Mysqld. It will wait for all dba
 // queries to be finished.
 func (mysqld *Mysqld) Close() {
+	// Wait for any background replica-state restoration armed by a failed
+	// shutdown, so short-lived callers (e.g. the mysqlctl CLI, which defers
+	// Close right after Shutdown) do not exit while the restoration is still
+	// waiting out a draining server-side STOP REPLICA. When none is pending
+	// this returns immediately. The wait is transitively bounded by the
+	// restoration's own deadlines, with a hard cap as a backstop for a
+	// preparation that never resolves.
+	restored := make(chan struct{})
+	go func() {
+		mysqld.pendingRestores.Wait()
+		close(restored)
+	}()
+	select {
+	case <-restored:
+	default:
+		log.Info("waiting for a pending replica state restoration to complete before closing")
+		select {
+		case <-restored:
+		case <-time.After(replicaShutdownRestoreTimeout + replicaShutdownPreparationTimeout):
+			log.Warn("timed out waiting for a pending replica state restoration before closing")
+		}
+	}
+
 	if mysqld.dbaPool != nil {
 		mysqld.dbaPool.Close()
 	}

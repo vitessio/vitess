@@ -105,7 +105,7 @@ func TestReplicaShutdownRelayDurabilityFence(t *testing.T) {
 	// before this hook, so at the block the fence's effects are already visible
 	// on a fixed build.
 	require.NoError(t, replica.VttabletProcess.TearDown())
-	shutdown := startBlockedShutdown(t, &replica.MysqlctlProcess)
+	shutdown := startBlockedShutdown(t, &replica.MysqlctlProcess, 0)
 	require.Eventually(t, func() bool {
 		_, err := os.Stat(shutdown.entered)
 		return err == nil
@@ -142,6 +142,11 @@ func TestReplicaShutdownRelayDurabilityFence(t *testing.T) {
 // previous state before returning: the replication threads run again and the
 // durability settings are back at their prior (relaxed) values, so a failed
 // shutdown does not leave a live replica silently falling behind.
+//
+// The mysqld_shutdown hook first blocks so the test can observe the
+// intermediate fenced state -- proving the preparation actually ran, which is
+// what makes this test fail on a build without the feature -- and then exits
+// non-zero so Shutdown takes its failure path and must restore.
 func TestReplicaShutdownFailureRestoresReplication(t *testing.T) {
 	localCluster := cluster.NewCluster("zone1", "localhost")
 	localCluster.TmpDirectory = t.TempDir()
@@ -171,23 +176,44 @@ func TestReplicaShutdownFailureRestoresReplication(t *testing.T) {
 		status, err := replicaConn.ShowReplicationStatus()
 		return err == nil && status.Running()
 	}, 45*time.Second, 100*time.Millisecond, "replica did not start replicating")
+	assertGlobalVariable(t, replicaConn, "sync_relay_log", "10000")
+	assertGlobalVariable(t, replicaConn, "innodb_flush_log_at_trx_commit", "2")
+	assertGlobalVariable(t, replicaConn, "sync_binlog", "0")
 
 	// Stop the tablet so nothing else manages replication during the test.
 	require.NoError(t, replica.VttabletProcess.TearDown())
 
-	// Run mysqlctl shutdown with a mysqld_shutdown hook that fails: the
-	// crash-safety preparation runs first (stopping replication and forcing the
-	// durability settings to 1), then the hook fails, and Shutdown must restore
-	// the previous replica state before returning the error.
-	hookRoot := t.TempDir()
-	hookDir := filepath.Join(hookRoot, "vthook")
-	require.NoError(t, os.Mkdir(hookDir, 0o700))
-	require.NoError(t, os.WriteFile(filepath.Join(hookDir, "mysqld_shutdown"), []byte("#!/bin/sh\nexit 1\n"), 0o700))
+	// Block the mysqld_shutdown hook with a failing exit code: the crash-safety
+	// preparation runs before the hook, so at the block the fence must already
+	// be observable; releasing the hook then fails the shutdown, and Shutdown
+	// must restore the previous replica state before returning the error.
+	shutdown := startBlockedShutdown(t, &replica.MysqlctlProcess, 1)
+	require.Eventually(t, func() bool {
+		_, err := os.Stat(shutdown.entered)
+		return err == nil
+	}, 45*time.Second, 10*time.Millisecond, "mysqlctl did not enter the blocked mysqld_shutdown hook")
 
-	cmd := exec.Command("mysqlctl", "--tablet-uid", strconv.Itoa(replica.MysqlctlProcess.TabletUID), "--log-format", "text", "shutdown")
-	cmd.Env = append(os.Environ(), "VTROOT="+hookRoot)
-	output, err := cmd.CombinedOutput()
-	require.Error(t, err, "mysqlctl shutdown must fail when the mysqld_shutdown hook fails; output:\n%s", output)
+	// The intermediate fenced state proves the preparation ran: without it,
+	// replication would still be running with the relaxed settings and the
+	// restoration checks below would pass vacuously.
+	status, err := replicaConn.ShowReplicationStatus()
+	require.NoError(t, err)
+	assert.Equalf(t, replication.ReplicationStateStopped, status.IOState,
+		"the receiver (I/O thread) was not stopped before the mysqld_shutdown hook; the crash-safety preparation did not run")
+	assert.Equalf(t, replication.ReplicationStateStopped, status.SQLState,
+		"the applier (SQL thread) was not stopped before the mysqld_shutdown hook; the crash-safety preparation did not run")
+	assertGlobalVariable(t, replicaConn, "sync_relay_log", "1")
+	assertGlobalVariable(t, replicaConn, "innodb_flush_log_at_trx_commit", "1")
+	assertGlobalVariable(t, replicaConn, "sync_binlog", "1")
+
+	// Release the hook so it exits non-zero: mysqlctl shutdown must fail.
+	shutdown.release(t)
+	select {
+	case err := <-shutdown.done:
+		require.Error(t, err, "mysqlctl shutdown must fail when the mysqld_shutdown hook fails")
+	case <-time.After(45 * time.Second):
+		require.FailNow(t, "mysqlctl shutdown did not exit after the failing hook was released")
+	}
 
 	// The replica must be replicating again, with its previous relaxed
 	// durability settings restored.
@@ -208,7 +234,7 @@ type blockedShutdown struct {
 	releasePath string
 }
 
-func startBlockedShutdown(t *testing.T, replica *cluster.MysqlctlProcess) *blockedShutdown {
+func startBlockedShutdown(t *testing.T, replica *cluster.MysqlctlProcess, hookExitCode int) *blockedShutdown {
 	t.Helper()
 
 	hookRoot := t.TempDir()
@@ -222,6 +248,7 @@ func startBlockedShutdown(t *testing.T, replica *cluster.MysqlctlProcess) *block
 while [ ! -e "$MYSQLCTL_SHUTDOWN_HOOK_RELEASE" ]; do
   sleep 0.1
 done
+exit "${MYSQLCTL_SHUTDOWN_HOOK_EXIT_CODE:-0}"
 `), 0o700))
 
 	cmd := exec.Command("mysqlctl", "--tablet-uid", strconv.Itoa(replica.TabletUID), "--log-format", "text", "shutdown")
@@ -232,6 +259,7 @@ done
 		"VTROOT="+hookRoot,
 		"MYSQLCTL_SHUTDOWN_HOOK_ENTERED="+entered,
 		"MYSQLCTL_SHUTDOWN_HOOK_RELEASE="+releasePath,
+		"MYSQLCTL_SHUTDOWN_HOOK_EXIT_CODE="+strconv.Itoa(hookExitCode),
 	)
 	require.NoError(t, cmd.Start())
 
