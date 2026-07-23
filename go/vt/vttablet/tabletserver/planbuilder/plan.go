@@ -79,6 +79,12 @@ const (
 	PlanShowMigrationLogs
 	PlanShowThrottledApps
 	PlanShowThrottlerStatus
+	// PlanSelectStream is deprecated and never produced by the planner. It
+	// survives only as a plan name in query rules: a rule using it matches
+	// the statement shapes that streamed reads carried before v25 (see
+	// LegacyStreamRulePlan), and only on the streaming path. To be removed
+	// in v26.
+	PlanSelectStream
 	NumPlans
 )
 
@@ -114,6 +120,7 @@ var planName = []string{
 	"ShowMigrationLogs",
 	"ShowThrottledApps",
 	"ShowThrottlerStatus",
+	"SelectStream",
 }
 
 func (pt PlanType) String() string {
@@ -139,6 +146,23 @@ func PlanByNameIC(s string) (pt PlanType, ok bool) {
 		if strings.EqualFold(v, s) {
 			return PlanType(i), true
 		}
+	}
+	return NumPlans, false
+}
+
+// LegacyStreamRulePlan returns the plan type the pre-v25 streaming planner
+// assigned to this statement, for backward-compatible query-rule matching on
+// the streaming path. Every SELECT (including lock-function, impossible-WHERE,
+// and next-value selects), UNION, EXPLAIN, and SHOW was PlanSelectStream;
+// ANALYZE was PlanOtherRead and plans as PlanSelect today. Statements the
+// pre-v25 streaming planner rejected have no legacy plan. To be removed in
+// v26 along with PlanSelectStream.
+func LegacyStreamRulePlan(statement sqlparser.Statement) (pt PlanType, ok bool) {
+	switch statement.(type) {
+	case *sqlparser.Select, *sqlparser.Union, sqlparser.Explain, *sqlparser.Show:
+		return PlanSelectStream, true
+	case *sqlparser.Analyze:
+		return PlanOtherRead, true
 	}
 	return NumPlans, false
 }

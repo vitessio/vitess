@@ -19,13 +19,22 @@ package tabletserver
 // Tests that verify parity between StreamExecute and Execute.
 
 import (
+	"context"
 	"fmt"
 	"math/rand/v2"
+	"slices"
+	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/callerid"
@@ -34,6 +43,7 @@ import (
 	"vitess.io/vitess/go/vt/tableacl/simpleacl"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
@@ -43,7 +53,7 @@ import (
 )
 
 // BuildStreaming accepts DML and DDL statement types.
-func TestStreamExecuteCompat_BuildStreamingRejectsDML(t *testing.T) {
+func TestStreamExecuteCompat_BuildStreamingAcceptsDML(t *testing.T) {
 	parser := sqlparser.NewTestParser()
 
 	testcases := []struct {
@@ -68,8 +78,8 @@ func TestStreamExecuteCompat_BuildStreamingRejectsDML(t *testing.T) {
 	}
 }
 
-// Stream() handles plan types that Execute() handles.
-func TestStreamExecuteCompat_StreamMissingPlanTypes(t *testing.T) {
+// SELECT streams rows through the full TabletServer StreamExecute path.
+func TestStreamExecuteCompat_SelectViaTabletServer(t *testing.T) {
 	ctx := t.Context()
 	db, tsv := setupTabletServerTest(t, ctx, "")
 	defer tsv.StopService()
@@ -240,8 +250,12 @@ func TestStreamExecuteCompat_DMLViaTabletServer(t *testing.T) {
 	}
 }
 
-// StreamExecute honors query timeout hints.
-func TestStreamExecuteCompat_QueryTimeoutHint(t *testing.T) {
+// The vtgate-side QUERY_TIMEOUT_MS hint reaches the tablet as
+// ExecuteOptions.Timeout, which Execute enforces. The streaming path does not
+// apply the per-query timeout — StreamExecute serves OLAP queries, which are
+// expected to outlive OLTP limits — and is bounded by the caller's context
+// deadline instead, which vtgate derives from the hint for streams.
+func TestStreamExecuteCompat_QueryTimeout(t *testing.T) {
 	ctx := t.Context()
 	db, tsv := setupTabletServerTest(t, ctx, "")
 	defer tsv.StopService()
@@ -249,23 +263,33 @@ func TestStreamExecuteCompat_QueryTimeoutHint(t *testing.T) {
 
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 
-	selectSQL := "select /*vt+ QUERY_TIMEOUT_MS=1 */ sleep(10) from test_table limit 1000"
+	selectSQL := "select * from test_table limit 1000"
 	db.AddQuery(selectSQL, &sqltypes.Result{
 		Fields: []*querypb.Field{{Type: sqltypes.VarBinary}},
 	})
+	// Make the fake query stall so the timeouts below can fire.
+	db.SetBeforeFunc(selectSQL, func() { time.Sleep(300 * time.Millisecond) })
 
-	_, execErr := tsv.Execute(ctx, nil, &target, selectSQL, nil, 0, 0, nil)
+	shortTimeout := &querypb.ExecuteOptions{
+		Timeout: &querypb.ExecuteOptions_AuthoritativeTimeout{AuthoritativeTimeout: 1},
+	}
+	_, execErr := tsv.Execute(ctx, nil, &target, selectSQL, nil, 0, 0, shortTimeout)
+	require.Error(t, execErr, "Execute should enforce the per-query timeout option")
 
 	callback := func(*sqltypes.Result) error { return nil }
-	streamErr := tsv.StreamExecute(ctx, nil, &target, selectSQL, nil, 0, 0, nil, callback)
+	streamErr := tsv.StreamExecute(ctx, nil, &target, selectSQL, nil, 0, 0, shortTimeout, callback)
+	require.NoError(t, streamErr,
+		"the streaming path does not apply the per-query timeout")
 
-	if execErr != nil {
-		assert.Error(t, streamErr,
-			"StreamExecute should honor QUERY_TIMEOUT_MS hint like Execute does")
-	}
+	deadlineCtx, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
+	defer cancel()
+	streamErr = tsv.StreamExecute(deadlineCtx, nil, &target, selectSQL, nil, 0, 0, nil, callback)
+	require.Error(t, streamErr,
+		"streaming queries are bounded by the caller's context deadline")
 }
 
-// ACL denial errors use "Select" (not "SelectStream") in streaming mode.
+// A streamed query denied by table ACLs reports the same error message as
+// buffered execution.
 func TestStreamExecuteCompat_ACLErrorFormat(t *testing.T) {
 	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int64())
 	tableacl.Register(aclName, &simpleacl.Factory{})
@@ -296,10 +320,7 @@ func TestStreamExecuteCompat_ACLErrorFormat(t *testing.T) {
 	err := qreStream.Stream(func(*sqltypes.Result) error { return nil })
 	require.Error(t, err)
 
-	assert.Contains(t, err.Error(), "Select command denied",
-		"ACL error should say 'Select command denied', got: %s", err.Error())
-	assert.NotContains(t, err.Error(), "SelectStream",
-		"ACL error should not contain 'SelectStream', got: %s", err.Error())
+	assert.EqualError(t, err, "Select command denied to user 'denied_user' for table 'test_table' (ACL check error)")
 }
 
 // Stream() handles PlanNextval via execNextval().
@@ -348,6 +369,94 @@ func TestStreamExecuteCompat_NextvalHandling(t *testing.T) {
 		"Stream should handle PlanNextval like Execute does")
 }
 
+// setUpSeqStreamPlan wires up the sequence table responses execNextval needs
+// and returns a streaming QueryExecutor for NEXT VALUE, which is a dedicated
+// executor that returns both fields and rows.
+func setUpSeqStreamPlan(t *testing.T, ctx context.Context, tsv *TabletServer, options *querypb.ExecuteOptions) *QueryExecutor {
+	t.Helper()
+	logStats := tabletenv.NewLogStats(ctx, "TestSeqStream", streamlog.NewQueryLogConfigForTest())
+	query := "select next 1 values from seq"
+	plan, err := tsv.qe.GetStreamPlan(ctx, logStats, query, false)
+	require.NoError(t, err)
+	return &QueryExecutor{
+		ctx:      ctx,
+		query:    query,
+		bindVars: make(map[string]*querypb.BindVariable),
+		options:  options,
+		plan:     plan,
+		logStats: logStats,
+		tsv:      tsv,
+	}
+}
+
+func addSeqQueries(db *fakesqldb.DB) {
+	db.AddQuery("select next_id, cache from seq where id = 0 for update", &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Name: "next_id", Type: sqltypes.Int64},
+			{Name: "cache", Type: sqltypes.Int64},
+		},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt64(1),
+			sqltypes.NewInt64(3),
+		}},
+	})
+	db.AddQuery("update seq set next_id = 4 where id = 0", &sqltypes.Result{})
+}
+
+// A dedicated-executor result that carries rows is delivered as a fields-only
+// packet followed by a rows packet, matching the generic streaming path. vtgate
+// forwards each StreamExecute packet to gRPC clients verbatim, so a combined
+// fields+rows packet would repeat the fields mid-stream on a scatter.
+func TestStreamExecuteCompat_DedicatedResultStreamsFieldsThenRows(t *testing.T) {
+	ctx := t.Context()
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+	addSeqQueries(db)
+
+	qre := setUpSeqStreamPlan(t, ctx, tsv, nil)
+
+	var packets []*sqltypes.Result
+	require.NoError(t, qre.Stream(func(qr *sqltypes.Result) error {
+		packets = append(packets, qr)
+		return nil
+	}))
+
+	require.Len(t, packets, 2, "expected a fields packet followed by a rows packet")
+	assert.NotEmpty(t, packets[0].Fields, "first packet carries the fields")
+	assert.Empty(t, packets[0].Rows, "first packet carries no rows")
+	assert.Empty(t, packets[1].Fields, "row packet carries no fields")
+	assert.NotEmpty(t, packets[1].Rows, "row packet carries the rows")
+}
+
+// A dedicated-executor result honors the caller's field-metadata setting the
+// way Execute does: requesting only TYPE strips the field names.
+func TestStreamExecuteCompat_DedicatedResultHonorsIncludeFields(t *testing.T) {
+	ctx := t.Context()
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+	addSeqQueries(db)
+
+	qre := setUpSeqStreamPlan(t, ctx, tsv, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_TYPE_ONLY})
+
+	var fields []*querypb.Field
+	require.NoError(t, qre.Stream(func(qr *sqltypes.Result) error {
+		if len(qr.Fields) > 0 {
+			fields = qr.Fields
+		}
+		return nil
+	}))
+
+	require.NotEmpty(t, fields, "the fields packet must still be sent")
+	for _, f := range fields {
+		assert.Empty(t, f.Name, "TYPE_ONLY must strip the field name")
+		assert.Equal(t, sqltypes.Int64, f.Type, "the field type must be retained")
+	}
+}
+
 // Stream() dispatches the OnlineDDL and throttler admin plans to their
 // executors, matching Execute(). These plans carry a nil FullQuery, so the
 // generic SQL path would send the Vitess-internal statement (e.g. "show
@@ -371,10 +480,16 @@ func TestStreamExecuteCompat_AdminPlanDispatch(t *testing.T) {
 			qreExec := newTestQueryExecutor(ctx, tsv, query, 0)
 			execResult, execErr := qreExec.Execute()
 
+			// The streaming path delivers a result-set plan as a fields-only
+			// packet followed by row packets, so reassemble the packets to
+			// compare against Execute's single result.
 			qreStream := newTestQueryExecutorStreaming(ctx, tsv, query, 0)
-			var streamResult *sqltypes.Result
+			streamResult := &sqltypes.Result{}
 			streamErr := qreStream.Stream(func(qr *sqltypes.Result) error {
-				streamResult = qr
+				if len(qr.Fields) > 0 {
+					streamResult.Fields = qr.Fields
+				}
+				streamResult.Rows = append(streamResult.Rows, qr.Rows...)
 				return nil
 			})
 
@@ -385,10 +500,53 @@ func TestStreamExecuteCompat_AdminPlanDispatch(t *testing.T) {
 			}
 
 			require.NoError(t, streamErr, "Stream should handle %q like Execute", query)
-			require.NotNil(t, streamResult)
+			// Both paths strip field metadata to the caller's setting: Execute in
+			// tabletserver.execute, Stream before invoking the callback. These
+			// qre-level calls bypass Execute's wrapper, so strip its result the
+			// same way to compare like with like.
+			execResult = execResult.StripMetadata(sqltypes.IncludeFieldsOrDefault(nil))
 			assert.Equal(t, execResult.Fields, streamResult.Fields)
 			assert.Equal(t, execResult.Rows, streamResult.Rows)
 		})
+	}
+}
+
+// Inside a transaction, Stream dispatches the admin plans like Execute:
+// SHOW VITESS_MIGRATIONS is served through txConnExec, the rest are rejected
+// as unexpected plan types.
+func TestStreamExecuteCompat_AdminPlanInTransaction(t *testing.T) {
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "")
+	defer tsv.StopService()
+	defer db.Close()
+
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+	state, err := tsv.Begin(ctx, nil, &target, nil)
+	require.NoError(t, err)
+	defer func() { _, _ = tsv.Rollback(ctx, &target, state.TransactionID) }()
+
+	callback := func(*sqltypes.Result) error { return nil }
+	for _, query := range []string{
+		"show vitess_throttled_apps",
+		"show vitess_throttler status",
+		"show vitess_migration '9d80e3da_5e7e_11ed_b526_0a43f95f28a3' logs",
+		"alter vitess_migration '9d80e3da_5e7e_11ed_b526_0a43f95f28a3' cancel",
+		"revert vitess_migration '9d80e3da_5e7e_11ed_b526_0a43f95f28a3'",
+	} {
+		streamErr := tsv.StreamExecute(ctx, nil, &target, query, nil, state.TransactionID, 0, nil, callback)
+		require.ErrorContains(t, streamErr, "unexpected plan type",
+			"%q inside a transaction must be rejected like Execute", query)
+	}
+
+	showSQL := "show vitess_migrations"
+	_, execErr := tsv.Execute(ctx, nil, &target, showSQL, nil, state.TransactionID, 0, nil)
+	streamErr := tsv.StreamExecute(ctx, nil, &target, showSQL, nil, state.TransactionID, 0, nil, callback)
+	if execErr != nil {
+		require.EqualError(t, streamErr, execErr.Error(),
+			"SHOW VITESS_MIGRATIONS inside a transaction must behave like Execute")
+	} else {
+		require.NoError(t, streamErr,
+			"SHOW VITESS_MIGRATIONS inside a transaction must be served like Execute")
 	}
 }
 
@@ -448,7 +606,9 @@ func TestStreamExecuteCompat_ImplicitTransactionForDML(t *testing.T) {
 		"StreamExecute should handle INSERT statements")
 }
 
-// StreamExecute handles DDL statements.
+// StreamExecute dispatches DDL through execDDL, matching Execute: the DDL
+// runs with a schema reload afterward, and is rejected inside a transaction,
+// where MySQL would implicitly commit behind the tablet's back.
 func TestStreamExecuteCompat_DDLViaStreamExecute(t *testing.T) {
 	ctx := t.Context()
 	db, tsv := setupTabletServerTest(t, ctx, "")
@@ -458,12 +618,28 @@ func TestStreamExecuteCompat_DDLViaStreamExecute(t *testing.T) {
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 
 	ddlSQL := "alter table test_table add zipcode int"
-	db.AddQuery("alter table test_table add column zipcode int", &sqltypes.Result{})
+	rewrittenDDL := "alter table test_table add column zipcode int"
+	db.AddQuery(rewrittenDDL, &sqltypes.Result{})
 
 	callback := func(*sqltypes.Result) error { return nil }
+
+	reloadsBefore := db.GetQueryCalledNum(mysql.BaseShowTables)
 	err := tsv.StreamExecute(ctx, nil, &target, ddlSQL, nil, 0, 0, nil, callback)
-	assert.NoError(t, err,
+	require.NoError(t, err,
 		"StreamExecute should handle DDL statements")
+	require.Equal(t, 1, db.GetQueryCalledNum(rewrittenDDL))
+	require.Greater(t, db.GetQueryCalledNum(mysql.BaseShowTables), reloadsBefore,
+		"streamed DDL must reload the schema engine like Execute")
+
+	state, err := tsv.Begin(ctx, nil, &target, nil)
+	require.NoError(t, err)
+	err = tsv.StreamExecute(ctx, nil, &target, ddlSQL, nil, state.TransactionID, 0, nil, callback)
+	require.ErrorContains(t, err, "DDL statement executed inside a transaction",
+		"streamed DDL inside a transaction must be rejected like Execute")
+	require.Equal(t, 1, db.GetQueryCalledNum(rewrittenDDL),
+		"in-transaction streamed DDL must not reach MySQL")
+	_, err = tsv.Rollback(ctx, &target, state.TransactionID)
+	require.NoError(t, err)
 }
 
 // StreamExecute handles savepoint statements within a transaction.
@@ -479,13 +655,27 @@ func TestStreamExecuteCompat_SavepointViaStreamExecute(t *testing.T) {
 	state, err := tsv.Begin(ctx, nil, &target, nil)
 	require.NoError(t, err)
 
-	savepointSQL := "savepoint sp1"
-	db.AddQuery(savepointSQL, &sqltypes.Result{})
+	insertSQL := "insert into test_table(pk) values (2)"
+	db.AddQuery("savepoint sp1", &sqltypes.Result{})
+	db.AddQuery(insertSQL, &sqltypes.Result{})
+	db.AddQuery("rollback to sp1", &sqltypes.Result{})
 
 	callback := func(*sqltypes.Result) error { return nil }
-	err = tsv.StreamExecute(ctx, nil, &target, savepointSQL, nil, state.TransactionID, 0, nil, callback)
-	require.NoError(t, err,
-		"StreamExecute should handle savepoint statements within a transaction")
+	for _, sql := range []string{"savepoint sp1", insertSQL, "rollback to sp1"} {
+		err = tsv.StreamExecute(ctx, nil, &target, sql, nil, state.TransactionID, 0, nil, callback)
+		require.NoError(t, err,
+			"StreamExecute should handle %q within a transaction", sql)
+	}
+
+	// Rolling back to the savepoint must prune the transaction's recorded
+	// queries like Execute does, so 2PC recovery replay doesn't re-apply the
+	// rolled-back DML.
+	conn, err := tsv.te.txPool.GetAndLock(state.TransactionID, "for test inspection")
+	require.NoError(t, err)
+	recorded := slices.Clone(conn.TxProperties().Queries)
+	conn.Unlock()
+	assert.Empty(t, recorded,
+		"DML rolled back to a streamed savepoint must not stay recorded for 2PC recovery replay")
 
 	_, err = tsv.Commit(ctx, &target, state.TransactionID)
 	require.NoError(t, err)
@@ -509,8 +699,14 @@ func TestStreamExecuteCompat_SetViaStreamExecute(t *testing.T) {
 	// context which satisfies the NeedsReservedConn requirement.
 	callback := func(*sqltypes.Result) error { return nil }
 	_, err := tsv.ReserveStreamExecute(ctx, nil, &target, []string{"set sql_mode = ''"}, setSQL, nil, 0, nil, callback)
-	assert.NoError(t, err,
+	require.NoError(t, err,
 		"ReserveStreamExecute should handle SET statements")
+
+	// Like Execute, the SET itself must not run: the settings list carries the
+	// session state, and executing the raw SET on a pooled connection would
+	// leak its effect to other sessions sharing the settings pool.
+	assert.Zero(t, db.GetQueryCalledNum(setSQL),
+		"a streamed SET with a settings list must not reach MySQL")
 }
 
 // Stream() records to ResultHistogram like Execute does.
@@ -547,10 +743,50 @@ func TestStreamExecuteCompat_ResultStatsRecording(t *testing.T) {
 
 	assert.Greater(t, afterStream, afterExecute,
 		"Stream should record to ResultHistogram like Execute does")
+
+	// A failed streamed query must not contribute a result-size sample, like
+	// Execute, which would otherwise skew the histogram toward empty results.
+	qreFailed := newTestQueryExecutorStreaming(ctx, tsv, "select * from unregistered_table limit 1000", 0)
+	err = qreFailed.Stream(func(*sqltypes.Result) error { return nil })
+	require.Error(t, err)
+	assert.Equal(t, afterStream, tsv.Stats().ResultHistogram.Total(),
+		"a failed streamed query must not record to ResultHistogram")
+}
+
+// Dedicated-executor plans on the streaming path record the rows-affected
+// stats and query-log fields that Execute records: their single result is
+// fully in hand, so the streaming path's usual limitation — rows-affected
+// only arrives in the final OK packet, which a stream doesn't surface —
+// doesn't apply to them.
+func TestStreamExecuteCompat_RowsAffectedRecording(t *testing.T) {
+	ctx := t.Context()
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+
+	query := "alter table test_table add zipcode int"
+	rewritten := "alter table test_table add column zipcode int"
+	db.AddQuery(rewritten, &sqltypes.Result{RowsAffected: 5})
+
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+
+	qreExec := newTestQueryExecutor(ctx, tsv, query, 0)
+	_, err := qreExec.Execute()
+	require.NoError(t, err)
+	require.Equal(t, 5, qreExec.logStats.RowsAffected,
+		"Execute records the DDL result's rows-affected in the query log")
+
+	qreStream := newTestQueryExecutorStreaming(ctx, tsv, query, 0)
+	err = qreStream.Stream(func(*sqltypes.Result) error { return nil })
+	require.NoError(t, err)
+	assert.Equal(t, 5, qreStream.logStats.RowsAffected,
+		"streamed DDL must record rows-affected in the query log like Execute")
+	assert.Equal(t, uint64(5), atomic.LoadUint64(&qreStream.plan.RowsAffected),
+		"streamed DDL must record rows-affected in the per-plan stats like Execute")
 }
 
 // BuildStreaming accepts Vitess-specific migration statements.
-func TestStreamExecuteCompat_BuildStreamingRejectsMigration(t *testing.T) {
+func TestStreamExecuteCompat_BuildStreamingAcceptsMigration(t *testing.T) {
 	parser := sqlparser.NewTestParser()
 
 	testcases := []struct {
@@ -605,6 +841,200 @@ func TestStreamExecuteCompat_AllExecutePlanTypesSupported(t *testing.T) {
 			assert.NoError(t, err, "BuildStreaming should accept %s", tc.name)
 		})
 	}
+}
+
+// Stream() dispatches every plan type deliberately: DML through streamDML,
+// dedicated-executor plans through their Execute() counterparts, and the
+// remaining plain-SQL statements through the generic streaming path. Plan
+// types outside those dispatch tables — unreachable through GetStreamPlan,
+// like PlanMessageStream — are rejected as a bug, like Execute rejects them,
+// instead of silently executing raw SQL with none of Execute's semantics.
+func TestStreamExecuteCompat_StreamDispatchIsTotal(t *testing.T) {
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "")
+	defer tsv.StopService()
+	defer db.Close()
+
+	// The dispatch tables in Stream(), by path.
+	dispatched := map[planbuilder.PlanType]string{
+		planbuilder.PlanInsert:      "dml",
+		planbuilder.PlanUpdate:      "dml",
+		planbuilder.PlanUpdateLimit: "dml",
+		planbuilder.PlanDelete:      "dml",
+		planbuilder.PlanDeleteLimit: "dml",
+		planbuilder.PlanLoad:        "dml",
+
+		planbuilder.PlanNextval:             "dedicated",
+		planbuilder.PlanDDL:                 "dedicated",
+		planbuilder.PlanSavepoint:           "dedicated",
+		planbuilder.PlanSRollback:           "dedicated",
+		planbuilder.PlanRelease:             "dedicated",
+		planbuilder.PlanSet:                 "dedicated",
+		planbuilder.PlanUnlockTables:        "dedicated",
+		planbuilder.PlanShowMigrations:      "dedicated",
+		planbuilder.PlanShowMigrationLogs:   "dedicated",
+		planbuilder.PlanShowThrottledApps:   "dedicated",
+		planbuilder.PlanShowThrottlerStatus: "dedicated",
+		planbuilder.PlanAlterMigration:      "dedicated",
+		planbuilder.PlanRevertMigration:     "dedicated",
+
+		planbuilder.PlanSelect:           "generic",
+		planbuilder.PlanSelectImpossible: "generic",
+		planbuilder.PlanSelectLockFunc:   "generic",
+		planbuilder.PlanShow:             "generic",
+		planbuilder.PlanOtherRead:        "generic",
+		planbuilder.PlanOtherAdmin:       "generic",
+		planbuilder.PlanFlush:            "generic",
+		planbuilder.PlanCallProc:         "generic",
+	}
+
+	callback := func(*sqltypes.Result) error { return nil }
+	for id := range planbuilder.NumPlans {
+		if _, ok := dispatched[id]; ok {
+			continue
+		}
+		logStats := tabletenv.NewLogStats(ctx, "TestStreamDispatchIsTotal", streamlog.NewQueryLogConfigForTest())
+		plan := &TabletPlan{Plan: &planbuilder.Plan{PlanID: id}, Rules: rules.New()}
+		qre := newQueryExec(ctx, tsv, "select 1 from test_table", 0, plan, logStats)
+		err := qre.Stream(callback)
+		require.ErrorContains(t, err, "unexpected plan type",
+			"%s is not in Stream()'s dispatch tables and must not silently take the generic streaming path", id.String())
+	}
+}
+
+// Stream() must dispatch every plan type Execute() dispatches. Both
+// dispatchers are probed behaviorally with a synthetic plan per plan type, so
+// a plan type newly wired into Execute cannot pass this test without a Stream
+// dispatch decision: either Stream serves it, or the plan is recorded in
+// streamUnsupported below as a conscious gap. Only the connID==0 dispatch
+// tables are probed: inside a transaction Stream delegates dedicated plans to
+// txConnExec — Execute's own dispatcher — so those tables cannot drift apart.
+func TestStreamExecuteCompat_StreamDispatchCoversExecute(t *testing.T) {
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "")
+	defer tsv.StopService()
+	defer db.Close()
+
+	// Plan types Execute dispatches but Stream rejects.
+	streamUnsupported := map[planbuilder.PlanType]string{
+		// The planner never produces PlanInsertMessage (analyzeInsert always
+		// returns PlanInsert); Execute's dispatch entry for it is vestigial,
+		// and Stream rejects it like other planner-unreachable plan types.
+		planbuilder.PlanInsertMessage: "planner-unreachable, vestigial in Execute",
+	}
+
+	// probe reports whether the executor's dispatch tables rejected the plan
+	// type. Any other outcome — success, an execution error from the fake DB,
+	// or a panic from running a synthetic plan with no FullQuery/FullStmt —
+	// means the plan type was dispatched.
+	probe := func(id planbuilder.PlanType, run func(*QueryExecutor) error) (rejected bool) {
+		logStats := tabletenv.NewLogStats(ctx, "TestStreamDispatchCoversExecute", streamlog.NewQueryLogConfigForTest())
+		plan := &TabletPlan{Plan: &planbuilder.Plan{PlanID: id}, Rules: rules.New()}
+		qre := newQueryExec(ctx, tsv, "select 1 from test_table", 0, plan, logStats)
+		defer func() {
+			_ = recover()
+		}()
+		err := run(qre)
+		return err != nil && strings.Contains(err.Error(), "unexpected plan type")
+	}
+
+	for id := range planbuilder.NumPlans {
+		execRejected := probe(id, func(qre *QueryExecutor) error {
+			_, err := qre.Execute()
+			return err
+		})
+		streamRejected := probe(id, func(qre *QueryExecutor) error {
+			return qre.Stream(func(*sqltypes.Result) error { return nil })
+		})
+
+		if reason, ok := streamUnsupported[id]; ok {
+			require.False(t, execRejected,
+				"%s is listed as stream-unsupported but Execute rejects it too; remove the entry", id.String())
+			require.True(t, streamRejected,
+				"%s is listed as stream-unsupported (%s) but Stream dispatches it; remove the entry", id.String(), reason)
+			continue
+		}
+		if execRejected {
+			continue
+		}
+		require.False(t, streamRejected,
+			"%s is dispatched by Execute but rejected by Stream's dispatch tables", id.String())
+	}
+}
+
+// A connection setting first applied by a streamed query on a transaction
+// connection must be recorded in the transaction properties, like Execute
+// records it: a 2PC recovery replays the recorded queries, and later DML on
+// the same connection sees the setting already applied and does not record
+// it, so the first query's bookkeeping is the only record.
+func TestStreamExecuteCompat_AppliedSettingRecordedForReplay(t *testing.T) {
+	ctx := t.Context()
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+
+	const applyQuery = "set @@sql_mode = ''"
+	db.AddQuery(applyQuery, &sqltypes.Result{})
+	query := "select * from test_table"
+	db.AddQuery(query, &sqltypes.Result{Fields: getTestTableFields()})
+
+	target := tsv.sm.Target()
+	txID := newTransaction(tsv, nil)
+	defer func() { _, _ = tsv.Rollback(ctx, target, txID) }()
+
+	qre := newTestQueryExecutorStreaming(ctx, tsv, query, txID)
+	qre.setting = smartconnpool.NewSetting(applyQuery, "set @@sql_mode = default")
+	require.NoError(t, qre.Stream(func(*sqltypes.Result) error { return nil }))
+
+	conn, err := tsv.te.txPool.GetAndLock(txID, "for query inspection")
+	require.NoError(t, err)
+	defer conn.Unlock()
+	recorded := make([]string, 0, len(conn.TxProperties().Queries))
+	for _, q := range conn.TxProperties().Queries {
+		recorded = append(recorded, q.Sql)
+	}
+	require.Contains(t, recorded, applyQuery,
+		"a setting applied by a streamed query must be recorded for transaction replay")
+}
+
+// State-changing plans on the streaming path are bounded by the query
+// timeout, like Execute; the unbounded streaming exemption covers only reads.
+func TestStreamExecuteCompat_QueryTimeoutForStateChangingPlans(t *testing.T) {
+	ctx := t.Context()
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+	tsv.QueryTimeout.Store(int64(100 * time.Millisecond))
+
+	// The DDL blocks until the test releases it, so the only way Stream can
+	// return before the release is the query timeout firing. The failsafe
+	// release keeps a missing timeout from blocking the whole test run: the
+	// DDL then completes without an error and the assertions below fail.
+	ddl := "alter table test_table add zipcode int"
+	rewritten := "alter table test_table add column zipcode int"
+	release := make(chan struct{})
+	releaseOnce := sync.OnceFunc(func() { close(release) })
+	db.AddQuery(rewritten, &sqltypes.Result{})
+	db.SetBeforeFunc(rewritten, func() { <-release })
+	defer releaseOnce()
+	failsafe := time.AfterFunc(30*time.Second, releaseOnce)
+	defer failsafe.Stop()
+
+	qre := newTestQueryExecutorStreaming(ctx, tsv, ddl, 0)
+	err := qre.Stream(func(*sqltypes.Result) error { return nil })
+	require.Error(t, err, "streamed DDL must be bounded by the query timeout")
+	require.ErrorContains(t, err, "maximum statement execution time exceeded")
+
+	// A read outlives the query timeout: it holds the connection well past
+	// the timeout and must still complete.
+	query := "select * from test_table"
+	db.AddQuery(query, &sqltypes.Result{Fields: getTestTableFields()})
+	db.SetBeforeFunc(query, func() { time.Sleep(time.Second) })
+	qre = newTestQueryExecutorStreaming(ctx, tsv, query, 0)
+	require.NoError(t, qre.Stream(func(*sqltypes.Result) error { return nil }),
+		"streamed reads must stay exempt from the query timeout")
 }
 
 // ACL stats keys don't contain "SelectStream".

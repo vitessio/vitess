@@ -27,14 +27,15 @@ import (
 const fakeBackupEngineName = "fake"
 
 type FakeBackupEngine struct {
-	ExecuteBackupCalls         []FakeBackupEngineExecuteBackupCall
-	ExecuteBackupDuration      time.Duration
-	ExecuteBackupReturn        FakeBackupEngineExecuteBackupReturn
-	ExecuteRestoreCalls        []FakeBackupEngineExecuteRestoreCall
-	ExecuteRestoreDuration     time.Duration
-	ExecuteRestoreReturn       FakeBackupEngineExecuteRestoreReturn
-	ShouldDrainForBackupCalls  int
-	ShouldDrainForBackupReturn bool
+	ExecuteBackupCalls           []FakeBackupEngineExecuteBackupCall
+	ExecuteBackupDuration        time.Duration
+	ExecuteBackupReturn          FakeBackupEngineExecuteBackupReturn
+	ExecuteRestoreCalls          []FakeBackupEngineExecuteRestoreCall
+	ExecuteRestoreDuration       time.Duration
+	ExecuteRestoreReturn         FakeBackupEngineExecuteRestoreReturn
+	ShouldDrainForBackupCalls    int
+	ShouldDrainForBackupReturn   bool
+	ShouldSkipVersionCheckReturn bool
 }
 
 type FakeBackupEngineExecuteBackupCall struct {
@@ -98,4 +99,8 @@ func (be *FakeBackupEngine) Name() string { return fakeBackupEngineName }
 
 func (be *FakeBackupEngine) ShouldStartMySQLAfterRestore() bool {
 	return true
+}
+
+func (be *FakeBackupEngine) ShouldSkipVersionCheck() bool {
+	return be.ShouldSkipVersionCheckReturn
 }

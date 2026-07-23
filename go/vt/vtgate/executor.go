@@ -1296,6 +1296,23 @@ func (e *Executor) getCachedOrBuildPlan(
 		return nil, false, nil, err
 	}
 
+	preparedPlan := planKey.Query != ""
+	if preparedPlan {
+		// MySQL rejects statement text that itself manages prepared
+		// statements with ER_UNSUPPORTED_PS. The check must run before the
+		// statement is planned: planning an EXECUTE plans its stored
+		// statement text, and the gRPC API lets clients store arbitrary
+		// text in the session's prepared-statement map, so nested EXECUTE
+		// text would otherwise recurse through the planner without bound.
+		// No statement is returned with the error so that a failed
+		// binary-protocol prepare does not fall back to accepting the
+		// statement with NULL field types.
+		switch stmt.(type) {
+		case *sqlparser.PrepareStmt, *sqlparser.ExecuteStmt, *sqlparser.DeallocateStmt:
+			return nil, false, nil, vterrors.NewErrorf(vtrpcpb.Code_UNIMPLEMENTED, vterrors.UnsupportedPS, "This command is not supported in the prepared statement protocol yet")
+		}
+	}
+
 	defer func() {
 		if err == nil {
 			vcursor.CheckForReservedConnection(setVarComment, stmt)
@@ -1313,7 +1330,6 @@ func (e *Executor) getCachedOrBuildPlan(
 	vcursor.SetForeignKeyCheckState(qh.ForeignKeyChecks)
 
 	paramsCount := uint16(0)
-	preparedPlan := planKey.Query != ""
 	if preparedPlan {
 		// We need to count the number of arguments in the statement before we plan the query.
 		// Planning could add additional arguments to the statement.
@@ -1553,12 +1569,6 @@ func (e *Executor) Prepare(ctx context.Context, method string, safeSession *econ
 }
 
 func (e *Executor) prepare(ctx context.Context, safeSession *econtext.SafeSession, sql string, logStats *logstats.LogStats) ([]*querypb.Field, uint16, error) {
-	// Start an implicit transaction if necessary.
-	if !safeSession.Autocommit && !safeSession.InTransaction() {
-		if err := e.txConn.Begin(ctx, safeSession, nil); err != nil {
-			return nil, 0, err
-		}
-	}
 	stmtType := sqlparser.Preview(sql)
 	logStats.StmtType = stmtType.String()
 
@@ -1874,7 +1884,10 @@ func (e *Executor) PlanPrepareStmt(ctx context.Context, safeSession *econtext.Sa
 	// creating this log stats to not interfere with the original log stats.
 	lStats := logstats.NewLogStats(ctx, "prepare", query, safeSession.GetSessionUUID(), nil, streamlog.GetQueryLogConfig())
 	plan, _, _, err := e.fetchOrCreatePlan(ctx, safeSession, query, nil, false, true, lStats, false)
-	return plan, err
+	if err != nil {
+		return nil, err
+	}
+	return plan, nil
 }
 
 func (e *Executor) Close() {

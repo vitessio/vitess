@@ -1555,6 +1555,71 @@ func TestExecutorDeniedErrorNoBuffer(t *testing.T) {
 	})
 }
 
+// TestVTGateExecuteMultiTimeoutUsesParentContextPerStatement verifies that
+// each statement in an ExecuteMulti request receives a timeout derived from the
+// original request context.
+func TestVTGateExecuteMultiTimeoutUsesParentContextPerStatement(t *testing.T) {
+	executor, sbc1, sbc2, _, ctx := createExecutorEnv(t)
+
+	oldTimeout := mysqlQueryTimeout
+	mysqlQueryTimeout = 100 * time.Millisecond
+	sbc1.ExecDelayResponse = 5 * time.Millisecond
+	t.Cleanup(func() {
+		mysqlQueryTimeout = oldTimeout
+		sbc1.ExecDelayResponse = 0
+	})
+
+	session := &vtgatepb.Session{
+		Autocommit:   true,
+		TargetString: "TestExecutor",
+	}
+	vtg := newVTGate(executor, nil, nil, nil, nil)
+
+	_, results, err := vtg.ExecuteMulti(ctx, nil, session, "select id from user where id = 1; select id from user where id = 1")
+
+	require.NoError(t, err)
+	require.Len(t, results, 2)
+	require.EqualValues(t, 2, sbc1.ExecCount.Load())
+	require.Zero(t, sbc2.ExecCount.Load())
+}
+
+// TestVTGateStreamExecuteMultiTimeoutUsesParentContextPerStatement verifies
+// that each statement in a StreamExecuteMulti request receives a timeout
+// derived from the original request context.
+func TestVTGateStreamExecuteMultiTimeoutUsesParentContextPerStatement(t *testing.T) {
+	executor, sbc1, sbc2, _, ctx := createExecutorEnv(t)
+
+	oldTimeout := mysqlQueryTimeout
+	mysqlQueryTimeout = 100 * time.Millisecond
+	sbc1.ExecDelayResponse = 5 * time.Millisecond
+	t.Cleanup(func() {
+		mysqlQueryTimeout = oldTimeout
+		sbc1.ExecDelayResponse = 0
+	})
+
+	session := &vtgatepb.Session{
+		Autocommit:   true,
+		TargetString: "TestExecutor",
+	}
+	vtg := newVTGate(executor, nil, nil, nil, nil)
+	var moreFlags []bool
+
+	_, err := vtg.StreamExecuteMulti(ctx, nil, session, "select id from user where id = 1; select id from user where id = 1", func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error {
+		if qr.QueryError != nil {
+			return qr.QueryError
+		}
+		if firstPacket {
+			moreFlags = append(moreFlags, more)
+		}
+		return nil
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, []bool{true, false}, moreFlags)
+	require.EqualValues(t, 2, sbc1.ExecCount.Load())
+	require.Zero(t, sbc2.ExecCount.Load())
+}
+
 // TestVSchemaStats makes sure the building and displaying of the
 // VSchemaStats works.
 func TestVSchemaStats(t *testing.T) {
@@ -2779,6 +2844,30 @@ func TestExecutorPrepareExecute(t *testing.T) {
 		_, err := executorExecSession(t.Context(), executor, session, "prepare prep_user from ''", nil)
 		require.Error(t, err)
 	})
+
+	t.Run("execute prepared statement", func(t *testing.T) {
+		_, err := executorExecSession(t.Context(), executor, session, "prepare prep_exec from 'select * from user where id = ?'", nil)
+		require.NoError(t, err)
+		_, err = executorExecSession(t.Context(), executor, session, "set @exec_id = 1", nil)
+		require.NoError(t, err)
+		_, err = executorExecSession(t.Context(), executor, session, "execute prep_exec using @exec_id", nil)
+		require.NoError(t, err)
+	})
+
+	t.Run("deallocate prepared statement", func(t *testing.T) {
+		_, err := executorExecSession(t.Context(), executor, session, "prepare prep_dealloc from 'select 1'", nil)
+		require.NoError(t, err)
+		require.NotNil(t, session.PrepareStatement["prep_dealloc"])
+
+		_, err = executorExecSession(t.Context(), executor, session, "deallocate prepare prep_dealloc", nil)
+		require.NoError(t, err)
+		require.Nil(t, session.PrepareStatement["prep_dealloc"])
+	})
+
+	t.Run("deallocate unknown prepared statement", func(t *testing.T) {
+		_, err := executorExecSession(t.Context(), executor, session, "deallocate prepare prep_unknown", nil)
+		require.ErrorContains(t, err, "Unknown prepared statement handler (prep_unknown) given to DEALLOCATE PREPARE")
+	})
 }
 
 // TestExecutorSettingsInTwoPC tests that settings are supported for multi-shard atomic commit.
@@ -2872,6 +2961,156 @@ func TestExecutorTruncateErrors(t *testing.T) {
 
 	_, _, err = executor.Prepare(t.Context(), "TestExecute", session, "invalid statement")
 	assert.EqualError(t, err, "[BUG] unrecognized p [TRUNCATED]")
+}
+
+func TestPrepareDoesNotStartTransaction(t *testing.T) {
+	// MySQL does not start an implicit transaction for COM_STMT_PREPARE, even
+	// with autocommit disabled; the transaction starts at first execution.
+	executor, _, _, _, ctx := createExecutorEnv(t)
+
+	session := &vtgatepb.Session{TargetString: KsTestUnsharded, Autocommit: false}
+
+	_, _, err := executorPrepare(ctx, executor, session, "select id from main1 where id = ?")
+	require.NoError(t, err)
+	require.False(t, session.InTransaction)
+}
+
+func TestSQLPrepareDoesNotStartTransaction(t *testing.T) {
+	// MySQL does not start an implicit transaction for SQL-level PREPARE or
+	// DEALLOCATE PREPARE, even with autocommit disabled; the transaction
+	// starts when the prepared statement is executed. This must hold for
+	// failing statements too: their errors surface during execution, after
+	// the point where an implicit transaction would be started.
+	executor, _, _, _, ctx := createExecutorEnv(t)
+
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded, Autocommit: false})
+
+	tcases := []struct {
+		name    string
+		sql     string
+		wantErr string
+	}{{
+		name: "prepare",
+		sql:  "prepare prep from 'select id from main1 where id = ?'",
+	}, {
+		name:    "prepare with undefined user defined variable",
+		sql:     "prepare prep_udv from @undefined_stmt_text",
+		wantErr: "'undefined_stmt_text' user defined variable does not exists",
+	}, {
+		name:    "prepare with unplannable text",
+		sql:     "prepare prep_bad from 'wrong query syntax'",
+		wantErr: "syntax error",
+	}, {
+		name: "deallocate",
+		sql:  "deallocate prepare prep",
+	}, {
+		name:    "deallocate unknown",
+		sql:     "deallocate prepare prep_unknown",
+		wantErr: "Unknown prepared statement handler (prep_unknown) given to DEALLOCATE PREPARE",
+	}}
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			_, err := executorExecSession(ctx, executor, session, tcase.sql, nil)
+			if tcase.wantErr != "" {
+				require.ErrorContains(t, err, tcase.wantErr)
+			} else {
+				require.NoError(t, err)
+			}
+			require.False(t, session.InTransaction())
+		})
+	}
+}
+
+func TestPrepareRejectsNonPreparableStatements(t *testing.T) {
+	// MySQL rejects preparing statements that manage prepared statements
+	// (PREPARE, EXECUTE, DEALLOCATE PREPARE) with ER_UNSUPPORTED_PS.
+	// Accepting them would let an EXECUTE re-enter the session's
+	// prepared-statement state — for example a statement that deallocates
+	// itself while it runs.
+	executor, _, _, _, ctx := createExecutorEnv(t)
+
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
+
+	tcases := []struct {
+		name string
+		sql  string
+	}{{
+		name: "nested prepare",
+		sql:  "prepare prep from 'prepare prep_inner from ''select 1'''",
+	}, {
+		name: "nested execute",
+		sql:  "prepare prep from 'execute prep'",
+	}, {
+		// ER_UNSUPPORTED_PS takes precedence over the unknown-statement
+		// error the nested EXECUTE would fail to plan with, like in MySQL.
+		name: "nested execute of an unknown statement",
+		sql:  "prepare prep from 'execute prep_unknown'",
+	}, {
+		name: "nested deallocate",
+		sql:  "prepare prep from 'deallocate prepare prep'",
+	}, {
+		name: "nested drop prepare",
+		sql:  "prepare prep from 'drop prepare prep'",
+	}}
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			_, err := executorExecSession(ctx, executor, session, "prepare prep from 'select 1'", nil)
+			require.NoError(t, err)
+
+			_, err = executorExecSession(ctx, executor, session, tcase.sql, nil)
+			require.ErrorContains(t, err, "This command is not supported in the prepared statement protocol yet")
+			// A failed PREPARE deallocates the statement previously
+			// registered under the same name.
+			require.Nil(t, session.PrepareStatement["prep"])
+		})
+	}
+}
+
+func TestExecuteRejectsStoredNonPreparableStatements(t *testing.T) {
+	// The gRPC API lets clients supply the session, including the
+	// prepared-statement map, so stored statement text is not guaranteed
+	// to have passed PREPARE's checks. Planning an EXECUTE plans its
+	// stored text, so text that is itself an EXECUTE would recurse
+	// through the planner without bound and crash vtgate with a stack
+	// overflow unless it is rejected before planning.
+	executor, _, _, _, ctx := createExecutorEnv(t)
+
+	tcases := []struct {
+		name   string
+		stored map[string]*vtgatepb.PrepareData
+	}{{
+		name: "self-referential execute",
+		stored: map[string]*vtgatepb.PrepareData{
+			"prep": {PrepareStatement: "execute prep"},
+		},
+	}, {
+		name: "mutually recursive execute",
+		stored: map[string]*vtgatepb.PrepareData{
+			"prep":  {PrepareStatement: "execute other"},
+			"other": {PrepareStatement: "execute prep"},
+		},
+	}, {
+		name: "stored prepare",
+		stored: map[string]*vtgatepb.PrepareData{
+			"prep": {PrepareStatement: "prepare prep_nested from 'select 1'"},
+		},
+	}, {
+		name: "stored deallocate",
+		stored: map[string]*vtgatepb.PrepareData{
+			"prep": {PrepareStatement: "deallocate prepare prep"},
+		},
+	}}
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			session := econtext.NewSafeSession(&vtgatepb.Session{
+				TargetString:     KsTestUnsharded,
+				PrepareStatement: tcase.stored,
+			})
+
+			_, err := executorExecSession(ctx, executor, session, "execute prep", nil)
+			require.ErrorContains(t, err, "This command is not supported in the prepared statement protocol yet")
+		})
+	}
 }
 
 func TestExecutorFlushStmt(t *testing.T) {
