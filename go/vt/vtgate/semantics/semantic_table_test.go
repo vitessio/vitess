@@ -1100,3 +1100,14 @@ func TestCopySemanticInfoIntoColName(t *testing.T) {
 		require.NotContains(t, semTable.Direct, to)
 	})
 }
+
+// TestTypeForExprUnhashable tests that type lookups for expressions of
+// unhashable types, such as the value list of an IN comparison, report no
+// type instead of panicking on the ExprTypes map access.
+func TestTypeForExprUnhashable(t *testing.T) {
+	st := EmptySemTable()
+	tuple := sqlparser.ValTuple{sqlparser.NewIntLiteral("1"), sqlparser.NewIntLiteral("2")}
+	typ, found := st.TypeForExpr(tuple)
+	assert.False(t, found)
+	assert.Equal(t, sqltypes.Unknown, typ.Type())
+}

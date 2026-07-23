@@ -7408,5 +7408,79 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "vtgate-evaluated aggregate compared against a literal IN value list keeps the tuple structure",
+    "query": "select count(foo) in (1, 2) from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select count(foo) in (1, 2) from user",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "count(foo) in (1, 2) as count(foo) in (1, 2)"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "sum_count(0) AS count(foo), constant_aggr(1) AS 1, constant_aggr(2) AS 2",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select count(foo), 1, 2 from `user` where 1 != 1",
+                "Query": "select count(foo), 1, 2 from `user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "vtgate-evaluated aggregate compared against a list bind variable keeps the tuple structure",
+    "query": "select count(foo) in ::vals from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select count(foo) in ::vals from user",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "count(foo) in ::vals as count(foo) in ::vals"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "sum_count(0) AS count(foo)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select count(foo) from `user` where 1 != 1",
+                "Query": "select count(foo) from `user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
   }
 ]

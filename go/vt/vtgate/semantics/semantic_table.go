@@ -673,6 +673,12 @@ func (st *SemTable) AddExprs(tbl *sqlparser.AliasedTableExpr, cols *sqlparser.Se
 // TypeForExpr returns the type of expressions in the query
 // Note that PlanningContext has the same method, and you should use that if you have a PlanningContext
 func (st *SemTable) TypeForExpr(e sqlparser.Expr) (evalengine.Type, bool) {
+	if !ValidAsMapKey(e) {
+		// Expressions of unhashable types, such as the sqlparser.ValTuple
+		// value list of an IN comparison, cannot be stored in ExprTypes and
+		// would panic when used as a map key.
+		return evalengine.NewUnknownType(), false
+	}
 	if typ, found := st.ExprTypes[e]; found {
 		return typ, true
 	}
