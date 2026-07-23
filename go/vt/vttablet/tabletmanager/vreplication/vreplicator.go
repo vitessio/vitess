@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math"
 	"sort"
 	"strconv"
@@ -36,6 +37,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/schemadiff"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
@@ -396,12 +398,20 @@ func (vr *vreplicator) buildColInfoMap(ctx context.Context) (map[string][]*Colum
 			pks = td.PrimaryKeyColumns
 		} else {
 			// Use a PK equivalent if one exists.
-			executeFetch := func(query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
-				// This sets wantfields to true.
-				return vr.dbClient.ExecuteFetch(query, maxrows)
-			}
-			if pks, _, err = mysqlctl.GetPrimaryKeyEquivalentColumns(ctx, executeFetch, vr.dbClient.DBName(), td.Name); err != nil {
-				return nil, err
+			if td.Schema != "" {
+				senv := schemadiff.NewEnvWithDefaults(vr.vre.env)
+				createTableEntity, err := schemadiff.NewCreateTableEntityFromSQL(senv, td.Schema)
+				if err != nil {
+					log.Warn("Failed to parse the CREATE TABLE schema to determine a primary key equivalent; falling back to using all columns",
+						slog.String("table", td.Name),
+						slog.String("workflow", vr.WorkflowName),
+						slog.Any("error", err))
+				} else {
+					pks, _ = schemadiff.GetPrimaryKeyEquivalent(createTableEntity)
+				}
+			} else {
+				log.Warn("No CREATE TABLE schema available to determine a primary key equivalent",
+					slog.String("table", td.Name))
 			}
 			// Fall back to using every column in the table if there's no PK or PKE.
 			if len(pks) == 0 {
@@ -817,13 +827,15 @@ func (vr *vreplicator) stashSecondaryKeys(ctx context.Context, tableName string)
 			if secondaryKey.Info.Type == sqlparser.IndexTypePrimary || secondaryKey.Info.Type == sqlparser.IndexTypeFullText {
 				continue
 			}
-			alterDrop.AlterOptions = append(alterDrop.AlterOptions,
+			alterDrop.AlterOptions = append(
+				alterDrop.AlterOptions,
 				&sqlparser.DropKey{
 					Name: secondaryKey.Info.Name,
 					Type: sqlparser.NormalKeyType,
 				},
 			)
-			alterReAdd.AlterOptions = append(alterReAdd.AlterOptions,
+			alterReAdd.AlterOptions = append(
+				alterReAdd.AlterOptions,
 				&sqlparser.AddIndexDefinition{
 					IndexDefinition: secondaryKey,
 				},
@@ -1221,7 +1233,8 @@ func (vr *vreplicator) setExistingRowsCopied() {
 }
 
 func (vr *vreplicator) readExistingRowsCopied(id int32) (int64, error) {
-	query, err := sqlparser.ParseAndBind(`SELECT rows_copied FROM _vt.vreplication WHERE id=%a`,
+	query, err := sqlparser.ParseAndBind(
+		`SELECT rows_copied FROM _vt.vreplication WHERE id=%a`,
 		sqltypes.Int32BindVariable(id),
 	)
 	if err != nil {

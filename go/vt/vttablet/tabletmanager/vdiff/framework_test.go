@@ -262,15 +262,14 @@ func (ftc *fakeTabletConn) VStreamRows(ctx context.Context, request *binlogdatap
 	if vstreamRowsHook != nil {
 		vstreamRowsHook(ctx)
 	}
-	var row []sqltypes.Value
+	var lastpk *sqltypes.Result
 	if request.Lastpk != nil {
-		r := sqltypes.Proto3ToResult(request.Lastpk)
-		if len(r.Rows) != 1 {
+		lastpk = sqltypes.Proto3ToResult(request.Lastpk)
+		if len(lastpk.Rows) != 1 {
 			return fmt.Errorf("unexpected lastpk input: %v", request.Lastpk)
 		}
-		row = r.Rows[0]
 	}
-	return vdiffenv.vse.StreamRows(ctx, request.Query, row, func(rows *binlogdatapb.VStreamRowsResponse) error {
+	return vdiffenv.vse.StreamRows(ctx, request.Query, lastpk, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		if vstreamRowsSendHook != nil {
 			vstreamRowsSendHook(ctx)
 		}
@@ -668,10 +667,11 @@ func (tvde *testVDiffEnv) addTablet(id int, keyspace, shard string, tabletType t
 }
 
 func (tvde *testVDiffEnv) createController(t *testing.T, id int) *controller {
-	controllerQR := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		vdiffTestCols,
-		vdiffTestColTypes,
-	),
+	controllerQR := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			vdiffTestCols,
+			vdiffTestColTypes,
+		),
 		fmt.Sprintf("%d|%s|%s|%s|%s|%s|%s|%s|", id, uuid.New(), tvde.workflow, tstenv.KeyspaceName, tstenv.ShardName, vdiffDBName, PendingState, optionsJS),
 	)
 	tvde.dbClient.ExpectRequest(fmt.Sprintf("select * from _vt.vdiff where id = %d and db_name = %s", id, encodeString(vdiffDBName)), noResults, nil)

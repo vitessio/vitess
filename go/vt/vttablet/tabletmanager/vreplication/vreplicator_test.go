@@ -40,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/schemadiff"
+	"vitess.io/vitess/go/vt/vtenv"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -85,15 +86,66 @@ func TestMaxQuerySize(t *testing.T) {
 }
 
 // fakeFetchSuperQueryMysqld is a minimal MysqlDaemon test double that delegates
-// FetchSuperQuery to a callback. Only the methods exercised by tests are valid;
-// any other call will panic on the embedded nil interface.
+// FetchSuperQuery and GetSchema to callbacks. Only the methods exercised by
+// tests are valid; any other call will panic on the embedded nil interface.
 type fakeFetchSuperQueryMysqld struct {
 	mysqlctl.MysqlDaemon
-	callback func(query string) (*sqltypes.Result, error)
+	callback       func(query string) (*sqltypes.Result, error)
+	schemaCallback func(dbName string, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error)
 }
 
 func (f *fakeFetchSuperQueryMysqld) FetchSuperQuery(ctx context.Context, query string) (*sqltypes.Result, error) {
 	return f.callback(query)
+}
+
+func (f *fakeFetchSuperQueryMysqld) GetSchema(ctx context.Context, dbName string, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error) {
+	return f.schemaCallback(dbName, request)
+}
+
+// TestBuildColInfoMapUnparseableSchemaFallback confirms that a no-PK table
+// whose CREATE TABLE cannot be parsed (e.g. unknown SECONDARY_ENGINE
+// option) does not fail the stream: buildColInfoMap warns and falls back
+// to all columns.
+func TestBuildColInfoMapUnparseableSchemaFallback(t *testing.T) {
+	infoSchemaCols := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"character_set_name|collation_name|column_name|data_type|column_type|extra",
+			"varchar|varchar|varchar|varchar|varchar|varchar",
+		),
+		"utf8mb4|utf8mb4_general_ci|c1|int|int|",
+		"utf8mb4|utf8mb4_general_ci|c2|varchar|varchar(10)|",
+	)
+	fmd := &fakeFetchSuperQueryMysqld{
+		callback: func(query string) (*sqltypes.Result, error) {
+			return infoSchemaCols, nil
+		},
+		schemaCallback: func(dbName string, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error) {
+			return &tabletmanagerdatapb.SchemaDefinition{
+				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+					Name:    "t1",
+					Columns: []string{"c1", "c2"},
+					Fields:  sqltypes.MakeTestFields("c1|c2", "int64|varchar"),
+					Schema:  "CREATE TABLE t1 (c1 int NOT NULL, c2 varchar(10), UNIQUE KEY uk1 (c1)) SECONDARY_ENGINE=RAPID",
+				}},
+			}, nil
+		},
+	}
+	stats := binlogplayer.NewStats()
+	defer stats.Stop()
+	vr := &vreplicator{
+		mysqld:       fmd,
+		dbClient:     newVDBClient(binlogplayer.NewMockDBClient(t), stats, vttablet.DefaultVReplicationConfig.RelayLogMaxItems),
+		vre:          &Engine{env: vtenv.NewTestEnv()},
+		WorkflowName: "wf1",
+	}
+
+	colInfo, err := vr.buildColInfoMap(t.Context())
+	require.NoError(t, err)
+	require.Contains(t, colInfo, "t1")
+	require.Len(t, colInfo["t1"], 2)
+	for _, ci := range colInfo["t1"] {
+		assert.True(t, ci.IsPK, "column %s should be part of the all-columns substitute PK", ci.Name)
+	}
 }
 
 func TestFetchInfoSchemaColumnsRetry(t *testing.T) {
@@ -224,6 +276,18 @@ func TestPrimaryKeyEquivalentColumns(t *testing.T) {
 			wantIndex: "PRIMARY",
 		},
 		{
+			name:  "PRIMARYVSSECONDARYUNIQUE",
+			table: "primary_vs_secondary_unique_t",
+			ddl: `CREATE TABLE primary_vs_secondary_unique_t (
+					bigint_id BIGINT NOT NULL,
+					tinyint_col TINYINT NOT NULL,
+					PRIMARY KEY (bigint_id),
+					UNIQUE KEY tiny_uid (tinyint_col)
+				)`,
+			wantCols:  []string{"tinyint_col"},
+			wantIndex: "tiny_uid",
+		},
+		{
 			name:      "0PKE",
 			table:     "zeropke_t",
 			ddl:       `CREATE TABLE zeropke_t (id INT NULL, col1 VARCHAR(25), UNIQUE KEY (id))`,
@@ -297,6 +361,18 @@ func TestPrimaryKeyEquivalentColumns(t *testing.T) {
 			wantCols:  []string{"id1", "id2", "id3"},
 			wantIndex: "id1_id2_id3",
 		},
+		{
+			name:  "PREFIXVSMOREEXPENSIVENONPREFIX",
+			table: "prefix_vs_nonprefix_t",
+			ddl: `CREATE TABLE prefix_vs_nonprefix_t (
+					char_col CHAR(32) NOT NULL,
+					varchar_col VARCHAR(64) NOT NULL,
+					UNIQUE KEY char_prefix (char_col(8)),
+					UNIQUE KEY varchar_full (varchar_col)
+				)`,
+			wantCols:  []string{"char_col"},
+			wantIndex: "char_prefix",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -304,10 +380,21 @@ func TestPrimaryKeyEquivalentColumns(t *testing.T) {
 			conn, err := env.Mysqld.GetDbaConnection(ctx)
 			require.NoError(t, err, "could not connect to mysqld: %v", err)
 			defer conn.Close()
-			cols, indexName, err := mysqlctl.GetPrimaryKeyEquivalentColumns(ctx, conn.ExecuteFetch, env.Dbcfgs.DBName, tt.table)
+			cols, indexName, err := mysqlctl.GetPrimaryKeyEquivalentColumns(ctx, conn.ExecuteFetch, env.Dbcfgs.DBName, tt.table) //nolint:staticcheck // Intentionally testing deprecated function for parity with schemadiff
 			require.NoError(t, err)
 			require.Equalf(t, tt.wantCols, cols, "Mysqld.GetPrimaryKeyEquivalentColumns() columns = %v, want %v", cols, tt.wantCols)
 			require.Equalf(t, tt.wantIndex, indexName, "Mysqld.GetPrimaryKeyEquivalentColumns() index = %v, want %v", indexName, tt.wantIndex)
+
+			senv := schemadiff.NewTestEnv()
+			createTableEntity, err := schemadiff.NewCreateTableEntityFromSQL(senv, tt.ddl)
+			require.NoError(t, err)
+			sdCols, sdIndex := schemadiff.GetPrimaryKeyEquivalent(createTableEntity)
+			if len(tt.wantCols) == 0 {
+				assert.Empty(t, sdCols, "schemadiff columns should be empty")
+			} else {
+				assert.Equalf(t, tt.wantCols, sdCols, "schemadiff.GetPrimaryKeyEquivalent() columns = %v, want %v", sdCols, tt.wantCols)
+			}
+			assert.Equalf(t, tt.wantIndex, sdIndex, "schemadiff.GetPrimaryKeyEquivalent() index = %v, want %v", sdIndex, tt.wantIndex)
 		})
 	}
 }

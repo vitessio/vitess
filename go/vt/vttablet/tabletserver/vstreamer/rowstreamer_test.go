@@ -36,6 +36,7 @@ import (
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 // TestRowStreamerQuery validates that the correct force index hint and order by is added to the rowstreamer query.
@@ -670,9 +671,58 @@ func TestStreamRowsHeartbeat(t *testing.T) {
 	}, 50*time.Millisecond, time.Millisecond, "expected context cancellation to stop row and heartbeat callbacks")
 }
 
+// TestStreamRowsLastPKStaleKeyColumns confirms that resuming a copy with a
+// lastpk whose field names no longer match the currently selected key
+// columns fails with a clear error instead of silently binding the values
+// to the wrong columns and skipping rows. Key selection can change, e.g.
+// when the PKE ranking changes across an upgrade.
+func TestStreamRowsLastPKStaleKeyColumns(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	execStatements(t, []string{
+		"create table t6(id1 int not null, id2 int not null, val varbinary(128), unique key uk_b (id1), unique key uk_a (id2))",
+		"insert into t6 values (1, 2, 'aaa'), (2, 3, 'bbb')",
+	})
+	defer execStatements(t, []string{
+		"drop table t6",
+	})
+
+	// The table's PK equivalent is uk_a (id2): uk_a and uk_b tie on cost and
+	// the tie is broken by index name. A lastpk stored from the uk_b (id1)
+	// key must be rejected.
+	stalePK := &sqltypes.Result{
+		Fields: []*querypb.Field{{Name: "id1", Type: querypb.Type_INT32}},
+		Rows:   [][]sqltypes.Value{{sqltypes.NewInt32(1)}},
+	}
+	err := engine.StreamRows(t.Context(), "select * from t6", stalePK, func(rows *binlogdatapb.VStreamRowsResponse) error {
+		return nil
+	}, nil)
+	require.ErrorContains(t, err, "was generated using the (id1) key columns")
+	require.ErrorContains(t, err, "current key columns are (id2)")
+
+	// A lastpk from the currently selected key resumes the stream.
+	currentPK := &sqltypes.Result{
+		Fields: []*querypb.Field{{Name: "id2", Type: querypb.Type_INT32}},
+		Rows:   [][]sqltypes.Value{{sqltypes.NewInt32(2)}},
+	}
+	var rowsReceived int
+	err = engine.StreamRows(t.Context(), "select * from t6", currentPK, func(rows *binlogdatapb.VStreamRowsResponse) error {
+		rowsReceived += len(rows.Rows)
+		return nil
+	}, nil)
+	require.NoError(t, err)
+	require.Equal(t, 1, rowsReceived, "expected only the row with id2 > 2")
+}
+
 func checkStream(t *testing.T, query string, lastpk []sqltypes.Value, wantQuery string, wantStream []string, options *binlogdatapb.VStreamOptions) {
 	t.Helper()
 
+	var lastpkResult *sqltypes.Result
+	if lastpk != nil {
+		lastpkResult = &sqltypes.Result{Rows: [][]sqltypes.Value{lastpk}}
+	}
 	i := 0
 	ch := make(chan error)
 	// We don't want to report errors inside callback functions because
@@ -689,7 +739,7 @@ func checkStream(t *testing.T, query string, lastpk []sqltypes.Value, wantQuery 
 		options.ConfigOverrides["vstream-dynamic-packet-size"] = strconv.FormatBool(vttablet.VStreamerUseDynamicPacketSize)
 		options.ConfigOverrides["vstream-packet-size"] = strconv.Itoa(vttablet.VStreamerDefaultPacketSize)
 
-		err := engine.StreamRows(t.Context(), query, lastpk, func(rows *binlogdatapb.VStreamRowsResponse) error {
+		err := engine.StreamRows(t.Context(), query, lastpkResult, func(rows *binlogdatapb.VStreamRowsResponse) error {
 			if first {
 				if rows.Gtid == "" {
 					ch <- errors.New("stream gtid is empty")

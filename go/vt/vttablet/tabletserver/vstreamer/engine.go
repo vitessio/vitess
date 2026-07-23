@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
@@ -29,11 +30,12 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/acl"
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/schemadiff"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
@@ -284,14 +286,17 @@ func (vse *Engine) Stream(ctx context.Context, startPos string, tablePKs []*binl
 
 // StreamRows streams rows.
 // This streams the table data rows (so we can copy the table data snapshot)
-func (vse *Engine) StreamRows(ctx context.Context, query string, lastpk []sqltypes.Value,
+// The lastpk result, when provided, carries both the values and the fields of
+// the last PK from a previous copy phase cycle, so that the row streamer can
+// verify the values still bind to the same key columns before resuming.
+func (vse *Engine) StreamRows(ctx context.Context, query string, lastpk *sqltypes.Result,
 	send func(*binlogdatapb.VStreamRowsResponse) error, options *binlogdatapb.VStreamOptions,
 ) error {
 	// Ensure vschema is initialized and the watcher is started.
 	// Starting of the watcher has to be delayed till the first call to Stream
 	// because this overhead should be incurred only if someone uses this feature.
 	vse.watcherOnce.Do(vse.setWatch)
-	log.Info(fmt.Sprintf("Streaming rows for query %s, lastpk: %s", query, lastpk))
+	log.Info(fmt.Sprintf("Streaming rows for query %s, lastpk: %v", query, lastpk))
 
 	// Create stream and add it to the map.
 	rowStreamer, idx, err := func() (*rowStreamer, int, error) {
@@ -601,18 +606,37 @@ func (vse *Engine) getMySQLEndpoint(ctx context.Context, db dbconfigs.Connector)
 	return fmt.Sprintf("%s:%d", host, port), nil
 }
 
-// mapPKEquivalentCols gets a PK equivalent from mysqld for the table
-// and maps the column names to field indexes in the MinimalTable struct.
+// mapPKEquivalentCols gets a PK equivalent for the table and maps the
+// column names to field indexes in the MinimalTable struct.
 func (vse *Engine) mapPKEquivalentCols(ctx context.Context, db dbconfigs.Connector, table *binlogdatapb.MinimalTable) ([]int, error) {
 	conn, err := db.Connect(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Close()
-	pkeColNames, indexName, err := mysqlctl.GetPrimaryKeyEquivalentColumns(ctx, conn.ExecuteFetch, vse.env.Config().DB.DBName, table.Name)
+	query := fmt.Sprintf("SHOW CREATE TABLE %s.%s", sqlescape.EscapeID(vse.env.Config().DB.DBName), sqlescape.EscapeID(table.Name))
+	qr, err := conn.ExecuteFetch(query, 1, true)
 	if err != nil {
 		return nil, err
 	}
+	if len(qr.Rows) == 0 || len(qr.Rows[0]) < 2 {
+		rowCols := 0
+		if len(qr.Rows) > 0 {
+			rowCols = len(qr.Rows[0])
+		}
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result for SHOW CREATE TABLE query for table %s.%s: %d rows with %d columns",
+			vse.env.Config().DB.DBName, table.Name, len(qr.Rows), rowCols)
+	}
+	createTableSQL := qr.Rows[0][1].ToString()
+	senv := schemadiff.NewEnvWithDefaults(vse.env.Environment())
+	createTableEntity, err := schemadiff.NewCreateTableEntityFromSQL(senv, createTableSQL)
+	if err != nil {
+		log.Warn("Failed to parse the CREATE TABLE schema to determine a primary key equivalent; the row streamer will fall back to using all columns",
+			slog.String("table", table.Name),
+			slog.Any("error", err))
+		return nil, err
+	}
+	pkeColNames, indexName := schemadiff.GetPrimaryKeyEquivalent(createTableEntity)
 	if len(pkeColNames) > 0 && indexName != "" {
 		table.PKIndexName = indexName
 	}

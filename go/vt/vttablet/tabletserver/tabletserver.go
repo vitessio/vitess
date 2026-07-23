@@ -1168,7 +1168,8 @@ func (tsv *TabletServer) beginWaitForSameRangeTransactions(ctx context.Context, 
 			}
 
 			return waitErr
-		})
+		},
+	)
 	return txDone, err
 }
 
@@ -1322,15 +1323,14 @@ func (tsv *TabletServer) VStreamRows(ctx context.Context, request *binlogdatapb.
 	if err := tsv.sm.VerifyTarget(ctx, request.Target); err != nil {
 		return err
 	}
-	var row []sqltypes.Value
+	var lastpk *sqltypes.Result
 	if request.Lastpk != nil {
-		r := sqltypes.Proto3ToResult(request.Lastpk)
-		if len(r.Rows) != 1 {
+		lastpk = sqltypes.Proto3ToResult(request.Lastpk)
+		if len(lastpk.Rows) != 1 {
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected lastpk input: %v", request.Lastpk)
 		}
-		row = r.Rows[0]
 	}
-	return tsv.vstreamer.StreamRows(ctx, request.Query, row, send, request.Options)
+	return tsv.vstreamer.StreamRows(ctx, request.Query, lastpk, send, request.Options)
 }
 
 // VStreamTables streams all tables.

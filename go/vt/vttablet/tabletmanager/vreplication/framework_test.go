@@ -381,18 +381,17 @@ func (ftc *fakeTabletConn) VStreamRows(ctx context.Context, request *binlogdatap
 	if vstreamRowsHook != nil {
 		vstreamRowsHook(ctx)
 	}
-	var row []sqltypes.Value
+	var lastpk *sqltypes.Result
 	if request.Lastpk != nil {
-		r := sqltypes.Proto3ToResult(request.Lastpk)
-		if len(r.Rows) != 1 {
+		lastpk = sqltypes.Proto3ToResult(request.Lastpk)
+		if len(lastpk.Rows) != 1 {
 			return fmt.Errorf("unexpected lastpk input: %v", request.Lastpk)
 		}
-		row = r.Rows[0]
 	}
 	vstreamOptions := &binlogdatapb.VStreamOptions{
 		ConfigOverrides: vttablet.GetVReplicationConfigDefaults(false).Map(),
 	}
-	return streamerEngine.StreamRows(ctx, request.Query, row, func(rows *binlogdatapb.VStreamRowsResponse) error {
+	return streamerEngine.StreamRows(ctx, request.Query, lastpk, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		if vstreamRowsSendHook != nil {
 			vstreamRowsSendHook(ctx)
 		}

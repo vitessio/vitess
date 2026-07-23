@@ -17,15 +17,16 @@ limitations under the License.
 package vdiff
 
 import (
-	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/schemadiff"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -119,11 +120,13 @@ func (td *tableDiffer) buildTablePlan(dbClient binlogplayer.DBClient, dbName str
 					// this won't work: "select count(*) from (select id from t limit 1)"
 					// since vreplication only handles simple tables (no joins/derived tables) this is fine for now
 					// but will need to be revisited when we add such support to vreplication
-					aggregates = append(aggregates, engine.NewAggregateParam(
-						/*opcode*/ opcode.AggregateSum,
-						/*offset*/ sourceSelect.GetColumnCount()-1,
-						nil,
-						/*alias*/ "", collationEnv),
+					aggregates = append(
+						aggregates, engine.NewAggregateParam(
+							/*opcode*/ opcode.AggregateSum,
+							/*offset*/ sourceSelect.GetColumnCount()-1,
+							nil,
+							/*alias*/ "", collationEnv,
+						),
 					)
 				}
 			}
@@ -166,7 +169,8 @@ func (td *tableDiffer) buildTablePlan(dbClient binlogplayer.DBClient, dbName str
 
 	if len(tp.table.PrimaryKeyColumns) == 0 {
 		// We use the columns from a PKE if there is one.
-		pkeCols, err := tp.getPKEquivalentColumns(dbClient)
+		senv := schemadiff.NewEnvWithDefaults(td.wd.ct.vde.env)
+		pkeCols, err := tp.getPKEquivalentColumns(dbClient, senv)
 		if err != nil {
 			return nil, vterrors.Wrapf(err, "error getting PK equivalent columns for table %s", tp.table.Name)
 		}
@@ -270,7 +274,8 @@ func (tp *tablePlan) getPKColumnCollations(dbClient binlogplayer.DBClient, colla
 	if err != nil {
 		return err
 	}
-	query, err := sqlparser.ParseAndBind(sqlSelectColumnCollations,
+	query, err := sqlparser.ParseAndBind(
+		sqlSelectColumnCollations,
 		sqltypes.StringBindVariable(tp.dbName),
 		sqltypes.StringBindVariable(tp.table.Name),
 		columnsBV,
@@ -298,16 +303,28 @@ func (tp *tablePlan) getPKColumnCollations(dbClient binlogplayer.DBClient, colla
 	return nil
 }
 
-func (tp *tablePlan) getPKEquivalentColumns(dbClient binlogplayer.DBClient) ([]string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), BackgroundOperationTimeout/2)
-	defer cancel()
-	executeFetch := func(query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
-		// This sets wantfields to true.
-		return dbClient.ExecuteFetch(query, maxrows)
-	}
-	pkeCols, _, err := mysqlctl.GetPrimaryKeyEquivalentColumns(ctx, executeFetch, tp.dbName, tp.table.Name)
+func (tp *tablePlan) getPKEquivalentColumns(dbClient binlogplayer.DBClient, env *schemadiff.Environment) ([]string, error) {
+	query := fmt.Sprintf("SHOW CREATE TABLE %s.%s", sqlescape.EscapeID(tp.dbName), sqlescape.EscapeID(tp.table.Name))
+	qr, err := dbClient.ExecuteFetch(query, 1)
 	if err != nil {
 		return nil, err
 	}
+	if len(qr.Rows) == 0 || len(qr.Rows[0]) < 2 {
+		rowCols := 0
+		if len(qr.Rows) > 0 {
+			rowCols = len(qr.Rows[0])
+		}
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result for SHOW CREATE TABLE query for table %s.%s: %d rows with %d columns",
+			tp.dbName, tp.table.Name, len(qr.Rows), rowCols)
+	}
+	createTableSQL := qr.Rows[0][1].ToString()
+	createTableEntity, err := schemadiff.NewCreateTableEntityFromSQL(env, createTableSQL)
+	if err != nil {
+		log.Warn("Failed to parse the CREATE TABLE schema to determine a primary key equivalent; falling back to using all columns",
+			slog.String("table", tp.table.Name),
+			slog.Any("error", err))
+		return nil, nil
+	}
+	pkeCols, _ := schemadiff.GetPrimaryKeyEquivalent(createTableEntity)
 	return pkeCols, nil
 }

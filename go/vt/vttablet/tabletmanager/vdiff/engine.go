@@ -34,6 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
@@ -71,16 +72,18 @@ type Engine struct {
 
 	collationEnv *collations.Environment
 	parser       *sqlparser.Parser
+	env          *vtenv.Environment
 }
 
-func NewEngine(ts *topo.Server, tablet *topodata.Tablet, collationEnv *collations.Environment, parser *sqlparser.Parser) *Engine {
+func NewEngine(ts *topo.Server, tablet *topodata.Tablet, env *vtenv.Environment) *Engine {
 	vde := &Engine{
 		controllers:     make(map[int64]*controller),
 		ts:              ts,
 		thisTablet:      tablet,
 		tmClientFactory: func() tmclient.TabletManagerClient { return tmclient.NewTabletManagerClient() },
-		collationEnv:    collationEnv,
-		parser:          parser,
+		collationEnv:    env.CollationEnv(),
+		parser:          env.Parser(),
+		env:             env,
 	}
 	return vde
 }
@@ -89,6 +92,7 @@ func NewEngine(ts *topo.Server, tablet *topodata.Tablet, collationEnv *collation
 // tablet manager client factory, while setting the fortests field to true to modify any engine
 // behavior when used in tests (e.g. not starting the retry goroutine).
 func NewTestEngine(ts *topo.Server, tablet *topodata.Tablet, dbn string, dbcf func() binlogplayer.DBClient, tmcf func() tmclient.TabletManagerClient) *Engine {
+	testEnv := vtenv.NewTestEnv()
 	vde := &Engine{
 		controllers:             make(map[int64]*controller),
 		ts:                      ts,
@@ -98,8 +102,9 @@ func NewTestEngine(ts *topo.Server, tablet *topodata.Tablet, dbn string, dbcf fu
 		dbClientFactoryDba:      dbcf,
 		tmClientFactory:         tmcf,
 		fortests:                true,
-		collationEnv:            collations.MySQL8(),
-		parser:                  sqlparser.NewTestParser(),
+		collationEnv:            testEnv.CollationEnv(),
+		parser:                  testEnv.Parser(),
+		env:                     testEnv,
 	}
 	return vde
 }
