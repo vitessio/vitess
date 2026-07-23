@@ -15,6 +15,7 @@
         - [`BackupHandle` interface gains `Wait()` method](#backup-handle-wait-method)
     - **[Deprecations](#deprecations)**
         - [CLI Flags](#deprecated-cli-flags)
+        - [Legacy streaming-path plan types in query rules](#deprecated-selectstream-rule-plan)
 - **[Minor Changes](#minor-changes)**
     - **[VReplication](#minor-changes-vreplication)**
         - [Default data protection for `_reverse` workflow cancel/complete](#vreplication-reverse-workflow-data-protection)
@@ -24,14 +25,20 @@
         - [Streaming errors no longer surface as connection loss](#vtgate-streamexecute-real-errors)
         - [Temporary-table connections are kept alive with a heartbeat](#vtgate-temp-table-heartbeat)
         - [SHA256-hashed passwords in the static gRPC auth plugin](#vtgate-grpc-static-auth-sha256)
+        - [PREPARE statements no longer report the prepared statement's tables](#vtgate-prepare-tables-used)
+        - [Preparing a statement no longer starts an implicit transaction](#vtgate-prepare-no-implicit-tx)
+        - [Stricter validation of SQL-level PREPARE statements](#vtgate-prepare-stricter-validation)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
         - [Query timeouts no longer kill reserved connections outside transactions](#vttablet-reserved-conn-kill-query)
-    - **[VTTablet](#minor-changes-vttablet)**
+        - [Query timeout for state-changing statements on the streaming path](#vttablet-stream-query-timeout)
+        - [Query rules now apply to queries on the streaming path](#vttablet-rules-apply-to-streaming)
+        - [New `--demote-primary-lock-wait-timeout` flag](#vttablet-demote-primary-lock-wait-timeout)
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
         - [Skip MySQL version check when restoring from a mysql-shell backup](#vttablet-mysql-shell-restore-skip-version-check)
     - **[Backup/Restore](#minor-changes-backup)**
         - [Chunked backup/restore for the builtinbackupengine](#backup-chunked-builtin)
+        - [Slow clean mysqld shutdowns no longer fail backups](#backup-mysqld-shutdown-timeout)
     - **[General](#minor-changes-general)**
         - [Build version metadata now sourced from VCS stamping](#build-info-from-vcs)
 
@@ -128,6 +135,19 @@ The VTTablet flag `--vreplication-enable-http-log` is now deprecated and is a no
 
 **Impact**: Remove any usage of the `--vreplication-enable-http-log` flag from VTTablet startup scripts or configuration.
 
+#### <a id="deprecated-selectstream-rule-plan"/>Legacy streaming-path plan types in query rules</a>
+
+The `SelectStream` query plan type no longer exists: statements served over the streaming path now produce the same plan types as buffered execution (`Select`, `Show`, `SelectLockFunc`, ...), so query rules keyed on those concrete plan names now apply to both execution paths.
+
+For backward compatibility, rules keep matching queries on the streaming path by their pre-v25 plan types:
+
+- Rules files using `SelectStream` in a `Plans` condition keep loading and match only queries on the streaming path, for the statement shapes the streaming planner used to label `SelectStream` (`Select`, `SelectImpossible`, `SelectLockFunc`, `Nextval`, `Show`, `ShowMigrations`, `OtherRead`). VTTablet logs a deprecation warning when such a rule is loaded.
+- `ANALYZE` statements on the streaming path, which used to carry the `OtherRead` plan type and now plan as `Select`, keep matching rules keyed on `OtherRead` (and do not match `SelectStream` rules, as before). Because `OtherRead` remains a valid plan name, this cannot be detected when the rules file is loaded; VTTablet logs a deprecation warning when a rule matches a streamed `ANALYZE` only through this compatibility behavior.
+
+Both compatibility behaviors will be removed in v26, along with the `SelectStream` plan name.
+
+**Impact**: Update query rules that use `SelectStream` to the concrete plan names listed above, and re-key `OtherRead` rules meant to gate streamed `ANALYZE` on the `Select` plan or a `Query` pattern. Note that rules keyed on concrete plan names match on both execution paths, not only streamed queries.
+
 ## <a id="minor-changes"/>Minor Changes</a>
 
 #### <a id="vreplication-reverse-workflow-data-protection"/>Default data protection for `_reverse` workflow cancel/complete</a>
@@ -223,6 +243,28 @@ The hash is validated and hex-decoded once when the plugin loads. An entry whose
 
 See [#19250](https://github.com/vitessio/vitess/pull/19250) for details.
 
+#### <a id="vtgate-prepare-tables-used"/>PREPARE statements no longer report the prepared statement's tables</a>
+
+Plans for SQL-level `PREPARE` statements no longer record the tables of the statement text being prepared. `PREPARE` only plans the statement text and registers it in the session; it does not access any tables. As a result, VTGate query logs no longer list those tables in `TablesUsed` for `PREPARE` statements, and the `QueryExecutionsByTable` metric no longer counts a `PREPARE` as an execution against them. `EXECUTE` is unchanged and still reports the tables of the statement it runs.
+
+See [#20562](https://github.com/vitessio/vitess/pull/20562) for details.
+
+#### <a id="vtgate-prepare-no-implicit-tx"/>Preparing a statement no longer starts an implicit transaction</a>
+
+With autocommit disabled, preparing a statement no longer opens an implicit transaction. This applies both to preparing over the MySQL binary protocol (`COM_STMT_PREPARE`) and to the SQL-level `PREPARE` and `DEALLOCATE PREPARE` statements, which previously started an implicit transaction like any other statement.
+
+This matches MySQL's behavior: preparing a statement doesn't access table data, so the transaction only starts when the prepared statement is executed. `EXECUTE` and `COM_STMT_EXECUTE` still start an implicit transaction as before.
+
+See [#20538](https://github.com/vitessio/vitess/pull/20538) and [#20562](https://github.com/vitessio/vitess/pull/20562) for details.
+
+#### <a id="vtgate-prepare-stricter-validation"/>Stricter validation of SQL-level PREPARE statements</a>
+
+SQL-level `PREPARE` and binary-protocol `COM_STMT_PREPARE` now reject statement text that itself manages prepared statements (`PREPARE`, `EXECUTE`, `DEALLOCATE PREPARE`) with MySQL's `ER_UNSUPPORTED_PS` error (1295). Previous versions accepted most of these and performed the nested statement's session changes while planning the outer one; MySQL rejects them all at PREPARE time.
+
+Additionally, `PREPARE ... FROM ?` is now a syntax error, matching MySQL: the grammar accidentally accepted a positional parameter as the statement text, but no value could ever reach it and the statement always failed. This also affects programs that parse SQL using the `go/vt/sqlparser` package directly.
+
+See [#20562](https://github.com/vitessio/vitess/pull/20562) for details.
+
 ### <a id="minor-changes-vttablet"/>VTTablet</a>
 
 #### <a id="vttablet-consolidator-reject-on-cap"/>Consolidator Reject on Waiter Cap</a>
@@ -239,7 +281,27 @@ Previously, when a query executing on a reserved connection (one holding tempora
 
 See [#20429](https://github.com/vitessio/vitess/pull/20429) for details.
 
-### <a id="minor-changes-vttablet"/>VTTablet</a>
+#### <a id="vttablet-stream-query-timeout"/>Query timeout for state-changing statements on the streaming path</a>
+
+Streaming reads (`StreamExecute` outside a transaction) remain exempt from the tablet query timeout so OLAP results can stream indefinitely. State-changing statements served over the streaming path — DML, DDL, `FLUSH`, sequence allocation, migration commands, and similar — are bounded by the same query timeout that buffered execution applies. In v24 and earlier, these statements were rejected on the streaming path entirely; v25 introduces support for them, bounded by the standard query timeout from the start. Only streaming reads retain the unbounded exemption, unchanged from previous releases.
+
+See [#20499](https://github.com/vitessio/vitess/pull/20499) for details.
+
+#### <a id="vttablet-rules-apply-to-streaming"/>Query rules now apply to queries on the streaming path</a>
+
+Before v25, queries served over the streaming path (`workload=olap` connections and the `StreamExecute` API) carried the internal `SelectStream` plan type, so query rules keyed on concrete plan types such as `Select`, `Insert`, or `Show` matched only buffered execution. In v25 these queries produce the same plan types as buffered execution, so a query rule keyed on a concrete plan type now applies to both execution paths.
+
+**Impact**: Review existing query rules. A rule written for buffered queries — including one enforcing a `FAIL` or `BUFFER` policy — now also affects the same statements arriving over `workload=olap`/`StreamExecute` connections. See the [`SelectStream` deprecation note](#deprecated-selectstream-rule-plan) for the backward-compatibility behavior of rules keyed on the old streaming plan types.
+
+See [#20499](https://github.com/vitessio/vitess/pull/20499) for details.
+
+#### <a id="vttablet-demote-primary-lock-wait-timeout"/>New `--demote-primary-lock-wait-timeout` flag</a>
+
+A new VTTablet flag, `--demote-primary-lock-wait-timeout` (default `0`, disabled), bounds how long enabling `super_read_only` waits for metadata locks during a primary demotion. Long-running queries hold metadata locks that block `SET GLOBAL super_read_only`, which can stall a `PlannedReparentShard` or `EmergencyReparentShard` behind them. With the flag set, the demotion applies a session `lock_wait_timeout` (rounded up to whole seconds) so the statement fails fast with a lock-wait-timeout error instead of waiting indefinitely.
+
+When disabled (the default), demotion behavior is unchanged and the wait is unbounded.
+
+See [#20285](https://github.com/vitessio/vitess/pull/20285) for details.
 
 #### <a id="vttablet-schema-max-table-count"/>Schema engine table-count limit is now configurable</a>
 
@@ -276,6 +338,12 @@ Two new flags control chunking behavior:
 **Compatibility note:** Backups created with chunking enabled are **not restorable by older Vitess versions** that do not understand the `Chunks` field in the backup MANIFEST. Non-chunked backups (the default) remain fully compatible with older versions.
 
 See [#20167](https://github.com/vitessio/vitess/pull/20167) for details.
+
+#### <a id="backup-mysqld-shutdown-timeout"/>Slow clean mysqld shutdowns no longer fail backups</a>
+
+The builtin backup engine's shutdown deadline (`--builtinbackup-mysqld-timeout`) is now raised to the backup request's mysqld shutdown timeout (e.g. vtbackup's `--mysql-shutdown-timeout`) plus a 30 second grace period whenever that is larger, so the two settings can no longer silently conflict. The same grace period now pads the shutdown contexts of `mysqlctl`, `mysqlctld` and `vtbackup`, which moves `mysqlctld`'s derived `--onterm-timeout` default from `5m10s` to `5m30s`.
+
+In addition, when `mysqladmin` gives up waiting for mysqld to stop, the shutdown is no longer failed immediately: the `SHUTDOWN` command has already been delivered at that point, so Vitess keeps waiting on the pid/socket files until the caller's deadline expires (or for a 30 second grace period, when the caller has no deadline). Slow-but-clean shutdowns, such as upgrade-safe backups running with `innodb_fast_shutdown=0` on large databases, previously failed with `Aborted waiting on pid file` even though mysqld was stopping normally.
 
 ### <a id="minor-changes-general"/>General</a>
 

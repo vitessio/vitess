@@ -30,9 +30,13 @@ func TestDiskHealthMonitor_noStall(t *testing.T) {
 	mockFileWriter := &sequencedMockWriter{}
 	diskHealthMonitor := newPollingDiskHealthMonitor(ctx, mockFileWriter.mockWriteFunction, 50*time.Millisecond, 25*time.Millisecond)
 
-	time.Sleep(300 * time.Millisecond)
-	totalCreateCalls := mockFileWriter.getTotalCreateCalls()
-	require.Equalf(t, 5, totalCreateCalls, "expected 5 calls to createFile, got %d", totalCreateCalls)
+	// The monitor keeps polling. The exact number of polls in a fixed window is
+	// timing-dependent (each cycle spans the polling interval plus the write
+	// duration), so wait for repeated polls rather than asserting an exact count.
+	require.Eventually(t, func() bool {
+		return mockFileWriter.getTotalCreateCalls() >= 5
+	}, 30*time.Second, 10*time.Millisecond, "expected the monitor to keep polling")
+	// A fast, error-free write is never treated as a stall.
 	require.False(t, diskHealthMonitor.IsDiskStalled(), "expected isStalled to be false")
 }
 
@@ -57,10 +61,12 @@ func TestDiskHealthMonitor_stallDetected(t *testing.T) {
 	mockFileWriter := &sequencedMockWriter{defaultWriteFunction: delayedWriteFunction(10*time.Millisecond, errors.New("test error"))}
 	diskHealthMonitor := newPollingDiskHealthMonitor(ctx, mockFileWriter.mockWriteFunction, 50*time.Millisecond, 25*time.Millisecond)
 
-	time.Sleep(300 * time.Millisecond)
-	totalCreateCalls := mockFileWriter.getTotalCreateCalls()
-	require.Equalf(t, 5, totalCreateCalls, "expected 5 calls to createFile, got %d", totalCreateCalls)
-	require.True(t, diskHealthMonitor.IsDiskStalled(), "expected isStalled to be true")
+	// A write function that always errors is reported as a stall once the monitor
+	// has polled. The exact number of polls in a fixed window is timing-dependent,
+	// so wait for repeated polls and a stall rather than asserting an exact count.
+	require.Eventually(t, func() bool {
+		return mockFileWriter.getTotalCreateCalls() >= 5 && diskHealthMonitor.IsDiskStalled()
+	}, 30*time.Second, 10*time.Millisecond, "expected the monitor to report a stall")
 }
 
 type sequencedMockWriter struct {

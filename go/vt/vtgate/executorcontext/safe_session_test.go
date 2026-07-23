@@ -17,6 +17,8 @@ limitations under the License.
 package executorcontext
 
 import (
+	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -241,4 +243,47 @@ func TestNewSafeSessionStripsReservedConnKeepAlive(t *testing.T) {
 	// A nil session and nil options are handled without panicking.
 	require.NotNil(t, NewSafeSession(nil))
 	require.NotNil(t, NewSafeSession(&vtgatepb.Session{}))
+}
+
+func TestClearPrepareData(t *testing.T) {
+	session := NewSafeSession(&vtgatepb.Session{})
+
+	// Clearing a name that was never stored is a no-op, including before
+	// any statement has been stored at all (nil map).
+	session.ClearPrepareData("absent")
+
+	session.StorePrepareData("stmt", &vtgatepb.PrepareData{PrepareStatement: "select 1"})
+	require.NotNil(t, session.GetPrepareData("stmt"))
+
+	session.ClearPrepareData("stmt")
+	require.Nil(t, session.GetPrepareData("stmt"))
+}
+
+func TestPrepareDataConcurrentAccess(t *testing.T) {
+	// A session can be accessed from multiple goroutines, which is why
+	// StorePrepareData and GetPrepareData hold the session mutex.
+	// ClearPrepareData must do the same: an unsynchronized delete on the
+	// PrepareStatement map alongside the locked accessors is a map race
+	// that crashes the process. This test fails under the race detector
+	// if any of the three accessors skips the lock.
+	session := NewSafeSession(&vtgatepb.Session{})
+
+	var wg sync.WaitGroup
+	for i := range 100 {
+		name := fmt.Sprintf("stmt_%d", i%4)
+		wg.Add(3)
+		go func() {
+			defer wg.Done()
+			session.StorePrepareData(name, &vtgatepb.PrepareData{PrepareStatement: "select 1"})
+		}()
+		go func() {
+			defer wg.Done()
+			session.GetPrepareData(name)
+		}()
+		go func() {
+			defer wg.Done()
+			session.ClearPrepareData(name)
+		}()
+	}
+	wg.Wait()
 }

@@ -127,7 +127,7 @@ func (p PlanType) String() string {
 
 func getPlanType(p Primitive) PlanType {
 	switch prim := p.(type) {
-	case *SessionPrimitive, *SingleRow, *UpdateTarget, *VindexFunc:
+	case *SessionPrimitive, *SingleRow, *UpdateTarget, *VindexFunc, *PrepareStmt, *DeallocateStmt:
 		return PlanLocal
 	case *Lock, *ReplaceVariables, *RevertMigration, *Rows:
 		return PlanPassthrough
