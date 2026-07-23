@@ -17,6 +17,7 @@ limitations under the License.
 package engine
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -66,7 +67,7 @@ func TestDDL(t *testing.T) {
 
 func TestDDLTempTable(t *testing.T) {
 	ddl := &DDL{
-		CreateTempTable: true,
+		TempTableDDL: true,
 		DDL: &sqlparser.CreateTable{
 			Temp:  true,
 			Table: sqlparser.NewTableName("a"),
@@ -85,9 +86,47 @@ func TestDDLTempTable(t *testing.T) {
 	_, err := ddl.TryExecute(t.Context(), vc, nil, true)
 	require.NoError(t, err)
 
+	// The session is marked as holding temp tables only after the create
+	// succeeded.
 	vc.ExpectLog(t, []string{
-		"temp table getting created",
 		"Needs Reserved Conn",
+		"ResolveDestinations ks [] Destinations:DestinationAllShards()",
+		"ExecuteMultiShard false false",
+		"temp table getting created",
+	})
+
+	// A CREATE that returns an error still marks the session: the tablet may
+	// have reserved a connection and created the table before failing, and
+	// heartbeats keyed on the reserved connection must be able to keep it
+	// alive. (A create that reserved nothing is simply never beaten.)
+	vc = &loggingVCursor{multiShardErrs: []error{errors.New("create failed")}}
+	_, err = ddl.TryExecute(t.Context(), vc, nil, true)
+	require.ErrorContains(t, err, "create failed")
+	vc.ExpectLog(t, []string{
+		"Needs Reserved Conn",
+		"ResolveDestinations ks [] Destinations:DestinationAllShards()",
+		"ExecuteMultiShard false false",
+		"temp table getting created",
+	})
+
+	// DROP TEMPORARY TABLE is also a temporary-table DDL: it must run on the
+	// reserved connection (no implicit commit, no online-DDL path — the
+	// OnlineDDL primitive is nil for temporary DDLs, so falling through
+	// would panic), but it must NOT reserve a connection or mark the session
+	// as holding temp tables (a drop-only session created nothing).
+	dropDDL := &DDL{
+		TempTableDDL: true,
+		DDL:          &sqlparser.DropTable{FromTables: sqlparser.TableNames{sqlparser.NewTableName("a")}},
+		NormalDDL: &Send{
+			Keyspace:          &vindexes.Keyspace{Name: "ks", Sharded: true},
+			TargetDestination: key.DestinationAllShards{},
+			Query:             "drop query",
+		},
+	}
+	vc = &loggingVCursor{}
+	_, err = dropDDL.TryExecute(t.Context(), vc, nil, true)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
 		"ResolveDestinations ks [] Destinations:DestinationAllShards()",
 		"ExecuteMultiShard false false",
 	})

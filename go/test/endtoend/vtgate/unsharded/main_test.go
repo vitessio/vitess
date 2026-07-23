@@ -19,6 +19,7 @@ package unsharded
 import (
 	"context"
 	"flag"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -184,7 +185,10 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start vtgate
-		clusterInstance.VtGateExtraArgs = []string{"--warn-sharded-only" + "=true"}
+		// The temp-table heartbeat must be below the tablets'
+		// --queryserver-config-transaction-timeout (3s above) so that idle
+		// connections holding temporary tables are kept alive.
+		clusterInstance.VtGateExtraArgs = []string{"--warn-sharded-only" + "=true", "--temp-table-heartbeat-time", "1s"}
 		if err := clusterInstance.StartVtgate(); err != nil {
 			log.Error(err.Error())
 			os.Exit(1)
@@ -359,6 +363,21 @@ func TestCallProcedure(t *testing.T) {
 
 func TestTempTable(t *testing.T) {
 	ctx := t.Context()
+
+	// Capture mysqld's general log for the duration of the test so we can
+	// assert below that the keepalives never reach mysqld.
+	tablet := clusterInstance.Keyspaces[0].Shards[0].Vttablets[0]
+	for _, q := range []string{"set global log_output = 'TABLE'", "truncate mysql.general_log", "set global general_log = 'ON'"} {
+		_, err := tablet.VttabletProcess.QueryTablet(q, KeyspaceName, true)
+		require.NoError(t, err)
+	}
+	t.Cleanup(func() {
+		for _, q := range []string{"set global general_log = default", "set global log_output = default"} {
+			_, err := tablet.VttabletProcess.QueryTablet(q, KeyspaceName, true)
+			require.NoError(t, err)
+		}
+	})
+
 	conn1, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn1.Close()
@@ -375,6 +394,26 @@ func TestTempTable(t *testing.T) {
 
 	utils.AssertMatches(t, conn2, `select count(table_id) from information_schema.innodb_temp_table_info`, `[[INT64(1)]]`)
 	utils.AssertContainsError(t, conn2, `show create table temp_t`, `Table 'vt_customer.temp_t' doesn't exist (errno 1146) (sqlstate 42S02)`)
+
+	// The temp table must survive the connection sitting idle for longer than
+	// the tablets' --queryserver-config-transaction-timeout (3s): vtgate's
+	// temp-table heartbeat keeps the reserved connection alive.
+	time.Sleep(6 * time.Second)
+	utils.AssertMatches(t, conn1, `select id from temp_t order by id`, `[[INT64(1)] [INT64(2)] [INT64(3)]]`)
+
+	// The keepalive must refresh only the tablet's own timers: nothing may
+	// reach mysqld, so mysqld's wait_timeout keeps counting real session
+	// traffic and an idle session eventually loses its connection — and its
+	// temporary tables — exactly as it would on a direct MySQL connection.
+	// The 6s of heartbeats above (interval 1s) make any leak visible in the
+	// general log captured since the test started.
+	qr := utils.Exec(t, conn1, `select count(*) from information_schema.processlist`) // any real query IS logged
+	require.NotNil(t, qr)
+	// The count query itself is captured by the general log as it runs, so
+	// exclude it from its own result.
+	gl, err := tablet.VttabletProcess.QueryTablet("select count(*) from mysql.general_log where argument like '%temp-table keepalive%' and argument not like '%general_log%'", KeyspaceName, true)
+	require.NoError(t, err)
+	require.Equal(t, `[[INT64(0)]]`, fmt.Sprintf("%v", gl.Rows), "keepalives must never reach mysqld")
 }
 
 func TestReservedConnDML(t *testing.T) {

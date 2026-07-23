@@ -179,6 +179,7 @@ func (m *ExecuteOptions) CloneVT() *ExecuteOptions {
 	r.FetchLastInsertId = m.FetchLastInsertId
 	r.InDmlExecution = m.InDmlExecution
 	r.NoResult = m.NoResult
+	r.ReservedConnKeepAlive = m.ReservedConnKeepAlive
 	if rhs := m.TransactionAccessMode; rhs != nil {
 		tmpContainer := make([]ExecuteOptions_TransactionAccessMode, len(rhs))
 		copy(tmpContainer, rhs)
@@ -192,6 +193,11 @@ func (m *ExecuteOptions) CloneVT() *ExecuteOptions {
 	if rhs := m.TransactionTimeout; rhs != nil {
 		tmpVal := *rhs
 		r.TransactionTimeout = &tmpVal
+	}
+	if rhs := m.ReservedConnKeepAliveIds; rhs != nil {
+		tmpContainer := make([]int64, len(rhs))
+		copy(tmpContainer, rhs)
+		r.ReservedConnKeepAliveIds = tmpContainer
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -1901,6 +1907,41 @@ func (m *ExecuteOptions) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		}
 		i -= size
 	}
+	if len(m.ReservedConnKeepAliveIds) > 0 {
+		var pksize2 int
+		for _, num := range m.ReservedConnKeepAliveIds {
+			pksize2 += protohelpers.SizeOfVarint(uint64(num))
+		}
+		i -= pksize2
+		j1 := i
+		for _, num1 := range m.ReservedConnKeepAliveIds {
+			num := uint64(num1)
+			for num >= 1<<7 {
+				dAtA[j1] = uint8(uint64(num)&0x7f | 0x80)
+				num >>= 7
+				j1++
+			}
+			dAtA[j1] = uint8(num)
+			j1++
+		}
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(pksize2))
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0xba
+	}
+	if m.ReservedConnKeepAlive {
+		i--
+		if m.ReservedConnKeepAlive {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0xb0
+	}
 	if m.NoResult {
 		i--
 		if m.NoResult {
@@ -1961,23 +2002,23 @@ func (m *ExecuteOptions) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		dAtA[i] = 0x7a
 	}
 	if len(m.TransactionAccessMode) > 0 {
-		var pksize2 int
+		var pksize4 int
 		for _, num := range m.TransactionAccessMode {
-			pksize2 += protohelpers.SizeOfVarint(uint64(num))
+			pksize4 += protohelpers.SizeOfVarint(uint64(num))
 		}
-		i -= pksize2
-		j1 := i
+		i -= pksize4
+		j3 := i
 		for _, num1 := range m.TransactionAccessMode {
 			num := uint64(num1)
 			for num >= 1<<7 {
-				dAtA[j1] = uint8(uint64(num)&0x7f | 0x80)
+				dAtA[j3] = uint8(uint64(num)&0x7f | 0x80)
 				num >>= 7
-				j1++
+				j3++
 			}
-			dAtA[j1] = uint8(num)
-			j1++
+			dAtA[j3] = uint8(num)
+			j3++
 		}
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(pksize2))
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(pksize4))
 		i--
 		dAtA[i] = 0x72
 	}
@@ -6242,6 +6283,16 @@ func (m *ExecuteOptions) SizeVT() (n int) {
 	if m.NoResult {
 		n += 3
 	}
+	if m.ReservedConnKeepAlive {
+		n += 3
+	}
+	if len(m.ReservedConnKeepAliveIds) > 0 {
+		l = 0
+		for _, e := range m.ReservedConnKeepAliveIds {
+			l += protohelpers.SizeOfVarint(uint64(e))
+		}
+		n += 2 + protohelpers.SizeOfVarint(uint64(l)) + l
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -9070,6 +9121,102 @@ func (m *ExecuteOptions) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.NoResult = bool(v != 0)
+		case 22:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ReservedConnKeepAlive", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.ReservedConnKeepAlive = bool(v != 0)
+		case 23:
+			if wireType == 0 {
+				var v int64
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return protohelpers.ErrIntOverflow
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					v |= int64(b&0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				m.ReservedConnKeepAliveIds = append(m.ReservedConnKeepAliveIds, v)
+			} else if wireType == 2 {
+				var packedLen int
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return protohelpers.ErrIntOverflow
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					packedLen |= int(b&0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				if packedLen < 0 {
+					return protohelpers.ErrInvalidLength
+				}
+				postIndex := iNdEx + packedLen
+				if postIndex < 0 {
+					return protohelpers.ErrInvalidLength
+				}
+				if postIndex > l {
+					return io.ErrUnexpectedEOF
+				}
+				var elementCount int
+				var count int
+				for _, integer := range dAtA[iNdEx:postIndex] {
+					if integer < 128 {
+						count++
+					}
+				}
+				elementCount = count
+				if elementCount != 0 && len(m.ReservedConnKeepAliveIds) == 0 {
+					m.ReservedConnKeepAliveIds = make([]int64, 0, elementCount)
+				}
+				for iNdEx < postIndex {
+					var v int64
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return protohelpers.ErrIntOverflow
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						v |= int64(b&0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+					m.ReservedConnKeepAliveIds = append(m.ReservedConnKeepAliveIds, v)
+				}
+			} else {
+				return fmt.Errorf("proto: wrong wireType = %d for field ReservedConnKeepAliveIds", wireType)
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

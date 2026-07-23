@@ -87,15 +87,34 @@ func (sc *StatefulConnection) ElapsedTimeout() bool {
 	return sc.expiryTime.Before(time.Now())
 }
 
-// Exec executes the statement in the dedicated connection
-func (sc *StatefulConnection) Exec(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
+// Exec executes the statement in the dedicated connection.
+//
+// keepConnOnTimeout declares whether a context deadline expiring mid-statement
+// may kill only the query (KILL QUERY) and keep the connection — preserving a
+// reserved connection's temp tables and settings — or must kill the whole
+// connection as a plain timeout always did. Only the caller knows the
+// statement: keeping the connection is safe solely for statements whose
+// interruption leaves no session state behind (reads; DML, which InnoDB rolls
+// back atomically). A killed SET applies its session-scope effects
+// left-to-right with no rollback, and a lock function can be granted just as
+// the kill lands — keeping such a connection would preserve state the session
+// never recorded, and the temp-table keepalive would then pin that divergence
+// alive indefinitely. Inside a transaction the whole connection is always
+// killed, since a partially-executed transaction cannot be continued.
+func (sc *StatefulConnection) Exec(ctx context.Context, query string, maxrows int, wantfields, keepConnOnTimeout bool) (*sqltypes.Result, error) {
 	if sc.IsClosed() {
 		if sc.IsInTransaction() {
 			return nil, vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction was aborted: %v", sc.txProps.Conclusion)
 		}
 		return nil, vterrors.New(vtrpcpb.Code_ABORTED, "connection was aborted")
 	}
-	r, err := sc.dbConn.Conn.ExecOnce(ctx, query, maxrows, wantfields)
+	var r *sqltypes.Result
+	var err error
+	if !sc.IsInTransaction() && keepConnOnTimeout {
+		r, err = sc.dbConn.Conn.ExecOnceKeepConnOnTimeout(ctx, query, maxrows, wantfields)
+	} else {
+		r, err = sc.dbConn.Conn.ExecOnce(ctx, query, maxrows, wantfields)
+	}
 	if err != nil {
 		if sqlerror.IsConnErr(err) {
 			select {

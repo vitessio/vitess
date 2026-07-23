@@ -39,6 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
@@ -2946,4 +2947,74 @@ func addTabletServerSupportedQueries(db *fakesqldb.DB) {
 			Type: sqltypes.Int64,
 		}},
 	})
+}
+
+// TestReservedConnKeepAliveBatch verifies the batched keepalive touch:
+// reservedID plus the additional reserved_conn_keep_alive_ids are refreshed in
+// one Execute, nothing is sent to MySQL, and ids that no longer exist are
+// reported back as rows so the caller can stop refreshing them.
+func TestReservedConnKeepAliveBatch(t *testing.T) {
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "")
+	defer tsv.StopService()
+	defer db.Close()
+
+	db.AddQueryPattern("set sql_mode = ''", &sqltypes.Result{})
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+
+	// Reserve two connections.
+	s1, _, err := tsv.ReserveExecute(ctx, nil, &target, nil, "set sql_mode = ''", nil, 0, nil)
+	require.NoError(t, err)
+	s2, _, err := tsv.ReserveExecute(ctx, nil, &target, nil, "set sql_mode = ''", nil, 0, nil)
+	require.NoError(t, err)
+
+	// A batched keepalive touch over both live ids (all ids in the list,
+	// reserved id 0 as vtgate sends it) reports none gone and runs nothing on
+	// MySQL.
+	queryLogBefore := db.QueryLog()
+	opts := &querypb.ExecuteOptions{ReservedConnKeepAlive: true, ReservedConnKeepAliveIds: []int64{s1.ReservedID, s2.ReservedID}}
+	res, err := tsv.Execute(ctx, nil, &target, "/* keepalive */ select 1", nil, 0, 0, opts)
+	require.NoError(t, err)
+	require.Empty(t, res.Rows, "no reserved connection is gone")
+	require.Equal(t, queryLogBefore, db.QueryLog(), "keepalive must not run anything on MySQL")
+
+	// Release one; the next batch reports it gone while the other stays alive.
+	require.NoError(t, tsv.Release(ctx, &target, 0, s2.ReservedID))
+	res, err = tsv.Execute(ctx, nil, &target, "/* keepalive */ select 1", nil, 0, 0, opts)
+	require.NoError(t, err)
+	require.Len(t, res.Rows, 1, "the released connection must be reported gone")
+	gone, err := res.Rows[0][0].ToInt64()
+	require.NoError(t, err)
+	require.Equal(t, s2.ReservedID, gone)
+
+	// An oversized batch is rejected before any allocation, bounding what a
+	// malformed or hostile request can cost.
+	huge := make([]int64, queryservice.ReservedConnKeepAliveMaxBatch+1)
+	_, err = tsv.Execute(ctx, nil, &target, "/* keepalive */ select 1", nil, 0, 0,
+		&querypb.ExecuteOptions{ReservedConnKeepAlive: true, ReservedConnKeepAliveIds: huge})
+	require.ErrorContains(t, err, "exceeds the limit")
+
+	// A keepalive whose target type no longer matches this tablet (as after a
+	// REPLICA->RDONLY transition) is rejected as a wrong tablet, exactly like a
+	// normal query, so vtgate can drop the now-unreachable registration instead
+	// of pinning the orphaned reservation open. The live reserved id is untouched.
+	wrongTarget := querypb.Target{TabletType: topodatapb.TabletType_RDONLY}
+	_, err = tsv.Execute(ctx, nil, &wrongTarget, "/* keepalive */ select 1", nil, 0, 0,
+		&querypb.ExecuteOptions{ReservedConnKeepAlive: true, ReservedConnKeepAliveIds: []int64{s1.ReservedID}})
+	require.ErrorContains(t, err, vterrors.WrongTablet)
+	res, err = tsv.Execute(ctx, nil, &target, "/* keepalive */ select 1", nil, 0, 0,
+		&querypb.ExecuteOptions{ReservedConnKeepAlive: true, ReservedConnKeepAliveIds: []int64{s1.ReservedID}})
+	require.NoError(t, err)
+	require.Empty(t, res.Rows, "the reserved connection must survive a rejected wrong-target keepalive")
+
+	require.NoError(t, tsv.Release(ctx, &target, 0, s1.ReservedID))
+
+	// A tablet that is not serving must reject keepalives just as it rejects
+	// queries: the keepalive goes through the same StartRequest gate, so
+	// reserved connections on a sick tablet are not pinned past the tablet
+	// timeout by a background refresh the tablet would never serve a query for.
+	require.NoError(t, tsv.SetServingType(topodatapb.TabletType_PRIMARY, time.Time{}, false, "test not serving"))
+	_, err = tsv.Execute(ctx, nil, &target, "/* keepalive */ select 1", nil, 0, 0,
+		&querypb.ExecuteOptions{ReservedConnKeepAlive: true, ReservedConnKeepAliveIds: []int64{1}})
+	require.Error(t, err, "a not-serving tablet must reject keepalives")
 }

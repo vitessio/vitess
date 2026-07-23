@@ -599,7 +599,7 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 						return err
 					}
 					defer dbConn.Recycle()
-					return qre.execStreamSQL(dbConn, qre.connID != 0, sql, func(result *sqltypes.Result) error {
+					return qre.execStreamSQL(dbConn, qre.connID != 0, false /* insideTxn */, sql, func(result *sqltypes.Result) error {
 						// this stream result is potentially used by more than one client, so
 						// the consolidator will return it to the pool once it knows it's no longer
 						// being shared
@@ -651,7 +651,7 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 		}
 
 		conn := txConn.UnderlyingDBConn()
-		err = qre.execStreamSQL(conn, true, sql, streamCallback)
+		err = qre.execStreamSQL(conn, true /* isStateful */, txConn.IsInTransaction(), sql, streamCallback)
 		if qre.plan.PlanID == p.PlanCallProc {
 			if err != nil {
 				txConn.Close()
@@ -684,7 +684,7 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 	}
 	defer dbConn.Recycle()
 
-	err = qre.execStreamSQL(dbConn, false, sql, streamCallback)
+	err = qre.execStreamSQL(dbConn, false /* isStateful */, false /* insideTxn */, sql, streamCallback)
 	if qre.plan.PlanID == p.PlanCallProc {
 		if err != nil {
 			dbConn.Close()
@@ -1371,6 +1371,21 @@ func (qre *QueryExecutor) execProc(conn *StatefulConnection) (*sqltypes.Result, 
 	}
 	qr, err := qre.execStatefulConn(conn, sql, true)
 	if err != nil {
+		// A stored procedure can start a transaction that Vitess does not
+		// track. A reserved-connection timeout now kills only the query (KILL
+		// QUERY) and leaves the connection open, so a procedure that had begun
+		// a transaction before failing would leave mysqld in a transaction
+		// while Vitess believes the connection is idle — and the keepalive
+		// would hold it (and its locks) open indefinitely. Close the connection
+		// on a CALL error so no untracked transaction survives — but only
+		// outside a Vitess-tracked transaction: inside one, a query timeout
+		// still kills the whole connection (ExecOnce insideTxn), so the hazard
+		// does not exist, and closing here on a benign statement error (a
+		// SIGNAL from the procedure, a typo'd name) would destroy the client's
+		// open transaction, which MySQL itself leaves usable.
+		if !conn.IsInTransaction() {
+			conn.Close()
+		}
 		return nil, rewriteOUTParamError(err)
 	}
 	if !qr.IsMoreResultsExists() {
@@ -1622,6 +1637,25 @@ func (qre *QueryExecutor) execDBConn(conn *connpool.Conn, sql string, wantfields
 	return exec, nil
 }
 
+// planKeepsConnOnTimeout reports whether a timed-out statement of this plan
+// type may keep its stateful connection (KILL QUERY only) instead of losing it.
+// Only reads and DML qualify: a killed read leaves nothing behind, and InnoDB
+// rolls a killed DML statement back atomically. Everything else — SET (whose
+// session-scope assignments apply left-to-right and are not rolled back by a
+// kill), lock functions (a lock can be granted just as the kill lands), CALL,
+// DDL, admin statements — can leave session or server state the session never
+// recorded, so a timeout kills the whole connection, exactly as it always did,
+// and the session self-heals by re-reserving and re-applying its settings.
+func planKeepsConnOnTimeout(planID p.PlanType) bool {
+	switch planID {
+	case p.PlanSelect, p.PlanSelectImpossible, p.PlanSelectNoLimit, p.PlanShow,
+		p.PlanInsert, p.PlanUpdate, p.PlanDelete, p.PlanInsertMessage,
+		p.PlanUpdateLimit, p.PlanDeleteLimit:
+		return true
+	}
+	return false
+}
+
 func (qre *QueryExecutor) execStatefulConn(conn *StatefulConnection, sql string, wantfields bool) (*sqltypes.Result, error) {
 	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.execStatefulConn")
 	defer span.Finish()
@@ -1638,7 +1672,7 @@ func (qre *QueryExecutor) execStatefulConn(conn *StatefulConnection, sql string,
 		return nil, err
 	}
 
-	exec, err := conn.Exec(ctx, sql, qre.getMaxResultSize(), wantfields)
+	exec, err := conn.Exec(ctx, sql, qre.getMaxResultSize(), wantfields, planKeepsConnOnTimeout(qre.plan.PlanID))
 	if err != nil {
 		return nil, err
 	}
@@ -1691,7 +1725,7 @@ func (qre *QueryExecutor) fetchLastInsertID(ctx context.Context, conn *connpool.
 	return nil
 }
 
-func (qre *QueryExecutor) execStreamSQL(conn *connpool.PooledConn, isTransaction bool, sql string, callback func(*sqltypes.Result) error) error {
+func (qre *QueryExecutor) execStreamSQL(conn *connpool.PooledConn, isStateful, insideTxn bool, sql string, callback func(*sqltypes.Result) error) error {
 	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.execStreamSQL")
 	defer span.Finish()
 	trace.AnnotateSQL(span, sqlparser.Preview(sql))
@@ -1719,13 +1753,17 @@ func (qre *QueryExecutor) execStreamSQL(conn *connpool.PooledConn, isTransaction
 	}
 
 	var err error
-	if isTransaction {
+	if isStateful {
 		err = qre.tsv.statefulql.Add(qd)
 		if err != nil {
 			return err
 		}
 		defer qre.tsv.statefulql.Remove(qd)
-		err = conn.Conn.StreamOnce(ctx, sql, cb, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Load()), sqltypes.IncludeFieldsOrDefault(qre.options))
+		if insideTxn {
+			err = conn.Conn.StreamOnce(ctx, sql, cb, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Load()), sqltypes.IncludeFieldsOrDefault(qre.options))
+		} else {
+			err = conn.Conn.StreamOnceKeepConnOnTimeout(ctx, sql, cb, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Load()), sqltypes.IncludeFieldsOrDefault(qre.options))
+		}
 	} else {
 		err = qre.tsv.olapql.Add(qd)
 		if err != nil {
@@ -1818,7 +1856,7 @@ func (qre *QueryExecutor) executeGetSchemaQuery(query string, callback func(sche
 	}
 	defer conn.Recycle()
 
-	return qre.execStreamSQL(conn, false /* isTransaction */, query, func(result *sqltypes.Result) error {
+	return qre.execStreamSQL(conn, false /* isStateful */, false /* insideTxn */, query, func(result *sqltypes.Result) error {
 		schemaDef := make(map[string]string)
 		for _, row := range result.Rows {
 			tableName := row[0].ToString()
@@ -1844,7 +1882,7 @@ func (qre *QueryExecutor) getUDFs(callback func(schemaRes *querypb.GetSchemaResp
 	}
 	defer conn.Recycle()
 
-	return qre.execStreamSQL(conn, false /* isTransaction */, query, func(result *sqltypes.Result) error {
+	return qre.execStreamSQL(conn, false /* isStateful */, false /* insideTxn */, query, func(result *sqltypes.Result) error {
 		var udfs []*querypb.UDFInfo
 		for _, row := range result.Rows {
 			aggr := strings.EqualFold(row[2].ToString(), "aggregate")

@@ -29,6 +29,21 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
+// ReservedConnKeepAliveGoneField is the name of the single column a reserved-
+// connection keepalive touch (ExecuteOptions.reserved_conn_keep_alive) returns:
+// each row is a reserved id that no longer exists on the tablet. A caller uses
+// its presence to tell an up-to-date tablet (which honors the keepalive option
+// and returns this field) from one that predates it (which runs the query
+// normally and returns its own result instead).
+const ReservedConnKeepAliveGoneField = "gone_reserved_id"
+
+// ReservedConnKeepAliveMaxBatch is the largest number of reserved ids a single
+// keepalive touch may carry. The tablet rejects a larger request before
+// allocating (bounding a malformed or hostile call), so a caller with more than
+// this many reserved connections on one tablet must split them across several
+// touches rather than send one oversized batch.
+const ReservedConnKeepAliveMaxBatch = 1024
+
 // Session represents the current session.
 type Session interface {
 	// GetSessionUUID returns the session's UUID.

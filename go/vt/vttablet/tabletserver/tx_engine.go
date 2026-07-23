@@ -503,7 +503,7 @@ func (te *TxEngine) prepareTx(ctx context.Context, preparedTx *tx.PreparedTx) (f
 
 	for _, stmt := range preparedTx.Queries {
 		conn.TxProperties().RecordQuery(stmt, te.env.Environment().Parser())
-		if _, err = conn.Exec(ctx, stmt, 1, false); err != nil {
+		if _, err = conn.Exec(ctx, stmt, 1, false, false /* keepConnOnTimeout */); err != nil {
 			te.txPool.RollbackAndRelease(ctx, conn)
 			return
 		}
@@ -699,7 +699,7 @@ func (te *TxEngine) taintConn(ctx context.Context, conn *StatefulConnection, pre
 		return err
 	}
 	for _, query := range preQueries {
-		_, err := conn.Exec(ctx, query, 0 /*maxrows*/, false /*wantFields*/)
+		_, err := conn.Exec(ctx, query, 0 /*maxrows*/, false /*wantFields*/, false /* keepConnOnTimeout */)
 		if err != nil {
 			conn.Releasef("error during connection setup: %s\n%v", query, err)
 			return err
@@ -729,8 +729,13 @@ func (te *TxEngine) beginNewDbaConnection(ctx context.Context, settingsQuery str
 	}
 
 	// If we have a settings query that we need to apply, we do that before starting the transaction.
+	// This is a fresh dba connection being set up; it is discarded whole on
+	// any failure, so an interruption may kill the connection.
 	if settingsQuery != "" {
 		if _, err = dbConn.ExecOnce(ctx, settingsQuery, 1, false); err != nil {
+			// The caller bails out on any error, so close the fresh
+			// connection here or it leaks.
+			dbConn.Close()
 			return nil, err
 		}
 	}
@@ -742,8 +747,11 @@ func (te *TxEngine) beginNewDbaConnection(ctx context.Context, settingsQuery str
 		env: te.env,
 	}
 
-	_, _, err = te.txPool.begin(ctx, nil, false, sc)
-	return sc, err
+	if _, _, err = te.txPool.begin(ctx, nil, false, sc); err != nil {
+		sc.Close()
+		return nil, err
+	}
+	return sc, nil
 }
 
 // IsTwoPCAllowed checks if TwoPC is allowed.

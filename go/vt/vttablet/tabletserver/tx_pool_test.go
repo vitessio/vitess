@@ -57,7 +57,7 @@ func TestTxPoolExecuteCommit(t *testing.T) {
 	// get the connection and execute a query on it
 	conn2, err := txPool.GetAndLock(id, "")
 	require.NoError(t, err)
-	_, _ = conn2.Exec(ctx, sql, 1, true)
+	_, _ = conn2.Exec(ctx, sql, 1, true, false /* keepConnOnTimeout */)
 	conn2.Unlock()
 
 	// get the connection again and now commit it
@@ -172,7 +172,7 @@ func TestTxPoolAutocommit(t *testing.T) {
 
 	// run a query to see it in the query log
 	query := "select 3"
-	conn1.Exec(ctx, query, 1, false)
+	conn1.Exec(ctx, query, 1, false, false /* keepConnOnTimeout */)
 
 	_, err = txPool.Commit(ctx, conn1)
 	require.NoError(t, err)
@@ -318,7 +318,7 @@ func TestTxPoolRollbackFailIsPassedThrough(t *testing.T) {
 	conn1, _, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	require.NoError(t, err)
 
-	_, err = conn1.Exec(ctx, sql, 1, true)
+	_, err = conn1.Exec(ctx, sql, 1, true, false /* keepConnOnTimeout */)
 	require.NoError(t, err)
 
 	// rollback is refused by the underlying db and the error is passed on
@@ -888,4 +888,157 @@ func setupWithEnv(t *testing.T, env tabletenv.Env) (*fakesqldb.DB, *TxPool, *fak
 		txPool.Close()
 		db.Close()
 	}
+}
+
+// TestStatefulConnExecTimeoutConnFate verifies that the caller decides a
+// timed-out statement's connection fate. A statement declared safe to keep
+// (reads, DML — a kill leaves no session state behind) keeps the connection on
+// a mid-statement deadline (KILL QUERY); an unsafe statement (SET, lock
+// functions — whose session-scope effects a kill does not roll back) loses the
+// whole connection, so state that vtgate never recorded cannot survive on a
+// connection the keepalive would then pin alive.
+func TestStatefulConnExecTimeoutConnFate(t *testing.T) {
+	ctx := t.Context()
+	db, txPool, _, closer := setup(t)
+	defer closer()
+
+	const slow = "select 1"
+	db.AddQuery(slow, &sqltypes.Result{})
+	db.SetBeforeFunc(slow, func() {
+		// Outlasts the context deadline so the statement is interrupted.
+		time.Sleep(1 * time.Second)
+	})
+
+	conn, err := txPool.scp.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
+	require.NoError(t, err)
+	defer conn.Unlock()
+
+	// Safe statement: the deadline kills only the query; the connection (and
+	// with it the session's temp tables and settings) survives.
+	execCtx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+	_, err = conn.Exec(execCtx, slow, 1, false, true /* keepConnOnTimeout */)
+	cancel()
+	require.Error(t, err)
+	require.False(t, conn.IsClosed(), "a timed-out safe statement must keep its connection")
+
+	// Unsafe statement: the deadline kills the whole connection, exactly as on
+	// main, so a half-applied SET or a racing lock grant cannot linger.
+	execCtx, cancel = context.WithTimeout(ctx, 100*time.Millisecond)
+	_, err = conn.Exec(execCtx, slow, 1, false, false /* keepConnOnTimeout */)
+	cancel()
+	require.Error(t, err)
+	require.True(t, conn.IsClosed(), "a timed-out unsafe statement must lose its connection")
+}
+
+// TestTxPoolKeepAliveReserved verifies the reserved-connection keepalive:
+// it refreshes the connection's tablet-side expiry without sending anything
+// to MySQL (mysqld's wait_timeout must keep counting only real user
+// traffic), treats a busy connection as alive, and reports a gone
+// connection with the same "transaction %d: ..." shape as GetAndLock so
+// vtgate stops beating it.
+func TestTxPoolKeepAliveReserved(t *testing.T) {
+	ctx := t.Context()
+	db, txPool, _, closer := setup(t)
+	defer closer()
+
+	conn, err := txPool.scp.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
+	require.NoError(t, err)
+	id := conn.ReservedID()
+	conn.Unlock()
+
+	// The keepalive refreshes the expiry and sends nothing to MySQL.
+	queryLogBefore := db.QueryLog()
+	expiryBefore := conn.expiryTime
+	time.Sleep(time.Millisecond)
+	require.NoError(t, txPool.KeepAliveReserved(id))
+	require.True(t, conn.expiryTime.After(expiryBefore), "keepalive must refresh the connection's expiry")
+	require.Equal(t, queryLogBefore, db.QueryLog(), "keepalive must not execute anything on the MySQL connection")
+
+	// A busy connection counts as alive.
+	relocked, err := txPool.GetAndLock(id, "for test")
+	require.NoError(t, err)
+	require.NoError(t, txPool.KeepAliveReserved(id))
+	relocked.Unlock()
+
+	// A connection whose MySQL side is gone (e.g. mysqld reclaimed it at
+	// wait_timeout) must be released — it occupies pool capacity — and the
+	// keepalive reports it with the gone shape so callers stop beating it,
+	// all without waiting for the session's next command.
+	db.CloseAllConnections()
+	require.Eventually(t, func() bool {
+		return txPool.KeepAliveReserved(id) != nil
+	}, 30*time.Second, 10*time.Millisecond, "keepalive must detect the peer-closed connection")
+	_, err = txPool.GetAndLock(id, "for test")
+	require.ErrorContains(t, err, fmt.Sprintf("transaction %d: ", id), "the dead connection must have been released")
+
+	// A connection that no longer exists reports the gone shape.
+	conn2, err := txPool.scp.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
+	require.NoError(t, err)
+	id2 := conn2.ReservedID()
+	conn2.ReleaseString("test")
+	err = txPool.KeepAliveReserved(id2)
+	require.ErrorContains(t, err, fmt.Sprintf("transaction %d: ", id2))
+}
+
+// TestTxPoolGetAndLockWaitsOutKeepAlive verifies that a caller colliding
+// with an in-flight keepalive briefly waits it out instead of failing with
+// an in-use error — a keepalive holds the connection only for microseconds
+// and a client query or release must not fail because of it. Other in-use
+// holders still fail fast.
+func TestTxPoolGetAndLockWaitsOutKeepAlive(t *testing.T) {
+	ctx := t.Context()
+	_, txPool, _, closer := setup(t)
+	defer closer()
+
+	conn, err := txPool.scp.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
+	require.NoError(t, err)
+	id := conn.ReservedID()
+	conn.Unlock()
+
+	// Hold the connection as a keepalive would, releasing shortly after: the
+	// foreground GetAndLock must wait it out and succeed.
+	held, err := txPool.scp.GetAndLock(id, reservedKeepAlivePurpose)
+	require.NoError(t, err)
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		held.Unlock()
+	}()
+	got, err := txPool.GetAndLock(id, "for query")
+	require.NoError(t, err, "a caller must wait out a keepalive hold, not fail")
+	got.Unlock()
+
+	// Any other holder still fails fast with the in-use error.
+	held, err = txPool.scp.GetAndLock(id, "for query")
+	require.NoError(t, err)
+	_, err = txPool.GetAndLock(id, "for another query")
+	require.ErrorContains(t, err, "in use: for query")
+	held.Release(tx.ConnRelease)
+}
+
+// TestTxPoolBeginWaitsOutKeepAlive verifies that starting a transaction on a
+// reserved connection waits out an in-flight keepalive touch rather than
+// failing with an in-use error — Begin must go through the keepalive-aware
+// lock path, not the pool directly.
+func TestTxPoolBeginWaitsOutKeepAlive(t *testing.T) {
+	ctx := t.Context()
+	db, txPool, _, closer := setup(t)
+	defer closer()
+	db.AddQuery("begin", &sqltypes.Result{})
+
+	conn, err := txPool.scp.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
+	require.NoError(t, err)
+	id := conn.ReservedID()
+	conn.Unlock()
+
+	// Hold the reserved connection as a keepalive would, releasing shortly
+	// after: BEGIN must wait it out and succeed.
+	held, err := txPool.scp.GetAndLock(id, reservedKeepAlivePurpose)
+	require.NoError(t, err)
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		held.Unlock()
+	}()
+	txConn, _, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, id, nil)
+	require.NoError(t, err, "BEGIN must wait out a keepalive hold on the reserved connection, not fail")
+	txConn.Unlock()
 }

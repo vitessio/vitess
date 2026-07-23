@@ -100,7 +100,10 @@ var (
 
 	// lockHeartbeatTime is used to set the next heartbeat time.
 	lockHeartbeatTime = 5 * time.Second
-	warnShardedOnly   bool
+	// tempTableHeartbeatTime is how often vtgate pings a reserved connection
+	// that holds temporary tables to keep it (and its mysqld connection) alive.
+	tempTableHeartbeatTime = 10 * time.Second
+	warnShardedOnly        bool
 
 	// ddl related flags
 	foreignKeyMode     = "allow"
@@ -208,6 +211,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	utils.SetFlagBoolVar(fs, &setVarEnabled, "enable-set-var", setVarEnabled, "This will enable the use of MySQL's SET_VAR query hint for certain system variables instead of using reserved connections")
 	fs.StringSliceVar(&deniedSystemVariables, "denied-system-variables", deniedSystemVariables, "Comma-separated list of system variables that clients are not allowed to SET; attempts return an unsupported error. Names are matched case-insensitively.")
 	utils.SetFlagDurationVar(fs, &lockHeartbeatTime, "lock-heartbeat-time", lockHeartbeatTime, "If there is lock function used. This will keep the lock connection active by using this heartbeat")
+	utils.SetFlagDurationVar(fs, &tempTableHeartbeatTime, "temp-table-heartbeat-time", tempTableHeartbeatTime, "How often to send a keepalive on a connection that created temporary tables, refreshing the tablet's reserved-connection timers without sending anything to mysqld (mysqld's wait_timeout still applies to real session traffic, as in MySQL). Must stay below the tablets' effective reserved-connection timeout for the workload (--queryserver-config-transaction-timeout, or --queryserver-config-olap-transaction-timeout for OLAP sessions) by at least one keepalive round-trip: the tablet refreshes the timer only when a beat reaches it, so the worst-case gap is this interval plus one beat budget (which can reach three-quarters of the interval at short intervals). As a rule of thumb keep the interval under half of that timeout so the connection is not reclaimed between heartbeats. A tablet that predates this feature ignores the keepalive and runs it as a harmless query on a pooled connection (never a reserved one), so its reserved connections are simply not kept alive — they fall back to the tablet timeout — until it is upgraded; upgrade tablets before vtgate to protect temporary tables during the rollout. Reserved connections on shards with an open transaction are not kept alive — those remain subject to the transaction timeout as usual — while the session's reserved connections on other shards keep their keepalives.")
 	utils.SetFlagBoolVar(fs, &warnShardedOnly, "warn-sharded-only", warnShardedOnly, "If any features that are only available in unsharded mode are used, query execution warnings will be added to the session")
 	utils.SetFlagStringVar(fs, &foreignKeyMode, "foreign-key-mode", foreignKeyMode, "This is to provide how to handle foreign key constraint in create/alter table. Valid values are: allow, disallow")
 	fs.Bool("enable-online-ddl", enableOnlineDDL.Default(), "Allow users to submit, review and control Online DDL")

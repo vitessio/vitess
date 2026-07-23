@@ -188,6 +188,42 @@
     }
   },
   {
+    "comment": "create temporary table must reserve the connection and mark the session, not pass through",
+    "query": "create temporary table temp_t(id bigint, primary key(id))",
+    "plan": {
+      "Type": "DirectDDL",
+      "QueryType": "DDL",
+      "Original": "create temporary table temp_t(id bigint, primary key(id))",
+      "Instructions": {
+        "OperatorType": "DDL",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "Query": "create temporary table temp_t(id bigint, primary key(id))",
+        "TempTable": true
+      }
+    }
+  },
+  {
+    "comment": "drop temporary table must route through the DDL primitive (no implicit commit), without reserving or marking",
+    "query": "drop temporary table if exists temp_t",
+    "plan": {
+      "Type": "DirectDDL",
+      "QueryType": "DDL",
+      "Original": "drop temporary table if exists temp_t",
+      "Instructions": {
+        "OperatorType": "DDL",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "Query": "drop temporary table if exists temp_t",
+        "TempTable": true
+      }
+    }
+  },
+  {
     "comment": "select bypass with query timeout hint",
     "query": "select /*vt+ QUERY_TIMEOUT_MS=100 */ count(*), col from user",
     "plan": {
