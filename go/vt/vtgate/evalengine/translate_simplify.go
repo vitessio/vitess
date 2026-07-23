@@ -51,6 +51,45 @@ func (expr *UnaryExpr) constant() bool {
 	return expr.Inner.constant()
 }
 
+// constForExecution mirrors MySQL's const_for_execution() property: whether
+// the value is stable once execution parameters are assigned. It is distinct
+// from constant(): bind parameters and statement-stable functions such as
+// NOW are constant for one execution without being foldable at translation,
+// while columns and volatile functions are neither.
+
+func (expr *Literal) constForExecution() bool {
+	return true
+}
+
+func (expr *BindVariable) constForExecution() bool {
+	return true
+}
+
+func (expr *TupleBindVariable) constForExecution() bool {
+	return true
+}
+
+func (expr *Column) constForExecution() bool {
+	return false
+}
+
+func (expr *BinaryExpr) constForExecution() bool {
+	return expr.Left.constForExecution() && expr.Right.constForExecution()
+}
+
+func (tuple TupleExpr) constForExecution() bool {
+	for _, subexpr := range tuple {
+		if !subexpr.constForExecution() {
+			return false
+		}
+	}
+	return true
+}
+
+func (expr *UnaryExpr) constForExecution() bool {
+	return expr.Inner.constForExecution()
+}
+
 func (expr *Literal) simplify(_ *ExpressionEnv) error {
 	return nil
 }
@@ -95,6 +134,26 @@ func (expr *LikeExpr) simplify(env *ExpressionEnv) error {
 	return nil
 }
 
+func (b *BetweenExpr) constant() bool {
+	return b.Left.constant() && b.From.constant() && b.To.constant()
+}
+
+func (b *BetweenExpr) constForExecution() bool {
+	return b.Left.constForExecution() && b.From.constForExecution() && b.To.constForExecution()
+}
+
+func (b *BetweenExpr) simplify(env *ExpressionEnv) error {
+	var err error
+	if b.Left, err = simplifyExpr(env, b.Left); err != nil {
+		return err
+	}
+	if b.From, err = simplifyExpr(env, b.From); err != nil {
+		return err
+	}
+	b.To, err = simplifyExpr(env, b.To)
+	return err
+}
+
 func (inexpr *InExpr) simplify(env *ExpressionEnv) error {
 	if err := inexpr.BinaryExpr.simplify(env); err != nil {
 		return err
@@ -126,6 +185,10 @@ func (expr *UnaryExpr) simplify(env *ExpressionEnv) error {
 
 func (c *CallExpr) constant() bool {
 	return c.Arguments.constant()
+}
+
+func (c *CallExpr) constForExecution() bool {
+	return c.Arguments.constForExecution()
 }
 
 func (c *CallExpr) simplify(env *ExpressionEnv) error {
