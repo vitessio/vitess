@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/utils"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 
@@ -372,6 +373,11 @@ func (conn *gRPCQueryClient) StartCommit(ctx context.Context, target *querypb.Ta
 	if resp != nil {
 		return resp.State, err
 	}
+
+	if vterrors.IsCommitNotAttemptedError(err) {
+		return querypb.StartCommitState_Fail, err
+	}
+
 	return querypb.StartCommitState_Unknown, err
 }
 

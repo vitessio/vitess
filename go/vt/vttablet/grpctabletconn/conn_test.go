@@ -29,11 +29,16 @@ import (
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/grpcclient"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	queryservicepb "vitess.io/vitess/go/vt/proto/queryservice"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/grpcqueryservice"
+	"vitess.io/vitess/go/vt/vttablet/queryservice"
+	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 	"vitess.io/vitess/go/vt/vttablet/tabletconntest"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -116,6 +121,87 @@ func TestGRPCTabletAuthConn(t *testing.T) {
 			"grpc": int32(port),
 		},
 	}, service, f)
+}
+
+// startCommitService serves a canned StartCommit result. Any other method
+// panics through the embedded nil QueryService.
+type startCommitService struct {
+	queryservice.QueryService
+	state querypb.StartCommitState
+	err   error
+}
+
+func (s *startCommitService) StartCommit(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (querypb.StartCommitState, error) {
+	return s.state, s.err
+}
+
+func (s *startCommitService) HandlePanic(err *error) {}
+
+// TestGRPCTabletConnStartCommitState verifies how the client reconstructs the
+// StartCommit state when the RPC carries an error, since gRPC drops the
+// response message on error. Only an error marked commit-not-attempted maps
+// to Fail. Any other error, including a generic state transition rejection
+// from before the commit handler ran, leaves the outcome unknown.
+func TestGRPCTabletConnStartCommitState(t *testing.T) {
+	tcases := []struct {
+		name     string
+		state    querypb.StartCommitState
+		err      error
+		expState querypb.StartCommitState
+		expErr   string
+	}{{
+		name:     "success",
+		state:    querypb.StartCommitState_Success,
+		expState: querypb.StartCommitState_Success,
+	}, {
+		name:     "commit not attempted is a definite failure",
+		state:    querypb.StartCommitState_Fail,
+		err:      vterrors.New(vtrpcpb.Code_CLUSTER_EVENT, vterrors.CommitNotAttempted+": "+vterrors.ShuttingDown),
+		expState: querypb.StartCommitState_Fail,
+		expErr:   vterrors.ShuttingDown,
+	}, {
+		name:     "generic state transition rejection leaves the outcome unknown",
+		state:    querypb.StartCommitState_Fail,
+		err:      vterrors.New(vtrpcpb.Code_CLUSTER_EVENT, vterrors.ShuttingDown),
+		expState: querypb.StartCommitState_Unknown,
+		expErr:   vterrors.ShuttingDown,
+	}, {
+		name:     "other errors leave the outcome unknown",
+		state:    querypb.StartCommitState_Fail,
+		err:      vterrors.New(vtrpcpb.Code_INTERNAL, "commit failed"),
+		expState: querypb.StartCommitState_Unknown,
+		expErr:   "commit failed",
+	}}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			listener, err := net.Listen("tcp", "127.0.0.1:0")
+			require.NoError(t, err)
+
+			server := grpc.NewServer()
+			grpcqueryservice.Register(server, &startCommitService{state: tcase.state, err: tcase.err})
+			go server.Serve(listener)
+			t.Cleanup(server.Stop)
+
+			ctx := t.Context()
+			conn, err := tabletconn.GetDialer()(ctx, &topodatapb.Tablet{
+				Hostname: listener.Addr().(*net.TCPAddr).IP.String(),
+				PortMap: map[string]int32{
+					"grpc": int32(listener.Addr().(*net.TCPAddr).Port),
+				},
+			}, grpcclient.FailFast(false))
+			require.NoError(t, err)
+			t.Cleanup(func() { conn.Close(ctx) })
+
+			state, err := conn.StartCommit(ctx, tabletconntest.TestTarget, 42, "aa")
+			if tcase.expErr == "" {
+				require.NoError(t, err)
+			} else {
+				require.ErrorContains(t, err, tcase.expErr)
+			}
+			require.Equal(t, tcase.expState, state)
+		})
+	}
 }
 
 // mockQueryClient is a mock query client that returns an error from Streaming calls,
