@@ -185,10 +185,7 @@ func (vtg *VTGate) StreamExecuteMulti(request *vtgatepb.StreamExecuteMultiReques
 		session = &vtgatepb.Session{Autocommit: true}
 	}
 
-	// Split oversized result packets to --stream-buffer-size so response
-	// message sizes stay independent of how the underlying primitives chunk
-	// their output.
-	callback := vtgate.NewStreamExecuteMultiChunker(func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error {
+	session, vtgErr := vtg.server.StreamExecuteMulti(ctx, nil, session, request.Sql, func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error {
 		// Send is not safe to call concurrently, but vtgate
 		// guarantees that it's not.
 		return stream.Send(&vtgatepb.StreamExecuteMultiResponse{
@@ -197,7 +194,6 @@ func (vtg *VTGate) StreamExecuteMulti(request *vtgatepb.StreamExecuteMultiReques
 			NewResult:   firstPacket,
 		})
 	})
-	session, vtgErr := vtg.server.StreamExecuteMulti(ctx, nil, session, request.Sql, callback)
 
 	var errs []error
 	if vtgErr != nil {
@@ -251,18 +247,14 @@ func (vtg *VTGate) StreamExecute(request *vtgatepb.StreamExecuteRequest, stream 
 		session = &vtgatepb.Session{Autocommit: true}
 	}
 
-	// Split oversized result packets to --stream-buffer-size so response
-	// message sizes stay independent of how the underlying primitives chunk
-	// their output.
-	chunked := vtgate.NewStreamResponseChunker(func(value *sqltypes.Result) error {
+	// The streaming gRPC API has no prepared-statement field, so prepared is always false here.
+	session, vtgErr := vtg.server.StreamExecute(ctx, nil, session, request.Query.Sql, request.Query.BindVariables, false, func(value *sqltypes.Result) error {
 		// Send is not safe to call concurrently, but vtgate
 		// guarantees that it's not.
 		return stream.Send(&vtgatepb.StreamExecuteResponse{
 			Result: sqltypes.ResultToProto3(value),
 		})
 	})
-	// The streaming gRPC API has no prepared-statement field, so prepared is always false here.
-	session, vtgErr := vtg.server.StreamExecute(ctx, nil, session, request.Query.Sql, request.Query.BindVariables, false, chunked)
 
 	var errs []error
 	if vtgErr != nil {

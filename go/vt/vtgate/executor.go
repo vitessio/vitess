@@ -112,8 +112,9 @@ func init() {
 // the abilities of the underlying vttablets.
 type (
 	ExecutorConfig struct {
-		Name      string
-		Normalize bool
+		Name       string
+		Normalize  bool
+		StreamSize int
 		// AllowScatter will fail planning if set to false and a plan contains any scatter queries
 		AllowScatter bool
 		// PreventCrossKeyspaceReads will fail planning if set to true and a plan contains any cross-keyspace joins or UNIONs.
@@ -333,13 +334,54 @@ func (e *Executor) StreamExecute(
 
 	resultHandler := func(ctx context.Context, plan *engine.Plan, vc *econtext.VCursorImpl, bindVars map[string]*querypb.BindVariable, execStart time.Time) error {
 		var seenResults atomic.Bool
+		var resultMu sync.Mutex
+		result := &sqltypes.Result{}
 		if canReturnRows(plan.QueryType) {
-			// Forward each packet to the client as-is: the tablet already
-			// batches rows up to its stream buffer size per packet, so
-			// re-chunking here would only add copies of every row.
 			srr.callback = func(qr *sqltypes.Result) error {
-				seenResults.Store(true)
-				return callback(qr)
+				resultMu.Lock()
+				defer resultMu.Unlock()
+				// Carry over the OK-packet fields so statements that return one (e.g. a
+				// CALL of a procedure that performs DML) report them to the client,
+				// matching the buffered Execute path. The InsertID handling mirrors
+				// Result.AppendResult.
+				result.RowsAffected += qr.RowsAffected
+				if qr.InsertIDUpdated() {
+					result.InsertID = qr.InsertID
+					result.InsertIDChanged = true
+				}
+				if qr.Info != "" {
+					result.Info = qr.Info
+				}
+				// If the row has field info, send it separately.
+				// TODO(sougou): this behavior is for handling tests because
+				// the framework currently sends all results as one packet.
+				byteCount := 0
+				if len(qr.Fields) > 0 {
+					result.Fields = qr.Fields
+					if err := callback(qr.Metadata()); err != nil {
+						return err
+					}
+					seenResults.Store(true)
+				}
+
+				for _, row := range qr.Rows {
+					result.Rows = append(result.Rows, row)
+
+					for _, col := range row {
+						byteCount += col.Len()
+					}
+
+					if byteCount >= e.config.StreamSize {
+						err := callback(result)
+						seenResults.Store(true)
+						result = &sqltypes.Result{}
+						byteCount = 0
+						if err != nil {
+							return err
+						}
+					}
+				}
+				return nil
 			}
 		}
 
@@ -399,11 +441,9 @@ func (e *Executor) StreamExecute(
 			return nil
 		}
 
-		// If the primitive produced no packets at all, still deliver one empty
-		// result so the client sees a (fieldless) response, matching the
-		// buffered Execute path.
-		if !seenResults.Load() {
-			if err := callback(&sqltypes.Result{}); err != nil {
+		// Send left-over rows if there is no error on execution.
+		if len(result.Rows) > 0 || !seenResults.Load() {
+			if err := callback(result); err != nil {
 				return err
 			}
 		}

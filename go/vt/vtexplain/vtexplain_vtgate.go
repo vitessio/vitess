@@ -69,12 +69,14 @@ func (vte *VTExplain) initVtgateExecutor(ctx context.Context, ts *topo.Server, v
 		vte.vtgateSession.Options.PlannerVersion = opts.PlannerVersion
 	}
 
+	streamSize := 10
 	var schemaTracker vtgate.SchemaInfo // no schema tracker for these tests
 	queryLogBufferSize := 10
 	plans := theine.NewStore[vtgate.PlanCacheKey, *engine.Plan](4*1024*1024, false)
 	eConfig := vtgate.ExecutorConfig{
 		Name:         "TestExecutor",
 		Normalize:    opts.Normalize,
+		StreamSize:   streamSize,
 		AllowScatter: true,
 	}
 	vte.vtgateExecutor = vtgate.NewExecutor(ctx, vte.env, vte.explainTopo, Cell, resolver, eConfig, false, plans, schemaTracker, opts.PlannerVersion, vtgate.NewDynamicViperConfig())
