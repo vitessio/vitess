@@ -37,6 +37,8 @@ func precedenceFor(in IR) sqlparser.Precendence {
 		}
 	case *NotExpr:
 		return sqlparser.P13
+	case *BetweenExpr:
+		return sqlparser.P12
 	case *ComparisonExpr:
 		return sqlparser.P11
 	case *IsExpr:
@@ -202,6 +204,18 @@ func (c *InExpr) format(buf *sqlparser.TrackedBuffer) {
 		op = "not in"
 	}
 	formatBinary(buf, c, c.Left, op, c.Right)
+}
+
+func (b *BetweenExpr) format(buf *sqlparser.TrackedBuffer) {
+	b.Left.format(buf)
+	if b.Negate {
+		buf.WriteLiteral(" not between ")
+	} else {
+		buf.WriteLiteral(" between ")
+	}
+	formatExpr(buf, b, b.From, true)
+	buf.WriteLiteral(" and ")
+	formatExpr(buf, b, b.To, false)
 }
 
 func (tuple TupleExpr) format(buf *sqlparser.TrackedBuffer) {

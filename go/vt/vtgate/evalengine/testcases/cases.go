@@ -67,6 +67,8 @@ var Cases = []TestCase{
 	{Run: TupleComparisons},
 	{Run: Comparisons},
 	{Run: InStatement},
+	{Run: JSONComparisonDomains},
+	{Run: JSONComparisonDomainsTemporal},
 	{Run: FnField},
 	{Run: FnElt},
 	{Run: FnInsert},
@@ -1921,6 +1923,78 @@ func InStatement(yield Query) {
 		yield(fmt.Sprintf("%s NOT IN (%s, %s)", inputs[1], inputs[0], inputs[2]), nil, false)
 		yield(fmt.Sprintf("%s NOT IN (%s, %s, %s)", inputs[0], inputs[1], inputs[2], inputs[0]), nil, false)
 	})
+}
+
+func JSONComparisonDomains(yield Query) {
+	domain := make([]string, 0, len(inputJSONComparisonDomainJSON)+len(inputJSONComparisonDomainScalars))
+	domain = append(domain, inputJSONComparisonDomainJSON...)
+	domain = append(domain, inputJSONComparisonDomainScalars...)
+
+	for i, l := range domain {
+		for j, a := range domain {
+			for k, b := range domain {
+				// Only yield combinations in which a JSON value participates:
+				// the JSON-free ones are covered by the other generators.
+				jsons := len(inputJSONComparisonDomainJSON)
+				if i >= jsons && j >= jsons && k >= jsons {
+					continue
+				}
+				yield(fmt.Sprintf("%s IN (%s, %s)", l, a, b), nil, false)
+				yield(fmt.Sprintf("%s NOT IN (%s, %s)", l, a, b), nil, false)
+				// MySQL versions disagree on BETWEEN with equal bounds and a
+				// JSON participant: 8.0.34 and 8.4.10 fold it into a
+				// JSON-comparator equality, the latest 8.0.x does not.
+				if a != b {
+					yield(fmt.Sprintf("%s BETWEEN %s AND %s", l, a, b), nil, false)
+					yield(fmt.Sprintf("%s NOT BETWEEN %s AND %s", l, a, b), nil, false)
+				}
+				yield(fmt.Sprintf("CASE %s WHEN %s THEN 1 WHEN %s THEN 2 ELSE 3 END", l, a, b), nil, false)
+			}
+		}
+	}
+}
+
+func JSONComparisonDomainsTemporal(yield Query) {
+	// Only constant temporal operands: the integration harness translates
+	// columns without a type resolver, so a temporal column cannot select the
+	// static BETWEEN domain here; TestJSONComparisonDomains covers those.
+	dates := []string{
+		`CAST('2020-01-01' AS DATE)`,
+		`CAST('2020-01-01 12:00:00' AS DATETIME)`,
+	}
+	jsons := []string{`JSON_ARRAY()`, `JSON_OBJECT()`, `CAST('[]' AS JSON)`}
+
+	for _, l := range dates {
+		for _, j := range jsons {
+			yield(fmt.Sprintf("%s BETWEEN %s AND '2021-01-01'", l, j), nil, false)
+			yield(fmt.Sprintf("%s NOT BETWEEN %s AND '2021-01-01'", l, j), nil, false)
+			yield(fmt.Sprintf("%s BETWEEN '2019-01-01' AND %s", l, j), nil, false)
+			yield(fmt.Sprintf("'2020-01-01' BETWEEN %s AND %s", j, l), nil, false)
+		}
+		// Without a JSON participant, the pairwise comparisons apply.
+		yield(fmt.Sprintf("%s BETWEEN '2019-01-01' AND '2021-01-01'", l), nil, false)
+	}
+
+	// A DATE-typed composite operand selects the DATETIME domain. Only
+	// DATE_ADD is exercised here: 8.0.x constant-folds COALESCE/IF/CASE/
+	// GREATEST composites before selecting the domain while 8.4.x does not;
+	// TestJSONComparisonDomains pins those to the 8.4.x behavior.
+	yield(`DATE_ADD(CAST('2020-01-01' AS DATE), INTERVAL 0 DAY) BETWEEN JSON_ARRAY() AND '2021-01-01'`, nil, false)
+	yield(`DATE_ADD(CAST('2020-01-01' AS DATE), INTERVAL 0 DAY) NOT BETWEEN JSON_ARRAY() AND '2021-01-01'`, nil, false)
+
+	// A TIME expression does not select a temporal domain: with only JSON
+	// and textual participants left, the domain falls back to strings.
+	for _, j := range jsons {
+		yield(fmt.Sprintf("CAST('12:00:00' AS TIME) BETWEEN %s AND '13:00:00'", j), nil, false)
+		yield(fmt.Sprintf("CAST('12:00:00' AS TIME) NOT BETWEEN %s AND '13:00:00'", j), nil, false)
+	}
+	yield(`CAST('12:00:00' AS TIME) BETWEEN '11:00:00' AND '13:00:00'`, nil, false)
+
+	// TIME-typed composites do not select a temporal domain either.
+	yield(`COALESCE(CAST('12:00:00' AS TIME), NULL) BETWEEN JSON_ARRAY() AND '13:00:00'`, nil, false)
+	yield(`COALESCE(CAST('12:00:00' AS TIME), NULL) NOT BETWEEN JSON_ARRAY() AND '13:00:00'`, nil, false)
+	yield(`GREATEST(CAST('12:00:00' AS TIME), CAST('11:00:00' AS TIME)) BETWEEN JSON_ARRAY() AND '13:00:00'`, nil, false)
+	yield(`DATE_ADD(CAST('12:00:00' AS TIME), INTERVAL 0 SECOND) BETWEEN JSON_ARRAY() AND '13:00:00'`, nil, false)
 }
 
 func FnNow(yield Query) {

@@ -95,6 +95,22 @@ func (expr *LikeExpr) simplify(env *ExpressionEnv) error {
 	return nil
 }
 
+func (b *BetweenExpr) constant() bool {
+	return b.Left.constant() && b.From.constant() && b.To.constant()
+}
+
+func (b *BetweenExpr) simplify(env *ExpressionEnv) error {
+	var err error
+	if b.Left, err = simplifyExpr(env, b.Left); err != nil {
+		return err
+	}
+	if b.From, err = simplifyExpr(env, b.From); err != nil {
+		return err
+	}
+	b.To, err = simplifyExpr(env, b.To)
+	return err
+}
+
 func (inexpr *InExpr) simplify(env *ExpressionEnv) error {
 	if err := inexpr.BinaryExpr.simplify(env); err != nil {
 		return err
