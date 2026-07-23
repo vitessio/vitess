@@ -183,6 +183,30 @@ func compareStrings(l, r eval, env *collations.Environment) (int, error) {
 	return collation.Collate(l.ToRawBytes(), r.ToRawBytes(), false), nil
 }
 
+// evalJSONToText returns the serialized text form of a JSON value, and any
+// other value unchanged.
+func evalJSONToText(e eval) eval {
+	if j, ok := e.(*evalJSON); ok {
+		return newEvalText(j.ToRawBytes(), collationJSON)
+	}
+	return e
+}
+
+// evalCompareCaseJSON compares a (base, WHEN) pair of a simple CASE in which
+// a JSON value participates. MySQL never uses the JSON comparator here: a
+// pair of JSON or textual values compares as strings on the serialized text
+// forms, and any other pair as DOUBLE.
+func evalCompareCaseJSON(l, r eval, collationEnv *collations.Environment) (int, error) {
+	_, lIsJSON := l.(*evalJSON)
+	_, rIsJSON := r.(*evalJSON)
+	if (lIsJSON || typeIsTextual(l.SQLType())) && (rIsJSON || typeIsTextual(r.SQLType())) {
+		return compareStrings(evalJSONToText(l), evalJSONToText(r), collationEnv)
+	}
+	lf, _ := evalToFloat(l)
+	rf, _ := evalToFloat(r)
+	return compareNumeric(lf, rf)
+}
+
 func compareJSON(l, r eval) (int, error) {
 	lj, err := argToJSON(l)
 	if err != nil {
