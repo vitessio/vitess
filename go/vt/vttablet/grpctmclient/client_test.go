@@ -20,11 +20,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/status"
@@ -32,8 +34,67 @@ import (
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/protoutil"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	tabletmanagerservicepb "vitess.io/vitess/go/vt/proto/tabletmanagerservice"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
+
+type executeMultiFetchClient struct {
+	tabletmanagerservicepb.TabletManagerClient
+	request *tabletmanagerdatapb.ExecuteMultiFetchAsDbaRequest
+}
+
+func (client *executeMultiFetchClient) ExecuteMultiFetchAsDba(
+	ctx context.Context,
+	request *tabletmanagerdatapb.ExecuteMultiFetchAsDbaRequest,
+	opts ...grpc.CallOption,
+) (*tabletmanagerdatapb.ExecuteMultiFetchAsDbaResponse, error) {
+	client.request = request
+	return &tabletmanagerdatapb.ExecuteMultiFetchAsDbaResponse{}, nil
+}
+
+type executeMultiFetchDialer struct {
+	client tabletmanagerservicepb.TabletManagerClient
+}
+
+func (dialer *executeMultiFetchDialer) dial(
+	ctx context.Context,
+	tablet *topodatapb.Tablet,
+) (tabletmanagerservicepb.TabletManagerClient, io.Closer, error) {
+	return dialer.client, executeMultiFetchCloser{}, nil
+}
+
+func (dialer *executeMultiFetchDialer) Close() {}
+
+type executeMultiFetchCloser struct{}
+
+func (executeMultiFetchCloser) Close() error {
+	return nil
+}
+
+// TestExecuteMultiFetchAsDbaSessionVariables verifies the gRPC client forwards
+// ordered session variable assignments.
+func TestExecuteMultiFetchAsDbaSessionVariables(t *testing.T) {
+	rpcClient := &executeMultiFetchClient{}
+	client := &Client{dialer: &executeMultiFetchDialer{client: rpcClient}}
+	tablet := &topodatapb.Tablet{Keyspace: "commerce"}
+	sessionVariables := []*tabletmanagerdatapb.SessionVariable{
+		{Name: "innodb_strict_mode", Value: "off"},
+		{Name: "sql_mode", Value: "ANSI"},
+	}
+
+	_, err := client.ExecuteMultiFetchAsDba(
+		t.Context(),
+		tablet,
+		false,
+		&tabletmanagerdatapb.ExecuteMultiFetchAsDbaRequest{
+			Sql:              []byte("create table t (id int primary key)"),
+			SessionVariables: sessionVariables,
+		},
+	)
+	require.NoError(t, err)
+	require.NotNil(t, rpcClient.request)
+	assert.Equal(t, sessionVariables, rpcClient.request.SessionVariables)
+}
 
 func TestDialDedicatedPool(t *testing.T) {
 	ctx := t.Context()

@@ -590,6 +590,19 @@ func (exec *TabletExecutor) executeOneTablet(
 			Sql:     []byte(sql),
 			MaxRows: 10,
 		}
+		if exec.ddlStrategySetting != nil {
+			sessionVariables, parseErr := exec.ddlStrategySetting.SessionVariables()
+			if parseErr != nil {
+				errChan <- ShardWithError{Shard: tablet.Shard, Err: parseErr.Error()}
+				return
+			}
+			for _, variable := range sessionVariables {
+				request.SessionVariables = append(request.SessionVariables, &tabletmanagerdatapb.SessionVariable{
+					Name:  variable.Name,
+					Value: variable.Value,
+				})
+			}
+		}
 		if exec.ddlStrategySetting != nil && exec.ddlStrategySetting.IsAllowForeignKeysFlag() {
 			request.DisableForeignKeyChecks = true
 		}

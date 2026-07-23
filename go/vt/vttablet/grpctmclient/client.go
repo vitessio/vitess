@@ -854,6 +854,7 @@ func (client *Client) ExecuteMultiFetchAsDba(ctx context.Context, tablet *topoda
 		DisableBinlogs:          req.DisableBinlogs,
 		ReloadSchema:            req.ReloadSchema,
 		DisableForeignKeyChecks: req.DisableForeignKeyChecks,
+		SessionVariables:        req.SessionVariables,
 	})
 	if err != nil {
 		return nil, vterrors.FromGRPC(err)

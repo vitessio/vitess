@@ -31,6 +31,12 @@ var (
 	cutOverThresholdFlagRegexp  = regexp.MustCompile(fmt.Sprintf(`^[-]{1,2}%s=(.*?)$`, cutOverThresholdFlag))
 	forceCutOverAfterFlagRegexp = regexp.MustCompile(fmt.Sprintf(`^[-]{1,2}%s=(.*?)$`, forceCutOverAfterFlag))
 	retainArtifactsFlagRegexp   = regexp.MustCompile(fmt.Sprintf(`^[-]{1,2}%s=(.*?)$`, retainArtifactsFlag))
+	sessionVariableNameRegexp   = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
+	deniedSessionVariables      = map[string]struct{}{
+		"foreign_key_checks": {},
+		"gtid_next":          {},
+		"sql_log_bin":        {},
+	}
 )
 
 const (
@@ -51,6 +57,7 @@ const (
 	retainArtifactsFlag    = "retain-artifacts"
 	vreplicationTestSuite  = "vreplication-test-suite"
 	allowForeignKeysFlag   = "unsafe-allow-foreign-keys"
+	sessionVariableFlag    = "session-variable"
 	analyzeTableFlag       = "analyze-table"
 )
 
@@ -84,6 +91,13 @@ type DDLStrategySetting struct {
 	Options  string      `json:"options,omitempty"`
 }
 
+// SessionVariable is a MySQL system variable assignment applied in SESSION
+// scope before schema DDL.
+type SessionVariable struct {
+	Name  string
+	Value string
+}
+
 // NewDDLStrategySetting instantiates a new setting
 func NewDDLStrategySetting(strategy DDLStrategy, options string) *DDLStrategySetting {
 	return &DDLStrategySetting{
@@ -113,6 +127,9 @@ func ParseDDLStrategy(strategyVariable string) (*DDLStrategySetting, error) {
 		return nil, err
 	}
 	if _, err := setting.RetainArtifactsDuration(); err != nil {
+		return nil, err
+	}
+	if _, err := setting.SessionVariables(); err != nil {
 		return nil, err
 	}
 	cutoverAfter, err := setting.ForceCutOverAfter()
@@ -182,6 +199,77 @@ func (setting *DDLStrategySetting) IsSingletonTable() bool {
 // IsAllowZeroInDateFlag checks if strategy options include --allow-zero-in-date
 func (setting *DDLStrategySetting) IsAllowZeroInDateFlag() bool {
 	return setting.hasFlag(allowZeroInDateFlag)
+}
+
+// ValidateSessionVariable ensures a variable name is safe to interpolate as a
+// MySQL system variable identifier.
+func ValidateSessionVariable(variable SessionVariable) error {
+	if !sessionVariableNameRegexp.MatchString(variable.Name) {
+		return fmt.Errorf("invalid session variable name: %q", variable.Name)
+	}
+	if _, ok := deniedSessionVariables[strings.ToLower(variable.Name)]; ok {
+		return fmt.Errorf("session variable %q is not allowed", variable.Name)
+	}
+	return nil
+}
+
+// ValidateSessionVariables validates variable names and rejects
+// case-insensitive duplicates.
+func ValidateSessionVariables(variables []SessionVariable) error {
+	seen := map[string]struct{}{}
+	for _, variable := range variables {
+		if err := ValidateSessionVariable(variable); err != nil {
+			return err
+		}
+		normalizedName := strings.ToLower(variable.Name)
+		if _, ok := seen[normalizedName]; ok {
+			return fmt.Errorf("duplicate session variable name: %q", variable.Name)
+		}
+		seen[normalizedName] = struct{}{}
+	}
+	return nil
+}
+
+// SetStatement returns a SET statement for the variable.
+func (variable SessionVariable) SetStatement() (string, error) {
+	if err := ValidateSessionVariable(variable); err != nil {
+		return "", err
+	}
+	// A connection default or an earlier assignment may enable
+	// NO_BACKSLASH_ESCAPES.
+	// In that mode, encoding O'Reilly as 'O\'Reilly' closes the string after
+	// the backslash; on a multi-statement DBA connection, a crafted suffix could
+	// then be parsed as another statement. A hex literal is parsed safely
+	// regardless of the active sql_mode.
+	return fmt.Sprintf("set @@session.%s=X'%x'", variable.Name, variable.Value), nil
+}
+
+// SessionVariables returns the ordered assignments from repeatable
+// --session-variable name=value options.
+func (setting *DDLStrategySetting) SessionVariables() ([]SessionVariable, error) {
+	opts, err := shlex.Split(setting.Options)
+	if err != nil {
+		return nil, fmt.Errorf("invalid DDL strategy options: %w", err)
+	}
+	var variables []SessionVariable
+	for i := 0; i < len(opts); i++ {
+		if !isFlag(opts[i], sessionVariableFlag) {
+			continue
+		}
+		if i+1 >= len(opts) {
+			return nil, fmt.Errorf("--%s requires name=value", sessionVariableFlag)
+		}
+		i++
+		name, value, found := strings.Cut(opts[i], "=")
+		if !found {
+			return nil, fmt.Errorf("invalid --%s value %q: expected name=value", sessionVariableFlag, opts[i])
+		}
+		variables = append(variables, SessionVariable{Name: name, Value: value})
+	}
+	if err := ValidateSessionVariables(variables); err != nil {
+		return nil, err
+	}
+	return variables, nil
 }
 
 // IsPostponeLaunch checks if strategy options include --postpone-launch
@@ -309,7 +397,8 @@ func (setting *DDLStrategySetting) IsAnalyzeTableFlag() bool {
 func (setting *DDLStrategySetting) RuntimeOptions() []string {
 	opts, _ := shlex.Split(setting.Options)
 	validOpts := []string{}
-	for _, opt := range opts {
+	for i := 0; i < len(opts); i++ {
+		opt := opts[i]
 		if _, ok := isCutOverThresholdFlag(opt); ok {
 			continue
 		}
@@ -326,6 +415,8 @@ func (setting *DDLStrategySetting) RuntimeOptions() []string {
 		case isFlag(opt, singletonContextFlag):
 		case isFlag(opt, singletonTableFlag):
 		case isFlag(opt, allowZeroInDateFlag):
+		case isFlag(opt, sessionVariableFlag):
+			i++
 		case isFlag(opt, postponeLaunchFlag):
 		case isFlag(opt, postponeCompletionFlag):
 		case isFlag(opt, inOrderCompletionFlag):
