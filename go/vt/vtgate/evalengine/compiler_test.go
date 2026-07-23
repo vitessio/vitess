@@ -202,6 +202,36 @@ func TestCompilerSingle(t *testing.T) {
 			result:     "INT64(2)",
 		},
 		{
+			// A NULL string operand must collapse both LOCATE operands before outer
+			// expressions consume the result.
+			expression: "null <=> locate('foo', column0)",
+			values:     []sqltypes.Value{sqltypes.NULL},
+			result:     "INT64(1)",
+		},
+		{
+			// A leftover operand would make IFNULL overflow the VM stack.
+			expression: "ifnull(locate('foo', column0), 7)",
+			values:     []sqltypes.Value{sqltypes.NULL},
+			result:     "INT64(7)",
+		},
+		{
+			// A NULL position must collapse all three LOCATE operands.
+			expression: "ifnull(locate('foo', 'foobar', column0), 7)",
+			values:     []sqltypes.Value{sqltypes.NULL},
+			result:     "INT64(7)",
+		},
+		{
+			// A NULL length must collapse all three SUBSTRING operands.
+			expression: "null <=> substring('abc', 1, column0)",
+			values:     []sqltypes.Value{sqltypes.NULL},
+			result:     "INT64(1)",
+		},
+		{
+			expression: "ifnull(substring('abc', 1, column0), 'x')",
+			values:     []sqltypes.Value{sqltypes.NULL},
+			result:     `VARCHAR("x")`,
+		},
+		{
 			expression: "1 + column0",
 			values:     []sqltypes.Value{sqltypes.NewFloat64(1)},
 			result:     "FLOAT64(2)",
