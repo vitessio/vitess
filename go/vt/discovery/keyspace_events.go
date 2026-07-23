@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -480,14 +481,67 @@ func (mts MoveTablesState) String() string {
 	return fmt.Sprintf("{Type: %s, State: %s}", typ, state)
 }
 
+// rulesReferenceKeyspace reports whether any routing rule in the SrvVSchema
+// references the given keyspace: as the keyspace qualifier of a table routing
+// rule's from-table or to-tables, or as an endpoint of a shard routing rule.
+//
+// This is safe to use as a MoveTables gate because the traffic switcher always
+// writes keyspace-qualified rule variants naming both the source and the
+// target keyspace, unquoted (see trafficSwitcher's routing rule handling, and
+// getMoveTablesStatus below, which already matches rules against the same
+// unquoted keyspace.table form), for regular as well as shard-by-shard
+// workflows, at every stage from Create until Complete deletes the rules and
+// the denied tables together. A keyspace not referenced by any rule therefore
+// cannot be part of an in-progress MoveTables.
+//
+// Two deliberate limits of this gate:
+//
+//   - A workflow created with --no-routing-rules writes no rules at all, so
+//     its keyspaces exit early here. That is not a regression: detecting such
+//     a workflow previously depended on some unrelated routing rule existing
+//     in the cluster (with none, the old any-rules-exist gate exited early
+//     too), and with --no-routing-rules the operator has taken over routing
+//     anyway. The same holds for multi-tenant migrations, which use keyspace
+//     routing rules and no denied tables, so the scan would find nothing.
+//
+//   - A completed shard-by-shard migration leaves its source-keyspace shard
+//     routing rules in place indefinitely, so that source keyspace keeps
+//     falling through to the shard-record scan on every SrvVSchema update
+//     until the rules are cleaned up. The scan stays scoped to that one
+//     keyspace, which is the point of this gate.
+func rulesReferenceKeyspace(vs *vschemapb.SrvVSchema, keyspace string) bool {
+	prefix := keyspace + "."
+	for _, rule := range vs.GetRoutingRules().GetRules() {
+		if strings.HasPrefix(rule.GetFromTable(), prefix) {
+			return true
+		}
+		for _, toTable := range rule.GetToTables() {
+			if strings.HasPrefix(toTable, prefix) {
+				return true
+			}
+		}
+	}
+	for _, rule := range vs.GetShardRoutingRules().GetRules() {
+		if rule.GetFromKeyspace() == keyspace || rule.GetToKeyspace() == keyspace {
+			return true
+		}
+	}
+	return false
+}
+
 func (kss *keyspaceState) getMoveTablesStatus(vs *vschemapb.SrvVSchema) (*MoveTablesState, error) {
 	mtState := &MoveTablesState{
 		Typ:   MoveTablesNone,
 		State: MoveTablesUnknown,
 	}
 
-	// If there are no routing rules defined, then movetables is not in progress, exit early.
-	if len(vs.GetRoutingRules().GetRules()) == 0 && len(vs.GetShardRoutingRules().GetRules()) == 0 {
+	// If no routing rules reference this keyspace, then movetables is not in
+	// progress for it, exit early. This check must be scoped to the keyspace:
+	// every keyspaceState on every vtgate runs this on every SrvVSchema
+	// update, and falling through fetches all of the keyspace's shard records
+	// from the global topo server — an unrelated routing rule must not turn
+	// one SrvVSchema write into a cluster-wide shard-record read storm.
+	if !rulesReferenceKeyspace(vs, kss.keyspace) {
 		return mtState, nil
 	}
 
