@@ -54,10 +54,14 @@ func gen4DeleteStmtPlanner(
 		return nil, err
 	}
 
-	// Remove all the foreign keys that don't require any handling.
-	err = ctx.SemTable.RemoveNonRequiredForeignKeys(ctx.VerifyAllFKs, vindexes.DeleteAction)
-	if err != nil {
-		return nil, err
+	if !ctx.SemTable.RequiresForeignKeyEmulation(vindexes.DeleteAction) {
+		ctx.SemTable.ClearForeignKeys()
+	} else {
+		// Remove all the foreign keys that don't require any handling.
+		err = ctx.SemTable.RemoveNonRequiredForeignKeys(ctx.VerifyAllFKs, vindexes.DeleteAction)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if ks, tables := ctx.SemTable.SingleUnshardedKeyspace(); ks != nil {
