@@ -41,7 +41,35 @@ func (l *Literal) IsExpr() {}
 
 // eval implements the expression interface
 func (l *Literal) eval(_ *ExpressionEnv) (eval, error) {
-	return l.inner, nil
+	return cloneJSONLiteral(l.inner), nil
+}
+
+// cloneJSONLiteral returns e with any JSON documents it contains deep-cloned:
+// JSON functions mutate documents in place, and a Literal is shared by every
+// evaluation of a translated expression.
+func cloneJSONLiteral(e eval) eval {
+	switch e := e.(type) {
+	case *evalJSON:
+		return e.Clone()
+	case *evalTuple:
+		var cloned []eval
+		for i, member := range e.t {
+			c := cloneJSONLiteral(member)
+			if c != member && cloned == nil {
+				cloned = make([]eval, len(e.t))
+				copy(cloned, e.t)
+			}
+			if cloned != nil {
+				cloned[i] = c
+			}
+		}
+		if cloned == nil {
+			return e
+		}
+		return &evalTuple{t: cloned}
+	default:
+		return e
+	}
 }
 
 // typeof implements the Expr interface

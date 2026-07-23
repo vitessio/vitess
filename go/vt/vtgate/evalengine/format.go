@@ -127,13 +127,27 @@ func (l *Literal) format(buf *sqlparser.TrackedBuffer) {
 			if i > 0 {
 				buf.WriteString(", ")
 			}
-			evalToSQLValue(val).EncodeSQLStringBuilder(buf.Builder)
+			formatEvalLiteral(buf, val)
 		}
 		buf.WriteByte(')')
 
 	default:
-		evalToSQLValue(l.inner).EncodeSQLStringBuilder(buf.Builder)
+		formatEvalLiteral(buf, l.inner)
 	}
+}
+
+// formatEvalLiteral formats e as a SQL literal. JSON values are wrapped in
+// CAST(... AS JSON) to keep their document semantics.
+func formatEvalLiteral(buf *sqlparser.TrackedBuffer, e eval) {
+	if _, ok := e.(*evalJSON); ok {
+		buf.WriteLiteral("cast(")
+		evalToSQLValue(e).EncodeSQLStringBuilder(buf.Builder)
+		buf.WriteLiteral(" as ")
+		buf.WriteString("JSON")
+		buf.WriteByte(')')
+		return
+	}
+	evalToSQLValue(e).EncodeSQLStringBuilder(buf.Builder)
 }
 
 func (bv *BindVariable) Format(buf *sqlparser.TrackedBuffer) {
