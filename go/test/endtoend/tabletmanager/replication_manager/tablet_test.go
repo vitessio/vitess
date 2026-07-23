@@ -21,14 +21,18 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path"
 	"strconv"
 	"testing"
 	"time"
 
 	"vitess.io/vitess/go/vt/sidecardb"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	tabletpb "vitess.io/vitess/go/vt/proto/topodata"
@@ -132,7 +136,8 @@ func resurrectTablet(t *testing.T, tab cluster.Vttablet) {
 	_, err := tab.MysqlctlProcess.ExecuteCommandWithOutput(
 		"--tablet-uid", strconv.Itoa(tab.MysqlctlProcess.TabletUID),
 		"--mysql-port", strconv.Itoa(tab.MysqlctlProcess.MySQLPort),
-		"init_config")
+		"init_config",
+	)
 	require.NoError(t, err)
 
 	tab.MysqlctlProcess.InitMysql = false
@@ -215,4 +220,63 @@ func TestReparentJournalInfo(t *testing.T) {
 		require.NoError(t, err)
 		require.EqualValues(t, 1, length)
 	}
+}
+
+// runSQL runs a query directly against the MySQL instance of the given
+// tablet, as the dba user.
+func runSQL(ctx context.Context, t *testing.T, tablet cluster.Vttablet, query string) *sqltypes.Result {
+	t.Helper()
+	connParams := mysql.ConnParams{
+		Uname:      "vt_dba",
+		UnixSocket: path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/mysql.sock", tablet.TabletUID)),
+	}
+	conn, err := mysql.Connect(ctx, &connParams)
+	require.NoError(t, err)
+	defer conn.Close()
+	qr, err := conn.ExecuteFetch(query, 1000, true)
+	require.NoError(t, err)
+	return qr
+}
+
+// TestFatalReplicationErrorMakesTabletUnhealthy breaks replication
+// unrecoverably: the primary purges binlogs the replica still needs, so the
+// replica's IO thread stops with the fatal binlog read error (1236, recorded
+// as errno 13114 by MySQL 8.0.26+). The replica must be reported unhealthy
+// right away, instead of quietly serving an estimated replication lag until
+// the unhealthy threshold is crossed.
+//
+// This test intentionally leaves the replica unable to replicate (the purged
+// transactions cannot be recovered), so it must remain the last test in this
+// package.
+func TestFatalReplicationErrorMakesTabletUnhealthy(t *testing.T) {
+	ctx := t.Context()
+
+	err := waitForSourcePort(ctx, t, replicaTablet, int32(primaryTablet.MySQLPort))
+	require.NoError(t, err)
+	require.NoError(t, replicaTablet.VttabletProcess.WaitForTabletStatus("SERVING"))
+
+	// Stop replication, move the primary ahead, and purge its binlogs so the
+	// replica can never catch up.
+	err = tmClient.StopReplication(ctx, getTablet(replicaTablet.GrpcPort))
+	require.NoError(t, err)
+
+	runSQL(ctx, t, primaryTablet, "insert into vt_ks.t1(id, value) values (100, 'unreachable')")
+	runSQL(ctx, t, primaryTablet, "flush binary logs")
+	binlogs := runSQL(ctx, t, primaryTablet, "show binary logs")
+	require.NotEmpty(t, binlogs.Rows)
+	lastFile := binlogs.Rows[len(binlogs.Rows)-1][0].ToString()
+	runSQL(ctx, t, primaryTablet, fmt.Sprintf("purge binary logs to '%s'", lastFile))
+
+	err = tmClient.StartReplication(ctx, getTablet(replicaTablet.GrpcPort), false)
+	require.NoError(t, err)
+
+	// The IO thread now stops with the fatal purged-binlogs error. The tablet
+	// must go unhealthy well before the replication lag unhealthy threshold
+	// would catch it.
+	err = replicaTablet.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"NOT_SERVING"}, 2*time.Minute)
+	require.NoError(t, err)
+
+	status, err := tmcGetReplicationStatus(ctx, replicaTablet.GrpcPort)
+	require.NoError(t, err)
+	assert.Contains(t, status.LastIoError, "Got fatal error 1236")
 }
