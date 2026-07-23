@@ -41,6 +41,7 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/srvtopo/fakesrvtopo"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 
@@ -2960,7 +2961,7 @@ func TestExecutorTruncateErrors(t *testing.T) {
 	require.EqualError(t, err, "syntax error at posi [TRUNCATED]")
 
 	_, _, err = executor.Prepare(t.Context(), "TestExecute", session, "invalid statement")
-	assert.EqualError(t, err, "[BUG] unrecognized p [TRUNCATED]")
+	assert.EqualError(t, err, "syntax error at posi [TRUNCATED]")
 }
 
 func TestPrepareDoesNotStartTransaction(t *testing.T) {
@@ -3060,8 +3061,9 @@ func TestPrepareRejectsNonPreparableStatements(t *testing.T) {
 			_, err = executorExecSession(ctx, executor, session, tcase.sql, nil)
 			require.ErrorContains(t, err, "This command is not supported in the prepared statement protocol yet")
 			// A failed PREPARE deallocates the statement previously
-			// registered under the same name.
-			require.Nil(t, session.PrepareStatement["prep"])
+			// registered under the same name, and the rejected inner
+			// statement must not have been registered either.
+			require.Empty(t, session.PrepareStatement)
 		})
 	}
 }
@@ -3111,6 +3113,65 @@ func TestExecuteRejectsStoredNonPreparableStatements(t *testing.T) {
 			require.ErrorContains(t, err, "This command is not supported in the prepared statement protocol yet")
 		})
 	}
+}
+
+func TestPrepareUnsupportedStatements(t *testing.T) {
+	// MySQL rejects these in the prepared statement protocol with
+	// ER_UNSUPPORTED_PS (1295); vitess must not be more permissive.
+	executor, _, _, _, ctx := createExecutorEnv(t)
+
+	queries := []string{
+		"begin",
+		"start transaction",
+		"use " + KsTestUnsharded,
+		"savepoint sp1",
+		"rollback to sp1",
+		"release savepoint sp1",
+		"lock tables main1 read",
+		"unlock tables",
+		"prepare p1 from 'select 1'",
+		"execute p1",
+		"deallocate prepare p1",
+		// The alternate DEALLOCATE syntax previously slipped past the
+		// keyword-based Preview gate as DDL and returned an empty success.
+		"drop prepare p1",
+	}
+	for _, sql := range queries {
+		t.Run(sql, func(t *testing.T) {
+			session := &vtgatepb.Session{TargetString: KsTestUnsharded}
+
+			_, _, err := executorPrepare(ctx, executor, session, sql)
+			require.ErrorContains(t, err, "not supported in the prepared statement protocol")
+			require.Equal(t, vterrors.UnsupportedPS, vterrors.ErrState(err))
+		})
+	}
+}
+
+func TestPrepareUnsupportedStatementsLeaveSessionStateUntouched(t *testing.T) {
+	// A COM_STMT_PREPARE of a SQL-level PREPARE or DEALLOCATE statement is
+	// rejected before anything executes; the session's prepared-statement
+	// state must remain unchanged.
+	executor, _, _, _, ctx := createExecutorEnv(t)
+
+	t.Run("prepare", func(t *testing.T) {
+		session := &vtgatepb.Session{TargetString: KsTestUnsharded}
+
+		_, _, err := executorPrepare(ctx, executor, session, "prepare p1 from 'select 1'")
+		require.ErrorContains(t, err, "not supported in the prepared statement protocol")
+		require.Empty(t, session.PrepareStatement)
+	})
+
+	t.Run("deallocate", func(t *testing.T) {
+		session := &vtgatepb.Session{TargetString: KsTestUnsharded}
+
+		_, err := executorExec(ctx, executor, session, "prepare p1 from 'select 1'", nil)
+		require.NoError(t, err)
+		require.Contains(t, session.PrepareStatement, "p1")
+
+		_, _, err = executorPrepare(ctx, executor, session, "deallocate prepare p1")
+		require.ErrorContains(t, err, "not supported in the prepared statement protocol")
+		require.Contains(t, session.PrepareStatement, "p1")
+	})
 }
 
 func TestExecutorFlushStmt(t *testing.T) {
