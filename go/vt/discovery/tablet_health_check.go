@@ -107,8 +107,6 @@ func (thc *tabletHealthCheck) SimpleCopy() *TabletHealth {
 // thc.connMu must be locked before calling this function.
 func (thc *tabletHealthCheck) setServingState(serving bool, reason string) {
 	if !thc.loggedServingState || (serving != thc.Serving) {
-		// Emit the log from a separate goroutine to avoid holding
-		// the th lock while logging is happening
 		thc.logger.Infof("HealthCheckUpdate(Serving State): tablet: %v serving %v => %v for %v/%v (%v) reason: %s",
 			topotools.TabletIdent(thc.Tablet),
 			thc.Serving,
@@ -210,7 +208,6 @@ func (thc *tabletHealthCheck) processResponse(hc *HealthCheckImpl, shr *query.St
 		reason = "healthCheck update error: " + healthErr.Error()
 	}
 	thc.setServingState(serving, reason)
-	serving = thc.Serving
 	thc.connMu.Unlock()
 
 	// notify downstream for primary change

@@ -336,11 +336,6 @@ func TestHealthCheckConcurrentReadDuringUpdate(t *testing.T) {
 
 	time.Sleep(200 * time.Millisecond)
 	close(stop)
-	// Unblock the writer if it is parked on a send.
-	select {
-	case <-input:
-	default:
-	}
 	wg.Wait()
 }
 
@@ -406,15 +401,6 @@ func TestTabletConnectionConcurrentWithStreamClose(t *testing.T) {
 
 	time.Sleep(200 * time.Millisecond)
 	close(stop)
-	// Unblock the writer if it is parked on a send.
-	select {
-	case <-input:
-	default:
-	}
-	select {
-	case <-fc.errCh:
-	default:
-	}
 	wg.Wait()
 }
 
