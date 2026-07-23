@@ -39,6 +39,11 @@ type compiler struct {
 	asm          assembler
 	sqlmode      SQLMode
 	env          *vtenv.Environment
+	// typeEnv makes this a type-only compile deriving an operand's declared
+	// result type: untyped Column and BindVariable leaves resolve from the
+	// evaluation environment, shapes the VM cannot emit still return their
+	// known result type, and the program is never published for execution.
+	typeEnv *ExpressionEnv
 }
 
 type CompilerLog interface {
@@ -206,6 +211,19 @@ func (c *compiler) unsupported(expr IR) error {
 	buf := sqlparser.NewTrackedBuffer(nil)
 	expr.format(buf)
 	return vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "unsupported compilation for IR '%s'", buf.String())
+}
+
+// typeOnlyCall completes a type-only compile of a call whose shape the VM
+// cannot emit: the uncompiled arguments still compile so the stack model
+// stays coherent, and the call contributes its known result type.
+func (c *compiler) typeOnlyCall(args []IR, compiled int, result ctype) (ctype, error) {
+	for _, arg := range args[compiled:] {
+		if _, err := arg.compile(c); err != nil {
+			return ctype{}, err
+		}
+	}
+	c.asm.adjustStack(1 - len(args))
+	return result, nil
 }
 
 func (c *compiler) compile(expr IR) (*CompiledExpr, error) {

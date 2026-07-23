@@ -132,6 +132,9 @@ func TestParens(t *testing.T) {
 		{in: "(a) between (5) and (7)", expected: "a between 5 and 7"},
 		{in: "(a | b) between (5) and (7)", expected: "a | b between 5 and 7"},
 		{in: "(a and b) between (5) and (7)", expected: "(a and b) between 5 and 7"},
+		{in: "(5 between 0 and 10) between 0 and 1", expected: "(5 between 0 and 10) between 0 and 1"},
+		{in: "1 between (0 between 0 and 1) and 2", expected: "1 between (0 between 0 and 1) and 2"},
+		{in: "1 not between (0 between 0 and 1) and 2", expected: "1 not between (0 between 0 and 1) and 2"},
 		{in: "(true is true) is null", expected: "(true is true) is null"},
 		{in: "3 * (100 div 3)", expected: "3 * (100 div 3)"},
 		{in: "100 div 2 div 2", expected: "100 div 2 div 2"},
@@ -208,4 +211,33 @@ func TestPrecedenceOfMemberOfWithAndWithoutParser(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, expression, String(ast2))
+}
+
+func TestNestedBetweenRoundTrip(t *testing.T) {
+	// BETWEEN is ternary and non-associative: a nested BETWEEN keeps its
+	// parentheses in every operand position, so the formatted SQL reparses
+	// to the same tree through both formatter paths.
+	tests := []string{
+		"(5 between 0 and 10) between 0 and 1",
+		"1 between (0 between 0 and 1) and 2",
+		"1 not between (0 between 0 and 1) and 2",
+		"1 between 0 and (2 between 1 and 3)",
+	}
+	parser := NewTestParser()
+	for _, in := range tests {
+		t.Run(in, func(t *testing.T) {
+			stmt, err := parser.Parse("select " + in)
+			require.NoError(t, err)
+
+			formatted := String(stmt)
+			reparsed, err := parser.Parse(formatted)
+			require.NoError(t, err, "formatted SQL must reparse: %s", formatted)
+			require.True(t, Equals.SQLNode(stmt, reparsed), "%q reparses to a different tree", formatted)
+
+			canonical := CanonicalString(stmt)
+			reparsed, err = parser.Parse(canonical)
+			require.NoError(t, err, "canonical SQL must reparse: %s", canonical)
+			require.Equal(t, canonical, CanonicalString(reparsed), "canonical formatting is not a fixed point")
+		})
+	}
 }
