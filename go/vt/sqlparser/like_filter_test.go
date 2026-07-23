@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestEmptyLike(t *testing.T) {
@@ -32,7 +33,7 @@ func TestEmptyLike(t *testing.T) {
 func TestLikePrefixRegexp(t *testing.T) {
 	parser := NewTestParser()
 	show, e := parser.Parse("show vitess_metadata variables like 'key%'")
-	assert.NoError(t, e)
+	require.NoError(t, e)
 
 	want := "^key.*$"
 	got := LikeToRegexp(show.(*Show).Internal.(*ShowBasic).Filter.Like).String()
@@ -43,7 +44,7 @@ func TestLikePrefixRegexp(t *testing.T) {
 func TestLikeAnyCharsRegexp(t *testing.T) {
 	parser := NewTestParser()
 	show, e := parser.Parse("show vitess_metadata variables like '%val1%val2%'")
-	assert.NoError(t, e)
+	require.NoError(t, e)
 
 	want := "^.*val1.*val2.*$"
 	got := LikeToRegexp(show.(*Show).Internal.(*ShowBasic).Filter.Like).String()
@@ -54,7 +55,7 @@ func TestLikeAnyCharsRegexp(t *testing.T) {
 func TestSingleAndMultipleCharsRegexp(t *testing.T) {
 	parser := NewTestParser()
 	show, e := parser.Parse("show vitess_metadata variables like '_val1_val2%'")
-	assert.NoError(t, e)
+	require.NoError(t, e)
 
 	want := "^.val1.val2.*$"
 	got := LikeToRegexp(show.(*Show).Internal.(*ShowBasic).Filter.Like).String()
@@ -65,7 +66,7 @@ func TestSingleAndMultipleCharsRegexp(t *testing.T) {
 func TestSpecialCharactersRegexp(t *testing.T) {
 	parser := NewTestParser()
 	show, e := parser.Parse("show vitess_metadata variables like '?.*?'")
-	assert.NoError(t, e)
+	require.NoError(t, e)
 
 	want := "^\\?\\.\\*\\?$"
 	got := LikeToRegexp(show.(*Show).Internal.(*ShowBasic).Filter.Like).String()
@@ -76,7 +77,7 @@ func TestSpecialCharactersRegexp(t *testing.T) {
 func TestQuoteLikeSpecialCharacters(t *testing.T) {
 	parser := NewTestParser()
 	show, e := parser.Parse(`show vitess_metadata variables like 'part1_part2\\%part3_part4\\_part5%'`)
-	assert.NoError(t, e)
+	require.NoError(t, e)
 
 	want := "^part1.part2%part3.part4_part5.*$"
 	got := LikeToRegexp(show.(*Show).Internal.(*ShowBasic).Filter.Like).String()

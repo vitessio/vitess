@@ -46,7 +46,7 @@ func TestGetExtensionFromEngine(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.engine, func(t *testing.T) {
 			ext, err := getExtensionFromEngine(tt.engine)
-			assert.ErrorIs(t, err, tt.err)
+			require.ErrorIs(t, err, tt.err)
 			assert.Equal(t, tt.extension, ext)
 		})
 	}

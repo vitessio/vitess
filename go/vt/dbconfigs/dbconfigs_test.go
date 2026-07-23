@@ -234,13 +234,13 @@ func TestAccessors(t *testing.T) {
 		Charset:        "utf8",
 	}
 	assert.Equal(t, "db", dbc.AppWithDB().connParams.DbName, "dbc.AppWithDB().DbName")
-	assert.Equal(t, "", dbc.AllPrivsConnector().connParams.DbName, "dbc.AllPrivsWithDB().DbName")
+	assert.Empty(t, dbc.AllPrivsConnector().connParams.DbName, "dbc.AllPrivsWithDB().DbName")
 	assert.Equal(t, "db", dbc.AllPrivsWithDB().connParams.DbName, "dbc.AllPrivsWithDB().DbName")
 	assert.Equal(t, "db", dbc.AppDebugWithDB().connParams.DbName, "dbc.AppDebugWithDB().DbName")
-	assert.Equal(t, "", dbc.DbaConnector().connParams.DbName, "dbc.Dba().DbName")
+	assert.Empty(t, dbc.DbaConnector().connParams.DbName, "dbc.Dba().DbName")
 	assert.Equal(t, "db", dbc.DbaWithDB().connParams.DbName, "dbc.DbaWithDB().DbName")
 	assert.Equal(t, "db", dbc.FilteredWithDB().connParams.DbName, "dbc.FilteredWithDB().DbName")
-	assert.Equal(t, "", dbc.ReplConnector().connParams.DbName, "dbc.Repl().DbName")
+	assert.Empty(t, dbc.ReplConnector().connParams.DbName, "dbc.Repl().DbName")
 }
 
 func TestCredentialsFileHUP(t *testing.T) {

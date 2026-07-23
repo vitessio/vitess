@@ -371,7 +371,7 @@ func TestStreamRowsFilterInt(t *testing.T) {
 	checkStream(t, "select id1, val from t1 where (id2 = 100)", nil, wantQuery, wantStream, nil)
 	require.Equal(t, int64(0), engine.rowStreamerNumPackets.Get())
 	require.Equal(t, int64(2), engine.rowStreamerNumRows.Get())
-	require.Less(t, int64(0), engine.vstreamerPacketSize.Get())
+	require.Positive(t, engine.vstreamerPacketSize.Get())
 }
 
 func TestStreamRowsFilterBetween(t *testing.T) {

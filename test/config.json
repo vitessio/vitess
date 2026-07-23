@@ -1180,6 +1180,18 @@
       "Tags": [],
       "Needs": []
     },
+    "mysql_utils": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/utils"
+      ],
+      "Args": [],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vtgate_queries",
+      "Tags": [],
+      "Needs": []
+    },
     "vtgate_kill": {
       "File": "unused.go",
       "Packages": [
@@ -2413,6 +2425,21 @@
       "File": "unused.go",
       "Packages": [
         "vitess.io/vitess/go/test/endtoend/vtorc/primaryfailure"
+      ],
+      "Args": [],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vtorc",
+      "Tags": [],
+      "Needs": [
+        "larger-runner",
+        "memory-check"
+      ]
+    },
+    "vtorc_tablet_health": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/vtorc/tablethealth"
       ],
       "Args": [],
       "Command": [],

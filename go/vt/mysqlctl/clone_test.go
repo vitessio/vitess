@@ -891,7 +891,7 @@ func TestCloneFromDonor(t *testing.T) {
 			if tc.wantErr {
 				require.Error(t, err)
 				if tc.wantErrContains != "" {
-					assert.ErrorContains(t, err, tc.wantErrContains)
+					require.ErrorContains(t, err, tc.wantErrContains)
 				}
 			} else {
 				require.NoError(t, err)

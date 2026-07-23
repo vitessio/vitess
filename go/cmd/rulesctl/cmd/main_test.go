@@ -56,5 +56,5 @@ func TestMainFunction(t *testing.T) {
   }
 ]
 `
-	require.EqualValues(t, expected, string(got))
+	require.Equal(t, expected, string(got))
 }

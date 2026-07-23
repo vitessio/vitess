@@ -195,7 +195,7 @@ func TestRegexps(t *testing.T) {
 		require.NotEmpty(t, submatch)
 		assert.Equal(t, "230608 13:14:31", submatch[1])
 		_, err := ParseBinlogTimestamp(submatch[1])
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	}
 	{
 		submatch := binlogEntryTimestampGTIDRegexp.FindStringSubmatch(`#230608 13:14:31 server id 484362839  end_log_pos 322 CRC32 0x651af842 	Query	thread_id=62	exec_time=0	error_code=0`)
@@ -245,7 +245,7 @@ func TestParseBinlogEntryTimestamp(t *testing.T) {
 	for _, tcase := range tcases {
 		t.Run(tcase.name, func(t *testing.T) {
 			tm, err := parseBinlogEntryTimestamp(tcase.entry)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tcase.tm, tm)
 		})
 	}
@@ -257,27 +257,27 @@ func TestCleanupLockfile(t *testing.T) {
 	})
 	ts := "prefix"
 	// All good if no lockfile exists
-	assert.NoError(t, cleanupLockfile("mysql.sock", ts))
+	require.NoError(t, cleanupLockfile("mysql.sock", ts))
 
 	// If lockfile exists, but the process is not found, we clean it up.
 	os.WriteFile("mysql.sock.lock", []byte("123456789"), 0o600)
-	assert.NoError(t, cleanupLockfile("mysql.sock", ts))
+	require.NoError(t, cleanupLockfile("mysql.sock", ts))
 	assert.NoFileExists(t, "mysql.sock.lock")
 
 	// If lockfile exists, but the process is not found, we clean it up.
 	os.WriteFile("mysql.sock.lock", []byte("123456789\n"), 0o600)
-	assert.NoError(t, cleanupLockfile("mysql.sock", ts))
+	require.NoError(t, cleanupLockfile("mysql.sock", ts))
 	assert.NoFileExists(t, "mysql.sock.lock")
 
 	// If the lockfile exists, and the process is found, but it's for ourselves,
 	// we clean it up.
 	os.WriteFile("mysql.sock.lock", []byte(strconv.Itoa(os.Getpid())), 0o600)
-	assert.NoError(t, cleanupLockfile("mysql.sock", ts))
+	require.NoError(t, cleanupLockfile("mysql.sock", ts))
 	assert.NoFileExists(t, "mysql.sock.lock")
 
 	// If the lockfile exists, and the process is found, we don't clean it up.
 	os.WriteFile("mysql.sock.lock", []byte(strconv.Itoa(os.Getppid())), 0o600)
-	assert.Error(t, cleanupLockfile("mysql.sock", ts))
+	require.Error(t, cleanupLockfile("mysql.sock", ts))
 	assert.FileExists(t, "mysql.sock.lock")
 }
 
@@ -300,7 +300,7 @@ func TestRunMysqlUpgrade(t *testing.T) {
 
 	ctx := t.Context()
 	err = testMysqld.RunMysqlUpgrade(ctx)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Should not fail for older versions
 	testMysqld.capabilities = newCapabilitySet(FlavorMySQL, ServerVersion{Major: 8, Minor: 0, Patch: 15})
@@ -340,7 +340,7 @@ func TestGetVersionString(t *testing.T) {
 
 	ctx := t.Context()
 	str, err := testMysqld.GetVersionString(ctx)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotEmpty(t, str)
 
 	ver := "test_version"
@@ -368,13 +368,13 @@ func TestGetVersionComment(t *testing.T) {
 
 	ctx := t.Context()
 	_, err := testMysqld.GetVersionComment(ctx)
-	assert.ErrorContains(t, err, "unexpected result length")
+	require.ErrorContains(t, err, "unexpected result length")
 
 	ver := "test_version"
 	db.AddQuery("select @@global.version_comment", sqltypes.MakeTestResult(sqltypes.MakeTestFields("@@global.version_comment", "varchar"), ver))
 
 	str, err := testMysqld.GetVersionComment(ctx)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, ver, str)
 }
 
@@ -426,6 +426,113 @@ func TestBuildLdPathsTZ(t *testing.T) {
 	defer os.Unsetenv("TZ")
 
 	env, err := buildLdPaths()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Contains(t, env, "TZ=Europe/Berlin")
+}
+
+// TestMysqlbinlogEnvironForcesUTC verifies that the environment used for
+// mysqlbinlog forces TZ=UTC so that the UTC-formatted --stop-datetime is
+// interpreted as UTC regardless of the host time zone. It also verifies that
+// the shared base environment is not mutated. Regression test for #20373.
+func TestMysqlbinlogEnvironForcesUTC(t *testing.T) {
+	base := []string{"LD_LIBRARY_PATH=/opt/mysql/lib", "LD_PRELOAD="}
+	baseCopy := append([]string(nil), base...)
+
+	got := mysqlbinlogEnviron(base)
+
+	require.Contains(t, got, "TZ=UTC")
+	// every entry from the base environment is preserved
+	for _, e := range baseCopy {
+		require.Contains(t, got, e)
+	}
+	// the shared base environment is left untouched (it is reused by the mysql
+	// command that applies the mysqlbinlog output)
+	require.Equal(t, baseCopy, base)
+}
+
+// TestMysqlbinlogEnvironOverridesExistingTZ verifies that a pre-existing TZ
+// entry in the base environment (e.g. from os.Environ() via buildLdPaths())
+// is replaced, not duplicated, so mysqlbinlog can't end up seeing two TZ
+// values.
+func TestMysqlbinlogEnvironOverridesExistingTZ(t *testing.T) {
+	base := []string{"LD_LIBRARY_PATH=/opt/mysql/lib", "TZ=Europe/Berlin"}
+	baseCopy := append([]string(nil), base...)
+
+	got := mysqlbinlogEnviron(base)
+
+	count := 0
+	for _, e := range got {
+		if strings.HasPrefix(e, "TZ=") {
+			count++
+		}
+	}
+	require.Equal(t, 1, count, "expected exactly one TZ entry, got %v", got)
+	require.Contains(t, got, "TZ=UTC")
+	require.NotContains(t, got, "TZ=Europe/Berlin")
+	require.Equal(t, baseCopy, base)
+}
+
+// TestMysqladminAbortedWaiting verifies detection of the mysqladmin output
+// emitted when its --shutdown-timeout expires while mysqld is still
+// shutting down cleanly, which must not be treated as a shutdown failure.
+func TestMysqladminAbortedWaiting(t *testing.T) {
+	tests := []struct {
+		name   string
+		output string
+		want   bool
+	}{
+		{
+			name: "aborted waiting on pid file",
+			output: `mysqladmin: connect to server at 'localhost' failed
+error: 'Can't connect to local MySQL server through socket '/vt/socket/mysql.sock' (2)'
+Check that mysqld is running and that the socket: '/vt/socket/mysql.sock' exists!
+Warning;  Aborted waiting on pid file: '/vt/vtdataroot/vt_0000000101/mysql.pid' after 3600 seconds`,
+			want: true,
+		},
+		{
+			name: "access denied",
+			output: `mysqladmin: connect to server at 'localhost' failed
+error: 'Access denied for user 'vt_dba'@'localhost' (using password: NO)'`,
+			want: false,
+		},
+		{
+			name:   "empty output",
+			output: "",
+			want:   false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, mysqladminAbortedWaiting(tt.output))
+		})
+	}
+}
+
+// TestBoundShutdownWaitContext pins the contract that surfaced in review of
+// the mysqladmin aborted-wait handling: the pid/socket file wait must run to
+// a caller-supplied deadline (e.g. the remaining --builtinbackup-mysqld-timeout
+// budget) and must never be shortened to the grace period; only callers with
+// no deadline get the grace bound.
+func TestBoundShutdownWaitContext(t *testing.T) {
+	t.Run("caller deadline is preserved", func(t *testing.T) {
+		parent, cancel := context.WithTimeout(t.Context(), 10*time.Minute)
+		defer cancel()
+		parentDeadline, ok := parent.Deadline()
+		require.True(t, ok)
+
+		bounded, boundedCancel := boundShutdownWaitContext(parent)
+		defer boundedCancel()
+		deadline, ok := bounded.Deadline()
+		require.True(t, ok)
+		assert.Equal(t, parentDeadline, deadline)
+	})
+
+	t.Run("no deadline gets the grace bound", func(t *testing.T) {
+		before := time.Now()
+		bounded, boundedCancel := boundShutdownWaitContext(t.Context())
+		defer boundedCancel()
+		deadline, ok := bounded.Deadline()
+		require.True(t, ok)
+		assert.WithinDuration(t, before.Add(MysqldShutdownGracePeriod), deadline, 5*time.Second)
+	})
 }

@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -54,7 +55,7 @@ func TestTxSerializer_NoHotRow(t *testing.T) {
 	resetVariables(txs)
 
 	done, waited, err := txs.Wait(t.Context(), "t1 where1", "t1")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.False(t, waited, "non-parallel tx must never wait")
 	done()
 
@@ -77,7 +78,7 @@ func TestTxSerializerRedactDebugUI(t *testing.T) {
 	txs.redactUIQuery = true
 
 	done, waited, err := txs.Wait(t.Context(), "t1 where1", "t1")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.False(t, waited, "non-parallel tx must never wait")
 	done()
 
@@ -115,14 +116,18 @@ func TestTxSerializer(t *testing.T) {
 
 	// tx1.
 	done1, waited1, err1 := txs.Wait(t.Context(), "t1 where1", "t1")
-	assert.NoError(t, err1)
+	require.NoError(t, err1)
 	assert.Falsef(t, waited1, "tx1 must never wait: %v", waited1)
 
 	// tx2 (gets queued and must wait).
 	wg := sync.WaitGroup{}
+	var tx2Err error
 	wg.Go(func() {
 		done2, waited2, err2 := txs.Wait(t.Context(), "t1 where1", "t1")
-		assert.NoError(t, err2)
+		tx2Err = err2
+		if err2 != nil {
+			return
+		}
 		assert.Truef(t, waited2, "tx2 must wait: %v", waited2)
 		got, want := txs.waits.Counts()["t1"], int64(1)
 		assert.Equalf(t, want, got, "variable not incremented: got = %v, want = %v", got, want)
@@ -139,11 +144,12 @@ func TestTxSerializer(t *testing.T) {
 	gotCode, wantCode := vterrors.Code(err3), vtrpcpb.Code_RESOURCE_EXHAUSTED
 	assert.Equalf(t, wantCode, gotCode, "wrong error code: got = %v, want = %v", gotCode, wantCode)
 	wantMsg := "hot row protection: too many queued transactions (2 >= 2) for the same row (table + WHERE clause: 't1 where1')"
-	assert.EqualErrorf(t, err3, wantMsg, "transaction rejected with wrong error: got = %v, want = %v", err3, wantMsg)
+	require.EqualErrorf(t, err3, wantMsg, "transaction rejected with wrong error: got = %v, want = %v", err3, wantMsg)
 
 	done1()
 	// tx2 must have been unblocked.
 	wg.Wait()
+	require.NoError(t, tx2Err)
 
 	assert.Nil(t, txs.queues["t1 where1"], "queue object was not deleted after last transaction")
 
@@ -170,19 +176,23 @@ func TestTxSerializer_ConcurrentTransactions(t *testing.T) {
 
 	// tx1.
 	done1, waited1, err1 := txs.Wait(t.Context(), "t1 where1", "t1")
-	assert.NoError(t, err1)
+	require.NoError(t, err1)
 	assert.Falsef(t, waited1, "tx1 must never wait: %v", waited1)
 
 	// tx2.
 	done2, waited2, err2 := txs.Wait(t.Context(), "t1 where1", "t1")
-	assert.NoError(t, err2)
+	require.NoError(t, err2)
 	assert.Falsef(t, waited2, "tx2 must not wait: %v", waited1)
 
 	// tx3 (gets queued and must wait).
 	wg := sync.WaitGroup{}
+	var tx3Err error
 	wg.Go(func() {
 		done3, waited3, err3 := txs.Wait(t.Context(), "t1 where1", "t1")
-		assert.NoError(t, err3)
+		tx3Err = err3
+		if err3 != nil {
+			return
+		}
 		assert.Truef(t, waited3, "tx3 must wait: %v", waited2)
 		got, want := txs.waits.Counts()["t1"], int64(1)
 		assert.Equalf(t, want, got, "variable not incremented: got = %v, want = %v", got, want)
@@ -199,6 +209,7 @@ func TestTxSerializer_ConcurrentTransactions(t *testing.T) {
 	done2()
 	// Wait for tx3 to finish.
 	wg.Wait()
+	require.NoError(t, tx3Err)
 	// Finish tx1 to delete the queue object.
 	done1()
 
@@ -277,11 +288,11 @@ func TestTxSerializerCancel(t *testing.T) {
 
 	// tx1.
 	done1, waited1, err1 := txs.Wait(t.Context(), "t1 where1", "t1")
-	assert.NoError(t, err1)
+	require.NoError(t, err1)
 	assert.Falsef(t, waited1, "tx1 must never wait: %v", waited1)
 	// tx2.
 	done2, waited2, err2 := txs.Wait(t.Context(), "t1 where1", "t1")
-	assert.NoError(t, err2)
+	require.NoError(t, err2)
 	assert.Falsef(t, waited2, "tx2 must not wait: %v", waited2)
 
 	// tx3 (gets queued and must wait).
@@ -301,9 +312,13 @@ func TestTxSerializerCancel(t *testing.T) {
 	}
 
 	// tx4 (gets queued and must wait as well).
+	var tx4Err error
 	wg.Go(func() {
 		done4, waited4, err4 := txs.Wait(t.Context(), "t1 where1", "t1")
-		assert.NoError(t, err4)
+		tx4Err = err4
+		if err4 != nil {
+			return
+		}
 		assert.Truef(t, waited4, "tx4 must have waited: %v", waited4)
 
 		txDone <- 4
@@ -325,6 +340,7 @@ func TestTxSerializerCancel(t *testing.T) {
 	gotTx = <-txDone
 	assert.Equalf(t, 4, gotTx, "wrong tx was unblocked after tx1: %v", gotTx)
 	wg.Wait()
+	require.NoError(t, tx4Err)
 	// Finish tx2 (the last transaction) which will delete the queue object.
 	done2()
 
@@ -352,12 +368,12 @@ func TestTxSerializerDryRun(t *testing.T) {
 
 	// tx1.
 	done1, waited1, err1 := txs.Wait(t.Context(), "t1 where1", "t1")
-	assert.NoError(t, err1)
+	require.NoError(t, err1)
 	assert.Falsef(t, waited1, "first transaction must never wait: %v", waited1)
 
 	// tx2 (would wait and exceed the local queue).
 	done2, waited2, err2 := txs.Wait(t.Context(), "t1 where1", "t1")
-	assert.NoError(t, err2)
+	require.NoError(t, err2)
 	assert.Falsef(t, waited2, "second transaction must never wait in dry-run mode: %v", waited2)
 	got64, want64 := txs.waitsDryRun.Counts()["t1"], int64(1)
 	assert.Equalf(t, want64, got64, "variable not incremented: got = %v, want = %v", got64, want64)
@@ -366,7 +382,7 @@ func TestTxSerializerDryRun(t *testing.T) {
 
 	// tx3 (would wait and exceed the global queue).
 	done3, waited3, err3 := txs.Wait(t.Context(), "t1 where1", "t1")
-	assert.NoError(t, err3)
+	require.NoError(t, err3)
 	assert.Falsef(t, waited3, "any transaction must never wait in dry-run mode: %v", waited3)
 	got64, want64 = txs.waitsDryRun.Counts()["t1"], int64(2)
 	assert.Equalf(t, want64, got64, "variable not incremented: got = %v, want = %v", got64, want64)
@@ -402,12 +418,12 @@ func TestTxSerializerGlobalQueueOverflow(t *testing.T) {
 
 	// tx1.
 	done1, waited1, err1 := txs.Wait(t.Context(), "t1 where1", "t1")
-	assert.NoError(t, err1)
+	require.NoError(t, err1)
 	assert.Falsef(t, waited1, "first transaction must never wait: %v", waited1)
 
 	// tx2.
 	done2, waited2, err2 := txs.Wait(t.Context(), "t1 where2", "t1")
-	assert.NoError(t, err2)
+	require.NoError(t, err2)
 	assert.Falsef(t, waited2, "second transaction for different row range must not wait: %v", waited2)
 
 	// tx3 (same row range as tx1).
@@ -415,7 +431,7 @@ func TestTxSerializerGlobalQueueOverflow(t *testing.T) {
 	gotCode, wantCode := vterrors.Code(err3), vtrpcpb.Code_RESOURCE_EXHAUSTED
 	assert.Equalf(t, wantCode, gotCode, "wrong error code: got = %v, want = %v", gotCode, wantCode)
 	wantMsg := "hot row protection: too many queued transactions (2 >= 1)"
-	assert.EqualErrorf(t, err3, wantMsg, "transaction rejected with wrong error: got = %v, want = %v", err3, wantMsg)
+	require.EqualErrorf(t, err3, wantMsg, "transaction rejected with wrong error: got = %v, want = %v", err3, wantMsg)
 	got, want := txs.globalQueueExceeded.Get(), int64(1)
 	assert.Equalf(t, want, got, "variable not incremented: got = %v, want = %v", got, want)
 

@@ -111,7 +111,7 @@ func TestVindexFuncMap(t *testing.T) {
 	want := &sqltypes.Result{
 		Fields: sqltypes.MakeTestFields("id|keyspace_id|hex(keyspace_id)|range_start|range_end", "varbinary|varbinary|varbinary|varbinary|varbinary"),
 	}
-	require.Equal(t, got, want)
+	require.Equal(t, want, got)
 
 	// Unique Vindex returning 1 row.
 	vf = testVindexFunc(&uvindex{matchid: true})
@@ -125,7 +125,7 @@ func TestVindexFuncMap(t *testing.T) {
 		row[2] = sqltypes.NULL
 		row[3] = sqltypes.NULL
 	}
-	require.Equal(t, got, want)
+	require.Equal(t, want, got)
 
 	// Unique Vindex returning 3 rows
 	vf = &VindexFunc{
@@ -147,7 +147,7 @@ func TestVindexFuncMap(t *testing.T) {
 		row[2] = sqltypes.NULL
 		row[3] = sqltypes.NULL
 	}
-	require.Equal(t, got, want)
+	require.Equal(t, want, got)
 
 	// Unique Vindex returning keyrange.
 	vf = testVindexFunc(&uvindex{matchkr: true})
@@ -166,7 +166,7 @@ func TestVindexFuncMap(t *testing.T) {
 		},
 		RowsAffected: 0,
 	}
-	require.Equal(t, got, want)
+	require.Equal(t, want, got)
 
 	// NonUnique Vindex returning 0 rows.
 	vf = testVindexFunc(&nvindex{})
@@ -175,7 +175,7 @@ func TestVindexFuncMap(t *testing.T) {
 	want = &sqltypes.Result{
 		Fields: sqltypes.MakeTestFields("id|keyspace_id|hex(keyspace_id)|range_start|range_end", "varbinary|varbinary|varbinary|varbinary|varbinary"),
 	}
-	require.Equal(t, got, want)
+	require.Equal(t, want, got)
 
 	// NonUnique Vindex returning 2 rows.
 	vf = testVindexFunc(&nvindex{matchid: true})
@@ -191,7 +191,7 @@ func TestVindexFuncMap(t *testing.T) {
 		row[2] = sqltypes.NULL
 		row[3] = sqltypes.NULL
 	}
-	require.Equal(t, got, want)
+	require.Equal(t, want, got)
 
 	// NonUnique Vindex returning keyrange
 	vf = testVindexFunc(&nvindex{matchkr: true})
@@ -208,7 +208,7 @@ func TestVindexFuncMap(t *testing.T) {
 		}},
 		RowsAffected: 0,
 	}
-	require.Equal(t, got, want)
+	require.Equal(t, want, got)
 }
 
 func TestVindexFuncStreamExecute(t *testing.T) {

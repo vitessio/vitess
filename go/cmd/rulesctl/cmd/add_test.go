@@ -127,7 +127,7 @@ func TestAdd(t *testing.T) {
 			require.NoError(t, err)
 			got, err := io.ReadAll(r)
 			require.NoError(t, err)
-			require.EqualValues(t, tt.expectedOutput, string(got))
+			require.Equal(t, tt.expectedOutput, string(got))
 		})
 	}
 }

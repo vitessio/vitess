@@ -24,7 +24,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
 
@@ -64,8 +63,8 @@ func TestOnlineDDLVDiff(t *testing.T) {
 	var output string
 
 	t.Run("OnlineDDL VDiff", func(t *testing.T) {
-		done := make(chan bool)
-		go populate(ctx, t, done, insertTemplate, updateTemplate)
+		done := make(chan error)
+		go populate(ctx, done, insertTemplate, updateTemplate)
 
 		waitForAdditionalRows(t, keyspace, "temp", 100)
 		output = execOnlineDDL(t, "vitess --postpone-completion", keyspace, alterQuery)
@@ -91,7 +90,7 @@ func TestOnlineDDLVDiff(t *testing.T) {
 		doVtctldclientVDiff(t, keyspace, uuid, "zone1", want)
 
 		cancel()
-		<-done
+		require.NoError(t, <-done)
 	})
 }
 
@@ -172,8 +171,10 @@ func getNumRows(t *testing.T, vtgateConn *mysql.Conn, keyspace, table string) in
 	return numRows
 }
 
-func populate(ctx context.Context, t *testing.T, done chan bool, insertTemplate, updateTemplate string) {
-	defer close(done)
+// populate runs a write load in a goroutine until ctx is cancelled. It reports
+// its outcome (nil on clean cancellation, or the first error) on done, so the
+// test goroutine can assert on it.
+func populate(ctx context.Context, done chan error, insertTemplate, updateTemplate string) {
 	vtgateConn, closeConn := getVTGateConn()
 	defer closeConn()
 	id := 1
@@ -181,16 +182,17 @@ func populate(ctx context.Context, t *testing.T, done chan bool, insertTemplate,
 		select {
 		case <-ctx.Done():
 			log.Info("load cancelled")
+			done <- nil
 			return
 		default:
 			query := fmt.Sprintf(insertTemplate, id, id, id)
-			_, err := vtgateConn.ExecuteFetch(query, 1, false)
-			if !assert.NoErrorf(t, err, "error in insert") {
+			if _, err := vtgateConn.ExecuteFetch(query, 1, false); err != nil {
+				done <- fmt.Errorf("error in insert: %w", err)
 				return
 			}
 			query = fmt.Sprintf(updateTemplate, id, id)
-			_, err = vtgateConn.ExecuteFetch(query, 1, false)
-			if !assert.NoErrorf(t, err, "error in update") {
+			if _, err := vtgateConn.ExecuteFetch(query, 1, false); err != nil {
+				done <- fmt.Errorf("error in update: %w", err)
 				return
 			}
 			id++

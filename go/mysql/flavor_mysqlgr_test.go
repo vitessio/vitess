@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/replication"
@@ -167,7 +168,7 @@ func TestMysqlGRSupportCapability(t *testing.T) {
 				assert.ErrorContains(t, err, tc.expectError.Error())
 				return
 			}
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tc.isCapable, isCapable)
 		})
 	}

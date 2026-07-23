@@ -28,8 +28,8 @@ func TestConnParams_EnableSSL(t *testing.T) {
 	p := ConnParams{}
 	p.EnableSSL()
 	assert := assert.New(t)
-	assert.EqualValues(vttls.VerifyIdentity, p.SslMode, "should enable strictest mode")
-	assert.EqualValues(vttls.VerifyIdentity, p.EffectiveSslMode(), "should enable strictest mode")
+	assert.Equal(vttls.VerifyIdentity, p.SslMode, "should enable strictest mode")
+	assert.Equal(vttls.VerifyIdentity, p.EffectiveSslMode(), "should enable strictest mode")
 }
 
 func TestConnParams_EffectiveSslModeLegacyFlags(t *testing.T) {
@@ -37,8 +37,8 @@ func TestConnParams_EffectiveSslModeLegacyFlags(t *testing.T) {
 		Flags: CapabilityClientSSL,
 	}
 	assert := assert.New(t)
-	assert.EqualValues("", p.SslMode, "should enable strictest mode")
-	assert.EqualValues(vttls.VerifyIdentity, p.EffectiveSslMode(), "should enable strictest mode")
+	assert.Empty(p.SslMode, "should enable strictest mode")
+	assert.Equal(vttls.VerifyIdentity, p.EffectiveSslMode(), "should enable strictest mode")
 }
 
 func TestConnParams_EffectiveSslModeConfigured(t *testing.T) {
@@ -47,16 +47,16 @@ func TestConnParams_EffectiveSslModeConfigured(t *testing.T) {
 		Flags:   CapabilityClientSSL,
 	}
 	assert := assert.New(t)
-	assert.EqualValues(vttls.VerifyCA, p.SslMode, "should use verify_ca")
-	assert.EqualValues(vttls.VerifyCA, p.EffectiveSslMode(), "should use configured mode")
+	assert.Equal(vttls.VerifyCA, p.SslMode, "should use verify_ca")
+	assert.Equal(vttls.VerifyCA, p.EffectiveSslMode(), "should use configured mode")
 }
 
 func TestConnParams_SslEnabledNotConfigured(t *testing.T) {
 	p := ConnParams{}
 	assert := assert.New(t)
 	assert.False(p.SslEnabled())
-	assert.EqualValues("", p.SslMode, "should be empty")
-	assert.EqualValues(vttls.Disabled, p.EffectiveSslMode(), "should have ssl disabled")
+	assert.Empty(p.SslMode, "should be empty")
+	assert.Equal(vttls.Disabled, p.EffectiveSslMode(), "should have ssl disabled")
 }
 
 func TestConnParams_SslEnabledPreferredUnixSocket(t *testing.T) {

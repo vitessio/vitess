@@ -73,7 +73,7 @@ func TestNewUserPermission(t *testing.T) {
 		// Test the next field is filtered.
 		"authentication_string": "this should be filtered out",
 	}))
-	require.EqualValues(t, &tabletmanagerdatapb.UserPermission{
+	require.Equal(t, &tabletmanagerdatapb.UserPermission{
 		Host:             "%",
 		User:             "vt",
 		PasswordChecksum: 17759204488013904955,

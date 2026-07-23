@@ -337,7 +337,7 @@ func TestEmergencyReparentShardSlow(t *testing.T) {
 					return
 				}
 
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				testutil.AssertEmergencyReparentShardResponsesEqual(t, tt.expected, resp)
 			})
 		})
@@ -645,7 +645,7 @@ func TestPlannedReparentShardSlow(t *testing.T) {
 					return
 				}
 
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				testutil.AssertPlannedReparentShardResponsesEqual(t, tt.expected, resp)
 			})
 		})
@@ -761,7 +761,7 @@ func TestSleepTablet(t *testing.T) {
 				resp, err := vtctld.SleepTablet(ctx, tt.req)
 				sleepDur := time.Since(start)
 				if tt.shouldErr {
-					assert.Error(t, err)
+					require.Error(t, err)
 					assert.Nil(t, resp)
 					return
 				}

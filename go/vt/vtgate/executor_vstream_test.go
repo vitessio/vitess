@@ -95,7 +95,7 @@ func TestVStreamSQLUnsharded(t *testing.T) {
 		select {
 		case qr := <-results:
 			if !fieldsValidated {
-				require.Equal(t, 2, len(qr.Fields))
+				require.Len(t, qr.Fields, 2)
 				fieldsValidated = true
 			}
 			for _, row := range qr.Rows {

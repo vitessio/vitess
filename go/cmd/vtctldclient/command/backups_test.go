@@ -250,8 +250,8 @@ func TestBackupCommand_BuildsCorrectRequest(t *testing.T) {
 			if tc.wantInitSQLNil {
 				assert.Nil(t, initSQL)
 			} else {
-				assert.Equal(t, tc.wantQueriesLen, len(initSQL))
-				assert.Equal(t, tc.wantTabletTypesLen, len(initSQLTabletTypes))
+				assert.Len(t, initSQL, tc.wantQueriesLen)
+				assert.Len(t, initSQLTabletTypes, tc.wantTabletTypesLen)
 				if initSQLTimeout != nil {
 					assert.Equal(t, tc.wantTimeoutSeconds, initSQLTimeout.Seconds)
 				} else {

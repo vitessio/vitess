@@ -190,11 +190,11 @@ func TestNewValue(t *testing.T) {
 	for _, tcase := range testcases {
 		v, err := NewValue(tcase.inType, []byte(tcase.inVal))
 		if tcase.outErr != "" {
-			assert.ErrorContains(t, err, tcase.outErr)
+			require.ErrorContains(t, err, tcase.outErr)
 			continue
 		}
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, tcase.outVal, v)
 	}
 }
@@ -253,11 +253,11 @@ func TestIntegralValue(t *testing.T) {
 	for _, tcase := range testcases {
 		v, err := NewIntegral(tcase.in)
 		if tcase.outErr != "" {
-			assert.ErrorContains(t, err, tcase.outErr)
+			require.ErrorContains(t, err, tcase.outErr)
 			continue
 		}
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, tcase.outVal, v)
 	}
 }
@@ -288,7 +288,7 @@ func TestInterfaceValue(t *testing.T) {
 	for _, tcase := range testcases {
 		v, err := InterfaceToValue(tcase.in)
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, tcase.out, v)
 	}
 
@@ -314,17 +314,17 @@ func TestAccessors(t *testing.T) {
 
 	{
 		i, err := v.ToInt64()
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, int64(1), i)
 	}
 	{
 		i, err := v.ToUint64()
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, uint64(1), i)
 	}
 	{
 		b, err := v.ToBool()
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.True(t, b)
 	}
 }
@@ -337,12 +337,12 @@ func TestAccessorsNegative(t *testing.T) {
 
 	{
 		i, err := v.ToInt64()
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, int64(-1), i)
 	}
 	{
 		_, err := v.ToUint64()
-		assert.Error(t, err)
+		require.Error(t, err)
 	}
 	{
 		_, err := v.ToBool()

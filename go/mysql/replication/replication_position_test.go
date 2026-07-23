@@ -371,7 +371,7 @@ func TestDecodePosition(t *testing.T) {
 	want := Position{GTIDSet: fakeGTID{value: "123-456:789"}}
 
 	got, err := DecodePosition(input)
-	assert.NoError(t, err, "unexpected error: %v", err)
+	require.NoError(t, err, "unexpected error: %v", err)
 	assert.True(t, got.Equal(want), "DecodePosition(%#v) = %#v, want %#v", input, got, want)
 }
 
@@ -382,13 +382,13 @@ func TestDecodePositionDefaultFlavor(t *testing.T) {
 	{
 		pos := "MySQL56/16b1039f-22b6-11ed-b765-0a43f95f28a3:1-615"
 		rp, err := DecodePositionDefaultFlavor(pos, "foo")
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-615", rp.GTIDSet.String())
 	}
 	{
 		pos := "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-615"
 		rp, err := DecodePositionDefaultFlavor(pos, Mysql56FlavorID)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-615", rp.GTIDSet.String())
 	}
 }
@@ -398,7 +398,7 @@ func TestDecodePositionZero(t *testing.T) {
 	want := Position{}
 
 	got, err := DecodePosition(input)
-	assert.NoError(t, err, "unexpected error: %v", err)
+	require.NoError(t, err, "unexpected error: %v", err)
 	assert.True(t, got.Equal(want), "DecodePosition(%#v) = %#v, want %#v", input, got, want)
 }
 
@@ -410,7 +410,7 @@ func TestDecodePositionNoFlavor(t *testing.T) {
 	want := Position{GTIDSet: fakeGTID{value: "12345"}}
 
 	got, err := DecodePosition(input)
-	assert.NoError(t, err, "unexpected error: %v", err)
+	require.NoError(t, err, "unexpected error: %v", err)
 	assert.True(t, got.Equal(want), "DecodePosition(%#v) = %#v, want %#v", input, got, want)
 }
 
@@ -419,7 +419,7 @@ func TestJsonMarshalPosition(t *testing.T) {
 	want := `"golf/par"`
 
 	buf, err := json.Marshal(input)
-	assert.NoError(t, err, "unexpected error: %v", err)
+	require.NoError(t, err, "unexpected error: %v", err)
 
 	got := string(buf)
 	assert.Equalf(t, want, got, "json.Marshal(%#v) = %#v, want %#v", input, got, want)
@@ -430,7 +430,7 @@ func TestJsonMarshalPositionPointer(t *testing.T) {
 	want := `"golf/par"`
 
 	buf, err := json.Marshal(&input)
-	assert.NoError(t, err, "unexpected error: %v", err)
+	require.NoError(t, err, "unexpected error: %v", err)
 
 	got := string(buf)
 	assert.Equalf(t, want, got, "json.Marshal(%#v) = %#v, want %#v", input, got, want)
@@ -445,7 +445,7 @@ func TestJsonUnmarshalPosition(t *testing.T) {
 
 	var got Position
 	err := json.Unmarshal([]byte(input), &got)
-	assert.NoError(t, err, "unexpected error: %v", err)
+	require.NoError(t, err, "unexpected error: %v", err)
 	assert.True(t, got.Equal(want), "json.Unmarshal(%#v) = %#v, want %#v", input, got, want)
 }
 
@@ -458,7 +458,7 @@ func TestJsonMarshalPositionInStruct(t *testing.T) {
 	}
 
 	buf, err := json.Marshal(&mystruct{input})
-	assert.NoError(t, err, "unexpected error: %v", err)
+	require.NoError(t, err, "unexpected error: %v", err)
 
 	got := string(buf)
 	assert.Equalf(t, want, got, "json.Marshal(%#v) = %#v, want %#v", input, got, want)
@@ -475,7 +475,7 @@ func TestJsonUnmarshalPositionInStruct(t *testing.T) {
 		Position Position
 	}
 	err := json.Unmarshal([]byte(input), &gotStruct)
-	assert.NoError(t, err, "unexpected error: %v", err)
+	require.NoError(t, err, "unexpected error: %v", err)
 
 	got := gotStruct.Position
 	assert.Truef(t, got.Equal(want), "json.Unmarshal(%#v) = %#v, want %#v", input, got, want)
@@ -486,7 +486,7 @@ func TestJsonMarshalPositionZero(t *testing.T) {
 	want := `""`
 
 	buf, err := json.Marshal(input)
-	assert.NoError(t, err, "unexpected error: %v", err)
+	require.NoError(t, err, "unexpected error: %v", err)
 
 	got := string(buf)
 	assert.Equalf(t, want, got, "json.Marshal(%#v) = %#v, want %#v", input, got, want)
@@ -498,6 +498,6 @@ func TestJsonUnmarshalPositionZero(t *testing.T) {
 
 	var got Position
 	err := json.Unmarshal([]byte(input), &got)
-	assert.NoError(t, err, "unexpected error: %v", err)
+	require.NoError(t, err, "unexpected error: %v", err)
 	assert.True(t, got.Equal(want), "json.Unmarshal(%#v) = %#v, want %#v", input, got, want)
 }

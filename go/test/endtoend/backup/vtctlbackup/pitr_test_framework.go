@@ -266,7 +266,7 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 				expectFromPosition := lastBackupPos.GTIDSet
 				if tc.incrementalFrom == incrementalFromPosPosition {
 					pos, err := replication.DecodePosition(incrementalFromPos)
-					assert.NoError(t, err)
+					require.NoError(t, err)
 					expectFromPosition = pos.GTIDSet.Union(gtidPurgedPos.GTIDSet)
 				}
 				require.Equalf(t, expectFromPosition, fromPositionIncludingPurged, "expected: %v, found: %v, gtid_purged: %v,  manifest.Position: %v", expectFromPosition, fromPositionIncludingPurged, gtidPurgedPos, manifest.Position)
@@ -286,7 +286,7 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 					msgs := ReadRowsFromReplica(t, 0)
 					count, ok := rowsPerPosition[pos]
 					require.True(t, ok)
-					assert.Equalf(t, count, len(msgs), "messages: %v", msgs)
+					assert.Lenf(t, msgs, count, "messages: %v", msgs)
 					if sampleTestedBackupPos == "" {
 						sampleTestedBackupPos = pos
 					}
@@ -329,7 +329,7 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 			t.Run(fmt.Sprintf("validate %d rows", rowsPerPosition[sampleTestedBackupPos]), func(t *testing.T) {
 				require.NotZero(t, rowsPerPosition[sampleTestedBackupPos])
 				msgs := ReadRowsFromReplica(t, 2)
-				assert.Equal(t, rowsPerPosition[sampleTestedBackupPos], len(msgs))
+				assert.Len(t, msgs, rowsPerPosition[sampleTestedBackupPos])
 			})
 		})
 	})
@@ -515,7 +515,7 @@ func ExecTestIncrementalBackupAndRestoreToTimestamp(t *testing.T, tcase *PITRTes
 				expectFromPosition := lastBackupPos.GTIDSet.Union(gtidPurgedPos.GTIDSet)
 				if tc.incrementalFrom == incrementalFromPosPosition {
 					pos, err := replication.DecodePosition(incrementalFromPos)
-					assert.NoError(t, err)
+					require.NoError(t, err)
 					expectFromPosition = pos.GTIDSet.Union(gtidPurgedPos.GTIDSet)
 				}
 				require.Equalf(t, expectFromPosition, fromPositionIncludingPurged, "expected: %v, found: %v, gtid_purged: %v,  manifest.Position: %v", expectFromPosition, fromPositionIncludingPurged, gtidPurgedPos, manifest.Position)
@@ -539,7 +539,7 @@ func ExecTestIncrementalBackupAndRestoreToTimestamp(t *testing.T, tcase *PITRTes
 					TestReplicaRestoreToTimestamp(t, testedBackup.postTimestamp, expectError)
 					if expectError == "" {
 						msgs := ReadRowsFromReplica(t, 0)
-						assert.Equalf(t, testedBackup.rows, len(msgs), "messages: %v", msgs)
+						assert.Lenf(t, msgs, testedBackup.rows, "messages: %v", msgs)
 						numSuccessfulRestores++
 						if sampleTestedBackupIndex < 0 {
 							sampleTestedBackupIndex = backupIndex
@@ -591,7 +591,7 @@ func ExecTestIncrementalBackupAndRestoreToTimestamp(t *testing.T, tcase *PITRTes
 			t.Run(fmt.Sprintf("validate %d rows", sampleTestedBackup.rows), func(t *testing.T) {
 				require.NotZero(t, sampleTestedBackup.rows)
 				msgs := ReadRowsFromReplica(t, 2)
-				assert.Equal(t, sampleTestedBackup.rows, len(msgs))
+				assert.Len(t, msgs, sampleTestedBackup.rows)
 			})
 		})
 	})

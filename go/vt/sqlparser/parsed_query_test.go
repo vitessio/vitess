@@ -29,9 +29,7 @@ import (
 func TestNewParsedQuery(t *testing.T) {
 	parser := NewTestParser()
 	stmt, err := parser.Parse("select * from a where id =:id")
-	if !assert.NoError(t, err) {
-		return
-	}
+	require.NoError(t, err)
 	pq := NewParsedQuery(stmt)
 	want := &ParsedQuery{
 		Query:         "select * from a where id = :id",
@@ -211,7 +209,7 @@ func TestParseAndBind(t *testing.T) {
 	for _, tc := range testcases {
 		t.Run(tc.in, func(t *testing.T) {
 			query, err := ParseAndBind(tc.in, tc.binds...)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tc.out, query)
 		})
 	}

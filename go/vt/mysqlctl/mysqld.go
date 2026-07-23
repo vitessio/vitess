@@ -30,6 +30,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path"
@@ -80,6 +81,14 @@ const (
 	// mysqld has removed its socket and pid files.
 	mysqldExitPollInterval = 100 * time.Millisecond
 )
+
+// MysqldShutdownGracePeriod bounds the pid/socket file wait in
+// Mysqld.Shutdown after mysqladmin has given up waiting, for callers
+// whose context has no deadline. It also pads the shutdown contexts
+// derived from the shutdown timeout by mysqlctl, mysqlctld, vtbackup,
+// vtcombo and the builtin backup engine, giving that wait a window to
+// observe the exit.
+const MysqldShutdownGracePeriod = 30 * time.Second
 
 var (
 	// DisableActiveReparents is a flag to disable active
@@ -701,8 +710,27 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 		if err != nil {
 			return err
 		}
-		if _, _, err = execCmd(name, args, env, dir, nil); err != nil {
-			return err
+		if _, output, err := execCmd(name, args, env, dir, nil); err != nil {
+			// mysqladmin exits non-zero when its --shutdown-timeout expires
+			// while mysqld is still shutting down. The SHUTDOWN command has
+			// already been delivered at that point, so a slow-but-clean
+			// shutdown (e.g. innodb_fast_shutdown=0 purging large undo logs)
+			// should not be treated as a failure here; the pid/socket file
+			// wait below decides the outcome instead, running to the
+			// caller's deadline. Callers whose ctx has no deadline get a
+			// bounded grace window instead, so a truly hung mysqld still
+			// fails in finite time rather than waiting forever.
+			//
+			// The error is only suppressed when the wait below will run:
+			// for waitForMysqld=false callers a nil return would claim a
+			// shutdown nothing verified, so they get the error as before.
+			if !waitForMysqld || !mysqladminAbortedWaiting(output) {
+				return err
+			}
+			log.Warn("mysqladmin gave up waiting for mysqld to stop, waiting on pid/socket files instead", slog.Any("error", err))
+			var cancel context.CancelFunc
+			ctx, cancel = boundShutdownWaitContext(ctx)
+			defer cancel()
 		}
 	default:
 		// hook failed, we report error
@@ -729,6 +757,34 @@ func (mysqld *Mysqld) StartAfterExit(ctx context.Context, cnf *Mycnf) error {
 		return err
 	}
 	return mysqld.Start(ctx, cnf)
+}
+
+// boundShutdownWaitContext bounds ctx by MysqldShutdownGracePeriod when it
+// has no deadline, so a truly hung mysqld still fails in finite time after
+// mysqladmin has given up waiting. A caller-supplied deadline is never
+// shortened: the pid/socket file wait runs to it, e.g. to the remainder of
+// the builtin backup engine's --builtinbackup-mysqld-timeout budget.
+func boundShutdownWaitContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	if _, hasDeadline := ctx.Deadline(); hasDeadline {
+		return ctx, func() {}
+	}
+	return context.WithTimeout(ctx, MysqldShutdownGracePeriod)
+}
+
+// mysqladminAbortedWaiting reports whether mysqladmin output shows it
+// delivered the SHUTDOWN command but gave up waiting for mysqld to exit,
+// which happens when a clean shutdown outlives mysqladmin's
+// --shutdown-timeout ("Warning; Aborted waiting on pid file: '...' after
+// N seconds").
+//
+// This deliberately couples to mysqladmin's literal message, emitted by
+// wait_pidfile() in client/mysqladmin.cc and unchanged across MySQL 5.7,
+// 8.0 and 8.4. The coupling fails closed: if a future MySQL changes the
+// message, the match returns false and Shutdown reports the mysqladmin
+// error exactly as it did before this check existed. The endtoend mysqlctl
+// suite exercises this match against the real mysqladmin binary.
+func mysqladminAbortedWaiting(output string) bool {
+	return strings.Contains(output, "Aborted waiting on pid file")
 }
 
 // waitForMysqldExit polls until both socketFile and pidFile have been removed,
@@ -1431,6 +1487,29 @@ func (mysqld *Mysqld) HostMetrics(ctx context.Context, cnf *Mycnf) (*mysqlctlpb.
 	return hostMetrics(ctx, cnf)
 }
 
+// mysqlbinlogEnviron returns the environment to use when running mysqlbinlog.
+// mysqlbinlog interprets --stop-datetime (and --start-datetime) in its own
+// process time zone. ApplyBinlogFile formats the restore timestamp in UTC, and
+// Vitess clears the host environment before invoking mysqlbinlog, so we force
+// TZ=UTC here to make mysqlbinlog read that timestamp as UTC too. Without this,
+// on a host whose time zone is not UTC, mysqlbinlog stops at the wrong point and
+// the wrong point in time is restored.
+// See https://github.com/vitessio/vitess/issues/20373.
+func mysqlbinlogEnviron(baseEnv []string) []string {
+	// baseEnv can already carry a TZ entry (e.g. from os.Environ() via
+	// buildLdPaths()). Drop it so mysqlbinlog only ever sees one TZ entry;
+	// otherwise the effective time zone would depend on how the child
+	// process resolves duplicate environment variables.
+	env := make([]string, 0, len(baseEnv)+1)
+	for _, e := range baseEnv {
+		if strings.HasPrefix(e, "TZ=") {
+			continue
+		}
+		env = append(env, e)
+	}
+	return append(env, "TZ=UTC")
+}
+
 // ApplyBinlogFile extracts a binary log file and applies it to MySQL. It is the equivalent of:
 // $ mysqlbinlog --include-gtids binlog.file | mysql
 func (mysqld *Mysqld) ApplyBinlogFile(ctx context.Context, req *mysqlctlpb.ApplyBinlogFileRequest) error {
@@ -1469,13 +1548,15 @@ func (mysqld *Mysqld) ApplyBinlogFile(ctx context.Context, req *mysqlctlpb.Apply
 
 		args := []string{}
 		if gtids := req.BinlogRestorePosition; gtids != "" {
-			args = append(args,
+			args = append(
+				args,
 				"--include-gtids",
 				gtids,
 			)
 		}
 		if restoreToTimestamp := protoutil.TimeFromProto(req.BinlogRestoreDatetime).UTC(); !restoreToTimestamp.IsZero() {
-			args = append(args,
+			args = append(
+				args,
 				"--stop-datetime",
 				restoreToTimestamp.Format(sqltypes.TimestampFormat),
 			)
@@ -1485,7 +1566,7 @@ func (mysqld *Mysqld) ApplyBinlogFile(ctx context.Context, req *mysqlctlpb.Apply
 
 		mysqlbinlogCmd = exec.Command(name, args...)
 		mysqlbinlogCmd.Dir = dir
-		mysqlbinlogCmd.Env = env
+		mysqlbinlogCmd.Env = mysqlbinlogEnviron(env)
 		mysqlbinlogCmd.Stderr = mysqlbinlogErrFile
 		log.Info(fmt.Sprintf("ApplyBinlogFile: running mysqlbinlog command: %#v with errfile=%v", mysqlbinlogCmd, mysqlbinlogErrFile.Name()))
 		pipe, err = mysqlbinlogCmd.StdoutPipe() // to be piped into mysql
@@ -1686,6 +1767,12 @@ func (mysqld *Mysqld) ReadBinlogFilesTimestamps(ctx context.Context, req *mysqlc
 	if err != nil {
 		return nil, err
 	}
+	// mysqlbinlog prints event timestamps in its own process time zone, and the
+	// MySQL 5.7 fallback in parseBinlogEntryTimestamp parses the zone-less value
+	// as UTC. Force TZ=UTC so the recorded First/LastTimestamp match that
+	// assumption on non-UTC hosts, the same way ApplyBinlogFile does for
+	// --stop-datetime. See https://github.com/vitessio/vitess/issues/20373.
+	mysqlbinlogEnv := mysqlbinlogEnviron(env)
 
 	lastMatchedTimeMap := map[string]time.Time{} // a simple cache to avoid rescanning same files. Key=binlog file name
 
@@ -1693,7 +1780,7 @@ func (mysqld *Mysqld) ReadBinlogFilesTimestamps(ctx context.Context, req *mysqlc
 	// Find first timestamp
 	err = func() error {
 		for _, binlogFile := range req.BinlogFileNames {
-			firstMatchedTime, lastMatchedTime, err := mysqld.scanBinlogTimestamp(dir, env, mysqlbinlogName, binlogFile, true)
+			firstMatchedTime, lastMatchedTime, err := mysqld.scanBinlogTimestamp(dir, mysqlbinlogEnv, mysqlbinlogName, binlogFile, true)
 			if err != nil {
 				return vterrors.Wrapf(err, "while scanning for first binlog timestamp in %v", binlogFile)
 			}
@@ -1722,7 +1809,7 @@ func (mysqld *Mysqld) ReadBinlogFilesTimestamps(ctx context.Context, req *mysqlc
 			lastMatchedTime, ok := lastMatchedTimeMap[binlogFile]
 			if !ok {
 				var err error
-				_, lastMatchedTime, err = mysqld.scanBinlogTimestamp(dir, env, mysqlbinlogName, binlogFile, false)
+				_, lastMatchedTime, err = mysqld.scanBinlogTimestamp(dir, mysqlbinlogEnv, mysqlbinlogName, binlogFile, false)
 				if err != nil {
 					return vterrors.Wrapf(err, "while scanning for last binlog timestamp in %v", binlogFile)
 				}

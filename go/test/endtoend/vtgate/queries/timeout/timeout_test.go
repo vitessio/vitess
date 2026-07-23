@@ -51,21 +51,21 @@ func TestQueryTimeoutWithDual(t *testing.T) {
 	defer closer()
 
 	_, err := utils.ExecAllowError(t, mcmp.VtConn, "select sleep(0.04) from dual")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select sleep(0.24) from dual")
-	assert.Error(t, err)
+	require.Error(t, err)
 	_, err = utils.ExecAllowError(t, mcmp.VtConn, "set @@session.query_timeout=20")
 	require.NoError(t, err)
 	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select sleep(0.04) from dual")
-	assert.Error(t, err)
+	require.Error(t, err)
 	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select sleep(0.01) from dual")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=500 */ sleep(0.24) from dual")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=10 */ sleep(0.04) from dual")
-	assert.Error(t, err)
+	require.Error(t, err)
 	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=15 */ sleep(0.001) from dual")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	// infinite query timeout overriding all defaults
 	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=0 */ sleep(5) from dual")
 	assert.NoError(t, err)
@@ -87,8 +87,8 @@ func TestQueryTimeoutWithTables(t *testing.T) {
 	// the query usually takes more than 5ms to return. So this should fail.
 	_, err := utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=1 */ count(*) from uks.unsharded where id1 > 31")
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "context deadline exceeded")
-	assert.ErrorContains(t, err, "(errno 1317) (sqlstate 70100)")
+	require.ErrorContains(t, err, "context deadline exceeded")
+	require.ErrorContains(t, err, "(errno 1317) (sqlstate 70100)")
 
 	// sharded
 	utils.Exec(t, mcmp.VtConn, "insert /*vt+ QUERY_TIMEOUT_MS=1000 */ into ks_misc.t1(id1, id2) values (1,2),(2,4),(3,6),(4,8),(5,10)")
@@ -97,7 +97,7 @@ func TestQueryTimeoutWithTables(t *testing.T) {
 	utils.Exec(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=500 */ sleep(0.1) from t1 where id1 = 1")
 	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=20 */ sleep(0.1) from t1 where id1 = 1")
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "DeadlineExceeded")
+	require.ErrorContains(t, err, "DeadlineExceeded")
 	assert.ErrorContains(t, err, "(errno 1317) (sqlstate 70100)")
 }
 
@@ -144,21 +144,21 @@ func TestQueryTimeoutWithoutVTGateDefault(t *testing.T) {
 
 	// tablet query timeout of 2s
 	_, err := utils.ExecAllowError(t, mcmp.VtConn, "select sleep(5) from dual")
-	assert.Error(t, err)
+	require.Error(t, err)
 
 	// infinite timeout using query hint
 	utils.Exec(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=0 */ sleep(5) from dual")
 
 	// checking again without query hint, tablet query timeout of 2s should be applied
 	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select sleep(5) from dual")
-	assert.Error(t, err)
+	require.Error(t, err)
 
 	// set timeout of 20ms
 	utils.Exec(t, mcmp.VtConn, "set query_timeout=20")
 
 	// query timeout of 20ms should be applied
 	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select sleep(1) from dual")
-	assert.Error(t, err)
+	require.Error(t, err)
 
 	// infinite timeout using query hint will override session timeout.
 	utils.Exec(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=0 */ sleep(5) from dual")
@@ -171,7 +171,7 @@ func TestQueryTimeoutWithoutVTGateDefault(t *testing.T) {
 	// tablet query timeout of 2s should be applied, as session timeout is not set on this connection.
 	utils.Exec(t, conn2, "select sleep(1) from dual")
 	_, err = utils.ExecAllowError(t, conn2, "select sleep(5) from dual")
-	assert.Error(t, err)
+	require.Error(t, err)
 
 	// reset session on first connection, tablet query timeout of 2s should be applied.
 	utils.Exec(t, mcmp.VtConn, "set query_timeout=0")
@@ -191,19 +191,19 @@ func TestOverallQueryTimeout(t *testing.T) {
 	// that issues one select query on the left side and 2 on the right side. The queries on the right side
 	// take 2 and 3 seconds each to run. If we have an overall timeout for 4 seconds, then it should fail.
 	_, err := utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=4000 */ sleep(u2.id2), u1.id2 from t1 u1 join t1 u2 where u1.id2 = u2.id1")
-	assert.Error(t, err)
+	require.Error(t, err)
 	// We can get two different error messages based on whether it is coming from vttablet or vtgate
 	deadLineExceeded := "DeadlineExceeded desc"
 	if !strings.Contains(err.Error(), "Query execution was interrupted, maximum statement execution time exceeded") {
-		assert.ErrorContains(t, err, deadLineExceeded)
+		require.ErrorContains(t, err, deadLineExceeded)
 	}
 
 	// Let's also check that setting the session variable also works.
 	utils.Exec(t, mcmp.VtConn, "set query_timeout=4000")
 	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select sleep(u2.id2), u1.id2 from t1 u1 join t1 u2 where u1.id2 = u2.id1")
-	assert.Error(t, err)
+	require.Error(t, err)
 	if !strings.Contains(err.Error(), "Query execution was interrupted, maximum statement execution time exceeded") {
-		assert.ErrorContains(t, err, deadLineExceeded)
+		require.ErrorContains(t, err, deadLineExceeded)
 	}
 
 	// Increasing the timeout should pass the query.

@@ -223,7 +223,7 @@ func (tc *vrepTestCase) initData() {
 func (tc *vrepTestCase) setupKeyspaces(keyspaces []string) {
 	for _, keyspace := range keyspaces {
 		ks, ok := tc.keyspaces[keyspace]
-		require.Equal(tc.t, true, ok, "keyspace %s not found", keyspace)
+		require.True(tc.t, ok, "keyspace %s not found", keyspace)
 		tc.setupKeyspace(ks)
 	}
 }

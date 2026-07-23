@@ -139,7 +139,7 @@ func TestDDLNoConnectionReservationOnSettings(t *testing.T) {
 	setting := "set sql_mode='TRADITIONAL'"
 
 	_, err := client.ReserveExecute(query, []string{setting}, nil)
-	assert.ErrorContains(t, err, "Invalid default value for 'c_date'", "create table should have failed with TRADITIONAL mode")
+	require.ErrorContains(t, err, "Invalid default value for 'c_date'", "create table should have failed with TRADITIONAL mode")
 	assert.Zero(t, client.ReservedID())
 }
 
@@ -349,11 +349,11 @@ func TestSetQueriesMultipleWays(t *testing.T) {
 
 	// As no connection is reserved, set statement will fail to execute.
 	_, err = client.Execute("set sql_safe_updates = 0", nil)
-	assert.ErrorContains(t, err, "Set not allowed without reserved connection")
+	require.ErrorContains(t, err, "Set not allowed without reserved connection")
 
 	// This will reserve the connection as this is part of the query execution and not the pre-queries to Reserve API
 	_, err = client2.ReserveExecute("set sql_safe_updates = 1", nil, nil)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// This will not error out as it gets executed on the reserved connection,
 	_, err = client2.Execute("set sql_safe_updates = 0", nil)

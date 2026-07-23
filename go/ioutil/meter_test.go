@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -51,7 +52,7 @@ func TestMeter(t *testing.T) {
 	wantDuration := time.Second + calledDuration
 	wantBytes := int64(123) + int64(calledBytes)
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, 1, b)
 	assert.Equal(t, wantDuration, tm.duration)
 	assert.Equal(t, wantBytes, tm.bytes)

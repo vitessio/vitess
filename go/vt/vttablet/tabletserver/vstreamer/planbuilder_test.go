@@ -786,7 +786,7 @@ func TestPlanBuilder(t *testing.T) {
 				plan.Filters[ind].Vindex = nil
 				plan.Filters[ind].Vindex = nil
 			}
-			require.EqualValues(t, tcase.outPlan, plan)
+			require.Equal(t, tcase.outPlan, plan)
 		})
 	}
 }

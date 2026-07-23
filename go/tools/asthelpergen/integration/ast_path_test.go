@@ -60,6 +60,6 @@ func TestWalkAllPartsOfAST(t *testing.T) {
 		fmt.Println("Walking: " + path.DebugString())
 		node := GetNodeFromPath(ast, path)
 		require.IsType(t, &Leaf{}, node)
-		require.EqualValues(t, idx+1, node.(*Leaf).v)
+		require.Equal(t, idx+1, node.(*Leaf).v)
 	}
 }

@@ -103,9 +103,9 @@ func TestAnalyzeExecuteFetchAsDbaMultiQuery(t *testing.T) {
 			if tcase.expectErr {
 				assert.Error(t, err)
 			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tcase.count, len(queries))
-				assert.Equal(t, len(queries), len(parsedStmts))
+				require.NoError(t, err)
+				assert.Len(t, queries, tcase.count)
+				assert.Len(t, parsedStmts, len(queries))
 				assert.Equal(t, tcase.parseable, parseable)
 				assert.Equal(t, tcase.allCreate, (countCreate == len(queries)))
 				assert.Equal(t, tcase.allowZeroInDate, allowZeroInDate)

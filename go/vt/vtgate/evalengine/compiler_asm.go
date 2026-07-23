@@ -1796,7 +1796,7 @@ func (asm *assembler) Fn_SQRT() {
 func (asm *assembler) Fn_ROUND1_f() {
 	asm.emit(func(env *ExpressionEnv) int {
 		f := env.vm.stack[env.vm.sp-1].(*evalFloat)
-		f.f = math.Round(f.f)
+		f.f = math.RoundToEven(f.f)
 		return 1
 	}, "FN ROUND FLOAT64(SP-1)")
 }
@@ -1840,7 +1840,7 @@ func (asm *assembler) Fn_ROUND2_f() {
 		f := env.vm.stack[env.vm.sp-2].(*evalFloat)
 		r := env.vm.stack[env.vm.sp-1].(*evalInt64)
 		if r.i == 0 {
-			f.f = math.Round(f.f)
+			f.f = math.RoundToEven(f.f)
 			env.vm.sp--
 			return 1
 		}
@@ -1852,7 +1852,7 @@ func (asm *assembler) Fn_ROUND2_f() {
 			env.vm.sp--
 			return 1
 		}
-		f.f = math.Round(f.f*factor) / factor
+		f.f = math.RoundToEven(f.f*factor) / factor
 		env.vm.sp--
 		return 1
 	}, "FN ROUND FLOAT64(SP-2) INT64(SP-1)")

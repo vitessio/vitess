@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/stats"
 )
@@ -42,17 +43,17 @@ func TestPushAll(t *testing.T) {
 	}
 
 	err := b.PushAll()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	before := len(mw.data)
 
 	stats.NewGaugeFloat64("test_push_all1", "help")
 	stats.NewGaugeFloat64("test_push_all2", "help")
 
 	err = b.PushAll()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	after := len(mw.data)
 
-	assert.Equalf(t, after-before, 2, "length of writer.data should have been increased by 2")
+	assert.Equalf(t, 2, after-before, "length of writer.data should have been increased by 2")
 }
 
 func TestPushOne(t *testing.T) {
@@ -65,7 +66,7 @@ func TestPushOne(t *testing.T) {
 
 	s := stats.NewGaugeFloat64("test_push_one", "help")
 	err := b.PushOne("test_push_one", s)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	assert.Len(t, mw.data, 1)
 	assert.Equal(t, "testprefix.test_push_one", mw.data[0].Metric)

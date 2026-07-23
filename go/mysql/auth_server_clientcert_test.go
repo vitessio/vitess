@@ -156,7 +156,7 @@ func TestNoCert(t *testing.T) {
 	defer cleanupListener(ctx, l, params)
 
 	conn, err := Connect(ctx, params)
-	assert.Error(t, err, "Connect() should have errored due to no client cert")
+	require.Error(t, err, "Connect() should have errored due to no client cert")
 
 	if conn != nil {
 		conn.Close()

@@ -46,8 +46,8 @@ func TestSysNumericPrecisionScale(t *testing.T) {
 	defer conn.Close()
 
 	qr := exec(t, conn, "select numeric_precision, numeric_scale from information_schema.columns where table_schema = 'ks' and table_name = 't1'")
-	assert.True(t, qr.Fields[0].Type == qr.Rows[0][0].Type())
-	assert.True(t, qr.Fields[1].Type == qr.Rows[0][1].Type())
+	assert.Equal(t, qr.Fields[0].Type, qr.Rows[0][0].Type())
+	assert.Equal(t, qr.Fields[1].Type, qr.Rows[0][1].Type())
 }
 
 func TestCreateAndDropDatabase(t *testing.T) {

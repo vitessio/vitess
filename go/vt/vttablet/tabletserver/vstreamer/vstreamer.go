@@ -1478,8 +1478,10 @@ func buildSetStringValue(env *vtenv.Environment, plan *streamerPlan, colNum int,
 			plan.Table.Fields[colNum].Name, plan.Table.Name, iv)
 	}
 	idx := 1
-	// See what bits are set in the bitmap using bitmasks.
-	for b := uint64(1); b < 1<<63; b <<= 1 {
+	// See what bits are set in the bitmap using bitmasks. A SET can have up to
+	// 64 members, so we need to check all 64 bits, including bit 1<<63 for the
+	// 64th member. The loop terminates when the shift overflows back to 0.
+	for b := uint64(1); b != 0; b <<= 1 {
 		if iv&b > 0 { // This bit is set and the SET's string value needs to be provided.
 			strVal, ok := plan.EnumSetValuesMap[colNum][idx]
 			// When you insert values not found in the SET (which requires disabling STRICT mode) then

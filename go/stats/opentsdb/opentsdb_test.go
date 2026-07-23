@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/stats"
 )
@@ -800,15 +801,15 @@ func TestCounterForEmptyCollectorPrefix(t *testing.T) {
 			sort.Sort(byMetric(dc.data))
 
 			gotBytes, err := json.MarshalIndent(dc.data, "", "  ")
-			assert.NoErrorf(t, err, "failed to marshal json")
+			require.NoErrorf(t, err, "failed to marshal json")
 
 			var got any
 			err = json.Unmarshal(gotBytes, &got)
-			assert.NoErrorf(t, err, "failed to unmarshal json")
+			require.NoErrorf(t, err, "failed to unmarshal json")
 
 			var want any
 			err = json.Unmarshal([]byte(expectedOutput), &want)
-			assert.NoErrorf(t, err, "failed to unmarshal json")
+			require.NoErrorf(t, err, "failed to unmarshal json")
 
 			assert.Equal(t, want, got)
 		}
@@ -836,15 +837,15 @@ func checkOutput(t *testing.T, statName string, wantJSON string) {
 			sort.Sort(byMetric(dc.data))
 
 			gotBytes, err := json.MarshalIndent(dc.data, "", "  ")
-			assert.NoErrorf(t, err, "failed to marshal json")
+			require.NoErrorf(t, err, "failed to marshal json")
 
 			var got any
 			err = json.Unmarshal(gotBytes, &got)
-			assert.NoErrorf(t, err, "failed to unmarshal json")
+			require.NoErrorf(t, err, "failed to unmarshal json")
 
 			var want any
 			err = json.Unmarshal([]byte(wantJSON), &want)
-			assert.NoErrorf(t, err, "failed to unmarshal json")
+			require.NoErrorf(t, err, "failed to unmarshal json")
 
 			assert.Equal(t, want, got)
 		}

@@ -70,7 +70,7 @@ func TestCollationsForLanguage(t *testing.T) {
 	}
 
 	for lang := range testutil.KnownLanguages {
-		assert.NotEqual(t, 0, len(langCounts[lang]), "no collations found for %q", lang)
+		assert.NotEmpty(t, langCounts[lang], "no collations found for %q", lang)
 
 		t.Logf("%s: %v", lang, langCounts[lang])
 	}

@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestRowMap(t *testing.T) {
@@ -147,7 +148,7 @@ func TestMarshalJSON(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			result, err := tc.rowData.MarshalJSON()
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tc.expected, string(result))
 		})
 	}
@@ -173,7 +174,7 @@ func TestUnmarshalJSON(t *testing.T) {
 			if tc.isError {
 				assert.Error(t, err)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, tc.expected, cellData)
 			}
 		})
@@ -220,10 +221,10 @@ func TestExecNoPrepare(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			out, err := ExecNoPrepare(tc.db, tc.query, tc.args...)
 			if tc.shouldErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 				assert.Nil(t, out)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, tc.expect, out)
 			}
 		})

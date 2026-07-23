@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestParseGTID(t *testing.T) {
@@ -32,7 +33,7 @@ func TestParseGTID(t *testing.T) {
 	want := fakeGTID{value: "12345"}
 
 	got, err := ParseGTID(flavor, input)
-	assert.NoError(t, err, "unexpected error: %v", err)
+	require.NoError(t, err, "unexpected error: %v", err)
 	assert.Equal(t, want, got, "ParseGTID(%#v, %#v) = %#v, want %#v", flavor, input, got, want)
 }
 
@@ -87,7 +88,7 @@ func TestDecodeGTID(t *testing.T) {
 	want := fakeGTID{value: "123-456:789"}
 
 	got, err := DecodeGTID(input)
-	assert.NoError(t, err, "unexpected error: %v", err)
+	require.NoError(t, err, "unexpected error: %v", err)
 	assert.Equal(t, want, got, "DecodeGTID(%#v) = %#v, want %#v", input, got, want)
 }
 
@@ -128,7 +129,7 @@ func TestDecodeNilGTID(t *testing.T) {
 	want := GTID(nil)
 
 	got, err := DecodeGTID(input)
-	assert.NoError(t, err, "unexpected error: %v", err)
+	require.NoError(t, err, "unexpected error: %v", err)
 	assert.Equal(t, want, got, "DecodeGTID(%#v) = %#v, want %#v", input, got, want)
 }
 
@@ -140,7 +141,7 @@ func TestDecodeNoFlavor(t *testing.T) {
 	want := fakeGTID{value: "12345"}
 
 	got, err := DecodeGTID(input)
-	assert.NoError(t, err, "unexpected error: %v", err)
+	require.NoError(t, err, "unexpected error: %v", err)
 	assert.Equal(t, want, got, "DecodeGTID(%#v) = %#v, want %#v", input, got, want)
 }
 
@@ -152,7 +153,7 @@ func TestDecodeGTIDWithSeparator(t *testing.T) {
 	want := fakeGTID{value: "GTID containing / a slash"}
 
 	got, err := DecodeGTID(input)
-	assert.NoError(t, err, "unexpected error: %v", err)
+	require.NoError(t, err, "unexpected error: %v", err)
 	assert.Equal(t, want, got, "DecodeGTID(%#v) = %#v, want %#v", input, got, want)
 }
 

@@ -69,6 +69,18 @@ func (e *evalEnum) Hash(h *vthash.Hasher) {
 	h.Write64(uint64(e.value))
 }
 
+// enumNumeric returns the value of an enum in a numeric context. MySQL uses the
+// 1-based ordinal of the value within the enum definition. A negative value is
+// the sentinel for a value that could not be resolved against the enum
+// definition (e.g. the definition was not available); it is passed through
+// unchanged to preserve the existing best-effort behavior for that case.
+func enumNumeric(value int) int64 {
+	if value < 0 {
+		return int64(value)
+	}
+	return int64(value) + 1
+}
+
 func valueIdx(values *EnumSetValues, value string) int {
 	if values == nil {
 		return -1
