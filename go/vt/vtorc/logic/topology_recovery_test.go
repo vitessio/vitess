@@ -1576,6 +1576,7 @@ func TestAllCellsDenied(t *testing.T) {
 		{"partial denied", []string{"z1", "z2"}, []string{"z1"}, false},
 		{"none denied", []string{"z1", "z2"}, []string{"z3"}, false},
 		{"empty denied list", []string{"z1"}, []string{}, false},
+		{"empty shard cells", []string{}, []string{"z1"}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

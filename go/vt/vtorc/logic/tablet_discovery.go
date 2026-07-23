@@ -127,7 +127,10 @@ func RegisterFlags(fs *pflag.FlagSet) {
 // validateCellsNoRecovery ensures every cell passed to --cells-no-recovery
 // exists in the topology. Recovery skipping relies on an exact match against
 // the analyzed tablet's cell, so an unknown cell name would silently disable
-// the intended protection; return an error so the caller can fail fast.
+// the intended protection. If the topology is unreachable at startup, validation
+// is skipped with a warning so VTOrc can still start; the risk is that a
+// misconfigured cell name becomes a silent no-op until VTOrc is restarted with
+// a reachable topology. When the topology is reachable, an unknown cell is fatal.
 func validateCellsNoRecovery(ctx context.Context) error {
 	if len(cellsNoRecovery) == 0 {
 		return nil
@@ -230,10 +233,10 @@ func OpenTabletDiscovery() <-chan time.Time {
 	// it on a timer.
 	ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 	defer cancel()
-	// Validate --cells-no-recovery against the topology's known cells. The
-	// recovery-skip decision is an exact cell-name match, so a typo or stale
-	// cell name would silently fail to protect the intended cell. Fail fast at
-	// startup instead.
+	// Validate --cells-no-recovery against the topology's known cells.
+	// A typo or stale cell name would silently fail to protect the intended
+	// cell; exit if the topo is reachable and the cell is absent. If the
+	// topo is unreachable, validation is skipped with a warning.
 	if err := validateCellsNoRecovery(ctx); err != nil {
 		log.Error(err.Error())
 		os.Exit(1)
