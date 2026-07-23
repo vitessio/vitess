@@ -235,6 +235,18 @@ return user.NeedsMigration() && migrate(user) || user
 - Changelog summaries are for key changes all users should know about — internal implementation details don't belong there
 - Keep PRs clean of unrelated diffs (e.g., stray `package-lock.json` changes, `go.sum` without `go mod tidy`)
 
+### Release Cycle & Compatibility
+Vitess ships a major release roughly every 6 months, each supported for 12 months (see the [release cycle](https://vitess.io/docs/releases/release-cycle/) docs and `doc/internal/release/versioning.md`). Some changes therefore take 1-3 release cycles to complete — recognize when a task needs multi-release staging and propose the staged plan instead of doing it all in one release.
+
+- **Backwards AND forwards compatibility** must hold between consecutive major versions ([VEP-1](https://github.com/vitessio/enhancements/blob/main/veps/vep-1.md)) — clusters run mixed-version components during rolling upgrades, and downgrade by one major version must work too. CI enforces this via the `upgrade_downgrade_test_*` workflows (the `_next_release` variants test against the next major)
+- **Deprecation is a multi-release cycle** (minimum; maintainers may extend it):
+  - Behavior changes: release N announces + warns (default unchanged, opt-in flag), release N+1 may flip the default (old behavior restorable via the now-deprecated flag), release N+2 removes the flag/old behavior
+  - Simple removals (obsolete utilities, flags): warn in release N, remove in release N+1
+  - Never remove or change a default in the same release that introduces the deprecation warning
+- **Protobuf changes must be wire-compatible in both directions**: never renumber, retype, or reuse removed field numbers; new fields must tolerate being absent (an older peer never sends them) and their zero value must preserve existing behavior. The VTGate RPC protos are public API per `doc/internal/release/versioning.md`
+- **Data written by a live system** (topology data, Vitess-internal tables, on-disk formats) is covered by the same promise — a change that breaks the upgrade *or downgrade* path of a running cluster is a breaking change even if the data is "internal"
+- Experimental features are excluded from the compatibility promise
+
 ## :mag: Debugging & Troubleshooting
 
 When things don't work as expected, we debug systematically:
