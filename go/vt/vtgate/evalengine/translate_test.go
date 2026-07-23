@@ -113,9 +113,9 @@ func TestTranslateSimplification(t *testing.T) {
 		{"ifnull(null, 23)", ok(`case when null is null then 23 else null`), ok(`23`)},
 		{"nullif(1, 1)", ok(`case when 1 = 1 then null else 1`), ok(`null`)},
 		{"nullif(1, 2)", ok(`case when 1 = 2 then null else 1`), ok(`1`)},
-		{"12 between 5 and 20", ok("12 >= 5 and 12 <= 20"), ok(`1`)},
-		{"12 not between 5 and 20", ok("12 < 5 or 12 > 20"), ok(`0`)},
-		{"2 not between 5 and 20", ok("2 < 5 or 2 > 20"), ok(`1`)},
+		{"12 between 5 and 20", ok("12 between 5 and 20"), ok(`1`)},
+		{"12 not between 5 and 20", ok("12 not between 5 and 20"), ok(`0`)},
+		{"2 not between 5 and 20", ok("2 not between 5 and 20"), ok(`1`)},
 		{"json->\"$.c\"", ok("JSON_EXTRACT(`json`, '$.c')"), ok("JSON_EXTRACT(`json`, '$.c')")},
 		{"json->>\"$.c\"", ok("JSON_UNQUOTE(JSON_EXTRACT(`json`, '$.c'))"), ok("JSON_UNQUOTE(JSON_EXTRACT(`json`, '$.c'))")},
 	}
@@ -616,6 +616,15 @@ func TestTranslationFailures(t *testing.T) {
 		}, {
 			expression:  "cast('3.4' as FLOAT(3))",
 			expectedErr: "Unsupported type conversion: FLOAT(3)",
+		}, {
+			expression:  "0 IN (0 BETWEEN ((1, 2, 3) = (1, 2)) AND 2)",
+			expectedErr: "Operand should contain 3 column(s)",
+		}, {
+			expression:  "1 BETWEEN (0 BETWEEN ((1, 2, 3) <=> (1, 2)) AND 2) AND 3",
+			expectedErr: "Operand should contain 3 column(s)",
+		}, {
+			expression:  "0 IN (JSON_EXTRACT('{}', (1, 2, 3) = (1, 2)))",
+			expectedErr: "Operand should contain 3 column(s)",
 		},
 	}
 
@@ -696,4 +705,145 @@ func TestBindVarType(t *testing.T) {
 		Environment: venv,
 	})
 	require.NoError(t, err)
+}
+
+// TestInExprJSONScanPrefix pins the translation-time IN type-scan prefix:
+// MySQL inspects RHS elements in order and stops after the first one that is
+// not constant for one execution, the stopper included. Bind parameters and
+// statement-stable functions continue the scan; columns and volatile
+// functions stop it.
+func TestInExprJSONScanPrefix(t *testing.T) {
+	testCases := []struct {
+		expression string
+		prefix     int
+		domain     inJSONDomain
+	}{
+		{`0 IN (1, '0', JSON_ARRAY())`, 3, inJSONYes},
+		{`0 IN (:v, '0', JSON_ARRAY())`, 3, inJSONYes},
+		{`0 IN (:v + 1, '0', JSON_ARRAY())`, 3, inJSONYes},
+		{`0 IN (NOW(), '0', JSON_ARRAY())`, 3, inJSONYes},
+		{`0 IN (CURDATE(), '0', JSON_ARRAY())`, 3, inJSONYes},
+		{`0 IN (USER(), '0', JSON_ARRAY())`, 3, inJSONYes},
+		{`0 IN (DATABASE(), '0', JSON_ARRAY())`, 3, inJSONYes},
+		{`0 IN (column0, '0', JSON_ARRAY())`, 1, inJSONUnknown},
+		{`0 IN (column0 + 1, '0', JSON_ARRAY())`, 1, inJSONUnknown},
+		{`0 IN (SYSDATE(), '0', JSON_ARRAY())`, 1, inJSONNo},
+		{`0 IN (UUID(), '0', JSON_ARRAY())`, 1, inJSONNo},
+		{`0 IN (RANDOM_BYTES(8), '0', JSON_ARRAY())`, 1, inJSONNo},
+		{`0 IN ('0', 1)`, 2, inJSONNo},
+		{`JSON_ARRAY() IN (column0, '0')`, 1, inJSONYes},
+	}
+
+	venv := vtenv.NewTestEnv()
+	fields := []*querypb.Field{{Name: "column0", Type: sqltypes.Int64, ColumnType: "BIGINT"}}
+	for _, tc := range testCases {
+		t.Run(tc.expression, func(t *testing.T) {
+			expr, err := venv.Parser().ParseExpr(tc.expression)
+			require.NoError(t, err)
+
+			translated, err := Translate(expr, &Config{
+				ResolveColumn:     FieldResolver(fields).Column,
+				Collation:         collations.CollationUtf8mb4ID,
+				Environment:       venv,
+				NoConstantFolding: true,
+				NoCompilation:     true,
+			})
+			require.NoError(t, err)
+
+			in, ok := translated.(*UntypedExpr).ir.(*InExpr)
+			require.True(t, ok, "expected an InExpr translation")
+			assert.Equal(t, tc.prefix, in.JSONScanRHS, "wrong type-scan prefix")
+			assert.Equal(t, tc.domain, in.PrefixJSON, "wrong declared-JSON tri-state")
+		})
+	}
+}
+
+// TestInExprJSONScanPrefixOffsets pins the type-scan prefix over planner
+// offsets: an aggregation pushes the constants of the expression it projects
+// into its input, and an offset reading such a constant continues the scan as
+// the constant itself does.
+func TestInExprJSONScanPrefixOffsets(t *testing.T) {
+	testCases := []struct {
+		expression string
+		prefix     int
+	}{
+		{`0 IN ('0', JSON_ARRAY(), column0)`, 3},
+		{`0 IN (:v, JSON_ARRAY(), column0)`, 3},
+		{`0 IN (column0, '0', JSON_ARRAY())`, 1},
+		{`0 IN (UUID(), '0', JSON_ARRAY())`, 1},
+	}
+
+	venv := vtenv.NewTestEnv()
+	for _, tc := range testCases {
+		t.Run(tc.expression, func(t *testing.T) {
+			expr, err := venv.Parser().ParseExpr(tc.expression)
+			require.NoError(t, err)
+			cmp := expr.(*sqlparser.ComparisonExpr)
+			cmp.Left = sqlparser.NewOffset(0, cmp.Left)
+			tuple := cmp.Right.(sqlparser.ValTuple)
+			for idx, el := range tuple {
+				tuple[idx] = sqlparser.NewOffset(idx+1, el)
+			}
+
+			translated, err := Translate(expr, &Config{
+				Collation:         collations.CollationUtf8mb4ID,
+				Environment:       venv,
+				NoConstantFolding: true,
+				NoCompilation:     true,
+			})
+			require.NoError(t, err)
+
+			in, ok := translated.(*UntypedExpr).ir.(*InExpr)
+			require.True(t, ok, "expected an InExpr translation")
+			assert.Equal(t, tc.prefix, in.JSONScanRHS, "wrong type-scan prefix")
+		})
+	}
+}
+
+// TestBetweenExprFormatRoundTrip checks that formatting a translated BETWEEN
+// preserves the parentheses of equal- and lower-precedence operands: the
+// formatted SQL must reparse to the same value.
+func TestBetweenExprFormatRoundTrip(t *testing.T) {
+	testCases := []struct {
+		expression string
+		formatted  string
+		result     string
+	}{
+		{`(0 AND 1) BETWEEN 0 AND 1`, `(0 and 1) between 0 and 1`, `INT64(1)`},
+		{`1 BETWEEN (0 BETWEEN 0 AND 1) AND 2`, `1 between (0 between 0 and 1) and 2`, `INT64(1)`},
+		{`5 NOT BETWEEN (0 BETWEEN 0 AND 1) AND 2`, `5 not between (0 between 0 and 1) and 2`, `INT64(1)`},
+	}
+
+	venv := vtenv.NewTestEnv()
+	cfg := &Config{
+		Collation:         collations.CollationUtf8mb4ID,
+		Environment:       venv,
+		NoConstantFolding: true,
+		NoCompilation:     true,
+	}
+	for _, tc := range testCases {
+		t.Run(tc.expression, func(t *testing.T) {
+			expr, err := venv.Parser().ParseExpr(tc.expression)
+			require.NoError(t, err)
+			translated, err := Translate(expr, cfg)
+			require.NoError(t, err)
+
+			buf := sqlparser.NewTrackedBuffer(nil)
+			translated.(*UntypedExpr).ir.format(buf)
+			require.Equal(t, tc.formatted, buf.String())
+
+			env := EmptyExpressionEnv(venv)
+			res, err := env.Evaluate(translated)
+			require.NoError(t, err)
+			require.Equal(t, tc.result, res.String())
+
+			reparsed, err := venv.Parser().ParseExpr(buf.String())
+			require.NoError(t, err)
+			retranslated, err := Translate(reparsed, cfg)
+			require.NoError(t, err)
+			res, err = env.Evaluate(retranslated)
+			require.NoError(t, err)
+			assert.Equal(t, tc.result, res.String())
+		})
+	}
 }
