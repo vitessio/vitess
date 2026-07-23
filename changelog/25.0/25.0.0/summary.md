@@ -19,6 +19,7 @@
 - **[Minor Changes](#minor-changes)**
     - **[VReplication](#minor-changes-vreplication)**
         - [Default data protection for `_reverse` workflow cancel/complete](#vreplication-reverse-workflow-data-protection)
+        - [MoveTables complete renames source tables by default](#vreplication-movetables-complete-rename-default)
     - **[VTGate](#minor-changes-vtgate)**
         - [Ingress bytes in query LogStats](#vtgate-logstats-ingress-bytes)
         - [New controls for cross-keyspace reads](#vtgate-cross-keyspace-reads)
@@ -163,6 +164,19 @@ When calling `cancel` or `complete` on an auto-generated `_reverse` workflow wit
 The `--keep-data` flag help text has been updated to note this default explicitly. This change applies to MoveTables, Reshard, and other VReplication workflow types that use the shared cancel/complete paths.
 
 See [#19906](https://github.com/vitessio/vitess/pull/19906) for details.
+
+#### <a id="vreplication-movetables-complete-rename-default"/>MoveTables complete renames source tables by default</a>
+
+Completing a MoveTables workflow without `--rename-tables` or `--keep-data` now **renames** the source tables to `_<tablename>_old` instead of **dropping** them, so the data is taken out of service but remains recoverable if the removal was accidental. To restore the previous behavior and drop the source tables, pass `--rename-tables=false`. `--keep-data` continues to leave the source tables fully intact (neither dropped nor renamed).
+
+The new default lives in the `vtctldclient` CLI — the `--rename-tables` flag now defaults to `true` — and in the VTAdmin web UI. Direct gRPC callers of `MoveTablesComplete` and the legacy `vtctlclient`/`vtctl` path are unchanged and still drop the source tables unless `rename_tables` is set. Because the CLI now sends the flag value explicitly, the behavior is consistent across a mixed-version (rolling upgrade) cluster.
+
+**Caveats:**
+
+- A subsequent MoveTables of the same table can fail if a `_<tablename>_old` table already exists from a prior rename-complete, because the rename cannot overwrite it. Remove the leftover `_<tablename>_old` tables, or pass `--rename-tables=false`, in that case.
+- Renamed tables continue to consume disk on the source until they are removed manually; the previous drop behavior reclaimed that space immediately.
+
+See [#19930](https://github.com/vitessio/vitess/issues/19930) for details.
 
 ### <a id="minor-changes-vtgate"/>VTGate</a>
 

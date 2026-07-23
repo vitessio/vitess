@@ -180,7 +180,7 @@ describe('WorkflowActions', () => {
                 workflow: 'test_workflow',
                 target_keyspace: 'test_keyspace',
                 keep_routing_rules: false,
-                rename_tables: false,
+                rename_tables: true,
             },
         });
     });
@@ -221,7 +221,7 @@ describe('WorkflowActions', () => {
                 // Toggled options.
                 keep_data: true,
                 keep_routing_rules: true,
-                rename_tables: true,
+                rename_tables: false,
             },
         });
     });

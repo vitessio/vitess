@@ -104,7 +104,7 @@ func registerCommands(root *cobra.Command) {
 	complete := common.GetCompleteCommand(opts)
 	complete.Flags().BoolVar(&common.CompleteOptions.KeepData, "keep-data", false, common.ReverseWorkflowKeepDataHelpText("Keep the original source table data that was copied by the MoveTables workflow."))
 	complete.Flags().BoolVar(&common.CompleteOptions.KeepRoutingRules, "keep-routing-rules", false, "Keep the routing rules in place that direct table traffic from the source keyspace to the target keyspace of the MoveTables workflow.")
-	complete.Flags().BoolVar(&common.CompleteOptions.RenameTables, "rename-tables", false, "Keep the original source table data that was copied by the MoveTables workflow, but rename each table to '_<tablename>_old'.")
+	complete.Flags().BoolVar(&common.CompleteOptions.RenameTables, "rename-tables", true, "Instead of dropping the original source tables, rename each to '_<tablename>_old' so the data is out of service but recoverable. Enabled by default; pass --rename-tables=false to drop the source tables. Has no effect when --keep-data is set.")
 	complete.Flags().BoolVar(&common.CompleteOptions.DryRun, "dry-run", false, "Print the actions that would be taken and report any known errors that would have occurred.")
 	complete.Flags().BoolVar(&common.CompleteOptions.IgnoreSourceKeyspace, "ignore-source-keyspace", false, "WARNING: This option should only be used when absolutely necessary. Ignore the source keyspace as the workflow is completed and cleaned up. This allows the workflow to be completed if the source keyspace has been deleted or is not currently available.")
 	common.AddShardSubsetFlag(complete, &common.CompleteOptions.Shards)
