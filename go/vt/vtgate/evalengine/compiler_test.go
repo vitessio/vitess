@@ -893,6 +893,362 @@ func TestCompilerSingle(t *testing.T) {
 	}
 }
 
+// TestJSONComparisonDomains checks that IN, BETWEEN and simple CASE match
+// MySQL's comparison-domain coercion when a JSON value participates: IN
+// compares every pair as JSON, while BETWEEN and simple CASE never use the
+// JSON comparator. Non-JSON and NULL rows pin existing behavior.
+func TestJSONComparisonDomains(t *testing.T) {
+	testCases := []struct {
+		expression string
+		values     []sqltypes.Value
+		result     string
+		// skipFolding skips the constant-folding run: folding produces
+		// standalone JSON literals, which compilation cannot push yet — a
+		// pre-existing translation gap fixed separately.
+		skipFolding bool
+	}{
+		// IN/NOT IN with a JSON value in the comparison domain.
+		{expression: `'[]' IN (JSON_ARRAY(), 0)`, result: `INT64(0)`},
+		{expression: `0 IN (JSON_ARRAY(), '0')`, result: `INT64(0)`},
+		{expression: `1 IN (JSON_ARRAY(), '1')`, result: `INT64(0)`},
+		{expression: `'[]' NOT IN (JSON_ARRAY(), 0)`, result: `INT64(1)`},
+		{expression: `JSON_ARRAY(1) IN ('[1]')`, result: `INT64(0)`},
+		{expression: `0 IN (JSON_EXTRACT('[1]', '$'), '0')`, result: `INT64(0)`},
+		{expression: `0 NOT IN (JSON_ARRAY(), '0')`, result: `INT64(1)`},
+		{expression: `1 NOT IN (JSON_ARRAY(), '1')`, result: `INT64(1)`},
+		{expression: `CAST('[]' AS JSON) IN (JSON_ARRAY(), 0)`, result: `INT64(1)`},
+		{expression: `0 IN (JSON_ARRAY(), 0)`, result: `INT64(1)`},
+		{expression: `'[]' IN (JSON_ARRAY(), '0')`, result: `INT64(0)`},
+		{expression: `'0' IN (CAST('[]' AS JSON), '0')`, result: `INT64(1)`},
+
+		// ENUM and SET values convert to JSON string scalars of their
+		// textual value when a JSON value participates in the IN domain.
+		{
+			expression:  `column0 IN ('foo', JSON_ARRAY())`,
+			values:      []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Enum, []byte(`foo`))},
+			result:      `INT64(1)`,
+			skipFolding: true,
+		},
+		{
+			expression:  `column0 IN (JSON_ARRAY(), 'foo')`,
+			values:      []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Enum, []byte(`foo`))},
+			result:      `INT64(1)`,
+			skipFolding: true,
+		},
+		{
+			expression:  `column0 NOT IN ('foo', JSON_ARRAY())`,
+			values:      []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Enum, []byte(`foo`))},
+			result:      `INT64(0)`,
+			skipFolding: true,
+		},
+		{
+			expression:  `column0 NOT IN (JSON_ARRAY(), 'foo')`,
+			values:      []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Enum, []byte(`foo`))},
+			result:      `INT64(0)`,
+			skipFolding: true,
+		},
+		{
+			expression:  `column0 IN ('foo', JSON_ARRAY())`,
+			values:      []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Set, []byte(`foo`))},
+			result:      `INT64(1)`,
+			skipFolding: true,
+		},
+		{
+			expression:  `column0 IN (JSON_ARRAY(), 'foo')`,
+			values:      []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Set, []byte(`foo`))},
+			result:      `INT64(1)`,
+			skipFolding: true,
+		},
+		{
+			expression:  `column0 NOT IN ('foo', JSON_ARRAY())`,
+			values:      []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Set, []byte(`foo`))},
+			result:      `INT64(0)`,
+			skipFolding: true,
+		},
+		{
+			expression:  `column0 NOT IN (JSON_ARRAY(), 'foo')`,
+			values:      []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Set, []byte(`foo`))},
+			result:      `INT64(0)`,
+			skipFolding: true,
+		},
+
+		// BETWEEN/NOT BETWEEN with a JSON value in the comparison domain,
+		// compared as DOUBLE when a non-textual operand participates.
+		{expression: `'[]' BETWEEN JSON_ARRAY() AND 0`, result: `INT64(1)`},
+		{expression: `0 BETWEEN JSON_ARRAY() AND '0'`, result: `INT64(1)`},
+		{expression: `1 BETWEEN JSON_ARRAY() AND '1'`, result: `INT64(1)`},
+		{expression: `JSON_ARRAY() BETWEEN 0 AND '[]'`, result: `INT64(1)`},
+		{expression: `0 BETWEEN 0 AND JSON_ARRAY()`, result: `INT64(1)`},
+		{expression: `'[]' NOT BETWEEN JSON_ARRAY() AND 0`, result: `INT64(0)`},
+		{expression: `1 NOT BETWEEN JSON_ARRAY() AND '1'`, result: `INT64(0)`},
+		{expression: `1 BETWEEN CAST('"1"' AS JSON) AND 2`, result: `INT64(1)`},
+
+		// BETWEEN/NOT BETWEEN with only JSON and textual operands, compared
+		// as strings on the serialized text forms.
+		{expression: `JSON_ARRAY() BETWEEN CAST('0' AS JSON) AND JSON_OBJECT()`, result: `INT64(1)`},
+		{expression: `JSON_OBJECT() BETWEEN JSON_ARRAY() AND JSON_ARRAY()`, result: `INT64(0)`},
+		{expression: `CAST(2 AS JSON) BETWEEN CAST(10 AS JSON) AND CAST(3 AS JSON)`, result: `INT64(1)`},
+		{expression: `'[]' BETWEEN JSON_ARRAY() AND '0'`, result: `INT64(0)`},
+		{expression: `JSON_ARRAY() BETWEEN NULL AND CAST(0 AS JSON)`, result: `INT64(0)`},
+
+		// BETWEEN/NOT BETWEEN with a JSON operand and a statically selected
+		// temporal domain: a DATE/DATETIME/TIMESTAMP participant compares the
+		// whole domain as DATETIME; a TIME column selects the TIME domain,
+		// but a CAST(... AS TIME) expression does not.
+		{expression: `CAST('2020-01-01' AS DATE) BETWEEN JSON_ARRAY() AND '2021-01-01'`, result: `INT64(1)`},
+		{expression: `CAST('2020-01-01' AS DATE) NOT BETWEEN JSON_ARRAY() AND '2021-01-01'`, result: `INT64(0)`},
+		{expression: `CAST('2020-01-01' AS DATETIME) BETWEEN JSON_ARRAY() AND '2021-01-01'`, result: `INT64(1)`},
+		{expression: `CAST('2020-01-01' AS DATETIME) NOT BETWEEN JSON_ARRAY() AND '2021-01-01'`, result: `INT64(0)`},
+		{expression: `'2020-01-01' BETWEEN JSON_ARRAY() AND CAST('2021-01-01' AS DATE)`, result: `INT64(1)`},
+		{expression: `CAST('2020-01-01' AS DATE) BETWEEN NULL AND JSON_ARRAY()`, result: `INT64(0)`},
+		{expression: `CAST('2020-01-01' AS DATE) BETWEEN JSON_ARRAY() AND NULL`, result: `NULL`},
+		{expression: `CAST('12:00:00' AS TIME) BETWEEN JSON_ARRAY() AND '13:00:00'`, result: `INT64(0)`},
+		{expression: `CAST('12:00:00' AS TIME) NOT BETWEEN JSON_ARRAY() AND '13:00:00'`, result: `INT64(1)`},
+		{
+			expression:  `column0 BETWEEN JSON_ARRAY() AND '2021-01-01'`,
+			values:      []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Date, []byte(`2020-01-01`))},
+			result:      `INT64(1)`,
+			skipFolding: true,
+		},
+		{
+			expression:  `column0 NOT BETWEEN JSON_ARRAY() AND '2021-01-01'`,
+			values:      []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Date, []byte(`2020-01-01`))},
+			result:      `INT64(0)`,
+			skipFolding: true,
+		},
+		{
+			expression:  `column0 BETWEEN JSON_ARRAY() AND '2021-01-01'`,
+			values:      []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Datetime, []byte(`2020-01-01 12:00:00`))},
+			result:      `INT64(1)`,
+			skipFolding: true,
+		},
+		{
+			expression:  `column0 BETWEEN JSON_ARRAY() AND '2021-01-01'`,
+			values:      []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Timestamp, []byte(`2020-01-01 12:00:00`))},
+			result:      `INT64(1)`,
+			skipFolding: true,
+		},
+		{
+			expression:  `column0 BETWEEN JSON_ARRAY() AND '13:00:00'`,
+			values:      []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Time, []byte(`12:00:00`))},
+			result:      `INT64(1)`,
+			skipFolding: true,
+		},
+		{
+			expression:  `column0 NOT BETWEEN JSON_ARRAY() AND '13:00:00'`,
+			values:      []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Time, []byte(`12:00:00`))},
+			result:      `INT64(0)`,
+			skipFolding: true,
+		},
+
+		// Composite operands whose static result type resolves to DATE select
+		// the DATETIME domain like the column itself would.
+		{
+			expression:  `COALESCE(column0, column0) BETWEEN JSON_ARRAY() AND '2021-01-01'`,
+			values:      []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Date, []byte(`2020-01-01`))},
+			result:      `INT64(1)`,
+			skipFolding: true,
+		},
+		{
+			expression:  `COALESCE(column0, column0) NOT BETWEEN JSON_ARRAY() AND '2021-01-01'`,
+			values:      []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Date, []byte(`2020-01-01`))},
+			result:      `INT64(0)`,
+			skipFolding: true,
+		},
+		{
+			expression:  `IFNULL(column0, column0) BETWEEN JSON_ARRAY() AND '2021-01-01'`,
+			values:      []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Date, []byte(`2020-01-01`))},
+			result:      `INT64(1)`,
+			skipFolding: true,
+		},
+		{
+			expression:  `IFNULL(column0, column0) NOT BETWEEN JSON_ARRAY() AND '2021-01-01'`,
+			values:      []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Date, []byte(`2020-01-01`))},
+			result:      `INT64(0)`,
+			skipFolding: true,
+		},
+		{
+			expression:  `IF(1, column0, column0) BETWEEN JSON_ARRAY() AND '2021-01-01'`,
+			values:      []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Date, []byte(`2020-01-01`))},
+			result:      `INT64(1)`,
+			skipFolding: true,
+		},
+		{
+			expression:  `IF(1, column0, column0) NOT BETWEEN JSON_ARRAY() AND '2021-01-01'`,
+			values:      []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Date, []byte(`2020-01-01`))},
+			result:      `INT64(0)`,
+			skipFolding: true,
+		},
+		{
+			expression:  `CASE WHEN 1 THEN column0 ELSE column0 END BETWEEN JSON_ARRAY() AND '2021-01-01'`,
+			values:      []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Date, []byte(`2020-01-01`))},
+			result:      `INT64(1)`,
+			skipFolding: true,
+		},
+		{
+			expression:  `CASE WHEN 1 THEN column0 ELSE column0 END NOT BETWEEN JSON_ARRAY() AND '2021-01-01'`,
+			values:      []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Date, []byte(`2020-01-01`))},
+			result:      `INT64(0)`,
+			skipFolding: true,
+		},
+		{
+			expression:  `GREATEST(column0, column0) BETWEEN JSON_ARRAY() AND '2021-01-01'`,
+			values:      []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Date, []byte(`2020-01-01`))},
+			result:      `INT64(1)`,
+			skipFolding: true,
+		},
+		{
+			expression:  `GREATEST(column0, column0) NOT BETWEEN JSON_ARRAY() AND '2021-01-01'`,
+			values:      []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Date, []byte(`2020-01-01`))},
+			result:      `INT64(0)`,
+			skipFolding: true,
+		},
+		{
+			expression:  `DATE_ADD(column0, INTERVAL 0 DAY) BETWEEN JSON_ARRAY() AND '2021-01-01'`,
+			values:      []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Date, []byte(`2020-01-01`))},
+			result:      `INT64(1)`,
+			skipFolding: true,
+		},
+		{
+			expression:  `DATE_ADD(column0, INTERVAL 0 DAY) NOT BETWEEN JSON_ARRAY() AND '2021-01-01'`,
+			values:      []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Date, []byte(`2020-01-01`))},
+			result:      `INT64(0)`,
+			skipFolding: true,
+		},
+
+		// Constant composite operands resolve their static type the same way.
+		// 8.0.x constant-folds them before selecting the domain while 8.4.x
+		// does not; we match 8.4.x.
+		{expression: `COALESCE(CAST('2020-01-01' AS DATE), NULL) BETWEEN JSON_ARRAY() AND '2021-01-01'`, result: `INT64(1)`},
+		{expression: `COALESCE(CAST('2020-01-01' AS DATE), NULL) NOT BETWEEN JSON_ARRAY() AND '2021-01-01'`, result: `INT64(0)`},
+		{expression: `GREATEST(CAST('2020-01-01' AS DATE), CAST('2020-06-01' AS DATE)) BETWEEN JSON_ARRAY() AND '2021-01-01'`, result: `INT64(1)`},
+
+		// A TIME-typed composite does not select the TIME domain: COALESCE
+		// over a TIME column falls back to the string domain.
+		{
+			expression:  `COALESCE(column0, column0) BETWEEN JSON_ARRAY() AND '13:00:00'`,
+			values:      []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Time, []byte(`12:00:00`))},
+			result:      `INT64(0)`,
+			skipFolding: true,
+		},
+		{
+			expression:  `COALESCE(column0, column0) NOT BETWEEN JSON_ARRAY() AND '13:00:00'`,
+			values:      []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Time, []byte(`12:00:00`))},
+			result:      `INT64(1)`,
+			skipFolding: true,
+		},
+
+		// The string and DOUBLE fallbacks still apply when no operand is
+		// date-carrying.
+		{expression: `'2020-01-01' BETWEEN JSON_ARRAY() AND '2021-01-01'`, result: `INT64(0)`},
+		{expression: `1.5 BETWEEN JSON_ARRAY() AND '2'`, result: `INT64(1)`},
+
+		// JSON-free temporal BETWEEN is unchanged.
+		{expression: `CAST('2020-01-01' AS DATE) BETWEEN '2019-01-01' AND '2021-01-01'`, result: `INT64(1)`},
+		{expression: `CAST('2020-01-01' AS DATE) NOT BETWEEN '2019-01-01' AND '2021-01-01'`, result: `INT64(0)`},
+		{expression: `CAST('12:00:00' AS TIME) BETWEEN '11:00:00' AND '13:00:00'`, result: `INT64(1)`},
+		{
+			expression: `column0 BETWEEN '2019-01-01' AND '2021-01-01'`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Date, []byte(`2020-01-01`))},
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `column0 BETWEEN '11:00:00' AND '13:00:00'`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Time, []byte(`12:00:00`))},
+			result:     `INT64(1)`,
+		},
+
+		// Simple CASE with a JSON value in a (base, WHEN) pair.
+		{expression: `case JSON_ARRAY() when '[]' then 1 else 0 end`, result: `INT64(1)`},
+		{expression: `case 0 when JSON_ARRAY() then 1 when '0' then 2 else 3 end`, result: `INT64(1)`},
+		{expression: `case '[]' when JSON_ARRAY() then 1 when 0 then 2 else 3 end`, result: `INT64(1)`},
+		{expression: `case JSON_ARRAY() when 0 then 1 when '[]' then 2 else 3 end`, result: `INT64(1)`},
+		{expression: `case when JSON_ARRAY() = '[]' then 1 else 0 end`, result: `INT64(0)`},
+		{expression: `case JSON_ARRAY(1) when CAST('[1]' AS JSON) then 1 else 0 end`, result: `INT64(1)`},
+		{expression: `case JSON_OBJECT() when JSON_ARRAY() then 1 else 0 end`, result: `INT64(0)`},
+		{expression: `case CAST(1 AS JSON) when CAST('1.0' AS JSON) then 1 else 0 end`, result: `INT64(0)`},
+		{expression: `case '[1]' when 3 then 1 when JSON_ARRAY(2) then 2 else 0 end`, result: `INT64(0)`},
+
+		// JSON-free domains are unchanged.
+		{expression: `0 IN ('0', 2)`, result: `INT64(1)`},
+		{expression: `1 BETWEEN 0 AND '2'`, result: `INT64(1)`},
+		{expression: `2 NOT BETWEEN 5 AND 20`, result: `INT64(1)`},
+		{expression: `'b' BETWEEN 'a' AND 'c'`, result: `INT64(1)`},
+		{expression: `case 0 when '0' then 1 else 2 end`, result: `INT64(1)`},
+		{expression: `case 'b' when 'b' then 1 else 2 end`, result: `INT64(1)`},
+
+		// NULL semantics are unchanged, with or without JSON in the domain.
+		{expression: `NULL IN (JSON_ARRAY(), 1)`, result: `NULL`},
+		{expression: `1 IN (NULL, JSON_ARRAY())`, result: `NULL`},
+		{expression: `0 IN (NULL, '0')`, result: `INT64(1)`},
+		{expression: `3 IN (NULL, '0')`, result: `NULL`},
+		{expression: `NULL NOT IN (1, 2)`, result: `NULL`},
+		{expression: `NULL BETWEEN 1 AND 2`, result: `NULL`},
+		{expression: `1 BETWEEN NULL AND 2`, result: `NULL`},
+		{expression: `1 BETWEEN 2 AND NULL`, result: `INT64(0)`},
+		{expression: `1 NOT BETWEEN 2 AND NULL`, result: `INT64(1)`},
+		{expression: `1 BETWEEN NULL AND 0`, result: `INT64(0)`},
+		{expression: `0 BETWEEN NULL AND JSON_ARRAY()`, result: `NULL`},
+		{expression: `NULL BETWEEN JSON_ARRAY() AND 1`, result: `NULL`},
+		{expression: `case NULL when NULL then 1 else 2 end`, result: `INT64(2)`},
+		{expression: `case 1 when NULL then 1 else 2 end`, result: `INT64(2)`},
+		{expression: `case NULL when JSON_ARRAY() then 1 else 2 end`, result: `INT64(2)`},
+
+		// The comparison domain is decided from runtime types.
+		{
+			expression: `0 IN (column0, '0')`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[]`))},
+			result:     `INT64(0)`,
+		},
+		{
+			expression: `0 BETWEEN column0 AND '0'`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[]`))},
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `case column0 when '[]' then 1 else 0 end`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[]`))},
+			result:     `INT64(1)`,
+		},
+	}
+
+	venv := vtenv.NewTestEnv()
+	for _, tc := range testCases {
+		t.Run(tc.expression, func(t *testing.T) {
+			expr, err := venv.Parser().ParseExpr(tc.expression)
+			require.NoError(t, err)
+
+			fields := evalengine.FieldResolver(makeFields(tc.values))
+			for _, folding := range []bool{false, true} {
+				if folding && tc.skipFolding {
+					continue
+				}
+				cfg := &evalengine.Config{
+					ResolveColumn:     fields.Column,
+					ResolveType:       fields.Type,
+					Collation:         collations.CollationUtf8mb4ID,
+					Environment:       venv,
+					NoConstantFolding: !folding,
+				}
+
+				converted, err := evalengine.Translate(expr, cfg)
+				require.NoError(t, err)
+
+				env := evalengine.EmptyExpressionEnv(venv)
+				env.Row = tc.values
+
+				expected, err := env.EvaluateAST(converted)
+				require.NoError(t, err)
+				require.Equalf(t, tc.result, expected.String(), "bad evaluation from eval engine (folding=%v)", folding)
+
+				res, err := env.Evaluate(converted)
+				require.NoError(t, err)
+				assert.Equalf(t, tc.result, res.String(), "bad evaluation from compiler (folding=%v)", folding)
+			}
+		})
+	}
+}
+
 func TestBindVarLiteral(t *testing.T) {
 	testCases := []struct {
 		expression string

@@ -154,6 +154,12 @@ func argToJSON(e eval) (*evalJSON, error) {
 			return evalConvert_bj(e), nil
 		}
 		return evalConvertArg_cj(e)
+	case *evalEnum:
+		// An ENUM converts to a JSON string of its textual value, not its ordinal.
+		return json.NewString(e.string), nil
+	case *evalSet:
+		// A SET converts to a JSON string of its textual value, not its bitmask.
+		return json.NewString(e.string), nil
 	case *evalTemporal:
 		return e.toJSON(), nil
 	default:
