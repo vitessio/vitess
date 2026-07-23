@@ -467,6 +467,8 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 			if shardPrimaryAliasStr := m.GetString("shard_primary_alias"); shardPrimaryAliasStr != "" {
 				if alias, err := topoproto.ParseTabletAlias(shardPrimaryAliasStr); err == nil {
 					clusters[keyspaceShard].shardPrimaryAlias = alias
+				} else {
+					log.Warn(fmt.Sprintf("failed to parse shard primary alias %q: %v", shardPrimaryAliasStr, err))
 				}
 			}
 			durabilityPolicy := m.GetString("durability_policy")

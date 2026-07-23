@@ -134,7 +134,8 @@ func validateCellsNoRecovery(ctx context.Context) error {
 	}
 	knownCells, err := ts.GetKnownCells(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to get known cells while validating --cells-no-recovery: %w", err)
+		log.Warn(fmt.Sprintf("failed to get known cells while validating --cells-no-recovery, skipping validation: %v", err))
+		return nil
 	}
 	knownCellSet := make(map[string]struct{}, len(knownCells))
 	for _, cell := range knownCells {

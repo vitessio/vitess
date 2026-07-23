@@ -957,7 +957,8 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 	// cell that has tablets in the shard is denied. ClusterHasNoPrimary uses PRS (not ERS),
 	// so --prevent-cross-cell-failover does not constrain it.
 	if analysisEntry.Analysis == inst.ClusterHasNoPrimary && len(cellsNoRecovery) > 0 {
-		shardCells, err := inst.GetCellsInShard(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
+		var shardCells []string
+		shardCells, err = inst.GetCellsInShard(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
 		if err != nil {
 			logger.Error(fmt.Sprintf("CheckAndRecover: Tablet: %+v: error fetching shard cells for --cells-no-recovery check, aborting recovery: %v", analyzedInstanceAliasString, err))
 			return err
@@ -1017,6 +1018,19 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 			// we can proceed with the dead primary recovery. We don't need to refresh the information for this dead tablet.
 			logger.Info("Force refreshing all shard tablets")
 			forceRefreshAllTabletsInShard(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, tabletsToIgnore)
+			if analysisEntry.Analysis == inst.ClusterHasNoPrimary && len(cellsNoRecovery) > 0 {
+				var shardCells []string
+				shardCells, err = inst.GetCellsInShard(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
+				if err != nil {
+					logger.Error(fmt.Sprintf("CheckAndRecover: Tablet: %+v: error fetching shard cells for --cells-no-recovery check after refresh, aborting recovery: %v", analyzedInstanceAliasString, err))
+					return err
+				}
+				if len(shardCells) > 0 && allCellsDenied(shardCells, cellsNoRecovery) {
+					logger.Info(fmt.Sprintf("CheckAndRecover: Tablet: %+v: NOT Recovering host (all shard cells are in --cells-no-recovery)", analyzedInstanceAliasString))
+					recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipCellNoRecovery.String()), 1)
+					return nil
+				}
+			}
 		} else {
 			// If we are not running a shard-wide recovery, then it is only concerned with the specific tablet
 			// on which the failure occurred and the primary instance of the shard.
