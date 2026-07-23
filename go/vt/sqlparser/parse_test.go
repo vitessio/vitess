@@ -6510,6 +6510,11 @@ var invalidSQL = []struct {
 	input  string
 	output string
 }{{
+	// MySQL only accepts a text literal or a user defined variable as the
+	// statement text of a PREPARE; a positional parameter is a syntax error.
+	input:  "prepare stmt1 from ?",
+	output: "syntax error at position 21 near ':v1'",
+}, {
 	input:  "alter vitess_migration cancel context ''",
 	output: "migration context cannot be empty at position 41",
 }, {

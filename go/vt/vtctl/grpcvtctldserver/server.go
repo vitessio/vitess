@@ -1281,6 +1281,27 @@ func (s *VtctldServer) DeleteTablets(ctx context.Context, req *vtctldatapb.Delet
 	return &vtctldatapb.DeleteTabletsResponse{}, nil
 }
 
+// fillReparentResponseFromEvent copies keyspace, shard, and promoted primary from a reparent
+// event into the caller-supplied fields. When ev.ShardInfo is zero-valued (i.e.
+// reparentShardLocked returned before populating it), the caller's default values
+// are preserved unchanged.
+func fillReparentResponseFromEvent(keyspace, shard *string, promotedPrimary **topodatapb.TabletAlias, ev *events.Reparent) {
+	if ev == nil || ev.ShardInfo.Shard == nil {
+		return
+	}
+	if k, s := ev.ShardInfo.Keyspace(), ev.ShardInfo.ShardName(); k != "" && s != "" {
+		if keyspace != nil {
+			*keyspace = k
+		}
+		if shard != nil {
+			*shard = s
+		}
+	}
+	if promotedPrimary != nil && ev.NewPrimary != nil && !topoproto.TabletAliasIsZero(ev.NewPrimary.Alias) {
+		*promotedPrimary = ev.NewPrimary.Alias
+	}
+}
+
 // EmergencyReparentShard is part of the vtctldservicepb.VtctldServer interface.
 func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldatapb.EmergencyReparentShardRequest) (resp *vtctldatapb.EmergencyReparentShardResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.EmergencyReparentShard")
@@ -1332,15 +1353,7 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 		Keyspace: req.Keyspace,
 		Shard:    req.Shard,
 	}
-
-	if ev != nil {
-		resp.Keyspace = ev.ShardInfo.Keyspace()
-		resp.Shard = ev.ShardInfo.ShardName()
-
-		if ev.NewPrimary != nil && !topoproto.TabletAliasIsZero(ev.NewPrimary.Alias) {
-			resp.PromotedPrimary = ev.NewPrimary.Alias
-		}
-	}
+	fillReparentResponseFromEvent(&resp.Keyspace, &resp.Shard, &resp.PromotedPrimary, ev)
 
 	m.RLock()
 	defer m.RUnlock()
@@ -3398,15 +3411,7 @@ func (s *VtctldServer) PlannedReparentShard(ctx context.Context, req *vtctldatap
 		Keyspace: req.Keyspace,
 		Shard:    req.Shard,
 	}
-
-	if ev != nil {
-		resp.Keyspace = ev.ShardInfo.Keyspace()
-		resp.Shard = ev.ShardInfo.ShardName()
-
-		if ev.NewPrimary != nil && !topoproto.TabletAliasIsZero(ev.NewPrimary.Alias) {
-			resp.PromotedPrimary = ev.NewPrimary.Alias
-		}
-	}
+	fillReparentResponseFromEvent(&resp.Keyspace, &resp.Shard, &resp.PromotedPrimary, ev)
 
 	m.RLock()
 	defer m.RUnlock()

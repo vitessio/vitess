@@ -28,7 +28,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 )
 
 // TestDMLNone tests that impossible query run without an error.
@@ -696,4 +698,24 @@ func getVarValue[T any](t *testing.T, key string, varFunc func() map[string]any)
 	castValue, ok := value.(T)
 	assert.True(t, ok, "unexpected type, want: %T, got %T", new(T), value)
 	return castValue
+}
+
+// TestPrepareDoesNotStartTransaction verifies that preparing a statement does
+// not start an implicit transaction when autocommit is disabled. MySQL starts
+// the transaction at the first execution, not at prepare. The gRPC API is
+// used because it returns the session state, which the MySQL protocol does
+// not expose to clients.
+func TestPrepareDoesNotStartTransaction(t *testing.T) {
+	ctx := t.Context()
+	vtgateAddr := fmt.Sprintf("%s:%d", clusterInstance.Hostname, clusterInstance.VtgateProcess.GrpcPort)
+	vtConn, err := vtgateconn.Dial(ctx, vtgateAddr)
+	require.NoError(t, err)
+	t.Cleanup(vtConn.Close)
+
+	session := vtConn.SessionFromPb(&vtgatepb.Session{TargetString: uks, Autocommit: false})
+
+	_, paramsCount, err := session.Prepare(ctx, "select msg from vt_prepare_stmt_test where id = ?")
+	require.NoError(t, err)
+	require.EqualValues(t, 1, paramsCount)
+	require.False(t, session.SessionPb().InTransaction, "prepare must not start an implicit transaction")
 }

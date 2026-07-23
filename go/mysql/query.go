@@ -1123,7 +1123,7 @@ func (c *Conn) writePrepare(fld []*querypb.Field, prepare *PrepareData) error {
 	ok := PacketComStmtPrepareOK{
 		status:       OKPacket,
 		stmtID:       prepare.StatementID,
-		numCols:      (uint16)(columnCount),
+		numCols:      uint16(columnCount),
 		numParams:    paramsCount,
 		warningCount: 0,
 	}
@@ -1233,6 +1233,42 @@ func (c *Conn) writeBinaryRows(result *sqltypes.Result) error {
 	return nil
 }
 
+// isZeroDateTime reports whether raw is a MySQL zero temporal value in one of
+// the canonical textual forms Vitess receives from MySQL:
+//
+//	"0000-00-00"                        (DATE)
+//	"0000-00-00 00:00:00"               (DATETIME / TIMESTAMP)
+//	"0000-00-00 00:00:00.0" … ".000000" (with 1-6 all-zero fractional digits)
+//
+// MySQL encodes these as a zero-length value in the binary protocol, so we must
+// do the same to avoid clients decoding a length-4/7/11 packet with all-zero
+// components into a garbage date. Only these exact forms are treated as zero;
+// anything malformed (e.g. "----", "0000/00/00", or a trailing "." with no
+// fractional digits) falls through to the normal length-based path rather than
+// being silently accepted as a valid zero date.
+func isZeroDateTime(raw []byte) bool {
+	const zeroDateTime = "0000-00-00 00:00:00" // its 10-char prefix is the zero DATE
+	switch {
+	case string(raw) == zeroDateTime[:10], string(raw) == zeroDateTime:
+		return true
+	case len(raw) > len(zeroDateTime) && raw[len(zeroDateTime)] == '.' &&
+		string(raw[:len(zeroDateTime)]) == zeroDateTime:
+		// Fractional seconds must be 1-6 digits, all zero.
+		frac := raw[len(zeroDateTime)+1:]
+		if len(frac) == 0 || len(frac) > 6 {
+			return false
+		}
+		for _, b := range frac {
+			if b != '0' {
+				return false
+			}
+		}
+		return true
+	default:
+		return false
+	}
+}
+
 func val2MySQL(v sqltypes.Value) ([]byte, error) {
 	var out []byte
 	pos := 0
@@ -1312,7 +1348,10 @@ func val2MySQL(v sqltypes.Value) ([]byte, error) {
 		out = make([]byte, 8)
 		writeUint64(out, pos, bits)
 	case sqltypes.Timestamp, sqltypes.Date, sqltypes.Datetime:
-		if len(v.Raw()) > 19 {
+		if isZeroDateTime(v.Raw()) {
+			out = make([]byte, 1)
+			out[pos] = 0x00
+		} else if len(v.Raw()) > 19 {
 			out = make([]byte, 1+11)
 			out[pos] = 0x0b
 			pos++
@@ -1559,7 +1598,9 @@ func val2MySQLLen(v sqltypes.Value) (int, error) {
 	case sqltypes.Uint64, sqltypes.Int64, sqltypes.Float64:
 		length = 8
 	case sqltypes.Timestamp, sqltypes.Date, sqltypes.Datetime:
-		if len(v.Raw()) > 19 {
+		if isZeroDateTime(v.Raw()) {
+			length = 1
+		} else if len(v.Raw()) > 19 {
 			length = 12
 		} else if len(v.Raw()) > 10 {
 			length = 8

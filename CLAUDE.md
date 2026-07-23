@@ -195,8 +195,7 @@ return user.NeedsMigration() && migrate(user) || user
 - **No naked returns in non-trivial functions** - For functions with named return values, avoid bare `return` and explicitly return all result values (very small helpers are the only exception). This does not prohibit plain `return` in `func f() { ... }` when used for early-exit/guard clauses.
 - **Reduce nesting** - Prefer early returns and guard clauses over deeply nested `if` conditions
 - **Copyright header** - New Go files must include the project copyright header with the current year
-- **Always run `gofumpt -w`** on changed Go files before committing - this is mandatory
-- **Always run `goimports -local "vitess.io/vitess" -w`** on changed Go files before committing
+- **Always run `scripts/fmt <changed-go-files>`** before committing - this is mandatory
 - **Use format verbs precisely** - Use `%s` for strings and `%d` for integers, not `%v` for everything
 - **Structured logging** - New log messages should use structured logging with `slog`-style fields (e.g., `log.Warn("message", slog.Any("error", err))`) rather than printf-style logging with format strings
 - **Reuse existing helpers** - Before writing new parsing/validation code, check for existing utilities (e.g., `sqlerror` package for MySQL error codes, `mysqlctl.ParseVersionString()`, `strings.Split()`, `topoproto.TabletAliasString()` for formatting tablet aliases)
@@ -234,10 +233,6 @@ return user.NeedsMigration() && migrate(user) || user
 - Removing or renaming a public API function (e.g., in `sqlparser`) is a breaking change for downstream users — call it out explicitly or keep a thin compatibility wrapper
 - Changelog summaries are for key changes all users should know about — internal implementation details don't belong there
 - Keep PRs clean of unrelated diffs (e.g., stray `package-lock.json` changes, `go.sum` without `go mod tidy`)
-
-### EmergencyReparentShard (ERS)
-- ERS must prioritize **certainty** that we picked the most-advanced candidate
-- Changes should prioritize reducing points of failure - avoid new RPCs or work that may delay or make ERS more brittle
 
 ## :mag: Debugging & Troubleshooting
 
@@ -412,8 +407,7 @@ Me: "Now let's optimize without breaking functionality"
 Before considering any work "done":
 - [ ] Tests pass and cover the feature
 - [ ] Code is clean and readable
-    - [ ] Golang code passes the `gofumpt` formatter
-    - [ ] Golang code passes the `goimports -local "vitess.io/vitess" -w ...` formatter
+    - [ ] Golang code passes `scripts/fmt <changed-go-files>`
 - [ ] Edge cases are handled
 - [ ] Performance is acceptable
 - [ ] Documentation is updated if needed
