@@ -105,6 +105,12 @@ func (column *Column) compile(c *compiler) (ctype, error) {
 		typ.Values = column.Values
 	} else if c.dynamicTypes != nil {
 		typ = c.dynamicTypes[column.dynamicTypeOffset]
+	} else if c.typeEnv != nil {
+		t, err := column.typeof(c.typeEnv)
+		if err != nil {
+			return ctype{}, err
+		}
+		typ = t
 	} else {
 		return ctype{}, c.unsupported(column)
 	}
