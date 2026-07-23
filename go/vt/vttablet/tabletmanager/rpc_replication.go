@@ -654,17 +654,19 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 		// considered successful. If we are already not serving, this will be
 		// idempotent.
 		log.Info("DemotePrimary disabling query service")
-		if err := tm.QueryServiceControl.SetServingType(tablet.Type, protoutil.TimeFromProto(tablet.PrimaryTermStartTime).UTC(), false, "demotion in progress"); err != nil {
-			return nil, vterrors.Wrap(err, "SetServingType(serving=false) failed")
-		}
 		defer func() {
 			if finalErr != nil && revertPartialFailure && wasServing {
 				log.Info("reverting query service to serving")
+
 				if err := tm.QueryServiceControl.SetServingType(tablet.Type, protoutil.TimeFromProto(tablet.PrimaryTermStartTime).UTC(), true, ""); err != nil {
 					log.Warn(fmt.Sprintf("SetServingType(serving=true) failed during revert: %v", err))
 				}
 			}
 		}()
+
+		if err := tm.QueryServiceControl.SetServingType(tablet.Type, protoutil.TimeFromProto(tablet.PrimaryTermStartTime).UTC(), false, "demotion in progress"); err != nil {
+			return nil, vterrors.Wrap(err, "SetServingType(serving=false) failed")
+		}
 	}
 
 	log.Info("checking semi-sync status")
@@ -696,22 +698,30 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 	// will never have seen their transactions commit - they will already have received an error.
 	//
 	// The demoted primary will end up with errant GTIDs, but that's unavoidable in this scenario.
+	revertPrimarySemiSync := func() {
+		if finalErr != nil && revertPartialFailure && wasPrimary {
+			log.Info("reverting primary-side semi-sync to enabled")
+
+			ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), topo.RemoteOperationTimeout)
+			defer cancel()
+
+			if err := tm.fixSemiSync(ctx, topodatapb.TabletType_PRIMARY, SemiSyncActionSet); err != nil {
+				log.Warn(fmt.Sprintf("fixSemiSync(PRIMARY) failed during revert: %v", err))
+			}
+		}
+	}
+
 	if force && isSemiSyncBlocked {
 		log.Info("checking primary-side semi-sync state")
 		if tm.isPrimarySideSemiSyncEnabled(ctx) {
 			// Disable the primary side semi-sync to unblock the writes.
 			log.Info("disabling primary-side semi-sync to unblock stuck writes")
+
+			defer revertPrimarySemiSync()
+
 			if err := tm.fixSemiSync(ctx, topodatapb.TabletType_REPLICA, SemiSyncActionSet); err != nil {
 				return nil, err
 			}
-			defer func() {
-				if finalErr != nil && revertPartialFailure && wasPrimary {
-					log.Info("reverting primary-side semi-sync to enabled")
-					if err := tm.fixSemiSync(ctx, topodatapb.TabletType_PRIMARY, SemiSyncActionSet); err != nil {
-						log.Warn(fmt.Sprintf("fixSemiSync(PRIMARY) failed during revert: %v", err))
-					}
-				}
-			}()
 		}
 	} else {
 		// If `force` is false, we're demoting this primary as part of a `PlannedReparentShard` operation,
@@ -742,6 +752,21 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 	// idempotent.
 	log.Info("enabling super_read_only")
 
+	defer func() {
+		if finalErr != nil && revertPartialFailure && !wasReadOnly {
+			// We need to redo the prepared transactions in read only mode using the dba user to ensure we don't lose them.
+			// setting read_only OFF will also set super_read_only OFF if it was set
+			log.Info("reverting read-only by redoing prepared transactions")
+
+			// The caller's context might have already reached its deadline or been canceled. We want to ensure
+			// we restore read-write, so we create and detach a new context.
+			ctx := context.WithoutCancel(ctx)
+			if err = tm.redoPreparedTransactionsAndSetReadWrite(ctx); err != nil {
+				log.Warn(fmt.Sprintf("RedoPreparedTransactionsAndSetReadWrite failed during revert: %v", err))
+			}
+		}
+	}()
+
 	if _, err := tm.MysqlDaemon.SetSuperReadOnly(ctx, true, mysqlctl.WithLockWaitTimeout(demotePrimaryLockWaitTimeout)); err != nil {
 		if sqlErr, ok := errors.AsType[*sqlerror.SQLError](err); ok && sqlErr.Number() == sqlerror.ERUnknownSystemVariable {
 			log.Warn("server does not know about super_read_only, continuing anyway...")
@@ -752,33 +777,17 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 		log.Info("enabled super_read_only")
 	}
 
-	defer func() {
-		if finalErr != nil && revertPartialFailure && !wasReadOnly {
-			// We need to redo the prepared transactions in read only mode using the dba user to ensure we don't lose them.
-			// setting read_only OFF will also set super_read_only OFF if it was set
-			log.Info("reverting read-only by redoing prepared transactions")
-			if err = tm.redoPreparedTransactionsAndSetReadWrite(ctx); err != nil {
-				log.Warn(fmt.Sprintf("RedoPreparedTransactionsAndSetReadWrite failed during revert: %v", err))
-			}
-		}
-	}()
-
 	log.Info("checking primary-side semi-sync state")
 	// If we haven't disabled the primary side semi-sync so far, do it now.
 	if tm.isPrimarySideSemiSyncEnabled(ctx) {
 		// If using semi-sync, we need to disable primary-side.
 		log.Info("disabling primary-side semi-sync")
+
+		defer revertPrimarySemiSync()
+
 		if err := tm.fixSemiSync(ctx, topodatapb.TabletType_REPLICA, SemiSyncActionSet); err != nil {
 			return nil, err
 		}
-		defer func() {
-			if finalErr != nil && revertPartialFailure && wasPrimary {
-				log.Info("reverting primary-side semi-sync to enabled")
-				if err := tm.fixSemiSync(ctx, topodatapb.TabletType_PRIMARY, SemiSyncActionSet); err != nil {
-					log.Warn(fmt.Sprintf("fixSemiSync(PRIMARY) failed during revert: %v", err))
-				}
-			}
-		}()
 	}
 
 	// Return the current replication position.

@@ -918,7 +918,10 @@ func (tm *TabletManager) findMysqlPort(retryInterval time.Duration) {
 // redoPreparedTransactionsAndSetReadWrite redoes prepared transactions in read-only mode.
 // We turn off super read only mode, and then redo the transactions. Finally, we turn off read-only mode to allow for further traffic.
 func (tm *TabletManager) redoPreparedTransactionsAndSetReadWrite(ctx context.Context) error {
-	_, err := tm.MysqlDaemon.SetSuperReadOnly(ctx, false)
+	sroCtx, sroCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer sroCancel()
+
+	_, err := tm.MysqlDaemon.SetSuperReadOnly(sroCtx, false)
 	if err != nil {
 		// Ignore the error if the sever doesn't support super read only variable.
 		// We should just redo the preapred transactions before we set it to read-write.
@@ -928,9 +931,13 @@ func (tm *TabletManager) redoPreparedTransactionsAndSetReadWrite(ctx context.Con
 			return err
 		}
 	}
+
 	tm.QueryServiceControl.RedoPreparedTransactions()
-	err = tm.MysqlDaemon.SetReadOnly(ctx, false)
-	return err
+
+	roCtx, roCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer roCancel()
+
+	return tm.MysqlDaemon.SetReadOnly(roCtx, false)
 }
 
 func (tm *TabletManager) initTablet(ctx context.Context) error {
