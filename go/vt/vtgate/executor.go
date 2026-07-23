@@ -69,6 +69,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/logstats"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/querylogignore"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
@@ -449,6 +450,13 @@ func (e *Executor) StreamExecute(
 	return err
 }
 
+func (e *Executor) sendQueryLog(logStats *logstats.LogStats) {
+	if querylogignore.IgnorePatterns.Get().ShouldIgnore(logStats.SQL, e.env.Parser()) {
+		return
+	}
+	e.queryLogger.Send(logStats)
+}
+
 func canReturnRows(stmtType sqlparser.StatementType) bool {
 	switch stmtType {
 	case sqlparser.StmtSelect, sqlparser.StmtShow, sqlparser.StmtExplain, sqlparser.StmtCallProc:
@@ -488,7 +496,7 @@ func (e *Executor) finalizeLogStats(logStats *logstats.LogStats, mysqlCtx vtgate
 	if logStats.SlowQuery && logStats.StmtType != "" && logStats.PlanType != "" && logStats.TabletType != "" {
 		slowQueries.Add([]string{logStats.StmtType, logStats.PlanType, logStats.TabletType}, 1)
 	}
-	e.queryLogger.Send(logStats)
+	e.sendQueryLog(logStats)
 }
 
 func (e *Executor) execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, safeSession *econtext.SafeSession, sql string, bindVars map[string]*querypb.BindVariable, prepared bool, logStats *logstats.LogStats) (sqlparser.StatementType, *sqltypes.Result, error) {
