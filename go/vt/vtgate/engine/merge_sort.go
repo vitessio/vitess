@@ -19,7 +19,6 @@ package engine
 import (
 	"context"
 	"io"
-	"slices"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
@@ -34,14 +33,6 @@ import (
 type StreamExecutor interface {
 	StreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, fetchLastInsertID bool, callback func(*sqltypes.Result) error) error
 }
-
-// Merged rows are buffered and delivered in batches so the callback chain and
-// the client see reasonably sized packets instead of one packet per row. A
-// batch is flushed once it reaches either bound.
-const (
-	mergeSortBatchRows  = 256
-	mergeSortBatchBytes = 32 * 1024
-)
 
 var _ Primitive = (*MergeSort)(nil)
 
@@ -107,75 +98,53 @@ func (ms *MergeSort) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 	}
 
 	var errs []error
-	readers := make([]*streamReader, len(handles))
-	for i, handle := range handles {
-		readers[i] = &streamReader{handle: handle}
-	}
 	// Prime the merge tree. One element must be pulled from each stream.
-	for i, reader := range readers {
-		row, done, err := reader.next(ctx)
-		if err != nil {
-			if !done {
-				// The context was canceled.
-				return err
-			}
-			if ms.ScatterErrorsAsWarnings {
-				errs = append(errs, err)
+	for i, handle := range handles {
+		select {
+		case row, ok := <-handle.row:
+			if !ok {
+				if handle.err != nil {
+					if ms.ScatterErrorsAsWarnings {
+						errs = append(errs, handle.err)
+						break
+					}
+					return handle.err
+				}
+				// It's possible that a stream returns no rows.
+				// If so, don't add anything to the heap.
 				continue
 			}
-			return err
+			merge.Push(row, i)
+		case <-ctx.Done():
+			return ctx.Err()
 		}
-		if done {
-			// It's possible that a stream returns no rows.
-			// If so, don't add anything to the heap.
-			continue
-		}
-		merge.Push(row, i)
 	}
 	merge.Init()
 
 	// Iterate one row at a time:
-	// Pop a row from the merge tree and buffer it for sending.
+	// Pop a row from the merge tree and send it out.
 	// Then pull the next row from the stream the popped
 	// row came from and replace it in the tree, or remove
-	// it if the stream is exhausted. The buffered rows are
-	// sent out in batches to keep the per-row overhead of the
-	// callback chain off the merge loop.
-	var pending []sqltypes.Row
-	byteCount := 0
-	flush := func() error {
-		if len(pending) == 0 {
-			return nil
-		}
-		result := &sqltypes.Result{Rows: pending}
-		pending = nil
-		byteCount = 0
-		return callback(result)
-	}
+	// it if the stream is exhausted.
 	for merge.Len() != 0 {
 		row, stream := merge.Peek()
-		pending = append(pending, row)
-		for _, col := range row {
-			byteCount += col.Len()
-		}
-		if len(pending) >= mergeSortBatchRows || byteCount >= mergeSortBatchBytes {
-			if err := flush(); err != nil {
-				return err
-			}
-		}
-
-		next, done, err := readers[stream].next(ctx)
-		if err != nil {
+		if err := callback(&sqltypes.Result{Rows: [][]sqltypes.Value{row}}); err != nil {
 			return err
 		}
-		if done {
-			merge.Pop()
-			continue
+
+		select {
+		case row, ok := <-handles[stream].row:
+			if !ok {
+				if handles[stream].err != nil {
+					return handles[stream].err
+				}
+				merge.Pop()
+				continue
+			}
+			merge.ReplaceMin(row, stream)
+		case <-ctx.Done():
+			return ctx.Err()
 		}
-		merge.ReplaceMin(next, stream)
-	}
-	if err := flush(); err != nil {
-		return err
 	}
 
 	err = vterrors.Aggregate(errs)
@@ -233,16 +202,15 @@ func (ms *MergeSort) description() PrimitiveDescription {
 
 // streamHandle is the rendez-vous point between each stream and the merge-sorter.
 // The fields channel is used by the stream to transmit the field info, which
-// is the first packet. Following this, the stream sends each packet's rows to
-// the rows channel as one batch, keeping the per-row channel operations off
-// the merge loop. At the end of the stream, fields and rows are closed. If
-// there was an error, err is set before the channels are closed. The MergeSort
+// is the first packet. Following this, the stream sends each row to the row
+// channel. At the end of the stream, fields and row are closed. If there
+// was an error, err is set before the channels are closed. The MergeSort
 // routine that pulls the rows out of each streamHandle can abort the stream
-// by canceling the context.
+// by calling canceling the context.
 type streamHandle struct {
 	fields    chan []*querypb.Field
 	fieldSeen bool
-	rows      chan []sqltypes.Row
+	row       chan []sqltypes.Value
 	err       error
 }
 
@@ -256,12 +224,12 @@ func runOneStream(
 ) *streamHandle {
 	handle := &streamHandle{
 		fields: make(chan []*querypb.Field, 1),
-		rows:   make(chan []sqltypes.Row, 1),
+		row:    make(chan []sqltypes.Value, 10),
 	}
 
 	go func() {
 		defer close(handle.fields)
-		defer close(handle.rows)
+		defer close(handle.row)
 
 		handle.err = input.StreamExecute(ctx, vcursor, bindVars, wantfields, fetchLastInsertID, func(qr *sqltypes.Result) error {
 			if !handle.fieldSeen && len(qr.Fields) != 0 {
@@ -273,50 +241,16 @@ func runOneStream(
 				}
 			}
 
-			if len(qr.Rows) == 0 {
-				return nil
-			}
-			// The result is only valid for the duration of the callback: the
-			// tabletserver recycles its Rows slice once the callback returns
-			// (observable through vtcombo's zero-copy internal tabletconn), so
-			// the batch that outlives this callback needs its own row slice.
-			// The rows themselves are not recycled.
-			select {
-			case handle.rows <- slices.Clone(qr.Rows):
-			case <-ctx.Done():
-				return io.EOF
+			for _, row := range qr.Rows {
+				select {
+				case handle.row <- row:
+				case <-ctx.Done():
+					return io.EOF
+				}
 			}
 			return nil
 		})
 	}()
 
 	return handle
-}
-
-// streamReader pulls one row at a time out of a streamHandle, consuming the
-// row batches its stream produces.
-type streamReader struct {
-	handle *streamHandle
-	batch  []sqltypes.Row
-	next_  int
-}
-
-// next returns the stream's next row. When the stream is exhausted, done is
-// true and err carries the stream's error, if any. If the context is canceled
-// mid-stream, done is false and err is the context error.
-func (sr *streamReader) next(ctx context.Context) (row sqltypes.Row, done bool, err error) {
-	for sr.next_ >= len(sr.batch) {
-		select {
-		case batch, ok := <-sr.handle.rows:
-			if !ok {
-				return nil, true, sr.handle.err
-			}
-			sr.batch, sr.next_ = batch, 0
-		case <-ctx.Done():
-			return nil, false, ctx.Err()
-		}
-	}
-	row = sr.batch[sr.next_]
-	sr.next_++
-	return row, false, nil
 }

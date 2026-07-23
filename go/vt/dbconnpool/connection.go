@@ -93,33 +93,27 @@ func (dbc *DBConnection) ExecuteStreamFetch(query string, callback func(*sqltype
 	}
 	defer dbc.CloseResult()
 
+	// first call the callback with the fields
 	flds, err := dbc.Fields()
 	if err != nil {
 		return err
 	}
-
-	// Coalesce the field metadata into the first data packet instead of sending
-	// it as a separate packet up front: results that fit within a single stream
-	// buffer (the common case) then take one packet instead of two. The
-	// RowsAffected/InsertID/Info carry-over from an OK packet (e.g. a CALL that
-	// performs DML) rides on the first packet the same way, matching what the
-	// buffered ExecuteFetch path reports.
-	fieldsSent := false
-	sendResult := func(qr *sqltypes.Result) error {
-		if !fieldsSent {
-			fieldsSent = true
-			qr.Fields = flds
-			if okRes := dbc.StreamOKResult(); okRes != nil {
-				qr.RowsAffected = okRes.RowsAffected
-				qr.InsertID = okRes.InsertID
-				qr.InsertIDChanged = okRes.InsertIDChanged
-				qr.Info = okRes.Info
-			}
-		}
-		return callback(qr)
+	firstResult := &sqltypes.Result{Fields: flds}
+	// If the query produced no result set but an OK packet (e.g. a CALL that
+	// performs DML), carry its RowsAffected/InsertID/Info through so the streaming
+	// path reports them like the buffered ExecuteFetch path does.
+	if okRes := dbc.StreamOKResult(); okRes != nil {
+		firstResult.RowsAffected = okRes.RowsAffected
+		firstResult.InsertID = okRes.InsertID
+		firstResult.InsertIDChanged = okRes.InsertIDChanged
+		firstResult.Info = okRes.Info
+	}
+	err = callback(firstResult)
+	if err != nil {
+		return fmt.Errorf("stream send error: %v", err)
 	}
 
-	// get all the rows, sending them as we reach a decent packet size
+	// then get all the rows, sending them as we reach a decent packet size
 	// start with a pre-allocated array of 256 rows capacity
 	qr := alloc()
 	byteCount := 0
@@ -138,9 +132,9 @@ func (dbc *DBConnection) ExecuteStreamFetch(query string, callback func(*sqltype
 		}
 
 		if byteCount >= streamBufferSize {
-			err = sendResult(qr)
+			err = callback(qr)
 			if err != nil {
-				return fmt.Errorf("stream send error: %v", err)
+				return err
 			}
 
 			qr = alloc()
@@ -148,12 +142,10 @@ func (dbc *DBConnection) ExecuteStreamFetch(query string, callback func(*sqltype
 		}
 	}
 
-	// Send any leftover rows; if nothing was sent yet, this also delivers the
-	// fields (and OK carry-over) as the sole packet of the stream.
-	if len(qr.Rows) > 0 || !fieldsSent {
-		err = sendResult(qr)
+	if len(qr.Rows) > 0 {
+		err = callback(qr)
 		if err != nil {
-			return fmt.Errorf("stream send error: %v", err)
+			return err
 		}
 	}
 

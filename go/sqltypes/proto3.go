@@ -17,8 +17,6 @@ limitations under the License.
 package sqltypes
 
 import (
-	"sync"
-
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/vterrors"
@@ -94,58 +92,6 @@ func proto3ToRows(fields []*querypb.Field, rows []*querypb.Row) [][]Value {
 		result[i] = MakeRowTrusted(fields, r)
 	}
 	return result
-}
-
-// queryResultPool holds QueryResult messages for ResultToProto3Pooled.
-var queryResultPool = sync.Pool{
-	New: func() any { return &querypb.QueryResult{} },
-}
-
-// ResultToProto3Pooled converts qr like ResultToProto3, drawing the
-// QueryResult and its Row messages from message pools. It is meant for
-// transient conversions such as marshaling a streamed result into a gRPC
-// response: once the message has been sent, the caller must release it with
-// ReleaseProto3Result and must not retain any reference to it or its rows.
-//
-// Unlike ResultToProto3 it never uses the cached proto3 rows, so the
-// returned message always owns its rows; the Fields remain shared with qr.
-func ResultToProto3Pooled(qr *Result) *querypb.QueryResult {
-	if qr == nil {
-		return nil
-	}
-	res := queryResultPool.Get().(*querypb.QueryResult)
-	res.Fields = qr.Fields
-	res.RowsAffected = qr.RowsAffected
-	res.InsertId = qr.InsertID
-	res.InsertIdChanged = qr.InsertIDChanged
-	res.Info = qr.Info
-	res.SessionStateChanges = qr.SessionStateChanges
-	if cap(res.Rows) < len(qr.Rows) {
-		res.Rows = make([]*querypb.Row, 0, len(qr.Rows))
-	}
-	for _, row := range qr.Rows {
-		r := querypb.RowFromVTPool()
-		RowToProto3Inplace(row, r)
-		res.Rows = append(res.Rows, r)
-	}
-	return res
-}
-
-// ReleaseProto3Result returns a QueryResult obtained from
-// ResultToProto3Pooled, along with its rows, to their pools. The Field
-// messages are shared with the Result the message was converted from, so
-// only the references are dropped; the fields themselves are not reset.
-func ReleaseProto3Result(res *querypb.QueryResult) {
-	if res == nil {
-		return
-	}
-	for _, r := range res.Rows {
-		r.ReturnToVTPool()
-	}
-	rows := res.Rows[:0]
-	res.Reset()
-	res.Rows = rows
-	queryResultPool.Put(res)
 }
 
 func ResultToProto3(qr *Result) *querypb.QueryResult {
