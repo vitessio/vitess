@@ -17,15 +17,19 @@ limitations under the License.
 package endtoend
 
 import (
+	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 var procSQL = []string{
@@ -39,6 +43,11 @@ var procSQL = []string{
 		select intval from vitess_test;
 		select intval from vitess_test;
 		select intval from vitess_test;
+	END;`,
+	`create procedure proc_select_then_sleep()
+	BEGIN
+		select intval from vitess_test;
+		select sleep(30);
 	END;`,
 	`create procedure proc_select2_tx_insert()
 	BEGIN
@@ -373,4 +382,23 @@ func TestCallProcedureChangedTx(t *testing.T) {
 	// This passes as this starts a new transaction by committing the old transaction implicitly.
 	_, err = client.BeginExecute(`call proc_tx_begin()`, nil, nil)
 	require.NoError(t, err)
+}
+
+// A multi-resultset procedure that emits a quick first resultset and then
+// blocks must honor the query deadline while its trailing resultsets are being
+// drained, rather than blocking until the procedure finishes on its own.
+func TestCallProcedureDrainHonorsDeadline(t *testing.T) {
+	ctx, cancel := context.WithTimeout(
+		callerid.NewContext(context.Background(), &vtrpcpb.CallerID{}, &querypb.VTGateCallerID{Username: "dev"}),
+		5*time.Second)
+	defer cancel()
+	client := framework.NewClientWithContext(ctx)
+
+	start := time.Now()
+	_, err := client.Execute("call proc_select_then_sleep()", nil)
+	elapsed := time.Since(start)
+
+	require.Error(t, err)
+	require.Less(t, elapsed, 20*time.Second,
+		"draining trailing resultsets must honor the query deadline instead of blocking for the whole procedure")
 }
