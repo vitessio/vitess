@@ -263,8 +263,6 @@ func TestVTGateStreamExecute(t *testing.T) {
 	require.NoError(t, err)
 	want := []*sqltypes.Result{{
 		Fields: sandboxconn.StreamRowResult.Fields,
-	}, {
-		Fields: sandboxconn.StreamRowResult.Fields,
 		Rows:   sandboxconn.StreamRowResult.Rows,
 	}}
 	utils.MustMatch(t, want, qrs)
