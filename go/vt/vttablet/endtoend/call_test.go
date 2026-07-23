@@ -158,6 +158,21 @@ func TestCallProcedureBufferedAfterStreamedInTx(t *testing.T) {
 	require.Equal(t, "42", qr.Rows[0][0].ToString())
 }
 
+// With the FetchLastInsertId option set, a single-resultset CALL fetches the
+// last insert id with a follow-up query. That follow-up must run only after the
+// CALL's trailing OK packet has been drained; issuing it while the trailing
+// packet is still pending desyncs the connection.
+func TestCallProcedureFetchLastInsertID(t *testing.T) {
+	client := framework.NewClient()
+
+	qr, err := client.ExecuteWithOptions("call proc_select1()", nil, &querypb.ExecuteOptions{
+		IncludedFields:    querypb.ExecuteOptions_ALL,
+		FetchLastInsertId: true,
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, qr.Rows, "single-resultset procedure should return its rows")
+}
+
 func TestCallProcedureStreaming(t *testing.T) {
 	client := framework.NewClient()
 	type testcases struct {

@@ -534,6 +534,32 @@ func TestQueryExecutorSelectImpossible(t *testing.T) {
 	}
 }
 
+// A stored procedure CALL is registered in the live query list while it runs
+// and records its rewritten SQL, so it is visible to query introspection and
+// can be terminated on shutdown like any other query.
+func TestQueryExecutorCallProcTracked(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+
+	callSQL := "call proc_registered()"
+	db.AddQuery(callSQL, &sqltypes.Result{})
+
+	ctx := t.Context()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+
+	var registeredDuringExec bool
+	db.SetBeforeFunc(callSQL, func() {
+		registeredDuringExec = len(tsv.statelessql.AppendQueryzRows(nil)) > 0
+	})
+
+	qre := newTestQueryExecutor(ctx, tsv, callSQL, 0)
+	_, err := qre.Execute()
+	require.NoError(t, err)
+	require.True(t, registeredDuringExec, "CALL must be registered in the stateless query list while executing")
+	require.Contains(t, qre.logStats.RewrittenSQL(), "proc_registered")
+}
+
 // TestDisableOnlineDDL checks whether disabling online DDLs throws the correct error or not
 func TestDisableOnlineDDL(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
