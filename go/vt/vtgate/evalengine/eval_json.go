@@ -157,6 +157,9 @@ func argToJSON(e eval) (*evalJSON, error) {
 		return e, nil
 	case *evalFloat:
 		return evalConvert_fj(e)
+	case *evalYear:
+		// A YEAR converts to an unsigned JSON integer, as in MySQL 8.4.
+		return json.NewNumber(hack.String(e.ToRawBytes()), json.NumberTypeUnsigned), nil
 	case evalNumeric:
 		return evalConvert_nj(e), nil
 	case *evalBytes:
@@ -164,6 +167,12 @@ func argToJSON(e eval) (*evalJSON, error) {
 			return evalConvert_bj(e), nil
 		}
 		return evalConvertArg_cj(e)
+	case *evalEnum:
+		// An ENUM converts to a JSON string of its textual value, not its ordinal.
+		return json.NewString(e.string), nil
+	case *evalSet:
+		// A SET converts to a JSON string of its textual value, not its bitmask.
+		return json.NewString(e.string), nil
 	case *evalTemporal:
 		return e.toJSON(), nil
 	default:
