@@ -281,6 +281,129 @@ func TestHealthCheck(t *testing.T) {
 	testChecksum(t, 0, hc.stateChecksum())
 }
 
+// TestHealthCheckConcurrentReadDuringUpdate exercises GetTabletHealthByAlias
+// (which copies the tablet's health fields under connMu via SimpleCopy) while
+// the tablet's checkConn goroutine processes streaming health responses. The
+// field writes in processResponse must hold connMu, otherwise this reports a
+// data race under -race.
+func TestHealthCheckConcurrentReadDuringUpdate(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	hcErrorCounters.ResetAll()
+	ts := memorytopo.NewServer(ctx, "cell")
+	defer ts.Close()
+	hc := createTestHc(ctx, ts)
+	defer hc.Close()
+	tablet := createTestTablet(0, "cell", "a")
+	tablet.Type = topodatapb.TabletType_REPLICA
+	input := make(chan *querypb.StreamHealthResponse)
+	_ = createFakeConn(tablet, input)
+	hc.AddTablet(tablet)
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	stop := make(chan struct{})
+
+	// Writer: drive processResponse repeatedly through the checkConn goroutine.
+	go func() {
+		defer wg.Done()
+		for i := 0; ; i++ {
+			shr := &querypb.StreamHealthResponse{
+				TabletAlias:   tablet.Alias,
+				Target:        &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+				Serving:       i%2 == 0,
+				RealtimeStats: &querypb.RealtimeStats{ReplicationLagSeconds: uint32(i % 5)},
+			}
+			select {
+			case input <- shr:
+			case <-stop:
+				return
+			}
+		}
+	}()
+
+	// Reader: copy the same fields under connMu via SimpleCopy.
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+				_, _ = hc.GetTabletHealthByAlias(tablet.Alias)
+			}
+		}
+	}()
+
+	time.Sleep(200 * time.Millisecond)
+	close(stop)
+	wg.Wait()
+}
+
+// TestTabletConnectionConcurrentWithStreamClose exercises TabletConnection,
+// which reads thc.Conn, while the tablet's checkConn goroutine repeatedly
+// closes and re-dials the connection on stream errors. closeConnection and
+// finalizeConn write thc.Conn under connMu, so TabletConnection must read it
+// under connMu too, otherwise this reports a data race under -race.
+func TestTabletConnectionConcurrentWithStreamClose(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	hcErrorCounters.ResetAll()
+	ts := memorytopo.NewServer(ctx, "cell")
+	defer ts.Close()
+	hc := createTestHc(ctx, ts)
+	defer hc.Close()
+	tablet := createTestTablet(0, "cell", "a")
+	tablet.Type = topodatapb.TabletType_REPLICA
+	input := make(chan *querypb.StreamHealthResponse)
+	fc := createFakeConn(tablet, input)
+	fc.errCh = make(chan error)
+	hc.AddTablet(tablet)
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	stop := make(chan struct{})
+
+	// Writer: alternate a health response with a stream error so the checkConn
+	// goroutine repeatedly closes and re-dials the connection.
+	go func() {
+		defer wg.Done()
+		shr := &querypb.StreamHealthResponse{
+			TabletAlias:   tablet.Alias,
+			Target:        &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+			Serving:       true,
+			RealtimeStats: &querypb.RealtimeStats{ReplicationLagSeconds: 1},
+		}
+		for {
+			select {
+			case input <- shr:
+			case <-stop:
+				return
+			}
+			select {
+			case fc.errCh <- errors.New("some stream error"):
+			case <-stop:
+				return
+			}
+		}
+	}()
+
+	// Reader: read thc.Conn through TabletConnection.
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+				_, _ = hc.TabletConnection(ctx, tablet.Alias, nil)
+			}
+		}
+	}()
+
+	time.Sleep(200 * time.Millisecond)
+	close(stop)
+	wg.Wait()
+}
+
 func TestHealthCheckStreamError(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 
