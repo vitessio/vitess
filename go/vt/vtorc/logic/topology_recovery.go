@@ -1019,11 +1019,23 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 			logger.Info("Force refreshing all shard tablets")
 			forceRefreshAllTabletsInShard(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, tabletsToIgnore)
 			if analysisEntry.Analysis == inst.ClusterHasNoPrimary && len(cellsNoRecovery) > 0 {
-				var shardCells []string
-				shardCells, err = inst.GetCellsInShard(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
+				// Read shard membership from topo rather than the SQLite cache: the preceding
+				// forceRefreshAllTabletsInShard swallows errors, so the cache may still reflect
+				// a stale allowed-cell tablet if the refresh failed. A direct topo read either
+				// succeeds (authoritative) or returns an error (we abort before PRS).
+				var shardTablets []*topo.TabletInfo
+				shardTablets, err = getShardTabletsByCell(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, nil)
 				if err != nil {
-					logger.Error(fmt.Sprintf("CheckAndRecover: Tablet: %+v: error fetching shard cells for --cells-no-recovery check after refresh, aborting recovery: %v", analyzedInstanceAliasString, err))
+					logger.Error(fmt.Sprintf("CheckAndRecover: Tablet: %+v: error fetching shard tablets for --cells-no-recovery check after refresh, aborting recovery: %v", analyzedInstanceAliasString, err))
 					return err
+				}
+				seen := make(map[string]bool)
+				var shardCells []string
+				for _, ti := range shardTablets {
+					if cell := ti.Tablet.Alias.Cell; !seen[cell] {
+						seen[cell] = true
+						shardCells = append(shardCells, cell)
+					}
 				}
 				if len(shardCells) > 0 && allCellsDenied(shardCells, cellsNoRecovery) {
 					logger.Info(fmt.Sprintf("CheckAndRecover: Tablet: %+v: NOT Recovering host (all shard cells are in --cells-no-recovery)", analyzedInstanceAliasString))
