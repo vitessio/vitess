@@ -221,3 +221,52 @@ func TestNewSQLErrorFromError(t *testing.T) {
 		})
 	}
 }
+
+func TestIsTooManyConnectionsErr(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{
+			name: "global max_connections exceeded",
+			err:  NewSQLError(CRServerHandshakeErr, "", "Too many connections"),
+			want: true,
+		},
+		{
+			name: "per-user max_user_connections exceeded (errno 1203)",
+			err:  NewSQLError(ERTooManyUserConnections, SSUnknownSQLState, "Too many connections for user"),
+			want: true,
+		},
+		{
+			name: "per-user resource limit reached (errno 1226)",
+			err:  NewSQLError(ERUserLimitReached, SSUnknownSQLState, "User 'vt_app' has exceeded the 'max_user_connections' resource (current value: 1000)"),
+			want: true,
+		},
+		{
+			name: "handshake error without too many connections message",
+			err:  NewSQLError(CRServerHandshakeErr, "", "SSL connection error"),
+			want: false,
+		},
+		{
+			name: "access denied is not a connection limit error",
+			err:  NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "access denied"),
+			want: false,
+		},
+		{
+			name: "non-SQL error",
+			err:  errors.New("some random error"),
+			want: false,
+		},
+		{
+			name: "nil error",
+			err:  nil,
+			want: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, IsTooManyConnectionsErr(tt.err))
+		})
+	}
+}
