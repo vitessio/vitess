@@ -176,10 +176,43 @@ func TestExecuteBackup(t *testing.T) {
 	require.Equal(t, 4, sourceOpenStats)
 	require.Equal(t, 4, sourceReadStats)
 
+	// A shutdown that outlives BuiltinBackupMysqldTimeout (1s here) but
+	// completes within MysqlShutdownTimeout plus the grace period must not
+	// fail the backup: the engine deadline is the larger of the two.
 	mysqld.ExpectedExecuteSuperQueryCurrent = 0 // resest the index of what queries we've run
-	mysqld.ShutdownTime = time.Minute           // reminder that shutdownDeadline is 1s
+	mysqld.ShutdownTime = 3 * time.Second
 
 	backupResult, err = be.ExecuteBackup(ctx, mysqlctl.BackupParams{
+		Logger: logutil.NewConsoleLogger(),
+		Mysqld: mysqld,
+		Cnf: &mysqlctl.Mycnf{
+			InnodbDataHomeDir:     path.Join(backupRoot, "innodb"),
+			InnodbLogGroupHomeDir: path.Join(backupRoot, "log"),
+			DataDir:               path.Join(backupRoot, "datadir"),
+		},
+		Concurrency:          2,
+		HookExtraEnv:         map[string]string{},
+		TopoServer:           ts,
+		Keyspace:             keyspace,
+		Shard:                shard,
+		Stats:                backupstats.NewFakeStats(),
+		MysqlShutdownTimeout: MysqlShutdownTimeout,
+	}, filebackupstorage.NewBackupHandle(nil, "", "", false))
+
+	require.NoError(t, err)
+	assert.Equal(t, mysqlctl.BackupUsable, backupResult)
+
+	mysqld.ExpectedExecuteSuperQueryCurrent = 0 // resest the index of what queries we've run
+	mysqld.ShutdownTime = time.Minute           // longer than the shutdown deadline below
+
+	// The engine's shutdown deadline is the larger of
+	// BuiltinBackupMysqldTimeout (1s here) and MysqlShutdownTimeout plus
+	// MysqldShutdownGracePeriod, so a short parent context bounds the
+	// shutdown instead; the engine's child timeout cannot extend it.
+	shortCtx, shortCancel := context.WithTimeout(ctx, 2*time.Second)
+	defer shortCancel()
+
+	backupResult, err = be.ExecuteBackup(shortCtx, mysqlctl.BackupParams{
 		Logger: logutil.NewConsoleLogger(),
 		Mysqld: mysqld,
 		Cnf: &mysqlctl.Mycnf{
@@ -191,7 +224,7 @@ func TestExecuteBackup(t *testing.T) {
 		TopoServer:           ts,
 		Keyspace:             keyspace,
 		Shard:                shard,
-		MysqlShutdownTimeout: MysqlShutdownTimeout,
+		MysqlShutdownTimeout: time.Second,
 	}, bh)
 
 	require.Error(t, err)

@@ -336,11 +336,10 @@ func TestGetStreamPlanFiltersRulesByAllTables(t *testing.T) {
 	}
 }
 
-// TestGetPlanFiltersTableRulesForDDL ensures a table-scoped query rule applies to DDL
-// against that table. A DDL statement's target is a bare TableName, not a FROM-clause
-// entry, so it used to be invisible to the table filter and every rule with a TableNames
-// condition was dropped from the plan.
-func TestGetPlanFiltersTableRulesForDDL(t *testing.T) {
+// A rule using the deprecated SelectStream plan name applies to streaming-path
+// plans for every statement shape the pre-v25 streaming planner labeled
+// SelectStream, and never to buffered-execution plans of the same statements.
+func TestSelectStreamRuleAppliesOnlyToStreamingPlans(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	schematest.AddDefaultQueries(db)
@@ -350,54 +349,114 @@ func TestGetPlanFiltersTableRulesForDDL(t *testing.T) {
 	qe.Open()
 	defer qe.Close()
 
-	const sourceName = "test ddl rules"
-	qr := rules.NewQueryRule("deny denied tables", "deny_tables", rules.QRFailRetry)
-	qr.AddTableCond("test_table_02")
-	qr.AddTableCond("test_table_03")
+	const sourceName = "test legacy stream rules"
+	qr := rules.NewQueryRule("deny streamed reads", "deny_streamed_reads", rules.QRFail)
+	qr.AddPlanCond(planbuilder.PlanSelectStream)
 	qrs := rules.New()
 	qrs.Add(qr)
-	qe.queryRuleSources.UnRegisterSource(sourceName)
 	qe.queryRuleSources.RegisterSource(sourceName)
 	defer qe.queryRuleSources.UnRegisterSource(sourceName)
 	require.NoError(t, qe.queryRuleSources.SetRules(sourceName, qrs))
 
-	// The schema engine in this test harness does not populate the table map, so it is
-	// built by hand. test_table_03 is deliberately absent from it: the target of a
-	// CREATE TABLE does not exist in the schema yet, so it can never be resolved through
-	// plan.AllTables, and the rule must still apply.
+	// getStreamPlan and getPlan are exercised directly with a populated schema
+	// so the planbuilder resolves the referenced tables (the schema engine in
+	// this test harness does not populate the table map).
 	curSchema := &currentSchema{
 		tables: map[string]*schema.Table{
 			"test_table_01": {Name: sqlparser.NewIdentifierCS("test_table_01")},
-			"test_table_02": {Name: sqlparser.NewIdentifierCS("test_table_02")},
+			"seq":           {Name: sqlparser.NewIdentifierCS("seq"), Type: schema.Sequence},
 		},
 	}
 
 	testcases := []struct {
-		name  string
-		sql   string
-		match bool
+		name   string
+		sql    string
+		planID planbuilder.PlanType
 	}{
-		{"alter on the denied table", "alter table test_table_02 add column v int", true},
-		{"drop on the denied table", "drop table test_table_02", true},
-		{"rename onto the denied table", "rename table test_table_01 to test_table_02", true},
-		{"create the denied table", "create table test_table_02 (id bigint primary key)", true},
-		{"create a denied table absent from the schema", "create table test_table_03 (id bigint primary key)", true},
-		{"alter on another table", "alter table test_table_01 add column v int", false},
+		{"select", "select pk from test_table_01", planbuilder.PlanSelect},
+		{"impossible-where select", "select pk from test_table_01 where 1 != 1", planbuilder.PlanSelectImpossible},
+		{"lock-function select", "select get_lock('foo', 10)", planbuilder.PlanSelectLockFunc},
+		{"next-value select", "select next value from seq", planbuilder.PlanNextval},
+		{"explain", "explain test_table_01", planbuilder.PlanSelect},
+		{"show", "show tables", planbuilder.PlanShow},
+		{"show vitess_migrations", "show vitess_migrations", planbuilder.PlanShowMigrations},
+		{"show other", "show engine innodb status", planbuilder.PlanOtherRead},
 	}
 	for _, tcase := range testcases {
 		t.Run(tcase.name, func(t *testing.T) {
-			// DDL plans are never cached, so getPlan hands back a valid plan
-			// alongside errNoCache. GetPlan swallows it.
-			plan, err := qe.getPlan(curSchema, tcase.sql, false)
-			require.ErrorIs(t, err, errNoCache)
-			require.Equal(t, planbuilder.PlanDDL, plan.PlanID)
-			if tcase.match {
-				require.NotNil(t, plan.Rules.Find("deny_tables"), "table-scoped query rule must apply to DDL against that table")
-			} else {
-				require.Nil(t, plan.Rules.Find("deny_tables"), "table-scoped query rule must not apply to DDL against another table")
+			// The private helpers return the plan together with the errNoCache
+			// sentinel for non-cacheable statements like SHOW; the public
+			// GetPlan/GetStreamPlan wrappers strip it the same way.
+			streamPlan, err := qe.getStreamPlan(curSchema, tcase.sql)
+			if err != nil {
+				require.ErrorIs(t, err, errNoCache)
 			}
+			require.Equal(t, tcase.planID, streamPlan.PlanID)
+			require.NotNil(t, streamPlan.Rules.Find("deny_streamed_reads"),
+				"SelectStream rule must apply to the streaming-path plan")
+
+			execPlan, err := qe.getPlan(curSchema, tcase.sql, false)
+			if err != nil {
+				require.ErrorIs(t, err, errNoCache)
+			}
+			require.Equal(t, tcase.planID, execPlan.PlanID)
+			require.Nil(t, execPlan.Rules.Find("deny_streamed_reads"),
+				"SelectStream rule must not apply to the buffered-execution plan")
 		})
 	}
+}
+
+// Streamed ANALYZE keeps matching rules keyed on OtherRead — its pre-v25
+// streaming plan type — and does not match legacy SelectStream rules. On the
+// buffered path, where ANALYZE has always planned as Select, neither rule
+// applies.
+func TestStreamedAnalyzeLegacyRuleMatching(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	schematest.AddDefaultQueries(db)
+
+	qe := newTestQueryEngine(10*time.Second, true, newDBConfigs(db))
+	qe.se.Open()
+	qe.Open()
+	defer qe.Close()
+
+	const sourceName = "test analyze legacy rules"
+	qrs := rules.New()
+	otherReadRule := rules.NewQueryRule("deny other reads", "deny_other_read", rules.QRFail)
+	otherReadRule.AddPlanCond(planbuilder.PlanOtherRead)
+	qrs.Add(otherReadRule)
+	selectStreamRule := rules.NewQueryRule("deny streamed reads", "deny_streamed_reads", rules.QRFail)
+	selectStreamRule.AddPlanCond(planbuilder.PlanSelectStream)
+	qrs.Add(selectStreamRule)
+	qe.queryRuleSources.RegisterSource(sourceName)
+	defer qe.queryRuleSources.UnRegisterSource(sourceName)
+	require.NoError(t, qe.queryRuleSources.SetRules(sourceName, qrs))
+
+	curSchema := &currentSchema{
+		tables: map[string]*schema.Table{
+			"test_table_01": {Name: sqlparser.NewIdentifierCS("test_table_01")},
+		},
+	}
+
+	streamPlan, err := qe.getStreamPlan(curSchema, "analyze table test_table_01")
+	if err != nil {
+		require.ErrorIs(t, err, errNoCache)
+	}
+	require.Equal(t, planbuilder.PlanSelect, streamPlan.PlanID)
+	require.NotNil(t, streamPlan.Rules.Find("deny_other_read"),
+		"an OtherRead rule must keep applying to streamed ANALYZE")
+	require.Nil(t, streamPlan.Rules.Find("deny_streamed_reads"),
+		"a SelectStream rule must not apply to streamed ANALYZE")
+
+	execPlan, err := qe.getPlan(curSchema, "analyze table test_table_01", false)
+	if err != nil {
+		require.ErrorIs(t, err, errNoCache)
+	}
+	require.Equal(t, planbuilder.PlanSelect, execPlan.PlanID)
+	require.Nil(t, execPlan.Rules.Find("deny_other_read"),
+		"an OtherRead rule must not apply to buffered ANALYZE")
+	require.Nil(t, execPlan.Rules.Find("deny_streamed_reads"),
+		"a SelectStream rule must not apply to buffered ANALYZE")
 }
 
 func TestNoStreamQueryPlanCache(t *testing.T) {
@@ -1011,6 +1070,70 @@ func TestPlanPoolUnsafe(t *testing.T) {
 			require.True(t, plan.NeedsReservedConn)
 			err = isValid(plan.PlanID, false, false)
 			require.EqualError(t, err, tcase.err)
+		})
+	}
+}
+
+// TestGetPlanFiltersTableRulesForDDL ensures a table-scoped query rule applies to DDL
+// against that table. A DDL statement's target is a bare TableName, not a FROM-clause
+// entry, so it used to be invisible to the table filter and every rule with a TableNames
+// condition was dropped from the plan.
+func TestGetPlanFiltersTableRulesForDDL(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	schematest.AddDefaultQueries(db)
+
+	qe := newTestQueryEngine(10*time.Second, true, newDBConfigs(db))
+	qe.se.Open()
+	qe.Open()
+	defer qe.Close()
+
+	const sourceName = "test ddl rules"
+	qr := rules.NewQueryRule("deny denied tables", "deny_tables", rules.QRFailRetry)
+	qr.AddTableCond("test_table_02")
+	qr.AddTableCond("test_table_03")
+	qrs := rules.New()
+	qrs.Add(qr)
+	qe.queryRuleSources.UnRegisterSource(sourceName)
+	qe.queryRuleSources.RegisterSource(sourceName)
+	defer qe.queryRuleSources.UnRegisterSource(sourceName)
+	require.NoError(t, qe.queryRuleSources.SetRules(sourceName, qrs))
+
+	// The schema engine in this test harness does not populate the table map, so it is
+	// built by hand. test_table_03 is deliberately absent from it: the target of a
+	// CREATE TABLE does not exist in the schema yet, so it can never be resolved through
+	// plan.AllTables, and the rule must still apply.
+	curSchema := &currentSchema{
+		tables: map[string]*schema.Table{
+			"test_table_01": {Name: sqlparser.NewIdentifierCS("test_table_01")},
+			"test_table_02": {Name: sqlparser.NewIdentifierCS("test_table_02")},
+		},
+	}
+
+	testcases := []struct {
+		name  string
+		sql   string
+		match bool
+	}{
+		{"alter on the denied table", "alter table test_table_02 add column v int", true},
+		{"drop on the denied table", "drop table test_table_02", true},
+		{"rename onto the denied table", "rename table test_table_01 to test_table_02", true},
+		{"create the denied table", "create table test_table_02 (id bigint primary key)", true},
+		{"create a denied table absent from the schema", "create table test_table_03 (id bigint primary key)", true},
+		{"alter on another table", "alter table test_table_01 add column v int", false},
+	}
+	for _, tcase := range testcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			// DDL plans are never cached, so getPlan hands back a valid plan
+			// alongside errNoCache. GetPlan swallows it.
+			plan, err := qe.getPlan(curSchema, tcase.sql, false)
+			require.ErrorIs(t, err, errNoCache)
+			require.Equal(t, planbuilder.PlanDDL, plan.PlanID)
+			if tcase.match {
+				require.NotNil(t, plan.Rules.Find("deny_tables"), "table-scoped query rule must apply to DDL against that table")
+			} else {
+				require.Nil(t, plan.Rules.Find("deny_tables"), "table-scoped query rule must not apply to DDL against another table")
+			}
 		})
 	}
 }

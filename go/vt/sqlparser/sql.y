@@ -5527,7 +5527,7 @@ distinct_opt:
   }
 
 prepare_statement:
-  PREPARE comment_opt sql_id FROM text_literal_or_arg
+  PREPARE comment_opt sql_id FROM text_literal
   {
     $$ = &PrepareStmt{Name:$3, Comments: Comments($2).Parsed(), Statement:$5}
   }

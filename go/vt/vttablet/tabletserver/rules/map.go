@@ -86,14 +86,28 @@ func (qri *Map) Get(ruleSource string) (*Rules, error) {
 
 // FilterByPlan creates a new Rules by prefiltering on all query rules that are contained in internal
 // Rules structures, in other words, query rules from all predefined sources will be applied.
-func (qri *Map) FilterByPlan(query string, planid planbuilder.PlanType, tableNames ...string) (newqrs *Rules) {
+func (qri *Map) FilterByPlan(query string, planids []planbuilder.PlanType, tableNames ...string) (newqrs *Rules) {
 	qri.mu.Lock()
 	defer qri.mu.Unlock()
 	newqrs = New()
 	for _, rules := range qri.queryRulesMap {
-		newqrs.Append(rules.FilterByPlan(query, planid, tableNames...))
+		newqrs.Append(rules.FilterByPlan(query, planids, tableNames...))
 	}
 	return newqrs
+}
+
+// PlanMatchesExclusively reports whether any query rule from any source matches
+// the query and tables through exclusiveID but not through any of baseIDs — that
+// is, exclusiveID is the sole reason the rule applies.
+func (qri *Map) PlanMatchesExclusively(query string, baseIDs []planbuilder.PlanType, exclusiveID planbuilder.PlanType, tableNames ...string) bool {
+	qri.mu.Lock()
+	defer qri.mu.Unlock()
+	for _, rules := range qri.queryRulesMap {
+		if rules.PlanMatchesExclusively(query, baseIDs, exclusiveID, tableNames...) {
+			return true
+		}
+	}
+	return false
 }
 
 // MarshalJSON marshals to JSON.

@@ -164,6 +164,10 @@ type (
 
 		GetExecutionMetrics() *Metrics
 
+		// PlanPrepareStatement plans the given statement text on behalf of a
+		// SQL-level PREPARE or EXECUTE statement.
+		PlanPrepareStatement(ctx context.Context, query string) (*Plan, error)
+
 		// SetExecutedPrimitive records the post-PlanSwitcher root primitive that
 		// was actually executed. Per-query state set by PlanSwitcher when it
 		// picks a branch.
@@ -182,6 +186,16 @@ type (
 
 		SetUDV(key string, value any) error
 		GetUDV(key string) *querypb.BindVariable
+
+		// StorePrepareData registers a SQL-level prepared statement in the
+		// session under the given name.
+		StorePrepareData(name string, v *vtgatepb.PrepareData)
+		// GetPrepareData returns the prepared statement registered in the
+		// session under the given name, or nil if there is none.
+		GetPrepareData(name string) *vtgatepb.PrepareData
+		// ClearPrepareData removes the named prepared statement from the
+		// session.
+		ClearPrepareData(name string)
 
 		SetSysVar(name string, expr string)
 
