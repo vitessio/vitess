@@ -20,8 +20,11 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"reflect"
+	"sync/atomic"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -34,12 +37,24 @@ import (
 	"vitess.io/vitess/go/vt/topo/faketopo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
+
+// schemaEngineControllerForTest lets tests override SchemaEngine on the mock.
+type schemaEngineControllerForTest struct {
+	*tabletservermock.Controller
+	se *schema.Engine
+}
+
+// SchemaEngine returns the test schema engine so tmState can mark promotion state.
+func (c *schemaEngineControllerForTest) SchemaEngine() *schema.Engine {
+	return c.se
+}
 
 func TestStateOpenClose(t *testing.T) {
 	ctx := t.Context()
@@ -431,8 +446,13 @@ func TestStateChangeTabletTypeWithFailure(t *testing.T) {
 	statsTabletTypeCount.ResetAll()
 	// create TM with replica and put a hook to return error during SetServingType
 	tm := newTestTM(t, ts, 2, "ks", "0", nil)
-	qsc := tm.QueryServiceControl.(*tabletservermock.Controller)
+	se := schema.NewEngineForTests()
+	qsc := &schemaEngineControllerForTest{
+		Controller: tm.QueryServiceControl.(*tabletservermock.Controller),
+		se:         se,
+	}
 	qsc.SetServingTypeError = vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "mocking resource exhaustion error ")
+	tm.QueryServiceControl = qsc
 	defer tm.Stop()
 
 	assert.Len(t, statsTabletTypeCount.Counts(), 1)
@@ -447,6 +467,7 @@ func TestStateChangeTabletTypeWithFailure(t *testing.T) {
 	err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_PRIMARY, DBActionSetReadWrite)
 	errMsg := "Cannot start query service: Code: RESOURCE_EXHAUSTED\nmocking resource exhaustion error \n: mocking resource exhaustion error "
 	require.EqualError(t, err, errMsg)
+	assert.False(t, schemaEngineIsPrimaryOrPromoting(t, se))
 
 	ti, err := ts.GetTablet(ctx, alias)
 	require.NoError(t, err)
@@ -481,6 +502,24 @@ func TestStateChangeTabletTypeWithFailure(t *testing.T) {
 	assert.Equal(t, "spare", statsTabletType.Get())
 	assert.Len(t, statsTabletTypeCount.Counts(), 3)
 	assert.Equal(t, int64(1), statsTabletTypeCount.Counts()["spare"])
+}
+
+// schemaEngineIsPrimaryOrPromoting reads promotion state without adding test APIs.
+func schemaEngineIsPrimaryOrPromoting(t *testing.T, se *schema.Engine) bool {
+	t.Helper()
+
+	return loadSchemaEngineAtomicBool(t, se, "isPrimaryTablet") ||
+		loadSchemaEngineAtomicBool(t, se, "primaryPromotionInProgress")
+}
+
+// loadSchemaEngineAtomicBool reads private atomics for white-box regression tests.
+func loadSchemaEngineAtomicBool(t *testing.T, se *schema.Engine, fieldName string) bool {
+	t.Helper()
+
+	field := reflect.ValueOf(se).Elem().FieldByName(fieldName)
+	require.True(t, field.IsValid(), "%s no longer exists on schema.Engine; update this test", fieldName)
+	require.Equal(t, reflect.TypeFor[atomic.Bool](), field.Type())
+	return (*atomic.Bool)(unsafe.Pointer(field.UnsafeAddr())).Load()
 }
 
 // TestChangeTypeErrorWhileWritingToTopo tests the case where we fail while writing to the topo-server

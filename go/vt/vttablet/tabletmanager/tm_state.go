@@ -246,12 +246,21 @@ func (ts *tmState) ChangeTabletType(ctx context.Context, tabletType topodatapb.T
 
 // updateTypeAndPublish updates the tablet type in the internal state, and publishes the changes.
 func (ts *tmState) updateTypeAndPublish(ctx context.Context, tabletType topodatapb.TabletType, primaryTermStartTime *vttime.Time, action DBAction) error {
+	var abortPrimaryPromotion func()
 	if tabletType == topodatapb.TabletType_PRIMARY {
 		if action == DBActionSetReadWrite {
+			se := ts.tm.QueryServiceControl.SchemaEngine()
+			if se != nil {
+				se.BeginPrimaryPromotion()
+				abortPrimaryPromotion = se.AbortPrimaryPromotion
+			}
 			// We need to redo the prepared transactions in read only mode using the dba user to ensure we don't lose them.
 			// We call SetReadOnly only after the topo has been updated to avoid
 			// situations where two tablets are primary at the DB level but not at the vitess level
 			if err := ts.tm.redoPreparedTransactionsAndSetReadWrite(ctx); err != nil {
+				if abortPrimaryPromotion != nil {
+					abortPrimaryPromotion()
+				}
 				return err
 			}
 		}
@@ -268,6 +277,9 @@ func (ts *tmState) updateTypeAndPublish(ctx context.Context, tabletType topodata
 	statsTabletTypeCount.Add(s, 1)
 
 	err := ts.updateLocked(ctx)
+	if err != nil && abortPrimaryPromotion != nil {
+		abortPrimaryPromotion()
+	}
 	// No need to short circuit. Apply all steps and return error in the end.
 	ts.publishStateLocked(ctx)
 	ts.tm.notifyShardSync()
