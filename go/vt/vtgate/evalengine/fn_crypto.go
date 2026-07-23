@@ -225,6 +225,10 @@ func (call *builtinRandomBytes) constant() bool {
 	return false
 }
 
+func (call *builtinRandomBytes) constForExecution() bool {
+	return false
+}
+
 func (call *builtinRandomBytes) compile(c *compiler) (ctype, error) {
 	arg, err := call.Arguments[0].compile(c)
 	if err != nil {

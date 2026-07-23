@@ -5528,7 +5528,7 @@ INPUT
 select 5 between 0 and 10 between 0 and 1,(5 between 0 and 10) between 0 and 1;
 END
 OUTPUT
-select 5 between 0 and (10 between 0 and 1), 5 between 0 and 10 between 0 and 1 from dual
+select 5 between 0 and (10 between 0 and 1), (5 between 0 and 10) between 0 and 1 from dual
 END
 INPUT
 select * from (t1 join t2 on t1.b=t2.b) natural join (t3 natural join t4);
