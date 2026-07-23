@@ -941,29 +941,24 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 	// visible in recovery_detection even though no action is taken.
 	// Global-disable is checked first so it takes precedence when both conditions
 	// apply, keeping SkippedRecoveries accurate.
-	// Tablet-level cell check: skip recovery when the failed tablet's cell is denied.
-	// ClusterHasNoPrimary is handled separately below because it is shard-wide.
-	if isActionableRecovery &&
-		analysisEntry.Analysis != inst.ClusterHasNoPrimary &&
-		len(cellsNoRecovery) > 0 &&
-		slices.Contains(cellsNoRecovery, analysisEntry.AnalyzedCell) {
-		logger.Info(fmt.Sprintf("CheckAndRecover: Tablet: %+v: NOT Recovering host (cell %v is in --cells-no-recovery)",
-			analyzedInstanceAliasString, analysisEntry.AnalyzedCell))
-		recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipCellNoRecovery.String()), 1)
-		return nil
-	}
-
-	// Shard-level cell check for ClusterHasNoPrimary: suppress initial election when every
-	// cell that has tablets in the shard is denied. ClusterHasNoPrimary uses PRS (not ERS),
-	// so --prevent-cross-cell-failover does not constrain it.
-	if analysisEntry.Analysis == inst.ClusterHasNoPrimary && len(cellsNoRecovery) > 0 {
-		var shardCells []string
-		shardCells, err = inst.GetCellsInShard(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
-		if err != nil {
-			logger.Error(fmt.Sprintf("CheckAndRecover: Tablet: %+v: error fetching shard cells for --cells-no-recovery check, aborting recovery: %v", analyzedInstanceAliasString, err))
-			return err
-		} else if len(shardCells) > 0 && allCellsDenied(shardCells, cellsNoRecovery) {
-			logger.Info(fmt.Sprintf("CheckAndRecover: Tablet: %+v: NOT Recovering host (all shard cells are in --cells-no-recovery)", analyzedInstanceAliasString))
+	if len(cellsNoRecovery) > 0 {
+		if !cellsNoRecoveryValidated.Load() {
+			// Startup validation was skipped because the topology was unreachable.
+			// Block recovery until a subsequent refresh cycle validates the deny-list;
+			// running with an unvalidated list could leave a misconfigured cell unprotected.
+			if util.ClearToLog("executeCheckAndRecoverFunction: cells-no-recovery-unvalidated", analyzedInstanceAliasString) {
+				logger.Warn("--cells-no-recovery not yet validated against topology; holding recovery until validation succeeds")
+			}
+			return nil
+		}
+		// Tablet-level cell check: skip recovery when the failed tablet's cell is denied.
+		// ClusterHasNoPrimary is handled separately below (post-lock, topo read) because it
+		// is shard-wide and AnalyzedCell is non-deterministic for that analysis.
+		if isActionableRecovery &&
+			analysisEntry.Analysis != inst.ClusterHasNoPrimary &&
+			slices.Contains(cellsNoRecovery, analysisEntry.AnalyzedCell) {
+			logger.Info(fmt.Sprintf("CheckAndRecover: Tablet: %+v: NOT Recovering host (cell %v is in --cells-no-recovery)",
+				analyzedInstanceAliasString, analysisEntry.AnalyzedCell))
 			recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipCellNoRecovery.String()), 1)
 			return nil
 		}

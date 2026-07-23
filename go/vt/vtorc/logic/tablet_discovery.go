@@ -23,6 +23,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/spf13/pflag"
@@ -50,6 +51,11 @@ var (
 	clustersToWatch  []string
 	cellsNoRecovery  []string
 	shutdownWaitTime = 30 * time.Second
+	// cellsNoRecoveryValidated is true once validateCellsNoRecovery has confirmed
+	// every entry in cellsNoRecovery exists in the topology. It starts false when
+	// the flag is set but the topo was unreachable at startup; recovery is blocked
+	// until a subsequent refresh cycle can complete validation.
+	cellsNoRecoveryValidated atomic.Bool
 	// shardsToWatch is a map storing the shards for a given keyspace that need to be watched.
 	// We store the key range for all the shards that we want to watch.
 	// This is populated by parsing `--clusters_to_watch` flag.
@@ -133,6 +139,7 @@ func RegisterFlags(fs *pflag.FlagSet) {
 // a reachable topology. When the topology is reachable, an unknown cell is fatal.
 func validateCellsNoRecovery(ctx context.Context) error {
 	if len(cellsNoRecovery) == 0 {
+		cellsNoRecoveryValidated.Store(true)
 		return nil
 	}
 	knownCells, err := ts.GetKnownCells(ctx)
@@ -149,6 +156,7 @@ func validateCellsNoRecovery(ctx context.Context) error {
 			return fmt.Errorf("--cells-no-recovery contains cell %q which does not exist in the topology (known cells: %v)", cell, knownCells)
 		}
 	}
+	cellsNoRecoveryValidated.Store(true)
 	return nil
 }
 

@@ -179,6 +179,8 @@ CREATE TABLE recovery_detection (
 	PRIMARY KEY (detection_id)
 )`,
 	`
+CREATE UNIQUE INDEX recovery_detection_alias_analysis_uniq ON recovery_detection (alias, analysis)`,
+	`
 DROP TABLE IF EXISTS database_instance_last_analysis
 `,
 	`

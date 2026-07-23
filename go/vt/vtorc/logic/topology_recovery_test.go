@@ -1663,6 +1663,9 @@ func TestCellsNoRecoveryGateSkip(t *testing.T) {
 			cellsNoRecovery = tt.cellsToSet
 			defer func() { cellsNoRecovery = prev }()
 
+			prevValidated := cellsNoRecoveryValidated.Swap(true)
+			defer func() { cellsNoRecoveryValidated.Store(prevValidated) }()
+
 			analysis := tt.analysis
 			require.NoError(t, executeCheckAndRecoverFunction(&analysis))
 
