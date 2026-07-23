@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/sqlparser"
 	. "vitess.io/vitess/go/vt/vtgate/engine/opcode"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 func TestEmptyRows(outer *testing.T) {
@@ -141,6 +142,122 @@ func TestScalarAggregateStreamExecute(t *testing.T) {
 
 	got := fmt.Sprintf("%v", results[1].Rows)
 	assert.Equal(t, "[[DECIMAL(4)]]", got)
+}
+
+// TestScalarConstantAggrPrefersShardValue checks that a constant aggregation returns the value
+// computed by the shards instead of re-evaluating the expression at the vtgate level.
+func TestScalarConstantAggrPrefersShardValue(t *testing.T) {
+	fields := sqltypes.MakeTestFields(
+		"count(*)|const",
+		"int64|int64",
+	)
+	fp := &fakePrimitive{
+		results: []*sqltypes.Result{sqltypes.MakeTestResult(fields,
+			"1|5",
+			"3|5",
+		)},
+	}
+
+	countAggr := NewAggregateParam(AggregateSum, 0, nil, "count(*)", collations.MySQL8())
+	countAggr.OrigOpcode = AggregateCountStar
+	// the expression deliberately evaluates to a different value than the one returned by the
+	// shards, to prove that the shard value is the one returned
+	constAggr := NewAggregateParam(AggregateConstant, 1, evalengine.NewLiteralInt(2), "const", collations.MySQL8())
+
+	oa := &ScalarAggregate{
+		Aggregates: []*AggregateParams{countAggr, constAggr},
+		Input:      fp,
+	}
+
+	qr, err := oa.TryExecute(t.Context(), &noopVCursor{}, nil, false)
+	require.NoError(t, err)
+	assert.Equal(t, `[[INT64(4) INT64(5)]]`, fmt.Sprintf("%v", qr.Rows))
+}
+
+// TestScalarConstantAggrEmptyInput checks that a constant aggregation falls back to evaluating
+// the expression when the input has no rows.
+func TestScalarConstantAggrEmptyInput(t *testing.T) {
+	fields := sqltypes.MakeTestFields(
+		"const",
+		"int64",
+	)
+	fp := &fakePrimitive{
+		results: []*sqltypes.Result{sqltypes.MakeTestResult(fields)},
+	}
+
+	oa := &ScalarAggregate{
+		Aggregates: []*AggregateParams{
+			NewAggregateParam(AggregateConstant, 0, evalengine.NewLiteralInt(2), "const", collations.MySQL8()),
+		},
+		Input: fp,
+	}
+
+	qr, err := oa.TryExecute(t.Context(), &noopVCursor{}, nil, false)
+	require.NoError(t, err)
+	assert.Equal(t, `[[INT64(2)]]`, fmt.Sprintf("%v", qr.Rows))
+}
+
+// TestScalarConstantAggrNullShardValue checks that a NULL returned by the shards is a legitimate
+// captured value for a constant aggregation and does not trigger expression evaluation.
+func TestScalarConstantAggrNullShardValue(t *testing.T) {
+	fields := sqltypes.MakeTestFields(
+		"const",
+		"int64",
+	)
+	fp := &fakePrimitive{
+		results: []*sqltypes.Result{sqltypes.MakeTestResult(fields,
+			"null",
+		)},
+	}
+
+	oa := &ScalarAggregate{
+		Aggregates: []*AggregateParams{
+			NewAggregateParam(AggregateConstant, 0, evalengine.NewLiteralInt(2), "const", collations.MySQL8()),
+		},
+		Input: fp,
+	}
+
+	qr, err := oa.TryExecute(t.Context(), &noopVCursor{}, nil, false)
+	require.NoError(t, err)
+	assert.Equal(t, `[[NULL]]`, fmt.Sprintf("%v", qr.Rows))
+}
+
+// TestScalarConstantAggrStreamExecute checks that a constant aggregation returns the value
+// computed by the shards on the streaming path.
+func TestScalarConstantAggrStreamExecute(t *testing.T) {
+	fields := sqltypes.MakeTestFields(
+		"count(*)|const",
+		"int64|int64",
+	)
+	fp := &fakePrimitive{
+		allResultsInOneCall: true,
+		results: []*sqltypes.Result{
+			sqltypes.MakeTestResult(fields,
+				"1|5",
+			), sqltypes.MakeTestResult(fields,
+				"3|5",
+			),
+		},
+	}
+
+	countAggr := NewAggregateParam(AggregateSum, 0, nil, "count(*)", collations.MySQL8())
+	countAggr.OrigOpcode = AggregateCountStar
+	constAggr := NewAggregateParam(AggregateConstant, 1, evalengine.NewLiteralInt(2), "const", collations.MySQL8())
+
+	oa := &ScalarAggregate{
+		Aggregates: []*AggregateParams{countAggr, constAggr},
+		Input:      fp,
+	}
+
+	var results []*sqltypes.Result
+	err := oa.TryStreamExecute(t.Context(), &noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
+		results = append(results, qr)
+		return nil
+	})
+	require.NoError(t, err)
+	// one for the fields, and one for the actual aggregation result
+	require.Len(t, results, 2, "number of results")
+	assert.Equal(t, `[[INT64(4) INT64(5)]]`, fmt.Sprintf("%v", results[1].Rows))
 }
 
 // TestScalarAggregateExecuteTruncate checks if truncate works

@@ -109,6 +109,50 @@ func TestOrderedAggregateExecuteTruncate(t *testing.T) {
 	utils.MustMatch(t, wantResult, result)
 }
 
+// TestOrderedAggregateConstantAggrPerGroup checks that a grouped constant aggregation captures
+// the first-row value of each group, with the captured value reset between groups.
+func TestOrderedAggregateConstantAggrPerGroup(t *testing.T) {
+	fields := sqltypes.MakeTestFields(
+		"col|count(*)|const",
+		"varbinary|int64|int64",
+	)
+	fp := &fakePrimitive{
+		results: []*sqltypes.Result{sqltypes.MakeTestResult(fields,
+			"a|1|10",
+			"a|2|10",
+			"b|5|20",
+		)},
+	}
+
+	countAggr := NewAggregateParam(AggregateSum, 1, nil, "", collations.MySQL8())
+	countAggr.OrigOpcode = AggregateCountStar
+	// the expression deliberately evaluates to a different value than the ones returned by the
+	// shards, to prove that each group returns its own captured shard value
+	constAggr := NewAggregateParam(AggregateConstant, 2, evalengine.NewLiteralInt(99), "", collations.MySQL8())
+
+	oa := &OrderedAggregate{
+		Aggregates:  []*AggregateParams{countAggr, constAggr},
+		GroupByKeys: []*GroupByParams{{KeyCol: 0}},
+		Input:       fp,
+	}
+
+	result, err := oa.TryExecute(t.Context(), &noopVCursor{}, nil, false)
+	require.NoError(t, err)
+	assert.Equal(t, `[[VARBINARY("a") INT64(3) INT64(10)] [VARBINARY("b") INT64(5) INT64(20)]]`, fmt.Sprintf("%v", result.Rows))
+
+	fp.rewind()
+	results := &sqltypes.Result{}
+	err = oa.TryStreamExecute(t.Context(), &noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
+		if qr.Fields != nil {
+			results.Fields = qr.Fields
+		}
+		results.Rows = append(results.Rows, qr.Rows...)
+		return nil
+	})
+	require.NoError(t, err)
+	assert.Equal(t, `[[VARBINARY("a") INT64(3) INT64(10)] [VARBINARY("b") INT64(5) INT64(20)]]`, fmt.Sprintf("%v", results.Rows))
+}
+
 func TestMinMaxFailsCorrectly(t *testing.T) {
 	fp := &fakePrimitive{
 		results: []*sqltypes.Result{sqltypes.MakeTestResult(

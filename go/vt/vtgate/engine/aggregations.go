@@ -280,16 +280,35 @@ func (a *aggregatorScalar) reset() {
 	a.hasValue = false
 }
 
+// aggregatorConstant returns the value the shards computed for a constant expression,
+// captured from the first input row. The expression is only evaluated at the vtgate
+// level when no input row arrived, so that a scalar aggregate over an empty input
+// still produces a row containing the constant.
 type aggregatorConstant struct {
-	expr evalengine.Expr
+	from     int
+	expr     evalengine.Expr
+	current  sqltypes.Value
+	hasValue bool
 }
 
-func (*aggregatorConstant) add([]sqltypes.Value) error {
+func (a *aggregatorConstant) add(row []sqltypes.Value) error {
+	if !a.hasValue {
+		a.current = row[a.from]
+		a.hasValue = true
+	}
 	return nil
 }
 
 func (a *aggregatorConstant) finish(env *evalengine.ExpressionEnv, coll collations.ID) (sqltypes.Value, error) {
+	if a.hasValue {
+		return a.current, nil
+	}
 	return eval(env, a.expr, coll)
+}
+
+func (a *aggregatorConstant) reset() {
+	a.current = sqltypes.NULL
+	a.hasValue = false
 }
 
 func eval(env *evalengine.ExpressionEnv, eexpr evalengine.Expr, coll collations.ID) (sqltypes.Value, error) {
@@ -300,8 +319,6 @@ func eval(env *evalengine.ExpressionEnv, eexpr evalengine.Expr, coll collations.
 
 	return v.Value(coll), nil
 }
-
-func (*aggregatorConstant) reset() {}
 
 type aggregatorGroupConcat struct {
 	from      int
@@ -505,7 +522,7 @@ func newAggregation(fields []*querypb.Field, aggregates []*AggregateParams, env 
 			}
 
 		case opcode.AggregateConstant:
-			ag = &aggregatorConstant{expr: aggr.EExpr}
+			ag = &aggregatorConstant{from: aggr.Col, expr: aggr.EExpr}
 
 		default:
 			panic("BUG: unexpected Aggregation opcode")

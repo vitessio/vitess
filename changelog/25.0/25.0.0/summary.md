@@ -27,6 +27,7 @@
         - [PREPARE statements no longer report the prepared statement's tables](#vtgate-prepare-tables-used)
         - [Preparing a statement no longer starts an implicit transaction](#vtgate-prepare-no-implicit-tx)
         - [Stricter validation of SQL-level PREPARE statements](#vtgate-prepare-stricter-validation)
+        - [Constant expressions in cross-shard aggregations return shard-computed values](#vtgate-constant-aggregation-shard-values)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
         - [Query timeout for state-changing statements on the streaming path](#vttablet-stream-query-timeout)
@@ -246,6 +247,10 @@ SQL-level `PREPARE` and binary-protocol `COM_STMT_PREPARE` now reject statement 
 Additionally, `PREPARE ... FROM ?` is now a syntax error, matching MySQL: the grammar accidentally accepted a positional parameter as the statement text, but no value could ever reach it and the statement always failed. This also affects programs that parse SQL using the `go/vt/sqlparser` package directly.
 
 See [#20562](https://github.com/vitessio/vitess/pull/20562) for details.
+
+#### <a id="vtgate-constant-aggregation-shard-values"/>Constant expressions in cross-shard aggregations return shard-computed values</a>
+
+When a cross-shard aggregation query selects a constant expression alongside aggregate functions (e.g. `select count(*), <constant-expression> from t`), VTGate previously re-evaluated the constant expression itself, even though the expression is also computed by MySQL on every shard. For the rare expressions where VTGate's evaluation engine and MySQL disagree, this silently returned a different value than every shard computed. VTGate now returns the value computed by the shards, and only evaluates the expression itself when the input is empty — where a scalar aggregate must still produce a row containing the constant.
 
 ### <a id="minor-changes-vttablet"/>VTTablet</a>
 
