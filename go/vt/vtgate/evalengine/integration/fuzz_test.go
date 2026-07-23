@@ -166,6 +166,9 @@ func evaluateLocalEvalengine(env *evalengine.ExpressionEnv, query string, fields
 				err = fmt.Errorf("PANIC: %v", r)
 			}
 		}()
+		// Evaluation sees the same column declarations as translation and
+		// the remote table: a SQL NULL row value carries no type of its own.
+		env.Fields = fields
 		eval, err = env.Evaluate(local)
 		return
 	}()

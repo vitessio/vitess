@@ -36,6 +36,7 @@ type (
 		eval(env *ExpressionEnv) (eval, error)
 		format(buf *sqlparser.TrackedBuffer)
 		constant() bool
+		constForExecution() bool
 		simplify(env *ExpressionEnv) error
 		compile(c *compiler) (ctype, error)
 	}
