@@ -1563,3 +1563,116 @@ func TestRestartDirectReplicasTimeout(t *testing.T) {
 		require.Empty(t, activeRecoveries, "recovery row must be resolved after restartDirectReplicas returns")
 	})
 }
+
+func TestAllCellsDenied(t *testing.T) {
+	tests := []struct {
+		name          string
+		shardCells    []string
+		deniedCells   []string
+		wantAllDenied bool
+	}{
+		{"all cells denied", []string{"z1", "z2"}, []string{"z1", "z2"}, true},
+		{"superset denied", []string{"z1", "z2"}, []string{"z1", "z2", "z3"}, true},
+		{"partial denied", []string{"z1", "z2"}, []string{"z1"}, false},
+		{"none denied", []string{"z1", "z2"}, []string{"z3"}, false},
+		{"empty denied list", []string{"z1"}, []string{}, false},
+		{"empty shard cells", []string{}, []string{"z1"}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.wantAllDenied, allCellsDenied(tt.shardCells, tt.deniedCells))
+		})
+	}
+}
+
+// TestCellsNoRecoveryGateSkip verifies that executeCheckAndRecoverFunction returns
+// nil without attempting recovery when the cell gate fires. The skip cases are
+// distinguishable at the unit level because: (a) without a gate skip the function
+// proceeds to LockShard + actual recovery, (b) the skip path returns nil without
+// touching the topology_recovery table. The proceed path is covered by the e2e
+// test TestDownPrimary_CellsNoRecovery.
+func TestCellsNoRecoveryGateSkip(t *testing.T) {
+	tests := []struct {
+		name         string
+		analysis     inst.DetectionAnalysis
+		cellsToSet   []string
+		shardTablets []struct {
+			cell string
+			uid  uint32
+		}
+	}{
+		{
+			name: "tablet-level skip when analyzed cell is in deny list",
+			analysis: inst.DetectionAnalysis{
+				Analysis:              inst.ConnectedToWrongPrimary,
+				AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+				AnalyzedCell:          "zone1",
+				AnalyzedKeyspace:      "ks",
+				AnalyzedShard:         "0",
+			},
+			cellsToSet: []string{"zone1"},
+		},
+		{
+			name: "shard-level skip when all shard cells are in deny list",
+			analysis: inst.DetectionAnalysis{
+				Analysis:              inst.ClusterHasNoPrimary,
+				AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+				AnalyzedCell:          "zone1",
+				AnalyzedKeyspace:      "ks",
+				AnalyzedShard:         "0",
+			},
+			cellsToSet: []string{"zone1", "zone2"},
+			shardTablets: []struct {
+				cell string
+				uid  uint32
+			}{
+				{"zone1", 100},
+				{"zone2", 200},
+			},
+		},
+	}
+
+	db.ClearVTOrcDatabase()
+	defer db.ClearVTOrcDatabase()
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			orcDb, _, err := db.OpenVTOrcWithCache()
+			require.NoError(t, err)
+			for _, tbl := range []string{"topology_recovery_steps", "topology_recovery", "recovery_detection", "vitess_tablet", "global_recovery_disable"} {
+				_, err = orcDb.Exec("DELETE FROM " + tbl)
+				require.NoError(t, err)
+			}
+
+			for _, tab := range tt.shardTablets {
+				require.NoError(t, inst.SaveTablet(&topodatapb.Tablet{
+					Alias:    &topodatapb.TabletAlias{Cell: tab.cell, Uid: tab.uid},
+					Keyspace: tt.analysis.AnalyzedKeyspace,
+					Shard:    tt.analysis.AnalyzedShard,
+				}))
+			}
+
+			ctx := t.Context()
+			oldTs := ts
+			ts = memorytopo.NewServer(ctx, "zone1", "zone2")
+			require.NoError(t, ts.CreateKeyspace(ctx, tt.analysis.AnalyzedKeyspace, &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilityNone}))
+			require.NoError(t, ts.CreateShard(ctx, tt.analysis.AnalyzedKeyspace, tt.analysis.AnalyzedShard))
+			defer func() { ts = oldTs }()
+
+			prev := cellsNoRecovery
+			cellsNoRecovery = tt.cellsToSet
+			defer func() { cellsNoRecovery = prev }()
+
+			analysis := tt.analysis
+			require.NoError(t, executeCheckAndRecoverFunction(&analysis))
+
+			var recoveryRows int
+			require.NoError(t, orcDb.QueryRow("SELECT COUNT(*) FROM topology_recovery").Scan(&recoveryRows))
+			require.Zero(t, recoveryRows, "no topology_recovery row should exist when recovery is skipped by the cell gate")
+
+			var detectionRows int
+			require.NoError(t, orcDb.QueryRow("SELECT COUNT(*) FROM recovery_detection").Scan(&detectionRows))
+			require.Equal(t, 1, detectionRows, "detection must be recorded even when recovery is skipped")
+		})
+	}
+}

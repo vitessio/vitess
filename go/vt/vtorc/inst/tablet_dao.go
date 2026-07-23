@@ -157,3 +157,15 @@ func SaveTablet(tablet *topodatapb.Tablet) error {
 	)
 	return err
 }
+
+// GetCellsInShard returns the distinct set of cells that have tablets in the given keyspace/shard.
+func GetCellsInShard(keyspace, shard string) ([]string, error) {
+	query := `SELECT DISTINCT cell FROM vitess_tablet WHERE keyspace = ? AND shard = ?`
+	args := sqlutils.Args(keyspace, shard)
+	var cells []string
+	err := db.QueryVTOrc(query, args, func(row sqlutils.RowMap) error {
+		cells = append(cells, row.GetString("cell"))
+		return nil
+	})
+	return cells, err
+}

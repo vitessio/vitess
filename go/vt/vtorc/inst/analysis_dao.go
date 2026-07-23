@@ -73,6 +73,10 @@ type clusterAnalysis struct {
 	shardWideProblem      *DetectionAnalysisProblem
 	totalTablets          int
 	primaryAlias          *topodatapb.TabletAlias
+	// shardPrimaryAlias is the last-known primary alias from vitess_shard.primary_alias.
+	// Unlike primaryAlias (which comes from live vitess_tablet rows), this is available
+	// even after the primary tablet has been deleted from the topology.
+	shardPrimaryAlias *topodatapb.TabletAlias
 
 	// primaryTimestamp is the most recent primary term start time observed for the shard.
 	primaryTimestamp time.Time
@@ -104,6 +108,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		vitess_keyspace.durability_policy AS durability_policy,
 		vitess_keyspace.disable_emergency_reparent AS keyspace_disable_emergency_reparent,
 		vitess_shard.primary_timestamp AS shard_primary_term_timestamp,
+		vitess_shard.primary_alias AS shard_primary_alias,
 		vitess_shard.disable_emergency_reparent AS shard_disable_emergency_reparent,
 		primary_instance.read_only AS read_only,
 		MIN(primary_instance.gtid_errant) AS gtid_errant,
@@ -391,6 +396,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		a.ShardPrimaryTermTimestamp = m.GetTime("shard_primary_term_timestamp")
 		a.IsPrimary = m.GetBool("is_primary")
 		a.AnalyzedInstanceAlias = tablet.Alias
+		a.AnalyzedCell = tablet.Alias.GetCell()
 		a.AnalyzedInstancePrimaryAlias = primaryTablet.Alias
 		a.AnalyzedInstanceBinlogCoordinates = BinlogCoordinates{
 			LogFile: m.GetString("binary_log_file"),
@@ -457,6 +463,13 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 				a.IsClusterPrimary = true
 				clusters[keyspaceShard].primaryAlias = a.AnalyzedInstanceAlias
 				clusters[keyspaceShard].primaryTimestamp = a.PrimaryTimeStamp
+			}
+			if shardPrimaryAliasStr := m.GetString("shard_primary_alias"); shardPrimaryAliasStr != "" {
+				if alias, err := topoproto.ParseTabletAlias(shardPrimaryAliasStr); err == nil {
+					clusters[keyspaceShard].shardPrimaryAlias = alias
+				} else {
+					log.Warn(fmt.Sprintf("failed to parse shard primary alias %q: %v", shardPrimaryAliasStr, err))
+				}
 			}
 			durabilityPolicy := m.GetString("durability_policy")
 			if durabilityPolicy == "" {
@@ -759,6 +772,20 @@ func postProcessAnalyses(result []*DetectionAnalysis, clusters map[string]*clust
 			analysis.QuorumDetail = nil
 		}
 	}
+	// For PrimaryTabletDeleted, AnalyzedCell comes from a surviving replica row (the deleted
+	// primary has no vitess_tablet record). Override it with the cell recorded in
+	// vitess_shard.primary_alias so that the cell gate in --cells-no-recovery sees the
+	// deleted primary's actual cell, not whichever replica happened to appear first.
+	for _, analysis := range result {
+		if analysis.Analysis != PrimaryTabletDeleted {
+			continue
+		}
+		keyspaceShard := getKeyspaceShardName(analysis.AnalyzedKeyspace, analysis.AnalyzedShard)
+		if ca := clusters[keyspaceShard]; ca != nil && ca.shardPrimaryAlias != nil {
+			analysis.AnalyzedCell = ca.shardPrimaryAlias.GetCell()
+		}
+	}
+
 	return result
 }
 

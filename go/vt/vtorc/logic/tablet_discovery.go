@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -36,11 +35,9 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/utils"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/inst"
@@ -51,7 +48,7 @@ var (
 	ts               *topo.Server
 	tmc              tmclient.TabletManagerClient
 	clustersToWatch  []string
-	cellsToWatch     []string
+	cellsNoRecovery  []string
 	shutdownWaitTime = 30 * time.Second
 	// shardsToWatch is a map storing the shards for a given keyspace that need to be watched.
 	// We store the key range for all the shards that we want to watch.
@@ -123,8 +120,36 @@ func getEmergencyReparentShardDisabledStats() map[string]int64 {
 // RegisterFlags registers the flags required by VTOrc
 func RegisterFlags(fs *pflag.FlagSet) {
 	utils.SetFlagStringSliceVar(fs, &clustersToWatch, "clusters-to-watch", clustersToWatch, "Comma-separated list of keyspaces or keyspace/keyranges that this instance will monitor and repair. Defaults to all clusters in the topology. Example: \"ks1,ks2/-80\"")
-	utils.SetFlagStringSliceVar(fs, &cellsToWatch, "cells-to-watch", cellsToWatch, "Comma-separated list of cells that this instance will monitor and repair. Defaults to all cells in the topology. Example: \"cell1,cell2\"")
+	utils.SetFlagStringSliceVar(fs, &cellsNoRecovery, "cells-no-recovery", cellsNoRecovery, "Comma-separated list of cells in which VTOrc skips recovery actions when the analyzed tablet is in one of these cells. For ClusterHasNoPrimary (no primary exists in the shard), recovery is suppressed only when every cell that has tablets in the shard is listed; a partial deny-list lets the initial election proceed. Detection still happens and discovery still spans all cells. Cells are validated against the topology at startup. Example: \"cell1,cell2\"")
 	utils.SetFlagDurationVar(fs, &shutdownWaitTime, "shutdown-wait-time", shutdownWaitTime, "Maximum time to wait for VTOrc to release all the locks that it is holding before shutting down on SIGTERM")
+}
+
+// validateCellsNoRecovery ensures every cell passed to --cells-no-recovery
+// exists in the topology. Recovery skipping relies on an exact match against
+// the analyzed tablet's cell, so an unknown cell name would silently disable
+// the intended protection. If the topology is unreachable at startup, validation
+// is skipped with a warning so VTOrc can still start; the risk is that a
+// misconfigured cell name becomes a silent no-op until VTOrc is restarted with
+// a reachable topology. When the topology is reachable, an unknown cell is fatal.
+func validateCellsNoRecovery(ctx context.Context) error {
+	if len(cellsNoRecovery) == 0 {
+		return nil
+	}
+	knownCells, err := ts.GetKnownCells(ctx)
+	if err != nil {
+		log.Warn(fmt.Sprintf("failed to get known cells while validating --cells-no-recovery, skipping validation: %v", err))
+		return nil
+	}
+	knownCellSet := make(map[string]struct{}, len(knownCells))
+	for _, cell := range knownCells {
+		knownCellSet[cell] = struct{}{}
+	}
+	for _, cell := range cellsNoRecovery {
+		if _, ok := knownCellSet[cell]; !ok {
+			return fmt.Errorf("--cells-no-recovery contains cell %q which does not exist in the topology (known cells: %v)", cell, knownCells)
+		}
+	}
+	return nil
 }
 
 // initializeShardsToWatch parses the --clusters_to_watch flag-value
@@ -208,6 +233,14 @@ func OpenTabletDiscovery() <-chan time.Time {
 	// it on a timer.
 	ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 	defer cancel()
+	// Validate --cells-no-recovery against the topology's known cells.
+	// A typo or stale cell name would silently fail to protect the intended
+	// cell; exit if the topo is reachable and the cell is absent. If the
+	// topo is unreachable, validation is skipped with a warning.
+	if err := validateCellsNoRecovery(ctx); err != nil {
+		log.Error(err.Error())
+		os.Exit(1)
+	}
 	if err := refreshAllInformation(ctx); err != nil {
 		log.Error(fmt.Sprintf("failed to initialize topo information: %+v", err))
 	}
@@ -255,15 +288,6 @@ func refreshTabletsUsing(ctx context.Context, loader func(*topodatapb.TabletAlia
 	cells, err := ts.GetKnownCells(cellsCtx)
 	if err != nil {
 		return err
-	}
-
-	if len(cellsToWatch) > 0 {
-		for _, cellToWatch := range cellsToWatch {
-			if !slices.Contains(cells, cellToWatch) {
-				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cell %v does not exist in the topo", cellToWatch)
-			}
-		}
-		cells = cellsToWatch
 	}
 
 	// Get all tablets from all cells.
@@ -322,7 +346,7 @@ func refreshTabletInfoOfShard(ctx context.Context, keyspace, shard string) {
 }
 
 func refreshTabletsInKeyspaceShard(ctx context.Context, keyspace, shard string, loader func(*topodatapb.TabletAlias), forceRefresh bool, tabletsToIgnore []*topodatapb.TabletAlias) {
-	tablets, err := getShardTabletsByCell(ctx, keyspace, shard, cellsToWatch)
+	tablets, err := getShardTabletsByCell(ctx, keyspace, shard, nil)
 	if err != nil {
 		log.Error(fmt.Sprintf("Error fetching tablets for keyspace/shard %v/%v: %v", keyspace, shard, err))
 		return
