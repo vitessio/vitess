@@ -59,12 +59,30 @@ var createCommand = &cobra.Command{
 		if !cmd.Flags().Lookup("tables").Changed && !cmd.Flags().Lookup("all-tables").Changed {
 			return errors.New("tables or all-tables are required to specify which tables to move")
 		}
+		if err := validateTableSelectionFlags(); err != nil {
+			return err
+		}
 		if err := common.ParseAndValidateCreateOptions(cmd); err != nil {
 			return err
 		}
 		return nil
 	},
 	RunE: commandCreate,
+}
+
+// validateTableSelectionFlags rejects combining a non-empty --tables list
+// with an effective --all-tables=true, which would otherwise silently ignore
+// --all-tables. Checking the effective values rather than flag presence keeps
+// --tables=t1 --all-tables=false and --tables= --all-tables=true valid, so
+// automation can always emit flags explicitly. This matches the server-side
+// validation in workflow.Server.moveTablesCreate.
+//
+// See https://github.com/vitessio/vitess/issues/20566.
+func validateTableSelectionFlags() error {
+	if len(createOptions.IncludeTables) > 0 && createOptions.AllTables {
+		return errors.New("--tables and --all-tables are mutually exclusive")
+	}
+	return nil
 }
 
 func commandCreate(cmd *cobra.Command, args []string) error {

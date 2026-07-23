@@ -14,27 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package movetables
+package migrate
 
 import (
 	"testing"
 
-	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 )
-
-func TestKeepDataHelpMentionsReverseWorkflowDefault(t *testing.T) {
-	root := &cobra.Command{Use: "test"}
-	registerCommands(root)
-
-	completeCmd, _, err := root.Find([]string{"MoveTables", "complete"})
-	require.NoError(t, err)
-	require.Contains(t, completeCmd.Flags().Lookup("keep-data").Usage, "Defaults to true for an explicitly specified _reverse workflow unless --keep-data=false is provided.")
-
-	cancelCmd, _, err := root.Find([]string{"MoveTables", "cancel"})
-	require.NoError(t, err)
-	require.Contains(t, cancelCmd.Flags().Lookup("keep-data").Usage, "Defaults to true for an explicitly specified _reverse workflow unless --keep-data=false is provided.")
-}
 
 func TestValidateTableSelectionFlags(t *testing.T) {
 	// The helper checks the effective option values, mirroring the server-side
