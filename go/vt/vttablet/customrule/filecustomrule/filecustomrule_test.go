@@ -58,3 +58,59 @@ func TestFileCustomRule(t *testing.T) {
 	qr := qrs.Find("r1")
 	require.NotNilf(t, qr, "Expect custom rule r1 to be found, but got nothing, qrs=%v", qrs)
 }
+
+// TestActivateFileCustomRulesLoadFailure covers what happens at vttablet
+// startup when the custom rules file cannot be loaded: by default the
+// tablet keeps serving without file based custom rules (fail-open), and with
+// --filecustomrules-strict the load error is fatal instead.
+// See https://github.com/vitessio/vitess/issues/20522.
+func TestActivateFileCustomRulesLoadFailure(t *testing.T) {
+	badRulePath := path.Join(t.TempDir(), "bad-customrule.json")
+	err := os.WriteFile(badRulePath, []byte("{ not valid json"), os.FileMode(0o644))
+	require.NoError(t, err)
+
+	goodRulePath := path.Join(t.TempDir(), "good-customrule.json")
+	err = os.WriteFile(goodRulePath, []byte(customRule1), os.FileMode(0o644))
+	require.NoError(t, err)
+
+	// setup points the package-level state at the given rules file and strict
+	// setting, records calls to exitFunc, and restores everything on cleanup.
+	setup := func(t *testing.T, rulePath string, strict bool) (exitCodes *[]int) {
+		origPath, origStrict, origWatch := fileRulePath, fileRuleStrict, fileRuleShouldWatch
+		origExit, origRule := exitFunc, fileCustomRule
+		t.Cleanup(func() {
+			fileRulePath, fileRuleStrict, fileRuleShouldWatch = origPath, origStrict, origWatch
+			exitFunc, fileCustomRule = origExit, origRule
+		})
+
+		var codes []int
+		fileRulePath = rulePath
+		fileRuleStrict = strict
+		fileRuleShouldWatch = false
+		fileCustomRule = NewFileCustomRule()
+		exitFunc = func(code int) { codes = append(codes, code) }
+		return &codes
+	}
+
+	t.Run("load failure without strict keeps serving", func(t *testing.T) {
+		exitCodes := setup(t, badRulePath, false)
+		ActivateFileCustomRules(tabletservermock.NewController())
+		require.Empty(t, *exitCodes)
+	})
+
+	t.Run("load failure with strict is fatal", func(t *testing.T) {
+		exitCodes := setup(t, badRulePath, true)
+		ActivateFileCustomRules(tabletservermock.NewController())
+		require.Equal(t, []int{1}, *exitCodes)
+	})
+
+	t.Run("valid file with strict starts normally", func(t *testing.T) {
+		exitCodes := setup(t, goodRulePath, true)
+		ActivateFileCustomRules(tabletservermock.NewController())
+		require.Empty(t, *exitCodes)
+
+		qrs, _, err := fileCustomRule.GetRules()
+		require.NoError(t, err)
+		require.NotNil(t, qrs.Find("r1"))
+	})
+}
