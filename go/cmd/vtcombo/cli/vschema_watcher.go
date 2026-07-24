@@ -47,7 +47,7 @@ func startVschemaWatcher(ctx context.Context, vschemaPersistenceDir string, ts *
 	}
 
 	// Now watch for changes in the SrvVSchema object and persist them to disk.
-	go watchSrvVSchema(ctx, ts, tpb.Cells[0])
+	go watchSrvVSchema(ctx, vschemaPersistenceDir, ts, tpb.Cells[0])
 }
 
 func loadKeyspacesFromDir(ctx context.Context, dir string, ts *topo.Server) {
@@ -81,7 +81,7 @@ func loadKeyspacesFromDir(ctx context.Context, dir string, ts *topo.Server) {
 	}
 }
 
-func watchSrvVSchema(ctx context.Context, ts *topo.Server, cell string) {
+func watchSrvVSchema(ctx context.Context, dir string, ts *topo.Server, cell string) {
 	data, ch, err := ts.WatchSrvVSchema(ctx, tpb.Cells[0])
 	if err != nil {
 		log.Error(fmt.Sprintf("WatchSrvVSchema failed: %v", err))
@@ -92,31 +92,72 @@ func watchSrvVSchema(ctx context.Context, ts *topo.Server, cell string) {
 		log.Error(fmt.Sprintf("WatchSrvVSchema could not retrieve initial vschema: %v", data.Err))
 		os.Exit(1)
 	}
-	persistNewSrvVSchema(data.Value)
+	persistNewSrvVSchema(dir, data.Value)
 
 	for update := range ch {
 		if update.Err != nil {
 			log.Error(fmt.Sprintf("WatchSrvVSchema returned an error: %v", update.Err))
 		} else {
-			persistNewSrvVSchema(update.Value)
+			persistNewSrvVSchema(dir, update.Value)
 		}
 	}
 }
 
-func persistNewSrvVSchema(srvVSchema *vschemapb.SrvVSchema) {
+func persistNewSrvVSchema(dir string, srvVSchema *vschemapb.SrvVSchema) {
 	for ksName, ks := range srvVSchema.Keyspaces {
-		jsonBytes, err := json.MarshalIndent(ks, "", "  ")
-		if err != nil {
-			log.Error(fmt.Sprintf("Error marshaling keyspace: %v", err))
+		if err := persistKeyspace(dir, ksName, ks); err != nil {
+			log.Error(fmt.Sprintf("Error persisting keyspace %v: %v", ksName, err))
 			continue
 		}
-
-		err = os.WriteFile(path.Join(vschemaPersistenceDir, ksName+".json"), jsonBytes, 0o644)
-		if err != nil {
-			log.Error(fmt.Sprintf("Error writing keyspace file: %v", err))
-		}
-		log.Info(fmt.Sprintf("Persisted keyspace %v to %v", ksName, vschemaPersistenceDir))
+		log.Info(fmt.Sprintf("Persisted keyspace %v to %v", ksName, dir))
 	}
+}
+
+// persistKeyspace writes a keyspace's vschema to <dir>/<ksName>.json atomically.
+// Why: the previous implementation used os.WriteFile, which truncates the
+// destination before writing. A process kill between the truncate and the write
+// leaves an empty file on disk, and the next vtcombo startup then fails to
+// parse the file with "unexpected end of JSON input". Writing to a sibling
+// temp file and renaming over the destination keeps the existing file intact
+// until the new contents are fully on disk.
+func persistKeyspace(dir, ksName string, ks *vschemapb.Keyspace) error {
+	jsonBytes, err := json.MarshalIndent(ks, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshaling keyspace: %w", err)
+	}
+
+	finalPath := path.Join(dir, ksName+".json")
+
+	tmp, err := os.CreateTemp(dir, ksName+".*.tmp")
+	if err != nil {
+		return fmt.Errorf("creating temp file: %w", err)
+	}
+	tmpName := tmp.Name()
+	// Best-effort cleanup if we don't reach the rename. Harmless after a
+	// successful rename (the temp name no longer exists).
+	defer os.Remove(tmpName)
+
+	// CreateTemp uses 0o600; preserve the 0o644 the original os.WriteFile call
+	// produced so we don't silently tighten permissions on persisted files.
+	if err := tmp.Chmod(0o644); err != nil {
+		tmp.Close()
+		return fmt.Errorf("chmod temp file %s: %w", tmpName, err)
+	}
+	if _, err := tmp.Write(jsonBytes); err != nil {
+		tmp.Close()
+		return fmt.Errorf("writing temp file %s: %w", tmpName, err)
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return fmt.Errorf("syncing temp file %s: %w", tmpName, err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("closing temp file %s: %w", tmpName, err)
+	}
+	if err := os.Rename(tmpName, finalPath); err != nil {
+		return fmt.Errorf("renaming %s to %s: %w", tmpName, finalPath, err)
+	}
+	return nil
 }
 
 func createDirectoryIfNotExists(dir string) error {
