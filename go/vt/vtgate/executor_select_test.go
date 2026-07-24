@@ -3142,6 +3142,34 @@ func TestPrepareWithCTE(t *testing.T) {
 	}
 }
 
+// A statement whose first keyword Preview does not recognize but that parses to
+// a type prepare cannot count parameters for (DO discards its expression list)
+// must be rejected rather than reported to the client as a zero-parameter
+// success, which would defer a parameter-count mismatch to execution time.
+func TestPrepareUnknownParseableStatementRejected(t *testing.T) {
+	executor, _, _, _, ctx := createExecutorEnv(t)
+	session := &vtgatepb.Session{TargetString: KsTestUnsharded}
+
+	_, paramsCount, err := executorPrepare(ctx, executor, session, "do ?")
+	require.Error(t, err)
+	require.Zero(t, paramsCount)
+}
+
+// Preparing a statement whose first keyword Preview does not recognize and that
+// fails to parse must clear session warnings, like every other non-SHOW
+// statement, so a later SHOW WARNINGS does not report stale warnings.
+func TestPrepareClearsWarningsOnParseError(t *testing.T) {
+	executor, _, _, _, ctx := createExecutorEnv(t)
+	session := econtext.NewSafeSession(&vtgatepb.Session{
+		TargetString: KsTestUnsharded,
+		Warnings:     []*querypb.QueryWarning{{Code: 234, Message: "oh noes"}},
+	})
+
+	_, _, err := executor.Prepare(ctx, "TestExecute", session, "bad select id from t1")
+	require.Error(t, err)
+	require.Empty(t, session.Warnings)
+}
+
 func assertOptimizedPlanCondition(t *testing.T, executor *Executor, sql string, condition ...engine.Condition) *engine.PlanSwitcher {
 	var plan *engine.Plan
 	executor.ForEachPlan(func(p *engine.Plan) bool {

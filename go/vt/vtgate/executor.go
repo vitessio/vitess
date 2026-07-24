@@ -1581,12 +1581,23 @@ func (e *Executor) prepare(ctx context.Context, safeSession *econtext.SafeSessio
 	stmtType := sqlparser.Preview(sql)
 	if stmtType == sqlparser.StmtUnknown {
 		// Preview only looks at the first keyword, so statements starting with
-		// a WITH clause come back as unknown. Classify those from the AST.
+		// a WITH clause come back as unknown. Classify those from the AST, but
+		// only rescue the statements handlePrepare can count parameters for
+		// (WITH ... SELECT/INSERT/REPLACE/UPDATE/DELETE). Anything else stays
+		// unknown and is rejected below, rather than being reported to the
+		// client as a zero-parameter success.
 		stmt, err := e.env.Parser().Parse(sql)
 		if err != nil {
+			// An unparseable statement is never SHOW, so clear warnings to
+			// match the non-SHOW handling below before returning the error.
+			safeSession.ClearWarnings()
 			return nil, 0, err
 		}
-		stmtType = sqlparser.ASTToStatementType(stmt)
+		switch astType := sqlparser.ASTToStatementType(stmt); astType {
+		case sqlparser.StmtSelect, sqlparser.StmtInsert, sqlparser.StmtReplace,
+			sqlparser.StmtUpdate, sqlparser.StmtDelete:
+			stmtType = astType
+		}
 	}
 	logStats.StmtType = stmtType.String()
 
