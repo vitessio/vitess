@@ -1006,6 +1006,9 @@ func vtctlBackup(t *testing.T, tabletType string) {
 	err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, 25*time.Second)
 	require.NoError(t, err)
 	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
+	// replica2 was restored from the backup, so this pins that a decompressor
+	// actually processed the backup data during the restore.
+	verifyRestoreRanThroughDecompressor(t, replica2.VttabletProcess.GetVars())
 
 	verifyAfterRemovingBackupNoBackupShouldBePresent(t, backups)
 	err = replica2.VttabletProcess.TearDown()
@@ -1645,6 +1648,27 @@ func verifyRestorePositionAndTimeStats(t *testing.T, vars map[string]any) {
 	rp, err := replication.DecodePosition(backupPosition)
 	require.NoError(t, err)
 	require.False(t, rp.IsZero())
+}
+
+// verifyRestoreRanThroughDecompressor asserts that the restore read bytes
+// through a decompressor. Unlike verifyTabletRestoreStats it does not assert
+// on the stats' implementation label: the label reflects the tablet's
+// configured engine, and vtctlBackup deliberately configures a fake one
+// (restoreWaitForBackup) to prove the restore follows the engine recorded in
+// the backup manifest.
+func verifyRestoreRanThroughDecompressor(t *testing.T, vars map[string]any) {
+	require.Contains(t, vars, "RestoreBytes")
+	restoreBytes, ok := vars["RestoreBytes"].(map[string]any)
+	require.True(t, ok, "unexpected type %T for RestoreBytes", vars["RestoreBytes"])
+	for key, val := range restoreBytes {
+		if strings.HasSuffix(key, "Decompressor:Read") {
+			read, ok := val.(float64)
+			require.True(t, ok, "unexpected type %T for %s", val, key)
+			require.Positive(t, read, "the decompressor read no bytes during the restore")
+			return
+		}
+	}
+	require.Failf(t, "no decompressor restore stats found", "RestoreBytes: %v", restoreBytes)
 }
 
 func verifyTabletRestoreStats(t *testing.T, vars map[string]any) {

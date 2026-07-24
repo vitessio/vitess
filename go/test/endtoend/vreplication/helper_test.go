@@ -824,15 +824,24 @@ const (
 	loadTestBufferingWindowDuration = 10 * time.Second
 	loadTestAvgWaitBetweenQueries   = 500 * time.Microsecond
 	loadTestDefaultConnections      = 100
+	// After a traffic switch, this many new successful queries prove that any
+	// buffering has drained and traffic is flowing again.
+	loadTestPostSwitchQueryCount = 100
+	// A failover starting within vtgate's --buffer-min-time-between-failovers
+	// (1s in this cluster's config, see extraVTGateArgs) of the previous drain
+	// is not buffered at all and would fail queries, so consecutive traffic
+	// switches must be spaced further apart than that.
+	loadTestMinTimeBetweenSwitches = 2 * time.Second
 )
 
 type loadGenerator struct {
-	t           *testing.T
-	vc          *VitessCluster
-	ctx         context.Context
-	cancel      context.CancelFunc
-	connections int
-	wg          sync.WaitGroup
+	t                 *testing.T
+	vc                *VitessCluster
+	ctx               context.Context
+	cancel            context.CancelFunc
+	connections       int
+	wg                sync.WaitGroup
+	successfulQueries atomic.Int64
 }
 
 func newLoadGenerator(t *testing.T, vc *VitessCluster) *loadGenerator {
@@ -844,12 +853,33 @@ func newLoadGenerator(t *testing.T, vc *VitessCluster) *loadGenerator {
 }
 
 func (lg *loadGenerator) stop() {
-	// Wait for buffering to stop and additional records to be inserted by start
-	// after traffic is switched.
-	time.Sleep(loadTestBufferingWindowDuration * 2)
+	// Make sure fresh queries succeeded after the last traffic switch before
+	// canceling, so the final assertions cover the post-switch period.
+	lg.waitForTrafficToResume()
 	log.Info("Canceling load")
 	lg.cancel()
 	lg.wg.Wait()
+}
+
+// waitForTrafficToResume waits until the load generator executes new
+// successful queries, proving that any buffering triggered by a preceding
+// traffic switch has drained and traffic is flowing again, and then holds a
+// short gap so that a subsequent switch stays out of vtgate's
+// --buffer-min-time-between-failovers cooldown.
+func (lg *loadGenerator) waitForTrafficToResume() {
+	t := lg.t
+	start := lg.successfulQueries.Load()
+	timer := time.NewTimer(defaultTimeout)
+	defer timer.Stop()
+	for lg.successfulQueries.Load()-start < loadTestPostSwitchQueryCount {
+		select {
+		case <-timer.C:
+			require.FailNowf(t, "load generator did not resume", "no %d successful queries within %s after a traffic switch", loadTestPostSwitchQueryCount, defaultTimeout)
+		default:
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+	time.Sleep(loadTestMinTimeBetweenSwitches)
 }
 
 func (lg *loadGenerator) start() {
@@ -860,12 +890,13 @@ func (lg *loadGenerator) start() {
 	var id atomic.Int64
 	log.Info("loadGenerator: starting")
 	queryTemplate := "insert into loadtest(id, name) values (%d, 'name-%d')"
-	var totalQueries, successfulQueries int64
+	lg.successfulQueries.Store(0)
+	var totalQueries int64
 	var deniedErrors, ambiguousErrors, reshardedErrors, tableNotFoundErrors, otherErrors int64
 	lg.wg.Add(1)
 	defer func() {
 		defer lg.wg.Done()
-		log.Info(fmt.Sprintf("loadGenerator: totalQueries: %d, successfulQueries: %d, deniedErrors: %d, ambiguousErrors: %d, reshardedErrors: %d, tableNotFoundErrors: %d, otherErrors: %d", totalQueries, successfulQueries, deniedErrors, ambiguousErrors, reshardedErrors, tableNotFoundErrors, otherErrors))
+		log.Info(fmt.Sprintf("loadGenerator: totalQueries: %d, successfulQueries: %d, deniedErrors: %d, ambiguousErrors: %d, reshardedErrors: %d, tableNotFoundErrors: %d, otherErrors: %d", totalQueries, lg.successfulQueries.Load(), deniedErrors, ambiguousErrors, reshardedErrors, tableNotFoundErrors, otherErrors))
 	}()
 	for {
 		select {
@@ -875,7 +906,7 @@ func (lg *loadGenerator) start() {
 			require.Equal(t, int64(0), deniedErrors)
 			require.Equal(t, int64(0), otherErrors)
 			require.Equal(t, int64(0), reshardedErrors)
-			require.Equal(t, totalQueries, successfulQueries)
+			require.Equal(t, totalQueries, lg.successfulQueries.Load())
 			return
 		default:
 			if int(connectionCount.Load()) < lg.connections {
@@ -916,7 +947,7 @@ func (lg *loadGenerator) start() {
 								atomic.AddInt64(&otherErrors, 1)
 							}
 						} else {
-							atomic.AddInt64(&successfulQueries, 1)
+							lg.successfulQueries.Add(1)
 						}
 						time.Sleep(time.Duration(int64(float64(loadTestAvgWaitBetweenQueries.Microseconds()) * rand.Float64())))
 					}
