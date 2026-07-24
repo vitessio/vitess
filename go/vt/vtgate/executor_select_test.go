@@ -643,11 +643,12 @@ func TestStreamUnsharded(t *testing.T) {
 	testQueryLog(t, executor, logChan, "TestExecuteStream", "SELECT", sql, 1)
 }
 
-func TestStreamBuffering(t *testing.T) {
+func TestStreamPassthrough(t *testing.T) {
 	executor, _, _, sbclookup, _ := createExecutorEnv(t)
 
-	// This test is similar to TestStreamUnsharded except that it returns a Result > 10 bytes,
-	// such that the splitting of the Result into multiple Result responses gets tested.
+	// This test is similar to TestStreamUnsharded except that it verifies that
+	// packets are forwarded to the callback exactly as the tablet sent them,
+	// without any re-chunking in the executor.
 	sbclookup.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
 			{Name: "id", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
@@ -670,7 +671,7 @@ func TestStreamBuffering(t *testing.T) {
 	err := executor.StreamExecute(
 		t.Context(),
 		nil,
-		"TestStreamBuffering",
+		"TestStreamPassthrough",
 		econtext.NewSafeSession(session),
 		"select id from music_user_map where id = 1",
 		nil,
@@ -686,17 +687,10 @@ func TestStreamBuffering(t *testing.T) {
 			{Name: "id", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
 			{Name: "col", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
 		},
-	}, {
-		Fields: []*querypb.Field{
-			{Name: "id", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
-			{Name: "col", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
-		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt32(1),
 			sqltypes.NewVarChar("01234567890123456789"),
-		}},
-	}, {
-		Rows: [][]sqltypes.Value{{
+		}, {
 			sqltypes.NewInt32(2),
 			sqltypes.NewVarChar("12345678901234567890"),
 		}},

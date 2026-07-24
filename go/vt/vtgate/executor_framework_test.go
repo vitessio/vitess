@@ -248,7 +248,6 @@ func createCustomExecutor(t testing.TB, vschema string, mysqlVersion string) (ex
 func createExecutorConfig() ExecutorConfig {
 	return ExecutorConfig{
 		Name:         "TestExecutor",
-		StreamSize:   10,
 		AllowScatter: true,
 	}
 }
@@ -256,7 +255,6 @@ func createExecutorConfig() ExecutorConfig {
 func createExecutorConfigWithNormalizer() ExecutorConfig {
 	return ExecutorConfig{
 		Name:         "TestExecutor",
-		StreamSize:   10,
 		AllowScatter: true,
 		Normalize:    true,
 	}
