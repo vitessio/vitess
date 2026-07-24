@@ -418,6 +418,17 @@ func checkValidRecursiveCTE(cteDef *CTE) error {
 		return vterrors.VT09026(cteDef.Name)
 	}
 
+	if len(cteDef.Columns) > 0 {
+		seed, err := sqlparser.GetFirstSelect(union.Left)
+		if err != nil {
+			return err
+		}
+		seedColumns := seed.GetColumns()
+		if !containsStar(seedColumns) && len(cteDef.Columns) != len(seedColumns) {
+			return vterrors.VT03033()
+		}
+	}
+
 	firstSelect, err := sqlparser.GetFirstSelect(union.Right)
 	if err != nil {
 		return err

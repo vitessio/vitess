@@ -236,6 +236,18 @@ func TestRecursiveCTEChecking(t *testing.T) {
 		name:  "use the same recursive cte twice in definition",
 		query: "with recursive x as (select 1 union select id+1 from x where id < 10 union select id+2 from x where id < 20) select t.id from x",
 		err:   "VT09029: In recursive query block of Recursive Common Table Expression x, the recursive table must be referenced only once, and not in any subquery",
+	}, {
+		name:  "declared column list shorter than the seed select list",
+		query: "with recursive x(a) as (select 1, 2 union select a + 1, 2 from x where a < 10) select a from x",
+		err:   "VT03033: In definition of view, derived table or common table expression, SELECT list and column names list have different column counts",
+	}, {
+		name:  "declared column list longer than the seed select list",
+		query: "with recursive x(a, b, c) as (select 1, 2 union select a + 1, b from x where a < 10) select a from x",
+		err:   "VT03033: In definition of view, derived table or common table expression, SELECT list and column names list have different column counts",
+	}, {
+		name:  "declared column list shorter than an expanded star seed",
+		query: "with recursive x(a) as (select * from t2 union select a + 1, 2, 3 from x where a < 10) select a from x",
+		err:   "VT03033: In definition of view, derived table or common table expression, SELECT list and column names list have different column counts",
 	}}
 	for _, tc := range queries {
 		t.Run(tc.query, func(t *testing.T) {

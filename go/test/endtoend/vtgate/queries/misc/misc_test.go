@@ -1043,3 +1043,19 @@ func TestOlapErrorAfterFields(t *testing.T) {
 	// The error ended the result set cleanly, so the connection stays usable.
 	utils.AssertMatches(t, mcmp.VtConn, "select 1", "[[INT64(1)]]")
 }
+
+// TestRecursiveCTETermFilter runs a recursive CTE that does not merge into a
+// single route and whose term filters on a CTE column. The filter must be
+// bound per iteration through the RecurseCTE primitive's join variables; it
+// used to be emitted as a column reference the term query cannot resolve.
+func TestRecursiveCTETermFilter(t *testing.T) {
+	mcmp, closer := start(t)
+	t.Cleanup(closer)
+
+	// a chain of rows spanning both shards: each row's id2 is the next row's id1.
+	// the chain is one row longer than the depth filter allows, so a dropped
+	// filter changes the result instead of only changing how recursion ends
+	mcmp.Exec("insert into t1(id1, id2) values (1,2), (2,3), (3,4), (4,5), (5,6)")
+
+	mcmp.Exec("with recursive chain as (select id1, id2, 0 as depth from t1 where id1 = 1 union all select t.id1, t.id2, chain.depth + 1 from chain join t1 t on t.id1 = chain.id2 where chain.depth < 3) select id1, id2, depth from chain order by depth")
+}
