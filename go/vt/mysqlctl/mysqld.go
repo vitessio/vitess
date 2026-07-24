@@ -147,9 +147,29 @@ type Mysqld struct {
 
 	capabilities capabilitySet
 
-	// pendingRestores tracks background replica-state restorations armed by a
-	// failed shutdown, so Close can wait for them before closing the pools.
-	pendingRestores sync.WaitGroup
+	// shutdownGateOnce/shutdownGateCh serialize crash-safe shutdown attempts:
+	// preparation, the shutdown itself, and the restore handoff. Callers do
+	// not serialize (e.g. concurrent mysqlctld shutdown RPCs), and overlapping
+	// attempts could otherwise interleave -- one attempt's failure restore
+	// resetting the durability fence beneath another attempt still shutting
+	// down. A capacity-one channel is used instead of a mutex so a waiting
+	// attempt can honor its context's cancellation.
+	shutdownGateOnce sync.Once
+	shutdownGateCh   chan struct{}
+
+	// pendingRestoreMu guards the pending-restore bookkeeping below, which
+	// tracks background replica-state restorations armed by a failed shutdown:
+	// Close waits for them before the process exits, and a retrying shutdown
+	// takes them over via the handle. A count plus a generation channel is
+	// used instead of a sync.WaitGroup because bounded waiters outlive their
+	// wait, and a WaitGroup forbids adding from zero concurrently with an
+	// in-flight Wait.
+	pendingRestoreMu    sync.Mutex
+	pendingRestoreCount int
+	// pendingRestoreIdle is closed when pendingRestoreCount drops to zero and
+	// replaced when a restoration arms from idle.
+	pendingRestoreIdle chan struct{}
+	pendingRestore     *pendingRestoreHandle
 
 	// mutex protects the fields below.
 	mutex         sync.Mutex
@@ -157,6 +177,67 @@ type Mysqld struct {
 	cancelWaitCmd chan struct{}
 
 	semiSyncType mysql.SemiSyncType
+}
+
+// pendingRestoreHandle identifies one armed replica-state restoration. done
+// is closed when its goroutine has fully exited.
+type pendingRestoreHandle struct {
+	state  *replicaShutdownState
+	cancel context.CancelFunc
+	done   chan struct{}
+}
+
+// closedRestoreIdle is a pre-closed channel returned when no restoration is
+// pending.
+var closedRestoreIdle = func() chan struct{} {
+	ch := make(chan struct{})
+	close(ch)
+	return ch
+}()
+
+// beginPendingRestore registers an armed restoration.
+func (mysqld *Mysqld) beginPendingRestore(handle *pendingRestoreHandle) {
+	mysqld.pendingRestoreMu.Lock()
+	defer mysqld.pendingRestoreMu.Unlock()
+	if mysqld.pendingRestoreCount == 0 {
+		mysqld.pendingRestoreIdle = make(chan struct{})
+	}
+	mysqld.pendingRestoreCount++
+	mysqld.pendingRestore = handle
+}
+
+// endPendingRestore unregisters an armed restoration, closing the idle channel
+// when it was the last one.
+func (mysqld *Mysqld) endPendingRestore(handle *pendingRestoreHandle) {
+	mysqld.pendingRestoreMu.Lock()
+	defer mysqld.pendingRestoreMu.Unlock()
+	mysqld.pendingRestoreCount--
+	if mysqld.pendingRestoreCount == 0 {
+		close(mysqld.pendingRestoreIdle)
+	}
+	if mysqld.pendingRestore == handle {
+		mysqld.pendingRestore = nil
+	}
+}
+
+// shutdownGate returns the capacity-one channel serializing shutdown
+// attempts, initializing it lazily so a zero-value Mysqld stays safe.
+func (mysqld *Mysqld) shutdownGate() chan struct{} {
+	mysqld.shutdownGateOnce.Do(func() {
+		mysqld.shutdownGateCh = make(chan struct{}, 1)
+	})
+	return mysqld.shutdownGateCh
+}
+
+// pendingRestoresIdle returns a channel that is closed once the currently
+// pending restorations (if any) have finished.
+func (mysqld *Mysqld) pendingRestoresIdle() <-chan struct{} {
+	mysqld.pendingRestoreMu.Lock()
+	defer mysqld.pendingRestoreMu.Unlock()
+	if mysqld.pendingRestoreCount == 0 {
+		return closedRestoreIdle
+	}
+	return mysqld.pendingRestoreIdle
 }
 
 func init() {
@@ -670,9 +751,7 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 	mysqld.mutex.Unlock()
 
 	// possibly mysql is already shutdown, check for a few files first
-	_, socketPathErr := os.Stat(cnf.SocketFile)
-	_, pidPathErr := os.Stat(cnf.PidFile)
-	if os.IsNotExist(socketPathErr) && os.IsNotExist(pidPathErr) {
+	if mysqldAlreadyStopped(cnf) {
 		log.Warn("assuming mysqld already shut down - no socket, no pid file found")
 		return nil
 	}
@@ -710,10 +789,83 @@ func replicaShutdownPreparationBudget(shutdownTimeout time.Duration) time.Durati
 // shutdown fails, leaving mysqld running -- makes a best-effort attempt to
 // restore the replica state the preparation changed.
 func (mysqld *Mysqld) shutdownWithReplicaCrashSafety(ctx context.Context, preparationTimeout time.Duration, executeShutdown func() error) error {
+	// Serialize the whole sequence -- preparation, shutdown, restore handoff
+	// -- against concurrent attempts (e.g. overlapping mysqlctld shutdown
+	// RPCs): a failed attempt's restore must never reset the durability fence
+	// beneath another attempt that is still shutting down. A later attempt
+	// entering after a failed one interacts with its pending restore through
+	// the takeover logic below. The wait honors cancellation: a caller whose
+	// deadline expired while queued behind a slow attempt must not go on to
+	// shut mysqld down after its client already received the error.
+	select {
+	case mysqld.shutdownGate() <- struct{}{}:
+	case <-ctx.Done():
+		return vterrors.Wrap(ctx.Err(), "shutdown cancelled while waiting for a concurrent shutdown attempt")
+	}
+	defer func() { <-mysqld.shutdownGateCh }()
+	// The select chooses pseudorandomly when both are ready: never proceed on
+	// an expired context.
+	if err := ctx.Err(); err != nil {
+		return vterrors.Wrap(err, "shutdown cancelled while waiting for a concurrent shutdown attempt")
+	}
+
 	// A non-positive preparation budget means the caller asked for an
 	// immediate, no-wait shutdown: skip the preparation entirely.
 	if preparationTimeout <= 0 {
 		return executeShutdown()
+	}
+	// A previous failed shutdown may still be restoring the replica state it
+	// changed: its restoration resets the durability settings first and can
+	// then spend a long time reconciling an interrupted stop, so the previous
+	// fence can no longer be assumed to be in effect. Preparing concurrently
+	// would capture that half-restored state as if it were the operator's, and
+	// shutting down without a fence would reopen the exact hole this fence
+	// closes. Wait briefly for the restoration to finish; if it is still
+	// running, take exclusive ownership: cancel it, inherit its recorded state
+	// -- the replica's true prior state -- and apply a fresh fence below.
+	var inherited *replicaShutdownState
+	select {
+	case <-mysqld.pendingRestoresIdle():
+	case <-ctx.Done():
+		// The pending restoration keeps its ownership; nothing was changed.
+		return vterrors.Wrap(ctx.Err(), "shutdown cancelled while waiting for a previous replica state restoration")
+	case <-time.After(preparationTimeout):
+		mysqld.pendingRestoreMu.Lock()
+		pending := mysqld.pendingRestore
+		mysqld.pendingRestoreMu.Unlock()
+		if pending != nil {
+			log.Warn("a previous failed shutdown's replica state restoration is still in progress; taking it over and applying a fresh fence")
+			pending.cancel()
+			// The restoration is context-aware throughout, so it exits
+			// promptly once cancelled; wait for it so the fresh fence below
+			// cannot interleave with it. Having cancelled it, ownership must
+			// survive every exit from here on: the cancelled restoration will
+			// exit without restoring, so any path that does not inherit must
+			// arm a replacement that waits for it to fully exit and then
+			// converges the replica.
+			select {
+			case <-pending.done:
+				stateCopy := *pending.state
+				inherited = &stateCopy
+			case <-ctx.Done():
+				mysqld.armReplicaRestore(ctx, pending.state, pending.done)
+				return vterrors.Wrap(ctx.Err(), "shutdown cancelled while taking over a previous replica state restoration")
+			case <-time.After(preparationTimeout):
+				// Should be unreachable -- the restoration is context-aware --
+				// but never run a fence that could interleave with it: skip
+				// the preparation.
+				log.Warn("the previous replica state restoration did not exit after being cancelled; skipping the crash-safety preparation")
+				if err := ctx.Err(); err != nil {
+					mysqld.armReplicaRestore(ctx, pending.state, pending.done)
+					return vterrors.Wrap(err, "shutdown cancelled while taking over a previous replica state restoration")
+				}
+				shutdownErr := executeShutdown()
+				if shutdownErr != nil {
+					mysqld.armReplicaRestore(ctx, pending.state, pending.done)
+				}
+				return shutdownErr
+			}
+		}
 	}
 	// Bound the crash-safety preparation at this boundary so a hung MySQL
 	// connection cannot delay shutdown past preparationTimeout: enforcing the
@@ -731,10 +883,13 @@ func (mysqld *Mysqld) shutdownWithReplicaCrashSafety(ctx context.Context, prepar
 	// captured receives the recorded pre-change state the moment the
 	// preparation moves past its read-only probes and starts mutating: a
 	// timed-out preparation that never published here cannot have changed
-	// anything and can be abandoned outright.
+	// anything and can be abandoned outright. preparationExited closes once
+	// the preparation goroutine has fully resolved.
 	captured := make(chan *replicaShutdownState, 1)
+	preparationExited := make(chan struct{})
 	go func() {
-		state, err := mysqld.prepareReplicaForShutdown(preparationCtx, func(state *replicaShutdownState) {
+		defer close(preparationExited)
+		state, err := mysqld.prepareReplicaForShutdown(preparationCtx, inherited, func(state *replicaShutdownState) {
 			captured <- state
 		})
 		prepared <- preparationResult{state: state, err: err}
@@ -752,14 +907,29 @@ func (mysqld *Mysqld) shutdownWithReplicaCrashSafety(ctx context.Context, prepar
 			)
 		}
 	case <-preparationCtx.Done():
-		log.Error(
-			"timed out preparing replica for crash-safe shutdown; continuing with shutdown",
-			slog.Any("error", preparationCtx.Err()),
-		)
+		// Distinguish the internal preparation deadline (shutdown continues,
+		// best effort) from caller cancellation (handled below).
+		if ctx.Err() == nil {
+			log.Error(
+				"timed out preparing replica for crash-safe shutdown; continuing with shutdown",
+				slog.Any("error", preparationCtx.Err()),
+			)
+		}
 	}
 	cancelPreparation()
 
-	shutdownErr := executeShutdown()
+	// A caller cancelled during the preparation must not go on to shut mysqld
+	// down after its client already received the error (the hookless
+	// mysqladmin path is not context-aware). Skip the shutdown, and fall
+	// through to the restore handoff below so anything the preparation
+	// changed is still converged back.
+	var shutdownErr error
+	if err := ctx.Err(); err != nil {
+		log.Warn("shutdown cancelled during the crash-safety preparation; not executing the shutdown")
+		shutdownErr = vterrors.Wrap(err, "shutdown cancelled during the crash-safety preparation")
+	} else {
+		shutdownErr = executeShutdown()
+	}
 	if shutdownErr == nil {
 		// The crash-safety preparation above is best effort and already logged
 		// on failure; a successful process shutdown must still report success
@@ -791,12 +961,7 @@ func (mysqld *Mysqld) shutdownWithReplicaCrashSafety(ctx context.Context, prepar
 				// keeping it alive in short-lived callers like the mysqlctl
 				// CLI.
 				log.Warn("shutdown failed and the crash-safety preparation is still in flight; the replica state will be restored in the background when it completes")
-				mysqld.pendingRestores.Go(func() {
-					<-prepared
-					restoreCtx, cancelRestore := context.WithTimeout(context.WithoutCancel(ctx), replicaShutdownRestoreTimeout)
-					defer cancelRestore()
-					mysqld.restoreReplicaAfterFailedShutdown(restoreCtx, state)
-				})
+				mysqld.armReplicaRestore(ctx, state, preparationExited)
 			default:
 				// The preparation never got past its read-only probes, so
 				// nothing was changed and there is nothing to restore -- do
@@ -817,20 +982,70 @@ func (mysqld *Mysqld) shutdownWithReplicaCrashSafety(ctx context.Context, prepar
 	// completion. It runs on a fresh context because ctx may already be
 	// exhausted (e.g. a wait timeout).
 	if replicaState != nil {
-		state := replicaState
-		mysqld.pendingRestores.Go(func() {
-			restoreCtx, cancelRestore := context.WithTimeout(context.WithoutCancel(ctx), replicaShutdownRestoreTimeout)
-			defer cancelRestore()
-			mysqld.restoreReplicaAfterFailedShutdown(restoreCtx, state)
-		})
+		mysqld.armReplicaRestore(ctx, replicaState, nil)
 	}
 	return shutdownErr
+}
+
+// armReplicaRestore arms the background restoration of the given replica
+// state after a failed shutdown. The restoration is tracked so Close waits for
+// it before the process exits, and registered so a retrying shutdown can take
+// it over -- cancel it and inherit its state -- instead of racing it. When
+// ready is non-nil, the restoration first waits for it (the preparation
+// resolving); a cancellation during that wait aborts the restoration outright,
+// leaving convergence to the new owner.
+func (mysqld *Mysqld) armReplicaRestore(ctx context.Context, state *replicaShutdownState, ready <-chan struct{}) {
+	restoreCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), replicaShutdownRestoreTimeout)
+	handle := &pendingRestoreHandle{state: state, cancel: cancel, done: make(chan struct{})}
+	mysqld.beginPendingRestore(handle)
+	go func() {
+		defer func() {
+			cancel()
+			mysqld.endPendingRestore(handle)
+			close(handle.done)
+		}()
+		if ready != nil {
+			select {
+			case <-ready:
+			case <-restoreCtx.Done():
+				// Cancelled by a taking-over retry (or the deadline): the new
+				// owner restores. Still wait -- bounded, so a ready that never
+				// arrives cannot leak this goroutine forever -- for the
+				// producer to resolve, so that its writes to state are visible
+				// to (and cannot race) the taker-over's read of it, which
+				// synchronizes on this goroutine's exit.
+				select {
+				case <-ready:
+				case <-time.After(replicaShutdownRestoreTimeout):
+				}
+				return
+			}
+		}
+		mysqld.restoreReplicaAfterFailedShutdown(restoreCtx, state, replicaRestorePollInterval)
+	}()
+}
+
+// mysqldAlreadyStopped reports whether mysqld already appears fully stopped:
+// neither its socket file nor its pid file exists.
+func mysqldAlreadyStopped(cnf *Mycnf) bool {
+	_, socketPathErr := os.Stat(cnf.SocketFile)
+	_, pidPathErr := os.Stat(cnf.PidFile)
+	return os.IsNotExist(socketPathErr) && os.IsNotExist(pidPathErr)
 }
 
 // executeShutdown performs the mysqld shutdown itself -- via the
 // mysqld_shutdown hook when one exists, or mysqladmin otherwise -- and
 // optionally waits for the process to fully exit.
 func (mysqld *Mysqld) executeShutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bool, shutdownTimeout time.Duration) error {
+	// Recheck under the shutdown gate: Shutdown's own already-stopped check
+	// runs before attempts are serialized, so a concurrent attempt may have
+	// stopped mysqld while this one was queued or preparing. Report the same
+	// idempotent success instead of a spurious hook/mysqladmin failure.
+	if mysqldAlreadyStopped(cnf) {
+		log.Warn("assuming mysqld already shut down - no socket, no pid file found")
+		return nil
+	}
+
 	// try the mysqld shutdown hook, if any
 	h := hook.NewSimpleHook("mysqld_shutdown")
 	hr := h.ExecuteContext(ctx)
@@ -1531,17 +1746,12 @@ func (mysqld *Mysqld) Close() {
 	// this returns immediately. The wait is transitively bounded by the
 	// restoration's own deadlines, with a hard cap as a backstop for a
 	// preparation that never resolves.
-	restored := make(chan struct{})
-	go func() {
-		mysqld.pendingRestores.Wait()
-		close(restored)
-	}()
 	select {
-	case <-restored:
+	case <-mysqld.pendingRestoresIdle():
 	default:
 		log.Info("waiting for a pending replica state restoration to complete before closing")
 		select {
-		case <-restored:
+		case <-mysqld.pendingRestoresIdle():
 		case <-time.After(replicaShutdownRestoreTimeout + replicaShutdownPreparationTimeout):
 			log.Warn("timed out waiting for a pending replica state restoration before closing")
 		}

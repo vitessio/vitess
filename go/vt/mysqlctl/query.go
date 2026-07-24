@@ -207,10 +207,12 @@ func (mysqld *Mysqld) executeFetchDirectContext(ctx context.Context, conn *dbcon
 		connID := conn.ID()
 		log.Info(fmt.Sprintf("Mysqld.executeFetchDirectContext(): killing connID %v due to timeout of query: %v", connID, query))
 		if killErr := mysqld.killConnection(connID); killErr != nil {
-			// Log it, but go ahead and wait for the query anyway.
 			log.Warn(fmt.Sprintf("Mysqld.executeFetchDirectContext(): failed to kill connID %v: %v", connID, killErr))
 		}
-		// Wait for the conn.ExecuteFetch() call to return.
+		// Close the connection before waiting: if the server cannot service
+		// the KILL (it is wedged), closing the socket is what unblocks the
+		// in-flight ExecuteFetch() client-side, so this wait stays bounded.
+		conn.Close()
 		<-done
 		// ExecuteFetch() may have succeeded before we tried to kill it.
 		if executeErr == nil {
@@ -237,8 +239,8 @@ func (mysqld *Mysqld) executeSuperQueryListDirectContext(ctx context.Context, co
 }
 
 // killConnectionTimeout bounds killConnection: both its connect and its KILL
-// execution. It is a variable only so tests can shorten it.
-var killConnectionTimeout = 10 * time.Second
+// execution.
+const killConnectionTimeout = 10 * time.Second
 
 // killConnection issues a MySQL KILL command for the given connection ID. It
 // uses a dedicated connection -- never the DBA pool, whose raw liveness probe
@@ -246,9 +248,13 @@ var killConnectionTimeout = 10 * time.Second
 // own I/O, so that killing a connection on a wedged server cannot hang its
 // caller either.
 func (mysqld *Mysqld) killConnection(connID int64) error {
+	return mysqld.killConnectionWithTimeout(connID, killConnectionTimeout)
+}
+
+func (mysqld *Mysqld) killConnectionWithTimeout(connID int64, timeout time.Duration) error {
 	// Use a fresh context because the caller's context is likely expired,
 	// which is the reason we're being asked to kill the connection.
-	ctx, cancel := context.WithTimeout(context.Background(), killConnectionTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	killConn, err := mysqld.GetDbaConnection(ctx)
 	if err != nil {

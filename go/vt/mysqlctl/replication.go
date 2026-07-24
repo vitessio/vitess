@@ -82,13 +82,20 @@ type (
 		// the stop landing afterwards would leave replication stopped.
 		receiverStopInterrupted bool
 		applierStopInterrupted  bool
+
+		// cycleReceiver records a receiver stop that failed because stopping
+		// the connection-failover monitor timed out
+		// (SOURCE_CONNECTION_AUTO_FAILOVER, MySQL error 4011): the receiver
+		// stop was never requested, so the receiver keeps running, but its
+		// monitor may be left stopped. The restore must then cycle the
+		// receiver -- stop it and start it again -- to bring both back.
+		cycleReceiver bool
 	}
 )
 
 // replicaRestorePollInterval is how often the post-failed-shutdown restore
 // re-reads the replication status while reconciling the replication threads.
-// It is a variable only so tests can shorten it.
-var replicaRestorePollInterval = time.Second
+const replicaRestorePollInterval = time.Second
 
 // WithLockWaitTimeout sets the session lock_wait_timeout (rounded up to whole
 // seconds) for the SET GLOBAL super_read_only statement, bounding how long it
@@ -206,45 +213,57 @@ func (mysqld *Mysqld) StopIOThread(ctx context.Context) error {
 // timed-out preparation can tell whether a mutation may still land (and a
 // restore is needed) or the preparation never got past its read-only probes.
 //
+// When inherited is non-nil, a retrying shutdown has taken over a pending
+// restoration: inherited is the replica's true prior state, recorded before
+// the first fence. Re-capturing here would read the half-restored state
+// instead, so the read-only probes are skipped and the fence is re-applied
+// directly on the inherited state.
+//
 // It uses a dedicated connection rather than the pools -- killed on ctx expiry
 // by the context-aware executors -- so that a preparation hung in mysqld can
 // never strand a pool slot: repeated failed shutdown attempts must not exhaust
 // the DBA pool of a long-lived caller.
-func (mysqld *Mysqld) prepareReplicaForShutdown(ctx context.Context, onStateCaptured func(*replicaShutdownState)) (*replicaShutdownState, error) {
+func (mysqld *Mysqld) prepareReplicaForShutdown(ctx context.Context, inherited *replicaShutdownState, onStateCaptured func(*replicaShutdownState)) (*replicaShutdownState, error) {
 	conn, err := mysqld.GetDbaConnection(ctx)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "failed to connect to MySQL before shutdown")
 	}
 	defer conn.Close()
 
-	status, err := mysqld.showReplicationStatusDirectContext(ctx, conn)
-	if err != nil {
-		if err == mysql.ErrNotReplica {
-			return nil, nil
+	var state *replicaShutdownState
+	if inherited != nil {
+		state = inherited
+		onStateCaptured(state)
+	} else {
+		status, err := mysqld.showReplicationStatusDirectContext(ctx, conn)
+		if err != nil {
+			if err == mysql.ErrNotReplica {
+				return nil, nil
+			}
+			return nil, vterrors.Wrap(err, "failed to read replication status before shutdown")
 		}
-		return nil, vterrors.Wrap(err, "failed to read replication status before shutdown")
-	}
 
-	// Record the state we are about to change so that a shutdown which
-	// subsequently fails -- leaving mysqld running -- can restore it.
-	qr, err := mysqld.executeFetchDirectContext(ctx, conn,
-		"SELECT @@global.innodb_flush_log_at_trx_commit, @@global.sync_binlog, @@global.sync_relay_log")
-	if err != nil {
-		return nil, vterrors.Wrap(err, "failed to read the durability settings before shutdown")
+		// Record the state we are about to change so that a shutdown which
+		// subsequently fails -- leaving mysqld running -- can restore it.
+		qr, err := mysqld.executeFetchDirectContext(ctx, conn,
+			"SELECT @@global.innodb_flush_log_at_trx_commit, @@global.sync_binlog, @@global.sync_relay_log")
+		if err != nil {
+			return nil, vterrors.Wrap(err, "failed to read the durability settings before shutdown")
+		}
+		if qr == nil || len(qr.Rows) != 1 || len(qr.Rows[0]) != 3 {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
+				"unexpected result reading the durability settings before shutdown: %+v", qr)
+		}
+		state = &replicaShutdownState{
+			startReceiver: status.IOState == replication.ReplicationStateRunning ||
+				status.IOState == replication.ReplicationStateConnecting,
+			startApplier:        status.SQLState == replication.ReplicationStateRunning,
+			flushLogAtTrxCommit: qr.Rows[0][0].ToString(),
+			syncBinlog:          qr.Rows[0][1].ToString(),
+			syncRelayLog:        qr.Rows[0][2].ToString(),
+		}
+		onStateCaptured(state)
 	}
-	if qr == nil || len(qr.Rows) != 1 || len(qr.Rows[0]) != 3 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
-			"unexpected result reading the durability settings before shutdown: %+v", qr)
-	}
-	state := &replicaShutdownState{
-		startReceiver: status.IOState == replication.ReplicationStateRunning ||
-			status.IOState == replication.ReplicationStateConnecting,
-		startApplier:        status.SQLState == replication.ReplicationStateRunning,
-		flushLogAtTrxCommit: qr.Rows[0][0].ToString(),
-		syncBinlog:          qr.Rows[0][1].ToString(),
-		syncRelayLog:        qr.Rows[0][2].ToString(),
-	}
-	onStateCaptured(state)
 
 	// Restore full durability before shutdown: innodb_flush_log_at_trx_commit=1
 	// and sync_binlog=1 re-enable per-commit InnoDB redo and binary log flushing
@@ -275,8 +294,21 @@ func (mysqld *Mysqld) prepareReplicaForShutdown(ctx context.Context, onStateCapt
 	// are managed by an external orchestrator); skip them there rather than
 	// issue an empty query that always fails.
 	if stopReceiver := conn.StopIOThreadCommand(); stopReceiver != "" {
-		if err := mysqld.executeSuperQueryListDirectContext(ctx, conn, []string{stopReceiver}); err != nil {
-			state.receiverStopInterrupted = true
+		if ctx.Err() != nil {
+			// The preparation deadline has passed: do not dispatch a stop we
+			// would then have to treat as possibly pending.
+			log.Warn("skipping the replication receiver stop before shutdown; the preparation deadline has passed")
+		} else if err := mysqld.executeSuperQueryListDirectContext(ctx, conn, []string{stopReceiver}); err != nil {
+			var sqlErr *sqlerror.SQLError
+			if errors.As(err, &sqlErr) && sqlErr.Number() == sqlerror.ERStopReplicaMonitorIOThreadTimeout {
+				// Stopping the connection-failover monitor timed out before
+				// the receiver stop was even requested: the receiver keeps
+				// running, but its monitor may be left stopped. Record it so
+				// a restore cycles the receiver to bring both back.
+				state.cycleReceiver = true
+			} else {
+				state.receiverStopInterrupted = stopInterrupted(err)
+			}
 			log.Warn(
 				"failed to stop the replication receiver before shutdown; continuing because the relay log durability fence completed",
 				slog.Any("error", err),
@@ -288,8 +320,10 @@ func (mysqld *Mysqld) prepareReplicaForShutdown(ctx context.Context, onStateCapt
 	// has less in-flight work to recover. Best effort and bounded by ctx: a
 	// hung applier flush must not block shutdown.
 	if stopApplier := conn.StopSQLThreadCommand(); stopApplier != "" {
-		if err := mysqld.executeSuperQueryListDirectContext(ctx, conn, []string{stopApplier}); err != nil {
-			state.applierStopInterrupted = true
+		if ctx.Err() != nil {
+			log.Warn("skipping the replication applier stop before shutdown; the preparation deadline has passed")
+		} else if err := mysqld.executeSuperQueryListDirectContext(ctx, conn, []string{stopApplier}); err != nil {
+			state.applierStopInterrupted = stopInterrupted(err)
 			log.Warn(
 				"failed to stop the replication applier before shutdown; continuing because the relay log durability fence completed",
 				slog.Any("error", err),
@@ -297,6 +331,34 @@ func (mysqld *Mysqld) prepareReplicaForShutdown(ctx context.Context, onStateCapt
 		}
 	}
 	return state, nil
+}
+
+// stopInterrupted reports whether a failed replication-thread stop may have
+// left its server-side stop pending: either the statement was cut short
+// client-side (a context error from the bounded executors, whose kill does not
+// cancel a stop the server already accepted), or the server itself reported
+// that the stop timed out while remaining in effect (rpl_stop_replica_timeout,
+// MySQL errors 1875/1876). Any other error is a definitive server response:
+// the statement completed without leaving a stop pending.
+func stopInterrupted(err error) bool {
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+		return true
+	}
+	var sqlErr *sqlerror.SQLError
+	if errors.As(err, &sqlErr) {
+		switch sqlErr.Number() {
+		case sqlerror.ERStopReplicaIOThreadTimeout, sqlerror.ERStopReplicaSQLThreadTimeout:
+			// rpl_stop_replica_timeout fired: the stop remains in effect.
+			return true
+		case sqlerror.CRServerLost:
+			// The statement was written but the response was lost: the server
+			// may have accepted the stop and still be completing it. Its
+			// sibling CRServerGone means the write itself failed -- the
+			// statement was never delivered -- and stays definitive.
+			return true
+		}
+	}
+	return false
 }
 
 // showReplicationStatusDirectContext reads the replication status on a
@@ -339,10 +401,12 @@ func (mysqld *Mysqld) showReplicationStatusDirectContext(ctx context.Context, co
 		connID := conn.ID()
 		log.Info(fmt.Sprintf("Mysqld.showReplicationStatusDirectContext(): killing connID %v due to timeout", connID))
 		if killErr := mysqld.killConnection(connID); killErr != nil {
-			// Log it, but go ahead and wait for the status read anyway.
 			log.Warn(fmt.Sprintf("Mysqld.showReplicationStatusDirectContext(): failed to kill connID %v: %v", connID, killErr))
 		}
-		// Wait for the ShowReplicationStatus() call to return.
+		// Close the connection before waiting: if the server cannot service
+		// the KILL (it is wedged), closing the socket is what unblocks the
+		// in-flight status read client-side, so this wait stays bounded.
+		conn.Close()
 		<-done
 		// It may have succeeded before we tried to kill it.
 		if executeErr == nil {
@@ -363,7 +427,7 @@ func (mysqld *Mysqld) showReplicationStatusDirectContext(ctx context.Context, co
 // why callers must give it a generous deadline. All steps are best effort: if
 // mysqld is unreachable (e.g. it is exiting after all), each step just logs
 // and moves on.
-func (mysqld *Mysqld) restoreReplicaAfterFailedShutdown(ctx context.Context, state *replicaShutdownState) {
+func (mysqld *Mysqld) restoreReplicaAfterFailedShutdown(ctx context.Context, state *replicaShutdownState, pollInterval time.Duration) {
 	conn, err := mysqld.GetDbaConnection(ctx)
 	if err != nil {
 		log.Warn(
@@ -400,6 +464,7 @@ func (mysqld *Mysqld) restoreReplicaAfterFailedShutdown(ctx context.Context, sta
 	// start whatever should be running, and verify the result.
 	pendingReceiver := state.receiverStopInterrupted
 	pendingApplier := state.applierStopInterrupted
+	cycleReceiver := state.cycleReceiver
 	for {
 		status, err := mysqld.showReplicationStatusDirectContext(ctx, conn)
 		if err != nil {
@@ -412,18 +477,37 @@ func (mysqld *Mysqld) restoreReplicaAfterFailedShutdown(ctx context.Context, sta
 		receiverRunning := status.IOState == replication.ReplicationStateRunning ||
 			status.IOState == replication.ReplicationStateConnecting
 		applierRunning := status.SQLState == replication.ReplicationStateRunning
-		// A thread observed stopped means any pending stop for it has settled.
+		// A thread observed stopped means any pending stop for it has settled,
+		// and a receiver observed stopped needs no further cycling: restarting
+		// it below brings its connection-failover monitor back with it.
 		if !receiverRunning {
 			pendingReceiver = false
+			cycleReceiver = false
 		}
 		if !applierRunning {
 			pendingApplier = false
 		}
 		needReceiver := state.startReceiver && !receiverRunning
 		needApplier := state.startApplier && !applierRunning
-		if !needReceiver && !needApplier && !pendingReceiver && !pendingApplier {
+		if !needReceiver && !needApplier && !pendingReceiver && !pendingApplier && !cycleReceiver {
 			log.Warn("shutdown failed after replication was stopped to make the replica crash-safe; restored the previous replication state")
 			return
+		}
+		if cycleReceiver {
+			// The preparation's receiver stop failed because stopping the
+			// connection-failover monitor timed out, leaving the receiver
+			// running without its monitor. Stop the receiver -- retrying until
+			// it takes -- so the restart below brings both back.
+			if stopReceiver := conn.StopIOThreadCommand(); stopReceiver != "" {
+				if _, err := mysqld.executeFetchDirectContext(ctx, conn, stopReceiver); err != nil {
+					log.Warn(
+						"failed to stop the replication receiver to restore its connection-failover monitor; retrying",
+						slog.Any("error", err),
+					)
+				}
+			} else {
+				cycleReceiver = false
+			}
 		}
 		if needReceiver || needApplier {
 			var start string
@@ -449,16 +533,19 @@ func (mysqld *Mysqld) restoreReplicaAfterFailedShutdown(ctx context.Context, sta
 		}
 		select {
 		case <-ctx.Done():
-			if !needReceiver && !needApplier {
+			switch {
+			case cycleReceiver:
+				log.Warn("gave up cycling the replication receiver after a failed shutdown; its connection-failover monitor may be left stopped")
+			case !needReceiver && !needApplier:
 				log.Warn("the replication threads are running as desired after a failed shutdown, but an interrupted stop may still be draining; if replication stops later it must be restarted externally (e.g. by VTOrc)")
-			} else {
+			default:
 				log.Warn(
 					"gave up restoring the replication threads after a failed shutdown",
 					slog.Any("error", ctx.Err()),
 				)
 			}
 			return
-		case <-time.After(replicaRestorePollInterval):
+		case <-time.After(pollInterval):
 		}
 	}
 }
