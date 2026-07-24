@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/sync2"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -33,6 +34,8 @@ const streamBufferSize = 8
 // StreamConsolidator is a data structure capable of merging several identical streaming queries so only
 // one query is executed in MySQL and its response is fanned out to all the clients simultaneously.
 type StreamConsolidator struct {
+	consolidations *sync2.ConsolidatorCache
+
 	mu                             sync.Mutex
 	inflight                       map[string]*streamInFlight
 	memory                         int64
@@ -46,12 +49,19 @@ type StreamConsolidator struct {
 // only use up to maxMemoryQuery bytes of memory as a history buffer to catch up.
 func NewStreamConsolidator(maxMemoryTotal, maxMemoryQuery int64, cleanup StreamCallback) *StreamConsolidator {
 	return &StreamConsolidator{
+		consolidations: sync2.NewConsolidatorCache(1000),
 		inflight:       make(map[string]*streamInFlight),
 		maxMemoryTotal: maxMemoryTotal,
 		maxMemoryQuery: maxMemoryQuery,
 		blocking:       false,
 		cleanup:        cleanup,
 	}
+}
+
+// Items returns the per-query consolidation counts recorded by this consolidator,
+// for display on the /debug/consolidations page.
+func (sc *StreamConsolidator) Items() []sync2.ConsolidatorCacheItem {
+	return sc.consolidations.Items()
 }
 
 // StreamCallback is a function that is called with every Result object from a streaming query
@@ -102,6 +112,10 @@ func (sc *StreamConsolidator) Consolidate(waitTimings *servenv.TimingsWrapper, l
 
 	// if we have a followChan, we're following up on a query that is already being served
 	if followChan != nil {
+		// We consolidated onto an in-flight leader; record it for /debug/consolidations.
+		// This mirrors the buffered consolidator, which records each follower (not the
+		// leader) in Wait(). Runs after sc.mu is released; the cache has its own lock.
+		sc.consolidations.Record(sql)
 		startTime := time.Now()
 		defer func() {
 			memchange := inflight.unfollow(followChan, sc.cleanup)

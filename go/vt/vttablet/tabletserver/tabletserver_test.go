@@ -914,6 +914,50 @@ func TestTabletServerRollbackPrepared(t *testing.T) {
 	require.NoError(t, err)
 }
 
+// TestStreamTimeout verifies the request timeout chosen for a streaming query.
+// An OLTP workload keeps the buffered-Execute timeout semantics (query timeout,
+// or the smaller of query and OLTP transaction timeouts inside a transaction);
+// every other workload retains the historical behavior of bounding only
+// transactional streams with the OLAP transaction timeout.
+func TestStreamTimeout(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+
+	ctx := t.Context()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+
+	// Distinct timeouts so each branch is identifiable.
+	tsv.QueryTimeout.Store((20 * time.Millisecond).Nanoseconds())
+	tsv.config.Oltp.TxTimeout = 10 * time.Millisecond
+	tsv.config.Olap.TxTimeout = 50 * time.Millisecond
+
+	const noTx, inTx = int64(0), int64(5)
+
+	testCases := []struct {
+		name            string
+		workload        querypb.ExecuteOptions_Workload
+		transactionID   int64
+		wantTimeout     time.Duration
+		wantAllowOnShut bool
+	}{
+		{"OLTP no tx uses query timeout", querypb.ExecuteOptions_OLTP, noTx, 20 * time.Millisecond, false},
+		{"OLTP in tx uses smaller of query and OLTP tx", querypb.ExecuteOptions_OLTP, inTx, 10 * time.Millisecond, true},
+		{"OLAP no tx has no timeout", querypb.ExecuteOptions_OLAP, noTx, 0, false},
+		{"OLAP in tx uses OLAP tx timeout", querypb.ExecuteOptions_OLAP, inTx, 50 * time.Millisecond, true},
+		{"UNSPECIFIED no tx has no timeout", querypb.ExecuteOptions_UNSPECIFIED, noTx, 0, false},
+		{"UNSPECIFIED in tx uses OLAP tx timeout, not OLTP", querypb.ExecuteOptions_UNSPECIFIED, inTx, 50 * time.Millisecond, true},
+		{"DBA in tx uses OLAP tx timeout, unchanged", querypb.ExecuteOptions_DBA, inTx, 50 * time.Millisecond, true},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			options := &querypb.ExecuteOptions{Workload: tc.workload}
+			timeout, allowOnShutdown := tsv.streamTimeout(tc.transactionID, options)
+			assert.Equal(t, tc.wantTimeout, timeout, "timeout")
+			assert.Equal(t, tc.wantAllowOnShut, allowOnShutdown, "allowOnShutdown")
+		})
+	}
+}
+
 func TestTabletServerStreamExecute(t *testing.T) {
 	ctx := t.Context()
 	db, tsv := setupTabletServerTest(t, ctx, "")

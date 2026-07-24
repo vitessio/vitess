@@ -80,14 +80,17 @@ var procSQL = []string{
 func TestCallProcedure(t *testing.T) {
 	client := framework.NewClient()
 	type testcases struct {
-		query   string
-		wantErr bool
+		query    string
+		wantErr  bool
+		wantRows bool
 	}
 	tcases := []testcases{{
 		query: "call proc_dml()",
 	}, {
-		query:   "call proc_select1()",
-		wantErr: true,
+		// A single-resultset procedure is accepted and returns its rows, even
+		// though MySQL appends a trailing OK packet after the resultset.
+		query:    "call proc_select1()",
+		wantRows: true,
 	}, {
 		query:   "call proc_select4()",
 		wantErr: true,
@@ -99,14 +102,30 @@ func TestCallProcedure(t *testing.T) {
 
 	for _, tc := range tcases {
 		t.Run(tc.query, func(t *testing.T) {
-			_, err := client.Execute(tc.query, nil)
+			qr, err := client.Execute(tc.query, nil)
 			if tc.wantErr {
 				require.EqualError(t, err, "Multi-Resultset not supported in stored procedure (CallerID: dev)")
 				return
 			}
 			require.NoError(t, err)
+			if tc.wantRows {
+				require.NotEmpty(t, qr.Rows, "single-resultset procedure should return its rows")
+			}
 		})
 	}
+}
+
+// A stored procedure call with an OUT/INOUT parameter is reported as unsupported
+// on both the buffered and streaming paths, rather than leaking the raw MySQL
+// "is not a variable" error.
+func TestCallProcedureOutParam(t *testing.T) {
+	client := framework.NewClient()
+
+	_, err := client.Execute("call out_parameter(123)", nil)
+	require.ErrorContains(t, err, "OUT and INOUT parameters are not supported")
+
+	_, err = client.StreamExecute("call out_parameter(123)", nil)
+	require.ErrorContains(t, err, "OUT and INOUT parameters are not supported")
 }
 
 func TestCallProcedureStreaming(t *testing.T) {

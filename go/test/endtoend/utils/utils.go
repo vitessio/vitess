@@ -99,6 +99,29 @@ func AssertMatchesAny(t testing.TB, conn *mysql.Conn, query string, expected ...
 	t.Error(err.String())
 }
 
+// AssertMatchesAnyNoOrder ensures the given query produces any one of the expected results.
+// The order of the rows in the result is ignored.
+func AssertMatchesAnyNoOrder(t testing.TB, conn *mysql.Conn, query string, expected ...string) {
+	t.Helper()
+	qr := Exec(t, conn, query)
+
+	errs := make([]error, 0, len(expected))
+	for _, e := range expected {
+		err := sqltypes.RowsEqualsStr(e, qr.Rows)
+		if err == nil {
+			return
+		}
+		errs = append(errs, err)
+	}
+
+	var err strings.Builder
+	_, _ = fmt.Fprintf(&err, "Query did not match:\n%s\n", query)
+	for i, e := range errs {
+		_, _ = fmt.Fprintf(&err, "Expected query %d does not match.\n%v\n\n", i, e)
+	}
+	t.Error(err.String())
+}
+
 // AssertMatchesCompareMySQL executes the given query on both Vitess and MySQL and make sure
 // they have the same result set. The result set of Vitess is then matched with the given expectation.
 func AssertMatchesCompareMySQL(t *testing.T, vtConn, mysqlConn *mysql.Conn, query, expected string) {

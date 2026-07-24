@@ -266,7 +266,9 @@ func TestTypeORMQuery(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
 
-	utils.AssertMatchesAny(t, mcmp.VtConn, `SELECT kcu.TABLE_NAME, kcu.COLUMN_NAME, cols.DATA_TYPE
+	// The UNIONs have no ORDER BY, so with streaming delivery the row order
+	// depends on which source's rows arrive first — compare order-insensitively.
+	utils.AssertMatchesAnyNoOrder(t, mcmp.VtConn, `SELECT kcu.TABLE_NAME, kcu.COLUMN_NAME, cols.DATA_TYPE
 FROM (SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME
       FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
       WHERE kcu.TABLE_SCHEMA = 'ks'
@@ -291,7 +293,7 @@ FROM (SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME
 		`[[VARCHAR("t1") VARCHAR("id1") BLOB("bigint")] [VARCHAR("t7_xxhash") VARCHAR("uid") BLOB("varchar")]]`,
 	)
 
-	utils.AssertMatchesAny(t, mcmp.VtConn, `
+	utils.AssertMatchesAnyNoOrder(t, mcmp.VtConn, `
 SELECT *
 FROM INFORMATION_SCHEMA.COLUMNS
 WHERE TABLE_SCHEMA = 'ks' AND TABLE_NAME = 't1'

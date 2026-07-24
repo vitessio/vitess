@@ -591,6 +591,33 @@ func TestConsolidationsUIRedaction(t *testing.T) {
 	require.Containsf(t, redactedResponse.Body.String(), redactedSQL, "Response missing redacted consolidated query: %v %v", redactedSQL, redactedResponse.Body.String())
 }
 
+func TestConsolidationsUITagsStreamingAndNonStreaming(t *testing.T) {
+	request, _ := http.NewRequest("GET", "/debug/consolidations", nil)
+
+	const sql = "select * from test_db_01 where id = 1"
+
+	db := fakesqldb.New(t)
+	defer db.Close()
+	qe := newTestQueryEngine(1*time.Second, true, newDBConfigs(db))
+	qe.se.Open()
+	qe.Open()
+	defer qe.Close()
+
+	require.NotNil(t, qe.streamConsolidator, "stream consolidator should be enabled by the default config")
+
+	// Record the same query on both paths so we can confirm they're labelled
+	// separately rather than collapsed onto one ambiguous line.
+	qe.consolidator.Record(sql)
+	qe.streamConsolidator.consolidations.Record(sql)
+
+	response := httptest.NewRecorder()
+	qe.handleHTTPConsolidations(response, request)
+	body := response.Body.String()
+
+	require.Containsf(t, body, "non-streaming 1: "+sql, "missing non-streaming entry: %v", body)
+	require.Containsf(t, body, "streaming 1: "+sql, "missing streaming entry: %v", body)
+}
+
 func BenchmarkPlanCacheThroughput(b *testing.B) {
 	db := fakesqldb.New(b)
 	defer db.Close()

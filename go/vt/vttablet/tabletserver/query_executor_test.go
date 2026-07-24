@@ -2095,6 +2095,125 @@ func TestGetConnectionLogStats(t *testing.T) {
 	assert.Positive(t, qre.logStats.WaitingForConnection)
 }
 
+// TestGetStreamConnWorkload verifies that getStreamConn selects the regular
+// (OLTP) connection pool for an OLTP workload and the stream (OLAP) pool for
+// every other workload, so that streaming delivery is decoupled from the
+// workload-driven pool choice.
+func TestGetStreamConnWorkload(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+
+	ctx := t.Context()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	input := "select * from test_table limit 1"
+
+	testCases := []struct {
+		name            string
+		workload        querypb.ExecuteOptions_Workload
+		wantConnsInUse  int64
+		wantStreamInUse int64
+	}{
+		{"OLTP uses the regular pool", querypb.ExecuteOptions_OLTP, 1, 0},
+		{"OLAP uses the stream pool", querypb.ExecuteOptions_OLAP, 0, 1},
+		{"UNSPECIFIED uses the stream pool", querypb.ExecuteOptions_UNSPECIFIED, 0, 1},
+		{"DBA uses the stream pool", querypb.ExecuteOptions_DBA, 0, 1},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			qre := newTestQueryExecutorStreaming(ctx, tsv, input, 0)
+			qre.options = &querypb.ExecuteOptions{Workload: tc.workload}
+
+			conn, err := qre.getStreamConn()
+			require.NoError(t, err)
+			defer conn.Recycle()
+
+			assert.Equal(t, tc.wantConnsInUse, tsv.qe.conns.InUse(), "regular pool InUse")
+			assert.Equal(t, tc.wantStreamInUse, tsv.qe.streamConns.InUse(), "stream pool InUse")
+		})
+	}
+}
+
+// TestStreamConsolidatorWorkloadPool verifies the workload-driven pool choice on
+// the stream-consolidator path, which is a second getStreamConn call site
+// distinct from the direct Stream path. An OLTP query consolidated and streamed
+// to the client must still draw from the regular pool.
+func TestStreamConsolidatorWorkloadPool(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+
+	ctx := t.Context()
+	// The default config enables the stream consolidator (non-zero query size).
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	input := "select * from test_table where pk = 1"
+	db.AddQueryPattern("select.*from test_table.*", &sqltypes.Result{Fields: getTestTableFields()})
+
+	qre := newTestQueryExecutorStreaming(ctx, tsv, input, 0)
+	require.Equal(t, planbuilder.PlanSelect, qre.plan.PlanID)
+	// Force the consolidator path; without an explicit option it is disabled by
+	// the default test config.
+	qre.options = &querypb.ExecuteOptions{
+		Workload:     querypb.ExecuteOptions_OLTP,
+		Consolidator: querypb.ExecuteOptions_CONSOLIDATOR_ENABLED,
+	}
+	require.True(t, qre.shouldConsolidate())
+
+	var connsInUse, streamInUse int64
+	err := qre.Stream(func(*sqltypes.Result) error {
+		// The streamed connection is held while the callback runs.
+		connsInUse = tsv.qe.conns.InUse()
+		streamInUse = tsv.qe.streamConns.InUse()
+		return nil
+	})
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), connsInUse, "consolidated OLTP stream should use the regular pool")
+	assert.Equal(t, int64(0), streamInUse, "consolidated OLTP stream should not use the stream pool")
+}
+
+// TestStreamQueryListByWorkload verifies that a non-transactional streamed query
+// is tracked in the query list matching its workload, so shutdown semantics
+// follow the workload too: an OLTP stream drains during the grace period like
+// buffered OLTP (statelessql), while other workloads are tracked as OLAP and
+// killed immediately on shutdown (olapql).
+func TestStreamQueryListByWorkload(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+
+	ctx := t.Context()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	input := "select * from test_table where pk = 1"
+	db.AddQueryPattern("select.*from test_table.*", &sqltypes.Result{Fields: getTestTableFields()})
+
+	count := func(ql *QueryList) int { return len(ql.AppendQueryzRows(nil)) }
+
+	testCases := []struct {
+		name          string
+		workload      querypb.ExecuteOptions_Workload
+		wantStateless int
+		wantOlap      int
+	}{
+		{"OLTP stream tracked as stateless OLTP", querypb.ExecuteOptions_OLTP, 1, 0},
+		{"OLAP stream tracked as OLAP", querypb.ExecuteOptions_OLAP, 0, 1},
+		{"UNSPECIFIED stream tracked as OLAP", querypb.ExecuteOptions_UNSPECIFIED, 0, 1},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			qre := newTestQueryExecutorStreaming(ctx, tsv, input, 0)
+			qre.options = &querypb.ExecuteOptions{Workload: tc.workload}
+
+			var gotStateless, gotOlap int
+			err := qre.Stream(func(*sqltypes.Result) error {
+				// The query detail is registered while the callback runs.
+				gotStateless = count(tsv.statelessql)
+				gotOlap = count(tsv.olapql)
+				return nil
+			})
+			require.NoError(t, err)
+			assert.Equal(t, tc.wantStateless, gotStateless, "statelessql entries")
+			assert.Equal(t, tc.wantOlap, gotOlap, "olapql entries")
+		})
+	}
+}
+
 type executorFlags int64
 
 const (
