@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/querythrottler/registry"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
 
@@ -456,8 +457,17 @@ func (s *TabletThrottlerStrategy) Evaluate(ctx context.Context, targetTabletType
 			continue
 		}
 
-		// Only act on metrics explicitly configured for this SQL type
+		// Only act on metrics explicitly configured for this SQL type.
+		// CheckResult.Metrics is keyed by the bare metric name (the throttler disaggregates
+		// scoped names) with the actual scope in result.Scope. Config rules may be keyed by
+		// the bare name ("lag") or a scoped name ("shard/lag"), so try the bare key first,
+		// then the reconstructed aggregated name.
 		rule, found := metricRuleSet.GetMetricRules()[metricName]
+		if !found {
+			if scope, err := base.ScopeFromString(result.Scope); err == nil {
+				rule, found = metricRuleSet.GetMetricRules()[base.MetricName(metricName).AggregatedName(scope)]
+			}
+		}
 		if !found {
 			continue
 		}

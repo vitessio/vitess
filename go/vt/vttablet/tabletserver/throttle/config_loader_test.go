@@ -129,3 +129,49 @@ func TestConvertQueryThrottlerConfigToThrottlerConfig_MinAcrossRules(t *testing.
 	require.Len(t, names, 2, "AppCheckedMetrics names must contain each unique metric exactly once (no duplicates from multiple rules)")
 	require.ElementsMatch(t, []string{"lag", "cpu"}, names)
 }
+
+// TestConvertQueryThrottlerConfigToThrottlerConfig_ScopedMetricName verifies scope
+// normalization for a scoped config key such as "shard/lag":
+//   - AppCheckedMetrics keeps the SCOPED name so the underlying throttler checks the
+//     correct scope.
+//   - MetricThresholds is keyed by the BARE metric name ("lag"), because the throttler
+//     applies thresholds per bare metric and convergeMetricThresholds only converges bare
+//     names. Keying by the scoped name ("shard/lag") would be silently dropped by
+//     convergeMetricThresholds, leaving the throttler on the inventory default.
+func TestConvertQueryThrottlerConfigToThrottlerConfig_ScopedMetricName(t *testing.T) {
+	cfg := &querythrottlerpb.Config{
+		Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
+		Enabled:  true,
+		TabletStrategyConfig: &querythrottlerpb.TabletStrategyConfig{
+			TabletRules: map[string]*querythrottlerpb.StatementRuleSet{
+				"PRIMARY": {
+					StatementRules: map[string]*querythrottlerpb.MetricRuleSet{
+						"SELECT": {
+							MetricRules: map[string]*querythrottlerpb.MetricRule{
+								"shard/lag": {
+									Thresholds: []*querythrottlerpb.ThrottleThreshold{
+										{Above: 15, Throttle: 100},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	tc := convertQueryThrottlerConfigToThrottlerConfig(cfg)
+	require.NotNil(t, tc)
+
+	appName := throttlerapp.QueryThrottlerName.String()
+	require.NotNil(t, tc.AppCheckedMetrics[appName])
+	require.Equal(t, []string{"shard/lag"}, tc.AppCheckedMetrics[appName].GetNames(),
+		"AppCheckedMetrics must keep the scoped name so the throttler checks the shard scope")
+
+	require.Equal(t, float64(15), tc.MetricThresholds["lag"],
+		"threshold must be keyed by the bare metric name so convergeMetricThresholds honors it")
+	_, scopedKeyPresent := tc.MetricThresholds["shard/lag"]
+	require.False(t, scopedKeyPresent,
+		"threshold must NOT be keyed by the scoped name — convergeMetricThresholds would drop it")
+}

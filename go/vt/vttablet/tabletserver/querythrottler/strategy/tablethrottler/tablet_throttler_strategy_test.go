@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/querythrottler/registry"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
 
@@ -314,6 +315,36 @@ func TestTabletThrottlerStrategy_ThrottleIfNeeded_Legacy(t *testing.T) {
 			giveRandValue:         0.5,
 			givePriorityRandValue: 99,
 			wantErr:               "[VTTabletThrottler] query throttled: stmtType=DELETE workload=unknown priority=100 metric=lag value=20.00 breached threshold=10.00 throttle=100%",
+		},
+		{
+			// Regression: a scoped config key ("shard/lag") must match the check result,
+			// which the throttler keys by the bare name ("lag") with the scope in
+			// result.Scope. Before the fix, the lookup by "lag" missed "shard/lag" and the
+			// rule silently failed open.
+			name:           "scoped metric rule (shard/lag) matches result keyed by bare name",
+			giveTabletType: topodatapb.TabletType_PRIMARY,
+			giveCfg: makeTabletStrategyConfig(
+				topodatapb.TabletType_PRIMARY.String(),
+				"SELECT",
+				"shard/lag",
+				makeThresholds(10, 100),
+			),
+			giveSQL:      "SELECT * from A where X=1",
+			giveStmtType: sqlparser.StmtSelect,
+			giveTxnID:    1,
+			giveCheckResult: &throttle.CheckResult{
+				Metrics: map[string]*throttle.MetricResult{
+					"lag": {
+						ResponseCode: tabletmanagerdata.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED,
+						Value:        20,
+						Scope:        base.ShardScope.String(),
+					},
+				},
+			},
+			giveThrottleCheckOK:   false,
+			giveRandValue:         0.5,
+			givePriorityRandValue: 99,
+			wantErr:               "[VTTabletThrottler] query throttled: stmtType=SELECT workload=unknown priority=100 metric=lag value=20.00 breached threshold=10.00 throttle=100%",
 		},
 	}
 	for _, tt := range tests {

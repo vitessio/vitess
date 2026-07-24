@@ -24,6 +24,7 @@ import (
 	"vitess.io/vitess/go/protoutil"
 	querythrottlerpb "vitess.io/vitess/go/vt/proto/querythrottler"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
 
@@ -85,6 +86,8 @@ func convertQueryThrottlerConfigToThrottlerConfig(qtCfg *querythrottlerpb.Config
 			for metricName, rule := range metricRuleSet.GetMetricRules() {
 				if thresholds := rule.GetThresholds(); len(thresholds) > 0 {
 					if _, ok := seenMetrics[metricName]; !ok {
+						// AppCheckedMetrics keeps the scoped name (e.g. "shard/lag") so the
+						// throttler checks the correct scope.
 						metricsNames = append(metricsNames, metricName)
 						seenMetrics[metricName] = true
 					}
@@ -99,10 +102,18 @@ func convertQueryThrottlerConfigToThrottlerConfig(qtCfg *querythrottlerpb.Config
 						})
 					}
 					thresholdValue := thresholds[0].GetAbove()
-					if existingValue, exists := metricThresholds[metricName]; exists {
-						metricThresholds[metricName] = math.Min(existingValue, thresholdValue)
+					// The throttler applies thresholds per bare metric: getScopedMetric reads
+					// the threshold under the bare key regardless of scope, and
+					// convergeMetricThresholds only converges bare names. Key by the
+					// disaggregated bare name so scoped configs ("shard/lag") are honored.
+					thresholdKey := metricName
+					if _, bareMetric, err := base.DisaggregateMetricName(metricName); err == nil {
+						thresholdKey = bareMetric.String()
+					}
+					if existingValue, exists := metricThresholds[thresholdKey]; exists {
+						metricThresholds[thresholdKey] = math.Min(existingValue, thresholdValue)
 					} else {
-						metricThresholds[metricName] = thresholdValue
+						metricThresholds[thresholdKey] = thresholdValue
 					}
 				}
 			}
