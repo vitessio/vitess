@@ -527,22 +527,37 @@ func convertError(err error, path string) error {
 	}
 
 	// Handle context errors
-	if err == context.Canceled {
+	if errors.Is(err, context.Canceled) {
 		return topo.NewError(topo.Interrupted, path)
 	}
-	if err == context.DeadlineExceeded {
+	if errors.Is(err, context.DeadlineExceeded) {
 		return topo.NewError(topo.Timeout, path)
 	}
 
 	// Handle SQL errors
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return topo.NewError(topo.NoNode, path)
 	}
 
-	// Handle MySQL-specific errors
-	sqlErr, isSQLErr := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
-	if isSQLErr && sqlErr != nil && sqlErr.Number() == sqlerror.ERDupEntry {
+	// Handle MySQL-specific errors. go-sql-driver returns *mysql.MySQLError,
+	// which carries the server error number directly; its message format
+	// ("Error 1062 (23000): ...") is not recognized by
+	// sqlerror.NewSQLErrorFromError, so check the typed error first and only
+	// fall back to message parsing for errors from other sources.
+	var errno sqlerror.ErrorCode
+	var driverErr *mysql.MySQLError
+	if errors.As(err, &driverErr) {
+		errno = sqlerror.ErrorCode(driverErr.Number)
+	} else if sqlErr, ok := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError); ok && sqlErr != nil {
+		errno = sqlErr.Number()
+	}
+	switch errno {
+	case sqlerror.ERDupEntry:
 		return topo.NewError(topo.NodeExists, path)
+	case sqlerror.ERLockDeadlock, sqlerror.ERLockWaitTimeout:
+		// Transient locking failures; report as Timeout so callers treat
+		// them as retryable rather than fatal.
+		return topo.NewError(topo.Timeout, path)
 	}
 	// Default: return the original error
 	return err
