@@ -118,9 +118,9 @@ func TestVerifyNoErrantGTIDsInBaseBackup(t *testing.T) {
 	primaryPosition := mysqlPosition(primaryUUID + ":1-20")
 
 	// Validate that vtbackup returns a correct error that the base backup has errant GTIDs.
-	err := verifyNoErrantGTIDsInBaseBackup(restoreInfo{position: restoredPosition, backupName: backupName}, primaryPosition)
+	err := verifyNoErrantGTIDsInBaseBackup(restoreInfo{position: restoredPosition, restored: true, backupName: backupName}, primaryPosition)
 	require.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
-	require.EqualError(t, err, `base backup "`+backupName+`" has errant GTIDs "`+errantUUID+`:1" relative to current primary`)
+	require.EqualError(t, err, `base backup "`+backupName+`" has errant GTIDs "`+errantUUID+`:1" relative to current primary position "`+primaryPosition.String()+`"`)
 }
 
 func TestCatchUpReplicationForBackupClearsLastErrWhenReplicationBecomesHealthy(t *testing.T) {

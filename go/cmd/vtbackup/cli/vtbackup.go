@@ -82,6 +82,9 @@ type (
 		// position is the replication position of the loaded data.
 		position replication.Position
 
+		// restored reports whether vtbackup loaded existing data instead of starting empty.
+		restored bool
+
 		// backupName identifies the restored backup, if any.
 		backupName string
 	}
@@ -557,7 +560,7 @@ func restoreForBackup(ctx context.Context, mysqlTermHandler *mySQLTermHandler, t
 		// If err is nil, we expect backupManifest to be non-nil.
 		log.Info(fmt.Sprintf("Successfully restored from backup at replication position %v", backupManifest.Position))
 		deprecatedDurationByPhase.Set("RestoreLastBackup", int64(time.Since(restoreAt).Seconds()))
-		return restoreInfo{position: backupManifest.Position, backupName: backupManifest.BackupName}, nil
+		return restoreInfo{position: backupManifest.Position, restored: true, backupName: backupManifest.BackupName}, nil
 	case mysqlctl.ErrNoBackup:
 		// There is no backup found, but we may be taking the initial backup of a shard.
 		if !allowFirstBackup {
@@ -594,7 +597,7 @@ func runBackup(ctx context.Context, topoServer *topo.Server, mysqld *mysqlctl.My
 
 	// If we previously restored from a backup to begin, validate that it does not contain errant GTIDs
 	// before continuing.
-	if restored.backupName != "" {
+	if restored.restored {
 		if err := verifyNoErrantGTIDsInBaseBackup(restored, primaryPos); err != nil {
 			return err
 		}
@@ -700,9 +703,10 @@ func verifyNoErrantGTIDsInBaseBackup(ri restoreInfo, primaryPosition replication
 
 	return vterrors.Errorf(
 		vtrpc.Code_FAILED_PRECONDITION,
-		"base backup %q has errant GTIDs %q relative to current primary",
+		"base backup %q has errant GTIDs %q relative to current primary position %q",
 		ri.backupName,
 		errantGTIDs.String(),
+		primaryPosition.String(),
 	)
 }
 
