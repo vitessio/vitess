@@ -1938,10 +1938,12 @@ func TestGracefulShutdownWithTransaction(t *testing.T) {
 	require.True(t, mysqlConn.IsMarkedForClose())
 }
 
-// tempTargets builds a keepalive target map from the given targets, for tests.
+// tempTargets builds a keepalive target map from the given targets, for tests,
+// stamping each target's cached route key as the production construction does.
 func tempTargets(ts ...tempTableHeartbeatTarget) map[tempTableTargetKey]tempTableHeartbeatTarget {
 	m := make(map[tempTableTargetKey]tempTableHeartbeatTarget, len(ts))
 	for _, target := range ts {
+		target.route = tempTableRouteKey(target)
 		m[newTempTableTargetKey(target)] = target
 	}
 	return m
@@ -1992,6 +1994,14 @@ func TestTempTableCommandTracking(t *testing.T) {
 	registered := v.(*tempTableConn)
 	require.Len(t, registered.targets, 1)
 	require.Equal(t, int64(42), firstTempTarget(t, registered.targets).reservedID)
+
+	// The production construction stamps the cached route key, and it must
+	// match what a bare (unstamped) target computes, or the sweeper's grouped
+	// and per-route snapshots would disagree about the target's route.
+	stamped := firstTempTarget(t, registered.targets)
+	bare := tempTableHeartbeatTarget{target: stamped.target, alias: stamped.alias, reservedID: stamped.reservedID}
+	require.NotEmpty(t, stamped.route, "registration must stamp the cached route key")
+	require.Equal(t, tempTableRouteKey(bare), stamped.route, "the cached route key must match the computed one")
 
 	// Republishing the same targets keeps the reservation registered under the
 	// same key. The sweeper validates a beat by that key rather than a generation
@@ -2186,12 +2196,20 @@ type gatedBeatConn struct {
 	execCount atomic.Int64
 	release   chan struct{}
 	err       error
-	idsMu     sync.Mutex
-	beatIDs   map[int64]bool
+	// expectKeyspace, when set, makes Execute reject any target whose keyspace
+	// differs — with the same INVALID_ARGUMENT mismatch a real tablet's target
+	// validation returns — simulating a tablet whose alias was reused for a
+	// different keyspace. A rejected beat does not record its ids.
+	expectKeyspace string
+	idsMu          sync.Mutex
+	beatIDs        map[int64]bool
 }
 
 func (c *gatedBeatConn) Execute(ctx context.Context, session queryservice.Session, target *querypb.Target, sql string, bindVars map[string]*querypb.BindVariable, transactionID, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	c.execCount.Add(1)
+	if c.expectKeyspace != "" && target.Keyspace != c.expectKeyspace {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid keyspace %s does not match expected %s", target.Keyspace, c.expectKeyspace)
+	}
 	c.idsMu.Lock()
 	if c.beatIDs == nil {
 		c.beatIDs = make(map[int64]bool)
@@ -2566,6 +2584,38 @@ func TestTempTableHeartbeatEvictsOnTabletTypeChange(t *testing.T) {
 	require.False(t, isStaleTargetErr(vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
 		"reserved connection keepalive batch of 2000 exceeds the limit of 1024")),
 		"a batch-limit rejection must stay transient")
+
+	// A reused alias can also leave a stale registration coexisting with a
+	// valid one for the tablet's new keyspace, on the same alias and tablet
+	// type. Each beat carries a single routing target and a whole-beat
+	// stale-target rejection evicts everything in it, so the two must beat as
+	// separate routes: the stale registration's keyspace mismatch must evict
+	// only itself — never the valid session's reservation, whose temp table
+	// would otherwise expire — and the valid reservation must still be
+	// refreshed.
+	qs3 := hc.AddFakeTablet("aa", "sharedaliashost", 3, "newks", "0", topodatapb.TabletType_REPLICA, true, 1, nil,
+		func(tablet *topodatapb.Tablet) queryservice.QueryService {
+			return &gatedBeatConn{SandboxConn: sandboxconn.NewSandboxConn(tablet), expectKeyspace: "newks"}
+		})
+	gc3 := qs3.(*gatedBeatConn)
+	st3 := gc3.Tablet()
+	cStale := &mysql.Conn{ConnectionID: 3}
+	vh.tempTableConns.Store(cStale, &tempTableConn{targets: tempTargets(tempTableHeartbeatTarget{
+		target: &querypb.Target{Keyspace: "oldks", Shard: st3.Shard, TabletType: st3.Type}, alias: st3.Alias, reservedID: 7,
+	})})
+	cValid := &mysql.Conn{ConnectionID: 4}
+	vh.tempTableConns.Store(cValid, &tempTableConn{targets: tempTargets(tempTableHeartbeatTarget{
+		target: &querypb.Target{Keyspace: st3.Keyspace, Shard: st3.Shard, TabletType: st3.Type}, alias: st3.Alias, reservedID: 8,
+	})})
+
+	vh.dispatchTempTableBeats(ctx).Wait()
+
+	_, ok = vh.tempTableConns.Load(cStale)
+	require.False(t, ok, "the stale registration must be evicted")
+	_, ok = vh.tempTableConns.Load(cValid)
+	require.True(t, ok, "the valid registration for the tablet's real keyspace must survive the stale one's eviction")
+	require.True(t, gc3.hasBeatID(8), "the valid reservation must still be refreshed")
+	require.False(t, gc3.hasBeatID(7), "the stale reservation must not ride along in the valid route's beat")
 }
 
 // TestTempTableHeartbeatTouchesRegistrationWithinOneInterval covers the
@@ -3114,6 +3164,39 @@ func BenchmarkTempTableHeartbeatSnapshot(b *testing.B) {
 	b.ResetTimer()
 	for range b.N {
 		_ = vh.snapshotTempTableBeats()
+	}
+}
+
+// BenchmarkTempTableHeartbeatRouteResnapshot measures the per-failing-route
+// re-snapshot against a registry spread across many routes — the broad-recovery
+// shape, where every failing route re-snapshots as it clears the semaphore. The
+// per-route cost must be one cheap filtered pass over the registry, not a full
+// grouped rebuild of every route's slice.
+func BenchmarkTempTableHeartbeatRouteResnapshot(b *testing.B) {
+	vh := &vtgateHandler{}
+	const routes = 500
+	const connsPerRoute = 20
+	var probe string
+	for r := range routes {
+		alias := &topodatapb.TabletAlias{Cell: "aa", Uid: uint32(r + 1)}
+		target := &querypb.Target{Keyspace: "ks", Shard: "-", TabletType: topodatapb.TabletType_PRIMARY}
+		if r == 0 {
+			probe = tempTableRouteKey(tempTableHeartbeatTarget{target: target, alias: alias})
+		}
+		for i := range connsPerRoute {
+			c := &mysql.Conn{ConnectionID: uint32(r*connsPerRoute + i + 1)}
+			vh.tempTableConns.Store(c, &tempTableConn{targets: tempTargets(
+				tempTableHeartbeatTarget{target: target, alias: alias, reservedID: int64(r*connsPerRoute + i + 1)},
+			)})
+		}
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		items := vh.snapshotTempTableRoute(probe)
+		if len(items) != connsPerRoute {
+			b.Fatalf("got %d items, want %d", len(items), connsPerRoute)
+		}
 	}
 }
 

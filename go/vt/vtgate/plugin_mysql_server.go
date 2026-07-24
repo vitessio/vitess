@@ -135,6 +135,12 @@ type tempTableHeartbeatTarget struct {
 	// and is carried across a command's target republish so client activity
 	// cannot reset a still-unavailable tablet.
 	failures int
+	// route caches tempTableRouteKey for this target, stamped at construction,
+	// so the sweeper's snapshots group and filter targets with plain string
+	// compares instead of rebuilding the key (an allocating fmt of the alias)
+	// per target per scan. Derived state: tempTableRouteKey computes it on the
+	// fly when empty, so a hand-built target still routes correctly.
+	route string
 }
 
 // tempTableTargetKey identifies a reserved connection by its tablet and
@@ -264,6 +270,7 @@ func tempTableHeartbeatTargets(session *vtgatepb.Session) map[tempTableTargetKey
 				alias:      ss.GetTabletAlias(),
 				reservedID: ss.GetReservedId(),
 			}
+			t.route = tempTableRouteKey(t)
 			targets[newTempTableTargetKey(t)] = t
 		}
 	}
@@ -382,34 +389,52 @@ func (vh *vtgateHandler) startTempTableHeartbeat(ctx context.Context) {
 }
 
 // tempTableRouteKey identifies the beat a reserved connection belongs to: its
-// tablet alias and type. Type is part of the key, not just the alias, so every
-// id in one beat shares a single routing target. The tablet validates that one
-// target; if it rejects it as a wrong tablet (the tablet changed type), every id
-// in the beat is genuinely orphaned. A beat mixing a tablet's pre- and post-
-// transition reservations could not be judged that cleanly — the rejection would
-// condemn valid ids too.
+// tablet alias plus the full routing target (keyspace, shard, tablet type). The
+// whole target is part of the key, not just the alias, so every id in one beat
+// shares a single routing target: the tablet validates that one target, and a
+// permanent rejection (the tablet changed type, or its alias was reused for a
+// different keyspace/shard) then condemns exactly the ids that are genuinely
+// orphaned. A beat mixing a tablet's pre- and post-transition reservations —
+// same alias and type but a different keyspace, say — could not be judged that
+// cleanly: the shared rejection would evict valid reservations too, and their
+// temp tables would expire at the tablet timeout. The computed key is cached on
+// the target at construction (see tempTableHeartbeatTarget.route); the fallback
+// computation here keeps a hand-built target routing correctly.
 func tempTableRouteKey(t tempTableHeartbeatTarget) string {
-	return topoproto.TabletAliasString(t.alias) + "/" + t.target.GetTabletType().String()
+	if t.route != "" {
+		return t.route
+	}
+	return topoproto.TabletAliasString(t.alias) + "/" + t.target.GetKeyspace() + "/" + t.target.GetShard() + "/" + t.target.GetTabletType().String()
 }
 
-// snapshotTempTableBeats scans the registry once and groups every reserved
-// connection by its route (tablet + type), so the whole registry is locked once
-// per interval and each route can then be refreshed with a single batched touch
-// RPC.
-func (vh *vtgateHandler) snapshotTempTableBeats() map[string][]tempTableBeatItem {
-	byRoute := make(map[string][]tempTableBeatItem)
+// forEachTempTableBeatItem walks every beat item in the registry under each
+// connection's briefly-held lock, applying the snapshot rules (skip closing
+// connections) in one place for both the grouped sweep snapshot and the
+// single-route re-snapshot, so the two can never drift apart.
+func (vh *vtgateHandler) forEachTempTableBeatItem(fn func(item tempTableBeatItem)) {
 	vh.tempTableConns.Range(func(key, value any) bool {
 		c := key.(*mysql.Conn)
 		ttc := value.(*tempTableConn)
 		ttc.mu.Lock()
 		if !ttc.closed {
 			for _, t := range ttc.targets {
-				route := tempTableRouteKey(t)
-				byRoute[route] = append(byRoute[route], tempTableBeatItem{c: c, ttc: ttc, target: t})
+				fn(tempTableBeatItem{c: c, ttc: ttc, target: t})
 			}
 		}
 		ttc.mu.Unlock()
 		return true
+	})
+}
+
+// snapshotTempTableBeats scans the registry once and groups every reserved
+// connection by its route (tablet + full target), so the whole registry is
+// locked once per interval and each route can then be refreshed with a single
+// batched touch RPC.
+func (vh *vtgateHandler) snapshotTempTableBeats() map[string][]tempTableBeatItem {
+	byRoute := make(map[string][]tempTableBeatItem)
+	vh.forEachTempTableBeatItem(func(item tempTableBeatItem) {
+		route := tempTableRouteKey(item.target)
+		byRoute[route] = append(byRoute[route], item)
 	})
 	return byRoute
 }
@@ -420,11 +445,19 @@ func (vh *vtgateHandler) snapshotTempTableBeats() map[string][]tempTableBeatItem
 // that the original snapshot missed — and that in-flight suppression kept the
 // next sweep from picking up while this beat held the route. Re-collecting just
 // before the beat refreshes those too, so a reservation added while the route was
-// queued is not stranded (and left to time out) until this beat finishes. It
-// reuses the full grouped snapshot — a per-route filter would walk the whole
-// registry anyway, and one traversal means one set of snapshot rules.
+// queued is not stranded (and left to time out) until this beat finishes. The
+// walk filters on the target's cached route key — a plain string compare — and
+// allocates only for the requested route, so a broad recovery, where many
+// failing routes re-snapshot as they clear the semaphore, costs one cheap pass
+// per route rather than rebuilding every route's slice each time.
 func (vh *vtgateHandler) snapshotTempTableRoute(route string) []tempTableBeatItem {
-	return vh.snapshotTempTableBeats()[route]
+	var items []tempTableBeatItem
+	vh.forEachTempTableBeatItem(func(item tempTableBeatItem) {
+		if tempTableRouteKey(item.target) == route {
+			items = append(items, item)
+		}
+	})
+	return items
 }
 
 // tempTableFailingBeatConcurrency bounds how many failing tablets are beaten at
