@@ -3052,6 +3052,141 @@ func TestWorkflowStatus(t *testing.T) {
 	assert.Equal(t, vtctldatapb.TableCopyPhase_NOT_STARTED, stateTable3.Phase)
 }
 
+func TestGetWorkflowsSummary(t *testing.T) {
+	ctx := t.Context()
+
+	sourceKeyspace := "source_keyspace"
+	targetKeyspace := "target_keyspace"
+	workflow := "test_workflow"
+
+	te := newTestMaterializerEnv(t, ctx, &vtctldatapb.MaterializeSettings{
+		SourceKeyspace: sourceKeyspace,
+		TargetKeyspace: targetKeyspace,
+		Workflow:       workflow,
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{
+			{
+				TargetTable:      "table1",
+				SourceExpression: "select * from table1",
+			},
+		},
+	}, []string{"-"}, []string{"-"})
+
+	copyStateResult := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("vrepl_id|table_name|lastpk", "int64|varchar|varchar"),
+		"1|table1|pk:1",
+	)
+	te.tmc.expectVRQuery(200, "select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in (1) and id in (select max(id) from _vt.copy_state where vrepl_id in (1) group by vrepl_id, table_name)", copyStateResult)
+
+	res, err := te.ws.GetWorkflows(ctx, &vtctldatapb.GetWorkflowsRequest{
+		Keyspace:    targetKeyspace,
+		Workflow:    workflow,
+		SummaryOnly: true,
+	})
+	require.NoError(t, err)
+	require.Len(t, res.Workflows, 1)
+
+	got := res.Workflows[0]
+	require.Nil(t, got.ShardStreams)
+	require.NotNil(t, got.Status)
+	assert.Equal(t, int32(1), got.Status.TotalStreams)
+	assert.Equal(t, int32(1), got.Status.CopyingStreams)
+	assert.Equal(t, vtctldatapb.Workflow_WorkflowStatus_COPYING, got.Status.State)
+	assert.Equal(t, "Reads Not Switched. Writes Not Switched", got.Status.TrafficState)
+}
+
+// TestGetWorkflowsSummaryNonSwitchable checks that the summary does not
+// report a traffic state for workflow types that cannot switch traffic.
+func TestGetWorkflowsSummaryNonSwitchable(t *testing.T) {
+	ctx := t.Context()
+
+	sourceKeyspace := "source_keyspace"
+	targetKeyspace := "target_keyspace"
+	// The "lookup" in the name makes the fake TM client report the workflow
+	// as a CreateLookupIndex workflow, which cannot switch traffic.
+	workflow := "test_lookup_workflow"
+
+	te := newTestMaterializerEnv(t, ctx, &vtctldatapb.MaterializeSettings{
+		SourceKeyspace: sourceKeyspace,
+		TargetKeyspace: targetKeyspace,
+		Workflow:       workflow,
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{
+			{
+				TargetTable:      "table1",
+				SourceExpression: "select * from table1",
+			},
+		},
+	}, []string{"-"}, []string{"-"})
+
+	te.tmc.expectVRQuery(200, "select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in (1) and id in (select max(id) from _vt.copy_state where vrepl_id in (1) group by vrepl_id, table_name)", &sqltypes.Result{})
+
+	res, err := te.ws.GetWorkflows(ctx, &vtctldatapb.GetWorkflowsRequest{
+		Keyspace:    targetKeyspace,
+		Workflow:    workflow,
+		SummaryOnly: true,
+	})
+	require.NoError(t, err)
+	require.Len(t, res.Workflows, 1)
+
+	got := res.Workflows[0]
+	require.Nil(t, got.ShardStreams)
+	require.NotNil(t, got.Status)
+	assert.Equal(t, int32(1), got.Status.TotalStreams)
+	assert.Equal(t, int32(1), got.Status.RunningStreams)
+	assert.Equal(t, vtctldatapb.Workflow_WorkflowStatus_RUNNING, got.Status.State)
+	assert.Empty(t, got.Status.TrafficState)
+}
+
+// TestGetWorkflowsSummaryTrafficStateError checks that a workflow whose
+// traffic state cannot be determined degrades to an empty traffic_state in
+// the summary instead of failing the entire listing.
+func TestGetWorkflowsSummaryTrafficStateError(t *testing.T) {
+	ctx := t.Context()
+
+	sourceKeyspace := "source_keyspace"
+	targetKeyspace := "target_keyspace"
+	workflow := "test_workflow"
+
+	te := newTestMaterializerEnv(t, ctx, &vtctldatapb.MaterializeSettings{
+		SourceKeyspace: sourceKeyspace,
+		TargetKeyspace: targetKeyspace,
+		Workflow:       workflow,
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{
+			{
+				TargetTable:      "table1",
+				SourceExpression: "select * from table1",
+			},
+		},
+	}, []string{"-"}, []string{"-"})
+
+	// Building the traffic switcher finds no streams and fails, so the
+	// traffic state for this workflow cannot be determined.
+	te.tmc.readVReplicationWorkflow = func(
+		ctx context.Context,
+		tablet *topodatapb.Tablet,
+		request *tabletmanagerdatapb.ReadVReplicationWorkflowRequest,
+	) (*tabletmanagerdatapb.ReadVReplicationWorkflowResponse, error) {
+		return nil, nil
+	}
+
+	te.tmc.expectVRQuery(200, "select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in (1) and id in (select max(id) from _vt.copy_state where vrepl_id in (1) group by vrepl_id, table_name)", &sqltypes.Result{})
+
+	res, err := te.ws.GetWorkflows(ctx, &vtctldatapb.GetWorkflowsRequest{
+		Keyspace:    targetKeyspace,
+		Workflow:    workflow,
+		SummaryOnly: true,
+	})
+	require.NoError(t, err)
+	require.Len(t, res.Workflows, 1)
+
+	got := res.Workflows[0]
+	require.Nil(t, got.ShardStreams)
+	require.NotNil(t, got.Status)
+	assert.Equal(t, int32(1), got.Status.TotalStreams)
+	assert.Equal(t, int32(1), got.Status.RunningStreams)
+	assert.Equal(t, vtctldatapb.Workflow_WorkflowStatus_RUNNING, got.Status.State)
+	assert.Empty(t, got.Status.TrafficState)
+}
+
 func TestDeleteShard(t *testing.T) {
 	ctx := t.Context()
 

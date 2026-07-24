@@ -380,6 +380,7 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 	span.Annotate("active_only", req.ActiveOnly)
 	span.Annotate("include_logs", req.IncludeLogs)
 	span.Annotate("shards", req.Shards)
+	span.Annotate("summary_only", req.SummaryOnly)
 
 	w := &workflowFetcher{
 		ts:     s.ts,
@@ -401,6 +402,38 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 	workflows, err := w.buildWorkflows(ctx, workflowsByShard, copyStatesByShardStreamId, req)
 	if err != nil {
 		return nil, err
+	}
+
+	if req.SummaryOnly {
+		// Determining the traffic state requires building a traffic switcher,
+		// which fans out to the target shard primaries, so it is limited to
+		// workflow types that can switch traffic and the concurrency is
+		// bounded.
+		var eg errgroup.Group
+		eg.SetLimit(20)
+
+		for _, workflow := range workflows {
+			switch workflow.WorkflowType {
+			case binlogdatapb.VReplicationWorkflowType_MoveTables.String(),
+				binlogdatapb.VReplicationWorkflowType_Migrate.String(),
+				binlogdatapb.VReplicationWorkflowType_Reshard.String():
+			default:
+				continue
+			}
+
+			eg.Go(func() error {
+				_, state, err := s.getWorkflowState(ctx, req.Keyspace, workflow.Name)
+				if err != nil {
+					s.Logger().Warningf("GetWorkflows: failed to get the traffic state for workflow %s in keyspace %s, leaving it empty in the summary: %v",
+						workflow.Name, req.Keyspace, err)
+					return nil
+				}
+				workflow.Status.TrafficState = state.String()
+				return nil
+			})
+		}
+
+		_ = eg.Wait() // The goroutines never return an error.
 	}
 
 	return &vtctldatapb.GetWorkflowsResponse{

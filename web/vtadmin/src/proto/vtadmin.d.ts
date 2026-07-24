@@ -11473,6 +11473,9 @@ export namespace vtadmin {
         /** GetWorkflowsRequest ignore_keyspaces. */
         ignore_keyspaces: string[];
 
+        /** GetWorkflowsRequest summary_only. */
+        summary_only: boolean;
+
         /**
          * Creates a new GetWorkflowsRequest instance using the specified properties.
          * @param [properties] Properties to set
@@ -11568,6 +11571,9 @@ export namespace vtadmin {
 
             /** GetWorkflowsRequest ignore_keyspaces */
             ignore_keyspaces?: (string[]|null);
+
+            /** GetWorkflowsRequest summary_only */
+            summary_only?: (boolean|null);
 
             /** Unknown fields preserved while decoding */
             $unknowns?: Uint8Array[];
@@ -64836,6 +64842,9 @@ export namespace vtctldata {
         /** Workflow options. */
         options?: (vtctldata.WorkflowOptions.$Properties|null);
 
+        /** Workflow status. */
+        status?: (vtctldata.Workflow.WorkflowStatus.$Properties|null);
+
         /**
          * Creates a new Workflow instance using the specified properties.
          * @param [properties] Properties to set
@@ -64950,12 +64959,202 @@ export namespace vtctldata {
             /** Workflow options */
             options?: (vtctldata.WorkflowOptions.$Properties|null);
 
+            /** Workflow status */
+            status?: (vtctldata.Workflow.WorkflowStatus.$Properties|null);
+
             /** Unknown fields preserved while decoding */
             $unknowns?: Uint8Array[];
         }
 
         /** Shape of a Workflow. */
         type $Shape = vtctldata.Workflow.$Properties;
+
+        /**
+         * Properties of a WorkflowStatus.
+         * @deprecated Use vtctldata.Workflow.WorkflowStatus.$Properties instead.
+         */
+        interface IWorkflowStatus extends vtctldata.Workflow.WorkflowStatus.$Properties {
+        }
+
+        /** Represents a WorkflowStatus. */
+        class WorkflowStatus {
+
+            /**
+             * Constructs a new WorkflowStatus.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: vtctldata.Workflow.WorkflowStatus.$Properties);
+
+            /** Unknown fields preserved while decoding */
+            $unknowns?: Uint8Array[];
+
+            /** WorkflowStatus total_streams. */
+            total_streams: number;
+
+            /** WorkflowStatus running_streams. */
+            running_streams: number;
+
+            /** WorkflowStatus stopped_streams. */
+            stopped_streams: number;
+
+            /** WorkflowStatus copying_streams. */
+            copying_streams: number;
+
+            /** WorkflowStatus error_streams. */
+            error_streams: number;
+
+            /** WorkflowStatus errors. */
+            errors: string[];
+
+            /** WorkflowStatus is_throttled. */
+            is_throttled: boolean;
+
+            /** WorkflowStatus state. */
+            state: vtctldata.Workflow.WorkflowStatus.State;
+
+            /** WorkflowStatus traffic_state. */
+            traffic_state: string;
+
+            /**
+             * Creates a new WorkflowStatus instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns WorkflowStatus instance
+             */
+            static create(properties: vtctldata.Workflow.WorkflowStatus.$Shape): vtctldata.Workflow.WorkflowStatus & vtctldata.Workflow.WorkflowStatus.$Shape;
+            static create(properties?: vtctldata.Workflow.WorkflowStatus.$Properties): vtctldata.Workflow.WorkflowStatus;
+
+            /**
+             * Encodes the specified WorkflowStatus message. Does not implicitly {@link vtctldata.Workflow.WorkflowStatus.verify|verify} messages.
+             * @param message WorkflowStatus message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            static encode(message: vtctldata.Workflow.WorkflowStatus.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Encodes the specified WorkflowStatus message, length delimited. Does not implicitly {@link vtctldata.Workflow.WorkflowStatus.verify|verify} messages.
+             * @param message WorkflowStatus message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            static encodeDelimited(message: vtctldata.Workflow.WorkflowStatus.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a WorkflowStatus message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns {vtctldata.Workflow.WorkflowStatus & vtctldata.Workflow.WorkflowStatus.$Shape} WorkflowStatus
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.Workflow.WorkflowStatus & vtctldata.Workflow.WorkflowStatus.$Shape;
+
+            /**
+             * Decodes a WorkflowStatus message from the specified reader or buffer, length delimited.
+             * @param reader Reader or buffer to decode from
+             * @returns {vtctldata.Workflow.WorkflowStatus & vtctldata.Workflow.WorkflowStatus.$Shape} WorkflowStatus
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.Workflow.WorkflowStatus & vtctldata.Workflow.WorkflowStatus.$Shape;
+
+            /**
+             * Verifies a WorkflowStatus message.
+             * @param message Plain object to verify
+             * @returns `null` if valid, otherwise the reason why it is not
+             */
+            static verify(message: { [k: string]: any }): (string|null);
+
+            /**
+             * Creates a WorkflowStatus message from a plain object. Also converts values to their respective internal types.
+             * @param object Plain object
+             * @returns WorkflowStatus
+             */
+            static fromObject(object: { [k: string]: any }): vtctldata.Workflow.WorkflowStatus;
+
+            /**
+             * Creates a plain object from a WorkflowStatus message. Also converts values to other types if specified.
+             * @param message WorkflowStatus
+             * @param [options] Conversion options
+             * @returns Plain object
+             */
+            static toObject(message: vtctldata.Workflow.WorkflowStatus, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+            /**
+             * Converts this WorkflowStatus to JSON.
+             * @returns JSON object
+             */
+            toJSON(): { [k: string]: any };
+
+            /**
+             * Gets the type url for WorkflowStatus
+             * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+             * @returns The type url
+             */
+            static getTypeUrl(prefix?: string): string;
+        }
+
+        namespace WorkflowStatus {
+
+            /** Properties of a WorkflowStatus. */
+            interface $Properties {
+
+                /** WorkflowStatus total_streams */
+                total_streams?: (number|null);
+
+                /** WorkflowStatus running_streams */
+                running_streams?: (number|null);
+
+                /** WorkflowStatus stopped_streams */
+                stopped_streams?: (number|null);
+
+                /** WorkflowStatus copying_streams */
+                copying_streams?: (number|null);
+
+                /** WorkflowStatus error_streams */
+                error_streams?: (number|null);
+
+                /** WorkflowStatus errors */
+                errors?: (string[]|null);
+
+                /** WorkflowStatus is_throttled */
+                is_throttled?: (boolean|null);
+
+                /** WorkflowStatus state */
+                state?: (vtctldata.Workflow.WorkflowStatus.State|null);
+
+                /** WorkflowStatus traffic_state */
+                traffic_state?: (string|null);
+
+                /** Unknown fields preserved while decoding */
+                $unknowns?: Uint8Array[];
+            }
+
+            /** Shape of a WorkflowStatus. */
+            type $Shape = vtctldata.Workflow.WorkflowStatus.$Properties;
+
+            /** State enum. */
+            enum State {
+
+                /** UNKNOWN value */
+                UNKNOWN = 0,
+
+                /** RUNNING value */
+                RUNNING = 1,
+
+                /** COPYING value */
+                COPYING = 2,
+
+                /** ERROR value */
+                ERROR = 3,
+
+                /** STOPPED value */
+                STOPPED = 4,
+
+                /** LAGGING value */
+                LAGGING = 5
+            }
+        }
 
         /**
          * Properties of a ReplicationLocation.
@@ -81114,6 +81313,9 @@ export namespace vtctldata {
         /** GetWorkflowsRequest shards. */
         shards: string[];
 
+        /** GetWorkflowsRequest summary_only. */
+        summary_only: boolean;
+
         /**
          * Creates a new GetWorkflowsRequest instance using the specified properties.
          * @param [properties] Properties to set
@@ -81215,6 +81417,9 @@ export namespace vtctldata {
 
             /** GetWorkflowsRequest shards */
             shards?: (string[]|null);
+
+            /** GetWorkflowsRequest summary_only */
+            summary_only?: (boolean|null);
 
             /** Unknown fields preserved while decoding */
             $unknowns?: Uint8Array[];

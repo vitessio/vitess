@@ -27314,6 +27314,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @property {boolean|null} [active_only] GetWorkflowsRequest active_only
          * @property {Array.<string>|null} [keyspaces] GetWorkflowsRequest keyspaces
          * @property {Array.<string>|null} [ignore_keyspaces] GetWorkflowsRequest ignore_keyspaces
+         * @property {boolean|null} [summary_only] GetWorkflowsRequest summary_only
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
          */
 
@@ -27381,6 +27382,14 @@ export const vtadmin = $root.vtadmin = (() => {
         GetWorkflowsRequest.prototype.ignore_keyspaces = $util.emptyArray;
 
         /**
+         * GetWorkflowsRequest summary_only.
+         * @member {boolean} summary_only
+         * @memberof vtadmin.GetWorkflowsRequest
+         * @instance
+         */
+        GetWorkflowsRequest.prototype.summary_only = false;
+
+        /**
          * Creates a new GetWorkflowsRequest instance using the specified properties.
          * @function create
          * @memberof vtadmin.GetWorkflowsRequest
@@ -27423,6 +27432,8 @@ export const vtadmin = $root.vtadmin = (() => {
             if (message.ignore_keyspaces != null && message.ignore_keyspaces.length)
                 for (let i = 0; i < message.ignore_keyspaces.length; ++i)
                     writer.uint32(/* id 4, wireType 2 =*/34).string(message.ignore_keyspaces[i]);
+            if (message.summary_only != null && $Object.hasOwnProperty.call(message, "summary_only"))
+                writer.uint32(/* id 5, wireType 0 =*/40).bool(message.summary_only);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -27503,6 +27514,15 @@ export const vtadmin = $root.vtadmin = (() => {
                         message.ignore_keyspaces.push(reader.stringVerify());
                         continue;
                     }
+                case 5: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.summary_only = value;
+                        else
+                            delete message.summary_only;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -27570,6 +27590,9 @@ export const vtadmin = $root.vtadmin = (() => {
                     if (!$util.isString(message.ignore_keyspaces[i]))
                         return "ignore_keyspaces: string[] expected";
             }
+            if (message.summary_only != null && $Object.hasOwnProperty.call(message, "summary_only"))
+                if (typeof message.summary_only !== "boolean")
+                    return "summary_only: boolean expected";
             return null;
         };
 
@@ -27615,6 +27638,9 @@ export const vtadmin = $root.vtadmin = (() => {
                 for (let i = 0; i < object.ignore_keyspaces.length; ++i)
                     message.ignore_keyspaces[i] = $String(object.ignore_keyspaces[i]);
             }
+            if (object.summary_only != null)
+                if (object.summary_only)
+                    message.summary_only = $Boolean(object.summary_only);
             return message;
         };
 
@@ -27640,8 +27666,10 @@ export const vtadmin = $root.vtadmin = (() => {
                 object.keyspaces = [];
                 object.ignore_keyspaces = [];
             }
-            if (options.defaults)
+            if (options.defaults) {
                 object.active_only = false;
+                object.summary_only = false;
+            }
             if (message.cluster_ids && message.cluster_ids.length) {
                 object.cluster_ids = $Array(message.cluster_ids.length);
                 for (let j = 0; j < message.cluster_ids.length; ++j)
@@ -27659,6 +27687,8 @@ export const vtadmin = $root.vtadmin = (() => {
                 for (let j = 0; j < message.ignore_keyspaces.length; ++j)
                     object.ignore_keyspaces[j] = message.ignore_keyspaces[j];
             }
+            if (message.summary_only != null && $Object.hasOwnProperty.call(message, "summary_only"))
+                object.summary_only = message.summary_only;
             return object;
         };
 
@@ -166198,6 +166228,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {number|Long|null} [max_v_replication_transaction_lag] Workflow max_v_replication_transaction_lag
          * @property {boolean|null} [defer_secondary_keys] Workflow defer_secondary_keys
          * @property {vtctldata.WorkflowOptions.$Properties|null} [options] Workflow options
+         * @property {vtctldata.Workflow.WorkflowStatus.$Properties|null} [status] Workflow status
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
          */
 
@@ -166311,6 +166342,14 @@ export const vtctldata = $root.vtctldata = (() => {
         Workflow.prototype.options = null;
 
         /**
+         * Workflow status.
+         * @member {vtctldata.Workflow.WorkflowStatus.$Properties|null|undefined} status
+         * @memberof vtctldata.Workflow
+         * @instance
+         */
+        Workflow.prototype.status = null;
+
+        /**
          * Creates a new Workflow instance using the specified properties.
          * @function create
          * @memberof vtctldata.Workflow
@@ -166365,6 +166404,8 @@ export const vtctldata = $root.vtctldata = (() => {
                 writer.uint32(/* id 9, wireType 0 =*/72).bool(message.defer_secondary_keys);
             if (message.options != null && $Object.hasOwnProperty.call(message, "options"))
                 $root.vtctldata.WorkflowOptions.encode(message.options, writer.uint32(/* id 10, wireType 2 =*/82).fork(), _depth + 1).ldelim();
+            if (message.status != null && $Object.hasOwnProperty.call(message, "status"))
+                $root.vtctldata.Workflow.WorkflowStatus.encode(message.status, writer.uint32(/* id 11, wireType 2 =*/90).fork(), _depth + 1).ldelim();
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -166514,6 +166555,12 @@ export const vtctldata = $root.vtctldata = (() => {
                         message.options = $root.vtctldata.WorkflowOptions.decode(reader, reader.uint32(), $undefined, _depth + 1, message.options);
                         continue;
                     }
+                case 11: {
+                        if (wireType !== 2)
+                            break;
+                        message.status = $root.vtctldata.Workflow.WorkflowStatus.decode(reader, reader.uint32(), $undefined, _depth + 1, message.status);
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -166600,6 +166647,11 @@ export const vtctldata = $root.vtctldata = (() => {
                 if (error)
                     return "options." + error;
             }
+            if (message.status != null && $Object.hasOwnProperty.call(message, "status")) {
+                let error = $root.vtctldata.Workflow.WorkflowStatus.verify(message.status, _depth + 1);
+                if (error)
+                    return "status." + error;
+            }
             return null;
         };
 
@@ -166680,6 +166732,11 @@ export const vtctldata = $root.vtctldata = (() => {
                     throw $TypeError(".vtctldata.Workflow.options: object expected");
                 message.options = $root.vtctldata.WorkflowOptions.fromObject(object.options, _depth + 1);
             }
+            if (object.status != null) {
+                if (!$util.isObject(object.status))
+                    throw $TypeError(".vtctldata.Workflow.status: object expected");
+                message.status = $root.vtctldata.Workflow.WorkflowStatus.fromObject(object.status, _depth + 1);
+            }
             return message;
         };
 
@@ -166720,6 +166777,7 @@ export const vtctldata = $root.vtctldata = (() => {
                     object.max_v_replication_transaction_lag = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
                 object.defer_secondary_keys = false;
                 object.options = null;
+                object.status = null;
             }
             if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
                 object.name = message.name;
@@ -166758,6 +166816,8 @@ export const vtctldata = $root.vtctldata = (() => {
                 object.defer_secondary_keys = message.defer_secondary_keys;
             if (message.options != null && $Object.hasOwnProperty.call(message, "options"))
                 object.options = $root.vtctldata.WorkflowOptions.toObject(message.options, options, _depth + 1);
+            if (message.status != null && $Object.hasOwnProperty.call(message, "status"))
+                object.status = $root.vtctldata.Workflow.WorkflowStatus.toObject(message.status, options, _depth + 1);
             return object;
         };
 
@@ -166785,6 +166845,573 @@ export const vtctldata = $root.vtctldata = (() => {
                 prefix = "type.googleapis.com";
             return prefix + "/vtctldata.Workflow";
         };
+
+        Workflow.WorkflowStatus = (function() {
+
+            /**
+             * Properties of a WorkflowStatus.
+             * @typedef {Object} vtctldata.Workflow.WorkflowStatus.$Properties
+             * @property {number|null} [total_streams] WorkflowStatus total_streams
+             * @property {number|null} [running_streams] WorkflowStatus running_streams
+             * @property {number|null} [stopped_streams] WorkflowStatus stopped_streams
+             * @property {number|null} [copying_streams] WorkflowStatus copying_streams
+             * @property {number|null} [error_streams] WorkflowStatus error_streams
+             * @property {Array.<string>|null} [errors] WorkflowStatus errors
+             * @property {boolean|null} [is_throttled] WorkflowStatus is_throttled
+             * @property {vtctldata.Workflow.WorkflowStatus.State|null} [state] WorkflowStatus state
+             * @property {string|null} [traffic_state] WorkflowStatus traffic_state
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             */
+
+            /**
+             * Properties of a WorkflowStatus.
+             * @memberof vtctldata.Workflow
+             * @interface IWorkflowStatus
+             * @augments vtctldata.Workflow.WorkflowStatus.$Properties
+             * @deprecated Use vtctldata.Workflow.WorkflowStatus.$Properties instead.
+             */
+
+            /**
+             * Shape of a WorkflowStatus.
+             * @typedef {vtctldata.Workflow.WorkflowStatus.$Properties} vtctldata.Workflow.WorkflowStatus.$Shape
+             */
+
+            /**
+             * Constructs a new WorkflowStatus.
+             * @memberof vtctldata.Workflow
+             * @classdesc Represents a WorkflowStatus.
+             * @constructor
+             * @param {vtctldata.Workflow.WorkflowStatus.$Properties=} [properties] Properties to set
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             */
+            const WorkflowStatus = function (properties) {
+                this.errors = [];
+                if (properties)
+                    for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            };
+
+            /**
+             * WorkflowStatus total_streams.
+             * @member {number} total_streams
+             * @memberof vtctldata.Workflow.WorkflowStatus
+             * @instance
+             */
+            WorkflowStatus.prototype.total_streams = 0;
+
+            /**
+             * WorkflowStatus running_streams.
+             * @member {number} running_streams
+             * @memberof vtctldata.Workflow.WorkflowStatus
+             * @instance
+             */
+            WorkflowStatus.prototype.running_streams = 0;
+
+            /**
+             * WorkflowStatus stopped_streams.
+             * @member {number} stopped_streams
+             * @memberof vtctldata.Workflow.WorkflowStatus
+             * @instance
+             */
+            WorkflowStatus.prototype.stopped_streams = 0;
+
+            /**
+             * WorkflowStatus copying_streams.
+             * @member {number} copying_streams
+             * @memberof vtctldata.Workflow.WorkflowStatus
+             * @instance
+             */
+            WorkflowStatus.prototype.copying_streams = 0;
+
+            /**
+             * WorkflowStatus error_streams.
+             * @member {number} error_streams
+             * @memberof vtctldata.Workflow.WorkflowStatus
+             * @instance
+             */
+            WorkflowStatus.prototype.error_streams = 0;
+
+            /**
+             * WorkflowStatus errors.
+             * @member {Array.<string>} errors
+             * @memberof vtctldata.Workflow.WorkflowStatus
+             * @instance
+             */
+            WorkflowStatus.prototype.errors = $util.emptyArray;
+
+            /**
+             * WorkflowStatus is_throttled.
+             * @member {boolean} is_throttled
+             * @memberof vtctldata.Workflow.WorkflowStatus
+             * @instance
+             */
+            WorkflowStatus.prototype.is_throttled = false;
+
+            /**
+             * WorkflowStatus state.
+             * @member {vtctldata.Workflow.WorkflowStatus.State} state
+             * @memberof vtctldata.Workflow.WorkflowStatus
+             * @instance
+             */
+            WorkflowStatus.prototype.state = 0;
+
+            /**
+             * WorkflowStatus traffic_state.
+             * @member {string} traffic_state
+             * @memberof vtctldata.Workflow.WorkflowStatus
+             * @instance
+             */
+            WorkflowStatus.prototype.traffic_state = "";
+
+            /**
+             * Creates a new WorkflowStatus instance using the specified properties.
+             * @function create
+             * @memberof vtctldata.Workflow.WorkflowStatus
+             * @static
+             * @param {vtctldata.Workflow.WorkflowStatus.$Properties=} [properties] Properties to set
+             * @returns {vtctldata.Workflow.WorkflowStatus} WorkflowStatus instance
+             * @type {{
+             *   (properties: vtctldata.Workflow.WorkflowStatus.$Shape): vtctldata.Workflow.WorkflowStatus & vtctldata.Workflow.WorkflowStatus.$Shape;
+             *   (properties?: vtctldata.Workflow.WorkflowStatus.$Properties): vtctldata.Workflow.WorkflowStatus;
+             * }}
+             */
+            WorkflowStatus.create = function(properties) {
+                return new WorkflowStatus(properties);
+            };
+
+            /**
+             * Encodes the specified WorkflowStatus message. Does not implicitly {@link vtctldata.Workflow.WorkflowStatus.verify|verify} messages.
+             * @function encode
+             * @memberof vtctldata.Workflow.WorkflowStatus
+             * @static
+             * @param {vtctldata.Workflow.WorkflowStatus.$Properties} message WorkflowStatus message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            WorkflowStatus.encode = function (message, writer, _depth) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (_depth === $undefined)
+                    _depth = 0;
+                if (_depth > $util.recursionLimit)
+                    throw $Error("max depth exceeded");
+                if (message.total_streams != null && $Object.hasOwnProperty.call(message, "total_streams"))
+                    writer.uint32(/* id 1, wireType 0 =*/8).int32(message.total_streams);
+                if (message.running_streams != null && $Object.hasOwnProperty.call(message, "running_streams"))
+                    writer.uint32(/* id 2, wireType 0 =*/16).int32(message.running_streams);
+                if (message.stopped_streams != null && $Object.hasOwnProperty.call(message, "stopped_streams"))
+                    writer.uint32(/* id 3, wireType 0 =*/24).int32(message.stopped_streams);
+                if (message.copying_streams != null && $Object.hasOwnProperty.call(message, "copying_streams"))
+                    writer.uint32(/* id 4, wireType 0 =*/32).int32(message.copying_streams);
+                if (message.error_streams != null && $Object.hasOwnProperty.call(message, "error_streams"))
+                    writer.uint32(/* id 5, wireType 0 =*/40).int32(message.error_streams);
+                if (message.errors != null && message.errors.length)
+                    for (let i = 0; i < message.errors.length; ++i)
+                        writer.uint32(/* id 6, wireType 2 =*/50).string(message.errors[i]);
+                if (message.is_throttled != null && $Object.hasOwnProperty.call(message, "is_throttled"))
+                    writer.uint32(/* id 7, wireType 0 =*/56).bool(message.is_throttled);
+                if (message.state != null && $Object.hasOwnProperty.call(message, "state"))
+                    writer.uint32(/* id 8, wireType 0 =*/64).int32(message.state);
+                if (message.traffic_state != null && $Object.hasOwnProperty.call(message, "traffic_state"))
+                    writer.uint32(/* id 9, wireType 2 =*/74).string(message.traffic_state);
+                if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
+                    for (let i = 0; i < message.$unknowns.length; ++i)
+                        writer.raw(message.$unknowns[i]);
+                return writer;
+            };
+
+            /**
+             * Encodes the specified WorkflowStatus message, length delimited. Does not implicitly {@link vtctldata.Workflow.WorkflowStatus.verify|verify} messages.
+             * @function encodeDelimited
+             * @memberof vtctldata.Workflow.WorkflowStatus
+             * @static
+             * @param {vtctldata.Workflow.WorkflowStatus.$Properties} message WorkflowStatus message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            WorkflowStatus.encodeDelimited = function(message, writer) {
+                return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            };
+
+            /**
+             * Decodes a WorkflowStatus message from the specified reader or buffer.
+             * @function decode
+             * @memberof vtctldata.Workflow.WorkflowStatus
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {vtctldata.Workflow.WorkflowStatus & vtctldata.Workflow.WorkflowStatus.$Shape} WorkflowStatus
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            WorkflowStatus.decode = function (reader, length, _end, _depth, _target) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (_depth === $undefined)
+                    _depth = 0;
+                if (_depth > $Reader.recursionLimit)
+                    throw $Error("max depth exceeded");
+                let end = length === $undefined ? reader.len : reader.pos + length, message = _target || new $root.vtctldata.Workflow.WorkflowStatus(), value;
+                while (reader.pos < end) {
+                    let start = reader.pos;
+                    let tag = reader.tag();
+                    if (tag === _end) {
+                        _end = $undefined;
+                        break;
+                    }
+                    let wireType = tag & 7;
+                    switch (tag >>>= 3) {
+                    case 1: {
+                            if (wireType !== 0)
+                                break;
+                            if (value = reader.int32())
+                                message.total_streams = value;
+                            else
+                                delete message.total_streams;
+                            continue;
+                        }
+                    case 2: {
+                            if (wireType !== 0)
+                                break;
+                            if (value = reader.int32())
+                                message.running_streams = value;
+                            else
+                                delete message.running_streams;
+                            continue;
+                        }
+                    case 3: {
+                            if (wireType !== 0)
+                                break;
+                            if (value = reader.int32())
+                                message.stopped_streams = value;
+                            else
+                                delete message.stopped_streams;
+                            continue;
+                        }
+                    case 4: {
+                            if (wireType !== 0)
+                                break;
+                            if (value = reader.int32())
+                                message.copying_streams = value;
+                            else
+                                delete message.copying_streams;
+                            continue;
+                        }
+                    case 5: {
+                            if (wireType !== 0)
+                                break;
+                            if (value = reader.int32())
+                                message.error_streams = value;
+                            else
+                                delete message.error_streams;
+                            continue;
+                        }
+                    case 6: {
+                            if (wireType !== 2)
+                                break;
+                            if (!(message.errors && message.errors.length))
+                                message.errors = [];
+                            message.errors.push(reader.stringVerify());
+                            continue;
+                        }
+                    case 7: {
+                            if (wireType !== 0)
+                                break;
+                            if (value = reader.bool())
+                                message.is_throttled = value;
+                            else
+                                delete message.is_throttled;
+                            continue;
+                        }
+                    case 8: {
+                            if (wireType !== 0)
+                                break;
+                            if (value = reader.int32())
+                                message.state = value;
+                            else
+                                delete message.state;
+                            continue;
+                        }
+                    case 9: {
+                            if (wireType !== 2)
+                                break;
+                            if ((value = reader.stringVerify()).length)
+                                message.traffic_state = value;
+                            else
+                                delete message.traffic_state;
+                            continue;
+                        }
+                    }
+                    reader.skipType(wireType, _depth, tag);
+                    if (!reader.discardUnknown) {
+                        $util.makeProp(message, "$unknowns", false);
+                        (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
+                    }
+                }
+                if (_end !== $undefined)
+                    throw $Error("missing end group");
+                return message;
+            };
+
+            /**
+             * Decodes a WorkflowStatus message from the specified reader or buffer, length delimited.
+             * @function decodeDelimited
+             * @memberof vtctldata.Workflow.WorkflowStatus
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @returns {vtctldata.Workflow.WorkflowStatus & vtctldata.Workflow.WorkflowStatus.$Shape} WorkflowStatus
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            WorkflowStatus.decodeDelimited = function(reader) {
+                if (!(reader instanceof $Reader))
+                    reader = new $Reader(reader);
+                return this.decode(reader, reader.uint32());
+            };
+
+            /**
+             * Verifies a WorkflowStatus message.
+             * @function verify
+             * @memberof vtctldata.Workflow.WorkflowStatus
+             * @static
+             * @param {Object.<string,*>} message Plain object to verify
+             * @returns {string|null} `null` if valid, otherwise the reason why it is not
+             */
+            WorkflowStatus.verify = function (message, _depth) {
+                if (typeof message !== "object" || message === null)
+                    return "object expected";
+                if (_depth === $undefined)
+                    _depth = 0;
+                if (_depth > $util.recursionLimit)
+                    return "max depth exceeded";
+                if (message.total_streams != null && $Object.hasOwnProperty.call(message, "total_streams"))
+                    if (!$util.isInteger(message.total_streams))
+                        return "total_streams: integer expected";
+                if (message.running_streams != null && $Object.hasOwnProperty.call(message, "running_streams"))
+                    if (!$util.isInteger(message.running_streams))
+                        return "running_streams: integer expected";
+                if (message.stopped_streams != null && $Object.hasOwnProperty.call(message, "stopped_streams"))
+                    if (!$util.isInteger(message.stopped_streams))
+                        return "stopped_streams: integer expected";
+                if (message.copying_streams != null && $Object.hasOwnProperty.call(message, "copying_streams"))
+                    if (!$util.isInteger(message.copying_streams))
+                        return "copying_streams: integer expected";
+                if (message.error_streams != null && $Object.hasOwnProperty.call(message, "error_streams"))
+                    if (!$util.isInteger(message.error_streams))
+                        return "error_streams: integer expected";
+                if (message.errors != null && $Object.hasOwnProperty.call(message, "errors")) {
+                    if (!$Array.isArray(message.errors))
+                        return "errors: array expected";
+                    for (let i = 0; i < message.errors.length; ++i)
+                        if (!$util.isString(message.errors[i]))
+                            return "errors: string[] expected";
+                }
+                if (message.is_throttled != null && $Object.hasOwnProperty.call(message, "is_throttled"))
+                    if (typeof message.is_throttled !== "boolean")
+                        return "is_throttled: boolean expected";
+                if (message.state != null && $Object.hasOwnProperty.call(message, "state"))
+                    switch (message.state) {
+                    default:
+                        return "state: enum value expected";
+                    case 0:
+                    case 1:
+                    case 2:
+                    case 3:
+                    case 4:
+                    case 5:
+                        break;
+                    }
+                if (message.traffic_state != null && $Object.hasOwnProperty.call(message, "traffic_state"))
+                    if (!$util.isString(message.traffic_state))
+                        return "traffic_state: string expected";
+                return null;
+            };
+
+            /**
+             * Creates a WorkflowStatus message from a plain object. Also converts values to their respective internal types.
+             * @function fromObject
+             * @memberof vtctldata.Workflow.WorkflowStatus
+             * @static
+             * @param {Object.<string,*>} object Plain object
+             * @returns {vtctldata.Workflow.WorkflowStatus} WorkflowStatus
+             */
+            WorkflowStatus.fromObject = function (object, _depth) {
+                if (object instanceof $root.vtctldata.Workflow.WorkflowStatus)
+                    return object;
+                if (!$util.isObject(object))
+                    throw $TypeError(".vtctldata.Workflow.WorkflowStatus: object expected");
+                if (_depth === $undefined)
+                    _depth = 0;
+                if (_depth > $util.recursionLimit)
+                    throw $Error("max depth exceeded");
+                let message = new $root.vtctldata.Workflow.WorkflowStatus();
+                if (object.total_streams != null)
+                    if ($Number(object.total_streams) !== 0)
+                        message.total_streams = object.total_streams | 0;
+                if (object.running_streams != null)
+                    if ($Number(object.running_streams) !== 0)
+                        message.running_streams = object.running_streams | 0;
+                if (object.stopped_streams != null)
+                    if ($Number(object.stopped_streams) !== 0)
+                        message.stopped_streams = object.stopped_streams | 0;
+                if (object.copying_streams != null)
+                    if ($Number(object.copying_streams) !== 0)
+                        message.copying_streams = object.copying_streams | 0;
+                if (object.error_streams != null)
+                    if ($Number(object.error_streams) !== 0)
+                        message.error_streams = object.error_streams | 0;
+                if (object.errors) {
+                    if (!$Array.isArray(object.errors))
+                        throw $TypeError(".vtctldata.Workflow.WorkflowStatus.errors: array expected");
+                    message.errors = $Array(object.errors.length);
+                    for (let i = 0; i < object.errors.length; ++i)
+                        message.errors[i] = $String(object.errors[i]);
+                }
+                if (object.is_throttled != null)
+                    if (object.is_throttled)
+                        message.is_throttled = $Boolean(object.is_throttled);
+                if (object.state !== 0 && (typeof object.state !== "string" || $root.vtctldata.Workflow.WorkflowStatus.State[object.state] !== 0))
+                    switch (object.state) {
+                    default:
+                        if (typeof object.state === "number") {
+                            message.state = object.state;
+                            break;
+                        }
+                        break;
+                    case "UNKNOWN":
+                    case 0:
+                        message.state = 0;
+                        break;
+                    case "RUNNING":
+                    case 1:
+                        message.state = 1;
+                        break;
+                    case "COPYING":
+                    case 2:
+                        message.state = 2;
+                        break;
+                    case "ERROR":
+                    case 3:
+                        message.state = 3;
+                        break;
+                    case "STOPPED":
+                    case 4:
+                        message.state = 4;
+                        break;
+                    case "LAGGING":
+                    case 5:
+                        message.state = 5;
+                        break;
+                    }
+                if (object.traffic_state != null)
+                    if (typeof object.traffic_state !== "string" || object.traffic_state.length)
+                        message.traffic_state = $String(object.traffic_state);
+                return message;
+            };
+
+            /**
+             * Creates a plain object from a WorkflowStatus message. Also converts values to other types if specified.
+             * @function toObject
+             * @memberof vtctldata.Workflow.WorkflowStatus
+             * @static
+             * @param {vtctldata.Workflow.WorkflowStatus} message WorkflowStatus
+             * @param {$protobuf.IConversionOptions} [options] Conversion options
+             * @returns {Object.<string,*>} Plain object
+             */
+            WorkflowStatus.toObject = function (message, options, _depth) {
+                if (!options)
+                    options = {};
+                if (_depth === $undefined)
+                    _depth = 0;
+                if (_depth > $util.recursionLimit)
+                    throw $Error("max depth exceeded");
+                let object = {};
+                if (options.arrays || options.defaults)
+                    object.errors = [];
+                if (options.defaults) {
+                    object.total_streams = 0;
+                    object.running_streams = 0;
+                    object.stopped_streams = 0;
+                    object.copying_streams = 0;
+                    object.error_streams = 0;
+                    object.is_throttled = false;
+                    object.state = options.enums === $String ? "UNKNOWN" : 0;
+                    object.traffic_state = "";
+                }
+                if (message.total_streams != null && $Object.hasOwnProperty.call(message, "total_streams"))
+                    object.total_streams = message.total_streams;
+                if (message.running_streams != null && $Object.hasOwnProperty.call(message, "running_streams"))
+                    object.running_streams = message.running_streams;
+                if (message.stopped_streams != null && $Object.hasOwnProperty.call(message, "stopped_streams"))
+                    object.stopped_streams = message.stopped_streams;
+                if (message.copying_streams != null && $Object.hasOwnProperty.call(message, "copying_streams"))
+                    object.copying_streams = message.copying_streams;
+                if (message.error_streams != null && $Object.hasOwnProperty.call(message, "error_streams"))
+                    object.error_streams = message.error_streams;
+                if (message.errors && message.errors.length) {
+                    object.errors = $Array(message.errors.length);
+                    for (let j = 0; j < message.errors.length; ++j)
+                        object.errors[j] = message.errors[j];
+                }
+                if (message.is_throttled != null && $Object.hasOwnProperty.call(message, "is_throttled"))
+                    object.is_throttled = message.is_throttled;
+                if (message.state != null && $Object.hasOwnProperty.call(message, "state"))
+                    object.state = options.enums === $String ? $root.vtctldata.Workflow.WorkflowStatus.State[message.state] === $undefined ? message.state : $root.vtctldata.Workflow.WorkflowStatus.State[message.state] : message.state;
+                if (message.traffic_state != null && $Object.hasOwnProperty.call(message, "traffic_state"))
+                    object.traffic_state = message.traffic_state;
+                return object;
+            };
+
+            /**
+             * Converts this WorkflowStatus to JSON.
+             * @function toJSON
+             * @memberof vtctldata.Workflow.WorkflowStatus
+             * @instance
+             * @returns {Object.<string,*>} JSON object
+             */
+            WorkflowStatus.prototype.toJSON = function() {
+                return WorkflowStatus.toObject(this, $protobuf.util.toJSONOptions);
+            };
+
+            /**
+             * Gets the type url for WorkflowStatus
+             * @function getTypeUrl
+             * @memberof vtctldata.Workflow.WorkflowStatus
+             * @static
+             * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+             * @returns {string} The type url
+             */
+            WorkflowStatus.getTypeUrl = function(prefix) {
+                if (prefix === $undefined)
+                    prefix = "type.googleapis.com";
+                return prefix + "/vtctldata.Workflow.WorkflowStatus";
+            };
+
+            /**
+             * State enum.
+             * @name vtctldata.Workflow.WorkflowStatus.State
+             * @enum {number}
+             * @property {number} UNKNOWN=0 UNKNOWN value
+             * @property {number} RUNNING=1 RUNNING value
+             * @property {number} COPYING=2 COPYING value
+             * @property {number} ERROR=3 ERROR value
+             * @property {number} STOPPED=4 STOPPED value
+             * @property {number} LAGGING=5 LAGGING value
+             */
+            WorkflowStatus.State = (function() {
+                const valuesById = {}, values = $Object.create(valuesById);
+                values[valuesById[0] = "UNKNOWN"] = 0;
+                values[valuesById[1] = "RUNNING"] = 1;
+                values[valuesById[2] = "COPYING"] = 2;
+                values[valuesById[3] = "ERROR"] = 3;
+                values[valuesById[4] = "STOPPED"] = 4;
+                values[valuesById[5] = "LAGGING"] = 5;
+                return values;
+            })();
+
+            return WorkflowStatus;
+        })();
 
         Workflow.ReplicationLocation = (function() {
 
@@ -207153,6 +207780,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [workflow] GetWorkflowsRequest workflow
          * @property {boolean|null} [include_logs] GetWorkflowsRequest include_logs
          * @property {Array.<string>|null} [shards] GetWorkflowsRequest shards
+         * @property {boolean|null} [summary_only] GetWorkflowsRequest summary_only
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
          */
 
@@ -207234,6 +207862,14 @@ export const vtctldata = $root.vtctldata = (() => {
         GetWorkflowsRequest.prototype.shards = $util.emptyArray;
 
         /**
+         * GetWorkflowsRequest summary_only.
+         * @member {boolean} summary_only
+         * @memberof vtctldata.GetWorkflowsRequest
+         * @instance
+         */
+        GetWorkflowsRequest.prototype.summary_only = false;
+
+        /**
          * Creates a new GetWorkflowsRequest instance using the specified properties.
          * @function create
          * @memberof vtctldata.GetWorkflowsRequest
@@ -207278,6 +207914,8 @@ export const vtctldata = $root.vtctldata = (() => {
             if (message.shards != null && message.shards.length)
                 for (let i = 0; i < message.shards.length; ++i)
                     writer.uint32(/* id 6, wireType 2 =*/50).string(message.shards[i]);
+            if (message.summary_only != null && $Object.hasOwnProperty.call(message, "summary_only"))
+                writer.uint32(/* id 7, wireType 0 =*/56).bool(message.summary_only);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -207378,6 +208016,15 @@ export const vtctldata = $root.vtctldata = (() => {
                         message.shards.push(reader.stringVerify());
                         continue;
                     }
+                case 7: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.summary_only = value;
+                        else
+                            delete message.summary_only;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -207443,6 +208090,9 @@ export const vtctldata = $root.vtctldata = (() => {
                     if (!$util.isString(message.shards[i]))
                         return "shards: string[] expected";
             }
+            if (message.summary_only != null && $Object.hasOwnProperty.call(message, "summary_only"))
+                if (typeof message.summary_only !== "boolean")
+                    return "summary_only: boolean expected";
             return null;
         };
 
@@ -207486,6 +208136,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 for (let i = 0; i < object.shards.length; ++i)
                     message.shards[i] = $String(object.shards[i]);
             }
+            if (object.summary_only != null)
+                if (object.summary_only)
+                    message.summary_only = $Boolean(object.summary_only);
             return message;
         };
 
@@ -207514,6 +208167,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 object.name_only = false;
                 object.workflow = "";
                 object.include_logs = false;
+                object.summary_only = false;
             }
             if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
                 object.keyspace = message.keyspace;
@@ -207530,6 +208184,8 @@ export const vtctldata = $root.vtctldata = (() => {
                 for (let j = 0; j < message.shards.length; ++j)
                     object.shards[j] = message.shards[j];
             }
+            if (message.summary_only != null && $Object.hasOwnProperty.call(message, "summary_only"))
+                object.summary_only = message.summary_only;
             return object;
         };
 

@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/proto/binlogdata"
 	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/topo"
@@ -255,4 +256,260 @@ func TestFetchCopyStatesByShardStream(t *testing.T) {
 	assert.Len(t, copyStates3, 2)
 
 	assert.Nil(t, copyStatesByStreamId["80-/2"])
+}
+
+func TestComputeWorkflowStatus(t *testing.T) {
+	testCases := []struct {
+		name     string
+		workflow *vtctldatapb.Workflow
+		want     *vtctldatapb.Workflow_WorkflowStatus
+	}{
+		{
+			name: "all running",
+			workflow: &vtctldatapb.Workflow{
+				ShardStreams: map[string]*vtctldatapb.Workflow_ShardStream{
+					"-80/zone1-100": {
+						IsPrimaryServing: true,
+						Streams: []*vtctldatapb.Workflow_Stream{
+							{State: "Running"},
+							{State: "Running"},
+						},
+					},
+					"80-/zone1-101": {
+						IsPrimaryServing: true,
+						Streams: []*vtctldatapb.Workflow_Stream{
+							{State: "Running"},
+						},
+					},
+				},
+			},
+			want: &vtctldatapb.Workflow_WorkflowStatus{
+				TotalStreams:   3,
+				RunningStreams: 3,
+				State:          vtctldatapb.Workflow_WorkflowStatus_RUNNING,
+			},
+		},
+		{
+			name: "some copying",
+			workflow: &vtctldatapb.Workflow{
+				ShardStreams: map[string]*vtctldatapb.Workflow_ShardStream{
+					"-80/zone1-100": {
+						Streams: []*vtctldatapb.Workflow_Stream{
+							{State: "Running"},
+							{State: "Copying"},
+						},
+					},
+				},
+			},
+			want: &vtctldatapb.Workflow_WorkflowStatus{
+				TotalStreams:   2,
+				RunningStreams: 1,
+				CopyingStreams: 1,
+				State:          vtctldatapb.Workflow_WorkflowStatus_COPYING,
+			},
+		},
+		{
+			name: "with errors",
+			workflow: &vtctldatapb.Workflow{
+				ShardStreams: map[string]*vtctldatapb.Workflow_ShardStream{
+					"-80/zone1-100": {
+						Streams: []*vtctldatapb.Workflow_Stream{
+							{State: "Running"},
+							{State: "Error", Message: "connection failed"},
+							{State: "Error", Message: "connection failed"}, // duplicate error
+							{State: "Error", Message: "timeout"},
+						},
+					},
+				},
+			},
+			want: &vtctldatapb.Workflow_WorkflowStatus{
+				TotalStreams:   4,
+				RunningStreams: 1,
+				ErrorStreams:   3,
+				Errors:         []string{"connection failed", "timeout"},
+				State:          vtctldatapb.Workflow_WorkflowStatus_ERROR,
+			},
+		},
+		{
+			name: "all stopped",
+			workflow: &vtctldatapb.Workflow{
+				ShardStreams: map[string]*vtctldatapb.Workflow_ShardStream{
+					"-80/zone1-100": {
+						Streams: []*vtctldatapb.Workflow_Stream{
+							{State: "Stopped"},
+							{State: "Stopped"},
+						},
+					},
+				},
+			},
+			want: &vtctldatapb.Workflow_WorkflowStatus{
+				TotalStreams:   2,
+				StoppedStreams: 2,
+				State:          vtctldatapb.Workflow_WorkflowStatus_STOPPED,
+			},
+		},
+		{
+			name: "lagging",
+			workflow: &vtctldatapb.Workflow{
+				ShardStreams: map[string]*vtctldatapb.Workflow_ShardStream{
+					"-80/zone1-100": {
+						Streams: []*vtctldatapb.Workflow_Stream{
+							{State: "Running"},
+							{State: "Lagging"},
+						},
+					},
+				},
+			},
+			want: &vtctldatapb.Workflow_WorkflowStatus{
+				TotalStreams:   2,
+				RunningStreams: 2, // Lagging counts as running
+				State:          vtctldatapb.Workflow_WorkflowStatus_LAGGING,
+			},
+		},
+		{
+			name: "error takes priority",
+			workflow: &vtctldatapb.Workflow{
+				ShardStreams: map[string]*vtctldatapb.Workflow_ShardStream{
+					"-80/zone1-100": {
+						Streams: []*vtctldatapb.Workflow_Stream{
+							{State: "Running"},
+							{State: "Copying"},
+							{State: "Error"},
+							{State: "Lagging"},
+						},
+					},
+				},
+			},
+			want: &vtctldatapb.Workflow_WorkflowStatus{
+				TotalStreams:   4,
+				RunningStreams: 2,
+				CopyingStreams: 1,
+				ErrorStreams:   1,
+				State:          vtctldatapb.Workflow_WorkflowStatus_ERROR,
+			},
+		},
+		{
+			name: "copying takes priority over lagging",
+			workflow: &vtctldatapb.Workflow{
+				ShardStreams: map[string]*vtctldatapb.Workflow_ShardStream{
+					"-80/zone1-100": {
+						Streams: []*vtctldatapb.Workflow_Stream{
+							{State: "Running"},
+							{State: "Copying"},
+							{State: "Lagging"},
+						},
+					},
+				},
+			},
+			want: &vtctldatapb.Workflow_WorkflowStatus{
+				TotalStreams:   3,
+				RunningStreams: 2,
+				CopyingStreams: 1,
+				State:          vtctldatapb.Workflow_WorkflowStatus_COPYING,
+			},
+		},
+		{
+			// STOPPED requires all streams to be stopped; a stream in an
+			// uncounted state (e.g. Init) makes the state indeterminate.
+			name: "stopped and init yields unknown",
+			workflow: &vtctldatapb.Workflow{
+				ShardStreams: map[string]*vtctldatapb.Workflow_ShardStream{
+					"-80/zone1-100": {
+						Streams: []*vtctldatapb.Workflow_Stream{
+							{State: "Stopped"},
+							{State: "Init"},
+						},
+					},
+				},
+			},
+			want: &vtctldatapb.Workflow_WorkflowStatus{
+				TotalStreams:   2,
+				StoppedStreams: 1,
+				State:          vtctldatapb.Workflow_WorkflowStatus_UNKNOWN,
+			},
+		},
+		{
+			name: "stopped and running yields running",
+			workflow: &vtctldatapb.Workflow{
+				ShardStreams: map[string]*vtctldatapb.Workflow_ShardStream{
+					"-80/zone1-100": {
+						Streams: []*vtctldatapb.Workflow_Stream{
+							{State: "Stopped"},
+							{State: "Running"},
+						},
+					},
+				},
+			},
+			want: &vtctldatapb.Workflow_WorkflowStatus{
+				TotalStreams:   2,
+				RunningStreams: 1,
+				StoppedStreams: 1,
+				State:          vtctldatapb.Workflow_WorkflowStatus_RUNNING,
+			},
+		},
+		{
+			name: "recently throttled",
+			workflow: &vtctldatapb.Workflow{
+				ShardStreams: map[string]*vtctldatapb.Workflow_ShardStream{
+					"-80/zone1-100": {
+						Streams: []*vtctldatapb.Workflow_Stream{
+							{
+								State: "Running",
+								ThrottlerStatus: &vtctldatapb.Workflow_Stream_ThrottlerStatus{
+									ComponentThrottled: "vreplication",
+									TimeThrottled:      &vttime.Time{Seconds: time.Now().Unix()},
+								},
+							},
+						},
+					},
+				},
+			},
+			want: &vtctldatapb.Workflow_WorkflowStatus{
+				TotalStreams:   1,
+				RunningStreams: 1,
+				IsThrottled:    true,
+				State:          vtctldatapb.Workflow_WorkflowStatus_RUNNING,
+			},
+		},
+		{
+			// The component_throttled column is never cleared after a
+			// throttle event, so only a recent time_throttled means the
+			// workflow is currently throttled.
+			name: "stale throttle event",
+			workflow: &vtctldatapb.Workflow{
+				ShardStreams: map[string]*vtctldatapb.Workflow_ShardStream{
+					"-80/zone1-100": {
+						Streams: []*vtctldatapb.Workflow_Stream{
+							{
+								State: "Running",
+								ThrottlerStatus: &vtctldatapb.Workflow_Stream_ThrottlerStatus{
+									ComponentThrottled: "vreplication",
+									TimeThrottled:      &vttime.Time{Seconds: time.Now().Unix() - 2*throttledRecencySeconds},
+								},
+							},
+						},
+					},
+				},
+			},
+			want: &vtctldatapb.Workflow_WorkflowStatus{
+				TotalStreams:   1,
+				RunningStreams: 1,
+				IsThrottled:    false,
+				State:          vtctldatapb.Workflow_WorkflowStatus_RUNNING,
+			},
+		},
+		{
+			name:     "empty workflow",
+			workflow: &vtctldatapb.Workflow{},
+			want: &vtctldatapb.Workflow_WorkflowStatus{
+				State: vtctldatapb.Workflow_WorkflowStatus_UNKNOWN,
+			},
+		},
+	}
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			utils.MustMatch(t, tt.want, computeWorkflowStatus(tt.workflow))
+		})
+	}
 }
