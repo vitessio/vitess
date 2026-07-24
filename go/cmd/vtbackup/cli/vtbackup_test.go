@@ -28,9 +28,100 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
+
+func TestFindErrantGTIDs(t *testing.T) {
+	const (
+		primaryUUID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+		errantUUID  = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+	)
+
+	// Decode each candidate and primary replication position.
+	mysqlPosition := func(value string) replication.Position {
+		t.Helper()
+
+		position, err := replication.DecodePosition("MySQL56/" + value)
+		require.NoError(t, err)
+		return position
+	}
+
+	tests := []struct {
+		name            string
+		candidate       replication.Position
+		primary         replication.Position
+		wantErrantGTIDs string
+	}{
+		{
+			// A backup behind the primary contains no extra transactions.
+			name:      "candidate is not errant",
+			candidate: mysqlPosition(primaryUUID + ":1-10"),
+			primary:   mysqlPosition(primaryUUID + ":1-20"),
+		},
+		{
+			// An empty position contains no extra transactions.
+			name:      "empty candidate",
+			candidate: replication.Position{},
+			primary:   mysqlPosition(primaryUUID + ":1-20"),
+		},
+		{
+			// Transactions ahead of the primary are errant even when they use the primary's UUID.
+			name:            "candidate is ahead under the primary UUID",
+			candidate:       mysqlPosition(primaryUUID + ":1-20"),
+			primary:         mysqlPosition(primaryUUID + ":1-10"),
+			wantErrantGTIDs: primaryUUID + ":11-20",
+		},
+		{
+			// Unsupported replication position types are not compared.
+			name:      "non MySQL position",
+			candidate: testCatchupPosition(10),
+			primary:   testCatchupPosition(20),
+		},
+		{
+			// Transactions from another server are returned as the errant difference.
+			name:            "candidate has errant GTIDs",
+			candidate:       mysqlPosition(primaryUUID + ":1-10," + errantUUID + ":1"),
+			primary:         mysqlPosition(primaryUUID + ":1-20"),
+			wantErrantGTIDs: errantUUID + ":1",
+		},
+	}
+
+	// Compare each candidate with the primary and verify the exact difference.
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			errantGTIDs := findErrantGTIDs(tt.candidate, tt.primary)
+			assert.Equal(t, tt.wantErrantGTIDs, errantGTIDs.String())
+		})
+	}
+}
+
+func TestVerifyNoErrantGTIDsInBaseBackup(t *testing.T) {
+	const (
+		primaryUUID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+		errantUUID  = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+		backupName  = "2026-07-23.120000.zone1-0000000101"
+	)
+
+	mysqlPosition := func(value string) replication.Position {
+		t.Helper()
+
+		position, err := replication.DecodePosition("MySQL56/" + value)
+		require.NoError(t, err)
+		return position
+	}
+
+	// Give the restored backup one transaction that is absent from the primary.
+	restoredPosition := mysqlPosition(primaryUUID + ":1-10," + errantUUID + ":1")
+	primaryPosition := mysqlPosition(primaryUUID + ":1-20")
+
+	// Validate that vtbackup returns a correct error that the base backup has errant GTIDs.
+	err := verifyNoErrantGTIDsInBaseBackup(restoreInfo{position: restoredPosition, backupName: backupName}, primaryPosition)
+	require.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+	require.EqualError(t, err, `base backup "`+backupName+`" has errant GTIDs "`+errantUUID+`:1" relative to current primary`)
+}
 
 func TestCatchUpReplicationForBackupClearsLastErrWhenReplicationBecomesHealthy(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {

@@ -22,6 +22,8 @@
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
+    - **[VTBackup](#minor-changes-vtbackup)**
+        - [Errant GTID validation for base backups](#vtbackup-errant-gtid-validation)
     - **[General](#minor-changes-general)**
         - [Build version metadata now sourced from VCS stamping](#build-info-from-vcs)
 
@@ -147,6 +149,16 @@ Two changes:
 Tablets that already have more tracked schema objects than the configured limit will reload fine — only new creations are gated. Operators who need to support more tables and views should increase the flag and ensure both vttablet and mysqld have enough memory to comfortably hold the larger schema.
 
 See [#19978](https://github.com/vitessio/vitess/issues/19978) for details.
+
+### <a id="minor-changes-vtbackup"/>VTBackup</a>
+
+#### <a id="vtbackup-errant-gtid-validation"/>Errant GTID validation for base backups</a>
+
+Before creating a new backup, `vtbackup` now verifies that the restored base backup has no errant GTIDs relative to
+the current shard primary. If errant GTIDs are found, `vtbackup` fails without creating or pruning backups and reports
+the affected backup and errant GTID set.
+
+See [#20677](https://github.com/vitessio/vitess/issues/20677) for details.
 
 ### <a id="minor-changes-general"/>General</a>
 
