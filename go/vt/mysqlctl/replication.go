@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/replicationdata"
@@ -61,6 +62,17 @@ type (
 
 	setSuperReadOnlyOptions struct {
 		lockWaitTimeout time.Duration
+	}
+
+	// replicaShutdownState records the replica state that
+	// prepareReplicaForShutdown changes, so that a shutdown which
+	// subsequently fails (leaving mysqld running) can restore it.
+	replicaShutdownState struct {
+		startReceiver       bool
+		startApplier        bool
+		flushLogAtTrxCommit string
+		syncBinlog          string
+		syncRelayLog        string
 	}
 )
 
@@ -172,6 +184,209 @@ func (mysqld *Mysqld) StopIOThread(ctx context.Context) error {
 	defer conn.Recycle()
 
 	return mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.Conn.StopIOThreadCommand()})
+}
+
+// prepareReplicaForShutdown places a replica in a crash-safe state before
+// shutdown. It calls onStateCaptured with the recorded pre-change state right
+// before it starts mutating anything, so that a caller abandoning a
+// timed-out preparation can tell whether a mutation may still land (and a
+// restore is needed) or the preparation never got past its read-only probes.
+//
+// It uses a dedicated connection rather than the pools -- killed on ctx expiry
+// by the context-aware executors -- so that a preparation hung in mysqld can
+// never strand a pool slot: repeated failed shutdown attempts must not exhaust
+// the DBA pool of a long-lived caller.
+func (mysqld *Mysqld) prepareReplicaForShutdown(ctx context.Context, onStateCaptured func(*replicaShutdownState)) (*replicaShutdownState, error) {
+	conn, err := mysqld.GetDbaConnection(ctx)
+	if err != nil {
+		return nil, vterrors.Wrap(err, "failed to connect to MySQL before shutdown")
+	}
+	defer conn.Close()
+
+	status, err := mysqld.showReplicationStatusDirectContext(ctx, conn)
+	if err != nil {
+		if err == mysql.ErrNotReplica {
+			return nil, nil
+		}
+		return nil, vterrors.Wrap(err, "failed to read replication status before shutdown")
+	}
+
+	// Record the state we are about to change so that a shutdown which
+	// subsequently fails -- leaving mysqld running -- can restore it.
+	qr, err := mysqld.executeFetchDirectContext(ctx, conn,
+		"SELECT @@global.innodb_flush_log_at_trx_commit, @@global.sync_binlog, @@global.sync_relay_log")
+	if err != nil {
+		return nil, vterrors.Wrap(err, "failed to read the durability settings before shutdown")
+	}
+	if qr == nil || len(qr.Rows) != 1 || len(qr.Rows[0]) != 3 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
+			"unexpected result reading the durability settings before shutdown: %+v", qr)
+	}
+	state := &replicaShutdownState{
+		startReceiver: status.IOState == replication.ReplicationStateRunning ||
+			status.IOState == replication.ReplicationStateConnecting,
+		startApplier:        status.SQLState == replication.ReplicationStateRunning,
+		flushLogAtTrxCommit: qr.Rows[0][0].ToString(),
+		syncBinlog:          qr.Rows[0][1].ToString(),
+		syncRelayLog:        qr.Rows[0][2].ToString(),
+	}
+	onStateCaptured(state)
+
+	// Restore full durability before shutdown: innodb_flush_log_at_trx_commit=1
+	// and sync_binlog=1 re-enable per-commit InnoDB redo and binary log flushing
+	// (both are often relaxed together to speed up replica catch-up), and
+	// sync_relay_log=1 protects relay writes that race an interrupted receiver
+	// stop. Those settings only govern commits from here on, so the flushes then
+	// make the tails already written under the relaxed settings durable: FLUSH
+	// ENGINE LOGS syncs the existing InnoDB redo, and rotating the binary and
+	// relay logs syncs their current files. Every flush must be
+	// NO_WRITE_TO_BINLOG: a binlogged FLUSH on a GTID server is assigned a
+	// transaction from this replica's own UUID -- an errant GTID that later
+	// blocks reparents and keeps the replica from rejoining. Stopping the
+	// receiver and applier is then best effort.
+	if err := mysqld.executeSuperQueryListDirectContext(ctx, conn, []string{
+		"SET GLOBAL innodb_flush_log_at_trx_commit = 1",
+		"SET GLOBAL sync_binlog = 1",
+		"SET GLOBAL sync_relay_log = 1",
+		"FLUSH NO_WRITE_TO_BINLOG ENGINE LOGS",
+		"FLUSH NO_WRITE_TO_BINLOG BINARY LOGS",
+		"FLUSH NO_WRITE_TO_BINLOG RELAY LOGS",
+	}); err != nil {
+		// Return the state: some settings may already have been changed, and a
+		// failed shutdown should still restore them.
+		return state, vterrors.Wrap(err, "failed to establish the crash-safety durability fence before shutdown")
+	}
+	// The receiver/applier stop commands are empty for flavors that do not use
+	// classic replication threads (e.g. MySQL Group Replication, whose members
+	// are managed by an external orchestrator); skip them there rather than
+	// issue an empty query that always fails.
+	if stopReceiver := conn.StopIOThreadCommand(); stopReceiver != "" {
+		if err := mysqld.executeSuperQueryListDirectContext(ctx, conn, []string{stopReceiver}); err != nil {
+			log.Warn(
+				"failed to stop the replication receiver before shutdown; continuing because the relay log durability fence completed",
+				slog.Any("error", err),
+			)
+		}
+	}
+	// Stopping the applier lets the (multi-threaded) worker queue drain to a
+	// gap-free, position-consistent point, so an interrupted shutdown or crash
+	// has less in-flight work to recover. Best effort and bounded by ctx: a
+	// hung applier flush must not block shutdown.
+	if stopApplier := conn.StopSQLThreadCommand(); stopApplier != "" {
+		if err := mysqld.executeSuperQueryListDirectContext(ctx, conn, []string{stopApplier}); err != nil {
+			log.Warn(
+				"failed to stop the replication applier before shutdown; continuing because the relay log durability fence completed",
+				slog.Any("error", err),
+			)
+		}
+	}
+	return state, nil
+}
+
+// showReplicationStatusDirectContext reads the replication status on a
+// dedicated (non-pooled) connection, honoring ctx the way
+// executeFetchDirectContext does: if ctx expires, the connection is killed so
+// a hung status probe cannot outlive its caller unnoticed.
+func (mysqld *Mysqld) showReplicationStatusDirectContext(ctx context.Context, conn *dbconnpool.DBConnection) (replication.ReplicationStatus, error) {
+	// Fast fail if context is done.
+	select {
+	case <-ctx.Done():
+		return replication.ReplicationStatus{}, ctx.Err()
+	default:
+	}
+
+	// Execute asynchronously so we can select on both it and the context.
+	var status replication.ReplicationStatus
+	var executeErr error
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+
+		status, executeErr = conn.ShowReplicationStatus()
+	}()
+
+	select {
+	case <-done:
+		return status, executeErr
+	case <-ctx.Done():
+		// The context expired or was canceled.
+		// Try to kill the connection to effectively cancel the status read.
+		connID := conn.ID()
+		log.Info(fmt.Sprintf("Mysqld.showReplicationStatusDirectContext(): killing connID %v due to timeout", connID))
+		if killErr := mysqld.killConnection(connID); killErr != nil {
+			// Log it, but go ahead and wait for the status read anyway.
+			log.Warn(fmt.Sprintf("Mysqld.showReplicationStatusDirectContext(): failed to kill connID %v: %v", connID, killErr))
+		}
+		// Wait for the ShowReplicationStatus() call to return.
+		<-done
+		// It may have succeeded before we tried to kill it.
+		if executeErr == nil {
+			return status, executeErr
+		}
+		return replication.ReplicationStatus{}, ctx.Err()
+	}
+}
+
+// restoreReplicaAfterFailedShutdown makes a best-effort attempt to undo what
+// prepareReplicaForShutdown changed, for use when the subsequent shutdown
+// failed and mysqld is still running: it restores the recorded durability
+// settings and restarts whichever replication threads were running before.
+//
+// It uses a dedicated connection rather than the pools, so it keeps working
+// after Close has closed them, and its START REPLICA serializes behind -- that
+// is, waits out -- a server-side STOP REPLICA that is still draining, which is
+// why callers must give it a generous deadline. All steps are best effort: if
+// mysqld is unreachable (e.g. it is exiting after all), each step just logs
+// and moves on.
+func (mysqld *Mysqld) restoreReplicaAfterFailedShutdown(ctx context.Context, state *replicaShutdownState) {
+	conn, err := mysqld.GetDbaConnection(ctx)
+	if err != nil {
+		log.Warn(
+			"failed to connect to MySQL to restore the replica state after a failed shutdown",
+			slog.Any("error", err),
+		)
+		return
+	}
+	defer conn.Close()
+
+	for _, query := range []string{
+		"SET GLOBAL innodb_flush_log_at_trx_commit = " + state.flushLogAtTrxCommit,
+		"SET GLOBAL sync_binlog = " + state.syncBinlog,
+		"SET GLOBAL sync_relay_log = " + state.syncRelayLog,
+	} {
+		if _, err := mysqld.executeFetchDirectContext(ctx, conn, query); err != nil {
+			log.Warn(
+				"failed to restore a durability setting after a failed shutdown",
+				slog.String("query", query),
+				slog.Any("error", err),
+			)
+		}
+	}
+
+	// Restart only the threads that were running before the shutdown
+	// preparation stopped them. The commands are empty for flavors without
+	// classic replication threads (e.g. MySQL Group Replication); skip them
+	// there, matching the preparation.
+	var start string
+	switch {
+	case state.startReceiver && state.startApplier:
+		start = conn.StartReplicationCommand()
+	case state.startApplier:
+		start = conn.StartSQLThreadCommand()
+	case state.startReceiver:
+		start = conn.StartIOThreadCommand()
+	}
+	if start == "" {
+		return
+	}
+	if _, err := mysqld.executeFetchDirectContext(ctx, conn, start); err != nil {
+		log.Warn(
+			"failed to restart replication after a failed shutdown",
+			slog.Any("error", err),
+		)
+		return
+	}
+	log.Warn("shutdown failed after replication was stopped to make the replica crash-safe; restored the previous replication state")
 }
 
 // StopSQLThread stops a replica's SQL thread(s) only.

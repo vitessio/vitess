@@ -94,6 +94,11 @@ func (mysqlGRFlavor) startSQLThreadCommand() string {
 	return ""
 }
 
+// startIOThreadCommand is disabled in mysqlGRFlavor
+func (mysqlGRFlavor) startIOThreadCommand() string {
+	return ""
+}
+
 // resetReplicationCommands is disabled in mysqlGRFlavor
 func (mysqlGRFlavor) resetReplicationCommands(c *Conn) []string {
 	return []string{}

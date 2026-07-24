@@ -168,6 +168,65 @@ func (mysqld *Mysqld) executeFetchContext(ctx context.Context, conn *dbconnpool.
 	}
 }
 
+// executeFetchDirectContext executes a query on a dedicated (non-pooled)
+// connection, honoring ctx the way executeFetchContext does: if ctx expires,
+// the connection is killed to cancel the in-flight query.
+func (mysqld *Mysqld) executeFetchDirectContext(ctx context.Context, conn *dbconnpool.DBConnection, query string) (*sqltypes.Result, error) {
+	// Fast fail if context is done.
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
+	// Execute asynchronously so we can select on both it and the context.
+	var qr *sqltypes.Result
+	var executeErr error
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+
+		qr, executeErr = conn.ExecuteFetch(query, 10000, false)
+	}()
+
+	select {
+	case <-done:
+		return qr, executeErr
+	case <-ctx.Done():
+		// The context expired or was canceled.
+		// Try to kill the connection to effectively cancel the ExecuteFetch().
+		connID := conn.ID()
+		log.Info(fmt.Sprintf("Mysqld.executeFetchDirectContext(): killing connID %v due to timeout of query: %v", connID, query))
+		if killErr := mysqld.killConnection(connID); killErr != nil {
+			// Log it, but go ahead and wait for the query anyway.
+			log.Warn(fmt.Sprintf("Mysqld.executeFetchDirectContext(): failed to kill connID %v: %v", connID, killErr))
+		}
+		// Wait for the conn.ExecuteFetch() call to return.
+		<-done
+		// ExecuteFetch() may have succeeded before we tried to kill it.
+		if executeErr == nil {
+			return qr, executeErr
+		}
+		return nil, ctx.Err()
+	}
+}
+
+// executeSuperQueryListDirectContext executes the queries in order on a
+// dedicated (non-pooled) connection, honoring ctx the way
+// executeFetchDirectContext does.
+func (mysqld *Mysqld) executeSuperQueryListDirectContext(ctx context.Context, conn *dbconnpool.DBConnection, queryList []string) error {
+	const LogQueryLengthLimit = 200
+	for _, query := range queryList {
+		log.Info("exec " + limitString(redactPassword(query), LogQueryLengthLimit))
+		if _, err := mysqld.executeFetchDirectContext(ctx, conn, query); err != nil {
+			msg := fmt.Sprintf("ExecuteFetch(%v) failed: %v", redactPassword(query), redactPassword(err.Error()))
+			log.Error(msg)
+			return &execError{msg: msg, cause: err}
+		}
+	}
+	return nil
+}
+
 // killConnection issues a MySQL KILL command for the given connection ID.
 func (mysqld *Mysqld) killConnection(connID int64) error {
 	// There's no other interface that both types of connection implement.

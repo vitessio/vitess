@@ -33,6 +33,7 @@
         - [Query rules now apply to queries on the streaming path](#vttablet-rules-apply-to-streaming)
         - [New `--demote-primary-lock-wait-timeout` flag](#vttablet-demote-primary-lock-wait-timeout)
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
+        - [Replicas are placed in a crash-safe state before shutdown](#vttablet-replica-crash-safe-shutdown)
         - [Skip MySQL version check when restoring from a mysql-shell backup](#vttablet-mysql-shell-restore-skip-version-check)
     - **[Backup/Restore](#minor-changes-backup)**
         - [Chunked backup/restore for the builtinbackupengine](#backup-chunked-builtin)
@@ -291,6 +292,22 @@ Two changes:
 Tablets that already have more tracked schema objects than the configured limit will reload fine — only new creations are gated. Operators who need to support more tables and views should increase the flag and ensure both vttablet and mysqld have enough memory to comfortably hold the larger schema.
 
 See [#19978](https://github.com/vitessio/vitess/issues/19978) for details.
+
+#### <a id="vttablet-replica-crash-safe-shutdown"/>Replicas are placed in a crash-safe state before shutdown</a>
+
+When VTTablet gracefully shuts down a `REPLICA`/`RDONLY` MySQL, it now proactively puts the server into a crash-safe state first, so that an interrupted shutdown or a host crash during shutdown cannot leave the replica with unsynced writes that are lost or re-applied on restart.
+
+Just before handing off to the shutdown hook, VTTablet, on replicas only:
+
+- restores full commit durability by setting `innodb_flush_log_at_trx_commit=1` and `sync_binlog=1` (these are commonly relaxed together to let a replica catch up faster, and may still be relaxed when a shutdown begins),
+- sets `sync_relay_log=1`, then flushes the engine, binary, and relay logs so the InnoDB redo, binary-log, and relay-log tails already written under the relaxed settings become durable (the settings alone only govern commits from that point on), and
+- stops the replication receiver (I/O) and applier (SQL) threads so the multi-threaded applier queue drains to a gap-free, position-consistent point.
+
+The whole preparation is best effort: if any step fails, or the (bounded) preparation times out, the error is logged and shutdown proceeds regardless, so making a replica crash-safe never blocks or fails the shutdown itself. If the shutdown itself then fails while mysqld is still running — for example a failing `mysqld_shutdown` hook — the previous replication and durability state is restored (best effort), so a failed shutdown does not leave a live replica with replication stopped.
+
+**Impact**: On a graceful replica shutdown that completes the preparation, `innodb_flush_log_at_trx_commit`, `sync_binlog`, and `sync_relay_log` are set to `1` and both replication threads are stopped, regardless of their prior runtime values; if the preparation cannot complete, it is skipped and logged. This does not affect `PRIMARY` tablets.
+
+See [#20599](https://github.com/vitessio/vitess/pull/20599) for details.
 
 #### <a id="vttablet-mysql-shell-restore-skip-version-check"/>Skip MySQL version check when restoring from a mysql-shell backup</a>
 

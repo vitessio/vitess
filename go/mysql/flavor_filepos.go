@@ -123,6 +123,10 @@ func (flv *filePosFlavor) startSQLThreadCommand() string {
 	return "unsupported"
 }
 
+func (flv *filePosFlavor) startIOThreadCommand() string {
+	return "unsupported"
+}
+
 // sendBinlogDumpCommand is part of the Flavor interface.
 func (flv *filePosFlavor) sendBinlogDumpCommand(c *Conn, serverID uint32, binlogFilename string, binlogPos uint32) error {
 	flv.file = binlogFilename

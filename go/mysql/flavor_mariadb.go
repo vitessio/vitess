@@ -118,6 +118,10 @@ func (mariadbFlavor) startSQLThreadCommand() string {
 	return "START SLAVE SQL_THREAD"
 }
 
+func (mariadbFlavor) startIOThreadCommand() string {
+	return "START SLAVE IO_THREAD"
+}
+
 // sendBinlogDumpCommand is part of the Flavor interface.
 func (mariadbFlavor) sendBinlogDumpCommand(c *Conn, serverID uint32, binlogFilename string, binlogPos uint32) error {
 	return c.WriteComBinlogDump(serverID, binlogFilename, uint64(binlogPos), 0)
