@@ -26,7 +26,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	querythrottlerpb "vitess.io/vitess/go/vt/proto/querythrottler"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -138,7 +138,6 @@ func TestQueryThrottler_DryRunMode(t *testing.T) {
 		throttleDecision          registry.ThrottleDecision
 		expectError               bool
 		expectDryRunLog           bool
-		expectedLogMsg            string
 		expectedTotalRequests     int64
 		expectedThrottledRequests int64
 	}{
@@ -207,7 +206,6 @@ func TestQueryThrottler_DryRunMode(t *testing.T) {
 			},
 			expectError:               false,
 			expectDryRunLog:           true,
-			expectedLogMsg:            "[DRY-RUN] Query throttled: metric=cpu value=95.0 threshold=80.0, metric name: cpu, metric value: 95.000000",
 			expectedTotalRequests:     1,
 			expectedThrottledRequests: 1,
 		},
@@ -234,10 +232,13 @@ func TestQueryThrottler_DryRunMode(t *testing.T) {
 
 			env := tabletenv.NewEnv(vtenv.NewTestEnv(), &tabletenv.TabletConfig{}, "TestThrottler")
 
-			// Create throttler with controlled config
+			// Create throttler with controlled config. A long throttle interval means the
+			// dry-run logger emits at most once, so GetLastLogTime reliably reflects whether
+			// a dry-run decision was logged during this case.
 			iqt := &QueryThrottler{
-				ctx: t.Context(),
-				env: env,
+				ctx:             t.Context(),
+				env:             env,
+				throttledLogger: logutil.NewThrottledLogger("test", time.Hour),
 			}
 			iqt.snapshot.Store(&stateSnapshot{
 				cfg: &querythrottlerpb.Config{
@@ -249,15 +250,6 @@ func TestQueryThrottler_DryRunMode(t *testing.T) {
 
 			requestsTotal.ResetAll()
 			requestsThrottled.ResetAll()
-
-			// Capture log output.
-			logCapture := &testLogCapture{}
-			originalLogWarn := log.Warn
-			defer func() {
-				log.Warn = originalLogWarn
-			}()
-
-			log.Warn = logCapture.captureLog
 
 			// Test the enforcement
 			err := iqt.Throttle(
@@ -279,12 +271,12 @@ func TestQueryThrottler_DryRunMode(t *testing.T) {
 				require.NoError(t, err, "Expected no throttling error")
 			}
 
-			// Verify log expectation
+			// Verify dry-run log expectation via the throttled logger's last-log time
+			// (the log now routes through logutil.ThrottledLogger, not log.Warn).
 			if tt.expectDryRunLog {
-				require.Len(t, logCapture.logs, 1, "Expected exactly one log message")
-				require.Equal(t, tt.expectedLogMsg, logCapture.logs[0], "Log message should match expected")
+				require.False(t, iqt.throttledLogger.GetLastLogTime().IsZero(), "Expected a dry-run log to be emitted")
 			} else {
-				require.Empty(t, logCapture.logs, "Expected no log messages")
+				require.True(t, iqt.throttledLogger.GetLastLogTime().IsZero(), "Expected no dry-run log to be emitted")
 			}
 
 			// Verify stats expectation
@@ -294,6 +286,71 @@ func TestQueryThrottler_DryRunMode(t *testing.T) {
 			require.Equal(t, tt.expectedThrottledRequests, throttledReqs.Counts()["MockStrategy"], "Throttled requests should match expected")
 		})
 	}
+}
+
+// TestQueryThrottler_DryRunLogIsRateLimited verifies that dry-run decision logging is
+// rate-limited so a 100%-throttle rule cannot spam the logs at query rate during an overload.
+// The logger's last-log time must advance only for the first decision within the interval;
+// subsequent decisions are suppressed. The requestsThrottled counter still records every
+// decision, so volume is not lost.
+func TestQueryThrottler_DryRunLogIsRateLimited(t *testing.T) {
+	mockStrategy := &mockThrottlingStrategy{
+		decision: registry.ThrottleDecision{
+			Throttle:           true,
+			Message:            "Query throttled: metric=cpu value=95.0 threshold=80.0",
+			MetricName:         "cpu",
+			MetricValue:        95.0,
+			Threshold:          80.0,
+			ThrottlePercentage: 1.0,
+		},
+	}
+
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), &tabletenv.TabletConfig{}, "TestThrottler")
+	// A large interval guarantees only the first decision is logged; the rest are suppressed.
+	iqt := &QueryThrottler{
+		ctx:             t.Context(),
+		env:             env,
+		throttledLogger: logutil.NewThrottledLogger("test", time.Hour),
+	}
+	iqt.snapshot.Store(&stateSnapshot{
+		cfg: &querythrottlerpb.Config{
+			Enabled: true,
+			DryRun:  true,
+		},
+		strategy: mockStrategy,
+	})
+
+	requestsTotal.ResetAll()
+	requestsThrottled.ResetAll()
+
+	call := func() {
+		err := iqt.Throttle(
+			t.Context(),
+			topodatapb.TabletType_REPLICA,
+			&sqlparser.ParsedQuery{Query: "SELECT * FROM test_table WHERE id = 1"},
+			sqlparser.StmtSelect,
+			12345,
+			&querypb.ExecuteOptions{Priority: "50"},
+		)
+		require.NoError(t, err, "dry-run must never return an error")
+	}
+
+	// First dry-run decision emits a log.
+	call()
+	firstLogTime := iqt.throttledLogger.GetLastLogTime()
+	require.False(t, firstLogTime.IsZero(), "first dry-run decision must emit a log")
+
+	// Subsequent decisions within the interval are suppressed: last-log time does not advance.
+	for range 5 {
+		call()
+	}
+	require.Equal(t, firstLogTime, iqt.throttledLogger.GetLastLogTime(),
+		"dry-run logs within the throttle interval must be rate-limited (suppressed)")
+
+	// Every decision is still counted, so volume is available from the counter.
+	throttledReqs := stats.CounterForDimension(requestsThrottled, "Strategy")
+	require.Equal(t, int64(6), throttledReqs.Counts()["MockStrategy"],
+		"counters must record every dry-run throttle decision even though logs are rate-limited")
 }
 
 // TestQueryThrottler_ThrottledErrorMapsToOutOfResources verifies the full errno mapping:

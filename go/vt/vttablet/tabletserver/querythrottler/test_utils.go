@@ -18,7 +18,6 @@ package querythrottler
 
 import (
 	"context"
-	"log/slog"
 
 	querythrottlerpb "vitess.io/vitess/go/vt/proto/querythrottler"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -63,13 +62,4 @@ func (m *mockThrottlingStrategy) UpdateConfig(cfg *querythrottlerpb.Config) {
 
 func (m *mockThrottlingStrategy) GetStrategyName() string {
 	return "MockStrategy"
-}
-
-// testLogCapture captures log output for testing
-type testLogCapture struct {
-	logs []string
-}
-
-func (lc *testLogCapture) captureLog(msg string, _ ...slog.Attr) {
-	lc.logs = append(lc.logs, msg)
 }

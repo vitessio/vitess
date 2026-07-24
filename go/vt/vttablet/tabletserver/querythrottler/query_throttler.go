@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	querythrottlerpb "vitess.io/vitess/go/vt/proto/querythrottler"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -61,6 +62,11 @@ const (
 	// EnablePerWorkloadTableMetrics. Collapsing the value to this constant when the feature is
 	// off avoids the unbounded cardinality of client-supplied WORKLOAD_NAME directives.
 	unknownWorkload = "unknown"
+
+	// throttledLogInterval bounds how often hot-path log lines (e.g. the dry-run throttle
+	// decision) are emitted, so a high query rate cannot spam the logs during an overload.
+	// Volume is tracked by counters instead.
+	throttledLogInterval = 5 * time.Second
 )
 
 var (
@@ -139,6 +145,10 @@ type QueryThrottler struct {
 	// bypass NewQueryThrottler may leave it nil and buildNewStrategy falls back.
 	newStrategyFactory func(*querythrottlerpb.Config) registry.ThrottlingStrategyHandler
 
+	// throttledLogger rate-limits hot-path log lines (e.g. the per-query dry-run decision) so a
+	// high query rate cannot spam the logs. Never nil after NewQueryThrottler.
+	throttledLogger *logutil.ThrottledLogger
+
 	env tabletenv.Env
 }
 
@@ -157,6 +167,7 @@ func NewQueryThrottler(ctx context.Context, throttler *throttle.Throttler, env t
 		srvTopoServer:      srvTopoServer,
 		env:                env,
 		perWorkloadMetrics: perWorkloadMetrics,
+		throttledLogger:    logutil.NewThrottledLogger("QueryThrottler", throttledLogInterval),
 	}
 	qt.newStrategyFactory = func(cfg *querythrottlerpb.Config) registry.ThrottlingStrategyHandler {
 		return selectThrottlingStrategy(cfg, qt.throttlerClient, qt.tabletConfig, qt.env, qt.keyspace, qt.cell, qt.srvTopoServer)
@@ -271,9 +282,11 @@ func (qt *QueryThrottler) Throttle(ctx context.Context, tabletType topodatapb.Ta
 	// Emit metric of query being throttled.
 	requestsThrottled.Add(qt.buildLabels(strategyName, attrs.WorkloadName, priorityStr, decision.MetricName, strconv.FormatBool(tCfg.GetDryRun())), 1)
 
-	// If dry-run mode is enabled, log the decision but don't throttle
+	// If dry-run mode is enabled, log the decision but don't throttle.
 	if tCfg.GetDryRun() {
-		log.Warn(fmt.Sprintf("[DRY-RUN] %s, metric name: %s, metric value: %f", decision.Message, decision.MetricName, decision.MetricValue))
+		// Rate-limited: with a 100% rule this path fires per query; the requestsThrottled
+		// counter (incremented above) carries the volume.
+		qt.throttledLogger.Warningf("[DRY-RUN] %s, metric name: %s, metric value: %f", decision.Message, decision.MetricName, decision.MetricValue)
 		return nil
 	}
 
