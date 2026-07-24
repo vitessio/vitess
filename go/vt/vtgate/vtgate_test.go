@@ -169,8 +169,8 @@ func TestVTGatePrepareError(t *testing.T) {
 	require.Nil(t, qr)
 
 	newCounts := errorCounts.Counts()
-	require.Contains(t, newCounts, "Prepare.TestUnsharded.primary.INTERNAL")
-	require.Equal(t, counts["Prepare.TestUnsharded.primary.INTERNAL"]+1, newCounts["Prepare.TestUnsharded.primary.INTERNAL"])
+	require.Contains(t, newCounts, "Prepare.TestUnsharded.primary.INVALID_ARGUMENT")
+	require.Equal(t, counts["Prepare.TestUnsharded.primary.INVALID_ARGUMENT"]+1, newCounts["Prepare.TestUnsharded.primary.INVALID_ARGUMENT"])
 
 	for k, v := range newCounts {
 		if strings.HasPrefix(k, "Execute") {
