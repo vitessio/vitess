@@ -549,21 +549,18 @@ func HashStreams(targetKeyspace string, targets map[string]*MigrationTarget) int
 }
 
 func doValidateWorkflowHasCompleted(ctx context.Context, ts *trafficSwitcher) error {
-	wg := sync.WaitGroup{}
 	rec := concurrency.AllErrorRecorder{}
 	if ts.MigrationType() == binlogdatapb.MigrationType_SHARDS {
-		_ = ts.ForAllSources(func(source *MigrationSource) error {
-			wg.Add(1)
+		if err := ts.ForAllSources(func(source *MigrationSource) error {
 			if source.GetShard().IsPrimaryServing {
 				rec.RecordError(fmt.Errorf("shard %s is still serving", source.GetShard().ShardName()))
 			}
-			wg.Done()
 			return nil
-		})
+		}); err != nil {
+			rec.RecordError(err)
+		}
 	} else {
-		_ = ts.ForAllTargets(func(target *MigrationTarget) error {
-			wg.Add(1)
-			defer wg.Done()
+		if err := ts.ForAllTargets(func(target *MigrationTarget) error {
 			res, err := ts.ws.tmc.ReadVReplicationWorkflow(ctx, target.GetPrimary().Tablet, &tabletmanagerdatapb.ReadVReplicationWorkflowRequest{
 				Workflow: ts.WorkflowName(),
 			})
@@ -578,10 +575,10 @@ func doValidateWorkflowHasCompleted(ctx context.Context, ts *trafficSwitcher) er
 				}
 			}
 			return nil
-		})
+		}); err != nil {
+			rec.RecordError(err)
+		}
 	}
-	wg.Wait()
-
 	if !ts.keepRoutingRules {
 		// Check if table is routable.
 		if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {

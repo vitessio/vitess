@@ -31,6 +31,7 @@ type iswitcher interface {
 	stopStreams(ctx context.Context, sm *StreamMigrator) ([]string, error)
 	stopSourceWrites(ctx context.Context) error
 	waitForCatchup(ctx context.Context, filteredReplicationWaitTime time.Duration) error
+	stopReverseVReplication(ctx context.Context) error
 	migrateStreams(ctx context.Context, sm *StreamMigrator) error
 	createReverseVReplication(ctx context.Context) error
 	createJournals(ctx context.Context, sourceWorkflows []string) error
