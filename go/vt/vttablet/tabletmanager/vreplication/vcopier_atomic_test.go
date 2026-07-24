@@ -145,8 +145,8 @@ func TestDrainAndAggregateErrors(t *testing.T) {
 
 		err := drainAndAggregateErrors(ch, errors.New("vstream connection lost"), preTerrs)
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "failed inserting rows: EOF")
-		assert.ErrorContains(t, err, "vstream connection lost")
+		require.ErrorContains(t, err, "failed inserting rows: EOF")
+		require.ErrorContains(t, err, "vstream connection lost")
 		assert.ErrorContains(t, err, "+1 batches failed waiting on this to complete")
 	})
 
@@ -160,7 +160,7 @@ func TestDrainAndAggregateErrors(t *testing.T) {
 			err := drainAndAggregateErrors(ch, tt.vstreamErr, nil)
 
 			// Verify the channel was fully drained.
-			assert.Equal(t, 0, len(ch), "channel should be empty after draining")
+			assert.Empty(t, ch, "channel should be empty after draining")
 
 			if tt.wantNil {
 				assert.NoError(t, err)

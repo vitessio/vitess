@@ -163,7 +163,7 @@ func TestNextTableToPurge(t *testing.T) {
 			}
 			var err error
 			collector.lifecycleStates, err = schema.ParseGCLifecycle("hold,purge,evac,drop")
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			for _, table := range ts.tables {
 				collector.addPurgingTable(table)
 			}
@@ -248,7 +248,7 @@ func TestNextState(t *testing.T) {
 		collector := &TableGC{}
 		var err error
 		collector.lifecycleStates, err = schema.ParseGCLifecycle(ts.lifecycle)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		next := collector.nextState(ts.state)
 		assert.NotNil(t, next)
 		assert.Equal(t, ts.next, *next)
@@ -347,7 +347,7 @@ func TestShouldTransitionTable(t *testing.T) {
 				ts.handledStates = "purge,evac,drop"
 			}
 			lifecycleStates, err := schema.ParseGCLifecycle(ts.handledStates)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			collector := &TableGC{
 				lifecycleStates: lifecycleStates,
 			}
@@ -356,7 +356,7 @@ func TestShouldTransitionTable(t *testing.T) {
 			if ts.isError {
 				assert.Error(t, err)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, ts.shouldTransition, shouldTransition)
 				assert.Equal(t, ts.state, state)
 				assert.Equal(t, ts.uuid, uuid)
@@ -466,7 +466,7 @@ func TestCheckTables(t *testing.T) {
 	transitionRequestsChan := make(chan *transitionRequest)
 
 	err = collector.checkTables(ctx, gcTables, dropTablesChan, transitionRequestsChan)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	var responses int
 	var foundDropTables []*gcTable

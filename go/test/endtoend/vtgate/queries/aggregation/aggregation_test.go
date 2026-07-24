@@ -658,7 +658,7 @@ func TestGroupConcatAggregation(t *testing.T) {
 }
 
 func compareRow(t *testing.T, mRes *sqltypes.Result, vtRes *sqltypes.Result, grpCols []int, fCols []int) {
-	require.Equal(t, len(mRes.Rows), len(vtRes.Rows), "mysql and vitess result count does not match")
+	require.Len(t, vtRes.Rows, len(mRes.Rows), "mysql and vitess result count does not match")
 	for _, row := range vtRes.Rows {
 		var grpKey string
 		var grpKeySb634 strings.Builder

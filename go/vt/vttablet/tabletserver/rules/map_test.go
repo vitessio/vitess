@@ -75,15 +75,15 @@ func TestMapSetRulesWithNil(t *testing.T) {
 
 	qri.RegisterSource(denyListQueryRules)
 	err := qri.SetRules(denyListQueryRules, denyRules)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	qrs, err := qri.Get(denyListQueryRules)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, denyRules, qrs, "denyListQueryRules")
 
 	qri.SetRules(denyListQueryRules, nil)
 
 	qrs, err = qri.Get(denyListQueryRules)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, New(), qrs, "denyListQueryRules")
 }
 
@@ -96,33 +96,33 @@ func TestMapGetSetQueryRules(t *testing.T) {
 
 	// Test if we can get a Rules without a predefined rule set name
 	qrs, err := qri.Get("Foo")
-	assert.Error(t, err, "GetRules shouldn't succeed with 'Foo' as the rule set name")
+	require.Error(t, err, "GetRules shouldn't succeed with 'Foo' as the rule set name")
 	assert.NotNil(t, qrs, "GetRules should always return empty Rules and never nil")
 	assert.Equal(t, New(), qrs, "Map contains only empty Rules at the beginning")
 
 	// Test if we can set a Rules without a predefined rule set name
 	err = qri.SetRules("Foo", New())
-	assert.Error(t, err, "SetRules shouldn't succeed with 'Foo' as the rule set name")
+	require.Error(t, err, "SetRules shouldn't succeed with 'Foo' as the rule set name")
 
 	// Test if we can successfully set Rules previously mocked into Map
 	err = qri.SetRules(denyListQueryRules, denyRules)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	err = qri.SetRules(denyListQueryRules, denyRules)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	err = qri.SetRules(customQueryRules, otherRules)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Test if we can successfully retrieve rules which been set
 	qrs, err = qri.Get(denyListQueryRules)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, denyRules, qrs, "denyListQueryRules")
 
 	qrs, err = qri.Get(denyListQueryRules)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, denyRules, qrs, "denyListQueryRules")
 
 	qrs, err = qri.Get(customQueryRules)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, otherRules, qrs, "customQueryRules")
 }
 
@@ -138,12 +138,12 @@ func TestMapFilterByPlan(t *testing.T) {
 	qri.SetRules(customQueryRules, otherRules)
 
 	// Test filter by denylist rule
-	qrs = qri.FilterByPlan("select * from bannedtable2", planbuilder.PlanSelect, "bannedtable2")
+	qrs = qri.FilterByPlan("select * from bannedtable2", []planbuilder.PlanType{planbuilder.PlanSelect}, "bannedtable2")
 	assert.Len(t, qrs.rules, 1, "Select from bannedtable")
 	assert.Truef(t, strings.HasPrefix(qrs.rules[0].Name, "denied_table"), "Select from bannedtable query matches rule '%s', but we expect rule with prefix 'denied_table'", qrs.rules[0].Name)
 
 	// Test filter by custom rule
-	qrs = qri.FilterByPlan("select cid from t_customer limit 10", planbuilder.PlanSelect, "t_customer")
+	qrs = qri.FilterByPlan("select cid from t_customer limit 10", []planbuilder.PlanType{planbuilder.PlanSelect}, "t_customer")
 	assert.Len(t, qrs.rules, 1, "Select from t_customer")
 	assert.Truef(t, strings.HasPrefix(qrs.rules[0].Name, "customrule_ban_bindvar"), "Select from t_customer matches rule '%s', but we expect rule with prefix 'customrule_ban_bindvar'", qrs.rules[0].Name)
 
@@ -153,7 +153,7 @@ func TestMapFilterByPlan(t *testing.T) {
 	qr.AddBindVarCond("bindvar1", true, false, QRNoOp, nil)
 	otherRules.Add(qr)
 	qri.SetRules(customQueryRules, otherRules)
-	qrs = qri.FilterByPlan("select * from bannedtable2", planbuilder.PlanSelect, "bannedtable2")
+	qrs = qri.FilterByPlan("select * from bannedtable2", []planbuilder.PlanType{planbuilder.PlanSelect}, "bannedtable2")
 	assert.Lenf(t, qrs.rules, 2, "Insert into bannedtable2 matches rules: %v", qrs.rules)
 }
 

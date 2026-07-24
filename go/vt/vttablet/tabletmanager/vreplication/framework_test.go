@@ -100,11 +100,6 @@ var (
 	mockSchema   = make(map[string]*mockTable)
 )
 
-type LogExpectation struct {
-	Type   string
-	Detail string
-}
-
 var heartbeatRe *regexp.Regexp
 
 // setFlag() sets a flag for a test in a non-racy way:
@@ -1203,39 +1198,6 @@ func deleteAllVReplicationStreams(t *testing.T) {
 	require.NoError(t, err, "failed to delete vreplication rows: %v", err)
 }
 
-func expectLogsAndUnsubscribe(t *testing.T, logs []LogExpectation, logCh chan *VrLogStats) {
-	t.Helper()
-	defer vrLogStatsLogger.Unsubscribe(logCh)
-	failed := false
-	for i, log := range logs {
-		if failed {
-			assert.Fail(t, "no logs received")
-			continue
-		}
-		select {
-		case got := <-logCh:
-			var match bool
-			match = (log.Type == got.Type)
-			if match {
-				if log.Detail[0] == '/' {
-					result, err := regexp.MatchString(log.Detail[1:], got.Detail)
-					if err != nil {
-						panic(err)
-					}
-					match = result
-				} else {
-					match = (got.Detail == log.Detail)
-				}
-			}
-
-			assert.True(t, match, "log:\n%v, does not match log %d:\n%q", got, i, log)
-		case <-time.After(5 * time.Second):
-			assert.Failf(t, "no logs received", "no logs received, expecting %s", log)
-			failed = true
-		}
-	}
-}
-
 func shouldIgnoreQuery(query string) bool {
 	queriesToIgnore := []string{
 		"_vt.vreplication_log",   // ignore all selects, updates and inserts into this table
@@ -1299,10 +1261,7 @@ func expectDBClientQueries(t *testing.T, expectations qh.ExpectationSequence, sk
 						}
 					}
 				}
-				require.True(t, result.Accepted, fmt.Sprintf(
-					"query:%q\nmessage:%s\nexpectation:%s\nmatched:%t\nerror:%v\nhistory:%s",
-					got, result.Message, result.Expectation, result.Matched, result.Error, validator.History(),
-				))
+				require.True(t, result.Accepted, "query:%q\nmessage:%s\nexpectation:%s\nmatched:%t\nerror:%v\nhistory:%s", got, result.Message, result.Expectation, result.Matched, result.Error, validator.History())
 			}
 		case <-time.After(5 * time.Second):
 			require.FailNow(t, "no query received")
@@ -1318,7 +1277,7 @@ func expectDBClientQueries(t *testing.T, expectations qh.ExpectationSequence, sk
 			assert.Failf(t, "unexpected query", "unexpected query: %s", got)
 		default:
 			// Assert there are no pending expectations.
-			require.Len(t, validator.Pending(), 0)
+			require.Empty(t, validator.Pending())
 			return
 		}
 	}
@@ -1350,10 +1309,7 @@ func expectNontxQueries(t *testing.T, expectations qh.ExpectationSequence, recvT
 
 			result := validator.AcceptQuery(got)
 			require.NotNil(t, result)
-			require.True(t, result.Accepted, fmt.Sprintf(
-				"query:%q\nmessage:%s\nexpectation:%s\nmatched:%t\nerror:%v\nhistory:%s",
-				got, result.Message, result.Expectation, result.Matched, result.Error, validator.History(),
-			))
+			require.True(t, result.Accepted, "query:%q\nmessage:%s\nexpectation:%s\nmatched:%t\nerror:%v\nhistory:%s", got, result.Message, result.Expectation, result.Matched, result.Error, validator.History())
 		case <-time.After(recvTimeout):
 			require.FailNowf(t, "no query received", "pending expectations: %s", validator.Pending())
 			failed = true
@@ -1371,7 +1327,7 @@ func expectNontxQueries(t *testing.T, expectations qh.ExpectationSequence, recvT
 			assert.Failf(t, "unexpected query", "unexpected query: %s", got)
 		default:
 			// Assert there are no pending expectations.
-			require.Len(t, validator.Pending(), 0)
+			require.Empty(t, validator.Pending())
 			return
 		}
 	}

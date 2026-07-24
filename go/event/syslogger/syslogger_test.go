@@ -21,7 +21,6 @@ package syslogger
 import (
 	"errors"
 	"log/syslog"
-	"strings"
 	"testing"
 
 	"vitess.io/vitess/go/event"
@@ -86,38 +85,38 @@ func TestBadWriter(t *testing.T) {
 	wantLevel := "ERROR"
 	ev := &TestEvent{priority: syslog.LOG_ALERT, message: wantMsg}
 	event.Dispatch(ev)
-	assert.True(t, strings.Contains(tl.getLog().msg, wantMsg))
-	assert.True(t, strings.Contains(tl.getLog().level, wantLevel))
+	assert.Contains(t, tl.getLog().msg, wantMsg)
+	assert.Contains(t, tl.getLog().level, wantLevel)
 
 	ev = &TestEvent{priority: syslog.LOG_CRIT, message: wantMsg}
 	event.Dispatch(ev)
-	assert.True(t, strings.Contains(tl.getLog().level, wantLevel))
+	assert.Contains(t, tl.getLog().level, wantLevel)
 
 	ev = &TestEvent{priority: syslog.LOG_ERR, message: wantMsg}
 	event.Dispatch(ev)
-	assert.True(t, strings.Contains(tl.getLog().level, wantLevel))
+	assert.Contains(t, tl.getLog().level, wantLevel)
 
 	ev = &TestEvent{priority: syslog.LOG_EMERG, message: wantMsg}
 	event.Dispatch(ev)
-	assert.True(t, strings.Contains(tl.getLog().level, wantLevel))
+	assert.Contains(t, tl.getLog().level, wantLevel)
 
 	wantLevel = "WARNING"
 	ev = &TestEvent{priority: syslog.LOG_WARNING, message: wantMsg}
 	event.Dispatch(ev)
-	assert.True(t, strings.Contains(tl.getLog().level, wantLevel))
+	assert.Contains(t, tl.getLog().level, wantLevel)
 
 	wantLevel = "INFO"
 	ev = &TestEvent{priority: syslog.LOG_INFO, message: wantMsg}
 	event.Dispatch(ev)
-	assert.True(t, strings.Contains(tl.getLog().level, wantLevel))
+	assert.Contains(t, tl.getLog().level, wantLevel)
 
 	ev = &TestEvent{priority: syslog.LOG_NOTICE, message: wantMsg}
 	event.Dispatch(ev)
-	assert.True(t, strings.Contains(tl.getLog().level, wantLevel))
+	assert.Contains(t, tl.getLog().level, wantLevel)
 
 	ev = &TestEvent{priority: syslog.LOG_DEBUG, message: wantMsg}
 	event.Dispatch(ev)
-	assert.True(t, strings.Contains(tl.getLog().level, wantLevel))
+	assert.Contains(t, tl.getLog().level, wantLevel)
 	assert.True(t, ev.triggered)
 }
 

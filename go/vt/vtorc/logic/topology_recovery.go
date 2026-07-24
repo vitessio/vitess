@@ -653,7 +653,7 @@ func getCheckAndRecoverFunctionCode(analysisEntry *inst.DetectionAnalysis) (reco
 	analysisCode := analysisEntry.Analysis
 	switch analysisCode {
 	// primary
-	case inst.DeadPrimary, inst.DeadPrimaryAndSomeReplicas, inst.PrimaryDiskStalled, inst.PrimarySemiSyncBlocked:
+	case inst.DeadPrimary, inst.DeadPrimaryAndSomeReplicas, inst.PrimaryDiskStalled, inst.PrimarySemiSyncBlocked, inst.PrimaryTabletUnreachableByQuorum:
 		// If ERS is disabled globally, on the keyspace or the shard, skip recovery.
 		if !isERSEnabled(analysisEntry) {
 			log.Info(fmt.Sprintf("VTOrc not configured to run EmergencyReparentShard, skipping recovering %v", analysisCode))
@@ -830,6 +830,15 @@ func shardWideRecoveryIgnoredTablets(recoveryFunctionCode recoveryFunction, anal
 			// evaluates current state. The problem may have been
 			// resolved by a prior dependency recovery.
 			// See https://github.com/vitessio/vitess/issues/19941
+		case inst.PrimaryTabletUnreachableByQuorum:
+			// The primary's mysqld is up by definition here — only its
+			// vttablet is unreachable, and it may have restarted between
+			// detection and this recovery acquiring the shard lock. Refresh
+			// it so a recovered vttablet flips LastCheckValid and
+			// checkIfAlreadyFixed aborts the ERS, instead of failing over a
+			// just-recovered primary on stale analysis plus observer reports
+			// that have not yet aged past the freshness window. A still-dead
+			// vttablet fails the refresh quickly (connection refused).
 		default:
 			tabletsToIgnore = append(tabletsToIgnore, analysisEntry.AnalyzedInstanceAlias)
 		}

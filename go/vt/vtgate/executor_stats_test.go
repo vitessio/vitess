@@ -45,7 +45,7 @@ func TestQueryExecutionsByTable_OnError(t *testing.T) {
 	result, err := executorExecSession(ctx, executor, session, "select id from user where id = 1", nil)
 
 	// Verify successful execution
-	assert.NoError(t, err, "Expected query execution to succeed")
+	require.NoError(t, err, "Expected query execution to succeed")
 	assert.NotNil(t, result, "Expected valid result")
 
 	// Get counter values after successful execution
@@ -67,7 +67,7 @@ func TestQueryExecutionsByTable_OnError(t *testing.T) {
 	_, err = executorExecSession(ctx, executor, session, "select id from user where id = 1", nil)
 
 	// Verify that the execution failed
-	assert.Error(t, err, "Expected query execution to fail")
+	require.Error(t, err, "Expected query execution to fail")
 
 	// Get counter values after failed execution
 	finalCounts := getCurrentQueryExecutionsByTableCounts()

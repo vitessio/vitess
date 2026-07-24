@@ -299,7 +299,7 @@ const fkExtMaterializeSpec = `
 func materializeTables(t *testing.T) {
 	wfName := "mat"
 	err := vc.VtctldClient.ExecuteCommand("ApplySchema", "--ddl-strategy"+"=direct", "--sql", FKExtMaterializeSchema, fkextConfig.target1KeyspaceName)
-	require.NoError(t, err, fmt.Sprintf("ApplySchema Error: %s", err))
+	require.NoError(t, err, "ApplySchema Error: %s", err)
 	materializeSpec := fmt.Sprintf(fkExtMaterializeSpec, "mat", fkextConfig.target2KeyspaceName, fkextConfig.target1KeyspaceName)
 	materialize(t, materializeSpec)
 	tab := vc.getPrimaryTablet(t, fkextConfig.target1KeyspaceName, "0")

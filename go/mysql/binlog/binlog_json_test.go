@@ -313,6 +313,39 @@ func TestBinaryJSONOpaqueErrors(t *testing.T) {
 	}
 }
 
+func TestParseBinaryJSONDiffPathEscaping(t *testing.T) {
+	testcases := []struct {
+		name     string
+		path     string
+		expected string
+	}{
+		{
+			name:     "plain path is unchanged",
+			path:     `$.role`,
+			expected: `JSON_REMOVE(%s, _utf8mb4'$.role')`,
+		},
+		{
+			name:     "single quote in key is escaped",
+			path:     `$."a'b"`,
+			expected: `JSON_REMOVE(%s, _utf8mb4'$."a\'b"')`,
+		},
+		{
+			name:     "backslash in key is escaped",
+			path:     `$."a\b"`,
+			expected: `JSON_REMOVE(%s, _utf8mb4'$."a\\b"')`,
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			data := []byte{byte(jsonDiffOpRemove), byte(len(tc.path))}
+			data = append(data, tc.path...)
+			val, err := ParseBinaryJSONDiff(data)
+			require.NoError(t, err)
+			require.Equal(t, tc.expected, val.RawStr())
+		})
+	}
+}
+
 func TestMarshalJSONToSQL(t *testing.T) {
 	testcases := []struct {
 		name     string

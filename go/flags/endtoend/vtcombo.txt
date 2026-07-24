@@ -29,10 +29,12 @@ Flags:
       --buffer-min-time-between-failovers duration                       Minimum time between the end of a failover and the start of the next one (tracked per shard). Faster consecutive failovers will not trigger buffering. (default 1m0s)
       --buffer-size int                                                  Maximum number of buffered requests in flight (across all ongoing failovers). (default 1000)
       --buffer-window duration                                           Duration for how long a request should be buffered at most (should not be larger than --buffer-max-failover-duration). (default 10s)
+      --builtinbackup-file-chunk-size uint                               Size of each chunk (in bytes) when splitting large files for parallel backup/restore. (default 1073741824)
+      --builtinbackup-file-chunk-threshold uint                          Files larger than this size (in bytes) are split into chunks for parallel backup/restore. 0 disables chunking.
       --builtinbackup-file-read-buffer-size uint                         read files using an IO buffer of this many bytes. Golang defaults are used when set to 0.
       --builtinbackup-file-write-buffer-size uint                        write files using an IO buffer of this many bytes. Golang defaults are used when set to 0. (default 2097152)
       --builtinbackup-incremental-restore-path string                    the directory where incremental restore files, namely binlog files, are extracted to. In k8s environments, this should be set to a directory that is shared between the vttablet and mysqld pods. The path should exist. When empty, the default OS temp dir is assumed.
-      --builtinbackup-mysqld-timeout duration                            how long to wait for mysqld to shutdown at the start of the backup. (default 10m0s)
+      --builtinbackup-mysqld-timeout duration                            how long to wait for mysqld to shutdown at the start of the backup. Raised to the mysqld shutdown timeout of the backup request plus a grace period when that is larger. (default 10m0s)
       --builtinbackup-progress duration                                  how often to send progress updates when backing up large files. (default 5s)
       --catch-sigpipe                                                    catch and ignore SIGPIPE on stdout and stderr if specified
       --cell string                                                      cell to use
@@ -109,6 +111,7 @@ Flags:
       --ddl-strategy string                                              Set default strategy for DDL statements. Override with @@ddl_strategy session variable (default "direct")
       --default-tablet-type topodatapb.TabletType                        The default tablet type to set for queries, when one is not explicitly selected. (default PRIMARY)
       --degraded-threshold duration                                      replication lag after which a replica is considered degraded (default 30s)
+      --demote-primary-lock-wait-timeout duration                        Sets the session lock_wait_timeout when enabling super_read_only during a primary demotion. 0 leaves it unset and uses the default of the MySQL server.
       --denied-system-variables strings                                  Comma-separated list of system variables that clients are not allowed to SET; attempts return an unsupported error. Names are matched case-insensitively.
       --disk-write-dir string                                            if provided, tablet will attempt to write a file to this directory to check if the disk is stalled
       --disk-write-interval duration                                     how often to write to the disk to check whether it is stalled (default 5s)
@@ -253,6 +256,7 @@ Flags:
       --mysql-shell-dump-flags string                                    flags to pass to mysql shell dump utility. This should be a JSON string and will be saved in the MANIFEST (default "{\"threads\": 4}")
       --mysql-shell-flags string                                         execution flags to pass to mysqlsh binary to be used during dump/load (default "--defaults-file=/dev/null --js -h localhost")
       --mysql-shell-load-flags string                                    flags to pass to mysql shell load utility. This should be a JSON string (default "{\"threads\": 4, \"loadUsers\": true, \"updateGtidSet\": \"replace\", \"skipBinlog\": true, \"progressFile\": \"\"}")
+      --mysql-shell-restore-skip-version-check                           skip the MySQL version compatibility check when restoring from a mysql-shell backup
       --mysql-shell-should-drain                                         decide if we should drain while taking a backup or continue to serving traffic
       --mysql-shell-speedup-restore                                      speed up restore by disabling redo logging and double write buffer during the restore process
       --mysql-shutdown-timeout duration                                  Timeout to use when MySQL is being shut down. (default 5m0s)
@@ -426,7 +430,6 @@ Flags:
       --vreplication-copy-phase-duration duration                        Duration for each copy phase loop (before running the next catchup: default 1h) (default 1h0m0s)
       --vreplication-copy-phase-max-innodb-history-list-length int       The maximum InnoDB transaction history that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet (default 10000000)
       --vreplication-copy-phase-max-mysql-replication-lag int            The maximum MySQL replication lag (in seconds) that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet (default 43200)
-      --vreplication-enable-http-log                                     Enable the /debug/vrlog HTTP endpoint, which will produce a log of the events replicated on primary tablets in the target keyspace by all VReplication workflows that are in the running/replicating phase.
       --vreplication-experimental-flags int                              (Bitmask) of experimental features in vreplication to enable (default 7)
       --vreplication-heartbeat-update-interval int                       Frequency (in seconds, default 1, max 60) at which the time_updated column of a vreplication stream when idling (default 1)
       --vreplication-max-row-json-bytes int                              Maximum combined byte size of JSON columns in a single row during VReplication copy and replay phases. 0 means unlimited.

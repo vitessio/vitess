@@ -57,7 +57,7 @@ func TestSortedTableSummariesEmpty(t *testing.T) {
 
 	sorted := summary.SortedTableSummaries()
 
-	require.Len(t, sorted, 0)
+	require.Empty(t, sorted)
 }
 
 func TestBuildSummary(t *testing.T) {

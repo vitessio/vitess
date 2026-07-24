@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type testCharset1 struct{}
@@ -163,10 +164,10 @@ func TestConvert(t *testing.T) {
 		res, err := Convert(tc.dst, tc.dstCharset, tc.src, tc.srcCharset)
 
 		if tc.err != "" {
-			assert.ErrorContains(t, err, tc.err)
+			require.ErrorContains(t, err, tc.err)
 			assert.Equal(t, tc.want, res)
 		} else {
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tc.want, res)
 		}
 	}
@@ -301,11 +302,11 @@ func TestConvertFromUTF8(t *testing.T) {
 	src := []byte("😊😂🤢")
 
 	res, err := ConvertFromUTF8(dst, Charset_utf8mb4{}, src)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, []byte("dst😊😂🤢"), res)
 
 	res, err = ConvertFromUTF8(dst, Charset_utf8mb3{}, src)
-	assert.ErrorContains(t, err, "Cannot convert string")
+	require.ErrorContains(t, err, "Cannot convert string")
 	assert.Equal(t, []byte("dst???"), res)
 }
 
@@ -352,10 +353,10 @@ func TestConvertFromBinary(t *testing.T) {
 		got, err := ConvertFromBinary(tc.dst, tc.cs, tc.in)
 
 		if tc.want == nil {
-			assert.ErrorContains(t, err, tc.err)
+			require.ErrorContains(t, err, tc.err)
 			assert.Nil(t, got)
 		} else {
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tc.want, got)
 		}
 	}

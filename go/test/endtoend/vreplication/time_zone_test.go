@@ -120,7 +120,7 @@ func TestMoveTablesTZ(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, qrTargetUTC)
 
-	require.Equal(t, len(qrSourceUSPacific.Rows), len(qrTargetUTC.Rows))
+	require.Len(t, qrTargetUTC.Rows, len(qrSourceUSPacific.Rows))
 
 	pacificLocation, err := time.LoadLocation("US/Pacific")
 	require.NoError(t, err)
@@ -163,7 +163,7 @@ func TestMoveTablesTZ(t *testing.T) {
 	qrTargetUSPacific, err := customerTab.QueryTablet(query, defaultTargetKs, true)
 	require.NoError(t, err)
 	require.NotNil(t, qrTargetUSPacific)
-	require.Equal(t, len(qrSourceUSPacific.Rows), len(qrTargetUSPacific.Rows))
+	require.Len(t, qrTargetUSPacific.Rows, len(qrSourceUSPacific.Rows))
 
 	for i, row := range qrSourceUSPacific.Named().Rows {
 		// source and target results must match since source is in US/Pacific and we are converting target columns explicitly to US/Pacific

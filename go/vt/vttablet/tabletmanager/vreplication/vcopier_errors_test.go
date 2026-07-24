@@ -42,16 +42,16 @@ func TestFormatTaskError(t *testing.T) {
 	t.Run("root only surfaces the root cause", func(t *testing.T) {
 		err := formatTaskError([]error{root})
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "task error")
-		assert.ErrorContains(t, err, "failed inserting rows: EOF")
+		require.ErrorContains(t, err, "task error")
+		require.ErrorContains(t, err, "failed inserting rows: EOF")
 		assert.NotContains(t, err.Error(), "batches failed waiting on")
 	})
 
 	t.Run("mixed root + dependent prefers the root and counts the dependents", func(t *testing.T) {
 		err := formatTaskError([]error{root, dep, dep, dep})
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "failed inserting rows: EOF")
-		assert.ErrorContains(t, err, "+3 batches failed waiting on this to complete")
+		require.ErrorContains(t, err, "failed inserting rows: EOF")
+		require.ErrorContains(t, err, "+3 batches failed waiting on this to complete")
 		assert.NotContains(t, err.Error(), "received result is not complete",
 			"dependent-batch echo strings must not appear in the message")
 	})
@@ -59,8 +59,8 @@ func TestFormatTaskError(t *testing.T) {
 	t.Run("dependent only directs operators to earlier rows", func(t *testing.T) {
 		err := formatTaskError([]error{dep, dep, dep, dep})
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "4 batches failed waiting on a concurrent insert worker's batch")
-		assert.ErrorContains(t, err, "original failure not captured this retry")
+		require.ErrorContains(t, err, "4 batches failed waiting on a concurrent insert worker's batch")
+		require.ErrorContains(t, err, "original failure not captured this retry")
 		assert.ErrorContains(t, err, "see earlier rows for the root cause")
 	})
 
@@ -80,8 +80,8 @@ func TestFormatTaskError(t *testing.T) {
 			dep,
 		})
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "failed inserting rows: EOF")
-		assert.ErrorContains(t, err, "error committing transaction: write conflict")
+		require.ErrorContains(t, err, "failed inserting rows: EOF")
+		require.ErrorContains(t, err, "error committing transaction: write conflict")
 		assert.ErrorContains(t, err, "+1 batches failed waiting on this to complete")
 	})
 }

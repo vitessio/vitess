@@ -47,7 +47,7 @@ func Stub[T any](t *testing.T, v *viper.Viper, val viperutil.Value[T]) func() {
 	case *value.Dynamic[T]:
 		base = val.Base
 	default:
-		assert.Fail(t, "value %+v does not support stubbing", val)
+		assert.Failf(t, "value", "%+v does not support stubbing", val)
 		return func() {}
 	}
 

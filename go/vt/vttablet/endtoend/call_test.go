@@ -248,7 +248,7 @@ func TestCallProcedureChangedTxStreaming(t *testing.T) {
 	for _, query := range queries {
 		t.Run(query, func(t *testing.T) {
 			_, err := client.StreamBeginExecuteWithOptions(query, nil, nil, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
-			assert.EqualError(t, err, "Transaction state change inside the stored procedure is not allowed (CallerID: dev)")
+			require.EqualError(t, err, "Transaction state change inside the stored procedure is not allowed (CallerID: dev)")
 			client.Release()
 		})
 	}
@@ -301,7 +301,7 @@ func TestCallProcedureChangedTx(t *testing.T) {
 	for _, query := range queries {
 		t.Run(query, func(t *testing.T) {
 			_, err := client.BeginExecute(query, nil, nil)
-			assert.EqualError(t, err, "Transaction state change inside the stored procedure is not allowed (CallerID: dev)")
+			require.EqualError(t, err, "Transaction state change inside the stored procedure is not allowed (CallerID: dev)")
 			client.Release()
 		})
 	}

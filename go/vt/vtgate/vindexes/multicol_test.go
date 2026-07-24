@@ -239,7 +239,7 @@ func TestMultiColMap(t *testing.T) {
 		// Invalid column value type.
 		sqltypes.NewInt64(256), sqltypes.NewInt64(256), sqltypes.NewVarBinary("abcd"),
 	}})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	want := []key.ShardDestination{
 		key.DestinationKeyspaceID("\x16\x6b\x40\x16\x6b\x40\x16\x6b"),

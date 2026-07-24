@@ -120,7 +120,7 @@ func TestSchemaManagerRun(t *testing.T) {
 			ctx := t.Context()
 			resp, err := Run(ctx, controller, executor)
 
-			require.Lenf(t, resp.UUIDs, 0, "response should contain an empty list of UUIDs")
+			require.Emptyf(t, resp.UUIDs, "response should contain an empty list of UUIDs")
 			require.NoError(t, err)
 
 			require.True(t, controller.onReadSuccessTriggered, "OnReadSuccess should be called")
@@ -156,7 +156,7 @@ func TestSchemaManagerExecutorFail(t *testing.T) {
 
 	ctx := t.Context()
 	resp, err := Run(ctx, controller, executor)
-	require.Lenf(t, resp.UUIDs, 0, "response should contain an empty list of UUIDs")
+	require.Emptyf(t, resp.UUIDs, "response should contain an empty list of UUIDs")
 	require.ErrorContains(t, err, "schema change failed", "schema change should fail")
 }
 

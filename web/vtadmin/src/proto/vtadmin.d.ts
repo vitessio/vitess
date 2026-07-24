@@ -60754,6 +60754,147 @@ export namespace replicationdata {
     }
 
     /**
+     * Properties of a ShardPeerHealth.
+     * @deprecated Use replicationdata.ShardPeerHealth.$Properties instead.
+     */
+    interface IShardPeerHealth extends replicationdata.ShardPeerHealth.$Properties {
+    }
+
+    /** Represents a ShardPeerHealth. */
+    class ShardPeerHealth {
+
+        /**
+         * Constructs a new ShardPeerHealth.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: replicationdata.ShardPeerHealth.$Properties);
+
+        /** Unknown fields preserved while decoding */
+        $unknowns?: Uint8Array[];
+
+        /** ShardPeerHealth tablet_alias. */
+        tablet_alias?: (topodata.TabletAlias.$Properties|null);
+
+        /** ShardPeerHealth consecutive_ping_failures. */
+        consecutive_ping_failures: (number|Long);
+
+        /** ShardPeerHealth last_successful_ping. */
+        last_successful_ping?: (vttime.Time.$Properties|null);
+
+        /** ShardPeerHealth last_attempted_ping. */
+        last_attempted_ping?: (vttime.Time.$Properties|null);
+
+        /** ShardPeerHealth time_since_last_attempted_ping. */
+        time_since_last_attempted_ping?: (vttime.Duration.$Properties|null);
+
+        /**
+         * Creates a new ShardPeerHealth instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ShardPeerHealth instance
+         */
+        static create(properties: replicationdata.ShardPeerHealth.$Shape): replicationdata.ShardPeerHealth & replicationdata.ShardPeerHealth.$Shape;
+        static create(properties?: replicationdata.ShardPeerHealth.$Properties): replicationdata.ShardPeerHealth;
+
+        /**
+         * Encodes the specified ShardPeerHealth message. Does not implicitly {@link replicationdata.ShardPeerHealth.verify|verify} messages.
+         * @param message ShardPeerHealth message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encode(message: replicationdata.ShardPeerHealth.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ShardPeerHealth message, length delimited. Does not implicitly {@link replicationdata.ShardPeerHealth.verify|verify} messages.
+         * @param message ShardPeerHealth message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encodeDelimited(message: replicationdata.ShardPeerHealth.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ShardPeerHealth message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns {replicationdata.ShardPeerHealth & replicationdata.ShardPeerHealth.$Shape} ShardPeerHealth
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): replicationdata.ShardPeerHealth & replicationdata.ShardPeerHealth.$Shape;
+
+        /**
+         * Decodes a ShardPeerHealth message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns {replicationdata.ShardPeerHealth & replicationdata.ShardPeerHealth.$Shape} ShardPeerHealth
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): replicationdata.ShardPeerHealth & replicationdata.ShardPeerHealth.$Shape;
+
+        /**
+         * Verifies a ShardPeerHealth message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ShardPeerHealth message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ShardPeerHealth
+         */
+        static fromObject(object: { [k: string]: any }): replicationdata.ShardPeerHealth;
+
+        /**
+         * Creates a plain object from a ShardPeerHealth message. Also converts values to other types if specified.
+         * @param message ShardPeerHealth
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        static toObject(message: replicationdata.ShardPeerHealth, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ShardPeerHealth to JSON.
+         * @returns JSON object
+         */
+        toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the type url for ShardPeerHealth
+         * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns The type url
+         */
+        static getTypeUrl(prefix?: string): string;
+    }
+
+    namespace ShardPeerHealth {
+
+        /** Properties of a ShardPeerHealth. */
+        interface $Properties {
+
+            /** ShardPeerHealth tablet_alias */
+            tablet_alias?: (topodata.TabletAlias.$Properties|null);
+
+            /** ShardPeerHealth consecutive_ping_failures */
+            consecutive_ping_failures?: (number|Long|null);
+
+            /** ShardPeerHealth last_successful_ping */
+            last_successful_ping?: (vttime.Time.$Properties|null);
+
+            /** ShardPeerHealth last_attempted_ping */
+            last_attempted_ping?: (vttime.Time.$Properties|null);
+
+            /** ShardPeerHealth time_since_last_attempted_ping */
+            time_since_last_attempted_ping?: (vttime.Duration.$Properties|null);
+
+            /** Unknown fields preserved while decoding */
+            $unknowns?: Uint8Array[];
+        }
+
+        /** Shape of a ShardPeerHealth. */
+        type $Shape = replicationdata.ShardPeerHealth.$Properties;
+    }
+
+    /**
      * Properties of a FullStatus.
      * @deprecated Use replicationdata.FullStatus.$Properties instead.
      */
@@ -60846,6 +60987,9 @@ export namespace replicationdata {
 
         /** FullStatus tablet_type. */
         tablet_type: topodata.TabletType;
+
+        /** FullStatus shard_peer_health. */
+        shard_peer_health: replicationdata.ShardPeerHealth.$Properties[];
 
         /**
          * Creates a new FullStatus instance using the specified properties.
@@ -61005,6 +61149,9 @@ export namespace replicationdata {
 
             /** FullStatus tablet_type */
             tablet_type?: (topodata.TabletType|null);
+
+            /** FullStatus shard_peer_health */
+            shard_peer_health?: (replicationdata.ShardPeerHealth.$Properties[]|null);
 
             /** Unknown fields preserved while decoding */
             $unknowns?: Uint8Array[];

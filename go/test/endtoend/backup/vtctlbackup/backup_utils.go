@@ -70,7 +70,6 @@ var (
 	newInitDBFile    string
 	currentSetupType int
 	cell             = cluster.DefaultCell
-
 	hostname         = "localhost"
 	keyspaceName     = "ks"
 	dbPassword       = "VtDbaPass"
@@ -193,8 +192,10 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 		// since we spin different mysqld processes, we need to pass exactly the socket of the this particular
 		// one when running mysql shell dump/loads
 		if setupType == MySQLShell {
-			commonTabletArg = append(commonTabletArg,
-				"--mysql-shell-flags", fmt.Sprintf("--js -u vt_dba -p%s -S %s", dbPassword,
+			commonTabletArg = append(
+				commonTabletArg,
+				"--mysql-shell-flags", fmt.Sprintf(
+					"--js -u vt_dba -p%s -S %s", dbPassword,
 					path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", tablet.TabletUID), "mysql.sock"),
 				),
 			)
@@ -418,7 +419,7 @@ func TestBackup(t *testing.T, setupType int, streamMode string, stripes int, cDe
 
 	// setup cluster for the testing
 	code, err := LaunchCluster(setupType, streamMode, stripes, cDetails)
-	require.Nilf(t, err, "setup failed with status code %d", code)
+	require.NoErrorf(t, err, "setup failed with status code %d", code)
 
 	// Teardown the cluster
 	defer TearDownCluster()
@@ -510,7 +511,8 @@ func primaryBackup(t *testing.T) {
 	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
 
 	sqlInitTestTable := "init_test"
-	err = localCluster.VtctldClientProcess.ExecuteCommand("Backup", "--allow-primary",
+	err = localCluster.VtctldClientProcess.ExecuteCommand(
+		"Backup", "--allow-primary",
 		// Test init SQL.
 		"--init-backup-sql-queries", fmt.Sprintf("create table `%s`.%s (id int),optimize table `%s`.%s,insert into `%s`.%s (id) values (1)",
 			primary.VttabletProcess.DbName, sqlInitTestTable, primary.VttabletProcess.DbName, sqlInitTestTable, primary.VttabletProcess.DbName, sqlInitTestTable),
@@ -787,7 +789,7 @@ func restartPrimaryAndReplica(t *testing.T) {
 	for _, tablet := range []*cluster.Vttablet{primary, replica1, replica2} {
 		if tablet.MysqlctldProcess.TabletUID > 0 {
 			err := tablet.MysqlctldProcess.Start()
-			require.Nilf(t, err, "error while starting mysqlctld, tabletUID %v", tablet.TabletUID)
+			require.NoErrorf(t, err, "error while starting mysqlctld, tabletUID %v", tablet.TabletUID)
 			continue
 		}
 		proc, _ := tablet.MysqlctlProcess.StartProcess()
@@ -836,15 +838,15 @@ func terminatedRestore(t *testing.T) {
 	// previous test to complete (suspicion: MySQL does not fully start)
 	time.Sleep(5 * time.Second)
 
-	checkTabletType(t, replica1.Alias, topodata.TabletType_REPLICA)
+	require.NoError(t, checkTabletType(replica1.Alias, topodata.TabletType_REPLICA))
 	terminateBackup(t, replica1.Alias)
 	// If backup fails then the tablet type goes back to original type.
-	checkTabletType(t, replica1.Alias, topodata.TabletType_REPLICA)
+	require.NoError(t, checkTabletType(replica1.Alias, topodata.TabletType_REPLICA))
 
 	// backup the replica
 	err := localCluster.VtctldClientProcess.ExecuteCommand("Backup", replica1.Alias)
 	require.NoError(t, err)
-	checkTabletType(t, replica1.Alias, topodata.TabletType_REPLICA)
+	require.NoError(t, checkTabletType(replica1.Alias, topodata.TabletType_REPLICA))
 
 	verifyTabletBackupStats(t, replica1.VttabletProcess.GetVars())
 
@@ -861,14 +863,14 @@ func terminatedRestore(t *testing.T) {
 	_, err = replica1.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test3')", keyspaceName, true)
 	require.NoError(t, err)
 
-	checkTabletType(t, primary.Alias, topodata.TabletType_REPLICA)
+	require.NoError(t, checkTabletType(primary.Alias, topodata.TabletType_REPLICA))
 	terminateRestore(t)
 	// If restore fails then the tablet type goes back to original type.
-	checkTabletType(t, primary.Alias, topodata.TabletType_REPLICA)
+	require.NoError(t, checkTabletType(primary.Alias, topodata.TabletType_REPLICA))
 
 	err = localCluster.VtctldClientProcess.ExecuteCommand("RestoreFromBackup", primary.Alias)
 	require.NoError(t, err)
-	checkTabletType(t, primary.Alias, topodata.TabletType_REPLICA)
+	require.NoError(t, checkTabletType(primary.Alias, topodata.TabletType_REPLICA))
 
 	_, err = os.Stat(path.Join(primary.VttabletProcess.Directory, "restore_in_progress"))
 	assert.True(t, os.IsNotExist(err))
@@ -880,36 +882,58 @@ func terminatedRestore(t *testing.T) {
 	stopAllTablets()
 }
 
-func checkTabletType(t *testing.T, alias string, tabletType topodata.TabletType) {
-	t.Helper()
+// checkTabletType returns an error instead of asserting, so callers running in
+// a goroutine can propagate the result back to the test goroutine. Callers on
+// the test goroutine should wrap it with require.NoError.
+func checkTabletType(alias string, tabletType topodata.TabletType) error {
 	// for loop for 15 seconds to check if tablet type is correct
 	for range 15 {
 		output, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("GetTablet", alias)
-		if !assert.NoError(t, err) {
-			return
+		if err != nil {
+			return err
 		}
 		var tabletPB topodata.Tablet
-		err = json2.UnmarshalPB([]byte(output), &tabletPB)
-		if !assert.NoError(t, err) {
-			return
+		if err := json2.UnmarshalPB([]byte(output), &tabletPB); err != nil {
+			return err
 		}
 		if tabletType == tabletPB.Type {
-			return
+			return nil
 		}
 		time.Sleep(1 * time.Second)
 	}
-	assert.Failf(t, "checkTabletType failed.", "Tablet type is not correct. Expected: %v", tabletType)
+	return fmt.Errorf("tablet %s type is not %v", alias, tabletType)
 }
 
 func doNotDemoteNewlyPromotedPrimaryIfReparentingDuringBackup(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(2)
 
+	// checkType runs the tablet-type check in a goroutine and records the first
+	// error so the test goroutine can assert on it after wg.Wait().
+	var (
+		mu      sync.Mutex
+		typeErr error
+	)
+	checkType := func(alias string, tabletType topodata.TabletType) bool {
+		err := checkTabletType(alias, tabletType)
+		if err != nil {
+			mu.Lock()
+			if typeErr == nil {
+				typeErr = err
+			}
+			mu.Unlock()
+			return false
+		}
+		return true
+	}
+
 	// Start the backup on a replica
 	go func() {
 		defer wg.Done()
 		// ensure this is a primary first
-		checkTabletType(t, primary.Alias, topodata.TabletType_PRIMARY)
+		if !checkType(primary.Alias, topodata.TabletType_PRIMARY) {
+			return
+		}
 
 		// now backup
 		err := localCluster.VtctldClientProcess.ExecuteCommand("Backup", replica1.Alias)
@@ -922,7 +946,9 @@ func doNotDemoteNewlyPromotedPrimaryIfReparentingDuringBackup(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		// ensure this is a primary first
-		checkTabletType(t, primary.Alias, topodata.TabletType_PRIMARY)
+		if !checkType(primary.Alias, topodata.TabletType_PRIMARY) {
+			return
+		}
 
 		// now reparent
 		_, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput(
@@ -935,13 +961,14 @@ func doNotDemoteNewlyPromotedPrimaryIfReparentingDuringBackup(t *testing.T) {
 		}
 
 		// check that we reparented
-		checkTabletType(t, replica1.Alias, topodata.TabletType_PRIMARY)
+		checkType(replica1.Alias, topodata.TabletType_PRIMARY)
 	}()
 
 	wg.Wait()
+	require.NoError(t, typeErr)
 
 	// check that this is still a primary
-	checkTabletType(t, replica1.Alias, topodata.TabletType_PRIMARY)
+	require.NoError(t, checkTabletType(replica1.Alias, topodata.TabletType_PRIMARY))
 }
 
 // test_backup will:
@@ -984,6 +1011,158 @@ func vtctlBackup(t *testing.T, tabletType string) {
 	err = replica2.VttabletProcess.TearDown()
 	require.NoError(t, err)
 
+	err = localCluster.VtctldClientProcess.ExecuteCommand("DeleteTablets", replica2.Alias)
+	require.NoError(t, err)
+	_, err = primary.VttabletProcess.QueryTablet("DROP TABLE vt_insert_test", keyspaceName, true)
+	require.NoError(t, err)
+}
+
+func chunkedBackup(t *testing.T) {
+	verifyBackupChunking(t, true, 4194304)
+}
+
+func nonChunkedBackup(t *testing.T) {
+	verifyBackupChunking(t, false, 0)
+}
+
+func chunkedRestoreNonChunkedBackup(t *testing.T) {
+	verifyInitialReplication(t)
+
+	// Launch replica2 with chunking flags enabled but waiting for a backup.
+	// The backup itself will be non-chunked (taken by replica1 without chunking).
+	replica2.Type = "replica"
+	replica2.ValidateTabletRestart(t)
+	replicaTabletArgs := append(
+		commonTabletArg,
+		"--wait-for-backup-interval", "1s",
+		"--init-tablet-type", "replica",
+		"--builtinbackup-file-chunk-threshold", "4194304",
+		"--builtinbackup-file-chunk-size", "4194304",
+	)
+	replica2.VttabletProcess.ExtraArgs = replicaTabletArgs
+	replica2.VttabletProcess.ServingStatus = ""
+	err := replica2.VttabletProcess.Setup()
+	require.NoError(t, err)
+
+	// Take a non-chunked backup on replica1.
+	err = localCluster.VtctldClientProcess.ExecuteCommand("Backup", replica1.Alias)
+	require.NoError(t, err)
+
+	backups := localCluster.VerifyBackupCount(t, shardKsName, 1)
+
+	// Verify the MANIFEST has no chunks (non-chunked backup).
+	backupLocation := path.Join(localCluster.CurrentVTDATAROOT, "backups", keyspaceName, shardName, backups[0])
+	manifestData, err := os.ReadFile(path.Join(backupLocation, "MANIFEST"))
+	require.NoError(t, err)
+	var manifest struct {
+		FileEntries []struct {
+			Chunks []struct{}
+		}
+	}
+	require.NoError(t, json.Unmarshal(manifestData, &manifest))
+	for _, fe := range manifest.FileEntries {
+		require.Empty(t, fe.Chunks, "expected non-chunked backup but found chunks in MANIFEST")
+	}
+
+	// Verify replica2 restores successfully from the non-chunked backup.
+	err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, 25*time.Second)
+	require.NoError(t, err)
+	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 1)
+
+	verifyAfterRemovingBackupNoBackupShouldBePresent(t, backups)
+	err = replica2.VttabletProcess.TearDown()
+	require.NoError(t, err)
+	err = localCluster.VtctldClientProcess.ExecuteCommand("DeleteTablets", replica2.Alias)
+	require.NoError(t, err)
+	_, err = primary.VttabletProcess.QueryTablet("DROP TABLE vt_insert_test", keyspaceName, true)
+	require.NoError(t, err)
+}
+
+func verifyBackupChunking(t *testing.T, expectChunked bool, chunkSizeBytes int64) {
+	verifyInitialReplication(t)
+
+	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 1)
+
+	restoreWaitForBackup(t, "replica", nil, true)
+
+	err := localCluster.VtctldClientProcess.ExecuteCommand("Backup", replica1.Alias)
+	require.NoError(t, err)
+
+	backups := localCluster.VerifyBackupCount(t, shardKsName, 1)
+	backupLocation := path.Join(localCluster.CurrentVTDATAROOT, "backups", keyspaceName, shardName, backups[0])
+
+	manifestData, err := os.ReadFile(path.Join(backupLocation, "MANIFEST"))
+	require.NoError(t, err)
+
+	var manifest struct {
+		FileEntries []struct {
+			Name   string
+			Chunks []struct {
+				StorageName string
+				Offset      int64
+				Size        int64
+				Hash        string
+			}
+		}
+	}
+	require.NoError(t, json.Unmarshal(manifestData, &manifest))
+
+	totalChunks := 0
+	chunkedFileCount := 0
+	nonChunkedFileCount := 0
+	for _, fe := range manifest.FileEntries {
+		if len(fe.Chunks) > 0 {
+			chunkedFileCount++
+			totalChunks += len(fe.Chunks)
+
+			// We want to make sure the chunk count matches what we are expecting in terms of the file size.
+			lastChunk := fe.Chunks[len(fe.Chunks)-1]
+			fileSize := lastChunk.Offset + lastChunk.Size
+			expectedChunks := int(fileSize / chunkSizeBytes)
+			if fileSize%chunkSizeBytes != 0 {
+				expectedChunks++
+			}
+			assert.Len(t, fe.Chunks, expectedChunks, "file %s: expected %d chunks for size %d with chunk size %d", fe.Name, expectedChunks, fileSize, chunkSizeBytes)
+			t.Logf("File %s: size=%d, chunks=%d (expected %d)", fe.Name, fileSize, len(fe.Chunks), expectedChunks)
+
+			for _, chunk := range fe.Chunks {
+				assert.NotEmpty(t, chunk.StorageName, "chunk StorageName must not be empty for file %s", fe.Name)
+				assert.NotEmpty(t, chunk.Hash, "chunk Hash must not be empty for file %s", fe.Name)
+				assert.Contains(t, chunk.StorageName, "-", "chunk StorageName must follow fileIndex-chunkIndex format, got %s", chunk.StorageName)
+				assert.Positive(t, chunk.Size, "chunk Size must be positive for file %s chunk %s", fe.Name, chunk.StorageName)
+			}
+		} else {
+			nonChunkedFileCount++
+		}
+	}
+	t.Logf("Total chunks: %d, chunked files: %d, non-chunked files: %d", totalChunks, chunkedFileCount, nonChunkedFileCount)
+
+	if expectChunked {
+		assert.Positive(t, chunkedFileCount, "expected at least one file to be chunked")
+		assert.Positive(t, nonChunkedFileCount, "expected at least one file to NOT be chunked (mixed scenario)")
+
+		// Verify that our small test table (well under chunk threshold) was NOT chunked.
+		foundSmallFile := false
+		for _, fe := range manifest.FileEntries {
+			if strings.Contains(fe.Name, "vt_insert_test") {
+				foundSmallFile = true
+				t.Logf("File %s: not chunked", fe.Name)
+				assert.Empty(t, fe.Chunks, "small file %s should not be chunked", fe.Name)
+			}
+		}
+		assert.True(t, foundSmallFile, "expected vt_insert_test table file in manifest")
+	} else {
+		assert.Equal(t, 0, chunkedFileCount, "expected no chunked files with threshold=0")
+		assert.Equal(t, 0, totalChunks, "expected no chunking with threshold=0")
+	}
+
+	err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, 25*time.Second)
+	require.NoError(t, err)
+	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 1)
+
+	verifyAfterRemovingBackupNoBackupShouldBePresent(t, backups)
+	err = replica2.VttabletProcess.TearDown()
+	require.NoError(t, err)
 	err = localCluster.VtctldClientProcess.ExecuteCommand("DeleteTablets", replica2.Alias)
 	require.NoError(t, err)
 	_, err = primary.VttabletProcess.QueryTablet("DROP TABLE vt_insert_test", keyspaceName, true)
@@ -1076,17 +1255,17 @@ func verifySemiSyncStatus(t *testing.T, vttablet *cluster.Vttablet, expectedStat
 	case mysql.SemiSyncTypeSource:
 		status, err := vttablet.VttabletProcess.GetDBVar("rpl_semi_sync_replica_enabled", keyspaceName)
 		require.NoError(t, err)
-		assert.Equal(t, status, expectedStatus)
+		assert.Equal(t, expectedStatus, status)
 		status, err = vttablet.VttabletProcess.GetDBStatus("rpl_semi_sync_replica_status", keyspaceName)
 		require.NoError(t, err)
-		assert.Equal(t, status, expectedStatus)
+		assert.Equal(t, expectedStatus, status)
 	case mysql.SemiSyncTypeMaster:
 		status, err := vttablet.VttabletProcess.GetDBVar("rpl_semi_sync_slave_enabled", keyspaceName)
 		require.NoError(t, err)
-		assert.Equal(t, status, expectedStatus)
+		assert.Equal(t, expectedStatus, status)
 		status, err = vttablet.VttabletProcess.GetDBStatus("rpl_semi_sync_slave_status", keyspaceName)
 		require.NoError(t, err)
-		assert.Equal(t, status, expectedStatus)
+		assert.Equal(t, expectedStatus, status)
 	}
 }
 
@@ -1389,7 +1568,7 @@ func TestReplicaRestoreToPos(t *testing.T, replicaIndex int, restoreToPos replic
 	}
 	require.NoErrorf(t, err, "output: %v", output)
 	verifyTabletRestoreStats(t, replica.VttabletProcess.GetVars())
-	checkTabletType(t, replica1.Alias, topodata.TabletType_DRAINED)
+	require.NoError(t, checkTabletType(replica1.Alias, topodata.TabletType_DRAINED))
 }
 
 func TestReplicaRestoreToTimestamp(t *testing.T, restoreToTimestamp time.Time, expectError string) {
@@ -1403,7 +1582,7 @@ func TestReplicaRestoreToTimestamp(t *testing.T, restoreToTimestamp time.Time, e
 	}
 	require.NoErrorf(t, err, "output: %v", output)
 	verifyTabletRestoreStats(t, replica1.VttabletProcess.GetVars())
-	checkTabletType(t, replica1.Alias, topodata.TabletType_DRAINED)
+	require.NoError(t, checkTabletType(replica1.Alias, topodata.TabletType_DRAINED))
 }
 
 func verifyTabletBackupStats(t *testing.T, vars map[string]any) {
@@ -1461,8 +1640,8 @@ func verifyRestorePositionAndTimeStats(t *testing.T, vars map[string]any) {
 	backupTime := vars["RestoredBackupTime"].(string)
 	require.Contains(t, vars, "RestoredBackupTime")
 	require.Contains(t, vars, "RestorePosition")
-	require.NotEqual(t, "", backupPosition)
-	require.NotEqual(t, "", backupTime)
+	require.NotEmpty(t, backupPosition)
+	require.NotEmpty(t, backupTime)
 	rp, err := replication.DecodePosition(backupPosition)
 	require.NoError(t, err)
 	require.False(t, rp.IsZero())
@@ -1551,7 +1730,7 @@ func TestBackupEngineSelector(t *testing.T) {
 
 	// launch the custer with xtrabackup as the default engine
 	code, err := LaunchCluster(XtraBackup, "xbstream", 0, &CompressionDetails{CompressorEngineName: "pgzip"})
-	require.Nilf(t, err, "setup failed with status code %d", code)
+	require.NoErrorf(t, err, "setup failed with status code %d", code)
 
 	defer TearDownCluster()
 
@@ -1595,7 +1774,7 @@ func TestRestoreAllowedBackupEngines(t *testing.T) {
 
 	// launch the custer with xtrabackup as the default engine
 	code, err := LaunchCluster(XtraBackup, "xbstream", 0, cDetails)
-	require.Nilf(t, err, "setup failed with status code %d", code)
+	require.NoErrorf(t, err, "setup failed with status code %d", code)
 
 	defer TearDownCluster()
 
@@ -1627,7 +1806,8 @@ func TestRestoreAllowedBackupEngines(t *testing.T) {
 		// check the new replica has the data
 		cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
 		result, err := replica2.VttabletProcess.QueryTablet(
-			fmt.Sprintf("select msg from vt_insert_test where msg='%s'", backupMsg), replica2.VttabletProcess.Keyspace, true)
+			fmt.Sprintf("select msg from vt_insert_test where msg='%s'", backupMsg), replica2.VttabletProcess.Keyspace, true,
+		)
 		require.NoError(t, err)
 		require.Equal(t, backupMsg, result.Named().Row().AsString("msg", ""))
 	})
@@ -1655,7 +1835,8 @@ func TestRestoreAllowedBackupEngines(t *testing.T) {
 		cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
 
 		result, err := replica2.VttabletProcess.QueryTablet(
-			fmt.Sprintf("select msg from vt_insert_test where msg='%s'", backupMsg), replica2.VttabletProcess.Keyspace, true)
+			fmt.Sprintf("select msg from vt_insert_test where msg='%s'", backupMsg), replica2.VttabletProcess.Keyspace, true,
+		)
 		require.NoError(t, err)
 		require.Equal(t, backupMsg, result.Named().Row().AsString("msg", ""))
 	})

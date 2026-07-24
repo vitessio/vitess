@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
@@ -97,10 +98,10 @@ func TestTableACL(t *testing.T) {
 	for _, tcase := range execCases {
 		_, err := client.Execute(tcase.query, nil)
 		if tcase.err == "" {
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			continue
 		}
-		assert.ErrorContains(t, err, tcase.err)
+		require.ErrorContains(t, err, tcase.err)
 	}
 
 	streamCases := []struct {
@@ -123,7 +124,7 @@ func TestTableACL(t *testing.T) {
 	for _, tcase := range streamCases {
 		_, err := client.StreamExecute(tcase.query, nil)
 		if tcase.err == "" {
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			continue
 		}
 		assert.ErrorContains(t, err, tcase.err)
@@ -143,19 +144,15 @@ var rulesJSON = []byte(`[{
 func TestQueryRules(t *testing.T) {
 	rules := rules.New()
 	err := rules.UnmarshalJSON(rulesJSON)
-	if !assert.NoError(t, err) {
-		return
-	}
+	require.NoError(t, err)
 	err = framework.Server.SetQueryRules("endtoend", rules)
 	want := "Rule source identifier endtoend is not valid"
-	assert.EqualErrorf(t, err, want, "Error: %v, want %s", err, want)
+	require.EqualErrorf(t, err, want, "Error: %v, want %s", err, want)
 
 	framework.Server.RegisterQueryRuleSource("endtoend")
 	defer framework.Server.UnRegisterQueryRuleSource("endtoend")
 	err = framework.Server.SetQueryRules("endtoend", rules)
-	if !assert.NoError(t, err) {
-		return
-	}
+	require.NoError(t, err)
 
 	rulesJSON := compacted(framework.FetchURL("/debug/query_rules"))
 	want = compacted(`{
@@ -177,15 +174,13 @@ func TestQueryRules(t *testing.T) {
 	bv := map[string]*querypb.BindVariable{"asdfg": sqltypes.Int64BindVariable(1)}
 	_, err = client.Execute(query, bv)
 	want = "disallowed due to rule: disallow bindvar 'asdfg' (CallerID: dev)"
-	assert.EqualErrorf(t, err, want, "Error: %v, want %s", err, want)
+	require.EqualErrorf(t, err, want, "Error: %v, want %s", err, want)
 	_, err = client.StreamExecute(query, bv)
 	want = "disallowed due to rule: disallow bindvar 'asdfg' (CallerID: dev)"
-	assert.EqualErrorf(t, err, want, "Error: %v, want %s", err, want)
+	require.EqualErrorf(t, err, want, "Error: %v, want %s", err, want)
 
 	err = framework.Server.SetQueryRules("endtoend", nil)
-	if !assert.NoError(t, err) {
-		return
-	}
+	require.NoError(t, err)
 	_, err = client.Execute(query, bv)
 	if !assert.NoError(t, err) {
 		return

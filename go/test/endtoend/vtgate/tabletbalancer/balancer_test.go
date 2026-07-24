@@ -98,7 +98,7 @@ func TestCellModeBalancer(t *testing.T) {
 
 		switch tablet.Cell {
 		case cell1:
-			assert.Greater(t, count, 0, "Expected local cell tablet %s to receive queries", tablet.Alias)
+			assert.Positive(t, count, "Expected local cell tablet %s to receive queries", tablet.Alias)
 			cell1Count += count
 		case cell2:
 			assert.Equal(t, 0, count, "Expected remote cell tablet %s to receive NO queries in cell mode", tablet.Alias)
@@ -106,7 +106,7 @@ func TestCellModeBalancer(t *testing.T) {
 		}
 	}
 
-	assert.Greater(t, cell1Count, 0, "Expected cell1 (local) to receive queries")
+	assert.Positive(t, cell1Count, "Expected cell1 (local) to receive queries")
 	assert.Equal(t, 0, cell2Count, "Expected cell2 (remote) to receive NO queries in cell mode")
 }
 
@@ -182,8 +182,8 @@ func TestPreferCell(t *testing.T) {
 		}
 	}
 
-	assert.Greater(t, cell1Count, 0, "Expected cell1 to receive queries in prefer-cell mode")
-	assert.Greater(t, cell2Count, 0, "Expected cell2 to receive queries in prefer-cell mode")
+	assert.Positive(t, cell1Count, "Expected cell1 to receive queries in prefer-cell mode")
+	assert.Positive(t, cell2Count, "Expected cell2 to receive queries in prefer-cell mode")
 }
 
 // TestRandomModeBalancer tests the "random" mode which uniformly distributes load
@@ -253,7 +253,7 @@ func TestRandomModeBalancer(t *testing.T) {
 	// Verify each replica got roughly equal queries
 	for _, tablet := range replicaTablets {
 		count := counts[aliases[tablet.Alias]]
-		assert.Greater(t, count, 0, "Expected replica %s to receive queries", tablet.Alias)
+		assert.Positive(t, count, "Expected replica %s to receive queries", tablet.Alias)
 		assert.InDelta(t, expectedPerReplica, count, float64(tolerance),
 			"Expected replica %s to receive ~%d queries (±%d), got %d",
 			tablet.Alias, expectedPerReplica, tolerance, count)
@@ -267,8 +267,8 @@ func TestRandomModeBalancer(t *testing.T) {
 	}
 
 	// Verify both cells received queries
-	assert.Greater(t, cell1Count, 0, "Expected cell1 to receive queries")
-	assert.Greater(t, cell2Count, 0, "Expected cell2 to receive queries")
+	assert.Positive(t, cell1Count, "Expected cell1 to receive queries")
+	assert.Positive(t, cell2Count, "Expected cell2 to receive queries")
 }
 
 // TestRandomModeWithCellFiltering tests random mode with cell filtering via balancer-vtgate-cells
@@ -338,7 +338,7 @@ func TestRandomModeWithCellFiltering(t *testing.T) {
 		count := counts[aliases[tablet.Alias]]
 		switch tablet.Cell {
 		case cell1:
-			assert.Greater(t, count, 0, "Expected cell1 replica %s to receive queries", tablet.Alias)
+			assert.Positive(t, count, "Expected cell1 replica %s to receive queries", tablet.Alias)
 			cell1Count += count
 		case cell2:
 			assert.Equal(t, 0, count, "Expected cell2 replica %s to receive NO queries (filtered out)", tablet.Alias)
@@ -346,7 +346,7 @@ func TestRandomModeWithCellFiltering(t *testing.T) {
 		}
 	}
 
-	assert.Equal(t, cell1Count, 200, "Expected cell1 to receive all queries")
+	assert.Equal(t, 200, cell1Count, "Expected cell1 to receive all queries")
 	assert.Equal(t, 0, cell2Count, "Expected cell2 to receive NO queries (filtered out)")
 	assert.Equal(t, numQueries, cell1Count, "Expected all queries to go to cell1")
 }
@@ -422,8 +422,8 @@ func TestDeprecatedEnableBalancerFlag(t *testing.T) {
 		}
 	}
 
-	assert.Greater(t, cell1Count, 0, "Expected cell1 to receive queries (flow mode behavior)")
-	assert.Greater(t, cell2Count, 0, "Expected cell2 to receive queries (flow mode behavior)")
+	assert.Positive(t, cell1Count, "Expected cell1 to receive queries (flow mode behavior)")
+	assert.Positive(t, cell2Count, "Expected cell2 to receive queries (flow mode behavior)")
 }
 
 // Helper functions for e2e testing of balancer modes
@@ -446,7 +446,7 @@ func executeReplicaQueries(t *testing.T, conn *mysql.Conn, numQueries int) map[i
 	for range numQueries {
 		res, err := conn.ExecuteFetch("SELECT @@server_id, id FROM balancer_test LIMIT 1", 10, false)
 		require.NoError(t, err)
-		require.Equal(t, 1, len(res.Rows), "expected one row from balancer_test")
+		require.Len(t, res.Rows, 1, "expected one row from balancer_test")
 
 		serverID, err := res.Rows[0][0].ToInt64()
 		require.NoError(t, err)
@@ -462,14 +462,14 @@ func mapTabletAliasToMySQLServerID(t *testing.T, tablets []*cluster.Vttablet) ma
 	for _, tablet := range tablets {
 		id, err := tablet.VttabletProcess.QueryTablet("SELECT @@server_id", tablet.VttabletProcess.Keyspace, false)
 		require.NoError(t, err)
-		require.Equal(t, 1, len(id.Rows), "expected one row for server_id query")
+		require.Len(t, id.Rows, 1, "expected one row for server_id query")
 
 		serverID, err := id.Rows[0][0].ToInt64()
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		aliases[tablet.Alias] = serverID
 	}
 
-	assert.Equal(t, len(aliases), 6, "expected six tablet aliases, got: %d", len(aliases))
+	assert.Len(t, aliases, 6, "expected six tablet aliases, got: %d", len(aliases))
 
 	return aliases
 }

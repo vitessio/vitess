@@ -545,7 +545,7 @@ func TestConnAttrs(t *testing.T) {
 
 	serverConn = th.LastConn()
 	assert.Equal(t, uint32(0), clientConn.Capabilities&CapabilityClientConnAttr, "ConnAttr flag: %x, bit must not be set", th.LastConn().Capabilities)
-	assert.Equal(t, 0, len(serverConn.Attributes), "attributes should be empty")
+	assert.Empty(t, serverConn.Attributes, "attributes should be empty")
 
 	clientConn.Close()
 	assert.True(t, clientConn.IsClosed(), "IsClosed should be true on Close-d connection.")
@@ -858,7 +858,7 @@ func TestClearTextServer(t *testing.T) {
 		if isMariaDB {
 			t.Logf("mysql should have failed but returned: %v\nbut letting it go on MariaDB", output)
 		} else {
-			require.Fail(t, "mysql should have failed but returned: %v", output)
+			require.Failf(t, "mysql should have failed but returned", "%v", output)
 		}
 	} else {
 		if strings.Contains(output, "No such file or directory") {
@@ -1003,7 +1003,7 @@ func TestTLSServer(t *testing.T) {
 
 	assert.Equal(t, "nice name", results.Rows[0][1].ToString())
 	assert.Equal(t, "nicer name", results.Rows[1][1].ToString())
-	assert.Equal(t, 2, len(results.Rows))
+	assert.Len(t, results.Rows, 2)
 
 	// make sure this went through SSL
 	results, err = conn.ExecuteFetch("ssl echo", 1000, true)

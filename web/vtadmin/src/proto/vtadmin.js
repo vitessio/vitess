@@ -153702,6 +153702,403 @@ export const replicationdata = $root.replicationdata = (() => {
         return PrimaryStatus;
     })();
 
+    replicationdata.ShardPeerHealth = (function() {
+
+        /**
+         * Properties of a ShardPeerHealth.
+         * @typedef {Object} replicationdata.ShardPeerHealth.$Properties
+         * @property {topodata.TabletAlias.$Properties|null} [tablet_alias] ShardPeerHealth tablet_alias
+         * @property {number|Long|null} [consecutive_ping_failures] ShardPeerHealth consecutive_ping_failures
+         * @property {vttime.Time.$Properties|null} [last_successful_ping] ShardPeerHealth last_successful_ping
+         * @property {vttime.Time.$Properties|null} [last_attempted_ping] ShardPeerHealth last_attempted_ping
+         * @property {vttime.Duration.$Properties|null} [time_since_last_attempted_ping] ShardPeerHealth time_since_last_attempted_ping
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         */
+
+        /**
+         * Properties of a ShardPeerHealth.
+         * @memberof replicationdata
+         * @interface IShardPeerHealth
+         * @augments replicationdata.ShardPeerHealth.$Properties
+         * @deprecated Use replicationdata.ShardPeerHealth.$Properties instead.
+         */
+
+        /**
+         * Shape of a ShardPeerHealth.
+         * @typedef {replicationdata.ShardPeerHealth.$Properties} replicationdata.ShardPeerHealth.$Shape
+         */
+
+        /**
+         * Constructs a new ShardPeerHealth.
+         * @memberof replicationdata
+         * @classdesc Represents a ShardPeerHealth.
+         * @constructor
+         * @param {replicationdata.ShardPeerHealth.$Properties=} [properties] Properties to set
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         */
+        const ShardPeerHealth = function (properties) {
+            if (properties)
+                for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                        this[keys[i]] = properties[keys[i]];
+        };
+
+        /**
+         * ShardPeerHealth tablet_alias.
+         * @member {topodata.TabletAlias.$Properties|null|undefined} tablet_alias
+         * @memberof replicationdata.ShardPeerHealth
+         * @instance
+         */
+        ShardPeerHealth.prototype.tablet_alias = null;
+
+        /**
+         * ShardPeerHealth consecutive_ping_failures.
+         * @member {number|Long} consecutive_ping_failures
+         * @memberof replicationdata.ShardPeerHealth
+         * @instance
+         */
+        ShardPeerHealth.prototype.consecutive_ping_failures = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
+
+        /**
+         * ShardPeerHealth last_successful_ping.
+         * @member {vttime.Time.$Properties|null|undefined} last_successful_ping
+         * @memberof replicationdata.ShardPeerHealth
+         * @instance
+         */
+        ShardPeerHealth.prototype.last_successful_ping = null;
+
+        /**
+         * ShardPeerHealth last_attempted_ping.
+         * @member {vttime.Time.$Properties|null|undefined} last_attempted_ping
+         * @memberof replicationdata.ShardPeerHealth
+         * @instance
+         */
+        ShardPeerHealth.prototype.last_attempted_ping = null;
+
+        /**
+         * ShardPeerHealth time_since_last_attempted_ping.
+         * @member {vttime.Duration.$Properties|null|undefined} time_since_last_attempted_ping
+         * @memberof replicationdata.ShardPeerHealth
+         * @instance
+         */
+        ShardPeerHealth.prototype.time_since_last_attempted_ping = null;
+
+        /**
+         * Creates a new ShardPeerHealth instance using the specified properties.
+         * @function create
+         * @memberof replicationdata.ShardPeerHealth
+         * @static
+         * @param {replicationdata.ShardPeerHealth.$Properties=} [properties] Properties to set
+         * @returns {replicationdata.ShardPeerHealth} ShardPeerHealth instance
+         * @type {{
+         *   (properties: replicationdata.ShardPeerHealth.$Shape): replicationdata.ShardPeerHealth & replicationdata.ShardPeerHealth.$Shape;
+         *   (properties?: replicationdata.ShardPeerHealth.$Properties): replicationdata.ShardPeerHealth;
+         * }}
+         */
+        ShardPeerHealth.create = function(properties) {
+            return new ShardPeerHealth(properties);
+        };
+
+        /**
+         * Encodes the specified ShardPeerHealth message. Does not implicitly {@link replicationdata.ShardPeerHealth.verify|verify} messages.
+         * @function encode
+         * @memberof replicationdata.ShardPeerHealth
+         * @static
+         * @param {replicationdata.ShardPeerHealth.$Properties} message ShardPeerHealth message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ShardPeerHealth.encode = function (message, writer, _depth) {
+            if (!writer)
+                writer = $Writer.create();
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            if (message.tablet_alias != null && $Object.hasOwnProperty.call(message, "tablet_alias"))
+                $root.topodata.TabletAlias.encode(message.tablet_alias, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
+            if (message.consecutive_ping_failures != null && $Object.hasOwnProperty.call(message, "consecutive_ping_failures"))
+                writer.uint32(/* id 2, wireType 0 =*/16).int64(message.consecutive_ping_failures);
+            if (message.last_successful_ping != null && $Object.hasOwnProperty.call(message, "last_successful_ping"))
+                $root.vttime.Time.encode(message.last_successful_ping, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
+            if (message.last_attempted_ping != null && $Object.hasOwnProperty.call(message, "last_attempted_ping"))
+                $root.vttime.Time.encode(message.last_attempted_ping, writer.uint32(/* id 4, wireType 2 =*/34).fork(), _depth + 1).ldelim();
+            if (message.time_since_last_attempted_ping != null && $Object.hasOwnProperty.call(message, "time_since_last_attempted_ping"))
+                $root.vttime.Duration.encode(message.time_since_last_attempted_ping, writer.uint32(/* id 5, wireType 2 =*/42).fork(), _depth + 1).ldelim();
+            if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
+                for (let i = 0; i < message.$unknowns.length; ++i)
+                    writer.raw(message.$unknowns[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified ShardPeerHealth message, length delimited. Does not implicitly {@link replicationdata.ShardPeerHealth.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof replicationdata.ShardPeerHealth
+         * @static
+         * @param {replicationdata.ShardPeerHealth.$Properties} message ShardPeerHealth message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ShardPeerHealth.encodeDelimited = function(message, writer) {
+            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+        };
+
+        /**
+         * Decodes a ShardPeerHealth message from the specified reader or buffer.
+         * @function decode
+         * @memberof replicationdata.ShardPeerHealth
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {replicationdata.ShardPeerHealth & replicationdata.ShardPeerHealth.$Shape} ShardPeerHealth
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ShardPeerHealth.decode = function (reader, length, _end, _depth, _target) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $Reader.recursionLimit)
+                throw $Error("max depth exceeded");
+            let end = length === $undefined ? reader.len : reader.pos + length, message = _target || new $root.replicationdata.ShardPeerHealth(), value;
+            while (reader.pos < end) {
+                let start = reader.pos;
+                let tag = reader.tag();
+                if (tag === _end) {
+                    _end = $undefined;
+                    break;
+                }
+                let wireType = tag & 7;
+                switch (tag >>>= 3) {
+                case 1: {
+                        if (wireType !== 2)
+                            break;
+                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet_alias);
+                        continue;
+                    }
+                case 2: {
+                        if (wireType !== 0)
+                            break;
+                        if (typeof (value = reader.int64()) === "object" ? value.low || value.high : value !== 0)
+                            message.consecutive_ping_failures = value;
+                        else
+                            delete message.consecutive_ping_failures;
+                        continue;
+                    }
+                case 3: {
+                        if (wireType !== 2)
+                            break;
+                        message.last_successful_ping = $root.vttime.Time.decode(reader, reader.uint32(), $undefined, _depth + 1, message.last_successful_ping);
+                        continue;
+                    }
+                case 4: {
+                        if (wireType !== 2)
+                            break;
+                        message.last_attempted_ping = $root.vttime.Time.decode(reader, reader.uint32(), $undefined, _depth + 1, message.last_attempted_ping);
+                        continue;
+                    }
+                case 5: {
+                        if (wireType !== 2)
+                            break;
+                        message.time_since_last_attempted_ping = $root.vttime.Duration.decode(reader, reader.uint32(), $undefined, _depth + 1, message.time_since_last_attempted_ping);
+                        continue;
+                    }
+                }
+                reader.skipType(wireType, _depth, tag);
+                if (!reader.discardUnknown) {
+                    $util.makeProp(message, "$unknowns", false);
+                    (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
+                }
+            }
+            if (_end !== $undefined)
+                throw $Error("missing end group");
+            return message;
+        };
+
+        /**
+         * Decodes a ShardPeerHealth message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof replicationdata.ShardPeerHealth
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {replicationdata.ShardPeerHealth & replicationdata.ShardPeerHealth.$Shape} ShardPeerHealth
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ShardPeerHealth.decodeDelimited = function(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a ShardPeerHealth message.
+         * @function verify
+         * @memberof replicationdata.ShardPeerHealth
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        ShardPeerHealth.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.tablet_alias != null && $Object.hasOwnProperty.call(message, "tablet_alias")) {
+                let error = $root.topodata.TabletAlias.verify(message.tablet_alias, _depth + 1);
+                if (error)
+                    return "tablet_alias." + error;
+            }
+            if (message.consecutive_ping_failures != null && $Object.hasOwnProperty.call(message, "consecutive_ping_failures"))
+                if (!$util.isInteger(message.consecutive_ping_failures) && !(message.consecutive_ping_failures && $util.isInteger(message.consecutive_ping_failures.low) && $util.isInteger(message.consecutive_ping_failures.high)))
+                    return "consecutive_ping_failures: integer|Long expected";
+            if (message.last_successful_ping != null && $Object.hasOwnProperty.call(message, "last_successful_ping")) {
+                let error = $root.vttime.Time.verify(message.last_successful_ping, _depth + 1);
+                if (error)
+                    return "last_successful_ping." + error;
+            }
+            if (message.last_attempted_ping != null && $Object.hasOwnProperty.call(message, "last_attempted_ping")) {
+                let error = $root.vttime.Time.verify(message.last_attempted_ping, _depth + 1);
+                if (error)
+                    return "last_attempted_ping." + error;
+            }
+            if (message.time_since_last_attempted_ping != null && $Object.hasOwnProperty.call(message, "time_since_last_attempted_ping")) {
+                let error = $root.vttime.Duration.verify(message.time_since_last_attempted_ping, _depth + 1);
+                if (error)
+                    return "time_since_last_attempted_ping." + error;
+            }
+            return null;
+        };
+
+        /**
+         * Creates a ShardPeerHealth message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof replicationdata.ShardPeerHealth
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {replicationdata.ShardPeerHealth} ShardPeerHealth
+         */
+        ShardPeerHealth.fromObject = function (object, _depth) {
+            if (object instanceof $root.replicationdata.ShardPeerHealth)
+                return object;
+            if (!$util.isObject(object))
+                throw $TypeError(".replicationdata.ShardPeerHealth: object expected");
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let message = new $root.replicationdata.ShardPeerHealth();
+            if (object.tablet_alias != null) {
+                if (!$util.isObject(object.tablet_alias))
+                    throw $TypeError(".replicationdata.ShardPeerHealth.tablet_alias: object expected");
+                message.tablet_alias = $root.topodata.TabletAlias.fromObject(object.tablet_alias, _depth + 1);
+            }
+            if (object.consecutive_ping_failures != null)
+                if (typeof object.consecutive_ping_failures === "object" ? object.consecutive_ping_failures.low || object.consecutive_ping_failures.high : $Number(object.consecutive_ping_failures) !== 0)
+                    if ($util.Long)
+                        message.consecutive_ping_failures = $util.Long.fromValue(object.consecutive_ping_failures, false);
+                    else if (typeof object.consecutive_ping_failures === "string")
+                        message.consecutive_ping_failures = $parseInt(object.consecutive_ping_failures, 10);
+                    else if (typeof object.consecutive_ping_failures === "number")
+                        message.consecutive_ping_failures = object.consecutive_ping_failures;
+                    else if (typeof object.consecutive_ping_failures === "object")
+                        message.consecutive_ping_failures = new $util.LongBits(object.consecutive_ping_failures.low >>> 0, object.consecutive_ping_failures.high >>> 0).toNumber();
+            if (object.last_successful_ping != null) {
+                if (!$util.isObject(object.last_successful_ping))
+                    throw $TypeError(".replicationdata.ShardPeerHealth.last_successful_ping: object expected");
+                message.last_successful_ping = $root.vttime.Time.fromObject(object.last_successful_ping, _depth + 1);
+            }
+            if (object.last_attempted_ping != null) {
+                if (!$util.isObject(object.last_attempted_ping))
+                    throw $TypeError(".replicationdata.ShardPeerHealth.last_attempted_ping: object expected");
+                message.last_attempted_ping = $root.vttime.Time.fromObject(object.last_attempted_ping, _depth + 1);
+            }
+            if (object.time_since_last_attempted_ping != null) {
+                if (!$util.isObject(object.time_since_last_attempted_ping))
+                    throw $TypeError(".replicationdata.ShardPeerHealth.time_since_last_attempted_ping: object expected");
+                message.time_since_last_attempted_ping = $root.vttime.Duration.fromObject(object.time_since_last_attempted_ping, _depth + 1);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a ShardPeerHealth message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof replicationdata.ShardPeerHealth
+         * @static
+         * @param {replicationdata.ShardPeerHealth} message ShardPeerHealth
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        ShardPeerHealth.toObject = function (message, options, _depth) {
+            if (!options)
+                options = {};
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let object = {};
+            if (options.defaults) {
+                object.tablet_alias = null;
+                if ($util.Long) {
+                    let long = new $util.Long(0, 0, false);
+                    object.consecutive_ping_failures = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
+                } else
+                    object.consecutive_ping_failures = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
+                object.last_successful_ping = null;
+                object.last_attempted_ping = null;
+                object.time_since_last_attempted_ping = null;
+            }
+            if (message.tablet_alias != null && $Object.hasOwnProperty.call(message, "tablet_alias"))
+                object.tablet_alias = $root.topodata.TabletAlias.toObject(message.tablet_alias, options, _depth + 1);
+            if (message.consecutive_ping_failures != null && $Object.hasOwnProperty.call(message, "consecutive_ping_failures"))
+                if (typeof $BigInt !== "undefined" && options.longs === $BigInt)
+                    object.consecutive_ping_failures = typeof message.consecutive_ping_failures === "number" ? $BigInt(message.consecutive_ping_failures) : $util.Long.fromBits(message.consecutive_ping_failures.low >>> 0, message.consecutive_ping_failures.high >>> 0, false).toBigInt();
+                else if (typeof message.consecutive_ping_failures === "number")
+                    object.consecutive_ping_failures = options.longs === $String ? $String(message.consecutive_ping_failures) : message.consecutive_ping_failures;
+                else
+                    object.consecutive_ping_failures = options.longs === $String ? $util.Long.prototype.toString.call(message.consecutive_ping_failures) : options.longs === $Number ? new $util.LongBits(message.consecutive_ping_failures.low >>> 0, message.consecutive_ping_failures.high >>> 0).toNumber() : message.consecutive_ping_failures;
+            if (message.last_successful_ping != null && $Object.hasOwnProperty.call(message, "last_successful_ping"))
+                object.last_successful_ping = $root.vttime.Time.toObject(message.last_successful_ping, options, _depth + 1);
+            if (message.last_attempted_ping != null && $Object.hasOwnProperty.call(message, "last_attempted_ping"))
+                object.last_attempted_ping = $root.vttime.Time.toObject(message.last_attempted_ping, options, _depth + 1);
+            if (message.time_since_last_attempted_ping != null && $Object.hasOwnProperty.call(message, "time_since_last_attempted_ping"))
+                object.time_since_last_attempted_ping = $root.vttime.Duration.toObject(message.time_since_last_attempted_ping, options, _depth + 1);
+            return object;
+        };
+
+        /**
+         * Converts this ShardPeerHealth to JSON.
+         * @function toJSON
+         * @memberof replicationdata.ShardPeerHealth
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        ShardPeerHealth.prototype.toJSON = function() {
+            return ShardPeerHealth.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the type url for ShardPeerHealth
+         * @function getTypeUrl
+         * @memberof replicationdata.ShardPeerHealth
+         * @static
+         * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns {string} The type url
+         */
+        ShardPeerHealth.getTypeUrl = function(prefix) {
+            if (prefix === $undefined)
+                prefix = "type.googleapis.com";
+            return prefix + "/replicationdata.ShardPeerHealth";
+        };
+
+        return ShardPeerHealth;
+    })();
+
     replicationdata.FullStatus = (function() {
 
         /**
@@ -153732,6 +154129,7 @@ export const replicationdata = $root.replicationdata = (() => {
          * @property {boolean|null} [disk_stalled] FullStatus disk_stalled
          * @property {boolean|null} [semi_sync_blocked] FullStatus semi_sync_blocked
          * @property {topodata.TabletType|null} [tablet_type] FullStatus tablet_type
+         * @property {Array.<replicationdata.ShardPeerHealth.$Properties>|null} [shard_peer_health] FullStatus shard_peer_health
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
          */
 
@@ -153757,6 +154155,7 @@ export const replicationdata = $root.replicationdata = (() => {
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
          */
         const FullStatus = function (properties) {
+            this.shard_peer_health = [];
             if (properties)
                 for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null && keys[i] !== "__proto__")
@@ -153964,6 +154363,14 @@ export const replicationdata = $root.replicationdata = (() => {
         FullStatus.prototype.tablet_type = 0;
 
         /**
+         * FullStatus shard_peer_health.
+         * @member {Array.<replicationdata.ShardPeerHealth.$Properties>} shard_peer_health
+         * @memberof replicationdata.FullStatus
+         * @instance
+         */
+        FullStatus.prototype.shard_peer_health = $util.emptyArray;
+
+        /**
          * Creates a new FullStatus instance using the specified properties.
          * @function create
          * @memberof replicationdata.FullStatus
@@ -154045,6 +154452,9 @@ export const replicationdata = $root.replicationdata = (() => {
                 writer.uint32(/* id 24, wireType 0 =*/192).bool(message.semi_sync_blocked);
             if (message.tablet_type != null && $Object.hasOwnProperty.call(message, "tablet_type"))
                 writer.uint32(/* id 25, wireType 0 =*/200).int32(message.tablet_type);
+            if (message.shard_peer_health != null && message.shard_peer_health.length)
+                for (let i = 0; i < message.shard_peer_health.length; ++i)
+                    $root.replicationdata.ShardPeerHealth.encode(message.shard_peer_health[i], writer.uint32(/* id 26, wireType 2 =*/210).fork(), _depth + 1).ldelim();
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -154308,6 +154718,14 @@ export const replicationdata = $root.replicationdata = (() => {
                             delete message.tablet_type;
                         continue;
                     }
+                case 26: {
+                        if (wireType !== 2)
+                            break;
+                        if (!(message.shard_peer_health && message.shard_peer_health.length))
+                            message.shard_peer_health = [];
+                        message.shard_peer_health.push($root.replicationdata.ShardPeerHealth.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -154446,6 +154864,15 @@ export const replicationdata = $root.replicationdata = (() => {
                 case 8:
                     break;
                 }
+            if (message.shard_peer_health != null && $Object.hasOwnProperty.call(message, "shard_peer_health")) {
+                if (!$Array.isArray(message.shard_peer_health))
+                    return "shard_peer_health: array expected";
+                for (let i = 0; i < message.shard_peer_health.length; ++i) {
+                    let error = $root.replicationdata.ShardPeerHealth.verify(message.shard_peer_health[i], _depth + 1);
+                    if (error)
+                        return "shard_peer_health." + error;
+                }
+            }
             return null;
         };
 
@@ -154605,6 +155032,16 @@ export const replicationdata = $root.replicationdata = (() => {
                     message.tablet_type = 8;
                     break;
                 }
+            if (object.shard_peer_health) {
+                if (!$Array.isArray(object.shard_peer_health))
+                    throw $TypeError(".replicationdata.FullStatus.shard_peer_health: array expected");
+                message.shard_peer_health = $Array(object.shard_peer_health.length);
+                for (let i = 0; i < object.shard_peer_health.length; ++i) {
+                    if (!$util.isObject(object.shard_peer_health[i]))
+                        throw $TypeError(".replicationdata.FullStatus.shard_peer_health: object expected");
+                    message.shard_peer_health[i] = $root.replicationdata.ShardPeerHealth.fromObject(object.shard_peer_health[i], _depth + 1);
+                }
+            }
             return message;
         };
 
@@ -154625,6 +155062,8 @@ export const replicationdata = $root.replicationdata = (() => {
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
             let object = {};
+            if (options.arrays || options.defaults)
+                object.shard_peer_health = [];
             if (options.defaults) {
                 object.server_id = 0;
                 object.server_uuid = "";
@@ -154711,6 +155150,11 @@ export const replicationdata = $root.replicationdata = (() => {
                 object.semi_sync_blocked = message.semi_sync_blocked;
             if (message.tablet_type != null && $Object.hasOwnProperty.call(message, "tablet_type"))
                 object.tablet_type = options.enums === $String ? $root.topodata.TabletType[message.tablet_type] === $undefined ? message.tablet_type : $root.topodata.TabletType[message.tablet_type] : message.tablet_type;
+            if (message.shard_peer_health && message.shard_peer_health.length) {
+                object.shard_peer_health = $Array(message.shard_peer_health.length);
+                for (let j = 0; j < message.shard_peer_health.length; ++j)
+                    object.shard_peer_health[j] = $root.replicationdata.ShardPeerHealth.toObject(message.shard_peer_health[j], options, _depth + 1);
+            }
             return object;
         };
 

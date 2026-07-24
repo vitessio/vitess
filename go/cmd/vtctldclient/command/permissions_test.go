@@ -625,7 +625,7 @@ func TestRedactUserPermissions(t *testing.T) {
 		},
 	}
 	redactUserPermissions(perms)
-	require.EqualValues(t, &tabletmanagerdatapb.Permissions{
+	require.Equal(t, &tabletmanagerdatapb.Permissions{
 		UserPermissions: []*tabletmanagerdatapb.UserPermission{
 			{
 				Host:       "%",

@@ -317,7 +317,7 @@ func TestRecordMirrorStats(t *testing.T) {
 
 	require.Zero(t, logStats.MirrorSourceExecuteTime)
 	require.Zero(t, logStats.MirrorTargetExecuteTime)
-	require.Nil(t, logStats.MirrorTargetError)
+	require.NoError(t, logStats.MirrorTargetError)
 
 	vc.RecordMirrorStats(10*time.Millisecond, 20*time.Millisecond, errors.New("test error"))
 

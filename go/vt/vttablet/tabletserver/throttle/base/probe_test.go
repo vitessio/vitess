@@ -49,5 +49,5 @@ import (
 
 func TestNewProbe(t *testing.T) {
 	c := NewProbe()
-	assert.Equal(t, "", c.Alias)
+	assert.Empty(t, c.Alias)
 }

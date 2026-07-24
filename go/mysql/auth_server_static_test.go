@@ -44,8 +44,8 @@ func TestJsonConfigParser(t *testing.T) {
 	jsonConfig := "{\"mysql_user\":{\"Password\":\"123\", \"UserData\":\"dummy\"}, \"mysql_user_2\": {\"Password\": \"123\", \"UserData\": \"mysql_user_2\"}}"
 	err := ParseConfig([]byte(jsonConfig), &config)
 	require.NoError(t, err, "should not get an error, but got: %v", err)
-	require.Equal(t, 1, len(config["mysql_user"]), "mysql_user config size should be equal to 1")
-	require.Equal(t, 1, len(config["mysql_user_2"]), "mysql_user config size should be equal to 1")
+	require.Len(t, config["mysql_user"], 1, "mysql_user config size should be equal to 1")
+	require.Len(t, config["mysql_user_2"], 1, "mysql_user config size should be equal to 1")
 
 	// works with new format
 	jsonConfig = `{"mysql_user":[
@@ -55,7 +55,7 @@ func TestJsonConfigParser(t *testing.T) {
 	]}`
 	err = ParseConfig([]byte(jsonConfig), &config)
 	require.NoError(t, err, "should not get an error, but got: %v", err)
-	require.Equal(t, 3, len(config["mysql_user"]), "mysql_user config size should be equal to 3")
+	require.Len(t, config["mysql_user"], 3, "mysql_user config size should be equal to 3")
 	require.Equal(t, "localhost", config["mysql_user"][0].SourceHost, "SourceHost should be equal to localhost")
 
 	if len(config["mysql_user"][2].Groups) != 1 || config["mysql_user"][2].Groups[0] != "user_group" {
@@ -179,8 +179,11 @@ func hupTest(t *testing.T, aStatic *AuthServerStatic, tmpFile *os.File, oldStr, 
 
 	// wait for signal handler
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		require.Nil(c, aStatic.getEntries()[oldStr], "Should not have old %s after config reload", oldStr)
-		require.Equal(c, newStr, aStatic.getEntries()[newStr][0].Password, "%s's Password should be '%s'", newStr, newStr)
+		entries := aStatic.getEntries()
+		assert.Nil(c, entries[oldStr], "Should not have old %s after config reload", oldStr)
+		if assert.NotEmpty(c, entries[newStr], "Should have new %s after config reload", newStr) {
+			assert.Equal(c, newStr, entries[newStr][0].Password, "%s's Password should be '%s'", newStr, newStr)
+		}
 	}, 30*time.Second, 10*time.Millisecond, "config should be reloaded with new file after rotation")
 }
 
@@ -191,8 +194,11 @@ func hupTestWithRotation(t *testing.T, aStatic *AuthServerStatic, tmpFile *os.Fi
 	}
 
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		require.Nil(c, aStatic.getEntries()[oldStr], "Should not have old %s after config reload", oldStr)
-		require.Equal(c, newStr, aStatic.getEntries()[newStr][0].Password, "%s's Password should be '%s'", newStr, newStr)
+		entries := aStatic.getEntries()
+		assert.Nil(c, entries[oldStr], "Should not have old %s after config reload", oldStr)
+		if assert.NotEmpty(c, entries[newStr], "Should have new %s after config reload", newStr) {
+			assert.Equal(c, newStr, entries[newStr][0].Password, "%s's Password should be '%s'", newStr, newStr)
+		}
 	}, 30*time.Second, 10*time.Millisecond, "config should be reloaded with new file after rotation")
 }
 

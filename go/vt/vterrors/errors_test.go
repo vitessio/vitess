@@ -32,7 +32,7 @@ import (
 
 func TestWrapNil(t *testing.T) {
 	got := Wrap(nil, "no error")
-	assert.Nilf(t, got, "Wrap(nil, \"no error\"): got %#v, expected nil", got)
+	assert.NoErrorf(t, got, "Wrap(nil, \"no error\"): got %#v, expected nil", got)
 }
 
 func TestWrap(t *testing.T) {
@@ -184,7 +184,7 @@ func TestCause(t *testing.T) {
 
 func TestWrapfNil(t *testing.T) {
 	got := Wrapf(nil, "no error")
-	assert.Nilf(t, got, "Wrapf(nil, \"no error\"): got %#v, expected nil", got)
+	assert.NoErrorf(t, got, "Wrapf(nil, \"no error\"): got %#v, expected nil", got)
 }
 
 func TestWrapf(t *testing.T) {

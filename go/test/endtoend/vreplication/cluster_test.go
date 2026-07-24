@@ -382,7 +382,7 @@ func NewVitessCluster(t *testing.T, opts *clusterOptions) *VitessCluster {
 	topo := cluster.TopoProcessInstance(vc.ClusterConfig.topoPort, vc.ClusterConfig.topoPort+1, vc.ClusterConfig.hostname, "etcd2", "global")
 
 	require.NotNil(t, topo)
-	require.Nil(t, topo.Setup("etcd2", nil))
+	require.NoError(t, topo.Setup("etcd2", nil))
 	err := topo.ManageTopoDir("mkdir", "/vitess/global")
 	require.NoError(t, err)
 	vc.Topo = topo

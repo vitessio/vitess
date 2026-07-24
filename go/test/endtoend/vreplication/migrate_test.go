@@ -110,7 +110,7 @@ func TestMigrateUnsharded(t *testing.T) {
 		require.NoError(t, err, "Mount List command failed with %s", output)
 
 		names := gjson.Get(output, "names")
-		require.Equal(t, 1, len(names.Array()))
+		require.Len(t, names.Array(), 1)
 		require.Equal(t, "ext1", names.Array()[0].String())
 		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Mount", "show", "--name=ext1")
 		require.NoError(t, err, "Mount command failed with %s\n", output)
@@ -248,14 +248,14 @@ func TestMigrateSharded(t *testing.T) {
 	var output string
 	if output, err = extVc.VtctldClient.ExecuteCommandWithOutput("Mount", "register", "--name=external", "--topo-type=etcd2",
 		fmt.Sprintf("--topo-server=localhost:%d", vc.ClusterConfig.topoPort), "--topo-root=/vitess/global"); err != nil {
-		require.FailNow(t, "Mount command failed with %+v : %s\n", err, output)
+		require.FailNowf(t, "Mount command failed with", "%+v : %s\n", err, output)
 	}
 	ksWorkflow := "rating.e1"
 	if output, err = extVc.VtctldClient.ExecuteCommandWithOutput("Migrate",
 		"--target-keyspace", "rating", "--workflow", "e1",
 		"create", "--source-keyspace", defaultTargetKs, "--mount-name", "external", "--all-tables", "--cells=zone1",
 		"--tablet-types=primary"); err != nil {
-		require.FailNow(t, "Migrate command failed with %+v : %s\n", err, output)
+		require.FailNowf(t, "Migrate command failed with", "%+v : %s\n", err, output)
 	}
 	require.NoError(t, waitForWorkflowState(extVc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String()))
 	// this is because currently doVtctldclientVDiff is using the global vc :-( and we want to run a diff on the extVc cluster

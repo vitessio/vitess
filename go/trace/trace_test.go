@@ -63,7 +63,7 @@ func TestRegisterService(t *testing.T) {
 	closer := StartTracing(serviceName)
 	tracer := closer.(*fakeTracer)
 
-	require.Equal(t, serviceName, tracer.name, fmt.Sprintf("tracer name mismatch: expected %s, got %s", serviceName, tracer.name))
+	require.Equal(t, serviceName, tracer.name, "tracer name mismatch: expected %s, got %s", serviceName, tracer.name)
 }
 
 func TestNewFromString(t *testing.T) {
@@ -122,7 +122,7 @@ func TestNewFromString(t *testing.T) {
 
 func TestNilCloser(t *testing.T) {
 	nc := nilCloser{}
-	require.Nil(t, nc.Close())
+	require.NoError(t, nc.Close())
 }
 
 type fakeTracer struct {

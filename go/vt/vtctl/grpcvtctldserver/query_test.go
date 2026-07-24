@@ -239,7 +239,7 @@ func TestAlterSchemaMigrationQuery(t *testing.T) {
 			t.Parallel()
 
 			query, err := alterSchemaMigrationQuery(tcase.command, tcase.uuid)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tcase.expect, query)
 		})
 	}

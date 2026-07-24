@@ -431,7 +431,7 @@ func TestDiffTables(t *testing.T) {
 			}
 			if ts.from != "" {
 				fromStmt, err := env.Parser().ParseStrictDDL(ts.from)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				var ok bool
 				fromCreateTable, ok = fromStmt.(*sqlparser.CreateTable)
 				assert.True(t, ok)
@@ -439,7 +439,7 @@ func TestDiffTables(t *testing.T) {
 			var toCreateTable *sqlparser.CreateTable
 			if ts.to != "" {
 				toStmt, err := env.Parser().ParseStrictDDL(ts.to)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				var ok bool
 				toCreateTable, ok = toStmt.(*sqlparser.CreateTable)
 				assert.True(t, ok)
@@ -454,8 +454,8 @@ func TestDiffTables(t *testing.T) {
 			d, err := DiffTables(env, fromCreateTable, toCreateTable, hints)
 			switch {
 			case ts.expectError != "":
-				assert.ErrorContains(t, err, ts.expectError)
-				assert.ErrorContains(t, dqerr, ts.expectError)
+				require.ErrorContains(t, err, ts.expectError)
+				require.ErrorContains(t, dqerr, ts.expectError)
 			case ts.diff == "":
 				assert.NoError(t, err)
 				assert.NoError(t, dqerr)
@@ -466,19 +466,19 @@ func TestDiffTables(t *testing.T) {
 					assert.Failf(t, "found unexpected diff", "%v", dq.CanonicalStatementString())
 				}
 			default:
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				require.NotNil(t, d)
 				require.False(t, d.IsEmpty())
 				t.Run("statement", func(t *testing.T) {
 					diff := d.StatementString()
 					assert.Equal(t, ts.diff, diff)
 					action, err := DDLActionStr(d)
-					assert.NoError(t, err)
+					require.NoError(t, err)
 					assert.Equal(t, ts.action, action)
 
 					// validate we can parse back the statement
 					_, err = env.Parser().ParseStrictDDL(diff)
-					assert.NoError(t, err)
+					require.NoError(t, err)
 
 					eFrom, eTo := d.Entities()
 					if ts.fromName != "" {
@@ -492,7 +492,7 @@ func TestDiffTables(t *testing.T) {
 					canonicalDiff := d.CanonicalStatementString()
 					assert.Equal(t, ts.cdiff, canonicalDiff)
 					action, err := DDLActionStr(d)
-					assert.NoError(t, err)
+					require.NoError(t, err)
 					assert.Equal(t, ts.action, action)
 
 					// validate we can parse back the statement
@@ -511,7 +511,7 @@ func TestDiffTables(t *testing.T) {
 					assert.Equal(t, ts.annotated, strings.Split(unifiedExport, "\n"))
 				})
 				// let's also check dq, and also validate that dq's statement is identical to d's
-				assert.NoError(t, dqerr)
+				require.NoError(t, dqerr)
 				require.NotNil(t, dq)
 				require.False(t, dq.IsEmpty())
 				diff := dq.StatementString()
@@ -586,7 +586,7 @@ func TestDiffViews(t *testing.T) {
 			var fromCreateView *sqlparser.CreateView
 			if ts.from != "" {
 				fromStmt, err := env.Parser().ParseStrictDDL(ts.from)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				var ok bool
 				fromCreateView, ok = fromStmt.(*sqlparser.CreateView)
 				assert.True(t, ok)
@@ -594,7 +594,7 @@ func TestDiffViews(t *testing.T) {
 			var toCreateView *sqlparser.CreateView
 			if ts.to != "" {
 				toStmt, err := env.Parser().ParseStrictDDL(ts.to)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				var ok bool
 				toCreateView, ok = toStmt.(*sqlparser.CreateView)
 				assert.True(t, ok)
@@ -609,8 +609,8 @@ func TestDiffViews(t *testing.T) {
 			d, err := DiffViews(env, fromCreateView, toCreateView, hints)
 			switch {
 			case ts.isError:
-				assert.Error(t, err)
-				assert.Error(t, dqerr)
+				require.Error(t, err)
+				require.Error(t, dqerr)
 			case ts.diff == "":
 				assert.NoError(t, err)
 				assert.NoError(t, dqerr)
@@ -621,19 +621,19 @@ func TestDiffViews(t *testing.T) {
 					assert.Failf(t, "found unexpected diff", "%v", dq.CanonicalStatementString())
 				}
 			default:
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				require.NotNil(t, d)
 				require.False(t, d.IsEmpty())
 				{
 					diff := d.StatementString()
 					assert.Equal(t, ts.diff, diff)
 					action, err := DDLActionStr(d)
-					assert.NoError(t, err)
+					require.NoError(t, err)
 					assert.Equal(t, ts.action, action)
 
 					// validate we can parse back the statement
 					_, err = env.Parser().ParseStrictDDL(diff)
-					assert.NoError(t, err)
+					require.NoError(t, err)
 
 					eFrom, eTo := d.Entities()
 					if ts.fromName != "" {
@@ -647,12 +647,12 @@ func TestDiffViews(t *testing.T) {
 					canonicalDiff := d.CanonicalStatementString()
 					assert.Equal(t, ts.cdiff, canonicalDiff)
 					action, err := DDLActionStr(d)
-					assert.NoError(t, err)
+					require.NoError(t, err)
 					assert.Equal(t, ts.action, action)
 
 					// validate we can parse back the statement
 					_, err = env.Parser().ParseStrictDDL(canonicalDiff)
-					assert.NoError(t, err)
+					require.NoError(t, err)
 				}
 				if ts.annotated == nil {
 					ts.annotated = []string{}
@@ -662,7 +662,7 @@ func TestDiffViews(t *testing.T) {
 				assert.Equal(t, ts.annotated, strings.Split(unifiedExport, "\n"))
 
 				// let's also check dq, and also validate that dq's statement is identical to d's
-				assert.NoError(t, dqerr)
+				require.NoError(t, dqerr)
 				require.NotNil(t, dq)
 				require.False(t, dq.IsEmpty())
 				diff := dq.StatementString()
@@ -1253,7 +1253,7 @@ func TestDiffSchemas(t *testing.T) {
 				require.NoError(t, err)
 
 				diffs, err := diff.OrderedDiffs(ctx)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				statements := []string{}
 				cstatements := []string{}
 				for _, d := range diffs {
@@ -1297,7 +1297,7 @@ func TestDiffSchemas(t *testing.T) {
 				if ts.annotated == nil {
 					ts.annotated = []string{}
 				}
-				if assert.Equalf(t, len(diffs), len(ts.annotated), "%+v", cstatements) {
+				if assert.Lenf(t, ts.annotated, len(diffs), "%+v", cstatements) {
 					for i, d := range diffs {
 						_, _, unified := d.Annotated()
 						assert.Equal(t, ts.annotated[i], unified.Export())
@@ -1366,15 +1366,15 @@ func TestSchemaApplyError(t *testing.T) {
 		t.Run(ts.name, func(t *testing.T) {
 			// Validate "apply()" on "from" converges with "to"
 			schema1, err := NewSchemaFromSQL(env, ts.from)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			schema2, err := NewSchemaFromSQL(env, ts.to)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			{
 				diff, err := schema1.SchemaDiff(schema2, hints)
 				require.NoError(t, err)
 				diffs, err := diff.OrderedDiffs(ctx)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.NotEmpty(t, diffs)
 				_, err = schema1.Apply(diffs)
 				require.NoError(t, err)
@@ -1385,7 +1385,7 @@ func TestSchemaApplyError(t *testing.T) {
 				diff, err := schema2.SchemaDiff(schema1, hints)
 				require.NoError(t, err)
 				diffs, err := diff.OrderedDiffs(ctx)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.NotEmpty(t, diffs, "schema1: %v, schema2: %v", schema1.ToSQL(), schema2.ToSQL())
 				_, err = schema2.Apply(diffs)
 				require.NoError(t, err)

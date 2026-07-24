@@ -118,13 +118,35 @@ linters:
         - "-QF1001"
         - "-QF1005"
     testifylint:
-      # Only go-require is enabled for now: it flags require.* calls made from
-      # a non-test goroutine, which is a real correctness problem (require's
-      # FailNow only works on the test goroutine). The other checkers are being
-      # adopted separately.
+      # testifylint checkers are adopted incrementally: each is enabled here
+      # once its findings across the codebase have been fixed. go-require flags
+      # require.* calls from a non-test goroutine (FailNow only works there).
       disable-all: true
       enable:
         - go-require
+        # These checkers have no findings in the codebase today, so they
+        # are enabled directly without a dedicated fix-up commit.
+        - blank-import
+        - suite-extra-assert-call
+        - suite-broken-parallel
+        - suite-method-signature
+        - bool-compare
+        - nil-compare
+        - regexp
+        - suite-dont-use-pkg
+        - contains
+        - compares
+        - negative-positive
+        - formatter
+        - empty
+        - expected-actual
+        - equal-values
+        - error-nil
+        - len
+        - useless-assert
+        - suite-subtest-run
+        - require-error
+        - error-is-as
   exclusions:
     generated: lax
     presets:

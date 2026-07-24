@@ -55,6 +55,6 @@ func TestEtcdServer(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, res)
 		// Confirm that we have at least one key matching the prefix.
-		require.Greaterf(t, len(res.Kvs), 0, "no keys found matching prefix: %s", keyPrefix)
+		require.NotEmptyf(t, res.Kvs, "no keys found matching prefix: %s", keyPrefix)
 	}
 }

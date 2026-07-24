@@ -201,7 +201,7 @@ func TestMultiTenantSimple(t *testing.T) {
 		},
 	}
 
-	require.Zero(t, len(getKeyspaceRoutingRules(t, vc).Rules))
+	require.Empty(t, getKeyspaceRoutingRules(t, vc).Rules)
 
 	createFunc := func() {
 		mt.Create()
@@ -252,7 +252,7 @@ func TestMultiTenantSimple(t *testing.T) {
 	waitForRowCountInTablet(t, sourceTablet, sourceKeyspace, "t1", lastIndex)
 
 	mt.Complete()
-	require.Zero(t, len(getKeyspaceRoutingRules(t, vc).Rules))
+	require.Empty(t, getKeyspaceRoutingRules(t, vc).Rules)
 	// Targeting to target keyspace should start working now. Upto this point we had to target the source keyspace.
 	lastIndex = insertRows(lastIndex, targetKeyspace)
 
@@ -388,10 +388,10 @@ func TestMultiTenantSharded(t *testing.T) {
 	var workflowState vtctldata.GetWorkflowsResponse
 	err = protojson.Unmarshal([]byte(mt.lastOutput), &workflowState)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(workflowState.Workflows))
+	require.Len(t, workflowState.Workflows, 1)
 	wf := workflowState.Workflows[0]
 	// Verifies that only one stream is created for the tenant on the shard to which this tenant id will be routed.
-	require.Equal(t, 1, len(wf.ShardStreams))
+	require.Len(t, wf.ShardStreams, 1)
 
 	// Note: we cannot insert into the target keyspace since that is never routed to the source keyspace.
 	lastIndex = insertRows(lastIndex, sourceKeyspace)
@@ -402,7 +402,7 @@ func TestMultiTenantSharded(t *testing.T) {
 	// replicated to the source keyspace. The source keyspace is routed to the target keyspace at this point.
 	lastIndex = insertRows(lastIndex, sourceKeyspace)
 	mt.Complete()
-	require.Zero(t, len(getKeyspaceRoutingRules(t, vc).Rules))
+	require.Empty(t, getKeyspaceRoutingRules(t, vc).Rules)
 	actualRowsInserted := getRowCount(t, vtgateConn, fmt.Sprintf("%s.%s", targetKeyspace, "t1"))
 	require.Equal(t, lastIndex, int64(actualRowsInserted))
 	require.Equal(t, lastIndex, int64(getRowCount(t, vtgateConn, fmt.Sprintf("%s.%s", targetKeyspace, "t1"))))

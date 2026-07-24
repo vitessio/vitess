@@ -26,16 +26,16 @@ import (
 // TestRequestWaiter tests the functionality of request waiter.
 func TestRequestWaiter(t *testing.T) {
 	rw := newRequestsWaiter()
-	require.EqualValues(t, 0, rw.GetWaiterCount())
-	require.EqualValues(t, 0, rw.GetOutstandingRequestsCount())
+	require.Equal(t, 0, rw.GetWaiterCount())
+	require.Equal(t, 0, rw.GetOutstandingRequestsCount())
 
 	rw.Add(3)
-	require.EqualValues(t, 0, rw.GetWaiterCount())
-	require.EqualValues(t, 3, rw.GetOutstandingRequestsCount())
+	require.Equal(t, 0, rw.GetWaiterCount())
+	require.Equal(t, 3, rw.GetOutstandingRequestsCount())
 
 	rw.Done()
-	require.EqualValues(t, 0, rw.GetWaiterCount())
-	require.EqualValues(t, 2, rw.GetOutstandingRequestsCount())
+	require.Equal(t, 0, rw.GetWaiterCount())
+	require.Equal(t, 2, rw.GetOutstandingRequestsCount())
 
 	go func() {
 		rw.WaitToBeEmpty()
@@ -45,13 +45,13 @@ func TestRequestWaiter(t *testing.T) {
 	}()
 
 	time.Sleep(100 * time.Millisecond)
-	require.EqualValues(t, 2, rw.GetWaiterCount())
-	require.EqualValues(t, 2, rw.GetOutstandingRequestsCount())
+	require.Equal(t, 2, rw.GetWaiterCount())
+	require.Equal(t, 2, rw.GetOutstandingRequestsCount())
 
 	rw.Done()
 	rw.Done()
 
 	time.Sleep(100 * time.Millisecond)
-	require.EqualValues(t, 0, rw.GetWaiterCount())
-	require.EqualValues(t, 0, rw.GetOutstandingRequestsCount())
+	require.Equal(t, 0, rw.GetWaiterCount())
+	require.Equal(t, 0, rw.GetOutstandingRequestsCount())
 }
