@@ -112,6 +112,67 @@ func testPlan(t *testing.T, fileName string) {
 	}
 }
 
+// TestDDLPlanTableNames ensures a DDL plan reports the tables it operates on, so that
+// table-scoped query rules can be filtered onto it. DDL statements carry their targets as
+// bare TableNames, which the FROM-clause extraction behind plan.AllTables never sees.
+func TestDDLPlanTableNames(t *testing.T) {
+	testSchema := loadSchema("schema_test.json")
+	parser := sqlparser.NewTestParser()
+
+	testcases := []struct {
+		input string
+		want  []string
+	}{{
+		input: "alter table a add column foo bigint",
+		want:  []string{"a"},
+	}, {
+		input: "alter table a rename b",
+		want:  []string{"a", "b"},
+	}, {
+		// The qualifier is stripped: rules match on the bare table name.
+		input: "alter table c.a comment 'aa'",
+		want:  []string{"a"},
+	}, {
+		// x is not in the schema, so it can never reach plan.AllTables.
+		input: "create table x (id bigint primary key)",
+		want:  []string{"x"},
+	}, {
+		input: "drop table b, c",
+		want:  []string{"b", "c"},
+	}, {
+		input: "rename table a to b",
+		want:  []string{"a", "b"},
+	}, {
+		input: "truncate table a",
+		want:  []string{"a"},
+	}, {
+		// The view name and the tables the view reads from.
+		input: "create view v as select * from b",
+		want:  []string{"b", "v"},
+	}, {
+		input: "drop view b",
+		want:  []string{"b"},
+	}, {
+		// AffectedTables reports a procedure by name, so the procedure is reported
+		// alongside the tables its body reads. BuildPermissions does the same.
+		input: "create procedure p() begin select * from a; end",
+		want:  []string{"a", "p"},
+	}, {
+		input: "select * from a",
+		want:  []string{"a"},
+	}}
+
+	for _, tcase := range testcases {
+		t.Run(tcase.input, func(t *testing.T) {
+			statement, err := parser.Parse(tcase.input)
+			require.NoError(t, err)
+			plan, err := Build(vtenv.NewTestEnv(), statement, testSchema, "dbName", false)
+			require.NoError(t, err)
+			assert.Equal(t, tcase.want, plan.TableNames())
+		})
+	}
+}
+
 func TestPlanInReservedConn(t *testing.T) {
 	testSchema := loadSchema("schema_test.json")
 	parser := sqlparser.NewTestParser()
