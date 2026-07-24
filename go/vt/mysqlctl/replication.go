@@ -73,8 +73,22 @@ type (
 		flushLogAtTrxCommit string
 		syncBinlog          string
 		syncRelayLog        string
+
+		// The interrupted flags record a STOP statement that was issued but
+		// did not return success (e.g. it was killed at the preparation
+		// deadline, or hit rpl_stop_replica_timeout): the server-side stop may
+		// then still be draining, and a restore must wait for it to settle --
+		// a START issued while the thread is still draining is a no-op, and
+		// the stop landing afterwards would leave replication stopped.
+		receiverStopInterrupted bool
+		applierStopInterrupted  bool
 	}
 )
+
+// replicaRestorePollInterval is how often the post-failed-shutdown restore
+// re-reads the replication status while reconciling the replication threads.
+// It is a variable only so tests can shorten it.
+var replicaRestorePollInterval = time.Second
 
 // WithLockWaitTimeout sets the session lock_wait_timeout (rounded up to whole
 // seconds) for the SET GLOBAL super_read_only statement, bounding how long it
@@ -262,6 +276,7 @@ func (mysqld *Mysqld) prepareReplicaForShutdown(ctx context.Context, onStateCapt
 	// issue an empty query that always fails.
 	if stopReceiver := conn.StopIOThreadCommand(); stopReceiver != "" {
 		if err := mysqld.executeSuperQueryListDirectContext(ctx, conn, []string{stopReceiver}); err != nil {
+			state.receiverStopInterrupted = true
 			log.Warn(
 				"failed to stop the replication receiver before shutdown; continuing because the relay log durability fence completed",
 				slog.Any("error", err),
@@ -274,6 +289,7 @@ func (mysqld *Mysqld) prepareReplicaForShutdown(ctx context.Context, onStateCapt
 	// hung applier flush must not block shutdown.
 	if stopApplier := conn.StopSQLThreadCommand(); stopApplier != "" {
 		if err := mysqld.executeSuperQueryListDirectContext(ctx, conn, []string{stopApplier}); err != nil {
+			state.applierStopInterrupted = true
 			log.Warn(
 				"failed to stop the replication applier before shutdown; continuing because the relay log durability fence completed",
 				slog.Any("error", err),
@@ -309,6 +325,15 @@ func (mysqld *Mysqld) showReplicationStatusDirectContext(ctx context.Context, co
 	case <-done:
 		return status, executeErr
 	case <-ctx.Done():
+		// If both are done already, we may end up here anyway because select
+		// chooses among multiple ready channels pseudorandomly.
+		// Check the done channel and prefer that one if it's ready.
+		select {
+		case <-done:
+			return status, executeErr
+		default:
+		}
+
 		// The context expired or was canceled.
 		// Try to kill the connection to effectively cancel the status read.
 		connID := conn.ID()
@@ -363,30 +388,79 @@ func (mysqld *Mysqld) restoreReplicaAfterFailedShutdown(ctx context.Context, sta
 		}
 	}
 
-	// Restart only the threads that were running before the shutdown
-	// preparation stopped them. The commands are empty for flavors without
-	// classic replication threads (e.g. MySQL Group Replication); skip them
-	// there, matching the preparation.
-	var start string
-	switch {
-	case state.startReceiver && state.startApplier:
-		start = conn.StartReplicationCommand()
-	case state.startApplier:
-		start = conn.StartSQLThreadCommand()
-	case state.startReceiver:
-		start = conn.StartIOThreadCommand()
-	}
-	if start == "" {
+	if !state.startReceiver && !state.startApplier {
 		return
 	}
-	if _, err := mysqld.executeFetchDirectContext(ctx, conn, start); err != nil {
-		log.Warn(
-			"failed to restart replication after a failed shutdown",
-			slog.Any("error", err),
-		)
-		return
+	// Reconcile the replication threads rather than fire a single START: an
+	// interrupted STOP (killed at the preparation deadline, or one that hit
+	// rpl_stop_replica_timeout) can still be draining server-side. A START
+	// issued while its thread is still draining is a no-op, and the stop
+	// landing afterwards would leave replication stopped -- so wait for any
+	// interrupted stop to settle (observed as its thread reporting stopped),
+	// start whatever should be running, and verify the result.
+	pendingReceiver := state.receiverStopInterrupted
+	pendingApplier := state.applierStopInterrupted
+	for {
+		status, err := mysqld.showReplicationStatusDirectContext(ctx, conn)
+		if err != nil {
+			log.Warn(
+				"failed to read the replication status while restoring the replica state after a failed shutdown",
+				slog.Any("error", err),
+			)
+			return
+		}
+		receiverRunning := status.IOState == replication.ReplicationStateRunning ||
+			status.IOState == replication.ReplicationStateConnecting
+		applierRunning := status.SQLState == replication.ReplicationStateRunning
+		// A thread observed stopped means any pending stop for it has settled.
+		if !receiverRunning {
+			pendingReceiver = false
+		}
+		if !applierRunning {
+			pendingApplier = false
+		}
+		needReceiver := state.startReceiver && !receiverRunning
+		needApplier := state.startApplier && !applierRunning
+		if !needReceiver && !needApplier && !pendingReceiver && !pendingApplier {
+			log.Warn("shutdown failed after replication was stopped to make the replica crash-safe; restored the previous replication state")
+			return
+		}
+		if needReceiver || needApplier {
+			var start string
+			switch {
+			case needReceiver && needApplier:
+				start = conn.StartReplicationCommand()
+			case needApplier:
+				start = conn.StartSQLThreadCommand()
+			case needReceiver:
+				start = conn.StartIOThreadCommand()
+			}
+			if start == "" {
+				// Flavors without classic replication threads have nothing to
+				// start, matching the preparation's skipped stops.
+				return
+			}
+			if _, err := mysqld.executeFetchDirectContext(ctx, conn, start); err != nil {
+				log.Warn(
+					"failed to restart replication after a failed shutdown; retrying",
+					slog.Any("error", err),
+				)
+			}
+		}
+		select {
+		case <-ctx.Done():
+			if !needReceiver && !needApplier {
+				log.Warn("the replication threads are running as desired after a failed shutdown, but an interrupted stop may still be draining; if replication stops later it must be restarted externally (e.g. by VTOrc)")
+			} else {
+				log.Warn(
+					"gave up restoring the replication threads after a failed shutdown",
+					slog.Any("error", ctx.Err()),
+				)
+			}
+			return
+		case <-time.After(replicaRestorePollInterval):
+		}
 	}
-	log.Warn("shutdown failed after replication was stopped to make the replica crash-safe; restored the previous replication state")
 }
 
 // StopSQLThread stops a replica's SQL thread(s) only.
