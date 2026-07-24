@@ -66,7 +66,7 @@ Flags:
       --builtinbackup-file-read-buffer-size uint                    read files using an IO buffer of this many bytes. Golang defaults are used when set to 0.
       --builtinbackup-file-write-buffer-size uint                   write files using an IO buffer of this many bytes. Golang defaults are used when set to 0. (default 2097152)
       --builtinbackup-incremental-restore-path string               the directory where incremental restore files, namely binlog files, are extracted to. In k8s environments, this should be set to a directory that is shared between the vttablet and mysqld pods. The path should exist. When empty, the default OS temp dir is assumed.
-      --builtinbackup-mysqld-timeout duration                       how long to wait for mysqld to shutdown at the start of the backup. (default 10m0s)
+      --builtinbackup-mysqld-timeout duration                       how long to wait for mysqld to shutdown at the start of the backup. Raised to the mysqld shutdown timeout of the backup request plus a grace period when that is larger. (default 10m0s)
       --builtinbackup-progress duration                             how often to send progress updates when backing up large files. (default 5s)
       --ceph-backup-storage-config string                           Path to JSON config file for ceph backup storage. (default "ceph_backup_config.json")
       --clone-from-primary                                          Clone data from the primary tablet in the shard using MySQL CLONE REMOTE instead of restoring from backup. Requires MySQL 8.0.17+. Mutually exclusive with --clone-from-tablet.

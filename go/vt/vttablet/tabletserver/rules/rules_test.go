@@ -113,7 +113,7 @@ func TestFilterByPlan(t *testing.T) {
 	qrs.Add(qr3)
 	qrs.Add(qr4)
 
-	qrs1 := qrs.FilterByPlan("select", planbuilder.PlanSelect, "a")
+	qrs1 := qrs.FilterByPlan("select", []planbuilder.PlanType{planbuilder.PlanSelect}, "a")
 	want := compacted(`[{
 		"Description":"rule 1",
 		"Name":"r1",
@@ -146,7 +146,7 @@ func TestFilterByPlan(t *testing.T) {
 	got := marshalled(qrs1)
 	assert.Equalf(t, want, got, "qrs1:\n%s, want\n%s", got, want)
 
-	qrs1 = qrs.FilterByPlan("insert", planbuilder.PlanSelect, "a")
+	qrs1 = qrs.FilterByPlan("insert", []planbuilder.PlanType{planbuilder.PlanSelect}, "a")
 	want = compacted(`[{
 		"Description":"rule 2",
 		"Name":"r2",
@@ -161,7 +161,7 @@ func TestFilterByPlan(t *testing.T) {
 	assert.Equalf(t, want, got, "qrs1:\n%s, want\n%s", got, want)
 	{
 		// test multiple tables:
-		qrs1 := qrs.FilterByPlan("insert", planbuilder.PlanSelect, "a", "other_table")
+		qrs1 := qrs.FilterByPlan("insert", []planbuilder.PlanType{planbuilder.PlanSelect}, "a", "other_table")
 		want := compacted(`[{
 			"Description":"rule 2",
 			"Name":"r2",
@@ -177,7 +177,7 @@ func TestFilterByPlan(t *testing.T) {
 	}
 	{
 		// test multiple tables:
-		qrs1 := qrs.FilterByPlan("insert", planbuilder.PlanSelect, "other_table", "a")
+		qrs1 := qrs.FilterByPlan("insert", []planbuilder.PlanType{planbuilder.PlanSelect}, "other_table", "a")
 		want := compacted(`[{
 			"Description":"rule 2",
 			"Name":"r2",
@@ -192,11 +192,11 @@ func TestFilterByPlan(t *testing.T) {
 		assert.Equalf(t, want, got, "qrs1:\n%s, want\n%s", got, want)
 	}
 
-	qrs1 = qrs.FilterByPlan("insert", planbuilder.PlanSelect, "a")
+	qrs1 = qrs.FilterByPlan("insert", []planbuilder.PlanType{planbuilder.PlanSelect}, "a")
 	got = marshalled(qrs1)
 	assert.Equalf(t, want, got, "qrs1:\n%s, want\n%s", got, want)
 
-	qrs1 = qrs.FilterByPlan("select", planbuilder.PlanInsert, "a")
+	qrs1 = qrs.FilterByPlan("select", []planbuilder.PlanType{planbuilder.PlanInsert}, "a")
 	want = compacted(`[{
 		"Description":"rule 3",
 		"Name":"r3",
@@ -210,10 +210,10 @@ func TestFilterByPlan(t *testing.T) {
 	got = marshalled(qrs1)
 	assert.Equalf(t, want, got, "qrs1:\n%s, want\n%s", got, want)
 
-	qrs1 = qrs.FilterByPlan("sel", planbuilder.PlanInsert, "a")
+	qrs1 = qrs.FilterByPlan("sel", []planbuilder.PlanType{planbuilder.PlanInsert}, "a")
 	assert.Nil(t, qrs1.rules)
 
-	qrs1 = qrs.FilterByPlan("table", planbuilder.PlanInsert, "b")
+	qrs1 = qrs.FilterByPlan("table", []planbuilder.PlanType{planbuilder.PlanInsert}, "b")
 	want = compacted(`[{
 		"Description":"rule 4",
 		"Name":"r4",
@@ -225,7 +225,7 @@ func TestFilterByPlan(t *testing.T) {
 	qr5 := NewQueryRule("rule 5", "r5", QRFail)
 	qrs.Add(qr5)
 
-	qrs1 = qrs.FilterByPlan("sel", planbuilder.PlanInsert, "a")
+	qrs1 = qrs.FilterByPlan("sel", []planbuilder.PlanType{planbuilder.PlanInsert}, "a")
 	want = compacted(`[{
 		"Description":"rule 5",
 		"Name":"r5",
@@ -235,8 +235,81 @@ func TestFilterByPlan(t *testing.T) {
 	assert.Equalf(t, want, got, "qrs1:\n%s, want\n%s", got, want)
 
 	qrsnil1 := New()
-	qrsnil2 := qrsnil1.FilterByPlan("", planbuilder.PlanSelect, "a")
+	qrsnil2 := qrsnil1.FilterByPlan("", []planbuilder.PlanType{planbuilder.PlanSelect}, "a")
 	assert.Nil(t, qrsnil2.rules)
+}
+
+// TestPlanMatchesExclusively covers the ANALYZE compatibility case: ANALYZE
+// plans as PlanSelect but matched rules keyed on PlanOtherRead before v25. A
+// rule is exclusive to the legacy plan type only when it matches through
+// PlanOtherRead but not through PlanSelect.
+func TestPlanMatchesExclusively(t *testing.T) {
+	base := []planbuilder.PlanType{planbuilder.PlanSelect}
+	const legacy = planbuilder.PlanOtherRead
+
+	otherReadOnly := NewQueryRule("legacy", "legacy", QRFail)
+	otherReadOnly.AddPlanCond(legacy)
+
+	selectOnly := NewQueryRule("real", "real", QRFail)
+	selectOnly.AddPlanCond(planbuilder.PlanSelect)
+
+	both := NewQueryRule("both", "both", QRFail)
+	both.AddPlanCond(planbuilder.PlanSelect)
+	both.AddPlanCond(legacy)
+
+	matchAll := NewQueryRule("all", "all", QRFail)
+
+	otherReadOnlyQuery := NewQueryRule("legacy-query", "legacy-query", QRFail)
+	otherReadOnlyQuery.AddPlanCond(legacy)
+	otherReadOnlyQuery.SetQueryCond("analyze.*")
+
+	otherReadOnlyTable := NewQueryRule("legacy-table", "legacy-table", QRFail)
+	otherReadOnlyTable.AddPlanCond(legacy)
+	otherReadOnlyTable.AddTableCond("t1")
+
+	testcases := []struct {
+		name  string
+		rule  *Rule
+		query string
+		table string
+		want  bool
+	}{
+		{"legacy plan only", otherReadOnly, "analyze table t1", "t1", true},
+		{"real plan only", selectOnly, "analyze table t1", "t1", false},
+		{"both plans", both, "analyze table t1", "t1", false},
+		{"no plan condition", matchAll, "analyze table t1", "t1", false},
+		{"legacy plan, query matches", otherReadOnlyQuery, "analyze table t1", "t1", true},
+		{"legacy plan, query does not match", otherReadOnlyQuery, "select 1", "t1", false},
+		{"legacy plan, table matches", otherReadOnlyTable, "analyze table t1", "t1", true},
+		{"legacy plan, table does not match", otherReadOnlyTable, "analyze table t2", "t2", false},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			qrs := New()
+			qrs.Add(tc.rule)
+			assert.Equal(t, tc.want, qrs.PlanMatchesExclusively(tc.query, base, legacy, tc.table))
+		})
+	}
+
+	// Across many sources that each match only through the real plan type, no
+	// source is exclusive to the legacy type — regardless of map-iteration
+	// order. A single legacy-only source flips the result.
+	t.Run("multiple sources without legacy match", func(t *testing.T) {
+		m := NewMap()
+		for _, name := range []string{"s1", "s2", "s3"} {
+			m.RegisterSource(name)
+			qrs := New()
+			qrs.Add(selectOnly.Copy())
+			require.NoError(t, m.SetRules(name, qrs))
+		}
+		assert.False(t, m.PlanMatchesExclusively("analyze table t1", base, legacy, "t1"))
+
+		m.RegisterSource("legacy-source")
+		qrs := New()
+		qrs.Add(otherReadOnly.Copy())
+		require.NoError(t, m.SetRules("legacy-source", qrs))
+		assert.True(t, m.PlanMatchesExclusively("analyze table t1", base, legacy, "t1"))
+	})
 }
 
 func TestQueryRule(t *testing.T) {
@@ -545,6 +618,32 @@ func TestImport(t *testing.T) {
 	got := marshalled(qrs)
 	want := compacted(jsondata)
 	assert.Equalf(t, want, got, "qrs:\n%s, want\n%s", got, want)
+}
+
+// A rules file using the deprecated SelectStream plan name must keep loading,
+// and the rule must match a plan only when PlanSelectStream is passed as one
+// of the filter ids — which the query engine does only for streaming-path
+// plans — never through a plan's real id alone.
+func TestSelectStreamPlanNameCompat(t *testing.T) {
+	qrs := New()
+	jsondata := `[{
+		"Description": "legacy stream rule",
+		"Name": "block_streamed_select",
+		"Query": "select.*",
+		"Plans": ["SelectStream"],
+		"Action": "FAIL"
+	}]`
+	require.NoError(t, qrs.UnmarshalJSON([]byte(jsondata)))
+	require.Len(t, qrs.rules, 1)
+	require.Equal(t, []planbuilder.PlanType{planbuilder.PlanSelectStream}, qrs.rules[0].plans)
+
+	filtered := qrs.FilterByPlan("select * from a", []planbuilder.PlanType{planbuilder.PlanSelect}, "a")
+	require.Empty(t, filtered.rules,
+		"a SelectStream rule must not match a plan filtered by its real plan id alone")
+
+	filtered = qrs.FilterByPlan("select * from a", []planbuilder.PlanType{planbuilder.PlanSelect, planbuilder.PlanSelectStream}, "a")
+	require.Len(t, filtered.rules, 1)
+	require.Equal(t, "block_streamed_select", filtered.rules[0].Name)
 }
 
 type ValidJSONCase struct {
