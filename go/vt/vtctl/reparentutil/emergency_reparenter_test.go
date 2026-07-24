@@ -1917,6 +1917,307 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 			cells:     []string{"zone1"},
 		},
 		{
+			// same errant sole leader as the rescue cell above, but the whole relay log
+			// wait budget was already spent, so the rescue wait that would make the
+			// skipped peers' journal counts truthful can't run. Accepting the starved
+			// leader would promote it without ever proving the missing evidence wasn't of
+			// our own making (uuid2 is errant), so ERS must fail closed rather than accept
+			// it unconfirmed. The nanosecond timeout drives relayLogBudgetLeft to zero
+			// while the context-ignoring mocks still let the first wait finish.
+			name:       "errant sole leader is not accepted when the rescue budget is exhausted",
+			durability: policy.DurabilityNone,
+			emergencyReparentOps: EmergencyReparentOptions{
+				WaitReplicasTimeout: time.Nanosecond,
+			},
+			tmc: &testutil.TabletManagerClient{
+				// 100 applied the latest reparent journal entry; 101 and 102 received it
+				// but haven't applied it, so 100 reads as the sole max-journal candidate
+				// and errant detection has no peer to corroborate it
+				ReadReparentJournalInfoResults: map[string]int32{
+					"zone1-0000000100": 2,
+					"zone1-0000000101": 1,
+					"zone1-0000000102": 1,
+				},
+				StopReplicationAndGetStatusResults: map[string]struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Error      error
+				}{
+					"zone1-0000000100": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-21", "1-1"),
+							},
+						},
+					},
+					"zone1-0000000101": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-21"),
+							},
+						},
+					},
+					"zone1-0000000102": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-21"),
+							},
+						},
+					},
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000100": {
+						getRelayLogPosition("1-21", "1-1"): nil,
+					},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						PrimaryAlias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Hostname: "errant sole leader, must not be promoted unconfirmed",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Hostname: "clean peer, could not be rescued in budget",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  102,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Hostname: "clean peer, could not be rescued in budget",
+				},
+			},
+			shouldErr:        true,
+			errShouldContain: "could not corroborate",
+			keyspace:         "testkeyspace",
+			shard:            "-",
+			cells:            []string{"zone1"},
+		},
+		{
+			// errant GTID detection removes the only candidate that applied its relay
+			// logs (uuid2 on 100), leaving clean survivors that were never waited on and
+			// still have relay logs to apply. With the budget already spent the re-wait
+			// can't run, and promoting an unapplied survivor would break the
+			// received-but-unapplied rule, so ERS fails closed with the real reason.
+			name:       "re-wait fails closed when a survivor still needs to apply and the budget is spent",
+			durability: policy.DurabilityNone,
+			emergencyReparentOps: EmergencyReparentOptions{
+				WaitReplicasTimeout: time.Nanosecond,
+			},
+			tmc: &testutil.TabletManagerClient{
+				StopReplicationAndGetStatusResults: map[string]struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Error      error
+				}{
+					"zone1-0000000100": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-100", "1-5"),
+							},
+						},
+					},
+					"zone1-0000000101": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-100"),
+							},
+						},
+					},
+					"zone1-0000000102": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-100"),
+							},
+						},
+					},
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000100": {
+						getRelayLogPosition("1-100", "1-5"): nil,
+					},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						PrimaryAlias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Hostname: "errant GTIDs, applied first then convicted",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Hostname: "clean survivor, unapplied, no budget to re-wait",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  102,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Hostname: "clean survivor, unapplied, no budget to re-wait",
+				},
+			},
+			shouldErr:        true,
+			errShouldContain: "was exhausted before the remaining candidates could apply",
+			keyspace:         "testkeyspace",
+			shard:            "-",
+			cells:            []string{"zone1"},
+		},
+		{
+			// like the cell above, errant detection convicts the only applied candidate
+			// (100), but the surviving candidate is a demoted former primary (absent from
+			// the status map). It has no relay logs to apply and is exempt from the
+			// re-wait, so even with the budget spent ERS must proceed and promote it
+			// rather than reject a safe reparent.
+			name:       "re-wait proceeds for an exempt former primary when the budget is spent",
+			durability: policy.DurabilityNone,
+			emergencyReparentOps: EmergencyReparentOptions{
+				WaitReplicasTimeout: time.Nanosecond,
+			},
+			tmc: &testutil.TabletManagerClient{
+				DemotePrimaryResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000101": {
+						Status: &replicationdatapb.PrimaryStatus{
+							Position: getRelayLogPosition("1-100"),
+						},
+					},
+				},
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000101": nil,
+				},
+				PromoteReplicaResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000101": {Result: "ok"},
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+				StopReplicationAndGetStatusResults: map[string]struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Error      error
+				}{
+					// the former primary fails the replica RPC and is demoted instead, so
+					// it is absent from the status map and exempt from the relay log wait
+					"zone1-0000000101": {
+						Error: mysql.ErrNotReplica,
+					},
+					"zone1-0000000100": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-100", "1-5"),
+							},
+						},
+					},
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000100": {
+						getRelayLogPosition("1-100", "1-5"): nil,
+					},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						PrimaryAlias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Hostname: "errant GTIDs, applied first then convicted",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_PRIMARY,
+					Hostname: "demoted former primary, exempt from the re-wait, promoted",
+				},
+			},
+			shouldErr: false,
+			keyspace:  "testkeyspace",
+			shard:     "-",
+			cells:     []string{"zone1"},
+		},
+		{
 			// same errant sole leader as the cell above, but the skipped candidates have
 			// mixed received positions: zone1-0000000102 is further behind and has no
 			// journal entry in its backlog, so a rescue race it wins proves nothing. The
@@ -2615,6 +2916,146 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 			keyspace:  "testkeyspace",
 			shard:     "-",
 			cells:     []string{"zone1"},
+		},
+		{
+			// A relay-log-wait failer that was running (zone1-0000000103) repoints
+			// successfully, so before the fix its repoint counted towards the acker
+			// quorum even though filterValidCandidates had excluded it as a non-acker.
+			// That let the gate release while the genuine sole acker's repoint
+			// (zone1-0000000101) failed, papering over a promotion that could wedge.
+			// The gate must count the same acker set filterValidCandidates trusted,
+			// so ERS aborts before promotion instead.
+			name:       "a failed relay-log waiter does not count towards the acker quorum",
+			durability: policy.DurabilitySemiSync,
+			emergencyReparentOps: EmergencyReparentOptions{
+				WaitReplicasTimeout: time.Second * 30,
+			},
+			tmc: &testutil.TabletManagerClient{
+				// present so that, without the fix, the promotion the gate wrongly
+				// releases actually completes and the test can tell the difference
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+				PromoteReplicaResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000100": {Result: "ok"},
+				},
+				SetReplicationSourceResults: map[string]error{
+					// the genuine sole acker zone1-0000000101 fails to repoint; the
+					// failed relay-log waiter and the rdonly repoint fine
+					"zone1-0000000102": nil,
+					"zone1-0000000103": nil,
+				},
+				StopReplicationAndGetStatusResults: map[string]struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Error      error
+				}{
+					"zone1-0000000100": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-21"),
+							},
+						},
+					},
+					"zone1-0000000101": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-19"),
+							},
+						},
+					},
+					"zone1-0000000102": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-19"),
+							},
+						},
+					},
+					// leading candidate that fails its relay-log wait but was running,
+					// so its successful repoint used to be counted
+					"zone1-0000000103": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-21"),
+							},
+						},
+					},
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000100": {
+						getRelayLogPosition("1-21"): nil,
+					},
+					"zone1-0000000103": {
+						getRelayLogPosition("1-21"): assert.AnError,
+					},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						PrimaryAlias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Hostname: "wins the election, applies its relay logs",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Hostname: "genuine sole acker, behind on received, repoint fails",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  102,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_RDONLY,
+					Hostname: "rdonly, cannot ack",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  103,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Hostname: "failed relay-log waiter, non-acker, repoint succeeds",
+				},
+			},
+			shouldErr:        true,
+			errShouldContain: "not enough semi-sync ackers were reachable to guarantee the promotion of zone1-0000000100 can make progress",
+			keyspace:         "testkeyspace",
+			shard:            "-",
+			cells:            []string{"zone1"},
 		},
 		{
 			// the mirror of the cell above: the sole acker zone1-0000000101 is only
@@ -4673,7 +5114,7 @@ func TestEmergencyReparenter_promotionOfNewPrimary(t *testing.T) {
 			tt.emergencyReparentOps.durability = durability
 
 			erp := NewEmergencyReparenter(ts, tt.tmc, logger)
-			_, err := erp.reparentReplicas(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, tt.emergencyReparentOps, false)
+			_, err := erp.reparentReplicas(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, tt.emergencyReparentOps, nil /* nonAckers */, false)
 			if tt.shouldErr {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.errShouldContain)
@@ -6656,7 +7097,7 @@ func TestEmergencyReparenter_reparentReplicas(t *testing.T) {
 			tt.emergencyReparentOps.durability = durability
 
 			erp := NewEmergencyReparenter(ts, tt.tmc, logger)
-			_, err := erp.reparentReplicas(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, tt.emergencyReparentOps, false /* intermediateReparent */)
+			_, err := erp.reparentReplicas(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, tt.emergencyReparentOps, nil /* nonAckers */, false /* intermediateReparent */)
 			if tt.shouldErr {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.errShouldContain)
@@ -7526,7 +7967,7 @@ func TestParentContextCancelled(t *testing.T) {
 		time.Sleep(time.Second)
 		cancel()
 	}()
-	_, err = erp.reparentReplicas(ctx, ev, tabletMap[newPrimaryTabletAlias].Tablet, tabletMap, statusMap, emergencyReparentOps, true)
+	_, err = erp.reparentReplicas(ctx, ev, tabletMap[newPrimaryTabletAlias].Tablet, tabletMap, statusMap, emergencyReparentOps, nil /* nonAckers */, true)
 	require.NoError(t, err)
 }
 
