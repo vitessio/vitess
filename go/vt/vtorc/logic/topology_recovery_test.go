@@ -905,7 +905,6 @@ func TestRecoverIncapacitatedPrimary(t *testing.T) {
 					close(done)
 				}()
 				restoreStderr = func() {
-					log.Flush()
 					_ = w.Close()
 					os.Stderr = oldStderr
 					_ = unix.Dup2(oldFD, int(os.Stderr.Fd()))
@@ -1065,7 +1064,6 @@ func TestRecoverIncapacitatedPrimary(t *testing.T) {
 
 			attempted, topologyRecovery, err := recoverIncapacitatedPrimary(t.Context(), &analysis, logger)
 			if restoreStderr != nil {
-				log.Flush()
 				require.Eventually(t, func() bool {
 					err := db.QueryVTOrc("select message from topology_recovery_steps where message like 'ERS - %'", nil, func(_ sqlutils.RowMap) error {
 						return nil

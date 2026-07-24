@@ -30,7 +30,6 @@ var InitConfig = &cobra.Command{
 	Long: "Bootstraps the configuration for a new `mysqld` instance and initializes its data directory.\n" +
 		"This command is the same as `init` except the `mysqld` server will not be started.",
 	Example: `mysqlctl \
-	--alsologtostderr \
 	--tablet-uid 101 \
 	--mysql-port 12345 \
 	init_config`,

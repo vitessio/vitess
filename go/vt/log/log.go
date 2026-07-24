@@ -22,21 +22,11 @@ import (
 	"runtime"
 	"sync/atomic"
 	"time"
-
-	"github.com/golang/glog"
 )
 
-// Level is used with V() to test log verbosity.
-type Level = glog.Level
-
 var (
-	// structured is whether structured logging is currently enabled or not.
-	structured atomic.Bool
-
-	// logger is the currently configured structured logger.
+	// logger is the currently configured logger.
 	logger atomic.Pointer[slog.Logger]
-
-	Flush = glog.Flush
 
 	Debug = func(msg string, attrs ...slog.Attr) { log(slog.LevelDebug, 1, msg, attrs...) }
 	Info  = func(msg string, attrs ...slog.Attr) { log(slog.LevelInfo, 1, msg, attrs...) }
@@ -49,35 +39,29 @@ var (
 	ErrorDepth = func(depth int, msg string, attrs ...slog.Attr) { log(slog.LevelError, depth+1, msg, attrs...) }
 )
 
-// init is used to initialize structured logging to true and set up a default logger.
-// This is to workaround situations (like testing) where there is no explicit [Init] call
-// that enables structured logging. This should be removed once structured logging is
-// the only option.
 func init() {
 	logger.Store(newLogger(slog.LevelInfo))
-	structured.Store(true)
 }
 
-// SwapLogger atomically replaces the structured logger with a new one
+// SwapLogger atomically replaces the logger with a new one
 // and returns the previous logger. This is safe for concurrent use and is
 // intended for tests that need to intercept log output.
 func SwapLogger(newLogger *slog.Logger) *slog.Logger {
 	return logger.Swap(newLogger)
 }
 
-// log is a helper that logs with glog or slog depending on the configured flags.
-func log(level slog.Level, depth int, msg string, attrs ...slog.Attr) {
-	if !structured.Load() {
-		logGlog(level, depth+1, msg, attrs...)
-		return
-	}
+func Enabled(level slog.Level) bool {
+	l := logger.Load()
+	return l != nil && l.Enabled(context.Background(), level)
+}
 
+func log(level slog.Level, depth int, msg string, attrs ...slog.Attr) {
 	l := logger.Load()
 	if l == nil {
 		return
 	}
 
-	if !l.Enabled(context.Background(), level) {
+	if !Enabled(level) {
 		return
 	}
 
@@ -88,73 +72,4 @@ func log(level slog.Level, depth int, msg string, attrs ...slog.Attr) {
 	r.AddAttrs(attrs...)
 
 	_ = l.Handler().Handle(context.Background(), r)
-}
-
-// logGlog is a helper that logs with glog. If structured attributes are passed, they
-// are appended to the message in the format "key=value".
-func logGlog(level slog.Level, depth int, msg string, attrs ...slog.Attr) {
-	depth++
-
-	if len(attrs) == 0 {
-		switch {
-		case level >= slog.LevelError:
-			glog.ErrorDepth(depth, msg)
-		case level >= slog.LevelWarn:
-			glog.WarningDepth(depth, msg)
-		default:
-			glog.InfoDepth(depth, msg)
-		}
-
-		return
-	}
-
-	args := make([]any, 0, len(attrs)+2)
-
-	// Append the message, and add a space to separate the message from the start of the attributes. glog
-	// follows fmt.Print semantics, which concatenates two entries if either one is a string, and only
-	// separates with a space if both are non-strings.
-	args = append(args, msg, " ")
-
-	if len(args) > 0 {
-		args = append(args, " ")
-	}
-
-	for _, attr := range attrs {
-		args = append(args, attr)
-	}
-
-	switch {
-	case level >= slog.LevelError:
-		glog.ErrorDepth(depth, args...)
-	case level >= slog.LevelWarn:
-		glog.WarningDepth(depth, args...)
-	default:
-		glog.InfoDepth(depth, args...)
-	}
-}
-
-// Verbose gates logging at a given V-level. Used to temporarily support glog
-// call sites.
-//
-// TODO: migrate call sites to normal debug logging and remove this once glog
-// is removed.
-type Verbose bool
-
-func V(level Level) Verbose {
-	if !structured.Load() {
-		return Verbose(glog.V(level))
-	}
-
-	l := logger.Load()
-	if l == nil {
-		return false
-	}
-
-	return Verbose(l.Enabled(context.Background(), slog.Level(-int(level))))
-}
-
-func (v Verbose) Info(msg string, attrs ...slog.Attr) {
-	if v {
-		log(slog.LevelInfo, 1, msg, attrs...)
-	}
 }

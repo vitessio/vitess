@@ -48,8 +48,6 @@ variable.`,
 				return err
 			}
 
-			logutil.PurgeLogs()
-
 			// Connect to the server.
 			fs = &zkfs.FS{
 				Conn: zk2topo.Connect(server),
@@ -67,6 +65,5 @@ func init() {
 	Root.Flags().StringVar(&server, "server", server, "server(s) to connect to")
 
 	log.RegisterFlags(Root.Flags())
-	logutil.RegisterFlags(Root.Flags())
 	acl.RegisterFlags(Root.Flags())
 }

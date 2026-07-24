@@ -42,11 +42,6 @@ def find_flag_definitions():
     
     # Search for each flag definition
     for flag in underscore_flags:
-        # Skip glog flags (they come from standard library)
-        if flag.startswith('log_'):
-            flag_groups['logging'].append(flag)
-            continue
-            
         # Try to find the definition
         cmd = f'grep -r "\\"{flag}\\"" {vtroot}/go --include="*.go" -n | head -5'
         try:
@@ -99,7 +94,7 @@ def print_migration_plan():
     
     # Priority order for groups
     priority_order = [
-        ('logging', 'Logging flags (glog - may not need migration)'),
+        ('logging', 'Logging flags'),
         ('timeout', 'Timeout and deadline flags'),
         ('backup_restore', 'Backup and restore flags'),
         ('database', 'Database connection flags'),
@@ -158,7 +153,6 @@ def print_migration_plan():
     print("1. Start with timeout flags (small group, high impact)")
     print("2. Then backup_restore flags (medium group, isolated)")
     print("3. Continue with other groups in order")
-    print("4. Skip logging flags if they're from glog")
 
 if __name__ == "__main__":
     print_migration_plan()

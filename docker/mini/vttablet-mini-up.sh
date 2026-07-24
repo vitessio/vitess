@@ -42,7 +42,6 @@ echo "  - Tablet listens on http://$hostname:$port"
 #TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 vttablet \
  $TOPOLOGY_FLAGS \
- -log_dir $VTDATAROOT/tmp \
  -log_queries_to_file $VTDATAROOT/tmp/$tablet_logfile \
  -tablet-path $alias \
  -tablet_hostname "$hostname" \

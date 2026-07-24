@@ -1086,7 +1086,6 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 			defer func() {
 				if err := recover(); err != nil {
 					log.Info(fmt.Sprintf("Got panic in test: %v", err))
-					log.Flush()
 					require.Failf(t, "panic in test", "Recovered from panic: %v, stack: %s", err, debug.Stack())
 				}
 			}()

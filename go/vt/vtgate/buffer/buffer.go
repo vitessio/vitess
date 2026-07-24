@@ -88,7 +88,7 @@ func init() {
 // To simplify things, we've merged the detection for different MySQL flavors
 // in one function. Supported flavors: MariaDB, MySQL
 func CausedByFailover(err error) bool {
-	log.V(2).Info(fmt.Sprintf("Checking error (type: %T) if it is caused by a failover. err: %v", err, err))
+	log.Debug(fmt.Sprintf("Checking error (type: %T) if it is caused by a failover. err: %v", err, err))
 	reason, isFailover := isFailoverError(err)
 	if isFailover {
 		log.Info("CausedByFailover signalling failover for reason: " + reason)

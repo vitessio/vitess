@@ -168,8 +168,6 @@ func run(cmd *cobra.Command, args []string) error {
 }
 
 func _run(cmd *cobra.Command, args []string) (*results, error) {
-	logutil.PurgeLogs()
-
 	if maxSeqID > minSeqID {
 		go func() {
 			if useRandom {

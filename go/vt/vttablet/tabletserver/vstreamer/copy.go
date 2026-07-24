@@ -36,7 +36,7 @@ import (
 func (uvs *uvstreamer) copy(ctx context.Context) error {
 	for len(uvs.tablesToCopy) > 0 {
 		tableName := uvs.tablesToCopy[0]
-		log.V(2).Info("Copystate not empty starting catchupAndCopy on table " + tableName)
+		log.Debug("Copystate not empty starting catchupAndCopy on table " + tableName)
 		if err := uvs.catchupAndCopy(ctx, tableName); err != nil {
 			uvs.vse.errorCounts.Add("Copy", 1)
 			return err
@@ -118,7 +118,7 @@ func (uvs *uvstreamer) sendFieldEvent(ctx context.Context, gtid string, fieldEve
 		Type:       binlogdatapb.VEventType_FIELD,
 		FieldEvent: fieldEvent,
 	}}
-	log.V(2).Info(fmt.Sprintf("Sending field event %v, gtid is %s", fieldEvent, gtid))
+	log.Debug(fmt.Sprintf("Sending field event %v, gtid is %s", fieldEvent, gtid))
 	uvs.send(evs)
 
 	if err := uvs.setPosition(gtid, true); err != nil {
@@ -242,7 +242,7 @@ func (uvs *uvstreamer) copyTable(ctx context.Context, tableName string) error {
 					return err
 				}
 			} else {
-				log.V(2).Info(fmt.Sprintf("Not starting fastforward pos is %s, uvs.pos is %s, rows.gtid %s", pos, uvs.pos, rows.Gtid))
+				log.Debug(fmt.Sprintf("Not starting fastforward pos is %s, uvs.pos is %s, rows.gtid %s", pos, uvs.pos, rows.Gtid))
 			}
 
 			// Store a copy of the fields and pkfields because the original will be cleared
@@ -276,7 +276,7 @@ func (uvs *uvstreamer) copyTable(ctx context.Context, tableName string) error {
 		}
 
 		if len(rows.Rows) == 0 {
-			log.V(2).Info("0 rows returned for table " + tableName)
+			log.Debug("0 rows returned for table " + tableName)
 			return nil
 		}
 
@@ -296,7 +296,7 @@ func (uvs *uvstreamer) copyTable(ctx context.Context, tableName string) error {
 			Rows:   []*querypb.Row{rows.Lastpk.CloneVT()},
 		})
 		qrLastPK := sqltypes.ResultToProto3(newLastPK)
-		log.V(2).Info("Calling sendEventForRows with gtid " + rows.Gtid)
+		log.Debug("Calling sendEventForRows with gtid " + rows.Gtid)
 		if err := uvs.sendEventsForRows(ctx, tableName, rows, qrLastPK); err != nil {
 			log.Info(fmt.Sprintf("sendEventsForRows returned error %v", err))
 			return err
@@ -305,7 +305,7 @@ func (uvs *uvstreamer) copyTable(ctx context.Context, tableName string) error {
 		uvs.inTransaction = false
 
 		uvs.setCopyState(tableName, qrLastPK)
-		log.V(2).Info(fmt.Sprintf("NewLastPK: %v", qrLastPK))
+		log.Debug(fmt.Sprintf("NewLastPK: %v", qrLastPK))
 		return nil
 	}, uvs.options)
 	if err != nil {

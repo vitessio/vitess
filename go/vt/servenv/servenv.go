@@ -29,7 +29,6 @@ limitations under the License.
 package servenv
 
 import (
-	"flag"
 	"fmt"
 	"net/url"
 	"os"
@@ -48,7 +47,6 @@ import (
 	viperdebug "vitess.io/vitess/go/viperutil/debug"
 	"vitess.io/vitess/go/vt/grpccommon"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -193,7 +191,6 @@ func fireOnCloseHooks(timeout time.Duration) bool {
 
 // fireHooksWithTimeout returns true iff all the hooks finish before the timeout.
 func fireHooksWithTimeout(timeout time.Duration, name string, hookFn func()) bool {
-	defer log.Flush()
 	log.Info(fmt.Sprintf("Firing %s hooks and waiting up to %v for them", name, timeout))
 
 	timer := time.NewTimer(timeout)
@@ -325,8 +322,6 @@ func ParseFlags(cmd string) {
 	}
 
 	loadViper(cmd)
-
-	logutil.PurgeLogs()
 }
 
 // ParseFlagsForTests initializes flags but skips the version, filesystem
@@ -341,16 +336,14 @@ func ParseFlagsForTests(cmd string) {
 }
 
 // MoveFlagsToCobraCommand moves the servenv-registered flags to the flagset of
-// the given cobra command, then copies over the glog flags that otherwise
-// require manual transferring.
+// the given cobra command.
 func MoveFlagsToCobraCommand(cmd *cobra.Command) {
 	moveFlags(cmd.Name(), cmd.Flags())
 }
 
 // MovePersistentFlagsToCobraCommand functions exactly like MoveFlagsToCobraCommand,
 // but moves the servenv-registered flags to the persistent flagset of
-// the given cobra command, then copies over the glog flags that otherwise
-// require manual transferring.
+// the given cobra command.
 //
 // Useful for transferring flags to a parent command whose subcommands should
 // inherit the servenv-registered flags.
@@ -361,26 +354,6 @@ func MovePersistentFlagsToCobraCommand(cmd *cobra.Command) {
 func moveFlags(name string, fs *pflag.FlagSet) {
 	fs.AddFlagSet(GetFlagSetFor(name))
 
-	// glog flags, no better way to do this
-	_flag.PreventGlogVFlagFromClobberingVersionFlagShorthand(fs)
-	fs.AddGoFlag(flag.Lookup("logtostderr"))
-	fs.AddGoFlag(flag.Lookup("log_backtrace_at"))
-	fs.AddGoFlag(flag.Lookup("alsologtostderr"))
-	fs.AddGoFlag(flag.Lookup("stderrthreshold"))
-	fs.AddGoFlag(flag.Lookup("log_dir"))
-	fs.AddGoFlag(flag.Lookup("vmodule"))
-
-	// glog is deprecated in favor of structured logging (--log-structured).
-	// These flags will be removed in v25.
-	const deprecationMsg = "glog and its flags have been deprecated, use the default structured logging instead (\"--log-structured\")"
-	_ = fs.MarkDeprecated("logtostderr", deprecationMsg)
-	_ = fs.MarkDeprecated("log_backtrace_at", deprecationMsg)
-	_ = fs.MarkDeprecated("alsologtostderr", deprecationMsg)
-	_ = fs.MarkDeprecated("stderrthreshold", deprecationMsg)
-	_ = fs.MarkDeprecated("log_dir", deprecationMsg)
-	_ = fs.MarkDeprecated("vmodule", deprecationMsg)
-	_ = fs.MarkDeprecated("v", deprecationMsg)
-
 	pflag.CommandLine = fs
 }
 
@@ -388,8 +361,6 @@ func moveFlags(name string, fs *pflag.FlagSet) {
 // viper infrastructure. It matches the signature of cobra's (Pre|Post)RunE-type
 // functions.
 func CobraPreRunE(cmd *cobra.Command, args []string) error {
-	_flag.TrickGlog()
-
 	if err := log.Init(cmd.Flags()); err != nil {
 		return err
 	}
@@ -414,8 +385,6 @@ func CobraPreRunE(cmd *cobra.Command, args []string) error {
 	// sending on a closed channel.
 	OnTerm(func() { close(ch) })
 	HTTPHandleFunc("/debug/config", viperdebug.HandlerFunc)
-
-	logutil.PurgeLogs()
 
 	return nil
 }
@@ -456,8 +425,6 @@ func ParseFlagsWithArgs(cmd string) []string {
 	}
 
 	loadViper(cmd)
-
-	logutil.PurgeLogs()
 
 	return args
 }
@@ -523,7 +490,6 @@ func init() {
 	// Flags in package log are installed for all binaries.
 	OnParse(log.RegisterFlags)
 	// Flags in package logutil are installed for all binaries.
-	OnParse(logutil.RegisterFlags)
 	// Flags in package viperutil/config are installed for all binaries.
 	OnParse(viperutil.RegisterFlags)
 }

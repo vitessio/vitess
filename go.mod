@@ -21,7 +21,6 @@ require (
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/go-sql-driver/mysql v1.10.0
 	github.com/go-viper/mapstructure/v2 v2.5.0
-	github.com/golang/glog v1.2.5
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/golang/snappy v1.0.0
 	github.com/google/go-cmp v0.7.0

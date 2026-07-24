@@ -49,7 +49,6 @@ public class GrpcClientWithRetriesTest extends RpcClientTest {
         new ProcessBuilder(
             Arrays.asList(
                 vtRoot + "/bin/vtgateclienttest",
-                "--logtostderr",
                 "--grpc-port",
                 Integer.toString(port),
                 "--service-map",
