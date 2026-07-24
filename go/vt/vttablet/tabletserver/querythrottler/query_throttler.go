@@ -28,6 +28,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
@@ -276,8 +277,10 @@ func (qt *QueryThrottler) Throttle(ctx context.Context, tabletType topodatapb.Ta
 		return nil
 	}
 
-	// Normal throttling: return an error to reject the query
-	return vterrors.New(vtrpcpb.Code_RESOURCE_EXHAUSTED, decision.Message)
+	// Normal throttling: return an error to reject the query.
+	// Prefix the stable marker so sqlerror.demuxResourceExhaustedErrors maps this to
+	// ER_OUT_OF_RESOURCES (1041) instead of the default ER_TOO_MANY_USER_CONNECTIONS (1203).
+	return vterrors.New(vtrpcpb.Code_RESOURCE_EXHAUSTED, sqlerror.QueryThrottledMarker+" "+decision.Message)
 }
 
 // startSrvKeyspaceWatch starts watching the SrvKeyspace for event-driven config updates.

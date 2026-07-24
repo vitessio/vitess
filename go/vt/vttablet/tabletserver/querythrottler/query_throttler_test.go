@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -273,7 +274,7 @@ func TestQueryThrottler_DryRunMode(t *testing.T) {
 
 			// Verify error expectation
 			if tt.expectError {
-				require.EqualError(t, err, tt.throttleDecision.Message, "Error should match the throttle message exactly")
+				require.EqualError(t, err, sqlerror.QueryThrottledMarker+" "+tt.throttleDecision.Message, "Error should carry the query-throttle marker followed by the throttle message")
 			} else {
 				require.NoError(t, err, "Expected no throttling error")
 			}
@@ -293,6 +294,52 @@ func TestQueryThrottler_DryRunMode(t *testing.T) {
 			require.Equal(t, tt.expectedThrottledRequests, throttledReqs.Counts()["MockStrategy"], "Throttled requests should match expected")
 		})
 	}
+}
+
+// TestQueryThrottler_ThrottledErrorMapsToOutOfResources verifies the full errno mapping:
+// a throttle rejection must surface to clients as ER_OUT_OF_RESOURCES (1041), matching the
+// transaction throttler, not the default ER_TOO_MANY_USER_CONNECTIONS (1203). The mock
+// strategy's message deliberately omits any "throttled" wording, so the mapping can only
+// succeed via the marker QueryThrottler.Throttle prepends — proving the errno is driven by
+// the central marker, not by the strategy's message text.
+func TestQueryThrottler_ThrottledErrorMapsToOutOfResources(t *testing.T) {
+	mockStrategy := &mockThrottlingStrategy{
+		decision: registry.ThrottleDecision{
+			Throttle: true,
+			Message:  "metric=lag value=20 over threshold",
+		},
+	}
+
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), &tabletenv.TabletConfig{}, "TestThrottler")
+	iqt := &QueryThrottler{
+		ctx: t.Context(),
+		env: env,
+	}
+	iqt.snapshot.Store(&stateSnapshot{
+		cfg: &querythrottlerpb.Config{
+			Enabled: true,
+			DryRun:  false,
+		},
+		strategy: mockStrategy,
+	})
+
+	requestsTotal.ResetAll()
+	requestsThrottled.ResetAll()
+
+	err := iqt.Throttle(
+		t.Context(),
+		topodatapb.TabletType_REPLICA,
+		&sqlparser.ParsedQuery{Query: "SELECT * FROM test_table WHERE id = 1"},
+		sqlparser.StmtSelect,
+		12345,
+		&querypb.ExecuteOptions{WorkloadName: "test-workload", Priority: "50"},
+	)
+	require.Error(t, err)
+
+	sqlErr, ok := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
+	require.True(t, ok, "throttle error must convert to a *sqlerror.SQLError")
+	require.Equal(t, sqlerror.EROutOfResources, sqlErr.Num,
+		"query-throttle rejection must map to ER_OUT_OF_RESOURCES (1041), not ER_TOO_MANY_USER_CONNECTIONS (1203)")
 }
 
 func TestQueryThrottler_extractWorkloadName(t *testing.T) {
