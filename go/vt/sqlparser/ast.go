@@ -86,6 +86,7 @@ type (
 
 	Withable interface {
 		SetWith(with *With)
+		GetWith() *With
 	}
 
 	Distinctable interface {
@@ -3926,6 +3927,7 @@ func (variance *Variance) SetArgs(exprs []Expr) error {
 }
 func (av *AnyValue) SetArgs(exprs []Expr) error      { return setFuncArgs(av, exprs, "ANY_VALUE") }
 func (jaa *JSONArrayAgg) SetArgs(exprs []Expr) error { return setFuncArgs(jaa, exprs, "JSON_ARRAYARG") }
+
 func (joa *JSONObjectAgg) SetArgs(exprs []Expr) error {
 	if len(exprs) != 2 {
 		return vterrors.VT13001("JSONObjectAgg takes in 2 expressions")

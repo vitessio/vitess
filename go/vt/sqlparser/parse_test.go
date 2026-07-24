@@ -510,6 +510,39 @@ var validSQL = []struct {
 	input:  "WITH count_a AS (SELECT COUNT(`id`) AS `num` FROM `tbl_a`), count_b AS (SELECT COUNT(`id`) AS `num` FROM tbl_b) SELECT 'a', `num` FROM `count_a` UNION SELECT 'b', `num` FROM `count_b`",
 	output: "with count_a as (select count(id) as num from tbl_a) , count_b as (select count(id) as num from tbl_b) select 'a', num from count_a union select 'b', num from count_b",
 }, {
+	input:  "with x as (select 1) (select * from x)",
+	output: "with x as (select 1 from dual) select * from x",
+}, {
+	input:  "with x as (select 1) ((select * from x))",
+	output: "with x as (select 1 from dual) select * from x",
+}, {
+	// When the parenthesized query has its own WITH clause, MySQL keeps the
+	// inner clause and silently drops the outer one; the outer CTEs are not
+	// in scope anywhere inside the parens.
+	input:  "with x as (select 1) (with y as (select 2) select * from y)",
+	output: "with y as (select 2 from dual) select * from y",
+}, {
+	input:  "with y as (select 1) (with y as (select 2) select * from y)",
+	output: "with y as (select 2 from dual) select * from y",
+}, {
+	input:  "with x as (select 1) (with y as (select 2) select * from x)",
+	output: "with y as (select 2 from dual) select * from x",
+}, {
+	input:  "with x as (select 1) (with y as (select * from x) select * from y)",
+	output: "with y as (select * from x) select * from y",
+}, {
+	input:  "with x as (select 1 as a) (with y as (select 2 as a) select * from y union select * from x)",
+	output: "with y as (select 2 as a from dual) select * from y union select * from x",
+}, {
+	input:  "with x as (select 1) ((with y as (select 2) select * from y))",
+	output: "with y as (select 2 from dual) select * from y",
+}, {
+	input:  "with x as (select 1) (with y as (select 2 union select 3) select * from y) limit 1",
+	output: "with y as (select 2 from dual union select 3 from dual) select * from y limit 1",
+}, {
+	input:  "with x as (select 1) (with y as (select 2 union select 3) select * from y) order by 1 limit 5",
+	output: "with y as (select 2 from dual union select 3 from dual) select * from y order by 1 asc limit 5",
+}, {
 	input: "select 1 from t",
 }, {
 	input:  "select * from (select 1) as x(user)",
