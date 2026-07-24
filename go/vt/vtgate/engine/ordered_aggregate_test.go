@@ -1189,3 +1189,116 @@ func TestGroupConcat(t *testing.T) {
 		})
 	}
 }
+
+// TestJSONArrayAggMerge tests merging shard-level json_arrayagg partials per
+// group. Groups fed by multiple partials pin the merge, single-partial groups
+// pin the passthrough, and the sequence of groups pins reset() isolation
+// between groups. The aggregate params deliberately carry no Func.
+func TestJSONArrayAggMerge(t *testing.T) {
+	fields := sqltypes.MakeTestFields(
+		"c1|json_arrayagg(c2)",
+		"int64|json",
+	)
+
+	tcases := []struct {
+		name        string
+		inputResult *sqltypes.Result
+		expResult   *sqltypes.Result
+	}{{
+		name: "multiple groups with multiple partials",
+		inputResult: sqltypes.MakeTestResult(fields,
+			`10|[1, 2]`, `10|[3]`,
+			`20|["a"]`,
+			`30|[null]`, `30|[4]`,
+			`40|null`),
+		expResult: sqltypes.MakeTestResult(fields,
+			`10|[1, 2, 3]`,
+			`20|["a"]`,
+			`30|[null, 4]`,
+			`40|null`),
+	}, {
+		name:        "empty result",
+		inputResult: sqltypes.MakeTestResult(fields),
+		expResult:   sqltypes.MakeTestResult(fields),
+	}}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			fp := &fakePrimitive{results: []*sqltypes.Result{tcase.inputResult}}
+			oa := &OrderedAggregate{
+				Aggregates: []*AggregateParams{
+					NewAggregateParam(AggregateJSONArrayMerge, 1, nil, "", collations.MySQL8()),
+				},
+				GroupByKeys: []*GroupByParams{{KeyCol: 0}},
+				Input:       fp,
+			}
+			qr, err := oa.TryExecute(t.Context(), &noopVCursor{}, nil, false)
+			require.NoError(t, err)
+			if len(qr.Rows) == 0 {
+				qr.Rows = nil // just to make the expectation.
+				// empty slice or nil both are valid and will not cause any issue.
+			}
+			assert.Equal(t, sqltypes.TypeJSON, qr.Fields[1].Type)
+			assert.Equal(t, tcase.expResult, qr)
+
+			fp.rewind()
+			results := &sqltypes.Result{}
+			err = oa.TryStreamExecute(t.Context(), &noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
+				if qr.Fields != nil {
+					results.Fields = qr.Fields
+				}
+				results.Rows = append(results.Rows, qr.Rows...)
+				return nil
+			})
+			require.NoError(t, err)
+			assert.Equal(t, tcase.expResult, results)
+		})
+	}
+}
+
+// TestJSONObjectAggMerge tests merging shard-level json_objectagg partials per
+// group: last duplicate key wins within a group, and no keys bleed between
+// groups (reset() isolation).
+func TestJSONObjectAggMerge(t *testing.T) {
+	fields := sqltypes.MakeTestFields(
+		"c1|json_objectagg(c2, c3)",
+		"int64|json",
+	)
+
+	fp := &fakePrimitive{results: []*sqltypes.Result{sqltypes.MakeTestResult(fields,
+		`10|{"a": 1}`, `10|{"b": 2}`,
+		`20|{"zz": 1}`,
+		`30|{"k": 1}`, `30|{"k": 2}`,
+		`40|{"d": 123456789012.12345678}`, `40|{"e": 1.50000000}`,
+	)}}
+	expResult := sqltypes.MakeTestResult(fields,
+		`10|{"a": 1, "b": 2}`,
+		`20|{"zz": 1}`,
+		`30|{"k": 2}`,
+		`40|{"d": 123456789012.12345678, "e": 1.50000000}`,
+	)
+
+	oa := &OrderedAggregate{
+		Aggregates: []*AggregateParams{
+			NewAggregateParam(AggregateJSONObjectMerge, 1, nil, "", collations.MySQL8()),
+		},
+		GroupByKeys: []*GroupByParams{{KeyCol: 0}},
+		Input:       fp,
+	}
+	qr, err := oa.TryExecute(t.Context(), &noopVCursor{}, nil, false)
+	require.NoError(t, err)
+	assert.Equal(t, sqltypes.TypeJSON, qr.Fields[1].Type)
+	assert.Equal(t, expResult, qr)
+
+	fp.rewind()
+	results := &sqltypes.Result{}
+	err = oa.TryStreamExecute(t.Context(), &noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
+		if qr.Fields != nil {
+			results.Fields = qr.Fields
+		}
+		results.Rows = append(results.Rows, qr.Rows...)
+		return nil
+	})
+	require.NoError(t, err)
+	assert.Equal(t, expResult, results)
+}

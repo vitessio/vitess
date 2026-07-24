@@ -460,9 +460,11 @@ func (ast *astCompiler) translateCaseExpr(node *sqlparser.CaseExpr) (IR, error) 
 		}
 
 		if cmpbase != nil {
-			cond, err = ast.translateComparisonExpr2(sqlparser.EqualOp, cmpbase, cond)
-			if err != nil {
-				return nil, err
+			// Unlike the `=` operator, MySQL never uses the JSON comparator
+			// between the base operand of a simple CASE and its WHEN operands.
+			cond = &ComparisonExpr{
+				BinaryExpr: BinaryExpr{Left: cmpbase, Right: cond},
+				Op:         compareCaseEQ{},
 			}
 		}
 
@@ -475,27 +477,67 @@ func (ast *astCompiler) translateCaseExpr(node *sqlparser.CaseExpr) (IR, error) 
 	return &result, nil
 }
 
+// betweenOperandStaticType resolves the static result type of a BETWEEN
+// operand by compiling it into a throwaway compiler. It returns
+// sqltypes.Unknown when the type cannot be resolved at translation time.
+func (ast *astCompiler) betweenOperandStaticType(op IR) sqltypes.Type {
+	comp := compiler{
+		collation: ast.cfg.Collation,
+		env:       ast.cfg.Environment,
+		sqlmode:   ast.cfg.SQLMode,
+	}
+	typ, err := op.compile(&comp)
+	if err != nil {
+		return sqltypes.Unknown
+	}
+	return typ.Type
+}
+
+// betweenTemporalDomain returns the temporal comparison domain MySQL selects
+// for a BETWEEN operator statically: sqltypes.Datetime when any operand's
+// static result type is DATE, DATETIME or TIMESTAMP; sqltypes.Time when a
+// TIME column participates; sqltypes.Unknown otherwise. The asymmetry
+// matches MySQL: only a TIME column proper selects the TIME domain, a
+// TIME-typed expression like CAST(... AS TIME) does not.
+func (ast *astCompiler) betweenTemporalDomain(left, from, to IR) sqltypes.Type {
+	var timeColumn bool
+	for _, op := range [3]IR{left, from, to} {
+		switch ast.betweenOperandStaticType(op) {
+		case sqltypes.Date, sqltypes.Datetime, sqltypes.Timestamp:
+			return sqltypes.Datetime
+		}
+		if col, ok := op.(*Column); ok && col.Type == sqltypes.Time {
+			timeColumn = true
+		}
+	}
+	if timeColumn {
+		return sqltypes.Time
+	}
+	return sqltypes.Unknown
+}
+
 func (ast *astCompiler) translateBetweenExpr(node *sqlparser.BetweenExpr) (IR, error) {
-	// x BETWEEN a AND b => x >= a AND x <= b
-	from := &sqlparser.ComparisonExpr{
-		Operator: sqlparser.GreaterEqualOp,
-		Left:     node.Left,
-		Right:    node.From,
+	// BETWEEN is not lowered to `x >= a AND x <= b`: MySQL decides the
+	// comparison domain across all three operands when JSON participates.
+	left, err := ast.translateExpr(node.Left)
+	if err != nil {
+		return nil, err
 	}
-	to := &sqlparser.ComparisonExpr{
-		Operator: sqlparser.LessEqualOp,
-		Left:     node.Left,
-		Right:    node.To,
+	from, err := ast.translateExpr(node.From)
+	if err != nil {
+		return nil, err
 	}
-
-	if !node.IsBetween {
-		// x NOT BETWEEN a AND b  => x < a OR x > b
-		from.Operator = sqlparser.LessThanOp
-		to.Operator = sqlparser.GreaterThanOp
-		return ast.translateExpr(&sqlparser.OrExpr{Left: from, Right: to})
+	to, err := ast.translateExpr(node.To)
+	if err != nil {
+		return nil, err
 	}
-
-	return ast.translateExpr(sqlparser.AndExpressions(from, to))
+	return &BetweenExpr{
+		Left:           left,
+		From:           from,
+		To:             to,
+		Negate:         !node.IsBetween,
+		TemporalDomain: ast.betweenTemporalDomain(left, from, to),
+	}, nil
 }
 
 func translateExprNotSupported(e sqlparser.Expr) error {
