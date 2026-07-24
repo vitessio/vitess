@@ -102,6 +102,7 @@ Available Commands:
   TabletExternallyReparented  Updates the topology record for the tablet's shard to acknowledge that an external tool made this tablet the primary.
   UpdateCellInfo              Updates the content of a CellInfo with the provided parameters, creating the CellInfo if it does not exist.
   UpdateCellsAlias            Updates the content of a CellsAlias with the provided parameters, creating the CellsAlias if it does not exist.
+  UpdateQueryThrottlerConfig  Update the query throttler configuration for the given keyspace.
   UpdateThrottlerConfig       Update the tablet throttler configuration for all tablets in the given keyspace (across all cells)
   VDiff                       Perform commands related to diffing tables involved in a VReplication workflow between the source and target.
   Validate                    Validates that all nodes reachable from the global replication graph, as well as all tablets in discoverable cells, are consistent.

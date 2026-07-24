@@ -37,7 +37,7 @@ type testStrategyFactory struct{}
 // Compile-time interface compliance check
 var _ StrategyFactory = (*testStrategyFactory)(nil)
 
-func (f testStrategyFactory) New(deps Deps, cfg StrategyConfig) (ThrottlingStrategyHandler, error) {
+func (f testStrategyFactory) New(deps Deps, cfg *querythrottlerpb.Config) (ThrottlingStrategyHandler, error) {
 	return &NoOpStrategy{}, nil
 }
 
