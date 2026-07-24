@@ -19,6 +19,7 @@ package logic
 import (
 	"context"
 	"fmt"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -346,7 +347,8 @@ func refreshAllInformation(ctx context.Context) error {
 			retryCtx, retryCancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer retryCancel()
 			if retryErr := validateCellsNoRecovery(retryCtx); retryErr != nil {
-				log.Error(fmt.Sprintf("--cells-no-recovery validation failed: %v; recovery will remain blocked until validation succeeds", retryErr))
+				log.Error(fmt.Sprintf("--cells-no-recovery validation failed: %v", retryErr))
+				os.Exit(1)
 			}
 		}
 	}

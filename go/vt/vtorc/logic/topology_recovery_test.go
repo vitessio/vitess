@@ -31,6 +31,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
+	cache "github.com/patrickmn/go-cache"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -1657,7 +1658,29 @@ func TestCellsNoRecoveryGateSkip(t *testing.T) {
 			ts = memorytopo.NewServer(ctx, "zone1", "zone2")
 			require.NoError(t, ts.CreateKeyspace(ctx, tt.analysis.AnalyzedKeyspace, &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilityNone}))
 			require.NoError(t, ts.CreateShard(ctx, tt.analysis.AnalyzedKeyspace, tt.analysis.AnalyzedShard))
+			// Also register tablets in the in-process topology so getShardTabletsByCell
+			// (used by the post-lock gate) can read them. inst.SaveTablet only writes to
+			// SQLite, which the gate no longer consults.
+			for _, tab := range tt.shardTablets {
+				require.NoError(t, ts.CreateTablet(ctx, &topodatapb.Tablet{
+					Alias:    &topodatapb.TabletAlias{Cell: tab.cell, Uid: tab.uid},
+					Keyspace: tt.analysis.AnalyzedKeyspace,
+					Shard:    tt.analysis.AnalyzedShard,
+					Type:     topodatapb.TabletType_REPLICA,
+				}))
+			}
 			defer func() { ts = oldTs }()
+
+			// forceRefreshAllTabletsInShard calls DiscoverInstance for each topo tablet,
+			// which requires recentDiscoveryOperationKeys to be non-nil. The var is
+			// normally set by OpenTabletDiscovery; initialize it here for sub-tests that
+			// register tablets in topo so DiscoverInstance exits cleanly (no MySQL in
+			// tests means it logs a discovery failure and returns, not crashes).
+			if len(tt.shardTablets) > 0 {
+				prevKeys := recentDiscoveryOperationKeys
+				recentDiscoveryOperationKeys = cache.New(config.GetInstancePollTime(), time.Second)
+				defer func() { recentDiscoveryOperationKeys = prevKeys }()
+			}
 
 			prev := cellsNoRecovery
 			cellsNoRecovery = tt.cellsToSet
