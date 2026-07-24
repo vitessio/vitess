@@ -351,7 +351,7 @@ func (kss *keyspaceState) ensureConsistentLocked() {
 			Serving: sstate.serving,
 		})
 
-		log.V(2).Info(fmt.Sprintf("keyspace event resolved: %s is now consistent (serving: %t)", topoproto.KeyspaceShardString(sstate.target.Keyspace, sstate.target.Shard),
+		log.Debug(fmt.Sprintf("keyspace event resolved: %s is now consistent (serving: %t)", topoproto.KeyspaceShardString(sstate.target.Keyspace, sstate.target.Shard),
 			sstate.serving))
 
 		if !sstate.serving {

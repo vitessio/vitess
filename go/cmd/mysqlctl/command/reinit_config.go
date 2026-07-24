@@ -31,7 +31,6 @@ var ReinitConfig = &cobra.Command{
 	Long: "Regenerate new configuration files for an existing `mysqld` instance (generating new server_id and server_uuid values).\n" +
 		"This could be helpful to revert configuration changes, or to pick up changes made to the bundled config in newer Vitess versions.",
 	Example: `mysqlctl \
-	--alsologtostderr \
 	--tablet-uid 101 \
 	--mysql-port 12345 \
 	reinit_config`,

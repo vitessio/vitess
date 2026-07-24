@@ -63,7 +63,6 @@ var (
 			"{{</ warning>}}\n\n" +
 			"To enable communication with a `vttablet`, the server must be configured to receive gRPC messages on a unix domain socket.",
 		Example: `mysqlctld \
-	--log_dir=${VTDATAROOT}/logs \
 	--tablet-uid=100 \
 	--mysql-port=17100 \
 	--socket-file=/path/to/socket-file`,

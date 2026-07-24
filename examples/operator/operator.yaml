@@ -7967,7 +7967,6 @@ spec:
     spec:
       containers:
         - args:
-            - --logtostderr
             - -v=4
           command:
             - vitess-operator

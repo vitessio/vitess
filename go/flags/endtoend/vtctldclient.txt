@@ -120,7 +120,6 @@ Available Commands:
 
 Flags:
       --action-timeout duration                  timeout to use for the command (default 1h0m0s)
-      --alsologtostderr                          log to standard error as well as files
       --compact                                  use compact format for otherwise verbose outputs
       --grpc-auth-static-client-creds string     When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
       --grpc-compression string                  Which protocol to use for compressing gRPC. Default: nothing. Supported: snappy
@@ -132,22 +131,11 @@ Flags:
       --grpc-max-message-size int                Maximum allowed RPC message size. Larger messages will be rejected by gRPC with the error 'exceeding the max size'. (default 16777216)
       --grpc-prometheus                          Enable gRPC monitoring with Prometheus.
   -h, --help                                     help for vtctldclient
-      --keep-logs duration                       keep logs for this long (using ctime) (zero to keep forever)
-      --keep-logs-by-mtime duration              keep logs for this long (using mtime) (zero to keep forever)
       --log-format string                        log output format: json for machine-readable JSON, text for human-readable colored output (default "json")
-      --log-level string                         minimum log level when structured logging is enabled (debug, info, warn, error) (default "info")
-      --log-rotate-max-size uint                 size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
-      --log-structured                           enable structured JSON logging (default true)
-      --log_backtrace_at traceLocations          when logging hits line file:N, emit a stack trace
-      --log_dir string                           If non-empty, write log files in this directory
-      --log_link string                          If non-empty, add symbolic links in this directory to the log files
-      --logbuflevel int                          Buffer log messages logged at this level or lower (-1 means don't buffer; 0 means buffer INFO only; ...). Has limited applicability on non-prod platforms.
-      --logtostderr                              log to standard error instead of files
+      --log-level string                         minimum log level (debug, info, warn, error) (default "info")
       --mysql-server-version string              MySQL server version to advertise. (default "8.4.6-Vitess")
-      --purge-logs-interval duration             how often try to remove old logs (default 1h0m0s)
       --security-policy string                   the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
       --server string                            server to use for the connection (required)
-      --stderrthreshold severityFlag             logs at or above this threshold go to stderr (default 1)
       --tablet-manager-grpc-ca string            the server ca to use to validate servers when connecting
       --tablet-manager-grpc-cert string          the cert to use to connect
       --tablet-manager-grpc-concurrency int      concurrency to use to talk to a vttablet server for performance-sensitive RPCs (like ExecuteFetchAs{Dba,App}, CheckThrottler and FullStatus) (default 8)
@@ -158,9 +146,7 @@ Flags:
       --topo-global-root string                  the path of the global topology data in the global topology server (default "/vitess/global")
       --topo-global-server-address strings       the address of the global topology server(s) (default [localhost:2379])
       --topo-implementation string               the topology implementation to use (default "etcd2")
-  -v, --v Level                                  log level for V logs
-      --version                                  version for vtctldclient
-      --vmodule vModuleFlag                      comma-separated list of pattern=N settings for file-filtered logging
+  -v, --version                                  version for vtctldclient
       --vtctl-client-protocol string             Protocol to use to talk to the vtctl server. (default "grpc")
       --vtctld-grpc-ca string                    the server ca to use to validate servers when connecting
       --vtctld-grpc-cert string                  the cert to use to connect

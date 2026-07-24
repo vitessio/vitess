@@ -43,6 +43,3 @@ func (pl *PrefixedLogger) WarnDepth(depth int, msg string, attrs ...slog.Attr) {
 func (pl *PrefixedLogger) ErrorDepth(depth int, msg string, attrs ...slog.Attr) {
 	ErrorDepth(depth+1, pl.prefix+msg, attrs...)
 }
-
-func (pl *PrefixedLogger) V(level Level) Verbose { return V(level) }
-func (pl *PrefixedLogger) Flush()                { Flush() }

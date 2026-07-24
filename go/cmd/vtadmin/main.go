@@ -17,7 +17,6 @@ limitations under the License.
 package main
 
 import (
-	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -25,10 +24,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtadmin"
@@ -61,13 +58,9 @@ var (
 	rootCmd = &cobra.Command{
 		Use: "vtadmin",
 		PreRunE: func(cmd *cobra.Command, args []string) error {
-			_flag.TrickGlog()
-
 			if err := log.Init(cmd.Flags()); err != nil {
 				return err
 			}
-
-			logutil.PurgeLogs()
 
 			if opts.EnableTracing || httpOpts.EnableTracing {
 				startTracing(cmd)
@@ -220,22 +213,7 @@ func registerFlags() {
 		"Note: any whitespace characters are replaced with hyphens."
 	rootCmd.Flags().StringVar(&cacheRefreshKey, "cache-refresh-key", "vt-cache-refresh", cacheRefreshHelp)
 
-	// Structured logging flags.
 	log.RegisterFlags(rootCmd.Flags())
-
-	// glog flags, no better way to do this
-	rootCmd.Flags().AddGoFlag(flag.Lookup("v"))
-	rootCmd.Flags().AddGoFlag(flag.Lookup("logtostderr"))
-	rootCmd.Flags().AddGoFlag(flag.Lookup("alsologtostderr"))
-	rootCmd.Flags().AddGoFlag(flag.Lookup("stderrthreshold"))
-	rootCmd.Flags().AddGoFlag(flag.Lookup("log_dir"))
-
-	const deprecationMsg = "glog and its flags have been deprecated, use the default structured logging instead (\"--log-structured\")"
-	rootCmd.Flags().MarkDeprecated("v", deprecationMsg)
-	rootCmd.Flags().MarkDeprecated("logtostderr", deprecationMsg)
-	rootCmd.Flags().MarkDeprecated("alsologtostderr", deprecationMsg)
-	rootCmd.Flags().MarkDeprecated("stderrthreshold", deprecationMsg)
-	rootCmd.Flags().MarkDeprecated("log_dir", deprecationMsg)
 
 	servenv.RegisterMySQLServerFlags(rootCmd.Flags())
 

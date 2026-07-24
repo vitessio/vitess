@@ -1258,7 +1258,6 @@ func stopListener(listener *mysql.Listener, shutdown bool) {
 }
 
 func (srv *mysqlServer) rollbackAtShutdown() {
-	defer log.Flush()
 	if srv.vtgateHandle == nil {
 		// we still haven't been able to initialise the vtgateHandler, so we don't need to rollback anything
 		return

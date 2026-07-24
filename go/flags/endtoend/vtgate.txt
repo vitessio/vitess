@@ -13,7 +13,6 @@ vtgate \
 	--topo-implementation etcd2 \
 	--topo-global-server-address localhost:2379 \
 	--topo-global-root /vitess/global \
-	--log_dir $VTDATAROOT/tmp \
 	--port 15001 \
 	--grpc-port 15991 \
 	--mysql-server-port 15306 \
@@ -103,18 +102,14 @@ Flags:
       --healthcheck-retry-delay duration                                 health check retry delay (default 2ms)
       --healthcheck-timeout duration                                     the health check timeout period (default 1m0s)
   -h, --help                                                             help for vtgate
-      --keep-logs duration                                               keep logs for this long (using ctime) (zero to keep forever)
-      --keep-logs-by-mtime duration                                      keep logs for this long (using mtime) (zero to keep forever)
       --keyspaces-to-watch strings                                       Specifies which keyspaces this vtgate should have access to while routing queries or accessing the vschema.
       --lameduck-period duration                                         keep running at least this long after SIGTERM before stopping (default 50ms)
       --lock-heartbeat-time duration                                     If there is lock function used. This will keep the lock connection active by using this heartbeat (default 5s)
       --lock-timeout duration                                            Maximum time to wait when attempting to acquire a lock from the topo server (default 45s)
       --log-err-stacks                                                   log stack traces for errors
       --log-format string                                                log output format: json for machine-readable JSON, text for human-readable colored output (default "json")
-      --log-level string                                                 minimum log level when structured logging is enabled (debug, info, warn, error) (default "info")
+      --log-level string                                                 minimum log level (debug, info, warn, error) (default "info")
       --log-queries-to-file string                                       Enable query logging to the specified file
-      --log-rotate-max-size uint                                         size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
-      --log-structured                                                   enable structured JSON logging (default true)
       --max-memory-rows int                                              Maximum number of rows that will be held in memory for intermediate results as well as the final result. (default 300000)
       --max-payload-size int                                             The threshold for query payloads in bytes. A payload greater than this threshold will result in a failure to handle the query.
       --max-stack-size int                                               configure the maximum stack size in bytes (default 67108864)
@@ -174,7 +169,6 @@ Flags:
       --pprof-http                                                       enable pprof http endpoints
       --prevent-cross-keyspace-reads                                     when set to true, the planner will fail instead of producing a plan that includes cross-keyspace joins or UNIONs
       --proxy-protocol                                                   Enable HAProxy PROXY protocol on MySQL listener socket
-      --purge-logs-interval duration                                     how often try to remove old logs (default 1h0m0s)
       --query-timeout int                                                Sets the default query timeout (in ms). Can be overridden by session variable (query_timeout) or comment directive (QUERY_TIMEOUT_MS)
       --querylog-buffer-size int                                         Maximum number of buffered query logs before throttling log output (default 10)
       --querylog-emit-on-any-condition-met                               Emit to query log when any of the conditions (row-threshold, time-threshold, filter-tag) is met (default false)

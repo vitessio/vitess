@@ -4049,7 +4049,6 @@ func TestPlayerStalls(t *testing.T) {
 				// The log message is written asynchronously after the stalled
 				// workflow transitions to the error state, so poll for it.
 				require.EventuallyWithT(t, func(c *assert.CollectT) {
-					log.Flush()
 					assert.Contains(c, logger.String(), relayLogIOStalledMsg)
 				}, 30*time.Second, 100*time.Millisecond, "expected log message not found")
 				execStatements(t, []string{"set @@session.binlog_format='ROW'"})
@@ -4090,7 +4089,6 @@ func TestPlayerStalls(t *testing.T) {
 				// preFunc connection, rather than sleeping a fixed multiple of
 				// the heartbeat interval.
 				require.EventuallyWithT(t, func(c *assert.CollectT) {
-					log.Flush()
 					logMessage := logger.String()
 					assert.True(c, strings.Contains(logMessage, failedToRecordHeartbeatMsg) ||
 						strings.Contains(logMessage, "Lock wait timeout exceeded"),

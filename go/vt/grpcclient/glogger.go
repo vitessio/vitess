@@ -18,6 +18,7 @@ package grpcclient
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 
 	"google.golang.org/grpc/grpclog"
@@ -78,6 +79,6 @@ func (g *glogger) Fatalf(format string, args ...any) {
 	os.Exit(1)
 }
 
-func (g *glogger) V(l int) bool {
-	return bool(log.V(log.Level(l)))
+func (g *glogger) V(int) bool {
+	return log.Enabled(slog.LevelDebug)
 }

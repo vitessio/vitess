@@ -39,9 +39,6 @@ const (
 	getNextSchemaVersions    = "select id, pos, ddl, time_updated, schemax from %s.schema_version where id > %d order by id asc"
 )
 
-// vl defines the glog verbosity level for the package
-const vl = 10
-
 // trackedSchema has the snapshot of the table at a given pos (reached by ddl)
 type trackedSchema struct {
 	schema      map[string]*binlogdatapb.MinimalTable
@@ -257,7 +254,7 @@ func (h *historian) readRow(row []sqltypes.Value) (*trackedSchema, int64, error)
 	if err := sch.UnmarshalVT(rowBytes); err != nil {
 		return nil, 0, err
 	}
-	log.V(vl).Info(fmt.Sprintf("Read tracked schema from db: id %d, pos %v, ddl %s, schema len %d, time_updated %d \n", id, replication.EncodePosition(pos), ddl, len(sch.Tables), timeUpdated))
+	log.Debug(fmt.Sprintf("Read tracked schema from db: id %d, pos %v, ddl %s, schema len %d, time_updated %d \n", id, replication.EncodePosition(pos), ddl, len(sch.Tables), timeUpdated))
 
 	tables := map[string]*binlogdatapb.MinimalTable{}
 	for _, t := range sch.Tables {
