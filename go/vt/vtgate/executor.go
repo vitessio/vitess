@@ -1307,18 +1307,18 @@ func (e *Executor) getCachedOrBuildPlan(
 
 	preparedPlan := planKey.Query != ""
 	if preparedPlan {
-		// MySQL rejects statement text that itself manages prepared
-		// statements with ER_UNSUPPORTED_PS. The check must run before the
-		// statement is planned: planning an EXECUTE plans its stored
-		// statement text, and the gRPC API lets clients store arbitrary
-		// text in the session's prepared-statement map, so nested EXECUTE
-		// text would otherwise recurse through the planner without bound.
-		// No statement is returned with the error so that a failed
-		// binary-protocol prepare does not fall back to accepting the
-		// statement with NULL field types.
-		switch stmt.(type) {
-		case *sqlparser.PrepareStmt, *sqlparser.ExecuteStmt, *sqlparser.DeallocateStmt:
-			return nil, false, nil, vterrors.NewErrorf(vtrpcpb.Code_UNIMPLEMENTED, vterrors.UnsupportedPS, "This command is not supported in the prepared statement protocol yet")
+		// MySQL only permits a subset of statement types in the prepared
+		// statement protocol and rejects everything else with
+		// ER_UNSUPPORTED_PS; vitess must not be more permissive. The check
+		// must run before the statement is planned: planning an EXECUTE
+		// plans its stored statement text, and the gRPC API lets clients
+		// store arbitrary text in the session's prepared-statement map, so
+		// nested EXECUTE text would otherwise recurse through the planner
+		// without bound. No statement is returned with the error so that a
+		// failed binary-protocol prepare does not fall back to accepting
+		// the statement with NULL field types.
+		if !preparableStatement(sqlparser.ASTToStatementType(stmt)) {
+			return nil, false, nil, errUnsupportedPS()
 		}
 	}
 
@@ -1578,8 +1578,36 @@ func (e *Executor) Prepare(ctx context.Context, method string, safeSession *econ
 }
 
 func (e *Executor) prepare(ctx context.Context, safeSession *econtext.SafeSession, sql string, logStats *logstats.LogStats) ([]*querypb.Field, uint16, error) {
-	stmtType := sqlparser.Preview(sql)
-	logStats.StmtType = stmtType.String()
+	plan, vcursor, stmt, err := e.fetchOrCreatePlan(ctx, safeSession, sql, nil, false, true, logStats, false)
+	execStart := time.Now()
+	logStats.PlanTime = execStart.Sub(logStats.StartTime)
+
+	if err != nil {
+		if stmt == nil {
+			safeSession.ClearWarnings()
+			logStats.Error = err
+			return nil, 0, err
+		}
+		stmtType := sqlparser.ASTToStatementType(stmt)
+		if stmtType != sqlparser.StmtShow {
+			safeSession.ClearWarnings()
+		}
+		if !preparableStatement(stmtType) {
+			return nil, 0, errUnsupportedPS()
+		}
+		// Attempt to build NULL field types for the statement in case planning fails,
+		// allowing the client to proceed with preparing the statement even without a valid execution plan.
+		// Hoping that an optimized plan can be built later when parameter values are available.
+		flds, paramCount, success := buildNullFieldTypes(stmt)
+		if success {
+			logStats.StmtType = stmtType.String()
+			return flds, paramCount, nil
+		}
+		logStats.Error = err
+		return nil, 0, err
+	}
+
+	logStats.StmtType = plan.QueryType.String()
 
 	// Mysql warnings are scoped to the current session, but are
 	// cleared when a "non-diagnostic statement" is executed:
@@ -1588,19 +1616,40 @@ func (e *Executor) prepare(ctx context.Context, safeSession *econtext.SafeSessio
 	// To emulate this behavior, clear warnings from the session
 	// for all statements _except_ SHOW, so that SHOW WARNINGS
 	// can actually return them.
-	if stmtType != sqlparser.StmtShow {
+	if plan.QueryType != sqlparser.StmtShow {
 		safeSession.ClearWarnings()
 	}
 
-	switch stmtType {
+	if !preparableStatement(plan.QueryType) {
+		return nil, 0, errUnsupportedPS()
+	}
+
+	switch plan.QueryType {
 	case sqlparser.StmtSelect, sqlparser.StmtShow,
 		sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete:
-		return e.handlePrepare(ctx, safeSession, sql, logStats)
-	case sqlparser.StmtDDL, sqlparser.StmtBegin, sqlparser.StmtCommit, sqlparser.StmtRollback, sqlparser.StmtSet,
-		sqlparser.StmtUse, sqlparser.StmtOther, sqlparser.StmtAnalyze, sqlparser.StmtComment, sqlparser.StmtExplain, sqlparser.StmtFlush, sqlparser.StmtKill:
+		// These return field information, fetched from the tablets below.
+	default:
 		return nil, 0, nil
 	}
-	return nil, 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unrecognized prepare statement: %s", sql)
+
+	bindVars := prepareBindVars(plan.ParamsCount)
+	if err := e.addNeededBindVars(vcursor, plan.BindVarNeeds, bindVars, safeSession); err != nil {
+		logStats.Error = err
+		return nil, 0, err
+	}
+
+	qr, err := plan.Instructions.GetFields(ctx, vcursor, bindVars)
+	logStats.ExecuteTime = time.Since(execStart)
+	if err != nil {
+		logStats.Error = err
+		plan.AddStats(1, time.Since(logStats.StartTime), logStats.ShardQueries, 0, 0, 1)
+		return nil, 0, err
+	}
+	logStats.RowsAffected = qr.RowsAffected
+
+	plan.AddStats(1, time.Since(logStats.StartTime), logStats.ShardQueries, qr.RowsAffected, uint64(len(qr.Rows)), 0)
+
+	return qr.Fields, plan.ParamsCount, nil
 }
 
 func (e *Executor) initVConfig(warnOnShardedOnly bool, pv plancontext.PlannerVersion) {
@@ -1690,44 +1739,24 @@ func prepareBindVars(paramsCount uint16) map[string]*querypb.BindVariable {
 	return bindVars
 }
 
-func (e *Executor) handlePrepare(ctx context.Context, safeSession *econtext.SafeSession, sql string, logStats *logstats.LogStats) ([]*querypb.Field, uint16, error) {
-	plan, vcursor, stmt, err := e.fetchOrCreatePlan(ctx, safeSession, sql, nil, false, true, logStats, false)
-	execStart := time.Now()
-	logStats.PlanTime = execStart.Sub(logStats.StartTime)
-
-	if err != nil {
-		if stmt != nil {
-			// Attempt to build NULL field types for the statement in case planning fails,
-			// allowing the client to proceed with preparing the statement even without a valid execution plan.
-			// Hoping that an optimized plan can be built later when parameter values are available.
-			flds, paramCount, success := buildNullFieldTypes(stmt)
-			if success {
-				return flds, paramCount, nil
-			}
-		}
-		logStats.Error = err
-		return nil, 0, err
+// preparableStatement reports whether MySQL permits the statement type in the
+// prepared statement protocol. MySQL rejects everything else with
+// ER_UNSUPPORTED_PS, and vitess must not be more permissive.
+func preparableStatement(stmtType sqlparser.StatementType) bool {
+	switch stmtType {
+	case sqlparser.StmtSelect, sqlparser.StmtShow,
+		sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete,
+		sqlparser.StmtDDL, sqlparser.StmtSet, sqlparser.StmtCommit, sqlparser.StmtRollback,
+		sqlparser.StmtOther, sqlparser.StmtAnalyze, sqlparser.StmtComment, sqlparser.StmtCommentOnly,
+		sqlparser.StmtExplain, sqlparser.StmtFlush, sqlparser.StmtKill:
+		return true
 	}
+	return false
+}
 
-	bindVars := prepareBindVars(plan.ParamsCount)
-	err = e.addNeededBindVars(vcursor, plan.BindVarNeeds, bindVars, safeSession)
-	if err != nil {
-		logStats.Error = err
-		return nil, 0, err
-	}
-
-	qr, err := plan.Instructions.GetFields(ctx, vcursor, bindVars)
-	logStats.ExecuteTime = time.Since(execStart)
-	if err != nil {
-		logStats.Error = err
-		plan.AddStats(1, time.Since(logStats.StartTime), logStats.ShardQueries, 0, 0, 1)
-		return nil, 0, err
-	}
-	logStats.RowsAffected = qr.RowsAffected
-
-	plan.AddStats(1, time.Since(logStats.StartTime), logStats.ShardQueries, qr.RowsAffected, uint64(len(qr.Rows)), 0)
-
-	return qr.Fields, plan.ParamsCount, err
+func errUnsupportedPS() error {
+	return vterrors.NewErrorf(vtrpcpb.Code_UNIMPLEMENTED, vterrors.UnsupportedPS,
+		"This command is not supported in the prepared statement protocol yet")
 }
 
 // buildNullFieldTypes builds a list of NULL field types for the given statement.
@@ -1895,6 +1924,13 @@ func (e *Executor) PlanPrepareStmt(ctx context.Context, safeSession *econtext.Sa
 	plan, _, _, err := e.fetchOrCreatePlan(ctx, safeSession, query, nil, false, true, lStats, false)
 	if err != nil {
 		return nil, err
+	}
+	// Non-preparable statement text is rejected before planning in
+	// getCachedOrBuildPlan. Checking the plan's query type here also
+	// covers plans fetched from the plan cache, which bypass that check:
+	// STREAM and VSTREAM statements are cachable but not preparable.
+	if !preparableStatement(plan.QueryType) {
+		return nil, errUnsupportedPS()
 	}
 	return plan, nil
 }

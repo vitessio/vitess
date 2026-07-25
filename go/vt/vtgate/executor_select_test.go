@@ -3111,6 +3111,37 @@ func TestSelectBindvarswithPrepare(t *testing.T) {
 	assert.Empty(t, sbc2.Queries)
 }
 
+func TestPrepareWithCTE(t *testing.T) {
+	testcases := []struct {
+		name        string
+		sql         string
+		paramsCount uint16
+	}{{
+		name:        "recursive cte select",
+		sql:         "with recursive rec as (select id from main1 where id = ? union all select id + 1 from rec where id < ?) select id from rec",
+		paramsCount: 2,
+	}, {
+		name:        "cte update",
+		sql:         "with cte as (select id from main1 where id = ?) update simple set name = ? where id in (select id from cte)",
+		paramsCount: 2,
+	}, {
+		name:        "cte delete",
+		sql:         "with cte as (select id from main1 where id = ?) delete from simple where id in (select id from cte)",
+		paramsCount: 1,
+	}}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			executor, _, _, _, ctx := createExecutorEnv(t)
+			session := &vtgatepb.Session{TargetString: KsTestUnsharded}
+
+			_, paramsCount, err := executorPrepare(ctx, executor, session, tc.sql)
+			require.NoError(t, err)
+			require.Equal(t, tc.paramsCount, paramsCount)
+		})
+	}
+}
+
 func assertOptimizedPlanCondition(t *testing.T, executor *Executor, sql string, condition ...engine.Condition) *engine.PlanSwitcher {
 	var plan *engine.Plan
 	executor.ForEachPlan(func(p *engine.Plan) bool {
