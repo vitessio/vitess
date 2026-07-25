@@ -1085,13 +1085,18 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 
 	sourceKeyspace := req.SourceKeyspace
 	targetKeyspace := req.TargetKeyspace
-	// Enforce the table-selection invariant at the RPC boundary, not only in
+	// Enforce the table-selection invariants at the RPC boundary, not only in
 	// vtctldclient: VTAdmin forwards a raw request and direct gRPC callers
 	// bypass the CLI checks. An explicit include list combined with
-	// all_tables=true would otherwise silently move only the explicit subset.
-	// Combining an include list with exclude_tables is supported behavior.
+	// all_tables=true would otherwise silently move only the explicit subset,
+	// and an exclude list with no table selection to apply it to would only
+	// fail later, after topo access, with a less clear error. Combining an
+	// include list with exclude_tables is supported behavior.
 	if req.AllTables && len(req.IncludeTables) > 0 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot specify both all_tables and an explicit list of tables to include")
+	}
+	if len(req.ExcludeTables) > 0 && !req.AllTables && len(req.IncludeTables) == 0 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "exclude_tables requires all_tables or an explicit list of tables to include")
 	}
 
 	if workflowType == binlogdatapb.VReplicationWorkflowType_MoveTables && sourceKeyspace == targetKeyspace {

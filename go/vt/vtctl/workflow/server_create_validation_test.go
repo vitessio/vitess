@@ -57,3 +57,35 @@ func TestCreateRejectsAllTablesWithIncludeList(t *testing.T) {
 		require.ErrorContains(t, err, "cannot specify both all_tables")
 	})
 }
+
+// TestCreateRejectsExcludeTablesWithoutSelection ensures the RPC boundary
+// also considers exclude_tables: an exclude list with neither all_tables nor
+// an explicit include list has no table selection to apply to, and would
+// otherwise only fail later, after topo access, with a less clear error.
+// The vtctldclient cannot produce this request (it requires --tables or
+// --all-tables), so only raw gRPC callers and VTAdmin can hit it.
+func TestCreateRejectsExcludeTablesWithoutSelection(t *testing.T) {
+	ctx := context.Background()
+	s := &Server{}
+
+	t.Run("MoveTablesCreate", func(t *testing.T) {
+		_, err := s.MoveTablesCreate(ctx, &vtctldatapb.MoveTablesCreateRequest{
+			Workflow:       "wf1",
+			SourceKeyspace: "sourceks",
+			TargetKeyspace: "targetks",
+			ExcludeTables:  []string{"t1"},
+		})
+		require.ErrorContains(t, err, "exclude_tables requires all_tables")
+	})
+
+	t.Run("MigrateCreate", func(t *testing.T) {
+		_, err := s.MigrateCreate(ctx, &vtctldatapb.MigrateCreateRequest{
+			Workflow:       "wf1",
+			MountName:      "ext1",
+			SourceKeyspace: "sourceks",
+			TargetKeyspace: "targetks",
+			ExcludeTables:  []string{"t1"},
+		})
+		require.ErrorContains(t, err, "exclude_tables requires all_tables")
+	})
+}
