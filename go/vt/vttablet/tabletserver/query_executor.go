@@ -1759,7 +1759,13 @@ func (qre *QueryExecutor) execStreamSQL(conn *connpool.PooledConn, isStateful, i
 			return err
 		}
 		defer qre.tsv.statefulql.Remove(qd)
-		if insideTxn {
+		// Same timeout decision as the buffered path (see execStatefulConn):
+		// only a statement whose interruption leaves no session state behind
+		// may keep the connection on a mid-statement deadline. A streaming SET
+		// or admin statement that times out must lose the whole connection, or
+		// its half-applied session state would survive on a connection the
+		// temp-table keepalive then pins alive.
+		if insideTxn || !planKeepsConnOnTimeout(qre.plan.PlanID) {
 			err = conn.Conn.StreamOnce(ctx, sql, cb, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Load()), sqltypes.IncludeFieldsOrDefault(qre.options))
 		} else {
 			err = conn.Conn.StreamOnceKeepConnOnTimeout(ctx, sql, cb, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Load()), sqltypes.IncludeFieldsOrDefault(qre.options))

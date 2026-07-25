@@ -680,9 +680,7 @@ func isStaleTargetErr(err error) bool {
 	case vtrpcpb.Code_FAILED_PRECONDITION:
 		return vterrors.RxWrongTablet.MatchString(err.Error())
 	case vtrpcpb.Code_INVALID_ARGUMENT:
-		msg := err.Error()
-		return strings.Contains(msg, "does not match expected") &&
-			(strings.Contains(msg, "invalid keyspace") || strings.Contains(msg, "invalid shard"))
+		return vterrors.RxWrongKeyspaceShard.MatchString(err.Error())
 	}
 	return false
 }
@@ -894,8 +892,11 @@ func (vh *vtgateHandler) ComResetConnection(c *mysql.Conn) {
 }
 
 func (vh *vtgateHandler) ConnectionClosed(c *mysql.Conn) {
-	// Stop temp-table keepalives first, waiting out any beat in flight, so a
-	// beat cannot race the release of the reserved connections below.
+	// Deregister the temp-table keepalives first so no further beats start for
+	// this connection. A beat already in flight is not waited out: it races
+	// the release of the reserved connections below safely in both directions
+	// (see tempTableConn.closed), and waiting here could stall the disconnect
+	// path for a whole beat budget when the beat's tablet is unreachable.
 	vh.stopTempTableHeartbeats(c)
 
 	// Rollback if there is an ongoing transaction. Ignore error.

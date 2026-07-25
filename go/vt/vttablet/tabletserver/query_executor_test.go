@@ -2525,6 +2525,54 @@ func TestExecProcClosesConnOnError(t *testing.T) {
 	require.False(t, txConn.IsClosed(), "a benign CALL error inside a tracked transaction must not destroy the transaction")
 }
 
+// TestExecStreamSQLTimeoutConnFateByPlan verifies the streaming stateful path
+// shares the buffered path's timeout decision: a timed-out safe statement
+// (reads) keeps the reserved connection (KILL QUERY only), while a statement
+// whose interruption could leave unrecorded session state (SET) loses the
+// whole connection — otherwise a half-applied streaming SET would survive on a
+// connection the temp-table keepalive then pins alive.
+func TestExecStreamSQLTimeoutConnFateByPlan(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	tsv := newTestTabletServer(t.Context(), noFlags, db)
+	defer tsv.StopService()
+
+	db.AddQueryPattern(`kill query \d+`, &sqltypes.Result{})
+	db.AddQueryPattern(`kill \d+`, &sqltypes.Result{})
+
+	cases := []struct {
+		sql       string
+		keepsConn bool
+	}{
+		{"select 1", true},
+		{"set @@sql_mode = ''", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.sql, func(t *testing.T) {
+			db.AddQuery(tc.sql, &sqltypes.Result{})
+			db.SetBeforeFunc(tc.sql, func() {
+				// Outlasts the context deadline so the statement is interrupted.
+				time.Sleep(1 * time.Second)
+			})
+
+			conn, err := tsv.te.txPool.scp.NewConn(t.Context(), &querypb.ExecuteOptions{}, nil)
+			require.NoError(t, err)
+			defer conn.Unlock()
+
+			execCtx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
+			defer cancel()
+			qre := newTestQueryExecutorStreaming(execCtx, tsv, tc.sql, conn.ReservedID())
+			err = qre.execStreamSQL(conn.UnderlyingDBConn(), true /* isStateful */, false /* insideTxn */, tc.sql, func(*sqltypes.Result) error { return nil })
+			require.Error(t, err)
+			if tc.keepsConn {
+				require.False(t, conn.IsClosed(), "a timed-out safe streaming statement must keep its connection")
+			} else {
+				require.True(t, conn.IsClosed(), "a timed-out unsafe streaming statement must lose its connection")
+			}
+		})
+	}
+}
+
 // TestPlanKeepsConnOnTimeout pins which plan types may keep their stateful
 // connection when a timeout kills only the query: reads and DML (whose kill
 // leaves no session state behind), and nothing else — a killed SET or lock
