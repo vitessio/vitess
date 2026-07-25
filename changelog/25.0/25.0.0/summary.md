@@ -27,6 +27,8 @@
         - [PREPARE statements no longer report the prepared statement's tables](#vtgate-prepare-tables-used)
         - [Preparing a statement no longer starts an implicit transaction](#vtgate-prepare-no-implicit-tx)
         - [Stricter validation of SQL-level PREPARE statements](#vtgate-prepare-stricter-validation)
+    - **[Reparent](#minor-changes-reparent)**
+        - [`EmergencyReparentShard` no longer waits on replicas that cannot win the election](#ers-lagging-relay-log-wait)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
         - [Query timeout for state-changing statements on the streaming path](#vttablet-stream-query-timeout)
@@ -246,6 +248,20 @@ SQL-level `PREPARE` and binary-protocol `COM_STMT_PREPARE` now reject statement 
 Additionally, `PREPARE ... FROM ?` is now a syntax error, matching MySQL: the grammar accidentally accepted a positional parameter as the statement text, but no value could ever reach it and the statement always failed. This also affects programs that parse SQL using the `go/vt/sqlparser` package directly.
 
 See [#20562](https://github.com/vitessio/vitess/pull/20562) for details.
+
+### <a id="minor-changes-reparent"/>Reparent</a>
+
+#### <a id="ers-lagging-relay-log-wait"/>`EmergencyReparentShard` no longer waits on replicas that cannot win the election</a>
+
+`EmergencyReparentShard` (including VTOrc-triggered failovers) used to wait for every candidate to finish applying its relay logs before electing a new primary, and to fail the whole reparent if any candidate could not do so within `--wait-replicas-timeout`. A single lagging or stuck replica — a busy `RDONLY`, a replica freshly restored from a backup, a stopped SQL thread — could fail an emergency failover that it could never have won anyway.
+
+For shards using GTID-based replication, ERS now waits only on the candidates at the most-advanced *received* relay log position, and one of them finishing to apply is sufficient to elect a winner. Candidates that are behind on received relay logs, or that fail to apply them, are excluded from the election but are still repointed under the new primary afterwards. Shards not using GTID-based replication (e.g. FilePos) keep the previous wait-for-all behavior.
+
+This mirrors a tradeoff `orchestrator` made before Vitess: it never gated dead-primary promotion on all replicas draining their relay logs — its relay-log gates (`DelayMasterPromotionIfSQLThreadNotUpToDate`, `FailMasterPromotionIfSQLThreadNotUpToDate`) were candidate-scoped and opt-in, and `PostponeReplicaRecoveryOnLagMinutes` explicitly deferred lagging replicas until after the election. ERS remains more conservative: the promoted candidate must always have fully applied everything it received.
+
+**Impact**: emergency failovers now succeed in shard states where they previously timed out. A reparent can succeed while some replicas are still catching up; they are repointed and continue replicating under the new primary. No flags were added or changed.
+
+See [#18529](https://github.com/vitessio/vitess/issues/18529).
 
 ### <a id="minor-changes-vttablet"/>VTTablet</a>
 
