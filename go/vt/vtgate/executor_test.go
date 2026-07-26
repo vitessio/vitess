@@ -2200,7 +2200,6 @@ func TestExecutorOther(t *testing.T) {
 	stmts := []string{
 		"repair table t1",
 		"optimize table t1",
-		"do 1",
 	}
 
 	for _, stmt := range stmts {
@@ -2227,6 +2226,21 @@ func TestExecutorOther(t *testing.T) {
 			})
 		}
 	}
+}
+
+func TestExecutorDo(t *testing.T) {
+	executor, sbc1, sbc2, sbclookup, ctx := createExecutorEnv(t)
+
+	// DO with a constant expression is evaluated entirely at vtgate: it
+	// never reaches any shard, and MySQL's DO returns a plain OK with no
+	// result set.
+	result, err := executorExec(ctx, executor, &vtgatepb.Session{TargetString: "TestExecutor"}, "do 1 + 1, 2", nil)
+	require.NoError(t, err)
+	assert.Empty(t, result.Rows)
+	assert.Empty(t, result.Fields)
+	assert.EqualValues(t, 0, sbc1.ExecCount.Load())
+	assert.EqualValues(t, 0, sbc2.ExecCount.Load())
+	assert.EqualValues(t, 0, sbclookup.ExecCount.Load())
 }
 
 func TestExecutorAnalyze(t *testing.T) {

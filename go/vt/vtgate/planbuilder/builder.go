@@ -176,7 +176,7 @@ func buildRoutePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVa
 
 func createInstructionFor(ctx context.Context, query string, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, cfg dynamicconfig.DDL) (*planResult, error) {
 	switch stmt := stmt.(type) {
-	case *sqlparser.Select, *sqlparser.Insert, *sqlparser.Update, *sqlparser.Delete:
+	case *sqlparser.Select, *sqlparser.Insert, *sqlparser.Update, *sqlparser.Delete, *sqlparser.Do:
 		configuredPlanner, err := getConfiguredPlanner(vschema, stmt, query)
 		if err != nil {
 			return nil, err

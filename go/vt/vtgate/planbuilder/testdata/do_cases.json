@@ -1,0 +1,161 @@
+[
+  {
+    "comment": "DO with a constant expression, evaluated entirely at vtgate, no shard round-trip",
+    "query": "do 1+1",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "DO",
+      "Original": "do 1+1",
+      "Instructions": {
+        "OperatorType": "Discard",
+        "Inputs": [
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              "2 as 1 + 1"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "SingleRow"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "DO with multiple constant expressions, all evaluated at vtgate",
+    "query": "do 1, 2 = 1, 3 + 1",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "DO",
+      "Original": "do 1, 2 = 1, 3 + 1",
+      "Instructions": {
+        "OperatorType": "Discard",
+        "Inputs": [
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              "1 as 1",
+              "0 as 2 = 1",
+              "4 as 3 + 1"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "SingleRow"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "DO with GET_LOCK, routed through the reserved-connection lock path, no shard scatter",
+    "query": "do get_lock('mylock', 5)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "DO",
+      "Original": "do get_lock('mylock', 5)",
+      "Instructions": {
+        "OperatorType": "Discard",
+        "Inputs": [
+          {
+            "OperatorType": "Lock",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "TargetDestination": "KeyspaceID(00)",
+            "FieldQuery": "select get_lock('mylock', 5) from dual where 1 != 1",
+            "lock_func": [
+              "get_lock('mylock', 5)"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "DO with RELEASE_LOCK, routed through the reserved-connection lock path",
+    "query": "do release_lock('mylock')",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "DO",
+      "Original": "do release_lock('mylock')",
+      "Instructions": {
+        "OperatorType": "Discard",
+        "Inputs": [
+          {
+            "OperatorType": "Lock",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "TargetDestination": "KeyspaceID(00)",
+            "FieldQuery": "select release_lock('mylock') from dual where 1 != 1",
+            "lock_func": [
+              "release_lock('mylock')"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "DO with a scalar subquery reading a sharded table, planned cross-shard instead of sent to an arbitrary shard",
+    "query": "do (select count(*) from user)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "DO",
+      "Original": "do (select count(*) from user)",
+      "Instructions": {
+        "OperatorType": "Discard",
+        "Inputs": [
+          {
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutValue",
+            "PulloutVars": [
+              "__sq1"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Aggregate",
+                "Variant": "Scalar",
+                "Aggregates": "sum_count_star(0) AS count(*)",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select count(*) from `user` where 1 != 1",
+                    "Query": "select count(*) from `user`"
+                  }
+                ]
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Reference",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select :__sq1 /* INT64 */ as `(select count(*) from ``user``)` from dual where 1 != 1",
+                "Query": "select :__sq1 /* INT64 */ as `(select count(*) from ``user``)` from dual"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  }
+]

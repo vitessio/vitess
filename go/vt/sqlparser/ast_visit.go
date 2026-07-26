@@ -154,6 +154,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfDelete(in, f)
 	case *DerivedTable:
 		return VisitRefOfDerivedTable(in, f)
+	case *Do:
+		return VisitRefOfDo(in, f)
 	case *DropColumn:
 		return VisitRefOfDropColumn(in, f)
 	case *DropDatabase:
@@ -1657,6 +1659,21 @@ func VisitRefOfDerivedTable(in *DerivedTable, f Visit) error {
 	}
 	if err := VisitTableStatement(in.Select, f); err != nil {
 		return err
+	}
+	return nil
+}
+
+func VisitRefOfDo(in *Do, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	for _, el := range in.Exprs {
+		if err := VisitExpr(el, f); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -6092,6 +6109,8 @@ func VisitStatement(in Statement, f Visit) error {
 		return VisitRefOfDeallocateStmt(in, f)
 	case *Delete:
 		return VisitRefOfDelete(in, f)
+	case *Do:
+		return VisitRefOfDo(in, f)
 	case *DropDatabase:
 		return VisitRefOfDropDatabase(in, f)
 	case *DropProcedure:

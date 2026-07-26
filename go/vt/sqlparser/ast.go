@@ -765,6 +765,10 @@ type (
 	// the full AST for the statement.
 	OtherAdmin struct{}
 
+	Do struct {
+		Exprs []Expr
+	}
+
 	// CommentOnly represents a query which only has comments
 	CommentOnly struct {
 		Comments []string
@@ -927,6 +931,7 @@ func (*Savepoint) iStatement()             {}
 func (*Release) iStatement()               {}
 func (*Analyze) iStatement()               {}
 func (*OtherAdmin) iStatement()            {}
+func (*Do) iStatement()                    {}
 func (*CommentOnly) iStatement()           {}
 func (*Select) iSelectStatement()          {}
 func (*Select) iTableStatement()           {}

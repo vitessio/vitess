@@ -64,6 +64,7 @@ const (
 	StmtExecute
 	StmtDeallocate
 	StmtKill
+	StmtDo
 )
 
 // ASTToStatementType returns a StatementType from an AST stmt
@@ -89,6 +90,8 @@ func ASTToStatementType(stmt Statement) StatementType {
 		return StmtUse
 	case *OtherAdmin, *Load:
 		return StmtOther
+	case *Do:
+		return StmtDo
 	case *Analyze:
 		return StmtAnalyze
 	case Explain, *VExplainStmt:
@@ -207,6 +210,8 @@ func Preview(sql string) StatementType {
 		return StmtLockTables
 	case "unlock":
 		return StmtUnlockTables
+	case "do":
+		return StmtDo
 	}
 	// For the following statements it is not sufficient to rely
 	// on loweredFirstWord. This is because they are not statements
@@ -315,6 +320,8 @@ func (s StatementType) String() string {
 		return "DEALLOCATE_PREPARE"
 	case StmtKill:
 		return "KILL"
+	case StmtDo:
+		return "DO"
 	default:
 		return "UNKNOWN"
 	}

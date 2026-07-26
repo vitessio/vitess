@@ -155,6 +155,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfDelete(parent, node, replacer)
 	case *DerivedTable:
 		return a.rewriteRefOfDerivedTable(parent, node, replacer)
+	case *Do:
+		return a.rewriteRefOfDo(parent, node, replacer)
 	case *DropColumn:
 		return a.rewriteRefOfDropColumn(parent, node, replacer)
 	case *DropDatabase:
@@ -3819,6 +3821,54 @@ func (a *application) rewriteRefOfDerivedTable(parent SQLNode, node *DerivedTabl
 		parent.(*DerivedTable).Select = newNode.(TableStatement)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+
+// Function Generation Source: PtrToStructMethod
+func (a *application) rewriteRefOfDo(parent SQLNode, node *Do, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
+			return true
+		}
+	}
+	for x, el := range node.Exprs {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfDoExprsOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
+		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*Do).Exprs[idx] = newNode.(Expr)
+			}
+		}(x)) {
+			return false
+		}
 	}
 	if a.collectPaths {
 		a.cur.current.Pop()
@@ -15898,6 +15948,8 @@ func (a *application) rewriteStatement(parent SQLNode, node Statement, replacer 
 		return a.rewriteRefOfDeallocateStmt(parent, node, replacer)
 	case *Delete:
 		return a.rewriteRefOfDelete(parent, node, replacer)
+	case *Do:
+		return a.rewriteRefOfDo(parent, node, replacer)
 	case *DropDatabase:
 		return a.rewriteRefOfDropDatabase(parent, node, replacer)
 	case *DropProcedure:

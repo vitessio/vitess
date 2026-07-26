@@ -422,6 +422,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfDerivedTable(a, b)
+	case *Do:
+		b, ok := inB.(*Do)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfDo(a, b)
 	case *DropColumn:
 		b, ok := inB.(*DropColumn)
 		if !ok {
@@ -2662,6 +2668,17 @@ func (cmp *Comparator) RefOfDerivedTable(a, b *DerivedTable) bool {
 	}
 	return a.Lateral == b.Lateral &&
 		cmp.TableStatement(a.Select, b.Select)
+}
+
+// RefOfDo does deep equals between the two objects.
+func (cmp *Comparator) RefOfDo(a, b *Do) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.SliceOfExpr(a.Exprs, b.Exprs)
 }
 
 // RefOfDropColumn does deep equals between the two objects.
@@ -7628,6 +7645,12 @@ func (cmp *Comparator) Statement(inA, inB Statement) bool {
 			return false
 		}
 		return cmp.RefOfDelete(a, b)
+	case *Do:
+		b, ok := inB.(*Do)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfDo(a, b)
 	case *DropDatabase:
 		b, ok := inB.(*DropDatabase)
 		if !ok {

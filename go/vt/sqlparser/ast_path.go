@@ -143,6 +143,7 @@ const (
 	RefOfDeleteOrderBy
 	RefOfDeleteLimit
 	RefOfDerivedTableSelect
+	RefOfDoExprsOffset
 	RefOfDropColumnName
 	RefOfDropDatabaseComments
 	RefOfDropDatabaseDBName
@@ -853,6 +854,8 @@ func (s ASTStep) DebugString() string {
 		return "(*Delete).Limit"
 	case RefOfDerivedTableSelect:
 		return "(*DerivedTable).Select"
+	case RefOfDoExprsOffset:
+		return "(*Do).ExprsOffset"
 	case RefOfDropColumnName:
 		return "(*DropColumn).Name"
 	case RefOfDropDatabaseComments:
@@ -2054,6 +2057,10 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*Delete).Limit
 		case RefOfDerivedTableSelect:
 			node = node.(*DerivedTable).Select
+		case RefOfDoExprsOffset:
+			idx, bytesRead := path.nextPathOffset()
+			path = path[bytesRead:]
+			node = node.(*Do).Exprs[idx]
 		case RefOfDropColumnName:
 			node = node.(*DropColumn).Name
 		case RefOfDropDatabaseComments:

@@ -1728,6 +1728,11 @@ func (node *OtherAdmin) FormatFast(buf *TrackedBuffer) {
 	buf.WriteString("otheradmin")
 }
 
+func (node *Do) FormatFast(buf *TrackedBuffer) {
+	buf.WriteString("do ")
+	buf.formatExprs(node.Exprs)
+}
+
 // FormatFast formats the node.
 func (node *ParsedComments) FormatFast(buf *TrackedBuffer) {
 	if node == nil {

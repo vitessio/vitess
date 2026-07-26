@@ -30,6 +30,37 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
+func gen4DoStmtPlanner(
+	query string,
+	plannerVersion querypb.ExecuteOptions_PlannerVersion,
+	do *sqlparser.Do,
+	reservedVars *sqlparser.ReservedVars,
+	vschema plancontext.VSchema,
+) (*planResult, error) {
+	synthSelect := &sqlparser.Select{
+		SelectExprs: exprsToSelectExprs(do.Exprs),
+		From:        nil,
+	}
+
+	planRes, err := gen4SelectStmtPlanner(query, plannerVersion, synthSelect, reservedVars, vschema)
+	if err != nil {
+		return nil, err
+	}
+
+	discardPlan := &engine.Discard{Input: planRes.primitive}
+	return newPlanResult(discardPlan, planRes.tables...), nil
+}
+
+func exprsToSelectExprs(exprs []sqlparser.Expr) *sqlparser.SelectExprs {
+	result := make([]sqlparser.SelectExpr, len(exprs))
+	for i, e := range exprs {
+		result[i] = &sqlparser.AliasedExpr{Expr: e}
+	}
+	return &sqlparser.SelectExprs{
+		Exprs: result,
+	}
+}
+
 func gen4SelectStmtPlanner(
 	query string,
 	plannerVersion querypb.ExecuteOptions_PlannerVersion,

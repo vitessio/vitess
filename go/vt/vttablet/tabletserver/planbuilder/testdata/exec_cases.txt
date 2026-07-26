@@ -812,6 +812,13 @@ options:PassthroughDMLs
   "TableName": ""
 }
 
+# do
+"do 1"
+{
+  "PlanID": "OtherAdmin",
+  "TableName": ""
+}
+
 # syntax error
 "syntax error"
 "syntax error at position 7 near 'syntax'"
