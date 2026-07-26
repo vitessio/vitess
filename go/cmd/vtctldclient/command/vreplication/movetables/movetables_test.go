@@ -17,57 +17,71 @@ limitations under the License.
 package movetables
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 )
 
-func TestKeepDataHelpMentionsReverseWorkflowDefault(t *testing.T) {
-	root := &cobra.Command{Use: "test"}
-	registerCommands(root)
+// registerCommands binds flags to the package-level command vars, so it can
+// only run once per test binary; the resulting tree is shared by the tests.
+var (
+	testRoot         = &cobra.Command{Use: "test"}
+	registerTestOnce sync.Once
+)
 
-	completeCmd, _, err := root.Find([]string{"MoveTables", "complete"})
+func testCommand(t *testing.T, path ...string) *cobra.Command {
+	t.Helper()
+	registerTestOnce.Do(func() { registerCommands(testRoot) })
+	cmd, _, err := testRoot.Find(path)
 	require.NoError(t, err)
+	return cmd
+}
+
+func TestKeepDataHelpMentionsReverseWorkflowDefault(t *testing.T) {
+	completeCmd := testCommand(t, "MoveTables", "complete")
 	require.Contains(t, completeCmd.Flags().Lookup("keep-data").Usage, "Defaults to true for an explicitly specified _reverse workflow unless --keep-data=false is provided.")
 
-	cancelCmd, _, err := root.Find([]string{"MoveTables", "cancel"})
-	require.NoError(t, err)
+	cancelCmd := testCommand(t, "MoveTables", "cancel")
 	require.Contains(t, cancelCmd.Flags().Lookup("keep-data").Usage, "Defaults to true for an explicitly specified _reverse workflow unless --keep-data=false is provided.")
 }
 
-func TestValidateTableSelectionFlags(t *testing.T) {
-	// The helper checks the effective option values, mirroring the server-side
-	// validation in workflow.Server.moveTablesCreate: only a non-empty include
-	// list combined with all-tables is contradictory. An empty --tables= list
-	// (pflag marks the flag as changed but produces an empty slice) must stay
-	// valid with --all-tables.
+// TestCreatePreRunETableSelection runs the create command's PreRunE with the
+// flag forms an operator or automation actually passes. pflag marks --tables=
+// and --all-tables=false as changed while producing an empty list and false,
+// so a flag presence check accepts them; the selection-less forms must be
+// rejected here rather than reaching the server-side guard (or, against an
+// older vtctld, the late "no tables to move" failure).
+func TestCreatePreRunETableSelection(t *testing.T) {
+	cmd := testCommand(t, "MoveTables", "create")
+
 	tests := []struct {
-		name          string
-		tables        []string
-		allTables     bool
-		excludeTables []string
-		wantErr       string
+		name    string
+		args    []string
+		wantErr string
 	}{
-		{name: "only --tables", tables: []string{"t1", "t2"}},
-		{name: "only --all-tables", allTables: true},
-		{name: "--all-tables with --exclude-tables", allTables: true, excludeTables: []string{"t2"}},
-		{name: "--tables with --exclude-tables", tables: []string{"t1", "t2"}, excludeTables: []string{"t2"}},
-		{name: "empty --tables= list with --all-tables", tables: []string{}, allTables: true},
-		{name: "--tables and --all-tables together", tables: []string{"t1"}, allTables: true, wantErr: "mutually exclusive"},
+		{name: "--tables", args: []string{"--tables=t1,t2"}},
+		{name: "--all-tables", args: []string{"--all-tables"}},
+		{name: "--all-tables with --exclude-tables", args: []string{"--all-tables", "--exclude-tables=t2"}},
+		{name: "--tables with --exclude-tables", args: []string{"--tables=t1,t2", "--exclude-tables=t2"}},
+		{name: "--tables with --all-tables=false", args: []string{"--tables=t1", "--all-tables=false"}},
+		{name: "empty --tables= with --all-tables=true", args: []string{"--tables=", "--all-tables=true"}},
+		{name: "--tables with --all-tables", args: []string{"--tables=t1", "--all-tables"}, wantErr: "mutually exclusive"},
+		{name: "empty --tables= with --exclude-tables", args: []string{"--tables=", "--exclude-tables=t1"}, wantErr: "--exclude-tables requires"},
+		{name: "--all-tables=false with --exclude-tables", args: []string{"--all-tables=false", "--exclude-tables=t1"}, wantErr: "--exclude-tables requires"},
+		{name: "no table selection", args: nil, wantErr: "tables or all-tables are required"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			defer func() {
-				createOptions.IncludeTables = nil
-				createOptions.AllTables = false
-				createOptions.ExcludeTables = nil
-			}()
-			createOptions.IncludeTables = tt.tables
-			createOptions.AllTables = tt.allTables
-			createOptions.ExcludeTables = tt.excludeTables
+			// The flags bind to package-level options that persist across
+			// parses, so reset the ones under test for each case.
+			createOptions.IncludeTables = nil
+			createOptions.AllTables = false
+			createOptions.ExcludeTables = nil
+			require.NoError(t, cmd.ParseFlags(tt.args))
 
-			err := validateTableSelectionFlags()
+			err := cmd.PreRunE(cmd, nil)
 			if tt.wantErr == "" {
 				require.NoError(t, err)
 			} else {

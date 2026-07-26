@@ -55,10 +55,6 @@ var (
 		Aliases:               []string{"Create"},
 		Args:                  cobra.NoArgs,
 		PreRunE: func(cmd *cobra.Command, args []string) error {
-			// Either specific tables or the all tables flags are required.
-			if !cmd.Flags().Lookup("tables").Changed && !cmd.Flags().Lookup("all-tables").Changed {
-				return errors.New("tables or all-tables are required to specify which tables to move")
-			}
 			if err := validateTableSelectionFlags(); err != nil {
 				return err
 			}
@@ -113,17 +109,26 @@ var (
 	}
 )
 
-// validateTableSelectionFlags rejects combining a non-empty --tables list
-// with an effective --all-tables=true, which would otherwise silently ignore
-// --all-tables. Checking the effective values rather than flag presence keeps
+// validateTableSelectionFlags checks the table-selection options by their
+// effective values rather than by flag presence, mirroring the server-side
+// validation in workflow.Server.moveTablesCreate: a selection is required, a
+// non-empty include list cannot be combined with all-tables, and an exclude
+// list needs a selection to apply to. Using the effective values keeps
 // --tables=t1 --all-tables=false and --tables= --all-tables=true valid, so
-// automation can always emit flags explicitly. This matches the server-side
-// validation in workflow.Server.moveTablesCreate.
+// automation can always emit flags explicitly, and it rejects the
+// selection-less forms (--tables= --exclude-tables=t1) that a flag presence
+// check accepts because pflag marks an empty value as changed.
 //
 // See https://github.com/vitessio/vitess/issues/20566.
 func validateTableSelectionFlags() error {
 	if len(createOptions.IncludeTables) > 0 && createOptions.AllTables {
 		return errors.New("--tables and --all-tables are mutually exclusive")
+	}
+	if len(createOptions.IncludeTables) == 0 && !createOptions.AllTables {
+		if len(createOptions.ExcludeTables) > 0 {
+			return errors.New("--exclude-tables requires --all-tables or a non-empty --tables list")
+		}
+		return errors.New("tables or all-tables are required to specify which tables to move")
 	}
 	return nil
 }
