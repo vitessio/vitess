@@ -126,13 +126,7 @@ jobs:
 
       - name: Set up Go
         if: (steps.changes.outputs.go_files == 'true' || steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.proto_changes == 'true')
-        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
-        with:
-          go-version-file: go.mod
-          cache: ${{ (github.base_ref == 'main' || (github.base_ref == '' && github.ref_name == 'main')) && 'true' || 'false' }}
-          cache-dependency-path: |
-            go.sum
-            tools/**/go.sum
+        uses: ./.github/actions/setup-go
 
       - name: Tune the OS
         if: steps.changes.outputs.go_files == 'true'
