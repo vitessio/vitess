@@ -104,6 +104,8 @@ func TestErrantGTIDsInBaseBackup(t *testing.T) {
 	// Run vtbackup, which restores the newest backup and should reject it before creating another backup.
 	_, err = startVtBackup(t, false, false, false, "--verify-backup-errant-gtids")
 	require.Error(t, err)
+	require.Contains(t, localCluster.VtbackupProcess.Output(), "has errant GTIDs",
+		"vtbackup should have rejected the base backup for its errant GTIDs")
 
 	// Confirm that the failed run did not create a backup from the invalid base.
 	verifyBackupCount(t, shardKsName, len(backups))
