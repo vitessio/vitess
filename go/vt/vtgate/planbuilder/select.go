@@ -37,18 +37,41 @@ func gen4DoStmtPlanner(
 	reservedVars *sqlparser.ReservedVars,
 	vschema plancontext.VSchema,
 ) (*planResult, error) {
-	synthSelect := &sqlparser.Select{
-		SelectExprs: exprsToSelectExprs(do.Exprs),
-		From:        nil,
+
+	var sources []engine.Primitive
+	var tables []string
+	for _, run := range segmentDoExprs(do.Exprs) {
+		synthSelect := &sqlparser.Select{
+			SelectExprs: exprsToSelectExprs(run),
+		}
+		planRes, err := gen4SelectStmtPlanner(query, plannerVersion, synthSelect, reservedVars, vschema)
+		if err != nil {
+			return nil, err
+		}
+		sources = append(sources, planRes.primitive)
+		tables = append(tables, planRes.tables...)
 	}
 
-	planRes, err := gen4SelectStmtPlanner(query, plannerVersion, synthSelect, reservedVars, vschema)
-	if err != nil {
-		return nil, err
-	}
+	return newPlanResult(&engine.Discard{Sources: sources}, tables...), nil
+}
 
-	discardPlan := &engine.Discard{Input: planRes.primitive}
-	return newPlanResult(discardPlan, planRes.tables...), nil
+func segmentDoExprs(exprs []sqlparser.Expr) [][]sqlparser.Expr {
+	var runs [][]sqlparser.Expr
+	var cur []sqlparser.Expr
+	curIsLock := false
+	for _, e := range exprs {
+		_, isLock := e.(*sqlparser.LockingFunc)
+		if len(cur) > 0 && isLock != curIsLock {
+			runs = append(runs, cur)
+			cur = nil
+		}
+		cur = append(cur, e)
+		curIsLock = isLock
+	}
+	if len(cur) > 0 {
+		runs = append(runs, cur)
+	}
+	return runs
 }
 
 func exprsToSelectExprs(exprs []sqlparser.Expr) *sqlparser.SelectExprs {

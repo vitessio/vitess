@@ -161,7 +161,7 @@ func newNormalizer(
 
 func (nz *normalizer) determineQueryRewriteStrategy(in Statement) {
 	switch in.(type) {
-	case *Select, *Union, *Insert, *Update, *Delete, *CallProc, *Stream, *VExplainStmt:
+	case *Select, *Union, *Insert, *Update, *Delete, *CallProc, *Stream, *VExplainStmt, *Do:
 		nz.useASTQuery = true
 	case *Set:
 		nz.useASTQuery = true
@@ -175,7 +175,7 @@ func (nz *normalizer) determineQueryRewriteStrategy(in Statement) {
 // It handles normalization logic based on node types.
 func (nz *normalizer) walkDown(node, _ SQLNode) bool {
 	switch node := node.(type) {
-	case *Begin, *Commit, *Rollback, *Savepoint, *SRollback, *Release, *OtherAdmin, *Do, *Analyze,
+	case *Begin, *Commit, *Rollback, *Savepoint, *SRollback, *Release, *OtherAdmin, *Analyze,
 		*PrepareStmt, *ExecuteStmt, *FramePoint, *ColName, TableName, *ConvertType, *CreateProcedure:
 		// These statement do not need normalizing
 		return false

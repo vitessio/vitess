@@ -25,7 +25,7 @@
     }
   },
   {
-    "comment": "DO with multiple constant expressions, all evaluated at vtgate",
+    "comment": "DO with multiple constant expressions, all evaluated at vtgate in one source",
     "query": "do 1, 2 = 1, 3 + 1",
     "plan": {
       "Type": "Complex",
@@ -156,6 +156,107 @@
       "TablesUsed": [
         "user.user"
       ]
+    }
+  },
+  {
+    "comment": "DO mixing an ordinary expression before a lock function, each planned as its own source and executed in order",
+    "query": "do 1, get_lock('mylock', 5)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "DO",
+      "Original": "do 1, get_lock('mylock', 5)",
+      "Instructions": {
+        "OperatorType": "Discard",
+        "Inputs": [
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              "1 as 1"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "SingleRow"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Lock",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "TargetDestination": "KeyspaceID(00)",
+            "FieldQuery": "select get_lock('mylock', 5) from dual where 1 != 1",
+            "lock_func": [
+              "get_lock('mylock', 5)"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "DO mixing a lock function before an ordinary expression, each planned as its own source and executed in order",
+    "query": "do get_lock('mylock', 5), 1",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "DO",
+      "Original": "do get_lock('mylock', 5), 1",
+      "Instructions": {
+        "OperatorType": "Discard",
+        "Inputs": [
+          {
+            "OperatorType": "Lock",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "TargetDestination": "KeyspaceID(00)",
+            "FieldQuery": "select get_lock('mylock', 5) from dual where 1 != 1",
+            "lock_func": [
+              "get_lock('mylock', 5)"
+            ]
+          },
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              "1 as 1"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "SingleRow"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "DO with consecutive lock functions grouped into a single lock source",
+    "query": "do get_lock('a', 0), get_lock('b', 0)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "DO",
+      "Original": "do get_lock('a', 0), get_lock('b', 0)",
+      "Instructions": {
+        "OperatorType": "Discard",
+        "Inputs": [
+          {
+            "OperatorType": "Lock",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "TargetDestination": "KeyspaceID(00)",
+            "FieldQuery": "select get_lock('a', 0), get_lock('b', 0) from dual where 1 != 1",
+            "lock_func": [
+              "get_lock('a', 0)",
+              "get_lock('b', 0)"
+            ]
+          }
+        ]
+      }
     }
   }
 ]

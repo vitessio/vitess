@@ -73,6 +73,15 @@ func TestNormalize(t *testing.T) {
 			"foobar": sqltypes.Int64BindVariable(1),
 		},
 	}, {
+		// DO statements are normalized like the equivalent SELECT: their
+		// expressions are walked and literals are turned into bind variables.
+		in:      "do get_lock('mylock', 5)",
+		outstmt: "do get_lock(:bv1 /* VARCHAR */, :bv2 /* INT64 */)",
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.StringBindVariable("mylock"),
+			"bv2": sqltypes.Int64BindVariable(5),
+		},
+	}, {
 		// float val
 		in:      "select * from t where foobar = 1.2",
 		outstmt: "select * from t where foobar = :foobar /* DECIMAL(2,1) */",
