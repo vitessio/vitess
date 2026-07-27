@@ -915,5 +915,91 @@
         "user.ref"
       ]
     }
+  },
+  {
+    "comment": "Reference table on the preserved side of a left join is not merged into the shards",
+    "query": "select ref_with_source.col from ref_with_source left join `user` on ref_with_source.col = user.col",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select ref_with_source.col from ref_with_source left join `user` on ref_with_source.col = user.col",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "LeftJoin",
+        "JoinColumnIndexes": "L:0",
+        "JoinVars": {
+          "ref_with_source_col": 0
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select ref_with_source.col from ref_with_source where 1 != 1",
+            "Query": "select ref_with_source.col from ref_with_source"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from `user` where 1 != 1",
+            "Query": "select 1 from `user` where `user`.col = :ref_with_source_col"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.ref_with_source",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Right join with the reference table preserved is not merged into the shards",
+    "query": "select ref_with_source.col from `user` right join ref_with_source on ref_with_source.col = user.col",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select ref_with_source.col from `user` right join ref_with_source on ref_with_source.col = user.col",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "LeftJoin",
+        "JoinColumnIndexes": "L:0",
+        "JoinVars": {
+          "ref_with_source_col": 0
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select ref_with_source.col from ref_with_source where 1 != 1",
+            "Query": "select ref_with_source.col from ref_with_source"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from `user` where 1 != 1",
+            "Query": "select 1 from `user` where `user`.col = :ref_with_source_col"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.ref_with_source",
+        "user.user"
+      ]
+    }
   }
 ]
