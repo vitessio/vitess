@@ -2992,16 +2992,8 @@ func TestExecutorTruncateErrors(t *testing.T) {
 	err = executor.StreamExecute(ctx, nil, "TestExecute", session, "invalid statement", nil, false, fn)
 	assert.EqualError(t, err, "syntax error at posi [TRUNCATED]")
 
-<<<<<<< HEAD
 	_, _, err = executor.Prepare(context.Background(), "TestExecute", session, "invalid statement")
-	assert.EqualError(t, err, "[BUG] unrecognized p [TRUNCATED]")
-||||||| parent of 98752e5c9a (vtgate: support prepared statements with a leading WITH clause (#20665))
-	_, _, err = executor.Prepare(t.Context(), "TestExecute", session, "invalid statement")
-	assert.EqualError(t, err, "[BUG] unrecognized p [TRUNCATED]")
-=======
-	_, _, err = executor.Prepare(t.Context(), "TestExecute", session, "invalid statement")
 	assert.EqualError(t, err, "syntax error at posi [TRUNCATED]")
->>>>>>> 98752e5c9a (vtgate: support prepared statements with a leading WITH clause (#20665))
 }
 
 func TestPrepareDoesNotStartTransaction(t *testing.T) {
