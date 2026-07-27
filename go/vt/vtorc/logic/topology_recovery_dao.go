@@ -31,6 +31,8 @@ import (
 
 // InsertRecoveryDetection inserts the recovery analysis that has been detected.
 func InsertRecoveryDetection(analysisEntry *inst.DetectionAnalysis) error {
+	aliasStr := topoproto.TabletAliasString(analysisEntry.AnalyzedInstanceAlias)
+	analysisStr := string(analysisEntry.Analysis)
 	sqlResult, err := db.ExecVTOrc(`INSERT OR IGNORE
 		INTO recovery_detection (
 			alias,
@@ -45,8 +47,8 @@ func InsertRecoveryDetection(analysisEntry *inst.DetectionAnalysis) error {
 			?,
 			DATETIME('now')
 		)`,
-		topoproto.TabletAliasString(analysisEntry.AnalyzedInstanceAlias),
-		string(analysisEntry.Analysis),
+		aliasStr,
+		analysisStr,
 		analysisEntry.AnalyzedKeyspace,
 		analysisEntry.AnalyzedShard,
 	)
@@ -54,12 +56,35 @@ func InsertRecoveryDetection(analysisEntry *inst.DetectionAnalysis) error {
 		log.Error(err.Error())
 		return err
 	}
-	id, err := sqlResult.LastInsertId()
+	rows, err := sqlResult.RowsAffected()
 	if err != nil {
 		log.Error(err.Error())
 		return err
 	}
-	analysisEntry.RecoveryId = id
+	if rows > 0 {
+		id, err := sqlResult.LastInsertId()
+		if err != nil {
+			log.Error(err.Error())
+			return err
+		}
+		analysisEntry.RecoveryId = id
+		return nil
+	}
+	// The (alias, analysis) row already exists. Retrieve its detection_id explicitly:
+	// on an ignored INSERT SQLite's last_insert_rowid() retains the rowid from the
+	// previous successful INSERT on this connection, which may belong to a different
+	// detection row entirely.
+	err = db.QueryVTOrc(
+		`SELECT detection_id FROM recovery_detection WHERE alias = ? AND analysis = ?`,
+		sqlutils.Args(aliasStr, analysisStr),
+		func(m sqlutils.RowMap) error {
+			analysisEntry.RecoveryId = m.GetInt64("detection_id")
+			return nil
+		})
+	if err != nil {
+		log.Error(err.Error())
+		return err
+	}
 	return nil
 }
 
