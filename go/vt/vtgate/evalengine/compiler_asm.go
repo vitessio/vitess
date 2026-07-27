@@ -205,9 +205,14 @@ func (asm *assembler) BitOp_and_bb() {
 			env.vm.err = errBitwiseOperandsLength
 			return 0
 		}
-		for i := range l.bytes {
-			l.bytes[i] = l.bytes[i] & r.bytes[i]
+		// The result is a plain binary string of its own: the operands' bytes
+		// are borrowed from a literal, a bind variable or the input row, and
+		// their hex or bit literal markers do not carry over to the result.
+		out := make([]byte, len(l.bytes))
+		for i := range out {
+			out[i] = l.bytes[i] & r.bytes[i]
 		}
+		env.vm.stack[env.vm.sp-2] = env.vm.arena.newEvalBinary(out)
 		env.vm.sp--
 		return 1
 	}, "AND BINARY(SP-2), BINARY(SP-1)")
@@ -222,9 +227,14 @@ func (asm *assembler) BitOp_or_bb() {
 			env.vm.err = errBitwiseOperandsLength
 			return 0
 		}
-		for i := range l.bytes {
-			l.bytes[i] = l.bytes[i] | r.bytes[i]
+		// The result is a plain binary string of its own: the operands' bytes
+		// are borrowed from a literal, a bind variable or the input row, and
+		// their hex or bit literal markers do not carry over to the result.
+		out := make([]byte, len(l.bytes))
+		for i := range out {
+			out[i] = l.bytes[i] | r.bytes[i]
 		}
+		env.vm.stack[env.vm.sp-2] = env.vm.arena.newEvalBinary(out)
 		env.vm.sp--
 		return 1
 	}, "OR BINARY(SP-2), BINARY(SP-1)")
@@ -239,9 +249,14 @@ func (asm *assembler) BitOp_xor_bb() {
 			env.vm.err = errBitwiseOperandsLength
 			return 0
 		}
-		for i := range l.bytes {
-			l.bytes[i] = l.bytes[i] ^ r.bytes[i]
+		// The result is a plain binary string of its own: the operands' bytes
+		// are borrowed from a literal, a bind variable or the input row, and
+		// their hex or bit literal markers do not carry over to the result.
+		out := make([]byte, len(l.bytes))
+		for i := range out {
+			out[i] = l.bytes[i] ^ r.bytes[i]
 		}
+		env.vm.stack[env.vm.sp-2] = env.vm.arena.newEvalBinary(out)
 		env.vm.sp--
 		return 1
 	}, "XOR BINARY(SP-2), BINARY(SP-1)")
@@ -370,9 +385,13 @@ func (asm *assembler) BitShiftRight_uu() {
 func (asm *assembler) BitwiseNot_b() {
 	asm.emit(func(env *ExpressionEnv) int {
 		a := env.vm.stack[env.vm.sp-1].(*evalBytes)
-		for i := range a.bytes {
-			a.bytes[i] = ^a.bytes[i]
+		// The result needs its own buffer: the operand's bytes are borrowed
+		// from a literal, a bind variable or the input row.
+		out := make([]byte, len(a.bytes))
+		for i := range out {
+			out[i] = ^a.bytes[i]
 		}
+		a.bytes = out
 		return 1
 	}, "BIT_NOT BINARY(SP-1)")
 }
