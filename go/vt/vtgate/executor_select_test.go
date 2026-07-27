@@ -3380,6 +3380,7 @@ func TestOptimizedPlan(t *testing.T) {
 	twoTableJoin := "select count(*) from `user` u1 join user u2 where u1.id = ? and u2.id = ?"
 	threeTableJoin := "select count(*) from `user` u1, `user` u2, `user` u3 where u1.id = ? and u2.id = ? and u3.id = ?"
 	unionQuery := "select col, count(*) from (select col from `user` where id = ? union select foo from `user` where id = ?) x group by col"
+	unionJoinQuery := "select refs.seg from user_extra as ue join (select music.user_id, music.id as seg from music where music.user_id = ? union select ue2.user_id, ue2.id from user_extra as ue2 where ue2.user_id = ? union select 5, 42 from dual) as refs on refs.user_id = ue.col where ue.user_id = ?"
 	queryWithSubQ := "select col from `user` where id = ? and exists (select 1 from `user` where id = ?)"
 
 	type testCase struct {
@@ -3461,6 +3462,20 @@ func TestOptimizedPlan(t *testing.T) {
 		v1:             54,
 		v2:             54,
 		expectedShards: 1,
+	}, {
+		name:           "Same values - pass-through - join to union with dual",
+		query:          unionJoinQuery,
+		v1:             1,
+		v2:             1,
+		v3:             1,
+		expectedShards: 1,
+	}, {
+		name:           "Different values - baseline plan - join to union with dual",
+		query:          unionJoinQuery,
+		v1:             54,
+		v2:             22,
+		v3:             54,
+		expectedShards: 2,
 	}, {
 		name:           "Same values - pass-through - sub query",
 		query:          queryWithSubQ,
