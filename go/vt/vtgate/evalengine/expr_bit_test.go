@@ -47,6 +47,8 @@ var bitwiseOperandOwnership = []struct {
 	{name: "literal rhs", expression: `:l ^ _binary'!!'`, result: "`c"},
 }
 
+// bitwiseBindVars returns a fresh set of the operands the cases above use, so
+// that a case which corrupts one of them cannot affect any other case.
 func bitwiseBindVars() map[string]*querypb.BindVariable {
 	return map[string]*querypb.BindVariable{
 		"l": sqltypes.BytesBindVariable([]byte("AB")),

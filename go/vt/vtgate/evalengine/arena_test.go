@@ -33,11 +33,14 @@ func TestArenaReusedEntriesAreCleared(t *testing.T) {
 	t.Run("bytes", func(t *testing.T) {
 		var a Arena
 
-		// A hex literal reaches an entry by having the whole literal copied over
-		// it, which is how an entry ends up holding flags at all.
+		// A literal reaches an entry by having the whole literal copied over it,
+		// which is how an entry ends up holding flags at all. Both markers are
+		// seeded so that clearing only one of them fails the test.
 		stale := a.newEvalBytesEmpty()
 		*stale = *newEvalBytesHex([]byte("A")).(*evalBytes)
+		stale.flag |= flagBit
 		require.True(t, stale.isHexLiteral())
+		require.True(t, stale.isBitLiteral())
 
 		a.reset()
 
