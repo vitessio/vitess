@@ -1016,6 +1016,10 @@ func (v *Value) Array() ([]*Value, bool) {
 }
 
 // StringBytes returns the underlying JSON string for the v.
+//
+// The returned slice aliases the string inside v and must not be written to. v
+// can outlive the caller by a long way — a document folded into a query plan
+// lives as long as the plan is cached, and is shared by concurrent queries.
 func (v *Value) StringBytes() ([]byte, bool) {
 	if v.Type() != TypeString {
 		return nil, false
