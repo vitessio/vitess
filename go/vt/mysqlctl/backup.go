@@ -456,7 +456,7 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 	}
 
 	// Some backup engines and older manifests omit BackupName, so populate it from the selected backup handle.
-	if manifest.BackupName == "" {
+	if manifest != nil && manifest.BackupName == "" {
 		manifest.BackupName = bh.Name()
 	}
 
