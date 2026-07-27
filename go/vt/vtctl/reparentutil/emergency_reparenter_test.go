@@ -22,6 +22,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -134,9 +135,14 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 		errShouldContain string
 	}{
 		{
-			name:                 "success",
-			durability:           policy.DurabilityNone,
-			emergencyReparentOps: EmergencyReparentOptions{},
+			name:       "success with matching expected primary",
+			durability: policy.DurabilityNone,
+			emergencyReparentOps: EmergencyReparentOptions{
+				ExpectedPrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
 			tmc: &testutil.TabletManagerClient{
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000102": nil,
@@ -1871,120 +1877,6 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 			errShouldContain: "primary zone1-0000000100 is not equal to expected alias zone1-0000000101",
 		},
 		{
-			name:       "expected primary matches current primary",
-			durability: policy.DurabilityNone,
-			emergencyReparentOps: EmergencyReparentOptions{
-				ExpectedPrimaryAlias: &topodatapb.TabletAlias{
-					Cell: "zone1",
-					Uid:  100,
-				},
-			},
-			tmc: &testutil.TabletManagerClient{
-				PopulateReparentJournalResults: map[string]error{
-					"zone1-0000000102": nil,
-				},
-				PromoteReplicaResults: map[string]struct {
-					Result string
-					Error  error
-				}{
-					"zone1-0000000102": {
-						Result: "ok",
-						Error:  nil,
-					},
-				},
-				SetReplicationSourceResults: map[string]error{
-					"zone1-0000000100": nil,
-					"zone1-0000000101": nil,
-				},
-				StopReplicationAndGetStatusResults: map[string]struct {
-					StopStatus *replicationdatapb.StopReplicationStatus
-					Error      error
-				}{
-					"zone1-0000000100": {
-						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
-							After: &replicationdatapb.Status{
-								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
-								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
-							},
-						},
-					},
-					"zone1-0000000101": {
-						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
-							After: &replicationdatapb.Status{
-								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
-								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
-							},
-						},
-					},
-					"zone1-0000000102": {
-						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
-							After: &replicationdatapb.Status{
-								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
-								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26",
-							},
-						},
-					},
-				},
-				WaitForPositionResults: map[string]map[string]error{
-					"zone1-0000000100": {
-						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
-					},
-					"zone1-0000000101": {
-						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
-					},
-					"zone1-0000000102": {
-						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26": nil,
-					},
-				},
-			},
-			shards: []*vtctldatapb.Shard{
-				{
-					Keyspace: "testkeyspace",
-					Name:     "-",
-					Shard: &topodatapb.Shard{
-						PrimaryAlias: &topodatapb.TabletAlias{
-							Cell: "zone1",
-							Uid:  100,
-						},
-					},
-				},
-			},
-			tablets: []*topodatapb.Tablet{
-				{
-					Alias: &topodatapb.TabletAlias{
-						Cell: "zone1",
-						Uid:  100,
-					},
-					Keyspace: "testkeyspace",
-					Shard:    "-",
-				},
-				{
-					Alias: &topodatapb.TabletAlias{
-						Cell: "zone1",
-						Uid:  101,
-					},
-					Keyspace: "testkeyspace",
-					Shard:    "-",
-				},
-				{
-					Alias: &topodatapb.TabletAlias{
-						Cell: "zone1",
-						Uid:  102,
-					},
-					Keyspace: "testkeyspace",
-					Shard:    "-",
-					Hostname: "most up-to-date position, wins election",
-				},
-			},
-			keyspace:  "testkeyspace",
-			shard:     "-",
-			cells:     []string{"zone1"},
-			shouldErr: false,
-		},
-		{
 			name:       "expected primary set but shard has no primary",
 			durability: policy.DurabilityNone,
 			emergencyReparentOps: EmergencyReparentOptions{
@@ -2141,12 +2033,15 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 
 // readReparentJournalInfoUnlockTMC releases the shard lock from inside the first
 // ReadReparentJournalInfo RPC, simulating losing the topology lock after the
-// post-stop-replication lock check has already passed.
+// post-stop-replication lock check has already passed. It also counts StartReplication
+// calls so tests can assert the deferred cleanup skipped the replication restart.
 type readReparentJournalInfoUnlockTMC struct {
 	*testutil.TabletManagerClient
 
 	once   sync.Once
 	unlock func()
+
+	startReplicationCalls atomic.Int32
 }
 
 func (fake *readReparentJournalInfoUnlockTMC) ReadReparentJournalInfo(ctx context.Context, tablet *topodatapb.Tablet) (int32, error) {
@@ -2154,19 +2049,32 @@ func (fake *readReparentJournalInfoUnlockTMC) ReadReparentJournalInfo(ctx contex
 	return fake.TabletManagerClient.ReadReparentJournalInfo(ctx, tablet)
 }
 
+func (fake *readReparentJournalInfoUnlockTMC) StartReplication(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) error {
+	fake.startReplicationCalls.Add(1)
+	return fake.TabletManagerClient.StartReplication(ctx, tablet, semiSync)
+}
+
 // setReplicationSourceUnlockTMC releases the shard lock from inside the first
 // SetReplicationSource RPC, simulating losing the topology lock while replicas are
-// being reparented to the intermediate source.
+// being reparented to the intermediate source. It also counts StartReplication calls
+// so tests can assert the deferred cleanup skipped the replication restart.
 type setReplicationSourceUnlockTMC struct {
 	*testutil.TabletManagerClient
 
 	once   sync.Once
 	unlock func()
+
+	startReplicationCalls atomic.Int32
 }
 
 func (fake *setReplicationSourceUnlockTMC) SetReplicationSource(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync bool, heartbeatInterval float64) error {
 	fake.once.Do(fake.unlock)
 	return fake.TabletManagerClient.SetReplicationSource(ctx, tablet, parent, timeCreatedNS, waitPosition, forceStartReplication, semiSync, heartbeatInterval)
+}
+
+func (fake *setReplicationSourceUnlockTMC) StartReplication(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) error {
+	fake.startReplicationCalls.Add(1)
+	return fake.TabletManagerClient.StartReplication(ctx, tablet, semiSync)
 }
 
 // TestEmergencyReparenterLockLostBeforePromotion verifies that ERS re-checks the shard
@@ -2281,6 +2189,7 @@ func TestEmergencyReparenterLockLostBeforePromotion(t *testing.T) {
 	err := erp.reparentShardLocked(lctx, ev, keyspace, shard, EmergencyReparentOptions{})
 	require.Error(t, err)
 	assert.ErrorContains(t, err, lostTopologyLockMsg)
+	assert.Zero(t, tmc.startReplicationCalls.Load(), "the deferred cleanup must not restart replication after the shard lock is lost")
 }
 
 // TestEmergencyReparenterLockLostAfterIntermediateSourcePromotion verifies that ERS
@@ -2419,6 +2328,7 @@ func TestEmergencyReparenterLockLostAfterIntermediateSourcePromotion(t *testing.
 	err := erp.reparentShardLocked(lctx, ev, keyspace, shard, opts)
 	require.Error(t, err)
 	assert.ErrorContains(t, err, lostTopologyLockMsg)
+	assert.Zero(t, tmc.startReplicationCalls.Load(), "the deferred cleanup must not restart replication after the shard lock is lost")
 }
 
 // TestEmergencyReparenterRestartsStoppedIOThreadsOnStopReplicationFailure verifies that ERS
