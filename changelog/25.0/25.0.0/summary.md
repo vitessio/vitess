@@ -35,7 +35,7 @@
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
         - [Skip MySQL version check when restoring from a mysql-shell backup](#vttablet-mysql-shell-restore-skip-version-check)
     - **[Backup/Restore](#minor-changes-backup)**
-        - [Errant GTID validation for base backups](#vtbackup-errant-gtid-validation)
+        - [Errant GTID validation for base backups with `--verify-backup-errant-gtids`](#vtbackup-errant-gtid-validation)
         - [Chunked backup/restore for the builtinbackupengine](#backup-chunked-builtin)
         - [Slow clean mysqld shutdowns no longer fail backups](#backup-mysqld-shutdown-timeout)
     - **[General](#minor-changes-general)**
@@ -303,15 +303,20 @@ Because mysql-shell performs a logical restore, its backups are not tied to the 
 
 ### <a id="minor-changes-backup"/>Backup/Restore</a>
 
-#### <a id="vtbackup-errant-gtid-validation"/>Errant GTID validation for base backups</a>
+#### <a id="vtbackup-errant-gtid-validation"/>Errant GTID validation for base backups with `--verify-backup-errant-gtids`</a>
 
-Before creating a new backup, `vtbackup` now verifies that the restored base backup has no errant GTIDs relative to
-the current shard primary. If errant GTIDs are found, `vtbackup` fails without creating or pruning backups and reports
-the affected backup and errant GTID set.
+A new `--verify-backup-errant-gtids` flag (default `false`) has been added to VTBackup. It controls what `vtbackup`
+does when the base backup it restored has errant GTIDs relative to the current shard primary.
 
-Existing `--init-backup-sql-queries` that generate local GTIDs can cause the resulting backup to be rejected by the next
-`vtbackup` run. Configure those statements to avoid binary logging, using forms such as `LOCAL` or
-`NO_WRITE_TO_BINLOG`, or execute them with `sql_log_bin` disabled.
+The default of `false` logs a warning naming the affected backup and errant GTID set, then takes the backup as usual,
+preserving the existing behavior.
+
+When set to `true`, `vtbackup` fails instead, exiting without creating or pruning backups. Operators are encouraged to
+enable it, since a base backup with errant GTIDs propagates those transactions into every backup taken from it, and a
+tablet restoring from such a backup refuses to join the replication graph and fails to start.
+
+Existing `--init-backup-sql-queries` that generate local GTIDs will trigger this. Configure those statements to avoid
+binary logging, using forms such as `LOCAL` or `NO_WRITE_TO_BINLOG`, or execute them with `sql_log_bin` disabled.
 
 See [#20677](https://github.com/vitessio/vitess/issues/20677) for details.
 
