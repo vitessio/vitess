@@ -1334,6 +1334,27 @@ func parseNumberType(ns string) NumberType {
 	return NumberTypeUnknown
 }
 
+// ResolveNumberTypes classifies every number in the document, in place.
+// Parsed numbers are classified lazily: the first NumberType call writes the
+// classification back to the value. A document that will be shared between
+// goroutines — such as a constant folded into a cached plan — must resolve
+// its number types first, while a single goroutine still owns it, so that
+// concurrent readers never race that write.
+func (v *Value) ResolveNumberTypes() {
+	switch v.t {
+	case TypeObject:
+		for _, item := range v.o.kvs {
+			item.v.ResolveNumberTypes()
+		}
+	case TypeArray:
+		for _, item := range v.a {
+			item.ResolveNumberTypes()
+		}
+	case TypeNumber:
+		v.NumberType()
+	}
+}
+
 func (v *Value) Int64() (int64, bool) {
 	i, err := fastparse.ParseInt64(v.s, 10)
 	if err != nil {
