@@ -556,7 +556,7 @@ func TestDownPrimaryPromotionRuleWithLag(t *testing.T) {
 			shard0 := &keyspace.Shards[0]
 			// find primary from topo
 			curPrimary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
-			assert.NotNil(t, curPrimary, "should have elected a primary")
+			require.NotNil(t, curPrimary, "should have elected a primary")
 
 			// find the same-cell replica and rdonly tablets
 			replica, rdonly := utils.FindReplicaAndRdonly(t, shard0, curPrimary)
