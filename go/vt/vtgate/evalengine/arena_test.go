@@ -24,27 +24,56 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 )
 
-// TestArenaReusedBytesEntriesAreCleared tests that a value handed out by the
-// arena carries nothing over from the value that used the same entry before it.
-// An arena is reset once per evaluation and then hands the same entries out
-// again, while the constructors set only the type, the collation and the bytes,
-// so anything else has to be cleared for the caller to get the value it asked
-// for.
-func TestArenaReusedBytesEntriesAreCleared(t *testing.T) {
-	var a Arena
+// TestArenaReusedEntriesAreCleared tests that a value handed out by the arena
+// carries nothing over from the value that used the same entry before it. An
+// arena is reset once per evaluation and then hands the same entries out again,
+// so a field a constructor takes no argument for still has to be cleared for the
+// caller to get the value it asked for.
+func TestArenaReusedEntriesAreCleared(t *testing.T) {
+	t.Run("bytes", func(t *testing.T) {
+		var a Arena
 
-	// A hex literal is pushed onto the stack by copying the whole literal, which
-	// is how an entry ends up holding flags at all.
-	stale := a.newEvalBytesEmpty()
-	*stale = *newEvalBytesHex([]byte("A")).(*evalBytes)
-	require.True(t, stale.isHexLiteral())
+		// A hex literal reaches an entry by having the whole literal copied over
+		// it, which is how an entry ends up holding flags at all.
+		stale := a.newEvalBytesEmpty()
+		*stale = *newEvalBytesHex([]byte("A")).(*evalBytes)
+		require.True(t, stale.isHexLiteral())
 
-	a.reset()
+		a.reset()
 
-	fresh := a.newEvalBinary([]byte("A"))
-	require.Same(t, stale, fresh, "the entry must be reused for this test to mean anything")
-	require.False(t, fresh.isHexLiteral())
-	require.False(t, fresh.isBitLiteral())
-	require.Equal(t, sqltypes.VarBinary, fresh.SQLType())
-	require.Equal(t, collationBinary, fresh.col)
+		fresh := a.newEvalBinary([]byte("A"))
+		require.Same(t, stale, fresh, "the entry must be reused for this test to mean anything")
+		require.False(t, fresh.isHexLiteral())
+		require.False(t, fresh.isBitLiteral())
+		require.Equal(t, sqltypes.VarBinary, fresh.SQLType())
+		require.Equal(t, collationBinary, fresh.col)
+	})
+
+	t.Run("int64", func(t *testing.T) {
+		var a Arena
+
+		stale := a.newEvalInt64(1)
+		stale.bitLiteral = true
+
+		a.reset()
+
+		fresh := a.newEvalInt64(2)
+		require.Same(t, stale, fresh, "the entry must be reused for this test to mean anything")
+		require.False(t, fresh.bitLiteral)
+		require.EqualValues(t, 2, fresh.i)
+	})
+
+	t.Run("uint64", func(t *testing.T) {
+		var a Arena
+
+		stale := a.newEvalUint64(1)
+		stale.hexLiteral = true
+
+		a.reset()
+
+		fresh := a.newEvalUint64(2)
+		require.Same(t, stale, fresh, "the entry must be reused for this test to mean anything")
+		require.False(t, fresh.hexLiteral)
+		require.EqualValues(t, 2, fresh.u)
+	})
 }
