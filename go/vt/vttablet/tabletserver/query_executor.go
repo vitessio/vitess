@@ -1207,7 +1207,14 @@ func (qre *QueryExecutor) execOther() (*sqltypes.Result, error) {
 		return nil, err
 	}
 	defer conn.Recycle()
-	return qre.execDBConn(conn.Conn, qre.query, true)
+	sql := qre.query
+	if qre.plan.FullQuery != nil && len(qre.bindVars) > 0 {
+		sql, _, err = qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return qre.execDBConn(conn.Conn, sql, true)
 }
 
 func (qre *QueryExecutor) getConn() (*connpool.PooledConn, error) {

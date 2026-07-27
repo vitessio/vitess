@@ -299,7 +299,7 @@ func BuildStreaming(env *vtenv.Environment, statement sqlparser.Statement, table
 	case *sqlparser.OtherAdmin:
 		plan = &Plan{PlanID: PlanOtherAdmin}
 	case *sqlparser.Do:
-		plan = &Plan{PlanID: PlanOtherAdmin}
+		plan = &Plan{PlanID: PlanOtherAdmin, FullQuery: GenerateFullQuery(stmt)}
 	case *sqlparser.Savepoint:
 		plan = &Plan{PlanID: PlanSavepoint, FullStmt: stmt}
 	case *sqlparser.Release:

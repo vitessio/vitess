@@ -816,7 +816,8 @@ options:PassthroughDMLs
 "do 1"
 {
   "PlanID": "OtherAdmin",
-  "TableName": ""
+  "TableName": "",
+  "FullQuery": "do 1"
 }
 
 # syntax error
