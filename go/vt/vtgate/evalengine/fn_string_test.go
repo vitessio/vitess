@@ -28,6 +28,66 @@ import (
 	"vitess.io/vitess/go/vt/vtenv"
 )
 
+// TestChangeCaseNumberCharset tests that UPPER or LOWER of a number or a
+// temporal value compares with a column in another single-byte charset: the
+// value's text is ASCII, so it converts to the column's charset. ENUM text
+// need not be ASCII, so it does not convert.
+func TestChangeCaseNumberCharset(t *testing.T) {
+	venv := vtenv.NewTestEnv()
+	coll := venv.CollationEnv().LookupByName("latin1_swedish_ci")
+	resolver := FieldResolver([]*querypb.Field{
+		{Name: "n", Type: sqltypes.Int64, Charset: collations.CollationBinaryID},
+		{Name: "d", Type: sqltypes.Date, Charset: collations.CollationBinaryID},
+		{Name: "f", Type: sqltypes.Float64, Charset: collations.CollationBinaryID},
+		{Name: "e", Type: sqltypes.Enum, Charset: uint32(coll)},
+		{Name: "a", Type: sqltypes.VarChar, Charset: uint32(venv.CollationEnv().LookupByName("ascii_bin"))},
+		{Name: "l", Type: sqltypes.VarChar, Charset: uint32(venv.CollationEnv().LookupByName("latin2_general_ci"))},
+	})
+
+	testCases := []struct {
+		expression string
+		text       string
+		err        string
+	}{
+		{expression: `upper(n) = a`, text: "1"},
+		{expression: `lower(d) = a`, text: "2020-01-01"},
+		{expression: `upper(f) = a`, text: "1E100"},
+		{expression: `lower(e) = l`, err: "Illegal mix of collations"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.expression, func(t *testing.T) {
+			astExpr, err := venv.Parser().ParseExpr(tc.expression)
+			require.NoError(t, err)
+			translated, err := Translate(astExpr, &Config{
+				ResolveColumn: resolver.Column,
+				ResolveType:   resolver.Type,
+				Collation:     coll,
+				Environment:   venv,
+			})
+			if tc.err != "" {
+				require.ErrorContains(t, err, tc.err)
+				return
+			}
+			require.NoError(t, err)
+			require.IsType(t, &CompiledExpr{}, translated)
+
+			env := NewExpressionEnv(t.Context(), nil, NewEmptyVCursor(venv, time.Local))
+			env.Row = []sqltypes.Value{
+				sqltypes.NewInt64(1),
+				sqltypes.NewDate("2020-01-01"),
+				sqltypes.NewFloat64(1e100),
+				sqltypes.MakeTrusted(sqltypes.Enum, []byte("x")),
+				sqltypes.NewVarChar(tc.text),
+				sqltypes.NewVarChar("x"),
+			}
+			res, err := env.Evaluate(translated)
+			require.NoError(t, err)
+			require.Equal(t, sqltypes.NewInt64(1), res.Value(coll))
+		})
+	}
+}
+
 // TestPadPreservesRow tests that LPAD and RPAD leave the input row untouched.
 // The values of a row share one buffer, so every value but the last is followed
 // in memory by the next one: padding that grew its operand in place would write
