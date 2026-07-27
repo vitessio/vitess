@@ -365,7 +365,10 @@ func TestERSPromoteRdonly(t *testing.T) {
 	// Confirm that replication is still working as intended
 	utils.ConfirmReplication(t, tablets[0], tablets[1:])
 
-	t.Run("fail fast when no tablet can be safely promoted", func(t *testing.T) {
+	// The fail-fast ERS runs in a goroutine so we can bound it with a test-side deadline; on the
+	// timeout path that goroutine is left running the (non-cancelable) ERS against the shared cluster,
+	// so skip the second scenario if this one fails rather than let the leaked ERS corrupt its state.
+	if !t.Run("fail fast when no tablet can be safely promoted", func(t *testing.T) {
 		// Context to be used in the go-routine to cleanly exit it after the test ends
 		ctx := t.Context()
 		strChan := make(chan string)
@@ -383,11 +386,13 @@ func TestERSPromoteRdonly(t *testing.T) {
 
 		select {
 		case out := <-strChan:
-			require.Contains(t, out, "proposed primary zone1-0000000103 will not be able to make forward progress on being promoted")
+			require.Contains(t, out, fmt.Sprintf("proposed primary %s will not be able to make forward progress on being promoted", tablets[2].Alias))
 		case <-time.After(60 * time.Second):
 			require.Fail(t, "Emergency Reparent Shard did not fail in 60 seconds")
 		}
-	})
+	}) {
+		return
+	}
 
 	t.Run("never promote a rdonly tablet", func(t *testing.T) {
 		err := clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", tablets[2].Alias, "rdonly")
@@ -599,6 +604,10 @@ func TestERSForInitialization(t *testing.T) {
 	utils.ConfirmReplication(t, tablets[0], tablets[1:])
 }
 
+// TestRecoverWithMultipleFailures tests that ERS succeeds with the default values even when there
+// are multiple vttablet failures. It uses the semi_sync policy to allow multiple failures to happen
+// and still be recoverable, and runs ERS with the default remote-operation-timeout, lock-timeout and
+// wait_replicas_timeout values so a regression in those defaults is caught (see #11881).
 func TestRecoverWithMultipleFailures(t *testing.T) {
 	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
 	defer utils.TeardownCluster(clusterInstance)
@@ -617,7 +626,7 @@ func TestRecoverWithMultipleFailures(t *testing.T) {
 	utils.StopTablet(t, tablets[0], true)
 
 	// We expect this to succeed since we only have 1 primary eligible tablet which is down
-	out, err := utils.Ers(clusterInstance, nil, "30s", "10s")
+	out, err := utils.Ers(clusterInstance, nil, "", "")
 	require.NoError(t, err, out)
 
 	newPrimary := utils.GetNewPrimary(t, clusterInstance)
