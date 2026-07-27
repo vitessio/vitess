@@ -65,6 +65,14 @@ func (jm *joinMerger) mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs
 
 	// an unsharded/reference route can be merged with anything going to that keyspace
 	case a == anyShard && sameKeyspace:
+		// Except when the reference table is the preserved side of an outer
+		// join: the merged route runs on every shard, and since the reference
+		// table has the same rows everywhere, an unmatched preserved row would
+		// come back once per shard instead of once.
+		if !jm.joinType.IsInner() {
+			debugNoRewrite("apply join merge blocked: reference table on the preserved side of a %s", jm.joinType.ToString())
+			return nil
+		}
 		return jm.merge(ctx, lhsRoute, rhsRoute, routingB)
 	case b == anyShard && sameKeyspace:
 		return jm.merge(ctx, lhsRoute, rhsRoute, routingA)
