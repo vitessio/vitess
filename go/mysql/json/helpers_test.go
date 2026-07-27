@@ -17,12 +17,14 @@ limitations under the License.
 package json
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/vt/vthash"
 )
 
@@ -34,6 +36,20 @@ func repeatedArray(elements int) string {
 			buf.WriteByte(',')
 		}
 		buf.WriteString(strconv.Itoa(i))
+	}
+	buf.WriteByte(']')
+	return buf.String()
+}
+
+func fractionalArray(elements int) string {
+	var buf strings.Builder
+	buf.WriteByte('[')
+	for i := range elements {
+		if i > 0 {
+			buf.WriteByte(',')
+		}
+		buf.WriteString(strconv.Itoa(i))
+		buf.WriteString(".25")
 	}
 	buf.WriteByte(']')
 	return buf.String()
@@ -65,6 +81,8 @@ func BenchmarkValueHash(b *testing.B) {
 		{"array/4", repeatedArray(4)},
 		{"array/64", repeatedArray(64)},
 		{"array/1024", repeatedArray(1024)},
+		{"fractional array/64", fractionalArray(64)},
+		{"fractional array/1024", fractionalArray(1024)},
 		{"object/4", repeatedObject(4)},
 		{"object/64", repeatedObject(64)},
 		{"nested", `{"a":[1,2,3],"b":{"c":[4,5,6],"d":"seven"},"e":[[8],[9]]}`},
@@ -85,6 +103,100 @@ func BenchmarkValueHash(b *testing.B) {
 				v.Hash(&hasher)
 				_ = hasher.Sum128()
 			}
+		})
+	}
+}
+
+func hashNumberText(t *testing.T, num string) vthash.Hash {
+	t.Helper()
+
+	h := vthash.New()
+	require.Truef(t, hashDecimalText(&h, num), "%q was not recognised as a number", num)
+	return h.Sum128()
+}
+
+// numberSpellings returns many spellings of relatively few values: the same
+// digits with the decimal point walked across them, with and without a written
+// exponent, signed and unsigned. Values that coincide are the point of the
+// corpus, since those are the pairs a fingerprint has to agree on.
+func numberSpellings() []string {
+	coefficients := []string{
+		"0", "00", "1", "7", "10", "100", "1000", "123", "1230", "1002003",
+		"9007199254740992", "9007199254740993", "999999999999999999999",
+		"1000000000000000000000000000",
+	}
+	exponents := []string{"", "e0", "e1", "e-1", "e5", "e-5", "e+5", "e27", "e-27", "E3"}
+
+	var spellings []string
+	for _, coefficient := range coefficients {
+		mantissas := []string{coefficient}
+		for point := 1; point < len(coefficient); point++ {
+			mantissas = append(mantissas, coefficient[:point]+"."+coefficient[point:])
+		}
+		mantissas = append(mantissas, "0."+coefficient, coefficient+".0", coefficient+".")
+
+		for _, mantissa := range mantissas {
+			for _, exponent := range exponents {
+				spellings = append(spellings, mantissa+exponent, "-"+mantissa+exponent)
+			}
+		}
+	}
+	return spellings
+}
+
+// TestNumberHashMatchesDecimalComparison is the safety net under fingerprinting
+// numbers from their text: comparison converts them to exact decimals instead,
+// and the two must sort every pair of spellings into the same equality classes.
+func TestNumberHashMatchesDecimalComparison(t *testing.T) {
+	var (
+		spellings []string
+		values    []decimal.Decimal
+		hashes    []vthash.Hash
+		skipped   int
+	)
+	for _, spelling := range numberSpellings() {
+		value, err := decimal.NewFromString(spelling)
+		if err != nil {
+			// A spelling with no decimal value has nothing to agree with:
+			// comparison fails on it rather than calling it equal to anything.
+			skipped++
+			continue
+		}
+		spellings = append(spellings, spelling)
+		values = append(values, value)
+		hashes = append(hashes, hashNumberText(t, spelling))
+	}
+	t.Logf("comparing %d spellings pairwise, %d had no decimal value", len(spellings), skipped)
+
+	for i, left := range spellings {
+		for j, right := range spellings {
+			equal := values[i].Cmp(values[j]) == 0
+			require.Equalf(t, equal, hashes[i] == hashes[j],
+				"%q and %q compare equal=%v but hash equal=%v (as decimals %s and %s)",
+				left, right, equal, hashes[i] == hashes[j], values[i], values[j])
+		}
+	}
+}
+
+// TestNumberHashSpansUnparseableSpellings checks that spellings the decimal
+// parser turns down still fingerprint by value. Comparison errors on them, so
+// nothing can contradict the fingerprint, and treating a signed exponent as the
+// number it spells beats treating it as its own value.
+func TestNumberHashSpansUnparseableSpellings(t *testing.T) {
+	_, err := decimal.NewFromString("1e+5")
+	require.Error(t, err)
+
+	require.Equal(t, hashNumberText(t, "1e5"), hashNumberText(t, "1e+5"))
+	require.Equal(t, hashNumberText(t, "100000"), hashNumberText(t, "1e+5"))
+}
+
+// TestNumberHashRejectsNonNumbers checks that text with no decimal value falls
+// out of the fast path rather than being canonicalised into a collision.
+func TestNumberHashRejectsNonNumbers(t *testing.T) {
+	for _, num := range []string{"", "-", ".", "-.", "e5", "1e", "1e+", "1.2.3", "1e2e3", "0x10", " 1", "1 ", "+1", "1e1234567890123"} {
+		t.Run(fmt.Sprintf("%q", num), func(t *testing.T) {
+			h := vthash.New()
+			require.False(t, hashDecimalText(&h, num))
 		})
 	}
 }

@@ -17,6 +17,7 @@ limitations under the License.
 package json
 
 import (
+	"encoding/binary"
 	"fmt"
 	"strings"
 
@@ -108,56 +109,181 @@ func (v *Value) hash(h *vthash.Hasher) {
 	}
 }
 
+// Sign markers leading a number's fingerprint. Zero carries no sign, so that
+// 0 and -0 fingerprint alike, and unrecognised text carries its own marker so
+// that it can never be mistaken for a number that happens to spell the same.
+const (
+	numberHashZero = iota
+	numberHashPositive
+	numberHashNegative
+	// The scaled markers carry an exponent after the digit count. Most numbers
+	// are written with none, so the plain markers leave it off entirely.
+	numberHashPositiveScaled
+	numberHashNegativeScaled
+	numberHashUnparsed
+)
+
 // hashNumber fingerprints the decimal value a number spells, so that every
 // spelling of one value fingerprints alike while two values that differ only
 // past the precision of a float64 do not.
 func (v *Value) hashNumber(h *vthash.Hasher) {
-	// Integral spellings are the common case and canonicalise without the
-	// arbitrary-precision detour, byte for byte as Decimal.String would.
-	if digits, negative, ok := integralDigits(v.s); ok {
-		if negative {
-			h.Write32(uint32(len(digits) + 1))
-			h.Write8('-')
-		} else {
-			h.Write32(uint32(len(digits)))
-		}
-		_, _ = h.WriteString(digits)
+	if hashDecimalText(h, v.s) {
 		return
 	}
-
-	dec, ok := v.Decimal()
-	if !ok {
-		// A number that will not convert to a decimal cannot be compared
-		// either, so its spelling is the best fingerprint left.
-		hashFramed(h, v.s)
-		return
-	}
-	hashFramed(h, dec.String())
+	// Text no number the parser produces can reach. It has no decimal value to
+	// fingerprint, and comparison rejects it too, so its spelling is all there
+	// is to go on.
+	h.Write8(numberHashUnparsed)
+	hashFramed(h, v.s)
 }
 
-// integralDigits canonicalises a number written without a fraction or an
-// exponent: leading zeros go and zero is never signed, which is how
-// Decimal.String renders the same value. Every other spelling reports false and
-// takes the decimal conversion instead.
-func integralDigits(num string) (digits string, negative bool, ok bool) {
-	digits = num
-	if strings.HasPrefix(digits, "-") {
-		negative, digits = true, digits[1:]
+// hashDecimalText writes a canonical fingerprint of the decimal value spelled by
+// num, and reports whether it recognised num as a number at all.
+//
+// Two spellings denote the same value exactly when they share a sign, a run of
+// significant digits with no leading or trailing zeros, and the power of ten
+// that run scales by, which is what gets written. Working from the text rather
+// than from a parsed decimal keeps this allocation-free, which matters because
+// every element of a JSON array of numbers passes through here.
+func hashDecimalText(h *vthash.Hasher, num string) bool {
+	rest := num
+
+	var negative bool
+	if strings.HasPrefix(rest, "-") {
+		negative, rest = true, rest[1:]
 	}
-	if digits == "" {
-		return "", false, false
+
+	integer := rest[:indexMantissaEnd(rest)]
+	rest = rest[len(integer):]
+
+	var fraction string
+	if strings.HasPrefix(rest, ".") {
+		rest = rest[1:]
+		fraction = rest[:indexMantissaEnd(rest)]
+		rest = rest[len(fraction):]
 	}
-	for i := range len(digits) {
-		if digits[i] < '0' || digits[i] > '9' {
-			return "", false, false
+
+	if integer == "" && fraction == "" || !allDigits(integer) || !allDigits(fraction) {
+		return false
+	}
+
+	// The digits denote an integer scaled by ten to the exponent: the fraction
+	// contributes one negative power of ten per digit, on top of any written
+	// exponent.
+	exponent := -int64(len(fraction))
+	if rest != "" {
+		written, ok := parseExponent(rest)
+		if !ok {
+			return false
+		}
+		exponent += written
+	}
+
+	// Leading zeros contribute nothing, and each trailing zero is worth one
+	// power of ten, so dropping them scales the exponent up to compensate. The
+	// digits are two slices rather than one, so the leading run can only reach
+	// the fraction once the integer part is spent, and the trailing run can only
+	// reach the integer part once the fraction is.
+	head, tail := strings.TrimLeft(integer, "0"), fraction
+	if head == "" {
+		tail = strings.TrimLeft(tail, "0")
+	}
+	if trimmed := strings.TrimRight(tail, "0"); len(trimmed) != len(tail) {
+		exponent += int64(len(tail) - len(trimmed))
+		tail = trimmed
+	}
+	if tail == "" {
+		if trimmed := strings.TrimRight(head, "0"); len(trimmed) != len(head) {
+			exponent += int64(len(head) - len(trimmed))
+			head = trimmed
 		}
 	}
 
-	digits = strings.TrimLeft(digits, "0")
-	if digits == "" {
-		return "0", false, true
+	if head == "" && tail == "" {
+		h.Write8(numberHashZero)
+		return true
 	}
-	return digits, negative, true
+
+	// The header goes in as one write: at array sizes the hasher call overhead
+	// outweighs the work of assembling it.
+	var header [13]byte
+	switch {
+	case exponent == 0 && !negative:
+		header[0] = numberHashPositive
+	case exponent == 0:
+		header[0] = numberHashNegative
+	case !negative:
+		header[0] = numberHashPositiveScaled
+	default:
+		header[0] = numberHashNegativeScaled
+	}
+	binary.LittleEndian.PutUint32(header[1:], uint32(len(head)+len(tail)))
+	written := 5
+	if exponent != 0 {
+		binary.LittleEndian.PutUint64(header[5:], uint64(exponent))
+		written = 13
+	}
+
+	_, _ = h.Write(header[:written])
+	_, _ = h.WriteString(head)
+	if tail != "" {
+		_, _ = h.WriteString(tail)
+	}
+	return true
+}
+
+// parseExponent reads the exponent suffix of a number, from the e onwards. It
+// reports false for a suffix long enough to overflow, which is a value no
+// decimal can hold anyway.
+func parseExponent(suffix string) (int64, bool) {
+	if suffix[0] != 'e' && suffix[0] != 'E' {
+		return 0, false
+	}
+
+	rest := suffix[1:]
+	var negative bool
+	switch {
+	case strings.HasPrefix(rest, "+"):
+		rest = rest[1:]
+	case strings.HasPrefix(rest, "-"):
+		negative, rest = true, rest[1:]
+	}
+
+	if rest == "" || len(rest) > 9 || !allDigits(rest) {
+		return 0, false
+	}
+
+	var exponent int64
+	for i := range len(rest) {
+		exponent = exponent*10 + int64(rest[i]-'0')
+	}
+	if negative {
+		exponent = -exponent
+	}
+	return exponent, true
+}
+
+// indexMantissaEnd returns the offset of the first byte that ends a run of
+// mantissa digits, or the length of s if the digits run to the end. This is
+// strings.IndexAny over ".eE", spelled out because IndexAny decodes runes and
+// this sits under every number in a JSON array.
+func indexMantissaEnd(s string) int {
+	for i := range len(s) {
+		switch s[i] {
+		case '.', 'e', 'E':
+			return i
+		}
+	}
+	return len(s)
+}
+
+func allDigits(s string) bool {
+	for i := range len(s) {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 func (v *Value) ToRawBytes() []byte {
