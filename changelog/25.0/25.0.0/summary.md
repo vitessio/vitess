@@ -309,6 +309,10 @@ Before creating a new backup, `vtbackup` now verifies that the restored base bac
 the current shard primary. If errant GTIDs are found, `vtbackup` fails without creating or pruning backups and reports
 the affected backup and errant GTID set.
 
+Existing `--init-backup-sql-queries` that generate local GTIDs can cause the resulting backup to be rejected by the next
+`vtbackup` run. Configure those statements to avoid binary logging, using forms such as `LOCAL` or
+`NO_WRITE_TO_BINLOG`, or execute them with `sql_log_bin` disabled.
+
 See [#20677](https://github.com/vitessio/vitess/issues/20677) for details.
 
 #### <a id="backup-chunked-builtin"/>Chunked backup/restore for the `builtinbackupengine`</a>
