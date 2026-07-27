@@ -204,13 +204,14 @@ func (asm *assembler) BitOp_and_bb() {
 			env.vm.err = errBitwiseOperandsLength
 			return 0
 		}
-		// The result needs its own buffer: the operands' bytes are borrowed
-		// from a literal, a bind variable or the input row.
+		// The result is a plain binary string of its own: the operands' bytes
+		// are borrowed from a literal, a bind variable or the input row, and
+		// their hex or bit literal markers do not carry over to the result.
 		out := make([]byte, len(l.bytes))
 		for i := range out {
 			out[i] = l.bytes[i] & r.bytes[i]
 		}
-		l.bytes = out
+		env.vm.stack[env.vm.sp-2] = env.vm.arena.newEvalBinary(out)
 		env.vm.sp--
 		return 1
 	}, "AND BINARY(SP-2), BINARY(SP-1)")
@@ -225,13 +226,14 @@ func (asm *assembler) BitOp_or_bb() {
 			env.vm.err = errBitwiseOperandsLength
 			return 0
 		}
-		// The result needs its own buffer: the operands' bytes are borrowed
-		// from a literal, a bind variable or the input row.
+		// The result is a plain binary string of its own: the operands' bytes
+		// are borrowed from a literal, a bind variable or the input row, and
+		// their hex or bit literal markers do not carry over to the result.
 		out := make([]byte, len(l.bytes))
 		for i := range out {
 			out[i] = l.bytes[i] | r.bytes[i]
 		}
-		l.bytes = out
+		env.vm.stack[env.vm.sp-2] = env.vm.arena.newEvalBinary(out)
 		env.vm.sp--
 		return 1
 	}, "OR BINARY(SP-2), BINARY(SP-1)")
@@ -246,13 +248,14 @@ func (asm *assembler) BitOp_xor_bb() {
 			env.vm.err = errBitwiseOperandsLength
 			return 0
 		}
-		// The result needs its own buffer: the operands' bytes are borrowed
-		// from a literal, a bind variable or the input row.
+		// The result is a plain binary string of its own: the operands' bytes
+		// are borrowed from a literal, a bind variable or the input row, and
+		// their hex or bit literal markers do not carry over to the result.
 		out := make([]byte, len(l.bytes))
 		for i := range out {
 			out[i] = l.bytes[i] ^ r.bytes[i]
 		}
-		l.bytes = out
+		env.vm.stack[env.vm.sp-2] = env.vm.arena.newEvalBinary(out)
 		env.vm.sp--
 		return 1
 	}, "XOR BINARY(SP-2), BINARY(SP-1)")

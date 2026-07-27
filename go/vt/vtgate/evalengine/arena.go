@@ -138,7 +138,13 @@ func (a *Arena) newEvalBytesEmpty() *evalBytes {
 	} else {
 		a.aBytes = append(a.aBytes, evalBytes{})
 	}
-	return &a.aBytes[len(a.aBytes)-1]
+	b := &a.aBytes[len(a.aBytes)-1]
+	// reset() hands the same entries out again on the next evaluation, and the
+	// constructors below only set the type, the collation and the bytes: an
+	// entry that is not cleared here keeps the flags of whatever value used it
+	// last.
+	*b = evalBytes{}
+	return b
 }
 
 func (a *Arena) newEvalBinary(raw []byte) *evalBytes {

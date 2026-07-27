@@ -85,35 +85,67 @@ func TestBitwiseBinaryRepeatedEvaluation(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			astExpr, err := venv.Parser().ParseExpr(tc.expression)
 			require.NoError(t, err)
+			translated, err := Translate(astExpr, &Config{Collation: coll, Environment: venv})
+			require.NoError(t, err)
 
-			t.Run("compiled", func(t *testing.T) {
-				translated, err := Translate(astExpr, &Config{Collation: coll, Environment: venv})
-				require.NoError(t, err)
+			bindVars := bitwiseBindVars()
+			for i := range 4 {
+				env := EmptyExpressionEnv(venv)
+				env.BindVars = bindVars
 
-				bindVars := bitwiseBindVars()
-				for i := range 4 {
-					env := EmptyExpressionEnv(venv)
-					env.BindVars = bindVars
+				res := evaluateCompiled(t, env, translated)
+				require.Equalf(t, tc.result, res.Value(coll).ToString(), "evaluation %d", i)
+			}
+		})
+	}
+}
 
-					res := evaluateCompiled(t, env, translated)
-					require.Equalf(t, tc.result, res.Value(coll).ToString(), "evaluation %d", i)
+// TestBitwiseBinaryResultIsPlainBinary tests that the binary-string form of the
+// bitwise operators returns a plain binary string even when an operand is a hex
+// or bit literal. MySQL reads the result as a binary string, which is only true
+// when its bytes parse as a non-zero number:
+//
+//	SELECT IF(X'FF' & _binary'A', 'true', 'false')  =>  false
+//	SELECT IF(X'41', 'true', 'false')               =>  true
+//
+// A result that carried the operand's hex or bit literal marker would instead be
+// read as the number 65 and come out true.
+func TestBitwiseBinaryResultIsPlainBinary(t *testing.T) {
+	venv := vtenv.NewTestEnv()
+	coll := collations.MySQL8().DefaultConnectionCharset()
+
+	for _, tc := range []struct {
+		expression string
+		result     string
+	}{
+		{expression: `x'ff' & :r`, result: "A"},
+		{expression: `b'11111111' & :r`, result: "A"},
+		{expression: `x'ff' | :r`, result: "\xff"},
+		{expression: `x'ff' ^ :r`, result: "\xbe"},
+	} {
+		t.Run(tc.expression, func(t *testing.T) {
+			astExpr, err := venv.Parser().ParseExpr(tc.expression)
+			require.NoError(t, err)
+			translated, err := Translate(astExpr, &Config{Collation: coll, Environment: venv})
+			require.NoError(t, err)
+
+			newEnv := func() *ExpressionEnv {
+				env := EmptyExpressionEnv(venv)
+				env.BindVars = map[string]*querypb.BindVariable{
+					"r": sqltypes.BytesBindVariable([]byte("A")),
 				}
-			})
+				return env
+			}
 
-			t.Run("interpreted", func(t *testing.T) {
-				translated, err := Translate(astExpr, &Config{Collation: coll, Environment: venv})
-				require.NoError(t, err)
+			interpreted, err := newEnv().EvaluateAST(translated)
+			require.NoError(t, err)
+			compiled := evaluateCompiled(t, newEnv(), translated)
 
-				bindVars := bitwiseBindVars()
-				for i := range 4 {
-					env := EmptyExpressionEnv(venv)
-					env.BindVars = bindVars
+			require.Equal(t, tc.result, interpreted.Value(coll).ToString())
+			require.Equal(t, tc.result, compiled.Value(coll).ToString())
 
-					res, err := env.EvaluateAST(translated)
-					require.NoError(t, err)
-					require.Equalf(t, tc.result, res.Value(coll).ToString(), "evaluation %d", i)
-				}
-			})
+			require.False(t, interpreted.ToBoolean())
+			require.False(t, compiled.ToBoolean())
 		})
 	}
 }
