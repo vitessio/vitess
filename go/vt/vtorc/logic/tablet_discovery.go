@@ -142,6 +142,12 @@ func validateCellsNoRecovery(ctx context.Context) error {
 		cellsNoRecoveryValidated.Store(true)
 		return nil
 	}
+	// Trim whitespace so that "--cells-no-recovery=cell1, cell2" works the
+	// same as "--cells-no-recovery=cell1,cell2". pflag's StringSliceVar
+	// splits on commas but does not strip surrounding whitespace.
+	for i, cell := range cellsNoRecovery {
+		cellsNoRecovery[i] = strings.TrimSpace(cell)
+	}
 	knownCells, err := ts.GetKnownCells(ctx)
 	if err != nil {
 		log.Warn(fmt.Sprintf("failed to get known cells while validating --cells-no-recovery, skipping validation: %v", err))

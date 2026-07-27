@@ -1233,6 +1233,16 @@ func TestGetDetectionAnalysis(t *testing.T) {
 			shardWanted:    "0",
 			cellWanted:     "zone2",
 		}, {
+			name: "PrimaryTabletDeleted falls back to replica cell when shard primary alias is empty",
+			sql: []string{
+				`delete from vitess_tablet where port = 6714`,
+				`update vitess_shard set primary_alias = '' where keyspace = 'ks' and shard = '0'`,
+			},
+			codeWanted:     PrimaryTabletDeleted,
+			keyspaceWanted: "ks",
+			shardWanted:    "0",
+			cellWanted:     "zone1",
+		}, {
 			name: "Removing Primary Tablet's MySQL record",
 			sql: []string{
 				// This query removes the primary tablet's database_instance record

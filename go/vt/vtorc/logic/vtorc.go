@@ -22,6 +22,7 @@ import (
 	"os"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/patrickmn/go-cache"
@@ -341,13 +342,24 @@ func refreshAllInformation(ctx context.Context) error {
 	err := eg.Wait()
 	if err == nil {
 		process.FirstDiscoveryCycleComplete.Store(true)
-		// Retry --cells-no-recovery validation if startup validation was skipped because
-		// the topology was unreachable. Recovery remains blocked until validation succeeds.
-		if !cellsNoRecoveryValidated.Load() {
-			retryCtx, retryCancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer retryCancel()
-			if retryErr := validateCellsNoRecovery(retryCtx); retryErr != nil {
-				log.Error(fmt.Sprintf("--cells-no-recovery validation failed: %v", retryErr))
+	}
+	// Retry --cells-no-recovery validation if startup validation was skipped because
+	// the topology was unreachable. The retry runs regardless of whether the refresh
+	// succeeded: the topo may be reachable for cell listing even when keyspace/tablet
+	// refresh had partial errors. Recovery remains blocked until validation succeeds.
+	if !cellsNoRecoveryValidated.Load() {
+		retryCtx, retryCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer retryCancel()
+		if retryErr := validateCellsNoRecovery(retryCtx); retryErr != nil {
+			log.Error(fmt.Sprintf("--cells-no-recovery validation failed, shutting down: %v", retryErr))
+			// Trigger graceful shutdown so closeVTOrc runs (releases shard locks,
+			// fires OnTermSync hooks) instead of os.Exit which would abandon any
+			// in-flight recovery holding a shard lock. The nil guard is defensive:
+			// ExitChan is always initialized by the time topo ticks fire, but if
+			// it somehow isn't, fall back to os.Exit.
+			if servenv.ExitChan != nil {
+				servenv.ExitChan <- syscall.SIGTERM
+			} else {
 				os.Exit(1)
 			}
 		}
