@@ -92,6 +92,12 @@ var testTableScientificNotation = map[string]string{
 	"123.456e0":  "123.456",
 	"123.456e2":  "12345.6",
 	"123.456e10": "1234560000000",
+	// MySQL accepts a written plus on the exponent.
+	"1e+9":       "1000000000",
+	"1E+9":       "1000000000",
+	"245E+3":     "245000",
+	"123.456e+2": "12345.6",
+	"0e+5":       "0",
 }
 
 func init() {
@@ -190,6 +196,45 @@ func TestNewFromString(t *testing.T) {
 			assert.Equalf(t, s, d.String(), "expected %s, got %s (%s, %d)", s, d.String(), d.value.String(), d.exp)
 		}
 	}
+}
+
+// TestNewFromStringLeadingPlus covers a sign the negating entries in
+// testTableScientificNotation cannot: MySQL reads a leading plus as the number
+// it introduces, so CAST('+1' AS DECIMAL) is 1.
+func TestNewFromStringLeadingPlus(t *testing.T) {
+	for in, want := range map[string]string{
+		"+1":          "1",
+		"+1.5":        "1.5",
+		"+0":          "0",
+		"+1e9":        "1000000000",
+		"+1e+9":       "1000000000",
+		"+123.456e-2": "1.23456",
+	} {
+		t.Run(in, func(t *testing.T) {
+			d, err := NewFromString(in)
+			require.NoError(t, err)
+			require.Equal(t, want, d.String())
+		})
+	}
+}
+
+// TestNewFromStringZeroExponent pins the formatting of a zero written with a
+// positive exponent. String trims the padding away, but FormatMySQL keeps the
+// scale it is asked for, so a stale exponent surfaces as leading zeros.
+func TestNewFromStringZeroExponent(t *testing.T) {
+	for _, in := range []string{"0e5", "-0e5", "+0e5", "0E+5", "0e2", "0"} {
+		t.Run(in, func(t *testing.T) {
+			d, err := NewFromString(in)
+			require.NoError(t, err)
+			require.Equal(t, "0", d.String())
+			require.Equal(t, "0.000000", string(d.FormatMySQL(6)))
+		})
+	}
+
+	// A zero written to a scale keeps it: only a positive exponent is dropped.
+	d, err := NewFromString("0.00")
+	require.NoError(t, err)
+	require.Equal(t, int32(-2), d.Exponent())
 }
 
 func TestFloat64(t *testing.T) {

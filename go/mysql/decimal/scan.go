@@ -183,10 +183,11 @@ func NewFromString(s string) (d Decimal, err error) {
 next:
 	for i < maxLen {
 		switch {
-		case s[i] == '-':
-			// Negative sign is allowed at the start and at the start
-			// of the exponent.
-			if i != 0 && expPos == -1 && i != expPos+1 {
+		case s[i] == '-' || s[i] == '+':
+			// A sign is allowed at the start of the number and at the start of
+			// the exponent, nowhere else. With no exponent seen yet expPos is
+			// -1, so the second test collapses into the first.
+			if i != 0 && i != expPos+1 {
 				break next
 			}
 		case s[i] >= '0' && s[i] <= '9':
@@ -226,6 +227,10 @@ next:
 		exp -= int64(expPos - dotPos - 1)
 	}
 
+	// fastparse reads a leading minus but not a leading plus, which the scanner
+	// above accepts because MySQL does.
+	si = strings.TrimPrefix(si, "+")
+
 	if len(si) <= 18 {
 		var v int64
 		v, err = fastparse.ParseInt64(si, 10)
@@ -237,7 +242,7 @@ next:
 
 	var expOverflow bool
 	if expPos != -1 {
-		e, _ := fastparse.ParseInt64(s[expPos+1:i], 10)
+		e, _ := fastparse.ParseInt64(strings.TrimPrefix(s[expPos+1:i], "+"), 10)
 		switch {
 		case e > ExponentLimit:
 			e = ExponentLimit
@@ -249,6 +254,13 @@ next:
 		exp += e
 	}
 
+	// Scaling zero by a positive power of ten leaves zero, but keeping the
+	// exponent renders it as that many leading zeros: '0e5' would format as
+	// 000000 where MySQL prints 0. A negative exponent is left alone, since it
+	// is the scale a zero is written to.
+	if exp > 0 && d.value.Sign() == 0 {
+		exp = 0
+	}
 	d.exp = int32(exp)
 
 	for i < maxLen {

@@ -46,6 +46,7 @@ var Cases = []TestCase{
 	{Run: LargeDecimals},
 	{Run: LargeIntegers},
 	{Run: DecimalClamping},
+	{Run: SignedExponents},
 	{Run: BitwiseOperatorsUnary},
 	{Run: BitwiseOperators},
 	{Run: WeightString},
@@ -910,6 +911,23 @@ func DecimalClamping(yield Query) {
 			for d := 0; d <= min(m, 33); d += 2 {
 				yield(fmt.Sprintf("CAST(%s.%s AS DECIMAL(%d, %d))", inputPi[:pos], inputPi[pos:], m, d), nil, false)
 			}
+		}
+	}
+}
+
+// SignedExponents covers numeric text carrying a written sign, on the number
+// itself and on its exponent. MySQL reads both, so a cast or a JSON comparison
+// over one has to land on the same value.
+func SignedExponents(yield Query) {
+	mantissas := []string{"1", "+1", "-1", "1.5", "+1.5", "-1.5", "0", "+0", "-0"}
+	exponents := []string{"", "e5", "e+5", "E+5", "e-5", "E-5", "e+0", "e-0"}
+
+	for _, mantissa := range mantissas {
+		for _, exponent := range exponents {
+			literal := "'" + mantissa + exponent + "'"
+			yield(fmt.Sprintf("CAST(%s AS DECIMAL(20, 6))", literal), nil, false)
+			yield(fmt.Sprintf("CAST(%s AS DOUBLE)", literal), nil, false)
+			yield(literal+" + 0", nil, false)
 		}
 	}
 }
