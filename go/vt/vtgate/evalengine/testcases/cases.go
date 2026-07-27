@@ -967,6 +967,8 @@ func JSONStoredNumbers(yield Query) {
 			}
 			yield("column0 = column1", row, false)
 			yield("column0 < column1", row, false)
+			yield(fmt.Sprintf("column0 = JSON_ARRAY(%s)", rhs), row, false)
+			yield(fmt.Sprintf("column0 < JSON_ARRAY(%s)", rhs), row, false)
 			yield(fmt.Sprintf("column0 IN (JSON_ARRAY(%s))", rhs), row, false)
 			if rhs == lhs {
 				yield("column0->'$[0]' + 0", row, false)
