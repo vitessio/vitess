@@ -1588,8 +1588,10 @@ func (e *Executor) prepare(ctx context.Context, safeSession *econtext.SafeSessio
 		// client as a zero-parameter success.
 		stmt, err := e.env.Parser().Parse(sql)
 		if err != nil {
-			// An unparseable statement is never SHOW, so clear warnings to
-			// match the non-SHOW handling below before returning the error.
+			// The statement stays unknown, and an unparseable statement is
+			// never SHOW, so record the type and clear warnings the way the
+			// code below does before returning the syntax error.
+			logStats.StmtType = stmtType.String()
 			safeSession.ClearWarnings()
 			return nil, 0, err
 		}

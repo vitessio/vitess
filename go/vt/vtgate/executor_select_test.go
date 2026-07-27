@@ -3170,6 +3170,24 @@ func TestPrepareClearsWarningsOnParseError(t *testing.T) {
 	require.Empty(t, session.Warnings)
 }
 
+// A statement whose first keyword Preview does not recognize and that fails to
+// parse has no known statement type, so its query log record reports the
+// statement type as unknown rather than leaving the field empty.
+func TestPrepareParseErrorLogsUnknownStatementType(t *testing.T) {
+	executor, _, _, _, ctx := createExecutorEnv(t)
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
+
+	logChan := executor.queryLogger.Subscribe("Test")
+	t.Cleanup(func() { executor.queryLogger.Unsubscribe(logChan) })
+
+	_, _, err := executor.Prepare(ctx, "TestExecute", session, "bad select id from t1")
+	require.Error(t, err)
+
+	logStats := getQueryLog(logChan)
+	require.NotNil(t, logStats)
+	require.Equal(t, "UNKNOWN", logStats.StmtType)
+}
+
 func assertOptimizedPlanCondition(t *testing.T, executor *Executor, sql string, condition ...engine.Condition) *engine.PlanSwitcher {
 	var plan *engine.Plan
 	executor.ForEachPlan(func(p *engine.Plan) bool {
