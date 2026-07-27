@@ -94,18 +94,21 @@ func (cte *CTETable) canShortCut() shortCut {
 func (cte *CTETable) getColumns(bool) []ColumnInfo {
 	selExprs := cte.Query.GetColumns()
 	cols := make([]ColumnInfo, 0, len(selExprs))
+	// a declared column list renames the columns only when it pairs with the
+	// select list; on a length mismatch MySQL resolves the recursive reference
+	// against the select list names, and rejects the mismatch where the CTE
+	// is used
+	useDeclared := len(cte.Columns) == len(selExprs)
 	for i, selExpr := range selExprs {
 		ae, isAe := selExpr.(*sqlparser.AliasedExpr)
 		if !isAe {
 			panic(vterrors.VT12001("should not be called"))
 		}
-		if len(cte.Columns) == 0 {
-			cols = append(cols, ColumnInfo{Name: ae.ColumnName()})
+		if useDeclared {
+			cols = append(cols, ColumnInfo{Name: cte.Columns[i].String()})
 			continue
 		}
-
-		// We have column aliases defined on the CTE
-		cols = append(cols, ColumnInfo{Name: cte.Columns[i].String()})
+		cols = append(cols, ColumnInfo{Name: ae.ColumnName()})
 	}
 	return cols
 }
