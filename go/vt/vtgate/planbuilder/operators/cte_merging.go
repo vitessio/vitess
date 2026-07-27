@@ -22,6 +22,20 @@ import (
 )
 
 func tryMergeRecurse(ctx *plancontext.PlanningContext, in *RecurseCTE) (Operator, *ApplyResult) {
+	// A recursive predicate that was pushed into every source of a UNION inside
+	// the term leaves per-source copies behind. Those copies cannot be restored
+	// to column form (their column belongs to another scope) and cannot be
+	// skipped (they carry the recursion condition), so mergeCTE would emit them
+	// as arguments no primitive produces. Keep the RecurseCTE primitive instead.
+	for _, predicate := range in.Predicates {
+		if predicate.JoinPredicateID == nil {
+			continue
+		}
+		if len(ctx.PredTracker.DescendantIDs(*predicate.JoinPredicateID)) > 0 {
+			return in, NoRewrite
+		}
+	}
+
 	op := tryMergeCTE(ctx, in.Seed(), in.Term(), in)
 	if op == nil {
 		return in, NoRewrite
