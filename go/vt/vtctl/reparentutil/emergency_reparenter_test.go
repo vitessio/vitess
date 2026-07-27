@@ -2187,8 +2187,7 @@ func TestEmergencyReparenterLockLostBeforePromotion(t *testing.T) {
 	erp := NewEmergencyReparenter(ts, tmc, logger)
 
 	err := erp.reparentShardLocked(lctx, ev, keyspace, shard, EmergencyReparentOptions{})
-	require.Error(t, err)
-	assert.ErrorContains(t, err, lostTopologyLockMsg)
+	require.ErrorContains(t, err, lostTopologyLockMsg)
 	assert.Zero(t, tmc.startReplicationCalls.Load(), "the deferred cleanup must not restart replication after the shard lock is lost")
 }
 
@@ -2326,8 +2325,7 @@ func TestEmergencyReparenterLockLostAfterIntermediateSourcePromotion(t *testing.
 		},
 	}
 	err := erp.reparentShardLocked(lctx, ev, keyspace, shard, opts)
-	require.Error(t, err)
-	assert.ErrorContains(t, err, lostTopologyLockMsg)
+	require.ErrorContains(t, err, lostTopologyLockMsg)
 	assert.Zero(t, tmc.startReplicationCalls.Load(), "the deferred cleanup must not restart replication after the shard lock is lost")
 }
 
