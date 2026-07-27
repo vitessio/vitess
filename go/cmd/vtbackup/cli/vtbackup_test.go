@@ -54,6 +54,7 @@ func TestFindErrantGTIDs(t *testing.T) {
 		candidate       replication.Position
 		primary         replication.Position
 		wantErrantGTIDs string
+		wantErr         string
 	}{
 		{
 			// A backup behind the primary contains no extra transactions.
@@ -62,10 +63,11 @@ func TestFindErrantGTIDs(t *testing.T) {
 			primary:   mysqlPosition(primaryUUID + ":1-20"),
 		},
 		{
-			// An empty position contains no extra transactions.
+			// A position carrying no GTID set cannot be compared.
 			name:      "empty candidate",
 			candidate: replication.Position{},
 			primary:   mysqlPosition(primaryUUID + ":1-20"),
+			wantErr:   "restored position",
 		},
 		{
 			// Transactions ahead of the primary are errant even when they use the primary's UUID.
@@ -79,6 +81,14 @@ func TestFindErrantGTIDs(t *testing.T) {
 			name:      "non MySQL position",
 			candidate: testCatchupPosition(10),
 			primary:   testCatchupPosition(20),
+			wantErr:   "restored position",
+		},
+		{
+			// A primary position of another flavor cannot be compared either.
+			name:      "non MySQL primary position",
+			candidate: mysqlPosition(primaryUUID + ":1-10"),
+			primary:   testCatchupPosition(20),
+			wantErr:   "primary position",
 		},
 		{
 			// Transactions from another server are returned as the errant difference.
@@ -92,7 +102,13 @@ func TestFindErrantGTIDs(t *testing.T) {
 	// Compare each candidate with the primary and verify the exact difference.
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			errantGTIDs := findErrantGTIDs(tt.candidate, tt.primary)
+			errantGTIDs, err := findErrantGTIDs(tt.candidate, tt.primary)
+			if tt.wantErr != "" {
+				assert.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
 			assert.Equal(t, tt.wantErrantGTIDs, errantGTIDs.String())
 		})
 	}

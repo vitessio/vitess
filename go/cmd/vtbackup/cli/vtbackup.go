@@ -710,7 +710,12 @@ func runBackup(ctx context.Context, topoServer *topo.Server, mysqld *mysqlctl.My
 
 // verifyNoErrantGTIDsInBaseBackup rejects restored or cloned data with transactions absent from the primary.
 func verifyNoErrantGTIDsInBaseBackup(ri restoreInfo, primaryPosition replication.Position) error {
-	errantGTIDs := findErrantGTIDs(ri.position, primaryPosition)
+	errantGTIDs, err := findErrantGTIDs(ri.position, primaryPosition)
+	if err != nil {
+		log.Warn("skipping errant GTID verification", slog.Any("error", err))
+		return nil
+	}
+
 	if errantGTIDs.Empty() {
 		return nil
 	}
@@ -729,19 +734,22 @@ func verifyNoErrantGTIDsInBaseBackup(ri restoreInfo, primaryPosition replication
 	)
 }
 
-// findErrantGTIDs returns the set of transactions in the candidate position that are absent from the primary position.
-func findErrantGTIDs(candidatePosition, primaryPosition replication.Position) replication.Mysql56GTIDSet {
+// findErrantGTIDs returns the set of transactions in the candidate position that are absent from the primary
+// position. It returns an error when the positions cannot be compared.
+func findErrantGTIDs(candidatePosition, primaryPosition replication.Position) (replication.Mysql56GTIDSet, error) {
 	candidateSet, candidateIsMySQL := candidatePosition.GTIDSet.(replication.Mysql56GTIDSet)
 	if !candidateIsMySQL {
-		return nil
+		return nil, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED,
+			"restored position %q is not a MySQL 56 GTID set", candidatePosition.String())
 	}
 
 	primarySet, primaryIsMySQL := primaryPosition.GTIDSet.(replication.Mysql56GTIDSet)
 	if !primaryIsMySQL {
-		return nil
+		return nil, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED,
+			"primary position %q is not a MySQL 56 GTID set", primaryPosition.String())
 	}
 
-	return candidateSet.Difference(primarySet)
+	return candidateSet.Difference(primarySet), nil
 }
 
 // catchUpReplicationForBackup catches a restored mysqld up to the current
