@@ -587,6 +587,14 @@ func (call *builtinInsert) compile(c *compiler) (ctype, error) {
 	return ctype{Type: sqltypes.VarChar, Col: col, Flag: flagNullable}, nil
 }
 
+// JSON text takes utf8mb4_bin, which is not a CaseAwareCollation.
+func changeCaseJSON(j *evalJSON, upcase bool) []byte {
+	if upcase {
+		return bytes.ToUpper(j.ToRawBytes())
+	}
+	return bytes.ToLower(j.ToRawBytes())
+}
+
 func (call *builtinChangeCase) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := call.arg1(env)
 	if err != nil {
@@ -599,6 +607,9 @@ func (call *builtinChangeCase) eval(env *ExpressionEnv) (eval, error) {
 
 	case evalNumeric:
 		return evalToVarchar(e, call.collate, false)
+
+	case *evalJSON:
+		return newEvalText(changeCaseJSON(e, call.upcase), collationJSON), nil
 
 	case *evalBytes:
 		coll := colldata.Lookup(e.col.Collation)
@@ -629,11 +640,21 @@ func (call *builtinChangeCase) compile(c *compiler) (ctype, error) {
 
 	switch {
 	case str.isTextual():
+		c.asm.Fn_LUCASE(call.upcase)
+	case str.Type == sqltypes.TypeJSON:
+		c.asm.Fn_LUCASE_j(call.upcase)
+		str = ctype{Type: sqltypes.VarChar, Flag: nullableFlags(str.Flag), Col: collationJSON}
 	default:
 		c.asm.Convert_xc(1, sqltypes.VarChar, c.collation, nil)
+		c.asm.Fn_LUCASE(call.upcase)
+		col := typedCoercionCollation(sqltypes.VarChar, c.collation)
+		// ENUM and SET text need not be ASCII.
+		if sqltypes.IsNumber(str.Type) || sqltypes.IsDateOrTime(str.Type) {
+			col.Repertoire = collations.RepertoireASCII
+		}
+		str = ctype{Type: sqltypes.VarChar, Flag: nullableFlags(str.Flag), Col: col}
 	}
 
-	c.asm.Fn_LUCASE(call.upcase)
 	c.asm.jumpDestination(skip)
 
 	return str, nil

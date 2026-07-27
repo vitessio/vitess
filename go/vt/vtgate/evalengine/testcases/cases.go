@@ -973,6 +973,8 @@ func JSONStoredNumbers(yield Query) {
 			}
 			yield("column0 = column1", row, false)
 			yield("column0 < column1", row, false)
+			yield(fmt.Sprintf("column0 = JSON_ARRAY(%s)", rhs), row, false)
+			yield(fmt.Sprintf("column0 < JSON_ARRAY(%s)", rhs), row, false)
 			yield(fmt.Sprintf("column0 IN (JSON_ARRAY(%s))", rhs), row, false)
 			if rhs == lhs {
 				yield("column0->'$[0]' + 0", row, false)
@@ -1691,6 +1693,7 @@ func FnLower(yield Query) {
 		yield(fmt.Sprintf("LOWER(%s)", str), nil, false)
 		yield(fmt.Sprintf("LCASE(%s)", str), nil, false)
 	}
+	yield(`LOWER(JSON_OBJECT('A', 'B')) = '{"a": "b"}'`, nil, false)
 }
 
 func FnUpper(yield Query) {
@@ -1698,6 +1701,9 @@ func FnUpper(yield Query) {
 		yield(fmt.Sprintf("UPPER(%s)", str), nil, false)
 		yield(fmt.Sprintf("UCASE(%s)", str), nil, false)
 	}
+	yield(`UPPER(JSON_OBJECT('a', 'b')) = '{"A": "B"}'`, nil, false)
+	yield(`UPPER(JSON_OBJECT('a', 'b')) = '{"a": "b"}'`, nil, false)
+	yield("UPPER(1) = '1.0'", nil, false)
 }
 
 func FnCharLength(yield Query) {
