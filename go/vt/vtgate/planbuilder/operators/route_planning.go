@@ -332,7 +332,8 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPredic
 
 // checkCrossKeyspaceOp checks if the given operators would create a cross-keyspace operation
 // and if cross-keyspace joins are denied for any involved keyspace. Fast path for direct
-// Route/Route comparisons (no allocations), falls back to collecting all keyspaces from
+// Route/Route comparisons (no allocations unless an inferred none routing
+// needs its real tables checked), falls back to collecting all keyspaces from
 // both operator trees to handle composite operators spanning multiple keyspaces.
 //
 // Panics via checkCrossKeyspacePair if the operation is denied — this follows the
@@ -341,8 +342,8 @@ func checkCrossKeyspaceOp(ctx *plancontext.PlanningContext, lhs, rhs Operator, o
 	// Fast path: both sides are direct *Route — two type assertions + pointer comparison, no allocations.
 	if lRoute, ok := lhs.(*Route); ok {
 		if rRoute, ok := rhs.(*Route); ok {
-			lhsKs := lRoute.Routing.Keyspace()
-			rhsKs := rRoute.Routing.Keyspace()
+			lhsKs := crossKeyspaceAccountable(lRoute)
+			rhsKs := crossKeyspaceAccountable(rRoute)
 			if lhsKs == nil || rhsKs == nil || lhsKs == rhsKs {
 				return
 			}
@@ -397,9 +398,12 @@ func checkCrossKeyspacePair(ctx *plancontext.PlanningContext, lhs, rhs Operator,
 	}
 }
 
-// hasAlternateInKeyspace checks if op is a direct *Route with an AnyShardRouting alternate
-// in the given keyspace. Only checks direct routes because mergeJoinInputs (via operatorsToRoutes)
-// only uses alternates for direct *Route operators — wrapped routes won't be merged.
+// hasAlternateInKeyspace checks if op is a direct *Route whose tables also live
+// in the given keyspace: through an AnyShardRouting alternate, or — for a route
+// degraded to NoneRouting, where the alternates were discarded — by checking
+// every real table's reference-copy placements in the vschema. Only checks
+// direct routes because mergeJoinInputs (via operatorsToRoutes) only uses
+// alternates for direct *Route operators — wrapped routes won't be merged.
 func hasAlternateInKeyspace(ctx *plancontext.PlanningContext, op Operator, ks *vindexes.Keyspace) bool {
 	route, ok := op.(*Route)
 	if !ok {
@@ -408,11 +412,77 @@ func hasAlternateInKeyspace(ctx *plancontext.PlanningContext, op Operator, ks *v
 	if !ctx.SemTable.DMLTargets.IsEmpty() && TableID(route).IsOverlapping(ctx.SemTable.DMLTargets) {
 		return false
 	}
-	ref, ok := route.Routing.(*AnyShardRouting)
-	if !ok {
+	switch routing := route.Routing.(type) {
+	case *AnyShardRouting:
+		return routing.AlternateInKeyspace(ks) != nil
+	case *NoneRouting:
+		return allRealTablesHaveCopyIn(ctx, route.Source, ks)
+	}
+	return false
+}
+
+// allRealTablesHaveCopyIn reports whether the operator tree has at least one
+// real table and every one of them also lives in ks: as the table's own
+// keyspace, through a reference copy recorded in ReferencedBy, or as the
+// source of a reference table. This only makes a cross-keyspace exemption
+// safe; it does not make the query text runnable in ks, since physical table
+// names can differ between keyspaces.
+func allRealTablesHaveCopyIn(ctx *plancontext.PlanningContext, op Operator, ks *vindexes.Keyspace) bool {
+	if op == nil {
 		return false
 	}
-	return ref.AlternateInKeyspace(ks) != nil
+	found := false
+	covered := true
+	_ = Visit(op, func(this Operator) error {
+		tbl, isTable := this.(*Table)
+		if !isTable || tbl.VTable == nil {
+			return nil
+		}
+		if tbl.QTable != nil && tbl.QTable.IsInfSchema {
+			// information_schema is present on every shard
+			return nil
+		}
+		found = true
+		if tableHasCopyIn(ctx, tbl.VTable, ks) {
+			return nil
+		}
+		covered = false
+		return io.EOF
+	})
+	return found && covered
+}
+
+func tableHasCopyIn(ctx *plancontext.PlanningContext, vt *vindexes.BaseTable, ks *vindexes.Keyspace) bool {
+	if vt.Keyspace == ks {
+		return true
+	}
+	if _, referenced := vt.ReferencedBy[ks.Name]; referenced {
+		return true
+	}
+	if vt.Source == nil {
+		return false
+	}
+	if qualifier := vt.Source.TableName.Qualifier.String(); qualifier != "" {
+		return qualifier == ks.Name
+	}
+	// an unqualified source declaration resolves through the vschema
+	src, _, _, _, _, err := ctx.VSchema.FindTableOrVindex(vt.Source.TableName)
+	return err == nil && src != nil && src.Keyspace == ks
+}
+
+// crossKeyspaceAccountable returns the keyspace the route genuinely reads
+// from. A none routing with an inferred keyspace (information_schema, dual)
+// reads from no keyspace — unless a merge absorbed real tables under it, in
+// which case the placeholder keyspace is where those tables live.
+func crossKeyspaceAccountable(route *Route) *vindexes.Keyspace {
+	nr, ok := route.Routing.(*NoneRouting)
+	if !ok || !nr.inferredKeyspace {
+		return route.Routing.Keyspace()
+	}
+	if len(realTableKeyspaces(route.Source)) == 0 {
+		return nil
+	}
+	return nr.keyspace
 }
 
 // operatorKeyspaces collects all unique keyspaces from an operator tree by recursively
@@ -430,7 +500,7 @@ func collectOperatorKeyspaces(op Operator, result *[]*vindexes.Keyspace) {
 		return
 	}
 	if route, ok := op.(*Route); ok {
-		addOperatorKeyspace(result, route.Routing.Keyspace())
+		addOperatorKeyspace(result, crossKeyspaceAccountable(route))
 		return
 	}
 	for _, input := range op.Inputs() {
@@ -446,6 +516,45 @@ func addOperatorKeyspace(result *[]*vindexes.Keyspace, ks *vindexes.Keyspace) {
 		return
 	}
 	*result = append(*result, ks)
+}
+
+// realTableKeyspaces collects the distinct keyspaces of the real tables under
+// op. Virtual tables (dual, recursive CTE references) have no vschema table
+// behind them, and information_schema tables only get a synthetic VTable in an
+// arbitrary keyspace (createInfSchemaRoute), so neither contributes anything.
+// Unlike operatorKeyspaces, this reflects where the referenced tables actually
+// live rather than where a routing points.
+func realTableKeyspaces(op Operator) []*vindexes.Keyspace {
+	if op == nil {
+		return nil
+	}
+	var result []*vindexes.Keyspace
+	_ = Visit(op, func(this Operator) error {
+		tbl, ok := this.(*Table)
+		if !ok || tbl.VTable == nil {
+			return nil
+		}
+		if tbl.QTable != nil && tbl.QTable.IsInfSchema {
+			return nil
+		}
+		addOperatorKeyspace(&result, tbl.VTable.Keyspace)
+		return nil
+	})
+	return result
+}
+
+// hasInfoSchemaTables reports whether any table under op reads from
+// information_schema.
+func hasInfoSchemaTables(op Operator) bool {
+	var found bool
+	_ = Visit(op, func(this Operator) error {
+		if tbl, ok := this.(*Table); ok && tbl.QTable != nil && tbl.QTable.IsInfSchema {
+			found = true
+			return io.EOF
+		}
+		return nil
+	})
+	return found
 }
 
 func operatorsToRoutes(a, b Operator) (*Route, *Route) {
