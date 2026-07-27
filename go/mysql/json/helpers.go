@@ -25,9 +25,44 @@ import (
 
 const hashPrefixJSON = 0xCCBB
 
+// Hash writes a fingerprint of v into h. Callers use the fingerprint to decide
+// equality, so two documents that compare unequal must not collide. Unlike
+// WeightString, which MySQL defines to fingerprint arrays and objects by their
+// cardinality alone so that they sort by length, Hash descends into containers.
+// Recursion is bounded because parsing rejects documents deeper than MaxDepth.
 func (v *Value) Hash(h *vthash.Hasher) {
 	h.Write16(hashPrefixJSON)
-	_, _ = h.Write(v.WeightString(nil))
+	var weights []byte
+	v.hash(h, &weights)
+}
+
+func (v *Value) hash(h *vthash.Hasher, weights *[]byte) {
+	// Type() rather than v.t: it resolves a lazily unescaped raw string, which
+	// two equal strings may or may not still be carrying.
+	//
+	// The type leads: the scalar weight strings collapse Bit, Blob and Opaque
+	// onto one tag, but JSON comparison orders those three types apart.
+	typ := v.Type()
+	h.Write16(uint16(typ))
+
+	switch typ {
+	case TypeArray:
+		h.Write32(uint32(len(v.a)))
+		for _, elem := range v.a {
+			elem.hash(h, weights)
+		}
+	case TypeObject:
+		h.Write32(uint32(v.o.Len()))
+		// Members are kept sorted by key, which is the order objects compare in.
+		for _, kv := range v.o.kvs {
+			h.Write32(uint32(len(kv.k)))
+			_, _ = h.WriteString(kv.k)
+			kv.v.hash(h, weights)
+		}
+	default:
+		*weights = v.WeightString((*weights)[:0])
+		_, _ = h.Write(*weights)
+	}
 }
 
 func (v *Value) ToRawBytes() []byte {

@@ -1099,3 +1099,64 @@ func TestCompilerNonConstant(t *testing.T) {
 		})
 	}
 }
+
+// TestCompiledJSONInList checks that a compiled IN over a list of JSON literals
+// agrees with the interpreter. The compiled form builds a static hash table and
+// treats a hash hit as equality without comparing the candidate, so documents
+// that share a shape but not a value must not collide.
+func TestCompiledJSONInList(t *testing.T) {
+	testCases := []struct {
+		expression string
+		value      string
+		result     string
+	}{
+		{`column0 IN (JSON_ARRAY(2))`, `[1]`, `INT64(0)`},
+		{`column0 IN (JSON_ARRAY(1))`, `[1]`, `INT64(1)`},
+		{`column0 IN (JSON_ARRAY(1, 2))`, `[2, 1]`, `INT64(0)`},
+		{`column0 IN (JSON_OBJECT('b', 2))`, `{"a": 1}`, `INT64(0)`},
+		{`column0 IN (JSON_OBJECT('a', 1))`, `{"a": 1}`, `INT64(1)`},
+		{`column0 IN (JSON_OBJECT('a', JSON_ARRAY(1)))`, `{"a": [2]}`, `INT64(0)`},
+		{`column0 NOT IN (JSON_ARRAY(2))`, `[1]`, `INT64(1)`},
+		{`column0 NOT IN (JSON_ARRAY(1))`, `[1]`, `INT64(0)`},
+		{`column0 IN (CAST(2 AS JSON))`, `1`, `INT64(0)`},
+		{`column0 IN (CAST(1.0 AS JSON))`, `1`, `INT64(1)`},
+	}
+
+	venv := vtenv.NewTestEnv()
+	for _, tc := range testCases {
+		t.Run(tc.expression+" / "+tc.value, func(t *testing.T) {
+			values := []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(tc.value))}
+
+			expr, err := venv.Parser().ParseExpr(tc.expression)
+			require.NoError(t, err)
+
+			fields := evalengine.FieldResolver(makeFields(values))
+			cfg := &evalengine.Config{
+				ResolveColumn: fields.Column,
+				Collation:     collations.CollationUtf8mb4ID,
+				Environment:   venv,
+			}
+
+			translated, err := evalengine.Translate(expr, cfg)
+			require.NoError(t, err)
+
+			untyped, ok := translated.(*evalengine.UntypedExpr)
+			require.True(t, ok)
+
+			env := evalengine.EmptyExpressionEnv(venv)
+			env.Row = values
+			env.Fields = makeFields(values)
+
+			interpreted, err := env.EvaluateAST(untyped)
+			require.NoError(t, err)
+			require.Equal(t, tc.result, interpreted.String())
+
+			compiled, err := untyped.Compile(env)
+			require.NoError(t, err)
+
+			res, err := env.EvaluateVM(compiled)
+			require.NoError(t, err)
+			require.Equal(t, tc.result, res.String())
+		})
+	}
+}

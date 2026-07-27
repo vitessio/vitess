@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -113,6 +114,92 @@ func TestEnumSetHashing(t *testing.T) {
 	hSetC, err := NullsafeHashcode(sqltypes.MakeTrusted(sqltypes.Set, []byte("c")), collations.CollationBinaryID, sqltypes.Set, 0, &vals)
 	require.NoError(t, err)
 	assert.NotEqual(t, hSetA, hSetC)
+}
+
+func parseJSON(t *testing.T, doc string) *json.Value {
+	t.Helper()
+
+	var p json.Parser
+	v, err := p.ParseBytes([]byte(doc))
+	require.NoError(t, err)
+	return v
+}
+
+func hashJSON(v *json.Value) vthash.Hash {
+	hasher := vthash.New()
+	v.Hash(&hasher)
+	return hasher.Sum128()
+}
+
+// TestJSONHashMatchesComparison pins the invariant that every consumer of a JSON
+// hash relies on: the compiled IN table, the DISTINCT probe table and the hash
+// join probe table all treat a hash hit as equality without comparing the
+// candidate, so two documents may share a hash only when they compare equal.
+func TestJSONHashMatchesComparison(t *testing.T) {
+	documents := []struct {
+		name  string
+		value *json.Value
+	}{
+		{`[1]`, parseJSON(t, `[1]`)},
+		{`[2]`, parseJSON(t, `[2]`)},
+		{`[1,2]`, parseJSON(t, `[1, 2]`)},
+		{`[2,1]`, parseJSON(t, `[2, 1]`)},
+		{`[]`, parseJSON(t, `[]`)},
+		{`[[]]`, parseJSON(t, `[[]]`)},
+		{`{"a":1}`, parseJSON(t, `{"a": 1}`)},
+		{`{"b":1}`, parseJSON(t, `{"b": 1}`)},
+		{`{"a":2}`, parseJSON(t, `{"a": 2}`)},
+		{`{"a":[1]}`, parseJSON(t, `{"a": [1]}`)},
+		{`{"a":[2]}`, parseJSON(t, `{"a": [2]}`)},
+		{`{"a":1,"b":2}`, parseJSON(t, `{"a": 1, "b": 2}`)},
+		{`{"b":2,"a":1}`, parseJSON(t, `{"b": 2, "a": 1}`)},
+		{`{"a":"b"}`, parseJSON(t, `{"a": "b"}`)},
+		{`{"ab":""}`, parseJSON(t, `{"ab": ""}`)},
+		{`1`, parseJSON(t, `1`)},
+		{`1.0`, parseJSON(t, `1.0`)},
+		{`1e0`, parseJSON(t, `1e0`)},
+		{`2`, parseJSON(t, `2`)},
+		{`"a"`, parseJSON(t, `"a"`)},
+		{`"b"`, parseJSON(t, `"b"`)},
+		{`true`, parseJSON(t, `true`)},
+		{`false`, parseJSON(t, `false`)},
+		{`null`, parseJSON(t, `null`)},
+		{`bit "x"`, json.NewBit("x")},
+		{`blob "x"`, json.NewBlob("x")},
+		{`opaque "x"`, json.NewOpaqueValue("x")},
+	}
+
+	for _, lhs := range documents {
+		for _, rhs := range documents {
+			t.Run(lhs.name+" vs "+rhs.name, func(t *testing.T) {
+				sameHash := hashJSON(lhs.value) == hashJSON(rhs.value)
+
+				cmp, err := compareJSONValue(lhs.value, rhs.value)
+				require.NoError(t, err)
+
+				require.Equalf(t, cmp == 0, sameHash,
+					"%s and %s compare as %s but hash as %s",
+					lhs.name, rhs.name, equality(cmp == 0), equality(sameHash))
+			})
+		}
+	}
+}
+
+// TestJSONHashIgnoresLazyUnescaping checks that a JSON string hashes the same
+// whether or not it has already been unescaped. Parsing leaves a string in a raw
+// kind and Type() rewrites it in place on first use, so two equal strings can
+// reach the hasher in different internal states.
+func TestJSONHashIgnoresLazyUnescaping(t *testing.T) {
+	// A parsed string keeps a raw kind until Type() unescapes it in place, so
+	// these three spellings of "ab" reach the hasher in different states.
+	plain := parseJSON(t, `"ab"`)
+	escaped := parseJSON(t, `"\u0061b"`)
+
+	normalized := parseJSON(t, `"ab"`)
+	require.Equal(t, json.TypeString, normalized.Type())
+
+	require.Equal(t, hashJSON(normalized), hashJSON(plain))
+	require.Equal(t, hashJSON(normalized), hashJSON(escaped))
 }
 
 type equality bool
