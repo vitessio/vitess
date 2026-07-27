@@ -446,7 +446,7 @@ func IsSimpleTuple(node Expr) bool {
 // IsReadStatement returns true if the statement is a read statement.
 func (stmt StatementType) IsReadStatement() bool {
 	switch stmt {
-	case StmtSelect, StmtShow:
+	case StmtSelect, StmtShow, StmtDo:
 		return true
 	default:
 		return false

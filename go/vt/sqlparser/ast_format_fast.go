@@ -1730,6 +1730,7 @@ func (node *OtherAdmin) FormatFast(buf *TrackedBuffer) {
 
 func (node *Do) FormatFast(buf *TrackedBuffer) {
 	buf.WriteString("do ")
+	node.Comments.FormatFast(buf)
 	buf.formatExprs(node.Exprs)
 }
 

@@ -2249,6 +2249,7 @@ func (c *cow) copyOnRewriteRefOfDo(n *Do, parent SQLNode) (out SQLNode, changed 
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
+		_Comments, changedComments := c.copyOnRewriteRefOfParsedComments(n.Comments, n)
 		var changedExprs bool
 		_Exprs := make([]Expr, len(n.Exprs))
 		for x, el := range n.Exprs {
@@ -2258,8 +2259,9 @@ func (c *cow) copyOnRewriteRefOfDo(n *Do, parent SQLNode) (out SQLNode, changed 
 				changedExprs = true
 			}
 		}
-		if changedExprs {
+		if changedComments || changedExprs {
 			res := *n
+			res.Comments, _ = _Comments.(*ParsedComments)
 			res.Exprs = _Exprs
 			out = &res
 			if c.cloned != nil {

@@ -3136,6 +3136,9 @@ var validSQL = []struct {
 }, {
 	input: "do funcCall(), 2 = 1, 3 + 1",
 }, {
+	input:  "do /*vt+ ALLOW_SCATTER */ (select count(*) from user)",
+	output: "do /*vt+ ALLOW_SCATTER */ (select count(*) from `user`)",
+}, {
 	input: "savepoint a",
 }, {
 	input: "savepoint `@@@;a`",

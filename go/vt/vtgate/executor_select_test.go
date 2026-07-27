@@ -3620,6 +3620,22 @@ func TestSelectScatterFails(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestExecutorDoScatterOverride(t *testing.T) {
+	executor, _, _, _, ctx := createExecutorEnv(t)
+	executor.config.AllowScatter = false
+
+	sess := &vtgatepb.Session{TargetString: "TestExecutor"}
+
+	// A DO whose subquery scatters is rejected when scatter is disallowed.
+	_, err := executorExec(ctx, executor, sess, "do (select count(*) from `user`)", nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "scatter")
+
+	// The ALLOW_SCATTER directive carried on the DO overrides the restriction.
+	_, err = executorExec(ctx, executor, sess, "do /*vt+ ALLOW_SCATTER */ (select count(*) from `user`)", nil)
+	require.NoError(t, err)
+}
+
 func TestGen4SelectStraightJoin(t *testing.T) {
 	executor, sbc1, _, _, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 

@@ -1670,6 +1670,9 @@ func VisitRefOfDo(in *Do, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
+	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
+		return err
+	}
 	for _, el := range in.Exprs {
 		if err := VisitExpr(el, f); err != nil {
 			return err

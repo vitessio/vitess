@@ -1332,7 +1332,7 @@ func (node *OtherAdmin) Format(buf *TrackedBuffer) {
 }
 
 func (node *Do) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "do %n", node.Exprs)
+	buf.astPrintf(node, "do %v%n", node.Comments, node.Exprs)
 }
 
 // Format formats the node.

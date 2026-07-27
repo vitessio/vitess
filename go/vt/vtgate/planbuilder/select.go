@@ -37,11 +37,11 @@ func gen4DoStmtPlanner(
 	reservedVars *sqlparser.ReservedVars,
 	vschema plancontext.VSchema,
 ) (*planResult, error) {
-
 	var sources []engine.Primitive
 	var tables []string
 	for _, run := range segmentDoExprs(do.Exprs) {
 		synthSelect := &sqlparser.Select{
+			Comments:    do.Comments,
 			SelectExprs: exprsToSelectExprs(run),
 		}
 		planRes, err := gen4SelectStmtPlanner(query, plannerVersion, synthSelect, reservedVars, vschema)

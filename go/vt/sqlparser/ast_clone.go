@@ -1341,6 +1341,7 @@ func CloneRefOfDo(n *Do) *Do {
 		return nil
 	}
 	out := *n
+	out.Comments = CloneRefOfParsedComments(n.Comments)
 	out.Exprs = CloneSliceOfExpr(n.Exprs)
 	return &out
 }

@@ -1050,9 +1050,9 @@ variable_expr:
   }
 
 do_statement:
-  DO expression_list
+  DO comment_opt expression_list
   {
-    $$ = &Do{Exprs: $2}
+    $$ = &Do{Comments: Comments($2).Parsed(), Exprs: $3}
   }
 
 load_statement:

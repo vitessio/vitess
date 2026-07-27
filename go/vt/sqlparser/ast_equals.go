@@ -2678,7 +2678,8 @@ func (cmp *Comparator) RefOfDo(a, b *Do) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return cmp.SliceOfExpr(a.Exprs, b.Exprs)
+	return cmp.RefOfParsedComments(a.Comments, b.Comments) &&
+		cmp.SliceOfExpr(a.Exprs, b.Exprs)
 }
 
 // RefOfDropColumn does deep equals between the two objects.

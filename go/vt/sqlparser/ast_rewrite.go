@@ -3854,6 +3854,17 @@ func (a *application) rewriteRefOfDo(parent SQLNode, node *Do, replacer replacer
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfDoComments))
+	}
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*Do).Comments = newNode.(*ParsedComments)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
 	for x, el := range node.Exprs {
 		if a.collectPaths {
 			if x == 0 {

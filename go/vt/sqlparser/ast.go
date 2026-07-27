@@ -766,7 +766,8 @@ type (
 	OtherAdmin struct{}
 
 	Do struct {
-		Exprs []Expr
+		Comments *ParsedComments
+		Exprs    []Expr
 	}
 
 	// CommentOnly represents a query which only has comments
@@ -1667,6 +1668,11 @@ func (node *Stream) SetComments(comments Comments) {
 	node.Comments = comments.Parsed()
 }
 
+// SetComments for Do
+func (node *Do) SetComments(comments Comments) {
+	node.Comments = comments.Parsed()
+}
+
 // SetComments for Update
 func (node *Update) SetComments(comments Comments) {
 	node.Comments = comments.Parsed()
@@ -1759,6 +1765,11 @@ func (node *Insert) GetParsedComments() *ParsedComments {
 
 // GetParsedComments implements Stream.
 func (node *Stream) GetParsedComments() *ParsedComments {
+	return node.Comments
+}
+
+// GetParsedComments implements Do.
+func (node *Do) GetParsedComments() *ParsedComments {
 	return node.Comments
 }
 
