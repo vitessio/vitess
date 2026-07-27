@@ -98,6 +98,9 @@ var (
 	// minimum part size
 	minPartSize int64 = 5 * 1024 * 1024 // 5MiB - AWS requirement
 
+	// minimum download part size — separate from upload so the two can be configured independently
+	minDownloadPartSize int64 = 5 * 1024 * 1024 // 5MiB - S3 minimum for byte-range requests
+
 	// download part size and concurrency for parallel downloads via transfer manager
 	downloadPartSize    int64 = 8 * 1024 * 1024 // 8MiB - transfer manager default
 	downloadConcurrency int   = 5               // transfer manager default
@@ -116,7 +119,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	utils.SetFlagStringVar(fs, &requiredLogLevel, "s3-backup-log-level", "LogOff", "determine the S3 loglevel to use from LogOff, LogDebug, LogDebugWithSigning, LogDebugWithHTTPBody, LogDebugWithRequestRetries, LogDebugWithRequestErrors.")
 	utils.SetFlagStringVar(fs, &sse, "s3-backup-server-side-encryption", "", "server-side encryption algorithm (e.g., AES256, aws:kms, sse_c:/path/to/key/file).")
 	utils.SetFlagInt64Var(fs, &minPartSize, "s3-backup-aws-min-partsize", minPartSize, "Minimum part size to use, defaults to 5MiB but can be increased due to the dataset size.")
-	utils.SetFlagInt64Var(fs, &downloadPartSize, "s3-backup-download-part-size", 8*1024*1024, "Part size in bytes for parallel S3 downloads via transfer manager. (default 8MiB)")
+	utils.SetFlagInt64Var(fs, &downloadPartSize, "s3-backup-download-part-size", 8*1024*1024, "Part size in bytes for parallel S3 downloads via transfer manager.")
 	utils.SetFlagIntVar(fs, &downloadConcurrency, "s3-backup-download-concurrency", 5, "Number of parallel goroutines for S3 downloads via transfer manager.")
 }
 
@@ -336,8 +339,8 @@ func (bh *S3BackupHandle) ReadFile(ctx context.Context, filename string) (io.Rea
 	sendStats := bh.bs.params.Stats.Scope(stats.Operation("AWS:Request:Send"))
 	timedClient := &timedS3Client{client: bh.s3Client, sendStats: sendStats}
 
-	if downloadPartSize < minPartSize {
-		return nil, fmt.Errorf("--s3-backup-download-part-size must be >= %d (5MiB), got %d", minPartSize, downloadPartSize)
+	if downloadPartSize < minDownloadPartSize {
+		return nil, fmt.Errorf("--s3-backup-download-part-size must be >= %d (5 MiB), got %d", minDownloadPartSize, downloadPartSize)
 	}
 	if downloadConcurrency < 1 {
 		return nil, fmt.Errorf("--s3-backup-download-concurrency must be >= 1, got %d", downloadConcurrency)
@@ -363,6 +366,10 @@ func (bh *S3BackupHandle) ReadFile(ctx context.Context, filename string) (io.Rea
 		o.GetObjectType = tmtypes.GetObjectRanges
 		o.PartSizeBytes = downloadPartSize
 		o.Concurrency = downloadConcurrency
+		// Size buffer so the SDK fills all workers in one wave. Without this,
+		// the 50MiB default means floor(50MiB/partSize) parts are scheduled per
+		// Read() — at parts above 25MiB that serializes the download entirely.
+		o.GetObjectBufferSize = min(downloadPartSize*int64(downloadConcurrency), 1<<30)
 	})
 
 	readCtx, cancel := context.WithCancel(ctx)

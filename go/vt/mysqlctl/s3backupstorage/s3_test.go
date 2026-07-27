@@ -1,3 +1,19 @@
+/*
+Copyright 2026 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package s3backupstorage
 
 import (
@@ -604,23 +620,25 @@ func TestReadFileInvalidDownloadFlags(t *testing.T) {
 
 	origPartSize := downloadPartSize
 	origConcurrency := downloadConcurrency
+	origMinPartSize := minPartSize
 	defer func() {
 		downloadPartSize = origPartSize
 		downloadConcurrency = origConcurrency
+		minPartSize = origMinPartSize
 	}()
 
-	// Part size below minimum (5MiB)
+	// Part size below download minimum (5MiB)
 	downloadPartSize = 1024
 	downloadConcurrency = 5
 	_, err := bh.ReadFile(t.Context(), "testfile")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "5MiB")
+	require.Contains(t, err.Error(), "5 MiB")
 
 	// Negative part size
 	downloadPartSize = -1
 	_, err = bh.ReadFile(t.Context(), "testfile")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "5MiB")
+	require.Contains(t, err.Error(), "5 MiB")
 
 	// Zero concurrency
 	downloadPartSize = 8 * 1024 * 1024
@@ -628,6 +646,51 @@ func TestReadFileInvalidDownloadFlags(t *testing.T) {
 	_, err = bh.ReadFile(t.Context(), "testfile")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), ">= 1")
+
+	// Regression: download part size (8MiB) is valid even when upload minPartSize
+	// is set higher (16MiB). The two thresholds must be independent.
+	// We need a real s3Client to get past validation without a nil-pointer panic.
+	minPartSize = 16 * 1024 * 1024
+	downloadPartSize = 8 * 1024 * 1024
+	downloadConcurrency = 5
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	originalBucket := bucket
+	originalRoot := root
+	defer func() {
+		bucket = originalBucket
+		root = originalRoot
+	}()
+	bucket = "test-bucket"
+	root = ""
+
+	bhWithClient := &S3BackupHandle{
+		s3Client: s3.New(s3.Options{
+			Region:       "us-east-1",
+			BaseEndpoint: aws.String(server.URL),
+			UsePathStyle: true,
+			Credentials: aws.CredentialsProviderFunc(func(_ context.Context) (aws.Credentials, error) {
+				return aws.Credentials{AccessKeyID: "test", SecretAccessKey: "test"}, nil
+			}),
+			Retryer: func() aws.Retryer {
+				return retry.NewStandard(func(o *retry.StandardOptions) { o.MaxAttempts = 1 })
+			}(),
+		}),
+		bs: &S3BackupStorage{
+			params: backupstorage.NoParams(),
+			s3SSE:  S3ServerSideEncryption{},
+		},
+		readOnly: true,
+	}
+
+	_, err = bhWithClient.ReadFile(t.Context(), "testfile")
+	// Validation passes — error is from S3 (404), not from our part-size check
+	require.Error(t, err)
+	require.NotContains(t, err.Error(), "5 MiB")
 }
 
 func TestReadFileSSECHeaderForwarding(t *testing.T) {
@@ -706,6 +769,112 @@ func TestReadFileSSECHeaderForwarding(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, testData, data)
 	require.NoError(t, rc.Close())
+}
+
+func TestReadFileParallelism(t *testing.T) {
+	const objectSize = 40 * 1024 * 1024 // 40MiB
+	testData := bytes.Repeat([]byte("x"), objectSize)
+
+	var (
+		mu          sync.Mutex
+		maxInFlight int
+		curInFlight int
+	)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "HEAD" {
+			w.Header().Set("Content-Length", strconv.Itoa(len(testData)))
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		if r.Method == "GET" {
+			mu.Lock()
+			curInFlight++
+			if curInFlight > maxInFlight {
+				maxInFlight = curInFlight
+			}
+			mu.Unlock()
+
+			// Small delay so concurrent requests overlap
+			time.Sleep(20 * time.Millisecond)
+
+			mu.Lock()
+			curInFlight--
+			mu.Unlock()
+
+			// Serve the requested byte range
+			rangeHdr := r.Header.Get("Range")
+			if rangeHdr == "" {
+				w.Header().Set("Content-Length", strconv.Itoa(len(testData)))
+				w.WriteHeader(http.StatusOK)
+				w.Write(testData)
+				return
+			}
+			var start, end int
+			fmt.Sscanf(rangeHdr, "bytes=%d-%d", &start, &end)
+			if end >= len(testData) {
+				end = len(testData) - 1
+			}
+			chunk := testData[start : end+1]
+			w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, len(testData)))
+			w.Header().Set("Content-Length", strconv.Itoa(len(chunk)))
+			w.WriteHeader(http.StatusPartialContent)
+			w.Write(chunk)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	originalBucket := bucket
+	originalRoot := root
+	origPartSize := downloadPartSize
+	origConcurrency := downloadConcurrency
+	defer func() {
+		bucket = originalBucket
+		root = originalRoot
+		downloadPartSize = origPartSize
+		downloadConcurrency = origConcurrency
+	}()
+	bucket = "test-bucket"
+	root = ""
+	downloadPartSize = 8 * 1024 * 1024 // 8MiB parts
+	downloadConcurrency = 4            // expect ~4 parallel GETs
+
+	s3Client := s3.New(s3.Options{
+		Region:       "us-east-1",
+		BaseEndpoint: aws.String(server.URL),
+		UsePathStyle: true,
+		Credentials: aws.CredentialsProviderFunc(func(_ context.Context) (aws.Credentials, error) {
+			return aws.Credentials{AccessKeyID: "test", SecretAccessKey: "test"}, nil
+		}),
+		Retryer: func() aws.Retryer {
+			return retry.NewStandard(func(o *retry.StandardOptions) { o.MaxAttempts = 1 })
+		}(),
+	})
+
+	bh := &S3BackupHandle{
+		s3Client: s3Client,
+		bs: &S3BackupStorage{
+			params: backupstorage.NoParams(),
+			s3SSE:  S3ServerSideEncryption{},
+		},
+		dir:      "testdir",
+		name:     "testbackup",
+		readOnly: true,
+	}
+
+	rc, err := bh.ReadFile(t.Context(), "testfile")
+	require.NoError(t, err)
+
+	data, err := io.ReadAll(rc)
+	require.NoError(t, err)
+	require.Len(t, data, objectSize)
+	require.NoError(t, rc.Close())
+
+	// With buffer sized to partSize*concurrency, the SDK should fill all workers
+	assert.GreaterOrEqual(t, maxInFlight, downloadConcurrency-1,
+		"expected at least %d parallel GETs, got %d", downloadConcurrency-1, maxInFlight)
 }
 
 func TestReadFileOnWriteHandle(t *testing.T) {
