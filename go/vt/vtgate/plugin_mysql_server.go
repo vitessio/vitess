@@ -522,6 +522,16 @@ func (vh *vtgateHandler) dispatchTempTableBeats(ctx context.Context) *sync.WaitG
 			continue
 		}
 		failing := tempTableBeatItemsFailing(items)
+		if failing && vh.vtg != nil && vh.vtg.gw != nil && vh.vtg.gw.TabletSeemsServing(items[0].target.alias) {
+			// The healthcheck already sees this tablet serving again, so its
+			// beat will resolve quickly whichever way it goes. Dispatch it on
+			// the healthy path instead of queueing it behind still-failing
+			// routes: with the lane full of budget-burning beats, a recovered
+			// tablet could otherwise wait through several beat budgets for a
+			// slot — long enough for the reserved connections the recovery
+			// was meant to save to expire at the tablet timeout.
+			failing = false
+		}
 		wg.Go(func() {
 			defer vh.tempTableBeatInFlight.Delete(route)
 			beatItems := items
@@ -873,22 +883,20 @@ func (vh *vtgateHandler) ComResetConnection(c *mysql.Conn) {
 	}
 	// The reset released the reserved connections, and the temporary tables
 	// and applied session settings died with them — but the session object
-	// survives on the connection, so clear vtgate's record of that state.
-	// Otherwise the session would still look like a temp-table holder (the
-	// next reserved shard session would re-register it for heartbeats, and
-	// query-plan caching would stay disabled for the rest of the
-	// connection's life), and every subsequent query would be forced onto a
-	// pointless fresh reserved connection. InReservedConn and
-	// SystemVariables must be cleared together: the flag plus the recorded
-	// variables are what re-establish settings on newly reserved
-	// connections, so clearing one without the other would desynchronize
-	// what the session reports (@@var reads) from what its connections
-	// actually have applied.
-	if opts := session.GetOptions(); opts != nil {
-		opts.HasCreatedTempTables = false
-	}
-	session.InReservedConn = false
-	session.SystemVariables = nil
+	// survives on the connection. MySQL's COM_RESET_CONNECTION returns the
+	// whole session to its just-connected state (transaction rolled back,
+	// temp tables dropped, session and user variables reset, LAST_INSERT_ID
+	// cleared, autocommit back to default), so rebuild the session as a
+	// fresh default rather than clearing fields piecemeal: the post-reset
+	// state is then identical to a new connection's by construction, future
+	// default fields included, and a pooled client cannot inherit any of the
+	// previous borrower's state. Only the default database survives a reset,
+	// so carry the target over, and restore the autocommit status flag the
+	// handshake advertises for the default session.
+	target := session.TargetString
+	c.ClientData = nil
+	vh.session(c).TargetString = target
+	c.StatusFlags |= mysql.ServerStatusAutocommit
 }
 
 func (vh *vtgateHandler) ConnectionClosed(c *mysql.Conn) {

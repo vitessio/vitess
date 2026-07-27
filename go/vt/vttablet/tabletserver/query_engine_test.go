@@ -376,6 +376,13 @@ func TestSelectStreamRuleAppliesOnlyToStreamingPlans(t *testing.T) {
 		{"select", "select pk from test_table_01", planbuilder.PlanSelect},
 		{"impossible-where select", "select pk from test_table_01 where 1 != 1", planbuilder.PlanSelectImpossible},
 		{"lock-function select", "select get_lock('foo', 10)", planbuilder.PlanSelectLockFunc},
+		// The mutating lock functions share get_lock's classification: they
+		// must run on a reserved connection, and a timeout must kill the
+		// connection rather than keep it with lock state vtgate never
+		// recorded. The pure reads stay ordinary selects.
+		{"release-lock select", "select release_lock('foo')", planbuilder.PlanSelectLockFunc},
+		{"release-all-locks select", "select release_all_locks()", planbuilder.PlanSelectLockFunc},
+		{"is-free-lock select", "select is_free_lock('foo')", planbuilder.PlanSelect},
 		{"next-value select", "select next value from seq", planbuilder.PlanNextval},
 		{"explain", "explain test_table_01", planbuilder.PlanSelect},
 		{"show", "show tables", planbuilder.PlanShow},

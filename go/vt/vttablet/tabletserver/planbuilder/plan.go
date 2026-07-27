@@ -340,8 +340,14 @@ func BuildMessageStreaming(name string, tables map[string]*schema.Table) (*Plan,
 	return plan, nil
 }
 
-// hasLockFunc looks for get_lock function in the select query.
-// If it is present then it returns true otherwise false
+// hasLockFunc looks for a mutating lock function — get_lock, release_lock,
+// release_all_locks — in the select query. These must run on a reserved
+// connection (a lock is scoped to one MySQL connection, so acquiring or
+// releasing it on a pooled connection is meaningless), and a query timeout
+// must kill that connection rather than keep it: the kill can race the
+// server-side grant or release, leaving lock state vtgate never recorded on a
+// connection it goes on reusing. The pure reads (is_free_lock, is_used_lock)
+// stay ordinary selects.
 func hasLockFunc(sel *sqlparser.Select) bool {
 	var found bool
 	_ = sqlparser.Walk(func(in sqlparser.SQLNode) (bool, error) {
@@ -349,7 +355,8 @@ func hasLockFunc(sel *sqlparser.Select) bool {
 		if !isLFunc {
 			return true, nil
 		}
-		if lFunc.Type == sqlparser.GetLock {
+		switch lFunc.Type {
+		case sqlparser.GetLock, sqlparser.ReleaseLock, sqlparser.ReleaseAllLocks:
 			found = true
 			return false, nil
 		}

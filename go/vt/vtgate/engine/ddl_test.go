@@ -82,16 +82,17 @@ func TestDDLTempTable(t *testing.T) {
 		},
 	}
 
-	vc := &loggingVCursor{}
+	vc := &loggingVCursor{shards: []string{"0"}}
 	_, err := ddl.TryExecute(t.Context(), vc, nil, true)
 	require.NoError(t, err)
 
-	// The session is marked as holding temp tables only after the create
-	// succeeded.
+	// The single-shard routing check resolves before the session is touched;
+	// the session is marked as holding temp tables only around the create.
 	vc.ExpectLog(t, []string{
+		"ResolveDestinations ks [] Destinations:DestinationAllShards()",
 		"Needs Reserved Conn",
 		"ResolveDestinations ks [] Destinations:DestinationAllShards()",
-		"ExecuteMultiShard false false",
+		"ExecuteMultiShard ks.0: ddl query {} false false",
 		"temp table getting created",
 	})
 
@@ -99,13 +100,14 @@ func TestDDLTempTable(t *testing.T) {
 	// have reserved a connection and created the table before failing, and
 	// heartbeats keyed on the reserved connection must be able to keep it
 	// alive. (A create that reserved nothing is simply never beaten.)
-	vc = &loggingVCursor{multiShardErrs: []error{errors.New("create failed")}}
+	vc = &loggingVCursor{shards: []string{"0"}, multiShardErrs: []error{errors.New("create failed")}}
 	_, err = ddl.TryExecute(t.Context(), vc, nil, true)
 	require.ErrorContains(t, err, "create failed")
 	vc.ExpectLog(t, []string{
+		"ResolveDestinations ks [] Destinations:DestinationAllShards()",
 		"Needs Reserved Conn",
 		"ResolveDestinations ks [] Destinations:DestinationAllShards()",
-		"ExecuteMultiShard false false",
+		"ExecuteMultiShard ks.0: ddl query {} false false",
 		"temp table getting created",
 	})
 
@@ -129,5 +131,17 @@ func TestDDLTempTable(t *testing.T) {
 	vc.ExpectLog(t, []string{
 		"ResolveDestinations ks [] Destinations:DestinationAllShards()",
 		"ExecuteMultiShard false false",
+	})
+
+	// A create whose destination resolves to more than one shard is rejected
+	// before anything executes: no tablet RPC is sent, so the session must
+	// not be marked — marking would force every subsequent query onto a
+	// pointless reserved connection with plan caching disabled for the rest
+	// of the connection's life, for a statement that provably did nothing.
+	vc = &loggingVCursor{shards: []string{"-80", "80-"}}
+	_, err = ddl.TryExecute(t.Context(), vc, nil, true)
+	require.ErrorContains(t, err, "exactly one shard")
+	vc.ExpectLog(t, []string{
+		"ResolveDestinations ks [] Destinations:DestinationAllShards()",
 	})
 }

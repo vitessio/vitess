@@ -2243,7 +2243,9 @@ func (c *gatedBeatConn) hasBeatID(id int64) bool {
 // reserved connection on it that is already marked failing, so the sweep routes
 // it through the bounded failing lane.
 func storeGatedFailingTablet(vh *vtgateHandler, hc *discovery.FakeHealthCheck, i int, release chan struct{}, err error) *gatedBeatConn {
-	qs := hc.AddFakeTablet("aa", fmt.Sprintf("gated-%d", i), int32(i+1), "gatedks", fmt.Sprintf("g%d", i), topodatapb.TabletType_PRIMARY, true, 1, nil,
+	// Failing tablets are not serving in the healthcheck, so they take the
+	// bounded failing lane rather than the healthcheck-informed bypass.
+	qs := hc.AddFakeTablet("aa", fmt.Sprintf("gated-%d", i), int32(i+1), "gatedks", fmt.Sprintf("g%d", i), topodatapb.TabletType_PRIMARY, false, 1, nil,
 		func(tablet *topodatapb.Tablet) queryservice.QueryService {
 			return &gatedBeatConn{SandboxConn: sandboxconn.NewSandboxConn(tablet), release: release, err: err}
 		})
@@ -2316,6 +2318,68 @@ func TestTempTableHeartbeatFailingLaneContactsRecovered(t *testing.T) {
 		"a recovered tablet must be contacted as soon as a lane slot frees")
 }
 
+// TestTempTableHeartbeatFailingLaneBypassForServingTablet proves the
+// healthcheck-informed bypass: a tablet still marked failing whose healthcheck
+// state already reports serving is dispatched on the healthy path — even with
+// every failing-lane slot occupied — instead of queueing behind still-failing
+// routes, where waiting through their beat budgets could outlast the tablet's
+// reserved-connection timeout and lose the temp tables the recovery was meant
+// to save.
+func TestTempTableHeartbeatFailingLaneBypassForServingTablet(t *testing.T) {
+	origInterval := tempTableHeartbeatTime
+	tempTableHeartbeatTime = 30 * time.Second
+	t.Cleanup(func() { tempTableHeartbeatTime = origInterval })
+
+	executor, _, _, _, ctx := createExecutorEnv(t)
+	vsm := newVStreamManager(executor.resolver.resolver, executor.serv, "aa")
+	vtg := newVTGate(executor, executor.resolver, vsm, nil, executor.scatterConn.gateway)
+	vh := newVtgateHandler(vtg)
+	hc := executor.scatterConn.gateway.hc.(*discovery.FakeHealthCheck)
+
+	// Fill every failing-lane slot with a stuck, not-serving tablet.
+	release := make(chan struct{})
+	var stuck []*gatedBeatConn
+	for i := range tempTableFailingBeatConcurrency {
+		stuck = append(stuck, storeGatedFailingTablet(vh, hc, i, release, assert.AnError))
+	}
+	hbCtx, hbCancel := context.WithCancel(ctx)
+	var wgs []*sync.WaitGroup
+	t.Cleanup(func() {
+		hbCancel()
+		close(release)
+		for _, wg := range wgs {
+			wg.Wait()
+		}
+	})
+	wgs = append(wgs, vh.dispatchTempTableBeats(hbCtx))
+	inFlight := func() int64 {
+		var n int64
+		for _, c := range stuck {
+			n += c.execCount.Load()
+		}
+		return n
+	}
+	require.Eventually(t, func() bool { return inFlight() == int64(tempTableFailingBeatConcurrency) }, 5*time.Second, time.Millisecond,
+		"every failing-lane slot must fill")
+
+	// A tablet still marked failing, but whose healthcheck state already says
+	// serving: its beat must bypass the full lane and run immediately.
+	qs := hc.AddFakeTablet("aa", "servingagainhost", 9999, "servingks", "0", topodatapb.TabletType_PRIMARY, true /* serving */, 1, nil,
+		func(tablet *topodatapb.Tablet) queryservice.QueryService {
+			return &gatedBeatConn{SandboxConn: sandboxconn.NewSandboxConn(tablet)}
+		})
+	servingAgain := qs.(*gatedBeatConn)
+	st := servingAgain.Tablet()
+	c := &mysql.Conn{ConnectionID: 900}
+	vh.tempTableConns.Store(c, &tempTableConn{targets: tempTargets(tempTableHeartbeatTarget{
+		target: &querypb.Target{Keyspace: st.Keyspace, Shard: st.Shard, TabletType: st.Type}, alias: st.Alias, reservedID: 901, failures: 1,
+	})})
+	wgs = append(wgs, vh.dispatchTempTableBeats(hbCtx))
+
+	require.Eventually(t, func() bool { return servingAgain.execCount.Load() >= 1 }, 5*time.Second, time.Millisecond,
+		"a failing-marked tablet the healthcheck sees serving must bypass the full lane, not queue behind it")
+}
+
 // TestTempTableHeartbeatQueuedBeatSurvivesRepublish proves a beat that waits
 // behind the failing-lane semaphore is still delivered after a command
 // republishes its (unchanged) reservation while it waits. The claim step
@@ -2364,7 +2428,7 @@ func TestTempTableHeartbeatQueuedBeatSurvivesRepublish(t *testing.T) {
 	// Register a failing tablet backed by a real session, so its target can be
 	// republished. It returns success once contacted.
 	const reservedID = 4242
-	qs := hc.AddFakeTablet("aa", "queuedhost", 9999, "queuedks", "0", topodatapb.TabletType_PRIMARY, true, 1, nil,
+	qs := hc.AddFakeTablet("aa", "queuedhost", 9999, "queuedks", "0", topodatapb.TabletType_PRIMARY, false, 1, nil,
 		func(tablet *topodatapb.Tablet) queryservice.QueryService {
 			return &gatedBeatConn{SandboxConn: sandboxconn.NewSandboxConn(tablet)}
 		})
@@ -2439,7 +2503,7 @@ func TestTempTableHeartbeatReSnapshotsQueuedRoute(t *testing.T) {
 		"every failing-lane slot must fill")
 
 	// A failing route with one reserved id; its beat queues behind the full lane.
-	qs := hc.AddFakeTablet("aa", "routehost", 9999, "routeks", "0", topodatapb.TabletType_PRIMARY, true, 1, nil,
+	qs := hc.AddFakeTablet("aa", "routehost", 9999, "routeks", "0", topodatapb.TabletType_PRIMARY, false, 1, nil,
 		func(tablet *topodatapb.Tablet) queryservice.QueryService {
 			return &gatedBeatConn{SandboxConn: sandboxconn.NewSandboxConn(tablet)}
 		})
@@ -2775,7 +2839,7 @@ func storeFailingTempTablet(vh *vtgateHandler, hc *discovery.FakeHealthCheck, i 
 }
 
 func storeTempTablet(vh *vtgateHandler, hc *discovery.FakeHealthCheck, i, failures int) *sandboxconn.SandboxConn {
-	slow := hc.AddTestTablet("aa", fmt.Sprintf("host-%d", i), int32(i+1), "slowks", fmt.Sprintf("s%d", i), topodatapb.TabletType_PRIMARY, true, 1, nil)
+	slow := hc.AddTestTablet("aa", fmt.Sprintf("host-%d", i), int32(i+1), "slowks", fmt.Sprintf("s%d", i), topodatapb.TabletType_PRIMARY, failures == 0 /* serving */, 1, nil)
 	slow.ExecDelayResponse = 30 * time.Second
 	st := slow.Tablet()
 	c := &mysql.Conn{ConnectionID: uint32(1000 + i)}
@@ -3356,10 +3420,19 @@ func TestComQueryTempTableHeartbeatRegistration(t *testing.T) {
 
 	// COM_RESET_CONNECTION releases the reserved connections, and the
 	// temporary tables and applied session settings die with them: the
-	// connection must be deregistered and the temp-table flag, the
-	// reserved-connection mode, and the recorded system variables all
-	// cleared — otherwise the next queries would be forced onto pointless
-	// fresh reserved connections and could re-register for heartbeats.
+	// connection must be deregistered and the whole session rebuilt as a
+	// fresh default, the way MySQL resets its own — otherwise a pooled
+	// client would inherit the previous borrower's session state, and the
+	// next queries would be forced onto pointless fresh reserved
+	// connections and could re-register for heartbeats. Populate the rest
+	// of the state a borrower could leave behind first.
+	sessionBeforeReset := vh.session(c)
+	sessionBeforeReset.UserDefinedVariables = map[string]*querypb.BindVariable{"v": sqltypes.StringBindVariable("x")}
+	sessionBeforeReset.LastInsertId = 42
+	sessionBeforeReset.Autocommit = false
+	c.StatusFlags &^= mysql.ServerStatusAutocommit
+	sessionBeforeReset.TargetString = KsTestUnsharded
+
 	require.True(t, vh.session(c).GetInReservedConn())
 	vh.ComResetConnection(c)
 	require.False(t, vh.session(c).GetOptions().GetHasCreatedTempTables())
@@ -3368,6 +3441,15 @@ func TestComQueryTempTableHeartbeatRegistration(t *testing.T) {
 	require.Empty(t, vh.session(c).GetShardSessions())
 	_, ok = vh.tempTableConns.Load(c)
 	require.False(t, ok)
+	// The rest of the session-scope state returns to defaults too: user
+	// variables and LAST_INSERT_ID are gone, autocommit is back on (with the
+	// status flag the handshake advertises), and only the default database
+	// (target) survives the reset.
+	require.Empty(t, vh.session(c).GetUserDefinedVariables())
+	require.Zero(t, vh.session(c).GetLastInsertId())
+	require.True(t, vh.session(c).GetAutocommit())
+	require.NotZero(t, c.StatusFlags&mysql.ServerStatusAutocommit, "the autocommit status flag must be restored")
+	require.Equal(t, KsTestUnsharded, vh.session(c).GetTargetString(), "the default database must survive the reset")
 
 	// Creating a temporary table again after the reset re-registers.
 	err = vh.ComQuery(c, "create temporary table temp_t(id bigint)", func(*sqltypes.Result) error { return nil })

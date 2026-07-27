@@ -14,20 +14,24 @@
   "FullQuery": "select is_used_lock('foo') from dual limit :#maxLimit"
 }
 
-# release_all_locks is safe outside of reserved connection
+# release_all_locks mutates connection-scoped lock state: it must run on the
+# reserved connection that holds the locks, and a timeout must kill that
+# connection rather than keep it with lock state the session never recorded
 "select release_all_locks() from dual"
 {
-  "PlanID": "Select",
+  "PlanID": "SelectLockFunc",
   "TableName": "",
-  "FullQuery": "select release_all_locks() from dual limit :#maxLimit"
+  "FullQuery": "select release_all_locks() from dual limit :#maxLimit",
+  "NeedsReservedConn": true
 }
 
-# release_lock is safe outside of reserved connection
+# release_lock mutates connection-scoped lock state, exactly like get_lock
 "select release_lock('foo') from dual"
 {
-  "PlanID": "Select",
+  "PlanID": "SelectLockFunc",
   "TableName": "",
-  "FullQuery": "select release_lock('foo') from dual limit :#maxLimit"
+  "FullQuery": "select release_lock('foo') from dual limit :#maxLimit",
+  "NeedsReservedConn": true
 }
 
 # impossible lock query is safe outside of reserved connection

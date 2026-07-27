@@ -20,6 +20,7 @@ import (
 	"context"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/schema"
@@ -85,6 +86,22 @@ func (ddl *DDL) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[st
 		// path, so it runs here rather than falling through.
 		_, isCreate := ddl.DDL.(*sqlparser.CreateTable)
 		if isCreate {
+			// A temporary table lives on a single reserved connection, so
+			// the create must target exactly one shard. Resolve before
+			// touching the session: a routing rejection provably executed
+			// nothing, and marking the session for it would force every
+			// subsequent query onto a pointless reserved connection with
+			// plan caching disabled for the rest of the connection's life.
+			// (The Send resolves again below; resolution is a cached
+			// srvtopo lookup.)
+			rss, _, err := vcursor.ResolveDestinations(ctx, ddl.NormalDDL.Keyspace.Name, nil, []key.ShardDestination{ddl.NormalDDL.TargetDestination})
+			if err != nil {
+				return nil, err
+			}
+			if len(rss) != 1 {
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+					"temporary table DDL must target exactly one shard (a temporary table lives on a single reserved connection): destination %v resolves to %d shards", ddl.NormalDDL.TargetDestination, len(rss))
+			}
 			// Only a CREATE needs to reserve a connection; a DROP of an
 			// existing temp table is already routed to the session's
 			// reserved connection, and a drop-only session (e.g. DROP
