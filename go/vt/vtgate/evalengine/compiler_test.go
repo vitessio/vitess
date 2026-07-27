@@ -1102,9 +1102,8 @@ func TestCompilerNonConstant(t *testing.T) {
 
 // TestJSONInStaticTable checks that IN over folded JSON literals does not
 // compile the static hash table: JSON arrays and objects hash by kind and
-// cardinality only, so a hash hit is not equality. Compilation fails until
-// the compiler learns to push JSON literals; the follow-up literal change
-// flips this test to compiled evaluation.
+// cardinality only, so a hash hit is not equality. The compiled comparison
+// must agree with AST evaluation.
 func TestJSONInStaticTable(t *testing.T) {
 	testCases := []struct {
 		expression string
@@ -1160,8 +1159,12 @@ func TestJSONInStaticTable(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, tc.result, res.String())
 
-			_, err = untyped.Compile(env)
-			require.ErrorContains(t, err, "unsupported literal kind")
+			compiled, err := untyped.Compile(env)
+			require.NoError(t, err)
+
+			res, err = env.EvaluateVM(compiled)
+			require.NoError(t, err)
+			assert.Equal(t, tc.result, res.String())
 		})
 	}
 }
