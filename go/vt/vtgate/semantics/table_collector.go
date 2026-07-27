@@ -47,6 +47,13 @@ type (
 		// cte is a map of CTE definitions that are used in the query
 		cte map[string]*CTE
 
+		// deferredMismatch holds column-list violations found while analyzing
+		// a definition's body, keyed by the enclosing definition. MySQL only
+		// validates definitions the executed statement uses, so a violation
+		// surfaces when a use of the recording definition resolves, and stays
+		// silent while it remains unused.
+		deferredMismatch map[*CTE]error
+
 		// lastInsertIdWithArgument is used to signal to later stages that we
 		// need to do special handling of the engine primitive
 		lastInsertIdWithArgument bool
@@ -55,10 +62,11 @@ type (
 
 func newEarlyTableCollector(si SchemaInformation, currentDb string) *earlyTableCollector {
 	return &earlyTableCollector{
-		si:        si,
-		currentDb: currentDb,
-		done:      map[*sqlparser.AliasedTableExpr]TableInfo{},
-		cte:       map[string]*CTE{},
+		si:               si,
+		currentDb:        currentDb,
+		done:             map[*sqlparser.AliasedTableExpr]TableInfo{},
+		cte:              map[string]*CTE{},
+		deferredMismatch: map[*CTE]error{},
 	}
 }
 
@@ -400,12 +408,39 @@ func (etc *earlyTableCollector) buildRecursiveCTE(node *sqlparser.AliasedTableEx
 			return cteTable, nil
 		}
 	}
+	// MySQL validates a declared column list only where the CTE is used from
+	// the executed statement: the recursive reference inside the definition
+	// resolves against the select list names instead when the declared list
+	// cannot be paired with it, and a use inside another definition only
+	// counts if that definition is itself used, so the violation is recorded
+	// on the enclosing definition and surfaces when (and if) a use reaches it
+	err := checkColumnListLength(cteDef.Columns, cteDef.Query)
+	if err == nil {
+		err = etc.deferredMismatch[cteDef]
+	}
+	if err != nil {
+		enclosing := etc.enclosingCTE(sc)
+		if enclosing == nil {
+			return nil, err
+		}
+		etc.deferredMismatch[enclosing] = err
+	}
 	return &RealTable{
 		tableName:    node.TableNameString(),
 		ASTNode:      node,
 		CTE:          cteDef,
 		collationEnv: etc.si.Environment().CollationEnv(),
 	}, nil
+}
+
+// enclosingCTE returns the definition whose body is being analyzed at the
+// current scope, or nil when the reference comes from the executed statement.
+func (etc *earlyTableCollector) enclosingCTE(sc *scoper) *CTE {
+	if sc == nil || len(sc.commonTableExprScopes) == 0 {
+		return nil
+	}
+	def := sc.commonTableExprScopes[len(sc.commonTableExprScopes)-1]
+	return etc.cte[def.ID.String()]
 }
 
 func checkValidRecursiveCTE(cteDef *CTE) error {
@@ -435,6 +470,9 @@ func checkValidRecursiveCTE(cteDef *CTE) error {
 }
 
 func (tc *tableCollector) handleDerivedTable(node *sqlparser.AliasedTableExpr, t *sqlparser.DerivedTable) error {
+	if err := checkColumnListLength(node.Columns, t.Select); err != nil {
+		return err
+	}
 	switch sel := t.Select.(type) {
 	case *sqlparser.Select:
 		return tc.addSelectDerivedTable(sel, node, node.Columns, node.As)
@@ -443,6 +481,32 @@ func (tc *tableCollector) handleDerivedTable(node *sqlparser.AliasedTableExpr, t
 	default:
 		return vterrors.VT13001("[BUG] %T in a derived table", sel)
 	}
+}
+
+// checkColumnListLength validates a declared column list against the select
+// list that defines the table, as MySQL does for derived tables and CTEs.
+func checkColumnListLength(columns sqlparser.Columns, stmt sqlparser.TableStatement) error {
+	if len(columns) == 0 {
+		return nil
+	}
+	firstSelect, err := sqlparser.GetFirstSelect(stmt)
+	if err != nil {
+		return err
+	}
+	selectColumns := firstSelect.GetColumns()
+	if containsStar(selectColumns) {
+		// every star expands to at least one column, so a column list with
+		// fewer names than select expressions is guaranteed not to match;
+		// beyond that we cannot validate against an unexpanded star
+		if len(columns) < len(selectColumns) {
+			return vterrors.VT03033()
+		}
+		return nil
+	}
+	if len(columns) != len(selectColumns) {
+		return vterrors.VT03033()
+	}
+	return nil
 }
 
 func (tc *tableCollector) addSelectDerivedTable(
