@@ -30,6 +30,7 @@ import (
 	"math"
 	"math/bits"
 	"net/netip"
+	"slices"
 	"strconv"
 	"time"
 
@@ -3020,10 +3021,13 @@ func (asm *assembler) Fn_RPAD(col collations.TypedCollation) {
 		repeat := (l - strLen) / runeLen
 		remainder := (l - strLen) % runeLen
 
-		str.bytes = append(str.bytes, bytes.Repeat(pad.bytes, repeat)...)
+		padding := bytes.Repeat(pad.bytes, repeat)
 		if remainder > 0 {
-			str.bytes = append(str.bytes, charset.Slice(cs, pad.bytes, 0, remainder)...)
+			padding = append(padding, charset.Slice(cs, pad.bytes, 0, remainder)...)
 		}
+		// The result needs its own buffer: str.bytes is borrowed from the input
+		// row or a bind variable, where the next value follows it in memory.
+		str.bytes = slices.Concat(str.bytes, padding)
 
 		env.vm.sp -= 2
 		return 1
