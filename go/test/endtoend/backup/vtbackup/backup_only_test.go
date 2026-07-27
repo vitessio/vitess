@@ -102,7 +102,7 @@ func TestErrantGTIDsInBaseBackup(t *testing.T) {
 	require.False(t, primaryPosition.AtLeast(errantPosition))
 
 	// Run vtbackup, which restores the newest backup and should reject it before creating another backup.
-	_, err = startVtBackup(t, false, false, false)
+	_, err = startVtBackup(t, false, false, false, "--verify-backup-errant-gtids")
 	require.Error(t, err)
 
 	// Confirm that the failed run did not create a backup from the invalid base.
