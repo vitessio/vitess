@@ -102,7 +102,7 @@ func TestBitwiseBinaryRepeatedEvaluation(t *testing.T) {
 
 // TestBitwiseBinaryResultIsPlainBinary tests that the binary-string form of the
 // bitwise operators returns a plain binary string even when an operand is a hex
-// or bit literal. MySQL reads the result as a binary string, which is only true
+// or bit literal. MySQL 8.0+ reads the result as a binary string, which is only true
 // when its bytes parse as a non-zero number:
 //
 //	SELECT IF(X'FF' & _binary'A', 'true', 'false')  =>  false
