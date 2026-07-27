@@ -2510,5 +2510,49 @@
         "Query": "select a from (select 1 from dual union all select 2 from dual) as dt(a) where exists (with recursive qn as (select a * 0 as b from dual union all select b + 1 from qn where b = 0) select 1 from qn where b = a)"
       }
     }
+  },
+  {
+    "comment": "Recursive CTE whose seed selects * from a table without authoritative columns",
+    "query": "WITH RECURSIVE x AS (SELECT * FROM user UNION SELECT id + 1 FROM x WHERE id < 10) SELECT id FROM x",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "WITH RECURSIVE x AS (SELECT * FROM user UNION SELECT id + 1 FROM x WHERE id < 10) SELECT id FROM x",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "with recursive x as (select * from `user` where 1 != 1 union select id + 1 from x where 1 != 1) select id from x where 1 != 1",
+        "Query": "with recursive x as (select * from `user` union select id + 1 from x where id < 10) select id from x"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Recursive CTE with a declared column list whose seed selects * from a table without authoritative columns",
+    "query": "WITH RECURSIVE x(a) AS (SELECT * FROM user UNION SELECT a + 1 FROM x WHERE a < 10) SELECT a FROM x",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "WITH RECURSIVE x(a) AS (SELECT * FROM user UNION SELECT a + 1 FROM x WHERE a < 10) SELECT a FROM x",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "with recursive x(a) as (select * from `user` where 1 != 1 union select a + 1 from x where 1 != 1) select a from x where 1 != 1",
+        "Query": "with recursive x(a) as (select * from `user` union select a + 1 from x where a < 10) select a from x"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
   }
 ]
