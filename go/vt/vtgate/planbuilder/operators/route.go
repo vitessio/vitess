@@ -133,6 +133,11 @@ func UpdateRoutingLogic(ctx *plancontext.PlanningContext, in sqlparser.Expr, r R
 	pred, isJP := in.(*predicates.JoinPredicate)
 	if isJP {
 		expr = pred.Current()
+		if expr == nil {
+			// the predicate has been skipped - the join it belonged to has been
+			// merged away, so it no longer applies and must not influence routing
+			return r
+		}
 	}
 
 	if b := ctx.IsConstantBool(expr); b != nil && !*b {
