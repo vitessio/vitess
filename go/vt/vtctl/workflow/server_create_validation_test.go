@@ -17,7 +17,6 @@ limitations under the License.
 package workflow
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -31,11 +30,10 @@ import (
 // checks, so all_tables=true combined with an explicit include list would
 // otherwise silently move only the explicit subset.
 func TestCreateRejectsAllTablesWithIncludeList(t *testing.T) {
-	ctx := context.Background()
 	s := &Server{}
 
 	t.Run("MoveTablesCreate", func(t *testing.T) {
-		_, err := s.MoveTablesCreate(ctx, &vtctldatapb.MoveTablesCreateRequest{
+		_, err := s.MoveTablesCreate(t.Context(), &vtctldatapb.MoveTablesCreateRequest{
 			Workflow:       "wf1",
 			SourceKeyspace: "sourceks",
 			TargetKeyspace: "targetks",
@@ -46,7 +44,7 @@ func TestCreateRejectsAllTablesWithIncludeList(t *testing.T) {
 	})
 
 	t.Run("MigrateCreate", func(t *testing.T) {
-		_, err := s.MigrateCreate(ctx, &vtctldatapb.MigrateCreateRequest{
+		_, err := s.MigrateCreate(t.Context(), &vtctldatapb.MigrateCreateRequest{
 			Workflow:       "wf1",
 			MountName:      "ext1",
 			SourceKeyspace: "sourceks",
@@ -65,11 +63,10 @@ func TestCreateRejectsAllTablesWithIncludeList(t *testing.T) {
 // The vtctldclient cannot produce this request (it requires --tables or
 // --all-tables), so only raw gRPC callers and VTAdmin can hit it.
 func TestCreateRejectsExcludeTablesWithoutSelection(t *testing.T) {
-	ctx := context.Background()
 	s := &Server{}
 
 	t.Run("MoveTablesCreate", func(t *testing.T) {
-		_, err := s.MoveTablesCreate(ctx, &vtctldatapb.MoveTablesCreateRequest{
+		_, err := s.MoveTablesCreate(t.Context(), &vtctldatapb.MoveTablesCreateRequest{
 			Workflow:       "wf1",
 			SourceKeyspace: "sourceks",
 			TargetKeyspace: "targetks",
@@ -79,7 +76,7 @@ func TestCreateRejectsExcludeTablesWithoutSelection(t *testing.T) {
 	})
 
 	t.Run("MigrateCreate", func(t *testing.T) {
-		_, err := s.MigrateCreate(ctx, &vtctldatapb.MigrateCreateRequest{
+		_, err := s.MigrateCreate(t.Context(), &vtctldatapb.MigrateCreateRequest{
 			Workflow:       "wf1",
 			MountName:      "ext1",
 			SourceKeyspace: "sourceks",
