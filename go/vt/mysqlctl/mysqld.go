@@ -1021,7 +1021,7 @@ func (mysqld *Mysqld) armReplicaRestore(ctx context.Context, state *replicaShutd
 				return
 			}
 		}
-		mysqld.restoreReplicaAfterFailedShutdown(restoreCtx, state, replicaRestorePollInterval)
+		mysqld.restoreReplicaAfterFailedShutdown(restoreCtx, state, replicaRestorePollInterval, replicaRestoreConnectTimeout)
 	}()
 }
 
