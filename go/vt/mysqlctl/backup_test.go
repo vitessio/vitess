@@ -346,6 +346,16 @@ func TestRestoreExecutesRestoreWithScopedParams(t *testing.T) {
 	require.Equal(t, "Fake", executeRestoreStats.ScopeV[backupstats.ScopeImplementation])
 }
 
+func TestRestorePopulatesMissingBackupName(t *testing.T) {
+	env := createFakeBackupRestoreEnv(t)
+	env.backupStorage.ListBackupsReturn.BackupHandles[0].(*FakeBackupHandle).NameV = "backup-name"
+
+	manifest, err := Restore(env.ctx, env.restoreParams)
+	require.NoError(t, err, env.logger.Events)
+
+	assert.Equal(t, "backup-name", manifest.BackupName)
+}
+
 // TestRestoreNoStats tests that if RestoreParams.Stats is nil, then Restore will
 // pass non-nil Stats to sub-components.
 func TestRestoreNoStats(t *testing.T) {
