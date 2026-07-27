@@ -17,8 +17,6 @@ limitations under the License.
 package migrate
 
 import (
-	"errors"
-
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
@@ -55,7 +53,7 @@ var createCommand = &cobra.Command{
 	Aliases:               []string{"Create"},
 	Args:                  cobra.NoArgs,
 	PreRunE: func(cmd *cobra.Command, args []string) error {
-		if err := validateTableSelectionFlags(); err != nil {
+		if err := common.ValidateTableSelection(createOptions.IncludeTables, createOptions.ExcludeTables, createOptions.AllTables); err != nil {
 			return err
 		}
 		if err := common.ParseAndValidateCreateOptions(cmd); err != nil {
@@ -64,30 +62,6 @@ var createCommand = &cobra.Command{
 		return nil
 	},
 	RunE: commandCreate,
-}
-
-// validateTableSelectionFlags checks the table-selection options by their
-// effective values rather than by flag presence, mirroring the server-side
-// validation in workflow.Server.moveTablesCreate: a selection is required, a
-// non-empty include list cannot be combined with all-tables, and an exclude
-// list needs a selection to apply to. Using the effective values keeps
-// --tables=t1 --all-tables=false and --tables= --all-tables=true valid, so
-// automation can always emit flags explicitly, and it rejects the
-// selection-less forms (--tables= --exclude-tables=t1) that a flag presence
-// check accepts because pflag marks an empty value as changed.
-//
-// See https://github.com/vitessio/vitess/issues/20566.
-func validateTableSelectionFlags() error {
-	if len(createOptions.IncludeTables) > 0 && createOptions.AllTables {
-		return errors.New("--tables and --all-tables are mutually exclusive")
-	}
-	if len(createOptions.IncludeTables) == 0 && !createOptions.AllTables {
-		if len(createOptions.ExcludeTables) > 0 {
-			return errors.New("--exclude-tables requires --all-tables or a non-empty --tables list")
-		}
-		return errors.New("tables or all-tables are required to specify which tables to move")
-	}
-	return nil
 }
 
 func commandCreate(cmd *cobra.Command, args []string) error {
