@@ -27,6 +27,7 @@ import (
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
@@ -48,4 +49,20 @@ func TestUpdateRoutingLogicSequenceRouting(t *testing.T) {
 	// a sequence routing must pass through predicate handling untouched
 	seq := &SequenceRouting{keyspace: &vindexes.Keyspace{Name: "main"}}
 	assert.Same(t, seq, UpdateRoutingLogic(ctx, sqlparser.NewIntLiteral("1"), seq))
+}
+
+func TestRouteCloneMergeFallback(t *testing.T) {
+	ks := &vindexes.Keyspace{Name: "ks", Sharded: true}
+	route := &Route{
+		unaryOperator: newUnaryOp(&Route{Routing: &NoneRouting{keyspace: ks}}),
+		Routing:       &ShardedRouting{keyspace: ks, RouteOpCode: engine.Scatter},
+		MergeFallback: &ShardedRouting{keyspace: ks, RouteOpCode: engine.EqualUnique},
+	}
+
+	clone := route.Clone(route.Inputs()).(*Route)
+	require.NotSame(t, route.MergeFallback, clone.MergeFallback)
+
+	// mutating the clone's fallback must not reach through to the original
+	clone.MergeFallback.RouteOpCode = engine.Scatter
+	assert.Equal(t, engine.EqualUnique, route.MergeFallback.RouteOpCode)
 }
