@@ -124,6 +124,18 @@ func UpdateRoutingLogic(ctx *plancontext.PlanningContext, in sqlparser.Expr, r R
 		return nr
 	}
 
+	expr := in
+	// If we have a JoinPredicate, let's get the inner expression
+	pred, isJP := in.(*predicates.JoinPredicate)
+	if isJP {
+		expr = pred.Current()
+		if expr == nil {
+			// the predicate has been skipped - the join it belonged to has been
+			// merged away, so it no longer applies and must not influence routing
+			return r
+		}
+	}
+
 	ks := r.Keyspace()
 	inferred := false
 	if ks == nil {
@@ -135,13 +147,6 @@ func UpdateRoutingLogic(ctx *plancontext.PlanningContext, in sqlparser.Expr, r R
 		inferred = true
 	}
 	nr := &NoneRouting{keyspace: ks, inferredKeyspace: inferred}
-
-	expr := in
-	// If we have a JoinPredicate, let's get the inner expression
-	pred, isJP := in.(*predicates.JoinPredicate)
-	if isJP {
-		expr = pred.Current()
-	}
 
 	if b := ctx.IsConstantBool(expr); b != nil && !*b {
 		return nr
