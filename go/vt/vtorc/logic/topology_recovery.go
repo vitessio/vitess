@@ -571,16 +571,11 @@ func restartDirectReplicas(ctx context.Context, analysisEntry *inst.DetectionAna
 			logger.Info("Restarting replication on direct replica " + tabletAliasString)
 			_ = AuditTopologyRecovery(topologyRecovery, "Restarting replication on direct replica "+tabletAliasString)
 
-			if err := stopReplication(ctx, tablet); err != nil {
-				logger.Error(fmt.Sprintf("Failed to stop replication on %s: %v", tabletAliasString, err))
-				return err
-			}
-
 			// Determine if this replica should use semi-sync based on the durability policy
 			semiSync := policy.IsReplicaSemiSync(durabilityPolicy, primaryTablet, tablet)
 
-			if err := startReplication(ctx, tablet, semiSync); err != nil {
-				logger.Error(fmt.Sprintf("Failed to start replication on %s: %v", tabletAliasString, err))
+			if err := restartReplication(ctx, tablet, semiSync); err != nil {
+				logger.Error(fmt.Sprintf("Failed to restart replication on %s: %v", tabletAliasString, err))
 				return err
 			}
 			logger.Info("Successfully restarted replication on " + tabletAliasString)
@@ -608,20 +603,12 @@ func getShardTablets(ctx context.Context, keyspace, shard string) ([]*topo.Table
 	return ts.GetTabletsByShard(ctx, keyspace, shard)
 }
 
-// stopReplication calls StopReplication RPC for the given tablet with a timeout.
-func stopReplication(ctx context.Context, tablet *topodatapb.Tablet) error {
+// restartReplication calls RestartReplication RPC for the given tablet with a timeout.
+func restartReplication(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) error {
 	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer cancel()
 
-	return tmc.StopReplication(ctx, tablet)
-}
-
-// startReplication calls StartReplication RPC for the given tablet with a timeout.
-func startReplication(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) error {
-	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
-	defer cancel()
-
-	return tmc.StartReplication(ctx, tablet, semiSync)
+	return tmc.RestartReplication(ctx, tablet, semiSync)
 }
 
 // isERSEnabled returns true if ERS can be used globally or for the given keyspace.

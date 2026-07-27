@@ -1499,8 +1499,8 @@ func TestRestartDirectReplicasTimeout(t *testing.T) {
 		// when the passed context is canceled.
 		mockTMC := tmcmock.NewMockTabletManagerClient(mockController)
 		mockTMC.EXPECT().
-			StopReplication(gomock.Any(), gomock.Any()).
-			DoAndReturn(func(ctx context.Context, _ *topodatapb.Tablet) error {
+			RestartReplication(gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(ctx context.Context, _ *topodatapb.Tablet, _ bool) error {
 				<-ctx.Done()
 				return ctx.Err()
 			}).
@@ -1541,7 +1541,7 @@ func TestRestartDirectReplicasTimeout(t *testing.T) {
 		}()
 
 		// Let the recovery goroutine reach a blocked state before advancing fake time (in this case,
-		// hanging on the StopReplication RPC).
+		// hanging on the RestartReplication RPC).
 		synctest.Wait()
 
 		// Move fake time just beyond the expected RPC timeout boundary.
