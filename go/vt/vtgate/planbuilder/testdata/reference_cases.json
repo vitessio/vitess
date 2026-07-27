@@ -1001,5 +1001,32 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "Reference table preserved by an outer join still merges into a single-shard route",
+    "query": "select ref_with_source.col from ref_with_source left join (select * from `user` where id = 1) as u on ref_with_source.col = u.col",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select ref_with_source.col from ref_with_source left join (select * from `user` where id = 1) as u on ref_with_source.col = u.col",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select ref_with_source.col from ref_with_source left join (select * from `user` where 1 != 1) as u on ref_with_source.col = u.col where 1 != 1",
+        "Query": "select ref_with_source.col from ref_with_source left join (select * from `user` where id = 1) as u on ref_with_source.col = u.col",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.ref_with_source",
+        "user.user"
+      ]
+    }
   }
 ]
