@@ -885,7 +885,7 @@ func TestCloneFromDonor(t *testing.T) {
 			}
 
 			// Execute CloneFromDonor
-			pos, err := CloneFromDonor(ctx, env.ts, env.mysqld, tc.mycnf, env.keyspace, env.shard)
+			pos, _, err := CloneFromDonor(ctx, env.ts, env.mysqld, tc.mycnf, env.keyspace, env.shard)
 
 			// Verify results
 			if tc.wantErr {

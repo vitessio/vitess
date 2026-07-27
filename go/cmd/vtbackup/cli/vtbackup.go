@@ -86,6 +86,9 @@ type (
 		// restored reports whether vtbackup loaded existing data instead of starting empty.
 		restored bool
 
+		// donorAlias identifies the tablet the data was cloned from, if any.
+		donorAlias *topodatapb.TabletAlias
+
 		// backupName identifies the restored backup, if any.
 		backupName string
 	}
@@ -518,7 +521,10 @@ func restoreForBackup(ctx context.Context, mysqlTermHandler *mySQLTermHandler, t
 	mysqld mysqlctl.MysqlDaemon, mycnf *mysqlctl.Mycnf, dbName string, extraEnv map[string]string,
 ) (restoreInfo, error) {
 	if restoreWithClone {
-		var restorePos replication.Position
+		var (
+			restorePos replication.Position
+			donorAlias *topodatapb.TabletAlias
+		)
 
 		// CLONE intentionally restarts mysqld. Suppress the resulting OnTerm
 		// cancellation and pass mycnf so CloneFromDonor can restart mysqld
@@ -526,7 +532,7 @@ func restoreForBackup(ctx context.Context, mysqlTermHandler *mySQLTermHandler, t
 		err := mysqlTermHandler.ignoreTermsFor(func() error {
 			var err error
 
-			restorePos, err = mysqlctl.CloneFromDonor(ctx, topoServer, mysqld, mycnf, initKeyspace, initShard)
+			restorePos, donorAlias, err = mysqlctl.CloneFromDonor(ctx, topoServer, mysqld, mycnf, initKeyspace, initShard)
 
 			return err
 		})
@@ -534,7 +540,7 @@ func restoreForBackup(ctx context.Context, mysqlTermHandler *mySQLTermHandler, t
 			return restoreInfo{}, vterrors.Wrap(err, "restore with clone failed")
 		}
 
-		return restoreInfo{position: restorePos}, nil
+		return restoreInfo{position: restorePos, restored: true, donorAlias: donorAlias}, nil
 	}
 
 	phase.Set(phaseNameRestoreLastBackup, int64(1))
@@ -702,17 +708,22 @@ func runBackup(ctx context.Context, topoServer *topo.Server, mysqld *mysqlctl.My
 	return nil
 }
 
-// verifyNoErrantGTIDsInBaseBackup rejects a restored backup with transactions absent from the primary.
+// verifyNoErrantGTIDsInBaseBackup rejects restored or cloned data with transactions absent from the primary.
 func verifyNoErrantGTIDsInBaseBackup(ri restoreInfo, primaryPosition replication.Position) error {
 	errantGTIDs := findErrantGTIDs(ri.position, primaryPosition)
 	if errantGTIDs.Empty() {
 		return nil
 	}
 
+	source := fmt.Sprintf("base backup %q", ri.backupName)
+	if ri.donorAlias != nil {
+		source = "clone from donor tablet " + topoproto.TabletAliasString(ri.donorAlias)
+	}
+
 	return vterrors.Errorf(
 		vtrpc.Code_FAILED_PRECONDITION,
-		"base backup %q has errant GTIDs %q relative to current primary position %q",
-		ri.backupName,
+		"%s has errant GTIDs %q relative to current primary position %q",
+		source,
 		errantGTIDs.String(),
 		primaryPosition.String(),
 	)
