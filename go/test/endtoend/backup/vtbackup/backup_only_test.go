@@ -61,14 +61,26 @@ func TestErrantGTIDsInBaseBackup(t *testing.T) {
 	require.NoError(t, err)
 	errantGTID := primaryUUID.Rows[0][0].ToString() + ":1000000000"
 
+	// Clean up to allow the rest of the test suite to continue.
 	t.Cleanup(func() {
-		_, err := primary.VttabletProcess.QueryTablet(
-			"SET GLOBAL rpl_semi_sync_source_enabled = false",
-			keyspaceName,
-			true,
-		)
+		// Disable semi-sync so the primary repair does not wait for an acknowledgement from the
+		// disconnected replica.
+		semisyncType, err := primary.VttabletProcess.SemiSyncExtensionLoaded()
 		assert.NoError(t, err)
 
+		var disableSemiSync string
+		switch semisyncType {
+		case mysql.SemiSyncTypeSource:
+			disableSemiSync = "SET GLOBAL rpl_semi_sync_source_enabled = false"
+		case mysql.SemiSyncTypeMaster:
+			disableSemiSync = "SET GLOBAL rpl_semi_sync_master_enabled = false"
+		}
+		if disableSemiSync != "" {
+			_, err = primary.VttabletProcess.QueryTablet(disableSemiSync, keyspaceName, true)
+			assert.NoError(t, err)
+		}
+
+		// Commit the injected GTID on the primary so the replica can rejoin before the shared teardown.
 		assert.NoError(t, primary.VttabletProcess.QueryTabletMultiple([]string{
 			fmt.Sprintf("SET GTID_NEXT = '%s'", errantGTID),
 			"BEGIN",
@@ -76,6 +88,7 @@ func TestErrantGTIDsInBaseBackup(t *testing.T) {
 			"SET GTID_NEXT = 'AUTOMATIC'",
 		}, keyspaceName, true))
 
+		// Remove the test backups and restore the tablets for the remaining test suite.
 		removeBackups(t)
 		tearDownTablets(t, true, primary, replica1)
 	})
