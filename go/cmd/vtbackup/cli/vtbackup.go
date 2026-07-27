@@ -918,6 +918,10 @@ func getPrimaryPosition(ctx context.Context, tmc tmclient.TabletManagerClient, t
 
 // getPrimaryPositionWithRetry reads the current primary position until it succeeds or the context is canceled.
 func getPrimaryPositionWithRetry(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server) (replication.Position, error) {
+	if si, err := ts.GetShard(ctx, initKeyspace, initShard); err == nil && topoproto.TabletAliasIsZero(si.PrimaryAlias) {
+		return replication.Position{}, fmt.Errorf("shard %v/%v has no primary", initKeyspace, initShard)
+	}
+
 	var primaryPosition replication.Position
 	err := retryOnError(ctx, func() error {
 		ctx, cancel := context.WithTimeout(ctx, operationTimeout)
