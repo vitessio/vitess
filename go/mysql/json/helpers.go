@@ -19,7 +19,11 @@ package json
 import (
 	"encoding/binary"
 	"fmt"
+	"strconv"
 	"strings"
+
+	"vitess.io/vitess/go/hack"
+	"vitess.io/vitess/go/mysql/decimal"
 
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -123,16 +127,65 @@ const (
 	numberHashUnparsed
 )
 
-// hashNumber fingerprints the decimal value a number spells, so that every
-// spelling of one value fingerprints alike while two values that differ only
-// past the precision of a float64 do not.
-func (v *Value) hashNumber(h *vthash.Hasher) {
-	if hashDecimalText(h, v.s) {
-		return
+// NumericValue returns the value a number compares and fingerprints as.
+//
+// MySQL fixes the form of a number when the document is built, not when it is
+// read: an integer that fits stays exact, and everything else becomes a double,
+// losing precision there and then. Both comparison and hashing work from
+// whatever was kept, which is why 9007199254740992.1 equals 9007199254740992
+// (both are the same double) while 9007199254740993 does not (it stayed an
+// integer). Reading the decimal straight off the text would keep a precision
+// MySQL has already discarded.
+func (v *Value) NumericValue() (decimal.Decimal, bool) {
+	switch v.NumberType() {
+	case NumberTypeSigned:
+		i, ok := v.Int64()
+		return decimal.NewFromInt(i), ok
+	case NumberTypeUnsigned:
+		u, ok := v.Uint64()
+		return decimal.NewFromUint(u), ok
+	case NumberTypeFloat:
+		f, ok := v.Float64()
+		return decimal.NewFromFloat(f), ok
+	default:
+		// A decimal carried over from a SQL value keeps the scale it was
+		// written to, so it stands for itself.
+		return v.Decimal()
 	}
-	// Text no number the parser produces can reach. It has no decimal value to
-	// fingerprint, and comparison rejects it too, so its spelling is all there
-	// is to go on.
+}
+
+// hashNumber fingerprints a number by the form it is stored in, mirroring
+// NumericValue so that two numbers fingerprint alike exactly when they compare
+// equal. The text a number was written as is the wrong input: MySQL has already
+// discarded any precision beyond that form.
+func (v *Value) hashNumber(h *vthash.Hasher) {
+	switch v.NumberType() {
+	case NumberTypeSigned, NumberTypeUnsigned:
+		// An integer is kept exactly, so its text is already the value.
+		if hashDecimalText(h, v.s) {
+			return
+		}
+	case NumberTypeFloat:
+		if f, ok := v.Float64(); ok {
+			// The shortest form that round-trips the double is the value it
+			// stands for; hashDecimalText canonicalises whatever notation
+			// AppendFloat picks.
+			var buf [32]byte
+			if hashDecimalText(h, hack.String(strconv.AppendFloat(buf[:0], f, 'g', -1, 64))) {
+				return
+			}
+		}
+	default:
+		if dec, ok := v.Decimal(); ok {
+			if hashDecimalText(h, dec.String()) {
+				return
+			}
+		}
+	}
+
+	// A number with no value to fingerprint: too large for a double, so
+	// comparison rejects it too. Its spelling is all there is to go on, and the
+	// marker keeps it clear of anything that does have a value.
 	h.Write8(numberHashUnparsed)
 	hashFramed(h, v.s)
 }

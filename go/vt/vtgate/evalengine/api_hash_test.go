@@ -162,11 +162,14 @@ func TestJSONHashMatchesComparison(t *testing.T) {
 		{`1.0`, parseJSON(t, `1.0`)},
 		{`1e0`, parseJSON(t, `1e0`)},
 		{`2`, parseJSON(t, `2`)},
-		// The first pair differs only past the precision of a float64; the
-		// second is one value under two spellings that a float64 rendering
-		// would also flatten together.
+		// A number is fingerprinted by the form it is stored in. The first
+		// three are one double and so one value; the fourth stayed an integer
+		// and keeps the digit the double cannot hold.
+		{"9007199254740992", parseJSON(t, `9007199254740992`)},
 		{"9007199254740992.0", parseJSON(t, `9007199254740992.0`)},
 		{"9007199254740992.1", parseJSON(t, `9007199254740992.1`)},
+		{"9007199254740993", parseJSON(t, `9007199254740993`)},
+		{"9007199254740993.0", parseJSON(t, `9007199254740993.0`)},
 		{"1e27", parseJSON(t, `1e27`)},
 		{"1e27 written out", parseJSON(t, `1000000000000000000000000000`)},
 		// Integral spellings canonicalise on a different code path to the rest,

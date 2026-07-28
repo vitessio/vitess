@@ -197,33 +197,6 @@ func compareJSON(l, r eval) (int, error) {
 	return compareJSONValue(lj, rj)
 }
 
-// jsonNumericValue returns the value a JSON number compares as.
-//
-// MySQL fixes the form of a number when the document is built, not when it is
-// compared: an integer that fits stays exact, and everything else becomes a
-// double, losing precision there and then. Comparison is exact over whatever
-// was kept, which is why 9007199254740992.1 equals 9007199254740992 (both are
-// the same double) while 9007199254740993 does not (it stayed an integer).
-// Reading the decimal straight off the text instead would keep a precision
-// MySQL has already discarded.
-func jsonNumericValue(j *json.Value) (decimal.Decimal, bool) {
-	switch j.NumberType() {
-	case json.NumberTypeSigned:
-		i, ok := j.Int64()
-		return decimal.NewFromInt(i), ok
-	case json.NumberTypeUnsigned:
-		u, ok := j.Uint64()
-		return decimal.NewFromUint(u), ok
-	case json.NumberTypeFloat:
-		f, ok := j.Float64()
-		return decimal.NewFromFloat(f), ok
-	default:
-		// A decimal carried over from a SQL value keeps the scale it was
-		// written to, so it compares by its own digits.
-		return j.Decimal()
-	}
-}
-
 // compareJSONValue compares two JSON values.
 // See https://dev.mysql.com/doc/refman/8.0/en/json.html#json-comparison for all the rules.
 func compareJSONValue(lj, rj *json.Value) (int, error) {
@@ -236,11 +209,11 @@ func compareJSONValue(lj, rj *json.Value) (int, error) {
 	case json.TypeNull:
 		return 0, nil
 	case json.TypeNumber:
-		ld, ok := jsonNumericValue(lj)
+		ld, ok := lj.NumericValue()
 		if !ok {
 			return 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "DECIMAL value is out of range")
 		}
-		rd, ok := jsonNumericValue(rj)
+		rd, ok := rj.NumericValue()
 		if !ok {
 			return 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "DECIMAL value is out of range")
 		}
