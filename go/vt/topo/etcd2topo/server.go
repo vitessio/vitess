@@ -42,13 +42,13 @@ import (
 
 	"github.com/spf13/pflag"
 	"go.etcd.io/etcd/client/pkg/v3/tlsutil"
-	"google.golang.org/grpc"
 
 	clientv3 "go.etcd.io/etcd/client/v3"
 
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/utils"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var (
@@ -153,7 +153,6 @@ func NewServerWithOpts(serverAddr, root, certPath, keyPath, caPath string) (*Ser
 	config := clientv3.Config{
 		Endpoints:   strings.Split(serverAddr, ","),
 		DialTimeout: 5 * time.Second,
-		DialOptions: []grpc.DialOption{grpc.WithBlock()}, //nolint:staticcheck
 	}
 
 	tlscfg, err := newTLSConfig(certPath, keyPath, caPath)
@@ -166,6 +165,17 @@ func NewServerWithOpts(serverAddr, root, certPath, keyPath, caPath string) (*Ser
 	cli, err := clientv3.New(config)
 	if err != nil {
 		return nil, err
+	}
+
+	// The client connects lazily, so verify with a bounded RPC that an etcd
+	// endpoint is actually reachable. This way a misconfigured or unreachable
+	// server address fails topo.OpenServer at startup, rather than surfacing
+	// as timeouts on later topo operations.
+	ctx, cancel := context.WithTimeout(context.Background(), config.DialTimeout)
+	defer cancel()
+	if _, err := cli.MemberList(ctx); err != nil {
+		cli.Close()
+		return nil, vterrors.Wrapf(err, "unable to connect to etcd at %v", serverAddr)
 	}
 
 	return &Server{
