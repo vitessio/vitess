@@ -17,6 +17,7 @@ limitations under the License.
 package aggregation
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/rand/v2"
 	"slices"
@@ -579,7 +580,8 @@ func TestMinMaxAcrossJoins(t *testing.T) {
 
 	mcmp.AssertMatchesNoOrder(
 		`SELECT t1.name, max(t1.shardKey), t2.shardKey, min(t2.id) FROM t1 JOIN t2 ON t1.t1_id != t2.shardKey GROUP BY t1.name, t2.shardKey`,
-		`[[VARCHAR("name 2") INT64(2) INT64(10) INT64(1)] [VARCHAR("name 1") INT64(1) INT64(10) INT64(1)] [VARCHAR("name 2") INT64(2) INT64(20) INT64(2)] [VARCHAR("name 1") INT64(1) INT64(20) INT64(2)]]`)
+		`[[VARCHAR("name 2") INT64(2) INT64(10) INT64(1)] [VARCHAR("name 1") INT64(1) INT64(10) INT64(1)] [VARCHAR("name 2") INT64(2) INT64(20) INT64(2)] [VARCHAR("name 1") INT64(1) INT64(20) INT64(2)]]`,
+	)
 }
 
 func TestComplexAggregation(t *testing.T) {
@@ -816,4 +818,180 @@ func TestJsonAggregation(t *testing.T) {
 
 	mcmp.Exec("select count(1) from t3 where id6 = 2 group by id7 having json_arrayagg(id5+1) = json_array(2, 6)")
 	mcmp.Exec(`select count(1) from t3 where id6 = 2 group by id7 having json_objectagg(id5+1, id7) = json_object("2",1,"6",1)`)
+}
+
+// TestJsonAggregationCrossShard tests json_arrayagg/json_objectagg when the
+// aggregation is split between mysql and vtgate: the function runs on each
+// shard and vtgate merges the per-shard JSON partials.
+func TestJsonAggregationCrossShard(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	// id6 is t3's sharding key: hash(1) places rows on shard -80 and hash(4)
+	// places rows on shard 80-, so this data genuinely spans both shards.
+	mcmp.Exec("insert into t3(id5, id6, id7) values (1,1,10), (2,1,10), (3,1,20), (9,4,30), (10,4,30), (11,4,40)")
+
+	// One-time plan-shape check: grouping by id7 (non-unique lookup vindex)
+	// must produce a scatter with the merge running at the vtgate level.
+	res, err := mcmp.VtConn.ExecuteFetch("vexplain plan select id7, json_arrayagg(id5) from t3 group by id7", 100, false)
+	require.NoError(t, err)
+	require.Contains(t, fmt.Sprintf("%v", res.Rows), "json_arrayagg_merge")
+	require.Contains(t, fmt.Sprintf("%v", res.Rows), "Scatter")
+
+	// Rows sharing an id7 group value also share the sharding key id6, so
+	// every group is produced by exactly one shard. MySQL still documents the
+	// element order as undefined, so compare the groups as sorted multisets.
+	mQr, vtQr := mcmp.ExecNoCompare("select id7, json_arrayagg(id5) from t3 group by id7 order by id7")
+	compareGroupedJSONArrays(t, mQr, vtQr)
+	mcmp.Exec("select id7, json_objectagg(id5, id6) from t3 group by id7 order by id7")
+
+	// A true multi-shard array merge: element order across shards is not
+	// guaranteed, so compare the elements as sorted multisets.
+	mQr, vtQr = mcmp.ExecNoCompare("select json_arrayagg(id5) from t3")
+	compareJSONArrays(t, mQr, vtQr)
+
+	// A true multi-shard object merge: the keys (id5) are globally unique and
+	// of differing lengths, so the merged object is deterministic and pins the
+	// key length-then-bytes emit order against MySQL's normalization.
+	mcmp.Exec("select json_objectagg(id5, id7) from t3")
+
+	// The merged value used inside an expression; extracting by key stays
+	// order-independent, so a byte comparison is safe multi-shard.
+	mcmp.Exec(`select json_extract(json_objectagg(id5, id7), '$."1"') from t3`)
+
+	// Wide DECIMAL(20,8) values must survive the object merge verbatim: the
+	// merge re-emits member values and must not round them through float64.
+	// bet_logs is hash sharded on id: 1 and 2 live on -80, 4 on 80-. The keys
+	// are distinct and of equal length, so the merged object is deterministic.
+	mcmp.Exec("insert into bet_logs(id, merchant_game_id, bet_amount, game_id) values " +
+		"(1, 1, 123456789012.12345678, 1), (2, 1, 1.50000000, 1), (4, 2, 99999999999.00000001, 2)")
+	mcmp.Exec("select json_objectagg(id, bet_amount) from bet_logs")
+
+	// Comparing such a merge is rejected: MySQL keeps DECIMAL values inside an
+	// aggregated JSON document as an opaque decimal subtype the shard
+	// protocol's text round trip erases.
+	utils.AssertContainsError(t, mcmp.VtConn,
+		"select json_objectagg(id, bet_amount) = '{}' from bet_logs",
+		"not preserved across shard serialization")
+
+	// HAVING over the merged value. JSON-typed comparands constant-fold to a
+	// JSON literal the evalengine compiler cannot push yet, so compare an
+	// extracted scalar instead; the id7=20 group holds exactly one element,
+	// so $[0] does not depend on MySQL's undefined element order.
+	mcmp.Exec("select id7 from t3 group by id7 having json_extract(json_arrayagg(id5), '$[0]') = 3 order by id7")
+
+	// Ordinary comparisons against a string comparand plan and match MySQL:
+	// both engines treat the string as a JSON string scalar (never equal to
+	// an array document), not as parsed JSON.
+	mcmp.Exec("select id7 from t3 group by id7 having json_arrayagg(id5) = '[1, 2]' order by id7")
+	mcmp.Exec("select json_arrayagg(id5) = '[1, 2]', json_arrayagg(id5) <=> '[1, 2]' from t3 where id6 = 1")
+	mcmp.Exec("select nullif(json_arrayagg(id5), '[1, 2]') is null from t3 where id6 = 1")
+	mcmp.Exec("select cast(json_arrayagg(id5) as char) = '[1, 2, 3]' from t3 where id6 = 1")
+
+	// LIKE and REGEXP on the merged value stay supported: they are string
+	// operations, and both MySQL and the evalengine serialize the JSON
+	// operand to its text form.
+	mcmp.Exec("select json_arrayagg(id5) like '[%' from t3")
+	mcmp.Exec("select json_arrayagg(id5) regexp '.*' from t3")
+
+	// BETWEEN and IN over a non-lossy merged value plan and match MySQL,
+	// including through a JSON-returning wrapper around the merge. GREATEST
+	// stays rejected as a conservative policy.
+	mcmp.Exec("select id7 from t3 group by id7 having json_arrayagg(id5) between 1 and 2")
+	mcmp.Exec("select id7 from t3 group by id7 having 1 in (json_arrayagg(id5))")
+	mcmp.Exec("select 0 in (json_extract(json_arrayagg(id5), '$'), '0') from t3")
+	utils.AssertContainsError(t, mcmp.VtConn,
+		"select greatest(json_arrayagg(id5), 2) from t3",
+		"GREATEST over a vtgate-merged JSON aggregate")
+
+	// Aggregating values whose MySQL JSON scalar subtype cannot survive the
+	// shard protocol's text serialization stays supported for raw output,
+	// but vtgate-level JSON comparisons over such a merge are rejected.
+	mQr, vtQr = mcmp.ExecNoCompare("select json_arrayagg(cast(id5 as binary)) from t3")
+	compareJSONArrays(t, mQr, vtQr)
+	utils.AssertContainsError(t, mcmp.VtConn,
+		"select json_arrayagg(cast(id5 as binary)) = '[]' from t3",
+		"not preserved across shard serialization")
+	utils.AssertContainsError(t, mcmp.VtConn,
+		"select j, count(*) from (select json_arrayagg(cast(id5 as binary)) as j from t3) t group by j",
+		"GROUP BY consumes a vtgate-merged JSON aggregate")
+
+	// NULL rows become JSON null elements (json_arrayagg) and JSON null
+	// member values (json_objectagg) on the shards and must survive the
+	// merge. aggr_test is hash sharded on id: 1, 2 and 5 live on -80, 4 on 80-.
+	mcmp.Exec("insert into aggr_test(id, val1, val2) values (1,'a',1), (2,'b',null), (4,'c',3), (5,'d',null)")
+	mQr, vtQr = mcmp.ExecNoCompare("select json_arrayagg(val2) from aggr_test")
+	compareJSONArrays(t, mQr, vtQr)
+	mcmp.Exec("select json_objectagg(id, val2) from aggr_test")
+
+	// A NULL json_objectagg key must fail on the shard and surface MySQL's
+	// error 3158 through vtgate.
+	_, err = mcmp.ExecAllowAndCompareError("select json_objectagg(null, id5) from t3", utils.CompareOptions{})
+	require.ErrorContains(t, err, "may not contain NULL member names")
+
+	// Shards without rows contribute SQL NULL partials, which the merge skips.
+	// The surviving rows all live on one shard, but MySQL's element order is
+	// still undefined, so compare the array as a sorted element multiset.
+	mcmp.Exec("delete from t3 where id6 = 4")
+	mQr, vtQr = mcmp.ExecNoCompare("select json_arrayagg(id5) from t3")
+	compareJSONArrays(t, mQr, vtQr)
+	mcmp.Exec("select json_objectagg(id5, id7) from t3")
+
+	// Empty input across all shards must produce SQL NULL, not [] or {}.
+	mcmp.Exec("delete from t3")
+	mcmp.Exec("select json_arrayagg(id5) from t3")
+	mcmp.Exec("select json_objectagg(id5, id7) from t3")
+
+	// Aggregation over an unmergeable join cannot be pushed down and must
+	// fail with a clear plan-time error.
+	utils.AssertContainsError(t, mcmp.VtConn, "select json_arrayagg(t3.id5) from t3 join t9 on t3.id7 = t9.id1", "must be pushed down to MySQL")
+
+	// A group key that genuinely spans shards: id6=1 lives on -80 and id6=4
+	// on 80-, so the id7=50 group must merge partials from two shards, while
+	// the id7=60 group stays single-shard. Merge order is not guaranteed, so
+	// compare each group's array as a sorted element multiset.
+	mcmp.Exec("insert into t3(id5, id6, id7) values (100, 1, 50), (200, 4, 50), (300, 1, 60)")
+	mQr, vtQr = mcmp.ExecNoCompare("select id7, json_arrayagg(id5) from t3 group by id7 order by id7")
+	compareGroupedJSONArrays(t, mQr, vtQr)
+
+	// The grouped object merge of the same data is deterministic: member
+	// order is normalized (key length, then bytes) on both sides.
+	mcmp.Exec("select id7, json_objectagg(id5, id6) from t3 group by id7 order by id7")
+}
+
+// sortedJSONArrayElements unmarshals a JSON array and returns its elements as
+// sorted raw JSON strings: comparing raw elements keeps values such as wide
+// decimals byte-exact instead of weakening them through float64.
+func sortedJSONArrayElements(t *testing.T, raw []byte) []string {
+	var elems []json.RawMessage
+	require.NoError(t, json.Unmarshal(raw, &elems))
+
+	out := make([]string, 0, len(elems))
+	for _, e := range elems {
+		out = append(out, string(e))
+	}
+	slices.Sort(out)
+	return out
+}
+
+// compareJSONArrays compares a single-row, single-column json_arrayagg result
+// from mysql and vitess as sorted element multisets: neither MySQL's element
+// order nor the cross-shard merge order is guaranteed.
+func compareJSONArrays(t *testing.T, mRes, vtRes *sqltypes.Result) {
+	require.Len(t, mRes.Rows, 1)
+	require.Len(t, vtRes.Rows, 1)
+	require.Equal(t, sortedJSONArrayElements(t, mRes.Rows[0][0].Raw()), sortedJSONArrayElements(t, vtRes.Rows[0][0].Raw()))
+}
+
+// compareGroupedJSONArrays compares a grouped json_arrayagg result (group key
+// in the first column, array in the second) from mysql and vitess: rows must
+// match pairwise on the group key, and each group's array is compared as a
+// sorted element multiset.
+func compareGroupedJSONArrays(t *testing.T, mRes, vtRes *sqltypes.Result) {
+	require.Len(t, vtRes.Rows, len(mRes.Rows))
+	for i, mRow := range mRes.Rows {
+		vtRow := vtRes.Rows[i]
+		require.Equal(t, mRow[0].ToString(), vtRow[0].ToString())
+		require.Equal(t, sortedJSONArrayElements(t, mRow[1].Raw()), sortedJSONArrayElements(t, vtRow[1].Raw()))
+	}
 }

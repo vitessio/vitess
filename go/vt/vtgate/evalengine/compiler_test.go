@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -923,6 +924,1100 @@ func TestCompilerSingle(t *testing.T) {
 	}
 }
 
+// TestJSONComparisonDomains checks that IN, BETWEEN and simple CASE match
+// MySQL's comparison-domain coercion when a JSON value participates: IN
+// compares every pair as JSON, while BETWEEN and simple CASE never use the
+// JSON comparator. Non-JSON and NULL rows pin existing behavior.
+func TestJSONComparisonDomains(t *testing.T) {
+	testCases := []struct {
+		expression string
+		values     []sqltypes.Value
+		result     string
+	}{
+		// IN/NOT IN with a JSON value in the comparison domain.
+		{expression: `'[]' IN (JSON_ARRAY(), 0)`, result: `INT64(0)`},
+		{expression: `0 IN (JSON_ARRAY(), '0')`, result: `INT64(0)`},
+		{expression: `1 IN (JSON_ARRAY(), '1')`, result: `INT64(0)`},
+		{expression: `'[]' NOT IN (JSON_ARRAY(), 0)`, result: `INT64(1)`},
+		{expression: `JSON_ARRAY(1) IN ('[1]')`, result: `INT64(0)`},
+		{expression: `0 IN (JSON_EXTRACT('[1]', '$'), '0')`, result: `INT64(0)`},
+		{expression: `0 NOT IN (JSON_ARRAY(), '0')`, result: `INT64(1)`},
+		{expression: `1 NOT IN (JSON_ARRAY(), '1')`, result: `INT64(1)`},
+		{expression: `CAST('[]' AS JSON) IN (JSON_ARRAY(), 0)`, result: `INT64(1)`},
+		{expression: `0 IN (JSON_ARRAY(), 0)`, result: `INT64(1)`},
+		{expression: `'[]' IN (JSON_ARRAY(), '0')`, result: `INT64(0)`},
+		{expression: `'0' IN (CAST('[]' AS JSON), '0')`, result: `INT64(1)`},
+
+		// ENUM and SET values convert to JSON string scalars of their
+		// textual value when a JSON value participates in the IN domain.
+		{
+			expression: `column0 IN ('foo', JSON_ARRAY())`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Enum, []byte(`foo`))},
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `column0 IN (JSON_ARRAY(), 'foo')`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Enum, []byte(`foo`))},
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `column0 NOT IN ('foo', JSON_ARRAY())`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Enum, []byte(`foo`))},
+			result:     `INT64(0)`,
+		},
+		{
+			expression: `column0 NOT IN (JSON_ARRAY(), 'foo')`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Enum, []byte(`foo`))},
+			result:     `INT64(0)`,
+		},
+		{
+			expression: `column0 IN ('foo', JSON_ARRAY())`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Set, []byte(`foo`))},
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `column0 IN (JSON_ARRAY(), 'foo')`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Set, []byte(`foo`))},
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `column0 NOT IN ('foo', JSON_ARRAY())`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Set, []byte(`foo`))},
+			result:     `INT64(0)`,
+		},
+		{
+			expression: `column0 NOT IN (JSON_ARRAY(), 'foo')`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Set, []byte(`foo`))},
+			result:     `INT64(0)`,
+		},
+
+		// BETWEEN/NOT BETWEEN with a JSON value in the comparison domain,
+		// compared as DOUBLE when a non-textual operand participates.
+		{expression: `'[]' BETWEEN JSON_ARRAY() AND 0`, result: `INT64(1)`},
+		{expression: `0 BETWEEN JSON_ARRAY() AND '0'`, result: `INT64(1)`},
+		{expression: `1 BETWEEN JSON_ARRAY() AND '1'`, result: `INT64(1)`},
+		{expression: `JSON_ARRAY() BETWEEN 0 AND '[]'`, result: `INT64(1)`},
+		{expression: `0 BETWEEN 0 AND JSON_ARRAY()`, result: `INT64(1)`},
+		{expression: `'[]' NOT BETWEEN JSON_ARRAY() AND 0`, result: `INT64(0)`},
+		{expression: `1 NOT BETWEEN JSON_ARRAY() AND '1'`, result: `INT64(0)`},
+		{expression: `1 BETWEEN CAST('"1"' AS JSON) AND 2`, result: `INT64(1)`},
+
+		// BETWEEN/NOT BETWEEN with only JSON and textual operands, compared
+		// as strings on the serialized text forms.
+		{expression: `JSON_ARRAY() BETWEEN CAST('0' AS JSON) AND JSON_OBJECT()`, result: `INT64(1)`},
+		{expression: `JSON_OBJECT() BETWEEN JSON_ARRAY() AND JSON_ARRAY()`, result: `INT64(0)`},
+		{expression: `CAST(2 AS JSON) BETWEEN CAST(10 AS JSON) AND CAST(3 AS JSON)`, result: `INT64(1)`},
+		{expression: `'[]' BETWEEN JSON_ARRAY() AND '0'`, result: `INT64(0)`},
+		{expression: `JSON_ARRAY() BETWEEN NULL AND CAST(0 AS JSON)`, result: `INT64(0)`},
+
+		// BETWEEN/NOT BETWEEN with a JSON operand and a statically selected
+		// temporal domain: a DATE/DATETIME/TIMESTAMP participant compares the
+		// whole domain as DATETIME; a TIME column selects the TIME domain,
+		// but a CAST(... AS TIME) expression does not.
+		{expression: `CAST('2020-01-01' AS DATE) BETWEEN JSON_ARRAY() AND '2021-01-01'`, result: `INT64(1)`},
+		{expression: `CAST('2020-01-01' AS DATE) NOT BETWEEN JSON_ARRAY() AND '2021-01-01'`, result: `INT64(0)`},
+		{expression: `CAST('2020-01-01' AS DATETIME) BETWEEN JSON_ARRAY() AND '2021-01-01'`, result: `INT64(1)`},
+		{expression: `CAST('2020-01-01' AS DATETIME) NOT BETWEEN JSON_ARRAY() AND '2021-01-01'`, result: `INT64(0)`},
+		{expression: `'2020-01-01' BETWEEN JSON_ARRAY() AND CAST('2021-01-01' AS DATE)`, result: `INT64(1)`},
+		{expression: `CAST('2020-01-01' AS DATE) BETWEEN NULL AND JSON_ARRAY()`, result: `INT64(0)`},
+		{expression: `CAST('2020-01-01' AS DATE) BETWEEN JSON_ARRAY() AND NULL`, result: `NULL`},
+		{expression: `CAST('12:00:00' AS TIME) BETWEEN JSON_ARRAY() AND '13:00:00'`, result: `INT64(0)`},
+		{expression: `CAST('12:00:00' AS TIME) NOT BETWEEN JSON_ARRAY() AND '13:00:00'`, result: `INT64(1)`},
+		{
+			expression: `column0 BETWEEN JSON_ARRAY() AND '2021-01-01'`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Date, []byte(`2020-01-01`))},
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `column0 NOT BETWEEN JSON_ARRAY() AND '2021-01-01'`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Date, []byte(`2020-01-01`))},
+			result:     `INT64(0)`,
+		},
+		{
+			expression: `column0 BETWEEN JSON_ARRAY() AND '2021-01-01'`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Datetime, []byte(`2020-01-01 12:00:00`))},
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `column0 BETWEEN JSON_ARRAY() AND '2021-01-01'`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Timestamp, []byte(`2020-01-01 12:00:00`))},
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `column0 BETWEEN JSON_ARRAY() AND '13:00:00'`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Time, []byte(`12:00:00`))},
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `column0 NOT BETWEEN JSON_ARRAY() AND '13:00:00'`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Time, []byte(`12:00:00`))},
+			result:     `INT64(0)`,
+		},
+
+		// Composite operands whose static result type resolves to DATE select
+		// the DATETIME domain like the column itself would.
+		{
+			expression: `COALESCE(column0, column0) BETWEEN JSON_ARRAY() AND '2021-01-01'`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Date, []byte(`2020-01-01`))},
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `COALESCE(column0, column0) NOT BETWEEN JSON_ARRAY() AND '2021-01-01'`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Date, []byte(`2020-01-01`))},
+			result:     `INT64(0)`,
+		},
+		{
+			expression: `IFNULL(column0, column0) BETWEEN JSON_ARRAY() AND '2021-01-01'`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Date, []byte(`2020-01-01`))},
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `IFNULL(column0, column0) NOT BETWEEN JSON_ARRAY() AND '2021-01-01'`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Date, []byte(`2020-01-01`))},
+			result:     `INT64(0)`,
+		},
+		{
+			expression: `IF(1, column0, column0) BETWEEN JSON_ARRAY() AND '2021-01-01'`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Date, []byte(`2020-01-01`))},
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `IF(1, column0, column0) NOT BETWEEN JSON_ARRAY() AND '2021-01-01'`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Date, []byte(`2020-01-01`))},
+			result:     `INT64(0)`,
+		},
+		{
+			expression: `CASE WHEN 1 THEN column0 ELSE column0 END BETWEEN JSON_ARRAY() AND '2021-01-01'`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Date, []byte(`2020-01-01`))},
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `CASE WHEN 1 THEN column0 ELSE column0 END NOT BETWEEN JSON_ARRAY() AND '2021-01-01'`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Date, []byte(`2020-01-01`))},
+			result:     `INT64(0)`,
+		},
+		{
+			expression: `GREATEST(column0, column0) BETWEEN JSON_ARRAY() AND '2021-01-01'`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Date, []byte(`2020-01-01`))},
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `GREATEST(column0, column0) NOT BETWEEN JSON_ARRAY() AND '2021-01-01'`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Date, []byte(`2020-01-01`))},
+			result:     `INT64(0)`,
+		},
+		{
+			expression: `DATE_ADD(column0, INTERVAL 0 DAY) BETWEEN JSON_ARRAY() AND '2021-01-01'`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Date, []byte(`2020-01-01`))},
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `DATE_ADD(column0, INTERVAL 0 DAY) NOT BETWEEN JSON_ARRAY() AND '2021-01-01'`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Date, []byte(`2020-01-01`))},
+			result:     `INT64(0)`,
+		},
+
+		// Constant composite operands resolve their static type the same way.
+		// 8.0.x constant-folds them before selecting the domain while 8.4.x
+		// does not; we match 8.4.x.
+		{expression: `COALESCE(CAST('2020-01-01' AS DATE), NULL) BETWEEN JSON_ARRAY() AND '2021-01-01'`, result: `INT64(1)`},
+		{expression: `COALESCE(CAST('2020-01-01' AS DATE), NULL) NOT BETWEEN JSON_ARRAY() AND '2021-01-01'`, result: `INT64(0)`},
+		{expression: `GREATEST(CAST('2020-01-01' AS DATE), CAST('2020-06-01' AS DATE)) BETWEEN JSON_ARRAY() AND '2021-01-01'`, result: `INT64(1)`},
+
+		// A TIME-typed composite does not select the TIME domain: COALESCE
+		// over a TIME column falls back to the string domain.
+		{
+			expression: `COALESCE(column0, column0) BETWEEN JSON_ARRAY() AND '13:00:00'`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Time, []byte(`12:00:00`))},
+			result:     `INT64(0)`,
+		},
+		{
+			expression: `COALESCE(column0, column0) NOT BETWEEN JSON_ARRAY() AND '13:00:00'`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Time, []byte(`12:00:00`))},
+			result:     `INT64(1)`,
+		},
+
+		// A numeric operand wins over the DATE/DATETIME/TIMESTAMP candidates
+		// unless the left operand is a bare temporal column: the whole
+		// predicate compares as DOUBLE.
+		{expression: `CAST('2020-01-01' AS DATE) BETWEEN JSON_ARRAY() AND 99999999`, result: `INT64(1)`},
+		{expression: `CAST('2020-01-01' AS DATE) NOT BETWEEN JSON_ARRAY() AND 99999999`, result: `INT64(0)`},
+		{expression: `CAST('2020-01-01' AS DATE) BETWEEN 0 AND CAST('"2021-06-06"' AS JSON)`, result: `INT64(0)`},
+		{expression: `CAST('2020-01-01' AS DATE) BETWEEN CAST(NULL AS SIGNED) AND CAST('"2021-06-06"' AS JSON)`, result: `INT64(0)`},
+		{expression: `CAST('2020-01-01' AS DATE) BETWEEN 0.5 AND CAST('"2021-06-06"' AS JSON)`, result: `INT64(0)`},
+		{expression: `CAST('2020-01-01' AS DATE) BETWEEN 0e0 AND CAST('"2021-06-06"' AS JSON)`, result: `INT64(0)`},
+		{expression: `1 BETWEEN CAST('"2"' AS JSON) AND 5`, result: `INT64(0)`},
+		{expression: `0 BETWEEN CAST('true' AS JSON) AND 5`, result: `INT64(0)`},
+		{expression: `2020 BETWEEN CAST(CAST('2020-01-01' AS DATE) AS JSON) AND 99999999`, result: `INT64(1)`},
+
+		// In the DATETIME domain a JSON operand converts from its serialized
+		// text, quotes included: JSON numbers parse, JSON strings and even
+		// JSON date scalars fail to the zero date.
+		{expression: `CAST('2020-01-01' AS DATE) BETWEEN JSON_ARRAY() AND CAST('20210101' AS JSON)`, result: `INT64(1)`},
+		{expression: `CAST('2020-01-01' AS DATE) BETWEEN CAST('20200606' AS JSON) AND '2021-01-01'`, result: `INT64(0)`},
+		{expression: `CAST('2020-01-01' AS DATE) BETWEEN JSON_ARRAY() AND CAST(CAST('2021-01-01' AS DATE) AS JSON)`, result: `INT64(0)`},
+		{expression: `CAST('2020-01-01' AS DATE) BETWEEN JSON_ARRAY() AND CAST('"2021-06-06"' AS JSON)`, result: `INT64(0)`},
+		{expression: `CAST('2020-01-01' AS DATE) BETWEEN NULL AND CAST('"2021-06-06"' AS JSON)`, result: `INT64(0)`},
+
+		// A declared JSON type participates in domain selection even when
+		// the value is SQL NULL; an untyped NULL stays neutral.
+		{expression: `0 IN (CAST(NULL AS JSON), '0')`, result: `NULL`},
+		{expression: `'a' BETWEEN CAST(NULL AS JSON) AND 'A'`, result: `INT64(0)`},
+		{expression: `'a' BETWEEN NULL AND 'A'`, result: `NULL`},
+		{expression: `'a' BETWEEN CAST(NULL AS CHAR) AND 'A'`, result: `NULL`},
+		{expression: `CAST('2020-01-01' AS DATE) BETWEEN CAST(NULL AS JSON) AND '2021-01-01'`, result: `NULL`},
+		{expression: `CAST('2020-01-01' AS DATE) BETWEEN CAST(NULL AS JSON) AND 0`, result: `INT64(0)`},
+		{expression: `CAST('2020-01-01' AS DATE) IN (CAST(NULL AS JSON), '2020-01-01')`, result: `NULL`},
+
+		// The IN domain compares every pair with genuine JSON semantics:
+		// strings compare binary and never equal numbers or temporal
+		// scalars, and DATE does not equal DATETIME for the same instant.
+		{expression: `0 IN (JSON_ARRAY(), '0.0')`, result: `INT64(0)`},
+		{expression: `0.0 IN (CAST('0' AS JSON))`, result: `INT64(1)`},
+		{expression: `'2020-1-1' IN (CAST('"2020-1-1"' AS JSON))`, result: `INT64(1)`},
+		{expression: `'B' IN (JSON_ARRAY(), 'b')`, result: `INT64(0)`},
+		{expression: `CAST('2020-01-01' AS DATE) IN (JSON_ARRAY(), CAST('2020-01-01' AS DATETIME))`, result: `INT64(0)`},
+		{expression: `CAST('2020-01-01' AS DATE) IN (CAST('2020-01-01' AS DATE), JSON_ARRAY())`, result: `INT64(1)`},
+
+		// Row-valued IN keeps per-column comparisons: JSON inside a row does
+		// not pull the other columns into the JSON domain.
+		{expression: `(JSON_ARRAY(), 0) IN ((JSON_ARRAY(), '0'))`, result: `INT64(1)`},
+
+		// A bare TIME column on the left resolves the comparison per bound
+		// pair when a constant bound activates the conversion; otherwise the
+		// whole predicate compares as strings.
+		{
+			expression: `column0 BETWEEN JSON_ARRAY() AND 99999999`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Time, []byte(`12:00:00`))},
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `column0 BETWEEN column1 AND '13:00:00'`,
+			values: []sqltypes.Value{
+				sqltypes.MakeTrusted(sqltypes.Time, []byte(`12:00:00`)),
+				sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[]`)),
+			},
+			result: `INT64(1)`,
+		},
+		{
+			expression: `column0 BETWEEN '11:00:00' AND column1`,
+			values: []sqltypes.Value{
+				sqltypes.MakeTrusted(sqltypes.Time, []byte(`12:00:00`)),
+				sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[]`)),
+			},
+			result: `INT64(0)`,
+		},
+		{
+			expression: `column0 BETWEEN column1 AND '99999999'`,
+			values: []sqltypes.Value{
+				sqltypes.MakeTrusted(sqltypes.Time, []byte(`12:00:00`)),
+				sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[]`)),
+			},
+			result: `INT64(0)`,
+		},
+		{
+			expression: `column0 BETWEEN column1 AND 130000`,
+			values: []sqltypes.Value{
+				sqltypes.MakeTrusted(sqltypes.Time, []byte(`12:00:00`)),
+				sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[]`)),
+			},
+			result: `INT64(1)`,
+		},
+		{
+			expression: `column0 BETWEEN JSON_ARRAY() AND 'zz'`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Time, []byte(`12:00:00`))},
+			result:     `INT64(0)`,
+		},
+		{
+			expression: `column0 BETWEEN JSON_ARRAY() AND '25:00:00'`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Time, []byte(`12:00:00`))},
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `column0 BETWEEN JSON_ARRAY() AND '839:00:00'`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Time, []byte(`12:00:00`))},
+			result:     `INT64(0)`,
+		},
+		{
+			expression: `column0 BETWEEN JSON_ARRAY() AND '2021-01-01'`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Time, []byte(`12:00:00`))},
+			result:     `INT64(0)`,
+		},
+		{
+			expression: `column0 BETWEEN JSON_ARRAY() AND '2021-01-01 13:00:00'`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Time, []byte(`12:00:00`))},
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `column0 BETWEEN JSON_ARRAY() AND 0.5`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Time, []byte(`12:00:00`))},
+			result:     `INT64(0)`,
+		},
+		{
+			expression: `column0 BETWEEN JSON_ARRAY() AND column1`,
+			values: []sqltypes.Value{
+				sqltypes.MakeTrusted(sqltypes.Time, []byte(`12:00:00`)),
+				sqltypes.MakeTrusted(sqltypes.Time, []byte(`13:00:00`)),
+			},
+			result: `INT64(1)`,
+		},
+		{
+			expression: `column0 BETWEEN column1 AND column2`,
+			values: []sqltypes.Value{
+				sqltypes.MakeTrusted(sqltypes.Time, []byte(`12:00:00`)),
+				sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[]`)),
+				sqltypes.MakeTrusted(sqltypes.Time, []byte(`13:00:00`)),
+			},
+			result: `INT64(0)`,
+		},
+		{
+			expression: `column0 BETWEEN JSON_ARRAY() AND CAST('130000' AS JSON)`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Time, []byte(`12:00:00`))},
+			result:     `INT64(0)`,
+		},
+		{
+			expression: `column0 BETWEEN JSON_ARRAY() AND CAST('"13:00:00"' AS JSON)`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Time, []byte(`12:00:00`))},
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `column0 BETWEEN JSON_ARRAY() AND CAST(CAST('13:00:00' AS TIME) AS JSON)`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Time, []byte(`12:00:00`))},
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `column0 BETWEEN JSON_ARRAY() AND CAST(CAST('2021-01-01 13:00:00' AS DATETIME) AS JSON)`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Time, []byte(`12:00:00`))},
+			result:     `INT64(0)`,
+		},
+		{
+			// A typed-NULL JSON constant does not activate the per-pair
+			// paths: the predicate stays on the whole-string fallback.
+			expression: `column0 BETWEEN CAST(NULL AS JSON) AND 'zz'`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Time, []byte(`12:00:00`))},
+			result:     `NULL`,
+		},
+		{
+			expression: `column0 BETWEEN 'zz' AND CAST(NULL AS JSON)`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Time, []byte(`12:00:00`))},
+			result:     `INT64(0)`,
+		},
+		{
+			expression: `column0 BETWEEN CAST(NULL AS JSON) AND '13:00:00'`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Time, []byte(`12:00:00`))},
+			result:     `NULL`,
+		},
+		{
+			expression: `column0 BETWEEN CAST(NULL AS JSON) AND 99999999`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Date, []byte(`2020-01-01`))},
+			result:     `NULL`,
+		},
+
+		// A TIME column in a bound position, or wrapped in an expression,
+		// gets no TIME treatment: the domain stays string.
+		{
+			expression: `JSON_ARRAY() BETWEEN column0 AND 'zz'`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Time, []byte(`12:00:00`))},
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `'12:00:00' BETWEEN column0 AND JSON_ARRAY()`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Time, []byte(`12:00:00`))},
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `'12:00:00' BETWEEN JSON_ARRAY() AND column0`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Time, []byte(`12:00:00`))},
+			result:     `INT64(0)`,
+		},
+		{
+			expression: `CAST(column0 AS TIME) BETWEEN JSON_ARRAY() AND '13:00:00'`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Time, []byte(`12:00:00`))},
+			result:     `INT64(0)`,
+		},
+
+		// A bare DATE-family column on the left with a numeric operand also
+		// resolves per bound pair, and only there a JSON string scalar
+		// unquotes and converts while a JSON number is rejected.
+		{
+			expression: `column0 BETWEEN 20200101 AND CAST('"2021-06-06"' AS JSON)`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Date, []byte(`2020-01-01`))},
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `column0 BETWEEN CAST('"2020-01-01"' AS JSON) AND 0`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Date, []byte(`2020-01-01`))},
+			result:     `INT64(0)`,
+		},
+		{
+			expression: `column0 BETWEEN 0 AND CAST('20210606' AS JSON)`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Date, []byte(`2020-01-01`))},
+			result:     `INT64(0)`,
+		},
+		{
+			expression: `column0 BETWEEN 0 AND CAST(CAST('2021-06-06' AS DATE) AS JSON)`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Date, []byte(`2020-01-01`))},
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `column0 BETWEEN 0 AND CAST('"zz"' AS JSON)`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Date, []byte(`2020-01-01`))},
+			result:     `INT64(0)`,
+		},
+		{
+			expression: `column0 BETWEEN JSON_ARRAY() AND column1`,
+			values: []sqltypes.Value{
+				sqltypes.MakeTrusted(sqltypes.Date, []byte(`2020-01-01`)),
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte(`0`)),
+			},
+			result: `INT64(0)`,
+		},
+		{
+			expression: `column0 BETWEEN column1 AND '2021-01-01'`,
+			values: []sqltypes.Value{
+				sqltypes.MakeTrusted(sqltypes.Date, []byte(`2020-01-01`)),
+				sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[]`)),
+			},
+			result: `INT64(1)`,
+		},
+		{
+			expression: `20200601 BETWEEN column0 AND CAST('"2021-06-06"' AS JSON)`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Date, []byte(`2020-01-01`))},
+			result:     `INT64(0)`,
+		},
+
+		// The string and DOUBLE fallbacks still apply when no operand is
+		// date-carrying.
+		{expression: `'2020-01-01' BETWEEN JSON_ARRAY() AND '2021-01-01'`, result: `INT64(0)`},
+		{expression: `1.5 BETWEEN JSON_ARRAY() AND '2'`, result: `INT64(1)`},
+
+		// JSON-free temporal BETWEEN is unchanged.
+		{expression: `CAST('2020-01-01' AS DATE) BETWEEN '2019-01-01' AND '2021-01-01'`, result: `INT64(1)`},
+		{expression: `CAST('2020-01-01' AS DATE) NOT BETWEEN '2019-01-01' AND '2021-01-01'`, result: `INT64(0)`},
+		{expression: `CAST('12:00:00' AS TIME) BETWEEN '11:00:00' AND '13:00:00'`, result: `INT64(1)`},
+		{
+			expression: `column0 BETWEEN '2019-01-01' AND '2021-01-01'`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Date, []byte(`2020-01-01`))},
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `column0 BETWEEN '11:00:00' AND '13:00:00'`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Time, []byte(`12:00:00`))},
+			result:     `INT64(1)`,
+		},
+
+		// Simple CASE with a JSON value in a (base, WHEN) pair.
+		{expression: `case JSON_ARRAY() when '[]' then 1 else 0 end`, result: `INT64(1)`},
+		{expression: `case 0 when JSON_ARRAY() then 1 when '0' then 2 else 3 end`, result: `INT64(1)`},
+		{expression: `case '[]' when JSON_ARRAY() then 1 when 0 then 2 else 3 end`, result: `INT64(1)`},
+		{expression: `case JSON_ARRAY() when 0 then 1 when '[]' then 2 else 3 end`, result: `INT64(1)`},
+		{expression: `case when JSON_ARRAY() = '[]' then 1 else 0 end`, result: `INT64(0)`},
+		{expression: `case JSON_ARRAY(1) when CAST('[1]' AS JSON) then 1 else 0 end`, result: `INT64(1)`},
+		{expression: `case JSON_OBJECT() when JSON_ARRAY() then 1 else 0 end`, result: `INT64(0)`},
+		{expression: `case CAST(1 AS JSON) when CAST('1.0' AS JSON) then 1 else 0 end`, result: `INT64(0)`},
+		{expression: `case '[1]' when 3 then 1 when JSON_ARRAY(2) then 2 else 0 end`, result: `INT64(0)`},
+
+		// JSON-free domains are unchanged.
+		{expression: `0 IN ('0', 2)`, result: `INT64(1)`},
+		{expression: `1 BETWEEN 0 AND '2'`, result: `INT64(1)`},
+		{expression: `2 NOT BETWEEN 5 AND 20`, result: `INT64(1)`},
+		{expression: `'b' BETWEEN 'a' AND 'c'`, result: `INT64(1)`},
+		{expression: `case 0 when '0' then 1 else 2 end`, result: `INT64(1)`},
+		{expression: `case 'b' when 'b' then 1 else 2 end`, result: `INT64(1)`},
+
+		// NULL semantics are unchanged, with or without JSON in the domain.
+		{expression: `NULL IN (JSON_ARRAY(), 1)`, result: `NULL`},
+		{expression: `1 IN (NULL, JSON_ARRAY())`, result: `NULL`},
+		{expression: `0 IN (NULL, '0')`, result: `INT64(1)`},
+		{expression: `3 IN (NULL, '0')`, result: `NULL`},
+		{expression: `NULL NOT IN (1, 2)`, result: `NULL`},
+		{expression: `NULL BETWEEN 1 AND 2`, result: `NULL`},
+		{expression: `1 BETWEEN NULL AND 2`, result: `NULL`},
+		{expression: `1 BETWEEN 2 AND NULL`, result: `INT64(0)`},
+		{expression: `1 NOT BETWEEN 2 AND NULL`, result: `INT64(1)`},
+		{expression: `1 BETWEEN NULL AND 0`, result: `INT64(0)`},
+		{expression: `0 BETWEEN NULL AND JSON_ARRAY()`, result: `NULL`},
+		{expression: `NULL BETWEEN JSON_ARRAY() AND 1`, result: `NULL`},
+		{expression: `case NULL when NULL then 1 else 2 end`, result: `INT64(2)`},
+		{expression: `case 1 when NULL then 1 else 2 end`, result: `INT64(2)`},
+		{expression: `case NULL when JSON_ARRAY() then 1 else 2 end`, result: `INT64(2)`},
+
+		// The comparison domain is decided from runtime types.
+		{
+			expression: `0 IN (column0, '0')`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[]`))},
+			result:     `INT64(0)`,
+		},
+		{
+			expression: `0 BETWEEN column0 AND '0'`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[]`))},
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `case column0 when '[]' then 1 else 0 end`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[]`))},
+			result:     `INT64(1)`,
+		},
+
+		// MySQL's IN type scan stops after the first element that is not
+		// constant for one execution, the stopper included: a JSON element
+		// behind it never selects JSON comparison, while a constant element
+		// never stops the scan.
+		{
+			expression: `'12:00:00' IN (column0, JSON_ARRAY())`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Time, []byte(`12:00:00`))},
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `'12:00:00' IN (JSON_ARRAY(), column0)`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Time, []byte(`12:00:00`))},
+			result:     `INT64(0)`,
+		},
+		{
+			expression: `0 IN (column0, '0', JSON_ARRAY())`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Int64, []byte(`1`))},
+			result:     `INT64(1)`,
+		},
+		{expression: `'12:00:00' IN (CAST('12:00:00' AS TIME), JSON_ARRAY())`, result: `INT64(0)`},
+
+		// A temporal column with a nonconstant JSON bound and a numeric
+		// participant compares numerically; a JSON constant keeps the
+		// field-store conversion.
+		{
+			expression: `column0 BETWEEN column1 AND 99999999`,
+			values: []sqltypes.Value{
+				sqltypes.MakeTrusted(sqltypes.Date, []byte(`2020-01-01`)),
+				sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`99999999`)),
+			},
+			result: `INT64(0)`,
+		},
+		{
+			expression: `column0 BETWEEN column1 AND 99999999`,
+			values: []sqltypes.Value{
+				sqltypes.MakeTrusted(sqltypes.Time, []byte(`12:00:00`)),
+				sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[]`)),
+			},
+			result: `INT64(1)`,
+		},
+		{
+			expression: `column0 BETWEEN CAST('99999999' AS JSON) AND 99999999`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Date, []byte(`2020-01-01`))},
+			result:     `INT64(1)`,
+		},
+		{
+			// The maximum unsigned integer is not TIME-convertible: it must
+			// not wrap into a negative TIME through int64 narrowing.
+			expression: `column0 BETWEEN JSON_ARRAY() AND 18446744073709551615`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Time, []byte(`12:00:00`))},
+			result:     `INT64(1)`,
+		},
+	}
+
+	venv := vtenv.NewTestEnv()
+	for _, tc := range testCases {
+		t.Run(tc.expression, func(t *testing.T) {
+			expr, err := venv.Parser().ParseExpr(tc.expression)
+			require.NoError(t, err)
+
+			fields := evalengine.FieldResolver(makeFields(tc.values))
+			for _, folding := range []bool{false, true} {
+				cfg := &evalengine.Config{
+					ResolveColumn:     fields.Column,
+					ResolveType:       fields.Type,
+					Collation:         collations.CollationUtf8mb4ID,
+					Environment:       venv,
+					NoConstantFolding: !folding,
+				}
+
+				converted, err := evalengine.Translate(expr, cfg)
+				require.NoError(t, err)
+
+				env := evalengine.EmptyExpressionEnv(venv)
+				env.Row = tc.values
+
+				expected, err := env.EvaluateAST(converted)
+				require.NoError(t, err)
+				require.Equalf(t, tc.result, expected.String(), "bad evaluation from eval engine (folding=%v)", folding)
+
+				res, err := env.Evaluate(converted)
+				require.NoError(t, err)
+				assert.Equalf(t, tc.result, res.String(), "bad evaluation from compiler (folding=%v)", folding)
+			}
+		})
+	}
+}
+
+// TestJSONComparisonDomainsUntypedOperands checks that operand types
+// resolved only at evaluation time — from result fields or bind variable
+// values — select the same comparison domain as statically typed
+// translation, on both the AST and compiled paths.
+func TestJSONComparisonDomainsUntypedOperands(t *testing.T) {
+	type step struct {
+		row    []sqltypes.Value
+		binds  map[string]*querypb.BindVariable
+		result string
+	}
+	bind := func(tt sqltypes.Type, v string) map[string]*querypb.BindVariable {
+		return map[string]*querypb.BindVariable{
+			"v": sqltypes.ValueBindVariable(sqltypes.MakeTrusted(tt, []byte(v))),
+		}
+	}
+	field := func(name string, tt sqltypes.Type) *querypb.Field {
+		charset := uint32(collations.CollationBinaryID)
+		if sqltypes.IsText(tt) {
+			charset = uint32(collations.CollationUtf8mb4ID)
+		}
+		return &querypb.Field{Name: name, Type: tt, Charset: charset}
+	}
+
+	testCases := []struct {
+		expression string
+		fields     []*querypb.Field
+		steps      []step
+		// compileErr asserts that explicit compilation fails while AST
+		// evaluation still resolves the declared comparison plan.
+		compileErr string
+	}{
+		{
+			expression: `column0 BETWEEN JSON_ARRAY() AND '2021-01-01'`,
+			fields:     []*querypb.Field{field("column0", sqltypes.Date)},
+			steps: []step{
+				{row: []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Date, []byte(`2020-01-01`))}, result: `INT64(1)`},
+			},
+		},
+		{
+			expression: `column0 BETWEEN JSON_ARRAY() AND '2021-01-01'`,
+			fields:     []*querypb.Field{field("column0", sqltypes.Datetime)},
+			steps: []step{
+				{row: []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Datetime, []byte(`2020-01-01 12:00:00`))}, result: `INT64(1)`},
+			},
+		},
+		{
+			expression: `:v BETWEEN JSON_ARRAY() AND '2021-01-01'`,
+			steps: []step{
+				{binds: bind(sqltypes.Timestamp, `2020-01-01 12:00:00`), result: `INT64(1)`},
+			},
+		},
+		{
+			// One translated expression, re-evaluated with changing bind
+			// types: each evaluation selects its own domain, and the third
+			// one reuses the DATE specialization of the first.
+			expression: `:v BETWEEN JSON_ARRAY() AND '2021-01-01'`,
+			steps: []step{
+				{binds: bind(sqltypes.Date, `2020-01-01`), result: `INT64(1)`},
+				{binds: bind(sqltypes.VarChar, `2020-01-01`), result: `INT64(0)`},
+				{binds: bind(sqltypes.Date, `2020-01-01`), result: `INT64(1)`},
+			},
+		},
+		{
+			// A TIME bind is not a column: no TIME treatment, string domain.
+			expression: `:v BETWEEN JSON_ARRAY() AND '13:00:00'`,
+			steps: []step{
+				{binds: bind(sqltypes.Time, `12:00:00`), result: `INT64(0)`},
+			},
+		},
+		{
+			expression: `column0 BETWEEN JSON_ARRAY() AND '13:00:00'`,
+			fields:     []*querypb.Field{field("column0", sqltypes.Time)},
+			steps: []step{
+				{row: []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Time, []byte(`12:00:00`))}, result: `INT64(1)`},
+			},
+		},
+		{
+			expression: `'12:00:00' BETWEEN JSON_ARRAY() AND column0`,
+			fields:     []*querypb.Field{field("column0", sqltypes.Time)},
+			steps: []step{
+				{row: []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Time, []byte(`12:00:00`))}, result: `INT64(0)`},
+			},
+		},
+		{
+			expression: `JSON_ARRAY() BETWEEN column0 AND 'zz'`,
+			fields:     []*querypb.Field{field("column0", sqltypes.Time)},
+			steps: []step{
+				{row: []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Time, []byte(`12:00:00`))}, result: `INT64(1)`},
+			},
+		},
+		{
+			// The declared DATE type of an all-NULL column still selects the
+			// DATETIME domain.
+			expression: `JSON_ARRAY() BETWEEN column0 AND '2021-01-01'`,
+			fields:     []*querypb.Field{field("column0", sqltypes.Date)},
+			steps: []step{
+				{row: []sqltypes.Value{sqltypes.NULL}, result: `NULL`},
+			},
+		},
+		{
+			// The declared JSON type of an all-NULL column still forces the
+			// binary string collation; a VARCHAR column keeps the default
+			// case-insensitive comparison.
+			expression: `'a' BETWEEN column0 AND 'A'`,
+			fields:     []*querypb.Field{field("column0", sqltypes.TypeJSON)},
+			steps: []step{
+				{row: []sqltypes.Value{sqltypes.NULL}, result: `INT64(0)`},
+			},
+		},
+		{
+			expression: `'a' BETWEEN column0 AND 'A'`,
+			fields:     []*querypb.Field{field("column0", sqltypes.VarChar)},
+			steps: []step{
+				{row: []sqltypes.Value{sqltypes.NULL}, result: `NULL`},
+			},
+		},
+		{
+			expression: `0 IN (column0, '0')`,
+			fields:     []*querypb.Field{field("column0", sqltypes.TypeJSON)},
+			steps: []step{
+				{row: []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[]`))}, result: `INT64(0)`},
+				{row: []sqltypes.Value{sqltypes.NULL}, result: `NULL`},
+			},
+		},
+		{
+			expression: `0 IN (column0, '0')`,
+			fields:     []*querypb.Field{field("column0", sqltypes.VarChar)},
+			steps: []step{
+				{row: []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.VarChar, []byte(`0`))}, result: `INT64(1)`},
+			},
+		},
+		{
+			// The DATE-column field path applies with a late-resolved JSON
+			// column whose value is SQL NULL.
+			expression: `column0 BETWEEN column1 AND 99999999`,
+			fields: []*querypb.Field{
+				field("column0", sqltypes.Date),
+				field("column1", sqltypes.TypeJSON),
+			},
+			steps: []step{
+				{row: []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Date, []byte(`2020-01-01`)), sqltypes.NULL}, result: `NULL`},
+			},
+		},
+
+		// A composite operand contributes its declared result type, not the
+		// selected child's runtime representation, including when the value
+		// is SQL NULL.
+		{
+			expression: `0 IN (COALESCE(column0, NULL), '0')`,
+			fields:     []*querypb.Field{field("column0", sqltypes.TypeJSON)},
+			steps: []step{
+				{row: []sqltypes.Value{sqltypes.NULL}, result: `NULL`},
+				{row: []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[1]`))}, result: `INT64(0)`},
+			},
+		},
+		{
+			expression: `'a' BETWEEN COALESCE(column0, NULL) AND 'A'`,
+			fields:     []*querypb.Field{field("column0", sqltypes.TypeJSON)},
+			steps: []step{
+				{row: []sqltypes.Value{sqltypes.NULL}, result: `INT64(0)`},
+			},
+		},
+		{
+			expression: `JSON_ARRAY() BETWEEN COALESCE(column0, NULL) AND '2021-01-01'`,
+			fields:     []*querypb.Field{field("column0", sqltypes.Date)},
+			steps: []step{
+				{row: []sqltypes.Value{sqltypes.NULL}, result: `NULL`},
+			},
+		},
+		{
+			// COALESCE over DATE and VARCHAR declares a string result: the
+			// selected DATE child must not switch the domain.
+			expression: `COALESCE(column0, column1) BETWEEN JSON_ARRAY() AND '2021-01-01'`,
+			fields: []*querypb.Field{
+				field("column0", sqltypes.Date),
+				field("column1", sqltypes.VarChar),
+			},
+			steps: []step{
+				{row: []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Date, []byte(`2020-01-01`)), sqltypes.NULL}, result: `INT64(0)`},
+			},
+		},
+		{
+			// COALESCE over JSON and VARCHAR declares a non-JSON result: the
+			// selected JSON child must not re-enable JSON comparison.
+			expression: `0 IN (COALESCE(column0, column1), '0')`,
+			fields: []*querypb.Field{
+				field("column0", sqltypes.TypeJSON),
+				field("column1", sqltypes.VarChar),
+			},
+			steps: []step{
+				{row: []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[1]`)), sqltypes.NULL}, result: `INT64(1)`},
+			},
+		},
+		{
+			// The composite's declared type resolves even though this
+			// dynamic JSON_CONTAINS_PATH shape stays VM-unsupported.
+			expression: `0 IN (COALESCE(column0, JSON_CONTAINS_PATH(column0, column1, '$')), '0')`,
+			fields: []*querypb.Field{
+				field("column0", sqltypes.TypeJSON),
+				field("column1", sqltypes.VarChar),
+			},
+			steps: []step{
+				{row: []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[1]`)), sqltypes.MakeTrusted(sqltypes.VarChar, []byte(`one`))}, result: `INT64(1)`},
+			},
+			compileErr: `unsupported compilation for IR 'JSON_CONTAINS_PATH`,
+		},
+
+		// MySQL's IN type scan stops after the first element that is not
+		// constant for one execution: a JSON element behind the stopper
+		// never selects JSON comparison.
+		{
+			expression: `'12:00:00' IN (column0, JSON_ARRAY())`,
+			fields:     []*querypb.Field{field("column0", sqltypes.Time)},
+			steps: []step{
+				{row: []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Time, []byte(`12:00:00`))}, result: `INT64(1)`},
+			},
+		},
+		{
+			expression: `'12:00:00' IN (JSON_ARRAY(), column0)`,
+			fields:     []*querypb.Field{field("column0", sqltypes.Time)},
+			steps: []step{
+				{row: []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Time, []byte(`12:00:00`))}, result: `INT64(0)`},
+			},
+		},
+		{
+			// The stopper's own declared type still joins the scan: the
+			// left string converts to DATE for the first comparison.
+			expression: `'2020-1-1' IN (column0, JSON_ARRAY())`,
+			fields:     []*querypb.Field{field("column0", sqltypes.Date)},
+			steps: []step{
+				{row: []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Date, []byte(`2020-01-01`))}, result: `INT64(1)`},
+			},
+		},
+		{
+			expression: `'2020-01-01' IN (JSON_ARRAY(), column0)`,
+			fields:     []*querypb.Field{field("column0", sqltypes.Date)},
+			steps: []step{
+				{row: []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Date, []byte(`2020-01-01`))}, result: `INT64(0)`},
+			},
+		},
+		{
+			expression: `0 IN (column0, '0', JSON_ARRAY())`,
+			fields:     []*querypb.Field{field("column0", sqltypes.Int64)},
+			steps: []step{
+				{row: []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Int64, []byte(`1`))}, result: `INT64(1)`},
+			},
+		},
+		{
+			expression: `0 NOT IN (column0, '0', JSON_ARRAY())`,
+			fields:     []*querypb.Field{field("column0", sqltypes.Int64)},
+			steps: []step{
+				{row: []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Int64, []byte(`1`))}, result: `INT64(0)`},
+			},
+		},
+		{
+			// A bind parameter is constant for one execution: the scan
+			// continues past it and reaches the JSON element.
+			expression: `0 IN (:v, '0', JSON_ARRAY())`,
+			steps: []step{
+				{binds: bind(sqltypes.Int64, `1`), result: `INT64(0)`},
+			},
+		},
+
+		// A temporal column with a nonconstant JSON bound and a numeric
+		// participant compares numerically: the field-store and TIME
+		// conversions apply only to constant bounds.
+		{
+			expression: `column0 BETWEEN column1 AND 99999999`,
+			fields: []*querypb.Field{
+				field("column0", sqltypes.Date),
+				field("column1", sqltypes.TypeJSON),
+			},
+			steps: []step{
+				{row: []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Date, []byte(`2020-01-01`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`99999999`))}, result: `INT64(0)`},
+			},
+		},
+		{
+			expression: `column0 BETWEEN column1 AND column2`,
+			fields: []*querypb.Field{
+				field("column0", sqltypes.Date),
+				field("column1", sqltypes.TypeJSON),
+				field("column2", sqltypes.Int64),
+			},
+			steps: []step{
+				{row: []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Date, []byte(`2020-01-01`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`99999999`)), sqltypes.MakeTrusted(sqltypes.Int64, []byte(`99999999`))}, result: `INT64(0)`},
+			},
+		},
+		{
+			expression: `column0 BETWEEN column1 AND 99999999`,
+			fields: []*querypb.Field{
+				field("column0", sqltypes.Time),
+				field("column1", sqltypes.TypeJSON),
+			},
+			steps: []step{
+				{row: []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Time, []byte(`12:00:00`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[]`))}, result: `INT64(1)`},
+			},
+		},
+		{
+			expression: `column0 BETWEEN column1 AND column2`,
+			fields: []*querypb.Field{
+				field("column0", sqltypes.Time),
+				field("column1", sqltypes.TypeJSON),
+				field("column2", sqltypes.Int64),
+			},
+			steps: []step{
+				{row: []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Time, []byte(`12:00:00`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[]`)), sqltypes.MakeTrusted(sqltypes.Int64, []byte(`99999999`))}, result: `INT64(1)`},
+			},
+		},
+		{
+			// The maximum unsigned integer is not TIME-convertible: it must
+			// not wrap into a negative TIME through int64 narrowing.
+			expression: `column0 BETWEEN JSON_ARRAY() AND 18446744073709551615`,
+			fields:     []*querypb.Field{field("column0", sqltypes.Time)},
+			steps: []step{
+				{row: []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Time, []byte(`12:00:00`))}, result: `INT64(1)`},
+			},
+		},
+
+		// The reached comparison derives the composite's declared JSON
+		// type — which is what makes the left side false rather than NULL —
+		// while AND keeps the missing bind short-circuited and unresolved.
+		{
+			expression: `('a' BETWEEN COALESCE(column0, NULL) AND 'A') AND :unused`,
+			fields:     []*querypb.Field{field("column0", sqltypes.TypeJSON)},
+			steps: []step{
+				{row: []sqltypes.Value{sqltypes.NULL}, result: `INT64(0)`},
+			},
+			compileErr: `query arguments missing for unused`,
+		},
+	}
+
+	venv := vtenv.NewTestEnv()
+	for _, tc := range testCases {
+		t.Run(tc.expression, func(t *testing.T) {
+			expr, err := venv.Parser().ParseExpr(tc.expression)
+			require.NoError(t, err)
+
+			for _, folding := range []bool{false, true} {
+				cfg := &evalengine.Config{
+					ResolveColumn:     evalengine.FieldResolver(tc.fields).Column,
+					Collation:         collations.CollationUtf8mb4ID,
+					Environment:       venv,
+					NoConstantFolding: !folding,
+				}
+				translated, err := evalengine.Translate(expr, cfg)
+				require.NoError(t, err)
+				untyped, ok := translated.(*evalengine.UntypedExpr)
+				require.True(t, ok, "expected an untyped translation")
+
+				env := evalengine.EmptyExpressionEnv(venv)
+				env.Fields = tc.fields
+				for i, s := range tc.steps {
+					env.Row = s.row
+					env.BindVars = s.binds
+
+					ast, err := env.EvaluateAST(untyped)
+					require.NoError(t, err)
+					assert.Equalf(t, s.result, ast.String(), "bad evaluation from eval engine (step %d, folding=%v)", i, folding)
+
+					compiled, err := untyped.Compile(env)
+					if tc.compileErr != "" {
+						require.ErrorContains(t, err, tc.compileErr)
+						continue
+					}
+					require.NoError(t, err)
+					vm, err := env.EvaluateVM(compiled)
+					require.NoError(t, err)
+					assert.Equalf(t, s.result, vm.String(), "bad evaluation from compiler (step %d, folding=%v)", i, folding)
+				}
+			}
+		})
+	}
+}
+
+// TestJSONComparisonDomainsConcurrency evaluates one translated comparison
+// from many goroutines with alternating bind types: the JSON-typed bind
+// selects the binary JSON/string domain, the VARCHAR bind the default
+// case-insensitive one. With -race, this catches comparison plans or type
+// specializations shared across evaluations.
+func TestJSONComparisonDomainsConcurrency(t *testing.T) {
+	venv := vtenv.NewTestEnv()
+	expr, err := venv.Parser().ParseExpr(`'a' BETWEEN COALESCE(:w, NULL) AND 'z'`)
+	require.NoError(t, err)
+	translated, err := evalengine.Translate(expr, &evalengine.Config{
+		Collation:   collations.CollationUtf8mb4ID,
+		Environment: venv,
+	})
+	require.NoError(t, err)
+
+	const goroutines, evaluations = 8, 50
+	errs := make([]error, goroutines)
+	observed := make([][]string, goroutines)
+
+	var wg sync.WaitGroup
+	for i := range goroutines {
+		jsonBind := i%2 == 0
+		observed[i] = make([]string, evaluations)
+		wg.Go(func() {
+			bindVar := sqltypes.ValueBindVariable(sqltypes.MakeTrusted(sqltypes.VarChar, []byte(`B`)))
+			if jsonBind {
+				bindVar = sqltypes.ValueBindVariable(sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`"B"`)))
+			}
+			env := evalengine.EmptyExpressionEnv(venv)
+			env.BindVars = map[string]*querypb.BindVariable{"w": bindVar}
+			for n := range evaluations {
+				res, err := env.Evaluate(translated)
+				if err != nil {
+					errs[i] = err
+					return
+				}
+				observed[i][n] = res.String()
+			}
+		})
+	}
+	wg.Wait()
+
+	for i := range goroutines {
+		require.NoErrorf(t, errs[i], "goroutine %d", i)
+		result := `INT64(0)`
+		if i%2 == 0 {
+			result = `INT64(1)`
+		}
+		for _, got := range observed[i] {
+			assert.Equal(t, result, got)
+		}
+	}
+}
+
+// TestJSONComparisonDomainsTupleBind checks that one translated tuple bind,
+// re-executed with changing element declarations, selects the comparison
+// domain from the expanded list's declared element types on every execution.
+func TestJSONComparisonDomainsTupleBind(t *testing.T) {
+	tupleBind := func(vals ...sqltypes.Value) map[string]*querypb.BindVariable {
+		bv := &querypb.BindVariable{Type: querypb.Type_TUPLE}
+		for _, v := range vals {
+			bv.Values = append(bv.Values, sqltypes.ValueToProto(v))
+		}
+		return map[string]*querypb.BindVariable{"vals": bv}
+	}
+
+	venv := vtenv.NewTestEnv()
+	expr, err := venv.Parser().ParseExpr(`0 IN ::vals`)
+	require.NoError(t, err)
+	translated, err := evalengine.Translate(expr, &evalengine.Config{
+		Collation:   collations.CollationUtf8mb4ID,
+		Environment: venv,
+	})
+	require.NoError(t, err)
+
+	steps := []struct {
+		binds  map[string]*querypb.BindVariable
+		result string
+	}{
+		{binds: tupleBind(sqltypes.MakeTrusted(sqltypes.Int64, []byte(`1`)), sqltypes.MakeTrusted(sqltypes.VarChar, []byte(`0`))), result: `INT64(1)`},
+		{binds: tupleBind(sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[]`)), sqltypes.MakeTrusted(sqltypes.VarChar, []byte(`0`))), result: `INT64(0)`},
+		{binds: tupleBind(sqltypes.MakeTrusted(sqltypes.Int64, []byte(`1`)), sqltypes.MakeTrusted(sqltypes.VarChar, []byte(`0`))), result: `INT64(1)`},
+	}
+	env := evalengine.EmptyExpressionEnv(venv)
+	for i, s := range steps {
+		env.BindVars = s.binds
+
+		ast, err := env.EvaluateAST(translated)
+		require.NoError(t, err)
+		assert.Equalf(t, s.result, ast.String(), "bad evaluation from eval engine (step %d)", i)
+
+		res, err := env.Evaluate(translated)
+		require.NoError(t, err)
+		assert.Equalf(t, s.result, res.String(), "bad evaluation from compiler (step %d)", i)
+	}
+}
+
 func TestBindVarLiteral(t *testing.T) {
 	testCases := []struct {
 		expression string
@@ -1126,6 +2221,75 @@ func TestCompilerNonConstant(t *testing.T) {
 				require.NotEqualf(t, prev, res.String(), "constant evaluation from eval engine: got %s multiple times", res.String())
 				prev = res.String()
 			}
+		})
+	}
+}
+
+// TestJSONInStaticTable checks that IN over folded JSON literals does not
+// compile the static hash table: JSON arrays and objects hash by kind and
+// cardinality only, so a hash hit is not equality. The compiled comparison
+// must agree with AST evaluation.
+func TestJSONInStaticTable(t *testing.T) {
+	testCases := []struct {
+		expression string
+		values     []sqltypes.Value
+		result     string
+	}{
+		{
+			expression: `column0 IN (JSON_ARRAY(2))`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[1]`))},
+			result:     `INT64(0)`,
+		},
+		{
+			expression: `column0 IN (JSON_OBJECT('b', 2))`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"a": 1}`))},
+			result:     `INT64(0)`,
+		},
+		{
+			expression: `column0 IN (JSON_ARRAY(1))`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[1]`))},
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `column0 IN (JSON_OBJECT('a', 1))`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"a": 1}`))},
+			result:     `INT64(1)`,
+		},
+	}
+
+	venv := vtenv.NewTestEnv()
+	for _, tc := range testCases {
+		t.Run(tc.expression, func(t *testing.T) {
+			expr, err := venv.Parser().ParseExpr(tc.expression)
+			require.NoError(t, err)
+
+			fields := evalengine.FieldResolver(makeFields(tc.values))
+			cfg := &evalengine.Config{
+				ResolveColumn: fields.Column,
+				Collation:     collations.CollationUtf8mb4ID,
+				Environment:   venv,
+			}
+
+			translated, err := evalengine.Translate(expr, cfg)
+			require.NoError(t, err)
+
+			untyped, ok := translated.(*evalengine.UntypedExpr)
+			require.True(t, ok)
+
+			env := evalengine.EmptyExpressionEnv(venv)
+			env.Row = tc.values
+			env.Fields = makeFields(tc.values)
+
+			res, err := env.EvaluateAST(untyped)
+			require.NoError(t, err)
+			assert.Equal(t, tc.result, res.String())
+
+			compiled, err := untyped.Compile(env)
+			require.NoError(t, err)
+
+			res, err = env.EvaluateVM(compiled)
+			require.NoError(t, err)
+			assert.Equal(t, tc.result, res.String())
 		})
 	}
 }

@@ -176,6 +176,22 @@ func (asm *assembler) Add_uu() {
 	}, "ADD UINT64(SP-2), UINT64(SP-1)")
 }
 
+func (asm *assembler) Between(collationEnv *collations.Environment, negate bool, plan betweenPlan) {
+	asm.adjustStack(-2)
+	asm.emit(func(env *ExpressionEnv) int {
+		left := env.vm.stack[env.vm.sp-3]
+		from := env.vm.stack[env.vm.sp-2]
+		to := env.vm.stack[env.vm.sp-1]
+
+		var in boolean
+		in, env.vm.err = evalBetweenExpr(collationEnv, left, from, to, negate, plan, env.now)
+
+		env.vm.stack[env.vm.sp-3] = in.eval()
+		env.vm.sp -= 2
+		return 1
+	}, "BETWEEN (SP-3), (SP-2), (SP-1)")
+}
+
 func (asm *assembler) BitCount_b() {
 	asm.emit(func(env *ExpressionEnv) int {
 		a := env.vm.stack[env.vm.sp-1].(*evalBytes)
@@ -735,6 +751,17 @@ func (asm *assembler) CmpJSON() {
 		env.vm.flags.cmp, env.vm.err = compareJSONValue(l, r)
 		return 1
 	}, "CMP JSON(SP-2), JSON(SP-1)")
+}
+
+func (asm *assembler) CmpCaseJSON(collationEnv *collations.Environment) {
+	asm.adjustStack(-2)
+	asm.emit(func(env *ExpressionEnv) int {
+		l := env.vm.stack[env.vm.sp-2]
+		r := env.vm.stack[env.vm.sp-1]
+		env.vm.sp -= 2
+		env.vm.flags.cmp, env.vm.err = evalCompareCaseJSON(l, r, collationEnv)
+		return 1
+	}, "CMP CASE (SP-2), (SP-1)")
 }
 
 func (asm *assembler) CmpTuple(collationEnv *collations.Environment, fullEquality bool) {
@@ -3231,7 +3258,7 @@ func (asm *assembler) In_table(not bool, table map[vthash.Hash]struct{}) {
 	}
 }
 
-func (asm *assembler) In_slow(collationsEnv *collations.Environment, not bool) {
+func (asm *assembler) In_slow(collationsEnv *collations.Environment, not bool, plan inJSONDomain) {
 	asm.adjustStack(-1)
 
 	if not {
@@ -3240,7 +3267,7 @@ func (asm *assembler) In_slow(collationsEnv *collations.Environment, not bool) {
 			rhs := env.vm.stack[env.vm.sp-1].(*evalTuple)
 
 			var in boolean
-			in, env.vm.err = evalInExpr(collationsEnv, lhs, rhs)
+			in, env.vm.err = evalInExpr(collationsEnv, lhs, rhs, plan)
 
 			env.vm.stack[env.vm.sp-2] = in.not().eval()
 			env.vm.sp -= 1
@@ -3252,7 +3279,7 @@ func (asm *assembler) In_slow(collationsEnv *collations.Environment, not bool) {
 			rhs := env.vm.stack[env.vm.sp-1].(*evalTuple)
 
 			var in boolean
-			in, env.vm.err = evalInExpr(collationsEnv, lhs, rhs)
+			in, env.vm.err = evalInExpr(collationsEnv, lhs, rhs, plan)
 
 			env.vm.stack[env.vm.sp-2] = in.eval()
 			env.vm.sp -= 1
