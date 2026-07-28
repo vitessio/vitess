@@ -34,7 +34,9 @@ func newEvalTuple(values []*querypb.Value, collation collations.ID) (*evalTuple,
 	for _, value := range values {
 		val := sqltypes.ProtoToValue(value)
 
-		e, err := valueToEval(val, typedCoercionCollation(val.Type(), collations.CollationForType(val.Type(), collation)), nil)
+		// Tuples only reach the evalengine as bind variables, so each element
+		// converts as one.
+		e, err := valueToEvalBindVar(val, typedCoercionCollation(val.Type(), collations.CollationForType(val.Type(), collation)), nil)
 		if err != nil {
 			return nil, err
 		}

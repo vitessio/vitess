@@ -313,9 +313,13 @@ func (asm *assembler) PushBVar_hexval(key string) {
 	}, "PUSH HEXVAL(:%q)", key)
 }
 
-func push_json(env *ExpressionEnv, raw []byte) int {
+func push_json(env *ExpressionEnv, raw []byte, cast bool) int {
 	var parser json.Parser
-	env.vm.stack[env.vm.sp], env.vm.err = parser.ParseBytes(raw)
+	if cast {
+		env.vm.stack[env.vm.sp], env.vm.err = parser.ParseCastBytes(raw)
+	} else {
+		env.vm.stack[env.vm.sp], env.vm.err = parser.ParseBytes(raw)
+	}
 	env.vm.sp++
 	return 1
 }
@@ -328,7 +332,7 @@ func (asm *assembler) PushColumn_json(offset int) {
 		if col.IsNull() {
 			return push_null(env)
 		}
-		return push_json(env, col.Raw())
+		return push_json(env, col.Raw(), false)
 	}, "PUSH JSON(:%d)", offset)
 }
 
@@ -341,7 +345,9 @@ func (asm *assembler) PushBVar_json(key string) {
 		if env.vm.err != nil {
 			return 0
 		}
-		return push_json(env, bvar.Value)
+		// A bind variable holds character data, so its numbers convert the
+		// way MySQL's document parser converts them; see valueToEvalBindVar.
+		return push_json(env, bvar.Value, true)
 	}, "PUSH JSON(:%q)", key)
 }
 

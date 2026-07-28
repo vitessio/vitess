@@ -72,7 +72,7 @@ func (bv *BindVariable) eval(env *ExpressionEnv) (eval, error) {
 
 		tuple := make([]eval, 0, len(bvar.Values))
 		for _, value := range bvar.Values {
-			e, err := valueToEval(sqltypes.MakeTrusted(value.Type, value.Value), typedCoercionCollation(value.Type, collations.CollationForType(value.Type, bv.Collation)), nil)
+			e, err := valueToEvalBindVar(sqltypes.MakeTrusted(value.Type, value.Value), typedCoercionCollation(value.Type, collations.CollationForType(value.Type, bv.Collation)), nil)
 			if err != nil {
 				return nil, err
 			}
@@ -85,7 +85,7 @@ func (bv *BindVariable) eval(env *ExpressionEnv) (eval, error) {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "query argument '%s' cannot be a tuple", bv.Key)
 		}
 		typ := bvar.Type
-		return valueToEval(sqltypes.MakeTrusted(typ, bvar.Value), typedCoercionCollation(typ, collations.CollationForType(typ, bv.Collation)), nil)
+		return valueToEvalBindVar(sqltypes.MakeTrusted(typ, bvar.Value), typedCoercionCollation(typ, collations.CollationForType(typ, bv.Collation)), nil)
 	}
 }
 
