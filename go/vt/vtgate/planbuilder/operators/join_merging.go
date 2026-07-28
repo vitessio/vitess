@@ -78,14 +78,10 @@ func (jm *joinMerger) mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs
 			// cross-table shape, so anyone resetting the routing has to check it again.
 			// The merge gets a copy of the routing, so that re-checking it cannot damage
 			// the RHS if we end up not merging after all.
-			jm.requireSingleShard = true
 			merged := jm.merge(ctx, lhsRoute, rhsRoute, routingB.Clone())
-			// A single-shard opcode can still resolve to no shard at all: EqualUnique on a NULL
-			// or on a value the vindex has no mapping for routes nowhere. The merged query would
-			// then run nowhere and the preserved reference rows would go missing, so it runs on an
-			// arbitrary shard instead. The predicate that routed nowhere matches nothing there,
-			// which leaves exactly the preserved rows with NULLs the outer join owes them.
-			merged.NoRoutesSpecialHandling = true
+			if merged != nil {
+				merged.PreservesReferenceRows = true
+			}
 			return merged
 		}
 		return jm.merge(ctx, lhsRoute, rhsRoute, routingB)
@@ -168,9 +164,6 @@ type (
 		// joinType is permitted to store only 3 of the possible values
 		// NormalJoinType, StraightJoinType and LeftJoinType.
 		joinType sqlparser.JoinType
-		// requireSingleShard is set when the merge was only permitted because the
-		// routing was single-shard, and has to be re-checked if the routing is reset.
-		requireSingleShard bool
 	}
 
 	routingType int
@@ -294,10 +287,16 @@ func (jm *joinMerger) merge(ctx *plancontext.PlanningContext, op1, op2 *Route, r
 			ctx.PredTracker.Set(*column.JoinPredicateID, column.Original)
 		}
 	}
-	return &Route{
+	merged := &Route{
 		unaryOperator: newUnaryOp(aj),
 		MergedWith:    []*Route{op2},
 		Routing:       r,
 		Conditions:    conditions,
 	}
+	if !merged.inheritFrom(op1, op2) {
+		debugNoRewrite("apply join merge blocked: %s routing would widen a route that has to stay single-shard", r.OpCode().String())
+		return nil
+	}
+
+	return merged
 }
