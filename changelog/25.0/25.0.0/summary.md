@@ -342,6 +342,14 @@ duplicate, or denied variable names and failed assignments stop the operation
 before schema DDL executes on that connection. `sql_log_bin` and
 `foreign_key_checks` are denied.
 
+**Compatibility note:** `--session-variable` requires vtctld and vttablet at
+v25 or newer. On a mixed-version cluster, an upgraded caller can send the new
+`session_variables` RPC field (or Online DDL options) to an older tablet that
+does not understand them. The tablet may still run the DDL while skipping the
+requested session state, so the option can appear to succeed without effect.
+Upgrade vtctld and all tablets that will execute the schema change before using
+`--session-variable`.
+
 See [#20654](https://github.com/vitessio/vitess/pull/20654) for details.
 
 ### <a id="minor-changes-backup"/>Backup/Restore</a>
