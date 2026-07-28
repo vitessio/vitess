@@ -163,12 +163,15 @@ func parseValue(s string, c *cache, depth int) (*Value, string, error) {
 		return v, tail, nil
 	}
 	if s[0] == '"' {
-		ss, tail, err := parseRawString(s[1:])
+		ss, tail, unescape, err := parseRawValueString(s[1:])
 		if err != nil {
 			return nil, tail, fmt.Errorf("cannot parse string: %s", err)
 		}
+		if unescape {
+			ss = unescapeStringBestEffort(ss)
+		}
 		v := c.getValue()
-		v.t = typeRawString
+		v.t = TypeString
 		v.s = ss
 		return v, tail, nil
 	}
@@ -191,7 +194,7 @@ func parseValue(s string, c *cache, depth int) (*Value, string, error) {
 		return ValueNull, s[len("null"):], nil
 	}
 
-	flen, exponent, ok := readFloat(s)
+	flen, exponent, fractional, ok := readFloat(s)
 	if !ok {
 		return nil, s[flen:], fmt.Errorf("invalid number in JSON string: %q", s)
 	}
@@ -199,8 +202,10 @@ func parseValue(s string, c *cache, depth int) (*Value, string, error) {
 	v := c.getValue()
 	v.t = TypeNumber
 	v.s = s[:flen]
-	v.n = numberTypeRaw
-	if mayExceedFloat64(v.s, exponent) && !mysqlNumberFits(v.s) {
+	// An integer that fits is nowhere near the range of a double, so only the
+	// kind that did not fit one can be too big for the other.
+	v.n = numberKind(v.s, fractional)
+	if v.n == NumberTypeFloat && mayExceedFloat64(v.s, exponent) && !mysqlNumberFits(v.s) {
 		return nil, s, fmt.Errorf("number too big to be stored in double: %q", v.s)
 	}
 	return v, s[flen:], nil
@@ -428,6 +433,52 @@ func movePoint(significand float64, exp int) float64 {
 	default:
 		return significand / pow10[-exp]
 	}
+}
+
+// int64Digits is the most digits an integer can be written to and still be
+// certain to fit an int64.
+const int64Digits = 18
+
+// numberKind settles what a number is kept as, from the shape the scanner
+// already read. MySQL keeps an integer that fits exactly and makes a double of
+// everything else, so a fraction or an exponent decides the question outright,
+// and a short run of digits decides it without converting anything. Only the
+// lengths that straddle the integer limits are converted, and those at most
+// once rather than once per kind.
+func numberKind(num string, fractional bool) NumberType {
+	if fractional {
+		return NumberTypeFloat
+	}
+
+	digits := num
+	var negative bool
+	if len(digits) > 0 && (digits[0] == '-' || digits[0] == '+') {
+		negative = digits[0] == '-'
+		digits = digits[1:]
+	}
+	if len(digits) > 1 && digits[0] == '0' {
+		digits = strings.TrimLeft(digits, "0")
+	}
+	if len(digits) <= int64Digits {
+		return NumberTypeSigned
+	}
+
+	if negative {
+		if _, err := fastparse.ParseInt64(num, 10); err == nil {
+			return NumberTypeSigned
+		}
+		// Nothing negative fits an unsigned integer.
+		return NumberTypeFloat
+	}
+
+	unsigned, err := fastparse.ParseUint64(digits, 10)
+	if err != nil {
+		return NumberTypeFloat
+	}
+	if unsigned <= math.MaxInt64 {
+		return NumberTypeSigned
+	}
+	return NumberTypeUnsigned
 }
 
 func parseArray(s string, c *cache, depth int) (*Value, string, error) {
@@ -702,6 +753,23 @@ func parseRawKey(s string) (string, string, bool, error) {
 	return s, "", false, errors.New(`missing closing '"'`)
 }
 
+// parseRawValueString reads a string value and reports whether it carries
+// escapes, so that the caller can unescape it once, while the value is still
+// its own. This mirrors parseRawKey, which object keys have always used.
+func parseRawValueString(s string) (string, string, bool, error) {
+	for i := range len(s) {
+		if s[i] == '"' {
+			// Fast path.
+			return s[:i], s[i+1:], false, nil
+		}
+		if s[i] == '\\' {
+			str, tail, err := parseRawString(s)
+			return str, tail, true, err
+		}
+	}
+	return s, "", false, errors.New(`missing closing '"'`)
+}
+
 func parseRawString(s string) (string, string, error) {
 	n := strings.IndexByte(s, '"')
 	if n < 0 {
@@ -735,14 +803,16 @@ func parseRawString(s string) (string, string, error) {
 }
 
 // readFloat reads a JSON number off the front of s, returning how much of s it
-// covers and the exponent it was written with. Whether the number is one a
-// double can hold is mysqlNumberFits's job; the exponent is reported so that
-// question only has to be asked of numbers whose digits could reach that far.
+// covers, the exponent it was written with, and whether a fraction or an
+// exponent was written at all. Whether the number is one a double can hold is
+// mysqlNumberFits's job; the exponent is reported so that question only has to
+// be asked of numbers whose digits could reach that far, and the shape settles
+// what the number is kept as without converting anything.
 //
 // What counts as a number is JSON's grammar rather than Go's: a written plus,
 // a missing digit on either side of the decimal point, and an integer part
 // that opens with a zero are all rejected.
-func readFloat[S string | []byte](s S) (i, exponent int, ok bool) {
+func readFloat[S string | []byte](s S) (i, exponent int, fractional, ok bool) {
 	// optional minus. JSON numbers carry no written plus.
 	if i >= len(s) {
 		return
@@ -764,6 +834,7 @@ func readFloat[S string | []byte](s S) (i, exponent int, ok bool) {
 
 	// optional fraction, which has to carry a digit of its own
 	if i < len(s) && s[i] == '.' {
+		fractional = true
 		i++
 		if i >= len(s) || s[i] < '0' || s[i] > '9' {
 			return
@@ -777,6 +848,7 @@ func readFloat[S string | []byte](s S) (i, exponent int, ok bool) {
 	// both the largest double and every digit this number could hold after its
 	// decimal point, so a number stopped at it is out of reach either way.
 	if i < len(s) && (s[i] == 'e' || s[i] == 'E') {
+		fractional = true
 		i++
 		if i >= len(s) {
 			return
@@ -802,7 +874,7 @@ func readFloat[S string | []byte](s S) (i, exponent int, ok bool) {
 			exponent = -exponent
 		}
 	}
-	return i, exponent, true
+	return i, exponent, fractional, true
 }
 
 // Object represents JSON object.
@@ -1014,11 +1086,6 @@ func (v *Value) marshalFloat(dst []byte) []byte {
 // MarshalTo appends marshaled v to dst and returns the result.
 func (v *Value) MarshalTo(dst []byte) []byte {
 	switch v.t {
-	case typeRawString:
-		dst = append(dst, '"')
-		dst = append(dst, v.s...)
-		dst = append(dst, '"')
-		return dst
 	case TypeObject:
 		return v.o.MarshalTo(dst)
 	case TypeArray:
@@ -1140,8 +1207,6 @@ const (
 
 	// TypeBlob is JSON blob.
 	TypeBlob
-
-	typeRawString
 )
 
 type NumberType int32
@@ -1152,7 +1217,6 @@ const (
 	NumberTypeUnsigned
 	NumberTypeDecimal
 	NumberTypeFloat
-	numberTypeRaw
 )
 
 // String returns string representation of t.
@@ -1183,8 +1247,6 @@ func (t Type) String() string {
 	case TypeNull:
 		return "null"
 
-	// typeRawString is skipped intentionally,
-	// since it shouldn't be visible to user.
 	default:
 		panic(fmt.Errorf("BUG: unknown Value type: %d", t))
 	}
@@ -1194,10 +1256,6 @@ func (t Type) String() string {
 func (v *Value) Type() Type {
 	if v == nil {
 		return TypeNull
-	}
-	if v.t == typeRawString {
-		v.s = unescapeStringBestEffort(v.s)
-		v.t = TypeString
 	}
 	return v.t
 }
@@ -1268,9 +1326,6 @@ func (v *Value) Raw() string {
 func (v *Value) NumberType() NumberType {
 	if v.t != TypeNumber {
 		return NumberTypeUnknown
-	}
-	if v.n == numberTypeRaw {
-		v.n = parseNumberType(v.s)
 	}
 	return v.n
 }
