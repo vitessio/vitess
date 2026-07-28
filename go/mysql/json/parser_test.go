@@ -18,6 +18,7 @@ limitations under the License.
 package json
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -30,7 +31,7 @@ func TestParseRawNumber(t *testing.T) {
 		f := func(s, expectedRN, expectedTail string) {
 			t.Helper()
 
-			flen, ok := readFloat(s)
+			flen, _, ok := readFloat(s)
 			require.Truef(t, ok, "unexpected error when parsing '%s'", s)
 
 			rn, tail := s[:flen], s[flen:]
@@ -57,7 +58,7 @@ func TestParseRawNumber(t *testing.T) {
 		f := func(s, expectedTail string) {
 			t.Helper()
 
-			flen, ok := readFloat(s)
+			flen, _, ok := readFloat(s)
 			require.False(t, ok, "expecting non-nil error")
 			require.Equalf(t, expectedTail, s[flen:], "unexpected tail; got %q; want %q", s[flen:], expectedTail)
 		}
@@ -68,6 +69,56 @@ func TestParseRawNumber(t *testing.T) {
 		f(",", ",")
 		f("{", "{")
 		f("\"", "\"")
+	})
+}
+
+// TestParseNumberTooBigForDouble covers the boundary MySQL puts on JSON
+// numbers: a number it cannot store as a double makes the whole document
+// invalid, rather than being kept at the precision it was written to.
+// Underflow is not rejected — it flushes to zero.
+func TestParseNumberTooBigForDouble(t *testing.T) {
+	tooManyDigits := "1" + strings.Repeat("0", 309)
+
+	t.Run("accepted", func(t *testing.T) {
+		for _, doc := range []string{
+			"1e308",
+			"-1e308",
+			"1.7976931348623157e308",
+			"-1.7976931348623157e308",
+			"99999999999999999999999999999999999999999",
+			"1" + strings.Repeat("0", 307),
+			// Underflow keeps the document valid and reads as zero.
+			"1e-400",
+			"1e-1000",
+			"0." + strings.Repeat("0", 400) + "1",
+		} {
+			t.Run(startEndString(doc), func(t *testing.T) {
+				var p Parser
+				v, err := p.Parse(doc)
+				require.NoError(t, err)
+				require.Equal(t, TypeNumber, v.Type())
+			})
+		}
+	})
+
+	t.Run("rejected", func(t *testing.T) {
+		for _, doc := range []string{
+			"1e309",
+			"-1e309",
+			"1e1025",
+			"1.7976931348623159e308",
+			tooManyDigits,
+			// A number anywhere in the document invalidates all of it.
+			"[1, 1e309]",
+			`{"a": 1e309}`,
+			"[[1e309]]",
+		} {
+			t.Run(startEndString(doc), func(t *testing.T) {
+				var p Parser
+				_, err := p.Parse(doc)
+				require.ErrorContains(t, err, "number too big to be stored in double")
+			})
+		}
 	})
 }
 

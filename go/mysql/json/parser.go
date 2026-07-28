@@ -190,6 +190,7 @@ func parseValue(s string, c *cache, depth int) (*Value, string, error) {
 				v := c.getValue()
 				v.t = TypeNumber
 				v.s = s[:3]
+				v.n = numberTypeRaw
 				return v, s[3:], nil
 			}
 			return nil, s, fmt.Errorf("unexpected value found: %q", s)
@@ -197,7 +198,7 @@ func parseValue(s string, c *cache, depth int) (*Value, string, error) {
 		return ValueNull, s[len("null"):], nil
 	}
 
-	flen, ok := readFloat(s)
+	flen, exponent, ok := readFloat(s)
 	if !ok {
 		return nil, s[flen:], fmt.Errorf("invalid number in JSON string: %q", s)
 	}
@@ -206,7 +207,26 @@ func parseValue(s string, c *cache, depth int) (*Value, string, error) {
 	v.t = TypeNumber
 	v.s = s[:flen]
 	v.n = numberTypeRaw
+	if mayExceedFloat64(v.s, exponent) {
+		if _, err := fastparse.ParseFloat64(v.s); err != nil {
+			return nil, s, fmt.Errorf("number too big to be stored in double: %q", v.s)
+		}
+	}
 	return v, s[flen:], nil
+}
+
+// maxFloat64Digits is the number of digits it takes to write a number that a
+// double cannot hold. The largest double is under 1.8e308, so 308 digits always
+// fit and 309 need not.
+const maxFloat64Digits = 308
+
+// mayExceedFloat64 reports whether num is worth converting to find out whether
+// a double can hold it. It errs towards yes: the job is to keep the conversion
+// off the common path, not to answer the question. Without an exponent a number
+// has to be written out to more digits than the largest double before it can be
+// too big for one.
+func mayExceedFloat64(num string, exponent bool) bool {
+	return exponent || len(num) > maxFloat64Digits
 }
 
 func parseArray(s string, c *cache, depth int) (*Value, string, error) {
@@ -513,7 +533,7 @@ func parseRawString(s string) (string, string, error) {
 	}
 }
 
-func readFloat[S string | []byte](s S) (i int, ok bool) {
+func readFloat[S string | []byte](s S) (i int, exponent bool, ok bool) {
 	// optional sign
 	if i >= len(s) {
 		return
@@ -556,6 +576,7 @@ loop:
 	// a lot (say, 100000).  it doesn't matter if it's
 	// not the exact number.
 	if i < len(s) && (s[i] == 'e' || s[i] == 'E') {
+		exponent = true
 		i++
 		if i >= len(s) {
 			return
@@ -569,7 +590,7 @@ loop:
 		for ; i < len(s) && ('0' <= s[i] && s[i] <= '9'); i++ {
 		}
 	}
-	return i, true
+	return i, exponent, true
 }
 
 // Object represents JSON object.
