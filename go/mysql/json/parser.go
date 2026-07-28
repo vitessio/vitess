@@ -741,9 +741,16 @@ func parseRawString(s string) (string, string, error) {
 }
 
 // readFloat reads a JSON number off the front of s, returning how much of s it
-// covers and the exponent it was written with. Whether the number is one a
-// double can hold is mysqlNumberFits's job; the exponent is reported so that
-// question only has to be asked of numbers whose digits could reach that far.
+// covers and how far its exponent moves the decimal point. Whether the number
+// is one a double can hold is mysqlNumberFits's job; the exponent is reported so
+// that question only has to be asked of numbers whose digits could reach that
+// far.
+//
+// That distance is bounded rather than exact. An exponent can be written to more
+// digits than it takes to leave every double behind, and one that reaches
+// exponentCeiling below is left there instead of read out to the end. So it
+// answers how far is far enough to matter and nothing finer; mysqlNumberFits
+// reads the exponent itself off the number again.
 //
 // What counts as a number is JSON's grammar rather than Go's: a written plus,
 // a missing digit on either side of the decimal point, and an integer part
