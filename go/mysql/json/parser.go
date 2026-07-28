@@ -769,13 +769,6 @@ func parseRawString(s string) (string, string, error) {
 	}
 }
 
-<<<<<<< HEAD
-func readFloat(s string) (i int, ok bool) {
-	// optional sign
-||||||| parent of ec6fdee983 (mysql/json: read numbers the way MySQL does (#20722))
-func readFloat[S string | []byte](s S) (i int, ok bool) {
-	// optional sign
-=======
 // readFloat reads a JSON number off the front of s, returning how much of s it
 // covers and how far its exponent moves the decimal point. Whether the number
 // is one a double can hold is mysqlNumberFits's job; the exponent is reported so
@@ -793,7 +786,6 @@ func readFloat[S string | []byte](s S) (i int, ok bool) {
 // that opens with a zero are all rejected.
 func readFloat[S string | []byte](s S) (i, exponent int, ok bool) {
 	// optional minus. JSON numbers carry no written plus.
->>>>>>> ec6fdee983 (mysql/json: read numbers the way MySQL does (#20722))
 	if i >= len(s) {
 		return
 	}
