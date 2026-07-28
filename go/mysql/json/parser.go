@@ -22,6 +22,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"math"
 	"slices"
 	"strconv"
 	"strings"
@@ -190,7 +191,7 @@ func parseValue(s string, c *cache, depth int) (*Value, string, error) {
 		return ValueNull, s[len("null"):], nil
 	}
 
-	flen, exponent, fraction, ok := readFloat(s)
+	flen, exponent, ok := readFloat(s)
 	if !ok {
 		return nil, s[flen:], fmt.Errorf("invalid number in JSON string: %q", s)
 	}
@@ -199,13 +200,8 @@ func parseValue(s string, c *cache, depth int) (*Value, string, error) {
 	v.t = TypeNumber
 	v.s = s[:flen]
 	v.n = numberTypeRaw
-	if exponent > maxFloat64Digits+fraction {
+	if mayExceedFloat64(v.s, exponent) && !mysqlNumberFits(v.s) {
 		return nil, s, fmt.Errorf("number too big to be stored in double: %q", v.s)
-	}
-	if mayExceedFloat64(v.s, exponent) {
-		if _, err := fastparse.ParseFloat64(v.s); err != nil {
-			return nil, s, fmt.Errorf("number too big to be stored in double: %q", v.s)
-		}
 	}
 	return v, s[flen:], nil
 }
@@ -223,6 +219,209 @@ const maxFloat64Digits = 308
 // only makes the answer yes more often.
 func mayExceedFloat64(num string, exponent int) bool {
 	return len(num)+exponent > maxFloat64Digits
+}
+
+// pow10 holds the powers of ten that a number's digits are scaled by, which is
+// the table RapidJSON scales its significand with. It is built from the decimal
+// spellings rather than from math.Pow10, which multiplies two table entries
+// together and lands a bit away from the spelling for 78 of these exponents.
+var pow10 [maxFloat64Digits + 1]float64
+
+func init() {
+	for i := range pow10 {
+		pow10[i], _ = fastparse.ParseFloat64("1e" + strconv.Itoa(i))
+	}
+}
+
+// mysqlNumberFits reports whether MySQL can store num, which has to already be
+// a grammatically valid JSON number.
+//
+// MySQL parses JSON with RapidJSON, which decides this in two places. While
+// reading the exponent, a written exponent may not move the decimal point more
+// than maxFloat64Digits places past the digits already behind it. After
+// converting, the result may not be larger than the largest double. Neither
+// place catches what the other does: an exponent that lands on zero is refused
+// only as written, and a number written within the bound can still overflow
+// once converted.
+//
+// The conversion below is the one RapidJSON does rather than a correct one. It
+// accumulates the significand into a double and scales that by a power of ten,
+// which lands an ULP or two from the true value, and the boundary sits wherever
+// that lands. A number a hair under the largest double therefore comes down to
+// how it was spelled: 1.7976931348623158e308 does not fit, while writing the
+// same value as 1.79769313486231580e308 does, because the extra digit moves
+// where the significand ends and the scaling begins. Converting the same way is
+// what makes a document valid here exactly when it is valid in MySQL.
+func mysqlNumberFits(num string) bool {
+	i := 0
+	minus := num[i] == '-'
+	if minus {
+		i++
+	}
+
+	var (
+		u32       uint32
+		u64       uint64
+		use64     bool
+		sigDigits int
+		d         float64
+		useDouble bool
+	)
+	digit := func() bool { return i < len(num) && num[i] >= '0' && num[i] <= '9' }
+
+	// The integer part accumulates as an integer for as long as one can hold
+	// it, stepping up in width as it fills. RapidJSON leaves the leading digit
+	// out of sigDigits, and the seventeen-digit cut-off in the fraction below is
+	// measured against that count.
+	if num[i] == '0' {
+		i++
+	} else {
+		u32 = uint32(num[i] - '0')
+		i++
+		for digit() {
+			if minus {
+				if u32 >= 214748364 && (u32 != 214748364 || num[i] > '8') {
+					u64, use64 = uint64(u32), true
+					break
+				}
+			} else if u32 >= 429496729 && (u32 != 429496729 || num[i] > '5') {
+				u64, use64 = uint64(u32), true
+				break
+			}
+			u32 = u32*10 + uint32(num[i]-'0')
+			i++
+			sigDigits++
+		}
+	}
+	if use64 {
+		for digit() {
+			if minus {
+				if u64 >= 0x0CCCCCCCCCCCCCCC && (u64 != 0x0CCCCCCCCCCCCCCC || num[i] > '8') {
+					d, useDouble = float64(u64), true
+					break
+				}
+			} else if u64 >= 0x1999999999999999 && (u64 != 0x1999999999999999 || num[i] > '5') {
+				d, useDouble = float64(u64), true
+				break
+			}
+			u64 = u64*10 + uint64(num[i]-'0')
+			i++
+			sigDigits++
+		}
+	}
+	for useDouble && digit() {
+		d = d*10 + float64(num[i]-'0')
+		i++
+	}
+
+	// Digits behind the decimal point move it left, which is what expFrac
+	// counts. Past seventeen significant digits they stop counting and stop
+	// arriving, so they move it no further.
+	expFrac := 0
+	if i < len(num) && num[i] == '.' {
+		i++
+		if !useDouble {
+			if !use64 {
+				u64 = uint64(u32)
+			}
+			for digit() {
+				if u64 > 0x1FFFFFFFFFFFFF {
+					break
+				}
+				u64 = u64*10 + uint64(num[i]-'0')
+				i++
+				expFrac--
+				if u64 != 0 {
+					sigDigits++
+				}
+			}
+			d = float64(u64)
+			useDouble = true
+		}
+		for digit() {
+			if sigDigits < 17 {
+				d = d*10 + float64(num[i]-'0')
+				expFrac--
+				if d > 0 {
+					sigDigits++
+				}
+			}
+			i++
+		}
+	}
+
+	exp := 0
+	if i < len(num) && (num[i] == 'e' || num[i] == 'E') {
+		i++
+		if !useDouble {
+			if use64 {
+				d = float64(u64)
+			} else {
+				d = float64(u32)
+			}
+			useDouble = true
+		}
+		negative := num[i] == '-'
+		if negative || num[i] == '+' {
+			i++
+		}
+		exp = int(num[i] - '0')
+		i++
+		if negative {
+			// A negative exponent is not bounded, only stopped before it could
+			// overflow the int it accumulates into. Everything out that far has
+			// flushed to zero long before.
+			maxExp := (expFrac + 2147483639) / 10
+			for digit() {
+				exp = exp*10 + int(num[i]-'0')
+				i++
+				if exp > maxExp {
+					for digit() {
+						i++
+					}
+				}
+			}
+			exp = -exp
+		} else {
+			maxExp := maxFloat64Digits - expFrac
+			for digit() {
+				exp = exp*10 + int(num[i]-'0')
+				i++
+				if exp > maxExp {
+					return false
+				}
+			}
+		}
+	}
+
+	// A number that never needed a double is an integer MySQL keeps exact.
+	if !useDouble {
+		return true
+	}
+	return scaleByPow10(d, exp+expFrac) <= math.MaxFloat64
+}
+
+// scaleByPow10 moves d by p decimal places the way RapidJSON does, in one
+// multiplication or division by a power of ten. Anything below the smallest
+// power in the table is moved in two steps so that the table is never indexed
+// past its end.
+func scaleByPow10(d float64, p int) float64 {
+	if p < -maxFloat64Digits {
+		d = movePoint(d, -maxFloat64Digits)
+		return movePoint(d, p+maxFloat64Digits)
+	}
+	return movePoint(d, p)
+}
+
+func movePoint(significand float64, exp int) float64 {
+	switch {
+	case exp < -maxFloat64Digits:
+		return 0
+	case exp >= 0:
+		return significand * pow10[exp]
+	default:
+		return significand / pow10[-exp]
+	}
 }
 
 func parseArray(s string, c *cache, depth int) (*Value, string, error) {
@@ -530,14 +729,14 @@ func parseRawString(s string) (string, string, error) {
 }
 
 // readFloat reads a JSON number off the front of s, returning how much of s it
-// covers, the exponent it was written with, and how many digits it carries
-// after its decimal point. Together those say how far the number's digits sit
-// from where a double keeps them.
+// covers and the exponent it was written with. Whether the number is one a
+// double can hold is mysqlNumberFits's job; the exponent is reported so that
+// question only has to be asked of numbers whose digits could reach that far.
 //
 // What counts as a number is JSON's grammar rather than Go's: a written plus,
 // a missing digit on either side of the decimal point, and an integer part
 // that opens with a zero are all rejected.
-func readFloat[S string | []byte](s S) (i, exponent, fraction int, ok bool) {
+func readFloat[S string | []byte](s S) (i, exponent int, ok bool) {
 	// optional minus. JSON numbers carry no written plus.
 	if i >= len(s) {
 		return
@@ -564,7 +763,6 @@ func readFloat[S string | []byte](s S) (i, exponent, fraction int, ok bool) {
 			return
 		}
 		for ; i < len(s) && '0' <= s[i] && s[i] <= '9'; i++ {
-			fraction++
 		}
 	}
 
@@ -598,7 +796,7 @@ func readFloat[S string | []byte](s S) (i, exponent, fraction int, ok bool) {
 			exponent = -exponent
 		}
 	}
-	return i, exponent, fraction, true
+	return i, exponent, true
 }
 
 // Object represents JSON object.

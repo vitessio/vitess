@@ -31,7 +31,7 @@ func TestParseRawNumber(t *testing.T) {
 		f := func(s, expectedRN, expectedTail string) {
 			t.Helper()
 
-			flen, _, _, ok := readFloat(s)
+			flen, _, ok := readFloat(s)
 			require.Truef(t, ok, "unexpected error when parsing '%s'", s)
 
 			rn, tail := s[:flen], s[flen:]
@@ -57,7 +57,7 @@ func TestParseRawNumber(t *testing.T) {
 		f := func(s, expectedTail string) {
 			t.Helper()
 
-			flen, _, _, ok := readFloat(s)
+			flen, _, ok := readFloat(s)
 			require.False(t, ok, "expecting non-nil error")
 			require.Equalf(t, expectedTail, s[flen:], "unexpected tail; got %q; want %q", s[flen:], expectedTail)
 		}
@@ -158,6 +158,42 @@ func TestParseNumberTooBigForDouble(t *testing.T) {
 				var p Parser
 				_, err := p.Parse(doc)
 				require.ErrorContains(t, err, "number too big to be stored in double")
+			})
+		}
+	})
+
+	// Right at the top of the range the answer turns on how a number was
+	// written rather than on what it is worth. The digits are split between a
+	// significand and a power of ten to scale it by, and where that split falls
+	// decides which way the last place rounds — so writing the same value to one
+	// more digit moves the split and can move the answer with it.
+	t.Run("spelling at the largest double", func(t *testing.T) {
+		for _, tc := range []struct {
+			doc  string
+			fits bool
+		}{
+			{"1.7976931348623157e308", true},
+			{"1.7976931348623158e308", false},
+			{"1.79769313486231580e308", true},
+			{"1.797693134862315800e308", true},
+			{"1.79769313486231581e308", true},
+			{"1.79769313486231585e308", true},
+			{"1.7976931348623159e308", false},
+			{"1.7976931348623157081e308", true},
+			{"17976931348623157e292", true},
+			{"17976931348623158e292", false},
+			{"179769313486231580e291", true},
+			{"1797693134862315800e290", false},
+			{"17976931348623158000000e286", false},
+		} {
+			t.Run(tc.doc, func(t *testing.T) {
+				var p Parser
+				_, err := p.Parse(tc.doc)
+				if tc.fits {
+					require.NoError(t, err)
+				} else {
+					require.ErrorContains(t, err, "number too big to be stored in double")
+				}
 			})
 		}
 	})
