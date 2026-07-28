@@ -1,6 +1,8 @@
 /*
 Copyright 2018 Aliaksandr Valialkin
 Copyright 2023 The Vitess Authors.
+Portions Copyright (C) 2015 THL A29 Limited, a Tencent company, and Milo Yip.
+See LICENSE.rapidjson in this directory.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -245,8 +247,11 @@ func init() {
 // mysqlNumberFits reports whether MySQL can store num, which has to already be
 // a grammatically valid JSON number.
 //
-// MySQL parses JSON with RapidJSON, which decides this in two places. While
-// reading the exponent, a written exponent may not move the decimal point more
+// MySQL parses JSON with RapidJSON, and runs its number reader without
+// kParseFullPrecisionFlag — which is what leaves MySQL on the approximate
+// conversion below rather than a correct one, and pins this boundary to that
+// reader. It decides this in two places. While reading the exponent, a written
+// exponent may not move the decimal point more
 // than maxFloat64Digits places past the digits already behind it. After
 // converting, the result may not be larger than the largest double. Neither
 // place catches what the other does: an exponent that lands on zero is refused
