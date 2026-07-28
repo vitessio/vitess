@@ -19,6 +19,8 @@ package tabletserver
 import (
 	"context"
 	"fmt"
+	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -946,13 +948,18 @@ func TestTxPoolKeepAliveReserved(t *testing.T) {
 	id := conn.ReservedID()
 	conn.Unlock()
 
-	// The keepalive refreshes the expiry and sends nothing to MySQL.
+	// The keepalive refreshes the last-used time and sends nothing to MySQL.
+	// The first touch also marks the connection as covered by the vtgate
+	// keepalive contract — sticky, so it never moves to the temp-table idle
+	// timeout.
+	require.False(t, conn.keepAliveManaged, "a fresh connection must not be keepalive-managed")
 	queryLogBefore := db.QueryLog()
-	expiryBefore := conn.expiryTime
+	lastUsedBefore := conn.lastUsed
 	time.Sleep(time.Millisecond)
 	require.NoError(t, txPool.KeepAliveReserved(id))
-	require.True(t, conn.expiryTime.After(expiryBefore), "keepalive must refresh the connection's expiry")
+	require.True(t, conn.lastUsed.After(lastUsedBefore), "keepalive must refresh the connection's last-used time")
 	require.Equal(t, queryLogBefore, db.QueryLog(), "keepalive must not execute anything on the MySQL connection")
+	require.True(t, conn.keepAliveManaged, "a keepalive touch must mark the connection keepalive-managed")
 
 	// A busy connection counts as alive.
 	relocked, err := txPool.GetAndLock(id, "for test")
@@ -1041,4 +1048,152 @@ func TestTxPoolBeginWaitsOutKeepAlive(t *testing.T) {
 	txConn, _, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, id, nil)
 	require.NoError(t, err, "BEGIN must wait out a keepalive hold on the reserved connection, not fail")
 	txConn.Unlock()
+}
+
+// TestTempTableIdleTimeoutTimerSelection pins the timer-selection rule for
+// stateful connections: the temp-table idle timeout replaces the connection's
+// own timeout exactly when the flag is enabled (explicit value, or auto with a
+// known mysqld wait_timeout), the connection holds temporary tables, it is not
+// covered by the vtgate keepalive contract, and it is not in a transaction.
+// Every other combination keeps today's timer.
+func TestTempTableIdleTimeoutTimerSelection(t *testing.T) {
+	ctx := t.Context()
+
+	const txTimeout = 30 * time.Second
+	env := newEnv("TabletServerTest")
+	env.Config().Oltp.TxTimeout = txTimeout
+	_, txPool, _, closer := setupWithEnv(t, env)
+	defer closer()
+
+	// The connection stays locked (in use) for the whole test so the killer
+	// cannot touch it while the test flips its state.
+	conn, err := txPool.scp.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
+	require.NoError(t, err)
+	defer conn.Release(tx.ConnRelease)
+
+	cases := []struct {
+		name        string
+		flag        time.Duration // --queryserver-config-temp-table-idle-timeout
+		waitTimeout time.Duration // cached mysqld @@global.wait_timeout (auto mode)
+		marked      bool          // holdsTempTables
+		managed     bool          // keepAliveManaged
+		inTx        bool
+		want        time.Duration
+	}{
+		{name: "flag off, unmarked", flag: 0, want: txTimeout},
+		{name: "flag off, marked unmanaged", flag: 0, marked: true, want: txTimeout},
+		{name: "flag off, marked managed", flag: 0, marked: true, managed: true, want: txTimeout},
+		{name: "explicit, marked unmanaged", flag: 5 * time.Minute, marked: true, want: 5 * time.Minute},
+		{name: "explicit below tx timeout still governs", flag: time.Second, marked: true, want: time.Second},
+		{name: "explicit, unmarked", flag: 5 * time.Minute, want: txTimeout},
+		{name: "explicit, unmarked managed", flag: 5 * time.Minute, managed: true, want: txTimeout},
+		{name: "explicit, marked managed", flag: 5 * time.Minute, marked: true, managed: true, want: txTimeout},
+		{name: "explicit, marked unmanaged in tx", flag: 5 * time.Minute, marked: true, inTx: true, want: txTimeout},
+		{name: "explicit, marked managed in tx", flag: 5 * time.Minute, marked: true, managed: true, inTx: true, want: txTimeout},
+		{name: "explicit, unmarked in tx", flag: 5 * time.Minute, inTx: true, want: txTimeout},
+		{name: "auto, marked unmanaged", flag: -1, waitTimeout: 8 * time.Hour, marked: true, want: 8 * time.Hour},
+		{name: "auto, unmarked", flag: -1, waitTimeout: 8 * time.Hour, want: txTimeout},
+		{name: "auto, marked managed", flag: -1, waitTimeout: 8 * time.Hour, marked: true, managed: true, want: txTimeout},
+		{name: "auto, marked unmanaged in tx", flag: -1, waitTimeout: 8 * time.Hour, marked: true, inTx: true, want: txTimeout},
+		{name: "auto with unknown wait_timeout is disabled", flag: -1, waitTimeout: 0, marked: true, want: txTimeout},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			env.Config().TempTableIdleTimeout = tc.flag
+			txPool.scp.SetMysqlWaitTimeout(tc.waitTimeout)
+			conn.holdsTempTables = tc.marked
+			conn.keepAliveManaged = tc.managed
+			if tc.inTx {
+				conn.txProps = &tx.Properties{}
+			} else {
+				conn.txProps = nil
+			}
+			assert.Equal(t, tc.want, conn.effectiveTimeout())
+
+			// The selected timer is the one the killer enforces: idle just
+			// past the transaction timeout, the connection has elapsed exactly
+			// when the governing timer is no longer than that.
+			conn.lastUsed = time.Now().Add(-(txTimeout + time.Second))
+			assert.Equal(t, tc.want <= txTimeout, conn.ElapsedTimeout())
+		})
+	}
+}
+
+// TestTempTableIdleTimeoutReclaimsAbandonedConns verifies the temp-table idle
+// timer end to end through the connection killer: an unmanaged temp-table
+// reserved connection survives the transaction timeout (which reclaimed it
+// before this feature) and is reclaimed once the temp-table idle timeout
+// elapses, attributed to the dedicated kill counter.
+func TestTempTableIdleTimeoutReclaimsAbandonedConns(t *testing.T) {
+	ctx := t.Context()
+
+	env := newEnv("TabletServerTest")
+	env.Config().TxPool.Size = 1
+	env.Config().Oltp.TxTimeout = time.Second
+	env.Config().Olap.TxTimeout = time.Second
+	env.Config().TempTableIdleTimeout = 3 * time.Second
+	_, txPool, _, closer := setupWithEnv(t, env)
+	defer closer()
+
+	startingTempTableKills := txPool.tempTableIdleKills.Get()
+	startingRcKills := txPool.env.Stats().KillCounters.Counts()["ReservedConnection"]
+
+	conn, err := txPool.scp.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
+	require.NoError(t, err)
+	id := conn.ReservedID()
+	require.NoError(t, conn.Taint(ctx, nil))
+	conn.markHoldsTempTables()
+	conn.Unlock()
+
+	// Past the transaction timeout the connection must still be alive: the
+	// temp-table idle timer governs it now.
+	time.Sleep(1500 * time.Millisecond)
+	relocked, err := txPool.GetAndLock(id, "for test")
+	require.NoError(t, err, "an unmanaged temp-table connection must survive the transaction timeout")
+	relocked.Unlock()
+	require.Equal(t, int64(0), txPool.tempTableIdleKills.Get()-startingTempTableKills)
+
+	// Once the temp-table idle timeout elapses, the killer reclaims the
+	// connection and attributes the kill to the dedicated counter.
+	assert.Eventually(t, func() bool {
+		return txPool.tempTableIdleKills.Get()-startingTempTableKills == 1
+	}, 30*time.Second, 100*time.Millisecond, "the temp-table idle timer must reclaim the connection")
+	assert.Equal(t, int64(1), txPool.env.Stats().KillCounters.Counts()["ReservedConnection"]-startingRcKills)
+	_, err = txPool.GetAndLock(id, "for test")
+	require.Error(t, err, "the reclaimed connection must be gone")
+}
+
+// TestTempTableIdleTimeoutStartupWarning verifies that an explicit
+// --queryserver-config-temp-table-idle-timeout below the transaction timeout
+// logs a startup warning (the flag replaces the transaction timeout for
+// temp-table connections, so a smaller value reclaims them sooner than
+// before), and that the disabled, auto, and at-or-above values do not.
+func TestTempTableIdleTimeoutStartupWarning(t *testing.T) {
+	const warning = "--queryserver-config-temp-table-idle-timeout is below the transaction timeout"
+	cases := []struct {
+		name     string
+		flag     time.Duration
+		wantWarn bool
+	}{
+		{name: "below transaction timeout warns", flag: time.Second, wantWarn: true},
+		{name: "equal to transaction timeout", flag: 30 * time.Second},
+		{name: "above transaction timeout", flag: time.Hour},
+		{name: "disabled", flag: 0},
+		{name: "auto", flag: -1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			env := newEnv("TabletServerTest")
+			env.Config().Oltp.TxTimeout = 30 * time.Second
+			env.Config().TempTableIdleTimeout = tc.flag
+
+			tl := newTestLogger()
+			defer tl.Close()
+			newTxPoolWithEnv(env)
+			warned := slices.ContainsFunc(tl.getLogs(), func(msg string) bool {
+				return strings.Contains(msg, warning)
+			})
+			assert.Equal(t, tc.wantWarn, warned, "startup warning mismatch, logs: %v", tl.getLogs())
+		})
+	}
 }

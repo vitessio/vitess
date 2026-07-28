@@ -151,6 +151,12 @@ type QueryEngine struct {
 	env    tabletenv.Env
 	se     *schema.Engine
 
+	// publishMysqlWaitTimeout, when set, receives mysqld's
+	// @@global.wait_timeout for the temp-table idle timeout's auto mode. It
+	// is set once at TabletServer construction, before the engine can open,
+	// and fed when the query service opens and on the schema-reload cadence.
+	publishMysqlWaitTimeout func(time.Duration)
+
 	// mu protects the following fields.
 	schemaMu sync.Mutex
 	epoch    uint32
@@ -584,7 +590,6 @@ func (qe *QueryEngine) IsMySQLReachable() error {
 
 func (qe *QueryEngine) schemaChanged(tables map[string]*schema.Table, created, altered, dropped []*schema.Table, _ bool) {
 	qe.schemaMu.Lock()
-	defer qe.schemaMu.Unlock()
 
 	if len(altered) != 0 || len(dropped) != 0 {
 		qe.epoch++
@@ -594,6 +599,60 @@ func (qe *QueryEngine) schemaChanged(tables map[string]*schema.Table, created, a
 		tables: tables,
 		epoch:  qe.epoch,
 	})
+	qe.schemaMu.Unlock()
+
+	// Piggyback on the schema-reload cadence (the notifier also runs when it
+	// is registered at query-service open): mirror mysqld's wait_timeout for
+	// the temp-table idle timeout's auto mode, so a runtime SET GLOBAL
+	// converges without a tablet restart.
+	qe.refreshMysqlWaitTimeout()
+}
+
+// mysqlWaitTimeoutQueryTimeout bounds the @@global.wait_timeout read: the
+// refresh runs on the schema engine's reload path, which holds the schema
+// engine's lock, so it must not hang indefinitely.
+const mysqlWaitTimeoutQueryTimeout = 30 * time.Second
+
+// refreshMysqlWaitTimeout mirrors mysqld's @@global.wait_timeout for the
+// temp-table idle timeout's auto mode. On a failed read it logs a warning and
+// publishes zero, which disables auto mode until a later read succeeds — the
+// safe direction, since it restores the shorter pre-feature timer.
+func (qe *QueryEngine) refreshMysqlWaitTimeout() {
+	if qe.publishMysqlWaitTimeout == nil || qe.env.Config().TempTableIdleTimeout >= 0 {
+		return
+	}
+	waitTimeout, err := qe.readMysqlWaitTimeout()
+	if err != nil {
+		log.Warn("failed to read @@global.wait_timeout; the temp-table idle timeout auto mode is disabled until a later read succeeds",
+			slog.Any("error", err))
+		qe.publishMysqlWaitTimeout(0)
+		return
+	}
+	qe.publishMysqlWaitTimeout(waitTimeout)
+}
+
+// readMysqlWaitTimeout reads @@global.wait_timeout (seconds) from mysqld via
+// the schema engine's dba pool.
+func (qe *QueryEngine) readMysqlWaitTimeout() (time.Duration, error) {
+	ctx, cancel := context.WithTimeout(tabletenv.LocalContext(), mysqlWaitTimeoutQueryTimeout)
+	defer cancel()
+	conn, err := qe.se.GetConnection(ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer conn.Recycle()
+	qr, err := conn.Conn.Exec(ctx, "select @@global.wait_timeout", 1, false)
+	if err != nil {
+		return 0, err
+	}
+	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result for @@global.wait_timeout: %d rows", len(qr.Rows))
+	}
+	seconds, err := qr.Rows[0][0].ToCastInt64()
+	if err != nil {
+		return 0, vterrors.Wrap(err, "failed to parse @@global.wait_timeout")
+	}
+	return time.Duration(seconds) * time.Second, nil
 }
 
 // QueryPlanCacheCap returns the capacity of the query cache.

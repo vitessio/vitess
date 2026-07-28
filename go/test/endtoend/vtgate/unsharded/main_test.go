@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -414,6 +415,27 @@ func TestTempTable(t *testing.T) {
 	gl, err := tablet.VttabletProcess.QueryTablet("select count(*) from mysql.general_log where argument like '%temp-table keepalive%' and argument not like '%general_log%'", KeyspaceName, true)
 	require.NoError(t, err)
 	require.Equal(t, `[[INT64(0)]]`, fmt.Sprintf("%v", gl.Rows), "keepalives must never reach mysqld")
+
+	// A session used via the vtgate gRPC API has no wire connection for the
+	// heartbeat to anchor to. The tablet-side temp-table idle timeout covers
+	// it instead: with the default (auto = mysqld's wait_timeout) the temp
+	// table survives the session idling past the tablet's 3s transaction
+	// timeout, exactly as it would on a direct MySQL connection.
+	vtgateAddr := fmt.Sprintf("%s:%d", clusterInstance.Hostname, clusterInstance.VtgateProcess.GrpcPort)
+	gconn, err := vtgateconn.Dial(ctx, vtgateAddr)
+	require.NoError(t, err)
+	defer gconn.Close()
+	gsession := gconn.Session(KeyspaceName+"@primary", nil)
+	_, err = gsession.Execute(ctx, `create temporary table grpc_temp_t(id bigint primary key)`, nil, false)
+	require.NoError(t, err)
+	_, err = gsession.Execute(ctx, `insert into grpc_temp_t(id) values (1),(2),(3)`, nil, false)
+	require.NoError(t, err)
+
+	time.Sleep(6 * time.Second)
+
+	qr, err = gsession.Execute(ctx, `select id from grpc_temp_t order by id`, nil, false)
+	require.NoError(t, err, "a gRPC session's temp table must survive idling past the tablet transaction timeout")
+	require.Len(t, qr.Rows, 3, "the temp table's rows must survive the idle window")
 }
 
 func TestReservedConnDML(t *testing.T) {

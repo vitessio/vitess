@@ -20,12 +20,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
 
 	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/pools/smartconnpool"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
@@ -75,6 +77,11 @@ type (
 		logMu   sync.Mutex
 		lastLog time.Time
 		txStats *servenv.TimingsWrapper
+
+		// tempTableIdleKills counts connections the killer reclaimed because
+		// their temp-table idle timeout elapsed, separately from the existing
+		// kill stats so operators can see the feature working.
+		tempTableIdleKills *stats.Counter
 	}
 )
 
@@ -87,6 +94,8 @@ func NewTxPool(env tabletenv.Env, limiter txlimiter.TxLimiter) *TxPool {
 		ticks:   timer.NewTimer(txKillerTimeoutInterval(config)),
 		limiter: limiter,
 		txStats: env.Exporter().NewTimings("Transactions", "Transaction stats", "operation"),
+		tempTableIdleKills: env.Exporter().NewCounter("TempTableIdleTimeoutKills",
+			"Number of stateful connections reclaimed by the temp-table idle timer"),
 	}
 	// Careful: conns also exports name+"xxx" vars,
 	// but we know it doesn't export Timeout.
@@ -96,6 +105,16 @@ func NewTxPool(env tabletenv.Env, limiter txlimiter.TxLimiter) *TxPool {
 	env.Exporter().NewGaugeDurationFunc("TransactionTimeout", "Transaction timeout", func() time.Duration {
 		return config.TxTimeoutForWorkload(querypb.ExecuteOptions_OLTP)
 	})
+	env.Exporter().NewGaugeFunc("TempTableUnmanagedConnections",
+		"Number of stateful connections holding temporary tables without vtgate keepalive coverage", axp.scp.tempTableUnmanaged.Load)
+	// The temp-table idle timeout replaces the transaction timeout for the
+	// connections it governs, so an explicit value below the transaction
+	// timeout reclaims them sooner than before this feature.
+	if timeout := config.TempTableIdleTimeout; timeout > 0 && timeout < config.TxTimeoutForWorkload(querypb.ExecuteOptions_OLTP) {
+		log.Warn("--queryserver-config-temp-table-idle-timeout is below the transaction timeout: unmanaged temp-table reserved connections will be reclaimed sooner than the transaction timeout",
+			slog.Duration("temp_table_idle_timeout", timeout),
+			slog.Duration("transaction_timeout", config.TxTimeoutForWorkload(querypb.ExecuteOptions_OLTP)))
+	}
 	return axp
 }
 
@@ -132,7 +151,14 @@ func (tp *TxPool) Shutdown(ctx context.Context) {
 func (tp *TxPool) transactionKiller() {
 	defer tp.env.LogError()
 	for _, conn := range tp.scp.GetElapsedTimeout(vterrors.TxKillerRollback) {
-		log.Warn(fmt.Sprintf("killing transaction (exceeded timeout: %v): %s", conn.timeout, conn.String(tp.env.Config().SanitizeLogMessages, tp.env.Environment().Parser())))
+		// Capture the governing timeout before the kill mutates the
+		// connection's state (txComplete clears the transaction properties,
+		// which feed the timer selection).
+		elapsedTimeout := conn.effectiveTimeout()
+		log.Warn(fmt.Sprintf("killing transaction (exceeded timeout: %v): %s", elapsedTimeout, conn.String(tp.env.Config().SanitizeLogMessages, tp.env.Environment().Parser())))
+		if conn.usesTempTableIdleTimeout() {
+			tp.tempTableIdleKills.Add(1)
+		}
 		switch {
 		case conn.IsTainted():
 			conn.Close()
@@ -151,7 +177,7 @@ func (tp *TxPool) transactionKiller() {
 		if conn.IsInTransaction() {
 			tp.txComplete(conn, tx.TxKill)
 		}
-		conn.Releasef("exceeded timeout: %v", conn.timeout)
+		conn.Releasef("exceeded timeout: %v", elapsedTimeout)
 	}
 }
 
@@ -219,6 +245,11 @@ func (tp *TxPool) KeepAliveReserved(reservedID tx.ConnID) error {
 		}
 		return vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction %d: %v", reservedID, err)
 	}
+	// The touch proves the vtgate keepalive contract covers this connection:
+	// beats vouch for it and, when they stop, it is reclaimed at the normal
+	// timeout — so it must keep the short timer instead of the temp-table
+	// idle timeout. Sticky by design.
+	conn.markKeepAliveManaged()
 	// On a platform without a real peer check (Windows), PeerCheck cannot tell a
 	// live connection from one mysqld already closed. Refreshing anyway would pin
 	// a dead connection in the pool forever, so instead return it without

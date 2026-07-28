@@ -151,6 +151,11 @@ type SandboxConn struct {
 	// recorded ExecuteOptions).
 	KeepAliveBatches [][]int64
 
+	// ExecuteReservedIDs records the reservedID parameter of every Execute
+	// call, in order, so tests can assert which calls ran on a reserved
+	// connection.
+	ExecuteReservedIDs []int64
+
 	// KeepAliveUnsupported, when set, makes the connection behave like a tablet
 	// that predates the keepalive option: it ignores the option and runs the
 	// query, returning an ordinary result instead of the gone-id result.
@@ -296,6 +301,24 @@ func (sbc *SandboxConn) ClearOptions() {
 	sbc.Options = nil
 }
 
+// appendToExecuteReservedIDs appends to ExecuteReservedIDs in sandboxconn.
+func (sbc *SandboxConn) appendToExecuteReservedIDs(reservedID int64) {
+	if sbc.queriesRequireLocking {
+		sbc.queriesMu.Lock()
+		defer sbc.queriesMu.Unlock()
+	}
+	sbc.ExecuteReservedIDs = append(sbc.ExecuteReservedIDs, reservedID)
+}
+
+// GetExecuteReservedIDs returns the recorded Execute reservedID parameters.
+func (sbc *SandboxConn) GetExecuteReservedIDs() []int64 {
+	if sbc.queriesRequireLocking {
+		sbc.queriesMu.Lock()
+		defer sbc.queriesMu.Unlock()
+	}
+	return append([]int64(nil), sbc.ExecuteReservedIDs...)
+}
+
 // appendToOptions appends to the Options in sandboxconn.
 func (sbc *SandboxConn) appendToOptions(o *querypb.ExecuteOptions) {
 	if sbc.queriesRequireLocking {
@@ -350,6 +373,7 @@ func (sbc *SandboxConn) Execute(ctx context.Context, session queryservice.Sessio
 		BindVariables: bv,
 	})
 	sbc.appendToOptions(options)
+	sbc.appendToExecuteReservedIDs(reservedID)
 	if err := sbc.getError(); err != nil {
 		return nil, err
 	}

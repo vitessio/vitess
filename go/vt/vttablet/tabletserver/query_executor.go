@@ -1015,7 +1015,16 @@ func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (result *sqltypes.Re
 			return nil, err
 		}
 	}
-	return qre.execStatefulConn(conn, sql, true)
+	result, err = qre.execStatefulConn(conn, sql, true)
+	if err != nil {
+		return nil, err
+	}
+	if isTemporaryTable {
+		// The session holds temporary-table state on this connection, so the
+		// temp-table idle timeout may govern its reclamation.
+		conn.markHoldsTempTables()
+	}
+	return result, nil
 }
 
 // checkCreateTableLimit rejects a CREATE TABLE/VIEW that would exceed the

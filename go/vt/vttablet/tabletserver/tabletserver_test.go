@@ -2400,8 +2400,76 @@ func TestReserveExecute_WithoutTx(t *testing.T) {
 	for _, exp := range expected {
 		assert.Contains(t, splitOutput, exp, "expected queries to run")
 	}
+
+	// A temporary-table DDL executed on the reserved connection marks it as
+	// holding temp tables — and counts it on the unmanaged temp-table gauge.
+	// The mark is sticky: a DROP TEMPORARY TABLE does not unmark it (net-zero
+	// tracking would require statement bookkeeping the tablet doesn't have; a
+	// stale mark only costs a longer idle grace).
+	db.AddQueryPattern("create temporary table .*", &sqltypes.Result{})
+	db.AddQueryPattern("drop temporary table .*", &sqltypes.Result{})
+	_, err = tsv.Execute(ctx, nil, &target, "create temporary table temp_t(id int)", nil, 0, state.ReservedID, nil)
+	require.NoError(t, err)
+	conn, err := tsv.te.txPool.GetAndLock(state.ReservedID, "for test")
+	require.NoError(t, err)
+	assert.True(t, conn.holdsTempTables, "a temp-table DDL must mark the connection")
+	assert.False(t, conn.keepAliveManaged)
+	conn.Unlock()
+	assert.EqualValues(t, 1, tsv.te.txPool.scp.tempTableUnmanaged.Load(), "the marked, unmanaged connection must be on the gauge")
+
+	_, err = tsv.Execute(ctx, nil, &target, "drop temporary table temp_t", nil, 0, state.ReservedID, nil)
+	require.NoError(t, err)
+	conn, err = tsv.te.txPool.GetAndLock(state.ReservedID, "for test")
+	require.NoError(t, err)
+	assert.True(t, conn.holdsTempTables, "DROP TEMPORARY TABLE must not unmark the connection")
+	conn.Unlock()
+
+	// A keepalive touch marks the connection keepalive-managed, taking it off
+	// the unmanaged temp-table gauge.
+	require.NoError(t, tsv.te.txPool.KeepAliveReserved(state.ReservedID))
+	assert.Zero(t, tsv.te.txPool.scp.tempTableUnmanaged.Load(), "a keepalive-managed connection must leave the gauge")
+
 	err = tsv.Release(ctx, &target, 0, state.ReservedID)
 	require.NoError(t, err)
+}
+
+// TestTempTableIdleTimeoutAutoWaitTimeout verifies the temp-table idle
+// timeout's auto mode (-1, the default): the tablet mirrors its own mysqld's
+// @@global.wait_timeout, read via the dba pool when the query service opens
+// and refreshed on the schema-reload path so a runtime SET GLOBAL converges.
+// A failed read logs a warning and disables auto mode until a later read
+// succeeds.
+func TestTempTableIdleTimeoutAutoWaitTimeout(t *testing.T) {
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "")
+	defer tsv.StopService()
+	defer db.Close()
+
+	// Read at query-service open (the fake serves 28800, mysqld's default).
+	require.Equal(t, 28800*time.Second, tsv.te.txPool.scp.MysqlWaitTimeout())
+
+	// A runtime SET GLOBAL wait_timeout converges on the schema-reload path:
+	// every reload broadcast re-reads the value.
+	db.AddQuery("select @@global.wait_timeout", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("@@global.wait_timeout", "int64"),
+		"600",
+	))
+	tsv.se.BroadcastForTesting(nil, nil, nil, false)
+	require.Equal(t, 600*time.Second, tsv.te.txPool.scp.MysqlWaitTimeout())
+
+	// A failed read treats auto as disabled (zero) until a later read
+	// succeeds.
+	db.DeleteQuery("select @@global.wait_timeout")
+	tsv.se.BroadcastForTesting(nil, nil, nil, false)
+	require.Equal(t, time.Duration(0), tsv.te.txPool.scp.MysqlWaitTimeout())
+
+	// The next successful read recovers.
+	db.AddQuery("select @@global.wait_timeout", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("@@global.wait_timeout", "int64"),
+		"28800",
+	))
+	tsv.se.BroadcastForTesting(nil, nil, nil, false)
+	require.Equal(t, 28800*time.Second, tsv.te.txPool.scp.MysqlWaitTimeout())
 }
 
 func TestReserveExecute_WithTx(t *testing.T) {
@@ -2840,6 +2908,14 @@ func addTabletServerSupportedQueries(db *fakesqldb.DB) {
 			}},
 			Rows: [][]sqltypes.Value{
 				{sqltypes.NewVarBinary("0")},
+			},
+		},
+		"select @@global.wait_timeout": {
+			Fields: []*querypb.Field{{
+				Type: sqltypes.Uint64,
+			}},
+			Rows: [][]sqltypes.Value{
+				{sqltypes.NewVarBinary("28800")},
 			},
 		},
 		mysql.BaseShowPrimary: {

@@ -49,7 +49,18 @@ type StatefulConnection struct {
 	tainted        bool
 	enforceTimeout bool
 	timeout        time.Duration
-	expiryTime     time.Time
+	lastUsed       time.Time
+
+	// holdsTempTables and keepAliveManaged select the timer the connection
+	// killer enforces (see effectiveTimeout). Like tainted, they are written
+	// while holding the connection and read by the pool's filters under its
+	// lock, so they need no locking of their own.
+	//
+	// holdsTempTables is set when a temporary-table DDL executes on the
+	// connection. keepAliveManaged is set when a vtgate keepalive touch
+	// refreshes the connection. Both are sticky by design.
+	holdsTempTables  bool
+	keepAliveManaged bool
 }
 
 // Properties contains meta information about the connection
@@ -81,10 +92,75 @@ func (sc *StatefulConnection) ElapsedTimeout() bool {
 	if !sc.enforceTimeout {
 		return false
 	}
-	if sc.timeout <= 0 {
+	timeout := sc.effectiveTimeout()
+	if timeout <= 0 {
 		return false
 	}
-	return sc.expiryTime.Before(time.Now())
+	return sc.lastUsed.Add(timeout).Before(time.Now())
+}
+
+// effectiveTimeout returns the idle timeout the connection killer enforces:
+// the temp-table idle timeout when it governs this connection, otherwise the
+// connection's own timeout.
+func (sc *StatefulConnection) effectiveTimeout() time.Duration {
+	if sc.usesTempTableIdleTimeout() {
+		return sc.tempTableIdleTimeout()
+	}
+	return sc.timeout
+}
+
+// usesTempTableIdleTimeout reports whether the temp-table idle timeout —
+// rather than the connection's own timeout — governs when the killer
+// reclaims this connection: the feature is enabled, the connection holds
+// temporary tables, it is not covered by the vtgate keepalive contract
+// (beats vouch for managed connections and stop when the session dies, so
+// they keep the short timer), and it is not in a transaction (bounded
+// transaction lifetime is intended semantics).
+func (sc *StatefulConnection) usesTempTableIdleTimeout() bool {
+	return sc.holdsTempTables && !sc.keepAliveManaged && !sc.IsInTransaction() && sc.tempTableIdleTimeout() > 0
+}
+
+// tempTableIdleTimeout resolves --queryserver-config-temp-table-idle-timeout:
+// 0 disables the feature, a positive value is used as-is, and a negative
+// value (auto, the default) mirrors this mysqld's @@global.wait_timeout —
+// zero, and therefore disabled, until a read of it succeeds.
+func (sc *StatefulConnection) tempTableIdleTimeout() time.Duration {
+	configured := sc.env.Config().TempTableIdleTimeout
+	switch {
+	case configured >= 0:
+		return configured
+	case sc.pool == nil:
+		return 0
+	default:
+		return sc.pool.MysqlWaitTimeout()
+	}
+}
+
+// markHoldsTempTables records that a temporary-table DDL executed on the
+// connection. Sticky: DROP TEMPORARY TABLE does not unmark — net-zero
+// tracking would require statement bookkeeping the tablet doesn't have, and
+// a stale mark only costs a longer idle grace.
+func (sc *StatefulConnection) markHoldsTempTables() {
+	if sc.holdsTempTables {
+		return
+	}
+	sc.holdsTempTables = true
+	if !sc.keepAliveManaged && sc.pool != nil {
+		sc.pool.tempTableUnmanaged.Add(1)
+	}
+}
+
+// markKeepAliveManaged records that the vtgate keepalive contract covers the
+// connection: beats vouch for it, and when they stop it is reclaimed at the
+// normal timeout, so it never moves to the temp-table idle timeout. Sticky.
+func (sc *StatefulConnection) markKeepAliveManaged() {
+	if sc.keepAliveManaged {
+		return
+	}
+	sc.keepAliveManaged = true
+	if sc.holdsTempTables && sc.pool != nil {
+		sc.pool.tempTableUnmanaged.Add(-1)
+	}
 }
 
 // Exec executes the statement in the dedicated connection.
@@ -195,6 +271,9 @@ func (sc *StatefulConnection) ReleaseString(reason string) {
 	}
 	if sc.pool != nil {
 		sc.pool.unregister(sc.ConnID, reason)
+		if sc.holdsTempTables && !sc.keepAliveManaged {
+			sc.pool.tempTableUnmanaged.Add(-1)
+		}
 	}
 	sc.dbConn.Recycle()
 	sc.dbConn = nil
@@ -315,7 +394,7 @@ func (sc *StatefulConnection) LogTransaction(reason tx.ReleaseReason) {
 
 func (sc *StatefulConnection) SetTimeout(timeout time.Duration) {
 	sc.timeout = timeout
-	sc.resetExpiryTime()
+	sc.resetLastUsed()
 }
 
 // logReservedConn logs reserved connection related stats.
@@ -350,8 +429,9 @@ func (sc *StatefulConnection) ApplySetting(ctx context.Context, setting *smartco
 	return true, sc.dbConn.Conn.ApplySetting(ctx, setting)
 }
 
-func (sc *StatefulConnection) resetExpiryTime() {
-	sc.expiryTime = time.Now().Add(sc.timeout)
+// resetLastUsed restarts the idle clock ElapsedTimeout measures from.
+func (sc *StatefulConnection) resetLastUsed() {
+	sc.lastUsed = time.Now()
 }
 
 // IsUnixSocket returns true if the connection is using a unix socket

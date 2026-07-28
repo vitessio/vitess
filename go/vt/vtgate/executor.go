@@ -153,6 +153,10 @@ type (
 
 		vConfig   econtext.VCursorConfig
 		ddlConfig dynamicconfig.DDL
+
+		// tempTableRefresher fans session activity out to the session's idle
+		// temp-table reserved connections; see temp_table_refresh.go.
+		tempTableRefresher *tempTableActivityRefresher
 	}
 
 	Metrics struct {
@@ -207,6 +211,7 @@ func NewExecutor(
 		plans:                 plans,
 		warmingReadsSemaphore: newWarmingReadsSemaphore(warmingReadsConcurrency),
 		ddlConfig:             ddlConfig,
+		tempTableRefresher:    newTempTableActivityRefresher(resolver.scatterConn.gateway),
 	}
 	// setting the vcursor config.
 	e.initVConfig(warnOnShardedOnly, pv)
@@ -291,6 +296,10 @@ func (e *Executor) Execute(
 
 	err = errorTransform.TransformError(err)
 	err = vterrors.TruncateError(err, truncateErrorLen)
+
+	// The command was real activity on this session: fan it out to the
+	// session's idle temp-table reserved connections (fire-and-forget).
+	e.tempTableRefresher.onSessionActivity(ctx, safeSession)
 
 	return result, err
 }
@@ -445,6 +454,10 @@ func (e *Executor) StreamExecute(
 
 	err = errorTransform.TransformError(err)
 	err = vterrors.TruncateError(err, truncateErrorLen)
+
+	// The command was real activity on this session: fan it out to the
+	// session's idle temp-table reserved connections (fire-and-forget).
+	e.tempTableRefresher.onSessionActivity(ctx, safeSession)
 
 	return err
 }
