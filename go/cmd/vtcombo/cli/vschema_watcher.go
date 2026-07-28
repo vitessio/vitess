@@ -182,7 +182,10 @@ func (p *vschemaPersister) persistNewSrvVSchema(srvVSchema *vschemapb.SrvVSchema
 func (p *vschemaPersister) persistNewSrvVSchemaLocked(srvVSchema *vschemapb.SrvVSchema) {
 	for ksName, ks := range srvVSchema.Keyspaces {
 		if err := persistKeyspace(p.dir, ksName, ks); err != nil {
-			log.Error(fmt.Sprintf("Error persisting keyspace %v: %v", ksName, err))
+			log.Error("Unable to persist keyspace",
+				slog.String("keyspace", ksName),
+				slog.Any("error", err),
+			)
 			continue
 		}
 		log.Info(fmt.Sprintf("Persisted keyspace %v to %v", ksName, p.dir))
