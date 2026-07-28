@@ -139,6 +139,16 @@ func TestVerifyNoErrantGTIDsInBaseBackup(t *testing.T) {
 	require.EqualError(t, err, `base backup "`+backupName+`" has errant GTIDs "`+errantUUID+`:1" relative to current primary position "`+primaryPosition.String()+`"`)
 }
 
+func TestVerifyNoErrantGTIDsInBaseBackupRejectsUnsupportedPosition(t *testing.T) {
+	ri := restoreInfo{
+		position: testCatchupPosition(10),
+		restored: true,
+	}
+
+	err := verifyNoErrantGTIDsInBaseBackup(ri, testCatchupPosition(20))
+	require.ErrorContains(t, err, "restored position")
+}
+
 func TestCatchUpReplicationForBackupClearsLastErrWhenReplicationBecomesHealthy(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		ctx := t.Context()

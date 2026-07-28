@@ -712,8 +712,7 @@ func runBackup(ctx context.Context, topoServer *topo.Server, mysqld *mysqlctl.My
 func verifyNoErrantGTIDsInBaseBackup(ri restoreInfo, primaryPosition replication.Position) error {
 	errantGTIDs, err := findErrantGTIDs(ri.position, primaryPosition)
 	if err != nil {
-		log.Warn("skipping errant GTID verification", slog.Any("error", err))
-		return nil
+		return err
 	}
 
 	if errantGTIDs.Empty() {
