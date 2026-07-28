@@ -39,14 +39,17 @@ func numberArray(n int, digits func(i int) string) string {
 // benchDocs covers the number shapes the parser takes different paths through.
 //
 // The first four are the everyday ones, where the cost is the scan itself. The
-// last three reach the magnitude check, which a number only pays for when its
-// digits and its exponent together could carry it past the largest double:
-// once with an exponent large enough to ask the question of every element, once
-// where the digits alone are enough to ask it, and once for a document the
-// answer rejects.
+// last three reach the magnitude check, which a number only pays for once it is
+// written to more digits than its exponent leaves a double room for: once with
+// an exponent that shrinks the room to ask the question of every element, once
+// where the digits alone are past what a double has, and once for a document the
+// answer rejects. reachesMagnitudeCheck holds them to that, since a case that
+// falls short of the check goes on measuring the scan and reads as though the
+// check were free.
 var benchDocs = []struct {
 	name     string
 	doc      string
+	checked  bool
 	rejected bool
 }{
 	{name: "int/1024", doc: numberArray(1024, func(i int) string { return strconv.Itoa(i * 7919) })},
@@ -54,9 +57,34 @@ var benchDocs = []struct {
 	{name: "exp/1024", doc: numberArray(1024, func(i int) string { return strconv.Itoa(i) + "." + strconv.Itoa(i*7919) + "e" + strconv.Itoa(i%300) })},
 	{name: "mixed-object", doc: `{"id":38141,"name":"a name","ok":true,"score":-12.5e3,"tags":["x","y"],"meta":null}`},
 
-	{name: "checked/1024", doc: numberArray(1024, func(i int) string { return "1." + strconv.Itoa(i) + "e30" + strconv.Itoa(i%8) })},
-	{name: "checked-long-fraction", doc: "0." + strings.Repeat("0", 400) + "1e-400"},
-	{name: "rejected", doc: strings.Repeat("9", 400) + "e-100", rejected: true},
+	{name: "checked/1024", doc: numberArray(1024, func(i int) string { return "1" + strconv.Itoa(1000000000000000000+i) + "e289" }), checked: true},
+	{name: "checked-long-fraction", doc: "1" + strings.Repeat("0", 308) + "." + strings.Repeat("5", 400), checked: true},
+	{name: "rejected", doc: strings.Repeat("9", 400) + "e-100", checked: true, rejected: true},
+}
+
+// reachesMagnitudeCheck reports whether every number in doc is converted to find
+// out whether a double can hold it, which is what the checked cases are for. A
+// number written to fewer digits than a double has room for answers that question
+// from its digits alone, and a case built out of those measures the scan it shares
+// with every other case instead.
+func reachesMagnitudeCheck(doc string) bool {
+	numbers := 0
+	for i := 0; i < len(doc); {
+		if c := doc[i]; c != '-' && (c < '0' || c > '9') {
+			i++
+			continue
+		}
+		flen, exponent, ok := readFloat(doc[i:])
+		if !ok {
+			return false
+		}
+		if !mayExceedFloat64(doc[i:i+flen], exponent) {
+			return false
+		}
+		numbers++
+		i += flen
+	}
+	return numbers > 0
 }
 
 func BenchmarkParse(b *testing.B) {
@@ -68,6 +96,9 @@ func BenchmarkParse(b *testing.B) {
 			// it was written for, and reads as a speed-up while doing it.
 			if _, err := p.Parse(tc.doc); (err != nil) != tc.rejected {
 				b.Fatalf("document does not take the path this case measures: err=%v", err)
+			}
+			if reachesMagnitudeCheck(tc.doc) != tc.checked {
+				b.Fatalf("document reaches the magnitude check: %v, want %v", !tc.checked, tc.checked)
 			}
 
 			b.ReportAllocs()
