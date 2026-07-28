@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"strings"
 	"syscall"
 	"testing"
 
@@ -234,8 +233,7 @@ func TestPersistKeyspace_ExistingFilePreservedOnFailure(t *testing.T) {
 	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
 
 	err := persistKeyspace(dir, "ks1", &vschemapb.Keyspace{Sharded: true})
-	require.Error(t, err)
-	assert.True(t, strings.Contains(err.Error(), "creating temp file"), "got: %v", err)
+	require.ErrorContains(t, err, "creating temp file")
 
 	got, err := os.ReadFile(final)
 	require.NoError(t, err)
