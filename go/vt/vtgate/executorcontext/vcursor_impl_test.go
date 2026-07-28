@@ -264,6 +264,51 @@ func TestFirstSortedKeyspace(t *testing.T) {
 	require.Equal(t, ks3Schema.Keyspace, ks)
 }
 
+// A DO is planned as synthetic SELECTs that carry its SET_VAR hint, so it needs
+// no reserved connection — except when it is targeted at a shard, where the DO
+// reaches MySQL verbatim and the hint is dropped.
+func TestCheckForReservedConnectionDo(t *testing.T) {
+	const setVarComment = "SET_VAR(sql_mode = 'ANSI_QUOTES')"
+
+	parser := sqlparser.NewTestParser()
+	do, err := parser.Parse("do 1")
+	require.NoError(t, err)
+	sel, err := parser.Parse("select 1")
+	require.NoError(t, err)
+
+	newVCursor := func(t *testing.T, destination key.ShardDestination) *VCursorImpl {
+		t.Helper()
+		vc, err := NewVCursorImpl(NewSafeSession(nil), sqlparser.MarginComments{}, nil, nil, nil, &vindexes.VSchema{}, nil, nil, fakeObserver{}, VCursorConfig{}, nil)
+		require.NoError(t, err)
+		vc.destination = destination
+		return vc
+	}
+
+	t.Run("untargeted do uses the hint", func(t *testing.T) {
+		vc := newVCursor(t, nil)
+		vc.CheckForReservedConnection(setVarComment, do)
+		require.False(t, vc.InReservedConn())
+	})
+
+	t.Run("targeted do needs a reserved connection", func(t *testing.T) {
+		vc := newVCursor(t, key.DestinationShard("-80"))
+		vc.CheckForReservedConnection(setVarComment, do)
+		require.True(t, vc.InReservedConn())
+	})
+
+	t.Run("targeted do without set vars", func(t *testing.T) {
+		vc := newVCursor(t, key.DestinationShard("-80"))
+		vc.CheckForReservedConnection("", do)
+		require.False(t, vc.InReservedConn())
+	})
+
+	t.Run("targeted select still uses the hint", func(t *testing.T) {
+		vc := newVCursor(t, key.DestinationShard("-80"))
+		vc.CheckForReservedConnection(setVarComment, sel)
+		require.False(t, vc.InReservedConn())
+	})
+}
+
 // TestSetExecQueryTimeout tests the SetExecQueryTimeout method.
 // Validates the timeout value is set based on override rule.
 func TestSetExecQueryTimeout(t *testing.T) {

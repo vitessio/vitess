@@ -1014,6 +1014,7 @@ func (*Update) iSupportOptimizerHint()  {}
 func (*VStream) iSupportOptimizerHint() {}
 func (*Select) iSupportOptimizerHint()  {}
 func (*Union) iSupportOptimizerHint()   {}
+func (*Do) iSupportOptimizerHint()      {}
 
 // IsFullyParsed implements the DDLStatement interface
 func (*TruncateTable) IsFullyParsed() bool {

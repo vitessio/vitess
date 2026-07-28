@@ -820,6 +820,15 @@ options:PassthroughDMLs
   "FullQuery": "do 1"
 }
 
+# do with get_lock needs a reserved connection
+"do get_lock('x', 0)"
+{
+  "PlanID": "OtherAdmin",
+  "TableName": "",
+  "FullQuery": "do get_lock('x', 0)",
+  "NeedsReservedConn": true
+}
+
 # syntax error
 "syntax error"
 "syntax error at position 7 near 'syntax'"

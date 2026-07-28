@@ -301,7 +301,15 @@ func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result
 	case p.PlanUpdateLimit, p.PlanDeleteLimit:
 		return qre.execDMLLimit(conn)
 	case p.PlanOtherRead, p.PlanOtherAdmin, p.PlanFlush, p.PlanUnlockTables:
-		return qre.execStatefulConn(conn, qre.query, true)
+		sql := qre.query
+		if qre.plan.FullQuery != nil && len(qre.bindVars) > 0 {
+			var err error
+			sql, _, err = qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars)
+			if err != nil {
+				return nil, err
+			}
+		}
+		return qre.execStatefulConn(conn, sql, true)
 	case p.PlanSavepoint:
 		return qre.execSavepointQuery(conn, qre.query, qre.plan.FullStmt)
 	case p.PlanSRollback:

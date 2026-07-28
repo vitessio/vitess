@@ -300,6 +300,13 @@ func BuildStreaming(env *vtenv.Environment, statement sqlparser.Statement, table
 		plan = &Plan{PlanID: PlanOtherAdmin}
 	case *sqlparser.Do:
 		plan = &Plan{PlanID: PlanOtherAdmin, FullQuery: GenerateFullQuery(stmt)}
+		// A DO that acquires an advisory lock must run on a reserved connection,
+		// just like SELECT get_lock(...); otherwise the lock leaks onto a pooled
+		// connection. NeedsReservedConn makes execution refuse to run it without
+		// one (see QueryExecutor plan validation).
+		if containsGetLock(stmt) {
+			plan.NeedsReservedConn = true
+		}
 	case *sqlparser.Savepoint:
 		plan = &Plan{PlanID: PlanSavepoint, FullStmt: stmt}
 	case *sqlparser.Release:
@@ -345,6 +352,11 @@ func BuildMessageStreaming(name string, tables map[string]*schema.Table) (*Plan,
 // hasLockFunc looks for get_lock function in the select query.
 // If it is present then it returns true otherwise false
 func hasLockFunc(sel *sqlparser.Select) bool {
+	return containsGetLock(sel.SelectExprs)
+}
+
+// containsGetLock reports whether the node contains a get_lock function call.
+func containsGetLock(node sqlparser.SQLNode) bool {
 	var found bool
 	_ = sqlparser.Walk(func(in sqlparser.SQLNode) (bool, error) {
 		lFunc, isLFunc := in.(*sqlparser.LockingFunc)
@@ -356,7 +368,7 @@ func hasLockFunc(sel *sqlparser.Select) bool {
 			return false, nil
 		}
 		return true, nil
-	}, sel.SelectExprs)
+	}, node)
 	return found
 }
 

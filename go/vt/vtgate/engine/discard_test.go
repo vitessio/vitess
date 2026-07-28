@@ -71,14 +71,18 @@ func TestDiscardExecuteAllSources(t *testing.T) {
 }
 
 func TestDiscardExecuteError(t *testing.T) {
-	// The second source fails; the error propagates and later sources
-	// (if any) are not reached.
+	// The second source fails; the error propagates and later sources are
+	// not reached.
 	ok := &fakePrimitive{results: []*sqltypes.Result{{}}}
 	boom := &fakePrimitive{sendErr: errors.New("source failed")}
-	disc := &Discard{Sources: []Primitive{ok, boom}}
+	never := &fakePrimitive{results: []*sqltypes.Result{{}}}
+	disc := &Discard{Sources: []Primitive{ok, boom, never}}
 
 	_, err := disc.TryExecute(t.Context(), &noopVCursor{}, make(map[string]*querypb.BindVariable), false)
 	assert.ErrorContains(t, err, "source failed")
+
+	ok.ExpectLog(t, []string{`Execute  false`})
+	never.ExpectLog(t, nil)
 }
 
 func TestDiscardStreamExecute(t *testing.T) {
@@ -103,16 +107,21 @@ func TestDiscardStreamExecute(t *testing.T) {
 }
 
 func TestDiscardStreamExecuteError(t *testing.T) {
-	fp := &fakePrimitive{
-		sendErr: errors.New("source failed"),
-	}
-	disc := &Discard{Sources: []Primitive{fp}}
+	// The second source fails; the error propagates and later sources are
+	// not reached.
+	ok := &fakePrimitive{results: []*sqltypes.Result{{}}}
+	boom := &fakePrimitive{sendErr: errors.New("source failed")}
+	never := &fakePrimitive{results: []*sqltypes.Result{{}}}
+	disc := &Discard{Sources: []Primitive{ok, boom, never}}
 
 	err := disc.TryStreamExecute(t.Context(), &noopVCursor{}, make(map[string]*querypb.BindVariable), false, func(*sqltypes.Result) error {
 		assert.Fail(t, "callback should not be invoked when a source fails")
 		return nil
 	})
 	assert.ErrorContains(t, err, "source failed")
+
+	ok.ExpectLog(t, []string{`Execute  false`})
+	never.ExpectLog(t, nil)
 }
 
 func TestDiscardGetFields(t *testing.T) {
