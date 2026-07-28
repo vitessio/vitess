@@ -1028,5 +1028,52 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "Reference table preserved by an outer join is not merged when only the pushed join predicate makes the other side single-shard",
+    "query": "select ref_with_source.col from ref_with_source left join `user` on ref_with_source.col = user.id",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select ref_with_source.col from ref_with_source left join `user` on ref_with_source.col = user.id",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "LeftJoin",
+        "JoinColumnIndexes": "L:0",
+        "JoinVars": {
+          "ref_with_source_col": 0
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select ref_with_source.col from ref_with_source where 1 != 1",
+            "Query": "select ref_with_source.col from ref_with_source"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from `user` where 1 != 1",
+            "Query": "select 1 from `user` where `user`.id = :ref_with_source_col",
+            "Values": [
+              ":ref_with_source_col"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.ref_with_source",
+        "user.user"
+      ]
+    }
   }
 ]
