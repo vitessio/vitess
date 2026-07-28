@@ -78,11 +78,7 @@ func (jm *joinMerger) mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs
 			// cross-table shape, so anyone resetting the routing has to check it again.
 			// The merge gets a copy of the routing, so that re-checking it cannot damage
 			// the RHS if we end up not merging after all.
-			merged := jm.merge(ctx, lhsRoute, rhsRoute, routingB.Clone())
-			if merged != nil {
-				merged.PreservesReferenceRows = true
-			}
-			return merged
+			return jm.merge(ctx, lhsRoute, rhsRoute, routingB.Clone())
 		}
 		return jm.merge(ctx, lhsRoute, rhsRoute, routingB)
 	case b == anyShard && sameKeyspace:
@@ -292,6 +288,12 @@ func (jm *joinMerger) merge(ctx *plancontext.PlanningContext, op1, op2 *Route, r
 		MergedWith:    []*Route{op2},
 		Routing:       r,
 		Conditions:    conditions,
+	}
+	// A reference table on the preserved side of an outer join keeps its unmatched rows, and it
+	// has the same rows on every shard. Checking the opcode rather than the routing type leaves
+	// unsharded routes out: there is only one shard to read them from.
+	if !jm.joinType.IsInner() && op1.Routing.OpCode() == engine.Reference {
+		merged.PreservesReferenceRows = true
 	}
 	if !merged.inheritFrom(op1, op2) {
 		debugNoRewrite("apply join merge blocked: %s routing would widen a route that has to stay single-shard", r.OpCode().String())
