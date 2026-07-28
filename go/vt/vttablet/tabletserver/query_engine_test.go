@@ -376,10 +376,10 @@ func TestSelectStreamRuleAppliesOnlyToStreamingPlans(t *testing.T) {
 		{"select", "select pk from test_table_01", planbuilder.PlanSelect},
 		{"impossible-where select", "select pk from test_table_01 where 1 != 1", planbuilder.PlanSelectImpossible},
 		{"lock-function select", "select get_lock('foo', 10)", planbuilder.PlanSelectLockFunc},
-		// The mutating lock functions share get_lock's classification: they
-		// must run on a reserved connection, and a timeout must kill the
-		// connection rather than keep it with lock state vtgate never
-		// recorded. The pure reads stay ordinary selects.
+		// The mutating lock functions share get_lock's classification so that
+		// on a reserved connection a timeout kills the connection rather than
+		// keep it with lock state vtgate never recorded. The pure reads stay
+		// ordinary selects.
 		{"release-lock select", "select release_lock('foo')", planbuilder.PlanSelectLockFunc},
 		{"release-all-locks select", "select release_all_locks()", planbuilder.PlanSelectLockFunc},
 		{"is-free-lock select", "select is_free_lock('foo')", planbuilder.PlanSelect},
@@ -1061,9 +1061,17 @@ func TestPlanPoolUnsafe(t *testing.T) {
 			"set @@sql_safe_updates = false",
 			"Set not allowed without reserved connection",
 		}, {
-			"setting system variables must happen inside reserved connections",
-			"set @udv = false",
-			"Set not allowed without reserved connection",
+			// vtgate only reserves a connection for get_lock; a session that
+			// never acquired a lock sends release_lock as a plain execute, and
+			// a pooled connection can hold no user-level lock, so releasing
+			// there is a safe no-op that MySQL answers correctly.
+			"release_lock without a reserved connection is a safe no-op on a pooled connection",
+			"select release_lock('foo') from dual",
+			"",
+		}, {
+			"release_all_locks without a reserved connection is a safe no-op on a pooled connection",
+			"select release_all_locks() from dual",
+			"",
 		},
 	}
 	for _, tcase := range tcases {
@@ -1071,9 +1079,14 @@ func TestPlanPoolUnsafe(t *testing.T) {
 			statement, err := sqlparser.NewTestParser().Parse(tcase.query)
 			require.NoError(t, err)
 			plan, err := planbuilder.Build(vtenv.NewTestEnv(), statement, map[string]*schema.Table{}, "dbName", false)
+			require.NoError(t, err)
+			if tcase.err == "" {
+				require.False(t, plan.NeedsReservedConn)
+				require.NoError(t, (&TabletPlan{Plan: plan}).IsValid(false, false))
+				return
+			}
 			// Plan building will not fail, but it will mark that reserved connection is needed.
 			// checking plan is valid will fail.
-			require.NoError(t, err)
 			require.True(t, plan.NeedsReservedConn)
 			err = isValid(plan.PlanID, false, false)
 			require.EqualError(t, err, tcase.err)

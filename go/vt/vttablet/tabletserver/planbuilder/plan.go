@@ -340,29 +340,36 @@ func BuildMessageStreaming(name string, tables map[string]*schema.Table) (*Plan,
 	return plan, nil
 }
 
-// hasLockFunc looks for a mutating lock function — get_lock, release_lock,
-// release_all_locks — in the select query. These must run on a reserved
-// connection (a lock is scoped to one MySQL connection, so acquiring or
-// releasing it on a pooled connection is meaningless), and a query timeout
-// must kill that connection rather than keep it: the kill can race the
-// server-side grant or release, leaving lock state vtgate never recorded on a
-// connection it goes on reusing. The pure reads (is_free_lock, is_used_lock)
+// lockFuncs reports whether the select query contains a mutating lock
+// function — get_lock, release_lock, release_all_locks — and whether one of
+// them acquires a lock. Mutating lock functions plan as SelectLockFunc so
+// that on a reserved connection a query timeout kills the connection rather
+// than keep it: the kill can race the server-side grant or release, leaving
+// lock state vtgate never recorded on a connection it goes on reusing. Only
+// acquisition requires a reserved connection — a lock is scoped to one MySQL
+// connection, so acquiring it on a pooled connection is meaningless. The
+// release functions stay allowed without one: vtgate sends them as plain
+// executes when the session holds no locks, and a pooled connection can hold
+// no user-level lock, so MySQL correctly answers NULL (no such lock) or 0
+// (held by another connection). The pure reads (is_free_lock, is_used_lock)
 // stay ordinary selects.
-func hasLockFunc(sel *sqlparser.Select) bool {
-	var found bool
+func lockFuncs(sel *sqlparser.Select) (mutating, acquiring bool) {
 	_ = sqlparser.Walk(func(in sqlparser.SQLNode) (bool, error) {
 		lFunc, isLFunc := in.(*sqlparser.LockingFunc)
 		if !isLFunc {
 			return true, nil
 		}
 		switch lFunc.Type {
-		case sqlparser.GetLock, sqlparser.ReleaseLock, sqlparser.ReleaseAllLocks:
-			found = true
+		case sqlparser.GetLock:
+			mutating = true
+			acquiring = true
 			return false, nil
+		case sqlparser.ReleaseLock, sqlparser.ReleaseAllLocks:
+			mutating = true
 		}
 		return true, nil
 	}, sel.SelectExprs)
-	return found
+	return mutating, acquiring
 }
 
 // BuildSettingQuery builds a query for system settings.

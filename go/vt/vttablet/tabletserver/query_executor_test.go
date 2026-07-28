@@ -119,6 +119,19 @@ func TestQueryExecutorPlans(t *testing.T) {
 			logWant:    "select * from t limit 1",
 			inTxWant:   "select * from t limit 1",
 		}, {
+			// vtgate sends release_lock as a plain execute when the session
+			// holds no locks; it must run on a pooled connection like an
+			// ordinary select.
+			input: "select release_lock('foo') from dual",
+			dbResponses: []dbResponse{{
+				query:  "select release_lock('foo') from dual limit 10001",
+				result: selectResult,
+			}},
+			resultWant: selectResult,
+			planWant:   "SelectLockFunc",
+			logWant:    "select release_lock('foo') from dual limit 10001",
+			inTxWant:   "select release_lock('foo') from dual limit 10001",
+		}, {
 			input: "show engines",
 			dbResponses: []dbResponse{{
 				query:  "show engines",

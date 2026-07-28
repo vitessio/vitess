@@ -189,7 +189,11 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 	}
 
 	switch qre.plan.PlanID {
-	case p.PlanSelect, p.PlanSelectImpossible, p.PlanShow:
+	// SelectLockFunc reaches this pooled path only for the release functions
+	// (get_lock still requires a reserved connection): vtgate sends them as
+	// plain executes when the session holds no locks, and a pooled connection
+	// can hold no user-level lock, so they run like an ordinary select.
+	case p.PlanSelect, p.PlanSelectImpossible, p.PlanShow, p.PlanSelectLockFunc:
 		maxrows := qre.getSelectLimit()
 		qre.bindVars["#maxLimit"] = sqltypes.Int64BindVariable(maxrows + 1)
 		if qre.bindVars[sqltypes.BvReplaceSchemaName] != nil {
