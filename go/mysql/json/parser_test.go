@@ -177,6 +177,32 @@ func TestParseNumberTooBigForDouble(t *testing.T) {
 		}
 	})
 
+	// A negative exponent is not bounded, only stopped before it overflows the
+	// int it accumulates into, and what sends a number through the conversion at
+	// all is being written to more digits than a double holds. These cross the
+	// two, so the exponent is read into an int that cannot hold it and then
+	// scales a significand: written past that stop, it lands wherever the
+	// overflow leaves it, which can be a power of ten the table does not go up
+	// to. Each of these stays valid and reads as zero. MySQL 8.0.46 accepts all
+	// three and reads them as zero too.
+	t.Run("a negative exponent written past what an int holds", func(t *testing.T) {
+		for _, doc := range []string{
+			strings.Repeat("9", 400) + "e-" + strings.Repeat("2", 306),
+			"-" + strings.Repeat("9", 400) + "e-" + strings.Repeat("2", 306),
+			strings.Repeat("1", 400) + "." + strings.Repeat("5", 20) + "e-" + strings.Repeat("2", 306),
+		} {
+			t.Run(startEndString(doc), func(t *testing.T) {
+				var p Parser
+				v, err := p.Parse(doc)
+				require.NoError(t, err)
+
+				f, ok := v.Float64()
+				require.True(t, ok)
+				require.Zero(t, f)
+			})
+		}
+	})
+
 	// The significand accumulates one digit at a time, and each step rounds
 	// the multiplication and the addition separately, the way MySQL's builds
 	// run the loop. Fusing the two into one rounding — which the Go compiler
