@@ -1629,7 +1629,7 @@ func (call *builtinSubstring) compile(c *compiler) (ctype, error) {
 		if err != nil {
 			return ctype{}, err
 		}
-		skip2 = c.compileNullCheck2(str, l)
+		skip2 = c.compileNullCheckArg(l, 2)
 		_ = c.compileToInt64(l, 1)
 		c.asm.Fn_SUBSTRING3(tt, cs, col)
 	} else {
@@ -1698,7 +1698,7 @@ func (call *builtinLocate) compile(c *compiler) (ctype, error) {
 		return ctype{}, err
 	}
 
-	skip2 := c.compileNullCheck1(str)
+	skip2 := c.compileNullCheck1r(str)
 	var skip3 *jump
 
 	if !str.isTextual() {
@@ -1726,7 +1726,7 @@ func (call *builtinLocate) compile(c *compiler) (ctype, error) {
 		if err != nil {
 			return ctype{}, err
 		}
-		skip3 = c.compileNullCheck1(l)
+		skip3 = c.compileNullCheckArg(l, 2)
 		_ = c.compileToInt64(l, 1)
 	}
 
