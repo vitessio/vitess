@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/reparent/utils"
+	endtoendutils "vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 
@@ -638,14 +639,40 @@ func TestERSFailFast(t *testing.T) {
 	}
 }
 
-// TestReplicationStopped checks that ERS ignores the tablets that have sql thread stopped.
-// If there are more than 1, we also fail.
+// TestReplicationStopped checks how ERS treats replicas with replication stopped.
+//
+// The behaviour changed in v25 (vitessio/vitess#20578): a replica that cannot win the
+// election no longer holds up or fails the reparent. The upgrade/downgrade jobs run this
+// release-24.0 test against a newer vtctld, so the expected outcome is gated on the
+// version of the vtctld actually driving ERS.
 func TestReplicationStopped(t *testing.T) {
 	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
 
+	if endtoendutils.BinaryIsAtLeastAtVersion(25, "vtctld") {
+		// v25+ vtctld only waits on candidates that can win the election, so a
+		// fully-stopped replica neither delays nor fails the failover.
+		err := clusterInstance.VtctldClientProcess.ExecuteCommand("ExecuteFetchAsDBA", tablets[2].Alias, `STOP REPLICA;`)
+		require.NoError(t, err)
+		// This write will not reach tablets[2].
+		insertedVal := utils.ConfirmReplication(t, tablets[0], nil)
+		// Failover to tablets[3]; it succeeds despite tablets[2] being stopped.
+		out, err := utils.Ers(clusterInstance, tablets[3], "60s", "30s")
+		require.NoError(t, err, out)
+		// Verify that the tablet has the inserted value
+		err = utils.CheckInsertedValues(context.Background(), t, tablets[3], insertedVal)
+		require.NoError(t, err)
+		// Confirm that replication is setup correctly from tablets[3] to tablets[0]
+		utils.ConfirmReplication(t, tablets[3], tablets[:1])
+		// Confirm that tablets[2] which had replication stopped initially still has its replication stopped
+		utils.CheckReplicationStatus(context.Background(), t, tablets[2], false, false)
+		return
+	}
+
+	// Pre-v25 vtctld waits on every candidate's relay logs and fails when more than one
+	// replica has replication stopped.
 	err := clusterInstance.VtctldClientProcess.ExecuteCommand("ExecuteFetchAsDBA", tablets[1].Alias, `STOP REPLICA SQL_THREAD;`)
 	require.NoError(t, err)
 	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ExecuteFetchAsDBA", tablets[2].Alias, `STOP REPLICA;`)
