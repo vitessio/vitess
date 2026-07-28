@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/hack"
+	"vitess.io/vitess/go/mysql/fastparse"
 	"vitess.io/vitess/go/vt/vthash"
 )
 
@@ -261,6 +262,25 @@ func TestParseNumberGrammar(t *testing.T) {
 			})
 		}
 	})
+}
+
+// parseNumberType is the conversion-based answer to what a number is kept as,
+// which numberKind reaches by shape alone. It is the oracle for the test below
+// and nothing else reads it.
+func parseNumberType(ns string) NumberType {
+	_, err := fastparse.ParseInt64(ns, 10)
+	if err == nil {
+		return NumberTypeSigned
+	}
+	_, err = fastparse.ParseUint64(ns, 10)
+	if err == nil {
+		return NumberTypeUnsigned
+	}
+	_, err = fastparse.ParseFloat64(ns)
+	if err == nil {
+		return NumberTypeFloat
+	}
+	return NumberTypeUnknown
 }
 
 // TestNumberKindMatchesParsing is the safety net under deciding a number's kind

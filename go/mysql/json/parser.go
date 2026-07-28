@@ -1330,22 +1330,6 @@ func (v *Value) NumberType() NumberType {
 	return v.n
 }
 
-func parseNumberType(ns string) NumberType {
-	_, err := fastparse.ParseInt64(ns, 10)
-	if err == nil {
-		return NumberTypeSigned
-	}
-	_, err = fastparse.ParseUint64(ns, 10)
-	if err == nil {
-		return NumberTypeUnsigned
-	}
-	_, err = fastparse.ParseFloat64(ns)
-	if err == nil {
-		return NumberTypeFloat
-	}
-	return NumberTypeUnknown
-}
-
 func (v *Value) Int64() (int64, bool) {
 	i, err := fastparse.ParseInt64(v.s, 10)
 	if err != nil {
