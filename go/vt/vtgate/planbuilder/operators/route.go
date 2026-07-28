@@ -52,6 +52,12 @@ type (
 		// this field will contain the conditions under which this route is valid
 		Conditions []engine.Condition
 
+		// NoRoutesSpecialHandling makes the engine Route run on an arbitrary shard when the
+		// routing resolves to no destination at all, instead of returning an empty result.
+		// It is set when the rows this route owes the client do not depend on the routing
+		// finding a match.
+		NoRoutesSpecialHandling bool
+
 		ResultColumns int
 	}
 
