@@ -1503,6 +1503,28 @@ func (e *Executor) prepare(ctx context.Context, safeSession *econtext.SafeSessio
 		}
 	}
 	stmtType := sqlparser.Preview(sql)
+	if stmtType == sqlparser.StmtUnknown {
+		// Preview only looks at the first keyword, so statements starting with
+		// a WITH clause come back as unknown. Classify those from the AST, but
+		// only rescue the statements handlePrepare can count parameters for
+		// (WITH ... SELECT/INSERT/REPLACE/UPDATE/DELETE). Anything else stays
+		// unknown and is rejected below, rather than being reported to the
+		// client as a zero-parameter success.
+		stmt, err := e.env.Parser().Parse(sql)
+		if err != nil {
+			// The statement stays unknown, and an unparseable statement is
+			// never SHOW, so record the type and clear warnings the way the
+			// code below does before returning the syntax error.
+			logStats.StmtType = stmtType.String()
+			safeSession.ClearWarnings()
+			return nil, 0, err
+		}
+		switch astType := sqlparser.ASTToStatementType(stmt); astType {
+		case sqlparser.StmtSelect, sqlparser.StmtInsert, sqlparser.StmtReplace,
+			sqlparser.StmtUpdate, sqlparser.StmtDelete:
+			stmtType = astType
+		}
+	}
 	logStats.StmtType = stmtType.String()
 
 	// Mysql warnings are scoped to the current session, but are
