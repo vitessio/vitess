@@ -69,9 +69,17 @@ func (jm *joinMerger) mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs
 		// the merged route is multi-shard: the reference table has the same rows on
 		// every shard, so an unmatched preserved row would come back once per shard
 		// instead of once. A single-shard route runs once and cannot duplicate.
-		if !jm.joinType.IsInner() && !routingB.OpCode().IsSingleShard() {
-			debugNoRewrite("apply join merge blocked: reference table on the preserved side of a %s", jm.joinType.ToString())
-			return nil
+		if !jm.joinType.IsInner() {
+			if !routingB.OpCode().IsSingleShard() {
+				debugNoRewrite("apply join merge blocked: reference table on the preserved side of a %s", jm.joinType.ToString())
+				return nil
+			}
+			// The opcode can come from a join predicate that the caller restores to its
+			// cross-table shape, so anyone resetting the routing has to check it again.
+			// The merge gets a copy of the routing, so that re-checking it cannot damage
+			// the RHS if we end up not merging after all.
+			jm.requireSingleShard = true
+			return jm.merge(ctx, lhsRoute, rhsRoute, routingB.Clone())
 		}
 		return jm.merge(ctx, lhsRoute, rhsRoute, routingB)
 	case b == anyShard && sameKeyspace:
@@ -153,6 +161,9 @@ type (
 		// joinType is permitted to store only 3 of the possible values
 		// NormalJoinType, StraightJoinType and LeftJoinType.
 		joinType sqlparser.JoinType
+		// requireSingleShard is set when the merge was only permitted because the
+		// routing was single-shard, and has to be re-checked if the routing is reset.
+		requireSingleShard bool
 	}
 
 	routingType int
