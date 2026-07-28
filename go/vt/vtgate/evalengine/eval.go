@@ -369,6 +369,25 @@ func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type, collation collations.I
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value: %v", v)
 }
 
+// valueToEvalBindVar converts a bind variable's value, and differs from
+// valueToEval in one place. A JSON bind variable holds character data, not a
+// printed JSON value: wherever it travels, it reaches mysqld as text for its
+// document parser to read — a parameter cannot carry a double any other way —
+// so its numbers convert the way MySQL converts them. A JSON column's text,
+// by contrast, spells the double the tablet's mysqld already holds, and
+// converts back to exactly that double.
+func valueToEvalBindVar(value sqltypes.Value, collation collations.TypedCollation, values *EnumSetValues) (eval, error) {
+	if value.Type() == sqltypes.TypeJSON {
+		var p json.Parser
+		j, err := p.ParseCastBytes(value.Raw())
+		if err != nil {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
+		}
+		return j, nil
+	}
+	return valueToEval(value, collation, values)
+}
+
 func valueToEval(value sqltypes.Value, collation collations.TypedCollation, values *EnumSetValues) (eval, error) {
 	wrap := func(err error) error {
 		if err == nil {

@@ -51,7 +51,7 @@ func intoJSON(fn string, e eval) (*evalJSON, error) {
 		return e, nil
 	case *evalBytes:
 		var p json.Parser
-		return p.ParseBytes(e.bytes)
+		return p.ParseCastBytes(e.bytes)
 	default:
 		return nil, errJSONType(fn)
 	}
@@ -106,7 +106,7 @@ func evalConvert_cj(e *evalBytes) (*evalJSON, error) {
 		return nil, err
 	}
 	var p json.Parser
-	return p.ParseBytes(jsonText)
+	return p.ParseCastBytes(jsonText)
 }
 
 func evalConvertArg_cj(e *evalBytes) (*evalJSON, error) {

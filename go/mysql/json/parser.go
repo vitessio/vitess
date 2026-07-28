@@ -63,15 +63,48 @@ func startEndString(s string) string {
 	return start + "..." + end
 }
 
-// Parse parses s containing JSON.
+// Parse parses s containing JSON, where s is a printed JSON value: each of
+// its numbers is the exact spelling of the value that was printed, and reads
+// back as the nearest double, which reconstructs that value without loss.
 //
 // The returned value is valid until the next call to Parse*.
 //
 // Use Scanner if a stream of JSON values must be parsed.
 func (p *Parser) Parse(s string) (*Value, error) {
+	return p.parse(s, false)
+}
+
+// ParseBytes parses b containing JSON.
+//
+// The returned Value is valid until the next call to Parse*.
+//
+// Use Scanner if a stream of JSON values must be parsed.
+func (p *Parser) ParseBytes(b []byte) (*Value, error) {
+	return p.parse(hack.String(b), false)
+}
+
+// ParseCast parses s the way MySQL casts character data to JSON. Numbers that
+// only a double can hold read back as the double MySQL's parser stores for
+// the same text, which sits an ULP or two from the nearest one for long
+// significands and large exponents.
+//
+// The returned value is valid until the next call to Parse*.
+func (p *Parser) ParseCast(s string) (*Value, error) {
+	return p.parse(s, true)
+}
+
+// ParseCastBytes parses b the way MySQL casts character data to JSON.
+//
+// The returned Value is valid until the next call to Parse*.
+func (p *Parser) ParseCastBytes(b []byte) (*Value, error) {
+	return p.parse(hack.String(b), true)
+}
+
+func (p *Parser) parse(s string, cast bool) (*Value, error) {
 	s = skipWS(s)
 	p.b = append(p.b[:0], s...)
 	p.c.reset()
+	p.c.cast = cast
 
 	v, tail, err := parseValue(hack.String(p.b), &p.c, 0)
 	if err != nil {
@@ -84,17 +117,13 @@ func (p *Parser) Parse(s string) (*Value, error) {
 	return v, nil
 }
 
-// ParseBytes parses b containing JSON.
-//
-// The returned Value is valid until the next call to Parse*.
-//
-// Use Scanner if a stream of JSON values must be parsed.
-func (p *Parser) ParseBytes(b []byte) (*Value, error) {
-	return p.Parse(hack.String(b))
-}
-
 type cache struct {
 	vs []Value
+
+	// cast is whether this parse reads numbers the way a MySQL cast from
+	// character data does. It is set at every entry, so a pooled parser
+	// cannot carry one caller's choice into the next parse.
+	cast bool
 }
 
 func (c *cache) reset() {
@@ -205,8 +234,13 @@ func parseValue(s string, c *cache, depth int) (*Value, string, error) {
 	// An integer that fits is nowhere near the range of a double, so only the
 	// kind that did not fit one can be too big for the other.
 	v.n = numberKind(v.s, fractional)
-	if v.n == NumberTypeFloat && mayExceedFloat64(v.s, exponent) && !mysqlNumberFits(v.s) {
-		return nil, s, fmt.Errorf("number too big to be stored in double: %q", v.s)
+	if v.n == NumberTypeFloat {
+		if mayExceedFloat64(v.s, exponent) && !mysqlNumberFits(v.s) {
+			return nil, s, fmt.Errorf("number too big to be stored in double: %q", v.s)
+		}
+		if c.cast {
+			v.n = numberTypeCastFloat
+		}
 	}
 	return v, s[flen:], nil
 }
@@ -240,30 +274,39 @@ func init() {
 
 // mysqlNumberFits reports whether MySQL can store num, which has to already be
 // a grammatically valid JSON number.
+func mysqlNumberFits(num string) bool {
+	_, ok := mysqlDouble(num)
+	return ok
+}
+
+// mysqlDouble converts num, which has to already be a grammatically valid JSON
+// number, to the double MySQL stores for it, and reports whether MySQL can
+// store it at all.
 //
-// MySQL parses JSON with RapidJSON, which decides this in two places. While
-// reading the exponent, a written exponent may not move the decimal point more
-// than maxFloat64Digits places past the digits already behind it. After
-// converting, the result may not be larger than the largest double. Neither
-// place catches what the other does: an exponent that lands on zero is refused
-// only as written, and a number written within the bound can still overflow
-// once converted.
+// MySQL parses JSON with RapidJSON, which refuses a number in two places.
+// While reading the exponent, a written exponent may not move the decimal
+// point more than maxFloat64Digits places past the digits already behind it.
+// After converting, the result may not be larger than the largest double.
+// Neither place catches what the other does: an exponent that lands on zero is
+// refused only as written, and a number written within the bound can still
+// overflow once converted.
 //
 // The conversion below is the one RapidJSON does rather than a correct one. It
 // accumulates the significand into a double and scales that by a power of ten,
-// which lands an ULP or two from the true value, and the boundary sits wherever
-// that lands. A number a hair under the largest double therefore comes down to
-// how it was spelled: 1.7976931348623158e308 does not fit, while writing the
-// same value as 1.79769313486231580e308 does, because the extra digit moves
-// where the significand ends and the scaling begins. Converting the same way is
-// what makes a document valid here exactly when it is valid in MySQL.
+// which lands an ULP or two from the true value, and both the value and the
+// boundary sit wherever that lands. A number a hair under the largest double
+// therefore comes down to how it was spelled: 1.7976931348623158e308 does not
+// fit, while writing the same value as 1.79769313486231580e308 does, because
+// the extra digit moves where the significand ends and the scaling begins.
+// Converting the same way is what makes a document valid here exactly when it
+// is valid in MySQL, and worth the same double here as there.
 //
 // The float64 conversions in the digit loops keep the multiply and the add as
 // two roundings. Without them the compiler is free to fuse both into one FMA
 // on arm64, which rounds once and can land the accumulation one ULP away from
 // where MySQL's builds put it — enough to flip which side of the largest
 // double a number falls on.
-func mysqlNumberFits(num string) bool {
+func mysqlDouble(num string) (float64, bool) {
 	i := 0
 	minus := num[i] == '-'
 	if minus {
@@ -399,17 +442,33 @@ func mysqlNumberFits(num string) bool {
 				exp = exp*10 + int(num[i]-'0')
 				i++
 				if exp > maxExp {
-					return false
+					return 0, false
 				}
 			}
 		}
 	}
 
-	// A number that never needed a double is an integer MySQL keeps exact.
+	// A number that never needed a double is an integer MySQL keeps exact. As
+	// a double it is worth the integer, rounded once by the conversion.
 	if !useDouble {
-		return true
+		if use64 {
+			d = float64(u64)
+		} else {
+			d = float64(u32)
+		}
+		if minus {
+			return -d, true
+		}
+		return d, true
 	}
-	return scaleByPow10(d, exp+expFrac) <= math.MaxFloat64
+	d = scaleByPow10(d, exp+expFrac)
+	if d > math.MaxFloat64 {
+		return 0, false
+	}
+	if minus {
+		return -d, true
+	}
+	return d, true
 }
 
 // scaleByPow10 moves d by p decimal places the way RapidJSON does, in one
@@ -1217,6 +1276,10 @@ const (
 	NumberTypeUnsigned
 	NumberTypeDecimal
 	NumberTypeFloat
+	// numberTypeCastFloat is a float parsed from character data the way MySQL
+	// casts it to JSON. It reads as NumberTypeFloat, but converts to the
+	// double MySQL stores for its text rather than to the nearest one.
+	numberTypeCastFloat
 )
 
 // String returns string representation of t.
@@ -1327,6 +1390,9 @@ func (v *Value) NumberType() NumberType {
 	if v.t != TypeNumber {
 		return NumberTypeUnknown
 	}
+	if v.n == numberTypeCastFloat {
+		return NumberTypeFloat
+	}
 	return v.n
 }
 
@@ -1363,6 +1429,11 @@ func (v *Value) Uint64() (uint64, bool) {
 }
 
 func (v *Value) Float64() (float64, bool) {
+	if v.n == numberTypeCastFloat {
+		if f, ok := mysqlDouble(v.s); ok {
+			return f, true
+		}
+	}
 	val, err := fastparse.ParseFloat64(v.s)
 	if err != nil {
 		return val, false
@@ -1370,7 +1441,19 @@ func (v *Value) Float64() (float64, bool) {
 	return val, true
 }
 
+// Decimal returns the value as a decimal. A float becomes the decimal spelled
+// by the shortest text that reads back as the same double, which is how MySQL
+// turns a double into a decimal: double2decimal prints it through my_gcvt and
+// reads the digits back. Every other number keeps each digit it was written
+// with.
 func (v *Value) Decimal() (decimal.Decimal, bool) {
+	if v.NumberType() == NumberTypeFloat {
+		f, ok := v.Float64()
+		if !ok || math.IsInf(f, 0) || math.IsNaN(f) {
+			return decimal.Zero, false
+		}
+		return decimal.NewFromFloat(f), true
+	}
 	dec, err := decimal.NewFromString(v.s)
 	if err != nil {
 		return decimal.Zero, false

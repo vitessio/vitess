@@ -3631,7 +3631,7 @@ func (asm *assembler) Parse_j(offset int) {
 	asm.emit(func(env *ExpressionEnv) int {
 		var p json.Parser
 		arg := env.vm.stack[env.vm.sp-offset].(*evalBytes)
-		env.vm.stack[env.vm.sp-offset], env.vm.err = p.ParseBytes(arg.bytes)
+		env.vm.stack[env.vm.sp-offset], env.vm.err = p.ParseCastBytes(arg.bytes)
 		return 1
 	}, "PARSE_JSON VARCHAR(SP-%d)", offset)
 }

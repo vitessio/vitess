@@ -27,6 +27,7 @@
         - [PREPARE statements no longer report the prepared statement's tables](#vtgate-prepare-tables-used)
         - [Preparing a statement no longer starts an implicit transaction](#vtgate-prepare-no-implicit-tx)
         - [Stricter validation of SQL-level PREPARE statements](#vtgate-prepare-stricter-validation)
+        - [JSON numbers cast from strings read as the double MySQL stores](#vtgate-json-number-doubles)
     - **[Reparent](#minor-changes-reparent)**
         - [`EmergencyReparentShard` no longer waits on replicas that cannot win the election](#ers-lagging-relay-log-wait)
     - **[VTTablet](#minor-changes-vttablet)**
@@ -248,6 +249,12 @@ SQL-level `PREPARE` and binary-protocol `COM_STMT_PREPARE` now reject statement 
 Additionally, `PREPARE ... FROM ?` is now a syntax error, matching MySQL: the grammar accidentally accepted a positional parameter as the statement text, but no value could ever reach it and the statement always failed. This also affects programs that parse SQL using the `go/vt/sqlparser` package directly.
 
 See [#20562](https://github.com/vitessio/vitess/pull/20562) for details.
+
+#### <a id="vtgate-json-number-doubles"/>JSON numbers cast from strings read as the double MySQL stores</a>
+
+When VTGate converts character data to JSON — `CAST(... AS JSON)`, a string argument to a JSON function, or a JSON-typed bind variable — numbers that only a double can hold now convert to the same double MySQL stores when it parses the same text. MySQL reads JSON numbers at normal precision rather than by correct rounding, so for numbers with 16 or more significant digits, or with large exponents, its double can sit an ULP or two away from the nearest one; VTGate previously landed on the nearest, so the same expression could produce a different value at VTGate than pushed down to MySQL. Comparisons, hashing, weight strings and the printed form of such values follow the converted double.
+
+Numbers with up to 15 significant digits and moderate exponents are unaffected, as are JSON values read from columns, whose text spells the stored double exactly. Bind variables count as character data because a parameter reaches MySQL as text for its document parser to read.
 
 ### <a id="minor-changes-reparent"/>Reparent</a>
 

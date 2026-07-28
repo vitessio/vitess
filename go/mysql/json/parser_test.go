@@ -18,6 +18,8 @@ limitations under the License.
 package json
 
 import (
+	"math"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -25,6 +27,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/hack"
+	"vitess.io/vitess/go/mysql/decimal"
+	"vitess.io/vitess/go/mysql/format"
 	"vitess.io/vitess/go/vt/vthash"
 )
 
@@ -167,7 +171,7 @@ func TestParseNumberTooBigForDouble(t *testing.T) {
 	// The significand accumulates one digit at a time, and each step rounds
 	// the multiplication and the addition separately, the way MySQL's builds
 	// run the loop. Fusing the two into one rounding — which the Go compiler
-	// may do on arm64 unless the conversion in mysqlNumberFits stops it —
+	// may do on arm64 unless the conversion in mysqlDouble stops it —
 	// moves the accumulation an ULP for these documents, and that is enough
 	// to push them over the largest double. MySQL 8.0.45, 8.4.11 and 9.4.0
 	// accept all of them.
@@ -221,6 +225,141 @@ func TestParseNumberTooBigForDouble(t *testing.T) {
 			})
 		}
 	})
+}
+
+// TestParseCastDoubles pins the double a number is worth to the double MySQL
+// stores for the same text. MySQL parses JSON at normal precision — the
+// significand accumulates into a double and one multiplication scales it —
+// so for long significands and large exponents its double sits an ULP or two
+// from the nearest one, and an expression evaluated here has to land on
+// MySQL's. The expected bits below are what MySQL 8.0.45, 8.4.11 and 9.4.0
+// store, confirmed by comparing JSON_EXTRACT of each document against a
+// correctly-rounded CAST of the expected value inside the server.
+func TestParseCastDoubles(t *testing.T) {
+	docs := []struct {
+		doc  string
+		want uint64 // IEEE 754 bits of MySQL's double
+	}{
+		{"99999999999999999999999999999999999999999", 0x48725dfa371a19e6},  // 9.999999999999998e40, nearest is 1e41
+		{"-99999999999999999999999999999999999999999", 0xc8725dfa371a19e6}, // sign rides on the same conversion
+		{"100000000000000000000000000000000000000000", 0x48725dfa371a19e6}, // meets the nines at the same double
+		{"1e41", 0x48725dfa371a19e7},                                       // one table lookup, lands on the nearest double
+		{"10e40", 0x48725dfa371a19e7},
+		{"1.7976931348623157081e308", 0x7feffffffffffffe}, // one below the largest double; nearest is the largest
+		{"1.79769313486231580e308", 0x7fefffffffffffff},
+		{"17976931348623157e292", 0x7fefffffffffffff},
+		{"291.276103743955106997454", 0x4072346aebc26973},
+		{"41.451230056623148274", 0x4044b9c1e8101597},
+		{"2.2250738585072014e-308", 0x0010000000000000}, // smallest normal double
+		{"1e-320", 0x00000000000007e8},                  // subnormal, scaled in two steps
+		{"1e-400", 0x0000000000000000},                  // flushes to zero rather than the smallest subnormal
+		{"123456789012345678901234567890", 0x45f8ee90ff6c373d},
+		{"3.14159265358979323846264338327950288", 0x400921fb54442d18},
+		{"18446744073709551616", 0x43f0000000000000},      // one past the largest integer, forced onto the double path
+		{"0.99999999999999999999999", 0x3ff0000000000001}, // one above 1.0; the nearest double is 1.0
+		{"1234567890.12345678901234567890", 0x41d26580b487e6b8},
+		{"0.30000000000000000000000000001", 0x3fd3333333333333},
+		{"0.5", 0x3fe0000000000000},
+	}
+
+	t.Run("character data reads as MySQL's double", func(t *testing.T) {
+		for _, tc := range docs {
+			t.Run(tc.doc, func(t *testing.T) {
+				var p Parser
+				v, err := p.ParseCast(tc.doc)
+				require.NoError(t, err)
+				require.Equal(t, NumberTypeFloat, v.NumberType())
+				f, ok := v.Float64()
+				require.True(t, ok)
+				require.Equal(t, tc.want, math.Float64bits(f),
+					"got %v (%016x), want %v (%016x)",
+					f, math.Float64bits(f), math.Float64frombits(tc.want), tc.want)
+			})
+		}
+	})
+
+	// A printed JSON value spells each double exactly — whoever printed it
+	// chose text that reads back as the double it held — so reading it as the
+	// nearest double reconstructs that double, and MySQL's conversion must
+	// stay out of it.
+	t.Run("printed JSON reads as the nearest double", func(t *testing.T) {
+		for _, tc := range docs {
+			t.Run(tc.doc, func(t *testing.T) {
+				var p Parser
+				v, err := p.Parse(tc.doc)
+				require.NoError(t, err)
+				f, ok := v.Float64()
+				require.True(t, ok)
+				nearest, err := strconv.ParseFloat(tc.doc, 64)
+				require.NoError(t, err)
+				require.Equal(t, math.Float64bits(nearest), math.Float64bits(f))
+			})
+		}
+	})
+
+	// A number built around an existing double — a float column, a binary log
+	// entry — carries that double's exact spelling and has to keep holding the
+	// same double, even where MySQL's document conversion would read the very
+	// same text into a different one.
+	t.Run("numbers built from a double keep that double", func(t *testing.T) {
+		f := math.Float64frombits(0xd64d4ae72831c4f2) // -5.3746011104623175e107
+		text := string(format.FormatFloat(f))
+
+		v := NewNumber(text, NumberTypeFloat)
+		got, ok := v.Float64()
+		require.True(t, ok)
+		require.Equal(t, math.Float64bits(f), math.Float64bits(got))
+
+		var p Parser
+		doc, err := p.ParseCast(text)
+		require.NoError(t, err)
+		converted, ok := doc.Float64()
+		require.True(t, ok)
+		require.Equal(t, uint64(0xd64d4ae72831c4f3), math.Float64bits(converted),
+			"MySQL reads this spelling into the double one ULP over")
+	})
+
+	// Two spellings that MySQL stores as the same double are the same value
+	// everywhere a value reaches: they convert, weigh and therefore hash
+	// alike, while a spelling stored as a different double weighs apart.
+	t.Run("spellings weigh by their double", func(t *testing.T) {
+		var p Parser
+		nines, err := p.ParseCast("99999999999999999999999999999999999999999")
+		require.NoError(t, err)
+		ninesWeight := nines.WeightString(nil)
+
+		var q Parser
+		ten41, err := q.ParseCast("100000000000000000000000000000000000000000")
+		require.NoError(t, err)
+		require.Equal(t, ninesWeight, ten41.WeightString(nil))
+
+		var r Parser
+		e41, err := r.ParseCast("1e41")
+		require.NoError(t, err)
+		require.NotEqual(t, ninesWeight, e41.WeightString(nil))
+	})
+}
+
+// TestDecimalOfFloat pins how a float becomes a decimal: through the shortest
+// text of its double, which is what MySQL's double2decimal prints and reads
+// back. The digits the document spelled beyond the double's precision are
+// gone by then, while a number that is a decimal to begin with keeps all of
+// them.
+func TestDecimalOfFloat(t *testing.T) {
+	text := "0.30000000000000000000000000001"
+
+	var p Parser
+	v, err := p.ParseCast(text)
+	require.NoError(t, err)
+	dec, ok := v.Decimal()
+	require.True(t, ok)
+	require.True(t, dec.Equal(decimal.NewFromFloat(0.3)), "got %s", dec.String())
+
+	exact, err := decimal.NewFromString(text)
+	require.NoError(t, err)
+	kept, ok := NewNumber(text, NumberTypeDecimal).Decimal()
+	require.True(t, ok)
+	require.True(t, kept.Equal(exact), "got %s", kept.String())
 }
 
 // TestParseNumberGrammar covers the shapes JSON's grammar allows a number to
