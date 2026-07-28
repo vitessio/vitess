@@ -45,6 +45,7 @@
         - [MySQL-faithful validation and rejection of unsupported `sql_mode` values](#vtgate-sql-mode-rejection)
         - [New `VEXPLAIN MYSQLPLAN` statement](#vtgate-vexplain-mysqlplan)
         - [VStream metrics report live streams and can include the caller](#vtgate-vstream-metrics)
+        - [Outer joins that preserve a reference table no longer duplicate rows](#vtgate-reference-outer-join-not-merged)
     - **[Reparent](#minor-changes-reparent)**
         - [`EmergencyReparentShard` no longer waits on replicas that cannot win the election](#ers-lagging-relay-log-wait)
         - [`EmergencyReparentShard` can explicitly recover from split brain](#ers-allow-split-brain-promotion)
@@ -516,6 +517,14 @@ Like a plain `EXPLAIN`, the per-shard `EXPLAIN FORMAT=JSON` queries `VEXPLAIN MY
 `VStreamsCount` now also drops streams that end without an error, such as a shard stream ended by a resharding journal event. Previously those streams were counted as active forever.
 
 The new `--vstream-metrics-include-caller` flag adds a `CallerID` label to `VStreamsCreated`, `VStreamsCount`, `VStreamsEventsStreamed`, `VStreamsEndedWithErrors`, `VStreamsLag`, and `VStreamsTransactionsChunked`, so each streaming application can be monitored separately. The label is set to the principal of the effective caller ID in the `VStreamRequest`, or to the MySQL user for SQL `VSTREAM`; streams without one get an empty `CallerID`. The `VStreamRequest` principal is set by the client and is not authenticated by VTGate. Each distinct principal adds a series per keyspace, shard, and tablet type, and the counters keep their series until VTGate restarts, so the number of series grows with the distinct principals seen over the process lifetime, not only those of open streams. For example, if each client instance sets its own principal, the number of series grows with every instance that has connected, so consider the cardinality before enabling the flag. The flag is off by default, and the metrics keep their existing labels when it is off.
+
+#### <a id="vtgate-reference-outer-join-not-merged"/>Outer joins that preserve a reference table no longer duplicate rows</a>
+
+An outer join whose preserved side is a reference table is no longer merged into a multi-shard route. A reference table has the same rows on every shard, so a scatter route returned each unmatched preserved row once per shard instead of once. These queries now plan as a join between a route reading the reference table and a route reading the other side, which changes the plan shape and can send more queries than before for the same statement.
+
+The merge still happens when the route reads a single shard, and such a route now runs on an arbitrary shard when its routing resolves to no destination — a unique vindex lookup that finds no mapping, or a `NULL` bind value — so the preserved rows come back with `NULL`s rather than the query returning an empty result.
+
+See [#20701](https://github.com/vitessio/vitess/pull/20701) for details.
 
 ### <a id="minor-changes-reparent"/>Reparent</a>
 
