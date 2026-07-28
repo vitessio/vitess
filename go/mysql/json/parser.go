@@ -198,7 +198,7 @@ func parseValue(s string, c *cache, depth int) (*Value, string, error) {
 		return ValueNull, s[len("null"):], nil
 	}
 
-	flen, exponent, ok := readFloat(s)
+	flen, exponent, fraction, ok := readFloat(s)
 	if !ok {
 		return nil, s[flen:], fmt.Errorf("invalid number in JSON string: %q", s)
 	}
@@ -207,6 +207,9 @@ func parseValue(s string, c *cache, depth int) (*Value, string, error) {
 	v.t = TypeNumber
 	v.s = s[:flen]
 	v.n = numberTypeRaw
+	if exponent > maxFloat64Digits+fraction {
+		return nil, s, fmt.Errorf("number too big to be stored in double: %q", v.s)
+	}
 	if mayExceedFloat64(v.s, exponent) {
 		if _, err := fastparse.ParseFloat64(v.s); err != nil {
 			return nil, s, fmt.Errorf("number too big to be stored in double: %q", v.s)
@@ -215,18 +218,19 @@ func parseValue(s string, c *cache, depth int) (*Value, string, error) {
 	return v, s[flen:], nil
 }
 
-// maxFloat64Digits is the number of digits it takes to write a number that a
-// double cannot hold. The largest double is under 1.8e308, so 308 digits always
-// fit and 309 need not.
+// maxFloat64Digits is how far a decimal point can travel before a double runs
+// out of room. The largest double is under 1.8e308, so a written exponent of
+// 308 always leaves somewhere for the number to land and 309 need not.
 const maxFloat64Digits = 308
 
 // mayExceedFloat64 reports whether num is worth converting to find out whether
 // a double can hold it. It errs towards yes: the job is to keep the conversion
-// off the common path, not to answer the question. Without an exponent a number
-// has to be written out to more digits than the largest double before it can be
-// too big for one.
-func mayExceedFloat64(num string, exponent bool) bool {
-	return exponent || len(num) > maxFloat64Digits
+// off the common path, not to answer the question. A number is below the
+// largest double whenever the digits it is written to, moved by its exponent,
+// stay within the ones that double has — len(num) overcounts the digits, which
+// only makes the answer yes more often.
+func mayExceedFloat64(num string, exponent int) bool {
+	return len(num)+exponent > maxFloat64Digits
 }
 
 func parseArray(s string, c *cache, depth int) (*Value, string, error) {
@@ -533,7 +537,11 @@ func parseRawString(s string) (string, string, error) {
 	}
 }
 
-func readFloat[S string | []byte](s S) (i int, exponent bool, ok bool) {
+// readFloat reads a JSON number off the front of s, returning how much of s it
+// covers, the exponent it was written with, and how many digits it carries
+// after its decimal point. Together those say how far the number's digits sit
+// from where a double keeps them.
+func readFloat[S string | []byte](s S) (i, exponent, fraction int, ok bool) {
 	// optional sign
 	if i >= len(s) {
 		return
@@ -558,6 +566,9 @@ loop:
 
 		case '0' <= c && c <= '9':
 			sawdigits = true
+			if sawdot {
+				fraction++
+			}
 			if c == '0' && nd == 0 { // ignore leading zeros
 				continue
 			}
@@ -570,27 +581,37 @@ loop:
 		return
 	}
 
-	// optional exponent moves decimal point.
-	// if we read a very large, very long number,
-	// just be sure to move the decimal point by
-	// a lot (say, 100000).  it doesn't matter if it's
-	// not the exact number.
+	// optional exponent moves the decimal point. An exponent larger than
+	// exponentCeiling stops there rather than running on: the ceiling clears
+	// both the largest double and every digit this number could hold after its
+	// decimal point, so a number stopped at it is out of reach either way.
 	if i < len(s) && (s[i] == 'e' || s[i] == 'E') {
-		exponent = true
 		i++
 		if i >= len(s) {
 			return
 		}
+		negative := false
 		if s[i] == '+' || s[i] == '-' {
+			negative = s[i] == '-'
 			i++
 		}
 		if i >= len(s) || s[i] < '0' || s[i] > '9' {
 			return
 		}
+		exponentCeiling := maxFloat64Digits + len(s)
 		for ; i < len(s) && ('0' <= s[i] && s[i] <= '9'); i++ {
+			if exponent <= exponentCeiling {
+				exponent = exponent*10 + int(s[i]-'0')
+			}
+		}
+		if exponent > exponentCeiling {
+			exponent = exponentCeiling
+		}
+		if negative {
+			exponent = -exponent
 		}
 	}
-	return i, exponent, true
+	return i, exponent, fraction, true
 }
 
 // Object represents JSON object.

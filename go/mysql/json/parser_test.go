@@ -31,7 +31,7 @@ func TestParseRawNumber(t *testing.T) {
 		f := func(s, expectedRN, expectedTail string) {
 			t.Helper()
 
-			flen, _, ok := readFloat(s)
+			flen, _, _, ok := readFloat(s)
 			require.Truef(t, ok, "unexpected error when parsing '%s'", s)
 
 			rn, tail := s[:flen], s[flen:]
@@ -58,7 +58,7 @@ func TestParseRawNumber(t *testing.T) {
 		f := func(s, expectedTail string) {
 			t.Helper()
 
-			flen, _, ok := readFloat(s)
+			flen, _, _, ok := readFloat(s)
 			require.False(t, ok, "expecting non-nil error")
 			require.Equalf(t, expectedTail, s[flen:], "unexpected tail; got %q; want %q", s[flen:], expectedTail)
 		}
@@ -99,6 +99,17 @@ func TestParseNumberTooBigForDouble(t *testing.T) {
 			"1e0000000000",
 			"1e-0000000000",
 			"1e+308",
+			"1e00000000000000000308",
+			// A written exponent is bounded by where it puts the decimal
+			// point, so digits after the point buy the same number of places
+			// back. Zero is subject to the bound like anything else.
+			"0e308",
+			"-0e308",
+			"0.0e309",
+			"0.00e310",
+			"0.1e309",
+			"0.01e310",
+			"0." + strings.Repeat("0", 400) + "1e700",
 		} {
 			t.Run(startEndString(doc), func(t *testing.T) {
 				var p Parser
@@ -117,6 +128,21 @@ func TestParseNumberTooBigForDouble(t *testing.T) {
 			"1.7976931348623159e308",
 			"1e+309",
 			tooManyDigits,
+			// One place past what the digits after the point buy back. These
+			// all convert to zero, so only the exponent as written rules them
+			// out.
+			"0e309",
+			"-0e309",
+			"0e+309",
+			"0e1000",
+			"0.0e310",
+			"0.00e311",
+			"0.1e310",
+			"0.01e311",
+			"0." + strings.Repeat("0", 400) + "1e710",
+			// Within the written bound, but too big once converted.
+			"10e308",
+			"1" + strings.Repeat("0", 30) + "e279",
 			// A number anywhere in the document invalidates all of it.
 			"[1, 1e309]",
 			`{"a": 1e309}`,
