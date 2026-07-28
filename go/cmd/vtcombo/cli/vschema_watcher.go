@@ -118,7 +118,7 @@ func loadKeyspacesFromDir(ctx context.Context, dir string, ts *topo.Server) {
 }
 
 func watchSrvVSchema(ctx context.Context, persister *vschemaPersister, ts *topo.Server, cell string) {
-	data, ch, err := ts.WatchSrvVSchema(ctx, tpb.Cells[0])
+	data, ch, err := ts.WatchSrvVSchema(ctx, cell)
 	if err != nil {
 		log.Error(fmt.Sprintf("WatchSrvVSchema failed: %v", err))
 		os.Exit(1)
