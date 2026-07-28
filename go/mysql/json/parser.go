@@ -252,6 +252,12 @@ func init() {
 // same value as 1.79769313486231580e308 does, because the extra digit moves
 // where the significand ends and the scaling begins. Converting the same way is
 // what makes a document valid here exactly when it is valid in MySQL.
+//
+// The float64 conversions in the digit loops keep the multiply and the add as
+// two roundings. Without them the compiler is free to fuse both into one FMA
+// on arm64, which rounds once and can land the accumulation one ULP away from
+// where MySQL's builds put it — enough to flip which side of the largest
+// double a number falls on.
 func mysqlNumberFits(num string) bool {
 	i := 0
 	minus := num[i] == '-'
@@ -310,7 +316,7 @@ func mysqlNumberFits(num string) bool {
 		}
 	}
 	for useDouble && digit() {
-		d = d*10 + float64(num[i]-'0')
+		d = float64(d*10) + float64(num[i]-'0')
 		i++
 	}
 
@@ -340,7 +346,7 @@ func mysqlNumberFits(num string) bool {
 		}
 		for digit() {
 			if sigDigits < 17 {
-				d = d*10 + float64(num[i]-'0')
+				d = float64(d*10) + float64(num[i]-'0')
 				expFrac--
 				if d > 0 {
 					sigDigits++

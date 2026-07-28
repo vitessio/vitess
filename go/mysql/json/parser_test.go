@@ -162,6 +162,28 @@ func TestParseNumberTooBigForDouble(t *testing.T) {
 		}
 	})
 
+	// The significand accumulates one digit at a time, and each step rounds
+	// the multiplication and the addition separately, the way MySQL's builds
+	// run the loop. Fusing the two into one rounding — which the Go compiler
+	// may do on arm64 unless the conversion in mysqlNumberFits stops it —
+	// moves the accumulation an ULP for these documents, and that is enough
+	// to push them over the largest double. MySQL 8.0.45, 8.4.11 and 9.4.0
+	// accept all of them.
+	t.Run("each accumulation step rounds on its own", func(t *testing.T) {
+		for _, doc := range []string{
+			"17976931348623154547712857878e280",
+			"179769313486231559524062337652e279",
+			"179769313486231577704643761e282",
+			"1797693134862315724800793889e281",
+		} {
+			t.Run(startEndString(doc), func(t *testing.T) {
+				var p Parser
+				_, err := p.Parse(doc)
+				require.NoError(t, err)
+			})
+		}
+	})
+
 	// Right at the top of the range the answer turns on how a number was
 	// written rather than on what it is worth. The digits are split between a
 	// significand and a power of ten to scale it by, and where that split falls
