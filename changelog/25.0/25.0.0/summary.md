@@ -347,8 +347,8 @@ v25 or newer. On a mixed-version cluster, an upgraded caller can send the new
 `session_variables` RPC field (or Online DDL options) to an older tablet that
 does not understand them. The tablet may still run the DDL while skipping the
 requested session state, so the option can appear to succeed without effect.
-Upgrade vtctld and all tablets that will execute the schema change before using
-`--session-variable`.
+Upgrade vtctld, vtctldclient, vtgate and vttablet before executing a schema
+change with `--session-variable`.
 
 See [#20654](https://github.com/vitessio/vitess/pull/20654) for details.
 
