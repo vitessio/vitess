@@ -765,3 +765,61 @@ func TestTabletThrottlerStrategy_Evaluate_NilCachedResultFailsOpen(t *testing.T)
 		require.False(t, decision.Throttle, "nil cached result must fail open, not throttle")
 	}, "Evaluate must not panic when cached result is nil")
 }
+
+// TestTabletThrottlerStrategy_Evaluate_StaleOverloadedStateFailsOpen verifies that an
+// overloaded (ok=false) cached state is discarded once it ages past the staleness
+// threshold, so the hot path fails open instead of throttling forever.
+//
+// refreshCache preserves the last state when refreshes fail, so during a metrics outage
+// the cache can freeze at ok=false. Without discarding it, every query would keep hitting
+// that stale overloaded state and be throttled indefinitely. This is the reviewer's
+// "overloaded → refresh failures → fail open" scenario.
+func TestTabletThrottlerStrategy_Evaluate_StaleOverloadedStateFailsOpen(t *testing.T) {
+	cfg := makeTabletStrategyConfig(
+		topodatapb.TabletType_PRIMARY.String(),
+		"SELECT",
+		"lag",
+		makeThresholds(10, 100),
+	)
+	overloaded := &throttle.CheckResult{
+		Metrics: map[string]*throttle.MetricResult{
+			"lag": {ResponseCode: tabletmanagerdata.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED, Value: 20},
+		},
+	}
+	strategy := newTestStrategyWithRandom(
+		NewFakeThrottleClientWrapper(overloaded, false),
+		cfg,
+		testRandomFuncs{
+			randFloat64: func() float64 { return 0.5 },
+			randIntN:    func(n int) int { return 99 },
+		},
+	)
+	// running=true so the hot-path miss branch (returns checkOk=true when !running) does
+	// NOT mask the behavior under test.
+	strategy.running.Store(true)
+
+	evaluate := func() registry.ThrottleDecision {
+		return strategy.Evaluate(
+			context.Background(),
+			topodatapb.TabletType_PRIMARY,
+			&sqlparser.ParsedQuery{Query: "SELECT * FROM t"},
+			sqlparser.StmtSelect,
+			1,
+			toQueryAttributesForTest(&querypb.ExecuteOptions{Priority: "100"}),
+		)
+	}
+
+	// A fresh overloaded state must throttle — this proves the rule actually fires when
+	// the signal is current, so the fail-open below is due to staleness and not a
+	// too-aggressive discard that disables throttling outright.
+	strategy.cachedState.Store(&cacheState{ok: false, result: overloaded, refreshedAt: time.Now()})
+	require.True(t, evaluate().Throttle, "fresh overloaded state must throttle")
+
+	// Same overloaded state, now aged past the staleness threshold: it must be discarded
+	// and the query allowed. This is what a prolonged refresh outage looks like.
+	before := cacheStaleConsumption.Get()
+	stale := time.Now().Add(-2 * strategy.cacheStalenessThreshold)
+	strategy.cachedState.Store(&cacheState{ok: false, result: overloaded, refreshedAt: stale})
+	require.False(t, evaluate().Throttle, "stale overloaded state must fail open, not throttle indefinitely")
+	require.Greater(t, cacheStaleConsumption.Get(), before, "discarding stale state must increment CacheStaleConsumption")
+}

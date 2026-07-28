@@ -46,14 +46,15 @@ var (
 
 	_metricsPrefix = querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER.String()
 
-	cacheMisses          = stats.NewCounter(_metricsPrefix+"CacheMisses", "incoming query throttler cache misses")
-	cacheHits            = stats.NewCounter(_metricsPrefix+"CacheHits", "incoming query throttler cache hits")
-	cacheRefreshFailures = stats.NewCounter(_metricsPrefix+"CacheRefreshFailures", "background tablet throttler cache refreshes that did not produce a fresh state (e.g. timeouts)")
-	cacheStaleRefreshes  = stats.NewCounter(_metricsPrefix+"CacheStaleRefreshes", "background refresh ticks that observed the cache already older than the staleness threshold (queries are silently failing open against stale state)")
-	decisionCount        = stats.NewCountersWithMultiLabels(_metricsPrefix+"DecisionCount", "tablet throttler decisions by outcome and reason", []string{"tablet_type", "stmt_type", "path", "outcome", "reason"})
-	fastDecisionLatency  = stats.NewMultiTimings(_metricsPrefix+"FastDecisionLatencyMicroseconds", "fast-path tablet throttler decision latency in microseconds", []string{"tablet_type", "outcome"})
-	fullDecisionLatency  = stats.NewMultiTimings(_metricsPrefix+"FullDecisionLatencyMicroseconds", "full-path tablet throttler decision latency in microseconds", []string{"tablet_type", "stmt_type", "outcome"})
-	cacheLoadLatency     = stats.NewMultiTimings(_metricsPrefix+"CacheLoadLatencyMilliseconds", "tablet throttler cache load latency in milliseconds", []string{"status"})
+	cacheMisses           = stats.NewCounter(_metricsPrefix+"CacheMisses", "incoming query throttler cache misses")
+	cacheHits             = stats.NewCounter(_metricsPrefix+"CacheHits", "incoming query throttler cache hits")
+	cacheRefreshFailures  = stats.NewCounter(_metricsPrefix+"CacheRefreshFailures", "background tablet throttler cache refreshes that did not produce a fresh state (e.g. timeouts)")
+	cacheStaleRefreshes   = stats.NewCounter(_metricsPrefix+"CacheStaleRefreshes", "background refresh ticks that observed the cache already older than the staleness threshold (queries are silently failing open against stale state)")
+	cacheStaleConsumption = stats.NewCounter(_metricsPrefix+"CacheStaleConsumption", "hot-path cache reads that discarded a state older than the staleness threshold and failed open (prevents indefinite throttling during a metrics outage)")
+	decisionCount         = stats.NewCountersWithMultiLabels(_metricsPrefix+"DecisionCount", "tablet throttler decisions by outcome and reason", []string{"tablet_type", "stmt_type", "path", "outcome", "reason"})
+	fastDecisionLatency   = stats.NewMultiTimings(_metricsPrefix+"FastDecisionLatencyMicroseconds", "fast-path tablet throttler decision latency in microseconds", []string{"tablet_type", "outcome"})
+	fullDecisionLatency   = stats.NewMultiTimings(_metricsPrefix+"FullDecisionLatencyMicroseconds", "full-path tablet throttler decision latency in microseconds", []string{"tablet_type", "stmt_type", "outcome"})
+	cacheLoadLatency      = stats.NewMultiTimings(_metricsPrefix+"CacheLoadLatencyMilliseconds", "tablet throttler cache load latency in milliseconds", []string{"status"})
 )
 
 func init() {
@@ -91,8 +92,9 @@ const (
 
 	defaultCacheUpdateInterval = 10 * time.Second
 	// cacheStalenessMultiplier defines how many refresh intervals must pass without a
-	// successful refresh before a cached state is considered stale (for observability).
-	// Stale states are still served (fail open) but increment CacheStaleConsumption.
+	// successful refresh before a cached state is considered stale. Stale states are
+	// discarded on the hot path (fail open) and increment CacheStaleConsumption, so a
+	// metrics outage that froze the cache at ok=false cannot throttle queries forever.
 	cacheStalenessMultiplier = 6
 
 	cacheRefreshStatusSuccess = "success"
@@ -124,8 +126,10 @@ type TabletThrottlerStrategy struct {
 
 	fastPathLatencySampleRate float64
 
-	// cacheStalenessThreshold is the duration past which a cached state is treated as stale for observability purposes (CacheStaleConsumption counter).
-	// Set once in the constructor from the resolved refresh interval; never mutated after.
+	// cacheStalenessThreshold is the age past which a cached state is discarded on the hot
+	// path (fail open, CacheStaleConsumption) and, when observed by the background refresher,
+	// counted via CacheStaleRefreshes. Set once in the constructor from the resolved refresh
+	// interval; never mutated after.
 	cacheStalenessThreshold time.Duration
 
 	// Injectable random functions for testing (defaults to math/rand/v2)
@@ -308,8 +312,14 @@ func (s *TabletThrottlerStrategy) refreshCache() {
 // cache-priming window after Start() or when Evaluate() is called outside the
 // running lifecycle.
 //
-// Staleness is tracked by the background refresher (CacheStaleRefreshes counter),
-// not here — keeping the hot path free of per-query time arithmetic.
+// Staleness is tracked by the background refresher (CacheStaleRefreshes counter)
+// and also enforced here: a state older than cacheStalenessThreshold is discarded
+// and we fail open (returning checkOk=true, incrementing CacheStaleConsumption).
+// refreshCache preserves the last state when refreshes fail, so during a metrics
+// outage the cache can freeze at ok=false; serving that stale state would throttle
+// queries indefinitely. The time check runs only on this full/slow path — the fast
+// path has already bypassed a healthy ok=true state — so the healthy hot path stays
+// free of per-query time arithmetic.
 func (s *TabletThrottlerStrategy) getCachedThrottleResult() (*throttle.CheckResult, bool) {
 	if !s.running.Load() {
 		cacheMisses.Add(1)
@@ -319,6 +329,11 @@ func (s *TabletThrottlerStrategy) getCachedThrottleResult() (*throttle.CheckResu
 	state := s.cachedState.Load()
 	if state == nil {
 		cacheMisses.Add(1)
+		return nil, true
+	}
+
+	if s.isStale(state) {
+		cacheStaleConsumption.Add(1)
 		return nil, true
 	}
 
