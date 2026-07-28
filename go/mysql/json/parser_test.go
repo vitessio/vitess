@@ -31,18 +31,10 @@ func TestParseRawNumber(t *testing.T) {
 		f := func(s, expectedRN, expectedTail string) {
 			t.Helper()
 
-<<<<<<< HEAD
-			flen, ok := readFloat(s)
+			flen, _, ok := readFloat(s)
 			if !ok {
 				t.Fatalf("unexpected error when parsing '%s'", s)
 			}
-||||||| parent of ec6fdee983 (mysql/json: read numbers the way MySQL does (#20722))
-			flen, ok := readFloat(s)
-			require.Truef(t, ok, "unexpected error when parsing '%s'", s)
-=======
-			flen, _, ok := readFloat(s)
-			require.Truef(t, ok, "unexpected error when parsing '%s'", s)
->>>>>>> ec6fdee983 (mysql/json: read numbers the way MySQL does (#20722))
 
 			rn, tail := s[:flen], s[flen:]
 
@@ -72,23 +64,13 @@ func TestParseRawNumber(t *testing.T) {
 		f := func(s, expectedTail string) {
 			t.Helper()
 
-<<<<<<< HEAD
-			flen, ok := readFloat(s)
+			flen, _, ok := readFloat(s)
 			if ok {
 				t.Fatalf("expecting non-nil error")
 			}
 			if s[flen:] != expectedTail {
 				t.Fatalf("unexpected tail; got %q; want %q", s[flen:], expectedTail)
 			}
-||||||| parent of ec6fdee983 (mysql/json: read numbers the way MySQL does (#20722))
-			flen, ok := readFloat(s)
-			require.False(t, ok, "expecting non-nil error")
-			require.Equalf(t, expectedTail, s[flen:], "unexpected tail; got %q; want %q", s[flen:], expectedTail)
-=======
-			flen, _, ok := readFloat(s)
-			require.False(t, ok, "expecting non-nil error")
-			require.Equalf(t, expectedTail, s[flen:], "unexpected tail; got %q; want %q", s[flen:], expectedTail)
->>>>>>> ec6fdee983 (mysql/json: read numbers the way MySQL does (#20722))
 		}
 
 		f("xyz", "xyz")
