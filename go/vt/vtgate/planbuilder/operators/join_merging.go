@@ -277,28 +277,28 @@ func getKeyspaceName(routing Routing) string {
 }
 
 func (jm *joinMerger) merge(ctx *plancontext.PlanningContext, op1, op2 *Route, r Routing, conditions ...engine.Condition) *Route {
+	// A reference table on the preserved side of an outer join keeps its unmatched rows, and it
+	// has the same rows on every shard. Checking the opcode rather than the routing type leaves
+	// unsharded routes out: there is only one shard to read them from.
+	originated := !jm.joinType.IsInner() && op1.Routing.OpCode() == engine.Reference
+	preserved, canMerge := referenceRowsInvariant(r, originated, op1, op2)
+	if !canMerge {
+		debugNoRewrite("apply join merge blocked: %s routing would widen a route that has to stay single-shard", r.OpCode().String())
+		return nil
+	}
+
 	aj := NewApplyJoin(ctx, op1.Source, op2.Source, ctx.SemTable.AndExpressions(jm.predicates...), jm.joinType, false)
 	for _, column := range aj.JoinPredicates.columns {
 		if column.JoinPredicateID != nil {
 			ctx.PredTracker.Set(*column.JoinPredicateID, column.Original)
 		}
 	}
-	merged := &Route{
-		unaryOperator: newUnaryOp(aj),
-		MergedWith:    []*Route{op2},
-		Routing:       r,
-		Conditions:    conditions,
-	}
-	// A reference table on the preserved side of an outer join keeps its unmatched rows, and it
-	// has the same rows on every shard. Checking the opcode rather than the routing type leaves
-	// unsharded routes out: there is only one shard to read them from.
-	if !jm.joinType.IsInner() && op1.Routing.OpCode() == engine.Reference {
-		merged.PreservesReferenceRows = true
-	}
-	if !merged.inheritFrom(op1, op2) {
-		debugNoRewrite("apply join merge blocked: %s routing would widen a route that has to stay single-shard", r.OpCode().String())
-		return nil
-	}
 
-	return merged
+	return &Route{
+		unaryOperator:          newUnaryOp(aj),
+		MergedWith:             []*Route{op2},
+		Routing:                r,
+		Conditions:             conditions,
+		PreservesReferenceRows: preserved,
+	}
 }
