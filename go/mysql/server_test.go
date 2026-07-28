@@ -393,22 +393,6 @@ func TestConnectionWithProxyProtocol(t *testing.T) {
 		c.Close()
 	})
 
-	t.Run("with TCP6 PROXY header carrying IPv4 addresses", func(t *testing.T) {
-		// The nginx OSS stream module emits v1 TCP6 lines with plain IPv4
-		// addresses when the client and backend address families differ.
-		conn, err := net.Dial("tcp", net.JoinHostPort(host, strconv.Itoa(port)))
-		require.NoError(t, err, "net.Dial failed")
-		t.Cleanup(func() { conn.Close() })
-
-		_, err = conn.Write([]byte("PROXY TCP6 10.9.8.7 127.0.0.1 1234 5678\r\n"))
-		require.NoError(t, err, "writing PROXY header failed")
-
-		c := newConn(conn, 0, 0)
-		require.NoError(t, c.clientHandshake(params, ConnectionAttributes{}), "handshake after a TCP6 PROXY header with IPv4 addresses should succeed")
-		require.Equal(t, "10.9.8.7:1234", th.LastConn().RemoteAddr().String(), "server should report the source address from the PROXY header")
-		c.Close()
-	})
-
 	t.Run("without PROXY header", func(t *testing.T) {
 		c, err := Connect(ctx, params)
 		require.NoError(t, err, "a connection without a PROXY header should complete the regular MySQL handshake")

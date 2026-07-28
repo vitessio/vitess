@@ -28,6 +28,7 @@
         - [Preparing a statement no longer starts an implicit transaction](#vtgate-prepare-no-implicit-tx)
         - [Stricter validation of SQL-level PREPARE statements](#vtgate-prepare-stricter-validation)
         - [PROXY protocol v2 headers larger than 4 KiB are rejected](#vtgate-proxy-protocol-v2-header-cap)
+        - [Stricter PROXY protocol v1 header validation](#vtgate-proxy-protocol-v1-strictness)
     - **[Reparent](#minor-changes-reparent)**
         - [`EmergencyReparentShard` no longer waits on replicas that cannot win the election](#ers-lagging-relay-log-wait)
     - **[VTTablet](#minor-changes-vttablet)**
@@ -256,7 +257,22 @@ On listeners with `--proxy-protocol` enabled, PROXY protocol v2 headers whose pa
 
 This comes from upgrading the `go-proxyproto` library, which now caps the v2 header length as a memory-allocation DoS mitigation: the parser allocates the advertised length before reading, so an untrusted peer could previously force a 64 KiB allocation per connection. Typical headers fit comfortably — a `PP2_SUBTYPE_SSL_CLIENT_CERT` TLV carrying a DER-encoded client certificate is usually 1–2 KiB.
 
-**Impact**: Only deployments whose proxy emits v2 headers with more than 4 KiB of TLV data are affected; those connections will fail before the handshake instead of connecting. PROXY protocol v1 headers and v2 headers within the limit are unaffected.
+**Impact**: Only deployments whose proxy emits v2 headers with more than 4 KiB of TLV data are affected; those connections will fail before the handshake instead of connecting. Headers within the limit are unaffected.
+
+See [#20733](https://github.com/vitessio/vitess/pull/20733) for details.
+
+#### <a id="vtgate-proxy-protocol-v1-strictness"/>Stricter PROXY protocol v1 header validation</a>
+
+On listeners with `--proxy-protocol` enabled, malformed PROXY protocol v1 headers that earlier versions tolerated are now rejected, and the connection is closed before the MySQL handshake. This also comes from the go-proxyproto upgrade, which brought the v1 parser in line with the PROXY protocol specification. The newly rejected forms are:
+
+- `TCP6` headers whose address fields contain plain IPv4 addresses. The specification requires addresses in IPv6 format on a `TCP6` line; the nginx OSS stream module is known to emit the IPv4 form when it proxies between address families (for example, an IPv6 client reaching an IPv4 upstream).
+- Port fields with leading zeros (`01234`) or a sign (`+80`).
+- Header lines with extra fields after the destination port.
+- IPv6 addresses carrying a zone identifier (`fe80::1%eth0`).
+
+Specification-conformant v1 headers, as emitted by HAProxy, AWS load balancers, and common nginx configurations, are unaffected.
+
+**Impact**: Deployments whose proxy emits one of the forms above — most notably the nginx stream module proxying between IPv6 clients and IPv4 upstreams — will have those connections rejected before the MySQL handshake. Configure the proxy to emit specification-conformant headers (for nginx, listen on a matching address family or on a v4-mapped socket so addresses are rendered in IPv6 form).
 
 See [#20733](https://github.com/vitessio/vitess/pull/20733) for details.
 
