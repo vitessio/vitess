@@ -180,6 +180,10 @@ func NewFromString(s string) (d Decimal, err error) {
 		}
 		i++
 	}
+
+	// The number starts after the leading whitespace, so that is where a sign
+	// is allowed and where the mantissa is read from.
+	start := i
 next:
 	for i < maxLen {
 		switch {
@@ -187,7 +191,7 @@ next:
 			// A sign is allowed at the start of the number and at the start of
 			// the exponent, nowhere else. With no exponent seen yet expPos is
 			// -1, so the second test collapses into the first.
-			if i != 0 && i != expPos+1 {
+			if i != start && i != expPos+1 {
 				break next
 			}
 		case s[i] >= '0' && s[i] <= '9':
@@ -216,14 +220,14 @@ next:
 	var si string
 	switch {
 	case dotPos == -1 && expPos == -1:
-		si = s[:i]
+		si = s[start:i]
 	case expPos == -1:
-		si = s[:dotPos] + s[dotPos+1:i]
+		si = s[start:dotPos] + s[dotPos+1:i]
 		exp -= int64(i - dotPos - 1)
 	case dotPos == -1:
-		si = s[:expPos]
+		si = s[start:expPos]
 	default:
-		si = s[:dotPos] + s[dotPos+1:expPos]
+		si = s[start:dotPos] + s[dotPos+1:expPos]
 		exp -= int64(expPos - dotPos - 1)
 	}
 

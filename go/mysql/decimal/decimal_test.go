@@ -209,6 +209,13 @@ func TestNewFromStringLeadingPlus(t *testing.T) {
 		"+1e9":        "1000000000",
 		"+1e+9":       "1000000000",
 		"+123.456e-2": "1.23456",
+		// The number starts after any leading whitespace, and so does the sign.
+		" +1":     "1",
+		" -1":     "-1",
+		"  +1.5":  "1.5",
+		" -1e+5":  "-100000",
+		"\t-2":    "-2",
+		" 1.5e+3": "1500",
 	} {
 		t.Run(in, func(t *testing.T) {
 			d, err := NewFromString(in)
