@@ -217,8 +217,14 @@ const maxFloat64Digits = 308
 // largest double whenever the digits it is written to, moved by its exponent,
 // stay within the ones that double has — len(num) overcounts the digits, which
 // only makes the answer yes more often.
+//
+// Only an exponent that moves the decimal point to the right counts against
+// those digits. A negative one buys nothing back: the digits are read into the
+// significand before the exponent is applied, so a significand that ran out of
+// room on the way in has already gone infinite, and moving the point afterwards
+// leaves it there.
 func mayExceedFloat64(num string, exponent int) bool {
-	return len(num)+exponent > maxFloat64Digits
+	return len(num)+max(exponent, 0) > maxFloat64Digits
 }
 
 // pow10 holds the powers of ten that a number's digits are scaled by, which is

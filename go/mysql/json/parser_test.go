@@ -98,6 +98,12 @@ func TestParseNumberTooBigForDouble(t *testing.T) {
 			"1e-1000",
 			"1e-1024",
 			"0." + strings.Repeat("0", 400) + "1",
+			// Digits a double has room for, moved out of the way by a negative
+			// exponent.
+			"1" + strings.Repeat("0", 307) + "e-1",
+			"1" + strings.Repeat("0", 307) + "e-400",
+			"-1" + strings.Repeat("0", 307) + "e-400",
+			"0." + strings.Repeat("0", 400) + "1e-400",
 			// A written sign and a padded exponent are spellings, not
 			// magnitudes, and none of these is anywhere near the limit.
 			"1e+0",
@@ -149,6 +155,15 @@ func TestParseNumberTooBigForDouble(t *testing.T) {
 			// Within the written bound, but too big once converted.
 			"10e308",
 			"1" + strings.Repeat("0", 30) + "e279",
+			// More digits than a double has room for. The digits are read before
+			// the exponent is applied, so a negative exponent does not buy the
+			// room back however far it moves the decimal point afterwards.
+			"1" + strings.Repeat("0", 320) + "e-20",
+			"1" + strings.Repeat("0", 350) + "e-50",
+			"1" + strings.Repeat("0", 400) + "e-400",
+			"-1" + strings.Repeat("0", 400) + "e-400",
+			"1" + strings.Repeat("0", 400) + ".5e-400",
+			strings.Repeat("9", 400) + "e-100",
 			// A number anywhere in the document invalidates all of it.
 			"[1, 1e309]",
 			`{"a": 1e309}`,
