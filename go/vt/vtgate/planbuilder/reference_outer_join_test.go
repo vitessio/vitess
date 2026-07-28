@@ -84,6 +84,21 @@ func TestReferencePreservedByOuterJoinIsNotWidenedByAUnion(t *testing.T) {
 		"merging the route into the scatter branch would return each unmatched preserved row once per shard")
 }
 
+// A refused merge has to leave the plan as it was. The CTE merger rewrites the recursion definition
+// as it goes, so the routing is checked before any of that: a rejection afterwards leaves the CTE
+// marked as merged, and the term query then reads the CTE as a table instead of taking the value
+// from the bind variable.
+func TestRefusedCTEMergeLeavesAWorkingPlan(t *testing.T) {
+	primitive := planReferenceOuterJoin(t,
+		"with recursive c as (select r1.col as col from ref_with_source as r1 left join ref as r2 on r1.col = r2.col union all select u.col from `user` as u join c on u.col = c.col) select col from c")
+
+	cte, ok := primitive.(*engine.RecurseCTE)
+	require.True(t, ok, "the scatter term cannot be merged into the reference seed, got %T", primitive)
+	term, ok := cte.Term.(*engine.Route)
+	require.True(t, ok, "expected the recursive term to be a route, got %T", cte.Term)
+	require.Equal(t, "select u.col from `user` as u where u.col = :c_col", term.Query)
+}
+
 // A dual on the preserved side owes its row for the same reason a reference table does, and its
 // routing reports the same opcode.
 func TestDualPreservedByOuterJoinRunsWithoutADestination(t *testing.T) {
