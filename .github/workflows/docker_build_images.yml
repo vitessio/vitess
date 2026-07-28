@@ -53,6 +53,8 @@ jobs:
           context: .
           file: ${{ env.DOCKERFILE }}
           push: true
+          provenance: mode=max
+          sbom: true
           tags: vitess/vttestserver:${{ matrix.branch }}
 
       ######
@@ -75,6 +77,8 @@ jobs:
           context: .
           file: ${{ env.DOCKERFILE }}
           push: true
+          provenance: mode=max
+          sbom: true
           tags: ${{ env.DOCKER_TAG }}
 
   build_and_push_lite:
@@ -115,6 +119,8 @@ jobs:
           context: .
           file: ${{ env.DOCKERFILE }}
           push: true
+          provenance: mode=max
+          sbom: true
           tags: vitess/lite:${{ matrix.branch }}
 
       ######
@@ -141,6 +147,8 @@ jobs:
           context: .
           file: ${{ env.DOCKERFILE }}
           push: true
+          provenance: mode=max
+          sbom: true
           tags: ${{ env.DOCKER_TAG }}
 
   build_and_push_components:
@@ -179,6 +187,8 @@ jobs:
         with:
           context: ${{ env.DOCKER_CTX }}
           push: true
+          provenance: mode=max
+          sbom: true
           tags: vitess/${{ matrix.component }}:latest
           build-args: |
             VT_BASE_VER=latest
@@ -191,6 +201,8 @@ jobs:
         with:
           context: ${{ env.DOCKER_CTX }}
           push: true
+          provenance: mode=max
+          sbom: true
           tags: vitess/${{ matrix.component }}:latest-${{ matrix.debian }}
           build-args: |
             VT_BASE_VER=latest
@@ -224,6 +236,8 @@ jobs:
         with:
           context: ${{ env.DOCKER_CTX }}
           push: true
+          provenance: mode=max
+          sbom: true
           tags: ${{ env.DOCKER_TAG }}
           build-args: |
             VT_BASE_VER=${{ env.TAG_NAME }}
@@ -238,6 +252,8 @@ jobs:
         with:
           context: ${{ env.DOCKER_CTX }}
           push: true
+          provenance: mode=max
+          sbom: true
           tags: ${{ env.DOCKER_TAG_DEFAULT_DEBIAN }}
           build-args: |
             VT_BASE_VER=${{ env.TAG_NAME }}
