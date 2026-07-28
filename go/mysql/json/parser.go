@@ -203,7 +203,7 @@ func parseValue(s string, c *cache, depth int) (*Value, string, error) {
 	v.s = s[:flen]
 	v.n = numberTypeRaw
 	if mayExceedFloat64(v.s, exponent) && !mysqlNumberFits(v.s) {
-		return nil, s, fmt.Errorf("number too big to be stored in double: %q", v.s)
+		return nil, s, fmt.Errorf("number too big to be stored in double: %q", startEndString(v.s))
 	}
 	return v, s[flen:], nil
 }

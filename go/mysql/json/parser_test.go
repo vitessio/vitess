@@ -177,6 +177,20 @@ func TestParseNumberTooBigForDouble(t *testing.T) {
 		}
 	})
 
+	// Nothing bounds how long a number may be written, and Parse copies the
+	// message it wraps, so naming the number in full would carry the document
+	// twice over into the error a client is handed. It is abbreviated instead,
+	// as the unparsed tail already is.
+	t.Run("the error abbreviates a long number", func(t *testing.T) {
+		doc := "1" + strings.Repeat("0", 100000)
+
+		var p Parser
+		_, err := p.Parse(doc)
+		require.ErrorContains(t, err, "number too big to be stored in double")
+		require.NotContains(t, err.Error(), strings.Repeat("0", 200),
+			"the error carries the number it is reporting on")
+	})
+
 	// A negative exponent is not bounded, only stopped before it overflows the
 	// int it accumulates into, and what sends a number through the conversion at
 	// all is being written to more digits than a double holds. These cross the
