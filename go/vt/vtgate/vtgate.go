@@ -191,7 +191,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	utils.SetFlagBoolVar(fs, &normalizeQueries, "normalize-queries", normalizeQueries, "Rewrite queries with bind vars. Turn this off if the app itself sends normalized queries with bind vars.")
 	fs.BoolVar(&terseErrors, "vtgate-config-terse-errors", terseErrors, "prevent bind vars from escaping in returned errors")
 	fs.IntVar(&truncateErrorLen, "truncate-error-len", truncateErrorLen, "truncate errors sent to client if they are longer than this value (0 means do not truncate)")
-	utils.SetFlagIntVar(fs, &streamBufferSize, "stream-buffer-size", streamBufferSize, "the number of bytes sent from vtgate for each stream call. It's recommended to keep this value in sync with vttablet's query-server-config-stream-buffer-size.")
+	utils.SetFlagIntVar(fs, &streamBufferSize, "stream-buffer-size", streamBufferSize, "the number of bytes sent in each gRPC streaming API response.")
 	utils.SetFlagInt64Var(fs, &queryPlanCacheMemory, "gate-query-cache-memory", queryPlanCacheMemory, "gate server query cache size in bytes, maximum amount of memory to be cached. vtgate analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache.")
 	utils.SetFlagIntVar(fs, &maxMemoryRows, "max-memory-rows", maxMemoryRows, "Maximum number of rows that will be held in memory for intermediate results as well as the final result.")
 	utils.SetFlagIntVar(fs, &warnMemoryRows, "warn-memory-rows", warnMemoryRows, "Warning threshold for in-memory results. A row count higher than this amount will cause the VtGateWarnings.ResultsExceeded counter to be incremented.")
@@ -412,7 +412,6 @@ func Init(
 
 	eConfig := ExecutorConfig{
 		Normalize:                 normalizeQueries,
-		StreamSize:                streamBufferSize,
 		AllowScatter:              !noScatter,
 		PreventCrossKeyspaceReads: preventCrossKeyspaceReads,
 		WarmingReadsPercent:       warmingReadsPercent,

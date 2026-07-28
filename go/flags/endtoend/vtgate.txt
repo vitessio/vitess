@@ -204,7 +204,7 @@ Flags:
       --stats-emit-period duration                                       Interval between emitting stats to all registered backends (default 1m0s)
       --statsd-address string                                            Address for statsd client
       --statsd-sample-rate float                                         Sample rate for statsd metrics (default 1)
-      --stream-buffer-size int                                           the number of bytes sent from vtgate for each stream call. It's recommended to keep this value in sync with vttablet's query-server-config-stream-buffer-size. (default 32768)
+      --stream-buffer-size int                                           the number of bytes sent in each gRPC streaming API response. (default 32768)
       --table-refresh-interval int                                       interval in milliseconds to refresh tables in status page with refreshRequired class
       --tablet-filter-tags StringMap                                     Specifies a comma-separated list of tablet tags (as key:value pairs) to filter the tablets to watch.
       --tablet-filters strings                                           Specifies a comma-separated list of 'keyspace|shard_name or keyrange' values to filter the tablets to watch.

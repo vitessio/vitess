@@ -364,7 +364,7 @@ Flags:
       --stats-common-tags strings                                        Comma-separated list of common tags for the stats backend. It provides both label and values. Example: label1:value1,label2:value2
       --stats-drop-variables string                                      Variables to be dropped from the list of exported variables.
       --stats-emit-period duration                                       Interval between emitting stats to all registered backends (default 1m0s)
-      --stream-buffer-size int                                           the number of bytes sent from vtgate for each stream call. It's recommended to keep this value in sync with vttablet's query-server-config-stream-buffer-size. (default 32768)
+      --stream-buffer-size int                                           the number of bytes sent in each gRPC streaming API response. (default 32768)
       --stream-health-buffer-size uint                                   max streaming health entries to buffer per streaming health client (default 20)
       --table-gc-lifecycle string                                        States for a DROP TABLE garbage collection cycle. Default is 'hold,purge,evac,drop', use any subset ('drop' implicitly always included) (default "hold,purge,evac,drop")
       --table-refresh-interval int                                       interval in milliseconds to refresh tables in status page with refreshRequired class

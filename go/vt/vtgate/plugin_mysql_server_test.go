@@ -637,19 +637,6 @@ func TestComQueryMulti(t *testing.T) {
 								Charset: collations.CollationBinaryID,
 							},
 						},
-					},
-					QueryError: nil,
-				},
-				{
-					QueryResult: &sqltypes.Result{
-						Fields: []*querypb.Field{
-							{
-								Name:    "1",
-								Type:    sqltypes.Int64,
-								Flags:   uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_NOT_NULL_FLAG),
-								Charset: collations.CollationBinaryID,
-							},
-						},
 						Rows: [][]sqltypes.Value{
 							{
 								sqltypes.NewInt64(1),
@@ -659,8 +646,8 @@ func TestComQueryMulti(t *testing.T) {
 					QueryError: nil,
 				},
 			},
-			more:        []bool{false, false, false},
-			firstPacket: []bool{true, false, false},
+			more:        []bool{false, false},
+			firstPacket: []bool{true, false},
 			errExpected: false,
 		}, {
 			name: "Multiple queries - olap - success",
@@ -690,35 +677,9 @@ func TestComQueryMulti(t *testing.T) {
 								Charset: collations.CollationBinaryID,
 							},
 						},
-					},
-					QueryError: nil,
-				},
-				{
-					QueryResult: &sqltypes.Result{
-						Fields: []*querypb.Field{
-							{
-								Name:    "1",
-								Type:    sqltypes.Int64,
-								Flags:   uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_NOT_NULL_FLAG),
-								Charset: collations.CollationBinaryID,
-							},
-						},
 						Rows: [][]sqltypes.Value{
 							{
 								sqltypes.NewInt64(1),
-							},
-						},
-					},
-					QueryError: nil,
-				},
-				{
-					QueryResult: &sqltypes.Result{
-						Fields: []*querypb.Field{
-							{
-								Name:    "2",
-								Type:    sqltypes.Int64,
-								Flags:   uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_NOT_NULL_FLAG),
-								Charset: collations.CollationBinaryID,
 							},
 						},
 					},
@@ -778,19 +739,6 @@ func TestComQueryMulti(t *testing.T) {
 								Charset: collations.CollationBinaryID,
 							},
 						},
-					},
-					QueryError: nil,
-				},
-				{
-					QueryResult: &sqltypes.Result{
-						Fields: []*querypb.Field{
-							{
-								Name:    "3",
-								Type:    sqltypes.Int64,
-								Flags:   uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_NOT_NULL_FLAG),
-								Charset: collations.CollationBinaryID,
-							},
-						},
 						Rows: [][]sqltypes.Value{
 							{
 								sqltypes.NewInt64(3),
@@ -800,8 +748,8 @@ func TestComQueryMulti(t *testing.T) {
 					QueryError: nil,
 				},
 			},
-			more:        []bool{true, true, true, true, true, true, false, false, false},
-			firstPacket: []bool{true, false, false, true, false, false, true, false, false},
+			more:        []bool{true, true, true, true, false, false},
+			firstPacket: []bool{true, false, true, false, true, false},
 			errExpected: false,
 		}, {
 			name: "Multiple queries - olap - failure",
@@ -831,35 +779,9 @@ func TestComQueryMulti(t *testing.T) {
 								Charset: collations.CollationBinaryID,
 							},
 						},
-					},
-					QueryError: nil,
-				},
-				{
-					QueryResult: &sqltypes.Result{
-						Fields: []*querypb.Field{
-							{
-								Name:    "1",
-								Type:    sqltypes.Int64,
-								Flags:   uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_NOT_NULL_FLAG),
-								Charset: collations.CollationBinaryID,
-							},
-						},
 						Rows: [][]sqltypes.Value{
 							{
 								sqltypes.NewInt64(1),
-							},
-						},
-					},
-					QueryError: nil,
-				},
-				{
-					QueryResult: &sqltypes.Result{
-						Fields: []*querypb.Field{
-							{
-								Name:    "2",
-								Type:    sqltypes.Int64,
-								Flags:   uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_NOT_NULL_FLAG),
-								Charset: collations.CollationBinaryID,
 							},
 						},
 					},
@@ -901,8 +823,8 @@ func TestComQueryMulti(t *testing.T) {
 					QueryError:  errors.New("syntax error at position 8 near 'parsing' (errno 1105) (sqlstate HY000)"),
 				},
 			},
-			more:        []bool{true, true, true, true, true, true, false},
-			firstPacket: []bool{true, false, false, true, false, false, true},
+			more:        []bool{true, true, true, true, false},
+			firstPacket: []bool{true, false, true, false, true},
 			errExpected: false,
 		},
 	}

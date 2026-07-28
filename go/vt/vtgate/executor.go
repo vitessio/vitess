@@ -112,9 +112,8 @@ func init() {
 // the abilities of the underlying vttablets.
 type (
 	ExecutorConfig struct {
-		Name       string
-		Normalize  bool
-		StreamSize int
+		Name      string
+		Normalize bool
 		// AllowScatter will fail planning if set to false and a plan contains any scatter queries
 		AllowScatter bool
 		// PreventCrossKeyspaceReads will fail planning if set to true and a plan contains any cross-keyspace joins or UNIONs.
@@ -335,41 +334,22 @@ func (e *Executor) StreamExecute(
 	resultHandler := func(ctx context.Context, plan *engine.Plan, vc *econtext.VCursorImpl, bindVars map[string]*querypb.BindVariable, execStart time.Time) error {
 		var seenResults atomic.Bool
 		var resultMu sync.Mutex
-		result := &sqltypes.Result{}
 		if canReturnRows(plan.QueryType) {
 			srr.callback = func(qr *sqltypes.Result) error {
 				resultMu.Lock()
 				defer resultMu.Unlock()
-				// If the row has field info, send it separately.
-				// TODO(sougou): this behavior is for handling tests because
-				// the framework currently sends all results as one packet.
-				byteCount := 0
-				if len(qr.Fields) > 0 {
-					result.Fields = qr.Fields
-					if err := callback(qr.Metadata()); err != nil {
-						return err
-					}
-					seenResults.Store(true)
+				// Forward each tablet packet to the client as it arrives, without
+				// re-chunking to a fixed packet size: the gRPC streaming API
+				// re-chunks to --stream-buffer-size at the service boundary
+				// (grpcvtgateservice), and the MySQL protocol path streams the
+				// tablet packets verbatim. An OK-only packet (no fields, no rows)
+				// carries no result-set data the streaming path delivers, so it is
+				// left alone, unchanged from before.
+				if len(qr.Fields) == 0 && len(qr.Rows) == 0 {
+					return nil
 				}
-
-				for _, row := range qr.Rows {
-					result.Rows = append(result.Rows, row)
-
-					for _, col := range row {
-						byteCount += col.Len()
-					}
-
-					if byteCount >= e.config.StreamSize {
-						err := callback(result)
-						seenResults.Store(true)
-						result = &sqltypes.Result{}
-						byteCount = 0
-						if err != nil {
-							return err
-						}
-					}
-				}
-				return nil
+				seenResults.Store(true)
+				return callback(qr)
 			}
 		}
 
@@ -410,9 +390,11 @@ func (e *Executor) StreamExecute(
 			return nil
 		}
 
-		// Send left-over rows if there is no error on execution.
-		if len(result.Rows) > 0 || !seenResults.Load() {
-			if err := callback(result); err != nil {
+		// Packets are forwarded to the client as they arrive, so there are no
+		// left-over rows to flush here. If the primitive produced no packets at
+		// all, still emit one empty result so the client sees a response.
+		if !seenResults.Load() {
+			if err := callback(&sqltypes.Result{}); err != nil {
 				return err
 			}
 		}
