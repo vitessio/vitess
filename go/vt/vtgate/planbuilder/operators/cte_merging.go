@@ -78,6 +78,12 @@ func tryMergeCTESharded(ctx *plancontext.PlanningContext, seed, term *Route, in 
 }
 
 func mergeCTE(ctx *plancontext.PlanningContext, seed, term *Route, r Routing, in *RecurseCTE, conditions []engine.Condition) *Route {
+	preserved, canMerge := referenceRowsInvariant(r, false, seed, term)
+	if !canMerge {
+		debugNoRewrite("CTE merge blocked: %s routing would widen a route that has to stay single-shard", r.OpCode().String())
+		return nil
+	}
+
 	in.Def.Merged = true
 	hz := in.Horizon
 	hz.Source = term.Source
@@ -96,15 +102,11 @@ func mergeCTE(ctx *plancontext.PlanningContext, seed, term *Route, r Routing, in
 		OuterID:        in.OuterID,
 		Distinct:       in.Distinct,
 	}
-	merged := &Route{
-		Routing:       r,
-		unaryOperator: newUnaryOp(cte),
-		MergedWith:    []*Route{term},
-		Conditions:    conditions,
+	return &Route{
+		Routing:                r,
+		unaryOperator:          newUnaryOp(cte),
+		MergedWith:             []*Route{term},
+		Conditions:             conditions,
+		PreservesReferenceRows: preserved,
 	}
-	if !merged.inheritFrom(seed, term) {
-		return nil
-	}
-
-	return merged
 }
