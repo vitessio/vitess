@@ -17,6 +17,7 @@ limitations under the License.
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -25,6 +26,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
 
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
@@ -85,6 +89,88 @@ func TestPersistKeyspace_NoTempLeftover(t *testing.T) {
 		names = append(names, e.Name())
 	}
 	assert.Equal(t, []string{"ks1.json"}, names, "only the final file should remain")
+}
+
+// TestVschemaPersisterFlush_WritesCurrentTopoState covers the shutdown path:
+// persisting a vschema change is asynchronous, so a change that reached the
+// topo shortly before shutdown may never have been handed to the watcher. The
+// flush at shutdown has to write it from the topo, otherwise the next startup
+// comes back with a stale vschema.
+func TestVschemaPersisterFlush_WritesCurrentTopoState(t *testing.T) {
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "cell1")
+	t.Cleanup(func() { ts.Close() })
+
+	saveVSchema(t, ctx, ts, "cell1", "ks1", true)
+
+	dir := t.TempDir()
+	p := &vschemaPersister{dir: dir}
+
+	// No watcher is running here: flush alone has to get the vschema on disk.
+	p.flush(ctx, ts, "cell1")
+
+	assert.True(t, readPersistedKeyspace(t, dir, "ks1").Sharded)
+}
+
+// TestVschemaPersisterFlush_SealsLaterUpdates guards the ordering between the
+// shutdown flush and the watcher goroutine. The watcher can still be holding
+// updates it has not consumed yet, and those are necessarily no newer than what
+// the flush read from the topo, so they must not replace it on disk.
+func TestVschemaPersisterFlush_SealsLaterUpdates(t *testing.T) {
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "cell1")
+	t.Cleanup(func() { ts.Close() })
+
+	saveVSchema(t, ctx, ts, "cell1", "ks1", true)
+
+	dir := t.TempDir()
+	p := &vschemaPersister{dir: dir}
+	p.flush(ctx, ts, "cell1")
+
+	p.persistNewSrvVSchema(&vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{"ks1": {Sharded: false}},
+	})
+
+	assert.True(t, readPersistedKeyspace(t, dir, "ks1").Sharded, "an update delivered after the shutdown flush should have been dropped")
+}
+
+// TestVschemaPersisterFlush_LeavesFileOnTopoError checks that a failed flush
+// leaves the previously persisted vschema alone, so an unreadable topo at
+// shutdown cannot cost us the file we already had.
+func TestVschemaPersisterFlush_LeavesFileOnTopoError(t *testing.T) {
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "cell1")
+	t.Cleanup(func() { ts.Close() })
+
+	dir := t.TempDir()
+	final := filepath.Join(dir, "ks1.json")
+	original := []byte(`{"sharded": true}`)
+	require.NoError(t, os.WriteFile(final, original, 0o644))
+
+	p := &vschemaPersister{dir: dir}
+	p.flush(ctx, ts, "nosuchcell")
+
+	got, err := os.ReadFile(final)
+	require.NoError(t, err)
+	assert.Equal(t, original, got)
+	assert.False(t, p.sealed, "a failed flush must not seal the persister")
+}
+
+func saveVSchema(t *testing.T, ctx context.Context, ts *topo.Server, cell, ksName string, sharded bool) {
+	t.Helper()
+	require.NoError(t, ts.UpdateSrvVSchema(ctx, cell, &vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{ksName: {Sharded: sharded}},
+	}))
+}
+
+func readPersistedKeyspace(t *testing.T, dir, ksName string) *vschemapb.Keyspace {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(dir, ksName+".json"))
+	require.NoError(t, err)
+
+	ks := &vschemapb.Keyspace{}
+	require.NoError(t, json.Unmarshal(data, ks))
+	return ks
 }
 
 // TestPersistKeyspace_ExistingFilePreservedOnFailure is the core property:

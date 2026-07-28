@@ -22,12 +22,29 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"sync"
 
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+)
+
+type (
+	// vschemaPersister writes keyspace vschemas to disk. All writes go through
+	// it so that the final flush at shutdown cannot be undone by an older
+	// update that the watcher goroutine had not processed yet.
+	vschemaPersister struct {
+		dir string
+
+		mu sync.Mutex
+		// sealed is set once flush has written the authoritative topo state to
+		// disk. Watcher updates arriving after that point are dropped, because
+		// they can only be equal to or older than what flush wrote.
+		sealed bool
+	}
 )
 
 func startVschemaWatcher(ctx context.Context, vschemaPersistenceDir string, ts *topo.Server) {
@@ -46,8 +63,23 @@ func startVschemaWatcher(ctx context.Context, vschemaPersistenceDir string, ts *
 		os.Exit(1)
 	}
 
+	persister := &vschemaPersister{dir: vschemaPersistenceDir}
+
+	// Persisting a vschema change is asynchronous: an `alter vschema` statement
+	// returns as soon as the change is in the topo, and the watcher below only
+	// writes it to disk once the topo notifies it. Without a flush at shutdown,
+	// a change made shortly before the process exits is lost, and the next
+	// startup silently comes back with a stale vschema.
+	//
+	// OnClose runs after the gRPC and MySQL servers have stopped, so no further
+	// vschema change can arrive, and both ctx and ts stay valid until after all
+	// hooks have fired.
+	servenv.OnClose(func() {
+		persister.flush(ctx, ts, tpb.Cells[0])
+	})
+
 	// Now watch for changes in the SrvVSchema object and persist them to disk.
-	go watchSrvVSchema(ctx, vschemaPersistenceDir, ts, tpb.Cells[0])
+	go watchSrvVSchema(ctx, persister, ts, tpb.Cells[0])
 }
 
 func loadKeyspacesFromDir(ctx context.Context, dir string, ts *topo.Server) {
@@ -81,7 +113,7 @@ func loadKeyspacesFromDir(ctx context.Context, dir string, ts *topo.Server) {
 	}
 }
 
-func watchSrvVSchema(ctx context.Context, dir string, ts *topo.Server, cell string) {
+func watchSrvVSchema(ctx context.Context, persister *vschemaPersister, ts *topo.Server, cell string) {
 	data, ch, err := ts.WatchSrvVSchema(ctx, tpb.Cells[0])
 	if err != nil {
 		log.Error(fmt.Sprintf("WatchSrvVSchema failed: %v", err))
@@ -92,25 +124,61 @@ func watchSrvVSchema(ctx context.Context, dir string, ts *topo.Server, cell stri
 		log.Error(fmt.Sprintf("WatchSrvVSchema could not retrieve initial vschema: %v", data.Err))
 		os.Exit(1)
 	}
-	persistNewSrvVSchema(dir, data.Value)
+	persister.persistNewSrvVSchema(data.Value)
 
 	for update := range ch {
 		if update.Err != nil {
 			log.Error(fmt.Sprintf("WatchSrvVSchema returned an error: %v", update.Err))
 		} else {
-			persistNewSrvVSchema(dir, update.Value)
+			persister.persistNewSrvVSchema(update.Value)
 		}
 	}
 }
 
-func persistNewSrvVSchema(dir string, srvVSchema *vschemapb.SrvVSchema) {
+// flush writes the vschema currently in the topo to disk and seals the
+// persister, so that a watcher update the goroutine had not consumed yet cannot
+// replace it with an older vschema afterwards.
+//
+// It gives up without sealing if the topo read or any keyspace write fails, in
+// which case whatever is already on disk is left in place, exactly as before.
+func (p *vschemaPersister) flush(ctx context.Context, ts *topo.Server, cell string) {
+	srvVSchema, err := ts.GetSrvVSchema(ctx, cell)
+	if err != nil {
+		log.Error(fmt.Sprintf("Unable to read SrvVSchema for cell %v to persist it on shutdown: %v", cell, err))
+		return
+	}
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.sealed {
+		return
+	}
+	if p.persistNewSrvVSchemaLocked(srvVSchema) {
+		p.sealed = true
+	}
+}
+
+func (p *vschemaPersister) persistNewSrvVSchema(srvVSchema *vschemapb.SrvVSchema) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.sealed {
+		return
+	}
+	p.persistNewSrvVSchemaLocked(srvVSchema)
+}
+
+// persistNewSrvVSchemaLocked reports whether every keyspace was written.
+func (p *vschemaPersister) persistNewSrvVSchemaLocked(srvVSchema *vschemapb.SrvVSchema) bool {
+	ok := true
 	for ksName, ks := range srvVSchema.Keyspaces {
-		if err := persistKeyspace(dir, ksName, ks); err != nil {
+		if err := persistKeyspace(p.dir, ksName, ks); err != nil {
 			log.Error(fmt.Sprintf("Error persisting keyspace %v: %v", ksName, err))
+			ok = false
 			continue
 		}
-		log.Info(fmt.Sprintf("Persisted keyspace %v to %v", ksName, dir))
+		log.Info(fmt.Sprintf("Persisted keyspace %v to %v", ksName, p.dir))
 	}
+	return ok
 }
 
 // persistKeyspace writes a keyspace's vschema to <dir>/<ksName>.json atomically.
