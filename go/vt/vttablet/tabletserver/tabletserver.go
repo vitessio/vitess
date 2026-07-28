@@ -919,21 +919,22 @@ func (tsv *TabletServer) Execute(ctx context.Context, session queryservice.Sessi
 	// A reserved-connection keepalive only touches the connections' tablet-side
 	// idle timers: nothing is executed, and nothing is sent to MySQL, so
 	// mysqld's wait_timeout keeps counting only real user traffic. reservedID
-	// plus any options.reserved_conn_keep_alive_ids are all refreshed in this
-	// one RPC; the result reports which of them no longer exist so the caller
-	// can stop refreshing them. Callers pass the ids to refresh in
-	// reserved_conn_keep_alive_ids and leave reservedID zero, so that a tablet
-	// predating this option runs the fallback query on a throwaway pooled
-	// connection instead of a reserved one.
-	if options.GetReservedConnKeepAlive() {
-		ids := options.GetReservedConnKeepAliveIds()
+	// plus all the ids in the batch are refreshed in this one RPC; the result
+	// reports which of them no longer exist so the caller can stop refreshing
+	// them. Callers pass the ids in the batch and leave reservedID zero, so
+	// that a tablet predating this request field runs the fallback query on a
+	// throwaway pooled connection instead of a reserved one. The signal
+	// arrives as a request-level field (via the context, see
+	// queryservice.ContextWithReservedConnKeepAlive), never in ExecuteOptions:
+	// options round-trip through client sessions, and a vtgate predating the
+	// feature would relay client-injected option fields here verbatim.
+	if ids, isKeepAlive := queryservice.ReservedConnKeepAliveIDs(ctx); isKeepAlive {
 		if reservedID == 0 && len(ids) == 0 {
 			return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "reserved connection keepalive requires at least one reserved ID")
 		}
-		// Bound the batch before allocating: vtgate strips this control from
-		// client sessions, but the field is still client-shaped on the wire, so
-		// the tablet caps it defensively. vtgate splits its own touches at this
-		// same limit (queryservice.ReservedConnKeepAliveMaxBatch).
+		// Bound the batch before allocating, capping a malformed or hostile
+		// call. vtgate splits its own touches at this same limit
+		// (queryservice.ReservedConnKeepAliveMaxBatch).
 		if len(ids) > queryservice.ReservedConnKeepAliveMaxBatch {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "reserved connection keepalive batch of %d exceeds the limit of %d", len(ids), queryservice.ReservedConnKeepAliveMaxBatch)
 		}

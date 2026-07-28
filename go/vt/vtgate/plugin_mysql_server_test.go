@@ -2071,9 +2071,9 @@ func TestTempTableHeartbeatBatchesPerTablet(t *testing.T) {
 	before := sbc.ExecCount.Load()
 	vh.dispatchTempTableBeats(ctx).Wait()
 	require.Equal(t, before+1, sbc.ExecCount.Load(), "the tablet must be beaten with exactly one batched RPC")
-	opts := sbc.GetOptions()
-	require.NotEmpty(t, opts)
-	require.Len(t, opts[len(opts)-1].GetReservedConnKeepAliveIds(), 2, "the batch must carry both reserved connections' ids")
+	batches := sbc.KeepAliveBatches
+	require.NotEmpty(t, batches)
+	require.Len(t, batches[len(batches)-1], 2, "the batch must carry both reserved connections' ids")
 }
 
 // TestTempTableHeartbeatSplitsOversizedBatch verifies that a tablet holding more
@@ -2099,21 +2099,15 @@ func TestTempTableHeartbeatSplitsOversizedBatch(t *testing.T) {
 	vh.dispatchTempTableBeats(ctx).Wait()
 
 	// Collect the reserved-id batches the tablet received.
-	batches := 0
 	seen := map[int64]struct{}{}
-	for _, o := range sbc.GetOptions() {
-		if !o.GetReservedConnKeepAlive() {
-			continue
-		}
-		ids := o.GetReservedConnKeepAliveIds()
+	for _, ids := range sbc.KeepAliveBatches {
 		require.LessOrEqual(t, len(ids), queryservice.ReservedConnKeepAliveMaxBatch,
 			"no batch may exceed the tablet's per-request limit")
-		batches++
 		for _, id := range ids {
 			seen[id] = struct{}{}
 		}
 	}
-	require.Equal(t, 2, batches, "%d connections must be split into two batches", total)
+	require.Len(t, sbc.KeepAliveBatches, 2, "%d connections must be split into two batches", total)
 	require.Len(t, seen, total, "every reserved connection must be refreshed across the batches")
 }
 
@@ -2214,7 +2208,8 @@ func (c *gatedBeatConn) Execute(ctx context.Context, session queryservice.Sessio
 	if c.beatIDs == nil {
 		c.beatIDs = make(map[int64]bool)
 	}
-	for _, id := range options.GetReservedConnKeepAliveIds() {
+	beatIDs, _ := queryservice.ReservedConnKeepAliveIDs(ctx)
+	for _, id := range beatIDs {
 		c.beatIDs[id] = true
 	}
 	c.idsMu.Unlock()
@@ -2708,9 +2703,9 @@ func TestTempTableHeartbeatTouchesRegistrationWithinOneInterval(t *testing.T) {
 	vh.tempTableConns.Store(cNew, &tempTableConn{targets: tempTargets(tempTableHeartbeatTarget{target: target, alias: tablet.Alias, reservedID: 2})})
 
 	vh.dispatchTempTableBeats(ctx).Wait()
-	opts := sbc.GetOptions()
-	require.NotEmpty(t, opts)
-	require.Contains(t, opts[len(opts)-1].GetReservedConnKeepAliveIds(), int64(2),
+	batches := sbc.KeepAliveBatches
+	require.NotEmpty(t, batches)
+	require.Contains(t, batches[len(batches)-1], int64(2),
 		"a connection registered right after a snapshot must be touched by the next sweep, within one interval")
 }
 
@@ -3199,10 +3194,9 @@ func TestTempTableHeartbeatOldTabletSafe(t *testing.T) {
 
 	// The keepalive carried reserved id 0 (all ids in the list), so an old
 	// tablet's fallback never touches the reserved connection.
-	opts := sbc.GetOptions()
-	require.NotEmpty(t, opts)
-	require.True(t, opts[len(opts)-1].GetReservedConnKeepAlive())
-	require.Equal(t, []int64{7}, opts[len(opts)-1].GetReservedConnKeepAliveIds())
+	batches := sbc.KeepAliveBatches
+	require.NotEmpty(t, batches)
+	require.Equal(t, []int64{7}, batches[len(batches)-1])
 
 	// The old tablet's ordinary result is not misparsed as a gone reserved id,
 	// so the target is not evicted.
@@ -3285,9 +3279,7 @@ func TestTempTableHeartbeatSweep(t *testing.T) {
 		return q.Sql == "/* temp-table keepalive */ select 1"
 	})
 	require.True(t, found, "sandbox tablet should have received the heartbeat query")
-	opts := sbc.GetOptions()
-	require.NotEmpty(t, opts)
-	require.True(t, opts[len(opts)-1].GetReservedConnKeepAlive(),
+	require.NotEmpty(t, sbc.KeepAliveBatches,
 		"beats must be keepalive touches so mysqld's wait_timeout keeps counting only real user traffic")
 
 	// A result for a target that no longer exists — the reserved connection was

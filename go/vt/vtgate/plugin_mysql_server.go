@@ -295,7 +295,11 @@ func (vh *vtgateHandler) tempTableCommandEnd(c *mysql.Conn) {
 		// session's temp tables. This is intentional — an explicit session-level
 		// timeout is a per-session choice that wins over the keepalive, unlike
 		// the global default, which the feature deliberately outlives. Surface it
-		// once, at registration.
+		// once, at registration, where the session's current value is the one the
+		// reservation was just created with. The tablet applies the session value
+		// only when it reserves the connection and when a transaction begins on
+		// it, so a shorter timeout set after registration is not reflected here —
+		// nor on the existing reservation's timer until its next transaction.
 		session := vh.session(c)
 		if to := time.Duration(session.GetOptions().GetTransactionTimeout()) * time.Millisecond; to > 0 && to <= tempTableBeatWorstCaseGap(tempTableHeartbeatTime) {
 			log.Warn("session transaction timeout does not exceed the temp-table heartbeat interval plus one keepalive round-trip; its temporary tables may still be reclaimed between heartbeats",
@@ -819,12 +823,15 @@ func (vh *vtgateHandler) sendTempTableBeat(ctx context.Context, routing tempTabl
 	if err != nil {
 		return nil, err
 	}
-	options := &querypb.ExecuteOptions{ReservedConnKeepAlive: true, ReservedConnKeepAliveIds: ids}
-	// reservedID is left zero (all ids are in the batch list): an up-to-date
-	// tablet refreshes them all, while a tablet predating the option runs the
+	// The keepalive travels as a request-level signal (never in
+	// ExecuteOptions, which round-trip through client sessions and would let
+	// an older vtgate relay client-injected fields to the tablet). reservedID
+	// is left zero (all ids are in the batch list): an up-to-date tablet
+	// refreshes them all, while a tablet predating the request field runs the
 	// fallback query on a throwaway pooled connection rather than a reserved
 	// one — it can never kill a reserved connection.
-	result, err := qs.Execute(ctx, nil, routing.target, "/* temp-table keepalive */ select 1", nil, 0 /* transactionID */, 0 /* reservedID */, options)
+	ctx = queryservice.ContextWithReservedConnKeepAlive(ctx, ids)
+	result, err := qs.Execute(ctx, nil, routing.target, "/* temp-table keepalive */ select 1", nil, 0 /* transactionID */, 0 /* reservedID */, nil /* options */)
 	if err != nil {
 		return nil, err
 	}

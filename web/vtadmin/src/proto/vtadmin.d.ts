@@ -51541,12 +51541,6 @@ export namespace query {
         /** ExecuteOptions no_result. */
         no_result: boolean;
 
-        /** ExecuteOptions reserved_conn_keep_alive. */
-        reserved_conn_keep_alive: boolean;
-
-        /** ExecuteOptions reserved_conn_keep_alive_ids. */
-        reserved_conn_keep_alive_ids: (number|Long)[];
-
         /** ExecuteOptions timeout. */
         timeout?: "authoritative_timeout";
 
@@ -51685,12 +51679,6 @@ export namespace query {
             /** ExecuteOptions no_result */
             no_result?: (boolean|null);
 
-            /** ExecuteOptions reserved_conn_keep_alive */
-            reserved_conn_keep_alive?: (boolean|null);
-
-            /** ExecuteOptions reserved_conn_keep_alive_ids */
-            reserved_conn_keep_alive_ids?: ((number|Long)[]|null);
-
             /** ExecuteOptions timeout */
             timeout?: "authoritative_timeout";
 
@@ -51717,8 +51705,6 @@ export namespace query {
           in_dml_execution?: boolean|null;
           transaction_timeout?: number|Long|null;
           no_result?: boolean|null;
-          reserved_conn_keep_alive?: boolean|null;
-          reserved_conn_keep_alive_ids?: number|Long[]|null;
           $unknowns?: Uint8Array[];
         } & (
           ({ timeout?: undefined; authoritative_timeout?: null }|{ timeout?: "authoritative_timeout"; authoritative_timeout: number|Long })
@@ -52729,6 +52715,12 @@ export namespace query {
         /** ExecuteRequest reserved_id. */
         reserved_id: (number|Long);
 
+        /** ExecuteRequest reserved_conn_keep_alive. */
+        reserved_conn_keep_alive: boolean;
+
+        /** ExecuteRequest reserved_conn_keep_alive_ids. */
+        reserved_conn_keep_alive_ids: (number|Long)[];
+
         /**
          * Creates a new ExecuteRequest instance using the specified properties.
          * @param [properties] Properties to set
@@ -52834,6 +52826,12 @@ export namespace query {
             /** ExecuteRequest reserved_id */
             reserved_id?: (number|Long|null);
 
+            /** ExecuteRequest reserved_conn_keep_alive */
+            reserved_conn_keep_alive?: (boolean|null);
+
+            /** ExecuteRequest reserved_conn_keep_alive_ids */
+            reserved_conn_keep_alive_ids?: ((number|Long)[]|null);
+
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
@@ -52847,6 +52845,8 @@ export namespace query {
           transaction_id?: number|Long|null;
           options?: query.ExecuteOptions.$Shape|null;
           reserved_id?: number|Long|null;
+          reserved_conn_keep_alive?: boolean|null;
+          reserved_conn_keep_alive_ids?: number|Long[]|null;
           $unknowns?: Uint8Array[];
         };
     }

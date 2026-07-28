@@ -128302,8 +128302,6 @@ export const query = $root.query = (() => {
          * @property {boolean|null} [in_dml_execution] ExecuteOptions in_dml_execution
          * @property {number|Long|null} [transaction_timeout] ExecuteOptions transaction_timeout
          * @property {boolean|null} [no_result] ExecuteOptions no_result
-         * @property {boolean|null} [reserved_conn_keep_alive] ExecuteOptions reserved_conn_keep_alive
-         * @property {Array.<number|Long>|null} [reserved_conn_keep_alive_ids] ExecuteOptions reserved_conn_keep_alive_ids
          * @property {"authoritative_timeout"} [timeout] ExecuteOptions timeout
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
@@ -128336,8 +128334,6 @@ export const query = $root.query = (() => {
          *   in_dml_execution?: boolean|null;
          *   transaction_timeout?: number|Long|null;
          *   no_result?: boolean|null;
-         *   reserved_conn_keep_alive?: boolean|null;
-         *   reserved_conn_keep_alive_ids?: Array.<number|Long>|null;
          *   $unknowns?: Array.<Uint8Array>;
          * } & (
          *   ({ timeout?: undefined; authoritative_timeout?: null }|{ timeout?: "authoritative_timeout"; authoritative_timeout: number|Long })
@@ -128354,7 +128350,6 @@ export const query = $root.query = (() => {
          */
         const ExecuteOptions = function (properties) {
             this.transaction_access_mode = [];
-            this.reserved_conn_keep_alive_ids = [];
             if (properties)
                 for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null && keys[i] !== "__proto__")
@@ -128497,22 +128492,6 @@ export const query = $root.query = (() => {
          */
         ExecuteOptions.prototype.no_result = false;
 
-        /**
-         * ExecuteOptions reserved_conn_keep_alive.
-         * @member {boolean} reserved_conn_keep_alive
-         * @memberof query.ExecuteOptions
-         * @instance
-         */
-        ExecuteOptions.prototype.reserved_conn_keep_alive = false;
-
-        /**
-         * ExecuteOptions reserved_conn_keep_alive_ids.
-         * @member {Array.<number|Long>} reserved_conn_keep_alive_ids
-         * @memberof query.ExecuteOptions
-         * @instance
-         */
-        ExecuteOptions.prototype.reserved_conn_keep_alive_ids = $util.emptyArray;
-
         // OneOf field names bound to virtual getters and setters
         let $oneOfFields;
 
@@ -128603,14 +128582,6 @@ export const query = $root.query = (() => {
                 writer.uint32(/* id 20, wireType 0 =*/160).int64(message.transaction_timeout);
             if (message.no_result != null && $Object.hasOwnProperty.call(message, "no_result"))
                 writer.uint32(/* id 21, wireType 0 =*/168).bool(message.no_result);
-            if (message.reserved_conn_keep_alive != null && $Object.hasOwnProperty.call(message, "reserved_conn_keep_alive"))
-                writer.uint32(/* id 22, wireType 0 =*/176).bool(message.reserved_conn_keep_alive);
-            if (message.reserved_conn_keep_alive_ids != null && message.reserved_conn_keep_alive_ids.length) {
-                writer.uint32(/* id 23, wireType 2 =*/186).fork();
-                for (let i = 0; i < message.reserved_conn_keep_alive_ids.length; ++i)
-                    writer.int64(message.reserved_conn_keep_alive_ids[i]);
-                writer.ldelim();
-            }
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -128814,31 +128785,6 @@ export const query = $root.query = (() => {
                             delete message.no_result;
                         continue;
                     }
-                case 22: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.reserved_conn_keep_alive = value;
-                        else
-                            delete message.reserved_conn_keep_alive;
-                        continue;
-                    }
-                case 23: {
-                        if (wireType === 2) {
-                            if (!(message.reserved_conn_keep_alive_ids && message.reserved_conn_keep_alive_ids.length))
-                                message.reserved_conn_keep_alive_ids = [];
-                            let end2 = reader.uint32() + reader.pos;
-                            while (reader.pos < end2)
-                                message.reserved_conn_keep_alive_ids.push(reader.int64());
-                            continue;
-                        }
-                        if (wireType !== 0)
-                            break;
-                        if (!(message.reserved_conn_keep_alive_ids && message.reserved_conn_keep_alive_ids.length))
-                            message.reserved_conn_keep_alive_ids = [];
-                        message.reserved_conn_keep_alive_ids.push(reader.int64());
-                        continue;
-                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -128989,16 +128935,6 @@ export const query = $root.query = (() => {
             if (message.no_result != null && $Object.hasOwnProperty.call(message, "no_result"))
                 if (typeof message.no_result !== "boolean")
                     return "no_result: boolean expected";
-            if (message.reserved_conn_keep_alive != null && $Object.hasOwnProperty.call(message, "reserved_conn_keep_alive"))
-                if (typeof message.reserved_conn_keep_alive !== "boolean")
-                    return "reserved_conn_keep_alive: boolean expected";
-            if (message.reserved_conn_keep_alive_ids != null && $Object.hasOwnProperty.call(message, "reserved_conn_keep_alive_ids")) {
-                if (!$Array.isArray(message.reserved_conn_keep_alive_ids))
-                    return "reserved_conn_keep_alive_ids: array expected";
-                for (let i = 0; i < message.reserved_conn_keep_alive_ids.length; ++i)
-                    if (!$util.isInteger(message.reserved_conn_keep_alive_ids[i]) && !(message.reserved_conn_keep_alive_ids[i] && $util.isInteger(message.reserved_conn_keep_alive_ids[i].low) && $util.isInteger(message.reserved_conn_keep_alive_ids[i].high)))
-                        return "reserved_conn_keep_alive_ids: integer|Long[] expected";
-            }
             return null;
         };
 
@@ -129246,23 +129182,6 @@ export const query = $root.query = (() => {
             if (object.no_result != null)
                 if (object.no_result)
                     message.no_result = $Boolean(object.no_result);
-            if (object.reserved_conn_keep_alive != null)
-                if (object.reserved_conn_keep_alive)
-                    message.reserved_conn_keep_alive = $Boolean(object.reserved_conn_keep_alive);
-            if (object.reserved_conn_keep_alive_ids) {
-                if (!$Array.isArray(object.reserved_conn_keep_alive_ids))
-                    throw $TypeError(".query.ExecuteOptions.reserved_conn_keep_alive_ids: array expected");
-                message.reserved_conn_keep_alive_ids = $Array(object.reserved_conn_keep_alive_ids.length);
-                for (let i = 0; i < object.reserved_conn_keep_alive_ids.length; ++i)
-                    if ($util.Long)
-                        message.reserved_conn_keep_alive_ids[i] = $util.Long.fromValue(object.reserved_conn_keep_alive_ids[i], false);
-                    else if (typeof object.reserved_conn_keep_alive_ids[i] === "string")
-                        message.reserved_conn_keep_alive_ids[i] = $parseInt(object.reserved_conn_keep_alive_ids[i], 10);
-                    else if (typeof object.reserved_conn_keep_alive_ids[i] === "number")
-                        message.reserved_conn_keep_alive_ids[i] = object.reserved_conn_keep_alive_ids[i];
-                    else if (typeof object.reserved_conn_keep_alive_ids[i] === "object")
-                        message.reserved_conn_keep_alive_ids[i] = new $util.LongBits(object.reserved_conn_keep_alive_ids[i].low >>> 0, object.reserved_conn_keep_alive_ids[i].high >>> 0).toNumber();
-            }
             return message;
         };
 
@@ -129283,10 +129202,8 @@ export const query = $root.query = (() => {
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
             let object = {};
-            if (options.arrays || options.defaults) {
+            if (options.arrays || options.defaults)
                 object.transaction_access_mode = [];
-                object.reserved_conn_keep_alive_ids = [];
-            }
             if (options.defaults) {
                 object.included_fields = options.enums === $String ? "TYPE_AND_NAME" : 0;
                 object.client_found_rows = false;
@@ -129306,7 +129223,6 @@ export const query = $root.query = (() => {
                 object.fetch_last_insert_id = false;
                 object.in_dml_execution = false;
                 object.no_result = false;
-                object.reserved_conn_keep_alive = false;
             }
             if (message.included_fields != null && $Object.hasOwnProperty.call(message, "included_fields"))
                 object.included_fields = options.enums === $String ? $root.query.ExecuteOptions.IncludedFields[message.included_fields] === $undefined ? message.included_fields : $root.query.ExecuteOptions.IncludedFields[message.included_fields] : message.included_fields;
@@ -129363,18 +129279,6 @@ export const query = $root.query = (() => {
                     object.transaction_timeout = options.longs === $String ? $util.Long.prototype.toString.call(message.transaction_timeout) : options.longs === $Number ? new $util.LongBits(message.transaction_timeout.low >>> 0, message.transaction_timeout.high >>> 0).toNumber() : message.transaction_timeout;
             if (message.no_result != null && $Object.hasOwnProperty.call(message, "no_result"))
                 object.no_result = message.no_result;
-            if (message.reserved_conn_keep_alive != null && $Object.hasOwnProperty.call(message, "reserved_conn_keep_alive"))
-                object.reserved_conn_keep_alive = message.reserved_conn_keep_alive;
-            if (message.reserved_conn_keep_alive_ids && message.reserved_conn_keep_alive_ids.length) {
-                object.reserved_conn_keep_alive_ids = $Array(message.reserved_conn_keep_alive_ids.length);
-                for (let j = 0; j < message.reserved_conn_keep_alive_ids.length; ++j)
-                    if (typeof $BigInt !== "undefined" && options.longs === $BigInt)
-                        object.reserved_conn_keep_alive_ids[j] = typeof message.reserved_conn_keep_alive_ids[j] === "number" ? $BigInt(message.reserved_conn_keep_alive_ids[j]) : $util.Long.fromBits(message.reserved_conn_keep_alive_ids[j].low >>> 0, message.reserved_conn_keep_alive_ids[j].high >>> 0, false).toBigInt();
-                    else if (typeof message.reserved_conn_keep_alive_ids[j] === "number")
-                        object.reserved_conn_keep_alive_ids[j] = options.longs === $String ? $String(message.reserved_conn_keep_alive_ids[j]) : message.reserved_conn_keep_alive_ids[j];
-                    else
-                        object.reserved_conn_keep_alive_ids[j] = options.longs === $String ? $util.Long.prototype.toString.call(message.reserved_conn_keep_alive_ids[j]) : options.longs === $Number ? new $util.LongBits(message.reserved_conn_keep_alive_ids[j].low >>> 0, message.reserved_conn_keep_alive_ids[j].high >>> 0).toNumber() : message.reserved_conn_keep_alive_ids[j];
-            }
             return object;
         };
 
@@ -132183,6 +132087,8 @@ export const query = $root.query = (() => {
          * @property {number|Long|null} [transaction_id] ExecuteRequest transaction_id
          * @property {query.ExecuteOptions.$Properties|null} [options] ExecuteRequest options
          * @property {number|Long|null} [reserved_id] ExecuteRequest reserved_id
+         * @property {boolean|null} [reserved_conn_keep_alive] ExecuteRequest reserved_conn_keep_alive
+         * @property {Array.<number|Long>|null} [reserved_conn_keep_alive_ids] ExecuteRequest reserved_conn_keep_alive_ids
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -132204,6 +132110,8 @@ export const query = $root.query = (() => {
          *   transaction_id?: number|Long|null;
          *   options?: query.ExecuteOptions.$Shape|null;
          *   reserved_id?: number|Long|null;
+         *   reserved_conn_keep_alive?: boolean|null;
+         *   reserved_conn_keep_alive_ids?: Array.<number|Long>|null;
          *   $unknowns?: Array.<Uint8Array>;
          * }} query.ExecuteRequest.$Shape
          */
@@ -132217,6 +132125,7 @@ export const query = $root.query = (() => {
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ExecuteRequest = function (properties) {
+            this.reserved_conn_keep_alive_ids = [];
             if (properties)
                 for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null && keys[i] !== "__proto__")
@@ -132280,6 +132189,22 @@ export const query = $root.query = (() => {
         ExecuteRequest.prototype.reserved_id = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
 
         /**
+         * ExecuteRequest reserved_conn_keep_alive.
+         * @member {boolean} reserved_conn_keep_alive
+         * @memberof query.ExecuteRequest
+         * @instance
+         */
+        ExecuteRequest.prototype.reserved_conn_keep_alive = false;
+
+        /**
+         * ExecuteRequest reserved_conn_keep_alive_ids.
+         * @member {Array.<number|Long>} reserved_conn_keep_alive_ids
+         * @memberof query.ExecuteRequest
+         * @instance
+         */
+        ExecuteRequest.prototype.reserved_conn_keep_alive_ids = $util.emptyArray;
+
+        /**
          * Creates a new ExecuteRequest instance using the specified properties.
          * @function create
          * @memberof query.ExecuteRequest
@@ -132325,6 +132250,14 @@ export const query = $root.query = (() => {
                 $root.query.ExecuteOptions.encode(message.options, writer.uint32(/* id 6, wireType 2 =*/50).fork(), _depth + 1).ldelim();
             if (message.reserved_id != null && $Object.hasOwnProperty.call(message, "reserved_id"))
                 writer.uint32(/* id 7, wireType 0 =*/56).int64(message.reserved_id);
+            if (message.reserved_conn_keep_alive != null && $Object.hasOwnProperty.call(message, "reserved_conn_keep_alive"))
+                writer.uint32(/* id 8, wireType 0 =*/64).bool(message.reserved_conn_keep_alive);
+            if (message.reserved_conn_keep_alive_ids != null && message.reserved_conn_keep_alive_ids.length) {
+                writer.uint32(/* id 9, wireType 2 =*/74).fork();
+                for (let i = 0; i < message.reserved_conn_keep_alive_ids.length; ++i)
+                    writer.int64(message.reserved_conn_keep_alive_ids[i]);
+                writer.ldelim();
+            }
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -132420,6 +132353,31 @@ export const query = $root.query = (() => {
                             delete message.reserved_id;
                         continue;
                     }
+                case 8: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.reserved_conn_keep_alive = value;
+                        else
+                            delete message.reserved_conn_keep_alive;
+                        continue;
+                    }
+                case 9: {
+                        if (wireType === 2) {
+                            if (!(message.reserved_conn_keep_alive_ids && message.reserved_conn_keep_alive_ids.length))
+                                message.reserved_conn_keep_alive_ids = [];
+                            let end2 = reader.uint32() + reader.pos;
+                            while (reader.pos < end2)
+                                message.reserved_conn_keep_alive_ids.push(reader.int64());
+                            continue;
+                        }
+                        if (wireType !== 0)
+                            break;
+                        if (!(message.reserved_conn_keep_alive_ids && message.reserved_conn_keep_alive_ids.length))
+                            message.reserved_conn_keep_alive_ids = [];
+                        message.reserved_conn_keep_alive_ids.push(reader.int64());
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -132494,6 +132452,16 @@ export const query = $root.query = (() => {
             if (message.reserved_id != null && $Object.hasOwnProperty.call(message, "reserved_id"))
                 if (!$util.isInteger(message.reserved_id) && !(message.reserved_id && $util.isInteger(message.reserved_id.low) && $util.isInteger(message.reserved_id.high)))
                     return "reserved_id: integer|Long expected";
+            if (message.reserved_conn_keep_alive != null && $Object.hasOwnProperty.call(message, "reserved_conn_keep_alive"))
+                if (typeof message.reserved_conn_keep_alive !== "boolean")
+                    return "reserved_conn_keep_alive: boolean expected";
+            if (message.reserved_conn_keep_alive_ids != null && $Object.hasOwnProperty.call(message, "reserved_conn_keep_alive_ids")) {
+                if (!$Array.isArray(message.reserved_conn_keep_alive_ids))
+                    return "reserved_conn_keep_alive_ids: array expected";
+                for (let i = 0; i < message.reserved_conn_keep_alive_ids.length; ++i)
+                    if (!$util.isInteger(message.reserved_conn_keep_alive_ids[i]) && !(message.reserved_conn_keep_alive_ids[i] && $util.isInteger(message.reserved_conn_keep_alive_ids[i].low) && $util.isInteger(message.reserved_conn_keep_alive_ids[i].high)))
+                        return "reserved_conn_keep_alive_ids: integer|Long[] expected";
+            }
             return null;
         };
 
@@ -132560,6 +132528,23 @@ export const query = $root.query = (() => {
                         message.reserved_id = object.reserved_id;
                     else if (typeof object.reserved_id === "object")
                         message.reserved_id = new $util.LongBits(object.reserved_id.low >>> 0, object.reserved_id.high >>> 0).toNumber();
+            if (object.reserved_conn_keep_alive != null)
+                if (object.reserved_conn_keep_alive)
+                    message.reserved_conn_keep_alive = $Boolean(object.reserved_conn_keep_alive);
+            if (object.reserved_conn_keep_alive_ids) {
+                if (!$Array.isArray(object.reserved_conn_keep_alive_ids))
+                    throw $TypeError(".query.ExecuteRequest.reserved_conn_keep_alive_ids: array expected");
+                message.reserved_conn_keep_alive_ids = $Array(object.reserved_conn_keep_alive_ids.length);
+                for (let i = 0; i < object.reserved_conn_keep_alive_ids.length; ++i)
+                    if ($util.Long)
+                        message.reserved_conn_keep_alive_ids[i] = $util.Long.fromValue(object.reserved_conn_keep_alive_ids[i], false);
+                    else if (typeof object.reserved_conn_keep_alive_ids[i] === "string")
+                        message.reserved_conn_keep_alive_ids[i] = $parseInt(object.reserved_conn_keep_alive_ids[i], 10);
+                    else if (typeof object.reserved_conn_keep_alive_ids[i] === "number")
+                        message.reserved_conn_keep_alive_ids[i] = object.reserved_conn_keep_alive_ids[i];
+                    else if (typeof object.reserved_conn_keep_alive_ids[i] === "object")
+                        message.reserved_conn_keep_alive_ids[i] = new $util.LongBits(object.reserved_conn_keep_alive_ids[i].low >>> 0, object.reserved_conn_keep_alive_ids[i].high >>> 0).toNumber();
+            }
             return message;
         };
 
@@ -132580,6 +132565,8 @@ export const query = $root.query = (() => {
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
             let object = {};
+            if (options.arrays || options.defaults)
+                object.reserved_conn_keep_alive_ids = [];
             if (options.defaults) {
                 object.effective_caller_id = null;
                 object.immediate_caller_id = null;
@@ -132596,6 +132583,7 @@ export const query = $root.query = (() => {
                     object.reserved_id = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
                 } else
                     object.reserved_id = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
+                object.reserved_conn_keep_alive = false;
             }
             if (message.effective_caller_id != null && $Object.hasOwnProperty.call(message, "effective_caller_id"))
                 object.effective_caller_id = $root.vtrpc.CallerID.toObject(message.effective_caller_id, options, _depth + 1);
@@ -132621,6 +132609,18 @@ export const query = $root.query = (() => {
                     object.reserved_id = options.longs === $String ? $String(message.reserved_id) : message.reserved_id;
                 else
                     object.reserved_id = options.longs === $String ? $util.Long.prototype.toString.call(message.reserved_id) : options.longs === $Number ? new $util.LongBits(message.reserved_id.low >>> 0, message.reserved_id.high >>> 0).toNumber() : message.reserved_id;
+            if (message.reserved_conn_keep_alive != null && $Object.hasOwnProperty.call(message, "reserved_conn_keep_alive"))
+                object.reserved_conn_keep_alive = message.reserved_conn_keep_alive;
+            if (message.reserved_conn_keep_alive_ids && message.reserved_conn_keep_alive_ids.length) {
+                object.reserved_conn_keep_alive_ids = $Array(message.reserved_conn_keep_alive_ids.length);
+                for (let j = 0; j < message.reserved_conn_keep_alive_ids.length; ++j)
+                    if (typeof $BigInt !== "undefined" && options.longs === $BigInt)
+                        object.reserved_conn_keep_alive_ids[j] = typeof message.reserved_conn_keep_alive_ids[j] === "number" ? $BigInt(message.reserved_conn_keep_alive_ids[j]) : $util.Long.fromBits(message.reserved_conn_keep_alive_ids[j].low >>> 0, message.reserved_conn_keep_alive_ids[j].high >>> 0, false).toBigInt();
+                    else if (typeof message.reserved_conn_keep_alive_ids[j] === "number")
+                        object.reserved_conn_keep_alive_ids[j] = options.longs === $String ? $String(message.reserved_conn_keep_alive_ids[j]) : message.reserved_conn_keep_alive_ids[j];
+                    else
+                        object.reserved_conn_keep_alive_ids[j] = options.longs === $String ? $util.Long.prototype.toString.call(message.reserved_conn_keep_alive_ids[j]) : options.longs === $Number ? new $util.LongBits(message.reserved_conn_keep_alive_ids[j].low >>> 0, message.reserved_conn_keep_alive_ids[j].high >>> 0).toNumber() : message.reserved_conn_keep_alive_ids[j];
+            }
             return object;
         };
 

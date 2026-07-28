@@ -48,6 +48,9 @@ func (q *query) Execute(ctx context.Context, request *querypb.ExecuteRequest) (r
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
+	if request.ReservedConnKeepAlive {
+		ctx = queryservice.ContextWithReservedConnKeepAlive(ctx, request.ReservedConnKeepAliveIds)
+	}
 	result, err := q.server.Execute(ctx, nil, request.Target, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.ReservedId, request.Options)
 	if err != nil {
 		return nil, vterrors.ToGRPC(err)

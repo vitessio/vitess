@@ -1660,6 +1660,17 @@ func planKeepsConnOnTimeout(planID p.PlanType) bool {
 	return false
 }
 
+// keepsConnOnTimeout is the per-query timeout decision: a safe plan may keep
+// its connection unless the query carries fetch_last_insert_id. A
+// last_insert_id(expr) assignment survives KILL QUERY on the connection even
+// when the statement's row changes roll back, and the error return skips the
+// post-exec fetch that reports the new value to the vtgate session — keeping
+// the connection would leave it holding a last_insert_id the session never
+// recorded, so it is closed instead.
+func (qre *QueryExecutor) keepsConnOnTimeout() bool {
+	return planKeepsConnOnTimeout(qre.plan.PlanID) && !qre.options.GetFetchLastInsertId()
+}
+
 func (qre *QueryExecutor) execStatefulConn(conn *StatefulConnection, sql string, wantfields bool) (*sqltypes.Result, error) {
 	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.execStatefulConn")
 	defer span.Finish()
@@ -1676,7 +1687,7 @@ func (qre *QueryExecutor) execStatefulConn(conn *StatefulConnection, sql string,
 		return nil, err
 	}
 
-	exec, err := conn.Exec(ctx, sql, qre.getMaxResultSize(), wantfields, planKeepsConnOnTimeout(qre.plan.PlanID))
+	exec, err := conn.Exec(ctx, sql, qre.getMaxResultSize(), wantfields, qre.keepsConnOnTimeout())
 	if err != nil {
 		return nil, err
 	}
@@ -1769,7 +1780,7 @@ func (qre *QueryExecutor) execStreamSQL(conn *connpool.PooledConn, isStateful, i
 		// or admin statement that times out must lose the whole connection, or
 		// its half-applied session state would survive on a connection the
 		// temp-table keepalive then pins alive.
-		if insideTxn || !planKeepsConnOnTimeout(qre.plan.PlanID) {
+		if insideTxn || !qre.keepsConnOnTimeout() {
 			err = conn.Conn.StreamOnce(ctx, sql, cb, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Load()), sqltypes.IncludeFieldsOrDefault(qre.options))
 		} else {
 			err = conn.Conn.StreamOnceKeepConnOnTimeout(ctx, sql, cb, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Load()), sqltypes.IncludeFieldsOrDefault(qre.options))

@@ -131,6 +131,14 @@ func (conn *gRPCQueryClient) Execute(ctx context.Context, _ queryservice.Session
 		Options:       options,
 		ReservedId:    reservedID,
 	}
+	// A reserved-connection keepalive travels as request-level fields, never
+	// in options: options round-trip through client sessions, and an older
+	// vtgate would relay client-injected option fields to the tablet, while
+	// these fields are only ever populated right here.
+	if ids, isKeepAlive := queryservice.ReservedConnKeepAliveIDs(ctx); isKeepAlive {
+		req.ReservedConnKeepAlive = true
+		req.ReservedConnKeepAliveIds = ids
+	}
 	er, err := conn.c.Execute(ctx, req)
 	if err != nil {
 		return nil, tabletconn.ErrorFromGRPC(err)

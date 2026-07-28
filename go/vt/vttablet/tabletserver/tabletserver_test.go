@@ -32,6 +32,9 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/protobuf/encoding/protowire"
+	"google.golang.org/protobuf/reflect/protoreflect"
+
 	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/stats"
@@ -2972,15 +2975,15 @@ func TestReservedConnKeepAliveBatch(t *testing.T) {
 	// reserved id 0 as vtgate sends it) reports none gone and runs nothing on
 	// MySQL.
 	queryLogBefore := db.QueryLog()
-	opts := &querypb.ExecuteOptions{ReservedConnKeepAlive: true, ReservedConnKeepAliveIds: []int64{s1.ReservedID, s2.ReservedID}}
-	res, err := tsv.Execute(ctx, nil, &target, "/* keepalive */ select 1", nil, 0, 0, opts)
+	beatCtx := queryservice.ContextWithReservedConnKeepAlive(ctx, []int64{s1.ReservedID, s2.ReservedID})
+	res, err := tsv.Execute(beatCtx, nil, &target, "/* keepalive */ select 1", nil, 0, 0, nil)
 	require.NoError(t, err)
 	require.Empty(t, res.Rows, "no reserved connection is gone")
 	require.Equal(t, queryLogBefore, db.QueryLog(), "keepalive must not run anything on MySQL")
 
 	// Release one; the next batch reports it gone while the other stays alive.
 	require.NoError(t, tsv.Release(ctx, &target, 0, s2.ReservedID))
-	res, err = tsv.Execute(ctx, nil, &target, "/* keepalive */ select 1", nil, 0, 0, opts)
+	res, err = tsv.Execute(beatCtx, nil, &target, "/* keepalive */ select 1", nil, 0, 0, nil)
 	require.NoError(t, err)
 	require.Len(t, res.Rows, 1, "the released connection must be reported gone")
 	gone, err := res.Rows[0][0].ToInt64()
@@ -2990,8 +2993,8 @@ func TestReservedConnKeepAliveBatch(t *testing.T) {
 	// An oversized batch is rejected before any allocation, bounding what a
 	// malformed or hostile request can cost.
 	huge := make([]int64, queryservice.ReservedConnKeepAliveMaxBatch+1)
-	_, err = tsv.Execute(ctx, nil, &target, "/* keepalive */ select 1", nil, 0, 0,
-		&querypb.ExecuteOptions{ReservedConnKeepAlive: true, ReservedConnKeepAliveIds: huge})
+	_, err = tsv.Execute(queryservice.ContextWithReservedConnKeepAlive(ctx, huge), nil, &target,
+		"/* keepalive */ select 1", nil, 0, 0, nil)
 	require.ErrorContains(t, err, "exceeds the limit")
 
 	// A keepalive whose target type no longer matches this tablet (as after a
@@ -2999,13 +3002,30 @@ func TestReservedConnKeepAliveBatch(t *testing.T) {
 	// normal query, so vtgate can drop the now-unreachable registration instead
 	// of pinning the orphaned reservation open. The live reserved id is untouched.
 	wrongTarget := querypb.Target{TabletType: topodatapb.TabletType_RDONLY}
-	_, err = tsv.Execute(ctx, nil, &wrongTarget, "/* keepalive */ select 1", nil, 0, 0,
-		&querypb.ExecuteOptions{ReservedConnKeepAlive: true, ReservedConnKeepAliveIds: []int64{s1.ReservedID}})
+	s1Ctx := queryservice.ContextWithReservedConnKeepAlive(ctx, []int64{s1.ReservedID})
+	_, err = tsv.Execute(s1Ctx, nil, &wrongTarget, "/* keepalive */ select 1", nil, 0, 0, nil)
 	require.ErrorContains(t, err, vterrors.WrongTablet)
-	res, err = tsv.Execute(ctx, nil, &target, "/* keepalive */ select 1", nil, 0, 0,
-		&querypb.ExecuteOptions{ReservedConnKeepAlive: true, ReservedConnKeepAliveIds: []int64{s1.ReservedID}})
+	res, err = tsv.Execute(s1Ctx, nil, &target, "/* keepalive */ select 1", nil, 0, 0, nil)
 	require.NoError(t, err)
 	require.Empty(t, res.Rows, "the reserved connection must survive a rejected wrong-target keepalive")
+
+	// The keepalive is not injectable through ExecuteOptions. A vtgate that
+	// predates the feature preserves unknown proto fields when it relays a
+	// client session's options, so a client could smuggle the retired
+	// ExecuteOptions fields 22/23 through it; the tablet must execute the
+	// query normally, not treat it as a keepalive touch.
+	relayed := protowire.AppendTag(nil, 22, protowire.VarintType)
+	relayed = protowire.AppendVarint(relayed, 1)
+	relayed = protowire.AppendTag(relayed, 23, protowire.BytesType)
+	relayed = protowire.AppendBytes(relayed, protowire.AppendVarint(nil, uint64(s1.ReservedID)))
+	injected := &querypb.ExecuteOptions{}
+	injected.ProtoReflect().SetUnknown(protoreflect.RawFields(relayed))
+	wantResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields("val", "int64"), "42")
+	db.AddQuery("select 42 from dual limit 10001", wantResult)
+	res, err = tsv.Execute(ctx, nil, &target, "select 42 from dual", nil, 0, 0, injected)
+	require.NoError(t, err)
+	require.Equal(t, wantResult.Rows, res.Rows,
+		"options relayed by an old vtgate must not turn a query into a keepalive touch: the query must execute")
 
 	require.NoError(t, tsv.Release(ctx, &target, 0, s1.ReservedID))
 
@@ -3014,7 +3034,7 @@ func TestReservedConnKeepAliveBatch(t *testing.T) {
 	// reserved connections on a sick tablet are not pinned past the tablet
 	// timeout by a background refresh the tablet would never serve a query for.
 	require.NoError(t, tsv.SetServingType(topodatapb.TabletType_PRIMARY, time.Time{}, false, "test not serving"))
-	_, err = tsv.Execute(ctx, nil, &target, "/* keepalive */ select 1", nil, 0, 0,
-		&querypb.ExecuteOptions{ReservedConnKeepAlive: true, ReservedConnKeepAliveIds: []int64{1}})
+	_, err = tsv.Execute(queryservice.ContextWithReservedConnKeepAlive(ctx, []int64{1}), nil, &target,
+		"/* keepalive */ select 1", nil, 0, 0, nil)
 	require.Error(t, err, "a not-serving tablet must reject keepalives")
 }

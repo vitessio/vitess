@@ -145,6 +145,12 @@ type SandboxConn struct {
 	// reserved connection no longer exists).
 	KeepAliveGoneIDs map[int64]bool
 
+	// KeepAliveBatches records the reserved ids of every keepalive touch this
+	// connection received, one entry per touch, so tests can assert on what
+	// the vtgate sweeper sent (the signal travels in the context, not in the
+	// recorded ExecuteOptions).
+	KeepAliveBatches [][]int64
+
 	// KeepAliveUnsupported, when set, makes the connection behave like a tablet
 	// that predates the keepalive option: it ignores the option and runs the
 	// query, returning an ordinary result instead of the gone-id result.
@@ -351,9 +357,16 @@ func (sbc *SandboxConn) Execute(ctx context.Context, session queryservice.Sessio
 		return nil, err
 	}
 
-	if options.GetReservedConnKeepAlive() {
+	if keepAliveIDs, isKeepAlive := queryservice.ReservedConnKeepAliveIDs(ctx); isKeepAlive {
+		if sbc.queriesRequireLocking {
+			sbc.queriesMu.Lock()
+		}
+		sbc.KeepAliveBatches = append(sbc.KeepAliveBatches, append([]int64(nil), keepAliveIDs...))
+		if sbc.queriesRequireLocking {
+			sbc.queriesMu.Unlock()
+		}
 		if sbc.KeepAliveUnsupported {
-			// Simulate a tablet that predates the option: it ignores the option
+			// Simulate a tablet that predates the request field: it ignores it
 			// and runs the query, returning its own ordinary result (a row that
 			// must not be misparsed as a gone reserved id).
 			return &sqltypes.Result{
@@ -364,7 +377,7 @@ func (sbc *SandboxConn) Execute(ctx context.Context, session queryservice.Sessio
 		// Simulate the tablet's batched keepalive touch: return which of the
 		// touched reserved ids are gone.
 		result := &sqltypes.Result{Fields: []*querypb.Field{{Name: queryservice.ReservedConnKeepAliveGoneField, Type: sqltypes.Int64}}}
-		for _, id := range append([]int64{reservedID}, options.GetReservedConnKeepAliveIds()...) {
+		for _, id := range append([]int64{reservedID}, keepAliveIDs...) {
 			if sbc.KeepAliveGoneIDs[id] {
 				result.Rows = append(result.Rows, sqltypes.Row{sqltypes.NewInt64(id)})
 			}

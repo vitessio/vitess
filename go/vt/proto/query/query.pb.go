@@ -1409,27 +1409,9 @@ type ExecuteOptions struct {
 	// but will not return rows or fields in the response. This flag is not
 	// currently honored by StreamExecute. This is useful for warming reads
 	// where the goal is to warm the buffer pool, not to retrieve data.
-	NoResult bool `protobuf:"varint,21,opt,name=no_result,json=noResult,proto3" json:"no_result,omitempty"`
-	// reserved_conn_keep_alive turns the Execute into a keepalive touch for the
-	// reserved connections listed in reserved_conn_keep_alive_ids: the tablet
-	// refreshes their idle timers without executing the query or sending
-	// anything to MySQL, so mysqld's wait_timeout keeps counting only real user
-	// traffic. A connection that is busy executing counts as alive. Callers
-	// leave the Execute's reserved_id zero and pass the ids in
-	// reserved_conn_keep_alive_ids, so that a tablet predating this field runs
-	// the query on a throwaway pooled connection rather than a reserved one and
-	// can never kill a reserved connection.
-	ReservedConnKeepAlive bool `protobuf:"varint,22,opt,name=reserved_conn_keep_alive,json=reservedConnKeepAlive,proto3" json:"reserved_conn_keep_alive,omitempty"`
-	// reserved_conn_keep_alive_ids lists the reserved connection ids to refresh
-	// in a single keepalive touch, so a client can keep alive all of a tablet's
-	// reserved connections with one RPC. Ignored unless reserved_conn_keep_alive
-	// is set. The touch reports back which of the ids no longer exist (as result
-	// rows) so the caller can stop refreshing them. A tablet that predates this
-	// field ignores it and runs the query; it keeps no reserved connection alive
-	// until it is upgraded.
-	ReservedConnKeepAliveIds []int64 `protobuf:"varint,23,rep,packed,name=reserved_conn_keep_alive_ids,json=reservedConnKeepAliveIds,proto3" json:"reserved_conn_keep_alive_ids,omitempty"`
-	unknownFields            protoimpl.UnknownFields
-	sizeCache                protoimpl.SizeCache
+	NoResult      bool `protobuf:"varint,21,opt,name=no_result,json=noResult,proto3" json:"no_result,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ExecuteOptions) Reset() {
@@ -1588,20 +1570,6 @@ func (x *ExecuteOptions) GetNoResult() bool {
 		return x.NoResult
 	}
 	return false
-}
-
-func (x *ExecuteOptions) GetReservedConnKeepAlive() bool {
-	if x != nil {
-		return x.ReservedConnKeepAlive
-	}
-	return false
-}
-
-func (x *ExecuteOptions) GetReservedConnKeepAliveIds() []int64 {
-	if x != nil {
-		return x.ReservedConnKeepAliveIds
-	}
-	return nil
 }
 
 type isExecuteOptions_Timeout interface {
@@ -2029,8 +1997,29 @@ type ExecuteRequest struct {
 	TransactionId     int64                  `protobuf:"varint,5,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
 	Options           *ExecuteOptions        `protobuf:"bytes,6,opt,name=options,proto3" json:"options,omitempty"`
 	ReservedId        int64                  `protobuf:"varint,7,opt,name=reserved_id,json=reservedId,proto3" json:"reserved_id,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// reserved_conn_keep_alive turns the Execute into a keepalive touch for the
+	// reserved connections listed in reserved_conn_keep_alive_ids: the tablet
+	// refreshes their idle timers without executing the query or sending
+	// anything to MySQL, so mysqld's wait_timeout keeps counting only real user
+	// traffic. A connection that is busy executing counts as alive. Callers
+	// leave reserved_id zero and pass the ids in reserved_conn_keep_alive_ids,
+	// so that a tablet predating this field runs the query on a throwaway
+	// pooled connection rather than a reserved one and can never kill a
+	// reserved connection. This deliberately lives on the request, not in
+	// ExecuteOptions: options round-trip through client sessions, and a vtgate
+	// predating the feature would relay client-injected option fields to the
+	// tablet, while request fields are only ever populated by vtgate itself.
+	ReservedConnKeepAlive bool `protobuf:"varint,8,opt,name=reserved_conn_keep_alive,json=reservedConnKeepAlive,proto3" json:"reserved_conn_keep_alive,omitempty"`
+	// reserved_conn_keep_alive_ids lists the reserved connection ids to refresh
+	// in a single keepalive touch, so a client can keep alive all of a tablet's
+	// reserved connections with one RPC. Ignored unless reserved_conn_keep_alive
+	// is set. The touch reports back which of the ids no longer exist (as result
+	// rows) so the caller can stop refreshing them. A tablet that predates this
+	// field ignores it and runs the query; it keeps no reserved connection alive
+	// until it is upgraded.
+	ReservedConnKeepAliveIds []int64 `protobuf:"varint,9,rep,packed,name=reserved_conn_keep_alive_ids,json=reservedConnKeepAliveIds,proto3" json:"reserved_conn_keep_alive_ids,omitempty"`
+	unknownFields            protoimpl.UnknownFields
+	sizeCache                protoimpl.SizeCache
 }
 
 func (x *ExecuteRequest) Reset() {
@@ -2110,6 +2099,20 @@ func (x *ExecuteRequest) GetReservedId() int64 {
 		return x.ReservedId
 	}
 	return 0
+}
+
+func (x *ExecuteRequest) GetReservedConnKeepAlive() bool {
+	if x != nil {
+		return x.ReservedConnKeepAlive
+	}
+	return false
+}
+
+func (x *ExecuteRequest) GetReservedConnKeepAliveIds() []int64 {
+	if x != nil {
+		return x.ReservedConnKeepAliveIds
+	}
+	return nil
 }
 
 // ExecuteResponse is the returned value from Execute
@@ -5871,7 +5874,7 @@ const file_query_proto_rawDesc = "" +
 	"\x0ebind_variables\x18\x02 \x03(\v2$.query.BoundQuery.BindVariablesEntryR\rbindVariables\x1aU\n" +
 	"\x12BindVariablesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12)\n" +
-	"\x05value\x18\x02 \x01(\v2\x13.query.BindVariableR\x05value:\x028\x01\"\x99\x0e\n" +
+	"\x05value\x18\x02 \x01(\v2\x13.query.BindVariableR\x05value:\x028\x01\"\xac\r\n" +
 	"\x0eExecuteOptions\x12M\n" +
 	"\x0fincluded_fields\x18\x04 \x01(\x0e2$.query.ExecuteOptions.IncludedFieldsR\x0eincludedFields\x12*\n" +
 	"\x11client_found_rows\x18\x05 \x01(\bR\x0fclientFoundRows\x12:\n" +
@@ -5890,9 +5893,7 @@ const file_query_proto_rawDesc = "" +
 	"\x14fetch_last_insert_id\x18\x12 \x01(\bR\x11fetchLastInsertId\x12(\n" +
 	"\x10in_dml_execution\x18\x13 \x01(\bR\x0einDmlExecution\x124\n" +
 	"\x13transaction_timeout\x18\x14 \x01(\x03H\x01R\x12transactionTimeout\x88\x01\x01\x12\x1b\n" +
-	"\tno_result\x18\x15 \x01(\bR\bnoResult\x127\n" +
-	"\x18reserved_conn_keep_alive\x18\x16 \x01(\bR\x15reservedConnKeepAlive\x12>\n" +
-	"\x1creserved_conn_keep_alive_ids\x18\x17 \x03(\x03R\x18reservedConnKeepAliveIds\";\n" +
+	"\tno_result\x18\x15 \x01(\bR\bnoResult\";\n" +
 	"\x0eIncludedFields\x12\x11\n" +
 	"\rTYPE_AND_NAME\x10\x00\x12\r\n" +
 	"\tTYPE_ONLY\x10\x01\x12\a\n" +
@@ -5932,7 +5933,7 @@ const file_query_proto_rawDesc = "" +
 	"READ_WRITE\x10\x01\x12\r\n" +
 	"\tREAD_ONLY\x10\x02B\t\n" +
 	"\atimeoutB\x16\n" +
-	"\x14_transaction_timeoutJ\x04\b\x01\x10\x02J\x04\b\x02\x10\x03J\x04\b\x03\x10\x04\"\xb8\x02\n" +
+	"\x14_transaction_timeoutJ\x04\b\x01\x10\x02J\x04\b\x02\x10\x03J\x04\b\x03\x10\x04J\x04\b\x16\x10\x17J\x04\b\x17\x10\x18\"\xb8\x02\n" +
 	"\x05Field\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1f\n" +
 	"\x04type\x18\x02 \x01(\x0e2\v.query.TypeR\x04type\x12\x14\n" +
@@ -5979,7 +5980,7 @@ const file_query_proto_rawDesc = "" +
 	"\bCategory\x12\t\n" +
 	"\x05Error\x10\x00\x12\a\n" +
 	"\x03DML\x10\x01\x12\a\n" +
-	"\x03DDL\x10\x02\"\xe1\x02\n" +
+	"\x03DDL\x10\x02\"\xda\x03\n" +
 	"\x0eExecuteRequest\x12?\n" +
 	"\x13effective_caller_id\x18\x01 \x01(\v2\x0f.vtrpc.CallerIDR\x11effectiveCallerId\x12E\n" +
 	"\x13immediate_caller_id\x18\x02 \x01(\v2\x15.query.VTGateCallerIDR\x11immediateCallerId\x12%\n" +
@@ -5988,7 +5989,9 @@ const file_query_proto_rawDesc = "" +
 	"\x0etransaction_id\x18\x05 \x01(\x03R\rtransactionId\x12/\n" +
 	"\aoptions\x18\x06 \x01(\v2\x15.query.ExecuteOptionsR\aoptions\x12\x1f\n" +
 	"\vreserved_id\x18\a \x01(\x03R\n" +
-	"reservedId\"=\n" +
+	"reservedId\x127\n" +
+	"\x18reserved_conn_keep_alive\x18\b \x01(\bR\x15reservedConnKeepAlive\x12>\n" +
+	"\x1creserved_conn_keep_alive_ids\x18\t \x03(\x03R\x18reservedConnKeepAliveIds\"=\n" +
 	"\x0fExecuteResponse\x12*\n" +
 	"\x06result\x18\x01 \x01(\v2\x12.query.QueryResultR\x06result\"d\n" +
 	"\x0fResultWithError\x12%\n" +

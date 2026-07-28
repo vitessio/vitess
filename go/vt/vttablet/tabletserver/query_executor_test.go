@@ -2552,13 +2552,20 @@ func TestExecStreamSQLTimeoutConnFateByPlan(t *testing.T) {
 
 	db.AddQueryPattern(`kill query \d+`, &sqltypes.Result{})
 	db.AddQueryPattern(`kill \d+`, &sqltypes.Result{})
+	db.AddQuery(resetLastIDQuery, &sqltypes.Result{})
 
 	cases := []struct {
-		sql       string
-		keepsConn bool
+		sql               string
+		keepsConn         bool
+		fetchLastInsertID bool
 	}{
-		{"select 1", true},
-		{"set @@sql_mode = ''", false},
+		{"select 1", true, false},
+		{"set @@sql_mode = ''", false, false},
+		// A safe plan carrying fetch_last_insert_id still loses the
+		// connection: MySQL retains a last_insert_id(expr) assignment after
+		// KILL QUERY, and the error return skips the post-exec fetch that
+		// keeps the vtgate session in sync with the connection.
+		{"select last_insert_id(42)", false, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.sql, func(t *testing.T) {
@@ -2575,6 +2582,12 @@ func TestExecStreamSQLTimeoutConnFateByPlan(t *testing.T) {
 			execCtx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
 			defer cancel()
 			qre := newTestQueryExecutorStreaming(execCtx, tsv, tc.sql, conn.ReservedID())
+			if tc.fetchLastInsertID {
+				if qre.options == nil {
+					qre.options = &querypb.ExecuteOptions{}
+				}
+				qre.options.FetchLastInsertId = true
+			}
 			err = qre.execStreamSQL(conn.UnderlyingDBConn(), true /* isStateful */, false /* insideTxn */, tc.sql, func(*sqltypes.Result) error { return nil })
 			require.Error(t, err)
 			if tc.keepsConn {
@@ -2608,4 +2621,15 @@ func TestPlanKeepsConnOnTimeout(t *testing.T) {
 	for _, id := range unsafe {
 		assert.False(t, planKeepsConnOnTimeout(id), "%s must lose its connection on a query timeout", id)
 	}
+
+	// fetch_last_insert_id overrides a safe plan: the killed statement can
+	// retain a last_insert_id on the connection that the skipped post-exec
+	// fetch never reported to the vtgate session.
+	qre := &QueryExecutor{
+		plan:    &TabletPlan{Plan: &planbuilder.Plan{PlanID: planbuilder.PlanSelect}},
+		options: &querypb.ExecuteOptions{FetchLastInsertId: true},
+	}
+	assert.False(t, qre.keepsConnOnTimeout(), "fetch_last_insert_id must lose the connection on a query timeout")
+	qre.options.FetchLastInsertId = false
+	assert.True(t, qre.keepsConnOnTimeout(), "a safe plan without fetch_last_insert_id keeps the connection")
 }

@@ -223,27 +223,12 @@ func TestTargetTabletAlias(t *testing.T) {
 	assert.Nil(t, session.GetTargetTabletAlias())
 }
 
-// TestNewSafeSessionStripsReservedConnKeepAlive verifies that the internal
-// reserved-connection keepalive control is stripped from a client-supplied
-// session, so a client cannot turn a normal query into a keepalive touch on a
-// tablet.
-func TestNewSafeSessionStripsReservedConnKeepAlive(t *testing.T) {
-	ss := NewSafeSession(&vtgatepb.Session{
-		Options: &querypb.ExecuteOptions{
-			ReservedConnKeepAlive:    true,
-			ReservedConnKeepAliveIds: []int64{1, 2, 3},
-			Workload:                 querypb.ExecuteOptions_OLAP,
-		},
-	})
-	require.False(t, ss.Options.GetReservedConnKeepAlive(), "keepalive flag must be stripped")
-	require.Nil(t, ss.Options.GetReservedConnKeepAliveIds(), "keepalive ids must be stripped")
-	// Unrelated options are left untouched.
-	require.Equal(t, querypb.ExecuteOptions_OLAP, ss.Options.GetWorkload())
-
-	// A nil session and nil options are handled without panicking.
-	require.NotNil(t, NewSafeSession(nil))
-	require.NotNil(t, NewSafeSession(&vtgatepb.Session{}))
-}
+// The reserved-connection keepalive is a request-level ExecuteRequest field
+// (see queryservice.ContextWithReservedConnKeepAlive), not an ExecuteOptions
+// field, precisely so that a client-supplied session cannot carry it — through
+// this vtgate or through one predating the feature, which would relay unknown
+// option fields to the tablet verbatim. The tablet-side regression test for
+// that relay lives with the TabletServer keepalive tests.
 
 func TestClearPrepareData(t *testing.T) {
 	session := NewSafeSession(&vtgatepb.Session{})
