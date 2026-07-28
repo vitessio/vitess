@@ -49,9 +49,8 @@ func TestParseRawNumber(t *testing.T) {
 		f("-12.345E+67 tail", "-12.345E+67", " tail")
 		f("-12.345E-67,tail", "-12.345E-67", ",tail")
 		f("-1234567.8e+90tail", "-1234567.8e+90", "tail")
-		f("12.tail", "12.", "tail")
-		f(".2tail", ".2", "tail")
-		f("-.2tail", "-.2", "tail")
+		f("0.2tail", "0.2", "tail")
+		f("-0.2tail", "-0.2", "tail")
 	})
 
 	t.Run("error", func(t *testing.T) {
@@ -69,6 +68,13 @@ func TestParseRawNumber(t *testing.T) {
 		f(",", ",")
 		f("{", "{")
 		f("\"", "\"")
+
+		// A decimal point needs a digit on either side of it, and a number
+		// opens with a minus or a digit.
+		f("12.tail", "tail")
+		f(".2tail", ".2tail")
+		f("-.2tail", ".2tail")
+		f("+1tail", "+1tail")
 	})
 }
 

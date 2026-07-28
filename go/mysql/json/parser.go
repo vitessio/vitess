@@ -541,44 +541,39 @@ func parseRawString(s string) (string, string, error) {
 // covers, the exponent it was written with, and how many digits it carries
 // after its decimal point. Together those say how far the number's digits sit
 // from where a double keeps them.
+//
+// What counts as a number is JSON's grammar rather than Go's: a written plus,
+// a missing digit on either side of the decimal point, and an integer part
+// that opens with a zero are all rejected.
 func readFloat[S string | []byte](s S) (i, exponent, fraction int, ok bool) {
-	// optional sign
+	// optional minus. JSON numbers carry no written plus.
 	if i >= len(s) {
 		return
 	}
-	if s[i] == '+' || s[i] == '-' {
+	if s[i] == '-' {
 		i++
 	}
 
-	// digits
-	sawdot := false
-	sawdigits := false
-	nd := 0
-loop:
-	for ; i < len(s); i++ {
-		switch c := s[i]; true {
-		case c == '.':
-			if sawdot {
-				break loop
-			}
-			sawdot = true
-			continue
-
-		case '0' <= c && c <= '9':
-			sawdigits = true
-			if sawdot {
-				fraction++
-			}
-			if c == '0' && nd == 0 { // ignore leading zeros
-				continue
-			}
-			nd++
-			continue
-		}
-		break
-	}
-	if !sawdigits {
+	// integer part: either a lone zero, or digits that do not open with one
+	if i >= len(s) || s[i] < '0' || s[i] > '9' {
 		return
+	}
+	if s[i] == '0' {
+		i++
+	} else {
+		for ; i < len(s) && '0' <= s[i] && s[i] <= '9'; i++ {
+		}
+	}
+
+	// optional fraction, which has to carry a digit of its own
+	if i < len(s) && s[i] == '.' {
+		i++
+		if i >= len(s) || s[i] < '0' || s[i] > '9' {
+			return
+		}
+		for ; i < len(s) && '0' <= s[i] && s[i] <= '9'; i++ {
+			fraction++
+		}
 	}
 
 	// optional exponent moves the decimal point. An exponent larger than
