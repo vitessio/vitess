@@ -109,10 +109,8 @@ func TestPersistKeyspace_ReplacesExistingFile(t *testing.T) {
 }
 
 // TestPersistKeyspace_NoTempLeftover guards the cleanup path: after a
-// successful write, only the final file is present in the directory — no
-// stray ks1.*.tmp files. This matters because vtcombo can persist many times
-// over a long-lived process, and unbounded temp-file accumulation would
-// eventually exhaust inodes.
+// successful write, only the final file is present in the directory — the
+// temp file the content was staged in is gone.
 func TestPersistKeyspace_NoTempLeftover(t *testing.T) {
 	dir := t.TempDir()
 
@@ -128,6 +126,35 @@ func TestPersistKeyspace_NoTempLeftover(t *testing.T) {
 		names = append(names, e.Name())
 	}
 	assert.Equal(t, []string{"ks1.json"}, names, "only the final file should remain")
+}
+
+// TestPersistKeyspace_ReplacesStaleTempLeftover covers a leftover temp file
+// from a kill between create and rename. The temp name is deterministic, so
+// the next write of the same keyspace has to replace the leftover — including
+// its mode, which may have been chmodded over for a destination that no longer
+// exists and would otherwise stick, since O_CREATE leaves the mode of an
+// existing file alone.
+func TestPersistKeyspace_ReplacesStaleTempLeftover(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".ks1.json.tmp"), []byte("garbage"), 0o600))
+
+	require.NoError(t, persistKeyspace(dir, "ks1", &vschemapb.Keyspace{Sharded: true}))
+
+	assert.True(t, readPersistedKeyspace(t, dir, "ks1").Sharded)
+
+	// The mode must come from the create (0o644 under the test's umask, same
+	// as a reference os.WriteFile), not from the leftover's 0o600.
+	reference := filepath.Join(dir, "reference")
+	require.NoError(t, os.WriteFile(reference, []byte("{}"), 0o644))
+	referenceInfo, err := os.Stat(reference)
+	require.NoError(t, err)
+
+	info, err := os.Stat(filepath.Join(dir, "ks1.json"))
+	require.NoError(t, err)
+	assert.Equal(t, referenceInfo.Mode().Perm(), info.Mode().Perm())
+
+	_, err = os.Stat(filepath.Join(dir, ".ks1.json.tmp"))
+	assert.True(t, os.IsNotExist(err), "the leftover temp file should be gone")
 }
 
 // TestVschemaPersisterFlush_WritesCurrentTopoState covers the shutdown path:
@@ -251,8 +278,8 @@ func readPersistedKeyspace(t *testing.T, dir, ksName string) *vschemapb.Keyspace
 // the atomic rename, os.WriteFile would truncate the destination first and
 // leave an empty file behind on a kill between truncate and write.
 //
-// We force a failure by making the directory non-writable so CreateTemp
-// fails. Skipped when running as root since root ignores 0o555.
+// We force a failure by making the directory non-writable so creating the
+// temp file fails. Skipped when running as root since root ignores 0o555.
 func TestPersistKeyspace_ExistingFilePreservedOnFailure(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("root bypasses directory write permissions")
