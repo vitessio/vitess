@@ -31,6 +31,67 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 )
 
+func TestRedoQueriesDiscriminateTabletDBName(t *testing.T) {
+	newRedoStateInsert := func(dbName string) string {
+		tpc := NewTwoPC(nil)
+		tpc.dbName = dbName
+		tpc.initializeQueries()
+
+		q, err := tpc.insertRedoTx.GenerateQuery(map[string]*querypb.BindVariable{
+			"dtid":         sqltypes.BytesBindVariable([]byte("ks:-80:123")),
+			"db_name":      sqltypes.StringBindVariable(tpc.dbName),
+			"state":        sqltypes.Int64BindVariable(RedoStatePrepared),
+			"time_created": sqltypes.Int64BindVariable(1),
+		}, nil)
+		require.NoError(t, err)
+		return q
+	}
+
+	assert.Equal(t,
+		"insert into _vt.redo_state(dtid, db_name, state, time_created) values (_binary'ks:-80:123', 'vt_ks_-80', 1, 1)",
+		newRedoStateInsert("vt_ks_-80"),
+	)
+	assert.Equal(t,
+		"insert into _vt.redo_state(dtid, db_name, state, time_created) values (_binary'ks:-80:123', 'vt_ks_80-', 1, 1)",
+		newRedoStateInsert("vt_ks_80-"),
+	)
+}
+
+func TestRedoQueriesPreferTabletDBNameOverLegacyRows(t *testing.T) {
+	tpc := NewTwoPC(nil)
+	tpc.dbName = "vt_ks_-80"
+	tpc.initializeQueries()
+
+	assert.Equal(t, `select t.dtid, t.state, t.time_created, s.statement, t.message
+	from _vt.redo_state t
+    join _vt.redo_statement s on t.dtid = s.dtid and t.db_name = s.db_name
+    where t.db_name = 'vt_ks_-80' or (t.db_name = '' and not exists (select 1 from _vt.redo_state cur where cur.dtid = t.dtid and cur.db_name = 'vt_ks_-80'))
+	order by t.dtid, s.id`, tpc.readAllRedo)
+
+	bindVars := map[string]*querypb.BindVariable{
+		"dtid":    sqltypes.BytesBindVariable([]byte("ks:-80:123")),
+		"db_name": sqltypes.StringBindVariable(tpc.dbName),
+	}
+	readRedoTx, err := tpc.readRedoTx.GenerateQuery(bindVars, nil)
+	require.NoError(t, err)
+	assert.Equal(t, "select state, time_created, message from _vt.redo_state t where t.dtid = _binary'ks:-80:123' and (t.db_name = 'vt_ks_-80' or (t.db_name = '' and not exists (select 1 from _vt.redo_state cur where cur.dtid = t.dtid and cur.db_name = 'vt_ks_-80')))", readRedoTx)
+
+	readRedoDBName, err := tpc.readRedoDBName.GenerateQuery(bindVars, nil)
+	require.NoError(t, err)
+	assert.Equal(t, "select t.db_name from _vt.redo_state t where t.dtid = _binary'ks:-80:123' and (t.db_name = 'vt_ks_-80' or (t.db_name = '' and not exists (select 1 from _vt.redo_state cur where cur.dtid = t.dtid and cur.db_name = 'vt_ks_-80')))", readRedoDBName)
+
+	readRedoStmts, err := tpc.readRedoStmts.GenerateQuery(bindVars, nil)
+	require.NoError(t, err)
+	assert.Equal(t, "select statement from _vt.redo_statement s where s.dtid = _binary'ks:-80:123' and (s.db_name = 'vt_ks_-80' or (s.db_name = '' and not exists (select 1 from _vt.redo_state cur where cur.dtid = s.dtid and cur.db_name = 'vt_ks_-80'))) order by s.id", readRedoStmts)
+
+	countUnresolvedRedo, err := tpc.countUnresolvedRedo.GenerateQuery(map[string]*querypb.BindVariable{
+		"time_created": sqltypes.Int64BindVariable(1),
+		"db_name":      sqltypes.StringBindVariable(tpc.dbName),
+	}, nil)
+	require.NoError(t, err)
+	assert.Equal(t, "select count(*) from _vt.redo_state t where t.time_created < 1 and (t.db_name = 'vt_ks_-80' or (t.db_name = '' and not exists (select 1 from _vt.redo_state cur where cur.dtid = t.dtid and cur.db_name = 'vt_ks_-80')))", countUnresolvedRedo)
+}
+
 func TestReadAllRedo(t *testing.T) {
 	ctx := t.Context()
 	// Reuse code from tx_executor_test.

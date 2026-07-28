@@ -253,8 +253,9 @@ func TestTxExecutorCommitRedoFail(t *testing.T) {
 	require.NoError(t, err)
 
 	// fail commit prepare as the delete redo query is in rejected query.
-	db.AddRejectedQuery("delete from _vt.redo_state where dtid = _binary'bb'", errors.New("delete redo log fail"))
-	db.AddQuery("update _vt.redo_state set state = 0 where dtid = _binary'bb'", sqltypes.MakeTestResult(nil))
+	db.AddRejectedQuery("delete from _vt.redo_state where dtid = _binary'bb' and db_name = 'fakesqldb'", errors.New("delete redo log fail"))
+	db.AddQuery("select t.db_name from _vt.redo_state t where t.dtid = _binary'bb' and (t.db_name = 'fakesqldb' or (t.db_name = '' and not exists (select 1 from _vt.redo_state cur where cur.dtid = t.dtid and cur.db_name = 'fakesqldb')))", sqltypes.MakeTestResult(sqltypes.MakeTestFields("db_name", "varbinary"), "fakesqldb"))
+	db.AddQuery("update _vt.redo_state set state = 0, message = '' where dtid = _binary'bb' and db_name = 'fakesqldb'", &sqltypes.Result{RowsAffected: 1})
 	err = txe.CommitPrepared("bb")
 	require.ErrorContains(t, err, "delete redo log fail")
 
@@ -684,10 +685,10 @@ func newTestTxExecutor(t *testing.T, ctx context.Context) (txe *DTExecutor, tsv 
 	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TabletServerTest")
 	se := schema.NewEngine(env)
 	qe := NewQueryEngine(env, se)
-	db.AddQueryPattern("insert into _vt\\.redo_state\\(dtid, state, time_created\\) values \\(_binary'aa', 1,.*", &sqltypes.Result{})
+	db.AddQueryPattern("insert into _vt\\.redo_state\\(dtid, db_name, state, time_created\\) values \\(_binary'aa', 'fakesqldb', 1,.*", &sqltypes.Result{})
 	db.AddQueryPattern("insert into _vt\\.redo_statement.*", &sqltypes.Result{})
-	db.AddQuery("delete from _vt.redo_state where dtid = _binary'aa'", &sqltypes.Result{})
-	db.AddQuery("delete from _vt.redo_statement where dtid = _binary'aa'", &sqltypes.Result{})
+	db.AddQuery("delete from _vt.redo_state where dtid = _binary'aa' and db_name = 'fakesqldb'", &sqltypes.Result{RowsAffected: 1})
+	db.AddQuery("delete from _vt.redo_statement where dtid = _binary'aa' and db_name = 'fakesqldb'", &sqltypes.Result{})
 	db.AddQuery("update test_table set `name` = 2 where pk = 1 limit 10001", &sqltypes.Result{})
 	db.AddRejectedQuery("bogus", sqlerror.NewSQLError(sqlerror.ERUnknownError, sqlerror.SSUnknownSQLState, "bogus query"))
 	return &DTExecutor{
@@ -706,10 +707,10 @@ func newShortAgeExecutor(t *testing.T, ctx context.Context) (txe *DTExecutor, ts
 	db = setUpQueryExecutorTest(t)
 	logStats := tabletenv.NewLogStats(ctx, "TestTxExecutor", streamlog.NewQueryLogConfigForTest())
 	tsv = newTestTabletServer(ctx, smallTxPool|shortTwopcAge, db)
-	db.AddQueryPattern("insert into _vt\\.redo_state\\(dtid, state, time_created\\) values \\(_binary'aa', 1,.*", &sqltypes.Result{})
+	db.AddQueryPattern("insert into _vt\\.redo_state\\(dtid, db_name, state, time_created\\) values \\(_binary'aa', 'fakesqldb', 1,.*", &sqltypes.Result{})
 	db.AddQueryPattern("insert into _vt\\.redo_statement.*", &sqltypes.Result{})
-	db.AddQuery("delete from _vt.redo_state where dtid = _binary'aa'", &sqltypes.Result{})
-	db.AddQuery("delete from _vt.redo_statement where dtid = _binary'aa'", &sqltypes.Result{})
+	db.AddQuery("delete from _vt.redo_state where dtid = _binary'aa' and db_name = 'fakesqldb'", &sqltypes.Result{RowsAffected: 1})
+	db.AddQuery("delete from _vt.redo_statement where dtid = _binary'aa' and db_name = 'fakesqldb'", &sqltypes.Result{})
 	db.AddQuery("update test_table set `name` = 2 where pk = 1 limit 10001", &sqltypes.Result{})
 	return &DTExecutor{
 		ctx:      ctx,

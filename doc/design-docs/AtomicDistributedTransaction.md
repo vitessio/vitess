@@ -363,10 +363,11 @@ The redo_state table needs to support the following use cases:
 ```
 create table redo_state(
   dtid varbinary(512),
+  db_name varbinary(256) not null default '',
   state bigint, // state can be 0: Failed, 1: Prepared.
   time_created bigint,
   message text, // record any error message.
-  primary key(dtid)
+  primary key(dtid, db_name)
 )
 ```
 
@@ -376,9 +377,10 @@ It needs the ability to read the statements of a dtid in the correct order (by i
 ```
 create table redo_statement(
   dtid varbinary(512),
+  db_name varbinary(256) not null default '',
   id bigint,
   statement mediumblob,
-  primary key(dtid, id)
+  primary key(dtid, db_name, id)
 )
 ```
 

@@ -50,7 +50,8 @@ const (
 
 	readAllRedo = `select t.dtid, t.state, t.time_created, s.statement, t.message
 	from %s.redo_state t
-    join %s.redo_statement s on t.dtid = s.dtid
+    join %s.redo_statement s on t.dtid = s.dtid and t.db_name = s.db_name
+    where t.db_name = %s or (t.db_name = '' and not exists (select 1 from %s.redo_state cur where cur.dtid = t.dtid and cur.db_name = %s))
 	order by t.dtid, s.id`
 
 	readAllTransactions = `select t.dtid, t.state, t.time_created, p.keyspace, p.shard
@@ -74,8 +75,10 @@ const (
 // TwoPC performs 2PC metadata management (MM) functions.
 type TwoPC struct {
 	readPool *connpool.Pool
+	dbName   string
 
 	insertRedoTx        *sqlparser.ParsedQuery
+	readRedoDBName      *sqlparser.ParsedQuery
 	readRedoTx          *sqlparser.ParsedQuery
 	insertRedoStmt      *sqlparser.ParsedQuery
 	readRedoStmts       *sqlparser.ParsedQuery
@@ -106,30 +109,34 @@ func NewTwoPC(readPool *connpool.Pool) *TwoPC {
 func (tpc *TwoPC) initializeQueries() {
 	dbname := sidecar.GetIdentifier()
 	tpc.insertRedoTx = sqlparser.BuildParsedQuery(
-		"insert into %s.redo_state(dtid, state, time_created) values (%a, %a, %a)",
-		dbname, ":dtid", ":state", ":time_created")
+		"insert into %s.redo_state(dtid, db_name, state, time_created) values (%a, %a, %a, %a)",
+		dbname, ":dtid", ":db_name", ":state", ":time_created")
+	tpc.readRedoDBName = sqlparser.BuildParsedQuery(
+		"select t.db_name from %s.redo_state t where t.dtid = %a and (t.db_name = %a or (t.db_name = '' and not exists (select 1 from %s.redo_state cur where cur.dtid = t.dtid and cur.db_name = %a)))",
+		dbname, ":dtid", ":db_name", dbname, ":db_name")
 	tpc.readRedoTx = sqlparser.BuildParsedQuery(
-		"select state, time_created, message from %s.redo_state where dtid = %a",
-		dbname, ":dtid")
+		"select state, time_created, message from %s.redo_state t where t.dtid = %a and (t.db_name = %a or (t.db_name = '' and not exists (select 1 from %s.redo_state cur where cur.dtid = t.dtid and cur.db_name = %a)))",
+		dbname, ":dtid", ":db_name", dbname, ":db_name")
 	tpc.insertRedoStmt = sqlparser.BuildParsedQuery(
-		"insert into %s.redo_statement(dtid, id, statement) values %a",
+		"insert into %s.redo_statement(dtid, db_name, id, statement) values %a",
 		dbname, ":vals")
 	tpc.readRedoStmts = sqlparser.BuildParsedQuery(
-		"select statement from %s.redo_statement where dtid = %a order by id",
-		dbname, ":dtid")
+		"select statement from %s.redo_statement s where s.dtid = %a and (s.db_name = %a or (s.db_name = '' and not exists (select 1 from %s.redo_state cur where cur.dtid = s.dtid and cur.db_name = %a))) order by s.id",
+		dbname, ":dtid", ":db_name", dbname, ":db_name")
 	tpc.updateRedoTx = sqlparser.BuildParsedQuery(
-		"update %s.redo_state set state = %a, message = %a where dtid = %a",
-		dbname, ":state", ":message", ":dtid")
+		"update %s.redo_state set state = %a, message = %a where dtid = %a and db_name = %a",
+		dbname, ":state", ":message", ":dtid", ":db_name")
 	tpc.deleteRedoTx = sqlparser.BuildParsedQuery(
-		"delete from %s.redo_state where dtid = %a",
-		dbname, ":dtid")
+		"delete from %s.redo_state where dtid = %a and db_name = %a",
+		dbname, ":dtid", ":db_name")
 	tpc.deleteRedoStmt = sqlparser.BuildParsedQuery(
-		"delete from %s.redo_statement where dtid = %a",
-		dbname, ":dtid")
-	tpc.readAllRedo = fmt.Sprintf(readAllRedo, dbname, dbname)
+		"delete from %s.redo_statement where dtid = %a and db_name = %a",
+		dbname, ":dtid", ":db_name")
+	encodedDBName := sqltypes.EncodeStringSQL(tpc.dbName)
+	tpc.readAllRedo = fmt.Sprintf(readAllRedo, dbname, dbname, encodedDBName, dbname, encodedDBName)
 	tpc.countUnresolvedRedo = sqlparser.BuildParsedQuery(
-		"select count(*) from %s.redo_state where time_created < %a",
-		dbname, ":time_created")
+		"select count(*) from %s.redo_state t where t.time_created < %a and (t.db_name = %a or (t.db_name = '' and not exists (select 1 from %s.redo_state cur where cur.dtid = t.dtid and cur.db_name = %a)))",
+		dbname, ":time_created", ":db_name", dbname, ":db_name")
 
 	tpc.insertTransaction = sqlparser.BuildParsedQuery(
 		"insert into %s.dt_state(dtid, state, time_created) values (%a, %a, %a)",
@@ -179,8 +186,9 @@ func (tpc *TwoPC) Open(dbconfigs *dbconfigs.DBConfigs) error {
 	}
 	defer conn.Close()
 	tpc.readPool.Open(dbconfigs.AppWithDB(), dbconfigs.DbaWithDB(), dbconfigs.DbaWithDB())
+	tpc.dbName = dbconfigs.DBName
 	tpc.initializeQueries()
-	log.Info("TwoPC: Engine open succeeded")
+	log.Info(fmt.Sprintf("TwoPC: Engine open succeeded (dbName=%s)", tpc.dbName))
 	return nil
 }
 
@@ -193,6 +201,7 @@ func (tpc *TwoPC) Close() {
 func (tpc *TwoPC) SaveRedo(ctx context.Context, conn *StatefulConnection, dtid string, queries []tx.Query) error {
 	bindVars := map[string]*querypb.BindVariable{
 		"dtid":         sqltypes.BytesBindVariable([]byte(dtid)),
+		"db_name":      sqltypes.StringBindVariable(tpc.dbName),
 		"state":        sqltypes.Int64BindVariable(RedoStatePrepared),
 		"time_created": sqltypes.Int64BindVariable(time.Now().UnixNano()),
 	}
@@ -205,6 +214,7 @@ func (tpc *TwoPC) SaveRedo(ctx context.Context, conn *StatefulConnection, dtid s
 	for i, query := range queries {
 		rows[i] = []sqltypes.Value{
 			sqltypes.NewVarBinary(dtid),
+			sqltypes.NewVarBinary(tpc.dbName),
 			sqltypes.NewInt64(int64(i + 1)),
 			sqltypes.NewVarBinary(query.Sql),
 		}
@@ -224,24 +234,49 @@ func (tpc *TwoPC) SaveRedo(ctx context.Context, conn *StatefulConnection, dtid s
 func (tpc *TwoPC) UpdateRedo(ctx context.Context, conn *StatefulConnection, dtid string, state int, message string) error {
 	bindVars := map[string]*querypb.BindVariable{
 		"dtid":    sqltypes.BytesBindVariable([]byte(dtid)),
+		"db_name": sqltypes.StringBindVariable(tpc.dbName),
 		"state":   sqltypes.Int64BindVariable(int64(state)),
 		"message": sqltypes.StringBindVariable(message),
 	}
-	_, err := tpc.exec(ctx, conn, tpc.updateRedoTx, bindVars)
+	dbName, ok, err := tpc.resolveRedoDBName(ctx, conn, bindVars)
+	if err != nil || !ok {
+		return err
+	}
+	bindVars["db_name"] = sqltypes.StringBindVariable(dbName)
+	_, err = tpc.exec(ctx, conn, tpc.updateRedoTx, bindVars)
 	return err
 }
 
 // DeleteRedo deletes the redo log for the dtid.
 func (tpc *TwoPC) DeleteRedo(ctx context.Context, conn *StatefulConnection, dtid string) error {
 	bindVars := map[string]*querypb.BindVariable{
-		"dtid": sqltypes.BytesBindVariable([]byte(dtid)),
+		"dtid":    sqltypes.BytesBindVariable([]byte(dtid)),
+		"db_name": sqltypes.StringBindVariable(tpc.dbName),
 	}
-	_, err := tpc.exec(ctx, conn, tpc.deleteRedoTx, bindVars)
+	qr, err := tpc.exec(ctx, conn, tpc.deleteRedoTx, bindVars)
 	if err != nil {
 		return err
 	}
+	if qr.RowsAffected == 0 && tpc.dbName != "" {
+		bindVars["db_name"] = sqltypes.StringBindVariable("")
+		_, err = tpc.exec(ctx, conn, tpc.deleteRedoTx, bindVars)
+		if err != nil {
+			return err
+		}
+	}
 	_, err = tpc.exec(ctx, conn, tpc.deleteRedoStmt, bindVars)
 	return err
+}
+
+func (tpc *TwoPC) resolveRedoDBName(ctx context.Context, conn *StatefulConnection, bindVars map[string]*querypb.BindVariable) (string, bool, error) {
+	qr, err := tpc.exec(ctx, conn, tpc.readRedoDBName, bindVars)
+	if err != nil {
+		return "", false, err
+	}
+	if len(qr.Rows) == 0 {
+		return "", false, nil
+	}
+	return qr.Rows[0][0].ToString(), true, nil
 }
 
 // ReadAllRedo returns all the prepared transactions from the redo logs.
@@ -299,6 +334,7 @@ func (tpc *TwoPC) CountUnresolvedRedo(ctx context.Context, unresolvedTime time.T
 
 	bindVars := map[string]*querypb.BindVariable{
 		"time_created": sqltypes.Int64BindVariable(unresolvedTime.UnixNano()),
+		"db_name":      sqltypes.StringBindVariable(tpc.dbName),
 	}
 	qr, err := tpc.read(ctx, conn.Conn, tpc.countUnresolvedRedo, bindVars)
 	if err != nil {
@@ -431,7 +467,8 @@ func (tpc *TwoPC) GetTransactionInfo(ctx context.Context, dtid string) (*tabletm
 
 	result := &tabletmanagerdatapb.GetTransactionInfoResponse{}
 	bindVars := map[string]*querypb.BindVariable{
-		"dtid": sqltypes.BytesBindVariable([]byte(dtid)),
+		"dtid":    sqltypes.BytesBindVariable([]byte(dtid)),
+		"db_name": sqltypes.StringBindVariable(tpc.dbName),
 	}
 	qr, err := tpc.read(ctx, conn.Conn, tpc.readRedoTx, bindVars)
 	if err != nil {

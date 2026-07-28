@@ -2900,10 +2900,10 @@ func addTabletServerSupportedQueries(db *fakesqldb.DB) {
 				Type: sqltypes.Int64,
 			}},
 		},
-		"begin":                                {},
-		"commit":                               {},
-		"rollback":                             {},
-		fmt.Sprintf(readAllRedo, "_vt", "_vt"): {},
+		"begin":    {},
+		"commit":   {},
+		"rollback": {},
+		fmt.Sprintf(readAllRedo, "_vt", "_vt", sqltypes.EncodeStringSQL("fakesqldb"), "_vt", sqltypes.EncodeStringSQL("fakesqldb")): {},
 	}
 	parser := sqlparser.NewTestParser()
 	sidecardb.AddSchemaInitQueries(db, true, parser)

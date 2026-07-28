@@ -778,49 +778,50 @@ func TestCheckReceivedError(t *testing.T) {
 	}{{
 		receivedErr: vterrors.New(vtrpcpb.Code_DEADLINE_EXCEEDED, "deadline exceeded"),
 		retryable:   true,
-		expQuery:    `update _vt.redo_state set state = 1, message = 'deadline exceeded' where dtid = _binary'aa'`,
+		expQuery:    `update _vt.redo_state set state = 1, message = 'deadline exceeded' where dtid = _binary'aa' and db_name = 'fakesqldb'`,
 	}, {
 		receivedErr: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "invalid argument"),
 		retryable:   false,
-		expQuery:    `update _vt.redo_state set state = 0, message = 'invalid argument' where dtid = _binary'aa'`,
+		expQuery:    `update _vt.redo_state set state = 0, message = 'invalid argument' where dtid = _binary'aa' and db_name = 'fakesqldb'`,
 	}, {
 		receivedErr: sqlerror.NewSQLError(sqlerror.ERLockDeadlock, sqlerror.SSLockDeadlock, "Deadlock found when trying to get lock; try restarting transaction"),
 		retryable:   false,
-		expQuery:    `update _vt.redo_state set state = 0, message = 'Deadlock found when trying to get lock; try restarting transaction (errno 1213) (sqlstate 40001)' where dtid = _binary'aa'`,
+		expQuery:    `update _vt.redo_state set state = 0, message = 'Deadlock found when trying to get lock; try restarting transaction (errno 1213) (sqlstate 40001)' where dtid = _binary'aa' and db_name = 'fakesqldb'`,
 	}, {
 		receivedErr: context.DeadlineExceeded,
 		retryable:   true,
-		expQuery:    `update _vt.redo_state set state = 1, message = 'context deadline exceeded' where dtid = _binary'aa'`,
+		expQuery:    `update _vt.redo_state set state = 1, message = 'context deadline exceeded' where dtid = _binary'aa' and db_name = 'fakesqldb'`,
 	}, {
 		receivedErr: context.Canceled,
 		retryable:   true,
-		expQuery:    `update _vt.redo_state set state = 1, message = 'context canceled' where dtid = _binary'aa'`,
+		expQuery:    `update _vt.redo_state set state = 1, message = 'context canceled' where dtid = _binary'aa' and db_name = 'fakesqldb'`,
 	}, {
 		receivedErr: sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "Lost connection to MySQL server during query"),
 		retryable:   true,
-		expQuery:    `update _vt.redo_state set state = 1, message = 'Lost connection to MySQL server during query (errno 2013) (sqlstate HY000)' where dtid = _binary'aa'`,
+		expQuery:    `update _vt.redo_state set state = 1, message = 'Lost connection to MySQL server during query (errno 2013) (sqlstate HY000)' where dtid = _binary'aa' and db_name = 'fakesqldb'`,
 	}, {
 		receivedErr: sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "Malformed packet"),
 		retryable:   false,
-		expQuery:    `update _vt.redo_state set state = 0, message = 'Malformed packet (errno 2027) (sqlstate HY000)' where dtid = _binary'aa'`,
+		expQuery:    `update _vt.redo_state set state = 0, message = 'Malformed packet (errno 2027) (sqlstate HY000)' where dtid = _binary'aa' and db_name = 'fakesqldb'`,
 	}, {
 		receivedErr: sqlerror.NewSQLError(sqlerror.CRServerGone, sqlerror.SSUnknownSQLState, "Server has gone away"),
 		retryable:   true,
-		expQuery:    `update _vt.redo_state set state = 1, message = 'Server has gone away (errno 2006) (sqlstate HY000)' where dtid = _binary'aa'`,
+		expQuery:    `update _vt.redo_state set state = 1, message = 'Server has gone away (errno 2006) (sqlstate HY000)' where dtid = _binary'aa' and db_name = 'fakesqldb'`,
 	}, {
 		receivedErr: vterrors.New(vtrpcpb.Code_ABORTED, "Row count exceeded"),
 		retryable:   false,
-		expQuery:    `update _vt.redo_state set state = 0, message = 'Row count exceeded' where dtid = _binary'aa'`,
+		expQuery:    `update _vt.redo_state set state = 0, message = 'Row count exceeded' where dtid = _binary'aa' and db_name = 'fakesqldb'`,
 	}, {
 		receivedErr: errors.New("(errno 2013) (sqlstate HY000) lost connection"),
 		retryable:   true,
-		expQuery:    `update _vt.redo_state set state = 1, message = '(errno 2013) (sqlstate HY000) lost connection' where dtid = _binary'aa'`,
+		expQuery:    `update _vt.redo_state set state = 1, message = '(errno 2013) (sqlstate HY000) lost connection' where dtid = _binary'aa' and db_name = 'fakesqldb'`,
 	}}
 
 	for _, tc := range tcases {
 		t.Run(tc.receivedErr.Error(), func(t *testing.T) {
 			if tc.expQuery != "" {
-				db.AddQuery(tc.expQuery, &sqltypes.Result{})
+				db.AddQuery("select t.db_name from _vt.redo_state t where t.dtid = _binary'aa' and (t.db_name = 'fakesqldb' or (t.db_name = '' and not exists (select 1 from _vt.redo_state cur where cur.dtid = t.dtid and cur.db_name = 'fakesqldb')))", sqltypes.MakeTestResult(sqltypes.MakeTestFields("db_name", "varbinary"), "fakesqldb"))
+				db.AddQuery(tc.expQuery, &sqltypes.Result{RowsAffected: 1})
 			}
 			nonRetryable := te.checkErrorAndMarkFailed(t.Context(), "aa", tc.receivedErr, "")
 			require.NotEqual(t, tc.retryable, nonRetryable)

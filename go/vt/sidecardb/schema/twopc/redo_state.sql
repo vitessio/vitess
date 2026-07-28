@@ -16,8 +16,9 @@ limitations under the License.
 
 CREATE TABLE IF NOT EXISTS redo_state(
   dtid varbinary(512) NOT NULL,
+  db_name varbinary(256) NOT NULL DEFAULT '',
   state bigint NOT NULL,
   time_created bigint NOT NULL,
   message text,
-  primary key(dtid)
+  primary key(dtid, db_name)
 ) ENGINE = InnoDB CHARSET = utf8mb4
