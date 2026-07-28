@@ -923,6 +923,46 @@ func TestCompilerSingle(t *testing.T) {
 	}
 }
 
+// TestCastInvalidJSON pins that text MySQL refuses as a JSON document is
+// refused by both evaluation paths. The differential suite cannot pin this
+// direction: its comparison excuses a MySQL "Invalid JSON text" error when
+// the local evaluation succeeds, so a cast that wrongly started accepting one
+// of these spellings would stay green there.
+func TestCastInvalidJSON(t *testing.T) {
+	testCases := []struct {
+		expression string
+		wantErr    string
+	}{
+		{`CAST('+1' AS JSON)`, "invalid number"},
+		{`CAST(' +1' AS JSON)`, "invalid number"},
+		{`CAST('+1.5' AS JSON)`, "invalid number"},
+		{`CAST('1e309' AS JSON)`, "number too big to be stored in double"},
+	}
+
+	venv := vtenv.NewTestEnv()
+	for _, tc := range testCases {
+		t.Run(tc.expression, func(t *testing.T) {
+			expr, err := venv.Parser().ParseExpr(tc.expression)
+			require.NoError(t, err)
+
+			cfg := &evalengine.Config{
+				Collation:         collations.CollationUtf8mb4ID,
+				Environment:       venv,
+				NoConstantFolding: true,
+			}
+			converted, err := evalengine.Translate(expr, cfg)
+			require.NoError(t, err)
+
+			env := evalengine.EmptyExpressionEnv(venv)
+			_, err = env.EvaluateAST(converted)
+			require.ErrorContains(t, err, tc.wantErr)
+
+			_, err = env.Evaluate(converted)
+			require.ErrorContains(t, err, tc.wantErr)
+		})
+	}
+}
+
 func TestBindVarLiteral(t *testing.T) {
 	testCases := []struct {
 		expression string
