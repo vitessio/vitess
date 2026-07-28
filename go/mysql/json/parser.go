@@ -228,14 +228,17 @@ func mayExceedFloat64(num string, exponent int) bool {
 }
 
 // pow10 holds the powers of ten that a number's digits are scaled by, which is
-// the table RapidJSON scales its significand with. It is built from the decimal
-// spellings rather than from math.Pow10, which multiplies two table entries
-// together and lands a bit away from the spelling for 78 of these exponents.
+// the table RapidJSON scales its significand with. RapidJSON writes its table
+// out as decimal literals, so each entry here is read from the same spelling and
+// lands on the same double. math.Pow10 would not: it multiplies two table entries
+// together and comes out a bit away from the spelling for 78 of these exponents.
 var pow10 [maxFloat64Digits + 1]float64
 
+// The rest of the package reads numbers with fastparse, because that is a hot
+// path. This table is built once at startup, so it uses strconv instead.
 func init() {
 	for i := range pow10 {
-		pow10[i], _ = fastparse.ParseFloat64("1e" + strconv.Itoa(i))
+		pow10[i], _ = strconv.ParseFloat("1e"+strconv.Itoa(i), 64)
 	}
 }
 
