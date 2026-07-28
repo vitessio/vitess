@@ -57,7 +57,7 @@ func TestMessageTruncateWithBinaryData(t *testing.T) {
 		if i > 0 {
 			msg.WriteString(", ")
 		}
-		msg.WriteString(fmt.Sprintf("(0,%d,_binary'", i%4))
+		fmt.Fprintf(&msg, "(0,%d,_binary'", i%4)
 		msg.WriteString("id")
 		msg.WriteString("',_binary'")
 		// Write raw binary data the way encodeBytesSQLBytes2 does: raw bytes

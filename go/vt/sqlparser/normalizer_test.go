@@ -19,7 +19,6 @@ package sqlparser
 import (
 	"fmt"
 	"math/rand/v2"
-	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -545,7 +544,7 @@ func TestNormalizeOneCasae(t *testing.T) {
 	out, err := Normalize(tree, NewReservedVars("vtg", known), bv, true, "ks", 0, "", map[string]string{}, nil, nil)
 	require.NoError(t, err)
 	normalizerOutput := String(out.AST)
-	require.EqualValues(t, testOne.output, normalizerOutput)
+	require.Equal(t, testOne.output, normalizerOutput)
 	if normalizerOutput == "otheradmin" || normalizerOutput == "otherread" {
 		return
 	}
@@ -556,9 +555,7 @@ func TestNormalizeOneCasae(t *testing.T) {
 func TestGetBindVars(t *testing.T) {
 	parser := NewTestParser()
 	stmt, err := parser.Parse("select * from t where :v1 = :v2 and :v2 = :v3 and :v4 in ::v5")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	got := getBindvars(stmt)
 	want := map[string]struct{}{
 		"v1": {},
@@ -567,9 +564,7 @@ func TestGetBindVars(t *testing.T) {
 		"v4": {},
 		"v5": {},
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("GetBindVars: %v, want: %v", got, want)
-	}
+	assert.Equalf(t, want, got, "GetBindVars")
 }
 
 type testCaseSetVar struct {
@@ -638,7 +633,7 @@ func TestRewrites(in *testing.T) {
 	}, {
 		// unnest database() call
 		in:       "select (select database()) from test",
-		expected: "select database() as `(select database() from dual)` from test",
+		expected: "select database() as `(select database())` from test",
 		// no bindvar needs
 	}, {
 		// unnest database() call
@@ -719,7 +714,7 @@ func TestRewrites(in *testing.T) {
 		socket:   true,
 	}, {
 		in:       "select (select 42) from dual",
-		expected: "select 42 as `(select 42 from dual)` from dual",
+		expected: "select 42 as `(select 42)` from dual",
 	}, {
 		in:       "select * from user where col = (select 42)",
 		expected: "select * from user where col = 42",
@@ -769,8 +764,8 @@ func TestRewrites(in *testing.T) {
 		in:       "SELECT * FROM tbl WHERE id IN (SELECT id FROM user GROUP BY id)",
 		expected: "SELECT * FROM tbl WHERE id IN (SELECT id FROM user GROUP BY id)",
 	}, {
-		in:       "SELECT * FROM tbl WHERE id IN (SELECT 1 FROM dual, user)",
-		expected: "SELECT * FROM tbl WHERE id IN (SELECT 1 FROM dual, user)",
+		in:       "SELECT * FROM tbl WHERE id IN (SELECT 1 FROM `dual`, user)",
+		expected: "SELECT * FROM tbl WHERE id IN (SELECT 1 FROM `dual`, `user`)",
 	}, {
 		in:       "SELECT * FROM tbl WHERE id IN (SELECT 1 FROM dual limit 1)",
 		expected: "SELECT * FROM tbl WHERE id IN (SELECT 1 FROM dual limit 1)",
@@ -921,7 +916,7 @@ func TestRewrites(in *testing.T) {
 			assert.Equal(tc.db, result.NeedsFuncResult(DBVarName), "should need database name")
 			assert.Equal(tc.foundRows, result.NeedsFuncResult(FoundRowsName), "should need found rows")
 			assert.Equal(tc.rowCount, result.NeedsFuncResult(RowCountName), "should need row count")
-			assert.Equal(tc.udv, len(result.NeedUserDefinedVariables), "count of user defined variables")
+			assert.Len(result.NeedUserDefinedVariables, tc.udv, "count of user defined variables")
 			assert.Equal(tc.autocommit, result.NeedsSysVar(sysvars.Autocommit.Name), "should need :__vtautocommit")
 			assert.Equal(tc.foreignKeyChecks, result.NeedsSysVar(sysvars.ForeignKeyChecks), "should need :__vtforeignKeyChecks")
 			assert.Equal(tc.clientFoundRows, result.NeedsSysVar(sysvars.ClientFoundRows.Name), "should need :__vtclientFoundRows")

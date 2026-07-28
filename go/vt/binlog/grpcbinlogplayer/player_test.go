@@ -25,6 +25,8 @@ import (
 	"vitess.io/vitess/go/vt/binlog/binlogplayertest"
 	"vitess.io/vitess/go/vt/binlog/grpcbinlogstreamer"
 
+	"github.com/stretchr/testify/require"
+
 	binlogservicepb "vitess.io/vitess/go/vt/proto/binlogservice"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -34,9 +36,7 @@ import (
 func TestGRPCBinlogStreamer(t *testing.T) {
 	// Listen on a random port
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("Cannot listen: %v", err)
-	}
+	require.NoError(t, err)
 	host := listener.Addr().(*net.TCPAddr).IP.String()
 	port := listener.Addr().(*net.TCPAddr).Port
 

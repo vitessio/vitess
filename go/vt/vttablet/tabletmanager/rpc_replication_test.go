@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/semaphore"
 
@@ -33,8 +34,10 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/semisyncmonitor"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
+	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -66,7 +69,7 @@ func TestWaitForGrantsToHaveApplied(t *testing.T) {
 	tm := &TabletManager{
 		_waitForGrantsComplete: make(chan struct{}),
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
 	defer cancel()
 	err := tm.waitForGrantsToHaveApplied(ctx)
 	require.ErrorContains(t, err, "deadline exceeded")
@@ -74,7 +77,7 @@ func TestWaitForGrantsToHaveApplied(t *testing.T) {
 	err = tm.waitForDBAGrants(nil, 0)
 	require.NoError(t, err)
 
-	secondContext, secondCancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	secondContext, secondCancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
 	defer secondCancel()
 	err = tm.waitForGrantsToHaveApplied(secondContext)
 	require.NoError(t, err)
@@ -123,7 +126,7 @@ func TestDemotePrimaryStalled(t *testing.T) {
 	}
 
 	go func() {
-		tm.demotePrimary(context.Background(), false /* revertPartialFailure */, false /* force */)
+		tm.demotePrimary(t.Context(), false /* revertPartialFailure */, false /* force */)
 	}()
 	// We make IsServing stall by making it wait on a channel.
 	// This should cause the demote primary operation to be stalled.
@@ -140,10 +143,63 @@ func TestDemotePrimaryStalled(t *testing.T) {
 	}, 5*time.Second, 100*time.Millisecond)
 }
 
+// TestDemotePrimaryLockWaitTimeout checks that a demotion enables super_read_only
+// with a 1 second lock_wait_timeout, so that it fails fast instead of stalling
+// behind metadata locks held by in-flight queries.
+func TestDemotePrimaryLockWaitTimeout(t *testing.T) {
+	old := demotePrimaryLockWaitTimeout
+	demotePrimaryLockWaitTimeout = time.Second
+	t.Cleanup(func() { demotePrimaryLockWaitTimeout = old })
+
+	fakeDb := newTestMysqlDaemon(t, 1)
+	tm := &TabletManager{
+		actionSema:  semaphore.NewWeighted(1),
+		MysqlDaemon: fakeDb,
+		tmState: &tmState{
+			displayState: displayState{
+				tablet: newTestTablet(t, 100, "ks", "-", map[string]string{}),
+			},
+		},
+		QueryServiceControl: tabletservermock.NewController(),
+		SemiSyncMonitor:     semisyncmonitor.CreateTestSemiSyncMonitor(fakeDb.DB(), exporter),
+	}
+
+	_, err := tm.demotePrimary(t.Context(), false /* revertPartialFailure */, false /* force */)
+	require.NoError(t, err)
+
+	assert.True(t, fakeDb.SuperReadOnly.Load(), "demotePrimary must enable super_read_only")
+	assert.Equal(t, time.Second, fakeDb.SetSuperReadOnlyLockWaitTimeout, "demotePrimary must enable super_read_only with a 1s lock_wait_timeout")
+}
+
+// TestDemotePrimaryLockWaitTimeoutDisabledByDefault checks that a demotion does not pass a
+// lock_wait_timeout bound when demotePrimaryLockWaitTimeout is left at its zero-value default.
+func TestDemotePrimaryLockWaitTimeoutDisabledByDefault(t *testing.T) {
+	require.Zero(t, demotePrimaryLockWaitTimeout, "test requires the flag to be at its default value")
+
+	fakeDb := newTestMysqlDaemon(t, 1)
+	tm := &TabletManager{
+		actionSema:  semaphore.NewWeighted(1),
+		MysqlDaemon: fakeDb,
+		tmState: &tmState{
+			displayState: displayState{
+				tablet: newTestTablet(t, 100, "ks", "-", map[string]string{}),
+			},
+		},
+		QueryServiceControl: tabletservermock.NewController(),
+		SemiSyncMonitor:     semisyncmonitor.CreateTestSemiSyncMonitor(fakeDb.DB(), exporter),
+	}
+
+	_, err := tm.demotePrimary(t.Context(), false /* revertPartialFailure */, false /* force */)
+	require.NoError(t, err)
+
+	assert.True(t, fakeDb.SuperReadOnly.Load(), "demotePrimary must enable super_read_only")
+	assert.Zero(t, fakeDb.SetSuperReadOnlyLockWaitTimeout, "demotePrimary must not bound lock_wait_timeout when the flag is disabled")
+}
+
 // TestDemotePrimaryWaitingForSemiSyncUnblock tests that demote primary unblocks if the primary is blocked on semi-sync ACKs
 // and doesn't issue the set super read-only query until all writes waiting on semi-sync ACKs have gone through.
 func TestDemotePrimaryWaitingForSemiSyncUnblock(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	tm := newTestTM(t, ts, 1, "ks", "0", nil)
@@ -175,7 +231,9 @@ func TestDemotePrimaryWaitingForSemiSyncUnblock(t *testing.T) {
 	var demotePrimaryFinished atomic.Bool
 	go func() {
 		_, err := tm.demotePrimary(ctx, false /* revertPartialFailure */, false /* force */)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 		demotePrimaryFinished.Store(true)
 	}()
 
@@ -208,7 +266,7 @@ func TestDemotePrimaryWaitingForSemiSyncUnblock(t *testing.T) {
 // TestDemotePrimaryWithSemiSyncProgressDetection tests that demote primary proceeds
 // without blocking when transactions are making progress (ackedTrxs increasing between checks).
 func TestDemotePrimaryWithSemiSyncProgressDetection(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	tm := newTestTM(t, ts, 1, "ks", "0", nil)
@@ -246,7 +304,9 @@ func TestDemotePrimaryWithSemiSyncProgressDetection(t *testing.T) {
 	var demotePrimaryFinished atomic.Bool
 	go func() {
 		_, err := tm.demotePrimary(ctx, false /* revertPartialFailure */, false /* force */)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 		demotePrimaryFinished.Store(true)
 	}()
 
@@ -268,7 +328,7 @@ func TestDemotePrimaryWithSemiSyncProgressDetection(t *testing.T) {
 // TestDemotePrimaryWhenSemiSyncBecomesUnblockedBetweenChecks tests that demote primary
 // proceeds immediately when waiting sessions drops to 0 between the two checks.
 func TestDemotePrimaryWhenSemiSyncBecomesUnblockedBetweenChecks(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	tm := newTestTM(t, ts, 1, "ks", "0", nil)
@@ -304,7 +364,9 @@ func TestDemotePrimaryWhenSemiSyncBecomesUnblockedBetweenChecks(t *testing.T) {
 	var demotePrimaryFinished atomic.Bool
 	go func() {
 		_, err := tm.demotePrimary(ctx, false /* revertPartialFailure */, false /* force */)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 		demotePrimaryFinished.Store(true)
 	}()
 
@@ -326,7 +388,7 @@ func TestDemotePrimaryWhenSemiSyncBecomesUnblockedBetweenChecks(t *testing.T) {
 // if able to change the state of the tablet to Primary if there
 // is a mismatch with the tablet record.
 func TestUndoDemotePrimaryStateChange(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	tm := newTestTM(t, ts, 1, "ks", "0", nil)
@@ -338,14 +400,14 @@ func TestUndoDemotePrimaryStateChange(t *testing.T) {
 	require.NoError(t, err)
 
 	// Check that the tablet is initially a replica.
-	require.EqualValues(t, topodatapb.TabletType_REPLICA, tm.Tablet().Type)
+	require.Equal(t, topodatapb.TabletType_REPLICA, tm.Tablet().Type)
 	// Verify that the tablet record says the tablet should be a primary.
-	require.EqualValues(t, topodatapb.TabletType_PRIMARY, ti.Type)
+	require.Equal(t, topodatapb.TabletType_PRIMARY, ti.Type)
 
 	err = tm.UndoDemotePrimary(ctx, false)
 	require.NoError(t, err)
-	require.EqualValues(t, topodatapb.TabletType_PRIMARY, tm.Tablet().Type)
-	require.EqualValues(t, ti.PrimaryTermStartTime, tm.Tablet().PrimaryTermStartTime)
+	require.Equal(t, topodatapb.TabletType_PRIMARY, tm.Tablet().Type)
+	require.Equal(t, ti.PrimaryTermStartTime, tm.Tablet().PrimaryTermStartTime)
 	require.True(t, tm.QueryServiceControl.IsServing())
 	isReadOnly, err := tm.MysqlDaemon.IsReadOnly(ctx)
 	require.NoError(t, err)
@@ -718,4 +780,25 @@ func TestSetReplicationSourceRecovery(t *testing.T) {
 		require.EqualValues(t, 3306, fakeMysqlDaemon.CurrentSourcePort)
 		require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
 	})
+}
+
+func TestShardPeerHealthSnapshot(t *testing.T) {
+	// Without a monitor configured, FullStatus gets a nil snapshot and must not panic.
+	tm := &TabletManager{}
+	assert.Nil(t, tm.shardPeerHealthSnapshot(), "no monitor configured -> nil snapshot, no panic")
+
+	// With a monitor, the primary's latest liveness signals are surfaced. The monitor tracks only
+	// the shard primary, so the observed peer must be PRIMARY-typed.
+	self := &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}}
+	peer := &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}, Keyspace: "ks", Shard: "0", Type: topodatapb.TabletType_PRIMARY}
+	pinger := &fakePinger{fail: true}
+	m := newShardHealthMonitor(pinger, staticLister(self, peer), staticPrimaryAlias(peer), topoproto.TabletAliasString(self.Alias), time.Second, time.Second)
+	require.NoError(t, m.refreshPeers(t.Context()))
+	m.runPingRound(t.Context())
+	assert.Eventually(t, func() bool { return m.inflightCount() == 0 }, 30*time.Second, 5*time.Millisecond)
+
+	tm = &TabletManager{shardHealthMonitor: m}
+	snap := tm.shardPeerHealthSnapshot()
+	require.Len(t, snap, 1)
+	assert.Equal(t, int64(1), snap[0].ConsecutivePingFailures)
 }

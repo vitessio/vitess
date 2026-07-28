@@ -86,7 +86,7 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 
 	// Initialize our environment
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	db := fakesqldb.New(t)
 	defer db.Close()
@@ -460,7 +460,7 @@ func TestBackupRestoreLagged(t *testing.T) {
 	timer2 := time.NewTicker(5 * time.Second)
 	select {
 	case err := <-errCh:
-		require.Nil(t, err)
+		require.NoError(t, err)
 		// verify the full status
 		// verify the full status
 		require.NoError(t, sourceTablet.FakeMysqlDaemon.CheckSuperQueryList())
@@ -538,7 +538,7 @@ func TestBackupRestoreLagged(t *testing.T) {
 	timer2 = time.NewTicker(5 * time.Second)
 	select {
 	case err := <-errCh:
-		require.Nil(t, err)
+		require.NoError(t, err)
 		// verify the full status
 		require.NoError(t, destTablet.FakeMysqlDaemon.CheckSuperQueryList(), "destTablet.FakeMysqlDaemon.CheckSuperQueryList failed")
 		assert.True(t, destTablet.FakeMysqlDaemon.Replicating)
@@ -557,7 +557,7 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 
 	// Initialize our environment
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	db := fakesqldb.New(t)
 	defer db.Close()

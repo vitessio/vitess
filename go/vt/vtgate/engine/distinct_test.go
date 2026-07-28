@@ -17,7 +17,6 @@ limitations under the License.
 package engine
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -101,7 +100,7 @@ func TestDistinct(t *testing.T) {
 				CheckCols: checkCols,
 			}
 
-			qr, err := distinct.TryExecute(context.Background(), &noopVCursor{}, nil, true)
+			qr, err := distinct.TryExecute(t.Context(), &noopVCursor{}, nil, true)
 			if tc.expectedError == "" {
 				require.NoError(t, err)
 				got := fmt.Sprintf("%v", qr.Rows)
@@ -172,7 +171,7 @@ func TestDistinctStreamAsync(t *testing.T) {
 	}
 
 	qr := &sqltypes.Result{}
-	err := distinct.TryStreamExecute(context.Background(), &noopVCursor{}, nil, true, func(result *sqltypes.Result) error {
+	err := distinct.TryStreamExecute(t.Context(), &noopVCursor{}, nil, true, func(result *sqltypes.Result) error {
 		qr.Rows = append(qr.Rows, result.Rows...)
 		return nil
 	})
@@ -203,7 +202,7 @@ func TestWeightStringFallBack(t *testing.T) {
 		Truncate:  1,
 	}
 
-	qr, err := distinct.TryExecute(context.Background(), &noopVCursor{}, nil, true)
+	qr, err := distinct.TryExecute(t.Context(), &noopVCursor{}, nil, true)
 	require.NoError(t, err)
 
 	got := fmt.Sprintf("%v", qr.Rows)

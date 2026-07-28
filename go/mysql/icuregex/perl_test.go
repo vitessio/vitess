@@ -28,6 +28,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -97,7 +98,7 @@ func TestPerl(t *testing.T) {
 				continue
 			}
 			if strings.IndexByte(fields[2], 'c') == -1 && strings.IndexByte(fields[2], 'i') == -1 {
-				t.Errorf("line %d: ICU error %q", lineno, err)
+				assert.Failf(t, "ICU error", "line %d: %q", lineno, err)
 			}
 			continue
 		}
@@ -106,7 +107,7 @@ func TestPerl(t *testing.T) {
 			continue
 		}
 		if strings.IndexByte(fields[2], 'c') >= 0 {
-			t.Errorf("line %d: expected error", lineno)
+			assert.Failf(t, "expected error", "line %d", lineno)
 			continue
 		}
 
@@ -119,7 +120,7 @@ func TestPerl(t *testing.T) {
 		expected := strings.IndexByte(fields[2], 'y') >= 0
 
 		if expected != found {
-			t.Errorf("line %d: expected %v, found %v", lineno, expected, found)
+			assert.Failf(t, "match mismatch", "line %d: expected %v, found %v", lineno, expected, found)
 			continue
 		}
 
@@ -205,7 +206,7 @@ func TestPerl(t *testing.T) {
 		}
 
 		if expectedS != string(result) {
-			t.Errorf("line %d: Incorrect Perl expression results for %s\nwant: %q\ngot: %q", lineno, pattern, expectedS, result)
+			assert.Failf(t, "Incorrect Perl expression results", "line %d: for %s\nwant: %q\ngot: %q", lineno, pattern, expectedS, result)
 		}
 	}
 }

@@ -26,6 +26,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
@@ -74,7 +76,7 @@ func TestQueryzHandler(t *testing.T) {
 	hugeInsert := "insert into test_table values 0"
 	var hugeInsertSb75 strings.Builder
 	for i := 1; i < 1000; i++ {
-		hugeInsertSb75.WriteString(fmt.Sprintf(", %d", i))
+		fmt.Fprintf(&hugeInsertSb75, ", %d", i)
 	}
 	hugeInsert += hugeInsertSb75.String()
 	plan4 := &TabletPlan{
@@ -169,7 +171,5 @@ func TestQueryzHandler(t *testing.T) {
 
 func checkQueryzHasPlan(t *testing.T, planPattern []string, plan *TabletPlan, page []byte) {
 	matcher := regexp.MustCompile(strings.Join(planPattern, `\s*`))
-	if !matcher.Match(page) {
-		t.Fatalf("queryz page does not contain\nplan:\n%#v\npattern:\n%v\npage:\n%s", plan, strings.Join(planPattern, `\s*`), string(page))
-	}
+	require.Truef(t, matcher.Match(page), "queryz page does not contain\nplan:\n%#v\npattern:\n%v\npage:\n%s", plan, strings.Join(planPattern, `\s*`), string(page))
 }

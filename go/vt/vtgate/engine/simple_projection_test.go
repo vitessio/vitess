@@ -17,7 +17,6 @@ limitations under the License.
 package engine
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"testing"
@@ -54,10 +53,8 @@ func TestSubqueryExecute(t *testing.T) {
 		"a": sqltypes.Int64BindVariable(1),
 	}
 
-	r, err := sq.TryExecute(context.Background(), &noopVCursor{}, bv, true)
-	if err != nil {
-		t.Fatal(err)
-	}
+	r, err := sq.TryExecute(t.Context(), &noopVCursor{}, bv, true)
+	require.NoError(t, err)
 	prim.ExpectLog(t, []string{
 		fmt.Sprintf(`Execute a: %v true`, sqltypes.Int64BindVariable(1)),
 	})
@@ -75,7 +72,7 @@ func TestSubqueryExecute(t *testing.T) {
 	sq.Input = &fakePrimitive{
 		sendErr: errors.New("err"),
 	}
-	_, err = sq.TryExecute(context.Background(), &noopVCursor{}, bv, true)
+	_, err = sq.TryExecute(t.Context(), &noopVCursor{}, bv, true)
 	require.EqualError(t, err, `err`)
 }
 
@@ -105,9 +102,7 @@ func TestSubqueryStreamExecute(t *testing.T) {
 	}
 
 	r, err := wrapStreamExecute(sq, &noopVCursor{}, bv, true)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	prim.ExpectLog(t, []string{
 		fmt.Sprintf(`StreamExecute a: %v true`, sqltypes.Int64BindVariable(1)),
 	})
@@ -154,10 +149,8 @@ func TestSubqueryGetFields(t *testing.T) {
 		"a": sqltypes.Int64BindVariable(1),
 	}
 
-	r, err := sq.GetFields(context.Background(), nil, bv)
-	if err != nil {
-		t.Fatal(err)
-	}
+	r, err := sq.GetFields(t.Context(), nil, bv)
+	require.NoError(t, err)
 	prim.ExpectLog(t, []string{
 		fmt.Sprintf(`GetFields a: %v`, sqltypes.Int64BindVariable(1)),
 		fmt.Sprintf(`Execute a: %v true`, sqltypes.Int64BindVariable(1)),
@@ -173,7 +166,7 @@ func TestSubqueryGetFields(t *testing.T) {
 	sq.Input = &fakePrimitive{
 		sendErr: errors.New("err"),
 	}
-	_, err = sq.GetFields(context.Background(), nil, bv)
+	_, err = sq.GetFields(t.Context(), nil, bv)
 	require.EqualError(t, err, `err`)
 }
 
@@ -201,10 +194,8 @@ func TestSubqueryGetFieldsNamesOnly(t *testing.T) {
 		"a": sqltypes.Int64BindVariable(1),
 	}
 
-	r, err := sq.GetFields(context.Background(), nil, bv)
-	if err != nil {
-		t.Fatal(err)
-	}
+	r, err := sq.GetFields(t.Context(), nil, bv)
+	require.NoError(t, err)
 	prim.ExpectLog(t, []string{
 		`GetFields a: type:INT64 value:"1"`,
 		`Execute a: type:INT64 value:"1" true`,
@@ -220,6 +211,6 @@ func TestSubqueryGetFieldsNamesOnly(t *testing.T) {
 	sq.Input = &fakePrimitive{
 		sendErr: errors.New("err"),
 	}
-	_, err = sq.GetFields(context.Background(), nil, bv)
+	_, err = sq.GetFields(t.Context(), nil, bv)
 	require.EqualError(t, err, `err`)
 }

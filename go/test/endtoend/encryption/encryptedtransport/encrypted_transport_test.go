@@ -104,7 +104,7 @@ func TestSecureTransport(t *testing.T) {
 
 	// initialize cluster
 	_, err := clusterSetUp(t)
-	require.Nil(t, err, "setup failed")
+	require.NoError(t, err, "setup failed")
 
 	primaryTablet := *clusterInstance.Keyspaces[0].Shards[0].Vttablets[0]
 	replicaTablet := *clusterInstance.Keyspaces[0].Shards[0].Vttablets[1]
@@ -303,7 +303,7 @@ func clusterSetUp(t *testing.T) (int, error) {
 
 	// Start topo server
 	if err := clusterInstance.StartTopo(); err != nil {
-		return 1, fmt.Errorf("unable to start topo %w", err)
+		return 1, err
 	}
 
 	// create all certs
@@ -387,9 +387,8 @@ func clusterSetUp(t *testing.T) (int, error) {
 		clusterInstance.Keyspaces = append(clusterInstance.Keyspaces, keyspace)
 	}
 	for _, proc := range mysqlProcesses {
-		err := proc.Wait()
-		if err != nil {
-			return 1, fmt.Errorf("unable to wait on mysql process %w", err)
+		if err := proc.Wait(); err != nil {
+			return 1, fmt.Errorf("mysql process Wait failed: %w", err)
 		}
 	}
 	return 0, nil

@@ -17,9 +17,7 @@ limitations under the License.
 package vindexes
 
 import (
-	"context"
 	"errors"
-	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -146,10 +144,8 @@ func TestNumericStaticMapCreateVindex(t *testing.T) {
 
 func TestNumericStaticMapMap(t *testing.T) {
 	numericStaticMap, err := createVindex()
-	if err != nil {
-		t.Fatalf("failed to create vindex: %v", err)
-	}
-	got, err := numericStaticMap.Map(context.Background(), nil, []sqltypes.Value{
+	require.NoError(t, err)
+	got, err := numericStaticMap.Map(t.Context(), nil, []sqltypes.Value{
 		sqltypes.NewInt64(1),
 		sqltypes.NewInt64(2),
 		sqltypes.NewInt64(3),
@@ -177,25 +173,18 @@ func TestNumericStaticMapMap(t *testing.T) {
 		key.DestinationKeyspaceID([]byte("\x00\x00\x00\x00\x00\x00\x00\x08")),
 		key.DestinationNone{},
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("Map(): %+v, want %+v", got, want)
-	}
+	assert.Equal(t, want, got, "Map()")
 }
 
 func TestNumericStaticMapVerify(t *testing.T) {
 	numericStaticMap, err := createVindex()
-	if err != nil {
-		t.Fatalf("failed to create vindex: %v", err)
-	}
-	got, err := numericStaticMap.Verify(context.Background(), nil, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}, [][]byte{[]byte("\x00\x00\x00\x00\x00\x00\x00\x01"), []byte("\x00\x00\x00\x00\x00\x00\x00\x01")})
 	require.NoError(t, err)
-	want := []bool{true, false}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("lhu.Verify(match): %v, want %v", got, want)
-	}
+	got, err := numericStaticMap.Verify(t.Context(), nil, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}, [][]byte{[]byte("\x00\x00\x00\x00\x00\x00\x00\x01"), []byte("\x00\x00\x00\x00\x00\x00\x00\x01")})
+	require.NoError(t, err)
+	assert.Equal(t, []bool{true, false}, got, "lhu.Verify(match)")
 
 	// Failure test
-	_, err = numericStaticMap.Verify(context.Background(), nil, []sqltypes.Value{sqltypes.NewVarBinary("aa")}, [][]byte{nil})
+	_, err = numericStaticMap.Verify(t.Context(), nil, []sqltypes.Value{sqltypes.NewVarBinary("aa")}, [][]byte{nil})
 	require.EqualError(t, err, "cannot parse uint64 from \"aa\"")
 }
 
@@ -250,12 +239,10 @@ func TestNumericStaticMapWithFallback(t *testing.T) {
 			"fallback_type": "xxhash",
 		},
 	)
-	if err != nil {
-		t.Fatalf("failed to create vindex: %v", err)
-	}
+	require.NoError(t, err)
 	require.Empty(t, mapWithFallbackVdx.(ParamValidating).UnknownParams())
 	singleCol := mapWithFallbackVdx.(SingleColumn)
-	got, err := singleCol.Map(context.Background(), nil, []sqltypes.Value{
+	got, err := singleCol.Map(t.Context(), nil, []sqltypes.Value{
 		sqltypes.NewInt64(1),
 		sqltypes.NewInt64(2),
 		sqltypes.NewInt64(3),
@@ -285,9 +272,7 @@ func TestNumericStaticMapWithFallback(t *testing.T) {
 		key.DestinationKeyspaceID([]byte("\xff\xff\xff\xff\xff\xff\xff\xff")),
 		key.DestinationNone{},
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("Map()\ngot: %+v\nwant: %+v", got, want)
-	}
+	assert.Equal(t, want, got, "Map()")
 }
 
 func TestNumericStaticMapWithFallbackVerify(t *testing.T) {
@@ -299,19 +284,14 @@ func TestNumericStaticMapWithFallbackVerify(t *testing.T) {
 			"fallback_type": "xxhash",
 		},
 	)
-	if err != nil {
-		t.Fatalf("failed to create vindex: %v", err)
-	}
+	require.NoError(t, err)
 	require.Empty(t, mapWithFallbackVdx.(ParamValidating).UnknownParams())
 	singleCol := mapWithFallbackVdx.(SingleColumn)
-	got, err := singleCol.Verify(context.Background(), nil, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2), sqltypes.NewInt64(11), sqltypes.NewInt64(10)}, [][]byte{[]byte("\x00\x00\x00\x00\x00\x00\x00\x02"), []byte("\x8b\x59\x80\x16\x62\xb5\x21\x60"), []byte("\xff\xff\xff\xff\xff\xff\xff\xff"), []byte("\xff\xff\xff\xff\xff\xff\xff\xff")})
+	got, err := singleCol.Verify(t.Context(), nil, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2), sqltypes.NewInt64(11), sqltypes.NewInt64(10)}, [][]byte{[]byte("\x00\x00\x00\x00\x00\x00\x00\x02"), []byte("\x8b\x59\x80\x16\x62\xb5\x21\x60"), []byte("\xff\xff\xff\xff\xff\xff\xff\xff"), []byte("\xff\xff\xff\xff\xff\xff\xff\xff")})
 	require.NoError(t, err)
-	want := []bool{true, true, false, true}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("Verify(match): %v, want %v", got, want)
-	}
+	assert.Equal(t, []bool{true, true, false, true}, got, "Verify(match)")
 
 	// Failure test
-	_, err = singleCol.Verify(context.Background(), nil, []sqltypes.Value{sqltypes.NewVarBinary("aa")}, [][]byte{nil})
+	_, err = singleCol.Verify(t.Context(), nil, []sqltypes.Value{sqltypes.NewVarBinary("aa")}, [][]byte{nil})
 	require.EqualError(t, err, "cannot parse uint64 from \"aa\"")
 }

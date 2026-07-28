@@ -17,7 +17,6 @@ limitations under the License.
 package vtgate
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -137,7 +136,7 @@ func TestVExplainKeys(t *testing.T) {
 		t.Run(tt.Query, func(t *testing.T) {
 			executor, _, _, _, _ := createExecutorEnv(t)
 			session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
-			gotResult, err := executorExecSession(context.Background(), executor, session, "vexplain keys "+tt.Query, nil)
+			gotResult, err := executorExecSession(t.Context(), executor, session, "vexplain keys "+tt.Query, nil)
 			require.NoError(t, err)
 
 			gotRowString := gotResult.Rows[0][0].ToString()

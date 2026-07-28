@@ -29,6 +29,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/mysqlctl/mysqlctlclient"
 
@@ -73,10 +74,11 @@ func (c *client) Start(ctx context.Context, mysqldArgs ...string) error {
 }
 
 // Shutdown is part of the MysqlctlClient interface.
-func (c *client) Shutdown(ctx context.Context, waitForMysqld bool) error {
+func (c *client) Shutdown(ctx context.Context, waitForMysqld bool, shutdownTimeout time.Duration) error {
 	return c.withRetry(ctx, func() error {
 		_, err := c.c.Shutdown(ctx, &mysqlctlpb.ShutdownRequest{
-			WaitForMysqld: waitForMysqld,
+			WaitForMysqld:        waitForMysqld,
+			MysqlShutdownTimeout: protoutil.DurationToProto(shutdownTimeout),
 		})
 		return err
 	})

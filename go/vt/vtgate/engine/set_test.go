@@ -17,7 +17,6 @@ limitations under the License.
 package engine
 
 import (
-	"context"
 	"errors"
 	"testing"
 
@@ -60,7 +59,7 @@ func TestSetSystemVariableAsString(t *testing.T) {
 		)},
 		shardSession: []*srvtopo.ResolvedShard{{Target: &querypb.Target{Keyspace: "ks", Shard: "-20"}}},
 	}
-	_, err := set.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err := set.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 
 	vc.ExpectLog(t, []string{
@@ -580,7 +579,7 @@ func TestSetTable(t *testing.T) {
 				disableSetVar:  tc.disableSetVar,
 				parser:         parser,
 			}
-			_, err = set.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+			_, err = set.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 			if tc.expectedError == "" {
 				require.NoError(t, err)
 			} else {
@@ -621,7 +620,7 @@ func TestSysVarSetErr(t *testing.T) {
 		shards:         []string{"-20", "20-"},
 		multiShardErrs: []error{errors.New("error")},
 	}
-	_, err := set.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err := set.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.EqualError(t, err, "error")
 	vc.ExpectLog(t, expectedQueryLog)
 }

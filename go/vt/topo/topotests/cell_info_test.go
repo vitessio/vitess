@@ -43,55 +43,42 @@ func TestCellInfo(t *testing.T) {
 
 	// Check GetCellInfo returns what memorytopo created.
 	ci, err := ts.GetCellInfo(ctx, cell, true /*strongRead*/)
-	if err != nil {
-		t.Fatalf("GetCellInfo failed: %v", err)
-	}
-	if ci.Root != "" {
-		t.Fatalf("unexpected CellInfo: %v", ci)
-	}
+	require.NoError(t, err)
+	require.Emptyf(t, ci.Root, "unexpected CellInfo: %v", ci)
 
 	var cells []string
 	cells, err = ts.ExpandCells(ctx, cell)
 	require.NoError(t, err)
-	require.EqualValues(t, []string{"cell1"}, cells)
+	require.Equal(t, []string{"cell1"}, cells)
 
 	// Update the Server Address.
 	if err := ts.UpdateCellInfoFields(ctx, cell, func(ci *topodatapb.CellInfo) error {
 		ci.ServerAddress = "new address"
 		return nil
 	}); err != nil {
-		t.Fatalf("UpdateCellInfoFields failed: %v", err)
+		require.NoError(t, err)
 	}
 	ci, err = ts.GetCellInfo(ctx, cell, true /*strongRead*/)
-	if err != nil {
-		t.Fatalf("GetCellInfo failed: %v", err)
-	}
-	if ci.ServerAddress != "new address" {
-		t.Fatalf("unexpected CellInfo: %v", ci)
-	}
+	require.NoError(t, err)
+	require.Equalf(t, "new address", ci.ServerAddress, "unexpected CellInfo: %v", ci)
 
 	// Test update with no change.
 	if err := ts.UpdateCellInfoFields(ctx, cell, func(ci *topodatapb.CellInfo) error {
 		ci.ServerAddress = "bad address"
 		return topo.NewError(topo.NoUpdateNeeded, cell)
 	}); err != nil {
-		t.Fatalf("UpdateCellInfoFields failed: %v", err)
+		require.NoError(t, err)
 	}
 	ci, err = ts.GetCellInfo(ctx, cell, true /*strongRead*/)
-	if err != nil {
-		t.Fatalf("GetCellInfo failed: %v", err)
-	}
-	if ci.ServerAddress != "new address" {
-		t.Fatalf("unexpected CellInfo: %v", ci)
-	}
+	require.NoError(t, err)
+	require.Equalf(t, "new address", ci.ServerAddress, "unexpected CellInfo: %v", ci)
 
 	// Test failing update.
 	updateErr := errors.New("inside error")
-	if err := ts.UpdateCellInfoFields(ctx, cell, func(ci *topodatapb.CellInfo) error {
+	err = ts.UpdateCellInfoFields(ctx, cell, func(ci *topodatapb.CellInfo) error {
 		return updateErr
-	}); err != updateErr {
-		t.Fatalf("UpdateCellInfoFields failed: %v", err)
-	}
+	})
+	require.ErrorIs(t, err, updateErr)
 
 	// Test update on non-existing object.
 	newCell := "new_cell"
@@ -100,40 +87,30 @@ func TestCellInfo(t *testing.T) {
 		ci.ServerAddress = "good address"
 		return nil
 	}); err != nil {
-		t.Fatalf("UpdateCellInfoFields failed: %v", err)
+		require.NoError(t, err)
 	}
 	ci, err = ts.GetCellInfo(ctx, newCell, true /*strongRead*/)
-	if err != nil {
-		t.Fatalf("GetCellInfo failed: %v", err)
-	}
-	if ci.ServerAddress != "good address" || ci.Root != "/" {
-		t.Fatalf("unexpected CellInfo: %v", ci)
-	}
+	require.NoError(t, err)
+	require.Equalf(t, "good address", ci.ServerAddress, "unexpected CellInfo: %v", ci)
+	require.Equalf(t, "/", ci.Root, "unexpected CellInfo: %v", ci)
 
 	// Add a record that should block CellInfo deletion for safety reasons.
 	if err := ts.UpdateSrvKeyspace(ctx, cell, "keyspace", &topodatapb.SrvKeyspace{}); err != nil {
-		t.Fatalf("UpdateSrvKeyspace failed: %v", err)
+		require.NoError(t, err)
 	}
 	srvKeyspaces, err := ts.GetSrvKeyspaceNames(ctx, cell)
-	if err != nil {
-		t.Fatalf("GetSrvKeyspaceNames failed: %v", err)
-	}
-	if len(srvKeyspaces) == 0 {
-		t.Fatalf("UpdateSrvKeyspace did not add SrvKeyspace.")
-	}
+	require.NoError(t, err)
+	require.NotEmpty(t, srvKeyspaces, "UpdateSrvKeyspace did not add SrvKeyspace.")
 
 	// Try to delete without force; it should fail.
-	if err := ts.DeleteCellInfo(ctx, cell, false); err == nil {
-		t.Fatalf("DeleteCellInfo should have failed without -force")
-	}
+	require.Error(t, ts.DeleteCellInfo(ctx, cell, false), "DeleteCellInfo should have failed without -force")
 
 	// Use the force.
 	if err := ts.DeleteCellInfo(ctx, cell, true); err != nil {
-		t.Fatalf("DeleteCellInfo failed even with -force: %v", err)
+		require.NoError(t, err)
 	}
-	if _, err := ts.GetCellInfo(ctx, cell, true /*strongRead*/); !topo.IsErrType(err, topo.NoNode) {
-		t.Fatalf("GetCellInfo(non-existing cell) failed: %v", err)
-	}
+	_, err = ts.GetCellInfo(ctx, cell, true /*strongRead*/)
+	require.Truef(t, topo.IsErrType(err, topo.NoNode), "expected topo.NoNode error, got: %v", err)
 }
 
 func TestExpandCells(t *testing.T) {
@@ -177,7 +154,7 @@ func TestExpandCells(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 			}
-			require.EqualValues(t, tCase.cellsOut, cells)
+			require.Equal(t, tCase.cellsOut, cells)
 		})
 	}
 
@@ -264,14 +241,14 @@ func TestDeleteCellInfo(t *testing.T) {
 
 			err := ts.DeleteCellInfo(requestCtx, "unreachable", tt.force)
 			if tt.shouldErr {
-				assert.Error(t, err, "force=%t", tt.force)
+				require.Error(t, err, "force=%t", tt.force)
 			} else {
-				assert.NoError(t, err, "force=%t", tt.force)
+				require.NoError(t, err, "force=%t", tt.force)
 			}
 
 			ci, err := ts.GetCellInfo(ctx, "unreachable", true /* strongRead */)
 			if tt.shouldExist {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.NotNil(t, ci)
 			} else {
 				assert.True(t, topo.IsErrType(err, topo.NoNode), "expected cell %q to not exist", "unreachable")

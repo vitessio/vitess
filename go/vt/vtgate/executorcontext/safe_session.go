@@ -777,10 +777,10 @@ func (session *SafeSession) SetPreQueries() []string {
 	first := true
 	for _, k := range keys {
 		if first {
-			preQuery.WriteString(fmt.Sprintf("set %s = %s", k, sysVars[k]))
+			fmt.Fprintf(&preQuery, "set %s = %s", k, sysVars[k])
 			first = false
 		} else {
-			preQuery.WriteString(fmt.Sprintf(", %s = %s", k, sysVars[k]))
+			fmt.Fprintf(&preQuery, ", %s = %s", k, sysVars[k])
 		}
 	}
 	return []string{preQuery.String()}
@@ -1112,6 +1112,14 @@ func (session *SafeSession) GetPrepareData(name string) *vtgatepb.PrepareData {
 		return nil
 	}
 	return session.PrepareStatement[name]
+}
+
+// ClearPrepareData removes the prepared data information for the given key.
+func (session *SafeSession) ClearPrepareData(name string) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	delete(session.PrepareStatement, name)
 }
 
 func (session *SafeSession) Log(primitive engine.Primitive, target *querypb.Target, gateway srvtopo.Gateway, query string, begin bool, bv map[string]*querypb.BindVariable) {

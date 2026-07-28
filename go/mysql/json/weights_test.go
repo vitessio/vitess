@@ -20,6 +20,8 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/mysql/format"
 )
 
@@ -37,7 +39,7 @@ func TestWeightStrings(t *testing.T) {
 		r := tc.r.WeightString(nil)
 
 		if bytes.Compare(l, r) >= 0 {
-			t.Errorf("expected %s < %s\nl = %v\n  = %v\nr = %v\n  = %v",
+			assert.Failf(t, "compare failed", "expected %s < %s\nl = %v\n  = %v\nr = %v\n  = %v",
 				tc.l.String(), tc.r.String(), l, string(l), r, string(r))
 		}
 	}

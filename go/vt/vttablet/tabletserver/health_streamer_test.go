@@ -50,7 +50,7 @@ func TestHealthStreamerClosed(t *testing.T) {
 	}
 	blpFunc = testBlpFunc
 	hs := newHealthStreamer(env, alias, &schema.Engine{})
-	err := hs.Stream(context.Background(), func(shr *querypb.StreamHealthResponse) error {
+	err := hs.Stream(t.Context(), func(shr *querypb.StreamHealthResponse) error {
 		return nil
 	})
 	assert.Contains(t, err.Error(), "tabletserver is shutdown")
@@ -532,7 +532,9 @@ func TestReloadView(t *testing.T) {
 				tcCount.Add(1)
 				db.AddQueryPattern(".*SELECT table_name, view_definition.*views.*", &sqltypes.Result{})
 				ch <- struct{}{}
-				require.NoError(t, db.LastError())
+				if !assert.NoError(t, db.LastError()) {
+					return nil
+				}
 			}
 			return nil
 		})
@@ -558,7 +560,7 @@ func TestReloadView(t *testing.T) {
 			db.AddQueryPattern("SELECT .* information_schema.innodb_tablespaces .*", tcases[idx].showTablesWithSizesOutput)
 			db.AddQueryPattern(".*SELECT table_name, view_definition.*views.*", tcases[idx].detectViewChangeOutput)
 		case <-time.After(10 * time.Second):
-			t.Fatalf("timed out")
+			require.Fail(t, "timed out")
 		}
 	}
 }

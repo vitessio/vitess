@@ -17,7 +17,6 @@ limitations under the License.
 package testlib
 
 import (
-	"context"
 	"os"
 	"path"
 	"strings"
@@ -27,14 +26,15 @@ import (
 
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 func testVtctlTopoCommand(t *testing.T, vp *VtctlPipe, args []string, want string) {
 	got, err := vp.RunAndOutput(args)
-	if err != nil {
-		t.Fatalf("testVtctlTopoCommand(%v) failed: %v", args, err)
-	}
+	require.NoErrorf(t, err, "testVtctlTopoCommand(%v) failed: %v", args, err)
 
 	// Remove the variable version numbers.
 	lines := strings.Split(got, "\n")
@@ -44,9 +44,7 @@ func testVtctlTopoCommand(t *testing.T, vp *VtctlPipe, args []string, want strin
 		}
 	}
 	got = strings.Join(lines, "\n")
-	if got != want {
-		t.Errorf("testVtctlTopoCommand(%v) failed: got:\n%vwant:\n%v", args, got, want)
-	}
+	assert.Equalf(t, want, got, "testVtctlTopoCommand(%v) failed: got:\n%vwant:\n%v", args, got, want)
 }
 
 // TestVtctlTopoCommands tests all vtctl commands from the
@@ -55,11 +53,11 @@ func TestVtctlTopoCommands(t *testing.T) {
 	ctx := t.Context()
 
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
-	if err := ts.CreateKeyspace(context.Background(), "ks1", &topodatapb.Keyspace{KeyspaceType: topodatapb.KeyspaceType_NORMAL}); err != nil {
-		t.Fatalf("CreateKeyspace() failed: %v", err)
+	if err := ts.CreateKeyspace(t.Context(), "ks1", &topodatapb.Keyspace{KeyspaceType: topodatapb.KeyspaceType_NORMAL}); err != nil {
+		require.NoError(t, err)
 	}
-	if err := ts.CreateKeyspace(context.Background(), "ks2", &topodatapb.Keyspace{KeyspaceType: topodatapb.KeyspaceType_SNAPSHOT}); err != nil {
-		t.Fatalf("CreateKeyspace() failed: %v", err)
+	if err := ts.CreateKeyspace(t.Context(), "ks2", &topodatapb.Keyspace{KeyspaceType: topodatapb.KeyspaceType_SNAPSHOT}); err != nil {
+		require.NoError(t, err)
 	}
 	vp := NewVtctlPipe(ctx, t, ts)
 	defer vp.Close()
@@ -75,32 +73,20 @@ keyspace_type:SNAPSHOT
 	// Test TopoCp from topo to disk.
 	ksFile := path.Join(tmp, "Keyspace")
 	_, err := vp.RunAndOutput([]string{"TopoCp", "/keyspaces/ks1/Keyspace", ksFile})
-	if err != nil {
-		t.Fatalf("TopoCp(/keyspaces/ks1/Keyspace) failed: %v", err)
-	}
+	require.NoError(t, err)
 	contents, err := os.ReadFile(ksFile)
-	if err != nil {
-		t.Fatalf("copy failed: %v", err)
-	}
+	require.NoError(t, err)
 	expected := &topodatapb.Keyspace{KeyspaceType: topodatapb.KeyspaceType_NORMAL}
 	got := &topodatapb.Keyspace{}
 	if err = got.UnmarshalVT(contents); err != nil {
-		t.Fatalf("bad keyspace data %v", err)
+		require.NoError(t, err)
 	}
-	if !proto.Equal(got, expected) {
-		t.Fatalf("bad proto data: Got %v expected %v", got, expected)
-	}
+	require.True(t, proto.Equal(got, expected), "bad proto data: Got %v expected %v", got, expected)
 
 	// Test TopoCp from disk to topo.
 	_, err = vp.RunAndOutput([]string{"TopoCp", "--to_topo", ksFile, "/keyspaces/ks3/Keyspace"})
-	if err != nil {
-		t.Fatalf("TopoCp(/keyspaces/ks3/Keyspace) failed: %v", err)
-	}
-	ks3, err := ts.GetKeyspace(context.Background(), "ks3")
-	if err != nil {
-		t.Fatalf("copy from disk to topo failed: %v", err)
-	}
-	if !proto.Equal(ks3.Keyspace, expected) {
-		t.Fatalf("copy data to topo failed, got %v expected %v", ks3.Keyspace, expected)
-	}
+	require.NoError(t, err)
+	ks3, err := ts.GetKeyspace(t.Context(), "ks3")
+	require.NoError(t, err)
+	require.True(t, proto.Equal(ks3.Keyspace, expected), "copy data to topo failed, got %v expected %v", ks3.Keyspace, expected)
 }

@@ -61,10 +61,10 @@ func TestAllCollationsByCharset(t *testing.T) {
 			for charset, expected := range tc.defaults {
 				expectedDefault, expectedBinary := expected[0], expected[1]
 				if def := env.DefaultCollationForCharset(charset); env.LookupName(def) != expectedDefault {
-					t.Fatalf("bad default for utf8mb4: %s (expected %s)", env.LookupName(def), expectedDefault)
+					require.Failf(t, "bad default for utf8mb4", "%s (expected %s)", env.LookupName(def), expectedDefault)
 				}
 				if def := env.BinaryCollationForCharset(charset); env.LookupName(def) != expectedBinary {
-					t.Fatalf("bad binary for utf8mb4: %s (expected %s)", env.LookupName(def), expectedBinary)
+					require.Failf(t, "bad binary for utf8mb4", "%s (expected %s)", env.LookupName(def), expectedBinary)
 				}
 			}
 		})

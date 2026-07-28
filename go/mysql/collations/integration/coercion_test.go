@@ -68,16 +68,10 @@ func (tc *testConcat) Test(t *testing.T, remote *RemoteCoercionResult, local col
 	assert.Equal(t, remote.Coercibility, local.Coercibility, "bad coercibility resolved: local is %d, remote is %d", local.Coercibility, remote.Coercibility)
 
 	leftText, err := coercion1(nil, tc.left.Text)
-	if err != nil {
-		t.Errorf("failed to transcode left: %v", err)
-		return
-	}
+	require.NoError(t, err)
 
 	rightText, err := coercion2(nil, tc.right.Text)
-	if err != nil {
-		t.Errorf("failed to transcode right: %v", err)
-		return
-	}
+	require.NoError(t, err)
 
 	var concat bytes.Buffer
 	concat.Write(leftText)
@@ -105,16 +99,10 @@ func (tc *testComparison) Expression() string {
 func (tc *testComparison) Test(t *testing.T, remote *RemoteCoercionResult, local collations.TypedCollation, coerce1, coerce2 colldata.Coercion) {
 	localCollation := colldata.Lookup(local.Collation)
 	leftText, err := coerce1(nil, tc.left.Text)
-	if err != nil {
-		t.Errorf("failed to transcode left: %v", err)
-		return
-	}
+	require.NoError(t, err)
 
 	rightText, err := coerce2(nil, tc.right.Text)
-	if err != nil {
-		t.Errorf("failed to transcode right: %v", err)
-		return
-	}
+	require.NoError(t, err)
 	rEBytes, err := remote.Expr.ToBytes()
 	require.NoError(t, err)
 	remoteEquals := rEBytes[0] == '1'
@@ -194,10 +182,10 @@ func TestComparisonSemantics(t *testing.T) {
 					resultRemote, errRemote := conn.ExecuteFetch(query, 1, false)
 					env := collations.MySQL8()
 					if errRemote != nil {
-						require.True(t, strings.Contains(errRemote.Error(), "Illegal mix of collations"), "query %s failed: %v", query, errRemote)
+						require.Contains(t, errRemote.Error(), "Illegal mix of collations", "query %s failed: %v", query, errRemote)
 
 						if errLocal == nil {
-							t.Errorf("expected %s vs %s to fail coercion: %v", env.LookupName(collA.Collation), env.LookupName(collB.Collation), errRemote)
+							assert.Failf(t, "expected coercion to fail", "expected %s vs %s to fail coercion: %v", env.LookupName(collA.Collation), env.LookupName(collB.Collation), errRemote)
 							continue
 						}
 						require.True(t, strings.HasPrefix(normalizeCollationInError(errRemote.Error()), normalizeCollationInError(errLocal.Error())), "bad error message: expected %q, got %q", errRemote, errLocal)
@@ -206,7 +194,7 @@ func TestComparisonSemantics(t *testing.T) {
 					}
 
 					if errLocal != nil {
-						t.Errorf("expected %s vs %s to coerce, but they failed: %v", env.LookupName(collA.Collation), env.LookupName(collB.Collation), errLocal)
+						assert.Failf(t, "expected coercion to succeed", "expected %s vs %s to coerce, but they failed: %v", env.LookupName(collA.Collation), env.LookupName(collB.Collation), errLocal)
 						continue
 					}
 

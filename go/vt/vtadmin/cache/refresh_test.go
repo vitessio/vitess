@@ -39,7 +39,7 @@ func TestShouldRefreshFromIncomingContext(t *testing.T) {
 	t.Run("true", func(t *testing.T) {
 		t.Parallel()
 
-		ctx := cache.NewIncomingRefreshContext(context.Background())
+		ctx := cache.NewIncomingRefreshContext(t.Context())
 		assert.True(t, cache.ShouldRefreshFromIncomingContext(ctx), "incoming context with metadata set should signal refresh")
 	})
 
@@ -52,15 +52,15 @@ func TestShouldRefreshFromIncomingContext(t *testing.T) {
 		}{
 			{
 				name: "no metadata in context",
-				ctx:  context.Background(),
+				ctx:  t.Context(),
 			},
 			{
 				name: "no cache key in metadata",
-				ctx:  metadata.NewIncomingContext(context.Background(), metadata.Pairs("key", "val")),
+				ctx:  metadata.NewIncomingContext(t.Context(), metadata.Pairs("key", "val")),
 			},
 			{
 				name: "cache key set to non-bool",
-				ctx:  metadata.NewIncomingContext(context.Background(), metadata.Pairs(refreshKey, "this is not a boolean")),
+				ctx:  metadata.NewIncomingContext(t.Context(), metadata.Pairs(refreshKey, "this is not a boolean")),
 			},
 		}
 

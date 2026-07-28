@@ -159,9 +159,8 @@ func TestMysql56GTIDSetString(t *testing.T) {
 
 func TestMysql56GTIDSetFlavor(t *testing.T) {
 	input := Mysql56GTIDSet{}
-	if got, want := input.Flavor(), "MySQL56"; got != want {
-		t.Errorf("%#v.Flavor() = %#v, want %#v", input, got, want)
-	}
+	got := input.Flavor()
+	assert.Equalf(t, "MySQL56", got, "%#v.Flavor() = %#v, want %#v", input, got, "MySQL56")
 }
 
 func TestMysql56GTIDSetContainsGTID(t *testing.T) {
@@ -193,9 +192,8 @@ func TestMysql56GTIDSetContainsGTID(t *testing.T) {
 	}
 
 	for input, want := range table {
-		if got := set.ContainsGTID(input); got != want {
-			t.Errorf("ContainsGTID(%#v) = %#v, want %#v", input, got, want)
-		}
+		got := set.ContainsGTID(input)
+		assert.Equalf(t, want, got, "ContainsGTID(%#v) = %#v, want %#v", input, got, want)
 	}
 }
 
@@ -257,9 +255,7 @@ func TestMysql56GTIDSetContains(t *testing.T) {
 	}
 
 	for _, other := range notContained {
-		if set.Contains(other) {
-			t.Errorf("Contains(%#v) = true, want false", other)
-		}
+		assert.Falsef(t, set.Contains(other), "Contains(%#v) = true, want false", other)
 	}
 }
 
@@ -352,13 +348,9 @@ func TestMysql56GTIDSetEqual(t *testing.T) {
 	}
 
 	for _, other := range notEqual {
-		if set.Equal(other) {
-			t.Errorf("%#v.Equal(%#v) = true, want false", set, other)
-		}
+		assert.Falsef(t, set.Equal(other), "%#v.Equal(%#v) = true, want false", set, other)
 		// Equality should be transitive.
-		if other.Equal(set) {
-			t.Errorf("%#v.Equal(%#v) = true, want false", other, set)
-		}
+		assert.Falsef(t, other.Equal(set), "%#v.Equal(%#v) = true, want false", other, set)
 	}
 }
 
@@ -788,7 +780,7 @@ func TestMySQL56GTIDSetCount(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			gtidSet, _ := ParseMysql56GTIDSet(tt.gtidStr)
-			require.EqualValues(t, tt.wantCount, gtidSet.Count())
+			require.Equal(t, tt.wantCount, gtidSet.Count())
 		})
 	}
 }
@@ -858,7 +850,7 @@ func TestErrantGTIDsOnReplica(t *testing.T) {
 				require.ErrorContains(t, err, tt.wantErr)
 			} else {
 				require.NoError(t, err)
-				require.EqualValues(t, tt.errantGtidWanted, errantGTIDs)
+				require.Equal(t, tt.errantGtidWanted, errantGTIDs)
 			}
 		})
 	}
@@ -891,7 +883,7 @@ func TestMysql56GTIDSet_RemoveUUID(t *testing.T) {
 			sid, err := ParseSID(tt.uuid)
 			require.NoError(t, err)
 			gtidSet = gtidSet.RemoveUUID(sid)
-			require.EqualValues(t, tt.wantSet, gtidSet.String())
+			require.Equal(t, tt.wantSet, gtidSet.String())
 		})
 	}
 }

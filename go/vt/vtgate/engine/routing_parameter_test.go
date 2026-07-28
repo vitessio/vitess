@@ -17,7 +17,6 @@ limitations under the License.
 package engine
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -61,7 +60,7 @@ func TestFindRouteValuesJoin(t *testing.T) {
 
 	vc := newTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"-20", "-20", "20-", "20-"}
-	rss, bvs, err := rp.findRoute(context.Background(), vc, map[string]*querypb.BindVariable{
+	rss, bvs, err := rp.findRoute(t.Context(), vc, map[string]*querypb.BindVariable{
 		valueBvName: bv,
 	})
 

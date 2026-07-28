@@ -53,8 +53,11 @@ vttablet \
    --service-map 'grpc-queryservice,grpc-tabletmanager,grpc-updatestream' \
    --pid-file $VTDATAROOT/$tablet_dir/vttablet.pid \
    --heartbeat-on-demand-duration=5s \
+   --track-shard-tablet-health \
+   --shard-tablet-health-interval=1s \
    --pprof-http \
    --log-format text \
+   ${VTTABLET_EXTRA_FLAGS:-} \
    >$VTDATAROOT/$tablet_dir/vttablet.out 2>&1 &
 
 # Block waiting for the tablet to be listening

@@ -27,6 +27,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
@@ -184,9 +185,7 @@ func setupHOLServer(t *testing.T, streamSvc holStreamServerIface) *grpc.ClientCo
 	t.Helper()
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("Cannot listen: %v", err)
-	}
+	require.NoErrorf(t, err, "Cannot listen: %v", err)
 
 	server := grpc.NewServer(
 		grpc.MaxRecvMsgSize(64<<20),
@@ -205,9 +204,7 @@ func setupHOLServer(t *testing.T, streamSvc holStreamServerIface) *grpc.ClientCo
 			grpc.MaxCallSendMsgSize(64<<20),
 		),
 	)
-	if err != nil {
-		t.Fatalf("grpc.NewClient failed: %v", err)
-	}
+	require.NoErrorf(t, err, "grpc.NewClient failed: %v", err)
 	t.Cleanup(func() { cc.Close() })
 
 	return cc
@@ -740,9 +737,7 @@ func TestE2ECallbackHOL(t *testing.T) {
 	var baselineLatencies []time.Duration
 	for range 100 {
 		lat, err := doPing(baselineCC)
-		if err != nil {
-			t.Fatalf("baseline ping failed: %v", err)
-		}
+		require.NoErrorf(t, err, "baseline ping failed: %v", err)
 		baselineLatencies = append(baselineLatencies, lat)
 	}
 	baseline := computeLatencyStats(baselineLatencies)
@@ -755,9 +750,8 @@ func TestE2ECallbackHOL(t *testing.T) {
 			cc := setupHOLServer(t, svc)
 
 			// Warm up the connection.
-			if _, err := doPing(cc); err != nil {
-				t.Fatalf("warmup ping failed: %v", err)
-			}
+			_, err := doPing(cc)
+			require.NoErrorf(t, err, "warmup ping failed: %v", err)
 
 			var (
 				mu        sync.Mutex
@@ -791,9 +785,7 @@ func TestE2ECallbackHOL(t *testing.T) {
 			time.Sleep(50 * time.Millisecond)
 
 			// Run the stream with the callback.
-			if err := tc.consume(cc); err != nil {
-				t.Fatalf("stream failed: %v", err)
-			}
+			require.NoErrorf(t, tc.consume(cc), "stream failed")
 
 			// Let a few more pings land after the stream finishes.
 			time.Sleep(50 * time.Millisecond)
@@ -804,9 +796,7 @@ func TestE2ECallbackHOL(t *testing.T) {
 			collected := latencies
 			mu.Unlock()
 
-			if len(collected) < 10 {
-				t.Fatalf("only collected %d pings, need at least 10", len(collected))
-			}
+			require.GreaterOrEqualf(t, len(collected), 10, "only collected %d pings, need at least 10", len(collected))
 
 			stats := computeLatencyStats(collected)
 			t.Logf("%s (%d msgs, %d pings):  p50=%v  p95=%v  p99=%v  max=%v",

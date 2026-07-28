@@ -27,9 +27,7 @@ import (
 func assertEqualResults(t *testing.T, a, b *Result) {
 	t.Helper()
 	assert.Truef(t, a.Equal(b), "Results are not equal: \n%v\n%v", a, b)
-	if !a.Equal(b) {
-		t.Errorf("Results are not equal: %v %v", a, b)
-	}
+	assert.Truef(t, a.Equal(b), "Results are not equal: %v %v", a, b)
 }
 
 func TestRepair(t *testing.T) {
@@ -289,9 +287,7 @@ func TestStripMetaData(t *testing.T) {
 			assertEqualResults(t, out, tcase.expected)
 			if len(tcase.in.Fields) > 0 {
 				// check the out array is different than the in array.
-				if out.Fields[0] == inCopy.Fields[0] && tcase.includedFields != querypb.ExecuteOptions_ALL {
-					t.Errorf("StripMetaData modified original Field for %v", tcase.name)
-				}
+				assert.Falsef(t, out.Fields[0] == inCopy.Fields[0] && tcase.includedFields != querypb.ExecuteOptions_ALL, "StripMetaData modified original Field for %v", tcase.name)
 			}
 			// check we didn't change the original result.
 			assertEqualResults(t, tcase.in, inCopy)
@@ -359,14 +355,19 @@ func TestReplaceKeyspace(t *testing.T) {
 			Database: "vttest",
 		}, {
 			Type: VarBinary,
+		}, {
+			Type:     VarChar,
+			Database: "information_schema",
 		}},
 	}
 
-	result.ReplaceKeyspace("keyspace-name")
+	result.ReplaceKeyspace("vttest", "keyspace-name")
 	assert.Equal(t, "keyspace-name", result.Fields[0].Database)
 	assert.Equal(t, "keyspace-name", result.Fields[1].Database)
 	// Expect empty database identifiers to remain empty
-	assert.Equal(t, "", result.Fields[2].Database)
+	assert.Empty(t, result.Fields[2].Database)
+	// Expect databases that don't match the physical db name to be left intact
+	assert.Equal(t, "information_schema", result.Fields[3].Database)
 }
 
 func TestShallowCopy(t *testing.T) {

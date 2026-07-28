@@ -19,7 +19,6 @@ limitations under the License.
 package reuseport
 
 import (
-	"context"
 	_ "embed"
 	"flag"
 	"fmt"
@@ -72,7 +71,7 @@ func setupCluster(t *testing.T) (*cluster.LocalProcessCluster, mysql.ConnParams)
 }
 
 func start(t *testing.T, vtParams mysql.ConnParams) (*mysql.Conn, func()) {
-	vtConn, err := mysql.Connect(context.Background(), &vtParams)
+	vtConn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 
 	deleteAll := func() {
@@ -138,7 +137,7 @@ func TestReusePort(t *testing.T) {
 
 	// Create a second connection with the same parameters, which will
 	// now go to the duplicate vtgate
-	vtConn2, err := mysql.Connect(context.Background(), &vtParams)
+	vtConn2, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err, "second vtgate should handle the connection")
 	defer vtConn2.Close()
 

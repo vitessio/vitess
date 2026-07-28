@@ -17,9 +17,12 @@ limitations under the License.
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"regexp"
 	"testing"
 
+	"github.com/hashicorp/go-version"
 	"github.com/stretchr/testify/require"
 )
 
@@ -39,8 +42,8 @@ func TestRegularExpressions(t *testing.T) {
 			},
 		},
 		{
-			regexp: regexpFindGolangVersion,
-			input:  `goversion_min 1.20.5 || echo "Go version reported`,
+			regexp: regexpFindGoModGoVersion,
+			input:  "module vitess.io/vitess\n\ngo 1.20.5\n\nrequire golang.org/x/tools v0.1.0\n",
 			checkF: func(t *testing.T, regexp *regexp.Regexp, input string) {
 				submatch := regexp.FindStringSubmatch(input)
 				require.Len(t, submatch, 2, "Should have two submatches in the regular expression")
@@ -126,4 +129,96 @@ func TestRegularExpressions(t *testing.T) {
 			list.checkF(t, regexp.MustCompile(list.regexp), list.input)
 		})
 	}
+}
+
+func TestGoModFilesToUpgrade(t *testing.T) {
+	dir := t.TempDir()
+
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example\n\ngo 1.26.3\n"), 0o644))
+
+	for _, tool := range []string{"goyacc", "gofumpt"} {
+		toolDir := filepath.Join(dir, "tools", tool)
+		require.NoError(t, os.MkdirAll(toolDir, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(toolDir, "go.mod"), []byte("module example/"+tool+"\n\ngo 1.26.3\n"), 0o644))
+	}
+
+	// A tool directory without a go.mod must not be picked up.
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "tools", "notamodule"), 0o755))
+
+	origWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(dir))
+	t.Cleanup(func() {
+		require.NoError(t, os.Chdir(origWd))
+	})
+
+	files, err := goModFilesToUpgrade()
+	require.NoError(t, err)
+
+	require.Len(t, files, 3)
+	require.Contains(t, files, "./go.mod")
+
+	toolModules := map[string]bool{}
+	for _, file := range files {
+		toolModules[filepath.Base(filepath.Dir(file))] = true
+	}
+	require.True(t, toolModules["goyacc"])
+	require.True(t, toolModules["gofumpt"])
+}
+
+func TestCurrentGolangVersion(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "go.mod"),
+		[]byte("module vitess.io/vitess\n\ngo 1.26.4\n\nrequire golang.org/x/tools v0.1.0\n"), 0o644))
+
+	origWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(dir))
+	t.Cleanup(func() {
+		require.NoError(t, os.Chdir(origWd))
+	})
+
+	v, err := currentGolangVersion()
+	require.NoError(t, err)
+	require.Equal(t, "1.26.4", v.String())
+}
+
+func TestUpgradeGoModFiles(t *testing.T) {
+	dir := t.TempDir()
+
+	rootGoMod := filepath.Join(dir, "go.mod")
+	require.NoError(t, os.WriteFile(rootGoMod, []byte("module vitess.io/vitess\n\ngo 1.26.3\n"), 0o644))
+
+	// A tool module that has drifted behind the root module.
+	driftedTool := filepath.Join(dir, "tools", "goyacc", "go.mod")
+	require.NoError(t, os.MkdirAll(filepath.Dir(driftedTool), 0o755))
+	require.NoError(t, os.WriteFile(driftedTool, []byte("module vitess.io/vitess/go/tools/goyacc\n\ngo 1.26.1\n"), 0o644))
+
+	// A tool module already at the target version: it must be left byte-identical.
+	currentTool := filepath.Join(dir, "tools", "gofumpt", "go.mod")
+	require.NoError(t, os.MkdirAll(filepath.Dir(currentTool), 0o755))
+	currentContent := []byte("module vitess.io/vitess/go/tools/gofumpt\n\ngo 1.26.4\n")
+	require.NoError(t, os.WriteFile(currentTool, currentContent, 0o644))
+
+	origWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(dir))
+	t.Cleanup(func() {
+		require.NoError(t, os.Chdir(origWd))
+	})
+
+	target, err := version.NewVersion("1.26.4")
+	require.NoError(t, err)
+	require.NoError(t, upgradeGoModFiles(target))
+
+	for _, file := range []string{rootGoMod, driftedTool, currentTool} {
+		content, err := os.ReadFile(file)
+		require.NoError(t, err)
+		require.Contains(t, string(content), "go 1.26.4")
+	}
+
+	// The already-current module must be untouched, byte-for-byte.
+	got, err := os.ReadFile(currentTool)
+	require.NoError(t, err)
+	require.Equal(t, currentContent, got)
 }

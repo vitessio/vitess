@@ -17,7 +17,6 @@ limitations under the License.
 package newfeaturetest
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -35,36 +34,6 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 )
-
-// TestRecoverWithMultipleVttabletFailures tests that ERS succeeds with the default values
-// even when there are multiple vttablet failures. In this test we use the semi_sync policy
-// to allow multiple failures to happen and still be recoverable.
-// The test takes down the vttablets of the primary and a rdonly tablet and runs ERS with the
-// default values of remote-operation-timeout, lock-timeout flags and wait_replicas_timeout subflag.
-func TestRecoverWithMultipleVttabletFailures(t *testing.T) {
-	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
-	defer utils.TeardownCluster(clusterInstance)
-	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
-	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
-
-	// make tablets[1] a rdonly tablet.
-	err := clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", tablets[1].Alias, "rdonly")
-	require.NoError(t, err)
-
-	// Confirm that replication is still working as intended
-	utils.ConfirmReplication(t, tablets[0], tablets[1:])
-
-	// Make the rdonly and primary tablets and databases unavailable.
-	utils.StopTablet(t, tablets[1], true)
-	utils.StopTablet(t, tablets[0], true)
-
-	// We expect this to succeed since we only have 1 primary eligible tablet which is down
-	out, err := utils.Ers(clusterInstance, nil, "", "")
-	require.NoError(t, err, out)
-
-	newPrimary := utils.GetNewPrimary(t, clusterInstance)
-	utils.ConfirmReplication(t, newPrimary, []*cluster.Vttablet{tablets[2], tablets[3]})
-}
 
 // TetsSingeReplicaERS tests that ERS works even when there is only 1 tablet left
 // as long the durability policy allows this failure. Moreover, this also tests that the
@@ -171,7 +140,7 @@ func TestERSWithWriteInPromoteReplica(t *testing.T) {
 	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
 
 	// Drop a table so that when sidecardb changes are checked, we run a DML query.
-	utils.RunSQLs(context.Background(), t, []string{
+	utils.RunSQLs(t.Context(), t, []string{
 		"set sql_log_bin=0",
 		`SET @@global.super_read_only=0`,
 		`DROP TABLE _vt.heartbeat`,
@@ -202,8 +171,8 @@ func TestBufferingWithMultipleDisruptions(t *testing.T) {
 	// We simulate start of external reparent or a PRS where the healthcheck update from the tablet gets lost in transit
 	// to vtgate by just setting the primary read only. This is also why we needed to shutdown all VTOrcs, so that they don't
 	// fix this.
-	utils.RunSQL(context.Background(), t, "set global read_only=1", shards[0].Vttablets[0])
-	utils.RunSQL(context.Background(), t, "set global read_only=1", shards[1].Vttablets[0])
+	utils.RunSQL(t.Context(), t, "set global read_only=1", shards[0].Vttablets[0])
+	utils.RunSQL(t.Context(), t, "set global read_only=1", shards[1].Vttablets[0])
 
 	wg := sync.WaitGroup{}
 	rowCount := 10
@@ -215,13 +184,15 @@ func TestBufferingWithMultipleDisruptions(t *testing.T) {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			conn, err := mysql.Connect(context.Background(), &vtParams)
+			conn, err := mysql.Connect(t.Context(), &vtParams)
 			if err != nil {
 				return
 			}
 			defer conn.Close()
 			_, err = conn.ExecuteFetch(utils.GetInsertQuery(i), 0, false)
-			require.NoError(t, err)
+			if !assert.NoError(t, err) {
+				return
+			}
 		}(i)
 	}
 
@@ -260,7 +231,7 @@ func TestSemiSyncBlockDueToDisruption(t *testing.T) {
 		if idx == 0 {
 			continue
 		}
-		utils.RunSQLs(context.Background(), t, []string{
+		utils.RunSQLs(t.Context(), t, []string{
 			"stop slave;",
 			"change master to MASTER_HEARTBEAT_PERIOD = 0;",
 			"start slave;",
@@ -320,7 +291,7 @@ func TestSemiSyncBlockDueToDisruption(t *testing.T) {
 	// We expect the problem to be resolved in less than 30 seconds.
 	select {
 	case <-time.After(30 * time.Second):
-		t.Errorf("Timed out waiting for semi-sync to be unblocked")
+		assert.Fail(t, "Timed out waiting for semi-sync to be unblocked")
 	case <-ch:
 		log.Error("Woohoo, write finished!")
 	}
@@ -332,6 +303,6 @@ func TestSemiSyncBlockDueToDisruption(t *testing.T) {
 func runCommandWithSudo(t *testing.T, args ...string) string {
 	cmd := exec.Command("sudo", args...)
 	out, err := cmd.CombinedOutput()
-	assert.NoError(t, err, string(out))
+	require.NoError(t, err, string(out))
 	return string(out)
 }

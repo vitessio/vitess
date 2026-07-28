@@ -18,14 +18,57 @@ package vtbench
 
 import (
 	"context"
+	"errors"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
+
+type fakeClientConn struct {
+	execFn func(ctx context.Context) (*sqltypes.Result, error)
+}
+
+func (f *fakeClientConn) connect(ctx context.Context, cp ConnParams) error {
+	return nil
+}
+
+func (f *fakeClientConn) execute(ctx context.Context, query string, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	return f.execFn(ctx)
+}
+
+func newBenchForTest(threads, count int) *Bench {
+	return &Bench{
+		Threads: threads,
+		Count:   count,
+		Rows:    stats.NewCounter("", ""),
+		Errors:  stats.NewCountersWithSingleLabel("", "", "code"),
+		Timings: stats.NewTimings("", "", ""),
+	}
+}
+
+func runClientLoop(ctx context.Context, b *Bench, conn clientConn) {
+	bt := benchThread{b: b, i: 0, conn: conn}
+	b.lock.Lock()
+	b.wg.Add(2)
+	done := make(chan struct{})
+	go func() {
+		bt.clientLoop(ctx)
+		close(done)
+	}()
+	b.lock.Unlock()
+	<-done
+}
 
 func TestProtocolString(t *testing.T) {
 	tests := []struct {
@@ -163,11 +206,148 @@ func TestBenchCreateConnsUnknownProtocol(t *testing.T) {
 		Timings: stats.NewTimings("test_unknown_protocol", "", "timings"),
 	}
 
-	err := bench.createConns(context.Background())
+	err := bench.createConns(t.Context())
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unimplemented connection protocol")
 	assert.Contains(t, err.Error(), "unknown-protocol-999")
+}
+
+func TestErrorCode(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		expected vtrpcpb.Code
+	}{
+		{
+			name:     "nil error",
+			err:      nil,
+			expected: vtrpcpb.Code_OK,
+		},
+		{
+			name:     "plain error falls through to UNKNOWN",
+			err:      errors.New("boom"),
+			expected: vtrpcpb.Code_UNKNOWN,
+		},
+		{
+			name:     "vterrors carries its code",
+			err:      vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "bad input"),
+			expected: vtrpcpb.Code_INVALID_ARGUMENT,
+		},
+		{
+			name:     "SQLError duplicate-key maps via VtRpcErrorCode",
+			err:      sqlerror.NewSQLError(sqlerror.ERDupEntry, "23000", "duplicate entry"),
+			expected: vtrpcpb.Code_ALREADY_EXISTS,
+		},
+		{
+			name:     "SQLError syntax error maps to INVALID_ARGUMENT",
+			err:      sqlerror.NewSQLError(sqlerror.ERSyntaxError, "42000", "syntax error"),
+			expected: vtrpcpb.Code_INVALID_ARGUMENT,
+		},
+		{
+			name:     "context.DeadlineExceeded recognized",
+			err:      context.DeadlineExceeded,
+			expected: vtrpcpb.Code_DEADLINE_EXCEEDED,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, errorCode(tc.err))
+		})
+	}
+}
+
+func TestBenchClientLoopContinueOnError(t *testing.T) {
+	b := newBenchForTest(1, 5)
+	b.ContinueOnError = true
+
+	var calls atomic.Int64
+	conn := &fakeClientConn{
+		execFn: func(ctx context.Context) (*sqltypes.Result, error) {
+			calls.Add(1)
+			return nil, sqlerror.NewSQLError(sqlerror.ERDupEntry, "23000", "duplicate entry")
+		},
+	}
+
+	runClientLoop(t.Context(), b, conn)
+
+	assert.Equal(t, int64(5), calls.Load(), "all iterations should run with ContinueOnError")
+	assert.Equal(t, int64(5), b.Errors.Counts()[vtrpcpb.Code_ALREADY_EXISTS.String()])
+	assert.Empty(t, b.Errors.Counts()[vtrpcpb.Code_UNKNOWN.String()], "SQLError must not be bucketed as UNKNOWN")
+}
+
+func TestBenchClientLoopContinueOnErrorStopsOnContextCancel(t *testing.T) {
+	b := newBenchForTest(1, 1_000_000)
+	b.ContinueOnError = true
+
+	ctx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(cancel)
+
+	var calls atomic.Int64
+	conn := &fakeClientConn{
+		execFn: func(ctx context.Context) (*sqltypes.Result, error) {
+			if calls.Add(1) == 3 {
+				cancel()
+			}
+			return nil, context.Canceled
+		},
+	}
+
+	done := make(chan struct{})
+	go func() {
+		runClientLoop(ctx, b, conn)
+		close(done)
+	}()
+
+	require.Eventually(t, func() bool {
+		select {
+		case <-done:
+			return true
+		default:
+			return false
+		}
+	}, 5*time.Second, 50*time.Millisecond, "clientLoop did not return after context cancel under ContinueOnError")
+
+	assert.Less(t, calls.Load(), int64(1_000_000), "loop must stop after context cancel even with ContinueOnError")
+}
+
+func TestBenchClientLoopStopsOnContextCancelWhenExecuteIgnoresCtx(t *testing.T) {
+	// Simulates a protocol (e.g. mysql) where execute() ignores ctx and
+	// never surfaces ctx errors. The loop must still honor a canceled ctx
+	// so --deadline is enforced.
+	b := newBenchForTest(1, 1_000_000)
+	b.ContinueOnError = true
+
+	ctx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(cancel)
+
+	var calls atomic.Int64
+	conn := &fakeClientConn{
+		execFn: func(ctx context.Context) (*sqltypes.Result, error) {
+			if calls.Add(1) == 3 {
+				cancel()
+			}
+			return &sqltypes.Result{}, nil
+		},
+	}
+
+	done := make(chan struct{})
+	go func() {
+		runClientLoop(ctx, b, conn)
+		close(done)
+	}()
+
+	require.Eventually(t, func() bool {
+		select {
+		case <-done:
+			return true
+		default:
+			return false
+		}
+	}, 5*time.Second, 50*time.Millisecond, "clientLoop did not return after context cancel when execute ignores ctx")
+
+	assert.Less(t, calls.Load(), int64(1_000_000), "loop must stop after context cancel even when execute always succeeds")
 }
 
 func TestMysqlClientConnExecutePanicsWithBindVars(t *testing.T) {
@@ -178,6 +358,6 @@ func TestMysqlClientConnExecutePanicsWithBindVars(t *testing.T) {
 	}
 
 	assert.Panics(t, func() {
-		_, _ = c.execute(context.Background(), "SELECT 1", bindVars)
+		_, _ = c.execute(t.Context(), "SELECT 1", bindVars)
 	}, "execute should panic when bind vars are provided for mysql protocol")
 }

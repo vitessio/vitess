@@ -17,7 +17,6 @@ limitations under the License.
 package cli
 
 import (
-	"context"
 	"os"
 	"testing"
 
@@ -32,7 +31,7 @@ import (
 // When starting, the TabletManager checks if it needs to restore, in tm.handleRestore but this step will
 // fail if we do not provide a cnf file and if the flag --restore-from-backup is provided.
 func TestRunFailsToStartTabletManager(t *testing.T) {
-	ts, factory := memorytopo.NewServerAndFactory(context.Background(), "cell")
+	ts, factory := memorytopo.NewServerAndFactory(t.Context(), "cell")
 	topo.RegisterFactory("test", factory)
 
 	args := append([]string{}, os.Args...)

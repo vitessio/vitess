@@ -165,7 +165,7 @@ type txThrottlerStateImpl struct {
 	// tabletTypes stores the tablet types for throttling
 	tabletTypes map[topodatapb.TabletType]bool
 
-	maxLag             int64
+	maxLag             atomic.Int64
 	done               chan bool
 	waitForTermination sync.WaitGroup
 }
@@ -367,16 +367,14 @@ func (ts *txThrottlerStateImpl) throttle() bool {
 	ts.throttleMu.Lock()
 	defer ts.throttleMu.Unlock()
 
-	maxLag := atomic.LoadInt64(&ts.maxLag)
-
-	return maxLag > ts.config.TxThrottlerConfig.TargetReplicationLagSec &&
+	return ts.maxLag.Load() > ts.config.TxThrottlerConfig.TargetReplicationLagSec &&
 		ts.throttler.Throttle(0 /* threadId */) > 0
 }
 
 func (ts *txThrottlerStateImpl) updateMaxLag() {
 	defer ts.waitForTermination.Done()
 	// We use half of the target lag to ensure we have enough resolution to see changes in lag below that value
-	ticker := time.NewTicker(time.Duration(ts.config.TxThrottlerConfig.TargetReplicationLagSec/2) * time.Second)
+	ticker := time.NewTicker(time.Duration(ts.config.TxThrottlerConfig.TargetReplicationLagSec) * time.Second / 2)
 	defer ticker.Stop()
 outerloop:
 	for {
@@ -390,7 +388,7 @@ outerloop:
 					maxLag = maxLagPerTabletType
 				}
 			}
-			atomic.StoreInt64(&ts.maxLag, int64(maxLag))
+			ts.maxLag.Store(int64(maxLag))
 		case <-ts.done:
 			break outerloop
 		}

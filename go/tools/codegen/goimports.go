@@ -17,9 +17,13 @@ limitations under the License.
 package codegen
 
 import (
+	"errors"
 	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
+	"sync"
 
 	"github.com/dave/jennifer/jen"
 )
@@ -45,14 +49,35 @@ func FormatJenFile(file *jen.File) ([]byte, error) {
 	return os.ReadFile(tempFile.Name())
 }
 
+// moduleRoot returns the root directory of the enclosing vitess module.
+// goimports and gofumpt live in their own modules under tools/, so their
+// modfiles must be addressed relative to the repository root, regardless of
+// the caller's working directory.
+var moduleRoot = sync.OnceValues(func() (string, error) {
+	out, err := exec.Command("go", "env", "GOMOD").Output()
+	if err != nil {
+		return "", err
+	}
+	gomod := strings.TrimSpace(string(out))
+	if gomod == "" || gomod == os.DevNull {
+		return "", errors.New("codegen must run inside the vitess module")
+	}
+	return filepath.Dir(gomod), nil
+})
+
 func GoImports(fullPath string) error {
-	cmd := exec.Command("goimports", "-local", "vitess.io/vitess", "-w", fullPath)
+	root, err := moduleRoot()
+	if err != nil {
+		return err
+	}
+
+	cmd := exec.Command("go", "tool", "-modfile="+filepath.Join(root, "tools", "goimports", "go.mod"), "goimports", "-local", "vitess.io/vitess", "-w", fullPath)
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		return err
 	}
 
-	cmd = exec.Command("go", "tool", "gofumpt", "-w", fullPath)
+	cmd = exec.Command("go", "tool", "-modfile="+filepath.Join(root, "tools", "gofumpt", "go.mod"), "gofumpt", "-w", fullPath)
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		return err

@@ -95,7 +95,7 @@ func newTestEnv(t *testing.T, ctx context.Context, sourceKeyspace string, source
 	vttablet.InitVReplicationConfigDefaults()
 	protoName := fmt.Sprintf("%s_%d", t.Name(), testEnvCounter.Add(1))
 	tenv := &testEnv{
-		ctx:       context.Background(),
+		ctx:       t.Context(),
 		tmc:       newFakeTMClient(),
 		cells:     []string{"zone1"},
 		dbName:    "tmtestdb",

@@ -17,8 +17,6 @@ limitations under the License.
 package schema
 
 import (
-	"context"
-	"fmt"
 	"testing"
 	"time"
 
@@ -79,12 +77,12 @@ func getDbSchemaBlob(t *testing.T, tables map[string]*binlogdatapb.MinimalTable)
 }
 
 func TestHistorian(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	se, db, cancel := getTestSchemaEngine(t, 0)
 	defer cancel()
 
 	se.EnableHistorian(false)
-	require.Nil(t, se.RegisterVersionEvent())
+	require.NoError(t, se.RegisterVersionEvent())
 	gtidPrefix := "MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:"
 	gtid1 := gtidPrefix + "1-10"
 	ddl1 := "create table tracker_test (id int)"
@@ -92,9 +90,6 @@ func TestHistorian(t *testing.T) {
 	_, _, _ = ddl1, ts1, db
 	_, err := se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtid1)
 	require.Equal(t, "table t1 not found in vttablet schema", err.Error())
-	tab, err := se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("dual"), gtid1)
-	require.NoError(t, err)
-	require.Equal(t, `name:"dual"`, fmt.Sprintf("%v", tab))
 	se.EnableHistorian(true)
 	_, err = se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtid1)
 	require.Equal(t, "table t1 not found in vttablet schema", err.Error())
@@ -127,7 +122,7 @@ func TestHistorian(t *testing.T) {
 			{sqltypes.NewInt32(1), sqltypes.NewVarBinary(gtid1), sqltypes.NewVarBinary(ddl1), sqltypes.NewInt32(int32(ts1)), sqltypes.NewVarBinary(blob1)},
 		},
 	})
-	require.Nil(t, se.RegisterVersionEvent())
+	require.NoError(t, se.RegisterVersionEvent())
 	exp1 := &binlogdatapb.MinimalTable{
 		Name: "t1",
 		Fields: []*querypb.Field{
@@ -136,7 +131,7 @@ func TestHistorian(t *testing.T) {
 		},
 		PKColumns: []int64{0},
 	}
-	tab, err = se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtid1)
+	tab, err := se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtid1)
 	require.NoError(t, err)
 	require.EqualExportedValues(t, exp1, tab)
 	gtid2 := gtidPrefix + "1-20"
@@ -152,7 +147,7 @@ func TestHistorian(t *testing.T) {
 			{sqltypes.NewInt32(2), sqltypes.NewVarBinary(gtid2), sqltypes.NewVarBinary(ddl2), sqltypes.NewInt32(int32(ts2)), sqltypes.NewVarBinary(blob2)},
 		},
 	})
-	require.Nil(t, se.RegisterVersionEvent())
+	require.NoError(t, se.RegisterVersionEvent())
 	exp2 := &binlogdatapb.MinimalTable{
 		Name: "t1",
 		Fields: []*querypb.Field{
@@ -196,7 +191,7 @@ func TestHistorian(t *testing.T) {
 			{sqltypes.NewInt32(3), sqltypes.NewVarBinary(gtid3), sqltypes.NewVarBinary(ddl3), sqltypes.NewInt32(int32(ts3)), sqltypes.NewVarBinary(blob3)},
 		},
 	})
-	require.Nil(t, se.RegisterVersionEvent())
+	require.NoError(t, se.RegisterVersionEvent())
 	exp3 := &binlogdatapb.MinimalTable{
 		Name: "t1",
 		Fields: []*querypb.Field{
@@ -438,7 +433,7 @@ func TestHistorianRegisterVersionEventBestEffortOnReadError(t *testing.T) {
 }
 
 func TestHistorianPurgeOldSchemas(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	schemaVersionMaxAgeSeconds := 3600 // 1 hour
 	se, db, cancel := getTestSchemaEngine(t, int64(schemaVersionMaxAgeSeconds))
 	defer cancel()
@@ -481,11 +476,11 @@ func TestHistorianPurgeOldSchemas(t *testing.T) {
 			{sqltypes.NewInt32(1), sqltypes.NewVarBinary(gtid1), sqltypes.NewVarBinary(ddl1), sqltypes.NewInt32(int32(ts1.Unix())), sqltypes.NewVarBinary(blob1)},
 		},
 	})
-	require.Nil(t, se.RegisterVersionEvent())
+	require.NoError(t, se.RegisterVersionEvent())
 	_, err = se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtid1)
 	// validate the old schema has been purged
 	require.Equal(t, "table t1 not found in vttablet schema", err.Error())
-	require.Equal(t, 0, len(se.historian.schemas))
+	require.Empty(t, se.historian.schemas)
 
 	// add a second schema record row with a time_updated that won't be purged
 	gtid2 := gtidPrefix + "1-20"
@@ -504,7 +499,7 @@ func TestHistorianPurgeOldSchemas(t *testing.T) {
 			{sqltypes.NewInt32(2), sqltypes.NewVarBinary(gtid2), sqltypes.NewVarBinary(ddl2), sqltypes.NewInt32(int32(ts2.Unix())), sqltypes.NewVarBinary(blob2)},
 		},
 	})
-	require.Nil(t, se.RegisterVersionEvent())
+	require.NoError(t, se.RegisterVersionEvent())
 	exp2 := &binlogdatapb.MinimalTable{
 		Name: "t1",
 		Fields: []*querypb.Field{
@@ -516,5 +511,5 @@ func TestHistorianPurgeOldSchemas(t *testing.T) {
 	tab, err := se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtid2)
 	require.NoError(t, err)
 	require.EqualExportedValues(t, exp2, tab)
-	require.Equal(t, 1, len(se.historian.schemas))
+	require.Len(t, se.historian.schemas, 1)
 }

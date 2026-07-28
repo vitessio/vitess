@@ -1863,7 +1863,8 @@ func (cmp *Comparator) RefOfAliasedExpr(a, b *AliasedExpr) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return cmp.Expr(a.Expr, b.Expr) &&
+	return a.InputExpression == b.InputExpression &&
+		cmp.Expr(a.Expr, b.Expr) &&
 		cmp.IdentifierCI(a.As, b.As)
 }
 
@@ -1958,6 +1959,7 @@ func (cmp *Comparator) RefOfAlterMigration(a, b *AlterMigration) bool {
 	}
 	return a.Type == b.Type &&
 		a.UUID == b.UUID &&
+		a.Context == b.Context &&
 		a.Expire == b.Expire &&
 		a.Threshold == b.Threshold &&
 		a.Shards == b.Shards &&

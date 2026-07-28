@@ -16,7 +16,6 @@ limitations under the License.
 package primary
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"net/http"
@@ -85,7 +84,6 @@ func TestMain(m *testing.M) {
 		// Set extra tablet args for lock timeout
 		clusterInstance.VtTabletExtraArgs = []string{
 			"--lock-tables-timeout", "5s",
-			"--watch-replication-stream",
 			"--enable-replication-reporter",
 		}
 
@@ -166,7 +164,7 @@ func TestPrimaryRestartSetsPTSTimestamp(t *testing.T) {
 	require.NoError(t, err)
 
 	// Capture the current PTS.
-	shrs, err := clusterInstance.StreamTabletHealth(context.Background(), &replicaTablet, 1)
+	shrs, err := clusterInstance.StreamTabletHealth(t.Context(), &replicaTablet, 1)
 	require.NoError(t, err)
 
 	streamHealthRes1 := shrs[0]
@@ -176,7 +174,7 @@ func TestPrimaryRestartSetsPTSTimestamp(t *testing.T) {
 	want := strconv.Itoa(int(tabletType))
 	assert.Equal(t, want, got)
 	assert.NotNil(t, streamHealthRes1.GetPrimaryTermStartTimestamp())
-	assert.True(t, streamHealthRes1.GetPrimaryTermStartTimestamp() > 0,
+	assert.Positive(t, streamHealthRes1.GetPrimaryTermStartTimestamp(),
 		"PTS on PRIMARY must be set after InitShardPrimary")
 
 	// Restart the PRIMARY vttablet and test again
@@ -190,7 +188,7 @@ func TestPrimaryRestartSetsPTSTimestamp(t *testing.T) {
 	require.NoError(t, err)
 
 	// Make sure that the PTS did not change
-	shrs, err = clusterInstance.StreamTabletHealth(context.Background(), &replicaTablet, 1)
+	shrs, err = clusterInstance.StreamTabletHealth(t.Context(), &replicaTablet, 1)
 	require.NoError(t, err)
 
 	streamHealthRes2 := shrs[0]
@@ -202,11 +200,11 @@ func TestPrimaryRestartSetsPTSTimestamp(t *testing.T) {
 	assert.Equal(t, want, got)
 
 	assert.NotNil(t, streamHealthRes2.GetPrimaryTermStartTimestamp())
-	assert.True(t, streamHealthRes2.GetPrimaryTermStartTimestamp() == streamHealthRes1.GetPrimaryTermStartTimestamp(),
-		fmt.Sprintf("When the PRIMARY vttablet was restarted, "+
+	assert.Equal(t, streamHealthRes2.GetPrimaryTermStartTimestamp(), streamHealthRes1.GetPrimaryTermStartTimestamp(),
+		"When the PRIMARY vttablet was restarted, "+
 			"the PTS timestamp must be set by reading the old value from the tablet record. Old: %d, New: %d",
-			streamHealthRes1.GetPrimaryTermStartTimestamp(),
-			streamHealthRes2.GetPrimaryTermStartTimestamp()))
+		streamHealthRes1.GetPrimaryTermStartTimestamp(),
+		streamHealthRes2.GetPrimaryTermStartTimestamp())
 
 	// Reset primary
 	err = clusterInstance.VtctldClientProcess.InitShardPrimary(keyspaceName, shardName, cell, primaryTablet.TabletUID)
@@ -221,7 +219,7 @@ func checkHealth(t *testing.T, port int, shouldError bool) {
 	require.NoError(t, err)
 	defer resp.Body.Close()
 	if shouldError {
-		assert.True(t, resp.StatusCode > 400)
+		assert.Greater(t, resp.StatusCode, 400)
 	} else {
 		assert.Equal(t, 200, resp.StatusCode)
 	}

@@ -18,11 +18,11 @@ package vreplication
 
 import (
 	"bytes"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/safehtml/template"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/replication"
@@ -76,9 +76,7 @@ VReplication state: Open</br>
 
 func TestStatusHtml(t *testing.T) {
 	pos, err := replication.DecodePosition("MariaDB/1-2-3")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	blpStats := binlogplayer.NewStats()
 	defer blpStats.Stop()
@@ -124,9 +122,7 @@ func TestStatusHtml(t *testing.T) {
 	tpl := template.Must(template.New("test").Parse(vreplicationTemplate))
 	buf := bytes.NewBuffer(nil)
 	require.NoError(t, tpl.Execute(buf, testStats.status()))
-	if strings.Contains(buf.String(), wantOut) {
-		t.Errorf("output: %v, want %v", buf, wantOut)
-	}
+	assert.NotContainsf(t, buf.String(), wantOut, "output: %v, want %v", buf, wantOut)
 }
 
 func TestVReplicationStats(t *testing.T) {
@@ -200,7 +196,7 @@ func TestVReplicationStats(t *testing.T) {
 	require.Eventually(t, func() bool { return len(blpStats.VReplicationLagGauges.Get()["1"]) > 0 }, 10*time.Second, 500*time.Millisecond)
 	vals := blpStats.VReplicationLagGauges.Get()["1"]
 	require.Len(t, vals, 1)
-	require.Equal(t, int(vals[0]), 10)
+	require.Equal(t, 10, int(vals[0]))
 
 	blpStats.DDLEventActions.Add(binlogdatapb.OnDDLAction_IGNORE.String(), 4)
 	blpStats.DDLEventActions.Add(binlogdatapb.OnDDLAction_EXEC.String(), 3)

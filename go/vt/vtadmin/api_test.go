@@ -17,10 +17,8 @@ limitations under the License.
 package vtadmin
 
 import (
-	"context"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -544,7 +542,7 @@ func TestFindSchema(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -565,7 +563,7 @@ func TestFindSchema(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Truef(t, proto.Equal(tt.expected, resp), "expected %v, got %v", tt.expected, resp)
 		})
 	}
@@ -812,7 +810,7 @@ func TestFindSchema(t *testing.T) {
 			}
 		}
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Truef(t, proto.Equal(expected, schema), "expected %v, got %v", expected, schema)
 	})
 }
@@ -857,7 +855,7 @@ func TestGetClusters(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -866,7 +864,7 @@ func TestGetClusters(t *testing.T) {
 			api := NewAPI(vtenv.NewTestEnv(), tt.clusters, Options{})
 
 			resp, err := api.GetClusters(ctx, &vtadminpb.GetClustersRequest{})
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.ElementsMatch(t, tt.expected, resp.Clusters)
 		})
 	}
@@ -942,20 +940,20 @@ func TestGetGates(t *testing.T) {
 	}
 
 	api := NewAPI(vtenv.NewTestEnv(), []*cluster.Cluster{cluster1, cluster2}, Options{})
-	ctx := context.Background()
+	ctx := t.Context()
 
 	resp, err := api.GetGates(ctx, &vtadminpb.GetGatesRequest{})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.ElementsMatch(t, append(expectedCluster1Gates, expectedCluster2Gates...), resp.Gates)
 
 	resp, err = api.GetGates(ctx, &vtadminpb.GetGatesRequest{ClusterIds: []string{cluster1.ID}})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.ElementsMatch(t, expectedCluster1Gates, resp.Gates)
 
 	fakedisco1.SetGatesError(true)
 
 	resp, err = api.GetGates(ctx, &vtadminpb.GetGatesRequest{})
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, resp)
 }
 
@@ -1083,7 +1081,7 @@ func TestGetKeyspace(t *testing.T) {
 					return
 				}
 
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Truef(t, proto.Equal(tt.expected, ks), "expected %v, got %v", tt.expected, ks)
 			}, vtctlds...)
 		})
@@ -1561,7 +1559,7 @@ func TestGetSchema(t *testing.T) {
 					resp = resp.CloneVT()
 				}
 
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Truef(t, proto.Equal(tt.expected, resp), "expected %v, got %v", tt.expected, resp)
 			})
 		})
@@ -1725,7 +1723,7 @@ func TestGetSchema(t *testing.T) {
 			}
 		}
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Truef(t, proto.Equal(expected, schema), "expected %v, got %v", expected, schema)
 	})
 }
@@ -2451,7 +2449,7 @@ func TestGetSchemas(t *testing.T) {
 		api := NewAPI(vtenv.NewTestEnv(), []*cluster.Cluster{c1, c2}, Options{})
 		defer api.Close()
 
-		resp, err := api.GetSchemas(context.Background(), &vtadminpb.GetSchemasRequest{
+		resp, err := api.GetSchemas(t.Context(), &vtadminpb.GetSchemasRequest{
 			TableSizeOptions: &vtadminpb.GetSchemaTableSizeOptions{
 				AggregateSizes: true,
 			},
@@ -2535,7 +2533,7 @@ func TestGetSchemas(t *testing.T) {
 			resp.Schemas = schemas
 		}
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Truef(t, proto.Equal(expected, resp), "expected: %v, got: %v", expected, resp)
 	})
 }
@@ -3498,7 +3496,7 @@ func TestGetTablet(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -3527,7 +3525,7 @@ func TestGetTablet(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
@@ -3691,7 +3689,7 @@ func TestGetTablets(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -3720,7 +3718,7 @@ func TestGetTablets(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.ElementsMatch(t, tt.expected, resp.Tablets)
 		})
 	}
@@ -3835,7 +3833,7 @@ func TestGetVSchema(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -3851,7 +3849,7 @@ func TestGetVSchema(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Truef(t, proto.Equal(tt.expected, resp), "expected %v, got %v", tt.expected, resp)
 		})
 	}
@@ -4159,7 +4157,7 @@ func TestGetVSchemas(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -4179,7 +4177,7 @@ func TestGetVSchemas(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.ElementsMatch(t, tt.expected.VSchemas, resp.VSchemas)
 		})
 	}
@@ -4255,20 +4253,20 @@ func TestGetVtctlds(t *testing.T) {
 	}
 
 	api := NewAPI(vtenv.NewTestEnv(), []*cluster.Cluster{cluster1, cluster2}, Options{})
-	ctx := context.Background()
+	ctx := t.Context()
 
 	resp, err := api.GetVtctlds(ctx, &vtadminpb.GetVtctldsRequest{})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.ElementsMatch(t, append(expectedCluster1Vtctlds, expectedCluster2Vtctlds...), resp.Vtctlds)
 
 	resp, err = api.GetVtctlds(ctx, &vtadminpb.GetVtctldsRequest{ClusterIds: []string{cluster1.ID}})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.ElementsMatch(t, expectedCluster1Vtctlds, resp.Vtctlds)
 
 	fakedisco1.SetVtctldsError(true)
 
 	resp, err = api.GetVtctlds(ctx, &vtadminpb.GetVtctldsRequest{})
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, resp)
 }
 
@@ -4378,7 +4376,7 @@ func TestGetWorkflow(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -4393,7 +4391,7 @@ func TestGetWorkflow(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Truef(t, proto.Equal(tt.expected, resp), "expected %v, got %v", tt.expected, resp)
 		})
 	}
@@ -4815,7 +4813,7 @@ func TestGetWorkflows(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -4830,7 +4828,7 @@ func TestGetWorkflows(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			require.NotNil(t, resp)
 
 			vtadmintestutil.AssertGetWorkflowsResponsesEqual(t, tt.expected, resp)
@@ -5112,7 +5110,7 @@ func TestVTExplain(t *testing.T) {
 				resp, err := api.VTExplain(ctx, tt.req)
 
 				if tt.expectedError != nil {
-					assert.True(t, errors.Is(err, tt.expectedError), "expected error type %w does not match actual error type %w", err, tt.expectedError)
+					assert.ErrorIs(t, err, tt.expectedError)
 				} else {
 					require.NoError(t, err)
 
@@ -5291,7 +5289,7 @@ func TestVExplain(t *testing.T) {
 				resp, err := api.VExplain(ctx, tt.req)
 
 				if tt.expectedError != nil {
-					assert.True(t, errors.Is(err, tt.expectedError), "expected error type %w does not match actual error type %w", err, tt.expectedError)
+					assert.ErrorIs(t, err, tt.expectedError)
 				} else {
 					require.NoError(t, err)
 
@@ -5334,7 +5332,7 @@ func TestServeHTTP(t *testing.T) {
 				"discovery": "{\"vtctlds\": [{\"host\":{\"fqdn\": \"localhost:15000\", \"hostname\": \"localhost:15999\"}}], \"vtgates\": [{\"host\": {\"hostname\": \"localhost:15991\"}}]}",
 			},
 		},
-	}.Cluster(context.Background())
+	}.Cluster(t.Context())
 	defer testCluster.Close()
 
 	tests := []struct {
@@ -5509,7 +5507,7 @@ func TestServeHTTP(t *testing.T) {
 			var clustersResponse ServeHTTPResponse
 			err := dec.Decode(&clustersResponse)
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.ElementsMatch(t, tt.expected, clustersResponse.Result.Clusters)
 
 			if tt.testClusterVtctld != "" {
@@ -5532,7 +5530,7 @@ func TestServeHTTP(t *testing.T) {
 				var vtctldsResponse ServeHTTPVtctldResponse
 				err := dec.Decode(&vtctldsResponse)
 
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.ElementsMatch(t, tt.expectedVtctlds, vtctldsResponse.Result.Vtctlds)
 			}
 		})

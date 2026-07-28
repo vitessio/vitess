@@ -19,6 +19,7 @@ package reparentutil
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -189,13 +190,13 @@ func TestFindPositionsOfAllCandidates(t *testing.T) {
 			t.Parallel()
 
 			actual, isGTIDBased, err := FindPositionsOfAllCandidates(tt.statusMap, tt.primaryStatusMap)
-			require.EqualValues(t, tt.expectedGTIDBased, isGTIDBased)
+			require.Equal(t, tt.expectedGTIDBased, isGTIDBased)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			keys := make([]string, 0, len(actual))
 			for key := range actual {
@@ -204,6 +205,34 @@ func TestFindPositionsOfAllCandidates(t *testing.T) {
 			assert.ElementsMatch(t, tt.expected, keys)
 		})
 	}
+}
+
+// TestFindPositionsOfAllCandidates_ErrorNotDuplicated verifies that when
+// FindPositionsOfAllCandidates wraps an error the underlying cause message is
+// not repeated twice in the output. vterrors.Wrapf already appends the cause
+// via "wrapper: cause", so including the cause in the format string would
+// duplicate it.
+func TestFindPositionsOfAllCandidates_ErrorNotDuplicated(t *testing.T) {
+	t.Parallel()
+
+	_, _, err := FindPositionsOfAllCandidates(
+		map[string]*replicationdatapb.StopReplicationStatus{
+			"r1": {After: &replicationdatapb.Status{
+				SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+				RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+			}},
+		},
+		map[string]*replicationdatapb.PrimaryStatus{
+			"p1": {Position: "InvalidFlavor/1234"},
+		},
+	)
+	require.Error(t, err)
+
+	cause := vterrors.Cause(err)
+	require.Error(t, cause)
+	causeMsg := cause.Error()
+	assert.Equal(t, 1, strings.Count(err.Error(), causeMsg),
+		"cause message must appear exactly once in the wrapped error")
 }
 
 // stopReplicationAndBuildStatusMapsTestTMClient implements
@@ -270,7 +299,7 @@ func (fake *stopReplicationAndBuildStatusMapsTestTMClient) StopReplicationAndGet
 }
 
 func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	logger := logutil.NewMemoryLogger()
 	tests := []struct {
 		name                     string
@@ -1481,10 +1510,10 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tt.expectedStatusMap, res.statusMap, "StopReplicationStatus mismatch")
 			assert.Equal(t, tt.expectedPrimaryStatusMap, res.primaryStatusMap, "PrimaryStatusMap mismatch")
-			require.Equal(t, len(tt.expectedTabletsReachable), len(res.reachableTablets), "TabletsReached length mismatch")
+			require.Len(t, res.reachableTablets, len(tt.expectedTabletsReachable), "TabletsReached length mismatch")
 			for idx, tablet := range res.reachableTablets {
 				assert.True(t, topoproto.IsTabletInList(tablet, tt.expectedTabletsReachable), "TabletsReached[%d] not found - %s", idx, topoproto.TabletAliasString(tablet.Alias))
 			}
@@ -1573,7 +1602,7 @@ func TestReplicaWasRunning(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tt.expected, actual)
 		})
 	}
@@ -1692,7 +1721,7 @@ func (fake *waitForRelayLogsToApplyTestTMClient) WaitForPosition(_ context.Conte
 func TestWaitForRelayLogsToApply(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	tests := []struct {
 		name                    string
 		client                  *waitForRelayLogsToApplyTestTMClient
@@ -1832,4 +1861,265 @@ func TestRelayLogPositions_IsZero(t *testing.T) {
 	rlp.Combined = replication.Position{GTIDSet: gtidSet}
 	rlp.Executed = replication.Position{GTIDSet: gtidSet}
 	assert.False(t, rlp.IsZero())
+}
+
+// mustPosition parses a MySQL 5.6 GTID set spec into a replication.Position,
+// failing the test on malformed specs. An empty spec returns the zero Position.
+func mustPosition(t *testing.T, spec string) replication.Position {
+	t.Helper()
+	if spec == "" {
+		return replication.Position{}
+	}
+	gtidSet, err := replication.ParseMysql56GTIDSet(spec)
+	require.NoError(t, err)
+	return replication.Position{GTIDSet: gtidSet}
+}
+
+func TestHasDominantPosition(t *testing.T) {
+	tests := []struct {
+		name string
+		a    string
+		b    string
+		want bool
+	}{
+		{
+			name: "strict superset dominates",
+			a:    "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6",
+			b:    "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
+			want: true,
+		},
+		{
+			name: "equal does not dominate",
+			a:    "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6",
+			b:    "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6",
+			want: false,
+		},
+		{
+			name: "strict subset does not dominate",
+			a:    "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
+			b:    "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6",
+			want: false,
+		},
+		{
+			name: "disjoint UUIDs are incomparable, no dominance",
+			a:    "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
+			b:    "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-5",
+			want: false,
+		},
+		{
+			name: "overlapping sets where neither contains the other, no dominance",
+			a:    "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-3",
+			b:    "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-3,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-5",
+			want: false,
+		},
+		{
+			name: "non-zero dominates zero",
+			a:    "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
+			b:    "",
+			want: true,
+		},
+		{
+			name: "zero does not dominate non-zero",
+			a:    "",
+			b:    "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, hasDominantPosition(mustPosition(t, tt.a), mustPosition(t, tt.b)))
+		})
+	}
+}
+
+func TestHaveIncomparablePositions(t *testing.T) {
+	tests := []struct {
+		name string
+		a    string
+		b    string
+		want bool
+	}{
+		{
+			name: "disjoint UUIDs are incomparable",
+			a:    "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
+			b:    "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-5",
+			want: true,
+		},
+		{
+			name: "overlapping sets where neither contains the other are incomparable",
+			a:    "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-3",
+			b:    "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-3,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-5",
+			want: true,
+		},
+		{
+			name: "superset and subset are comparable",
+			a:    "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6",
+			b:    "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
+			want: false,
+		},
+		{
+			name: "equal positions are comparable",
+			a:    "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6",
+			b:    "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6",
+			want: false,
+		},
+		{
+			name: "zero is comparable to everything",
+			a:    "",
+			b:    "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, haveIncomparablePositions(mustPosition(t, tt.a), mustPosition(t, tt.b)))
+			// Incomparability is symmetric by definition; pin both directions.
+			assert.Equal(t, tt.want, haveIncomparablePositions(mustPosition(t, tt.b), mustPosition(t, tt.a)))
+		})
+	}
+}
+
+func TestHasUniformCombinedPosition(t *testing.T) {
+	tests := []struct {
+		name       string
+		candidates map[string]*RelayLogPositions
+		want       bool
+	}{
+		{
+			name:       "empty map is vacuously uniform",
+			candidates: map[string]*RelayLogPositions{},
+			want:       true,
+		},
+		{
+			name: "single candidate is uniform",
+			candidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": {Combined: mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6")},
+			},
+			want: true,
+		},
+		{
+			name: "all equal Combined is uniform",
+			candidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": {Combined: mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6")},
+				"zone1-0000000101": {Combined: mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6")},
+			},
+			want: true,
+		},
+		{
+			name: "differing Combined is not uniform",
+			candidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": {Combined: mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6")},
+				"zone1-0000000101": {Combined: mustPosition(t, "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-6")},
+			},
+			want: false,
+		},
+		{
+			name: "differing Executed at equal Combined is still uniform",
+			candidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": {
+					Combined: mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6"),
+					Executed: mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6"),
+				},
+				"zone1-0000000101": {
+					Combined: mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6"),
+					Executed: mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-3"),
+				},
+			},
+			want: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, hasUniformCombinedPosition(tt.candidates))
+		})
+	}
+}
+
+func TestFilterToMostAdvancedCombined(t *testing.T) {
+	tests := []struct {
+		name       string
+		candidates map[string]*RelayLogPositions
+		wantKept   []string
+	}{
+		{
+			name:       "empty map returned as-is",
+			candidates: map[string]*RelayLogPositions{},
+			wantKept:   []string{},
+		},
+		{
+			name: "single candidate kept",
+			candidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": {Combined: mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6")},
+			},
+			wantKept: []string{"zone1-0000000100"},
+		},
+		{
+			name: "strictly dominated candidate removed",
+			candidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": {Combined: mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6")},
+				"zone1-0000000101": {Combined: mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5")},
+			},
+			wantKept: []string{"zone1-0000000100"},
+		},
+		{
+			name: "equal Combined all kept",
+			candidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": {Combined: mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6")},
+				"zone1-0000000101": {Combined: mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6")},
+			},
+			wantKept: []string{"zone1-0000000100", "zone1-0000000101"},
+		},
+		{
+			name: "incomparable maxima both kept",
+			candidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": {Combined: mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5")},
+				"zone1-0000000101": {Combined: mustPosition(t, "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-5")},
+			},
+			wantKept: []string{"zone1-0000000100", "zone1-0000000101"},
+		},
+		{
+			name: "three-way: dominated removed, incomparable maxima kept",
+			candidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": {Combined: mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-10")},
+				"zone1-0000000101": {Combined: mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5")},
+				"zone1-0000000102": {Combined: mustPosition(t, "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-5")},
+			},
+			wantKept: []string{"zone1-0000000100", "zone1-0000000102"},
+		},
+		{
+			name: "Executed skew at equal Combined is ignored, all kept",
+			candidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": {
+					Combined: mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6"),
+					Executed: mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6"),
+				},
+				"zone1-0000000101": {
+					Combined: mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6"),
+					Executed: mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-3"),
+				},
+			},
+			wantKept: []string{"zone1-0000000100", "zone1-0000000101"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := filterToMostAdvancedCombined(tt.candidates, logutil.NewMemoryLogger())
+
+			kept := make([]string, 0, len(result))
+			for alias := range result {
+				kept = append(kept, alias)
+			}
+			assert.ElementsMatch(t, tt.wantKept, kept)
+
+			// Survivors must share the caller's position structs (the reconcile
+			// step later mutates them through the returned map).
+			for alias, pos := range result {
+				assert.Same(t, tt.candidates[alias], pos)
+			}
+		})
+	}
 }

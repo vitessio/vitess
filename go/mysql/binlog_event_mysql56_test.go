@@ -20,7 +20,6 @@ import (
 	_ "embed"
 	"fmt"
 	"io"
-	"reflect"
 	"strings"
 	"testing"
 
@@ -44,15 +43,12 @@ var (
 var mysql56CompressedLargeTrxPayload []byte
 
 func TestMysql56IsGTID(t *testing.T) {
-	if got, want := mysql56FormatEvent.IsGTID(), false; got != want {
-		t.Errorf("%#v.IsGTID() = %#v, want %#v", mysql56FormatEvent, got, want)
-	}
-	if got, want := mysql56QueryEvent.IsGTID(), false; got != want {
-		t.Errorf("%#v.IsGTID() = %#v, want %#v", mysql56QueryEvent, got, want)
-	}
-	if got, want := mysql56GTIDEvent.IsGTID(), true; got != want {
-		t.Errorf("%#v.IsGTID() = %#v, want %#v", mysql56GTIDEvent, got, want)
-	}
+	got := mysql56FormatEvent.IsGTID()
+	assert.Falsef(t, got, "%#v.IsGTID() = %#v, want %#v", mysql56FormatEvent, got, false)
+	got = mysql56QueryEvent.IsGTID()
+	assert.Falsef(t, got, "%#v.IsGTID() = %#v, want %#v", mysql56QueryEvent, got, false)
+	got = mysql56GTIDEvent.IsGTID()
+	assert.Truef(t, got, "%#v.IsGTID() = %#v, want %#v", mysql56GTIDEvent, got, true)
 }
 
 func TestMysql56StripChecksum(t *testing.T) {
@@ -63,9 +59,8 @@ func TestMysql56StripChecksum(t *testing.T) {
 	require.NoError(t, err, "StripChecksum() error: %v", err)
 
 	// Check checksum.
-	if want := []byte{0x92, 0x12, 0x79, 0xc3}; !reflect.DeepEqual(gotChecksum, want) {
-		t.Errorf("checksum = %#v, want %#v", gotChecksum, want)
-	}
+	wantChecksum := []byte{0x92, 0x12, 0x79, 0xc3}
+	assert.Equalf(t, wantChecksum, gotChecksum, "checksum = %#v, want %#v", gotChecksum, wantChecksum)
 
 	// Check query, to make sure checksum was stripped properly.
 	// Query length is defined as "the rest of the bytes after offset X",
@@ -73,9 +68,8 @@ func TestMysql56StripChecksum(t *testing.T) {
 	gotQuery, err := stripped.Query(format)
 	require.NoError(t, err, "Query() error: %v", err)
 
-	if want := "insert into test_table (msg) values ('hello')"; string(gotQuery.SQL) != want {
-		t.Errorf("query = %#v, want %#v", string(gotQuery.SQL), want)
-	}
+	wantQuery := "insert into test_table (msg) values ('hello')"
+	assert.Equalf(t, wantQuery, string(gotQuery.SQL), "query = %#v, want %#v", string(gotQuery.SQL), wantQuery)
 }
 
 func TestMysql56GTID(t *testing.T) {
@@ -217,7 +211,7 @@ func TestMysql56ParsePosition(t *testing.T) {
 	want := replication.Position{GTIDSet: set}
 
 	got, err := replication.ParsePosition(replication.Mysql56FlavorID, input)
-	assert.NoError(t, err, "unexpected error: %v", err)
+	require.NoError(t, err, "unexpected error: %v", err)
 	assert.True(t, got.Equal(want), "(&mysql56{}).ParsePosition(%#v) = %#v, want %#v", input, got, want)
 }
 
@@ -225,7 +219,7 @@ func TestMysql56SemiSyncAck(t *testing.T) {
 	{
 		c := Conn{ExpectSemiSyncIndicator: false}
 		buf, semiSyncAckRequested, err := c.AnalyzeSemiSyncAckRequest(mysql56QueryEvent.Bytes())
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		e := NewMysql56BinlogEventWithSemiSyncInfo(buf, semiSyncAckRequested)
 
 		assert.False(t, e.IsSemiSyncAckRequested())
@@ -234,7 +228,7 @@ func TestMysql56SemiSyncAck(t *testing.T) {
 	{
 		c := Conn{ExpectSemiSyncIndicator: true}
 		buf, semiSyncAckRequested, err := c.AnalyzeSemiSyncAckRequest(mysql56SemiSyncNoAckQueryEvent.Bytes())
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		e := NewMysql56BinlogEventWithSemiSyncInfo(buf, semiSyncAckRequested)
 
 		assert.False(t, e.IsSemiSyncAckRequested())
@@ -243,7 +237,7 @@ func TestMysql56SemiSyncAck(t *testing.T) {
 	{
 		c := Conn{ExpectSemiSyncIndicator: true}
 		buf, semiSyncAckRequested, err := c.AnalyzeSemiSyncAckRequest(mysql56SemiSyncAckQueryEvent.Bytes())
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		e := NewMysql56BinlogEventWithSemiSyncInfo(buf, semiSyncAckRequested)
 
 		assert.True(t, e.IsSemiSyncAckRequested())
@@ -714,7 +708,7 @@ func TestMySQL56PartialUpdateRowsEvent(t *testing.T) {
 			ev, err := mysql56PartialUpdateRowEvent.Rows(format, tm)
 			require.NoError(t, err)
 
-			assert.Equal(t, tc.numRows, len(ev.Rows))
+			assert.Len(t, ev.Rows, tc.numRows)
 			require.NoError(t, err)
 
 			for i := range ev.Rows {

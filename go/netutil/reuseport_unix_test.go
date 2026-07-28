@@ -22,36 +22,27 @@ import (
 	"net"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	"golang.org/x/sys/unix"
 )
 
 func TestListenReusePort(t *testing.T) {
 	l1, err := ListenReusePort("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer l1.Close()
 
 	// Bind to the same address. This should be possible with SO_REUSEPORT.
 	addr := l1.Addr().String()
 	l2, err := ListenReusePort("tcp", addr)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer l2.Close()
 
 	tcpListener := l1.(*net.TCPListener)
 	file, err := tcpListener.File()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer file.Close()
 
 	val, err := unix.GetsockoptInt(int(file.Fd()), unix.SOL_SOCKET, unix.SO_REUSEPORT)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if val != 1 {
-		t.Fatalf("SO_REUSEPORT not set: got %d, want 1", val)
-	}
+	require.NoError(t, err)
+	require.Equalf(t, 1, val, "SO_REUSEPORT not set: got %d, want 1", val)
 }

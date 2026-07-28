@@ -231,7 +231,7 @@ func TestSelectIntoAndLoadFrom(t *testing.T) {
 	t.Skip()
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	defer utils.Exec(t, conn, `delete from t1`)
@@ -261,7 +261,7 @@ func TestSelectIntoAndLoadFrom(t *testing.T) {
 func TestEmptyStatement(t *testing.T) {
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 	defer utils.Exec(t, conn, `delete from t1`)
 	utils.AssertContainsError(t, conn, " \t; \n;", "Query was empty")
@@ -273,7 +273,7 @@ func TestEmptyStatement(t *testing.T) {
 func TestTopoDownServingQuery(t *testing.T) {
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	defer utils.Exec(t, conn, `delete from t1`)
@@ -406,7 +406,7 @@ func TestNumericPrecisionScale(t *testing.T) {
 	defer utils.Exec(t, conn, "drop table `a`")
 
 	qr := utils.Exec(t, conn, "select numeric_precision, numeric_scale from information_schema.columns where table_name = 'a'")
-	require.Equal(t, 1, len(qr.Rows))
+	require.Len(t, qr.Rows, 1)
 
 	/*
 		We expect UINT64 to be returned as type for field and rows from VTGate to client.
@@ -430,7 +430,7 @@ func TestNumericPrecisionScale(t *testing.T) {
 }
 
 func TestDeleteAlias(t *testing.T) {
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
@@ -439,7 +439,7 @@ func TestDeleteAlias(t *testing.T) {
 }
 
 func TestFloatValueDefault(t *testing.T) {
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 

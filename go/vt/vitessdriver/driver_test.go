@@ -157,7 +157,7 @@ func TestBeginIsolation(t *testing.T) {
 	db, err := Open(testAddress, "@primary")
 	require.NoError(t, err)
 	defer db.Close()
-	_, err = db.BeginTx(context.Background(), &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
+	_, err = db.BeginTx(t.Context(), &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 	require.EqualError(t, err, errIsolationUnsupported.Error())
 }
 
@@ -526,7 +526,7 @@ func TestSessionToken(t *testing.T) {
 		Target:   "@primary",
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	db, err := OpenWithConfiguration(c)
 	require.NoError(t, err)
@@ -638,7 +638,7 @@ func TestConnSeparateSessions(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 
 	// Each new connection starts a fresh session pointed at @primary. When the
@@ -679,7 +679,7 @@ func TestConnReuseSessions(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 
 	// Pull an individual connection from the pool and execute a USE, resulting

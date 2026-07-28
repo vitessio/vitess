@@ -159,7 +159,7 @@ func TestCFCPrefixQueryNoHash(t *testing.T) {
 	ctx := t.Context()
 	vtParams := clusterInstance.GetVTParams(sKs)
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	utils.Exec(t, conn, "delete from t1")
@@ -176,17 +176,17 @@ func TestCFCPrefixQueryNoHash(t *testing.T) {
 	}
 	utils.Exec(t, conn, "use cfc_testing")
 	qr := utils.Exec(t, conn, "select c2 from t1 where c1 like 'A%' order by c2")
-	assert.Equal(t, 2, len(qr.Rows))
+	assert.Len(t, qr.Rows, 2)
 	// should only target a subset of shards serving rows starting with 'A'.
-	assert.EqualValues(t, `[[VARCHAR("shard-1")] [VARCHAR("shard-2")]]`, fmt.Sprintf("%v", qr.Rows))
+	assert.Equal(t, `[[VARCHAR("shard-1")] [VARCHAR("shard-2")]]`, fmt.Sprintf("%v", qr.Rows))
 	// should only target a subset of shards serving rows starting with 'AA',
 	// the shards to which 'AA' maps to.
 	qr = utils.Exec(t, conn, "select c2 from t1 where c1 like 'AA'")
-	assert.Equal(t, 1, len(qr.Rows))
-	assert.EqualValues(t, `[[VARCHAR("shard-1")]]`, fmt.Sprintf("%v", qr.Rows))
+	assert.Len(t, qr.Rows, 1)
+	assert.Equal(t, `[[VARCHAR("shard-1")]]`, fmt.Sprintf("%v", qr.Rows))
 	// fan out to all when there is no prefix
 	qr = utils.Exec(t, conn, "select c2 from t1 where c1 like '%A' order by c2")
-	assert.Equal(t, 4, len(qr.Rows))
+	assert.Len(t, qr.Rows, 4)
 	for i, r := range qr.Rows {
 		assert.Equal(t, fmt.Sprintf("shard-%d", i), r[0].ToString())
 	}
@@ -197,7 +197,7 @@ func TestCFCPrefixQueryWithHash(t *testing.T) {
 	vtParams := clusterInstance.GetVTParams(sKsMD5)
 
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	utils.Exec(t, conn, "delete from t2")
@@ -219,18 +219,18 @@ func TestCFCPrefixQueryWithHash(t *testing.T) {
 	// md5('A') -> 7fc56270e7a70fa81a5935b72eacbe29
 	// so keyspace id is c20a7f, which means shards "c2-c20a80"
 	qr := utils.Exec(t, conn, "select c2 from t2 where c1 like '12A%' order by c2")
-	assert.Equal(t, 1, len(qr.Rows))
+	assert.Len(t, qr.Rows, 1)
 	assert.Equal(t, `[[VARCHAR("shard-1")]]`, fmt.Sprintf("%v", qr.Rows))
 	// The prefix is ('12')
 	// md5('12') -> c20ad4d76fe97759aa27a0c99bff6710 so the corresponding
 	// so keyspace id is c20a, which means shards "c2-c20a80", "c20a80-d0"
 	qr = utils.Exec(t, conn, "select c2 from t2 where c1 like '12%' order by c2")
-	assert.Equal(t, 4, len(qr.Rows))
+	assert.Len(t, qr.Rows, 4)
 	assert.Equal(t, `[[VARCHAR("shard-1")] [VARCHAR("shard-1")] [VARCHAR("shard-2")] [VARCHAR("shard-2")]]`, fmt.Sprintf("%v", qr.Rows))
 	// in vschema the prefix length is defined as 2 bytes however only 1 byte
 	// is provided here so the query fans out to all.
 	qr = utils.Exec(t, conn, "select c2 from t2 where c1 like '2%' order by c2")
-	assert.Equal(t, 4, len(qr.Rows))
+	assert.Len(t, qr.Rows, 4)
 	assert.Equal(t, `[[VARCHAR("shard-0")] [VARCHAR("shard-1")] [VARCHAR("shard-2")] [VARCHAR("shard-3")]]`, fmt.Sprintf("%v", qr.Rows))
 }
 
@@ -239,7 +239,7 @@ func TestCFCInsert(t *testing.T) {
 
 	vtParams := clusterInstance.GetVTParams(sKs)
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	utils.Exec(t, conn, "delete from t1")
@@ -247,16 +247,16 @@ func TestCFCInsert(t *testing.T) {
 
 	utils.Exec(t, conn, "insert into t1 (c1, c2) values ('AAA', 'BBB')")
 	qr := utils.Exec(t, conn, "select c2 from t1 where c1 like 'A%'")
-	assert.Equal(t, 1, len(qr.Rows))
+	assert.Len(t, qr.Rows, 1)
 	shards := []string{"-41", "4180-42", "42-"}
 	for _, s := range shards {
 		utils.Exec(t, conn, fmt.Sprintf("use `cfc_testing:%s`", s))
 		qr = utils.Exec(t, conn, "select * from t1")
-		assert.Equal(t, 0, len(qr.Rows))
+		assert.Empty(t, qr.Rows)
 	}
 	// 'AAA' belongs to 41-4180
 	utils.Exec(t, conn, "use `cfc_testing:41-4180`")
 	qr = utils.Exec(t, conn, "select c2 from t1")
-	assert.Equal(t, 1, len(qr.Rows))
+	assert.Len(t, qr.Rows, 1)
 	assert.Equal(t, `[[VARCHAR("BBB")]]`, fmt.Sprintf("%v", qr.Rows))
 }

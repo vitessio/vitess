@@ -81,7 +81,7 @@ describe('api/http', () => {
             try {
                 await api.fetchTablets();
             } catch (error) {
-                let e: HttpResponseNotOkError = error as HttpResponseNotOkError;
+                const e: HttpResponseNotOkError = error as HttpResponseNotOkError;
                 expect(e.name).toEqual(HTTP_RESPONSE_NOT_OK_ERROR);
                 expect(e.message).toEqual('[status 500] /api/tablets: oh_no something went wrong');
                 expect(e.response).toEqual(response);
@@ -107,7 +107,7 @@ describe('api/http', () => {
             try {
                 await api.vtfetch(endpoint);
             } catch (error) {
-                let e: MalformedHttpResponseError = error as MalformedHttpResponseError;
+                const e: MalformedHttpResponseError = error as MalformedHttpResponseError;
                 expect(e.name).toEqual(MALFORMED_HTTP_RESPONSE_ERROR);
                 expect(e.message).toContain(
                     `[status 504] /api/tablets: Unexpected token '<', "<html><hea"... is not valid JSON`
@@ -127,7 +127,7 @@ describe('api/http', () => {
             try {
                 await api.vtfetch(endpoint);
             } catch (error) {
-                let e: MalformedHttpResponseError = error as MalformedHttpResponseError;
+                const e: MalformedHttpResponseError = error as MalformedHttpResponseError;
                 expect(e.name).toEqual(MALFORMED_HTTP_RESPONSE_ERROR);
             }
         });
@@ -182,7 +182,7 @@ describe('api/http', () => {
                 try {
                     await api.vtfetch(endpoint);
                 } catch (error) {
-                    let e: HttpFetchError = error as HttpFetchError;
+                    const e: HttpFetchError = error as HttpFetchError;
                     expect(e.message).toEqual(
                         'Invalid fetch credentials property: nope. Must be undefined or one of omit, same-origin, include'
                     );
@@ -254,7 +254,7 @@ describe('api/http', () => {
                     transform: (e) => null, // doesn't matter
                 });
             } catch (error) {
-                let e: HttpFetchError = error as HttpFetchError;
+                const e: HttpFetchError = error as HttpFetchError;
                 expect(e.message).toMatch('expected entities to be an array, got null');
 
                 expect(errorHandler.notify).toHaveBeenCalledTimes(1);

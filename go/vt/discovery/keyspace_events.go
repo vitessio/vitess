@@ -43,6 +43,15 @@ var (
 	// waitConsistentKeyspacesCheck is the amount of time to wait for between checks to verify the keyspace is consistent.
 	waitConsistentKeyspacesCheck = 100 * time.Millisecond
 	kewHcSubscriberName          = "KeyspaceEventWatcher"
+	// missingKeyspaceTTL is how long getKeyspaceStatus caches a NoNode result
+	// for a keyspace's SrvKeyspace in the local cell. Without this cache,
+	// every healthcheck event for a tablet whose keyspace has no SrvKeyspace
+	// in the local cell would allocate a keyspaceState, register watchers,
+	// and immediately tear it down — leaking the SrvVSchema listener (whose
+	// callback always returns true) on every event. This is observable in
+	// multi-cell deployments where some keyspaces are only served from a
+	// subset of cells.
+	missingKeyspaceTTL = 30 * time.Second
 )
 
 // KeyspaceEventWatcher is an auxiliary watcher that watches all availability incidents
@@ -60,6 +69,9 @@ type KeyspaceEventWatcher struct {
 
 	mu        sync.Mutex
 	keyspaces map[string]*keyspaceState
+	// missingKeyspaces is a negative cache for keyspaces whose SrvKeyspace
+	// does not exist in localCell. Entries expire after missingKeyspaceTTL.
+	missingKeyspaces map[string]time.Time
 
 	subsMu sync.Mutex
 	subs   map[chan *KeyspaceEvent]struct{}
@@ -91,11 +103,12 @@ type ShardEvent struct {
 // will be used to detect unhealthy nodes.
 func NewKeyspaceEventWatcher(ctx context.Context, topoServer srvtopo.Server, hc HealthCheck, localCell string) *KeyspaceEventWatcher {
 	kew := &KeyspaceEventWatcher{
-		hc:        hc,
-		ts:        topoServer,
-		localCell: localCell,
-		keyspaces: make(map[string]*keyspaceState),
-		subs:      make(map[chan *KeyspaceEvent]struct{}),
+		hc:               hc,
+		ts:               topoServer,
+		localCell:        localCell,
+		keyspaces:        make(map[string]*keyspaceState),
+		missingKeyspaces: make(map[string]time.Time),
+		subs:             make(map[chan *KeyspaceEvent]struct{}),
 	}
 	kew.run(ctx)
 	log.Info(fmt.Sprintf("started watching keyspace events in %q", localCell))
@@ -124,6 +137,14 @@ func (kss *keyspaceState) isConsistent() bool {
 	kss.mu.Lock()
 	defer kss.mu.Unlock()
 	return kss.consistent
+}
+
+// isDeleted returns whether the keyspace has been marked deleted by a NoNode
+// SrvKeyspace watch result.
+func (kss *keyspaceState) isDeleted() bool {
+	kss.mu.Lock()
+	defer kss.mu.Unlock()
+	return kss.deleted
 }
 
 // Format prints the internal state for this keyspace for debug purposes.
@@ -618,17 +639,30 @@ func (kss *keyspaceState) isServing() bool {
 // In addition, the traffic switcher updates SrvVSchema when the DeniedTables attributes in a Shard
 // record is modified.
 func (kss *keyspaceState) onSrvVSchema(vs *vschemapb.SrvVSchema, err error) bool {
+	kss.mu.Lock()
+	defer kss.mu.Unlock()
+	// If onSrvKeyspace has already marked this keyspace deleted (NoNode in
+	// localCell), unregister this listener too — including on nil-payload
+	// updates from a server shutdown. onSrvVSchema otherwise always returns
+	// true, so the resilient SrvVSchema watcher would keep the closure —
+	// and the orphan keyspaceState it captures — in its listeners slice
+	// forever and re-run this callback's work on every update.
+	if kss.deleted {
+		return false
+	}
 	// The vschema can be nil if the server is currently shutting down.
 	if vs == nil {
 		return true
 	}
-
-	kss.mu.Lock()
-	defer kss.mu.Unlock()
-	var kerr error
-	if kss.moveTablesState, kerr = kss.getMoveTablesStatus(vs); err != nil {
+	// Use a local for the new state — getMoveTablesStatus returns (nil, err)
+	// on failure, and assigning directly into kss.moveTablesState would
+	// silently clobber the previously-tracked state on a transient topo blip.
+	newState, kerr := kss.getMoveTablesStatus(vs)
+	if kerr != nil {
 		log.Error(fmt.Sprintf("onSrvVSchema: keyspace %s failed to get move tables status: %v", kss.keyspace, kerr))
+		return true
 	}
+	kss.moveTablesState = newState
 	if kss.moveTablesState != nil && kss.moveTablesState.Typ != MoveTablesNone {
 		// Mark the keyspace as inconsistent. ensureConsistentLocked() checks if the workflow is
 		// switched, and if so, it will send an event to the buffering subscribers to indicate that
@@ -650,6 +684,14 @@ func newKeyspaceState(ctx context.Context, kew *KeyspaceEventWatcher, cell, keys
 		shards:   make(map[string]*shardState),
 	}
 	kew.ts.WatchSrvKeyspace(ctx, cell, keyspace, kss.onSrvKeyspace)
+	if kss.isDeleted() {
+		// SrvKeyspace returned NoNode synchronously via the cached value
+		// during addListener, so this keyspaceState is already discarded.
+		// Skip the SrvVSchema listener: onSrvVSchema always returns true,
+		// and the listener would never be reaped — pinning the orphan
+		// keyspaceState in the SrvVSchema watcher's listeners slice.
+		return kss
+	}
 	kew.ts.WatchSrvVSchema(ctx, cell, kss.onSrvVSchema)
 	return kss
 }
@@ -673,12 +715,22 @@ func (kew *KeyspaceEventWatcher) getKeyspaceStatus(ctx context.Context, keyspace
 	defer kew.mu.Unlock()
 	kss := kew.keyspaces[keyspace]
 	if kss == nil {
+		// Skip allocation if we recently confirmed this keyspace has no
+		// SrvKeyspace in the local cell. Healthchecks for tablets in other
+		// watched cells can otherwise drive this path >1k times/sec.
+		if t, ok := kew.missingKeyspaces[keyspace]; ok {
+			if time.Since(t) < missingKeyspaceTTL {
+				return nil
+			}
+			delete(kew.missingKeyspaces, keyspace)
+		}
 		kss = newKeyspaceState(ctx, kew, kew.localCell, keyspace)
 		kew.keyspaces[keyspace] = kss
 	}
-	if kss.deleted {
+	if kss.isDeleted() {
 		kss = nil
 		delete(kew.keyspaces, keyspace)
+		kew.missingKeyspaces[keyspace] = time.Now()
 		// Delete from the sidecar database identifier cache as well.
 		// Ignore any errors as they should all mean that the entry
 		// does not exist in the cache (which will be common).

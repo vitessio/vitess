@@ -17,7 +17,6 @@ limitations under the License.
 package engine
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -65,7 +64,7 @@ func TestDeleteCascade(t *testing.T) {
 
 	vc := newTestVCursor("0")
 	vc.results = []*sqltypes.Result{fakeRes}
-	_, err := fkc.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, true)
+	_, err := fkc.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, true)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
@@ -77,7 +76,7 @@ func TestDeleteCascade(t *testing.T) {
 	})
 
 	vc.Rewind()
-	err = fkc.TryStreamExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, true, func(result *sqltypes.Result) error { return nil })
+	err = fkc.TryStreamExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, true, func(result *sqltypes.Result) error { return nil })
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
@@ -126,7 +125,7 @@ func TestUpdateCascade(t *testing.T) {
 
 	vc := newTestVCursor("0")
 	vc.results = []*sqltypes.Result{fakeRes}
-	_, err := fkc.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, true)
+	_, err := fkc.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, true)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
@@ -138,7 +137,7 @@ func TestUpdateCascade(t *testing.T) {
 	})
 
 	vc.Rewind()
-	err = fkc.TryStreamExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, true, func(result *sqltypes.Result) error { return nil })
+	err = fkc.TryStreamExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, true, func(result *sqltypes.Result) error { return nil })
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
@@ -198,7 +197,7 @@ func TestNonLiteralUpdateCascade(t *testing.T) {
 
 	vc := newTestVCursor("0")
 	vc.results = []*sqltypes.Result{fakeRes}
-	_, err := fkc.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, true)
+	_, err := fkc.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, true)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
@@ -212,7 +211,7 @@ func TestNonLiteralUpdateCascade(t *testing.T) {
 	})
 
 	vc.Rewind()
-	err = fkc.TryStreamExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, true, func(result *sqltypes.Result) error { return nil })
+	err = fkc.TryStreamExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, true, func(result *sqltypes.Result) error { return nil })
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,

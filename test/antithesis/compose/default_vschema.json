@@ -1,8 +1,0 @@
-{
-  "sharded": false,
-  "vindexes": {
-    "xxhash": {
-      "type": "xxhash"
-    }
-  }
-}

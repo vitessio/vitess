@@ -17,7 +17,6 @@ limitations under the License.
 package wrangler
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -27,7 +26,7 @@ import (
 )
 
 func TestValidateSchemaShard(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	sourceShards := []string{"-80", "80-"}
 	targetShards := []string{"-40", "40-80", "80-c0", "c0-"}
 
@@ -82,7 +81,7 @@ func TestValidateSchemaShard(t *testing.T) {
 }
 
 func TestValidateSchemaKeyspace(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	sourceShards := []string{"-80", "80-"}
 	targetShards := []string{"-40", "40-80", "80-c0", "c0-"}
 

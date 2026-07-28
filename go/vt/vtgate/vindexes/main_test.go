@@ -70,7 +70,7 @@ func testCreateVindex(
 		if ok {
 			unknownParams = paramValidating.UnknownParams()
 		}
-		require.Equal(t, len(tc.expectUnknownParams), len(unknownParams))
+		require.Len(t, unknownParams, len(tc.expectUnknownParams))
 		sort.Strings(tc.expectUnknownParams)
 		sort.Strings(unknownParams)
 		require.Equal(t, tc.expectUnknownParams, unknownParams)

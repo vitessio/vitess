@@ -24,5 +24,5 @@ uid=$TABLET_UID
 printf -v alias '%s-%010d' $cell $uid
 echo "Shutting down MySQL for tablet $alias..."
 
-mysqlctl --tablet_uid $uid shutdown
+mysqlctl --tablet-uid $uid shutdown
 

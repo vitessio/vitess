@@ -1,5 +1,21 @@
 //go:build !race
 
+/*
+Copyright 2026 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 // Disabling race detector because it doesn't like TestPProfInitWithWaitSig and TestPProfInitWithoutWaitSig,
 // but the profileStarted variable is updated in response to signals invoked in the tests and works as intended.
 
@@ -7,7 +23,6 @@ package servenv
 
 import (
 	"os/signal"
-	"reflect"
 	"strings"
 	"syscall"
 	"testing"
@@ -51,12 +66,10 @@ func TestParseProfileFlag(t *testing.T) {
 			}
 			got, err := parseProfileFlag(profileFlag)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("parseProfileFlag() error = %v, wantErr %v", err, tt.wantErr)
+				assert.Failf(t, "parseProfileFlag() unexpected error", "error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("parseProfileFlag() got = %v, want %v", got, tt.want)
-			}
+			assert.Equalf(t, tt.want, got, "parseProfileFlag() got = %v, want %v", got, tt.want)
 		})
 	}
 }

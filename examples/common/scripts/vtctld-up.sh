@@ -34,6 +34,7 @@ vtctld \
    --pid-file $VTDATAROOT/tmp/vtctld.pid \
    --pprof-http \
    --log-format text \
+   ${VTCTLD_EXTRA_FLAGS:-} \
    >$VTDATAROOT/tmp/vtctld.out 2>&1 &
 
 echo "Curling \"http://${hostname}:${vtctld_web_port}/debug/status\" to check if vtctld is up"

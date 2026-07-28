@@ -23,7 +23,6 @@ import (
 	"net"
 	"os"
 	"path"
-	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -48,7 +47,7 @@ func assertSQLError(t *testing.T, err error, code sqlerror.ErrorCode, sqlState, 
 	require.Equal(t, code, serr.Num, "was expecting SQLError %v / %v / %v but got code %v", code, sqlState, subtext, serr.Num)
 	require.Equal(t, sqlState, serr.State, "was expecting SQLError %v / %v / %v but got state %v", code, sqlState, subtext, serr.State)
 	if pattern != "" {
-		require.Regexp(t, regexp.MustCompile(pattern), serr.Message)
+		require.Regexp(t, pattern, serr.Message)
 	} else {
 		require.True(t, subtext == "" || strings.Contains(serr.Message, subtext), "was expecting SQLError %v / %v / %v but got message %v", code, sqlState, subtext, serr.Message)
 	}
@@ -71,7 +70,7 @@ func TestConnectTimeout(t *testing.T) {
 	defer listener.Close()
 
 	// Test that canceling the context really interrupts the Connect.
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan struct{})
 	go func() {
 		_, err := Connect(ctx, params)
@@ -83,13 +82,13 @@ func TestConnectTimeout(t *testing.T) {
 	<-done
 
 	// Tests a connection timeout works.
-	ctx, cancel = context.WithTimeout(context.Background(), 100*time.Millisecond)
+	ctx, cancel = context.WithTimeout(t.Context(), 100*time.Millisecond)
 	_, err = Connect(ctx, params)
 	cancel()
 	assert.Equal(t, context.DeadlineExceeded, err, "Was expecting context.DeadlineExceeded but got: %v", err)
 
 	// Tests a connection timeout through params
-	ctx = context.Background()
+	ctx = t.Context()
 	paramsWithTimeout := *params
 	paramsWithTimeout.ConnectTimeoutMs = 1
 	_, err = Connect(ctx, &paramsWithTimeout)
@@ -108,7 +107,7 @@ func TestConnectTimeout(t *testing.T) {
 			conn.Close()
 		}
 	})
-	ctx = context.Background()
+	ctx = t.Context()
 	_, err = Connect(ctx, params)
 	assertSQLError(t, err, sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "initial packet read failed", "", "")
 
@@ -127,7 +126,7 @@ func TestConnectTimeout(t *testing.T) {
 	name := fd.Name()
 	fd.Close()
 	params.UnixSocket = name
-	ctx = context.Background()
+	ctx = t.Context()
 	_, err = Connect(ctx, params)
 	os.Remove(name)
 	t.Log(err)
@@ -193,7 +192,7 @@ func TestTLSClientDisabled(t *testing.T) {
 		SslMode: vttls.Disabled,
 	}
 
-	conn, err := Connect(context.Background(), params)
+	conn, err := Connect(t.Context(), params)
 	require.NoError(t, err)
 
 	// make sure this went through SSL
@@ -266,7 +265,7 @@ func TestTLSClientPreferredDefault(t *testing.T) {
 		ServerName: "server.example.com",
 	}
 
-	conn, err := Connect(context.Background(), params)
+	conn, err := Connect(t.Context(), params)
 	require.NoError(t, err)
 
 	// make sure this went through SSL
@@ -321,7 +320,7 @@ func TestTLSClientRequired(t *testing.T) {
 		SslMode: vttls.Required,
 	}
 
-	_, err = Connect(context.Background(), params)
+	_, err = Connect(t.Context(), params)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "server doesn't support SSL but client asked for it")
 }
@@ -387,7 +386,7 @@ func TestTLSClientVerifyCA(t *testing.T) {
 		ServerName: "server.example.com",
 	}
 
-	_, err = Connect(context.Background(), params)
+	_, err = Connect(t.Context(), params)
 	require.Error(t, err)
 
 	fmt.Printf("Error: %s", err)
@@ -396,7 +395,7 @@ func TestTLSClientVerifyCA(t *testing.T) {
 
 	// Now setup proper CA that is valid to verify
 	params.SslCa = path.Join(root, "ca-cert.pem")
-	conn, err := Connect(context.Background(), params)
+	conn, err := Connect(t.Context(), params)
 	require.NoError(t, err)
 
 	// make sure this went through SSL
@@ -470,7 +469,7 @@ func TestTLSClientVerifyIdentity(t *testing.T) {
 		ServerName: "server.example.com",
 	}
 
-	_, err = Connect(context.Background(), params)
+	_, err = Connect(t.Context(), params)
 	require.Error(t, err)
 
 	fmt.Printf("Error: %s", err)
@@ -479,7 +478,7 @@ func TestTLSClientVerifyIdentity(t *testing.T) {
 
 	// Now setup proper CA that is valid to verify
 	params.SslCa = path.Join(root, "ca-cert.pem")
-	conn, err := Connect(context.Background(), params)
+	conn, err := Connect(t.Context(), params)
 	require.NoError(t, err)
 
 	// make sure this went through SSL
@@ -495,7 +494,7 @@ func TestTLSClientVerifyIdentity(t *testing.T) {
 	tlstest.RevokeCertAndRegenerateCRL(root, tlstest.CA, "server")
 
 	params.SslCrl = path.Join(root, "ca-crl.pem")
-	_, err = Connect(context.Background(), params)
+	_, err = Connect(t.Context(), params)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Certificate revoked: CommonName=server.example.com")
 }

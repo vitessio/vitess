@@ -23,6 +23,7 @@ web_port=15001
 grpc_port=15991
 mysql_server_port=15306
 mysql_server_socket_path="/tmp/mysql.sock"
+slow_query_threshold=${VTGATE_SLOW_QUERY_THRESHOLD:-10ms}
 
 echo "Starting vtgate..."
 # shellcheck disable=SC2086
@@ -40,8 +41,10 @@ vtgate \
    --pid-file $VTDATAROOT/tmp/vtgate.pid \
    --enable-buffer \
    --mysql-auth-server-impl none \
+   --slow-query-threshold $slow_query_threshold \
    --pprof-http \
    --log-format text \
+   ${VTGATE_EXTRA_FLAGS:-} \
    >$VTDATAROOT/tmp/vtgate.out 2>&1 &
 
 # Block waiting for vtgate to be listening

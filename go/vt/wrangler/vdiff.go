@@ -706,7 +706,8 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 						/*opcode*/ opcode.AggregateSum,
 						/*offset*/ sourceSelect.GetColumnCount()-1,
 						nil,
-						/*alias*/ "", df.env.CollationEnv()))
+						/*alias*/ "", df.env.CollationEnv(),
+					))
 				}
 			}
 		default:
@@ -777,7 +778,7 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 }
 
 func pkColsToGroupByParams(pkCols []int, collationEnv *collations.Environment) []*engine.GroupByParams {
-	var res []*engine.GroupByParams
+	res := make([]*engine.GroupByParams, 0, len(pkCols))
 	for _, col := range pkCols {
 		res = append(res, &engine.GroupByParams{KeyCol: col, WeightStringCol: -1, Type: evalengine.Type{}, CollationEnv: collationEnv})
 	}

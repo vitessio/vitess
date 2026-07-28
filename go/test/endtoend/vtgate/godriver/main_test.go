@@ -24,7 +24,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
@@ -156,7 +155,7 @@ func TestStreamMessaging(t *testing.T) {
 
 	// Exec not allowed in streaming
 	_, err = streamDB.Exec("stream * from my_message")
-	assert.EqualError(t, err, "Exec not allowed for streaming connections")
+	require.EqualError(t, err, "Exec not allowed for streaming connections")
 
 	row := streamDB.QueryRow("stream * from my_message")
 	require.NoError(t, row.Err())

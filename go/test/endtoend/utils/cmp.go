@@ -307,10 +307,10 @@ func (mcmp *MySQLCompare) ExecVitessAndMySQLDifferentQueries(vtQ, mQ string) *sq
 func (mcmp *MySQLCompare) ExecAssert(query string) *sqltypes.Result {
 	mcmp.t.Helper()
 	vtQr, err := mcmp.VtConn.ExecuteFetch(query, 1000, true)
-	assert.NoError(mcmp.t, err, "[Vitess Error] for query: "+query)
+	require.NoError(mcmp.t, err, "[Vitess Error] for query: "+query)
 
 	mysqlQr, err := mcmp.MySQLConn.ExecuteFetch(query, 1000, true)
-	assert.NoError(mcmp.t, err, "[MySQL Error] for query: "+query)
+	require.NoError(mcmp.t, err, "[MySQL Error] for query: "+query)
 	CompareVitessAndMySQLResults(mcmp.t, query, mcmp.VtConn, vtQr, mysqlQr, CompareOptions{})
 	return vtQr
 }

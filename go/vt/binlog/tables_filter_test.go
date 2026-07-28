@@ -160,7 +160,7 @@ func bltToString(tx *binlogdatapb.BinlogTransaction) string {
 	result := ""
 	var resultSb160 strings.Builder
 	for _, statement := range tx.Statements {
-		resultSb160.WriteString(fmt.Sprintf("statement: <%d, \"%s\"> ", statement.Category, string(statement.Sql)))
+		fmt.Fprintf(&resultSb160, "statement: <%d, \"%s\"> ", statement.Category, string(statement.Sql))
 	}
 	result += resultSb160.String()
 	result += fmt.Sprintf("position: \"%v\" ", tx.EventToken.Position)

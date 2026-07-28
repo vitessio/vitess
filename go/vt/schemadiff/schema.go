@@ -219,10 +219,8 @@ func (s *Schema) normalize(hints *DiffHints) error {
 		for _, name := range names {
 			dependencyLevel, ok := dependencyLevels[name]
 			if !ok {
-				if strings.ToLower(name) != "dual" {
-					// named table is not yet handled. This means this view cannot be defined yet.
-					return false
-				}
+				// named table is not yet handled. This means this view cannot be defined yet.
+				return false
 			}
 			if dependencyLevel >= level {
 				// named table/view is in same dependency level as this view; we want to postpone this
@@ -997,6 +995,99 @@ func (s *Schema) SchemaDiff(other *Schema, hints *DiffHints) (*SchemaDiff, error
 		return true, nil
 	}
 
+	// checkForeignKeyShadowConflict detects "shadow table" foreign key corruption. A foreign key
+	// present in the source schema survives on the OnlineDDL held table (`_vt_hld_…`) for the duration
+	// of the child's migration (and until table GC). If a parent table that *survives* this batch is
+	// concurrently altered such that the surviving foreign key becomes invalid — an incompatible
+	// referenced column signature, a dropped or renamed referenced column, or a dropped covering
+	// index — the held table is corrupted. No ordering can resolve this, so we record an
+	// impossible-execution dependency. A *dropped* parent is not a conflict: the table GC reclaims the
+	// held pair with foreign key checks disabled. This is gated behind
+	// ForeignKeyShadowConflictStrategyReject, since it is specific to OnlineDDL's held-table mechanism
+	// and is safe under direct strategy.
+	checkForeignKeyShadowConflict := func(childDiff EntityDiff, cFrom *CreateTableEntity, constraintName string, fk *sqlparser.ForeignKeyDefinition) {
+		referencedTableName := fk.ReferenceDefinition.ReferencedTable.Name.String()
+		if referencedTableName == cFrom.Name() {
+			// Self-referencing foreign key: the held original table is internally consistent (its
+			// foreign key references its own columns, all at the same version), so it cannot conflict
+			// with a separately-migrated parent. There is no shadow conflict.
+			return
+		}
+		parentDiffs := schemaDiff.diffsByEntityName(referencedTableName)
+		if len(parentDiffs) == 0 {
+			// Parent table is not migrated in this batch: there is no held parent table, and the
+			// final-schema foreign key validation already governs any incompatibility.
+			return
+		}
+		childColumns := cFrom.ColumnDefinitionEntitiesMap()
+		for _, parentDiff := range parentDiffs {
+			breaking := false
+			// Default to the first referenced column so that table-level conflicts (a dropped parent
+			// table or a dropped covering index) still name a column in the error. Column-specific
+			// branches below override this with the exact offending column.
+			referencedColumn := ""
+			if len(fk.ReferenceDefinition.ReferencedColumns) > 0 {
+				referencedColumn = fk.ReferenceDefinition.ReferencedColumns[0].String()
+			}
+			switch parentDiff := parentDiff.(type) {
+			case *AlterTableEntityDiff:
+				_, parentTo := parentDiff.Entities()
+				parentTable, ok := parentTo.(*CreateTableEntity)
+				if !ok {
+					continue
+				}
+				parentColumns := parentTable.ColumnDefinitionEntitiesMap()
+				for i, referencedCol := range fk.ReferenceDefinition.ReferencedColumns {
+					if i >= len(fk.Source) {
+						break
+					}
+					parentCol, ok := parentColumns[referencedCol.Lowered()]
+					if !ok {
+						// Referenced column was dropped or renamed by the parent's ALTER.
+						breaking, referencedColumn = true, referencedCol.String()
+						break
+					}
+					childCol, ok := childColumns[fk.Source[i].Lowered()]
+					if !ok {
+						continue
+					}
+					if !colTypeEqualForForeignKey(s.env, cFrom.TableSpec, parentTable.TableSpec, childCol.ColumnDefinition.Type, parentCol.ColumnDefinition.Type) {
+						// The surviving foreign key's referenced column changed to an incompatible signature.
+						breaking, referencedColumn = true, referencedCol.String()
+						break
+					}
+				}
+				if !breaking && !parentTable.columnsCoveredByInOrderIndex(fk.ReferenceDefinition.ReferencedColumns) {
+					// The parent no longer has an index covering the referenced columns, which the
+					// surviving foreign key requires.
+					breaking = true
+				}
+			default:
+				continue
+			}
+			if breaking {
+				schemaDiff.addDep(childDiff, parentDiff, DiffDependencyImpossibleExecution)
+				schemaDiff.foreignKeyShadowConflicts = append(schemaDiff.foreignKeyShadowConflicts, &ForeignKeyShadowConflictError{
+					Table:            cFrom.Name(),
+					Constraint:       constraintName,
+					ReferencedTable:  referencedTableName,
+					ReferencedColumn: referencedColumn,
+				})
+			}
+		}
+	}
+
+	checkSourceForeignKeyShadowConflicts := func(childDiff EntityDiff, cFrom *CreateTableEntity) {
+		if hints == nil || hints.ForeignKeyShadowConflictStrategy != ForeignKeyShadowConflictStrategyReject {
+			return
+		}
+		for _, constraint := range cFrom.TableSpec.Constraints {
+			if fk, ok := constraint.Details.(*sqlparser.ForeignKeyDefinition); ok {
+				checkForeignKeyShadowConflict(childDiff, cFrom, constraint.Name.String(), fk)
+			}
+		}
+	}
+
 	for _, diff := range schemaDiff.UnorderedDiffs() {
 		switch diff := diff.(type) {
 		case *CreateViewEntityDiff:
@@ -1026,6 +1117,7 @@ func (s *Schema) SchemaDiff(other *Schema, hints *DiffHints) (*SchemaDiff, error
 			}, diff.Statement())
 
 		case *AlterTableEntityDiff:
+			checkSourceForeignKeyShadowConflicts(diff, diff.from)
 			_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 				switch node := node.(type) {
 				case *sqlparser.AddConstraintDefinition:
@@ -1056,7 +1148,11 @@ func (s *Schema) SchemaDiff(other *Schema, hints *DiffHints) (*SchemaDiff, error
 				return true, nil
 			}, diff.Statement())
 		case *DropTableEntityDiff:
-			// No need to handle. Any dependencies will be resolved by any of the other cases
+			// Dropping a child table leaves a held original (`_vt_hld_…`) that retains its foreign
+			// keys, so it conflicts when a referenced parent *survives* this batch but is altered
+			// incompatibly. A dropped parent is not a conflict (it falls through below): the table GC
+			// reclaims the held pair with foreign key checks disabled, regardless of order.
+			checkSourceForeignKeyShadowConflicts(diff, diff.from)
 		}
 	}
 
@@ -1100,9 +1196,6 @@ func (s *Schema) ValidateViewReferences() error {
 		}
 	}
 
-	// Add dual table with no explicit columns for dual style expressions in views.
-	schemaInformation.addTable("dual")
-
 	for _, view := range s.Views() {
 		sel := sqlparser.Clone(view.Select) // Analyze(), below, rewrites the select; we don't want to actually modify the schema
 		_, err := semantics.AnalyzeStrict(sel, semanticKS.Name, schemaInformation)
@@ -1142,10 +1235,6 @@ func (s *Schema) getEntityColumnNames(entityName string, schemaInformation *decl
 ) {
 	entity := s.Entity(entityName)
 	if entity == nil {
-		if strings.ToLower(entityName) == "dual" {
-			// this is fine. DUAL does not exist but is allowed
-			return nil, nil
-		}
 		return nil, &EntityNotFoundError{Name: entityName}
 	}
 	// The entity is either a table or a view
@@ -1183,8 +1272,8 @@ func (s *Schema) getViewColumnNames(v *CreateViewEntity, schemaInformation *decl
 			} else {
 				// add all columns from all referenced tables and views
 				for _, entityName := range dependentNames {
-					if schemaInformation.Tables[entityName] != nil { // is nil for dual/DUAL
-						for _, col := range schemaInformation.Tables[entityName].Columns {
+					if tbl, ok := schemaInformation.Tables[entityName]; ok {
+						for _, col := range tbl.Columns {
 							name := sqlparser.Clone(col.Name)
 							columnNames = append(columnNames, &name)
 						}

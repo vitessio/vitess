@@ -455,7 +455,7 @@ func TestServerGetTabletsByCellPartialResults(t *testing.T) {
 	// Verify that we return a partial list of tablets and that each
 	// tablet matches what we expect.
 	out, err := ts.GetTabletsByCell(ctx, cell, nil)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.True(t, topo.IsErrType(err, topo.PartialResult), "Not a partial result: %v", err)
 	assert.Len(t, out, 2)
 	assert.True(t, proto.Equal(tablets[0].Tablet, out[0].Tablet), "Got: %v, want %v", tablets[0].Tablet, out[0].Tablet)
@@ -642,7 +642,7 @@ func TestServerGetTabletMapAndList(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 			defer cancel()
 			ts := memorytopo.NewServer(ctx, cells...)
 			defer ts.Close()
@@ -701,7 +701,7 @@ func TestGetTabletsIndividuallyByCell(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 			defer cancel()
 			ts := memorytopo.NewServer(ctx, cells...)
 			defer ts.Close()

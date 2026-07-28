@@ -36,7 +36,7 @@ func TestCreateUUID(t *testing.T) {
 func TestIsOnlineDDLUUID(t *testing.T) {
 	for range 20 {
 		uuid, err := CreateOnlineDDLUUID()
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.True(t, IsOnlineDDLUUID(uuid))
 	}
 	tt := []string{
@@ -57,12 +57,12 @@ func TestGetGCUUID(t *testing.T) {
 	count := 20
 	for range count {
 		onlineDDL, err := NewOnlineDDL("ks", "tbl", "alter table t drop column c", NewDDLStrategySetting(DDLStrategyDirect, ""), "", "", parser)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		gcUUID := onlineDDL.GetGCUUID()
 		assert.True(t, isCondensedUUID(gcUUID))
 		uuids[gcUUID] = true
 	}
-	assert.Equal(t, count, len(uuids))
+	assert.Len(t, uuids, count)
 }
 
 func TestGetActionStr(t *testing.T) {
@@ -96,7 +96,7 @@ func TestGetActionStr(t *testing.T) {
 			if ts.isError {
 				assert.Error(t, err)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, actionStr, ts.actionStr)
 			}
 		})
@@ -182,7 +182,7 @@ func TestGetRevertUUID(t *testing.T) {
 				assert.Error(t, err)
 				return
 			}
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, ts.uuid, uuid)
 		})
 	}
@@ -193,14 +193,14 @@ func TestGetRevertUUID(t *testing.T) {
 			if err != nil && ts.isError {
 				return
 			}
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			require.NotNil(t, onlineDDL)
 			uuid, err := onlineDDL.GetRevertUUID(parser)
 			if ts.isError {
 				assert.Error(t, err)
 				return
 			}
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, ts.uuid, uuid)
 		})
 	}
@@ -249,7 +249,7 @@ func TestNewOnlineDDL(t *testing.T) {
 						assert.Error(t, err)
 						return
 					}
-					assert.NoError(t, err)
+					require.NoError(t, err)
 					// onlineDDL.SQL enriched with /*vt+ ... */ comment
 					assert.Contains(t, onlineDDL.SQL, hex.EncodeToString([]byte(onlineDDL.UUID)))
 					assert.Contains(t, onlineDDL.SQL, hex.EncodeToString([]byte(migrationContext)))
@@ -265,14 +265,14 @@ func TestNewOnlineDDL(t *testing.T) {
 		parser := sqlparser.NewTestParser()
 
 		onlineDDL, err = NewOnlineDDL("test_ks", "t", "alter table t engine=innodb", NewDDLStrategySetting(DDLStrategyVitess, ""), migrationContext, "", parser)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.True(t, IsOnlineDDLUUID(onlineDDL.UUID))
 
 		_, err = NewOnlineDDL("test_ks", "t", "alter table t engine=innodb", NewDDLStrategySetting(DDLStrategyOnline, ""), migrationContext, "abc", parser)
-		assert.Error(t, err)
+		require.Error(t, err)
 
 		onlineDDL, err = NewOnlineDDL("test_ks", "t", "alter table t engine=innodb", NewDDLStrategySetting(DDLStrategyVitess, ""), migrationContext, "4e5dcf80_354b_11eb_82cd_f875a4d24e90", parser)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, "4e5dcf80_354b_11eb_82cd_f875a4d24e90", onlineDDL.UUID)
 
 		_, err = NewOnlineDDL("test_ks", "t", "alter table t engine=innodb", NewDDLStrategySetting(DDLStrategyVitess, ""), migrationContext, " 4e5dcf80_354b_11eb_82cd_f875a4d24e90", parser)
@@ -324,7 +324,7 @@ func TestNewOnlineDDLs(t *testing.T) {
 				assert.Error(t, err)
 				return
 			}
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			ddlStmt, ok := stmt.(sqlparser.DDLStatement)
 			if expect.notDDL {
 				assert.False(t, ok)
@@ -334,16 +334,16 @@ func TestNewOnlineDDLs(t *testing.T) {
 
 			onlineDDLs, err := NewOnlineDDLs("test_ks", query, ddlStmt, NewDDLStrategySetting(DDLStrategyVitess, ""), migrationContext, "", parser)
 			if expect.isError {
-				assert.Error(t, err)
+				require.Error(t, err)
 				assert.Contains(t, err.Error(), expect.expectErrorText)
 				return
 			}
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			sqls := []string{}
 			for _, onlineDDL := range onlineDDLs {
 				sql, err := onlineDDL.sqlWithoutComments(parser)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				sql = strings.ReplaceAll(sql, "\n", "")
 				sql = strings.ReplaceAll(sql, "\t", "")
 				sqls = append(sqls, sql)
@@ -378,15 +378,15 @@ func TestNewOnlineDDLsForeignKeys(t *testing.T) {
 					}
 					onlineDDLs, err := NewOnlineDDLs("test_ks", query, ddlStmt, NewDDLStrategySetting(DDLStrategyVitess, flags), migrationContext, "", parser)
 					if allowForeignKeys {
-						assert.NoError(t, err)
+						require.NoError(t, err)
 					} else {
-						assert.Error(t, err)
+						require.Error(t, err)
 						assert.Contains(t, err.Error(), "foreign key constraints are not supported")
 					}
 
 					for _, onlineDDL := range onlineDDLs {
 						sql, err := onlineDDL.sqlWithoutComments(parser)
-						assert.NoError(t, err)
+						require.NoError(t, err)
 						assert.NotEmpty(t, sql)
 					}
 				})

@@ -20,6 +20,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -82,6 +84,85 @@ func (rlp *RelayLogPositions) Equal(pos *RelayLogPositions) bool {
 // IsZero returns true if the RelayLogPositions is zero.
 func (rlp *RelayLogPositions) IsZero() bool {
 	return rlp.Combined.IsZero()
+}
+
+// hasDominantPosition returns true if position a is strictly ahead of position b, meaning
+// a contains everything b has, plus more.
+func hasDominantPosition(a, b replication.Position) bool {
+	return a.AtLeast(b) && !a.Equal(b)
+}
+
+// haveIncomparablePositions returns true if neither position contains the other. Replication
+// lag alone can't cause this, it takes writes that no other tablet has seen (split brain
+// or errant GTIDs).
+func haveIncomparablePositions(a, b replication.Position) bool {
+	return !a.AtLeast(b) && !b.AtLeast(a)
+}
+
+// hasUniformCombinedPosition returns true when every candidate has the same Combined position. On the
+// output of filterToMostAdvancedCombined a false result means the leading candidates have
+// incomparable positions, as the filter already removed anything dominated.
+func hasUniformCombinedPosition(candidates map[string]*RelayLogPositions) bool {
+	var ref replication.Position
+	var set bool
+	for _, pos := range candidates {
+		if !set {
+			ref = pos.Combined
+			set = true
+			continue
+		}
+		if !pos.Combined.Equal(ref) {
+			return false
+		}
+	}
+	return true
+}
+
+// filterToMostAdvancedCombined returns the candidates that no other candidate dominates on
+// the Combined position. GTID positions are partially ordered, so each candidate is
+// compared against all of the others; two incomparable leaders don't dominate each other
+// and both must be kept, which hasUniformCombinedPosition relies on. The returned map shares the
+// caller's RelayLogPositions structs.
+func filterToMostAdvancedCombined(candidates map[string]*RelayLogPositions, logger logutil.Logger) map[string]*RelayLogPositions {
+	if len(candidates) == 0 {
+		return candidates
+	}
+
+	result := make(map[string]*RelayLogPositions, len(candidates))
+	for alias, pos := range candidates {
+		var dominated bool
+		for otherAlias, otherPos := range candidates {
+			if otherAlias == alias {
+				continue
+			}
+			if hasDominantPosition(otherPos.Combined, pos.Combined) {
+				dominated = true
+				break
+			}
+		}
+		if !dominated {
+			result[alias] = pos
+		}
+	}
+
+	if len(result) < len(candidates) {
+		excluded := make([]string, 0, len(candidates)-len(result))
+		kept := make([]string, 0, len(result))
+		for alias := range candidates {
+			if _, ok := result[alias]; !ok {
+				excluded = append(excluded, alias)
+			}
+		}
+		for alias := range result {
+			kept = append(kept, alias)
+		}
+		slices.Sort(excluded)
+		slices.Sort(kept)
+		logger.Infof("excluding %d candidate(s) strictly behind the most-advanced received relay log position from the relay-log-apply wait: %s (still repointed after promotion); waiting on: %s",
+			len(excluded), strings.Join(excluded, ", "), strings.Join(kept, ", "))
+	}
+
+	return result
 }
 
 // FindPositionsOfAllCandidates will find candidates for an emergency
@@ -147,7 +228,7 @@ func FindPositionsOfAllCandidates(
 	for alias, primaryStatus := range primaryStatusMap {
 		executedPosition, err := replication.DecodePosition(primaryStatus.Position)
 		if err != nil {
-			return nil, false, vterrors.Wrapf(err, "could not decode a primary status executed position for tablet %v: %v", alias, err)
+			return nil, false, vterrors.Wrapf(err, "could not decode a primary status executed position for tablet %v", alias)
 		}
 
 		positionMap[alias] = &RelayLogPositions{Combined: executedPosition}
@@ -291,7 +372,7 @@ func stopReplicationAndBuildStatusMaps(
 		res        = &replicationSnapshot{
 			statusMap:          map[string]*replicationdatapb.StopReplicationStatus{},
 			primaryStatusMap:   map[string]*replicationdatapb.PrimaryStatus{},
-			reachableTablets:   []*topodatapb.Tablet{},
+			reachableTablets:   make([]*topodatapb.Tablet, 0, len(tabletMap)),
 			tabletsBackupState: map[string]bool{},
 		}
 	)
@@ -323,10 +404,9 @@ func stopReplicationAndBuildStatusMaps(
 
 				primaryStatus, err = tmc.DemotePrimary(groupCtx, tabletInfo.Tablet, true /* force */)
 				if err != nil {
-					msg := "replica %v thinks it's primary but we failed to demote it: %v"
-					err = vterrors.Wrapf(err, msg, alias, err)
+					err = vterrors.Wrapf(err, "replica %v thinks it's primary but we failed to demote it", alias)
 
-					logger.Warningf(msg, alias, err)
+					logger.Warningf("replica %v thinks it's primary but we failed to demote it: %v", alias, err)
 					return
 				}
 
@@ -336,7 +416,7 @@ func stopReplicationAndBuildStatusMaps(
 				m.Unlock()
 			} else {
 				logger.Warningf("failed to get replication status from %v: %v", alias, err)
-				err = vterrors.Wrapf(err, "error when getting replication status for alias %v: %v", alias, err)
+				err = vterrors.Wrapf(err, "error when getting replication status for alias %v", alias)
 			}
 		} else {
 			isTakingBackup := false
@@ -429,7 +509,7 @@ func stopReplicationAndBuildStatusMaps(
 	// check that the tablets we were able to reach are sufficient for us to guarantee that no new write will be accepted by any tablet
 	revokeSuccessful := haveRevoked(durability, res.reachableTablets, allTablets)
 	if !revokeSuccessful {
-		return res, vterrors.Wrapf(errRecorder.Error(), "could not reach sufficient tablets to guarantee safety: %v", errRecorder.Error())
+		return res, vterrors.Wrapf(errRecorder.Error(), "could not reach sufficient tablets to guarantee safety")
 	}
 
 	return res, nil

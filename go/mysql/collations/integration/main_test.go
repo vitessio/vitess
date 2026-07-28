@@ -17,7 +17,6 @@ limitations under the License.
 package integration
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"os/signal"
@@ -25,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/spf13/pflag"
+	"github.com/stretchr/testify/require"
 
 	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/mysql"
@@ -43,17 +43,15 @@ func init() {
 }
 
 func mysqlconn(t *testing.T) *mysql.Conn {
-	conn, err := mysql.Connect(context.Background(), &connParams)
-	if err != nil {
-		t.Fatal(err)
-	}
+	conn, err := mysql.Connect(t.Context(), &connParams)
+	require.NoError(t, err)
 	if strings.HasPrefix(conn.ServerVersion, "5.7.") {
 		conn.Close()
 		t.Skipf("collation integration tests are only supported in MySQL 8.0+")
 	}
 	if strings.HasPrefix(conn.ServerVersion, "8.0.27") {
 		conn.Close()
-		t.Fatalf("MySQL 8.0.27 is UNSUPPORTED for integration testing because of a behavior regression; " +
+		require.Failf(t, "unsupported version", "MySQL 8.0.27 is UNSUPPORTED for integration testing because of a behavior regression; "+
 			"please update to 8.0.28, or rollback to a previous 8.0 version. See: MySQL bug #33117410.")
 	}
 	return conn

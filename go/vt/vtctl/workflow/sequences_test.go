@@ -37,7 +37,7 @@ import (
 )
 
 func TestInitializeTargetSequences(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 
 	workflowName := "wf1"
@@ -207,7 +207,7 @@ func TestInitializeTargetSequences(t *testing.T) {
 			env.tmc.expectUpdateSequenceTablesRequest(100, tc.updateSeqTableRequest)
 
 			err = sw.initializeTargetSequences(ctx, sequencesByBackingTable)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			// Expect the requests to be cleared.
 			assert.Emptyf(t, env.tmc.updateSequenceTablesRequests, "expected no remaining UpdateSequenceTables requests")
@@ -217,7 +217,7 @@ func TestInitializeTargetSequences(t *testing.T) {
 }
 
 func TestGetTargetSequenceMetadata(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 	cell := "cell1"
 	workflow := "wf1"
@@ -726,7 +726,7 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 			}
-			require.EqualValues(t, tc.want, got)
+			require.Equal(t, tc.want, got)
 		})
 	}
 }
@@ -734,7 +734,7 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 // TestDryRunInitializeTargetSequences validates that we get the max value of the using tables and initialize the backing
 // tables to the next value.
 func TestDryRunInitializeTargetSequences(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 
 	workflowName := "wf1"

@@ -76,7 +76,7 @@ type (
 		duration time.Duration
 		start    time.Time
 		t        *testing.T
-		finish   uint32
+		finish   atomic.Uint32
 		cfgMu    sync.Mutex
 	}
 
@@ -192,7 +192,7 @@ func (s *Stresser) StopAfter(after time.Duration) {
 			s.t.Errorf("Requires no failed queries")
 		}
 	case <-timeoutCh:
-		atomic.StoreUint32(&s.finish, 1)
+		s.finish.Store(1)
 		res := <-s.doneCh
 		if s.cfg.PrintLogs {
 			res.print(s.t.Logf, s.duration.Seconds())
@@ -336,7 +336,7 @@ outer:
 }
 
 func (s *Stresser) finished() bool {
-	return atomic.LoadUint32(&s.finish) == 1
+	return s.finish.Load() == 1
 }
 
 // deleteFromRandomTable will delete the last row of a random table.

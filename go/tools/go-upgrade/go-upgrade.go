@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -50,10 +51,9 @@ const (
 	// The expected format of the input is BOOTSTRAP_VERSION=18 or BOOTSTRAP_VERSION=18.1
 	regexpFindBootstrapVersion = "(?i).*BOOTSTRAP_VERSION[[:space:]]*=[[:space:]]*([0-9.]+).*"
 
-	// regexpFindGolangVersion greps all numbers separated by a . after the goversion_min function call
-	// This is used to understand what is the current version of Golang using either two or three numbers
-	// The major, minor and optional patch number of the Golang version
-	regexpFindGolangVersion = "(?i).*goversion_min[[:space:]]*([0-9.]+).*"
+	// regexpFindGoModGoVersion captures the full Golang version from the top-level
+	// "go" directive in a go.mod file, e.g. "go 1.26.4" -> "1.26.4".
+	regexpFindGoModGoVersion = `(?m)^go[[:space:]]+([0-9.]+)`
 
 	// regexpReplaceGoModGoVersion replaces the top-level golang version instruction in the go.mod file
 	// Example going from go1.20 to go1.20: `go 1.20` -> `go 1.21`
@@ -210,6 +210,19 @@ func upgradePath(allowMajorUpgrade, isMainBranch bool) error {
 	}
 
 	upgradeTo := chooseNewVersion(currentVersion, availableVersions, allowMajorUpgrade)
+
+	// Reconcile the go.mod files (root + tools/*) against the canonical Golang
+	// version even when no newer release is available. This heals tool modules
+	// that have drifted behind the root module.
+	target := currentVersion
+	if upgradeTo != nil {
+		target = upgradeTo
+	}
+	err = upgradeGoModFiles(target)
+	if err != nil {
+		return err
+	}
+
 	if upgradeTo == nil {
 		return nil
 	}
@@ -239,18 +252,17 @@ func upgradePath(allowMajorUpgrade, isMainBranch bool) error {
 // currentGolangVersion gets the running version of Golang in Vitess
 // and returns it as a *version.Version.
 //
-// The file `./build.env` describes which version of Golang is expected by Vitess.
-// We use this file to detect the current Golang version of our codebase.
-// The file contains `goversion_min x.xx.xx`, we will grep `goversion_min` to finally find
-// the precise golang version we're using.
+// The root `./go.mod` is the source of truth for the Golang version used by the
+// codebase. We read the top-level `go` directive to detect the precise version
+// we're using.
 func currentGolangVersion() (*version.Version, error) {
-	contentRaw, err := os.ReadFile("build.env")
+	contentRaw, err := os.ReadFile("go.mod")
 	if err != nil {
 		return nil, err
 	}
 	content := string(contentRaw)
 
-	versre := regexp.MustCompile(regexpFindGolangVersion)
+	versre := regexp.MustCompile(regexpFindGoModGoVersion)
 	versionStr := versre.FindStringSubmatch(content)
 	if len(versionStr) != 2 {
 		return nil, fmt.Errorf("malformatted error, got: %v", versionStr)
@@ -361,7 +373,6 @@ func replaceGoVersionInCodebase(old, new *version.Version) error {
 	}
 
 	explore := []string{
-		"./build.env",
 		"./docker/bootstrap/Dockerfile.common",
 		"./docker/lite/Dockerfile",
 		"./docker/lite/Dockerfile.mysql80",
@@ -395,17 +406,39 @@ func replaceGoVersionInCodebase(old, new *version.Version) error {
 		}
 	}
 
-	if !isSameVersion(old, new) {
-		goModFiles := []string{"./go.mod"}
-		for _, file := range goModFiles {
-			err = replaceInFile(
-				[]*regexp.Regexp{regexp.MustCompile(regexpReplaceGoModGoVersion)},
-				[]string{fmt.Sprintf("go %d.%d.%d", new.Segments()[0], new.Segments()[1], new.Segments()[2])},
-				file,
-			)
-			if err != nil {
-				return err
-			}
+	return nil
+}
+
+// goModFilesToUpgrade returns the list of go.mod files whose Golang version
+// directive must be bumped: the root module along with every tool module
+// located under the tools/ directory.
+func goModFilesToUpgrade() ([]string, error) {
+	toolsGoModFiles, err := filepath.Glob("./tools/*/go.mod")
+	if err != nil {
+		return nil, err
+	}
+	return append([]string{"./go.mod"}, toolsGoModFiles...), nil
+}
+
+// upgradeGoModFiles rewrites the top-level "go" directive to target in the root
+// module and every tool module under tools/. It is idempotent: a module already
+// pinned to target is left byte-identical on disk, so reconciling already-current
+// modules produces no diff. It runs regardless of whether a newer Golang release
+// is available, so tool modules that have drifted behind the root module get healed.
+func upgradeGoModFiles(target *version.Version) error {
+	goModFiles, err := goModFilesToUpgrade()
+	if err != nil {
+		return err
+	}
+	replacement := fmt.Sprintf("go %d.%d.%d", target.Segments()[0], target.Segments()[1], target.Segments()[2])
+	for _, file := range goModFiles {
+		err = replaceInFile(
+			[]*regexp.Regexp{regexp.MustCompile(regexpReplaceGoModGoVersion)},
+			[]string{replacement},
+			file,
+		)
+		if err != nil {
+			return err
 		}
 	}
 	return nil
@@ -562,10 +595,6 @@ func updateBootstrapChangelog(new string, goVersion *version.Version) error {
 		return err
 	}
 	return nil
-}
-
-func isSameVersion(a, b *version.Version) bool {
-	return a.Segments()[0] == b.Segments()[0] && a.Segments()[1] == b.Segments()[1] && a.Segments()[2] == b.Segments()[2]
 }
 
 func isSameMajorMinorVersion(a, b *version.Version) bool {

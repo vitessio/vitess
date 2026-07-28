@@ -167,7 +167,7 @@ func TestActivePoolGetConnNonExistentTransaction(t *testing.T) {
 }
 
 func TestExecWithAbortedCtx(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	db := fakesqldb.New(t)
 	defer db.Close()
 	pool := newActivePool()

@@ -809,12 +809,11 @@ func (v *Value) MarshalTo(dst []byte) []byte {
 	case TypeBlob, TypeBit:
 		const prefix = "base64:type15:"
 
-		size := 2 + len(prefix) + base64.StdEncoding.EncodedLen(len(v.s))
-		dst := make([]byte, size)
-		dst[0] = '"'
-		copy(dst[1:], prefix)
-		base64.StdEncoding.Encode(dst[len(prefix)+1:], []byte(v.s))
-		dst[size-1] = '"'
+		dst = slices.Grow(dst, 2+len(prefix)+base64.StdEncoding.EncodedLen(len(v.s)))
+		dst = append(dst, '"')
+		dst = append(dst, prefix...)
+		dst = base64.StdEncoding.AppendEncode(dst, hack.StringBytes(v.s))
+		dst = append(dst, '"')
 		return dst
 	case TypeNumber:
 		if v.NumberType() == NumberTypeFloat {
@@ -1018,6 +1017,10 @@ func (v *Value) Array() ([]*Value, bool) {
 }
 
 // StringBytes returns the underlying JSON string for the v.
+//
+// The returned slice aliases the string inside v and must not be written to. v
+// can outlive the caller by a long way — a document folded into a query plan
+// lives as long as the plan is cached, and is shared by concurrent queries.
 func (v *Value) StringBytes() ([]byte, bool) {
 	if v.Type() != TypeString {
 		return nil, false

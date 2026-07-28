@@ -25,6 +25,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestStaticSetContents(t *testing.T) {
@@ -51,16 +52,10 @@ func TestStaticSetContents(t *testing.T) {
 
 func TestStaticFreeze(t *testing.T) {
 	for _, s := range staticPropertySets {
-		if err := s.FreezeCheck_(); err != nil {
-			t.Error(err)
-		}
+		require.NoError(t, s.FreezeCheck_())
 	}
 	for _, s := range staticRuleSet {
-		if err := s.FreezeCheck_(); err != nil {
-			t.Error(err)
-		}
+		require.NoError(t, s.FreezeCheck_())
 	}
-	if err := staticSetUnescape.FreezeCheck_(); err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, staticSetUnescape.FreezeCheck_())
 }

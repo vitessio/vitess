@@ -27,12 +27,14 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 
+	"github.com/stretchr/testify/require"
+
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // waitForInitialShard waits for the initial Shard to appear.
 func waitForInitialShard(t *testing.T, ts *topo.Server, keyspace, shard string) (current *topo.WatchShardData, changes <-chan *topo.WatchShardData, cancel context.CancelFunc) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	start := time.Now()
 	var err error
 	for {
@@ -40,15 +42,13 @@ func waitForInitialShard(t *testing.T, ts *topo.Server, keyspace, shard string) 
 		switch {
 		case topo.IsErrType(err, topo.NoNode):
 			// hasn't appeared yet
-			if time.Since(start) > 10*time.Second {
-				t.Fatalf("time out waiting for file to appear")
-			}
+			require.LessOrEqualf(t, time.Since(start), 10*time.Second, "time out waiting for file to appear")
 			time.Sleep(10 * time.Millisecond)
 			continue
 		case err == nil:
 			return
 		default:
-			t.Fatalf("watch failed: %v", err)
+			require.NoError(t, err)
 		}
 	}
 }
@@ -62,28 +62,24 @@ func TestWatchShardNoNode(t *testing.T) {
 
 	// No Shard -> ErrNoNode
 	_, _, err := ts.WatchShard(ctx, keyspace, shard)
-	if !topo.IsErrType(err, topo.NoNode) {
-		t.Errorf("Got invalid result from WatchShard(not there): %v", err)
-	}
+	require.True(t, topo.IsErrType(err, topo.NoNode), "expected NoNode error, got: %v", err)
 }
 
 func TestWatchShard(t *testing.T) {
 	cell := "cell1"
 	keyspace := "ks1"
 	shard := "0"
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, cell)
 	defer ts.Close()
 
 	// Create keyspace
-	if err := ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}); err != nil {
-		t.Fatalf("CreateKeyspace %v failed: %v", keyspace, err)
-	}
+	require.NoErrorf(t, ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}), "CreateKeyspace %v failed", keyspace)
 
 	// Create initial value
 	if err := ts.CreateShard(ctx, keyspace, shard); err != nil {
-		t.Fatalf("Create(/keyspaces/ks1/shards/0/Shard) failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	// Starting the watch should now work, and return an empty
@@ -91,9 +87,7 @@ func TestWatchShard(t *testing.T) {
 	// Shards are always created with IsPrimaryServing true
 	wanted := &topodatapb.Shard{IsPrimaryServing: true}
 	current, changes, cancel := waitForInitialShard(t, ts, keyspace, shard)
-	if !proto.Equal(current.Value, wanted) {
-		t.Fatalf("got bad data: %v expected: %v", current.Value, wanted)
-	}
+	require.Truef(t, proto.Equal(current.Value, wanted), "got bad data: %v expected: %v", current.Value, wanted)
 
 	// Update the value with good data, wait until we see it
 	wanted.IsPrimaryServing = false
@@ -101,47 +95,37 @@ func TestWatchShard(t *testing.T) {
 		si.IsPrimaryServing = false
 		return nil
 	}); err != nil {
-		t.Fatalf("Update(/keyspaces/ks1/shards/0/Shard) failed: %v", err)
+		require.NoError(t, err)
 	}
 	for {
 		wd, ok := <-changes
-		if !ok {
-			t.Fatalf("watch channel unexpectedly closed")
-		}
-		if wd.Err != nil {
-			t.Fatalf("watch channel unexpectedly got error: %v", wd.Err)
-		}
+		require.True(t, ok, "watch channel unexpectedly closed")
+		require.NoErrorf(t, wd.Err, "watch channel unexpectedly got error")
 		if proto.Equal(wd.Value, wanted) {
 			break
 		}
 		if proto.Equal(wd.Value, &topodatapb.Shard{}) {
 			t.Log("got duplicate empty value, skipping.")
 		}
-		t.Fatalf("got bad data: %v expected: %v", wd.Value, wanted)
+		require.Failf(t, "got bad data", "got bad data: %v expected: %v", wd.Value, wanted)
 	}
 
 	conn, err := ts.ConnForCell(ctx, "global")
-	if err != nil {
-		t.Fatalf("ConnForCell failed: %v", err)
-	}
+	require.NoError(t, err)
 	// Update the value with bad data, wait until error.
 	if _, err := conn.Update(ctx, "/keyspaces/"+keyspace+"/shards/"+shard+"/Shard", []byte("BAD PROTO DATA"), nil); err != nil {
-		t.Fatalf("Update(/keyspaces/ks1/shards/0/Shard) failed: %v", err)
+		require.NoError(t, err)
 	}
 	for {
 		wd, ok := <-changes
-		if !ok {
-			t.Fatalf("watch channel unexpectedly closed")
-		}
+		require.True(t, ok, "watch channel unexpectedly closed")
 		if wd.Err != nil {
 			if strings.Contains(wd.Err.Error(), "error unpacking Shard object") {
 				break
 			}
-			t.Fatalf("watch channel unexpectedly got unknown error: %v", wd.Err)
+			require.Failf(t, "unexpected error", "watch channel unexpectedly got unknown error: %v", wd.Err)
 		}
-		if !proto.Equal(wd.Value, wanted) {
-			t.Fatalf("got bad data: %v expected: %v", wd.Value, wanted)
-		}
+		require.Truef(t, proto.Equal(wd.Value, wanted), "got bad data: %v expected: %v", wd.Value, wanted)
 		t.Log("got duplicate right value, skipping.")
 	}
 
@@ -150,17 +134,13 @@ func TestWatchShard(t *testing.T) {
 
 	// Bad data in topo, setting the watch should now fail.
 	_, _, err = ts.WatchShard(ctx, keyspace, shard)
-	if err == nil || !strings.Contains(err.Error(), "error unpacking initial Shard object") {
-		t.Fatalf("expected an initial error setting watch on bad content, but got: %v", err)
-	}
+	require.ErrorContains(t, err, "error unpacking initial Shard object")
 
 	data, err := wanted.MarshalVT()
-	if err != nil {
-		t.Fatalf("error marshalling proto data: %v", err)
-	}
+	require.NoError(t, err)
 	// Update content, wait until Watch works again
 	if _, err := conn.Update(ctx, "/keyspaces/"+keyspace+"/shards/"+shard+"/Shard", data, nil); err != nil {
-		t.Fatalf("Update(/keyspaces/ks1/shards/0/Shard) failed: %v", err)
+		require.NoError(t, err)
 	}
 	start := time.Now()
 	for {
@@ -168,38 +148,30 @@ func TestWatchShard(t *testing.T) {
 		if err != nil {
 			if strings.Contains(err.Error(), "error unpacking initial Shard object") {
 				// hasn't changed yet
-				if time.Since(start) > 10*time.Second {
-					t.Fatalf("time out waiting for file to appear")
-				}
+				require.LessOrEqualf(t, time.Since(start), 10*time.Second, "time out waiting for file to appear")
 				time.Sleep(10 * time.Millisecond)
 				continue
 			}
-			t.Fatalf("got unexpected error while setting watch: %v", err)
+			require.NoError(t, err)
 		}
-		if !proto.Equal(current.Value, wanted) {
-			t.Fatalf("got bad data: %v expected: %v", current.Value, wanted)
-		}
+		require.Truef(t, proto.Equal(current.Value, wanted), "got bad data: %v expected: %v", current.Value, wanted)
 		break
 	}
 
 	// Delete node, wait for error (skip any duplicate).
 	if err := ts.DeleteShard(ctx, keyspace, shard); err != nil {
-		t.Fatalf("DeleteShard() failed: %v", err)
+		require.NoError(t, err)
 	}
 	for {
 		wd, ok := <-changes
-		if !ok {
-			t.Fatalf("watch channel unexpectedly closed")
-		}
+		require.True(t, ok, "watch channel unexpectedly closed")
 		if topo.IsErrType(wd.Err, topo.NoNode) {
 			break
 		}
 		if wd.Err != nil {
-			t.Fatalf("watch channel unexpectedly got unknown error: %v", wd.Err)
+			require.Failf(t, "unexpected error", "watch channel unexpectedly got unknown error: %v", wd.Err)
 		}
-		if !proto.Equal(wd.Value, wanted) {
-			t.Fatalf("got bad data: %v expected: %v", wd.Value, wanted)
-		}
+		require.Truef(t, proto.Equal(wd.Value, wanted), "got bad data: %v expected: %v", wd.Value, wanted)
 		t.Log("got duplicate right value, skipping.")
 	}
 }
@@ -208,25 +180,21 @@ func TestWatchShardCancel(t *testing.T) {
 	cell := "cell1"
 	keyspace := "ks1"
 	shard := "0"
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, cell)
 	defer ts.Close()
 
 	// No Shard -> ErrNoNode
 	_, _, err := ts.WatchShard(ctx, keyspace, shard)
-	if !topo.IsErrType(err, topo.NoNode) {
-		t.Errorf("Got invalid result from WatchShard(not there): %v", err)
-	}
+	require.Truef(t, topo.IsErrType(err, topo.NoNode), "expected topo.NoNode error, got: %v", err)
 
 	// Create keyspace
-	if err := ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}); err != nil {
-		t.Fatalf("CreateKeyspace %v failed: %v", keyspace, err)
-	}
+	require.NoErrorf(t, ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}), "CreateKeyspace %v failed", keyspace)
 
 	// Create initial value
 	if err := ts.CreateShard(ctx, keyspace, shard); err != nil {
-		t.Fatalf("Create(/keyspaces/ks1/shards/0/Shard) failed: %v", err)
+		require.NoError(t, err)
 	}
 	wanted := &topodatapb.Shard{
 		IsPrimaryServing: false,
@@ -235,31 +203,25 @@ func TestWatchShardCancel(t *testing.T) {
 		si.IsPrimaryServing = false
 		return nil
 	}); err != nil {
-		t.Fatalf("UpdateShardFields() failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	// Starting the watch should now work.
 	current, changes, cancel := waitForInitialShard(t, ts, keyspace, shard)
-	if !proto.Equal(current.Value, wanted) {
-		t.Fatalf("got bad data: %v expected: %v", current.Value, wanted)
-	}
+	require.Truef(t, proto.Equal(current.Value, wanted), "got bad data: %v expected: %v", current.Value, wanted)
 
 	// Cancel watch, wait for error.
 	cancel()
 	for {
 		wd, ok := <-changes
-		if !ok {
-			t.Fatalf("watch channel unexpectedly closed")
-		}
+		require.True(t, ok, "watch channel unexpectedly closed")
 		if topo.IsErrType(wd.Err, topo.Interrupted) {
 			break
 		}
 		if wd.Err != nil {
-			t.Fatalf("watch channel unexpectedly got unknown error: %v", wd.Err)
+			require.Failf(t, "unexpected error", "watch channel unexpectedly got unknown error: %v", wd.Err)
 		}
-		if !proto.Equal(wd.Value, wanted) {
-			t.Fatalf("got bad data: %v expected: %v", wd.Value, wanted)
-		}
+		require.Truef(t, proto.Equal(wd.Value, wanted), "got bad data: %v expected: %v", wd.Value, wanted)
 		t.Log("got duplicate right value, skipping.")
 	}
 

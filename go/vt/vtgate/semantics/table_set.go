@@ -52,7 +52,7 @@ func (ts TableSet) DebugString() string {
 			f.WriteString(strconv.Itoa(tid))
 			first = false
 		} else {
-			f.WriteString(fmt.Sprintf(",%d", tid))
+			fmt.Fprintf(&f, ",%d", tid)
 		}
 	})
 	f.WriteString("}")

@@ -56,7 +56,7 @@ func TestReplaceWorksInLaterCalls(t *testing.T) {
 				Expr: NewStrLiteral("foobar"),
 			})
 		case *StarExpr:
-			t.Errorf("should not have seen the star")
+			assert.Fail(t, "should not have seen the star")
 		case *Literal:
 			count++
 		}
@@ -124,7 +124,7 @@ func TestReplaceAndRevisitWorksInLaterCalls(t *testing.T) {
 			}
 			cursor.ReplaceAndRevisit(&SelectExprs{Exprs: []SelectExpr{expr1, expr2}})
 		case *StarExpr:
-			t.Errorf("should not have seen the star")
+			assert.Fail(t, "should not have seen the star")
 		case *Literal:
 			count++
 		}

@@ -234,11 +234,11 @@ func TestSafeMigrationCutOverThreshold(t *testing.T) {
 		t.Run(tcase.threshold.String(), func(t *testing.T) {
 			threshold, err := safeMigrationCutOverThreshold(tcase.threshold)
 			if tcase.isErr {
-				assert.Error(t, err)
-				require.Equal(t, tcase.expect, defaultCutOverThreshold)
+				require.Error(t, err)
+				require.Equal(t, defaultCutOverThreshold, tcase.expect)
 				// And keep testing, because we then also expect the threshold to be the default
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 			assert.Equal(t, tcase.expect, threshold)
 		})
@@ -246,20 +246,29 @@ func TestSafeMigrationCutOverThreshold(t *testing.T) {
 }
 
 func TestGetInOrderCompletionPendingCount(t *testing.T) {
-	onlineDDL := &schema.OnlineDDL{UUID: t.Name()}
+	const ctx = "ctx-same"
+	onlineDDL := &schema.OnlineDDL{UUID: t.Name(), MigrationContext: ctx}
+	pm := func(uuid, migrationContext string) pendingMigration {
+		return pendingMigration{uuid: uuid, migrationContext: migrationContext}
+	}
 	{
 		require.Zero(t, getInOrderCompletionPendingCount(onlineDDL, nil))
 	}
 	{
-		require.Zero(t, getInOrderCompletionPendingCount(onlineDDL, []string{}))
+		require.Zero(t, getInOrderCompletionPendingCount(onlineDDL, []pendingMigration{}))
 	}
 	{
-		pendingMigrationsUUIDs := []string{t.Name()}
-		require.Zero(t, getInOrderCompletionPendingCount(onlineDDL, pendingMigrationsUUIDs))
+		pendingMigrations := []pendingMigration{pm(t.Name(), ctx)}
+		require.Zero(t, getInOrderCompletionPendingCount(onlineDDL, pendingMigrations))
 	}
 	{
-		pendingMigrationsUUIDs := []string{"a", "b", "c", t.Name(), "x"}
-		require.Equal(t, uint64(3), getInOrderCompletionPendingCount(onlineDDL, pendingMigrationsUUIDs))
+		pendingMigrations := []pendingMigration{pm("a", ctx), pm("b", ctx), pm("c", ctx), pm(t.Name(), ctx), pm("x", ctx)}
+		require.Equal(t, uint64(3), getInOrderCompletionPendingCount(onlineDDL, pendingMigrations))
+	}
+	{
+		// migrations from a different context do not count
+		pendingMigrations := []pendingMigration{pm("a", "ctx-other"), pm("b", ctx), pm(t.Name(), ctx), pm("x", ctx)}
+		require.Equal(t, uint64(1), getInOrderCompletionPendingCount(onlineDDL, pendingMigrations))
 	}
 }
 
@@ -268,7 +277,7 @@ func TestInitDBConnectionLockWaitTimeout(t *testing.T) {
 	defer db.Close()
 	params := db.ConnParams()
 	connector := dbconfigs.NewTestDBConfigs(*params, *params, params.DbName).DbaWithDB()
-	conn, err := dbconnpool.NewDBConnection(context.Background(), connector)
+	conn, err := dbconnpool.NewDBConnection(t.Context(), connector)
 	require.NoError(t, err)
 	defer conn.Close()
 

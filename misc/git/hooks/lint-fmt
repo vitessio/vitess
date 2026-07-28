@@ -13,54 +13,27 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Required version of golangci-lint
-REQUIRED_VERSION="v2.9.0" # https://github.com/golangci/golangci-lint/releases/tag/v2.9.0
+# golangci-lint is version-pinned in its own module; `go tool` builds and
+# caches the pinned version on demand.
+GOLANGCI_LINT_MODFILE="$(git rev-parse --show-toplevel)/tools/golangci-lint/go.mod"
 
-# Function to compare versions in pure Bash
-version_greater_or_equal() {
-  local IFS=.
-  local i
-  local ver1=($1)
-  local ver2=($2)
-
-  # Fill empty fields in ver1 with zeros
-  for ((i = ${#ver1[@]}; i < ${#ver2[@]}; i++)); do
-    ver1[i]=0
-  done
-  # Fill empty fields in ver2 with zeros
-  for ((i = ${#ver2[@]}; i < ${#ver1[@]}; i++)); do
-    ver2[i]=0
-  done
-
-  for ((i = 0; i < ${#ver1[@]}; i++)); do
-    if ((10#${ver1[i]} > 10#${ver2[i]})); then
-      return 0
-    elif ((10#${ver1[i]} < 10#${ver2[i]})); then
-      return 1
-    fi
-  done
-  return 0
-}
-
-# Check if golangci-lint is installed and capture the version
-if ! command -v golangci-lint >/dev/null 2>&1; then
-  echo "golangci-lint not found. Installing version $REQUIRED_VERSION..."
-  go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$REQUIRED_VERSION
-else
-  VERSION_OUTPUT=$(golangci-lint --version)
-  INSTALLED_VERSION=$(echo "$VERSION_OUTPUT" | sed -E -n 's/^golangci-lint has version v?([0-9.]+) .*/\1/p')
-  if ! version_greater_or_equal "$INSTALLED_VERSION" "${REQUIRED_VERSION#v}"; then
-    echo "golangci-lint version $INSTALLED_VERSION found, but $REQUIRED_VERSION or newer is required."
-    echo "Installing version $REQUIRED_VERSION..."
-    go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$REQUIRED_VERSION
-  fi
-fi
-
-# Lint only changed packages.
+# Lint only changed packages. Packages in nested Go modules
+# are skipped: golangci-lint can only typecheck belonging
+# to the module it runs in, and CI doesn't lint them either.
 changed_pkgs=$(git diff --cached --name-only --diff-filter=ACM -- '*.go' \
   | xargs -n1 dirname \
   | sort -u \
-  | sed 's|$|/...|')
+  | while read -r dir; do
+      mod_dir=$dir
+      while [ "$mod_dir" != "." ] && [ ! -f "$mod_dir/go.mod" ]; do
+        mod_dir=$(dirname "$mod_dir")
+      done
+      if [ "$mod_dir" = "." ]; then
+        echo "$dir/..."
+      else
+        echo "skipping $dir (nested module $mod_dir)" >&2
+      fi
+    done)
 
 if [ -z "$changed_pkgs" ]; then
   echo "No staged .go files, skipping lint."
@@ -68,4 +41,4 @@ if [ -z "$changed_pkgs" ]; then
 fi
 
 echo "Linting staged changes..."
-golangci-lint run --new-from-rev=HEAD $changed_pkgs
+go tool -modfile="$GOLANGCI_LINT_MODFILE" golangci-lint run --new-from-rev=HEAD $changed_pkgs

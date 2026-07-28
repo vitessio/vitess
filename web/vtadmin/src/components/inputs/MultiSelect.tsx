@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import React from 'react';
 import { Icon, Icons } from '../Icon';
 import cx from 'classnames';
 import style from './MultiSelect.module.scss';

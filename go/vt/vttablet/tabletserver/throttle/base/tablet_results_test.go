@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -62,38 +63,38 @@ func TestAggregateTabletMetricResultsNoErrors(t *testing.T) {
 	{
 		worstMetric := AggregateTabletMetricResults(DefaultMetricName, tabletResultsMap, 0, false, 0)
 		value, err := worstMetric.Get()
-		assert.NoError(t, err)
-		assert.Equal(t, value, 1.7)
+		require.NoError(t, err)
+		assert.Equal(t, 1.7, value)
 	}
 	{
 		worstMetric := AggregateTabletMetricResults(DefaultMetricName, tabletResultsMap, 1, false, 0)
 		value, err := worstMetric.Get()
-		assert.NoError(t, err)
-		assert.Equal(t, value, 1.2)
+		require.NoError(t, err)
+		assert.Equal(t, 1.2, value)
 	}
 	{
 		worstMetric := AggregateTabletMetricResults(DefaultMetricName, tabletResultsMap, 2, false, 0)
 		value, err := worstMetric.Get()
-		assert.NoError(t, err)
-		assert.Equal(t, value, 1.1)
+		require.NoError(t, err)
+		assert.Equal(t, 1.1, value)
 	}
 	{
 		worstMetric := AggregateTabletMetricResults(DefaultMetricName, tabletResultsMap, 3, false, 0)
 		value, err := worstMetric.Get()
-		assert.NoError(t, err)
-		assert.Equal(t, value, 0.6)
+		require.NoError(t, err)
+		assert.Equal(t, 0.6, value)
 	}
 	{
 		worstMetric := AggregateTabletMetricResults(DefaultMetricName, tabletResultsMap, 4, false, 0)
 		value, err := worstMetric.Get()
-		assert.NoError(t, err)
-		assert.Equal(t, value, 0.3)
+		require.NoError(t, err)
+		assert.Equal(t, 0.3, value)
 	}
 	{
 		worstMetric := AggregateTabletMetricResults(DefaultMetricName, tabletResultsMap, 5, false, 0)
 		value, err := worstMetric.Get()
-		assert.NoError(t, err)
-		assert.Equal(t, value, 0.3)
+		require.NoError(t, err)
+		assert.Equal(t, 0.3, value)
 	}
 }
 
@@ -109,38 +110,38 @@ func TestAggregateTabletMetricResultsNoErrorsIgnoreHostsThreshold(t *testing.T) 
 	{
 		worstMetric := AggregateTabletMetricResults(DefaultMetricName, tabletResultsMap, 0, false, 1.0)
 		value, err := worstMetric.Get()
-		assert.NoError(t, err)
-		assert.Equal(t, value, 1.7)
+		require.NoError(t, err)
+		assert.Equal(t, 1.7, value)
 	}
 	{
 		worstMetric := AggregateTabletMetricResults(DefaultMetricName, tabletResultsMap, 1, false, 1.0)
 		value, err := worstMetric.Get()
-		assert.NoError(t, err)
-		assert.Equal(t, value, 1.2)
+		require.NoError(t, err)
+		assert.Equal(t, 1.2, value)
 	}
 	{
 		worstMetric := AggregateTabletMetricResults(DefaultMetricName, tabletResultsMap, 2, false, 1.0)
 		value, err := worstMetric.Get()
-		assert.NoError(t, err)
-		assert.Equal(t, value, 1.1)
+		require.NoError(t, err)
+		assert.Equal(t, 1.1, value)
 	}
 	{
 		worstMetric := AggregateTabletMetricResults(DefaultMetricName, tabletResultsMap, 3, false, 1.0)
 		value, err := worstMetric.Get()
-		assert.NoError(t, err)
-		assert.Equal(t, value, 0.6)
+		require.NoError(t, err)
+		assert.Equal(t, 0.6, value)
 	}
 	{
 		worstMetric := AggregateTabletMetricResults(DefaultMetricName, tabletResultsMap, 4, false, 1.0)
 		value, err := worstMetric.Get()
-		assert.NoError(t, err)
-		assert.Equal(t, value, 0.6)
+		require.NoError(t, err)
+		assert.Equal(t, 0.6, value)
 	}
 	{
 		worstMetric := AggregateTabletMetricResults(DefaultMetricName, tabletResultsMap, 5, false, 1.0)
 		value, err := worstMetric.Get()
-		assert.NoError(t, err)
-		assert.Equal(t, value, 0.6)
+		require.NoError(t, err)
+		assert.Equal(t, 0.6, value)
 	}
 }
 
@@ -156,25 +157,25 @@ func TestAggregateTabletMetricResultsWithErrors(t *testing.T) {
 	t.Run("nonexistent", func(t *testing.T) {
 		worstMetric := AggregateTabletMetricResults(nonexistentMetricName, tabletResultsMap, 0, false, 0)
 		_, err := worstMetric.Get()
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Equal(t, ErrNoSuchMetric, err)
 	})
 	t.Run("no ignore", func(t *testing.T) {
 		worstMetric := AggregateTabletMetricResults(DefaultMetricName, tabletResultsMap, 0, false, 0)
 		_, err := worstMetric.Get()
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Equal(t, ErrNoSuchMetric, err)
 	})
 	t.Run("ignore 1", func(t *testing.T) {
 		worstMetric := AggregateTabletMetricResults(DefaultMetricName, tabletResultsMap, 1, false, 0)
 		value, err := worstMetric.Get()
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, 1.7, value)
 	})
 	t.Run("ignore 2", func(t *testing.T) {
 		worstMetric := AggregateTabletMetricResults(DefaultMetricName, tabletResultsMap, 2, false, 0)
 		value, err := worstMetric.Get()
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, 1.2, value)
 	})
 
@@ -182,19 +183,19 @@ func TestAggregateTabletMetricResultsWithErrors(t *testing.T) {
 	t.Run("no such metric", func(t *testing.T) {
 		worstMetric := AggregateTabletMetricResults(DefaultMetricName, tabletResultsMap, 0, false, 0)
 		_, err := worstMetric.Get()
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Equal(t, ErrNoSuchMetric, err)
 	})
 	t.Run("no such metric, ignore 1", func(t *testing.T) {
 		worstMetric := AggregateTabletMetricResults(DefaultMetricName, tabletResultsMap, 1, false, 0)
 		_, err := worstMetric.Get()
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Equal(t, ErrNoSuchMetric, err)
 	})
 	t.Run("metric found", func(t *testing.T) {
 		worstMetric := AggregateTabletMetricResults(DefaultMetricName, tabletResultsMap, 2, false, 0)
 		value, err := worstMetric.Get()
-		assert.NoError(t, err)
-		assert.Equal(t, value, 1.7)
+		require.NoError(t, err)
+		assert.Equal(t, 1.7, value)
 	})
 }

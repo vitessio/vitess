@@ -122,7 +122,7 @@ func TestDeleteTablets(t *testing.T) {
 			},
 			timeout: time.Millisecond * 50,
 			setup: func(t testing.TB, c *Cluster) {
-				err := c.topoRWPool.Acquire(context.Background())
+				err := c.topoRWPool.Acquire(t.Context())
 				require.NoError(t, err, "failed to lock RPC pool")
 				t.Cleanup(c.topoRWPool.Release)
 			},
@@ -160,9 +160,9 @@ func TestDeleteTablets(t *testing.T) {
 
 			switch tt.timeout {
 			case 0:
-				ctx, cancel = context.WithCancel(context.Background())
+				ctx, cancel = context.WithCancel(t.Context())
 			default:
-				ctx, cancel = context.WithTimeout(context.Background(), tt.timeout)
+				ctx, cancel = context.WithTimeout(t.Context(), tt.timeout)
 			}
 			defer cancel()
 
@@ -309,7 +309,7 @@ func TestEmergencyFailoverShard(t *testing.T) {
 				emergencyFailoverPool: pools.NewRPCPool(1, time.Millisecond*25, nil),
 			},
 			setup: func(t testing.TB, c *Cluster) {
-				ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*50)
+				ctx, cancel := context.WithTimeout(t.Context(), time.Millisecond*50)
 				defer cancel()
 
 				err := c.emergencyFailoverPool.Acquire(ctx)
@@ -346,9 +346,9 @@ func TestEmergencyFailoverShard(t *testing.T) {
 			)
 			switch tt.timeout {
 			case 0:
-				ctx, cancel = context.WithCancel(context.Background())
+				ctx, cancel = context.WithCancel(t.Context())
 			default:
-				ctx, cancel = context.WithTimeout(context.Background(), tt.timeout)
+				ctx, cancel = context.WithTimeout(t.Context(), tt.timeout)
 			}
 			defer cancel()
 
@@ -493,7 +493,7 @@ func Test_getShardSets(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			result, err := c.getShardSets(context.Background(), tt.keyspaces, tt.keyspaceShards)
+			result, err := c.getShardSets(t.Context(), tt.keyspaces, tt.keyspaceShards)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				return
@@ -636,7 +636,7 @@ func TestPlannedFailoverShard(t *testing.T) {
 				failoverPool: pools.NewRPCPool(1, time.Millisecond*25, nil),
 			},
 			setup: func(t testing.TB, c *Cluster) {
-				ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*50)
+				ctx, cancel := context.WithTimeout(t.Context(), time.Millisecond*50)
 				defer cancel()
 
 				err := c.failoverPool.Acquire(ctx)
@@ -673,9 +673,9 @@ func TestPlannedFailoverShard(t *testing.T) {
 			)
 			switch tt.timeout {
 			case 0:
-				ctx, cancel = context.WithCancel(context.Background())
+				ctx, cancel = context.WithCancel(t.Context())
 			default:
-				ctx, cancel = context.WithTimeout(context.Background(), tt.timeout)
+				ctx, cancel = context.WithTimeout(t.Context(), tt.timeout)
 			}
 			defer cancel()
 
@@ -756,7 +756,7 @@ func TestRefreshState(t *testing.T) {
 			},
 			timeout: time.Millisecond * 50,
 			setup: func(t testing.TB, c *Cluster) {
-				err := c.topoReadPool.Acquire(context.Background())
+				err := c.topoReadPool.Acquire(t.Context())
 				require.NoError(t, err, "failed to lock RPC pool")
 				t.Cleanup(c.topoReadPool.Release)
 			},
@@ -785,9 +785,9 @@ func TestRefreshState(t *testing.T) {
 
 			switch tt.timeout {
 			case 0:
-				ctx, cancel = context.WithCancel(context.Background())
+				ctx, cancel = context.WithCancel(t.Context())
 			default:
-				ctx, cancel = context.WithTimeout(context.Background(), tt.timeout)
+				ctx, cancel = context.WithTimeout(t.Context(), tt.timeout)
 			}
 			defer cancel()
 
@@ -878,7 +878,7 @@ func TestRefreshTabletReplicationSource(t *testing.T) {
 			},
 			timeout: time.Millisecond * 50,
 			setup: func(t testing.TB, c *Cluster) {
-				err := c.topoRWPool.Acquire(context.Background())
+				err := c.topoRWPool.Acquire(t.Context())
 				require.NoError(t, err, "failed to lock RPC pool")
 				t.Cleanup(c.topoRWPool.Release)
 			},
@@ -907,9 +907,9 @@ func TestRefreshTabletReplicationSource(t *testing.T) {
 
 			switch tt.timeout {
 			case 0:
-				ctx, cancel = context.WithCancel(context.Background())
+				ctx, cancel = context.WithCancel(t.Context())
 			default:
-				ctx, cancel = context.WithTimeout(context.Background(), tt.timeout)
+				ctx, cancel = context.WithTimeout(t.Context(), tt.timeout)
 			}
 			defer cancel()
 
@@ -928,7 +928,7 @@ func TestRefreshTabletReplicationSource(t *testing.T) {
 func Test_reloadKeyspaceSchemas(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	tests := []struct {
 		name      string
 		cluster   *Cluster
@@ -1203,7 +1203,7 @@ func Test_reloadKeyspaceSchemas(t *testing.T) {
 func Test_reloadShardSchemas(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	tests := []struct {
 		name      string
 		cluster   *Cluster
@@ -1531,7 +1531,7 @@ func Test_reloadShardSchemas(t *testing.T) {
 func Test_reloadTabletSchemas(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	tests := []struct {
 		name      string
 		cluster   *Cluster
@@ -1865,7 +1865,7 @@ func TestTabletExternallyPromoted(t *testing.T) {
 				topoRWPool: pools.NewRPCPool(1, time.Millisecond*25, nil),
 			},
 			setup: func(t testing.TB, c *Cluster) {
-				ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*50)
+				ctx, cancel := context.WithTimeout(t.Context(), time.Millisecond*50)
 				defer cancel()
 
 				err := c.topoRWPool.Acquire(ctx)
@@ -1902,9 +1902,9 @@ func TestTabletExternallyPromoted(t *testing.T) {
 			)
 			switch tt.timeout {
 			case 0:
-				ctx, cancel = context.WithCancel(context.Background())
+				ctx, cancel = context.WithCancel(t.Context())
 			default:
-				ctx, cancel = context.WithTimeout(context.Background(), tt.timeout)
+				ctx, cancel = context.WithTimeout(t.Context(), tt.timeout)
 			}
 			defer cancel()
 

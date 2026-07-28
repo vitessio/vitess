@@ -17,7 +17,6 @@ limitations under the License.
 package schemamanager
 
 import (
-	"context"
 	"strconv"
 	"testing"
 	"time"
@@ -39,7 +38,7 @@ var testWaitReplicasTimeout = 10 * time.Second
 
 func TestTabletExecutorOpen(t *testing.T) {
 	executor := newFakeExecutor(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	err := executor.Open(ctx, "test_keyspace")
 	require.NoError(t, err)
@@ -100,7 +99,7 @@ func TestTabletExecutorValidate(t *testing.T) {
 	})
 
 	executor := NewTabletExecutor("TestTabletExecutorValidate", newFakeTopo(t), fakeTmc, logutil.NewConsoleLogger(), testWaitReplicasTimeout, 0, sqlparser.NewTestParser())
-	ctx := context.Background()
+	ctx := t.Context()
 
 	sqls := []string{
 		"ALTER TABLE test_table ADD COLUMN new_id bigint(20)",
@@ -169,7 +168,7 @@ func TestTabletExecutorDML(t *testing.T) {
 	})
 
 	executor := NewTabletExecutor("TestTabletExecutorDML", newFakeTopo(t), fakeTmc, logutil.NewConsoleLogger(), testWaitReplicasTimeout, 0, sqlparser.NewTestParser())
-	ctx := context.Background()
+	ctx := t.Context()
 
 	executor.Open(ctx, "unsharded_keyspace")
 	defer executor.Close()
@@ -183,7 +182,7 @@ func TestTabletExecutorDML(t *testing.T) {
 
 func TestTabletExecutorExecute(t *testing.T) {
 	executor := newFakeExecutor(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	sqls := []string{"DROP TABLE unknown_table"}
 
@@ -255,10 +254,10 @@ func TestIsOnlineSchemaDDL(t *testing.T) {
 	for _, ts := range tt {
 		e := &TabletExecutor{}
 		err := e.SetDDLStrategy(ts.ddlStrategy)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		stmt, err := parser.Parse(ts.query)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		ddlStmt, ok := stmt.(sqlparser.DDLStatement)
 		assert.True(t, ok)
@@ -386,7 +385,7 @@ func TestAllSQLsAreCreateQueries(t *testing.T) {
 	for _, tcase := range tcases {
 		t.Run(tcase.name, func(t *testing.T) {
 			result, err := allSQLsAreCreateQueries(tcase.sqls, sqlparser.NewTestParser())
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tcase.expect, result)
 		})
 	}
@@ -421,7 +420,7 @@ func TestApplyAllowZeroInDate(t *testing.T) {
 	for _, tcase := range tcases {
 		t.Run(tcase.sql, func(t *testing.T) {
 			result, err := applyAllowZeroInDate(tcase.sql, sqlparser.NewTestParser())
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tcase.expect, result)
 		})
 	}

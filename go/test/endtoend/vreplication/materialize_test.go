@@ -209,7 +209,8 @@ func testMaterialize(t *testing.T) {
 	waitForQueryResult(t, vtgateConn, targetKs, "select id, val, ts, day, month, x from mat2", want)
 
 	// insert data to test the replication phase
-	execVtgateQuery(t, vtgateConn, sourceKs, "insert into mat(id, val, ts) values (3, 'ghi', '2021-12-11 16:17:36')")
+	_, err = execVtgateQuery(vtgateConn, sourceKs, "insert into mat(id, val, ts) values (3, 'ghi', '2021-12-11 16:17:36')")
+	require.NoError(t, err)
 
 	// validate data after the replication phase
 	waitForQueryResult(t, vtgateConn, targetKs, "select count(*) from mat2", "[[INT64(3)]]")
@@ -346,7 +347,8 @@ func TestReferenceTableMaterialize(t *testing.T) {
 		"insert into ks1.ref2(id, id2) values (4, 4), (5, 5)",
 	}
 	for _, query := range queries {
-		execVtgateQuery(t, vtgateConn, "ks1", query)
+		_, err = execVtgateQuery(vtgateConn, "ks1", query)
+		require.NoError(t, err)
 	}
 	for _, shard := range shards {
 		waitForRowCount(t, vtgateConn, "ks2:"+shard, "ref1", 4)
@@ -383,7 +385,8 @@ func TestReferenceTableMaterialize(t *testing.T) {
 		"insert into ks1.ref4(id, id2) values (3, 3), (4, 4)",
 	}
 	for _, query := range queries {
-		execVtgateQuery(t, vtgateConn, "ks1", query)
+		_, err = execVtgateQuery(vtgateConn, "ks1", query)
+		require.NoError(t, err)
 	}
 	for _, shard := range shards {
 		waitForRowCount(t, vtgateConn, "ks2:"+shard, "ref3", 3)

@@ -21,6 +21,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/key"
@@ -112,7 +113,7 @@ func TestParseDestination(t *testing.T) {
 
 	for _, tcase := range testcases {
 		if targetKeyspace, targetTabletType, targetDest, targetAlias, _ := ParseDestination(tcase.targetString, topodatapb.TabletType_PRIMARY); !reflect.DeepEqual(targetDest, tcase.dest) || targetKeyspace != tcase.keyspace || targetTabletType != tcase.tabletType || !reflect.DeepEqual(targetAlias, tcase.tabletAlias) {
-			t.Errorf("ParseDestination(%s) - got: (%v, %v, %v, %v), want (%v, %v, %v, %v)",
+			assert.Failf(t, "ParseDestination mismatch", "ParseDestination(%s) - got: (%v, %v, %v, %v), want (%v, %v, %v, %v)",
 				tcase.targetString,
 				targetKeyspace,
 				targetTabletType,

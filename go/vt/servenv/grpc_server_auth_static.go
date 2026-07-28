@@ -18,6 +18,8 @@ package servenv
 
 import (
 	"context"
+	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -28,6 +30,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/utils"
 )
@@ -56,13 +59,28 @@ func registerGRPCServerAuthStaticFlags(fs *pflag.FlagSet) {
 type StaticAuthConfigEntry struct {
 	Username string
 	Password string
+	// CachingSha2Password is the hex-encoded SHA256(SHA256(password)) of the
+	// user's password, with an optional leading '*'. When set, it takes
+	// precedence over Password, matching the behavior of the MySQL protocol's
+	// static auth server so the same stored credential can be used to
+	// authenticate both MySQL and gRPC clients.
+	CachingSha2Password string
 	// TODO (@rafael) Add authorization parameters
+}
+
+// staticAuthEntry is the runtime representation of a StaticAuthConfigEntry,
+// with the CachingSha2Password hex-decoded once at initialization so that
+// Authenticate does not re-decode it on every request.
+type staticAuthEntry struct {
+	StaticAuthConfigEntry
+
+	cachingSha2Password []byte
 }
 
 // StaticAuthPlugin  implements static username/password authentication for grpc. It contains an array of username/passwords
 // that will be authorized to connect to the grpc server.
 type StaticAuthPlugin struct {
-	entries []StaticAuthConfigEntry
+	entries []staticAuthEntry
 }
 
 // Authenticate implements AuthPlugin interface. This method will be used inside a middleware in grpc_server to authenticate
@@ -74,8 +92,23 @@ func (sa *StaticAuthPlugin) Authenticate(ctx context.Context, fullMethod string)
 		}
 		username := md["username"][0]
 		password := md["password"][0]
+		// SHA256(SHA256(password)), computed lazily on the first entry that
+		// needs it so plaintext-only configurations never pay for the hashing.
+		var hashedPassword []byte
 		for _, authEntry := range sa.entries {
-			if username == authEntry.Username && password == authEntry.Password {
+			if username != authEntry.Username {
+				continue
+			}
+			if len(authEntry.cachingSha2Password) > 0 {
+				if hashedPassword == nil {
+					stage1 := sha256.Sum256([]byte(password))
+					stage2 := sha256.Sum256(stage1[:])
+					hashedPassword = stage2[:]
+				}
+				if subtle.ConstantTimeCompare(hashedPassword, authEntry.cachingSha2Password) == 1 {
+					return newStaticAuthContext(ctx, username), nil
+				}
+			} else if subtle.ConstantTimeCompare([]byte(password), []byte(authEntry.Password)) == 1 {
 				return newStaticAuthContext(ctx, username), nil
 			}
 		}
@@ -115,8 +148,23 @@ func staticAuthPluginInitializer() (Authenticator, error) {
 		err := fmt.Errorf("fail to load static auth plugin: %v", err)
 		return nil, err
 	}
+	authEntries := make([]staticAuthEntry, 0, len(entries))
+	for i, entry := range entries {
+		authEntry := staticAuthEntry{StaticAuthConfigEntry: entry}
+		if entry.CachingSha2Password != "" {
+			hash, err := mysql.DecodePasswordHex(entry.CachingSha2Password)
+			if err != nil {
+				return nil, fmt.Errorf("failed to load static auth plugin: entry %d (user=%s) has an invalid hex-encoded CachingSha2Password: %v", i, entry.Username, err)
+			}
+			if len(hash) != sha256.Size {
+				return nil, fmt.Errorf("failed to load static auth plugin: entry %d (user=%s) has an invalid CachingSha2Password length: expected %d hex chars, got %d", i, entry.Username, sha256.Size*2, len(hash)*2)
+			}
+			authEntry.cachingSha2Password = hash
+		}
+		authEntries = append(authEntries, authEntry)
+	}
 	staticAuthPlugin := &StaticAuthPlugin{
-		entries: entries,
+		entries: authEntries,
 	}
 	log.Info("static auth plugin have initialized successfully with config from grpc-auth-static-password-file")
 	return staticAuthPlugin, nil

@@ -92,7 +92,7 @@ func TestQueryAndSubQWithLimit(t *testing.T) {
 
 	mcmp.Exec("insert into t1(id1, id2) values(0,0),(1,1),(2,2),(3, 3), (4, 4), (5, 5), (6, 6), (7, 7), (8, 8),(9,9)")
 	result := mcmp.Exec(`select id1, id2 from t1 where id1 >= ( select id1 from t1 order by id1 asc limit 1) limit 100`)
-	assert.Equal(t, 10, len(result.Rows))
+	assert.Len(t, result.Rows, 10)
 }
 
 func TestSubQueryOnTopOfSubQuery(t *testing.T) {
@@ -237,5 +237,5 @@ func TestProperTypesOfPullOutValue(t *testing.T) {
 	mcmp.Exec("INSERT INTO user_extra (user_id, extra_info) VALUES (1, 'info1'), (2, 'info1'), (3, 'info1'), (3, 'info2'), (4, 'info1'), (5, 'info1'), (6, 'info1'), (7, 'info1'), (8, 'info1')")
 
 	r := mcmp.Exec(query)
-	require.True(t, r.Fields[0].Type == sqltypes.Decimal)
+	require.Equal(t, sqltypes.Decimal, r.Fields[0].Type)
 }

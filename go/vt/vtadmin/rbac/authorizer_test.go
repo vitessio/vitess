@@ -17,7 +17,6 @@ limitations under the License.
 package rbac
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -107,7 +106,7 @@ func TestIsAuthorized(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx := NewContext(context.Background(), tt.actor)
+			ctx := NewContext(t.Context(), tt.actor)
 			got := authz.IsAuthorized(ctx, tt.clusterID, tt.resource, tt.action)
 
 			assert.Equal(t, tt.isAuthorized, got)

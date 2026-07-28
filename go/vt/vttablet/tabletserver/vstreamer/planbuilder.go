@@ -535,6 +535,9 @@ func analyzeSelect(query string, parser *sqlparser.Parser) (sel *sqlparser.Selec
 	if !ok {
 		return nil, fromTable, fmt.Errorf("unsupported: %v", sqlparser.String(statement))
 	}
+	if len(sel.From) == 0 {
+		return nil, fromTable, fmt.Errorf("unsupported select from dual: %v", sqlparser.String(sel))
+	}
 	if len(sel.From) > 1 {
 		return nil, fromTable, fmt.Errorf("unsupported: %v", sqlparser.String(sel))
 	}

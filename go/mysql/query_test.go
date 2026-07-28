@@ -87,12 +87,12 @@ func TestComInitDB(t *testing.T) {
 
 	// Write ComInitDB packet, read it, compare.
 	if err := cConn.writeComInitDB("my_db"); err != nil {
-		t.Fatalf("writeComInitDB failed: %v", err)
+		require.NoError(t, err)
 	}
 	data, err := sConn.ReadPacket()
-	if err != nil || len(data) == 0 || data[0] != ComInitDB {
-		t.Fatalf("sConn.ReadPacket - ComInitDB failed: %v %v", data, err)
-	}
+	require.NoErrorf(t, err, "sConn.ReadPacket - ComInitDB failed: %v %v", data, err)
+	require.NotEmptyf(t, data, "sConn.ReadPacket - ComInitDB failed: %v", data)
+	require.Equalf(t, byte(ComInitDB), data[0], "sConn.ReadPacket - ComInitDB failed: %v", data)
 	db := sConn.parseComInitDB(data)
 	assert.Equal(t, "my_db", db, "parseComInitDB returned unexpected data: %v", db)
 }
@@ -107,12 +107,12 @@ func TestComSetOption(t *testing.T) {
 
 	// Write ComSetOption packet, read it, compare.
 	if err := cConn.writeComSetOption(1); err != nil {
-		t.Fatalf("writeComSetOption failed: %v", err)
+		require.NoError(t, err)
 	}
 	data, err := sConn.ReadPacket()
-	if err != nil || len(data) == 0 || data[0] != ComSetOption {
-		t.Fatalf("sConn.ReadPacket - ComSetOption failed: %v %v", data, err)
-	}
+	require.NoErrorf(t, err, "sConn.ReadPacket - ComSetOption failed: %v %v", data, err)
+	require.NotEmptyf(t, data, "sConn.ReadPacket - ComSetOption failed: %v", data)
+	require.Equalf(t, byte(ComSetOption), data[0], "sConn.ReadPacket - ComSetOption failed: %v", data)
 	operation, ok := sConn.parseComSetOption(data)
 	require.True(t, ok, "parseComSetOption failed unexpectedly")
 	assert.Equal(t, uint16(1), operation, "parseComSetOption returned unexpected data: %v", operation)
@@ -130,7 +130,7 @@ func TestComStmtPrepare(t *testing.T) {
 	mockData := preparePacket(t, sql)
 
 	if err := cConn.writePacket(mockData); err != nil {
-		t.Fatalf("writePacket failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	data, err := sConn.ReadPacket()
@@ -145,7 +145,7 @@ func TestComStmtPrepare(t *testing.T) {
 
 	// write the response to the client
 	if err := sConn.writePrepare(result.Fields, prepare); err != nil {
-		t.Fatalf("sConn.writePrepare failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	resp, err := cConn.ReadPacket()
@@ -209,21 +209,20 @@ func TestComStmtSendLongData(t *testing.T) {
 	cConn.PrepareData = make(map[uint32]*PrepareData)
 	cConn.PrepareData[prepare.StatementID] = prepare
 	if err := cConn.writePrepare(result.Fields, prepare); err != nil {
-		t.Fatalf("writePrepare failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	// Since there's no writeComStmtSendLongData, we'll write a prepareStmt and check if we can read the StatementID
 	data, err := sConn.ReadPacket()
-	if err != nil || len(data) == 0 {
-		t.Fatalf("sConn.ReadPacket - ComStmtClose failed: %v %v", data, err)
-	}
+	require.NoErrorf(t, err, "sConn.ReadPacket - ComStmtClose failed: %v %v", data, err)
+	require.NotEmptyf(t, data, "sConn.ReadPacket - ComStmtClose failed: %v", data)
 	stmtID, paramID, chunkData, ok := sConn.parseComStmtSendLongData(data)
 	require.True(t, ok, "parseComStmtSendLongData failed")
 	require.Equal(t, uint16(1), paramID, "Received incorrect ParamID, want %v, got %v:", paramID, 1)
 	require.Equal(t, prepare.StatementID, stmtID, "Received incorrect value, want: %v, got: %v", uint32(data[1]), prepare.StatementID)
 	// Check length of chunkData, Since its a subset of `data` and compare with it after we subtract the number of bytes that was read from it.
 	// sizeof(uint32) + sizeof(uint16) + 1 = 7
-	require.Equal(t, len(data)-7, len(chunkData), "Received bad chunkData")
+	require.Len(t, chunkData, len(data)-7, "Received bad chunkData")
 }
 
 func TestComStmtExecute(t *testing.T) {
@@ -334,14 +333,13 @@ func TestComStmtClose(t *testing.T) {
 	cConn.PrepareData = make(map[uint32]*PrepareData)
 	cConn.PrepareData[prepare.StatementID] = prepare
 	if err := cConn.writePrepare(result.Fields, prepare); err != nil {
-		t.Fatalf("writePrepare failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	// Since there's no writeComStmtClose, we'll write a prepareStmt and check if we can read the StatementID
 	data, err := sConn.ReadPacket()
-	if err != nil || len(data) == 0 {
-		t.Fatalf("sConn.ReadPacket - ComStmtClose failed: %v %v", data, err)
-	}
+	require.NoErrorf(t, err, "sConn.ReadPacket - ComStmtClose failed: %v %v", data, err)
+	require.NotEmptyf(t, data, "sConn.ReadPacket - ComStmtClose failed: %v", data)
 	stmtID, ok := sConn.parseComStmtClose(data)
 	require.True(t, ok, "parseComStmtClose failed")
 	require.Equal(t, prepare.StatementID, stmtID, "Received incorrect value, want: %v, got: %v", uint32(data[1]), prepare.StatementID)
@@ -655,7 +653,9 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 		}
 		got, gotWarnings, err := cConn.ExecuteFetchWithWarningCount(query, maxrows, wantfields)
 		if !allRows && len(result.Rows) > 1 {
-			require.ErrorContains(t, err, "Row count exceeded")
+			if err == nil || !strings.Contains(err.Error(), "Row count exceeded") {
+				fatalError = fmt.Sprintf("expected 'Row count exceeded' error, got: %v", err)
+			}
 			return
 		}
 		if err != nil {
@@ -679,7 +679,7 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 		}
 
 		if gotWarnings != warningCount {
-			t.Errorf("ExecuteFetch(%v) expected %v warnings got %v", query, warningCount, gotWarnings)
+			assert.Failf(t, "ExecuteFetch warnings mismatch", "ExecuteFetch(%v) expected %v warnings got %v", query, warningCount, gotWarnings)
 			return
 		}
 
@@ -732,7 +732,7 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 				t.Logf("========== Got      RowsAffected = %v", got.RowsAffected)
 				t.Logf("========== Expected RowsAffected = %v", expected.RowsAffected)
 			}
-			t.Errorf("\nExecuteStreamFetch(%v) returned:\n%+v\nBut was expecting:\n%+v\n", query, got, &expected)
+			assert.Failf(t, "ExecuteStreamFetch result mismatch", "\nExecuteStreamFetch(%v) returned:\n%+v\nBut was expecting:\n%+v\n", query, got, &expected)
 		}
 	})
 
@@ -756,7 +756,7 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 	}
 
 	wg.Wait()
-	require.Equal(t, "", fatalError, fatalError)
+	require.Empty(t, fatalError, fatalError)
 }
 
 func RowString(row []sqltypes.Value) string {
@@ -764,8 +764,84 @@ func RowString(row []sqltypes.Value) string {
 	result := fmt.Sprintf("%v values:", l)
 	var resultSb767 strings.Builder
 	for _, val := range row {
-		resultSb767.WriteString(fmt.Sprintf(" %v", val))
+		fmt.Fprintf(&resultSb767, " %v", val)
 	}
 	result += resultSb767.String()
 	return result
+}
+
+// TestVal2MySQLZeroDateTime verifies that the MySQL zero DATE/DATETIME/TIMESTAMP
+// value is serialized in the binary protocol as a zero-length value, matching
+// what MySQL itself emits, so clients decode it identically over the text and
+// binary protocols.
+func TestVal2MySQLZeroDateTime(t *testing.T) {
+	testcases := []struct {
+		name string
+		val  sqltypes.Value
+	}{
+		{"datetime", sqltypes.MakeTrusted(sqltypes.Datetime, []byte("0000-00-00 00:00:00"))},
+		{"datetime with microseconds", sqltypes.MakeTrusted(sqltypes.Datetime, []byte("0000-00-00 00:00:00.000000"))},
+		{"date", sqltypes.MakeTrusted(sqltypes.Date, []byte("0000-00-00"))},
+		{"timestamp", sqltypes.MakeTrusted(sqltypes.Timestamp, []byte("0000-00-00 00:00:00"))},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			out, err := val2MySQL(tc.val)
+			require.NoError(t, err)
+			require.Equal(t, []byte{0x00}, out)
+
+			l, err := val2MySQLLen(tc.val)
+			require.NoError(t, err)
+			require.Equal(t, len(out), l)
+		})
+	}
+}
+
+// TestVal2MySQLNonZeroDateTime guards that a non-zero DATE/DATETIME value keeps
+// its full binary encoding and is not mistaken for the zero value.
+func TestVal2MySQLNonZeroDateTime(t *testing.T) {
+	dt := sqltypes.MakeTrusted(sqltypes.Datetime, []byte("2020-01-02 03:04:05"))
+	out, err := val2MySQL(dt)
+	require.NoError(t, err)
+	require.Equal(t, byte(0x07), out[0])
+	l, err := val2MySQLLen(dt)
+	require.NoError(t, err)
+	require.Equal(t, len(out), l)
+
+	// A year of "0001" contains a non-zero digit and must not be treated as zero.
+	d := sqltypes.MakeTrusted(sqltypes.Date, []byte("0001-00-00"))
+	out, err = val2MySQL(d)
+	require.NoError(t, err)
+	require.Equal(t, byte(0x04), out[0])
+}
+
+// TestIsZeroDateTime pins the exact set of textual forms treated as the MySQL
+// zero temporal value. Only the canonical zero DATE/DATETIME/TIMESTAMP forms
+// (including all-zero fractional seconds) are zero; malformed values fall
+// through to the normal length-based path instead of being silently accepted
+// as a zero-length date.
+func TestIsZeroDateTime(t *testing.T) {
+	testcases := []struct {
+		raw  string
+		want bool
+	}{
+		{"0000-00-00", true},
+		{"0000-00-00 00:00:00", true},
+		{"0000-00-00 00:00:00.0", true},
+		{"0000-00-00 00:00:00.000000", true},
+		{"", false},
+		{"2020-01-02 03:04:05", false},
+		{"0001-00-00", false},
+		{"0000-00-00 00:00:01", false},
+		{"----", false},
+		{"0000/00/00", false},
+		{"0000-00-00 00:00:00.", false},
+		{"0000-00-00 00:00:00.0000000", false}, // 7 fractional digits
+		{"0000-00-00 00:00:00.00000a", false},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.raw, func(t *testing.T) {
+			assert.Equal(t, tc.want, isZeroDateTime([]byte(tc.raw)))
+		})
+	}
 }

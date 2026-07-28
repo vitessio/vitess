@@ -56,10 +56,6 @@ type VtbackupProcess struct {
 
 // Setup starts vtbackup process with required arguements
 func (vtbackup *VtbackupProcess) Setup() (err error) {
-	vtbackupVer, err := GetMajorVersion(vtbackup.Binary)
-	if err != nil {
-		return err
-	}
 	flags := map[string]string{
 		"--topo-implementation":        vtbackup.TopoImplementation,
 		"--topo-global-server-address": vtbackup.TopoGlobalAddress,
@@ -74,17 +70,8 @@ func (vtbackup *VtbackupProcess) Setup() (err error) {
 		"--file-backup-storage-root": vtbackup.FileBackupStorageRoot,
 	}
 
-	flags["--topo-implementation"] = vtbackup.TopoImplementation
-	flags["--topo-global-server-address"] = vtbackup.TopoGlobalAddress
-	flags["--topo-global-root"] = vtbackup.TopoGlobalRoot
-	flags["--mysql-port"] = strconv.Itoa(vtbackup.MysqlPort)
-	flags["--init-db-sql-file"] = vtbackup.initDBfile
-	flags["--init-keyspace"] = vtbackup.Keyspace
-	flags["--init-shard"] = vtbackup.Shard
 	flags["--backup-storage-implementation"] = vtbackup.BackupStorageImplementation
-	if vtbackupVer >= 24 {
-		flags["--log-format"] = "text"
-	}
+	flags["--log-format"] = "text"
 
 	vtbackup.proc = exec.Command(vtbackup.Binary)
 	for k, v := range flags {

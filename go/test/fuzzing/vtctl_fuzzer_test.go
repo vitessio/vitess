@@ -19,11 +19,13 @@ limitations under the License.
 package fuzzing
 
 import (
+	"fmt"
 	"os"
 	"path"
 	"runtime/debug"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -36,8 +38,8 @@ func TestVtctlFuzzer(t *testing.T) {
 			defer func() {
 				r := recover()
 				if r != nil {
-					t.Error(r)
-					t.Fatal(string(debug.Stack()))
+					assert.Fail(t, fmt.Sprintf("%v", r))
+					require.Fail(t, string(debug.Stack()))
 				}
 			}()
 			testcase, err := os.ReadFile(path.Join(directoryName, file.Name()))

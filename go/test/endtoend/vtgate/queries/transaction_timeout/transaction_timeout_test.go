@@ -17,7 +17,6 @@ limitations under the License.
 package transactiontimeout
 
 import (
-	"context"
 	_ "embed"
 	"testing"
 	"time"
@@ -69,13 +68,11 @@ func createCluster(t *testing.T, vttabletArgs ...string) func() {
 }
 
 func TestTransactionTimeout(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 21, "vttablet")
-
 	// Start cluster with no vtgate or vttablet timeouts
 	teardown := createCluster(t)
 	defer teardown()
 
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
@@ -101,7 +98,7 @@ func TestTransactionTimeout(t *testing.T) {
 	require.ErrorContains(t, err, "Query execution was interrupted")
 
 	// Get new connection
-	conn, err = mysql.Connect(context.Background(), &vtParams)
+	conn, err = mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 
 	// Set session transaction timeout to 0
@@ -115,13 +112,11 @@ func TestTransactionTimeout(t *testing.T) {
 }
 
 func TestSmallerTimeout(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 21, "vttablet")
-
 	// Start vttablet with a transaction timeout
 	teardown := createCluster(t, "--queryserver-config-transaction-timeout", "1s")
 	defer teardown()
 
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 
 	// Set session transaction timeout larger than tablet transaction timeout

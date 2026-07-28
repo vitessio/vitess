@@ -101,7 +101,9 @@ var (
 			}
 			createOptions.WorkflowOptions.ShardedAutoIncrementHandling = vtctldatapb.ShardedAutoIncrementHandling(val)
 			if val == int32(vtctldatapb.ShardedAutoIncrementHandling_REPLACE) && createOptions.WorkflowOptions.GlobalKeyspace == "" {
-				fmt.Println("WARNING: no global-keyspace value provided so all sequence table references not fully qualified must be created manually before switching traffic")
+				// This is a diagnostic, not command output: it must go to stderr so
+				// that stdout stays parseable (e.g. for --format=json consumers).
+				fmt.Fprintln(cmd.ErrOrStderr(), "WARNING: no global-keyspace value provided so all sequence table references not fully qualified must be created manually before switching traffic")
 			}
 
 			return nil

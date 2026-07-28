@@ -35,7 +35,7 @@ func TestBetaincPanic(t *testing.T) {
 		if r := recover(); r != nil {
 			assert.Contains(t, r, "betainc: a or b too big; failed to converge")
 		} else {
-			t.Error("Expected panic, but no panic occurred")
+			assert.Fail(t, "Expected panic, but no panic occurred")
 		}
 	}()
 

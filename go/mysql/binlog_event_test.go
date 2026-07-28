@@ -47,9 +47,8 @@ func TestQueryStringNilCharset(t *testing.T) {
 		SQL:      "sql",
 	}
 	want := `{Database: "test_database", Charset: <nil>, SQL: "sql"}`
-	if got := input.String(); got != want {
-		t.Errorf("%#v.String() = %#v, want %#v", input, got, want)
-	}
+	got := input.String()
+	assert.Equalf(t, want, got, "%#v.String() = %#v, want %#v", input, got, want)
 }
 
 func TestBinlogFormatIsZero(t *testing.T) {
@@ -59,8 +58,7 @@ func TestBinlogFormatIsZero(t *testing.T) {
 		{HeaderLength: 1}:  false,
 	}
 	for input, want := range table {
-		if got := input.IsZero(); got != want {
-			t.Errorf("%#v.IsZero() = %#v, want %#v", input, got, want)
-		}
+		got := input.IsZero()
+		assert.Equalf(t, want, got, "%#v.IsZero() = %#v, want %#v", input, got, want)
 	}
 }

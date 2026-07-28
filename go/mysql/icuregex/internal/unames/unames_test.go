@@ -23,6 +23,8 @@ package unames
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestCharForName(t *testing.T) {
@@ -50,15 +52,11 @@ func TestCharForName(t *testing.T) {
 	for _, tn := range TestNames {
 		if tn.name != "" {
 			r := CharForName(UnicodeCharName, tn.name)
-			if r != tn.code {
-				t.Errorf("CharFromName(U_UNICODE_CHAR_NAME, %q) = '%c' (U+%d), expected %c (U+%d)", tn.name, r, r, tn.code, tn.code)
-			}
+			assert.Equalf(t, tn.code, r, "CharFromName(U_UNICODE_CHAR_NAME, %q) = '%c' (U+%d), expected %c (U+%d)", tn.name, r, r, tn.code, tn.code)
 		}
 		if tn.extName != "" {
 			r := CharForName(ExtendedCharName, tn.extName)
-			if r != tn.code {
-				t.Errorf("CharFromName(U_EXTENDED_CHAR_NAME, %q) = '%c' (U+%d), expected %c (U+%d)", tn.extName, r, r, tn.code, tn.code)
-			}
+			assert.Equalf(t, tn.code, r, "CharFromName(U_EXTENDED_CHAR_NAME, %q) = '%c' (U+%d), expected %c (U+%d)", tn.extName, r, r, tn.code, tn.code)
 		}
 	}
 }

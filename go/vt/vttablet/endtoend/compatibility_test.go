@@ -35,9 +35,7 @@ var point12 = "\x00\x00\x00\x00\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\xf0?
 
 func TestCharacterSet(t *testing.T) {
 	qr, err := framework.NewClient().Execute("select * from vitess_test where intval=1", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	want := &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
@@ -115,13 +113,9 @@ func TestInts(t *testing.T) {
 			"year":    sqltypes.Int64BindVariable(2012),
 		},
 	)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	qr, err := client.Execute("select * from vitess_ints where tiny = -128", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	want := &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
@@ -258,9 +252,7 @@ func TestInts(t *testing.T) {
 	// return flags with both binary and unsigned set. The test ensures
 	// that a Uint64 is produced in spite of the stray binary flag.
 	qr, err = client.Execute("select max(bigu) from vitess_ints", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	want = &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
@@ -294,13 +286,9 @@ func TestFractionals(t *testing.T) {
 			"d":    sqltypes.Float64BindVariable(4.99),
 		},
 	)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	qr, err := client.Execute("select * from vitess_fracts where id = 1", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	want := &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
@@ -392,13 +380,9 @@ func TestStrings(t *testing.T) {
 			"s":   sqltypes.StringBindVariable("a,b"),
 		},
 	)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	qr, err := client.Execute("select * from vitess_strings where vb = 'a'", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	want := &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
@@ -533,13 +517,9 @@ func TestMiscTypes(t *testing.T) {
 			"t":  sqltypes.StringBindVariable("15:45:45"),
 		},
 	)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	qr, err := client.Execute("select * from vitess_misc where id = 1", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	want := &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
@@ -621,9 +601,7 @@ func TestMiscTypes(t *testing.T) {
 func TestNull(t *testing.T) {
 	client := framework.NewClient()
 	qr, err := client.Execute("select null from dual", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	want := &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
@@ -650,18 +628,15 @@ func TestJSONType(t *testing.T) {
 		if strings.Contains(err.Error(), "syntax") {
 			return
 		}
-		t.Fatal(err)
+		require.NoError(t, err)
 	}
 	defer client.Execute("drop table vitess_json", nil)
 
-	if _, err := client.Execute(`insert into vitess_json values(1, '{"foo": "bar"}')`, nil); err != nil {
-		t.Fatal(err)
-	}
+	_, err := client.Execute(`insert into vitess_json values(1, '{"foo": "bar"}')`, nil)
+	require.NoError(t, err)
 
 	qr, err := client.Execute("select id, val from vitess_json", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	want := &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{

@@ -63,14 +63,17 @@ func TestMycnf(t *testing.T) {
 	waitTime := 1 * time.Second
 	wg := sync.WaitGroup{}
 
+	// require.* is unsafe on a worker goroutine, so record the results and assert after wg.Wait().
+	var readErr error
+	var totalTimeSpent time.Duration
 	wg.Go(func() {
 		startTime := time.Now()
-		var readErr error
 		mycnf, readErr = ReadMycnf(mycnf, 1*time.Minute)
-		require.NoError(t, readErr, "failed reading")
+		totalTimeSpent = time.Since(startTime)
+		if readErr != nil {
+			return
+		}
 		t.Logf("socket file %v", mycnf.SocketFile)
-		totalTimeSpent := time.Since(startTime)
-		require.GreaterOrEqual(t, totalTimeSpent, waitTime)
 	})
 
 	time.Sleep(waitTime)
@@ -81,10 +84,12 @@ func TestMycnf(t *testing.T) {
 
 	// Wait for ReadMycnf to finish and then verify that the data read is correct.
 	wg.Wait()
+	require.NoError(t, readErr, "failed reading")
+	require.GreaterOrEqual(t, totalTimeSpent, waitTime)
 	// Tablet UID should be 11111, which determines tablet/data dir.
 	require.Contains(t, mycnf.DataDir, "/vt_0000011111/")
 	// MySQL server-id should be 22222, different from Tablet UID.
-	require.EqualValues(t, uint32(22222), mycnf.ServerID)
+	require.Equal(t, uint32(22222), mycnf.ServerID)
 }
 
 // Run this test if any changes are made to hook handling / make_mycnf hook
@@ -124,9 +129,7 @@ func NoTestMycnfHook(t *testing.T) {
 	mycnf := NewMycnf(uid, 0)
 	mycnf.Path = cnf.Path
 	mycnf, err = ReadMycnf(mycnf, 0)
-	if err != nil {
-		t.Errorf("failed reading, err %v", err)
-	} else {
+	if assert.NoError(t, err) {
 		t.Logf("socket file %v", mycnf.SocketFile)
 	}
 	// Tablet UID should be 11111, which determines tablet/data dir.
@@ -142,5 +145,5 @@ func NoTestMycnfHook(t *testing.T) {
 	assert.Equal(t, "11111", mycnf.lookup("TABLET_ID"))
 	assert.Equal(t, "/vt_0000011111", mycnf.lookup("TABLET_DIR"))
 	assert.Equal(t, "15306", mycnf.lookup("MYSQL_PORT"))
-	assert.Equal(t, "", mycnf.lookup("MY_VAR"))
+	assert.Empty(t, mycnf.lookup("MY_VAR"))
 }

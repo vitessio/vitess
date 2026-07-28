@@ -19,6 +19,9 @@ package txlimiter
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -51,9 +54,7 @@ func TestTxLimiter_DisabledAllowsAll(t *testing.T) {
 	limiter := New(tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TabletServerTest"))
 	im, ef := createCallers("", "", "", "")
 	for i := range 5 {
-		if got, want := limiter.Get(im, ef), true; got != want {
-			t.Errorf("Transaction number %d, Get(): got %v, want %v", i, got, want)
-		}
+		assert.Truef(t, limiter.Get(im, ef), "Transaction number %d, Get()", i)
 	}
 }
 
@@ -71,56 +72,38 @@ func TestTxLimiter_LimitsOnlyOffendingUser(t *testing.T) {
 	// This should allow 3 slots to all users
 	newlimiter := New(tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TabletServerTest"))
 	limiter, ok := newlimiter.(*Impl)
-	if !ok {
-		t.Fatalf("New returned limiter of unexpected type: got %T, want %T", newlimiter, limiter)
-	}
+	require.Truef(t, ok, "New returned limiter of unexpected type: got %T, want %T", newlimiter, limiter)
 	resetVariables(limiter)
 	im1, ef1 := createCallers("user1", "", "", "")
 	im2, ef2 := createCallers("user2", "", "", "")
 
 	// user1 uses 3 slots
 	for i := range 3 {
-		if got, want := limiter.Get(im1, ef1), true; got != want {
-			t.Errorf("Transaction number %d, Get(im1, ef1): got %v, want %v", i, got, want)
-		}
+		assert.Truef(t, limiter.Get(im1, ef1), "Transaction number %d, Get(im1, ef1)", i)
 	}
 
 	// user1 not allowed to use 4th slot, which increases counter
-	if got, want := limiter.Get(im1, ef1), false; got != want {
-		t.Errorf("Get(im1, ef1) after using up all allowed attempts: got %v, want %v", got, want)
-	}
+	assert.False(t, limiter.Get(im1, ef1), "Get(im1, ef1) after using up all allowed attempts")
 
 	key1 := limiter.extractKey(im1, ef1)
-	if got, want := limiter.rejections.Counts()[key1], int64(1); got != want {
-		t.Errorf("Rejections count for %s: got %d, want %d", key1, got, want)
-	}
+	assert.Equalf(t, int64(1), limiter.rejections.Counts()[key1], "Rejections count for %s", key1)
 
 	// user2 uses 3 slots
 	for i := range 3 {
-		if got, want := limiter.Get(im2, ef2), true; got != want {
-			t.Errorf("Transaction number %d, Get(im2, ef2): got %v, want %v", i, got, want)
-		}
+		assert.Truef(t, limiter.Get(im2, ef2), "Transaction number %d, Get(im2, ef2)", i)
 	}
 
 	// user2 not allowed to use 4th slot, which increases counter
-	if got, want := limiter.Get(im2, ef2), false; got != want {
-		t.Errorf("Get(im2, ef2) after using up all allowed attempts: got %v, want %v", got, want)
-	}
+	assert.False(t, limiter.Get(im2, ef2), "Get(im2, ef2) after using up all allowed attempts")
 	key2 := limiter.extractKey(im2, ef2)
-	if got, want := limiter.rejections.Counts()[key2], int64(1); got != want {
-		t.Errorf("Rejections count for %s: got %d, want %d", key2, got, want)
-	}
+	assert.Equalf(t, int64(1), limiter.rejections.Counts()[key2], "Rejections count for %s", key2)
 
 	// user1 releases a slot, which allows to get another
 	limiter.Release(im1, ef1)
-	if got, want := limiter.Get(im1, ef1), true; got != want {
-		t.Errorf("Get(im1, ef1) after releasing: got %v, want %v", got, want)
-	}
+	assert.True(t, limiter.Get(im1, ef1), "Get(im1, ef1) after releasing")
 
 	// Rejection count for user 1 should still be 1.
-	if got, want := limiter.rejections.Counts()[key1], int64(1); got != want {
-		t.Errorf("Rejections count for %s: got %d, want %d", key1, got, want)
-	}
+	assert.Equalf(t, int64(1), limiter.rejections.Counts()[key1], "Rejections count for %s", key1)
 }
 
 func TestTxLimiterDryRun(t *testing.T) {
@@ -137,29 +120,19 @@ func TestTxLimiterDryRun(t *testing.T) {
 	// This should allow 3 slots to all users
 	newlimiter := New(tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TabletServerTest"))
 	limiter, ok := newlimiter.(*Impl)
-	if !ok {
-		t.Fatalf("New returned limiter of unexpected type: got %T, want %T", newlimiter, limiter)
-	}
+	require.Truef(t, ok, "New returned limiter of unexpected type: got %T, want %T", newlimiter, limiter)
 	resetVariables(limiter)
 	im, ef := createCallers("user", "", "", "")
 	key := limiter.extractKey(im, ef)
 
 	// uses 3 slots
 	for i := range 3 {
-		if got, want := limiter.Get(im, ef), true; got != want {
-			t.Errorf("Transaction number %d, Get(im, ef): got %v, want %v", i, got, want)
-		}
+		assert.Truef(t, limiter.Get(im, ef), "Transaction number %d, Get(im, ef)", i)
 	}
 
 	// allowed to use 4th slot, but dry run rejection counter increased
-	if got, want := limiter.Get(im, ef), true; got != want {
-		t.Errorf("Get(im, ef) after using up all allowed attempts: got %v, want %v", got, want)
-	}
+	assert.True(t, limiter.Get(im, ef), "Get(im, ef) after using up all allowed attempts")
 
-	if got, want := limiter.rejections.Counts()[key], int64(0); got != want {
-		t.Errorf("Rejections count for %s: got %d, want %d", key, got, want)
-	}
-	if got, want := limiter.rejectionsDryRun.Counts()[key], int64(1); got != want {
-		t.Errorf("RejectionsDryRun count for %s: got %d, want %d", key, got, want)
-	}
+	assert.Equalf(t, int64(0), limiter.rejections.Counts()[key], "Rejections count for %s", key)
+	assert.Equalf(t, int64(1), limiter.rejectionsDryRun.Counts()[key], "RejectionsDryRun count for %s", key)
 }

@@ -17,10 +17,9 @@ limitations under the License.
 package vindexes
 
 import (
-	"context"
-	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -85,7 +84,7 @@ func TestNumericCreateVindex(t *testing.T) {
 }
 
 func TestNumericMap(t *testing.T) {
-	got, err := numeric.Map(context.Background(), nil, []sqltypes.Value{
+	got, err := numeric.Map(t.Context(), nil, []sqltypes.Value{
 		sqltypes.NewInt64(1),
 		sqltypes.NewInt64(2),
 		sqltypes.NewInt64(3),
@@ -112,37 +111,26 @@ func TestNumericMap(t *testing.T) {
 		key.DestinationKeyspaceID([]byte("\x00\x00\x00\x00\x00\x00\x00\x08")),
 		key.DestinationNone{},
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("Map(): %+v, want %+v", got, want)
-	}
+	assert.Equal(t, want, got, "Map()")
 }
 
 func TestNumericVerify(t *testing.T) {
-	got, err := numeric.Verify(context.Background(), nil, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}, [][]byte{[]byte("\x00\x00\x00\x00\x00\x00\x00\x01"), []byte("\x00\x00\x00\x00\x00\x00\x00\x01")})
+	got, err := numeric.Verify(t.Context(), nil, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}, [][]byte{[]byte("\x00\x00\x00\x00\x00\x00\x00\x01"), []byte("\x00\x00\x00\x00\x00\x00\x00\x01")})
 	require.NoError(t, err)
-	want := []bool{true, false}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("lhu.Verify(match): %v, want %v", got, want)
-	}
+	assert.Equal(t, []bool{true, false}, got, "lhu.Verify(match)")
 
 	// Failure test
-	_, err = numeric.Verify(context.Background(), nil, []sqltypes.Value{sqltypes.NewVarBinary("aa")}, [][]byte{nil})
+	_, err = numeric.Verify(t.Context(), nil, []sqltypes.Value{sqltypes.NewVarBinary("aa")}, [][]byte{nil})
 	require.EqualError(t, err, "cannot parse uint64 from \"aa\"")
 }
 
 func TestNumericReverseMap(t *testing.T) {
 	got, err := numeric.(Reversible).ReverseMap(nil, [][]byte{[]byte("\x00\x00\x00\x00\x00\x00\x00\x01")})
 	require.NoError(t, err)
-	want := []sqltypes.Value{sqltypes.NewUint64(1)}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("ReverseMap(): %v, want %v", got, want)
-	}
+	assert.Equal(t, []sqltypes.Value{sqltypes.NewUint64(1)}, got, "ReverseMap()")
 }
 
 func TestNumericReverseMapBadData(t *testing.T) {
 	_, err := numeric.(Reversible).ReverseMap(nil, [][]byte{[]byte("aa")})
-	want := `Numeric.ReverseMap: length of keyspaceId is not 8: 2`
-	if err == nil || err.Error() != want {
-		t.Errorf("numeric.Map: %v, want %v", err, want)
-	}
+	assert.EqualError(t, err, `Numeric.ReverseMap: length of keyspaceId is not 8: 2`, "numeric.Map")
 }

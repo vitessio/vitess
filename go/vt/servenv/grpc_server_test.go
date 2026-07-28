@@ -20,17 +20,20 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"sync/atomic"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/orca"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 func TestEmpty(t *testing.T) {
 	interceptors := &serverInterceptorBuilder{}
-	if len(interceptors.Build()) > 0 {
-		t.Fatalf("expected empty builder to report as empty")
-	}
+	require.Empty(t, interceptors.Build(), "expected empty builder to report as empty")
 }
 
 func TestSingleInterceptor(t *testing.T) {
@@ -39,12 +42,8 @@ func TestSingleInterceptor(t *testing.T) {
 
 	interceptors.Add(fake.StreamServerInterceptor, fake.UnaryServerInterceptor)
 
-	if len(interceptors.streamInterceptors) != 1 {
-		t.Fatalf("expected 1 server options to be available")
-	}
-	if len(interceptors.unaryInterceptors) != 1 {
-		t.Fatalf("expected 1 server options to be available")
-	}
+	require.Len(t, interceptors.streamInterceptors, 1, "expected 1 server options to be available")
+	require.Len(t, interceptors.unaryInterceptors, 1, "expected 1 server options to be available")
 }
 
 func TestDoubleInterceptor(t *testing.T) {
@@ -55,12 +54,8 @@ func TestDoubleInterceptor(t *testing.T) {
 	interceptors.Add(fake1.StreamServerInterceptor, fake1.UnaryServerInterceptor)
 	interceptors.Add(fake2.StreamServerInterceptor, fake2.UnaryServerInterceptor)
 
-	if len(interceptors.streamInterceptors) != 2 {
-		t.Fatalf("expected 1 server options to be available")
-	}
-	if len(interceptors.unaryInterceptors) != 2 {
-		t.Fatalf("expected 1 server options to be available")
-	}
+	require.Len(t, interceptors.streamInterceptors, 2, "expected 2 server options to be available")
+	require.Len(t, interceptors.unaryInterceptors, 2, "expected 2 server options to be available")
 }
 
 func TestOrcaRecorder(t *testing.T) {
@@ -71,38 +66,122 @@ func TestOrcaRecorder(t *testing.T) {
 
 	snap := recorder.ServerMetrics()
 
-	if snap.CPUUtilization != 0.25 {
-		t.Errorf("expected cpu 0.25, got %v", snap.CPUUtilization)
-	}
-	if snap.MemUtilization != 0.5 {
-		t.Errorf("expected memory 0.5, got %v", snap.MemUtilization)
-	}
+	assert.Equalf(t, 0.25, snap.CPUUtilization, "expected cpu 0.25, got %v", snap.CPUUtilization)
+	assert.Equalf(t, 0.5, snap.MemUtilization, "expected memory 0.5, got %v", snap.MemUtilization)
 }
 
 func TestReportedOrca(t *testing.T) {
 	// Set the port to enable gRPC server.
-	withTempVar(&gRPCPort, getFreePort())
-	withTempVar(&gRPCEnableOrcaMetrics, true)
-	withTempVar(&GRPCServerMetricsRecorder, nil)
+	t.Cleanup(withTempVar(&gRPCPort, getFreePort()))
+	t.Cleanup(withTempVar(&gRPCEnableOrcaMetrics, true))
+	t.Cleanup(withTempVar(&GRPCServerMetricsRecorder, nil))
+	t.Cleanup(withTempVar(&GRPCServer, (*grpc.Server)(nil)))
 
 	createGRPCServer()
-	if GRPCServerMetricsRecorder == nil {
-		t.Errorf("GRPCServerMetricsRecorder should be initialized when gRPCEnableOrcaMetrics is false")
-	}
+	assert.NotNil(t, GRPCServerMetricsRecorder, "GRPCServerMetricsRecorder should be initialized when gRPCEnableOrcaMetrics is false")
 
-	serveGRPC()
+	// Cleanups run last-in-first-out, so the updater goroutine is fully
+	// stopped before the withTempVar cleanups above restore the globals.
+	stopOrcaUpdater := serveGRPC()
+	t.Cleanup(stopOrcaUpdater)
+	// The method value binds the receiver now, so the cleanup stops this
+	// test's server no matter when the GRPCServer global gets restored.
+	t.Cleanup(GRPCServer.Stop)
+
 	serverMetrics := GRPCServerMetricsRecorder.ServerMetrics()
 	cpuUsage := serverMetrics.CPUUtilization
-	if cpuUsage < 0 {
-		t.Errorf("CPU Utilization is not set %.2f", cpuUsage)
-	}
+	assert.GreaterOrEqualf(t, cpuUsage, float64(0), "CPU Utilization is not set %.2f", cpuUsage)
 	t.Logf("CPU Utilization is %.2f", cpuUsage)
 
 	memUsage := serverMetrics.MemUtilization
-	if memUsage < 0 {
-		t.Errorf("Mem Utilization is not set %.2f", memUsage)
-	}
+	assert.GreaterOrEqualf(t, memUsage, float64(0), "Mem Utilization is not set %.2f", memUsage)
 	t.Logf("Memory utilization is %.2f", memUsage)
+}
+
+// TestGRPCServerSkipsIngressStatsByDefault verifies that servenv gRPC servers
+// do not record ingress bytes unless a binary opts in.
+func TestGRPCServerSkipsIngressStatsByDefault(t *testing.T) {
+	restore := withTempVar(&gRPCIngressStatsEnabled, false)
+	defer restore()
+
+	var ingressBytes uint64
+	runIngressStatsTestRPC(t, &ingressBytes)
+
+	assert.Zero(t, atomic.LoadUint64(&ingressBytes))
+}
+
+// TestEnableGRPCIngressStatsInstallsServerOption verifies that opt-in servers
+// attach inbound gRPC payload bytes to RPC contexts.
+func TestEnableGRPCIngressStatsInstallsServerOption(t *testing.T) {
+	restore := withTempVar(&gRPCIngressStatsEnabled, false)
+	defer restore()
+	EnableGRPCIngressStats()
+
+	var ingressBytes uint64
+	runIngressStatsTestRPC(t, &ingressBytes)
+
+	assert.Positive(t, atomic.LoadUint64(&ingressBytes))
+}
+
+type ingressStatsTestService interface {
+	Check(context.Context, *emptypb.Empty) (*emptypb.Empty, error)
+}
+
+type ingressStatsTestServer struct {
+	ingressBytes *uint64
+}
+
+func (s *ingressStatsTestServer) Check(ctx context.Context, _ *emptypb.Empty) (*emptypb.Empty, error) {
+	if ingressBytes, ok := GRPCIngressBytes(ctx); ok {
+		atomic.StoreUint64(s.ingressBytes, ingressBytes)
+	}
+	return &emptypb.Empty{}, nil
+}
+
+var ingressStatsTestServiceDesc = grpc.ServiceDesc{
+	ServiceName: "test.IngressStats",
+	HandlerType: (*ingressStatsTestService)(nil),
+	Methods: []grpc.MethodDesc{{
+		MethodName: "Check",
+		Handler: func(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
+			req := new(emptypb.Empty)
+			if err := dec(req); err != nil {
+				return nil, err
+			}
+			if interceptor == nil {
+				return srv.(ingressStatsTestService).Check(ctx, req)
+			}
+			info := &grpc.UnaryServerInfo{
+				Server:     srv,
+				FullMethod: "/test.IngressStats/Check",
+			}
+			handler := func(ctx context.Context, req any) (any, error) {
+				return srv.(ingressStatsTestService).Check(ctx, req.(*emptypb.Empty))
+			}
+			return interceptor(ctx, req, info, handler)
+		},
+	}},
+}
+
+func runIngressStatsTestRPC(t *testing.T, ingressBytes *uint64) {
+	t.Helper()
+
+	port := getFreePort()
+	t.Cleanup(withTempVar(&gRPCPort, port))
+	t.Cleanup(withTempVar(&gRPCBindAddress, "127.0.0.1"))
+	t.Cleanup(withTempVar(&GRPCServer, (*grpc.Server)(nil)))
+
+	createGRPCServer()
+	require.NotNil(t, GRPCServer)
+	GRPCServer.RegisterService(&ingressStatsTestServiceDesc, &ingressStatsTestServer{ingressBytes: ingressBytes})
+	serveGRPC()
+	t.Cleanup(GRPCServer.Stop)
+
+	conn, err := grpc.NewClient(fmt.Sprintf("127.0.0.1:%d", port), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	require.NoError(t, err)
+	t.Cleanup(func() { conn.Close() })
+
+	require.NoError(t, conn.Invoke(context.Background(), "/test.IngressStats/Check", &emptypb.Empty{}, &emptypb.Empty{}))
 }
 
 func getFreePort() int {

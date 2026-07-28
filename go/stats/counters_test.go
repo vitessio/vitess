@@ -19,7 +19,6 @@ package stats
 import (
 	"expvar"
 	"fmt"
-	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -37,33 +36,22 @@ func TestCounters(t *testing.T) {
 	c.Add("c2", 1)
 	want1 := `{"c1": 1, "c2": 2}`
 	want2 := `{"c2": 2, "c1": 1}`
-	if s := c.String(); s != want1 && s != want2 {
-		t.Errorf("want %s or %s, got %s", want1, want2, s)
-	}
+	s := c.String()
+	assert.Truef(t, s == want1 || s == want2, "want %s or %s, got %s", want1, want2, s)
 	counts := c.Counts()
-	if counts["c1"] != 1 {
-		t.Errorf("want 1, got %d", counts["c1"])
-	}
-	if counts["c2"] != 2 {
-		t.Errorf("want 2, got %d", counts["c2"])
-	}
+	assert.Equalf(t, int64(1), counts["c1"], "counts[c1]")
+	assert.Equalf(t, int64(2), counts["c2"], "counts[c2]")
 }
 
 func TestCountersTags(t *testing.T) {
 	clearStats()
 	c := NewCountersWithSingleLabel("counterTag1", "help", "label")
 	want := map[string]int64{}
-	got := c.Counts()
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("want %v, got %v", want, got)
-	}
+	assert.Equal(t, want, c.Counts())
 
 	c = NewCountersWithSingleLabel("counterTag2", "help", "label", "tag1", "tag2")
 	want = map[string]int64{"tag1": 0, "tag2": 0}
-	got = c.Counts()
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("want %v, got %v", want, got)
-	}
+	assert.Equal(t, want, c.Counts())
 }
 
 func TestMultiCounters(t *testing.T) {
@@ -74,25 +62,19 @@ func TestMultiCounters(t *testing.T) {
 	c.Add([]string{"c2a", "c2b"}, 1)
 	want1 := `{"c1a.c1b": 1, "c2a.c2b": 2}`
 	want2 := `{"c2a.c2b": 2, "c1a.c1b": 1}`
-	if s := c.String(); s != want1 && s != want2 {
-		t.Errorf("want %s or %s, got %s", want1, want2, s)
-	}
+	s := c.String()
+	assert.Truef(t, s == want1 || s == want2, "want %s or %s, got %s", want1, want2, s)
 	counts := c.Counts()
-	if counts["c1a.c1b"] != 1 {
-		t.Errorf("want 1, got %d", counts["c1a.c1b"])
-	}
-	if counts["c2a.c2b"] != 2 {
-		t.Errorf("want 2, got %d", counts["c2a.c2b"])
-	}
+	assert.Equalf(t, int64(1), counts["c1a.c1b"], "counts[c1a.c1b]")
+	assert.Equalf(t, int64(2), counts["c2a.c2b"], "counts[c2a.c2b]")
 	f := NewCountersFuncWithMultiLabels("", "help", []string{"aaa", "bbb"}, func() map[string]int64 {
 		return map[string]int64{
 			"c1a.c1b": 1,
 			"c2a.c2b": 2,
 		}
 	})
-	if s := f.String(); s != want1 && s != want2 {
-		t.Errorf("want %s or %s, got %s", want1, want2, s)
-	}
+	s = f.String()
+	assert.Truef(t, s == want1 || s == want2, "want %s or %s, got %s", want1, want2, s)
 }
 
 func TestMultiCountersDot(t *testing.T) {
@@ -107,16 +89,11 @@ func TestMultiCountersDot(t *testing.T) {
 	c2bJSON := strings.ReplaceAll(c2b, "\\", "\\\\")
 	want1 := `{"` + c1aJSON + `.c1b": 1, "c2a.` + c2bJSON + `": 2}`
 	want2 := `{"c2a.` + c2bJSON + `": 2, "` + c1aJSON + `.c1b": 1}`
-	if s := c.String(); s != want1 && s != want2 {
-		t.Errorf("want %s or %s, got %s", want1, want2, s)
-	}
+	s := c.String()
+	assert.Truef(t, s == want1 || s == want2, "want %s or %s, got %s", want1, want2, s)
 	counts := c.Counts()
-	if counts[c1a+".c1b"] != 1 {
-		t.Errorf("want 1, got %d", counts[c1a+".c1b"])
-	}
-	if counts["c2a."+c2b] != 2 {
-		t.Errorf("want 2, got %d", counts["c2a."+c2b])
-	}
+	assert.Equalf(t, int64(1), counts[c1a+".c1b"], "counts[c1a.c1b]")
+	assert.Equalf(t, int64(2), counts["c2a."+c2b], "counts[c2a.c2b]")
 }
 
 func TestCountersHook(t *testing.T) {
@@ -129,12 +106,8 @@ func TestCountersHook(t *testing.T) {
 	})
 
 	v := NewCountersWithSingleLabel("counter2", "help", "label")
-	if gotname != "counter2" {
-		t.Errorf("want counter2, got %s", gotname)
-	}
-	if gotv != v {
-		t.Errorf("want %#v, got %#v", v, gotv)
-	}
+	assert.Equal(t, "counter2", gotname)
+	assert.Same(t, v, gotv)
 }
 
 var benchCounter = NewCountersWithSingleLabel("bench", "help", "label")
@@ -252,9 +225,8 @@ func TestCountersFuncWithMultiLabels(t *testing.T) {
 
 	want1 := `{"c1": 1, "c2": 2}`
 	want2 := `{"c2": 2, "c1": 1}`
-	if s := f.String(); s != want1 && s != want2 {
-		t.Errorf("want %s or %s, got %s", want1, want2, s)
-	}
+	s := f.String()
+	assert.Truef(t, s == want1 || s == want2, "want %s or %s, got %s", want1, want2, s)
 }
 
 func TestCountersFuncWithMultiLabels_Hook(t *testing.T) {
@@ -269,12 +241,8 @@ func TestCountersFuncWithMultiLabels_Hook(t *testing.T) {
 	v := NewCountersFuncWithMultiLabels("TestCountersFuncWithMultiLabels_Hook", "help", []string{"label1"}, func() map[string]int64 {
 		return map[string]int64{}
 	})
-	if gotname != "TestCountersFuncWithMultiLabels_Hook" {
-		t.Errorf("want TestCountersFuncWithMultiLabels_Hook, got %s", gotname)
-	}
-	if gotv != v {
-		t.Errorf("want %#v, got %#v", v, gotv)
-	}
+	assert.Equal(t, "TestCountersFuncWithMultiLabels_Hook", gotname)
+	assert.Same(t, v, gotv)
 }
 
 func TestCountersCombineDimension(t *testing.T) {

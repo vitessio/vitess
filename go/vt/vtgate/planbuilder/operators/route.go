@@ -373,10 +373,7 @@ func findVSchemaTableAndCreateRoute(
 
 	// If we're processing the target-side of a mirror operator, look up the
 	// mirror target table by using FindTable, which bypasses routing rules.
-	//
-	// Exclude dual tables, which do not get a mirror rule, and are not known to
-	// the VSchema.
-	if ctx.IsMirrored() && (vschemaTable.Type != vindexes.TypeReference || vschemaTable.Name.String() != "dual") {
+	if ctx.IsMirrored() {
 		vschemaTable, _, tabletType, target, err = ctx.VSchema.FindTable(tableName)
 	}
 
@@ -491,8 +488,6 @@ func createRoutingForVTable(ctx *plancontext.PlanningContext, vschemaTable *vind
 	switch {
 	case vschemaTable.Type == vindexes.TypeSequence:
 		return &SequenceRouting{keyspace: vschemaTable.Keyspace}
-	case vschemaTable.Type == vindexes.TypeReference && vschemaTable.Name.String() == "dual":
-		return &DualRouting{}
 	case vschemaTable.Type == vindexes.TypeReference || !vschemaTable.Keyspace.Sharded:
 		return &AnyShardRouting{keyspace: vschemaTable.Keyspace}
 	default:

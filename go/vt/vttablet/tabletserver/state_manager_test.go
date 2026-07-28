@@ -17,7 +17,6 @@ limitations under the License.
 package tabletserver
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"sync"
@@ -76,7 +75,7 @@ func TestStateManagerServePrimary(t *testing.T) {
 	err := sm.SetServingType(topodatapb.TabletType_PRIMARY, testNow, StateServing, "")
 	require.NoError(t, err)
 
-	assert.Equal(t, false, sm.lameduck)
+	assert.False(t, sm.lameduck)
 	assert.Equal(t, testNow, sm.ptsTimestamp)
 
 	verifySubcomponent(t, 1, sm.se, testStateOpen)
@@ -328,7 +327,7 @@ func TestStateManagerTransitionFailRetry(t *testing.T) {
 	// Steal the lock and wait long enough for the retry
 	// to fail, and then release it. The retry will have
 	// to keep retrying.
-	sm.transitioning.Acquire(context.Background(), 1)
+	sm.transitioning.Acquire(t.Context(), 1)
 	time.Sleep(30 * time.Millisecond)
 	sm.transitioning.Release(1)
 
@@ -506,7 +505,7 @@ func TestStateManagerCheckMySQL(t *testing.T) {
 	for {
 		select {
 		case <-timeout:
-			t.Fatalf("Timedout waiting for checkMySQL to finish")
+			require.Fail(t, "Timedout waiting for checkMySQL to finish")
 		default:
 			if sm.isCheckMySQLRunning() == 0 {
 				return
@@ -537,7 +536,7 @@ func TestStateManagerValidations(t *testing.T) {
 	assert.Contains(t, err.Error(), "operation not allowed")
 
 	err = sm.StartRequest(ctx, target, true)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	sm.wantState = StateServing
 	target.Keyspace = "a"
@@ -562,9 +561,9 @@ func TestStateManagerValidations(t *testing.T) {
 
 	sm.alsoAllow = []topodatapb.TabletType{topodatapb.TabletType_REPLICA}
 	err = sm.StartRequest(ctx, target, false)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	err = sm.VerifyTarget(ctx, target)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	err = sm.StartRequest(ctx, nil, false)
 	assert.Contains(t, err.Error(), "No target")
@@ -573,7 +572,7 @@ func TestStateManagerValidations(t *testing.T) {
 
 	localctx := tabletenv.LocalContext()
 	err = sm.StartRequest(localctx, nil, false)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	err = sm.VerifyTarget(localctx, nil)
 	assert.NoError(t, err)
 }
@@ -631,7 +630,7 @@ func TestStateManagerNotify(t *testing.T) {
 	ch := make(chan *querypb.StreamHealthResponse, 5)
 	var wg sync.WaitGroup
 	wg.Go(func() {
-		err := sm.hs.Stream(context.Background(), func(shr *querypb.StreamHealthResponse) error {
+		err := sm.hs.Stream(t.Context(), func(shr *querypb.StreamHealthResponse) error {
 			ch <- shr
 			return nil
 		})
@@ -658,7 +657,6 @@ func TestStateManagerNotify(t *testing.T) {
 
 func TestDemotePrimaryStalled(t *testing.T) {
 	sm := newTestStateManager()
-	defer sm.StopService()
 	err := sm.SetServingType(topodatapb.TabletType_PRIMARY, testNow, StateServing, "")
 	require.NoError(t, err)
 	// Stopping the ticker so that we don't get unexpected health streams.
@@ -667,13 +665,22 @@ func TestDemotePrimaryStalled(t *testing.T) {
 	ch := make(chan *querypb.StreamHealthResponse, 5)
 	var wg sync.WaitGroup
 	wg.Go(func() {
-		err := sm.hs.Stream(context.Background(), func(shr *querypb.StreamHealthResponse) error {
+		err := sm.hs.Stream(t.Context(), func(shr *querypb.StreamHealthResponse) error {
 			ch <- shr
 			return nil
 		})
 		assert.Contains(t, err.Error(), "tabletserver is shutdown")
 	})
+	// Order matters: StopService cancels the streamer's context, which lets
+	// Stream return so wg.Wait can complete. Defers run LIFO.
 	defer wg.Wait()
+	defer sm.StopService()
+
+	// register() pushes the current state onto the channel as soon as the
+	// streaming client subscribes, and that value is racy with respect to
+	// SetServingType's async Broadcast trigger. Drain it so the assertions
+	// below only inspect states produced by our explicit Broadcast calls.
+	<-ch
 
 	// Send a broadcast message and check we have no error there.
 	sm.Broadcast()
@@ -684,13 +691,10 @@ func TestDemotePrimaryStalled(t *testing.T) {
 	sm.demotePrimaryStalled = true
 	sm.Broadcast()
 	gotshr = <-ch
-	require.EqualValues(t, "VT09031: Primary demotion is stalled", gotshr.RealtimeStats.HealthError)
+	require.Equal(t, "VT09031: Primary demotion is stalled", gotshr.RealtimeStats.HealthError)
 	// Verify that we can't start a new request once we have a demote primary stalled.
-	err = sm.StartRequest(context.Background(), &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}, false)
+	err = sm.StartRequest(t.Context(), &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}, false)
 	require.ErrorContains(t, err, "operation not allowed in state NOT_SERVING")
-
-	// Stop the state manager.
-	sm.StopService()
 }
 
 func TestRefreshReplHealthLocked(t *testing.T) {
@@ -702,21 +706,21 @@ func TestRefreshReplHealthLocked(t *testing.T) {
 	sm.replHealthy = false
 	lag, err := sm.refreshReplHealthLocked()
 	assert.Equal(t, time.Duration(0), lag)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, sm.replHealthy)
 
 	sm.target.TabletType = topodatapb.TabletType_REPLICA
 	sm.replHealthy = false
 	lag, err = sm.refreshReplHealthLocked()
 	assert.Equal(t, 1*time.Second, lag)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, sm.replHealthy)
 
 	rt.err = errors.New("err")
 	sm.replHealthy = true
 	lag, err = sm.refreshReplHealthLocked()
 	assert.Equal(t, 1*time.Second, lag)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.False(t, sm.replHealthy)
 
 	rt.err = nil
@@ -724,7 +728,7 @@ func TestRefreshReplHealthLocked(t *testing.T) {
 	sm.replHealthy = true
 	lag, err = sm.refreshReplHealthLocked()
 	assert.Equal(t, 3*time.Hour, lag)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.False(t, sm.replHealthy)
 }
 
@@ -734,7 +738,7 @@ func TestPanicInWait(t *testing.T) {
 	sm.wantState = StateServing
 	sm.state = StateServing
 	sm.replHealthy = true
-	ctx := context.Background()
+	ctx := t.Context()
 	// Simulate an Execute RPC running
 	err := sm.StartRequest(ctx, sm.target, false)
 	require.NoError(t, err)

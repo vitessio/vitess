@@ -156,7 +156,7 @@ func initClusterForClone() error {
 	// Create a combined init file that includes clone user
 	initDBWithClone, err := createInitDBWithCloneUser()
 	if err != nil {
-		return fmt.Errorf("failed to create init DB file: %v", err)
+		return fmt.Errorf("failed to create init DB with clone user: %v", err)
 	}
 	log.Info("Created combined init file at: " + initDBWithClone)
 
@@ -206,7 +206,7 @@ func initClusterForClone() error {
 	// Wait for MySQL processes to be ready
 	for _, proc := range mysqlCtlProcessList {
 		if err := proc.Wait(); err != nil {
-			return fmt.Errorf("MySQL process failed to start: %v", err)
+			return fmt.Errorf("failed waiting for MySQL process: %v", err)
 		}
 	}
 	log.Info("MySQL processes started successfully")
@@ -238,13 +238,13 @@ func createInitDBWithCloneUser() (string, error) {
 	// Use the official {{custom_sql}} marker pattern to inject clone user SQL
 	combined, err := utils.GetInitDBSQL(string(initDB), string(initClone), "")
 	if err != nil {
-		return "", fmt.Errorf("failed to inject clone SQL: %v", err)
+		return "", fmt.Errorf("failed to generate combined init SQL: %v", err)
 	}
 
 	// Write to temp file
 	combinedPath := path.Join(clusterInstance.TmpDirectory, "init_db_with_clone.sql")
 	if err := os.WriteFile(combinedPath, []byte(combined), 0o666); err != nil {
-		return "", fmt.Errorf("failed to write combined init file: %v", err)
+		return "", fmt.Errorf("failed to write combined init SQL: %v", err)
 	}
 
 	return combinedPath, nil
@@ -302,7 +302,7 @@ func createMysqldForTablet(tablet *cluster.Vttablet) *mysqlctl.Mysqld {
 
 // TestCloneRemote tests MySQL CLONE INSTANCE functionality
 func TestCloneRemote(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Minute)
+	ctx, cancel := context.WithTimeout(t.Context(), 6*time.Minute)
 	defer cancel()
 
 	// Connect to donor and insert test data
@@ -347,7 +347,7 @@ func TestCloneRemote(t *testing.T) {
 	require.NoError(t, err, "Failed to connect to recipient for pre-clone check")
 	qr, err = recipientConnPreClone.ExecuteFetch("SHOW DATABASES LIKE 'test_clone'", 1, false)
 	require.NoError(t, err, "Failed to check for test_clone database on recipient")
-	require.Len(t, qr.Rows, 0, "Recipient should NOT have test_clone database before clone")
+	require.Empty(t, qr.Rows, "Recipient should NOT have test_clone database before clone")
 	recipientConnPreClone.Close()
 
 	// Create Mysqld instance for recipient (needed by CloneExecutor)
@@ -412,7 +412,7 @@ func TestCloneRemote(t *testing.T) {
 	recipientData, err := recipientConn.ExecuteFetch("SELECT id, msg FROM test_clone.clone_test ORDER BY id", 100, false)
 	require.NoError(t, err)
 
-	require.Equal(t, len(donorData.Rows), len(recipientData.Rows), "Row counts should match")
+	require.Len(t, recipientData.Rows, len(donorData.Rows), "Row counts should match")
 	for i := range donorData.Rows {
 		assert.Equal(t, donorData.Rows[i][0].ToString(), recipientData.Rows[i][0].ToString(), "IDs should match at row %d", i)
 		assert.Equal(t, donorData.Rows[i][1].ToString(), recipientData.Rows[i][1].ToString(), "Messages should match at row %d", i)

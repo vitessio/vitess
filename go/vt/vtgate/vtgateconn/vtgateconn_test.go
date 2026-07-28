@@ -33,16 +33,14 @@ func TestRegisterDialer(t *testing.T) {
 
 func TestGetDialerWithProtocol(t *testing.T) {
 	protocol := "test2"
-	_, err := DialProtocol(context.Background(), protocol, "")
-	if err == nil || err.Error() != "no dialer registered for VTGate protocol "+protocol {
-		t.Fatalf("protocol: %s is not registered, should return error: %v", protocol, err)
-	}
+	_, err := DialProtocol(t.Context(), protocol, "")
+	require.EqualErrorf(t, err, "no dialer registered for VTGate protocol "+protocol, "protocol: %s is not registered, should return error: %v", protocol, err)
 	RegisterDialer(protocol, func(context.Context, string) (Impl, error) {
 		return nil, nil
 	})
-	c, err := DialProtocol(context.Background(), protocol, "")
+	c, err := DialProtocol(t.Context(), protocol, "")
 	if err != nil || c == nil {
-		t.Fatalf("dialerFunc has been registered, should not get nil: %v %v", err, c)
+		require.Failf(t, "dialerFunc registered but got nil", "dialerFunc has been registered, should not get nil: %v %v", err, c)
 	}
 }
 
@@ -55,10 +53,8 @@ func TestDeregisterDialer(t *testing.T) {
 
 	DeregisterDialer(protocol)
 
-	_, err := DialProtocol(context.Background(), protocol, "")
-	if err == nil || err.Error() != "no dialer registered for VTGate protocol "+protocol {
-		t.Fatalf("protocol: %s is not registered, should return error: %v", protocol, err)
-	}
+	_, err := DialProtocol(t.Context(), protocol, "")
+	require.EqualErrorf(t, err, "no dialer registered for VTGate protocol "+protocol, "protocol: %s is not registered, should return error: %v", protocol, err)
 }
 
 func TestDialCustom(t *testing.T) {
@@ -82,15 +78,15 @@ func TestDialCustom(t *testing.T) {
 
 	RegisterDialer(protocol, defaultDialerFunc)
 
-	_, err := DialProtocol(context.Background(), protocol, "")
+	_, err := DialProtocol(t.Context(), protocol, "")
 	require.NoError(t, err)
 	require.Equal(t, "default", dialer)
 
-	_, err = DialCustom(context.Background(), customDialerFunc, protocol)
+	_, err = DialCustom(t.Context(), customDialerFunc, protocol)
 	require.NoError(t, err)
 	require.Equal(t, "custom", dialer)
 
-	_, err = DialCustom(context.Background(), customDialerFunc2, protocol)
+	_, err = DialCustom(t.Context(), customDialerFunc2, protocol)
 	require.NoError(t, err)
 	require.Equal(t, "custom2", dialer)
 }

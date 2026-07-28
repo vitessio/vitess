@@ -123,8 +123,8 @@ func commandSwitchTraffic(cmd *cobra.Command, args []string) error {
 				tout.WriteString(line + "\n")
 			}
 		} else {
-			tout.WriteString(fmt.Sprintf("Start State: %s\n", resp.StartState))
-			tout.WriteString(fmt.Sprintf("Current State: %s\n", resp.CurrentState))
+			fmt.Fprintf(&tout, "Start State: %s\n", resp.StartState)
+			fmt.Fprintf(&tout, "Current State: %s\n", resp.CurrentState)
 		}
 		output = tout.Bytes()
 	}

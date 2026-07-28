@@ -18,8 +18,9 @@ package workflow
 
 import (
 	"fmt"
-	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 // TestVReplicationStreams tests various methods of VReplicationStreams.
@@ -44,9 +45,7 @@ func TestVReplicationStreams(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := tt.funcUnderTest(streams)
-			if !reflect.DeepEqual(result, tt.expectedResult) {
-				t.Errorf("Failed %s: expected %v, got %v", tt.name, tt.expectedResult, result)
-			}
+			assert.Equalf(t, tt.expectedResult, result, "Failed %s", tt.name)
 		})
 	}
 }

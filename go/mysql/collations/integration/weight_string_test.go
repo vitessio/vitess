@@ -23,6 +23,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/mysql/collations/colldata"
@@ -53,9 +55,8 @@ func TestWeightStringsComprehensive(t *testing.T) {
 	charsetMap := make(map[string]*collationsForCharset)
 
 	golden := &testutil.GoldenTest{}
-	if err := golden.DecodeFromFile("../testdata/wiki_416c626572742045696e737465696e.gob.gz"); err != nil {
-		t.Fatal(err)
-	}
+	err := golden.DecodeFromFile("../testdata/wiki_416c626572742045696e737465696e.gob.gz")
+	require.NoError(t, err)
 
 	conn := mysqlconn(t)
 	defer conn.Close()
@@ -122,9 +123,7 @@ func TestCJKWeightStrings(t *testing.T) {
 			continue
 		}
 		text, err := os.ReadFile(testfile)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		for _, coll := range valid {
 			verifyWeightString(t, coll, remote.NewCollation(conn, coll.Name()), text)
 		}

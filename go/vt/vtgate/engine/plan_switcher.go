@@ -48,13 +48,11 @@ func (s *PlanSwitcher) GetFields(
 	vcursor VCursor,
 	bindVars map[string]*querypb.BindVariable,
 ) (*sqltypes.Result, error) {
-	if s.metCondition(bindVars) {
-		return s.Optimized.GetFields(ctx, vcursor, bindVars)
-	}
-	if s.Baseline == nil {
+	branch, _ := s.pickBranch(vcursor, bindVars)
+	if branch == nil {
 		return nil, s.BaselineErr
 	}
-	return s.Baseline.GetFields(ctx, vcursor, bindVars)
+	return branch.GetFields(ctx, vcursor, bindVars)
 }
 
 func (s *PlanSwitcher) TryExecute(
@@ -63,14 +61,14 @@ func (s *PlanSwitcher) TryExecute(
 	bindVars map[string]*querypb.BindVariable,
 	wantfields bool,
 ) (*sqltypes.Result, error) {
-	if s.metCondition(bindVars) {
-		s.addOptimizedExecStats(vcursor)
-		return s.Optimized.TryExecute(ctx, vcursor, bindVars, wantfields)
-	}
-	if s.Baseline == nil {
+	branch, optimized := s.pickBranch(vcursor, bindVars)
+	if branch == nil {
 		return nil, s.BaselineErr
 	}
-	return s.Baseline.TryExecute(ctx, vcursor, bindVars, wantfields)
+	if optimized {
+		s.addOptimizedExecStats(vcursor)
+	}
+	return branch.TryExecute(ctx, vcursor, bindVars, wantfields)
 }
 
 func (s *PlanSwitcher) TryStreamExecute(
@@ -80,14 +78,26 @@ func (s *PlanSwitcher) TryStreamExecute(
 	wantfields bool,
 	callback func(*sqltypes.Result) error,
 ) error {
-	if s.metCondition(bindVars) {
-		s.addOptimizedExecStats(vcursor)
-		return s.Optimized.TryStreamExecute(ctx, vcursor, bindVars, wantfields, callback)
-	}
-	if s.Baseline == nil {
+	branch, optimized := s.pickBranch(vcursor, bindVars)
+	if branch == nil {
 		return s.BaselineErr
 	}
-	return s.Baseline.TryStreamExecute(ctx, vcursor, bindVars, wantfields, callback)
+	if optimized {
+		s.addOptimizedExecStats(vcursor)
+	}
+	return branch.TryStreamExecute(ctx, vcursor, bindVars, wantfields, callback)
+}
+
+// pickBranch selects the branch to execute for the supplied bindVars, records
+// it on the vcursor so later consumers don't need to re-evaluate the
+// conditions, and reports whether the optimized branch was chosen.
+func (s *PlanSwitcher) pickBranch(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (Primitive, bool) {
+	if s.metCondition(bindVars) {
+		vcursor.SetExecutedPrimitive(s.Optimized)
+		return s.Optimized, true
+	}
+	vcursor.SetExecutedPrimitive(s.Baseline)
+	return s.Baseline, false
 }
 
 func (s *PlanSwitcher) Inputs() ([]Primitive, []map[string]any) {

@@ -31,6 +31,7 @@ import (
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
@@ -208,11 +209,11 @@ func primeTxPoolWithConnection(t *testing.T, ctx context.Context) (*fakesqldb.DB
 	t.Helper()
 	db := fakesqldb.New(t)
 	txPool, _ := newTxPool()
-	// Set the capacity to 1 to ensure that the db connection is reused.
-	err := txPool.scp.conns.SetCapacity(context.Background(), 1)
-	require.NoError(t, err)
 	params := dbconfigs.New(db.ConnParams())
 	txPool.Open(params, params, params)
+	// Set the capacity to 1 to ensure that the db connection is reused.
+	err := txPool.scp.conns.SetCapacity(t.Context(), 1)
+	require.NoError(t, err)
 
 	// Run a query to trigger a database connection. That connection will be
 	// reused by subsequent transactions.
@@ -266,7 +267,7 @@ func TestTxPoolCancelledContextError(t *testing.T) {
 	// given
 	db, txPool, _, closer := setup(t)
 	defer closer()
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
 	// when
@@ -342,7 +343,7 @@ func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
 		conn, err := txPool.GetAndLock(id, "for query")
 		if err == nil { //
 			conn.ReleaseString("fail")
-			t.Errorf("expected to get an error")
+			assert.Fail(t, "expected to get an error")
 			return
 		}
 
@@ -388,7 +389,7 @@ func TestTxPoolCloseKillsStrayTransactions(t *testing.T) {
 	startingStray := txPool.env.Stats().InternalErrors.Counts()["StrayTransactions"]
 
 	// Start stray transaction.
-	conn, _, _, err := txPool.Begin(context.Background(), &querypb.ExecuteOptions{}, false, 0, nil)
+	conn, _, _, err := txPool.Begin(t.Context(), &querypb.ExecuteOptions{}, false, 0, nil)
 	require.NoError(t, err)
 	conn.Unlock()
 

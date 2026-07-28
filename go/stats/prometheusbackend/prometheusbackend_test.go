@@ -25,9 +25,11 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/stats"
-
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/stats"
 )
 
 const namespace = "namespace"
@@ -130,9 +132,7 @@ func checkHandlerForMetrics(t *testing.T, metric string, value int) {
 
 	expected := fmt.Sprintf("%s_%s %d", namespace, metric, value)
 
-	if !strings.Contains(response.Body.String(), expected) {
-		t.Fatalf("Expected %s got %s", expected, response.Body.String())
-	}
+	require.Containsf(t, response.Body.String(), expected, "Expected %s got %s", expected, response.Body.String())
 }
 
 func TestPrometheusCountersWithSingleLabel(t *testing.T) {
@@ -171,9 +171,7 @@ func checkHandlerForMetricWithSingleLabel(t *testing.T, metric, label, tag strin
 
 	expected := fmt.Sprintf("%s_%s{%s=\"%s\"} %d", namespace, metric, label, tag, value)
 
-	if !strings.Contains(response.Body.String(), expected) {
-		t.Fatalf("Expected %s got %s", expected, response.Body.String())
-	}
+	require.Containsf(t, response.Body.String(), expected, "Expected %s got %s", expected, response.Body.String())
 }
 
 func TestPrometheusCountersWithMultiLabels(t *testing.T) {
@@ -215,9 +213,7 @@ func TestPrometheusGaugesWithMultiLabels(t *testing.T) {
 
 func TestPrometheusCountersWithMultiLabels_AddPanic(t *testing.T) {
 	defer func() {
-		if r := recover(); r == nil {
-			t.Errorf("The code did not panic when adding to inequal label lengths")
-		}
+		assert.NotNil(t, recover(), "The code did not panic when adding to inequal label lengths")
 	}()
 
 	name := "blah_counterswithmultilabels_inequallength"
@@ -268,9 +264,7 @@ func checkHandlerForMetricWithMultiLabels(t *testing.T, metric string, labels []
 
 	expected := fmt.Sprintf("%s_%s{%s} %d", namespace, metric, strings.Join(kvPairs, ","), value)
 
-	if !strings.Contains(response.Body.String(), expected) {
-		t.Fatalf("Expected %s got %s", expected, response.Body.String())
-	}
+	require.Containsf(t, response.Body.String(), expected, "Expected %s got %s", expected, response.Body.String())
 }
 
 func TestPrometheusTimings(t *testing.T) {
@@ -299,9 +293,7 @@ func TestPrometheusTimings(t *testing.T) {
 	s = append(s, fmt.Sprintf("%s_%s_count{category=\"%s\"} %d", namespace, name, cats[0], 3))
 
 	for _, line := range s {
-		if !strings.Contains(response.Body.String(), line) {
-			t.Fatalf("Expected result to contain %s, got %s", line, response.Body.String())
-		}
+		require.Containsf(t, response.Body.String(), line, "Expected result to contain %s, got %s", line, response.Body.String())
 	}
 }
 
@@ -332,17 +324,13 @@ func TestPrometheusMultiTimings(t *testing.T) {
 	s = append(s, fmt.Sprintf("%s_%s_count{%s=\"%s\",%s=\"%s\"} %d", namespace, name, cats[0], catLabels[0], cats[1], catLabels[1], 3))
 
 	for _, line := range s {
-		if !strings.Contains(response.Body.String(), line) {
-			t.Fatalf("Expected result to contain %s, got %s", line, response.Body.String())
-		}
+		require.Containsf(t, response.Body.String(), line, "Expected result to contain %s, got %s", line, response.Body.String())
 	}
 }
 
 func TestPrometheusMultiTimings_PanicWrongLength(t *testing.T) {
 	defer func() {
-		if r := recover(); r == nil {
-			t.Errorf("The code did not panic when adding to inequal label lengths")
-		}
+		assert.NotNil(t, recover(), "The code did not panic when adding to inequal label lengths")
 	}()
 
 	c := stats.NewMultiTimings("name", "help", []string{"label1", "label2"})
@@ -366,9 +354,7 @@ func TestPrometheusHistogram(t *testing.T) {
 	s = append(s, fmt.Sprintf("%s_%s_count %d", namespace, name, 3))
 
 	for _, line := range s {
-		if !strings.Contains(response.Body.String(), line) {
-			t.Fatalf("Expected result to contain %s, got %s", line, response.Body.String())
-		}
+		require.Containsf(t, response.Body.String(), line, "Expected result to contain %s, got %s", line, response.Body.String())
 	}
 }
 
@@ -394,9 +380,7 @@ func TestPrometheusLabels(t *testing.T) {
 		"namespace_this_is_metric2{this_is_a_label=\"labelvalue2\"} 420",
 	}
 	for _, line := range expect {
-		if !strings.Contains(response.Body.String(), line) {
-			t.Fatalf("Expected result to contain %s, got %s", line, response.Body.String())
-		}
+		require.Containsf(t, response.Body.String(), line, "Expected result to contain %s, got %s", line, response.Body.String())
 	}
 }
 
@@ -415,9 +399,7 @@ func TestGoRuntimeMetrics(t *testing.T) {
 		// Scheduler metric only present with MetricsScheduler.
 		`go_sched_goroutines_goroutines`,
 	} {
-		if !strings.Contains(body, series) {
-			t.Errorf("expected metrics output to contain %q", series)
-		}
+		assert.Containsf(t, body, series, "expected metrics output to contain %q", series)
 	}
 }
 

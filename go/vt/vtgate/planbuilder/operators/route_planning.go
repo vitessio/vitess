@@ -18,7 +18,9 @@ package operators
 
 import (
 	"bytes"
+	"fmt"
 	"io"
+	"slices"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -300,6 +302,8 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPredic
 		return newPlan, Rewrote("merge routes into single operator")
 	}
 
+	checkCrossKeyspaceOp(ctx, lhs, rhs, "JOIN")
+
 	if len(joinPredicates) > 0 && requiresSwitchingSides(ctx, rhs) {
 		if !joinType.IsCommutative() || requiresSwitchingSides(ctx, lhs) {
 			// we can't switch sides, so let's see if we can use a HashJoin to solve it
@@ -324,6 +328,124 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPredic
 	}
 
 	return join, Rewrote("logical join to applyJoin ")
+}
+
+// checkCrossKeyspaceOp checks if the given operators would create a cross-keyspace operation
+// and if cross-keyspace joins are denied for any involved keyspace. Fast path for direct
+// Route/Route comparisons (no allocations), falls back to collecting all keyspaces from
+// both operator trees to handle composite operators spanning multiple keyspaces.
+//
+// Panics via checkCrossKeyspacePair if the operation is denied — this follows the
+// planner convention of using panics for control flow on planning errors.
+func checkCrossKeyspaceOp(ctx *plancontext.PlanningContext, lhs, rhs Operator, opType string) {
+	// Fast path: both sides are direct *Route — two type assertions + pointer comparison, no allocations.
+	if lRoute, ok := lhs.(*Route); ok {
+		if rRoute, ok := rhs.(*Route); ok {
+			lhsKs := lRoute.Routing.Keyspace()
+			rhsKs := rRoute.Routing.Keyspace()
+			if lhsKs == nil || rhsKs == nil || lhsKs == rhsKs {
+				return
+			}
+			checkCrossKeyspacePair(ctx, lhs, rhs, lhsKs, rhsKs, opType)
+			return
+		}
+	}
+
+	lhsKeyspaces := operatorKeyspaces(lhs)
+	rhsKeyspaces := operatorKeyspaces(rhs)
+	if len(lhsKeyspaces) == 0 || len(rhsKeyspaces) == 0 {
+		return
+	}
+
+	checked := make(map[[2]string]struct{})
+	for _, lhsKs := range lhsKeyspaces {
+		for _, rhsKs := range rhsKeyspaces {
+			if lhsKs == rhsKs {
+				continue
+			}
+			pair := [2]string{lhsKs.Name, rhsKs.Name}
+			if _, ok := checked[pair]; ok {
+				continue
+			}
+			checked[pair] = struct{}{}
+			checkCrossKeyspacePair(ctx, lhs, rhs, lhsKs, rhsKs, opType)
+		}
+	}
+}
+
+// checkCrossKeyspacePair checks a single cross-keyspace pair and panics if denied,
+// unless an alternate route or the ALLOW_CROSS_KEYSPACE_READS directive allows it.
+func checkCrossKeyspacePair(ctx *plancontext.PlanningContext, lhs, rhs Operator, lhsKs, rhsKs *vindexes.Keyspace, opType string) {
+	if hasAlternateInKeyspace(ctx, lhs, rhsKs) || hasAlternateInKeyspace(ctx, rhs, lhsKs) {
+		return
+	}
+
+	if sqlparser.AllowCrossKeyspaceReadsDirective(ctx.Statement) {
+		return
+	}
+
+	for _, ks := range []*vindexes.Keyspace{lhsKs, rhsKs} {
+		allowed, err := ctx.VSchema.AllowCrossKeyspaceReads(ks.Name)
+		if err != nil {
+			panic(err)
+		}
+		if !allowed {
+			panic(vterrors.VT12001(
+				fmt.Sprintf("cross-keyspace %s between keyspaces %q and %q (use /*vt+ ALLOW_CROSS_KEYSPACE_READS */ to override)", opType, lhsKs.Name, rhsKs.Name),
+			))
+		}
+	}
+}
+
+// hasAlternateInKeyspace checks if op is a direct *Route with an AnyShardRouting alternate
+// in the given keyspace. Only checks direct routes because mergeJoinInputs (via operatorsToRoutes)
+// only uses alternates for direct *Route operators — wrapped routes won't be merged.
+func hasAlternateInKeyspace(ctx *plancontext.PlanningContext, op Operator, ks *vindexes.Keyspace) bool {
+	route, ok := op.(*Route)
+	if !ok {
+		return false
+	}
+	if !ctx.SemTable.DMLTargets.IsEmpty() && TableID(route).IsOverlapping(ctx.SemTable.DMLTargets) {
+		return false
+	}
+	ref, ok := route.Routing.(*AnyShardRouting)
+	if !ok {
+		return false
+	}
+	return ref.AlternateInKeyspace(ks) != nil
+}
+
+// operatorKeyspaces collects all unique keyspaces from an operator tree by recursively
+// walking routes and their inputs. Returns nil for nil operators or those with no keyspaces.
+// Uses slice-based dedup with pointer equality (Vitess shares keyspace objects by pointer within
+// a planning context) instead of a map since the number of distinct keyspaces is very small.
+func operatorKeyspaces(op Operator) []*vindexes.Keyspace {
+	var result []*vindexes.Keyspace
+	collectOperatorKeyspaces(op, &result)
+	return result
+}
+
+func collectOperatorKeyspaces(op Operator, result *[]*vindexes.Keyspace) {
+	if op == nil {
+		return
+	}
+	if route, ok := op.(*Route); ok {
+		addOperatorKeyspace(result, route.Routing.Keyspace())
+		return
+	}
+	for _, input := range op.Inputs() {
+		collectOperatorKeyspaces(input, result)
+	}
+}
+
+func addOperatorKeyspace(result *[]*vindexes.Keyspace, ks *vindexes.Keyspace) {
+	if ks == nil {
+		return
+	}
+	if slices.Contains(*result, ks) {
+		return
+	}
+	*result = append(*result, ks)
 }
 
 func operatorsToRoutes(a, b Operator) (*Route, *Route) {

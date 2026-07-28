@@ -17,7 +17,6 @@ limitations under the License.
 package topo_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -32,7 +31,7 @@ func TestDeleteOrphanedKeyspaceFiles(t *testing.T) {
 	cell2 := "zone-2"
 	keyspace := "ks"
 	keyspace2 := "ks2"
-	ctx := context.Background()
+	ctx := t.Context()
 	tests := []struct {
 		name   string
 		setup  func(t *testing.T, ts *topo.Server, mtf *memorytopo.Factory)
@@ -58,8 +57,8 @@ func TestDeleteOrphanedKeyspaceFiles(t *testing.T) {
 				// Verify that getting srvKeyspaceNames now gives us this keyspace.
 				keyspaces, err := ts.GetSrvKeyspaceNames(ctx, cell)
 				require.NoError(t, err)
-				require.EqualValues(t, 1, len(keyspaces))
-				require.EqualValues(t, keyspace, keyspaces[0])
+				require.Len(t, keyspaces, 1)
+				require.Equal(t, keyspace, keyspaces[0])
 				// Also verify that we can't get the SrvKeyspace.
 				_, err = ts.GetSrvKeyspace(ctx, cell, keyspace)
 				require.Error(t, err)
@@ -78,7 +77,7 @@ func TestDeleteOrphanedKeyspaceFiles(t *testing.T) {
 				// Verify that getting srvKeyspaceNames is now empty.
 				keyspaces, err := ts.GetSrvKeyspaceNames(ctx, cell)
 				require.NoError(t, err)
-				require.Len(t, keyspaces, 0)
+				require.Empty(t, keyspaces)
 			},
 		}, {
 			name: "Ensure we don't delete extra files",
@@ -130,8 +129,8 @@ func TestDeleteOrphanedKeyspaceFiles(t *testing.T) {
 				// Verify that getting srvKeyspaceNames now gives us this keyspace.
 				keyspaces, err := ts.GetSrvKeyspaceNames(ctx, cell)
 				require.NoError(t, err)
-				require.EqualValues(t, 1, len(keyspaces))
-				require.EqualValues(t, keyspace, keyspaces[0])
+				require.Len(t, keyspaces, 1)
+				require.Equal(t, keyspace, keyspaces[0])
 				// Also verify that we can't get the SrvKeyspace.
 				_, err = ts.GetSrvKeyspace(ctx, cell, keyspace)
 				require.NoError(t, err)
@@ -150,7 +149,7 @@ func TestDeleteOrphanedKeyspaceFiles(t *testing.T) {
 				// Verify that getting srvKeyspaceNames is now empty.
 				keyspaces, err := ts.GetSrvKeyspaceNames(ctx, cell)
 				require.NoError(t, err)
-				require.Len(t, keyspaces, 0)
+				require.Empty(t, keyspaces)
 				// Since we only clear orphaned files for one cell, we should still see
 				// they srvKeyspace in the other cell.
 				keyspaces, err = ts.GetSrvKeyspaceNames(ctx, cell2)

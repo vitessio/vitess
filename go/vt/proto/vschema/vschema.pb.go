@@ -205,8 +205,13 @@ type Keyspace struct {
 	ForeignKeyMode Keyspace_ForeignKeyMode `protobuf:"varint,5,opt,name=foreign_key_mode,json=foreignKeyMode,proto3,enum=vschema.Keyspace_ForeignKeyMode" json:"foreign_key_mode,omitempty"`
 	// multi_tenant_mode specifies that the keyspace is multi-tenant. Currently used during migrations with MoveTables.
 	MultiTenantSpec *MultiTenantSpec `protobuf:"bytes,6,opt,name=multi_tenant_spec,json=multiTenantSpec,proto3" json:"multi_tenant_spec,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// If prevent_cross_keyspace_reads is true, the planner will reject queries that require
+	// joining tables across different keyspaces or performing UNIONs across different
+	// keyspaces. Can be overridden per-query with the
+	// /*vt+ ALLOW_CROSS_KEYSPACE_READS */ comment directive.
+	PreventCrossKeyspaceReads bool `protobuf:"varint,7,opt,name=prevent_cross_keyspace_reads,json=preventCrossKeyspaceReads,proto3" json:"prevent_cross_keyspace_reads,omitempty"`
+	unknownFields             protoimpl.UnknownFields
+	sizeCache                 protoimpl.SizeCache
 }
 
 func (x *Keyspace) Reset() {
@@ -279,6 +284,13 @@ func (x *Keyspace) GetMultiTenantSpec() *MultiTenantSpec {
 		return x.MultiTenantSpec
 	}
 	return nil
+}
+
+func (x *Keyspace) GetPreventCrossKeyspaceReads() bool {
+	if x != nil {
+		return x.PreventCrossKeyspaceReads
+	}
+	return false
 }
 
 type MultiTenantSpec struct {
@@ -1146,14 +1158,15 @@ const file_vschema_proto_rawDesc = "" +
 	"\vRoutingRule\x12\x1d\n" +
 	"\n" +
 	"from_table\x18\x01 \x01(\tR\tfromTable\x12\x1b\n" +
-	"\tto_tables\x18\x02 \x03(\tR\btoTables\"\xca\x04\n" +
+	"\tto_tables\x18\x02 \x03(\tR\btoTables\"\x8b\x05\n" +
 	"\bKeyspace\x12\x18\n" +
 	"\asharded\x18\x01 \x01(\bR\asharded\x12;\n" +
 	"\bvindexes\x18\x02 \x03(\v2\x1f.vschema.Keyspace.VindexesEntryR\bvindexes\x125\n" +
 	"\x06tables\x18\x03 \x03(\v2\x1d.vschema.Keyspace.TablesEntryR\x06tables\x128\n" +
 	"\x18require_explicit_routing\x18\x04 \x01(\bR\x16requireExplicitRouting\x12J\n" +
 	"\x10foreign_key_mode\x18\x05 \x01(\x0e2 .vschema.Keyspace.ForeignKeyModeR\x0eforeignKeyMode\x12D\n" +
-	"\x11multi_tenant_spec\x18\x06 \x01(\v2\x18.vschema.MultiTenantSpecR\x0fmultiTenantSpec\x1aL\n" +
+	"\x11multi_tenant_spec\x18\x06 \x01(\v2\x18.vschema.MultiTenantSpecR\x0fmultiTenantSpec\x12?\n" +
+	"\x1cprevent_cross_keyspace_reads\x18\a \x01(\bR\x19preventCrossKeyspaceReads\x1aL\n" +
 	"\rVindexesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12%\n" +
 	"\x05value\x18\x02 \x01(\v2\x0f.vschema.VindexR\x05value:\x028\x01\x1aI\n" +

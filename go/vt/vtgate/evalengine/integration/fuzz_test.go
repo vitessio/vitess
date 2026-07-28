@@ -30,6 +30,8 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
@@ -237,15 +239,13 @@ func TestGenerateFuzzCases(t *testing.T) {
 	for len(failures) < fuzzMaxFailures {
 		query := "SELECT " + gen.expr()
 		stmt, err := sqlparser.NewTestParser().Parse(query)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 
 		astExpr := stmt.(*sqlparser.Select).SelectExprs.Exprs[0].(*sqlparser.AliasedExpr).Expr
 
 		if fail := compareWithMySQL(astExpr); fail != nil {
 			failures = append(failures, fail)
-			t.Errorf("mismatch: %v", fail.Error())
+			assert.Failf(t, "mismatch", "%v", fail.Error())
 		}
 
 		if time.Since(start) > fuzzMaxTime {
@@ -291,9 +291,7 @@ func TestGenerateFuzzCases(t *testing.T) {
 
 func writeGolden(t *testing.T, golden []GoldenTest) {
 	out, err := os.Create(fmt.Sprintf("testdata/mysql_golden_%d.json", time.Now().Unix()))
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer out.Close()
 
 	enc := json.NewEncoder(out)

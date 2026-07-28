@@ -76,8 +76,14 @@ export const Stream = () => {
             </WorkspaceHeader>
             <ContentContainer>
                 <TabContainer>
-                    <Tab text="JSON" to="json" />
-                    <Tab text="JSON Tree" to="json_tree" />
+                    <Tab
+                        text="JSON"
+                        to={`/workflow/${params.clusterID}/${params.keyspace}/${params.workflowName}/stream/${params.tabletCell}/${params.tabletUID}/${params.streamID}/json`}
+                    />
+                    <Tab
+                        text="JSON Tree"
+                        to={`/workflow/${params.clusterID}/${params.keyspace}/${params.workflowName}/stream/${params.tabletCell}/${params.tabletUID}/${params.streamID}/json_tree`}
+                    />
                 </TabContainer>
 
                 <Routes>

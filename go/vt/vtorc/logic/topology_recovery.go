@@ -50,18 +50,17 @@ import (
 )
 
 const (
-	CheckAndRecoverGenericProblemRecoveryName        string = "CheckAndRecoverGenericProblem"
-	RestartArbitraryDirectReplicaRecoveryName        string = "RestartArbitraryDirectReplica"
-	RestartAllDirectReplicasRecoveryName             string = "RestartAllDirectReplicas"
-	RecoverDeadPrimaryRecoveryName                   string = "RecoverDeadPrimary"
-	RecoverIncapacitatedPrimaryRecoveryName          string = "RecoverIncapacitatedPrimary"
-	RecoverPrimaryTabletDeletedRecoveryName          string = "RecoverPrimaryTabletDeleted"
-	RecoverPrimaryHasPrimaryRecoveryName             string = "RecoverPrimaryHasPrimary"
-	CheckAndRecoverLockedSemiSyncPrimaryRecoveryName string = "CheckAndRecoverLockedSemiSyncPrimary"
-	ElectNewPrimaryRecoveryName                      string = "ElectNewPrimary"
-	FixPrimaryRecoveryName                           string = "FixPrimary"
-	FixReplicaRecoveryName                           string = "FixReplica"
-	RecoverErrantGTIDDetectedName                    string = "RecoverErrantGTIDDetected"
+	CheckAndRecoverGenericProblemRecoveryName string = "CheckAndRecoverGenericProblem"
+	RestartArbitraryDirectReplicaRecoveryName string = "RestartArbitraryDirectReplica"
+	RestartAllDirectReplicasRecoveryName      string = "RestartAllDirectReplicas"
+	RecoverDeadPrimaryRecoveryName            string = "RecoverDeadPrimary"
+	RecoverIncapacitatedPrimaryRecoveryName   string = "RecoverIncapacitatedPrimary"
+	RecoverPrimaryTabletDeletedRecoveryName   string = "RecoverPrimaryTabletDeleted"
+	RecoverPrimaryHasPrimaryRecoveryName      string = "RecoverPrimaryHasPrimary"
+	ElectNewPrimaryRecoveryName               string = "ElectNewPrimary"
+	FixPrimaryRecoveryName                    string = "FixPrimary"
+	FixReplicaRecoveryName                    string = "FixReplica"
+	RecoverErrantGTIDDetectedName             string = "RecoverErrantGTIDDetected"
 
 	// ReconcileStaleTopoPrimaryRecoveryName is a recovery for tablets that have a stale type of PRIMARY
 	// in the topology but a newer primary has been elected.
@@ -117,8 +116,8 @@ var (
 		"Shard",
 	})
 
-	// shardsLockCounter is a count of in-flight shard locks. Use atomics to read/update.
-	shardsLockCounter int64
+	// shardsLockCounter is a count of in-flight shard locks.
+	shardsLockCounter atomic.Int64
 
 	// recoveriesCounterLabels are labels for grouping the counter based stats for recoveries.
 	recoveriesCounterLabels = []string{"RecoveryType", "Keyspace", "Shard"}
@@ -154,7 +153,6 @@ const (
 	recoverIncapacitatedPrimaryFunc
 	recoverPrimaryTabletDeletedFunc
 	recoverPrimaryHasPrimaryFunc
-	recoverLockedSemiSyncPrimaryFunc
 	electNewPrimaryFunc
 	fixPrimaryFunc
 	fixReplicaFunc
@@ -214,7 +212,7 @@ func NewTopologyRecoveryStep(id int64, message string) *TopologyRecoveryStep {
 func init() {
 	// ShardLocksActive is a stats representation of shardsLockCounter.
 	stats.NewGaugeFunc("ShardLocksActive", "Number of actively-held shard locks", func() int64 {
-		return atomic.LoadInt64(&shardsLockCounter)
+		return shardsLockCounter.Load()
 	})
 	urgentOperations = cache.New(urgentOperationsInterval, 2*urgentOperationsInterval)
 	go initializeTopologyRecoveryPostConfiguration()
@@ -236,8 +234,7 @@ func LockShard(ctx context.Context, keyspace, shard, lockAction string) (context
 	if shard == "" {
 		return nil, nil, errors.New("can't lock shard: shard name is unspecified")
 	}
-	val := atomic.LoadInt32(&hasReceivedSIGTERM)
-	if val > 0 {
+	if hasReceivedSIGTERM.Load() > 0 {
 		return nil, nil, errors.New("can't lock shard: SIGTERM received")
 	}
 
@@ -247,16 +244,16 @@ func LockShard(ctx context.Context, keyspace, shard, lockAction string) (context
 		shardLockTimings.Add("Lock", lockTime)
 	}()
 
-	atomic.AddInt64(&shardsLockCounter, 1)
+	shardsLockCounter.Add(1)
 	ctx, unlock, err := ts.TryLockShard(ctx, keyspace, shard, lockAction)
 	if err != nil {
-		atomic.AddInt64(&shardsLockCounter, -1)
+		shardsLockCounter.Add(-1)
 		return nil, nil, err
 	}
 	return ctx, func(e *error) {
 		startTime := time.Now()
 		defer func() {
-			atomic.AddInt64(&shardsLockCounter, -1)
+			shardsLockCounter.Add(-1)
 			shardLockTimings.Add("Unlock", time.Since(startTime))
 		}()
 		unlock(e)
@@ -471,12 +468,6 @@ func postErsCompletion(topologyRecovery *TopologyRecovery, analysisEntry *inst.D
 }
 
 // checkAndRecoverGenericProblem is a general-purpose recovery function
-func checkAndRecoverLockedSemiSyncPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
-	logger.Warn("No actions in checkAndRecoverLockedSemiSyncPrimary")
-	return false, nil, nil
-}
-
-// checkAndRecoverGenericProblem is a general-purpose recovery function
 func checkAndRecoverGenericProblem(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logger *log.PrefixedLogger) (bool, *TopologyRecovery, error) {
 	logger.Warn("No actions in checkAndRecoverGenericProblem")
 	return false, nil, nil
@@ -662,7 +653,7 @@ func getCheckAndRecoverFunctionCode(analysisEntry *inst.DetectionAnalysis) (reco
 	analysisCode := analysisEntry.Analysis
 	switch analysisCode {
 	// primary
-	case inst.DeadPrimary, inst.DeadPrimaryAndSomeReplicas, inst.PrimaryDiskStalled, inst.PrimarySemiSyncBlocked:
+	case inst.DeadPrimary, inst.DeadPrimaryAndSomeReplicas, inst.PrimaryDiskStalled, inst.PrimarySemiSyncBlocked, inst.PrimaryTabletUnreachableByQuorum:
 		// If ERS is disabled globally, on the keyspace or the shard, skip recovery.
 		if !isERSEnabled(analysisEntry) {
 			log.Info(fmt.Sprintf("VTOrc not configured to run EmergencyReparentShard, skipping recovering %v", analysisCode))
@@ -686,8 +677,6 @@ func getCheckAndRecoverFunctionCode(analysisEntry *inst.DetectionAnalysis) (reco
 		recoveryFunc = recoverErrantGTIDDetectedFunc
 	case inst.PrimaryHasPrimary:
 		recoveryFunc = recoverPrimaryHasPrimaryFunc
-	case inst.LockedSemiSyncPrimary:
-		recoveryFunc = recoverLockedSemiSyncPrimaryFunc
 	case inst.ClusterHasNoPrimary:
 		recoveryFunc = electNewPrimaryFunc
 	case inst.PrimaryIsReadOnly, inst.PrimarySemiSyncMustBeSet, inst.PrimarySemiSyncMustNotBeSet, inst.PrimaryCurrentTypeMismatch:
@@ -741,8 +730,6 @@ func hasActionableRecovery(recoveryFunctionCode recoveryFunction) bool {
 		return true
 	case recoverPrimaryHasPrimaryFunc:
 		return true
-	case recoverLockedSemiSyncPrimaryFunc:
-		return true
 	case electNewPrimaryFunc:
 		return true
 	case fixPrimaryFunc:
@@ -779,8 +766,6 @@ func getCheckAndRecoverFunction(recoveryFunctionCode recoveryFunction) (
 		return recoverPrimaryTabletDeleted
 	case recoverPrimaryHasPrimaryFunc:
 		return recoverPrimaryHasPrimary
-	case recoverLockedSemiSyncPrimaryFunc:
-		return checkAndRecoverLockedSemiSyncPrimary
 	case electNewPrimaryFunc:
 		return electNewPrimary
 	case fixPrimaryFunc:
@@ -816,8 +801,6 @@ func getRecoverFunctionName(recoveryFunctionCode recoveryFunction) string {
 		return RecoverPrimaryTabletDeletedRecoveryName
 	case recoverPrimaryHasPrimaryFunc:
 		return RecoverPrimaryHasPrimaryRecoveryName
-	case recoverLockedSemiSyncPrimaryFunc:
-		return CheckAndRecoverLockedSemiSyncPrimaryRecoveryName
 	case electNewPrimaryFunc:
 		return ElectNewPrimaryRecoveryName
 	case fixPrimaryFunc:
@@ -847,6 +830,15 @@ func shardWideRecoveryIgnoredTablets(recoveryFunctionCode recoveryFunction, anal
 			// evaluates current state. The problem may have been
 			// resolved by a prior dependency recovery.
 			// See https://github.com/vitessio/vitess/issues/19941
+		case inst.PrimaryTabletUnreachableByQuorum:
+			// The primary's mysqld is up by definition here — only its
+			// vttablet is unreachable, and it may have restarted between
+			// detection and this recovery acquiring the shard lock. Refresh
+			// it so a recovered vttablet flips LastCheckValid and
+			// checkIfAlreadyFixed aborts the ERS, instead of failing over a
+			// just-recovered primary on stale analysis plus observer reports
+			// that have not yet aged past the freshness window. A still-dead
+			// vttablet fails the refresh quickly (connection refused).
 		default:
 			tabletsToIgnore = append(tabletsToIgnore, analysisEntry.AnalyzedInstanceAlias)
 		}

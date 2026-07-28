@@ -25,7 +25,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
@@ -126,26 +125,11 @@ func TestMain(m *testing.M) {
 		clusterInstance = cluster.NewCluster(Cell, "localhost")
 		defer clusterInstance.Teardown()
 
-		vtgateVer, err := cluster.GetMajorVersion("vtgate")
-		if err != nil {
-			return 1
-		}
-		vttabletVer, err := cluster.GetMajorVersion("vttablet")
-		if err != nil {
-			return 1
-		}
-
-		// For upgrade/downgrade tests.
-		if vtgateVer < 17 || vttabletVer < 17 {
-			// Then only the default sidecarDBName is supported.
-			sidecarDBName = sidecar.DefaultName
-		}
-
 		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--schema-change-signal")
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--queryserver-config-schema-change-signal")
 
 		// Start topo server
-		err = clusterInstance.StartTopo()
+		err := clusterInstance.StartTopo()
 		if err != nil {
 			return 1
 		}

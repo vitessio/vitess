@@ -18,16 +18,20 @@ package vtbench
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // ClientProtocol indicates how to connect
@@ -85,10 +89,12 @@ type Bench struct {
 	lock sync.RWMutex
 
 	Rows    *stats.Counter
+	Errors  *stats.CountersWithSingleLabel
 	Bytes   *stats.Counter
 	Timings *stats.Timings
 
-	TotalTime time.Duration
+	ContinueOnError bool
+	TotalTime       time.Duration
 }
 
 type benchThread struct {
@@ -107,6 +113,7 @@ func NewBench(threads, count int, cp ConnParams, query string) *Bench {
 		ConnParams: cp,
 		Query:      query,
 		Rows:       stats.NewCounter("", ""),
+		Errors:     stats.NewCountersWithSingleLabel("", "", "code"),
 		Timings:    stats.NewTimings("", "", ""),
 	}
 	return &bench
@@ -225,10 +232,20 @@ func (bt *benchThread) clientLoop(ctx context.Context) {
 	log.V(10).Info(fmt.Sprintf("thread %d starting loop", bt.i))
 
 	for i := 0; i < b.Count; i++ {
+		// Enforce the deadline across all protocols, even if execute()
+		// ignores ctx (e.g. mysqlClientConn).
+		if ctx.Err() != nil {
+			break
+		}
 		start := time.Now()
 		result, err := bt.conn.execute(ctx, bt.query, bt.bindVars)
 		b.Timings.Record("query", start)
 		if err != nil {
+			b.Errors.Add(errorCode(err).String(), 1)
+			if b.ContinueOnError && ctx.Err() == nil {
+				log.V(1).Info(fmt.Sprintf("query error: %v", err))
+				continue
+			}
 			log.Error(fmt.Sprintf("query error: %v", err))
 			break
 		} else {
@@ -237,4 +254,15 @@ func (bt *benchThread) clientLoop(ctx context.Context) {
 	}
 
 	b.wg.Done()
+}
+
+// errorCode returns the vtrpcpb.Code for err, preferring the MySQL
+// classification of a *sqlerror.SQLError when present so that the
+// per-protocol error summary remains accurate for the mysql protocol.
+func errorCode(err error) vtrpcpb.Code {
+	var sqlErr *sqlerror.SQLError
+	if errors.As(err, &sqlErr) {
+		return sqlErr.VtRpcErrorCode()
+	}
+	return vterrors.Code(err)
 }

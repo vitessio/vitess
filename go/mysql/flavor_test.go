@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/capabilities"
 )
@@ -149,7 +150,7 @@ func TestServerVersionCapableOf(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			capableOf := ServerVersionCapableOf(tc.version)
 			isCapable, err := capableOf(tc.capability)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tc.isCapable, isCapable)
 		})
 	}
@@ -301,7 +302,7 @@ func TestGetFlavor(t *testing.T) {
 				_, ok := flavor.(mariadbFlavor102)
 				assert.True(t, ok, "Expected mariadbFlavor102 for version %s, but got %T. %s", tc.version, flavor, tc.description)
 			default:
-				t.Errorf("Unknown expected type: %s", tc.expectedType)
+				assert.Failf(t, "unknown type", "Unknown expected type: %s", tc.expectedType)
 			}
 		})
 	}

@@ -1384,8 +1384,7 @@ func (c *CreateTableEntity) isRangePartitionsRotation(
 	}
 	// Find dropped partitions:
 	var droppedPartitions1 []*sqlparser.PartitionDefinition
-	for i := len(definitions1) - 1; i >= 0; i-- {
-		definition := definitions1[i]
+	for i, definition := range slices.Backward(definitions1) {
 		if _, ok := definitions2map[sqlparser.CanonicalString(definition)]; !ok {
 			// In range partitioning, it's allowed to drop any partition, whether it's the first, somewhere in the middle, or last.
 			droppedPartitions1 = append(droppedPartitions1, definition)

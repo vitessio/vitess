@@ -20,6 +20,8 @@ import (
 	"log/slog"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func skippedCount(tl *ThrottledLogger) int {
@@ -41,25 +43,25 @@ func TestThrottledLogger(t *testing.T) {
 
 	go tl.Infof("test %v", 1)
 	if got, want := <-log, "name: test 1"; got != want {
-		t.Errorf("got %q, want %q", got, want)
+		assert.Equalf(t, want, got, "got %q, want %q", got, want)
 	}
 
 	go tl.Infof("test %v", 2)
 	if got, want := <-log, "name: skipped 1 log messages"; got != want {
-		t.Errorf("got %q, want %q", got, want)
+		assert.Equalf(t, want, got, "got %q, want %q", got, want)
 	}
 	if got, want := skippedCount(tl), 0; got != want {
-		t.Errorf("skippedCount is %v but was expecting %v after waiting", got, want)
+		assert.Equalf(t, want, got, "skippedCount is %v but was expecting %v after waiting", got, want)
 	}
 	if got := time.Since(start); got < interval {
-		t.Errorf("didn't wait long enough before logging, got %v, want >= %v", got, interval)
+		assert.Failf(t, "did not wait long enough", "didn't wait long enough before logging, got %v, want >= %v", got, interval)
 	}
 
 	go tl.Infof("test %v", 3)
 	if got, want := <-log, "name: test 3"; got != want {
-		t.Errorf("got %q, want %q", got, want)
+		assert.Equalf(t, want, got, "got %q, want %q", got, want)
 	}
 	if got, want := skippedCount(tl), 0; got != want {
-		t.Errorf("skippedCount is %v but was expecting %v", got, want)
+		assert.Equalf(t, want, got, "skippedCount is %v but was expecting %v", got, want)
 	}
 }

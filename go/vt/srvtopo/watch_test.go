@@ -92,7 +92,7 @@ func TestWatcherOutageBehavior(t *testing.T) {
 
 	// Get should still work from cache during outage
 	vschema, err = rs.GetSrvVSchema(ctx, "test_cell")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, vschema)
 
 	// Wait during outage period
@@ -105,7 +105,7 @@ func TestWatcherOutageBehavior(t *testing.T) {
 
 	// Get operations should continue working from cache
 	vschema, err = rs.GetSrvVSchema(ctx, "test_cell")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, vschema)
 
 	// Clear the error and update VSchema
@@ -128,7 +128,7 @@ func TestWatcherOutageBehavior(t *testing.T) {
 
 	// Verify recovery worked
 	vschema, err = rs.GetSrvVSchema(ctx, "test_cell")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, vschema)
 }
 
@@ -172,7 +172,7 @@ func TestVSchemaWatcherCacheExpiryBehavior(t *testing.T) {
 	// Get VSchema after TTL expiry with non-topo error
 	// Should still serve cached value (not the error)
 	vschema, err = rs.GetSrvVSchema(ctx, "test_cell")
-	assert.NoError(t, err, "Should serve cached value for non-topo errors even after TTL")
+	require.NoError(t, err, "Should serve cached value for non-topo errors even after TTL")
 	assert.NotNil(t, vschema, "Should return cached VSchema")
 
 	// Now test with a topo error
@@ -181,7 +181,7 @@ func TestVSchemaWatcherCacheExpiryBehavior(t *testing.T) {
 
 	// With topo error after TTL expiry, cache should be cleared
 	vschema, err = rs.GetSrvVSchema(ctx, "test_cell")
-	assert.Error(t, err, "Should return error for topo errors after TTL expiry")
+	require.Error(t, err, "Should return error for topo errors after TTL expiry")
 	assert.True(t, topo.IsErrType(err, topo.Timeout), "Should return the topo error")
 	assert.Nil(t, vschema, "Should not return vschema when error occurs")
 }

@@ -314,6 +314,10 @@ func (v *vschema) ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKey
 	panic("implement me")
 }
 
+func (v *vschema) AllowCrossKeyspaceReads(keyspace string) (bool, error) {
+	return true, nil
+}
+
 func (v *vschema) KeyspaceError(keyspace string) error {
 	// TODO implement me
 	panic("implement me")
@@ -349,27 +353,12 @@ func (v *vschema) IsViewsEnabled() bool {
 	panic("implement me")
 }
 
-func (v *vschema) GetUDV(name string) *querypb.BindVariable {
-	// TODO implement me
-	panic("implement me")
-}
-
 func (v *vschema) PlanPrepareStatement(context.Context, string) (*engine.Plan, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (v *vschema) ClearPrepareData(stmtName string) {
-	// TODO implement me
-	panic("implement me")
-}
-
 func (v *vschema) GetPrepareData(stmtName string) *vtgatepb.PrepareData {
-	// TODO implement me
-	panic("implement me")
-}
-
-func (v *vschema) StorePrepareData(name string, pd *vtgatepb.PrepareData) {
 	// TODO implement me
 	panic("implement me")
 }

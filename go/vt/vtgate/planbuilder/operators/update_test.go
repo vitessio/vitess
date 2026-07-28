@@ -134,7 +134,7 @@ func TestGetCastTypeForColumn(t *testing.T) {
 				},
 			}
 			tyStr := getCastTypeForColumn(updatedTable, updExpr)
-			require.EqualValues(t, tt.want, tyStr)
+			require.Equal(t, tt.want, tyStr)
 		})
 	}
 }

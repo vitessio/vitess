@@ -362,7 +362,7 @@ func (bt *BufferingTest) Test(t *testing.T) {
 	if metadata.BufferLastRequestsInFlightMax[label] == 0 {
 		// Missed buffering is okay when we observed the failover during the
 		// COMMIT (which cannot trigger the buffering).
-		assert.Greater(t, updateThreadInstance.internalErrs, 0, "No buffering took place and the update thread saw no error during COMMIT. But one of it must happen.")
+		assert.Positive(t, updateThreadInstance.internalErrs, "No buffering took place and the update thread saw no error during COMMIT. But one of it must happen.")
 	} else {
 		bt.Assert(t, label, &metadata)
 	}

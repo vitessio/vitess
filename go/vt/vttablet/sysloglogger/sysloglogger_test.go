@@ -28,6 +28,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
@@ -131,13 +133,11 @@ func TestSyslog(t *testing.T) {
 	}
 
 	// Verify the count and contents
-	if len(queriesLogged) != 5 {
-		t.Fatalf("Expected 5 queries to be logged, but found %d", len(queriesLogged))
-	}
+	require.Lenf(t, queriesLogged, 5, "Expected 5 queries to be logged, but found %d", len(queriesLogged))
 	for i := 1; i <= 5; i++ {
-		if _, ok := queriesLogged[expectedLogStatsText("select "+strconv.Itoa(i))]; !ok {
-			t.Fatalf("Expected query \"%s\" was not logged", expectedLogStatsText("select "+strconv.Itoa(i)))
-		}
+		expected := expectedLogStatsText("select " + strconv.Itoa(i))
+		_, ok := queriesLogged[expected]
+		require.Truef(t, ok, "Expected query %q was not logged", expected)
 	}
 }
 
@@ -173,13 +173,11 @@ func TestSyslogRedacted(t *testing.T) {
 	}
 
 	// Verify the count and contents
-	if len(queriesLogged) != 5 {
-		t.Fatalf("Expected 5 queries to be logged, but found %d", len(queriesLogged))
-	}
+	require.Lenf(t, queriesLogged, 5, "Expected 5 queries to be logged, but found %d", len(queriesLogged))
 	for i := 1; i <= 5; i++ {
-		if _, ok := queriesLogged[expectedRedactedLogStatsText("select "+strconv.Itoa(i))]; !ok {
-			t.Fatalf("Expected query \"%s\" was not logged", expectedRedactedLogStatsText("select "+strconv.Itoa(i)))
-		}
+		expected := expectedRedactedLogStatsText("select " + strconv.Itoa(i))
+		_, ok := queriesLogged[expected]
+		require.Truef(t, ok, "Expected query %q was not logged", expected)
 	}
 }
 
@@ -211,14 +209,12 @@ func TestSyslogWithBadData(t *testing.T) {
 	}
 
 	// Verify the count and contents
-	if len(queriesLogged) != 4 {
-		t.Fatalf("Expected 4 queries to be logged, but found %d", len(queriesLogged))
-	}
+	require.Lenf(t, queriesLogged, 4, "Expected 4 queries to be logged, but found %d", len(queriesLogged))
 	validNums := []int{1, 2, 3, 5}
 	for _, num := range validNums {
-		if _, ok := queriesLogged[expectedLogStatsText("select "+strconv.Itoa(num))]; !ok {
-			t.Fatalf("Expected query \"%s\" was not logged", expectedLogStatsText("select "+strconv.Itoa(num)))
-		}
+		expected := expectedLogStatsText("select " + strconv.Itoa(num))
+		_, ok := queriesLogged[expected]
+		require.Truef(t, ok, "Expected query %q was not logged", expected)
 	}
 }
 
@@ -249,13 +245,11 @@ func TestSyslogWithInterruptedConnection(t *testing.T) {
 	for received := range mock.messages {
 		queriesLogged[received] = true
 	}
-	if len(queriesLogged) != 4 {
-		t.Fatalf("Expected 4 queries to be logged, but found %d", len(queriesLogged))
-	}
+	require.Lenf(t, queriesLogged, 4, "Expected 4 queries to be logged, but found %d", len(queriesLogged))
 	expectedLogs := []int{1, 2, 3, 5}
 	for _, num := range expectedLogs {
-		if _, ok := queriesLogged[expectedLogStatsText("select "+strconv.Itoa(num))]; !ok {
-			t.Fatalf("Expected query \"%s\" was not logged", expectedLogStatsText("select "+strconv.Itoa(num)))
-		}
+		expected := expectedLogStatsText("select " + strconv.Itoa(num))
+		_, ok := queriesLogged[expected]
+		require.Truef(t, ok, "Expected query %q was not logged", expected)
 	}
 }

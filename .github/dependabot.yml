@@ -10,6 +10,51 @@ updates:
       go:
         patterns:
           - "*"
+        exclude-patterns:
+          - "google.golang.org/protobuf"
+          - "google.golang.org/grpc/cmd/protoc-gen-go-grpc"
+          - "github.com/planetscale/vtprotobuf"
+          - "github.com/dave/jennifer"
+          - "golang.org/x/tools"
+      # These modules can influence the content of committed generated files:
+      # the protoc plugins (protoc-gen-go, protoc-gen-go-grpc,
+      # protoc-gen-go-vtproto) stamp their versions into the proto stubs, and
+      # jennifer/x/tools drive the AST code generators (sizegen, asthelpergen,
+      # astfmtgen, vtctldclient). Bumping them fails the CI staleness checks
+      # (check_make_proto, check_make_sizegen, ...) until a human regenerates
+      # (`make proto` / `make codegen`) and pushes the result, so keep them in
+      # their own group to not block the main go group.
+      codegen:
+        patterns:
+          - "google.golang.org/protobuf"
+          - "google.golang.org/grpc/cmd/protoc-gen-go-grpc"
+          - "github.com/planetscale/vtprotobuf"
+          - "github.com/dave/jennifer"
+          - "golang.org/x/tools"
+
+  - package-ecosystem: "gomod"
+    directories:
+      - "/tools/addlicense"
+      - "/tools/gofumpt"
+      - "/tools/goimports"
+      - "/tools/gotestsum"
+      - "/tools/goyacc"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 14
+    groups:
+      go-tools:
+        patterns:
+          - "*"
+
+  # golangci-lint bumps can change lint findings; keep them in their own PR.
+  - package-ecosystem: "gomod"
+    directory: "/tools/golangci-lint"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 14
 
   - package-ecosystem: "github-actions"
     directory: "/"
@@ -54,9 +99,6 @@ updates:
       - "/docker/vttestserver"
       - "/examples/compose/external_db/mysql"
       - "/go/mysql/collations/tools/colldump"
-      - "/test/antithesis/compose"
-      - "/test/antithesis/compose/antithesis-client"
-      - "/test/antithesis/compose/source_db/mysql"
     schedule:
       interval: "weekly"
     cooldown:

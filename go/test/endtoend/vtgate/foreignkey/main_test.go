@@ -261,9 +261,8 @@ func setupExtraMyConfig() error {
 	}
 
 	// Set the environment variable
-	err = os.Setenv("EXTRA_MY_CNF", configPath)
-	if err != nil {
-		return fmt.Errorf("failed to set EXTRA_MY_CNF environment variable: %v", err)
+	if err = os.Setenv("EXTRA_MY_CNF", configPath); err != nil {
+		return fmt.Errorf("failed to set EXTRA_MY_CNF: %v", err)
 	}
 
 	log.Info("Set EXTRA_MY_CNF to: " + configPath)

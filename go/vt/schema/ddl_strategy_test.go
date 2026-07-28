@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestIsDirect(t *testing.T) {
@@ -92,7 +93,7 @@ func TestIsCutOverThresholdFlag(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			val, isCutOver := isCutOverThresholdFlag(ts.s)
 			assert.Equal(t, ts.expect, isCutOver)
@@ -100,7 +101,7 @@ func TestIsCutOverThresholdFlag(t *testing.T) {
 
 			if ts.expect {
 				d, err := setting.CutOverThreshold()
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, ts.d, d)
 			}
 		})
@@ -163,7 +164,7 @@ func TestIsExpireArtifactsFlag(t *testing.T) {
 				assert.ErrorContains(t, err, ts.expectError)
 				return
 			}
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			val, isRetainArtifacts := isRetainArtifactsFlag(ts.s)
 			assert.Equal(t, ts.expect, isRetainArtifacts)
@@ -171,7 +172,7 @@ func TestIsExpireArtifactsFlag(t *testing.T) {
 
 			if ts.expect {
 				d, err := setting.RetainArtifactsDuration()
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, ts.d, d)
 			}
 		})
@@ -373,7 +374,7 @@ func TestParseDDLStrategy(t *testing.T) {
 				assert.ErrorContains(t, err, ts.expectError)
 				return
 			}
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, ts.strategy, setting.Strategy)
 			assert.Equal(t, ts.options, setting.Options)
 			assert.Equal(t, ts.isDeclarative, setting.IsDeclarative())
@@ -387,10 +388,10 @@ func TestParseDDLStrategy(t *testing.T) {
 			assert.Equal(t, ts.allowForeignKeys, setting.IsAllowForeignKeysFlag())
 			assert.Equal(t, ts.analyzeTable, setting.IsAnalyzeTableFlag())
 			cutOverThreshold, err := setting.CutOverThreshold()
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, ts.cutOverThreshold, cutOverThreshold)
 			forceCutOverAfter, err := setting.ForceCutOverAfter()
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, ts.forceCutOverAfter, forceCutOverAfter)
 
 			runtimeOptions := strings.Join(setting.RuntimeOptions(), " ")
@@ -399,15 +400,15 @@ func TestParseDDLStrategy(t *testing.T) {
 	}
 	{
 		_, err := ParseDDLStrategy("other")
-		assert.Error(t, err)
+		require.Error(t, err)
 	}
 	{
 		_, err := ParseDDLStrategy("online --cut-over-threshold=X")
-		assert.Error(t, err)
+		require.Error(t, err)
 	}
 	{
 		_, err := ParseDDLStrategy("online --cut-over-threshold=3")
-		assert.Error(t, err)
+		require.Error(t, err)
 	}
 	{
 		_, err := ParseDDLStrategy("online --retain-artifacts=3")

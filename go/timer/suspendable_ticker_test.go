@@ -30,7 +30,7 @@ const (
 )
 
 func TestInitiallySuspended(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	t.Run("true", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(ctx, time.Second)
 		defer cancel()

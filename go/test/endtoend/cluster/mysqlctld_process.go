@@ -56,12 +56,7 @@ func (mysqlctld *MysqlctldProcess) InitDb() (err error) {
 		"--tablet-uid", strconv.Itoa(mysqlctld.TabletUID),
 		"--mysql-port", strconv.Itoa(mysqlctld.MySQLPort),
 		"--init-db-sql-file", mysqlctld.InitDBFile,
-	}
-	mysqlctldVer, versionErr := GetMajorVersion(mysqlctld.Binary)
-	if versionErr != nil {
-		log.Warn(fmt.Sprintf("failed to get major %s version; skipping --log-format flag: %s", mysqlctld.Binary, versionErr))
-	} else if mysqlctldVer >= 24 {
-		args = append(args, "--log-format", "text")
+		"--log-format", "text",
 	}
 	if mysqlctld.SocketFile != "" {
 		args = append(args, "--socket-file", mysqlctld.SocketFile)
@@ -82,12 +77,7 @@ func (mysqlctld *MysqlctldProcess) Start() error {
 	args := []string{
 		"--tablet-uid", strconv.Itoa(mysqlctld.TabletUID),
 		"--mysql-port", strconv.Itoa(mysqlctld.MySQLPort),
-	}
-	mysqlctldVer, versionErr := GetMajorVersion(mysqlctld.Binary)
-	if versionErr != nil {
-		log.Warn(fmt.Sprintf("failed to get major %s version; skipping --log-format flag: %s", mysqlctld.Binary, versionErr))
-	} else if mysqlctldVer >= 24 {
-		args = append(args, "--log-format", "text")
+		"--log-format", "text",
 	}
 	if mysqlctld.SocketFile != "" {
 		args = append(args, "--socket-file", mysqlctld.SocketFile)
@@ -171,12 +161,7 @@ func (mysqlctld *MysqlctldProcess) Stop() error {
 	mysqlctld.exitSignalReceived = true
 	args := []string{
 		"--tablet-uid", strconv.Itoa(mysqlctld.TabletUID),
-	}
-	mysqlctlVer, versionErr := GetMajorVersion("mysqlctl")
-	if versionErr != nil {
-		log.Warn(fmt.Sprintf("failed to get major %s version; skipping --log-format flag: %s", "mysqlctl", versionErr))
-	} else if mysqlctlVer >= 24 {
-		args = append(args, "--log-format", "text")
+		"--log-format", "text",
 	}
 	tmpProcess := exec.Command(
 		"mysqlctl",

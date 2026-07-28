@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/mysqlctl"
 )
@@ -43,12 +44,12 @@ func TestPoller(t *testing.T) {
 	mysqld.Replicating = true
 	mysqld.ReplicationLagSeconds = 1
 	lag, err := poller.Status()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, 1*time.Second, lag)
 
 	time.Sleep(10 * time.Millisecond)
 	mysqld.Replicating = false
 	lag, err = poller.Status()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Less(t, int64(1*time.Second), int64(lag))
 }

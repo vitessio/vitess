@@ -83,6 +83,7 @@ type SandboxConn struct {
 	ReserveCount                atomic.Int64
 	ReleaseCount                atomic.Int64
 	GetSchemaCount              atomic.Int64
+	ExecDelayResponse           time.Duration
 	GetSchemaDelayResponse      time.Duration
 
 	queriesRequireLocking bool
@@ -116,6 +117,9 @@ type SandboxConn struct {
 	VStreamErrors     []error
 	VStreamCh         chan *binlogdatapb.VEvent
 	VStreamEventDelay time.Duration // Any sleep that should be introduced before each event is streamed
+	// VStreamRequests records every VStreamRequest received by VStream so tests can inspect
+	// what was sent to the tablet (e.g. Options.NoTimeouts).
+	VStreamRequests []*binlogdatapb.VStreamRequest
 
 	// BinlogDump expectations.
 	BinlogDumpResponses []*binlogdatapb.BinlogDumpResponse
@@ -163,6 +167,22 @@ func NewSandboxConn(t *topodatapb.Tablet) *SandboxConn {
 		MustFailExecute: make(map[sqlparser.StatementType]int),
 		txIDToRID:       make(map[int64]int64),
 		parser:          sqlparser.NewTestParser(),
+	}
+}
+
+func (sbc *SandboxConn) waitForExecDelay(ctx context.Context) error {
+	if sbc.ExecDelayResponse <= 0 {
+		return nil
+	}
+
+	timer := time.NewTimer(sbc.ExecDelayResponse)
+	defer timer.Stop()
+
+	select {
+	case <-timer.C:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }
 
@@ -317,6 +337,9 @@ func (sbc *SandboxConn) Execute(ctx context.Context, session queryservice.Sessio
 	if err := sbc.getError(); err != nil {
 		return nil, err
 	}
+	if err := sbc.waitForExecDelay(ctx); err != nil {
+		return nil, err
+	}
 
 	stmt, _ := sbc.parser.Parse(query) // knowingly ignoring the error
 	if sbc.MustFailExecute[sqlparser.ASTToStatementType(stmt)] > 0 {
@@ -340,6 +363,10 @@ func (sbc *SandboxConn) StreamExecute(ctx context.Context, session queryservice.
 	sbc.appendToOptions(options)
 	err := sbc.getError()
 	if err != nil {
+		sbc.sExecMu.Unlock()
+		return err
+	}
+	if err := sbc.waitForExecDelay(ctx); err != nil {
 		sbc.sExecMu.Unlock()
 		return err
 	}
@@ -602,6 +629,7 @@ func (sbc *SandboxConn) AddVStreamEvents(events []*binlogdatapb.VEvent, err erro
 
 // VStream is part of the QueryService interface.
 func (sbc *SandboxConn) VStream(ctx context.Context, request *binlogdatapb.VStreamRequest, send func([]*binlogdatapb.VEvent) error) error {
+	sbc.VStreamRequests = append(sbc.VStreamRequests, request)
 	if sbc.StartPos != "" && sbc.StartPos != request.Position {
 		log.Error(fmt.Sprintf("startPos(%v): %v, want %v", request.Target, request.Position, sbc.StartPos))
 		return fmt.Errorf("startPos(%v): %v, want %v", request.Target, request.Position, sbc.StartPos)

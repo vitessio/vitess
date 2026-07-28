@@ -46,7 +46,7 @@ import (
 func TestTxEngineClose(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
-	ctx := context.Background()
+	ctx := t.Context()
 	cfg := tabletenv.NewDefaultConfig()
 	cfg.DB = newDBConfigs(db)
 	cfg.TxPool.Size = 10
@@ -79,9 +79,7 @@ func TestTxEngineClose(t *testing.T) {
 	// Immediate close.
 	te.AcceptReadOnly()
 	c, _, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	c.Unlock()
 	start = time.Now()
 	te.Close()
@@ -126,10 +124,10 @@ func TestTxEngineClose(t *testing.T) {
 	start = time.Now()
 	te.Close()
 	if diff := time.Since(start); diff > 250*time.Millisecond {
-		t.Errorf("Close time: %v, must be under 0.25s", diff)
+		assert.Failf(t, "close time too long", "Close time: %v, must be under 0.25s", diff)
 	}
 	if diff := time.Since(start); diff < 100*time.Millisecond {
-		t.Errorf("Close time: %v, must be over 0.1", diff)
+		assert.Failf(t, "close time too short", "Close time: %v, must be over 0.1", diff)
 	}
 
 	// Normal close with Reserved connection timeout wait.
@@ -183,7 +181,7 @@ func TestTxEngineBegin(t *testing.T) {
 
 		te.transition(Transitioning)
 		_, _, err = exec()
-		assert.EqualError(t, err, "tx engine can't accept new connections in state Transitioning")
+		require.EqualError(t, err, "tx engine can't accept new connections in state Transitioning")
 
 		te.transition(NotServing)
 		_, _, err = exec()
@@ -665,7 +663,7 @@ func TestWithInnerTests(outerT *testing.T) {
 				err := startTx(te, false)
 				require.Error(t, err)
 			default:
-				t.Fatalf("don't know how to [%v]", test.tx)
+				require.Failf(t, "unknown tx type", "don't know how to [%v]", test.tx)
 			}
 
 			wg := sync.WaitGroup{}
@@ -731,23 +729,23 @@ func TestTxEngineFailReserve(t *testing.T) {
 
 	options := &querypb.ExecuteOptions{}
 	_, err := te.Reserve(ctx, options, 0, nil)
-	assert.EqualError(t, err, "tx engine can't accept new connections in state NotServing")
+	require.EqualError(t, err, "tx engine can't accept new connections in state NotServing")
 
 	_, _, err = te.ReserveBegin(ctx, options, nil)
-	assert.EqualError(t, err, "tx engine can't accept new connections in state NotServing")
+	require.EqualError(t, err, "tx engine can't accept new connections in state NotServing")
 
 	te.AcceptReadOnly()
 
 	db.AddRejectedQuery("dummy_query", errors.New("failed executing dummy_query"))
 	_, err = te.Reserve(ctx, options, 0, []string{"dummy_query"})
-	assert.EqualError(t, err, "unknown error: failed executing dummy_query (errno 1105) (sqlstate HY000) during query: dummy_query")
+	require.EqualError(t, err, "unknown error: failed executing dummy_query (errno 1105) (sqlstate HY000) during query: dummy_query")
 
 	_, _, err = te.ReserveBegin(ctx, options, []string{"dummy_query"})
-	assert.EqualError(t, err, "unknown error: failed executing dummy_query (errno 1105) (sqlstate HY000) during query: dummy_query")
+	require.EqualError(t, err, "unknown error: failed executing dummy_query (errno 1105) (sqlstate HY000) during query: dummy_query")
 
 	nonExistingID := int64(42)
 	_, err = te.Reserve(ctx, options, nonExistingID, nil)
-	assert.EqualError(t, err, "transaction 42: not found (potential transaction timeout)")
+	require.EqualError(t, err, "transaction 42: not found (potential transaction timeout)")
 
 	txID, _, _, err := te.Begin(ctx, 0, nil, options)
 	require.NoError(t, err)
@@ -756,7 +754,7 @@ func TestTxEngineFailReserve(t *testing.T) {
 	conn.Unlock() // but we keep holding on to it... sneaky....
 
 	_, err = te.Reserve(ctx, options, txID, []string{"dummy_query"})
-	assert.EqualError(t, err, "unknown error: failed executing dummy_query (errno 1105) (sqlstate HY000) during query: dummy_query")
+	require.EqualError(t, err, "unknown error: failed executing dummy_query (errno 1105) (sqlstate HY000) during query: dummy_query")
 
 	connID, _, err := te.Commit(ctx, txID)
 	require.Error(t, err)
@@ -824,7 +822,7 @@ func TestCheckReceivedError(t *testing.T) {
 			if tc.expQuery != "" {
 				db.AddQuery(tc.expQuery, &sqltypes.Result{})
 			}
-			nonRetryable := te.checkErrorAndMarkFailed(context.Background(), "aa", tc.receivedErr, "")
+			nonRetryable := te.checkErrorAndMarkFailed(t.Context(), "aa", tc.receivedErr, "")
 			require.NotEqual(t, tc.retryable, nonRetryable)
 			if !tc.retryable {
 				require.Equal(t, errPrepFailed, te.preparedPool.reserved["aa"])
@@ -950,15 +948,15 @@ func TestPrepareTx(t *testing.T) {
 			te := NewTxEngine(tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TabletServerTest"), nil)
 			te.AcceptReadWrite()
 			db.ResetQueryLog()
-			failed, err := te.prepareTx(context.Background(), tt.preparedTx)
-			require.EqualValues(t, tt.requireFailure, failed)
+			failed, err := te.prepareTx(t.Context(), tt.preparedTx)
+			require.Equal(t, tt.requireFailure, failed)
 			if tt.errWanted != "" {
 				require.ErrorContains(t, err, tt.errWanted)
 				return
 			}
 			require.NoError(t, err)
-			require.EqualValues(t, 1, len(te.preparedPool.conns))
-			require.EqualValues(t, tt.queryLogWanted, db.QueryLog())
+			require.Len(t, te.preparedPool.conns, 1)
+			require.Equal(t, tt.queryLogWanted, db.QueryLog())
 		})
 	}
 }

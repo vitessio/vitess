@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { useCreateVDiff, useShowVDiff } from '../../../hooks/api';
 import { DataTable } from '../../dataTable/DataTable';
@@ -62,7 +62,7 @@ export const WorkflowVDiff = ({ clusterID, keyspace, name }: Props) => {
         createVDiffMutation.mutate();
     };
 
-    let hasMutationRun = !!createVDiffMutation.data || !!createVDiffMutation.error;
+    const hasMutationRun = !!createVDiffMutation.data || !!createVDiffMutation.error;
 
     const closeDialog = () => {
         setDialogOpen(false);

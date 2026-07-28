@@ -624,8 +624,8 @@
                           "Name": "user",
                           "Sharded": true
                         },
-                        "FieldQuery": "select :u_id + e.id as `u.id + e.id` from user_extra as e where 1 != 1",
-                        "Query": "select :u_id + e.id as `u.id + e.id` from user_extra as e where e.id = :u_col /* INT16 */ limit 10"
+                        "FieldQuery": "select :u_id + e.id as `u.id+e.id` from user_extra as e where 1 != 1",
+                        "Query": "select :u_id + e.id as `u.id+e.id` from user_extra as e where e.id = :u_col /* INT16 */ limit 10"
                       }
                     ]
                   }
@@ -701,8 +701,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select u.id, :__sq1 /* INT16 */ as `(select col from ``user``)`, u.col from `user` as u where 1 != 1",
-                    "Query": "select u.id, :__sq1 /* INT16 */ as `(select col from ``user``)`, u.col from `user` as u"
+                    "FieldQuery": "select u.id, :__sq1 /* INT16 */ as `(select col from user)`, u.col from `user` as u where 1 != 1",
+                    "Query": "select u.id, :__sq1 /* INT16 */ as `(select col from user)`, u.col from `user` as u"
                   }
                 ]
               },
@@ -912,7 +912,7 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select `user`.col from `user` where 1 != 1",
+                "FieldQuery": "select /*vt+ PLANNER=left2right */ `user`.col from `user` where 1 != 1",
                 "Query": "select /*vt+ PLANNER=left2right */ `user`.col from `user`"
               },
               {
@@ -922,7 +922,7 @@
                   "Name": "main",
                   "Sharded": false
                 },
-                "FieldQuery": "select 1 from unsharded as m1 where 1 != 1",
+                "FieldQuery": "select /*vt+ PLANNER=left2right */ 1 from unsharded as m1 where 1 != 1",
                 "Query": "select /*vt+ PLANNER=left2right */ 1 from unsharded as m1"
               }
             ]
@@ -934,7 +934,7 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select 1 from unsharded as m2 where 1 != 1",
+            "FieldQuery": "select /*vt+ PLANNER=left2right */ 1 from unsharded as m2 where 1 != 1",
             "Query": "select /*vt+ PLANNER=left2right */ 1 from unsharded as m2"
           }
         ]

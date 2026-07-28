@@ -19,10 +19,12 @@ package vreplication
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 	"unicode"
@@ -32,6 +34,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -78,6 +81,80 @@ func TestMaxQuerySize(t *testing.T) {
 		vr := makeVR(dbClient, 4096)
 		assert.Equal(t, int64(4032), vr.maxQuerySize(vr.dbClient))
 		assert.Nil(t, vr.dbClient.queries)
+	})
+}
+
+// fakeFetchSuperQueryMysqld is a minimal MysqlDaemon test double that delegates
+// FetchSuperQuery to a callback. Only the methods exercised by tests are valid;
+// any other call will panic on the embedded nil interface.
+type fakeFetchSuperQueryMysqld struct {
+	mysqlctl.MysqlDaemon
+	callback func(query string) (*sqltypes.Result, error)
+}
+
+func (f *fakeFetchSuperQueryMysqld) FetchSuperQuery(ctx context.Context, query string) (*sqltypes.Result, error) {
+	return f.callback(query)
+}
+
+func TestFetchInfoSchemaColumnsRetry(t *testing.T) {
+	// Speed up retries for the test.
+	savedDelay := buildColInfoMapInitialDelay
+	buildColInfoMapInitialDelay = time.Millisecond
+	t.Cleanup(func() { buildColInfoMapInitialDelay = savedDelay })
+
+	cols := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"character_set_name|collation_name|column_name|data_type|column_type|extra",
+			"varchar|varchar|varchar|varchar|varchar|varchar",
+		),
+		"utf8mb4|utf8mb4_general_ci|id|int|int(11)|",
+	)
+
+	t.Run("returns rows once they appear after empty attempts", func(t *testing.T) {
+		var calls atomic.Int32
+		fmd := &fakeFetchSuperQueryMysqld{
+			callback: func(query string) (*sqltypes.Result, error) {
+				if calls.Add(1) < 3 {
+					return &sqltypes.Result{}, nil
+				}
+				return cols, nil
+			},
+		}
+		vr := &vreplicator{mysqld: fmd, WorkflowName: "wf1"}
+		qr, err := vr.fetchInfoSchemaColumns(t.Context(), "select 1", "t1")
+		require.NoError(t, err)
+		require.Len(t, qr.Rows, 1)
+		require.EqualValues(t, 3, calls.Load())
+	})
+
+	t.Run("returns bounded error after max attempts", func(t *testing.T) {
+		var calls atomic.Int32
+		fmd := &fakeFetchSuperQueryMysqld{
+			callback: func(query string) (*sqltypes.Result, error) {
+				calls.Add(1)
+				return &sqltypes.Result{}, nil
+			},
+		}
+		vr := &vreplicator{mysqld: fmd, WorkflowName: "wf1"}
+		_, err := vr.fetchInfoSchemaColumns(t.Context(), "select 1", "missingTable")
+		require.ErrorContains(t, err, "missingTable")
+		require.ErrorContains(t, err, fmt.Sprintf("%d attempts", buildColInfoMapMaxAttempts))
+		require.EqualValues(t, buildColInfoMapMaxAttempts, calls.Load())
+	})
+
+	t.Run("query error short-circuits retry", func(t *testing.T) {
+		var calls atomic.Int32
+		wantErr := errors.New("boom")
+		fmd := &fakeFetchSuperQueryMysqld{
+			callback: func(query string) (*sqltypes.Result, error) {
+				calls.Add(1)
+				return nil, wantErr
+			},
+		}
+		vr := &vreplicator{mysqld: fmd, WorkflowName: "wf1"}
+		_, err := vr.fetchInfoSchemaColumns(t.Context(), "select 1", "t1")
+		require.ErrorIs(t, err, wantErr)
+		require.EqualValues(t, 1, calls.Load())
 	})
 }
 
@@ -129,7 +206,7 @@ func TestRecalculatePKColsInfoByColumnNames(t *testing.T) {
 }
 
 func TestPrimaryKeyEquivalentColumns(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	tests := []struct {
 		name      string
 		table     string
@@ -228,9 +305,9 @@ func TestPrimaryKeyEquivalentColumns(t *testing.T) {
 			require.NoError(t, err, "could not connect to mysqld: %v", err)
 			defer conn.Close()
 			cols, indexName, err := mysqlctl.GetPrimaryKeyEquivalentColumns(ctx, conn.ExecuteFetch, env.Dbcfgs.DBName, tt.table)
-			assert.NoError(t, err)
-			require.Equalf(t, cols, tt.wantCols, "Mysqld.GetPrimaryKeyEquivalentColumns() columns = %v, want %v", cols, tt.wantCols)
-			require.Equalf(t, indexName, tt.wantIndex, "Mysqld.GetPrimaryKeyEquivalentColumns() index = %v, want %v", indexName, tt.wantIndex)
+			require.NoError(t, err)
+			require.Equalf(t, tt.wantCols, cols, "Mysqld.GetPrimaryKeyEquivalentColumns() columns = %v, want %v", cols, tt.wantCols)
+			require.Equalf(t, tt.wantIndex, indexName, "Mysqld.GetPrimaryKeyEquivalentColumns() index = %v, want %v", indexName, tt.wantIndex)
 		})
 	}
 }
@@ -242,7 +319,7 @@ func TestPrimaryKeyEquivalentColumns(t *testing.T) {
 //  2. We store the secondary key definitions for step 3
 //  3. We add the secondary keys back after the rows are copied
 func TestDeferSecondaryKeys(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	tablet := addTablet(100)
 	defer deleteTablet(tablet)
 	filter := &binlogdatapb.Filter{
@@ -278,7 +355,7 @@ func TestDeferSecondaryKeys(t *testing.T) {
 		req := &tabletmanagerdatapb.GetSchemaRequest{Tables: []string{tableName}}
 		sd, err := env.Mysqld.GetSchema(ctx, dbName, req)
 		require.NoError(t, err)
-		require.Equal(t, 1, len(sd.TableDefinitions))
+		require.Len(t, sd.TableDefinitions, 1)
 		return removeVersionDifferences(sd.TableDefinitions[0].Schema)
 	}
 	_, err = dbClient.ExecuteFetch("use "+dbName, 1)
@@ -571,7 +648,7 @@ func TestDeferSecondaryKeys(t *testing.T) {
 			// that the stored DDL matches what we expect.
 			if tcase.actionDDL != "" {
 				res, err := dbClient.ExecuteFetch(fmt.Sprintf(getActionsSQLf, tcase.tableName), 1)
-				require.Equal(t, 1, len(res.Rows))
+				require.Len(t, res.Rows, 1)
 				require.NoError(t, err)
 				val, err := res.Rows[0][0].ToBytes()
 				require.NoError(t, err)
@@ -609,7 +686,7 @@ func TestDeferSecondaryKeys(t *testing.T) {
 			// one.
 			res, err := dbClient.ExecuteFetch(fmt.Sprintf(getActionsSQLf, tcase.tableName), expectedPostCopyActionRecs)
 			require.NoError(t, err)
-			require.Equal(t, expectedPostCopyActionRecs, len(res.Rows),
+			require.Len(t, res.Rows, expectedPostCopyActionRecs,
 				"Expected %d post copy action records, got %d", expectedPostCopyActionRecs, len(res.Rows))
 		})
 	}
@@ -673,9 +750,9 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 	vr.WorkflowType = int32(binlogdatapb.VReplicationWorkflowType_MoveTables)
 	getCurrentDDL := func(tableName string) string {
 		req := &tabletmanagerdatapb.GetSchemaRequest{Tables: []string{tableName}}
-		sd, err := env.Mysqld.GetSchema(context.Background(), dbName, req)
+		sd, err := env.Mysqld.GetSchema(t.Context(), dbName, req)
 		require.NoError(t, err)
-		require.Equal(t, 1, len(sd.TableDefinitions))
+		require.Len(t, sd.TableDefinitions, 1)
 		return removeVersionDifferences(sd.TableDefinitions[0].Schema)
 	}
 	getActionsSQLf := "select action from _vt.post_copy_action where vrepl_id=%d and table_name='%s'"
@@ -715,7 +792,7 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 	wg.Wait()
 
 	_, err = dbaconn.ExecuteFetch("unlock tables", 1)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Confirm that the ALTER to re-add the secondary keys
 	// did not succeed.
@@ -726,8 +803,8 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 	// Confirm that we successfully attempted to kill it.
 	query = "select count(*) from performance_schema.events_statements_history where digest_text = 'KILL ?' and errors = 0"
 	res, err := dbaconn.ExecuteFetch(query, 1)
-	assert.NoError(t, err)
-	assert.Equal(t, 1, len(res.Rows))
+	require.NoError(t, err)
+	assert.Len(t, res.Rows, 1)
 	// TODO: figure out why the KILL never shows up...
 	// require.Equal(t, "1", res.Rows[0][0].ToString())
 
@@ -735,7 +812,7 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 	// so it will later be retried.
 	res, err = dbClient.ExecuteFetch(fmt.Sprintf(getActionsSQLf, id, tableName), 1)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(res.Rows))
+	require.Len(t, res.Rows, 1)
 }
 
 // TestResumingFromPreviousWorkflowKeepingRowsCopied tests that when you
@@ -743,7 +820,7 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 // the rows_copied does not reset to zero but continues along from where
 // it left off.
 func TestResumingFromPreviousWorkflowKeepingRowsCopied(t *testing.T) {
-	_, cancel := context.WithCancel(context.Background())
+	_, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	tablet := addTablet(100)
 	defer deleteTablet(tablet)
@@ -840,14 +917,14 @@ func waitForQueryResult(t *testing.T, dbc binlogplayer.DBClient, query, val stri
 	defer tmr.Stop()
 	for {
 		res, err := dbc.ExecuteFetch(query, 1)
-		assert.NoError(t, err)
-		assert.Equal(t, 1, len(res.Rows))
+		require.NoError(t, err)
+		assert.Len(t, res.Rows, 1)
 		if res.Rows[0][0].ToString() == val {
 			return
 		}
 		select {
 		case <-tmr.C:
-			t.Fatalf("query %s did not return expected value of %s", query, val)
+			require.Failf(t, "unexpected query result", "query %s did not return expected value of %s", query, val)
 		default:
 			time.Sleep(50 * time.Millisecond)
 		}
@@ -907,4 +984,73 @@ func TestThrottlerAppNames(t *testing.T) {
 	assert.Contains(t, vc.throttlerAppName, "vreplication")
 	assert.Contains(t, vc.throttlerAppName, "vcopier")
 	assert.NotContains(t, vc.throttlerAppName, "vplayer")
+}
+
+// TestStateMetricNotStuckAfterFailedErrorWrite reproduces issue #20012.
+//
+// setState() advances the in-memory state metric (stats.State) *before* it
+// writes state='Error' to _vt.vreplication. When that UPDATE fails — e.g. the
+// target MySQL is read-only during a reparent (errno 1290) — setState returns
+// an error, so vr.state and the persisted row stay at their prior value
+// (Copying) and no vreplication_log row is written, yet the metric has already
+// been left reporting "Error". The controller retry loop then resumes the
+// stream, but the metric stays stuck on "Error" until the next *successful*
+// state change (in production this was ~34h later, on copy completion).
+//
+// This drives that exact sequence — a failed Error write followed by the
+// settings re-read the retry loop performs — and asserts the observable
+// invariant: the exported state metric must reflect the persisted state
+// (Copying), never a transition the stream never actually committed. It fails
+// on main (metric stuck "Error") and passes once the in-memory state is kept
+// consistent with the persisted row.
+func TestStateMetricNotStuckAfterFailedErrorWrite(t *testing.T) {
+	stats := binlogplayer.NewStats()
+	defer stats.Stop()
+	stats.State.Store(binlogdatapb.VReplicationWorkflowState_Copying.String())
+
+	mockDBClient := binlogplayer.NewMockDBClient(t)
+	defer mockDBClient.Close()
+
+	// 1. The Copying stream hits a terminal apply error, so setState(Error)
+	//    tries to persist state='Error'. The target is read-only, so the
+	//    UPDATE fails exactly as it did in production (errno 1290).
+	readOnlyErr := sqlerror.NewSQLError(sqlerror.EROptionPreventsStatement, "HY000",
+		"The MySQL server is running with the --read-only option so it cannot execute this statement")
+	mockDBClient.ExpectRequestRE("update _vt.vreplication set state='Error'.*where id=1", nil, readOnlyErr)
+
+	// 2. The controller retry loop re-reads settings; the persisted row is
+	//    still Copying because the Error write never landed.
+	settingsResp := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"pos|stop_pos|max_tps|max_replication_lag|state|workflow_type|workflow|workflow_sub_type|defer_secondary_keys|options",
+			"varbinary|varbinary|int64|int64|varbinary|int64|varchar|int64|int64|varchar",
+		),
+		"MySQL56/1b03758e-0dd0-4d39-b0dc-bb7acede17c1:1-1083||9223372036854775807|9223372036854775807|Copying|1|wf|0|0|{}",
+	)
+	mockDBClient.ExpectRequest(binlogplayer.TestGetWorkflowQueryId1, settingsResp, nil)
+	mockDBClient.ExpectRequest("select count(distinct table_name) from _vt.copy_state where vrepl_id=1",
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("count", "int64"), "0"), nil)
+
+	vr := &vreplicator{
+		id:       1,
+		stats:    stats,
+		dbClient: newVDBClient(mockDBClient, stats, vttablet.DefaultVReplicationConfig.RelayLogMaxItems),
+		state:    binlogdatapb.VReplicationWorkflowState_Copying,
+	}
+
+	// The Error write fails; the stream never actually left Copying.
+	err := vr.setState(binlogdatapb.VReplicationWorkflowState_Error, "terminal error: read-only target")
+	require.Error(t, err)
+	require.Equal(t, binlogdatapb.VReplicationWorkflowState_Copying, vr.state,
+		"vr.state must not advance when the state write fails")
+
+	// The retry loop re-reads the (still Copying) settings.
+	settings, _, err := vr.loadSettings(context.Background(), vr.dbClient)
+	require.NoError(t, err)
+	require.Equal(t, binlogdatapb.VReplicationWorkflowState_Copying, settings.State)
+
+	// Invariant (#20012): the exported metric must reflect the persisted
+	// state, not the "Error" transition that was never committed.
+	assert.Equal(t, binlogdatapb.VReplicationWorkflowState_Copying.String(), stats.State.Load(),
+		"state metric must reflect the persisted state (Copying), not a stuck Error")
 }

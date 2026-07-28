@@ -38,7 +38,7 @@ func (c hangCloser) Close() error {
 }
 
 func TestTimeoutCloser(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	{
 		closer := NewTimeoutCloser(ctx, &hangCloser{hang: false}, time.Second)
 		err := closer.Close()

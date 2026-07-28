@@ -34,6 +34,9 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/wrangler"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -53,15 +56,15 @@ func copySchema(t *testing.T, useShardAsSource bool) {
 	}()
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(ctx, t, ts)
 	defer vp.Close()
 
-	if err := ts.CreateKeyspace(context.Background(), "ks", &topodatapb.Keyspace{}); err != nil {
-		t.Fatalf("CreateKeyspace failed: %v", err)
+	if err := ts.CreateKeyspace(t.Context(), "ks", &topodatapb.Keyspace{}); err != nil {
+		require.NoError(t, err)
 	}
 
 	sourcePrimaryDb := fakesqldb.New(t).SetName("sourcePrimaryDb")
@@ -162,17 +165,17 @@ func copySchema(t *testing.T, useShardAsSource bool) {
 	waitForShardPrimary(t, wr, destinationPrimary.Tablet)
 
 	if err := vp.Run([]string{"CopySchemaShard", "--include-views", source, "ks/-40"}); err != nil {
-		t.Fatalf("CopySchemaShard failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	// Check call count on destinationPrimaryDb
 	if count := destinationPrimaryDb.GetQueryCalledNum(createDb); count != 1 {
-		t.Errorf("CopySchemaShard did not create the db exactly once. Query count: %v", count)
+		assert.Failf(t, "CopySchemaShard did not create the db exactly once", "Query count: %v", count)
 	}
 	if count := destinationPrimaryDb.GetQueryCalledNum(createTable); count != 1 {
-		t.Errorf("CopySchemaShard did not create the table exactly once. Query count: %v", count)
+		assert.Failf(t, "CopySchemaShard did not create the table exactly once", "Query count: %v", count)
 	}
 	if count := destinationPrimaryDb.GetQueryCalledNum(createTableView); count != 1 {
-		t.Errorf("CopySchemaShard did not create the table view exactly once. Query count: %v", count)
+		assert.Failf(t, "CopySchemaShard did not create the table view exactly once", "Query count: %v", count)
 	}
 }

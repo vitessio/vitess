@@ -319,9 +319,9 @@ func TestTemplatize(t *testing.T) {
 	}
 	for _, tt := range tests {
 		sm := &StreamMigrator{ts: ts}
-		out, err := sm.templatize(context.Background(), tt.in)
+		out, err := sm.templatize(t.Context(), tt.in)
 		if tt.err != "" {
-			assert.Error(t, err, "templatize(%v) expected to get err=%s, got %+v", stringifyVRS(tt.in), tt.err, err)
+			require.Error(t, err, "templatize(%v) expected to get err=%s, got %+v", stringifyVRS(tt.in), tt.err, err)
 		}
 
 		got := stringifyVRS(out)
@@ -546,7 +546,7 @@ func addReferenceWorkflow(t *testing.T, env *streamMigratorEnv, id int32, source
 }
 
 func TestBuildStreamMigratorOneMaterialize(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	env := newStreamMigratorEnv(ctx, t, customerUnshardedKeyspace, customerShardedKeyspace)
 	defer env.close()
 	tmc := env.tenv.tmc
@@ -568,11 +568,11 @@ func TestBuildStreamMigratorOneMaterialize(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, sm)
 	require.NotNil(t, sm.streams)
-	require.Equal(t, 1, len(sm.streams))
+	require.Len(t, sm.streams, 1)
 
 	workflows, err := sm.StopStreams(ctx)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(workflows))
+	require.Len(t, workflows, 1)
 	require.NoError(t, sm.MigrateStreams(ctx))
 	require.Len(t, sm.templates, 1)
 	env.addTargetQueries([]string{
@@ -583,7 +583,7 @@ func TestBuildStreamMigratorOneMaterialize(t *testing.T) {
 }
 
 func TestBuildStreamMigratorNoStreams(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	env := newStreamMigratorEnv(ctx, t, customerUnshardedKeyspace, customerShardedKeyspace)
 	defer env.close()
 
@@ -591,17 +591,17 @@ func TestBuildStreamMigratorNoStreams(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, sm)
 	require.NotNil(t, sm.streams)
-	require.Equal(t, 0, len(sm.streams))
+	require.Empty(t, sm.streams)
 
 	workflows, err := sm.StopStreams(ctx)
 	require.NoError(t, err)
-	require.Equal(t, 0, len(workflows))
+	require.Empty(t, workflows)
 	require.NoError(t, sm.MigrateStreams(ctx))
-	require.Len(t, sm.templates, 0)
+	require.Empty(t, sm.templates)
 }
 
 func TestBuildStreamMigratorRefStream(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	env := newStreamMigratorEnv(ctx, t, customerUnshardedKeyspace, customerShardedKeyspace)
 	defer env.close()
 
@@ -611,11 +611,11 @@ func TestBuildStreamMigratorRefStream(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, sm)
 	require.NotNil(t, sm.streams)
-	require.Equal(t, 0, len(sm.streams))
+	require.Empty(t, sm.streams)
 
 	workflows, err := sm.StopStreams(ctx)
 	require.NoError(t, err)
-	require.Equal(t, 0, len(workflows))
+	require.Empty(t, workflows)
 	require.NoError(t, sm.MigrateStreams(ctx))
-	require.Len(t, sm.templates, 0)
+	require.Empty(t, sm.templates)
 }

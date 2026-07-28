@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/log"
@@ -95,7 +96,9 @@ func TestVSchemaChangesUnderLoad(t *testing.T) {
 			}},
 		}
 		conn, err := vtgateconn.Dial(ctx, net.JoinHostPort("localhost", strconv.Itoa(vc.ClusterConfig.vtgateGrpcPort)))
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 		defer conn.Close()
 
 		flags := &vtgatepb.VStreamFlags{}
@@ -103,9 +106,13 @@ func TestVSchemaChangesUnderLoad(t *testing.T) {
 		ctx2, cancel := context.WithTimeout(ctx, extendedTimeout/2)
 		defer cancel()
 		reader, err := conn.VStream(ctx2, topodatapb.TabletType_REPLICA, vgtid, filter, flags)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 		_, err = reader.Recv()
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 		log.Info("About to sleep in vstreaming to block the vstream Recv() channel")
 		time.Sleep(extendedTimeout)
 		log.Info("Done vstreaming")

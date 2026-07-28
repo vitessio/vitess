@@ -93,10 +93,6 @@ type VttabletProcess struct {
 
 // Setup starts vttablet process with required arguements
 func (vttablet *VttabletProcess) Setup() (err error) {
-	vttabletVer, err := GetMajorVersion(vttablet.Binary)
-	if err != nil {
-		return err
-	}
 	vttablet.proc = exec.Command(
 		vttablet.Binary,
 		"--topo-implementation", vttablet.TopoImplementation,
@@ -120,9 +116,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		"--grpc-bind-address", "127.0.0.1",
 	)
 
-	if vttabletVer >= 24 {
-		vttablet.proc.Args = append(vttablet.proc.Args, "--log-format", "text")
-	}
+	vttablet.proc.Args = append(vttablet.proc.Args, "--log-format", "text")
 
 	if *isCoverage {
 		vttablet.proc.Args = append(vttablet.proc.Args, "--test.coverprofile="+getCoveragePath("vttablet.out"))

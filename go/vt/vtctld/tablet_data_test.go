@@ -25,6 +25,9 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/vt/logutil"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -114,8 +117,8 @@ func TestTabletData(t *testing.T) {
 	defer ts.Close()
 	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
-	if err := ts.CreateKeyspace(context.Background(), "ks", &topodatapb.Keyspace{}); err != nil {
-		t.Fatalf("CreateKeyspace failed: %v", err)
+	if err := ts.CreateKeyspace(t.Context(), "ks", &topodatapb.Keyspace{}); err != nil {
+		require.NoError(t, err)
 	}
 
 	tablet1 := testlib.NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, nil, testlib.TabletKeyspaceShard(t, "ks", "-80"))
@@ -140,14 +143,12 @@ func TestTabletData(t *testing.T) {
 	}()
 
 	// Start streaming and wait for the first result.
-	requestCtx, requestCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	requestCtx, requestCancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer requestCancel()
 	result, err := thc.Get(requestCtx, tablet1.Tablet.Alias)
 	close(stop)
 
-	if err != nil {
-		t.Fatalf("thc.Get failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	stats := &querypb.RealtimeStats{
 		HealthError:           "testHealthError",
@@ -155,6 +156,6 @@ func TestTabletData(t *testing.T) {
 		CpuUsage:              1.1,
 	}
 	if got, want := result.RealtimeStats, stats; !proto.Equal(got, want) {
-		t.Errorf("RealtimeStats = %#v, want %#v", got, want)
+		assert.Failf(t, "RealtimeStats mismatch", "RealtimeStats = %#v, want %#v", got, want)
 	}
 }
