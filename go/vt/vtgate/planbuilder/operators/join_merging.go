@@ -79,7 +79,14 @@ func (jm *joinMerger) mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs
 			// The merge gets a copy of the routing, so that re-checking it cannot damage
 			// the RHS if we end up not merging after all.
 			jm.requireSingleShard = true
-			return jm.merge(ctx, lhsRoute, rhsRoute, routingB.Clone())
+			merged := jm.merge(ctx, lhsRoute, rhsRoute, routingB.Clone())
+			// A single-shard opcode can still resolve to no shard at all: EqualUnique on a NULL
+			// or on a value the vindex has no mapping for routes nowhere. The merged query would
+			// then run nowhere and the preserved reference rows would go missing, so it runs on an
+			// arbitrary shard instead. The predicate that routed nowhere matches nothing there,
+			// which leaves exactly the preserved rows with NULLs the outer join owes them.
+			merged.NoRoutesSpecialHandling = true
+			return merged
 		}
 		return jm.merge(ctx, lhsRoute, rhsRoute, routingB)
 	case b == anyShard && sameKeyspace:
