@@ -663,12 +663,12 @@ func TestReplicationStopped(t *testing.T) {
 		out, err := utils.Ers(clusterInstance, tablets[3], "60s", "30s")
 		require.NoError(t, err, out)
 		// Verify that the tablet has the inserted value
-		err = utils.CheckInsertedValues(context.Background(), t, tablets[3], insertedVal)
+		err = utils.CheckInsertedValues(t.Context(), t, tablets[3], insertedVal)
 		require.NoError(t, err)
 		// Confirm that replication is setup correctly from tablets[3] to tablets[0]
 		utils.ConfirmReplication(t, tablets[3], tablets[:1])
 		// Confirm that tablets[2] which had replication stopped initially still has its replication stopped
-		utils.CheckReplicationStatus(context.Background(), t, tablets[2], false, false)
+		utils.CheckReplicationStatus(t.Context(), t, tablets[2], false, false)
 		return
 	}
 
