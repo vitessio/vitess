@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -47,11 +48,50 @@ func TestPersistKeyspace_WritesFile(t *testing.T) {
 	require.NoError(t, json.Unmarshal(data, &got))
 	assert.True(t, got.Sharded)
 
-	// CreateTemp produces 0o600; persistKeyspace must restore 0o644 so we
-	// don't silently tighten permissions versus the prior os.WriteFile call.
+	// A newly persisted file should carry the same mode os.WriteFile would have
+	// given it, rather than os.CreateTemp's 0o600 or a mode that ignores the
+	// umask. Comparing against a reference file keeps this independent of
+	// whatever umask the test runs under.
+	reference := filepath.Join(dir, "reference")
+	require.NoError(t, os.WriteFile(reference, []byte("{}"), 0o644))
+	referenceInfo, err := os.Stat(reference)
+	require.NoError(t, err)
+
 	info, err := os.Stat(final)
 	require.NoError(t, err)
-	assert.Equal(t, os.FileMode(0o644), info.Mode().Perm())
+	assert.Equal(t, referenceInfo.Mode().Perm(), info.Mode().Perm())
+}
+
+// TestPersistKeyspace_PreservesExistingFileMode covers replacing a file whose
+// mode an operator has tightened. The rename swaps in a new inode, so without
+// carrying the mode over, each vschema update would widen the file back up.
+func TestPersistKeyspace_PreservesExistingFileMode(t *testing.T) {
+	dir := t.TempDir()
+	final := filepath.Join(dir, "ks1.json")
+
+	require.NoError(t, os.WriteFile(final, []byte(`{"sharded": false}`), 0o600))
+	require.NoError(t, os.Chmod(final, 0o600))
+
+	require.NoError(t, persistKeyspace(dir, "ks1", &vschemapb.Keyspace{Sharded: true}))
+
+	info, err := os.Stat(final)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o600), info.Mode().Perm())
+	assert.True(t, readPersistedKeyspace(t, dir, "ks1").Sharded, "the new content should still have been written")
+}
+
+// TestPersistKeyspace_NewFileRespectsUmask pins the create path to the umask,
+// so a restrictive umask is not overridden by a hardcoded mode.
+func TestPersistKeyspace_NewFileRespectsUmask(t *testing.T) {
+	previous := syscall.Umask(0o077)
+	t.Cleanup(func() { syscall.Umask(previous) })
+
+	dir := t.TempDir()
+	require.NoError(t, persistKeyspace(dir, "ks1", &vschemapb.Keyspace{Sharded: true}))
+
+	info, err := os.Stat(filepath.Join(dir, "ks1.json"))
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o600), info.Mode().Perm())
 }
 
 func TestPersistKeyspace_ReplacesExistingFile(t *testing.T) {

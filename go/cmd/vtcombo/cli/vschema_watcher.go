@@ -19,7 +19,10 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
+	"math/rand/v2"
 	"os"
 	"path"
 	"sync"
@@ -196,7 +199,7 @@ func persistKeyspace(dir, ksName string, ks *vschemapb.Keyspace) error {
 
 	finalPath := path.Join(dir, ksName+".json")
 
-	tmp, err := os.CreateTemp(dir, ksName+".*.tmp")
+	tmp, err := createTempFile(dir, ksName)
 	if err != nil {
 		return fmt.Errorf("creating temp file: %w", err)
 	}
@@ -205,11 +208,17 @@ func persistKeyspace(dir, ksName string, ks *vschemapb.Keyspace) error {
 	// successful rename (the temp name no longer exists).
 	defer os.Remove(tmpName)
 
-	// CreateTemp uses 0o600; preserve the 0o644 the original os.WriteFile call
-	// produced so we don't silently tighten permissions on persisted files.
-	if err := tmp.Chmod(0o644); err != nil {
-		tmp.Close()
-		return fmt.Errorf("chmod temp file %s: %w", tmpName, err)
+	// Renaming over the destination replaces its inode, and with it its
+	// permissions, so carry over the mode of the file being replaced. Operators
+	// who tightened a persisted file keep their mode, matching os.WriteFile,
+	// which leaves the mode of an existing file alone. New files instead keep
+	// what createTempFile got from 0o644 and the umask, which is what
+	// os.WriteFile produced when it created the file.
+	if info, err := os.Stat(finalPath); err == nil {
+		if err := tmp.Chmod(info.Mode().Perm()); err != nil {
+			tmp.Close()
+			return fmt.Errorf("chmod temp file %s: %w", tmpName, err)
+		}
 	}
 	if _, err := tmp.Write(jsonBytes); err != nil {
 		tmp.Close()
@@ -226,6 +235,22 @@ func persistKeyspace(dir, ksName string, ks *vschemapb.Keyspace) error {
 		return fmt.Errorf("renaming %s to %s: %w", tmpName, finalPath, err)
 	}
 	return nil
+}
+
+// createTempFile creates a uniquely named file in dir. It exists because
+// os.CreateTemp hardcodes 0o600: requesting 0o644 here lets the umask apply to
+// the new file the same way it applied to the os.WriteFile call this replaced,
+// instead of forcing a mode an operator's umask meant to exclude.
+func createTempFile(dir, ksName string) (*os.File, error) {
+	for range 10 {
+		name := path.Join(dir, fmt.Sprintf("%s.%d.tmp", ksName, rand.Uint32()))
+		f, err := os.OpenFile(name, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o644)
+		if errors.Is(err, fs.ErrExist) {
+			continue
+		}
+		return f, err
+	}
+	return nil, fmt.Errorf("no unused temp file name available in %s", dir)
 }
 
 func createDirectoryIfNotExists(dir string) error {
