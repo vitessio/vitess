@@ -190,6 +190,56 @@ func TestNumberHashSpansUnparseableSpellings(t *testing.T) {
 	require.Equal(t, hashNumberText(t, "100000"), hashNumberText(t, "1e+5"))
 }
 
+// TestNumberHashSpellings checks that hashing a parsed number fingerprints its
+// value and not the way it was written.
+//
+// hashDecimalText is covered directly by TestNumberHashMatchesDecimalComparison,
+// but nothing exercised the path a document actually takes, from the parser
+// through hashNumber. That is where a spelling can survive as far as the
+// fingerprint: a zero-padded exponent once reached the canonicaliser verbatim
+// and was turned away for being long, so 1e0000000000 and 1 fingerprinted
+// apart while comparison called them equal.
+func TestNumberHashSpellings(t *testing.T) {
+	// Every spelling in a group is one value; no two groups are.
+	groups := [][]string{
+		{"1", "1.0", "1e0", "1e+0", "1e-0", "1e0000000000", "1e-0000000000", "1.000", "0.1e1"},
+		{"10", "1e1", "1e+1", "1e0000000001", "10.0", "0.1e2"},
+		{"0", "-0", "0.0", "0e0", "0e0000000000", "0e-0000000000"},
+		{"-1", "-1.0", "-1e0", "-1e0000000000"},
+		// Precision beyond the form a number is kept in is not part of its
+		// value: the first three are one double, the fourth stayed an integer.
+		{"9007199254740992", "9007199254740992.0", "9007199254740992.1", "9007199254740993.0"},
+		{"9007199254740993"},
+	}
+
+	hashes := map[string]vthash.Hash{}
+	for _, group := range groups {
+		for _, spelling := range group {
+			var p Parser
+			v, err := p.Parse(spelling)
+			require.NoErrorf(t, err, "%q", spelling)
+
+			h := vthash.New()
+			v.Hash(&h)
+			hashes[spelling] = h.Sum128()
+		}
+	}
+
+	for i, group := range groups {
+		for _, spelling := range group {
+			require.Equalf(t, hashes[group[0]], hashes[spelling],
+				"%q and %q are one value but fingerprint apart", group[0], spelling)
+		}
+		for j, other := range groups {
+			if i == j {
+				continue
+			}
+			require.NotEqualf(t, hashes[group[0]], hashes[other[0]],
+				"%q and %q are different values but fingerprint alike", group[0], other[0])
+		}
+	}
+}
+
 // TestNumberHashRejectsNonNumbers checks that text with no decimal value falls
 // out of the fast path rather than being canonicalised into a collision.
 func TestNumberHashRejectsNonNumbers(t *testing.T) {
