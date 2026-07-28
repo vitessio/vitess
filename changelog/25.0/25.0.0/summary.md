@@ -27,6 +27,7 @@
         - [PREPARE statements no longer report the prepared statement's tables](#vtgate-prepare-tables-used)
         - [Preparing a statement no longer starts an implicit transaction](#vtgate-prepare-no-implicit-tx)
         - [Stricter validation of SQL-level PREPARE statements](#vtgate-prepare-stricter-validation)
+        - [Outer joins that preserve a reference table no longer duplicate rows](#vtgate-reference-outer-join-not-merged)
     - **[Reparent](#minor-changes-reparent)**
         - [`EmergencyReparentShard` no longer waits on replicas that cannot win the election](#ers-lagging-relay-log-wait)
     - **[VTTablet](#minor-changes-vttablet)**
@@ -248,6 +249,14 @@ SQL-level `PREPARE` and binary-protocol `COM_STMT_PREPARE` now reject statement 
 Additionally, `PREPARE ... FROM ?` is now a syntax error, matching MySQL: the grammar accidentally accepted a positional parameter as the statement text, but no value could ever reach it and the statement always failed. This also affects programs that parse SQL using the `go/vt/sqlparser` package directly.
 
 See [#20562](https://github.com/vitessio/vitess/pull/20562) for details.
+
+#### <a id="vtgate-reference-outer-join-not-merged"/>Outer joins that preserve a reference table no longer duplicate rows</a>
+
+An outer join whose preserved side is a reference table is no longer merged into a multi-shard route. A reference table has the same rows on every shard, so a scatter route returned each unmatched preserved row once per shard instead of once. These queries now plan as a join between a route reading the reference table and a route reading the other side, which changes the plan shape and can send more queries than before for the same statement.
+
+The merge still happens when the route reads a single shard, and such a route now runs on an arbitrary shard when its routing resolves to no destination — a unique vindex lookup that finds no mapping, or a `NULL` bind value — so the preserved rows come back with `NULL`s rather than the query returning an empty result.
+
+See [#20701](https://github.com/vitessio/vitess/pull/20701) for details.
 
 ### <a id="minor-changes-reparent"/>Reparent</a>
 
