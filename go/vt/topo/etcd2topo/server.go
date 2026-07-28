@@ -170,10 +170,13 @@ func NewServerWithOpts(serverAddr, root, certPath, keyPath, caPath string) (*Ser
 	// The client connects lazily, so verify with a bounded RPC that an etcd
 	// endpoint is actually reachable. This way a misconfigured or unreachable
 	// server address fails topo.OpenServer at startup, rather than surfacing
-	// as timeouts on later topo operations.
+	// as timeouts on later topo operations. The probe reads a key under the
+	// topo root, an operation permitted even when etcd authentication scopes
+	// the identity to just that prefix, and is serializable so any reachable
+	// member can answer it without a quorum.
 	ctx, cancel := context.WithTimeout(context.Background(), config.DialTimeout)
 	defer cancel()
-	if _, err := cli.MemberList(ctx); err != nil {
+	if _, err := cli.Get(ctx, root+"/", clientv3.WithSerializable()); err != nil {
 		cli.Close()
 		return nil, vterrors.Wrapf(err, "unable to connect to etcd at %v", serverAddr)
 	}
