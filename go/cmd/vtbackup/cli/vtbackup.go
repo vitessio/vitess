@@ -613,7 +613,8 @@ func runBackup(ctx context.Context, topoServer *topo.Server, mysqld *mysqlctl.My
 			if verifyBackupErrantGTIDs {
 				return err
 			}
-			log.Warn("base backup has errant gtids, taking a backup anyway because --verify-backup-errant-gtids is disabled", slog.Any("error", err))
+
+			log.Warn("base backup failed errant GTID verification, taking a backup anyway because --verify-backup-errant-gtids is disabled", slog.Any("error", err))
 		}
 	}
 
