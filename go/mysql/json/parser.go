@@ -176,26 +176,26 @@ func parseValue(s string, c *cache, depth int) (*Value, string, error) {
 	}
 	if s[0] == 't' {
 		if len(s) < len("true") || s[:len("true")] != "true" {
-			return nil, s, fmt.Errorf("unexpected value found: %q", s)
+			return nil, s, fmt.Errorf("unexpected value found: %q", startEndString(s))
 		}
 		return ValueTrue, s[len("true"):], nil
 	}
 	if s[0] == 'f' {
 		if len(s) < len("false") || s[:len("false")] != "false" {
-			return nil, s, fmt.Errorf("unexpected value found: %q", s)
+			return nil, s, fmt.Errorf("unexpected value found: %q", startEndString(s))
 		}
 		return ValueFalse, s[len("false"):], nil
 	}
 	if s[0] == 'n' {
 		if len(s) < len("null") || s[:len("null")] != "null" {
-			return nil, s, fmt.Errorf("unexpected value found: %q", s)
+			return nil, s, fmt.Errorf("unexpected value found: %q", startEndString(s))
 		}
 		return ValueNull, s[len("null"):], nil
 	}
 
 	flen, exponent, ok := readFloat(s)
 	if !ok {
-		return nil, s[flen:], fmt.Errorf("invalid number in JSON string: %q", s)
+		return nil, s[flen:], fmt.Errorf("invalid number in JSON string: %q", startEndString(s))
 	}
 
 	v := c.getValue()

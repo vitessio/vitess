@@ -177,20 +177,6 @@ func TestParseNumberTooBigForDouble(t *testing.T) {
 		}
 	})
 
-	// Nothing bounds how long a number may be written, and Parse copies the
-	// message it wraps, so naming the number in full would carry the document
-	// twice over into the error a client is handed. It is abbreviated instead,
-	// as the unparsed tail already is.
-	t.Run("the error abbreviates a long number", func(t *testing.T) {
-		doc := "1" + strings.Repeat("0", 100000)
-
-		var p Parser
-		_, err := p.Parse(doc)
-		require.ErrorContains(t, err, "number too big to be stored in double")
-		require.NotContains(t, err.Error(), strings.Repeat("0", 200),
-			"the error carries the number it is reporting on")
-	})
-
 	// A negative exponent is not bounded, only stopped before it overflows the
 	// int it accumulates into, and what sends a number through the conversion at
 	// all is being written to more digits than a double holds. These cross the
@@ -314,6 +300,35 @@ func TestParseNumberGrammar(t *testing.T) {
 			})
 		}
 	})
+}
+
+// TestParseErrorAbbreviatesTheDocument covers how much of a rejected document
+// its error names. Nothing bounds how long a document may be, and Parse copies
+// the message it wraps, so naming the text in full hands a client its own
+// document back twice over. Each rejection abbreviates what it names, as the
+// unparsed tail alongside it already did.
+func TestParseErrorAbbreviatesTheDocument(t *testing.T) {
+	long := strings.Repeat("9", 100000)
+
+	for _, tc := range []struct {
+		name string
+		doc  string
+	}{
+		{name: "a number too big for a double", doc: "1" + long},
+		{name: "a written plus", doc: "+" + long},
+		{name: "a decimal point with nothing before it", doc: "." + long},
+		{name: "a decimal point with nothing after it", doc: long + "."},
+		{name: "nan", doc: "nan" + long},
+		{name: "nothing the grammar has a shape for", doc: "q" + long},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var p Parser
+			_, err := p.Parse(tc.doc)
+			require.Error(t, err)
+			require.NotContains(t, err.Error(), strings.Repeat("9", 200),
+				"the error carries the document it is reporting on")
+		})
+	}
 }
 
 func TestUnescapeStringBestEffort(t *testing.T) {
