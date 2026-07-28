@@ -173,6 +173,40 @@ func TestVschemaPersisterFlush_SealsLaterUpdates(t *testing.T) {
 	assert.True(t, readPersistedKeyspace(t, dir, "ks1").Sharded, "an update delivered after the shutdown flush should have been dropped")
 }
 
+// TestVschemaPersisterFlush_SealsWhenSomeKeyspacesFail covers a flush that got
+// the authoritative vschema out of the topo but could only write part of it.
+// Keyspaces are written one file at a time, and the ordering the seal enforces
+// holds per file: an update the watcher is still holding is older than the
+// snapshot either way, so it must not replace a keyspace the flush did write.
+func TestVschemaPersisterFlush_SealsWhenSomeKeyspacesFail(t *testing.T) {
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "cell1")
+	t.Cleanup(func() { ts.Close() })
+
+	require.NoError(t, ts.UpdateSrvVSchema(ctx, "cell1", &vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"ks1": {Sharded: true},
+			"ks2": {Sharded: true},
+		},
+	}))
+
+	dir := t.TempDir()
+	// A directory where ks2's file belongs fails the rename, and only that one.
+	require.NoError(t, os.Mkdir(filepath.Join(dir, "ks2.json"), 0o755))
+
+	p := &vschemaPersister{dir: dir}
+	p.flush(ctx, ts, "cell1")
+
+	require.True(t, readPersistedKeyspace(t, dir, "ks1").Sharded, "ks1 should have been written")
+	assert.True(t, p.sealed)
+
+	p.persistNewSrvVSchema(&vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{"ks1": {Sharded: false}},
+	})
+
+	assert.True(t, readPersistedKeyspace(t, dir, "ks1").Sharded, "an update delivered after the shutdown flush should have been dropped")
+}
+
 // TestVschemaPersisterFlush_LeavesFileOnTopoError checks that a failed flush
 // leaves the previously persisted vschema alone, so an unreadable topo at
 // shutdown cannot cost us the file we already had.
