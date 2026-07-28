@@ -19,6 +19,7 @@ package evalengine
 import (
 	"bytes"
 	"math"
+	"slices"
 
 	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/collations"
@@ -1265,18 +1266,19 @@ func (call *builtinPad) eval(env *ExpressionEnv) (eval, error) {
 	repeat := (int(length) - strLen) / runeLen
 	remainder := (int(length) - strLen) % runeLen
 
-	var res []byte
-	if !call.left {
-		res = text.bytes
-	}
-
-	res = append(res, bytes.Repeat(pad.bytes, repeat)...)
+	padding := bytes.Repeat(pad.bytes, repeat)
 	if remainder > 0 {
-		res = append(res, charset.Slice(cs, pad.bytes, 0, remainder)...)
+		padding = append(padding, charset.Slice(cs, pad.bytes, 0, remainder)...)
 	}
 
+	var res []byte
 	if call.left {
-		res = append(res, text.bytes...)
+		res = append(padding, text.bytes...)
+	} else {
+		// The result needs its own buffer: text.bytes is borrowed from the
+		// input row or a bind variable, where the next value follows it in
+		// memory.
+		res = slices.Concat(text.bytes, padding)
 	}
 
 	return newEvalText(res, text.col), nil
