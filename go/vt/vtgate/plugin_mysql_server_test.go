@@ -3423,6 +3423,9 @@ func TestComQueryTempTableHeartbeatRegistration(t *testing.T) {
 	sessionBeforeReset.LastInsertId = 42
 	sessionBeforeReset.Autocommit = false
 	c.StatusFlags &^= mysql.ServerStatusAutocommit
+	// A reset issued mid-transaction must also clear the in-transaction
+	// status bit, not just set autocommit.
+	c.StatusFlags |= mysql.ServerStatusInTrans
 	sessionBeforeReset.TargetString = KsTestUnsharded
 
 	require.True(t, vh.session(c).GetInReservedConn())
@@ -3440,7 +3443,8 @@ func TestComQueryTempTableHeartbeatRegistration(t *testing.T) {
 	require.Empty(t, vh.session(c).GetUserDefinedVariables())
 	require.Zero(t, vh.session(c).GetLastInsertId())
 	require.True(t, vh.session(c).GetAutocommit())
-	require.NotZero(t, c.StatusFlags&mysql.ServerStatusAutocommit, "the autocommit status flag must be restored")
+	require.Equal(t, uint16(mysql.ServerStatusAutocommit), c.StatusFlags,
+		"the status flags must return to the just-connected state: autocommit set and stale bits (e.g. in-transaction) cleared")
 	require.Equal(t, KsTestUnsharded, vh.session(c).GetTargetString(), "the default database must survive the reset")
 
 	// Creating a temporary table again after the reset re-registers.

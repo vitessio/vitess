@@ -341,8 +341,10 @@ func BuildMessageStreaming(name string, tables map[string]*schema.Table) (*Plan,
 }
 
 // lockFuncs reports whether the select query contains a mutating lock
-// function — get_lock, release_lock, release_all_locks — and whether one of
-// them acquires a lock. Mutating lock functions plan as SelectLockFunc so
+// function — get_lock, release_lock, release_all_locks — anywhere in the
+// statement (select list, predicates, subqueries: a get_lock in a WHERE
+// clause acquires the lock just the same), and whether one of them acquires a
+// lock. Mutating lock functions plan as SelectLockFunc so
 // that on a reserved connection a query timeout kills the connection rather
 // than keep it: the kill can race the server-side grant or release, leaving
 // lock state vtgate never recorded on a connection it goes on reusing. Only
@@ -368,7 +370,7 @@ func lockFuncs(sel *sqlparser.Select) (mutating, acquiring bool) {
 			mutating = true
 		}
 		return true, nil
-	}, sel.SelectExprs)
+	}, sel)
 	return mutating, acquiring
 }
 

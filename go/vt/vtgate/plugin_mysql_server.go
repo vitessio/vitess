@@ -898,12 +898,14 @@ func (vh *vtgateHandler) ComResetConnection(c *mysql.Conn) {
 	// state is then identical to a new connection's by construction, future
 	// default fields included, and a pooled client cannot inherit any of the
 	// previous borrower's state. Only the default database survives a reset,
-	// so carry the target over, and restore the autocommit status flag the
-	// handshake advertises for the default session.
+	// so carry the target over, and return the status flags to the
+	// just-connected state the handshake advertises: assignment, not |=, so
+	// stale bits — e.g. in-transaction from a reset issued mid-transaction —
+	// are cleared along the way.
 	target := session.TargetString
 	c.ClientData = nil
 	vh.session(c).TargetString = target
-	c.StatusFlags |= mysql.ServerStatusAutocommit
+	c.StatusFlags = mysql.ServerStatusAutocommit
 }
 
 func (vh *vtgateHandler) ConnectionClosed(c *mysql.Conn) {

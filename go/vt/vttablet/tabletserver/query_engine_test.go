@@ -1061,12 +1061,24 @@ func TestPlanPoolUnsafe(t *testing.T) {
 			"set @@sql_safe_updates = false",
 			"Set not allowed without reserved connection",
 		}, {
+			// Lock functions anywhere in the statement classify it, not just
+			// in the select list: a predicate-placed get_lock would otherwise
+			// acquire a lock on a pooled connection and leak it to the
+			// connection's next borrower.
+			"get_lock in a predicate is unsafe with server-side connection pooling",
+			"select id from t where get_lock('foo', 10) = 1",
+			"SelectLockFunc not allowed without reserved connection",
+		}, {
 			// vtgate only reserves a connection for get_lock; a session that
 			// never acquired a lock sends release_lock as a plain execute, and
 			// a pooled connection can hold no user-level lock, so releasing
 			// there is a safe no-op that MySQL answers correctly.
 			"release_lock without a reserved connection is a safe no-op on a pooled connection",
 			"select release_lock('foo') from dual",
+			"",
+		}, {
+			"release_lock in a predicate is a safe no-op on a pooled connection",
+			"select id from t where release_lock('foo') = 1",
 			"",
 		}, {
 			"release_all_locks without a reserved connection is a safe no-op on a pooled connection",
