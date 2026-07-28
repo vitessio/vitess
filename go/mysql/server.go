@@ -77,6 +77,16 @@ var (
 	})
 )
 
+func init() {
+	// Accept PROXY protocol v1 TCP6 headers that carry plain IPv4 addresses,
+	// as emitted by proxies such as the nginx OSS stream module when the
+	// client and backend address families differ. go-proxyproto >= 0.14
+	// rejects them unless this compatibility mode is on. It is a package-level
+	// switch that must be set before any header parsing starts, so it cannot
+	// be a per-listener option.
+	proxyproto.V1AcceptIPv4InTCP6 = true
+}
+
 // A Handler is an interface used by Listener to send queries.
 // The implementation of this interface may store data in the ClientData
 // field of the Connection for its own purposes.
