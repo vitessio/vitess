@@ -180,9 +180,9 @@ func tryMergeApplyJoin(in *ApplyJoin, ctx *plancontext.PlanningContext) (_ Opera
 	// After merge: predicate rewritten to 'lhs.col = rhs.col', making this predicate invalid for routing.
 	r.Routing = r.Routing.resetRoutingLogic(ctx)
 
-	// The reset recomputed the routing from the restored predicates, so a merge that was
-	// only allowed because the routing was single-shard has to be checked once more.
-	if jm.requireSingleShard && !r.Routing.OpCode().IsSingleShard() {
+	// The reset recomputed the routing from the restored predicates, so a route that has to
+	// stay single-shard has to be checked once more.
+	if r.PreservesReferenceRows && !r.Routing.OpCode().IsSingleShard() {
 		debugNoRewrite("apply join merge blocked: reference table on the preserved side of a %s, routing is multi-shard after being reset", jm.joinType.ToString())
 		return in, NoRewrite
 	}

@@ -52,11 +52,12 @@ type (
 		// this field will contain the conditions under which this route is valid
 		Conditions []engine.Condition
 
-		// NoRoutesSpecialHandling makes the engine Route run on an arbitrary shard when the
-		// routing resolves to no destination at all, instead of returning an empty result.
-		// It is set when the rows this route owes the client do not depend on the routing
-		// finding a match.
-		NoRoutesSpecialHandling bool
+		// PreservesReferenceRows marks a route that produces the rows of a reference table kept
+		// by an outer join. Those rows do not depend on the routing finding a match, which has
+		// two consequences the route carries with it through any later merge: the routing has to
+		// stay single-shard, or each unmatched row comes back once per shard, and the query has
+		// to run even when the routing resolves to no destination, or they do not come back at all.
+		PreservesReferenceRows bool
 
 		ResultColumns int
 	}
@@ -193,6 +194,17 @@ func UpdateRoutingLogic(ctx *plancontext.PlanningContext, in sqlparser.Expr, r R
 // Cost implements the Operator interface
 func (r *Route) Cost() int {
 	return r.Routing.Cost()
+}
+
+// inheritFrom carries onto a merged route what its inputs constrain about the rows it produces.
+// It returns false when the merged routing cannot honour one of those constraints, which means
+// the inputs must not be merged.
+func (r *Route) inheritFrom(inputs ...*Route) bool {
+	for _, input := range inputs {
+		r.PreservesReferenceRows = r.PreservesReferenceRows || input.PreservesReferenceRows
+	}
+
+	return !r.PreservesReferenceRows || r.Routing.OpCode().IsSingleShard()
 }
 
 // Clone implements the Operator interface
