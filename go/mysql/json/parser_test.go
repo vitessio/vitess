@@ -19,11 +19,14 @@ package json
 
 import (
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/hack"
+	"vitess.io/vitess/go/mysql/fastparse"
+	"vitess.io/vitess/go/vt/vthash"
 )
 
 func TestParseRawNumber(t *testing.T) {
@@ -31,7 +34,7 @@ func TestParseRawNumber(t *testing.T) {
 		f := func(s, expectedRN, expectedTail string) {
 			t.Helper()
 
-			flen, _, ok := readFloat(s)
+			flen, _, _, ok := readFloat(s)
 			require.Truef(t, ok, "unexpected error when parsing '%s'", s)
 
 			rn, tail := s[:flen], s[flen:]
@@ -57,7 +60,7 @@ func TestParseRawNumber(t *testing.T) {
 		f := func(s, expectedTail string) {
 			t.Helper()
 
-			flen, _, ok := readFloat(s)
+			flen, _, _, ok := readFloat(s)
 			require.False(t, ok, "expecting non-nil error")
 			require.Equalf(t, expectedTail, s[flen:], "unexpected tail; got %q; want %q", s[flen:], expectedTail)
 		}
@@ -259,6 +262,156 @@ func TestParseNumberGrammar(t *testing.T) {
 			})
 		}
 	})
+}
+
+// parseNumberType is the conversion-based answer to what a number is kept as,
+// which numberKind reaches by shape alone. It is the oracle for the test below
+// and nothing else reads it.
+func parseNumberType(ns string) NumberType {
+	_, err := fastparse.ParseInt64(ns, 10)
+	if err == nil {
+		return NumberTypeSigned
+	}
+	_, err = fastparse.ParseUint64(ns, 10)
+	if err == nil {
+		return NumberTypeUnsigned
+	}
+	_, err = fastparse.ParseFloat64(ns)
+	if err == nil {
+		return NumberTypeFloat
+	}
+	return NumberTypeUnknown
+}
+
+// TestNumberKindMatchesParsing is the safety net under deciding a number's kind
+// from its shape: the shape rule exists to avoid the conversions, so it has to
+// reach the same answer they would.
+func TestNumberKindMatchesParsing(t *testing.T) {
+	var spellings []string
+	for digits := 1; digits <= 25; digits++ {
+		for _, lead := range []string{"1", "9"} {
+			run := lead + strings.Repeat("7", digits-1)
+			spellings = append(spellings, run, "-"+run, "0"+run, "-0"+run, strings.Repeat("0", digits)+run)
+		}
+	}
+	// The values either side of every limit the rule has to respect.
+	spellings = append(spellings,
+		"0", "-0", "00", "9223372036854775806", "9223372036854775807", "9223372036854775808",
+		"-9223372036854775807", "-9223372036854775808", "-9223372036854775809",
+		"18446744073709551614", "18446744073709551615", "18446744073709551616",
+	)
+
+	for _, spelling := range spellings {
+		t.Run(spelling, func(t *testing.T) {
+			want := parseNumberType(spelling)
+			got := numberKind(spelling, false)
+			if want == NumberTypeUnknown {
+				// Too long for any of them to hold; the parser rejects it as a
+				// document, and until then it is a double like any other.
+				require.Equal(t, NumberTypeFloat, got)
+				return
+			}
+			require.Equalf(t, want, got, "%q", spelling)
+		})
+	}
+}
+
+// TestParseSettlesValues checks that parsing leaves nothing for a reader to
+// work out later. A parsed document is shared by every goroutine running a
+// cached plan, so a read that rewrites the value it read is a data race.
+func TestParseSettlesValues(t *testing.T) {
+	var p Parser
+	v, err := p.Parse(`{"k": "a\u0062", "n": [1, 2.5, 3e4, 18446744073709551615], "s": "plain"}`)
+	require.NoError(t, err)
+
+	var walk func(*Value)
+	walk = func(v *Value) {
+		switch v.t {
+		case TypeArray:
+			for _, elem := range v.a {
+				walk(elem)
+			}
+		case TypeObject:
+			for _, kv := range v.o.kvs {
+				walk(kv.v)
+			}
+		case TypeString:
+			require.NotContains(t, v.s, `\u`, "string still carries an escape")
+		case TypeNumber:
+			require.NotEqual(t, NumberTypeUnknown, v.n, "number kind left undecided")
+		}
+		// Reading a value must not change it.
+		before := *v
+		require.Equal(t, before.t, v.Type())
+		require.Equal(t, before.n, v.NumberType())
+		require.Equal(t, before.s, v.s)
+	}
+	walk(v)
+}
+
+// TestParseUnescapesStrings pins that a string reads and renders the same
+// whether or not anything has looked at it, which is what MySQL does: it
+// resolves an escape when it parses the document, so \u0061 is stored and
+// printed as a.
+func TestParseUnescapesStrings(t *testing.T) {
+	for doc, want := range map[string]string{
+		`"\u0061"`:   `"a"`,
+		`["\u0061"]`: `["a"]`,
+		`"\u00e9"`:   `"é"`,
+		`"a\tb"`:     `"a\tb"`,
+		`"plain"`:    `"plain"`,
+	} {
+		t.Run(doc, func(t *testing.T) {
+			var p Parser
+			v, err := p.Parse(doc)
+			require.NoError(t, err)
+			require.Equal(t, want, v.String())
+		})
+	}
+}
+
+// TestParseConcurrentReads is the regression test for the races this settling
+// removes: one parsed document, read by several goroutines at once, which is
+// how a folded JSON literal in a cached plan is used.
+func TestParseConcurrentReads(t *testing.T) {
+	for _, doc := range []string{
+		`["a", "b", "c", "d"]`,
+		`["\u0061", "\u0062"]`,
+		`[1, 2.5, 3e4, 18446744073709551615]`,
+		`{"ka": "vb", "n": [1, 2.5, "x"]}`,
+		`2.5`,
+		`"a"`,
+	} {
+		t.Run(doc, func(t *testing.T) {
+			var p Parser
+			v, err := p.Parse(doc)
+			require.NoError(t, err)
+
+			const readers = 8
+			fingerprints := make([]vthash.Hash, readers)
+			renders := make([]string, readers)
+
+			var start sync.WaitGroup
+			var readersDone sync.WaitGroup
+			start.Add(1)
+			for i := range readers {
+				readersDone.Go(func() {
+					start.Wait()
+					h := vthash.New()
+					v.Hash(&h)
+					fingerprints[i] = h.Sum128()
+					renders[i] = v.String()
+				})
+			}
+			start.Done()
+			readersDone.Wait()
+
+			for i := 1; i < readers; i++ {
+				require.Equal(t, fingerprints[0], fingerprints[i])
+				require.Equal(t, renders[0], renders[i])
+			}
+		})
+	}
 }
 
 func TestUnescapeStringBestEffort(t *testing.T) {
