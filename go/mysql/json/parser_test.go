@@ -90,7 +90,15 @@ func TestParseNumberTooBigForDouble(t *testing.T) {
 			// Underflow keeps the document valid and reads as zero.
 			"1e-400",
 			"1e-1000",
+			"1e-1024",
 			"0." + strings.Repeat("0", 400) + "1",
+			// A written sign and a padded exponent are spellings, not
+			// magnitudes, and none of these is anywhere near the limit.
+			"1e+0",
+			"1e-0",
+			"1e0000000000",
+			"1e-0000000000",
+			"1e+308",
 		} {
 			t.Run(startEndString(doc), func(t *testing.T) {
 				var p Parser
@@ -107,6 +115,7 @@ func TestParseNumberTooBigForDouble(t *testing.T) {
 			"-1e309",
 			"1e1025",
 			"1.7976931348623159e308",
+			"1e+309",
 			tooManyDigits,
 			// A number anywhere in the document invalidates all of it.
 			"[1, 1e309]",
