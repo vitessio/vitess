@@ -93,17 +93,24 @@ func (dbc *DBConnection) ExecuteStreamFetch(query string, callback func(*sqltype
 	}
 	defer dbc.CloseResult()
 
-	// first call the callback with the fields
 	flds, err := dbc.Fields()
 	if err != nil {
 		return err
 	}
-	err = callback(&sqltypes.Result{Fields: flds})
-	if err != nil {
-		return fmt.Errorf("stream send error: %v", err)
+
+	// Coalesce the field metadata into the first data packet instead of sending
+	// it as a separate packet up front: results that fit within a single stream
+	// buffer (the common case) then take one packet instead of two.
+	fieldsSent := false
+	sendResult := func(qr *sqltypes.Result) error {
+		if !fieldsSent {
+			fieldsSent = true
+			qr.Fields = flds
+		}
+		return callback(qr)
 	}
 
-	// then get all the rows, sending them as we reach a decent packet size
+	// get all the rows, sending them as we reach a decent packet size
 	// start with a pre-allocated array of 256 rows capacity
 	qr := alloc()
 	byteCount := 0
@@ -122,9 +129,9 @@ func (dbc *DBConnection) ExecuteStreamFetch(query string, callback func(*sqltype
 		}
 
 		if byteCount >= streamBufferSize {
-			err = callback(qr)
+			err = sendResult(qr)
 			if err != nil {
-				return err
+				return fmt.Errorf("stream send error: %v", err)
 			}
 
 			qr = alloc()
@@ -132,10 +139,12 @@ func (dbc *DBConnection) ExecuteStreamFetch(query string, callback func(*sqltype
 		}
 	}
 
-	if len(qr.Rows) > 0 {
-		err = callback(qr)
+	// Send any leftover rows; if nothing was sent yet, this also delivers the
+	// fields as the sole packet of the stream.
+	if len(qr.Rows) > 0 || !fieldsSent {
+		err = sendResult(qr)
 		if err != nil {
-			return err
+			return fmt.Errorf("stream send error: %v", err)
 		}
 	}
 
