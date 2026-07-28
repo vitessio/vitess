@@ -189,6 +189,12 @@ func createMergedUnion(
 	routing Routing,
 	conditions []engine.Condition,
 ) (Operator, []sqlparser.SelectExpr) {
+	preserved, canMerge := referenceRowsInvariant(routing, false, lhsRoute, rhsRoute)
+	if !canMerge {
+		debugNoRewrite("union merge blocked: %s routing would widen a route that has to stay single-shard", routing.OpCode().String())
+		return nil, nil
+	}
+
 	// if there are `*` on either side, or a different number of SelectExpr items,
 	// we give up aligning the expressions and trust that we can push everything down
 	cols := make([]sqlparser.SelectExpr, len(lhsExprs))
@@ -235,18 +241,13 @@ func createMergedUnion(
 	exprs := [][]sqlparser.SelectExpr{lhsExprs, rhsExprs}
 	union := newUnion([]Operator{lhsRoute.Source, rhsRoute.Source}, exprs, cols, distinct)
 	selectExprs := unionSelects(lhsExprs)
-	merged := &Route{
-		unaryOperator: newUnaryOp(union),
-		MergedWith:    []*Route{rhsRoute},
-		Routing:       routing,
-		Conditions:    conditions,
-	}
-	if !merged.inheritFrom(lhsRoute, rhsRoute) {
-		debugNoRewrite("union merge blocked: %s routing would widen a route that has to stay single-shard", routing.OpCode().String())
-		return nil, nil
-	}
-
-	return merged, selectExprs
+	return &Route{
+		unaryOperator:          newUnaryOp(union),
+		MergedWith:             []*Route{rhsRoute},
+		Routing:                routing,
+		Conditions:             conditions,
+		PreservesReferenceRows: preserved,
+	}, selectExprs
 }
 
 func compactUnion(u *Union) *ApplyResult {

@@ -188,15 +188,17 @@ func (r *Route) Cost() int {
 	return r.Routing.Cost()
 }
 
-// inheritFrom carries onto a merged route what its inputs constrain about the rows it produces.
-// It returns false when the merged routing cannot honour one of those constraints, which means
-// the inputs must not be merged.
-func (r *Route) inheritFrom(inputs ...*Route) bool {
+// referenceRowsInvariant reports whether a route merged from these inputs produces the rows of a
+// reference table kept by an outer join, seeded with whether the merge itself originates them, and
+// whether a route with the given routing can honour those rows. Merge sites have to ask before
+// they mutate anything: a refused merge has to leave the plan exactly as it was.
+func referenceRowsInvariant(routing Routing, originated bool, inputs ...*Route) (preserved, canMerge bool) {
+	preserved = originated
 	for _, input := range inputs {
-		r.PreservesReferenceRows = r.PreservesReferenceRows || input.PreservesReferenceRows
+		preserved = preserved || input.PreservesReferenceRows
 	}
 
-	return !r.PreservesReferenceRows || r.Routing.OpCode().IsSingleShard()
+	return preserved, !preserved || routing.OpCode().IsSingleShard()
 }
 
 // Clone implements the Operator interface
