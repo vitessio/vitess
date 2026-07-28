@@ -642,7 +642,8 @@ func TestERSFailFast(t *testing.T) {
 // TestReplicationStopped checks how ERS treats replicas with replication stopped.
 //
 // The behaviour changed in v25 (vitessio/vitess#20578): a replica that cannot win the
-// election no longer holds up or fails the reparent. The upgrade/downgrade jobs run this
+// election no longer holds up or fails the reparent, whereas pre-v25 ERS fails when more
+// than one replica has replication stopped. The upgrade/downgrade jobs run this
 // release-24.0 test against a newer vtctld, so the expected outcome is gated on the
 // version of the vtctld actually driving ERS.
 func TestReplicationStopped(t *testing.T) {
