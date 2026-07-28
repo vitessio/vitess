@@ -26,23 +26,49 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-// TestReferencePreservedByOuterJoinRunsEvenWithoutADestination covers the merge that keeps a
-// reference table on the preserved side of an outer join in a single route: the routing has to
-// be single-shard for the merge to happen, but a single-shard opcode can still resolve to no
-// shard at all, and then the merged query would run nowhere and drop the preserved rows.
-func TestReferencePreservedByOuterJoinRunsEvenWithoutADestination(t *testing.T) {
+// A reference table on the preserved side of an outer join is only merged into the shards when
+// the route is single-shard, because a multi-shard route returns each unmatched preserved row
+// once per shard. These tests cover what has to hold for the rows of such a route: it must run
+// even when the routing resolves to no destination, and no later merge may widen it again.
+
+func planReferenceOuterJoin(t *testing.T, query string) engine.Primitive {
+	t.Helper()
+
 	vschema := loadSchema(t, "vschemas/schema.json", true)
 	vw, err := vschemawrapper.NewVschemaWrapper(vtenv.NewTestEnv(), vschema, TestBuilder)
 	require.NoError(t, err)
 
-	plan, err := TestBuilder(
-		"select ref_with_source.col from ref_with_source left join (select * from `user` where id = :id) as u on ref_with_source.col = u.col",
-		vw, vw.CurrentDb())
+	plan, err := TestBuilder(query, vw, vw.CurrentDb())
 	require.NoError(t, err)
+	return plan.Instructions
+}
 
-	route, ok := plan.Instructions.(*engine.Route)
-	require.True(t, ok, "the join is expected to be merged into a single route, got %T", plan.Instructions)
+func TestReferencePreservedByOuterJoinRunsWithoutADestination(t *testing.T) {
+	primitive := planReferenceOuterJoin(t,
+		"select ref_with_source.col from ref_with_source left join (select * from `user` where id = :id) as u on ref_with_source.col = u.col")
+
+	route, ok := primitive.(*engine.Route)
+	require.True(t, ok, "the join is expected to be merged into a single route, got %T", primitive)
 	require.Equal(t, engine.EqualUnique, route.Opcode)
 	require.True(t, route.NoRoutesSpecialHandling,
-		"a route that has to produce the preserved reference rows cannot return an empty result when the routing finds no destination")
+		"a route that owes the preserved reference rows cannot return an empty result when the routing finds no destination")
+}
+
+func TestReferencePreservedByOuterJoinRunsWithoutADestinationAfterAnotherMerge(t *testing.T) {
+	primitive := planReferenceOuterJoin(t,
+		"select ref_with_source.col from ref_with_source left join (select * from `user` where id = :id) as u on ref_with_source.col = u.col join ref_with_source as r2 on r2.col = ref_with_source.col")
+
+	route, ok := primitive.(*engine.Route)
+	require.True(t, ok, "the joins are expected to be merged into a single route, got %T", primitive)
+	require.Equal(t, engine.EqualUnique, route.Opcode)
+	require.True(t, route.NoRoutesSpecialHandling,
+		"merging the route with another one must not drop what the outer join owes the preserved rows")
+}
+
+func TestReferencePreservedByOuterJoinIsNotWidenedByAUnion(t *testing.T) {
+	primitive := planReferenceOuterJoin(t,
+		"select ref_with_source.col from ref_with_source left join (select * from `user` where id = :id) as u on ref_with_source.col = u.col union all select col from `user`")
+
+	require.IsType(t, &engine.Concatenate{}, primitive,
+		"merging the route into the scatter branch would return each unmatched preserved row once per shard")
 }
