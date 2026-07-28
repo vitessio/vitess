@@ -41,6 +41,7 @@
         - [Slow clean mysqld shutdowns no longer fail backups](#backup-mysqld-shutdown-timeout)
     - **[General](#minor-changes-general)**
         - [Build version metadata now sourced from VCS stamping](#build-info-from-vcs)
+        - [Published Docker images now carry provenance and SBOM attestations](#image-provenance-sbom-attestations)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -349,3 +350,19 @@ User-visible consequences:
 - Binaries built from a dirty working tree report their Git revision with a `-dirty` suffix.
 
 The `BUILD_GIT_REV`, `BUILD_GIT_BRANCH`, and `BUILD_TIME` environment-variable overrides still work for builds without VCS metadata (e.g. from a release tarball). When `BUILD_TIME` is set, it takes precedence over the commit time.
+
+#### <a id="image-provenance-sbom-attestations"/>Published Docker images now carry provenance and SBOM attestations</a>
+
+The Docker images Vitess publishes to Docker Hub — `vitess/vttestserver`, `vitess/lite`, and the component images — now carry BuildKit-generated provenance and SBOM attestations, added as an extra manifest in the image index.
+
+Anyone pulling a published image can inspect its provenance to see which CI workflow built it, and from which repository and commit, and can review its software bill of materials (SBOM).
+
+To inspect the provenance of a published image:
+
+```bash
+docker buildx imagetools inspect vitess/lite:<tag> --format '{{ json .Provenance }}'
+```
+
+Because the attestations live in an extra manifest in the image index, Docker Hub serves them transparently. When mirroring these images or copying them into air-gapped environments, reference the full image index so the attestations are preserved.
+
+See [#20738](https://github.com/vitessio/vitess/pull/20738) for details.
