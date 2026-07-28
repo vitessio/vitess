@@ -213,20 +213,42 @@ func parseValue(s string, c *cache, depth int) (*Value, string, error) {
 // 308 always leaves somewhere for the number to land and 309 need not.
 const maxFloat64Digits = 308
 
-// mayExceedFloat64 reports whether num is worth converting to find out whether
-// a double can hold it. It errs towards yes: the job is to keep the conversion
-// off the common path, not to answer the question. A number is below the
-// largest double whenever the digits it is written to, moved by its exponent,
-// stay within the ones that double has — len(num) overcounts the digits, which
-// only makes the answer yes more often.
+// mayExceedFloat64 reports whether num is worth converting to find out whether a
+// double can hold it. It errs towards yes: the job is to keep the conversion off
+// the common path, not to answer the question.
 //
-// Only an exponent that moves the decimal point to the right counts against
-// those digits. A negative one buys nothing back: the digits are read into the
+// What can carry a number that far is the digits in front of its decimal point,
+// moved by its exponent — it stays below 10^309 whenever those two together stay
+// inside the places a double has, whatever it goes on to say after the point.
+// Digits behind the point only ever move it the other way, and they are what buys
+// the written exponent its extra room; nor can they overflow the significand on
+// the way in, since it stops taking them at seventeen.
+//
+// Only an exponent that moves the point to the right counts against those digits.
+// A negative one buys nothing back: the digits in front are read into the
 // significand before the exponent is applied, so a significand that ran out of
 // room on the way in has already gone infinite, and moving the point afterwards
 // leaves it there.
+//
+// Counting those digits means walking them, so len(num) answers first. It counts
+// the fraction and the exponent's own characters too, and so can only say yes too
+// often — which leaves the walk where the conversion it saves is: off the path
+// every ordinary number takes.
 func mayExceedFloat64(num string, exponent int) bool {
-	return len(num)+max(exponent, 0) > maxFloat64Digits
+	room := maxFloat64Digits - max(exponent, 0)
+	if len(num) <= room {
+		return false
+	}
+
+	i := 0
+	if num[0] == '-' {
+		i++
+	}
+	digits := 0
+	for i+digits < len(num) && '0' <= num[i+digits] && num[i+digits] <= '9' {
+		digits++
+	}
+	return digits > room
 }
 
 // pow10 holds the powers of ten that a number's digits are scaled by, which is
