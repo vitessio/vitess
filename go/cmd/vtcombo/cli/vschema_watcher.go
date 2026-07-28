@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"math/rand/v2"
 	"os"
 	"path"
@@ -153,7 +154,10 @@ func watchSrvVSchema(ctx context.Context, persister *vschemaPersister, ts *topo.
 func (p *vschemaPersister) flush(ctx context.Context, ts *topo.Server, cell string) {
 	srvVSchema, err := ts.GetSrvVSchema(ctx, cell)
 	if err != nil {
-		log.Error(fmt.Sprintf("Unable to read SrvVSchema for cell %v to persist it on shutdown: %v", cell, err))
+		log.Error("Unable to read SrvVSchema to persist it on shutdown",
+			slog.String("cell", cell),
+			slog.Any("error", err),
+		)
 		return
 	}
 
