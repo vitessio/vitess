@@ -79,8 +79,15 @@ func tryMergeCTESharded(ctx *plancontext.PlanningContext, seed, term *Route, in 
 
 func mergeCTE(ctx *plancontext.PlanningContext, seed, term *Route, r Routing, in *RecurseCTE, conditions []engine.Condition) *Route {
 	preserved, canMerge := referenceRowsInvariant(r, false, seed, term)
+	if preserved {
+		// A sharded routing here can be single-shard only because of the recursion's bind predicate,
+		// which the loop below restores to its cross-table shape, and nothing recomputes the routing
+		// afterwards. Rows that a multi-shard route would duplicate do not get to rely on that.
+		_, sharded := r.(*ShardedRouting)
+		canMerge = canMerge && !sharded
+	}
 	if !canMerge {
-		debugNoRewrite("CTE merge blocked: %s routing would widen a route that has to stay single-shard", r.OpCode().String())
+		debugNoRewrite("CTE merge blocked: %s routing cannot honour a route that has to stay single-shard", r.OpCode().String())
 		return nil
 	}
 

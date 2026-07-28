@@ -99,6 +99,31 @@ func TestRefusedCTEMergeLeavesAWorkingPlan(t *testing.T) {
 	require.Equal(t, "select u.col from `user` as u where u.col = :c_col", term.Query)
 }
 
+// Refusing the merge after the routing has been reset must not leave the inputs behind changed:
+// the reset rewrites a ShardedRouting in place, and the merge can be sharing that object with the
+// route the plan falls back to.
+func TestRefusedJoinMergeLeavesTheProbeSingleShard(t *testing.T) {
+	primitive := planReferenceOuterJoin(t,
+		"select r1.col from ref_with_source as r1 left join ref as r2 on r1.col = r2.col join `user` as u on u.id = r1.col")
+
+	join, ok := primitive.(*engine.Join)
+	require.True(t, ok, "the reference outer join cannot be merged into the shards, got %T", primitive)
+	probe, ok := join.Right.(*engine.Route)
+	require.True(t, ok, "expected the probed side to be a route, got %T", join.Right)
+	require.Equal(t, engine.EqualUnique, probe.Opcode,
+		"the probe is routed by the value coming from the left, so it reads one shard per row, not every shard")
+}
+
+// The recursion's own predicate can make the term look single-shard, and the CTE merger restores it
+// to its cross-table shape without recomputing the routing afterwards.
+func TestReferenceRowsAreNotMergedIntoACTERoutedByTheRecursion(t *testing.T) {
+	primitive := planReferenceOuterJoin(t,
+		"with recursive c as (select r1.col as col from ref_with_source as r1 left join ref as r2 on r1.col = r2.col union all select u.col from `user` as u join c on u.id = c.col) select col from c")
+
+	require.IsType(t, &engine.RecurseCTE{}, primitive,
+		"the merged route would be routed by a predicate that no longer exists once the recursion is restored")
+}
+
 // A dual on the preserved side owes its row for the same reason a reference table does, and its
 // routing reports the same opcode.
 func TestDualPreservedByOuterJoinRunsWithoutADestination(t *testing.T) {
