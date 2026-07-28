@@ -163,6 +163,46 @@ func TestParseNumberTooBigForDouble(t *testing.T) {
 	})
 }
 
+// TestParseNumberGrammar covers the shapes JSON's grammar allows a number to
+// take. A number opens with a minus or a digit, an integer part of more than
+// one digit does not open with a zero, and a decimal point has digits on both
+// sides of it. MySQL holds documents to the same grammar, and nan is not a
+// number to either of them.
+func TestParseNumberGrammar(t *testing.T) {
+	t.Run("accepted", func(t *testing.T) {
+		for _, doc := range []string{
+			"0", "-0", "0.5", "-0.5", "1", "-1", "1.2", "0e0", "-0e0",
+			"1e5", "1E5", "1e007", "1e+007", "1e-5", "0.0",
+			"[0,1,2]", `{"a":-0.5,"b":[1e5]}`,
+		} {
+			t.Run(doc, func(t *testing.T) {
+				var p Parser
+				_, err := p.Parse(doc)
+				require.NoError(t, err)
+			})
+		}
+	})
+
+	t.Run("rejected", func(t *testing.T) {
+		for _, doc := range []string{
+			// An integer part that opens with a zero.
+			"007", "-003", "01", "00", "00.5", "01.5", "[007]",
+			// A decimal point missing a digit on one side.
+			".2", "-.2", "12.", "-12.", "1.e5", `{"a": .2}`, "[12.]",
+			// A written plus.
+			"+1", "+1.5", "+0", "[+1]",
+			// Not a number at all.
+			"nan", "NaN", "NAN", "[nan]", `{"a": nan}`, "-nan", ".", "-",
+		} {
+			t.Run(doc, func(t *testing.T) {
+				var p Parser
+				_, err := p.Parse(doc)
+				require.Error(t, err)
+			})
+		}
+	})
+}
+
 func TestUnescapeStringBestEffort(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		testUnescapeStringBestEffort(t, ``, ``)
