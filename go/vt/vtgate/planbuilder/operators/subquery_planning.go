@@ -687,7 +687,7 @@ func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, inner, out
 	allCond = append(allCond, conditions...)
 	if !s.subq.TopLevel {
 		// if the subquery we are merging isn't a top level predicate, we can't use it for routing
-		return &Route{
+		merged := &Route{
 			unaryOperator: newUnaryOp(outer.Source),
 			MergedWith:    mergedWith(inner, outer),
 			Routing:       outer.Routing,
@@ -695,6 +695,11 @@ func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, inner, out
 			ResultColumns: outer.ResultColumns,
 			Conditions:    allCond,
 		}
+		if !merged.inheritFrom(inner, outer) {
+			return nil
+		}
+
+		return merged
 	}
 	_, isSharded := r.(*ShardedRouting)
 	var src Operator
@@ -706,7 +711,7 @@ func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, inner, out
 	} else {
 		src = s.rewriteASTExpression(ctx, inner)
 	}
-	return &Route{
+	merged := &Route{
 		unaryOperator: newUnaryOp(src),
 		MergedWith:    mergedWith(inner, outer),
 		Routing:       r,
@@ -714,6 +719,11 @@ func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, inner, out
 		ResultColumns: s.outer.ResultColumns,
 		Conditions:    allCond,
 	}
+	if !merged.inheritFrom(inner, outer) {
+		return nil
+	}
+
+	return merged
 }
 
 // rewriteASTExpression rewrites the subquery expression that is used in the merged output
