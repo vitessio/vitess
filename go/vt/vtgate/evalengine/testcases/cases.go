@@ -931,10 +931,8 @@ func SignedExponents(yield Query) {
 
 			// JSON comparison reads the number through a decimal too, so it is
 			// worth exercising directly. A leading plus is not a JSON number,
-			// so those spellings have no document to compare.
-			if !strings.HasPrefix(mantissa, "+") {
-				yield(fmt.Sprintf("CAST(%s AS JSON) = CAST(%s AS JSON)", literal, literal), nil, false)
-			}
+			// so those spellings pin the cast being rejected rather than a value.
+			yield(fmt.Sprintf("CAST(%s AS JSON) = CAST(%s AS JSON)", literal, literal), nil, false)
 		}
 	}
 }
