@@ -27,6 +27,7 @@
         - [PREPARE statements no longer report the prepared statement's tables](#vtgate-prepare-tables-used)
         - [Preparing a statement no longer starts an implicit transaction](#vtgate-prepare-no-implicit-tx)
         - [Stricter validation of SQL-level PREPARE statements](#vtgate-prepare-stricter-validation)
+        - [PROXY protocol v2 headers larger than 4 KiB are rejected](#vtgate-proxy-protocol-v2-header-cap)
     - **[Reparent](#minor-changes-reparent)**
         - [`EmergencyReparentShard` no longer waits on replicas that cannot win the election](#ers-lagging-relay-log-wait)
     - **[VTTablet](#minor-changes-vttablet)**
@@ -248,6 +249,16 @@ SQL-level `PREPARE` and binary-protocol `COM_STMT_PREPARE` now reject statement 
 Additionally, `PREPARE ... FROM ?` is now a syntax error, matching MySQL: the grammar accidentally accepted a positional parameter as the statement text, but no value could ever reach it and the statement always failed. This also affects programs that parse SQL using the `go/vt/sqlparser` package directly.
 
 See [#20562](https://github.com/vitessio/vitess/pull/20562) for details.
+
+#### <a id="vtgate-proxy-protocol-v2-header-cap"/>PROXY protocol v2 headers larger than 4 KiB are rejected</a>
+
+On listeners with `--proxy-protocol` enabled, PROXY protocol v2 headers whose payload (address block plus TLVs) exceeds 4096 bytes are now rejected, and the connection is closed before the MySQL handshake. Previous versions accepted headers up to the protocol maximum of 65535 bytes.
+
+This comes from upgrading the `go-proxyproto` library, which now caps the v2 header length as a memory-allocation DoS mitigation: the parser allocates the advertised length before reading, so an untrusted peer could previously force a 64 KiB allocation per connection. Typical headers fit comfortably — a `PP2_SUBTYPE_SSL_CLIENT_CERT` TLV carrying a DER-encoded client certificate is usually 1–2 KiB.
+
+**Impact**: Only deployments whose proxy emits v2 headers with more than 4 KiB of TLV data are affected; those connections will fail before the handshake instead of connecting. PROXY protocol v1 headers and v2 headers within the limit are unaffected.
+
+See [#20733](https://github.com/vitessio/vitess/pull/20733) for details.
 
 ### <a id="minor-changes-reparent"/>Reparent</a>
 
