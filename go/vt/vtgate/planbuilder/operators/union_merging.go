@@ -313,12 +313,18 @@ func createMergedUnion(
 	exprs := [][]sqlparser.SelectExpr{lhsExprs, rhsExprs}
 	union := newUnion([]Operator{lhsRoute.Source, rhsRoute.Source}, exprs, cols, distinct)
 	selectExprs := unionSelects(lhsExprs)
-	return &Route{
+	merged := &Route{
 		unaryOperator: newUnaryOp(union),
 		MergedWith:    []*Route{rhsRoute},
 		Routing:       routing,
 		Conditions:    conditions,
-	}, selectExprs
+	}
+	if !merged.inheritFrom(lhsRoute, rhsRoute) {
+		debugNoRewrite("union merge blocked: %s routing would widen a route that has to stay single-shard", routing.OpCode().String())
+		return nil, nil
+	}
+
+	return merged, selectExprs
 }
 
 func compactUnion(u *Union) *ApplyResult {
