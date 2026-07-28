@@ -794,9 +794,8 @@ func (erp *EmergencyReparenter) findMostAdvanced(
 		if haveIncomparablePositions(winningPosition.Combined, position.Combined) {
 			return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "split brain detected between servers - %s and %s", topoproto.TabletAliasString(winningPrimaryTablet.Alias), topoproto.TabletAliasString(validTablets[i].Alias))
 		}
-		// The sort can't guarantee a maximum at index 0 when some positions are incomparable, so also reject a winner that
-		// another candidate dominates. This is an invariant check that should never fire, not an expected path
-		if hasDominantPosition(position.Combined, winningPosition.Combined) {
+		// Keep the sort's maximum-at-index-zero guarantee as a defense-in-depth invariant.
+		if hasDominantReparentPosition(position, winningPosition) {
 			return nil, nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "candidate sorting error: %s has a more advanced position than the chosen candidate %s", topoproto.TabletAliasString(validTablets[i].Alias), topoproto.TabletAliasString(winningPrimaryTablet.Alias))
 		}
 	}

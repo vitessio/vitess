@@ -89,7 +89,7 @@ func (rlp *RelayLogPositions) IsZero() bool {
 // hasDominantPosition returns true if position a is strictly ahead of position b, meaning
 // a contains everything b has, plus more.
 func hasDominantPosition(a, b replication.Position) bool {
-	return a.AtLeast(b) && !a.Equal(b)
+	return a.AtLeast(b) && !b.AtLeast(a)
 }
 
 // haveIncomparablePositions returns true if neither position contains the other. Replication
