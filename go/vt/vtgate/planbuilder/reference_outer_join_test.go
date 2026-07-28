@@ -65,10 +65,43 @@ func TestReferencePreservedByOuterJoinRunsWithoutADestinationAfterAnotherMerge(t
 		"merging the route with another one must not drop what the outer join owes the preserved rows")
 }
 
+func TestReferencePreservedByOuterJoinRunsWithoutADestinationAfterASubqueryMerge(t *testing.T) {
+	primitive := planReferenceOuterJoin(t,
+		"select ref_with_source.col from ref_with_source left join (select * from `user` where id = :id) as u on ref_with_source.col = u.col where exists (select 1 from ref_with_source as r2)")
+
+	route, ok := primitive.(*engine.Route)
+	require.True(t, ok, "the subquery is expected to be merged into the route, got %T", primitive)
+	require.Equal(t, engine.EqualUnique, route.Opcode)
+	require.True(t, route.NoRoutesSpecialHandling,
+		"merging a subquery into the route must not drop what the outer join owes the preserved rows")
+}
+
 func TestReferencePreservedByOuterJoinIsNotWidenedByAUnion(t *testing.T) {
 	primitive := planReferenceOuterJoin(t,
 		"select ref_with_source.col from ref_with_source left join (select * from `user` where id = :id) as u on ref_with_source.col = u.col union all select col from `user`")
 
 	require.IsType(t, &engine.Concatenate{}, primitive,
 		"merging the route into the scatter branch would return each unmatched preserved row once per shard")
+}
+
+// A dual on the preserved side owes its row for the same reason a reference table does, and its
+// routing reports the same opcode.
+func TestDualPreservedByOuterJoinRunsWithoutADestination(t *testing.T) {
+	primitive := planReferenceOuterJoin(t,
+		"select 1 from (select 1 from dual) as d left join (select * from `user` where id = :id) as u on u.col = 1")
+
+	route, ok := primitive.(*engine.Route)
+	require.True(t, ok, "the join is expected to be merged into a single route, got %T", primitive)
+	require.True(t, route.NoRoutesSpecialHandling,
+		"the preserved dual row cannot go missing because the other side routes nowhere")
+}
+
+// Both sides of the outer join can be reference tables, which routes to any single shard. That
+// route is single-shard, so nothing blocks it on its own, but a later merge can still widen it.
+func TestReferenceJoinedToReferenceIsNotWidenedByAUnion(t *testing.T) {
+	primitive := planReferenceOuterJoin(t,
+		"select r1.col from ref_with_source as r1 left join ref as r2 on r1.col = r2.col union all select col from `user`")
+
+	require.IsType(t, &engine.Concatenate{}, primitive,
+		"merging the reference route into the scatter branch would return each unmatched r1 row once per shard")
 }
