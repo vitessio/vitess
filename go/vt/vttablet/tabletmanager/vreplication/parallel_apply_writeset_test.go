@@ -255,12 +255,16 @@ func TestBuildTxnWritesetAllowsBeforeImageWithNullValue(t *testing.T) {
 	require.Equal(t, []uint64{expected}, keys)
 }
 
+// TestBuildTxnWritesetRejectsSparseBeforeImageOnRelevantFKColumn pins the
+// fail-closed boundary: a -1 length on a NOT NULL FK column cannot be a
+// legitimate NULL, so it must mean the column was omitted from the image, and
+// the txn must be forced onto the serial path.
 func TestBuildTxnWritesetRejectsSparseBeforeImageOnRelevantFKColumn(t *testing.T) {
 	childPlan := &TablePlan{
 		TargetName: "child",
 		Fields: []*querypb.Field{
 			{Name: "id", Type: querypb.Type_INT64},
-			{Name: "parent_id", Type: querypb.Type_INT64},
+			{Name: "parent_id", Type: querypb.Type_INT64, Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG)},
 			{Name: "val", Type: querypb.Type_VARCHAR},
 		},
 		PKIndices: []bool{true, false, false},
@@ -286,6 +290,116 @@ func TestBuildTxnWritesetRejectsSparseBeforeImageOnRelevantFKColumn(t *testing.T
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "partial row image")
 	require.Nil(t, keys)
+}
+
+// TestBuildTxnWritesetAllowsNullNullableFKColumn covers a NULL value in a
+// nullable FK column of a full row image: the -1 length there is a legitimate
+// NULL, not a partial image, and a NULL FK is unenforced by MySQL so it
+// creates no dependency edge. Forcing serialization for it would push every
+// transaction touching a NULL FK onto the serial path, and nullable FKs are
+// common in the schemas this feature targets.
+func TestBuildTxnWritesetAllowsNullNullableFKColumn(t *testing.T) {
+	childPlan := &TablePlan{
+		TargetName: "child",
+		Fields: []*querypb.Field{
+			{Name: "id", Type: querypb.Type_INT64, Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG)},
+			{Name: "parent_id", Type: querypb.Type_INT64},
+			{Name: "val", Type: querypb.Type_VARCHAR},
+		},
+		PKIndices: []bool{true, false, false},
+	}
+	fkRefs := map[string][]fkConstraintRef{
+		"child": {{ParentTable: "parent", ChildColumnNames: []string{"parent_id"}, ReferencedColumnNames: []string{"id"}}},
+	}
+	// Full row image: parent_id is NULL, not omitted.
+	change := &binlogdatapb.RowChange{
+		After: &querypb.Row{
+			Lengths: []int64{1, -1, 3},
+			Values:  []byte("5aaa"),
+		},
+	}
+	rowEvent := &binlogdatapb.RowEvent{TableName: "child", RowChanges: []*binlogdatapb.RowChange{change}}
+	vevent := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_ROW, RowEvent: rowEvent}
+
+	keys, err := buildTxnWriteset(
+		map[string]*TablePlan{"child": childPlan},
+		fkRefs,
+		buildParentFKRefs(fkRefs),
+		[]*binlogdatapb.VEvent{vevent},
+	)
+	require.NoError(t, err)
+	// The identity key only: a NULL FK references nothing, so no FK edge.
+	expected := testWritesetHash("child", sqltypes.MakeTrusted(querypb.Type_INT64, []byte("5")))
+	require.Equal(t, []uint64{expected}, keys)
+}
+
+// TestBuildTxnWritesetAllowsNullableFKNullInBeforeImage covers an UPDATE that
+// sets a previously NULL nullable FK: the before image's NULL emits no FK
+// edge, while the after image's value still conflicts with the parent row.
+func TestBuildTxnWritesetAllowsNullableFKNullInBeforeImage(t *testing.T) {
+	childPlan := &TablePlan{
+		TargetName: "child",
+		Fields: []*querypb.Field{
+			{Name: "id", Type: querypb.Type_INT64, Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG)},
+			{Name: "parent_id", Type: querypb.Type_INT64},
+		},
+		PKIndices: []bool{true, false},
+	}
+	fkRefs := map[string][]fkConstraintRef{
+		"child": {{ParentTable: "parent", ChildColumnNames: []string{"parent_id"}, ReferencedColumnNames: []string{"id"}}},
+	}
+	change := &binlogdatapb.RowChange{
+		Before: &querypb.Row{Lengths: []int64{1, -1}, Values: []byte("5")},
+		After:  &querypb.Row{Lengths: []int64{1, 2}, Values: []byte("542")},
+	}
+	rowEvent := &binlogdatapb.RowEvent{TableName: "child", RowChanges: []*binlogdatapb.RowChange{change}}
+	vevent := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_ROW, RowEvent: rowEvent}
+
+	keys, err := buildTxnWriteset(
+		map[string]*TablePlan{"child": childPlan},
+		fkRefs,
+		buildParentFKRefs(fkRefs),
+		[]*binlogdatapb.VEvent{vevent},
+	)
+	require.NoError(t, err)
+	childPKHash := testWritesetHash("child", sqltypes.MakeTrusted(querypb.Type_INT64, []byte("5")))
+	parentFKHash := testWritesetHash("parent", sqltypes.MakeTrusted(querypb.Type_INT64, []byte("42")))
+	assert.ElementsMatch(t, []uint64{childPKHash, parentFKHash}, keys)
+}
+
+// TestBuildTxnWritesetAllowsNullNullableParentReferencedColumn covers the
+// parent side of the same rule: a NULL in a nullable referenced column (a
+// nullable unique key) cannot be matched by any child FK, so it emits no
+// parent-side FK edge and must not force serialization.
+func TestBuildTxnWritesetAllowsNullNullableParentReferencedColumn(t *testing.T) {
+	parentPlan := &TablePlan{
+		TargetName: "parent",
+		Fields: []*querypb.Field{
+			{Name: "id", Type: querypb.Type_INT64, Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG)},
+			{Name: "alt_id", Type: querypb.Type_INT64},
+		},
+		PKIndices: []bool{true, false},
+	}
+	fkRefs := map[string][]fkConstraintRef{
+		"child": {{ParentTable: "parent", ChildColumnNames: []string{"parent_alt_id"}, ReferencedColumnNames: []string{"alt_id"}}},
+	}
+	// Full row image on the parent: alt_id is NULL, not omitted.
+	change := &binlogdatapb.RowChange{
+		After: &querypb.Row{Lengths: []int64{2, -1}, Values: []byte("42")},
+	}
+	rowEvent := &binlogdatapb.RowEvent{TableName: "parent", RowChanges: []*binlogdatapb.RowChange{change}}
+	vevent := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_ROW, RowEvent: rowEvent}
+
+	keys, err := buildTxnWriteset(
+		map[string]*TablePlan{"parent": parentPlan},
+		fkRefs,
+		buildParentFKRefs(fkRefs),
+		[]*binlogdatapb.VEvent{vevent},
+	)
+	require.NoError(t, err)
+	// The identity key only: no child FK can reference a NULL unique value.
+	expected := testWritesetHash("parent", sqltypes.MakeTrusted(querypb.Type_INT64, []byte("42")))
+	require.Equal(t, []uint64{expected}, keys)
 }
 
 func TestBuildTxnWritesetAllowsCaseOnlyFKColumnNameMismatch(t *testing.T) {

@@ -829,19 +829,35 @@ func buildTxnWritesetWithCache(tablePlans map[string]*TablePlan, fkRefs map[stri
 	return keys, nil
 }
 
-// writesetRelevantColumns builds the set of column indexes the writeset
-// depends on (PK plus FK-joined columns) for one table plan. Callers cache
-// the result per table (see txnWritesetCache.relevantColsCache) so the map
-// is built once per table per fetch instead of once per row change.
+// writesetRelevantColumns builds the set of column indexes for which a -1
+// length must be treated as a partial row image (PK columns plus NOT NULL
+// FK-joined columns) for one table plan. Callers cache the result per table
+// (see txnWritesetCache.relevantColsCache) so the map is built once per table
+// per fetch instead of once per row change.
 //
-// Hashable unique-secondary columns are intentionally NOT included here. A
-// -1 length on a relevant column trips the partial-image guard and forces
+// A -1 length on a relevant column trips the partial-image guard and forces
 // serialization, but a NULL value in a full row image is also encoded as a
-// -1 length. Unique-secondary columns are commonly nullable, and a NULL
-// unique value cannot conflict (MySQL permits multiple NULLs), so the
-// emitter (writesetKeysForUniqueKey) skips it. Adding such columns to the
-// relevance set would force-serialize every NULL unique value and negate the
-// parallelism this change unlocks.
+// -1 length, so only columns where -1 cannot be a legitimate NULL belong
+// here:
+//
+//   - Hashable unique-secondary columns are NOT included. They are commonly
+//     nullable, and a NULL unique value cannot conflict (MySQL permits
+//     multiple NULLs), so the emitter (writesetKeysForUniqueKey) skips it.
+//   - Nullable FK-joined columns are NOT included. Nullable FKs are common
+//     in the schemas this feature targets, and a NULL FK is unenforced by
+//     MySQL -- it references nothing -- so the emitters
+//     (writesetKeysForFKRef, writesetKeysForParentFKRef) skip it. The
+//     streams that reach this code carry complete row images for these
+//     columns: minimal binlog_row_image is rejected at stream start, an
+//     omitted column is a hard vstreamer error unless the noblob
+//     experimental flag is set, and noblob only omits blob columns, which
+//     cannot be FK members.
+//   - NOT NULL FK-joined columns stay in the set: a -1 there can never be a
+//     legitimate NULL, so it must mean the column was omitted, and failing
+//     closed costs no parallelism.
+//
+// Including nullable FK columns would force-serialize every transaction that
+// touches a NULL FK value and negate the parallelism this change unlocks.
 func writesetRelevantColumns(plan *TablePlan, fieldIdx map[string]int, refs []fkConstraintRef, pRefs []parentFKRef) map[int]struct{} {
 	relevantColumns := make(map[int]struct{})
 	for i, isPK := range plan.PKIndices {
@@ -849,18 +865,23 @@ func writesetRelevantColumns(plan *TablePlan, fieldIdx map[string]int, refs []fk
 			relevantColumns[i] = struct{}{}
 		}
 	}
+	addIfNotNullable := func(colName string) {
+		idx, ok := fieldIndexForName(fieldIdx, colName)
+		if !ok {
+			return
+		}
+		if idx < len(plan.Fields) && plan.Fields[idx].Flags&uint32(querypb.MySqlFlag_NOT_NULL_FLAG) != 0 {
+			relevantColumns[idx] = struct{}{}
+		}
+	}
 	for _, ref := range refs {
 		for _, colName := range ref.ChildColumnNames {
-			if idx, ok := fieldIndexForName(fieldIdx, colName); ok {
-				relevantColumns[idx] = struct{}{}
-			}
+			addIfNotNullable(colName)
 		}
 	}
 	for _, ref := range pRefs {
 		for _, colName := range ref.ReferencedColumnNames {
-			if idx, ok := fieldIndexForName(fieldIdx, colName); ok {
-				relevantColumns[idx] = struct{}{}
-			}
+			addIfNotNullable(colName)
 		}
 	}
 	return relevantColumns
