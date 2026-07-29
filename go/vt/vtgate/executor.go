@@ -361,7 +361,11 @@ func (e *Executor) StreamExecute(
 				byteCount := 0
 				if len(qr.Fields) > 0 {
 					result.Fields = qr.Fields
-					if err := callback(qr.Metadata()); err != nil {
+					// Send only the fields here: any OK-packet data on qr was
+					// accumulated into result above and goes to the client with
+					// the left-over result, so repeating it in this packet would
+					// deliver it twice to clients that sum across packets.
+					if err := callback(&sqltypes.Result{Fields: qr.Fields}); err != nil {
 						return err
 					}
 					seenResults.Store(true)

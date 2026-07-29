@@ -153,6 +153,38 @@ func TestStreamExecuteOKPacketDataAfterResultSet(t *testing.T) {
 		"RowsAffected arriving after the result set was sent must still reach the client")
 }
 
+// TestStreamExecuteOKPacketDataWithFields verifies that OK-packet data arriving in
+// the same packet as the field metadata reaches the client exactly once — in the
+// final left-over result — and is not also duplicated into the fields-only
+// metadata packet sent ahead of the rows.
+func TestStreamExecuteOKPacketDataWithFields(t *testing.T) {
+	executor, _, _, sbclookup, ctx := createExecutorEnv(t)
+
+	sbclookup.SetResults([]*sqltypes.Result{{
+		Fields:          sqltypes.MakeTestFields("id", "int64"),
+		RowsAffected:    1,
+		InsertID:        99,
+		InsertIDChanged: true,
+	}})
+
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
+	var rowsAffected uint64
+	var insertIDs []uint64
+	err := executor.StreamExecute(ctx, nil, "TestStreamExecuteOKPacketDataWithFields", session,
+		"select id from main1", nil, false, func(qr *sqltypes.Result) error {
+			rowsAffected += qr.RowsAffected
+			if qr.InsertIDUpdated() {
+				insertIDs = append(insertIDs, qr.InsertID)
+			}
+			return nil
+		})
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, rowsAffected,
+		"a client summing RowsAffected across packets must see the OK-packet count exactly once")
+	assert.Equal(t, []uint64{99}, insertIDs,
+		"the last insert id must be delivered in exactly one packet")
+}
+
 // TestStreamExecuteRecordsPlanStats verifies that the streaming path records
 // per-plan execution statistics (exec count, rows returned) on the engine.Plan,
 // matching the buffered Execute path.
