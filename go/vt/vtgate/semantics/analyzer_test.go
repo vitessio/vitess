@@ -361,6 +361,62 @@ func TestColumnListLengthChecking(t *testing.T) {
 		query: "with recursive x(a) as (select 1, 2), y as (select 1 from x), z as (select 1 from y) select * from z",
 		err:   mismatch,
 	}, {
+		name:  "unused cte chain reading the mismatched declared name",
+		query: "with recursive x(a) as (select 1, 2), y as (select a from x) select 1",
+	}, {
+		name:  "used cte chain reading the mismatched declared name",
+		query: "with recursive x(a) as (select 1, 2), y as (select a from x) select * from y",
+		err:   mismatch,
+	}, {
+		name:  "self-referencing mismatched cte reading its declared name while unused",
+		query: "with recursive x(a) as (select 1, 2 union all select a + 1, 2 from x) select 1",
+	}, {
+		name:  "declared column list over an unexpandable star",
+		query: "with recursive x(a, b) as (select * from t) select a from x",
+	}, {
+		name:  "derived table mismatch inside an unused cte",
+		query: "with recursive y as (select * from (select 1, 2) x(a)) select 1",
+	}, {
+		name:  "derived table mismatch read inside an unused cte",
+		query: "with recursive y as (select a from (select 1, 2) x(a)) select 1",
+	}, {
+		name:  "union derived table mismatch inside an unused cte",
+		query: "with recursive y as (select * from (select 1, 2 union select 3, 4) x(a)) select 1",
+	}, {
+		name:  "derived table mismatch inside a used cte",
+		query: "with recursive y as (select * from (select 1, 2) x(a)) select * from y",
+		err:   mismatch,
+	}, {
+		name:  "derived table mismatch inside a two-level used chain",
+		query: "with recursive y as (select * from (select 1, 2) x(a)), z as (select 1 from y) select * from z",
+		err:   mismatch,
+	}, {
+		name:  "derived table mismatch in the executed part of a recursive with",
+		query: "with recursive x(a) as (select 1 union all select a + 1 from x where a < 3) select a from (select 1, 2) d(a)",
+		err:   mismatch,
+	}, {
+		// a name defined more than once in the statement may resolve to the
+		// wrong definition, so collided names are not validated at all; MySQL
+		// accepts these two because the used definitions are valid
+		name:  "shadowed cte name with a mismatch only in the unused nested definition",
+		query: "with recursive x(a) as (with x(a) as (select 1, 2) select 1) select 1 from x",
+	}, {
+		name:  "sibling derived tables defining the same cte name",
+		query: "select 1 from (with x(a) as (select 1) select 1 from x) d1, (with x(a) as (select 1, 2) select 1) d2",
+	}, {
+		// known gap: MySQL rejects this (error 1353) because the used outer
+		// definition is invalid, but the shadowing collision disables the
+		// validation until definitions are tracked by lexical identity
+		// instead of by name
+		name:  "shadowed cte name with a mismatch in the used outer definition",
+		query: "with recursive x(a) as (with x(a) as (select 1) select 1, 2) select 1 from x",
+	}, {
+		// the non-recursive statement-level WITH resolves lexically, so the
+		// mismatch in the used outer definition is caught despite the collision
+		name:  "shadowed non-recursive cte name with a mismatch in the used outer definition",
+		query: "with x(a) as (with x(a) as (select 1) select 1, 2) select 1 from x",
+		err:   mismatch,
+	}, {
 		name:  "derived table with a declared column list matching a qualified star after join using",
 		query: "select a from (select r.* from authoritative l join authoritative r using (col1)) x(a, b, c)",
 	}, {
@@ -378,7 +434,7 @@ func TestColumnListLengthChecking(t *testing.T) {
 				require.NoError(t, err)
 				return
 			}
-			require.EqualError(t, err, tc.err)
+			require.ErrorContains(t, err, tc.err)
 		})
 	}
 }
