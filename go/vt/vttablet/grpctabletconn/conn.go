@@ -139,6 +139,7 @@ func (conn *gRPCQueryClient) Execute(ctx context.Context, _ queryservice.Session
 		req.ReservedConnKeepAlive = true
 		req.ReservedConnKeepAliveIds = ids
 	}
+	req.ReservedConnActivityRefresh = queryservice.IsReservedConnActivityRefresh(ctx)
 	er, err := conn.c.Execute(ctx, req)
 	if err != nil {
 		return nil, tabletconn.ErrorFromGRPC(err)

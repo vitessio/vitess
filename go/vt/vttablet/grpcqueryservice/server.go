@@ -51,6 +51,9 @@ func (q *query) Execute(ctx context.Context, request *querypb.ExecuteRequest) (r
 	if request.ReservedConnKeepAlive {
 		ctx = queryservice.ContextWithReservedConnKeepAlive(ctx, request.ReservedConnKeepAliveIds)
 	}
+	if request.ReservedConnActivityRefresh {
+		ctx = queryservice.ContextWithReservedConnActivityRefresh(ctx)
+	}
 	result, err := q.server.Execute(ctx, nil, request.Target, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.ReservedId, request.Options)
 	if err != nil {
 		return nil, vterrors.ToGRPC(err)

@@ -24,7 +24,9 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
+	"vitess.io/vitess/go/vt/vttablet/queryservice"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -63,12 +65,21 @@ type (
 	tempTableActivityRefresher struct {
 		gw *TabletGateway
 
-		// lastRefresh maps a reserved id to the unix-nano time of its last
-		// refresh, bounding the fanout to one refresh per heartbeat interval
-		// per connection regardless of the session's query rate. Entries for
-		// connections that no longer exist are pruned in amortized batches.
-		lastRefresh       sync.Map // int64 (reserved id) -> int64 (unix nanos)
+		// lastRefresh maps a reserved connection — keyed by tablet alias plus
+		// reserved id, since reserved ids are generated independently by each
+		// tablet and can collide across tablets — to the unix-nano time of
+		// its last refresh, bounding the fanout to one refresh per heartbeat
+		// interval per connection regardless of the session's query rate.
+		// Entries for connections that no longer exist are pruned in
+		// amortized batches.
+		lastRefresh       sync.Map // tempTableRefreshKey -> int64 (unix nanos)
 		insertsSincePrune atomic.Int64
+	}
+
+	// tempTableRefreshKey identifies one reserved connection across tablets.
+	tempTableRefreshKey struct {
+		alias      string
+		reservedID int64
 	}
 
 	// tempTableRefreshTarget is one reserved connection due for a refresh.
@@ -96,16 +107,20 @@ func (r *tempTableActivityRefresher) onSessionActivity(ctx context.Context, sess
 	if len(targets) == 0 {
 		return
 	}
-	// The refresh must survive the request that triggered it:
-	// context.WithoutCancel keeps the caller id and tracing values while
-	// detaching from the request's cancellation.
-	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), tempTableActivityRefreshTimeout)
-	go func() {
-		defer cancel()
-		for _, t := range targets {
+	// Each target refreshes independently with its own timeout, so one slow
+	// or unreachable tablet cannot starve the others' refreshes. Concurrency
+	// is naturally bounded by the session's shard-session count. The refresh
+	// must survive the request that triggered it: context.WithoutCancel
+	// keeps the caller id and tracing values while detaching from the
+	// request's cancellation.
+	detached := context.WithoutCancel(ctx)
+	for _, t := range targets {
+		rctx, cancel := context.WithTimeout(detached, tempTableActivityRefreshTimeout)
+		go func(t tempTableRefreshTarget) {
+			defer cancel()
 			r.refresh(rctx, t)
-		}
-	}()
+		}(t)
+	}
 }
 
 // dueTargets snapshots the session's reserved connections that are due for an
@@ -125,7 +140,11 @@ func (r *tempTableActivityRefresher) dueTargets(session *econtext.SafeSession) [
 		if ss.GetReservedId() == 0 || ss.GetTransactionId() != 0 {
 			continue
 		}
-		if last, ok := r.lastRefresh.Load(ss.GetReservedId()); ok {
+		key := tempTableRefreshKey{
+			alias:      topoproto.TabletAliasString(ss.GetTabletAlias()),
+			reservedID: ss.GetReservedId(),
+		}
+		if last, ok := r.lastRefresh.Load(key); ok {
 			if now-last.(int64) < interval.Nanoseconds() {
 				continue
 			}
@@ -133,7 +152,7 @@ func (r *tempTableActivityRefresher) dueTargets(session *econtext.SafeSession) [
 			r.insertsSincePrune.Store(0)
 			r.prune(now, interval)
 		}
-		r.lastRefresh.Store(ss.GetReservedId(), now)
+		r.lastRefresh.Store(key, now)
 		due = append(due, tempTableRefreshTarget{
 			target:     ss.GetTarget(),
 			alias:      ss.GetTabletAlias(),
@@ -150,6 +169,10 @@ func (r *tempTableActivityRefresher) dueTargets(session *econtext.SafeSession) [
 // retries on the session's next activity an interval later, and a connection
 // that is genuinely gone errors on its next real use anyway.
 func (r *tempTableActivityRefresher) refresh(ctx context.Context, t tempTableRefreshTarget) {
+	// The request-level marker makes the tablet lock the reserved connection
+	// under a purpose that a colliding client command briefly waits out
+	// instead of failing with an in-use error.
+	ctx = queryservice.ContextWithReservedConnActivityRefresh(ctx)
 	qs, err := r.gw.QueryServiceByAlias(ctx, t.alias, t.target)
 	if err == nil {
 		_, err = qs.Execute(ctx, nil, t.target, tempTableActivityRefreshQuery, nil, 0 /* transactionID */, t.reservedID, nil /* options */)

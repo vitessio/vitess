@@ -202,6 +202,14 @@ func (tp *TxPool) NewTxProps(immediateCaller *querypb.VTGateCallerID, effectiveC
 // instead of failing the caller.
 const reservedKeepAlivePurpose = "for reserved connection keepalive"
 
+// reservedActivityRefreshPurpose is the purpose string a temp-table activity
+// refresh locks the reserved connection under while it runs its trivial
+// statement. Like a keepalive touch, a client command that collides with one
+// waits it out instead of failing with an in-use error; unlike a touch the
+// hold spans one statement round trip on the local mysqld, still well inside
+// the wait-out deadline.
+const reservedActivityRefreshPurpose = "for temp-table activity refresh"
+
 // GetAndLock fetches the connection associated to the connID and blocks it from concurrent use
 // You must call Unlock on TxConnection once done.
 func (tp *TxPool) GetAndLock(connID tx.ConnID, reason string) (*StatefulConnection, error) {
@@ -214,10 +222,9 @@ func (tp *TxPool) GetAndLock(connID tx.ConnID, reason string) (*StatefulConnecti
 	// (the critical section is CPU-only, so it outlasts even a heavy
 	// scheduler or GC stall) while still bounding the wait if something is
 	// truly wedged.
-	if err != nil && errors.Is(err, pools.ErrInUse) && strings.Contains(err.Error(), reservedKeepAlivePurpose) {
+	if blockedByBriefHold(err) {
 		deadline := time.Now().Add(1 * time.Second)
-		for err != nil && time.Now().Before(deadline) &&
-			errors.Is(err, pools.ErrInUse) && strings.Contains(err.Error(), reservedKeepAlivePurpose) {
+		for err != nil && time.Now().Before(deadline) && blockedByBriefHold(err) {
 			time.Sleep(100 * time.Microsecond)
 			conn, err = tp.scp.GetAndLock(connID, reason)
 		}
@@ -226,6 +233,18 @@ func (tp *TxPool) GetAndLock(connID tx.ConnID, reason string) (*StatefulConnecti
 		return nil, vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction %d: %v", connID, err)
 	}
 	return conn, nil
+}
+
+// blockedByBriefHold reports whether err is the pool's in-use error for a
+// holder that is guaranteed to release quickly: a keepalive touch (CPU-only,
+// microseconds) or a temp-table activity refresh (one trivial statement round
+// trip). Any other holder — a real client query — fails fast as before.
+func blockedByBriefHold(err error) bool {
+	if err == nil || !errors.Is(err, pools.ErrInUse) {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, reservedKeepAlivePurpose) || strings.Contains(msg, reservedActivityRefreshPurpose)
 }
 
 // KeepAliveReserved refreshes the idle timers of a reserved connection

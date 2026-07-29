@@ -71,6 +71,29 @@ func ReservedConnKeepAliveIDs(ctx context.Context) ([]int64, bool) {
 	return ids, ok
 }
 
+// reservedConnActivityRefreshKey marks an Execute as a background activity
+// refresh of an idle temp-table reserved connection. Unlike the keepalive
+// touch, the query executes normally on the reserved connection — the point
+// is to reset mysqld's wait_timeout clock — but the tablet locks the
+// connection under a purpose a concurrent client command briefly waits out
+// instead of failing with an in-use error. Travels request-level on the wire
+// (ExecuteRequest.reserved_conn_activity_refresh) for the same reason as the
+// keepalive: only vtgate itself can populate it.
+type reservedConnActivityRefreshKey struct{}
+
+// ContextWithReservedConnActivityRefresh marks ctx as a temp-table activity
+// refresh.
+func ContextWithReservedConnActivityRefresh(ctx context.Context) context.Context {
+	return context.WithValue(ctx, reservedConnActivityRefreshKey{}, true)
+}
+
+// IsReservedConnActivityRefresh reports whether ctx marks a temp-table
+// activity refresh.
+func IsReservedConnActivityRefresh(ctx context.Context) bool {
+	is, _ := ctx.Value(reservedConnActivityRefreshKey{}).(bool)
+	return is
+}
+
 // Session represents the current session.
 type Session interface {
 	// GetSessionUUID returns the session's UUID.

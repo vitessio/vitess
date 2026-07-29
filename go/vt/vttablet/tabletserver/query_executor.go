@@ -43,6 +43,7 @@ import (
 	"vitess.io/vitess/go/vt/tableacl/acl"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	p "vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
@@ -169,7 +170,14 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 	if qre.connID != 0 {
 		var conn *StatefulConnection
 		// Need upfront connection for DMLs and transactions
-		conn, err = qre.tsv.te.txPool.GetAndLock(qre.connID, "for query")
+		// A temp-table activity refresh locks the connection under a purpose
+		// that colliding client commands briefly wait out (see
+		// TxPool.GetAndLock) instead of failing with an in-use error.
+		lockPurpose := "for query"
+		if queryservice.IsReservedConnActivityRefresh(qre.ctx) {
+			lockPurpose = reservedActivityRefreshPurpose
+		}
+		conn, err = qre.tsv.te.txPool.GetAndLock(qre.connID, lockPurpose)
 		if err != nil {
 			return nil, err
 		}

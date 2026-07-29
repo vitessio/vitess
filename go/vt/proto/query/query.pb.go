@@ -2018,8 +2018,20 @@ type ExecuteRequest struct {
 	// field ignores it and runs the query; it keeps no reserved connection alive
 	// until it is upgraded.
 	ReservedConnKeepAliveIds []int64 `protobuf:"varint,9,rep,packed,name=reserved_conn_keep_alive_ids,json=reservedConnKeepAliveIds,proto3" json:"reserved_conn_keep_alive_ids,omitempty"`
-	unknownFields            protoimpl.UnknownFields
-	sizeCache                protoimpl.SizeCache
+	// reserved_conn_activity_refresh marks this Execute as a background
+	// activity refresh of an idle temp-table reserved connection: vtgate fans
+	// real session activity out to reserved connections the session's queries
+	// did not reach. The query executes normally on the reserved connection
+	// (resetting mysqld's wait_timeout clock, unlike a keepalive touch), but
+	// the tablet locks the connection under a purpose that a concurrent client
+	// command briefly waits out instead of failing with an in-use error. Like
+	// reserved_conn_keep_alive, this is a request-level field populated only by
+	// vtgate itself, never relayed from client sessions. A tablet that predates
+	// this field runs the query without the special lock purpose, restoring the
+	// (benign) pre-field race.
+	ReservedConnActivityRefresh bool `protobuf:"varint,10,opt,name=reserved_conn_activity_refresh,json=reservedConnActivityRefresh,proto3" json:"reserved_conn_activity_refresh,omitempty"`
+	unknownFields               protoimpl.UnknownFields
+	sizeCache                   protoimpl.SizeCache
 }
 
 func (x *ExecuteRequest) Reset() {
@@ -2113,6 +2125,13 @@ func (x *ExecuteRequest) GetReservedConnKeepAliveIds() []int64 {
 		return x.ReservedConnKeepAliveIds
 	}
 	return nil
+}
+
+func (x *ExecuteRequest) GetReservedConnActivityRefresh() bool {
+	if x != nil {
+		return x.ReservedConnActivityRefresh
+	}
+	return false
 }
 
 // ExecuteResponse is the returned value from Execute
@@ -5980,7 +5999,7 @@ const file_query_proto_rawDesc = "" +
 	"\bCategory\x12\t\n" +
 	"\x05Error\x10\x00\x12\a\n" +
 	"\x03DML\x10\x01\x12\a\n" +
-	"\x03DDL\x10\x02\"\xda\x03\n" +
+	"\x03DDL\x10\x02\"\x9f\x04\n" +
 	"\x0eExecuteRequest\x12?\n" +
 	"\x13effective_caller_id\x18\x01 \x01(\v2\x0f.vtrpc.CallerIDR\x11effectiveCallerId\x12E\n" +
 	"\x13immediate_caller_id\x18\x02 \x01(\v2\x15.query.VTGateCallerIDR\x11immediateCallerId\x12%\n" +
@@ -5991,7 +6010,9 @@ const file_query_proto_rawDesc = "" +
 	"\vreserved_id\x18\a \x01(\x03R\n" +
 	"reservedId\x127\n" +
 	"\x18reserved_conn_keep_alive\x18\b \x01(\bR\x15reservedConnKeepAlive\x12>\n" +
-	"\x1creserved_conn_keep_alive_ids\x18\t \x03(\x03R\x18reservedConnKeepAliveIds\"=\n" +
+	"\x1creserved_conn_keep_alive_ids\x18\t \x03(\x03R\x18reservedConnKeepAliveIds\x12C\n" +
+	"\x1ereserved_conn_activity_refresh\x18\n" +
+	" \x01(\bR\x1breservedConnActivityRefresh\"=\n" +
 	"\x0fExecuteResponse\x12*\n" +
 	"\x06result\x18\x01 \x01(\v2\x12.query.QueryResultR\x06result\"d\n" +
 	"\x0fResultWithError\x12%\n" +

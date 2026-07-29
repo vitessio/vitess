@@ -614,18 +614,19 @@ func (qe *QueryEngine) schemaChanged(tables map[string]*schema.Table, created, a
 const mysqlWaitTimeoutQueryTimeout = 30 * time.Second
 
 // refreshMysqlWaitTimeout mirrors mysqld's @@global.wait_timeout for the
-// temp-table idle timeout's auto mode. On a failed read it logs a warning and
-// publishes zero, which disables auto mode until a later read succeeds — the
-// safe direction, since it restores the shorter pre-feature timer.
+// temp-table idle timeout's auto mode. A failed read logs a warning and
+// retains the last successfully read value: a transient read error must not
+// snap existing temp-table connections back to the much shorter pre-feature
+// timer (auto mode simply stays off until the first successful read, since
+// the cached value starts at zero).
 func (qe *QueryEngine) refreshMysqlWaitTimeout() {
 	if qe.publishMysqlWaitTimeout == nil || qe.env.Config().TempTableIdleTimeout >= 0 {
 		return
 	}
 	waitTimeout, err := qe.readMysqlWaitTimeout()
 	if err != nil {
-		log.Warn("failed to read @@global.wait_timeout; the temp-table idle timeout auto mode is disabled until a later read succeeds",
+		log.Warn("failed to read @@global.wait_timeout; the temp-table idle timeout keeps the last successfully read value",
 			slog.Any("error", err))
-		qe.publishMysqlWaitTimeout(0)
 		return
 	}
 	qe.publishMysqlWaitTimeout(waitTimeout)

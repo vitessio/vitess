@@ -132089,6 +132089,7 @@ export const query = $root.query = (() => {
          * @property {number|Long|null} [reserved_id] ExecuteRequest reserved_id
          * @property {boolean|null} [reserved_conn_keep_alive] ExecuteRequest reserved_conn_keep_alive
          * @property {Array.<number|Long>|null} [reserved_conn_keep_alive_ids] ExecuteRequest reserved_conn_keep_alive_ids
+         * @property {boolean|null} [reserved_conn_activity_refresh] ExecuteRequest reserved_conn_activity_refresh
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -132112,6 +132113,7 @@ export const query = $root.query = (() => {
          *   reserved_id?: number|Long|null;
          *   reserved_conn_keep_alive?: boolean|null;
          *   reserved_conn_keep_alive_ids?: Array.<number|Long>|null;
+         *   reserved_conn_activity_refresh?: boolean|null;
          *   $unknowns?: Array.<Uint8Array>;
          * }} query.ExecuteRequest.$Shape
          */
@@ -132205,6 +132207,14 @@ export const query = $root.query = (() => {
         ExecuteRequest.prototype.reserved_conn_keep_alive_ids = $util.emptyArray;
 
         /**
+         * ExecuteRequest reserved_conn_activity_refresh.
+         * @member {boolean} reserved_conn_activity_refresh
+         * @memberof query.ExecuteRequest
+         * @instance
+         */
+        ExecuteRequest.prototype.reserved_conn_activity_refresh = false;
+
+        /**
          * Creates a new ExecuteRequest instance using the specified properties.
          * @function create
          * @memberof query.ExecuteRequest
@@ -132258,6 +132268,8 @@ export const query = $root.query = (() => {
                     writer.int64(message.reserved_conn_keep_alive_ids[i]);
                 writer.ldelim();
             }
+            if (message.reserved_conn_activity_refresh != null && $Object.hasOwnProperty.call(message, "reserved_conn_activity_refresh"))
+                writer.uint32(/* id 10, wireType 0 =*/80).bool(message.reserved_conn_activity_refresh);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -132378,6 +132390,15 @@ export const query = $root.query = (() => {
                         message.reserved_conn_keep_alive_ids.push(reader.int64());
                         continue;
                     }
+                case 10: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.reserved_conn_activity_refresh = value;
+                        else
+                            delete message.reserved_conn_activity_refresh;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -132462,6 +132483,9 @@ export const query = $root.query = (() => {
                     if (!$util.isInteger(message.reserved_conn_keep_alive_ids[i]) && !(message.reserved_conn_keep_alive_ids[i] && $util.isInteger(message.reserved_conn_keep_alive_ids[i].low) && $util.isInteger(message.reserved_conn_keep_alive_ids[i].high)))
                         return "reserved_conn_keep_alive_ids: integer|Long[] expected";
             }
+            if (message.reserved_conn_activity_refresh != null && $Object.hasOwnProperty.call(message, "reserved_conn_activity_refresh"))
+                if (typeof message.reserved_conn_activity_refresh !== "boolean")
+                    return "reserved_conn_activity_refresh: boolean expected";
             return null;
         };
 
@@ -132545,6 +132569,9 @@ export const query = $root.query = (() => {
                     else if (typeof object.reserved_conn_keep_alive_ids[i] === "object")
                         message.reserved_conn_keep_alive_ids[i] = new $util.LongBits(object.reserved_conn_keep_alive_ids[i].low >>> 0, object.reserved_conn_keep_alive_ids[i].high >>> 0).toNumber();
             }
+            if (object.reserved_conn_activity_refresh != null)
+                if (object.reserved_conn_activity_refresh)
+                    message.reserved_conn_activity_refresh = $Boolean(object.reserved_conn_activity_refresh);
             return message;
         };
 
@@ -132584,6 +132611,7 @@ export const query = $root.query = (() => {
                 } else
                     object.reserved_id = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
                 object.reserved_conn_keep_alive = false;
+                object.reserved_conn_activity_refresh = false;
             }
             if (message.effective_caller_id != null && $Object.hasOwnProperty.call(message, "effective_caller_id"))
                 object.effective_caller_id = $root.vtrpc.CallerID.toObject(message.effective_caller_id, options, _depth + 1);
@@ -132621,6 +132649,8 @@ export const query = $root.query = (() => {
                     else
                         object.reserved_conn_keep_alive_ids[j] = options.longs === $String ? $util.Long.prototype.toString.call(message.reserved_conn_keep_alive_ids[j]) : options.longs === $Number ? new $util.LongBits(message.reserved_conn_keep_alive_ids[j].low >>> 0, message.reserved_conn_keep_alive_ids[j].high >>> 0).toNumber() : message.reserved_conn_keep_alive_ids[j];
             }
+            if (message.reserved_conn_activity_refresh != null && $Object.hasOwnProperty.call(message, "reserved_conn_activity_refresh"))
+                object.reserved_conn_activity_refresh = message.reserved_conn_activity_refresh;
             return object;
         };
 

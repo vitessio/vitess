@@ -532,6 +532,19 @@ message ExecuteRequest {
   // field ignores it and runs the query; it keeps no reserved connection alive
   // until it is upgraded.
   repeated int64 reserved_conn_keep_alive_ids = 9;
+
+  // reserved_conn_activity_refresh marks this Execute as a background
+  // activity refresh of an idle temp-table reserved connection: vtgate fans
+  // real session activity out to reserved connections the session's queries
+  // did not reach. The query executes normally on the reserved connection
+  // (resetting mysqld's wait_timeout clock, unlike a keepalive touch), but
+  // the tablet locks the connection under a purpose that a concurrent client
+  // command briefly waits out instead of failing with an in-use error. Like
+  // reserved_conn_keep_alive, this is a request-level field populated only by
+  // vtgate itself, never relayed from client sessions. A tablet that predates
+  // this field runs the query without the special lock purpose, restoring the
+  // (benign) pre-field race.
+  bool reserved_conn_activity_refresh = 10;
 }
 
 // ExecuteResponse is the returned value from Execute

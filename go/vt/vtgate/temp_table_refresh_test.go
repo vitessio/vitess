@@ -27,6 +27,7 @@ import (
 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
@@ -98,4 +99,25 @@ func TestTempTableActivityRefresh(t *testing.T) {
 
 	// Shard sessions without a reserved connection are ignored.
 	require.Empty(t, r.dueTargets(newSession(0, 0)), "shard sessions without a reserved connection must not be refreshed")
+
+	// Reserved ids are generated independently by each tablet and can collide
+	// across tablets: the rate-limit key includes the tablet, so the same id
+	// on a different tablet is still due.
+	otherTablet := &topodatapb.TabletAlias{Cell: "other", Uid: 999}
+	sameIDOtherTablet := econtext.NewSafeSession(&vtgatepb.Session{
+		Autocommit:   true,
+		TargetString: "@primary",
+		Options:      &querypb.ExecuteOptions{HasCreatedTempTables: true},
+		ShardSessions: []*vtgatepb.Session_ShardSession{{
+			Target: &querypb.Target{
+				Keyspace:   lookupTablet.Keyspace,
+				Shard:      lookupTablet.Shard,
+				TabletType: lookupTablet.Type,
+			},
+			TabletAlias: otherTablet,
+			ReservedId:  42,
+		}},
+	})
+	require.Len(t, r.dueTargets(sameIDOtherTablet), 1,
+		"the same reserved id on a different tablet must not be suppressed by the rate limiter")
 }

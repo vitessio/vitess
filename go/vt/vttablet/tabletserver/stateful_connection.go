@@ -124,6 +124,14 @@ func (sc *StatefulConnection) usesTempTableIdleTimeout() bool {
 // 0 disables the feature, a positive value is used as-is, and a negative
 // value (auto, the default) mirrors this mysqld's @@global.wait_timeout —
 // zero, and therefore disabled, until a read of it succeeds.
+// The auto value tracks @@global.wait_timeout, while each MySQL connection
+// enforces the @@session value it captured when its thread started — the two
+// can diverge after a runtime SET GLOBAL. Tracking the global is safe in both
+// directions: if the global drops below a connection's session value the
+// tablet reclaims earlier than mysqld would (conservative), and if it rises
+// above, mysqld reclaims first and the tablet discovers the dead connection
+// through the existing connection-closed paths. Per-connection capture would
+// add bookkeeping without changing either outcome.
 func (sc *StatefulConnection) tempTableIdleTimeout() time.Duration {
 	configured := sc.env.Config().TempTableIdleTimeout
 	switch {

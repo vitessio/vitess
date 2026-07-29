@@ -2437,8 +2437,9 @@ func TestReserveExecute_WithoutTx(t *testing.T) {
 // timeout's auto mode (-1, the default): the tablet mirrors its own mysqld's
 // @@global.wait_timeout, read via the dba pool when the query service opens
 // and refreshed on the schema-reload path so a runtime SET GLOBAL converges.
-// A failed read logs a warning and disables auto mode until a later read
-// succeeds.
+// A failed read logs a warning and retains the last successfully read value,
+// so a transient error cannot snap existing temp-table connections back to
+// the much shorter pre-feature timer.
 func TestTempTableIdleTimeoutAutoWaitTimeout(t *testing.T) {
 	ctx := t.Context()
 	db, tsv := setupTabletServerTest(t, ctx, "")
@@ -2457,13 +2458,14 @@ func TestTempTableIdleTimeoutAutoWaitTimeout(t *testing.T) {
 	tsv.se.BroadcastForTesting(nil, nil, nil, false)
 	require.Equal(t, 600*time.Second, tsv.te.txPool.scp.MysqlWaitTimeout())
 
-	// A failed read treats auto as disabled (zero) until a later read
-	// succeeds.
+	// A failed read retains the last successfully read value: a transient
+	// error must not move existing temp-table connections back to the much
+	// shorter normal timer.
 	db.DeleteQuery("select @@global.wait_timeout")
 	tsv.se.BroadcastForTesting(nil, nil, nil, false)
-	require.Equal(t, time.Duration(0), tsv.te.txPool.scp.MysqlWaitTimeout())
+	require.Equal(t, 600*time.Second, tsv.te.txPool.scp.MysqlWaitTimeout())
 
-	// The next successful read recovers.
+	// The next successful read converges again.
 	db.AddQuery("select @@global.wait_timeout", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("@@global.wait_timeout", "int64"),
 		"28800",
@@ -3084,6 +3086,15 @@ func TestReservedConnKeepAliveBatch(t *testing.T) {
 	res, err = tsv.Execute(s1Ctx, nil, &target, "/* keepalive */ select 1", nil, 0, 0, nil)
 	require.NoError(t, err)
 	require.Empty(t, res.Rows, "the reserved connection must survive a rejected wrong-target keepalive")
+
+	// A temp-table activity refresh is an ordinary query on the reserved
+	// connection (it must reach mysqld to reset wait_timeout), locked under a
+	// purpose that colliding client commands wait out.
+	refreshCtx := queryservice.ContextWithReservedConnActivityRefresh(ctx)
+	db.AddQuery("select 1 from dual limit 10001", sqltypes.MakeTestResult(sqltypes.MakeTestFields("1", "int64"), "1"))
+	res, err = tsv.Execute(refreshCtx, nil, &target, "select 1 from dual", nil, 0, s1.ReservedID, nil)
+	require.NoError(t, err, "an activity refresh must execute on the reserved connection")
+	require.Len(t, res.Rows, 1)
 
 	// The keepalive is not injectable through ExecuteOptions. A vtgate that
 	// predates the feature preserves unknown proto fields when it relays a

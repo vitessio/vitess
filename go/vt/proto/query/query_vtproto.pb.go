@@ -393,6 +393,7 @@ func (m *ExecuteRequest) CloneVT() *ExecuteRequest {
 	r.Options = m.Options.CloneVT()
 	r.ReservedId = m.ReservedId
 	r.ReservedConnKeepAlive = m.ReservedConnKeepAlive
+	r.ReservedConnActivityRefresh = m.ReservedConnActivityRefresh
 	if rhs := m.ReservedConnKeepAliveIds; rhs != nil {
 		tmpContainer := make([]int64, len(rhs))
 		copy(tmpContainer, rhs)
@@ -2521,6 +2522,16 @@ func (m *ExecuteRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.ReservedConnActivityRefresh {
+		i--
+		if m.ReservedConnActivityRefresh {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x50
 	}
 	if len(m.ReservedConnKeepAliveIds) > 0 {
 		var pksize2 int
@@ -6512,6 +6523,9 @@ func (m *ExecuteRequest) SizeVT() (n int) {
 			l += protohelpers.SizeOfVarint(uint64(e))
 		}
 		n += 1 + protohelpers.SizeOfVarint(uint64(l)) + l
+	}
+	if m.ReservedConnActivityRefresh {
+		n += 2
 	}
 	n += len(m.unknownFields)
 	return n
@@ -10651,6 +10665,26 @@ func (m *ExecuteRequest) UnmarshalVT(dAtA []byte) error {
 			} else {
 				return fmt.Errorf("proto: wrong wireType = %d for field ReservedConnKeepAliveIds", wireType)
 			}
+		case 10:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ReservedConnActivityRefresh", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.ReservedConnActivityRefresh = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

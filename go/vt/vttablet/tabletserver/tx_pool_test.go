@@ -1014,6 +1014,18 @@ func TestTxPoolGetAndLockWaitsOutKeepAlive(t *testing.T) {
 	require.NoError(t, err, "a caller must wait out a keepalive hold, not fail")
 	got.Unlock()
 
+	// A temp-table activity refresh holds the connection for one trivial
+	// statement round trip; a colliding caller waits that out too.
+	held, err = txPool.scp.GetAndLock(id, reservedActivityRefreshPurpose)
+	require.NoError(t, err)
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		held.Unlock()
+	}()
+	got, err = txPool.GetAndLock(id, "for query")
+	require.NoError(t, err, "a caller must wait out an activity-refresh hold, not fail")
+	got.Unlock()
+
 	// Any other holder still fails fast with the in-use error.
 	held, err = txPool.scp.GetAndLock(id, "for query")
 	require.NoError(t, err)

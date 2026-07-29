@@ -52721,6 +52721,9 @@ export namespace query {
         /** ExecuteRequest reserved_conn_keep_alive_ids. */
         reserved_conn_keep_alive_ids: (number|Long)[];
 
+        /** ExecuteRequest reserved_conn_activity_refresh. */
+        reserved_conn_activity_refresh: boolean;
+
         /**
          * Creates a new ExecuteRequest instance using the specified properties.
          * @param [properties] Properties to set
@@ -52832,6 +52835,9 @@ export namespace query {
             /** ExecuteRequest reserved_conn_keep_alive_ids */
             reserved_conn_keep_alive_ids?: ((number|Long)[]|null);
 
+            /** ExecuteRequest reserved_conn_activity_refresh */
+            reserved_conn_activity_refresh?: (boolean|null);
+
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
@@ -52847,6 +52853,7 @@ export namespace query {
           reserved_id?: number|Long|null;
           reserved_conn_keep_alive?: boolean|null;
           reserved_conn_keep_alive_ids?: number|Long[]|null;
+          reserved_conn_activity_refresh?: boolean|null;
           $unknowns?: Uint8Array[];
         };
     }
