@@ -46,6 +46,9 @@ var Cases = []TestCase{
 	{Run: LargeDecimals},
 	{Run: LargeIntegers},
 	{Run: DecimalClamping},
+	{Run: SignedExponents},
+	{Run: NumericTextWhitespace},
+	{Run: FixedWidthNumericText},
 	{Run: BitwiseOperatorsUnary},
 	{Run: BitwiseOperators},
 	{Run: WeightString},
@@ -911,6 +914,99 @@ func DecimalClamping(yield Query) {
 				yield(fmt.Sprintf("CAST(%s.%s AS DECIMAL(%d, %d))", inputPi[:pos], inputPi[pos:], m, d), nil, false)
 			}
 		}
+	}
+}
+
+// SignedExponents covers numeric text carrying a written sign, on the number
+// itself and on its exponent. MySQL reads both, so a cast or a JSON comparison
+// over one has to land on the same value.
+func SignedExponents(yield Query) {
+	mantissas := []string{"1", "+1", "-1", "1.5", "+1.5", "-1.5", "0", "+0", "-0"}
+	exponents := []string{"", "e5", "e+5", "E+5", "e-5", "E-5", "e+0", "e-0"}
+
+	for _, mantissa := range mantissas {
+		for _, exponent := range exponents {
+			literal := "'" + mantissa + exponent + "'"
+			yield(fmt.Sprintf("CAST(%s AS DECIMAL(20, 6))", literal), nil, false)
+			yield(fmt.Sprintf("CAST(%s AS DOUBLE)", literal), nil, false)
+			yield(literal+" + 0", nil, false)
+
+			// JSON comparison reads the number through a decimal too, so it is
+			// worth exercising directly. A leading plus is not a JSON number,
+			// so those spellings pin the cast being rejected rather than a value.
+			yield(fmt.Sprintf("CAST(%s AS JSON) = CAST(%s AS JSON)", literal, literal), nil, false)
+		}
+	}
+
+	// A JSON string reaches the decimal through its own conversion branch,
+	// separate from the one a JSON number takes. A few signed spellings cover
+	// that caller without repeating the matrix.
+	for _, s := range []string{"1e+5", "+1", " -1"} {
+		literal := fmt.Sprintf(`'"%s"'`, s)
+		yield(fmt.Sprintf("CAST(CAST(%s AS JSON) AS DECIMAL(20, 6))", literal), nil, false)
+	}
+}
+
+// NumericTextWhitespace covers the whitespace MySQL reads as part of numeric
+// text converted to a decimal: vertical tab and form feed around the number,
+// and spaces or tabs between the exponent marker and its sign. Only the
+// decimal conversion reads whitespace after the marker — the double
+// conversion stops there — so these stay on CAST … AS DECIMAL.
+func NumericTextWhitespace(yield Query) {
+	for _, text := range []string{
+		"\v+1", "\f-1", "\v1", "\v\f\n\r 1", "1\v", "1\f", "+ 1",
+		"1e +5", "1e -5", "1e\t-5", "1e \t+5", "1e 5", "1e  5",
+		"1E   -5", "1.5e 2", ".5e +3", "-1.5e +3", " 1e 2 ",
+		"1e\n+2", "1e\v2", "1e\f2", "1e \v5", "1e+ 2", "1e + 5", "1 e+2",
+		"1e ", "1e +", "1e +x", "1e --5", "1e -+5", "1e", "e5",
+	} {
+		yield(fmt.Sprintf("CAST('%s' AS DECIMAL(20, 6))", text), nil, false)
+	}
+
+	// Past ASCII, single-byte character sets — and binary — read 0xA0 as
+	// whitespace too. Multibyte sets do not, and their no-break space is more
+	// than one byte, so the utf8mb4 spelling pins that nothing is trimmed
+	// there.
+	for _, doc := range []string{
+		"_latin1 X'A031'",
+		"_binary X'A031'",
+		"_latin1 X'31A0'",
+		"_latin1 X'A020A031'",
+		"_latin1 X'31A032'",
+		// The exponent's own reader skips only spaces and tabs whatever the
+		// character set, while a 0xA0 after the exponent is plain trailing
+		// whitespace.
+		"_latin1 X'3165A032'",
+		"_latin1 X'316532A0'",
+		"_utf8mb4 X'C2A031'",
+	} {
+		yield(fmt.Sprintf("CAST(%s AS DECIMAL(20, 6))", doc), nil, false)
+	}
+}
+
+// FixedWidthNumericText covers numeric text in the character sets whose
+// smallest character is wider than one byte: UTF-16, UTF-16LE, UCS-2 and
+// UTF-32. MySQL reads such text through latin1, so characters are decoded
+// rather than read as raw bytes, and a character with no latin1 form ends
+// the number.
+func FixedWidthNumericText(yield Query) {
+	for _, doc := range []string{
+		// The single character U+312B, whose bytes spell ASCII '+1'.
+		"_utf16le X'2B31'",
+		// '+1' in each encoding.
+		"_utf16le X'2B003100'",
+		"_utf16 X'002B0031'",
+		"_ucs2 X'002B0031'",
+		"_utf32 X'0000002B00000031'",
+		// ' 15.5', whitespace and all read after decoding.
+		"_utf16le X'2000310035002E003500'",
+		// A no-break space becomes latin1 0xA0, which is whitespace around
+		// numeric text.
+		"_utf16 X'00A00031'",
+		// '€1': the euro sign has no latin1 form.
+		"_utf16 X'20AC0031'",
+	} {
+		yield(fmt.Sprintf("CAST(%s AS DECIMAL(20, 6))", doc), nil, false)
 	}
 }
 

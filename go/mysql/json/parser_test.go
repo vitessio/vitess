@@ -85,6 +85,18 @@ func TestParseRawNumber(t *testing.T) {
 func TestParseNumberTooBigForDouble(t *testing.T) {
 	tooManyDigits := "1" + strings.Repeat("0", 309)
 
+	// The subnormal 2.2250738585072011e-308, written out to nearly eight
+	// hundred digits of fraction.
+	longFraction := "2.22507385850720113605740979670913197593481954635164564802342610972482222202107694551652952390813508" +
+		"7914149158913039621106870086438694594645527657207407820621743379988141063267329253552286881372149012" +
+		"9811224514518898490572223072852551331557550159143974763979834118019993239625482890171070818506906306" +
+		"6665599493827577257201576306269066333264756530000924588831643303777979186961204949739037782970490505" +
+		"1080609940730262937128958950003583799967207254304360284078895771796150945516748243471030702609144621" +
+		"5722898802581825451803257070188608721131280795122334262883686223215037756666225039825343359745688844" +
+		"2390026549819838548794829220689472168983109969836584681402285424333066033985088644580400103493397042" +
+		"7567186443383770486037861622771738545623065874679014086723327636718751234567890123456789012345678901" +
+		"e-308"
+
 	t.Run("accepted", func(t *testing.T) {
 		for _, doc := range []string{
 			"1e308",
@@ -93,6 +105,7 @@ func TestParseNumberTooBigForDouble(t *testing.T) {
 			"-1.7976931348623157e308",
 			"99999999999999999999999999999999999999999",
 			"1" + strings.Repeat("0", 307),
+			"1" + strings.Repeat("0", 308),
 			// Underflow keeps the document valid and reads as zero.
 			"1e-400",
 			"1e-1000",
@@ -121,7 +134,14 @@ func TestParseNumberTooBigForDouble(t *testing.T) {
 			"0.00e310",
 			"0.1e309",
 			"0.01e310",
+			// The largest double itself, written so that its exponent stands
+			// past the bound until the fraction buys the places back.
+			"0.017976931348623157e+310",
 			"0." + strings.Repeat("0", 400) + "1e700",
+			// A fraction contributes seventeen significant digits; the
+			// hundreds behind these move neither the value nor the decimal
+			// point, however many there are.
+			longFraction,
 		} {
 			t.Run(startEndString(doc), func(t *testing.T) {
 				var p Parser
@@ -155,6 +175,7 @@ func TestParseNumberTooBigForDouble(t *testing.T) {
 			// Within the written bound, but too big once converted.
 			"10e308",
 			"1" + strings.Repeat("0", 30) + "e279",
+			"0.017976931348623159e+310",
 			// More digits than a double has room for. The digits are read before
 			// the exponent is applied, so a negative exponent does not buy the
 			// room back however far it moves the decimal point afterwards.
@@ -192,6 +213,31 @@ func TestParseNumberTooBigForDouble(t *testing.T) {
 			strings.Repeat("1", 400) + "." + strings.Repeat("5", 20) + "e-" + strings.Repeat("2", 306),
 		} {
 			t.Run(startEndString(doc), func(t *testing.T) {
+				var p Parser
+				v, err := p.Parse(doc)
+				require.NoError(t, err)
+
+				f, ok := v.Float64()
+				require.True(t, ok)
+				require.Zero(t, f)
+			})
+		}
+	})
+
+	// The int a negative exponent accumulates into stops taking digits once
+	// another could overflow it. Everything written by then already sits far
+	// below the smallest double, so however much further the spelling runs,
+	// these stay valid and read as zero. MySQL 8.0.46 reads each of them the
+	// same way.
+	t.Run("a negative exponent around the stop of the int it accumulates into", func(t *testing.T) {
+		for _, doc := range []string{
+			"1e-214748363",
+			"1e-214748364",
+			"1e-21474836311",
+			"1e-00011111111111",
+			"-1e-00011111111111",
+		} {
+			t.Run(doc, func(t *testing.T) {
 				var p Parser
 				v, err := p.Parse(doc)
 				require.NoError(t, err)
@@ -288,10 +334,13 @@ func TestParseNumberGrammar(t *testing.T) {
 			"007", "-003", "01", "00", "00.5", "01.5", "[007]",
 			// A decimal point missing a digit on one side.
 			".2", "-.2", "12.", "-12.", "1.e5", `{"a": .2}`, "[12.]",
+			// An exponent missing its digits.
+			"1e", "1e_", "1e+", "1e-", "[1e]",
 			// A written plus.
 			"+1", "+1.5", "+0", "[+1]",
 			// Not a number at all.
 			"nan", "NaN", "NAN", "[nan]", `{"a": nan}`, "-nan", ".", "-",
+			"inf", "-inf", "Infinity", "[inf]",
 		} {
 			t.Run(doc, func(t *testing.T) {
 				var p Parser
@@ -300,6 +349,37 @@ func TestParseNumberGrammar(t *testing.T) {
 			})
 		}
 	})
+}
+
+// TestParseNumberIntegerBoundaries walks the spellings on either side of each
+// integer width a JSON number can outgrow — int32, uint32, int64, uint64 —
+// until only a double can hold it. Every one of them is a number to MySQL,
+// exact while an int64 or a uint64 still holds it and approximate once only a
+// double does.
+func TestParseNumberIntegerBoundaries(t *testing.T) {
+	for _, tc := range []struct {
+		doc string
+		n   NumberType
+	}{
+		{"-2147483648", NumberTypeSigned},
+		{"-2147483649", NumberTypeSigned},
+		{"4294967295", NumberTypeSigned},
+		{"4294967296", NumberTypeSigned},
+		{"9223372036854775807", NumberTypeSigned},
+		{"9223372036854775808", NumberTypeUnsigned},
+		{"-9223372036854775808", NumberTypeSigned},
+		{"-9223372036854775809", NumberTypeFloat},
+		{"18446744073709551615", NumberTypeUnsigned},
+		{"18446744073709551616", NumberTypeFloat},
+	} {
+		t.Run(tc.doc, func(t *testing.T) {
+			var p Parser
+			v, err := p.Parse(tc.doc)
+			require.NoError(t, err)
+			require.Equal(t, TypeNumber, v.Type())
+			require.Equal(t, tc.n, v.NumberType())
+		})
+	}
 }
 
 // TestParseErrorAbbreviatesTheDocument covers how much of a rejected document

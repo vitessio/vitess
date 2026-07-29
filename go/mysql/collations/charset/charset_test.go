@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestIsMultibyteByName(t *testing.T) {
@@ -103,6 +104,67 @@ func TestIsBackslashSafe(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.cs.Name(), func(t *testing.T) {
 			assert.Equal(t, tc.want, IsBackslashSafe(tc.cs))
+		})
+	}
+}
+
+// TestDecodeRuneAlwaysAdvances pins the DecodeRune contract that callers
+// like Convert, Expand and Length rely on to make progress: on non-empty
+// input, the reported width is at least 1 and never past the end of the
+// input, whether the leading sequence is valid or not. A decoder reporting
+// width 0 loops those callers forever on bytes a user can supply.
+func TestDecodeRuneAlwaysAdvances(t *testing.T) {
+	charsets := []Charset{
+		Charset_binary{},
+		Charset_latin1{},
+		Charset_utf8mb3{},
+		Charset_utf8mb4{},
+		Charset_utf16{},
+		Charset_utf16le{},
+		Charset_ucs2{},
+		Charset_utf32{},
+		Charset_gb18030{},
+		Charset_gb2312{},
+		Charset_ujis{},
+		Charset_sjis{},
+		Charset_cp932{},
+		Charset_eucjpms{},
+		Charset_euckr{},
+	}
+
+	var inputs [][]byte
+	for b := range 256 {
+		inputs = append(inputs, []byte{byte(b)})
+	}
+	for hi := range 256 {
+		for lo := range 256 {
+			inputs = append(inputs, []byte{byte(hi), byte(lo)})
+		}
+	}
+	// Three and four byte tails behind the byte values that lead longer
+	// sequences somewhere: UTF-16 surrogates, UTF-8 continuations and
+	// multibyte lead bytes.
+	leads := []byte{0x00, 0x31, 0x81, 0x8E, 0x8F, 0xA1, 0xC2, 0xD8, 0xDB, 0xDC, 0xDF, 0xE0, 0xED, 0xF0, 0xFF}
+	tails := []byte{0x00, 0x31, 0x80, 0xA0, 0xD8, 0xDC, 0xFF}
+	for _, l := range leads {
+		for _, m := range tails {
+			for _, e := range tails {
+				inputs = append(inputs, []byte{l, m, e})
+				inputs = append(inputs, []byte{l, m, e, 0x31})
+				inputs = append(inputs, []byte{0x31, l, m, e})
+			}
+		}
+	}
+
+	for _, cs := range charsets {
+		t.Run(cs.Name(), func(t *testing.T) {
+			for _, in := range inputs {
+				_, width := cs.DecodeRune(in)
+				if width < 1 || width > len(in) {
+					require.Failf(t, "DecodeRune width out of range",
+						"%s.DecodeRune(%#v) returned width %d, want 1..%d", cs.Name(), in, width, len(in))
+				}
+			}
 		})
 	}
 }

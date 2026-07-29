@@ -871,6 +871,75 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `GREATEST(JSON_OBJECT(), JSON_ARRAY())`,
 			result:     `VARCHAR("{}")`,
 		},
+		{
+			// MySQL's single-byte character sets — and binary — mark 0xA0 as
+			// whitespace around numeric text; multibyte sets do not.
+			expression: `CAST(_latin1 X'A031' AS DECIMAL(20, 6))`,
+			result:     "DECIMAL(1.000000)",
+		},
+		{
+			expression: `CAST(_binary X'A031' AS DECIMAL(20, 6))`,
+			result:     "DECIMAL(1.000000)",
+		},
+		{
+			expression: `CAST(_latin1 X'31A0' AS DECIMAL(20, 6))`,
+			result:     "DECIMAL(1.000000)",
+		},
+		{
+			expression: `CAST(_latin1 X'A020A031' AS DECIMAL(20, 6))`,
+			result:     "DECIMAL(1.000000)",
+		},
+		{
+			expression: `CAST(_utf8mb4 X'C2A031' AS DECIMAL(20, 6))`,
+			result:     "DECIMAL(0.000000)",
+		},
+		{
+			// MySQL reads UTF-16, UTF-16LE, UCS-2 and UTF-32 numeric text
+			// through latin1, so characters are decoded rather than read as
+			// raw bytes. These bytes are the single character U+312B, not
+			// ASCII '+1', and a character with no latin1 form ends the number.
+			expression: `CAST(_utf16le X'2B31' AS DECIMAL(20, 6))`,
+			result:     "DECIMAL(0.000000)",
+		},
+		{
+			expression: `CAST(_utf16le X'2B003100' AS DECIMAL(20, 6))`,
+			result:     "DECIMAL(1.000000)",
+		},
+		{
+			expression: `CAST(_utf16 X'002B0031' AS DECIMAL(20, 6))`,
+			result:     "DECIMAL(1.000000)",
+		},
+		{
+			expression: `CAST(_ucs2 X'002B0031' AS DECIMAL(20, 6))`,
+			result:     "DECIMAL(1.000000)",
+		},
+		{
+			expression: `CAST(_utf32 X'0000002B00000031' AS DECIMAL(20, 6))`,
+			result:     "DECIMAL(1.000000)",
+		},
+		{
+			// A no-break space becomes latin1 0xA0, which is whitespace
+			// around numeric text.
+			expression: `CAST(_utf16 X'00A00031' AS DECIMAL(20, 6))`,
+			result:     "DECIMAL(1.000000)",
+		},
+		{
+			// A lone surrogate is not a character. MySQL rejects the literal
+			// outright; here it reads as '?', and the conversion must
+			// terminate rather than stall on the invalid unit.
+			expression: `CAST(_utf16 X'D800' AS DECIMAL(20, 6))`,
+			result:     "DECIMAL(0.000000)",
+		},
+		{
+			expression: `CAST(_utf16le X'00D8' AS DECIMAL(20, 6))`,
+			result:     "DECIMAL(0.000000)",
+		},
+		{
+			// The failed conversion surfaces as NULL, not as a stalled
+			// evaluation.
+			expression: `CONVERT(_utf16 X'D800' USING latin1)`,
+			result:     "NULL",
+		},
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")
@@ -919,6 +988,46 @@ func TestCompilerSingle(t *testing.T) {
 					require.Equalf(t, tc.collation, res.Collation(), "bad collation evaluation from compiler: got %d, want %d", res.Collation(), tc.collation)
 				}
 			}
+		})
+	}
+}
+
+// TestCastInvalidJSON pins that text MySQL refuses as a JSON document is
+// refused by both evaluation paths. The differential suite cannot pin this
+// direction: its comparison excuses a MySQL "Invalid JSON text" error when
+// the local evaluation succeeds, so a cast that wrongly started accepting one
+// of these spellings would stay green there.
+func TestCastInvalidJSON(t *testing.T) {
+	testCases := []struct {
+		expression string
+		wantErr    string
+	}{
+		{`CAST('+1' AS JSON)`, "invalid number"},
+		{`CAST(' +1' AS JSON)`, "invalid number"},
+		{`CAST('+1.5' AS JSON)`, "invalid number"},
+		{`CAST('1e309' AS JSON)`, "number too big to be stored in double"},
+	}
+
+	venv := vtenv.NewTestEnv()
+	for _, tc := range testCases {
+		t.Run(tc.expression, func(t *testing.T) {
+			expr, err := venv.Parser().ParseExpr(tc.expression)
+			require.NoError(t, err)
+
+			cfg := &evalengine.Config{
+				Collation:         collations.CollationUtf8mb4ID,
+				Environment:       venv,
+				NoConstantFolding: true,
+			}
+			converted, err := evalengine.Translate(expr, cfg)
+			require.NoError(t, err)
+
+			env := evalengine.EmptyExpressionEnv(venv)
+			_, err = env.EvaluateAST(converted)
+			require.ErrorContains(t, err, tc.wantErr)
+
+			_, err = env.Evaluate(converted)
+			require.ErrorContains(t, err, tc.wantErr)
 		})
 	}
 }

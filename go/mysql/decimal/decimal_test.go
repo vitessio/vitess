@@ -92,6 +92,12 @@ var testTableScientificNotation = map[string]string{
 	"123.456e0":  "123.456",
 	"123.456e2":  "12345.6",
 	"123.456e10": "1234560000000",
+	// MySQL accepts a written plus on the exponent.
+	"1e+9":       "1000000000",
+	"1E+9":       "1000000000",
+	"245E+3":     "245000",
+	"123.456e+2": "12345.6",
+	"0e+5":       "0",
 }
 
 func init() {
@@ -190,6 +196,127 @@ func TestNewFromString(t *testing.T) {
 			assert.Equalf(t, s, d.String(), "expected %s, got %s (%s, %d)", s, d.String(), d.value.String(), d.exp)
 		}
 	}
+}
+
+// TestNewFromStringLeadingPlus covers a sign the negating entries in
+// testTableScientificNotation cannot: MySQL reads a leading plus as the number
+// it introduces, so CAST('+1' AS DECIMAL) is 1.
+func TestNewFromStringLeadingPlus(t *testing.T) {
+	for in, want := range map[string]string{
+		"+1":          "1",
+		"+1.5":        "1.5",
+		"+0":          "0",
+		"+1e9":        "1000000000",
+		"+1e+9":       "1000000000",
+		"+123.456e-2": "1.23456",
+		// The number starts after any leading whitespace, and so does the sign.
+		" +1":     "1",
+		" -1":     "-1",
+		"  +1.5":  "1.5",
+		" -1e+5":  "-100000",
+		"\t-2":    "-2",
+		" 1.5e+3": "1500",
+	} {
+		t.Run(in, func(t *testing.T) {
+			d, err := NewFromString(in)
+			require.NoError(t, err)
+			require.Equal(t, want, d.String())
+		})
+	}
+}
+
+// TestNewFromStringWhitespace covers the whitespace MySQL skips around numeric
+// text: a vertical tab, a form feed and a 0xA0 are leading and trailing space
+// like a blank or a tab, and a blank or a tab may sit between the exponent
+// marker and the exponent it introduces. MySQL 8.0.46 reads every spelling
+// here to the same value.
+func TestNewFromStringWhitespace(t *testing.T) {
+	for in, want := range map[string]string{
+		"\v+1":       "1",
+		"\f-1":       "-1",
+		"\v1":        "1",
+		"1\v":        "1",
+		"1\f":        "1",
+		"\v\f\n\r 1": "1",
+		// 0xA0 is a non-breaking space in latin1, and the reader reads a string
+		// through latin1's character table whatever its own charset is.
+		"\xa01":        "1",
+		"1\xa0":        "1",
+		"\xa0-1":       "-1",
+		"\xa0\t \xa01": "1",
+		"1e +5":        "100000",
+		"1e -5":        "0.00001",
+		"1e\t-5":       "0.00001",
+		"1e \t+5":      "100000",
+		"1e 5":         "100000",
+		"1e  5":        "100000",
+		"1e\t+5":       "100000",
+		"1E   -5":      "0.00001",
+		"1.5e 2":       "150",
+		".5e +3":       "500",
+		"-1.5e +3":     "-1500",
+		" 1e 2 ":       "100",
+	} {
+		t.Run(in, func(t *testing.T) {
+			d, err := NewFromString(in)
+			require.NoError(t, err)
+			require.Equal(t, want, d.String())
+		})
+	}
+}
+
+// TestNewFromStringWhitespaceBoundary pins the spellings that stop short of a
+// number MySQL would read whole. Each one keeps the mantissa parsed so far as
+// its value and reports the string as invalid, so a caller that ignores the
+// error lands on the same partial value MySQL truncates to.
+func TestNewFromStringWhitespaceBoundary(t *testing.T) {
+	for in, want := range map[string]string{
+		// Whitespace belongs before the exponent's sign, not after it.
+		"1e+ 5":  "1",
+		"1e + 5": "1",
+		"1e +":   "1",
+		"1e +x":  "1",
+		// The exponent marker itself has to follow the mantissa directly.
+		"1 e+5": "1",
+		// Only a blank or a tab is skipped after the marker.
+		"1e\v5":   "1",
+		"1e\f5":   "1",
+		"1e\n5":   "1",
+		"1e \v5":  "1",
+		"1e\xa05": "1",
+		// Whitespace after the marker still needs an exponent behind it.
+		"1e ": "1",
+		// One sign, not two.
+		"1e --5": "1",
+		"1e -+5": "1",
+		// A sign introduces a number, so whitespace cannot follow it either.
+		"+ 1": "0",
+	} {
+		t.Run(in, func(t *testing.T) {
+			d, err := NewFromString(in)
+			require.ErrorContains(t, err, "invalid decimal string")
+			require.Equal(t, want, d.String())
+		})
+	}
+}
+
+// TestNewFromStringZeroExponent pins the formatting of a zero written with a
+// positive exponent. String trims the padding away, but FormatMySQL keeps the
+// scale it is asked for, so a stale exponent surfaces as leading zeros.
+func TestNewFromStringZeroExponent(t *testing.T) {
+	for _, in := range []string{"0e5", "-0e5", "+0e5", "0E+5", "0e2", "0"} {
+		t.Run(in, func(t *testing.T) {
+			d, err := NewFromString(in)
+			require.NoError(t, err)
+			require.Equal(t, "0", d.String())
+			require.Equal(t, "0.000000", string(d.FormatMySQL(6)))
+		})
+	}
+
+	// A zero written to a scale keeps it: only a positive exponent is dropped.
+	d, err := NewFromString("0.00")
+	require.NoError(t, err)
+	require.Equal(t, int32(-2), d.Exponent())
 }
 
 func TestFloat64(t *testing.T) {

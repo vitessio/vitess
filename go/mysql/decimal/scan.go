@@ -170,6 +170,7 @@ func NewFromString(s string) (d Decimal, err error) {
 
 	dotPos := -1
 	expPos := -1
+	expStart := -1
 	i := 0
 	var num bool
 	var exp int64
@@ -180,13 +181,18 @@ func NewFromString(s string) (d Decimal, err error) {
 		}
 		i++
 	}
+
+	// The number starts after the leading whitespace, so that is where a sign
+	// is allowed and where the mantissa is read from.
+	start := i
 next:
 	for i < maxLen {
 		switch {
-		case s[i] == '-':
-			// Negative sign is allowed at the start and at the start
-			// of the exponent.
-			if i != 0 && expPos == -1 && i != expPos+1 {
+		case s[i] == '-' || s[i] == '+':
+			// A sign is allowed at the start of the number and at the start of
+			// the exponent, nowhere else. With no exponent seen yet expStart is
+			// -1, so the second test never matches.
+			if i != start && i != expStart {
 				break next
 			}
 		case s[i] >= '0' && s[i] <= '9':
@@ -198,12 +204,21 @@ next:
 				break next
 			}
 		case s[i] == 'e' || s[i] == 'E':
-			if expPos == -1 {
-				expPos = i
-				num = false
-			} else {
+			if expPos != -1 {
 				break next
 			}
+			expPos = i
+			// MySQL reads the exponent with my_strtoll10, which steps over
+			// spaces and tabs before the sign and the digits, so '1e +5' is
+			// 100000. Only those two bytes: a vertical tab or a newline here
+			// leaves the exponent unread and the mantissa as a partial value.
+			i++
+			for i < maxLen && (s[i] == ' ' || s[i] == '\t') {
+				i++
+			}
+			expStart = i
+			num = false
+			continue
 		default:
 			break next
 		}
@@ -215,16 +230,20 @@ next:
 	var si string
 	switch {
 	case dotPos == -1 && expPos == -1:
-		si = s[:i]
+		si = s[start:i]
 	case expPos == -1:
-		si = s[:dotPos] + s[dotPos+1:i]
+		si = s[start:dotPos] + s[dotPos+1:i]
 		exp -= int64(i - dotPos - 1)
 	case dotPos == -1:
-		si = s[:expPos]
+		si = s[start:expPos]
 	default:
-		si = s[:dotPos] + s[dotPos+1:expPos]
+		si = s[start:dotPos] + s[dotPos+1:expPos]
 		exp -= int64(expPos - dotPos - 1)
 	}
+
+	// fastparse reads a leading minus but not a leading plus, which the scanner
+	// above accepts because MySQL does.
+	si = strings.TrimPrefix(si, "+")
 
 	if len(si) <= 18 {
 		var v int64
@@ -237,7 +256,7 @@ next:
 
 	var expOverflow bool
 	if expPos != -1 {
-		e, _ := fastparse.ParseInt64(s[expPos+1:i], 10)
+		e, _ := fastparse.ParseInt64(strings.TrimPrefix(s[expStart:i], "+"), 10)
 		switch {
 		case e > ExponentLimit:
 			e = ExponentLimit
@@ -249,6 +268,13 @@ next:
 		exp += e
 	}
 
+	// Scaling zero by a positive power of ten leaves zero, but keeping the
+	// exponent renders it as that many leading zeros: '0e5' would format as
+	// 000000 where MySQL prints 0. A negative exponent is left alone, since it
+	// is the scale a zero is written to.
+	if exp > 0 && d.value.Sign() == 0 {
+		exp = 0
+	}
 	d.exp = int32(exp)
 
 	for i < maxLen {
@@ -354,9 +380,14 @@ func parseLargeDecimal(integral, fractional []byte) (*big.Int, error) {
 	return new(big.Int).SetBits(z), nil
 }
 
+// isSpace reports the bytes MySQL skips around numeric text. It reads them
+// through latin1's character table whatever the string's own charset is, so a
+// vertical tab, a form feed and a 0xA0 all count as space. 0xA0 is reachable
+// from latin1 and binary text, where it stands for a non-breaking space; in
+// utf8mb4 that character is 0xC2 0xA0, and the 0xC2 ends the number first.
 func isSpace(c byte) bool {
 	switch c {
-	case ' ', '\t', '\n', '\r':
+	case ' ', '\t', '\n', '\v', '\f', '\r', 0xA0:
 		return true
 	default:
 		return false
