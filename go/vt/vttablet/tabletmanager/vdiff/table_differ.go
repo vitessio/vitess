@@ -1012,14 +1012,48 @@ func (td *tableDiffer) getSourcePKCols() error {
 		}
 	}
 
-	colIndex := make(map[string]int, len(td.table.Columns))
-	for i, col := range td.table.Columns {
-		colIndex[col] = i
+	// Parse the source query to determine column positions in the actual row layout.
+	// We must map PK columns against the SELECT expression order (not td.table.Columns)
+	// because filters can reorder columns (e.g., "select c2, c1 from t1").
+	statement, err := td.wd.ct.vde.parser.Parse(td.tablePlan.sourceQuery)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to parse source query for table %s", td.table.Name)
 	}
+	sourceSelect, ok := statement.(*sqlparser.Select)
+	if !ok {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected statement type for source query of table %s", td.table.Name)
+	}
+
 	td.tablePlan.sourcePkCols = make([]int, 0, len(sourceTable.PrimaryKeyColumns))
 	for _, pkc := range sourceTable.PrimaryKeyColumns {
-		if idx, ok := colIndex[pkc]; ok {
-			td.tablePlan.sourcePkCols = append(td.tablePlan.sourcePkCols, idx)
+		found := false
+		for i, selExpr := range sourceSelect.SelectExprs.Exprs {
+			aliasedExpr, ok := selExpr.(*sqlparser.AliasedExpr)
+			if !ok {
+				continue
+			}
+			colname := ""
+			switch ct := aliasedExpr.Expr.(type) {
+			case *sqlparser.ColName:
+				colname = ct.Name.String()
+			case *sqlparser.FuncExpr:
+				colname = aliasedExpr.As.String()
+			}
+			if strings.EqualFold(pkc, colname) {
+				td.tablePlan.sourcePkCols = append(td.tablePlan.sourcePkCols, i)
+				found = true
+				break
+			}
+			// Also check the alias for cross-table filters (e.g., "select c0 as c1 from t2")
+			if !aliasedExpr.As.IsEmpty() && strings.EqualFold(pkc, aliasedExpr.As.String()) {
+				td.tablePlan.sourcePkCols = append(td.tablePlan.sourcePkCols, i)
+				found = true
+				break
+			}
+		}
+		if !found {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL,
+				"source PK column %s not found in source query SELECT list for table %s", pkc, td.table.Name)
 		}
 	}
 
