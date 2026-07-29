@@ -544,8 +544,9 @@ func TestRestoreReplicaAfterFailedShutdown(t *testing.T) {
 			name:          "settings restore fails but threads are still restarted",
 			state:         state(true, true),
 			rejectedQuery: restoreFlushLog,
-			wantSet:       1,
-			wantStart:     startReplication,
+			// The failing setting is retried on the convergence pass.
+			wantSet:   2,
+			wantStart: startReplication,
 		},
 		{
 			name:             "thread restart failure is tolerated",
@@ -800,6 +801,225 @@ func TestRestoreRetriesStatusRead(t *testing.T) {
 	}
 	assert.Equal(t, 1, db.GetQueryCalledNum(restoreFlushLog), "the durability settings must be restored exactly once")
 	assert.Equal(t, 1, db.GetQueryCalledNum(startReplication), "replication must be restarted once the status reads recover")
+}
+
+// TestPrepareKeepsInheritedStateOnConnectFailure covers a takeover
+// preparation that cannot connect: the caller has already cancelled the
+// pending restoration it inherited the state from, so the preparation now
+// owns that state and must hand it back -- published and returned -- even
+// when it fails before reaching mysqld. Dropping it would leave a
+// subsequently failed shutdown with nothing to arm a replacement restoration
+// from, stranding the replica fenced with replication stopped.
+func TestPrepareKeepsInheritedStateOnConnectFailure(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	db.EnableConnFail()
+
+	params := db.ConnParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+	testMysqld := NewMysqld(dbc)
+	defer testMysqld.Close()
+
+	inherited := &replicaShutdownState{
+		startReceiver:       true,
+		startApplier:        true,
+		flushLogAtTrxCommit: "2",
+		syncBinlog:          "0",
+		syncRelayLog:        "10000",
+	}
+	var captured *replicaShutdownState
+	state, err := testMysqld.prepareReplicaForShutdown(t.Context(), inherited, func(state *replicaShutdownState) {
+		captured = state
+	})
+	require.ErrorContains(t, err, "failed to connect to MySQL before shutdown")
+	assert.Same(t, inherited, state, "the inherited state must be returned so the caller can arm a replacement restoration")
+	assert.Same(t, inherited, captured, "the inherited state must be published even when the preparation cannot connect")
+}
+
+// TestTakeoverConnectFailureKeepsRestoreOwnership covers the same case
+// end-to-end: a retrying shutdown takes over a pending restoration, its
+// preparation cannot reconnect, and the shutdown fails again. The inherited
+// state must not be dropped: a replacement restoration must be armed, and it
+// must converge the replica once mysqld is reachable again.
+func TestTakeoverConnectFailureKeepsRestoreOwnership(t *testing.T) {
+	const (
+		readDurability      = "SELECT @@global.innodb_flush_log_at_trx_commit, @@global.sync_binlog, @@global.sync_relay_log"
+		setFlushLog         = "SET GLOBAL innodb_flush_log_at_trx_commit = 1"
+		setSyncBinlog       = "SET GLOBAL sync_binlog = 1"
+		setSyncRelayLog     = "SET GLOBAL sync_relay_log = 1"
+		flushEngineLogs     = "FLUSH NO_WRITE_TO_BINLOG ENGINE LOGS"
+		flushBinaryLogs     = "FLUSH NO_WRITE_TO_BINLOG BINARY LOGS"
+		flushRelayLogs      = "FLUSH NO_WRITE_TO_BINLOG RELAY LOGS"
+		stopIOThread        = "STOP REPLICA IO_THREAD"
+		stopSQLThread       = "STOP REPLICA SQL_THREAD"
+		restoreFlushLog     = "SET GLOBAL innodb_flush_log_at_trx_commit = 2"
+		restoreSyncBinlog   = "SET GLOBAL sync_binlog = 0"
+		restoreSyncRelayLog = "SET GLOBAL sync_relay_log = 10000"
+		startReplication    = "START REPLICA"
+		startSQLThread      = "START REPLICA SQL_THREAD"
+	)
+
+	db := fakesqldb.New(t)
+	defer db.Close()
+	db.AddQuery("SELECT 1", &sqltypes.Result{})
+	db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("Source_Host|Replica_IO_Running|Replica_SQL_Running", "varchar|varchar|varchar"),
+		"source|Yes|Yes",
+	))
+	db.AddQuery(readDurability, sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"@@global.innodb_flush_log_at_trx_commit|@@global.sync_binlog|@@global.sync_relay_log",
+			"int64|int64|int64",
+		),
+		"2|0|10000",
+	))
+	for _, query := range []string{
+		setFlushLog, setSyncBinlog, setSyncRelayLog, flushEngineLogs, flushBinaryLogs, flushRelayLogs,
+		stopIOThread, restoreFlushLog, restoreSyncBinlog, restoreSyncRelayLog, startReplication, startSQLThread,
+	} {
+		db.AddQuery(query, &sqltypes.Result{})
+	}
+	// The applier stop hits rpl_stop_replica_timeout: the stop stays pending,
+	// so the first restoration resets the durability settings and then waits
+	// it out, staying pending for the retry to take over.
+	db.AddRejectedQuery(stopSQLThread, sqlerror.NewSQLError(sqlerror.ERStopReplicaSQLThreadTimeout, sqlerror.SSUnknownSQLState, "STOP REPLICA SQL_THREAD timed out"))
+	db.AddQueryPattern("kill .*", &sqltypes.Result{})
+	db.SetBeforeFunc(startSQLThread, func() {
+		db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("Source_Host|Replica_IO_Running|Replica_SQL_Running", "varchar|varchar|varchar"),
+			"source|Yes|Yes",
+		))
+	})
+
+	params := db.ConnParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+	testMysqld := NewMysqld(dbc)
+	defer testMysqld.Close()
+
+	err := testMysqld.shutdownWithReplicaCrashSafety(t.Context(), 200*time.Millisecond, func() error {
+		return assert.AnError
+	})
+	require.ErrorIs(t, err, assert.AnError)
+	assert.Eventually(t, func() bool {
+		return db.GetQueryCalledNum(restoreFlushLog) == 1
+	}, 30*time.Second, 10*time.Millisecond, "the first restoration did not reset the durability settings")
+
+	// mysqld stops accepting connections: the retry takes over the pending
+	// restoration but its preparation cannot connect, and the shutdown fails
+	// again.
+	db.EnableConnFail()
+	err = testMysqld.shutdownWithReplicaCrashSafety(t.Context(), 200*time.Millisecond, func() error {
+		return assert.AnError
+	})
+	require.ErrorIs(t, err, assert.AnError)
+
+	// mysqld accepts connections again and the pending stop settles: the
+	// replacement restoration must exist and converge the inherited state.
+	db.DisableConnFail()
+	db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("Source_Host|Replica_IO_Running|Replica_SQL_Running", "varchar|varchar|varchar"),
+		"source|Yes|No",
+	))
+	assert.Eventually(t, func() bool {
+		return db.GetQueryCalledNum(startSQLThread) == 1
+	}, 30*time.Second, 10*time.Millisecond, "no replacement restoration converged the replica: the takeover dropped the inherited state")
+}
+
+// TestRestoreStopsWhenNoLongerReplica covers the server ceasing to be a
+// replica mid-restoration (e.g. it was promoted, or its replication
+// configuration was reset): there are no threads left to reconcile, so the
+// restoration must stop rather than retry the status read for its whole
+// budget -- holding Close's bounded wait with it.
+func TestRestoreStopsWhenNoLongerReplica(t *testing.T) {
+	const (
+		showReplicaStatus   = "SHOW REPLICA STATUS"
+		restoreFlushLog     = "SET GLOBAL innodb_flush_log_at_trx_commit = 2"
+		restoreSyncBinlog   = "SET GLOBAL sync_binlog = 0"
+		restoreSyncRelayLog = "SET GLOBAL sync_relay_log = 10000"
+	)
+
+	db := fakesqldb.New(t)
+	defer db.Close()
+	db.AddQuery("SELECT 1", &sqltypes.Result{})
+	// An empty result is how a server that is not (any longer) a replica
+	// answers.
+	db.AddQuery(showReplicaStatus, &sqltypes.Result{})
+	for _, query := range []string{restoreFlushLog, restoreSyncBinlog, restoreSyncRelayLog} {
+		db.AddQuery(query, &sqltypes.Result{})
+	}
+
+	params := db.ConnParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+	testMysqld := NewMysqld(dbc)
+	defer testMysqld.Close()
+
+	state := &replicaShutdownState{
+		startReceiver:       true,
+		startApplier:        true,
+		flushLogAtTrxCommit: "2",
+		syncBinlog:          "0",
+		syncRelayLog:        "10000",
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+	defer cancel()
+	testMysqld.restoreReplicaAfterFailedShutdown(ctx, state, 10*time.Millisecond, 30*time.Second)
+	assert.Equal(t, 1, db.GetQueryCalledNum(showReplicaStatus), "the restoration must stop on the first not-a-replica answer instead of retrying")
+	assert.Equal(t, 1, db.GetQueryCalledNum(restoreFlushLog), "the durability settings must still be restored")
+}
+
+// TestRestoreRetriesSettingsRestore covers a transient failure while
+// restoring the durability settings: like the thread restarts, the settings
+// must be retried within the budget rather than attempted only once.
+func TestRestoreRetriesSettingsRestore(t *testing.T) {
+	const (
+		restoreFlushLog     = "SET GLOBAL innodb_flush_log_at_trx_commit = 2"
+		restoreSyncBinlog   = "SET GLOBAL sync_binlog = 0"
+		restoreSyncRelayLog = "SET GLOBAL sync_relay_log = 10000"
+	)
+
+	db := fakesqldb.New(t)
+	defer db.Close()
+	db.AddQuery("SELECT 1", &sqltypes.Result{})
+	for _, query := range []string{restoreFlushLog, restoreSyncBinlog, restoreSyncRelayLog} {
+		db.AddQuery(query, &sqltypes.Result{})
+	}
+	// The first setting fails to begin with.
+	db.AddRejectedQuery(restoreFlushLog, assert.AnError)
+
+	params := db.ConnParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+	testMysqld := NewMysqld(dbc)
+	defer testMysqld.Close()
+
+	// No threads to reconcile: the restoration's only work is the settings.
+	state := &replicaShutdownState{
+		flushLogAtTrxCommit: "2",
+		syncBinlog:          "0",
+		syncRelayLog:        "10000",
+	}
+	restored := make(chan struct{})
+	go func() {
+		defer close(restored)
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), 30*time.Second)
+		defer cancel()
+		testMysqld.restoreReplicaAfterFailedShutdown(ctx, state, 10*time.Millisecond, 30*time.Second)
+	}()
+
+	// The restoration must keep retrying the failing setting.
+	assert.Eventually(t, func() bool {
+		return db.GetQueryCalledNum(restoreFlushLog) >= 3
+	}, 30*time.Second, 10*time.Millisecond, "the restoration did not retry the failing durability setting")
+	// The setting recovers: the restoration must now complete.
+	db.DeleteRejectedQuery(restoreFlushLog)
+	select {
+	case <-restored:
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "the restoration did not complete after the setting recovered")
+	}
 }
 
 // TestReplicaShutdownSkipsUnavailableThreadCommands covers flavors whose

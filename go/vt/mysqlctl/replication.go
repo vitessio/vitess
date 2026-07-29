@@ -226,27 +226,35 @@ func (mysqld *Mysqld) StopIOThread(ctx context.Context) error {
 // restoration: inherited is the replica's true prior state, recorded before
 // the first fence. Re-capturing here would read the half-restored state
 // instead, so the read-only probes are skipped and the fence is re-applied
-// directly on the inherited state.
+// directly on the inherited state. The inherited state is published (and on
+// failure returned) before anything that can fail: the previous restoration
+// was cancelled when it was inherited, so this preparation owns the state now
+// and must hand it back even when it never reaches mysqld -- otherwise a
+// subsequently failed shutdown would have nothing to arm a replacement
+// restoration from, and the replica would stay fenced with replication
+// stopped.
 //
 // It uses a dedicated connection rather than the pools -- killed on ctx expiry
 // by the context-aware executors -- so that a preparation hung in mysqld can
 // never strand a pool slot: repeated failed shutdown attempts must not exhaust
 // the DBA pool of a long-lived caller.
 func (mysqld *Mysqld) prepareReplicaForShutdown(ctx context.Context, inherited *replicaShutdownState, onStateCaptured func(*replicaShutdownState)) (*replicaShutdownState, error) {
-	conn, err := mysqld.GetDbaConnection(ctx)
-	if err != nil {
-		return nil, vterrors.Wrap(err, "failed to connect to MySQL before shutdown")
-	}
-	defer conn.Close()
-
 	var state *replicaShutdownState
 	if inherited != nil {
 		state = inherited
 		onStateCaptured(state)
-	} else {
+	}
+
+	conn, err := mysqld.GetDbaConnection(ctx)
+	if err != nil {
+		return state, vterrors.Wrap(err, "failed to connect to MySQL before shutdown")
+	}
+	defer conn.Close()
+
+	if inherited == nil {
 		status, err := mysqld.showReplicationStatusDirectContext(ctx, conn)
 		if err != nil {
-			if err == mysql.ErrNotReplica {
+			if errors.Is(err, mysql.ErrNotReplica) {
 				return nil, nil
 			}
 			return nil, vterrors.Wrap(err, "failed to read replication status before shutdown")
@@ -522,23 +530,31 @@ func (mysqld *Mysqld) restoreReplicaAfterFailedShutdown(ctx context.Context, sta
 			conn = c
 		}
 		if !settingsRestored {
+			// Only count the settings as restored once every SET succeeded, so
+			// that a transient failure (e.g. on a connection the shutdown
+			// broke) is retried like the thread restarts are; re-running an
+			// already-applied SET is harmless.
+			settingsRestored = true
 			for _, query := range []string{
 				"SET GLOBAL innodb_flush_log_at_trx_commit = " + state.flushLogAtTrxCommit,
 				"SET GLOBAL sync_binlog = " + state.syncBinlog,
 				"SET GLOBAL sync_relay_log = " + state.syncRelayLog,
 			} {
 				if _, err := mysqld.executeFetchDirectContext(ctx, conn, query); err != nil {
+					settingsRestored = false
 					log.Warn(
-						"failed to restore a durability setting after a failed shutdown",
+						"failed to restore a durability setting after a failed shutdown; retrying",
 						slog.String("query", query),
 						slog.Any("error", err),
 					)
 				}
 			}
-			settingsRestored = true
 		}
 		if !state.startReceiver && !state.startApplier {
-			return
+			if settingsRestored {
+				return
+			}
+			continue
 		}
 		// Reconcile the replication threads rather than fire a single START: an
 		// interrupted STOP (killed at the preparation deadline, or one that hit
@@ -549,6 +565,13 @@ func (mysqld *Mysqld) restoreReplicaAfterFailedShutdown(ctx context.Context, sta
 		// start whatever should be running, and verify the result.
 		status, err := mysqld.showReplicationStatusDirectContext(ctx, conn)
 		if err != nil {
+			if errors.Is(err, mysql.ErrNotReplica) {
+				// The server stopped being a replica while we were restoring
+				// (e.g. it was promoted, or its replication configuration was
+				// reset): there are no threads left to reconcile.
+				log.Warn("the server is no longer a replica; ending the replica state restoration after a failed shutdown")
+				return
+			}
 			// The read may have failed because this connection broke:
 			// reconnect for the next attempt.
 			log.Warn(
