@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -30,6 +31,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/reparent/utils"
+	endtoendutils "vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 
@@ -638,35 +640,113 @@ func TestERSFailFast(t *testing.T) {
 	}
 }
 
-// TestReplicationStopped checks that ERS ignores the tablets that have sql thread stopped.
-// If there are more than 1, we also fail.
+// replicaStatusField returns the named field from `show replica status`, or an empty
+// string if the row or field is missing. It must not assert: it is called from polling
+// callbacks that run on a non-test goroutine, where a require failure would kill the
+// polling instead of retrying.
+func replicaStatusField(ctx context.Context, tablet *cluster.Vttablet, field string) (string, error) {
+	conn, err := utils.GetMySQLConn(ctx, tablet)
+	if err != nil {
+		return "", err
+	}
+	defer conn.Close()
+	res, err := conn.ExecuteFetch(`show replica status`, 1, true)
+	if err != nil {
+		return "", err
+	}
+	if len(res.Rows) != 1 {
+		return "", nil
+	}
+	for i, f := range res.Fields {
+		if f.Name == field {
+			return res.Rows[0][i].ToString(), nil
+		}
+	}
+	return "", nil
+}
+
+// waitForReceivedPosition waits until the tablet has received (not necessarily applied)
+// everything in the given GTID set.
+func waitForReceivedPosition(t *testing.T, tablet *cluster.Vttablet, position string) {
+	ctx := t.Context()
+	require.Eventually(t, func() bool {
+		retrievedField, err := replicaStatusField(ctx, tablet, "Retrieved_Gtid_Set")
+		if err != nil {
+			t.Logf("failed to fetch Retrieved_Gtid_Set from %s: %v", tablet.Alias, err)
+			return false
+		}
+		retrieved := strings.ReplaceAll(retrievedField, "\n", "")
+		if retrieved == "" {
+			return false
+		}
+		conn, err := utils.GetMySQLConn(ctx, tablet)
+		if err != nil {
+			t.Logf("failed to connect to %s: %v", tablet.Alias, err)
+			return false
+		}
+		defer conn.Close()
+		res, err := conn.ExecuteFetch(fmt.Sprintf(`select gtid_subset('%s', concat(@@global.gtid_executed, ',', '%s'))`, position, retrieved), 1, true)
+		if err != nil {
+			t.Logf("failed to check gtid_subset on %s: %v", tablet.Alias, err)
+			return false
+		}
+		return len(res.Rows) == 1 && res.Rows[0][0].ToString() == "1"
+	}, 30*time.Second, time.Second)
+}
+
+// TestReplicationStopped checks how ERS treats replicas with replication stopped:
+// tablets[1] has its SQL thread stopped after receiving a write it cannot apply, and
+// tablets[2] has replication fully stopped.
+//
+// The behaviour changed in v25 (vitessio/vitess#20578): a replica that cannot win the
+// election no longer holds up or fails the reparent, whereas pre-v25 ERS waits on every
+// candidate's relay logs and fails on tablets[1]'s received-but-unapplied backlog. The
+// upgrade/downgrade jobs run this release-24.0 test against a newer vtctld, so the
+// expected ERS outcome is gated on the version of the vtctld actually driving ERS.
 func TestReplicationStopped(t *testing.T) {
 	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
 
+	// Stop the SQL thread on tablets[1] so it keeps receiving changes without applying
+	// them, and stop replication fully on tablets[2].
 	err := clusterInstance.VtctldClientProcess.ExecuteCommand("ExecuteFetchAsDBA", tablets[1].Alias, `STOP REPLICA SQL_THREAD;`)
 	require.NoError(t, err)
 	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ExecuteFetchAsDBA", tablets[2].Alias, `STOP REPLICA;`)
 	require.NoError(t, err)
-	// Run an additional command in the current primary which will only be acked by tablets[3] and be in its relay log.
-	insertedVal := utils.ConfirmReplication(t, tablets[0], nil)
-	// Failover to tablets[3]
-	_, err = utils.Ers(clusterInstance, tablets[3], "60s", "30s")
-	require.Error(t, err, "ERS should fail with 2 replicas having replication stopped")
+	// Run an additional command in the current primary which will be applied by
+	// tablets[3] and land in tablets[1]'s relay log without being applied.
+	insertedVal := utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[3]})
+	// Wait until tablets[1] has actually received the write: semi-sync only needs one
+	// acker, so the write confirming on tablets[3] says nothing about tablets[1]'s relay
+	// log.
+	primaryPosition := strings.ReplaceAll(utils.RunSQL(t.Context(), t, `select @@global.gtid_executed`, tablets[0]).Rows[0][0].ToString(), "\n", "")
+	waitForReceivedPosition(t, tablets[1], primaryPosition)
 
-	// Start replication back on tablet[1]
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ExecuteFetchAsDBA", tablets[1].Alias, `START REPLICA;`)
-	require.NoError(t, err)
-	// Failover to tablets[3] again. This time it should succeed
-	out, err := utils.Ers(clusterInstance, tablets[3], "60s", "30s")
-	require.NoError(t, err, out)
+	if endtoendutils.BinaryIsAtLeastAtVersion(25, "vtctld") {
+		// v25+ vtctld only waits on relay log apply of candidates that can win the
+		// election, so neither stopped replica delays nor fails the failover to tablets[3].
+		out, err := utils.Ers(clusterInstance, tablets[3], "60s", "30s")
+		require.NoError(t, err, out)
+	} else {
+		// Pre-v25 vtctld fails the failover on tablets[1]'s unapplied relay log.
+		_, err = utils.Ers(clusterInstance, tablets[3], "60s", "30s")
+		require.Error(t, err, "ERS should fail while tablets[1] has received relay logs it cannot apply")
+
+		// Start replication back on tablet[1]
+		err = clusterInstance.VtctldClientProcess.ExecuteCommand("ExecuteFetchAsDBA", tablets[1].Alias, `START REPLICA;`)
+		require.NoError(t, err)
+		// Failover to tablets[3] again. This time it should succeed
+		out, err := utils.Ers(clusterInstance, tablets[3], "60s", "30s")
+		require.NoError(t, err, out)
+	}
+
 	// Verify that the tablet has the inserted value
-	err = utils.CheckInsertedValues(context.Background(), t, tablets[3], insertedVal)
+	err = utils.CheckInsertedValues(t.Context(), t, tablets[3], insertedVal)
 	require.NoError(t, err)
 	// Confirm that replication is setup correctly from tablets[3] to tablets[0]
 	utils.ConfirmReplication(t, tablets[3], tablets[:1])
 	// Confirm that tablets[2] which had replication stopped initially still has its replication stopped
-	utils.CheckReplicationStatus(context.Background(), t, tablets[2], false, false)
+	utils.CheckReplicationStatus(t.Context(), t, tablets[2], false, false)
 }

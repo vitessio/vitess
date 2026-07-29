@@ -319,6 +319,14 @@ func getMysqlConnParam(tablet *cluster.Vttablet) mysql.ConnParams {
 	return connParams
 }
 
+// GetMySQLConn returns an open connection to the MySQL instance of a vttablet, for
+// callers that need to hold session state (locks, transactions) across other steps.
+// The caller must Close it.
+func GetMySQLConn(ctx context.Context, tablet *cluster.Vttablet) (*mysql.Conn, error) {
+	tabletParams := getMysqlConnParam(tablet)
+	return mysql.Connect(ctx, &tabletParams)
+}
+
 // RunSQLs is used to run SQL commands directly on the MySQL instance of a vttablet. All commands are
 // run in a single connection.
 func RunSQLs(ctx context.Context, t *testing.T, sqls []string, tablet *cluster.Vttablet) (results []*sqltypes.Result) {
