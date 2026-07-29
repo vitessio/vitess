@@ -114,6 +114,28 @@ func TestRefusedJoinMergeLeavesTheProbeSingleShard(t *testing.T) {
 		"the probe is routed by the value coming from the left, so it reads one shard per row, not every shard")
 }
 
+// A merged CTE carries the invariant on to whatever merges next, so the seed keeps owing its
+// preserved rows once the recursion is behind it.
+func TestReferenceRowsSurviveIntoAMergedCTE(t *testing.T) {
+	primitive := planReferenceOuterJoin(t,
+		"with recursive c as (select r1.col from ref_with_source as r1 left join ref as r2 on r1.col = r2.col union all select col + 1 from c where col < 5) select col from c union all select col from `user`")
+
+	require.IsType(t, &engine.Concatenate{}, primitive,
+		"merging the CTE route into the scatter branch would return each unmatched r1 row once per shard")
+}
+
+// Only the recursive term's routing is the one rebuilt from a predicate that gets restored, so a
+// seed that is single-shard on its own keeps its merge. Rejecting it does more than cost RPCs: the
+// recursion counts every frontier row against its step limit, which the merged route does not.
+func TestReferenceRowsAreMergedIntoACTERoutedByItsSeed(t *testing.T) {
+	primitive := planReferenceOuterJoin(t,
+		"with recursive c as (select r.col as col from ref_with_source as r left join (select * from `user` where id = 1) as u on r.col = u.col union all select col + 1 from c where col < 5) select col from c")
+
+	route, ok := primitive.(*engine.Route)
+	require.True(t, ok, "the seed already reads one shard, so the recursion belongs on it, got %T", primitive)
+	require.Equal(t, engine.EqualUnique, route.Opcode)
+}
+
 // The recursion's own predicate can make the term look single-shard, and the CTE merger restores it
 // to its cross-table shape without recomputing the routing afterwards.
 func TestReferenceRowsAreNotMergedIntoACTERoutedByTheRecursion(t *testing.T) {
@@ -159,6 +181,16 @@ func TestMultiTableDeleteThroughAReferenceOuterJoinIsStillMerged(t *testing.T) {
 	require.True(t, ok, "the delete is expected to be sent to the shards as it is, got %T", primitive)
 	require.Equal(t, engine.Scatter, del.Opcode)
 	require.Equal(t, "delete u from ref as r left join `user` as u on r.col = u.col", del.Query)
+}
+
+// The reference table can be the target itself, and then every shard has a physical copy to delete.
+func TestDeleteOfThePreservedReferenceTableIsStillMerged(t *testing.T) {
+	primitive := planReferenceOuterJoin(t,
+		"delete r from ref r left join `user` u on r.col = u.col")
+
+	del, ok := primitive.(*engine.Delete)
+	require.True(t, ok, "the delete is expected to be sent to the shards as it is, got %T", primitive)
+	require.Equal(t, engine.Scatter, del.Opcode)
 }
 
 // Both sides of the outer join can be reference tables, which routes to any single shard. That
