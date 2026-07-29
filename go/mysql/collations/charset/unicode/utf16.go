@@ -76,7 +76,11 @@ func (Charset_utf16be) DecodeRune(b []byte) (rune, int) {
 	}
 
 	if len(b) < 4 {
-		return utf8.RuneError, 0
+		// A surrogate code unit without its pair is invalid, reported with
+		// its own two-byte width so that callers walking the input always
+		// advance. Callers that stop at invalid input still stop, as they
+		// treat any RuneError with a width below 3 as such.
+		return utf8.RuneError, 2
 	}
 
 	r2 := uint16(b[3]) | uint16(b[2])<<8
@@ -138,7 +142,11 @@ func (Charset_utf16le) DecodeRune(b []byte) (rune, int) {
 	}
 
 	if len(b) < 4 {
-		return utf8.RuneError, 0
+		// A surrogate code unit without its pair is invalid, reported with
+		// its own two-byte width so that callers walking the input always
+		// advance. Callers that stop at invalid input still stop, as they
+		// treat any RuneError with a width below 3 as such.
+		return utf8.RuneError, 2
 	}
 
 	r2 := uint16(b[2]) | uint16(b[3])<<8
