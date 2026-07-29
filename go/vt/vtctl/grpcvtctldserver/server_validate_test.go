@@ -293,6 +293,34 @@ func TestValidateQueryThrottlerConfigRequest(t *testing.T) {
 			},
 			wantErr: `unknown statement type "SELEC" (tablet_type=PRIMARY)`,
 		},
+		{
+			name: "custom metric rejected",
+			req: &vtctldatapb.UpdateQueryThrottlerConfigRequest{
+				Keyspace: "ks1",
+				QueryThrottlerConfig: &querythrottlerpb.Config{
+					Enabled:  true,
+					Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
+					TabletStrategyConfig: &querythrottlerpb.TabletStrategyConfig{
+						TabletRules: map[string]*querythrottlerpb.StatementRuleSet{
+							"PRIMARY": {
+								StatementRules: map[string]*querythrottlerpb.MetricRuleSet{
+									"SELECT": {
+										MetricRules: map[string]*querythrottlerpb.MetricRule{
+											"custom": {
+												Thresholds: []*querythrottlerpb.ThrottleThreshold{
+													{Above: 5.0, Throttle: 100},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: `custom metric is not supported by the query throttler (tablet_type=PRIMARY, statement=SELECT, metric=custom)`,
+		},
 	}
 
 	for _, tt := range tests {

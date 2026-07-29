@@ -225,8 +225,15 @@ func validateQueryThrottlerConfigContent(cfg *querythrottler.Config) error {
 				return fmt.Errorf("unknown statement type %q (tablet_type=%s)", stmtType, tabletType)
 			}
 			for metricName, rule := range metricRuleSet.GetMetricRules() {
-				if _, _, err := base.DisaggregateMetricName(metricName); err != nil {
+				_, mName, err := base.DisaggregateMetricName(metricName)
+				if err != nil {
 					return fmt.Errorf("unknown metric name %q (tablet_type=%s, statement=%s)", metricName, tabletType, stmtType)
+				}
+				// The custom metric reads its value from a custom_query the query throttler
+				// config has no way to supply, so it always reads as zero and can never breach
+				// a threshold. Reject it until the query is wired through.
+				if mName == base.CustomMetricName {
+					return fmt.Errorf("custom metric is not supported by the query throttler (tablet_type=%s, statement=%s, metric=%s)", tabletType, stmtType, metricName)
 				}
 				for i, t := range rule.GetThresholds() {
 					if t.GetAbove() < 0 {
