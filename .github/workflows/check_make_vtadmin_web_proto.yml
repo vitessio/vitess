@@ -49,12 +49,15 @@ jobs:
             - '.github/workflows/check_make_vtadmin_web_proto.yml'
 
     - name: Set up Go
+<<<<<<< HEAD
       # zizmor: ignore[cache-poisoning] this workflow publishes no artifacts
       uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+||||||| parent of 3a61da854a (ci: use the shared setup-go action in the remaining workflows (#20694))
+      uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+=======
+      uses: ./.github/actions/setup-go
+>>>>>>> 3a61da854a (ci: use the shared setup-go action in the remaining workflows (#20694))
       if: steps.changes.outputs.proto_changes == 'true'
-      with:
-        go-version-file: go.mod
-        cache: ${{ (github.base_ref == 'main' || (github.base_ref == '' && github.ref_name == 'main')) && 'true' || 'false' }}
 
     - name: Setup Node
       if: steps.changes.outputs.proto_changes == 'true'
