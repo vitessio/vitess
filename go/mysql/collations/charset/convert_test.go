@@ -45,11 +45,11 @@ func (c *testCharset1) EncodeRune([]byte, rune) int {
 	return 0
 }
 
-func (c *testCharset1) DecodeRune(bytes []byte) (rune, int) {
+func (c *testCharset1) DecodeRune(bytes []byte) (rune, int, bool) {
 	if len(bytes) < 1 {
-		return RuneError, 0
+		return RuneError, 0, false
 	}
-	return 1, 1
+	return 1, 1, true
 }
 
 type testCharset2 struct{}
@@ -74,11 +74,11 @@ func (c *testCharset2) EncodeRune([]byte, rune) int {
 	return 0
 }
 
-func (c *testCharset2) DecodeRune(bytes []byte) (rune, int) {
+func (c *testCharset2) DecodeRune(bytes []byte) (rune, int, bool) {
 	if len(bytes) < 1 {
-		return RuneError, 0
+		return RuneError, 0, false
 	}
-	return rune(bytes[0]), 1
+	return rune(bytes[0]), 1, true
 }
 
 func (c *testCharset2) Convert(_, src []byte, from Charset) ([]byte, error) {

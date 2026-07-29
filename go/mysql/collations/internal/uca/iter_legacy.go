@@ -64,7 +64,7 @@ func (it *WeightIteratorLegacy) reset(input []byte) {
 	it.codepoint.weights = nil
 }
 
-func (it *WeightIteratorLegacy) DebugCodepoint() (rune, int) {
+func (it *WeightIteratorLegacy) DebugCodepoint() (rune, int, bool) {
 	return it.charset.DecodeRune(it.input)
 }
 
@@ -74,8 +74,8 @@ func (it *WeightIteratorLegacy) Next() (uint16, bool) {
 			return w, true
 		}
 
-		cp, width := it.charset.DecodeRune(it.input)
-		if width <= 0 {
+		cp, width, ok := it.charset.DecodeRune(it.input)
+		if !ok {
 			return 0, false
 		}
 		it.input = it.input[width:]

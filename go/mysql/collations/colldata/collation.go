@@ -418,10 +418,7 @@ func instr(col Collation, str, sub []byte) int {
 		if col.Collate(str, sub, true) == 0 {
 			return pos
 		}
-		_, size := cs.DecodeRune(str)
-		if size < 0 {
-			size = -size
-		}
+		_, size, _ := cs.DecodeRune(str)
 		str = str[size:]
 		pos++
 	}

@@ -70,11 +70,10 @@ func convertSlow(dst []byte, dstCharset Charset, src []byte, srcCharset Charset)
 	}
 
 	for len(src) > 0 {
-		cp, width := srcCharset.DecodeRune(src)
-		if width < 0 {
+		cp, width, ok := srcCharset.DecodeRune(src)
+		if !ok {
 			failed++
 			cp = '?'
-			width = -width
 		}
 		src = src[width:]
 
@@ -154,10 +153,7 @@ func Expand(dst []rune, src []byte, srcCharset Charset) []rune {
 			dst = make([]rune, 0, len(src))
 		}
 		for len(src) > 0 {
-			cp, width := srcCharset.DecodeRune(src)
-			if width < 0 {
-				width = -width
-			}
+			cp, width, _ := srcCharset.DecodeRune(src)
 			src = src[width:]
 			dst = append(dst, cp)
 		}

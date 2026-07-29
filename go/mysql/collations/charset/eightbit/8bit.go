@@ -50,11 +50,11 @@ func (e *Charset_8bit) SupportsSupplementaryChars() bool {
 	return false
 }
 
-func (e *Charset_8bit) DecodeRune(bytes []byte) (rune, int) {
+func (e *Charset_8bit) DecodeRune(bytes []byte) (rune, int, bool) {
 	if len(bytes) < 1 {
-		return utf8.RuneError, 0
+		return utf8.RuneError, 0, false
 	}
-	return rune(e.ToUnicode[bytes[0]]), 1
+	return rune(e.ToUnicode[bytes[0]]), 1, true
 }
 
 func (e *Charset_8bit) EncodeRune(dst []byte, r rune) int {

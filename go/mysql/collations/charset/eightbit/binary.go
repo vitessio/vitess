@@ -44,11 +44,11 @@ func (c Charset_binary) EncodeRune(dst []byte, r rune) int {
 	return 1
 }
 
-func (c Charset_binary) DecodeRune(bytes []byte) (rune, int) {
+func (c Charset_binary) DecodeRune(bytes []byte) (rune, int, bool) {
 	if len(bytes) < 1 {
-		return utf8.RuneError, 0
+		return utf8.RuneError, 0, false
 	}
-	return rune(bytes[0]), 1
+	return rune(bytes[0]), 1, true
 }
 
 func (c Charset_binary) Convert(_, in []byte, _ types.Charset) ([]byte, error) {

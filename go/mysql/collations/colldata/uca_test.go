@@ -165,7 +165,7 @@ func TestReplacementCharacter(t *testing.T) {
 	}
 }
 
-func TestDecodeRuneWidthSign(t *testing.T) {
+func TestMalformedInput(t *testing.T) {
 	utf16 := testcollation(t, "utf16_general_ci")
 	require.NotEmpty(t, utf16.WeightString(nil, []byte{0xFF, 0xFD}, 0))
 	require.Empty(t, utf16.WeightString(nil, []byte{0xD8, 0x00}, 0))
@@ -206,7 +206,7 @@ func DebugUcaLegacyWeightString(t *testing.T, collname string, input, expected [
 	iter := coll.uca.Iterator(input)
 
 	for {
-		curcp, _ := iter.DebugCodepoint()
+		curcp, _, _ := iter.DebugCodepoint()
 		w, ok := iter.Next()
 		if !ok {
 			break

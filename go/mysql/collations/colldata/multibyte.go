@@ -61,14 +61,8 @@ func (c *Collation_multibyte) Collate(left, right []byte, isPrefix bool) int {
 			if sortL != sortR {
 				return int(sortL) - int(sortR)
 			}
-			_, widthL := cs.DecodeRune(left[i:])
-			_, widthR := cs.DecodeRune(right[i:])
-			if widthL < 0 {
-				widthL = -widthL
-			}
-			if widthR < 0 {
-				widthR = -widthR
-			}
+			_, widthL, _ := cs.DecodeRune(left[i:])
+			_, widthR, _ := cs.DecodeRune(right[i:])
 			switch min(widthL, widthR) {
 			case 4:
 				i++
@@ -118,10 +112,7 @@ func (c *Collation_multibyte) WeightString(dst, src []byte, numCodepoints int) [
 				dst = append(dst, w)
 				src = src[1:]
 			} else {
-				_, width := cs.DecodeRune(src)
-				if width < 0 {
-					width = -width
-				}
+				_, width, _ := cs.DecodeRune(src)
 				dst = append(dst, src[:width]...)
 				src = src[width:]
 			}
@@ -141,10 +132,7 @@ func (c *Collation_multibyte) WeightString(dst, src []byte, numCodepoints int) [
 				dst = append(dst, w)
 				src = src[1:]
 			} else {
-				_, width := cs.DecodeRune(src)
-				if width < 0 {
-					width = -width
-				}
+				_, width, _ := cs.DecodeRune(src)
 				dst = append(dst, src[:width]...)
 				src = src[width:]
 			}
@@ -177,10 +165,7 @@ func (c *Collation_multibyte) Hash(hasher *vthash.Hasher, src []byte, numCodepoi
 			hasher.Write8(w)
 			src = src[1:]
 		} else {
-			_, width := cs.DecodeRune(src)
-			if width < 0 {
-				width = -width
-			}
+			_, width, _ := cs.DecodeRune(src)
 			hasher.Write(src[:width])
 			src = src[width:]
 		}

@@ -85,18 +85,18 @@ write2:
 	return 2
 }
 
-func (Charset_euckr) DecodeRune(src []byte) (rune, int) {
+func (Charset_euckr) DecodeRune(src []byte) (rune, int, bool) {
 	if len(src) < 1 {
-		return utf8.RuneError, 0
+		return utf8.RuneError, 0, false
 	}
 
 	switch c0 := src[0]; {
 	case c0 < utf8.RuneSelf:
-		return rune(c0), 1
+		return rune(c0), 1, true
 
 	case 0x81 <= c0 && c0 < 0xff:
 		if len(src) < 2 {
-			return utf8.RuneError, -1
+			return utf8.RuneError, 1, false
 		}
 		var r rune
 		c1 := src[1]
@@ -120,18 +120,18 @@ func (Charset_euckr) DecodeRune(src []byte) (rune, int) {
 		if int(r) < len(decode) {
 			r = rune(decode[r])
 			if r != 0 {
-				return r, 2
+				return r, 2, true
 			}
 		}
 
 	decError:
 		if c1 < utf8.RuneSelf {
-			return utf8.RuneError, -1
+			return utf8.RuneError, 1, false
 		}
-		return utf8.RuneError, -2
+		return utf8.RuneError, 2, false
 
 	default:
-		return utf8.RuneError, -1
+		return utf8.RuneError, 1, false
 	}
 }
 

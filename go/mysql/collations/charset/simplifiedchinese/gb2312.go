@@ -96,18 +96,18 @@ writeGB:
 	return 2
 }
 
-func (Charset_gb2312) DecodeRune(src []byte) (rune, int) {
+func (Charset_gb2312) DecodeRune(src []byte) (rune, int, bool) {
 	if len(src) < 1 {
-		return utf8.RuneError, 0
+		return utf8.RuneError, 0, false
 	}
 
 	c0 := src[0]
 	if c0 < utf8.RuneSelf {
-		return rune(c0), 1
+		return rune(c0), 1, true
 	}
 
 	if len(src) < 2 {
-		return utf8.RuneError, -1
+		return utf8.RuneError, 1, false
 	}
 
 	r := (uint16(c0)<<8 | uint16(src[1])) & 0x7f7f
@@ -122,9 +122,9 @@ func (Charset_gb2312) DecodeRune(src []byte) (rune, int) {
 		r = 0
 	}
 	if r == 0 {
-		return utf8.RuneError, -2
+		return utf8.RuneError, 2, false
 	}
-	return rune(r), 2
+	return rune(r), 2, true
 }
 
 func (Charset_gb2312) MaxWidth() int {

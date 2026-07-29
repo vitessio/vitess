@@ -23,8 +23,9 @@ type Charset interface {
 	MaxWidth() int
 
 	EncodeRune([]byte, rune) int
-	// DecodeRune returns zero for empty input. Otherwise, the absolute width is
-	// the number of bytes consumed; it is negative when RuneError reports
-	// malformed input and positive for a decoded rune, including RuneError.
-	DecodeRune([]byte) (rune, int)
+	// DecodeRune decodes the first rune in the input and returns it along with
+	// its width in bytes and whether the input was well-formed. On malformed
+	// input it returns RuneError, the number of bytes to skip to reach the
+	// next rune (zero for empty input), and false.
+	DecodeRune([]byte) (rune, int, bool)
 }

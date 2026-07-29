@@ -117,24 +117,24 @@ write4:
 	return 4
 }
 
-func (Charset_gb18030) DecodeRune(src []byte) (rune, int) {
+func (Charset_gb18030) DecodeRune(src []byte) (rune, int, bool) {
 	if len(src) < 1 {
-		return utf8.RuneError, 0
+		return utf8.RuneError, 0, false
 	}
 
 	switch c0 := src[0]; {
 	case c0 < utf8.RuneSelf:
-		return rune(c0), 1
+		return rune(c0), 1, true
 
 	// Microsoft's Code Page 936 extends GBK 1.0 to encode the euro sign U+20AC
 	// as 0x80. The HTML5 specification at http://encoding.spec.whatwg.org/#gbk
 	// says to treat "gbk" as Code Page 936.
 	case c0 == 0x80:
-		return '€', 1
+		return '€', 1, true
 
 	case c0 < 0xff:
 		if len(src) < 2 {
-			return utf8.RuneError, -1
+			return utf8.RuneError, 1, false
 		}
 
 		c1 := src[1]
@@ -147,15 +147,15 @@ func (Charset_gb18030) DecodeRune(src []byte) (rune, int) {
 			if len(src) < 4 {
 				// The second byte here is always ASCII, so we can set size
 				// to 1 in all cases.
-				return utf8.RuneError, -1
+				return utf8.RuneError, 1, false
 			}
 			c2 := src[2]
 			if c2 < 0x81 {
-				return utf8.RuneError, -1
+				return utf8.RuneError, 1, false
 			}
 			c3 := src[3]
 			if c3 < 0x30 || 0x3a <= c3 {
-				return utf8.RuneError, -1
+				return utf8.RuneError, 1, false
 			}
 			r := ((rune(c0-0x81)*10+rune(c1-0x30))*126+rune(c2-0x81))*10 + rune(c3-0x30)
 			if r < 39420 {
@@ -170,27 +170,27 @@ func (Charset_gb18030) DecodeRune(src []byte) (rune, int) {
 				}
 				dec := &gb18030[i-1]
 				r += rune(dec[1]) - rune(dec[0])
-				return r, 4
+				return r, 4, true
 			}
 			r -= 189000
 			if 0 <= r && r < 0x100000 {
 				r += 0x10000
 			} else {
-				return utf8.RuneError, -1
+				return utf8.RuneError, 1, false
 			}
-			return r, 4
+			return r, 4, true
 		default:
-			return utf8.RuneError, -1
+			return utf8.RuneError, 1, false
 		}
 		if i := int(c0-0x81)*190 + int(c1); i < len(decode) {
 			if r := rune(decode[i]); r != 0 {
-				return r, 2
+				return r, 2, true
 			}
 		}
-		return utf8.RuneError, -2
+		return utf8.RuneError, 2, false
 
 	default:
-		return utf8.RuneError, -1
+		return utf8.RuneError, 1, false
 	}
 }
 

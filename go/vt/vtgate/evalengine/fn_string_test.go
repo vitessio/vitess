@@ -100,7 +100,7 @@ func TestPadPreservesRow(t *testing.T) {
 	}
 }
 
-func TestDecodeRuneWidthSign(t *testing.T) {
+func TestReverseAndOrdOnMalformedInput(t *testing.T) {
 	collation := collations.TypedCollation{
 		Collation: collations.MySQL8().LookupByName("utf16_general_ci"),
 	}
