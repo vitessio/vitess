@@ -5942,6 +5942,9 @@ func validateTabletThrottlerStrategyConfig(cfg *querythrottler.Config) error {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "tablet_rules cannot be empty when strategy is TABLET_THROTTLER")
 	}
 
+	// seenBareMetrics maps a bare metric name (e.g. "lag") to the first rule key that
+	// produced it, tracked across the whole config to catch scope collisions globally.
+	seenBareMetrics := make(map[string]string)
 	for tabletType, stmtRuleSet := range tsc.GetTabletRules() {
 		// Reject tablet types the runtime can never emit. targetTabletType.String()
 		// only produces canonical TabletType_name values, so an exact round-trip
@@ -5967,6 +5970,17 @@ func validateTabletThrottlerStrategyConfig(cfg *querythrottler.Config) error {
 					return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
 						"custom metric is not supported by the query throttler (tablet_type=%s, statement=%s, metric=%s)", tabletType, stmtType, metricName)
 				}
+				// Reject two distinct rule keys that disaggregate to the same bare metric
+				// (e.g. "self/lag" and "shard/lag"). The throttler shares one CheckResult
+				// keyed by the bare name across the whole config, so scoped variants collapse
+				// to a single entry and one silently stops matching. The same exact key
+				// repeated across statements is fine — it resolves to one consistent entry.
+				bare := mName.String()
+				if prevKey, ok := seenBareMetrics[bare]; ok && prevKey != metricName {
+					return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+						"metric %q is configured under multiple scopes; only one scope of a metric may be configured across the query throttler config", bare)
+				}
+				seenBareMetrics[bare] = metricName
 				for i, t := range rule.GetThresholds() {
 					if t.GetAbove() < 0 {
 						return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,

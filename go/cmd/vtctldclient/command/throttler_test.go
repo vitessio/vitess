@@ -386,6 +386,40 @@ func TestValidateQueryThrottlerConfigContent(t *testing.T) {
 			},
 			wantErr: `custom metric is not supported by the query throttler (tablet_type=PRIMARY, statement=SELECT, metric=custom)`,
 		},
+		{
+			name: "duplicate bare metric across scopes rejected",
+			config: &querythrottler.Config{
+				Enabled:  true,
+				Strategy: querythrottler.ThrottlingStrategy_TABLET_THROTTLER,
+				TabletStrategyConfig: &querythrottler.TabletStrategyConfig{
+					TabletRules: map[string]*querythrottler.StatementRuleSet{
+						"PRIMARY": {
+							StatementRules: map[string]*querythrottler.MetricRuleSet{
+								"SELECT": {
+									MetricRules: map[string]*querythrottler.MetricRule{
+										"self/lag": {
+											Thresholds: []*querythrottler.ThrottleThreshold{
+												{Above: 5.0, Throttle: 100},
+											},
+										},
+									},
+								},
+								"INSERT": {
+									MetricRules: map[string]*querythrottler.MetricRule{
+										"shard/lag": {
+											Thresholds: []*querythrottler.ThrottleThreshold{
+												{Above: 5.0, Throttle: 100},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: `metric "lag" is configured under multiple scopes; only one scope of a metric may be configured across the query throttler config`,
+		},
 	}
 
 	for _, tt := range tests {
