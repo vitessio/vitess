@@ -136,6 +136,31 @@ func TestDualPreservedByOuterJoinRunsWithoutADestination(t *testing.T) {
 		"the preserved dual row cannot go missing because the other side routes nowhere")
 }
 
+// A multi-table DML whose only target is the sharded side never reads the rows the outer join
+// preserves: an unmatched reference row has no row to write to, so a route that reads it once per
+// shard writes nothing extra. The merge has to stay, or these statements need schema tracking to
+// be planned at all - the fallback reads the rows to write them back by primary key. These two
+// build the plan without it, which is what an operator without schema tracking has.
+func TestMultiTableUpdateThroughAReferenceOuterJoinIsStillMerged(t *testing.T) {
+	primitive := planReferenceOuterJoin(t,
+		"update ref r left join `user` u on r.col = u.col set u.foo = 4")
+
+	upd, ok := primitive.(*engine.Update)
+	require.True(t, ok, "the update is expected to be sent to the shards as it is, got %T", primitive)
+	require.Equal(t, engine.Scatter, upd.Opcode)
+	require.Equal(t, "update ref as r left join `user` as u on r.col = u.col set u.foo = 4", upd.Query)
+}
+
+func TestMultiTableDeleteThroughAReferenceOuterJoinIsStillMerged(t *testing.T) {
+	primitive := planReferenceOuterJoin(t,
+		"delete u from ref r left join `user` u on r.col = u.col")
+
+	del, ok := primitive.(*engine.Delete)
+	require.True(t, ok, "the delete is expected to be sent to the shards as it is, got %T", primitive)
+	require.Equal(t, engine.Scatter, del.Opcode)
+	require.Equal(t, "delete u from ref as r left join `user` as u on r.col = u.col", del.Query)
+}
+
 // Both sides of the outer join can be reference tables, which routes to any single shard. That
 // route is single-shard, so nothing blocks it on its own, but a later merge can still widen it.
 func TestReferenceJoinedToReferenceIsNotWidenedByAUnion(t *testing.T) {
