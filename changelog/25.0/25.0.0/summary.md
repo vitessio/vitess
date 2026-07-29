@@ -344,6 +344,8 @@ An outer join whose preserved side is a reference table is no longer merged into
 
 The merge still happens when the route reads a single shard, and such a route now runs on an arbitrary shard when its routing resolves to no destination — a unique vindex lookup that finds no mapping, or a `NULL` bind value — so the preserved rows come back with `NULL`s rather than the query returning an empty result.
 
+A multi-table `UPDATE` or `DELETE` whose only target is the other side of the join is also unchanged: it never returns the preserved rows, and an unmatched one has no row to write, so those statements keep the plan they had.
+
 See [#20701](https://github.com/vitessio/vitess/pull/20701) for details.
 
 ### <a id="minor-changes-reparent"/>Reparent</a>
