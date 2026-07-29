@@ -893,6 +893,36 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `CAST(_utf8mb4 X'C2A031' AS DECIMAL(20, 6))`,
 			result:     "DECIMAL(0.000000)",
 		},
+		{
+			// MySQL reads UTF-16, UTF-16LE, UCS-2 and UTF-32 numeric text
+			// through latin1, so characters are decoded rather than read as
+			// raw bytes. These bytes are the single character U+312B, not
+			// ASCII '+1', and a character with no latin1 form ends the number.
+			expression: `CAST(_utf16le X'2B31' AS DECIMAL(20, 6))`,
+			result:     "DECIMAL(0.000000)",
+		},
+		{
+			expression: `CAST(_utf16le X'2B003100' AS DECIMAL(20, 6))`,
+			result:     "DECIMAL(1.000000)",
+		},
+		{
+			expression: `CAST(_utf16 X'002B0031' AS DECIMAL(20, 6))`,
+			result:     "DECIMAL(1.000000)",
+		},
+		{
+			expression: `CAST(_ucs2 X'002B0031' AS DECIMAL(20, 6))`,
+			result:     "DECIMAL(1.000000)",
+		},
+		{
+			expression: `CAST(_utf32 X'0000002B00000031' AS DECIMAL(20, 6))`,
+			result:     "DECIMAL(1.000000)",
+		},
+		{
+			// A no-break space becomes latin1 0xA0, which is whitespace
+			// around numeric text.
+			expression: `CAST(_utf16 X'00A00031' AS DECIMAL(20, 6))`,
+			result:     "DECIMAL(1.000000)",
+		},
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")

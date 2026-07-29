@@ -48,6 +48,7 @@ var Cases = []TestCase{
 	{Run: DecimalClamping},
 	{Run: SignedExponents},
 	{Run: NumericTextWhitespace},
+	{Run: FixedWidthNumericText},
 	{Run: BitwiseOperatorsUnary},
 	{Run: BitwiseOperators},
 	{Run: WeightString},
@@ -978,6 +979,32 @@ func NumericTextWhitespace(yield Query) {
 		"_latin1 X'3165A032'",
 		"_latin1 X'316532A0'",
 		"_utf8mb4 X'C2A031'",
+	} {
+		yield(fmt.Sprintf("CAST(%s AS DECIMAL(20, 6))", doc), nil, false)
+	}
+}
+
+// FixedWidthNumericText covers numeric text in the character sets whose
+// smallest character is wider than one byte: UTF-16, UTF-16LE, UCS-2 and
+// UTF-32. MySQL reads such text through latin1, so characters are decoded
+// rather than read as raw bytes, and a character with no latin1 form ends
+// the number.
+func FixedWidthNumericText(yield Query) {
+	for _, doc := range []string{
+		// The single character U+312B, whose bytes spell ASCII '+1'.
+		"_utf16le X'2B31'",
+		// '+1' in each encoding.
+		"_utf16le X'2B003100'",
+		"_utf16 X'002B0031'",
+		"_ucs2 X'002B0031'",
+		"_utf32 X'0000002B00000031'",
+		// ' 15.5', whitespace and all read after decoding.
+		"_utf16le X'2000310035002E003500'",
+		// A no-break space becomes latin1 0xA0, which is whitespace around
+		// numeric text.
+		"_utf16 X'00A00031'",
+		// '€1': the euro sign has no latin1 form.
+		"_utf16 X'20AC0031'",
 	} {
 		yield(fmt.Sprintf("CAST(%s AS DECIMAL(20, 6))", doc), nil, false)
 	}

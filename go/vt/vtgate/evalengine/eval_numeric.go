@@ -21,6 +21,9 @@ import (
 	"math"
 	"strconv"
 
+	"vitess.io/vitess/go/hack"
+	"vitess.io/vitess/go/mysql/collations/charset"
+	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/mysql/fastparse"
 	"vitess.io/vitess/go/mysql/format"
@@ -251,7 +254,18 @@ func evalToDecimal(e eval, m, d int32) *evalDecimal {
 			}
 			return bit.toDecimal(m, d)
 		}
-		dec, _ := decimal.NewFromString(e.string())
+		raw := e.bytes
+		// MySQL reads numeric text through latin1 when the character set's
+		// smallest character is wider than one byte (str2my_decimal): the
+		// characters are decoded rather than read as raw bytes, and one with
+		// no latin1 form becomes '?', which ends the number.
+		if col := colldata.Lookup(e.col.Collation); col != nil {
+			switch cs := col.Charset(); cs.(type) {
+			case charset.Charset_utf16, charset.Charset_utf16le, charset.Charset_ucs2, charset.Charset_utf32:
+				raw, _ = charset.Convert(nil, charset.Charset_latin1{}, raw, cs)
+			}
+		}
+		dec, _ := decimal.NewFromString(hack.String(raw))
 		return newEvalDecimal(dec, m, d)
 	case *evalJSON:
 		switch e.Type() {
