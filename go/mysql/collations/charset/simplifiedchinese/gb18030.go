@@ -134,7 +134,7 @@ func (Charset_gb18030) DecodeRune(src []byte) (rune, int) {
 
 	case c0 < 0xff:
 		if len(src) < 2 {
-			return utf8.RuneError, 1
+			return utf8.RuneError, -1
 		}
 
 		c1 := src[1]
@@ -147,15 +147,15 @@ func (Charset_gb18030) DecodeRune(src []byte) (rune, int) {
 			if len(src) < 4 {
 				// The second byte here is always ASCII, so we can set size
 				// to 1 in all cases.
-				return utf8.RuneError, 1
+				return utf8.RuneError, -1
 			}
 			c2 := src[2]
 			if c2 < 0x81 {
-				return utf8.RuneError, 1
+				return utf8.RuneError, -1
 			}
 			c3 := src[3]
 			if c3 < 0x30 || 0x3a <= c3 {
-				return utf8.RuneError, 1
+				return utf8.RuneError, -1
 			}
 			r := ((rune(c0-0x81)*10+rune(c1-0x30))*126+rune(c2-0x81))*10 + rune(c3-0x30)
 			if r < 39420 {
@@ -176,23 +176,21 @@ func (Charset_gb18030) DecodeRune(src []byte) (rune, int) {
 			if 0 <= r && r < 0x100000 {
 				r += 0x10000
 			} else {
-				return utf8.RuneError, 1
+				return utf8.RuneError, -1
 			}
 			return r, 4
 		default:
-			return utf8.RuneError, 1
+			return utf8.RuneError, -1
 		}
-		r := utf8.RuneError
 		if i := int(c0-0x81)*190 + int(c1); i < len(decode) {
-			r = rune(decode[i])
-			if r == 0 {
-				r = utf8.RuneError
+			if r := rune(decode[i]); r != 0 {
+				return r, 2
 			}
 		}
-		return r, 2
+		return utf8.RuneError, -2
 
 	default:
-		return utf8.RuneError, 1
+		return utf8.RuneError, -1
 	}
 }
 

@@ -107,7 +107,7 @@ func (Charset_gb2312) DecodeRune(src []byte) (rune, int) {
 	}
 
 	if len(src) < 2 {
-		return utf8.RuneError, 1
+		return utf8.RuneError, -1
 	}
 
 	r := (uint16(c0)<<8 | uint16(src[1])) & 0x7f7f
@@ -122,7 +122,7 @@ func (Charset_gb2312) DecodeRune(src []byte) (rune, int) {
 		r = 0
 	}
 	if r == 0 {
-		return utf8.RuneError, 2
+		return utf8.RuneError, -2
 	}
 	return rune(r), 2
 }

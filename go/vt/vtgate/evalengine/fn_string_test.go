@@ -99,3 +99,13 @@ func TestPadPreservesRow(t *testing.T) {
 		})
 	}
 }
+
+func TestDecodeRuneWidthSign(t *testing.T) {
+	collation := collations.TypedCollation{
+		Collation: collations.MySQL8().LookupByName("utf16_general_ci"),
+	}
+	input := newEvalText([]byte{0xD8, 0x00, 0x00, 0x31}, collation)
+
+	require.Equal(t, []byte{0x00, 0x31, 0xD8, 0x00}, reverse(input))
+	require.Equal(t, int64(0xD800), charOrd(input.bytes, collation.Collation))
+}

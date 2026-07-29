@@ -158,15 +158,12 @@ func TestConvert(t *testing.T) {
 			dstCharset: &testCharset2{},
 			want:       []byte("😊😂🤢"),
 		},
-		// A lone surrogate is not a character; each of its bytes converts
-		// to '?' and the conversion must terminate rather than stall on
-		// the invalid unit.
 		{
 			src:        []byte{0xD8, 0x00},
 			srcCharset: Charset_utf16{},
 			dst:        nil,
 			dstCharset: Charset_latin1{},
-			want:       []byte("??"),
+			want:       []byte("?"),
 			err:        "Cannot convert string",
 		},
 		{
@@ -174,7 +171,7 @@ func TestConvert(t *testing.T) {
 			srcCharset: Charset_utf16le{},
 			dst:        nil,
 			dstCharset: Charset_latin1{},
-			want:       []byte("??"),
+			want:       []byte("?"),
 			err:        "Cannot convert string",
 		},
 		{
@@ -182,8 +179,15 @@ func TestConvert(t *testing.T) {
 			srcCharset: Charset_utf16{},
 			dst:        nil,
 			dstCharset: Charset_utf8mb4{},
-			want:       []byte("?\x00?"),
+			want:       []byte("?1"),
 			err:        "Cannot convert string",
+		},
+		{
+			src:        []byte{0xFF, 0xFD},
+			srcCharset: Charset_utf16{},
+			dst:        nil,
+			dstCharset: Charset_utf8mb4{},
+			want:       []byte("\uFFFD"),
 		},
 	}
 
@@ -242,6 +246,12 @@ func TestExpand(t *testing.T) {
 			src:        []byte{0xFF},
 			srcCharset: Charset_latin1{},
 			want:       []rune("ÿ"),
+		},
+		{
+			dst:        nil,
+			src:        []byte{0xD8, 0x00, 0x00, 0x31},
+			srcCharset: Charset_utf16{},
+			want:       []rune{RuneError, '1'},
 		},
 		// multibyte case
 		{

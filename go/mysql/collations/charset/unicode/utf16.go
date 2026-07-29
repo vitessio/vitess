@@ -67,7 +67,7 @@ func (Charset_utf16be) EncodeRune(dst []byte, r rune) int {
 
 func (Charset_utf16be) DecodeRune(b []byte) (rune, int) {
 	if len(b) < 2 {
-		return utf8.RuneError, len(b)
+		return utf8.RuneError, -len(b)
 	}
 
 	r1 := uint16(b[1]) | uint16(b[0])<<8
@@ -76,12 +76,7 @@ func (Charset_utf16be) DecodeRune(b []byte) (rune, int) {
 	}
 
 	if len(b) < 4 {
-		// A surrogate code unit without enough bytes left for its pair is
-		// invalid, reported with a single-byte width like an invalid pair
-		// below: callers walking the input always advance, while callers
-		// that stop at invalid input still stop, since a genuine U+FFFD
-		// character decodes with its full two-byte width.
-		return utf8.RuneError, 1
+		return utf8.RuneError, -2
 	}
 
 	r2 := uint16(b[3]) | uint16(b[2])<<8
@@ -89,7 +84,7 @@ func (Charset_utf16be) DecodeRune(b []byte) (rune, int) {
 		return (rune(r1)-surr1)<<10 | (rune(r2) - surr2) + surrSelf, 4
 	}
 
-	return utf8.RuneError, 1
+	return utf8.RuneError, -2
 }
 
 func (Charset_utf16be) SupportsSupplementaryChars() bool {
@@ -134,7 +129,7 @@ func (Charset_utf16le) EncodeRune(dst []byte, r rune) int {
 
 func (Charset_utf16le) DecodeRune(b []byte) (rune, int) {
 	if len(b) < 2 {
-		return utf8.RuneError, len(b)
+		return utf8.RuneError, -len(b)
 	}
 
 	r1 := uint16(b[0]) | uint16(b[1])<<8
@@ -143,12 +138,7 @@ func (Charset_utf16le) DecodeRune(b []byte) (rune, int) {
 	}
 
 	if len(b) < 4 {
-		// A surrogate code unit without enough bytes left for its pair is
-		// invalid, reported with a single-byte width like an invalid pair
-		// below: callers walking the input always advance, while callers
-		// that stop at invalid input still stop, since a genuine U+FFFD
-		// character decodes with its full two-byte width.
-		return utf8.RuneError, 1
+		return utf8.RuneError, -2
 	}
 
 	r2 := uint16(b[2]) | uint16(b[3])<<8
@@ -156,7 +146,7 @@ func (Charset_utf16le) DecodeRune(b []byte) (rune, int) {
 		return (rune(r1)-surr1)<<10 | (rune(r2) - surr2) + surrSelf, 4
 	}
 
-	return utf8.RuneError, 1
+	return utf8.RuneError, -2
 }
 
 func (Charset_utf16le) SupportsSupplementaryChars() bool {
@@ -195,7 +185,7 @@ func (Charset_ucs2) EncodeRune(dst []byte, r rune) int {
 
 func (Charset_ucs2) DecodeRune(p []byte) (rune, int) {
 	if len(p) < 2 {
-		return utf8.RuneError, len(p)
+		return utf8.RuneError, -len(p)
 	}
 	return rune(p[0])<<8 | rune(p[1]), 2
 }

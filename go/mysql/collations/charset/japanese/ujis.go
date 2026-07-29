@@ -66,57 +66,57 @@ func ujisDecodeRune(src []byte, table208, table212 *[65536]uint16) (rune, int) {
 
 	case c0 == 0x8e:
 		if len(src) < 2 {
-			return utf8.RuneError, 1
+			return utf8.RuneError, -1
 		}
 		c1 := src[1]
 		switch {
 		case c1 < 0xa1:
-			return utf8.RuneError, 1
+			return utf8.RuneError, -1
 		case c1 > 0xdf:
 			if c1 == 0xff {
-				return utf8.RuneError, 1
+				return utf8.RuneError, -1
 			}
-			return utf8.RuneError, 2
+			return utf8.RuneError, -2
 		default:
 			return rune(c1) + (0xff61 - 0xa1), 2
 		}
 	case c0 == 0x8f:
 		if len(src) < 3 {
 			if len(src) == 2 && 0xa1 <= src[1] && src[1] < 0xfe {
-				return utf8.RuneError, 2
+				return utf8.RuneError, -2
 			}
-			return utf8.RuneError, 1
+			return utf8.RuneError, -1
 		}
 		c1 := src[1]
 		if c1 < 0xa1 || 0xfe < c1 {
-			return utf8.RuneError, 1
+			return utf8.RuneError, -1
 		}
 		c2 := src[2]
 		if c2 < 0xa1 || 0xfe < c2 {
-			return utf8.RuneError, 2
+			return utf8.RuneError, -2
 		}
 		r := rune(table212[uint16(c1)<<8|uint16(c2)])
 		if r == 0 {
-			r = utf8.RuneError
+			return utf8.RuneError, -3
 		}
 		return r, 3
 
 	case 0xa1 <= c0 && c0 <= 0xfe:
 		if len(src) < 2 {
-			return utf8.RuneError, 1
+			return utf8.RuneError, -1
 		}
 		c1 := src[1]
 		if c1 < 0xa1 || 0xfe < c1 {
-			return utf8.RuneError, 1
+			return utf8.RuneError, -1
 		}
 		r := rune(table208[uint16(c0)<<8|uint16(c1)])
 		if r == 0 {
-			r = utf8.RuneError
+			return utf8.RuneError, -2
 		}
 		return r, 2
 
 	default:
-		return utf8.RuneError, 1
+		return utf8.RuneError, -1
 	}
 }
 

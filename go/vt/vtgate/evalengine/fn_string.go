@@ -739,6 +739,9 @@ func reverse(in *evalBytes) []byte {
 	out, end := make([]byte, len(b)), len(b)
 	for len(b) > 0 {
 		_, size := cs.DecodeRune(b)
+		if size < 0 {
+			size = -size
+		}
 		copy(out[end-size:end], b[:size])
 		b = b[size:]
 		end -= size
@@ -832,6 +835,9 @@ func charOrd(b []byte, coll collations.ID) int64 {
 	}
 	cs := colldata.Lookup(coll).Charset()
 	_, l := cs.DecodeRune(b)
+	if l < 0 {
+		l = -l
+	}
 	var r int64
 	for i := range l {
 		r = (r << 8) | int64(b[i])

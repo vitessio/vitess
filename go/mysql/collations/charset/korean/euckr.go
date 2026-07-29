@@ -96,7 +96,7 @@ func (Charset_euckr) DecodeRune(src []byte) (rune, int) {
 
 	case 0x81 <= c0 && c0 < 0xff:
 		if len(src) < 2 {
-			return utf8.RuneError, 1
+			return utf8.RuneError, -1
 		}
 		var r rune
 		c1 := src[1]
@@ -126,12 +126,12 @@ func (Charset_euckr) DecodeRune(src []byte) (rune, int) {
 
 	decError:
 		if c1 < utf8.RuneSelf {
-			return utf8.RuneError, 1
+			return utf8.RuneError, -1
 		}
-		return utf8.RuneError, 2
+		return utf8.RuneError, -2
 
 	default:
-		return utf8.RuneError, 1
+		return utf8.RuneError, -1
 	}
 }
 

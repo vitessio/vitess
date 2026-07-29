@@ -63,6 +63,12 @@ func (c *Collation_multibyte) Collate(left, right []byte, isPrefix bool) int {
 			}
 			_, widthL := cs.DecodeRune(left[i:])
 			_, widthR := cs.DecodeRune(right[i:])
+			if widthL < 0 {
+				widthL = -widthL
+			}
+			if widthR < 0 {
+				widthR = -widthR
+			}
 			switch min(widthL, widthR) {
 			case 4:
 				i++
@@ -113,6 +119,9 @@ func (c *Collation_multibyte) WeightString(dst, src []byte, numCodepoints int) [
 				src = src[1:]
 			} else {
 				_, width := cs.DecodeRune(src)
+				if width < 0 {
+					width = -width
+				}
 				dst = append(dst, src[:width]...)
 				src = src[width:]
 			}
@@ -133,6 +142,9 @@ func (c *Collation_multibyte) WeightString(dst, src []byte, numCodepoints int) [
 				src = src[1:]
 			} else {
 				_, width := cs.DecodeRune(src)
+				if width < 0 {
+					width = -width
+				}
 				dst = append(dst, src[:width]...)
 				src = src[width:]
 			}
@@ -166,6 +178,9 @@ func (c *Collation_multibyte) Hash(hasher *vthash.Hasher, src []byte, numCodepoi
 			src = src[1:]
 		} else {
 			_, width := cs.DecodeRune(src)
+			if width < 0 {
+				width = -width
+			}
 			hasher.Write(src[:width])
 			src = src[width:]
 		}

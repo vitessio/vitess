@@ -165,6 +165,19 @@ func TestReplacementCharacter(t *testing.T) {
 	}
 }
 
+func TestDecodeRuneWidthSign(t *testing.T) {
+	utf16 := testcollation(t, "utf16_general_ci")
+	require.NotEmpty(t, utf16.WeightString(nil, []byte{0xFF, 0xFD}, 0))
+	require.Empty(t, utf16.WeightString(nil, []byte{0xD8, 0x00}, 0))
+
+	wildcard := utf16.Wildcard([]byte{0xFF, 0xFD}, '_', '%', '\\')
+	require.True(t, wildcard.Match([]byte{0xFF, 0xFD}))
+	require.False(t, wildcard.Match([]byte{0xD8, 0x00}))
+
+	sjis := testcollation(t, "sjis_japanese_ci")
+	require.Equal(t, []byte{0x81}, sjis.WeightString(nil, []byte{0x81}, 0))
+}
+
 func TestIsPrefix(t *testing.T) {
 	collations := []string{
 		"utf8mb4_0900_ai_ci",

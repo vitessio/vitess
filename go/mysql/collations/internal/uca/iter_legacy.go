@@ -16,10 +16,6 @@ limitations under the License.
 
 package uca
 
-import (
-	"vitess.io/vitess/go/mysql/collations/charset"
-)
-
 type WeightIteratorLegacy struct {
 	// Constant
 	*CollationLegacy
@@ -79,7 +75,7 @@ func (it *WeightIteratorLegacy) Next() (uint16, bool) {
 		}
 
 		cp, width := it.charset.DecodeRune(it.input)
-		if cp == charset.RuneError && width < 3 {
+		if width <= 0 {
 			return 0, false
 		}
 		it.input = it.input[width:]

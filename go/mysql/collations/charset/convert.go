@@ -18,7 +18,6 @@ package charset
 
 import (
 	"fmt"
-	"unicode/utf8"
 
 	"vitess.io/vitess/go/hack"
 )
@@ -72,9 +71,10 @@ func convertSlow(dst []byte, dstCharset Charset, src []byte, srcCharset Charset)
 
 	for len(src) > 0 {
 		cp, width := srcCharset.DecodeRune(src)
-		if cp == utf8.RuneError {
+		if width < 0 {
 			failed++
 			cp = '?'
+			width = -width
 		}
 		src = src[width:]
 
@@ -155,6 +155,9 @@ func Expand(dst []rune, src []byte, srcCharset Charset) []rune {
 		}
 		for len(src) > 0 {
 			cp, width := srcCharset.DecodeRune(src)
+			if width < 0 {
+				width = -width
+			}
 			src = src[width:]
 			dst = append(dst, cp)
 		}

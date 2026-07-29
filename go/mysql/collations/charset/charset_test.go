@@ -108,12 +108,7 @@ func TestIsBackslashSafe(t *testing.T) {
 	}
 }
 
-// TestDecodeRuneAlwaysAdvances pins the DecodeRune contract that callers
-// like Convert, Expand and Length rely on to make progress: on non-empty
-// input, the reported width is at least 1 and never past the end of the
-// input, whether the leading sequence is valid or not. A decoder reporting
-// width 0 loops those callers forever on bytes a user can supply.
-func TestDecodeRuneAlwaysAdvances(t *testing.T) {
+func TestDecodeRuneWidthContract(t *testing.T) {
 	charsets := []Charset{
 		Charset_binary{},
 		Charset_latin1{},
@@ -158,13 +153,60 @@ func TestDecodeRuneAlwaysAdvances(t *testing.T) {
 
 	for _, cs := range charsets {
 		t.Run(cs.Name(), func(t *testing.T) {
+			r, width := cs.DecodeRune(nil)
+			require.Equal(t, RuneError, r)
+			require.Zero(t, width)
+
 			for _, in := range inputs {
 				_, width := cs.DecodeRune(in)
-				if width < 1 || width > len(in) {
+				size := width
+				if size < 0 {
+					size = -size
+				}
+				if size < 1 || size > len(in) {
 					require.Failf(t, "DecodeRune width out of range",
-						"%s.DecodeRune(%#v) returned width %d, want 1..%d", cs.Name(), in, width, len(in))
+						"%s.DecodeRune(%#v) returned width %d, want an absolute width in 1..%d", cs.Name(), in, width, len(in))
 				}
 			}
+		})
+	}
+}
+
+func TestDecodeRuneWidthSign(t *testing.T) {
+	testCases := []struct {
+		name      string
+		cs        Charset
+		input     []byte
+		wantRune  rune
+		wantWidth int
+	}{
+		{"utf8mb3 valid RuneError", Charset_utf8mb3{}, []byte{0xEF, 0xBF, 0xBD}, RuneError, 3},
+		{"utf8mb3 invalid", Charset_utf8mb3{}, []byte{0xFF}, RuneError, -1},
+		{"utf8mb4 valid RuneError", Charset_utf8mb4{}, []byte{0xEF, 0xBF, 0xBD}, RuneError, 3},
+		{"utf8mb4 invalid", Charset_utf8mb4{}, []byte{0xFF}, RuneError, -1},
+		{"utf16 valid RuneError", Charset_utf16{}, []byte{0xFF, 0xFD}, RuneError, 2},
+		{"utf16 unpaired surrogate", Charset_utf16{}, []byte{0xD8, 0x00}, RuneError, -2},
+		{"utf16 broken surrogate pair", Charset_utf16{}, []byte{0xD8, 0x00, 0x00, 0x31}, RuneError, -2},
+		{"utf16le valid RuneError", Charset_utf16le{}, []byte{0xFD, 0xFF}, RuneError, 2},
+		{"utf16le unpaired surrogate", Charset_utf16le{}, []byte{0x00, 0xD8}, RuneError, -2},
+		{"ucs2 valid RuneError", Charset_ucs2{}, []byte{0xFF, 0xFD}, RuneError, 2},
+		{"ucs2 invalid", Charset_ucs2{}, []byte{0x00}, RuneError, -1},
+		{"utf32 valid RuneError", Charset_utf32{}, []byte{0x00, 0x00, 0xFF, 0xFD}, RuneError, 4},
+		{"utf32 invalid", Charset_utf32{}, []byte{0x00}, RuneError, -1},
+		{"gb18030 invalid", Charset_gb18030{}, []byte{0xFF}, RuneError, -1},
+		{"gb2312 invalid", Charset_gb2312{}, []byte{0xFF}, RuneError, -1},
+		{"ujis invalid", Charset_ujis{}, []byte{0xFF}, RuneError, -1},
+		{"sjis invalid", Charset_sjis{}, []byte{0x81}, RuneError, -1},
+		{"cp932 invalid", Charset_cp932{}, []byte{0x81}, RuneError, -1},
+		{"eucjpms invalid", Charset_eucjpms{}, []byte{0xFF}, RuneError, -1},
+		{"euckr invalid", Charset_euckr{}, []byte{0xFF}, RuneError, -1},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			gotRune, gotWidth := tc.cs.DecodeRune(tc.input)
+			require.Equal(t, tc.wantRune, gotRune)
+			require.Equal(t, tc.wantWidth, gotWidth)
 		})
 	}
 }

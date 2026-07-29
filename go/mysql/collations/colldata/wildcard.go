@@ -127,7 +127,7 @@ func newUnicodeWildcardMatcher(
 
 	for len(pat) > 0 {
 		cp, width := cs.DecodeRune(pat)
-		if cp == charset.RuneError && width < 3 {
+		if width <= 0 {
 			return nopMatcher{}
 		}
 		pat = pat[width:]
@@ -207,8 +207,8 @@ retry:
 
 		switch p0 {
 		case patternMatchOne:
-			c0, width := cs.DecodeRune(s)
-			if c0 == charset.RuneError && width < 3 {
+			_, width := cs.DecodeRune(s)
+			if width <= 0 {
 				return false
 			}
 			s = s[width:]
@@ -222,7 +222,7 @@ retry:
 			goto retry
 		default:
 			c0, width := cs.DecodeRune(s)
-			if c0 == charset.RuneError && width < 3 {
+			if width <= 0 {
 				return false
 			}
 			if !wc.equals(c0, p0) {
@@ -239,8 +239,8 @@ starCheck:
 		return false
 	}
 	if len(str) > 0 {
-		c0, width := cs.DecodeRune(str)
-		if c0 == charset.RuneError && width < 3 {
+		_, width := cs.DecodeRune(str)
+		if width <= 0 {
 			return false
 		}
 		str = str[width:]
@@ -270,8 +270,8 @@ many:
 	case patternMatchMany:
 		goto many
 	case patternMatchOne:
-		cpIn, width := cs.DecodeRune(in)
-		if cpIn == charset.RuneError && width < 3 {
+		_, width := cs.DecodeRune(in)
+		if width <= 0 {
 			return matchFail
 		}
 		in = in[width:]
@@ -287,7 +287,7 @@ retry:
 	for len(in) > 0 {
 		var cpIn rune
 		cpIn, width = cs.DecodeRune(in)
-		if cpIn == charset.RuneError && width < 3 {
+		if width <= 0 {
 			return matchFail
 		}
 		if wc.equals(cpIn, p0) {
@@ -320,7 +320,7 @@ func (wc *unicodeWildcard) matchRecursive(in []byte, pat []rune, depth int) matc
 		}
 
 		cpIn, width := cs.DecodeRune(in)
-		if cpIn == charset.RuneError && width < 3 {
+		if width <= 0 {
 			return matchFail
 		}
 

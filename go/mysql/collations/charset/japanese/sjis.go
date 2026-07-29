@@ -91,16 +91,13 @@ func decodeSJIS(src []byte, table *[65536]uint16) (rune, int) {
 		return rune(table[c0]), 1
 	}
 	if len(src) < 2 {
-		// A lead byte with no trail byte left is invalid on its own;
-		// reporting a single-byte width keeps callers from stepping past
-		// the end of the input.
-		return utf8.RuneError, 1
+		return utf8.RuneError, -1
 	}
 	sj := uint16(c0)<<8 | uint16(src[1])
 	if cp := table[sj]; cp != 0 {
 		return rune(cp), 2
 	}
-	return utf8.RuneError, 2
+	return utf8.RuneError, -2
 }
 
 func (Charset_sjis) DecodeRune(src []byte) (rune, int) {

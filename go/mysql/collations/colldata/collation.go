@@ -419,6 +419,9 @@ func instr(col Collation, str, sub []byte) int {
 			return pos
 		}
 		_, size := cs.DecodeRune(str)
+		if size < 0 {
+			size = -size
+		}
 		str = str[size:]
 		pos++
 	}
