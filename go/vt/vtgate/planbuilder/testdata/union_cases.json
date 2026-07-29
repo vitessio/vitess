@@ -1045,7 +1045,7 @@
     "skip_e2e": true
   },
   {
-    "comment": "a reference-degraded none routing keeps its canonical keyspace and declines a cross-keyspace merge",
+    "comment": "a reference-degraded none routing merges into the keyspace holding a copy of its table",
     "query": "select id from ambiguous_ref_with_source where id in (null) union select id from user",
     "plan": {
       "Type": "Complex",
@@ -1059,40 +1059,26 @@
         "ResultColumns": 1,
         "Inputs": [
           {
-            "OperatorType": "Concatenate",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "None",
-                "Keyspace": {
-                  "Name": "main",
-                  "Sharded": false
-                },
-                "FieldQuery": "select dt.c0 as id, weight_string(dt.c0) from (select id from ambiguous_ref_with_source where 1 != 1) as dt(c0) where 1 != 1",
-                "Query": "select dt.c0 as id, weight_string(dt.c0) from (select distinct id from ambiguous_ref_with_source where id in (null)) as dt(c0)"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select dt.c0 as id, weight_string(dt.c0) from (select id from `user` where 1 != 1) as dt(c0) where 1 != 1",
-                "Query": "select dt.c0 as id, weight_string(dt.c0) from (select distinct id from `user`) as dt(c0)"
-              }
-            ]
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id, weight_string(id) from ambiguous_ref_with_source where 1 != 1 union select id, weight_string(id) from `user` where 1 != 1",
+            "Query": "select id, weight_string(id) from ambiguous_ref_with_source where id in (null) union select id, weight_string(id) from `user`"
           }
         ]
       },
       "TablesUsed": [
-        "main.ambiguous_ref_with_source",
+        "user.ambiguous_ref_with_source",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
-    "comment": "differing physical reference names must not merge: the none side's table does not exist in the other keyspace",
+    "comment": "a reference-degraded none branch is rewritten to the copy's physical name in the target keyspace",
     "query": "select id from source_of_ref where id in (null) union select id from user",
     "plan": {
       "Type": "Complex",
@@ -1106,37 +1092,56 @@
         "ResultColumns": 1,
         "Inputs": [
           {
-            "OperatorType": "Concatenate",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "None",
-                "Keyspace": {
-                  "Name": "main",
-                  "Sharded": false
-                },
-                "FieldQuery": "select dt.c0 as id, weight_string(dt.c0) from (select id from source_of_ref where 1 != 1) as dt(c0) where 1 != 1",
-                "Query": "select dt.c0 as id, weight_string(dt.c0) from (select distinct id from source_of_ref where id in (null)) as dt(c0)"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select dt.c0 as id, weight_string(dt.c0) from (select id from `user` where 1 != 1) as dt(c0) where 1 != 1",
-                "Query": "select dt.c0 as id, weight_string(dt.c0) from (select distinct id from `user`) as dt(c0)"
-              }
-            ]
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id, weight_string(id) from ref_with_source as source_of_ref where 1 != 1 union select id, weight_string(id) from `user` where 1 != 1",
+            "Query": "select id, weight_string(id) from ref_with_source as source_of_ref where id in (null) union select id, weight_string(id) from `user`"
           }
         ]
       },
       "TablesUsed": [
-        "main.source_of_ref",
+        "user.ref_with_source",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "the rewrite also applies when the empty reference branch is on the right",
+    "query": "select id from user union select id from source_of_ref where id in (null)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select id from user union select id from source_of_ref where id in (null)",
+      "Instructions": {
+        "OperatorType": "Distinct",
+        "Collations": [
+          "(0:1)"
+        ],
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1 union select id, weight_string(id) from ref_with_source as source_of_ref where 1 != 1",
+            "Query": "select id, weight_string(id) from `user` union select id, weight_string(id) from ref_with_source as source_of_ref where id in (null)"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.ref_with_source",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
   },
   {
     "comment": "a reference-degraded none routing whose keyspace matches the other side still merges",
