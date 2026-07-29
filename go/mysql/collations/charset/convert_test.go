@@ -158,14 +158,15 @@ func TestConvert(t *testing.T) {
 			dstCharset: &testCharset2{},
 			want:       []byte("😊😂🤢"),
 		},
-		// A lone surrogate is not a character; it converts to '?' and the
-		// conversion must terminate rather than stall on the invalid unit.
+		// A lone surrogate is not a character; each of its bytes converts
+		// to '?' and the conversion must terminate rather than stall on
+		// the invalid unit.
 		{
 			src:        []byte{0xD8, 0x00},
 			srcCharset: Charset_utf16{},
 			dst:        nil,
 			dstCharset: Charset_latin1{},
-			want:       []byte("?"),
+			want:       []byte("??"),
 			err:        "Cannot convert string",
 		},
 		{
@@ -173,7 +174,7 @@ func TestConvert(t *testing.T) {
 			srcCharset: Charset_utf16le{},
 			dst:        nil,
 			dstCharset: Charset_latin1{},
-			want:       []byte("?"),
+			want:       []byte("??"),
 			err:        "Cannot convert string",
 		},
 		{

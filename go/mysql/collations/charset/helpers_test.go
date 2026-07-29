@@ -66,6 +66,39 @@ func TestSlice(t *testing.T) {
 			to:   4,
 			want: []byte("😊😂🤢"),
 		},
+		// Invalid input cases: slicing stops at the first invalid sequence
+		// and returns only the valid prefix, whether the input ends in a
+		// truncated surrogate, breaks a surrogate pair mid-string, or cuts
+		// off a multibyte character.
+		{
+			in:   []byte{0x00, 0x61, 0xD8, 0x00},
+			cs:   Charset_utf16{},
+			from: 0,
+			to:   5,
+			want: []byte{0x00, 0x61},
+		},
+		{
+			in:   []byte{0x00, 0x61, 0xD8, 0x00, 0x00, 0x31},
+			cs:   Charset_utf16{},
+			from: 0,
+			to:   5,
+			want: []byte{0x00, 0x61},
+		},
+		{
+			in:   []byte{0x61, 0x81},
+			cs:   Charset_sjis{},
+			from: 0,
+			to:   5,
+			want: []byte{0x61},
+		},
+		// A genuine U+FFFD character is not invalid input; it is kept.
+		{
+			in:   []byte{0x00, 0x61, 0xFF, 0xFD, 0x00, 0x62},
+			cs:   Charset_utf16{},
+			from: 0,
+			to:   2,
+			want: []byte{0x00, 0x61, 0xFF, 0xFD},
+		},
 	}
 
 	for _, tc := range testCases {
