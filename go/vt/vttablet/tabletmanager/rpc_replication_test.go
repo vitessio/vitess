@@ -93,7 +93,8 @@ type (
 
 	restartReplicationMysqlDaemon struct {
 		*mysqlctl.FakeMysqlDaemon
-		cancel context.CancelFunc
+		cancel                   context.CancelFunc
+		postStopTimeoutRemaining chan time.Duration
 	}
 )
 
@@ -115,8 +116,12 @@ func (rmd *restartReplicationMysqlDaemon) SemiSyncExtensionLoaded(ctx context.Co
 	if err := ctx.Err(); err != nil {
 		return mysql.SemiSyncTypeUnknown, err
 	}
-	if _, ok := ctx.Deadline(); !ok {
+	deadline, ok := ctx.Deadline()
+	if !ok {
 		return mysql.SemiSyncTypeUnknown, errors.New("post-STOP context must have a deadline")
+	}
+	if rmd.postStopTimeoutRemaining != nil {
+		rmd.postStopTimeoutRemaining <- time.Until(deadline)
 	}
 	return mysql.SemiSyncTypeOff, nil
 }
@@ -549,6 +554,27 @@ func TestRestartReplicationCompletesAfterContextCancellation(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
 	assert.True(t, fakeMysqlDaemon.Replicating, "replication must be started after STOP succeeds")
+}
+
+func TestRestartReplicationUsesCallerTimeoutAfterStop(t *testing.T) {
+	fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+	fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{"START REPLICA"}
+	ctx, cancel := context.WithTimeout(t.Context(), 2*topo.RemoteOperationTimeout)
+	t.Cleanup(cancel)
+
+	postStopTimeoutRemaining := make(chan time.Duration, 1)
+	restartMysqlDaemon := &restartReplicationMysqlDaemon{
+		FakeMysqlDaemon:          fakeMysqlDaemon,
+		cancel:                   cancel,
+		postStopTimeoutRemaining: postStopTimeoutRemaining,
+	}
+	tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), fakeMysqlDaemon, nil)
+	tm.MysqlDaemon = restartMysqlDaemon
+
+	err := tm.RestartReplication(ctx, false)
+	require.NoError(t, err)
+	require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
+	assert.Greater(t, <-postStopTimeoutRemaining, topo.RemoteOperationTimeout)
 }
 
 // TestRestartReplicationRecoversFromRecoverableReplicationInitializationError verifies RestartReplication self-heals recoverable init failures.

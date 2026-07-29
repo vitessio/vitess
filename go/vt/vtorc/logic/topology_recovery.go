@@ -605,10 +605,28 @@ func getShardTablets(ctx context.Context, keyspace, shard string) ([]*topo.Table
 
 // restartReplication calls RestartReplication RPC for the given tablet with a timeout.
 func restartReplication(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) error {
-	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
-	defer cancel()
+	restartCtx, restartCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	err := tmc.RestartReplication(restartCtx, tablet, semiSync)
+	restartCancel()
+	if err == nil {
+		return nil
+	}
 
-	return tmc.RestartReplication(ctx, tablet, semiSync)
+	// TODO: Remove this StartReplication fallback in v26, when all supported
+	// vttablets include detached post-STOP cleanup in RestartReplication.
+	tabletAlias := topoproto.TabletAliasString(tablet.Alias)
+	log.Warn("RestartReplication failed; attempting to ensure replication is started",
+		slog.String("tablet", tabletAlias),
+		slog.Any("error", err),
+	)
+
+	startCtx, startCancel := context.WithTimeout(context.WithoutCancel(ctx), topo.RemoteOperationTimeout)
+	defer startCancel()
+	if startErr := tmc.StartReplication(startCtx, tablet, semiSync); startErr != nil {
+		return vterrors.Wrapf(err, "failed to ensure replication was started on tablet %s after RestartReplication error (%v)", tabletAlias, startErr)
+	}
+
+	return err
 }
 
 // isERSEnabled returns true if ERS can be used globally or for the given keyspace.
