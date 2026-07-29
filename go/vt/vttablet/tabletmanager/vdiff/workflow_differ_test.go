@@ -515,7 +515,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 			compareCols:  []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), false, "c2"}, {1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}},
 			comparePKs:   []compareColInfo{{1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}},
 			pkCols:       []int{1},
-			sourcePkCols: []int{0},
+			sourcePkCols: []int{1},
 			selectPks:    []int{1},
 			orderBy: sqlparser.OrderBy{&sqlparser.Order{
 				Expr:      &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("c1")},
@@ -602,7 +602,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 			compareCols:  []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "textcol"}, {1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), false, "c2"}},
 			comparePKs:   []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "textcol"}},
 			pkCols:       []int{0},
-			sourcePkCols: []int{},
+			sourcePkCols: []int{0},
 			selectPks:    []int{0},
 			orderBy: sqlparser.OrderBy{&sqlparser.Order{
 				Expr:      &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("textcol")},
@@ -624,7 +624,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 			compareCols:  []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), false, "c2"}, {1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "textcol"}},
 			comparePKs:   []compareColInfo{{1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "textcol"}},
 			pkCols:       []int{1},
-			sourcePkCols: []int{},
+			sourcePkCols: []int{1},
 			selectPks:    []int{1},
 			orderBy: sqlparser.OrderBy{&sqlparser.Order{
 				Expr:      &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("textcol")},
@@ -646,7 +646,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 			compareCols:  []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c2"}, {2, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c3"}},
 			comparePKs:   []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c2"}, {2, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c3"}},
 			pkCols:       []int{0, 1, 2},
-			sourcePkCols: []int{0},
+			sourcePkCols: []int{0, 1, 2},
 			selectPks:    []int{0, 1, 2},
 			orderBy: sqlparser.OrderBy{
 				&sqlparser.Order{
@@ -678,7 +678,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 			compareCols:  []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), false, "c1"}, {1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), false, "c2"}, {2, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c3"}},
 			comparePKs:   []compareColInfo{{2, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c3"}},
 			pkCols:       []int{2},
-			sourcePkCols: []int{0},
+			sourcePkCols: []int{2},
 			selectPks:    []int{2},
 			orderBy: sqlparser.OrderBy{
 				&sqlparser.Order{
@@ -702,7 +702,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 			compareCols:  []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), false, "c2"}, {1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "textcol"}},
 			comparePKs:   []compareColInfo{{1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "textcol"}},
 			pkCols:       []int{1},
-			sourcePkCols: []int{},
+			sourcePkCols: []int{1},
 			selectPks:    []int{1},
 			orderBy: sqlparser.OrderBy{&sqlparser.Order{
 				Expr:      &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("textcol")},
@@ -723,7 +723,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 			compareCols:  []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c2"}},
 			comparePKs:   []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c2"}},
 			pkCols:       []int{0, 1},
-			sourcePkCols: []int{0},
+			sourcePkCols: []int{0, 1},
 			selectPks:    []int{0, 1},
 			orderBy: sqlparser.OrderBy{
 				&sqlparser.Order{
@@ -909,7 +909,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 			compareCols:  []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "id"}, {1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), false, "dt"}},
 			comparePKs:   []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "id"}},
 			pkCols:       []int{0},
-			sourcePkCols: []int{},
+			sourcePkCols: []int{0},
 			selectPks:    []int{0},
 			orderBy: sqlparser.OrderBy{&sqlparser.Order{
 				Expr:      &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("id")},

@@ -27,12 +27,14 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
-// TestSourcePKColsOrdering verifies that getSourcePKCols preserves PK
-// definition order (SEQ_IN_INDEX) rather than column ordinal position.
+// TestSourcePKColsOrdering verifies that getSourcePKCols maps PK columns
+// against the source query's SELECT expression order (the actual row layout),
+// not against td.table.Columns (column ordinal position).
 //
-// Before the fix, the function put PrimaryKeyColumns into a map (losing order)
-// then scanned td.table.Columns in ORDINAL_POSITION order. This produced
-// sourcePkCols in ordinal order which corrupted lastpk on VDiff resume.
+// Before the fix, the function mapped PK columns against td.table.Columns,
+// producing indices in ordinal order. When the source query reorders columns
+// (e.g., "select c2, c1 from t1"), lastPKFromRow would index into the wrong
+// position, corrupting the resume checkpoint.
 func TestSourcePKColsOrdering(t *testing.T) {
 	tvde := newTestVDiffEnv(t)
 	defer tvde.close()
@@ -43,30 +45,49 @@ func TestSourcePKColsOrdering(t *testing.T) {
 		name              string
 		columns           []string
 		primaryKeyColumns []string
+		sourceQuery       string
 		wantSourcePkCols  []int
 	}{
 		{
-			name:              "pk_order_differs_from_ordinal",
-			columns:           []string{"a", "b", "c", "d", "e"},
+			name:              "columns in natural order",
+			columns:           []string{"c1", "c2"},
+			primaryKeyColumns: []string{"c1"},
+			sourceQuery:       "select c1, c2 from t order by c1 asc",
+			wantSourcePkCols:  []int{0},
+		},
+		{
+			name:              "columns reordered in select",
+			columns:           []string{"c1", "c2"},
+			primaryKeyColumns: []string{"c1"},
+			sourceQuery:       "select c2, c1 from t order by c1 asc",
+			wantSourcePkCols:  []int{1},
+		},
+		{
+			name:              "composite pk reordered in select",
+			columns:           []string{"a", "b", "c"},
 			primaryKeyColumns: []string{"c", "a"},
+			sourceQuery:       "select a, b, c from t order by c asc, a asc",
 			wantSourcePkCols:  []int{2, 0},
 		},
 		{
-			name:              "three_col_pk_not_in_ordinal_order",
-			columns:           []string{"a", "b", "c", "d", "e", "f"},
-			primaryKeyColumns: []string{"b", "d", "a"},
-			wantSourcePkCols:  []int{1, 3, 0},
+			name:              "composite pk with select reorder",
+			columns:           []string{"a", "b", "c", "d"},
+			primaryKeyColumns: []string{"b", "d"},
+			sourceQuery:       "select d, c, b, a from t order by b asc, d asc",
+			wantSourcePkCols:  []int{2, 0},
 		},
 		{
-			name:              "two_col_pk_reversed",
-			columns:           []string{"a", "b", "c"},
-			primaryKeyColumns: []string{"b", "a"},
-			wantSourcePkCols:  []int{1, 0},
+			name:              "aliased column matches pk via alias",
+			columns:           []string{"c1", "c2"},
+			primaryKeyColumns: []string{"c1"},
+			sourceQuery:       "select c0 as c1, c2 from t2 order by c1 asc",
+			wantSourcePkCols:  []int{0},
 		},
 		{
-			name:              "pk_matches_ordinal",
+			name:              "pk matches ordinal order",
 			columns:           []string{"a", "b", "c"},
 			primaryKeyColumns: []string{"a", "b"},
+			sourceQuery:       "select a, b, c from t order by a asc, b asc",
 			wantSourcePkCols:  []int{0, 1},
 		},
 	}
@@ -106,7 +127,8 @@ func TestSourcePKColsOrdering(t *testing.T) {
 				},
 				table: table,
 				tablePlan: &tablePlan{
-					table: table,
+					table:       table,
+					sourceQuery: tc.sourceQuery,
 				},
 			}
 
@@ -114,7 +136,7 @@ func TestSourcePKColsOrdering(t *testing.T) {
 			require.NoError(t, err)
 
 			assert.Equal(t, tc.wantSourcePkCols, td.tablePlan.sourcePkCols,
-				"sourcePkCols should reflect PK definition order (SEQ_IN_INDEX), not column ordinal position")
+				"sourcePkCols should reflect PK column positions in the source SELECT expression list")
 		})
 	}
 }
