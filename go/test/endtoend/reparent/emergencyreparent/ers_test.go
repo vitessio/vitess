@@ -50,13 +50,6 @@ func TestTrivialERS(t *testing.T) {
 		require.NoError(t, err)
 		time.Sleep(5 * time.Second)
 	}
-	// We should do the same for vtctl binary
-	for i := 1; i <= 4; i++ {
-		out, err := utils.ErsWithVtctldClient(clusterInstance)
-		log.Info(fmt.Sprintf("ERS-vtctldclient loop %d.  EmergencyReparentShard Output: %v", i, out))
-		require.NoError(t, err)
-		time.Sleep(5 * time.Second)
-	}
 }
 
 func TestReparentIgnoreReplicas(t *testing.T) {
@@ -355,31 +348,70 @@ func TestSemiSyncSetupCorrectly(t *testing.T) {
 	})
 }
 
-// TestERSPromoteRdonly tests that we never end up promoting a rdonly instance as the primary
+// TestERSPromoteRdonly tests that we never end up promoting a rdonly instance as the primary,
+// and that ERS fails fast when it cannot find any tablet which can be safely promoted instead
+// of promoting a tablet and hanging while inserting a row in the reparent journal on getting
+// semi-sync ACKs. Both scenarios share one cluster; the fail-fast one runs first because it
+// leaves the cluster untouched.
 func TestERSPromoteRdonly(t *testing.T) {
 	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
-	var err error
 
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", tablets[1].Alias, "rdonly")
+	// make tablets[1] a rdonly tablet.
+	err := clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", tablets[1].Alias, "rdonly")
 	require.NoError(t, err)
 
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", tablets[2].Alias, "rdonly")
-	require.NoError(t, err)
-
+	// Confirm that replication is still working as intended
 	utils.ConfirmReplication(t, tablets[0], tablets[1:])
 
-	// Make the current primary agent and database unavailable.
-	utils.StopTablet(t, tablets[0], true)
+	// The fail-fast ERS runs in a goroutine so we can bound it with a test-side deadline; on the
+	// timeout path that goroutine is left running the (non-cancelable) ERS against the shared cluster,
+	// so skip the second scenario if this one fails rather than let the leaked ERS corrupt its state.
+	if !t.Run("fail fast when no tablet can be safely promoted", func(t *testing.T) {
+		// Context to be used in the go-routine to cleanly exit it after the test ends
+		ctx := t.Context()
+		strChan := make(chan string)
+		go func() {
+			// We expect this to fail since we have ignored all replica tablets and only the rdonly is left, which is not capable of sending semi-sync ACKs
+			out, err := utils.ErsIgnoreTablet(clusterInstance, tablets[2], "240s", "90s", []*cluster.Vttablet{tablets[0], tablets[3]}, false)
+			assert.Error(t, err)
+			select {
+			case strChan <- out:
+				return
+			case <-ctx.Done():
+				return
+			}
+		}()
 
-	// We expect this one to fail because we have ignored all the replicas and have only the rdonly's which should not be promoted
-	out, err := utils.ErsIgnoreTablet(clusterInstance, nil, "30s", "30s", []*cluster.Vttablet{tablets[3]}, false)
-	require.Error(t, err, out)
+		select {
+		case out := <-strChan:
+			require.Contains(t, out, fmt.Sprintf("proposed primary %s will not be able to make forward progress on being promoted", tablets[2].Alias))
+		case <-time.After(60 * time.Second):
+			require.Fail(t, "Emergency Reparent Shard did not fail in 60 seconds")
+		}
+	}) {
+		return
+	}
 
-	out, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("GetShard", utils.KeyspaceShard)
-	require.NoError(t, err)
-	require.Contains(t, out, `"uid": 101`, "the primary should still be 101 in the shard info")
+	t.Run("never promote a rdonly tablet", func(t *testing.T) {
+		err := clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", tablets[2].Alias, "rdonly")
+		require.NoError(t, err)
+
+		// Confirm the cluster recovered from the failed ERS above and replication still works
+		utils.ConfirmReplication(t, tablets[0], tablets[1:])
+
+		// Make the current primary agent and database unavailable.
+		utils.StopTablet(t, tablets[0], true)
+
+		// We expect this one to fail because we have ignored all the replicas and have only the rdonly's which should not be promoted
+		out, err := utils.ErsIgnoreTablet(clusterInstance, nil, "30s", "30s", []*cluster.Vttablet{tablets[3]}, false)
+		require.Error(t, err, out)
+
+		out, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("GetShard", utils.KeyspaceShard)
+		require.NoError(t, err)
+		require.Contains(t, out, `"uid": 101`, "the primary should still be 101 in the shard info")
+	})
 }
 
 // TestERSPreventCrossCellPromotion tests that we promote a replica in the same cell as the previous primary if prevent cross cell promotion flag is set
@@ -572,6 +604,10 @@ func TestERSForInitialization(t *testing.T) {
 	utils.ConfirmReplication(t, tablets[0], tablets[1:])
 }
 
+// TestRecoverWithMultipleFailures tests that ERS succeeds with the default values even when there
+// are multiple vttablet failures. It uses the semi_sync policy to allow multiple failures to happen
+// and still be recoverable, and runs ERS with the default remote-operation-timeout, lock-timeout and
+// wait_replicas_timeout values so a regression in those defaults is caught (see #11881).
 func TestRecoverWithMultipleFailures(t *testing.T) {
 	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
 	defer utils.TeardownCluster(clusterInstance)
@@ -590,49 +626,11 @@ func TestRecoverWithMultipleFailures(t *testing.T) {
 	utils.StopTablet(t, tablets[0], true)
 
 	// We expect this to succeed since we only have 1 primary eligible tablet which is down
-	out, err := utils.Ers(clusterInstance, nil, "30s", "10s")
+	out, err := utils.Ers(clusterInstance, nil, "", "")
 	require.NoError(t, err, out)
 
 	newPrimary := utils.GetNewPrimary(t, clusterInstance)
 	utils.ConfirmReplication(t, newPrimary, []*cluster.Vttablet{tablets[2], tablets[3]})
-}
-
-// TestERSFailFast tests that ERS will fail fast if it cannot find any tablet which can be safely promoted instead of promoting
-// a tablet and hanging while inserting a row in the reparent journal on getting semi-sync ACKs
-func TestERSFailFast(t *testing.T) {
-	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
-	defer utils.TeardownCluster(clusterInstance)
-	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
-	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
-
-	// make tablets[1] a rdonly tablet.
-	err := clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", tablets[1].Alias, "rdonly")
-	require.NoError(t, err)
-
-	// Confirm that replication is still working as intended
-	utils.ConfirmReplication(t, tablets[0], tablets[1:])
-
-	// Context to be used in the go-routine to cleanly exit it after the test ends
-	ctx := t.Context()
-	strChan := make(chan string)
-	go func() {
-		// We expect this to fail since we have ignored all replica tablets and only the rdonly is left, which is not capable of sending semi-sync ACKs
-		out, err := utils.ErsIgnoreTablet(clusterInstance, tablets[2], "240s", "90s", []*cluster.Vttablet{tablets[0], tablets[3]}, false)
-		assert.Error(t, err)
-		select {
-		case strChan <- out:
-			return
-		case <-ctx.Done():
-			return
-		}
-	}()
-
-	select {
-	case out := <-strChan:
-		require.Contains(t, out, "proposed primary zone1-0000000103 will not be able to make forward progress on being promoted")
-	case <-time.After(60 * time.Second):
-		require.Fail(t, "Emergency Reparent Shard did not fail in 60 seconds")
-	}
 }
 
 // TestReplicationStopped checks that ERS ignores a tablet that has replication fully

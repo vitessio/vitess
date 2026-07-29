@@ -128,40 +128,32 @@ func TestErrantGTIDOnPreviousPrimary(t *testing.T) {
 	utils.WaitForTabletType(t, curPrimary, "drained")
 }
 
-// Cases to test:
-// 1. create cluster with 1 replica and 1 rdonly, let orc choose primary
-// verify rdonly is not elected, only replica
-// verify replication is setup
-func TestSingleKeyspace(t *testing.T) {
-	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
-	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 1, 1, []string{"--clusters-to-watch", "ks"}, cluster.VTOrcConfiguration{
-		PreventCrossCellFailover: true,
-	}, cluster.DefaultVtorcsByCell, "")
-	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
-	shard0 := &keyspace.Shards[0]
+// TestClustersToWatch verifies that VTOrc elects a primary and sets up replication when it is
+// told to watch a cluster either by keyspace ("ks") or by keyspace/shard ("ks/0"). It creates a
+// cluster with 1 replica and 1 rdonly and confirms only the replica is elected primary.
+func TestClustersToWatch(t *testing.T) {
+	tests := []struct {
+		name            string
+		clustersToWatch string
+	}{
+		{name: "Keyspace", clustersToWatch: "ks"},
+		{name: "KeyspaceShard", clustersToWatch: "ks/0"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
+			utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 1, 1, []string{"--clusters-to-watch", tt.clustersToWatch}, cluster.VTOrcConfiguration{
+				PreventCrossCellFailover: true,
+			}, cluster.DefaultVtorcsByCell, "")
+			keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
+			shard0 := &keyspace.Shards[0]
 
-	utils.CheckPrimaryTablet(t, clusterInfo, shard0.Vttablets[0], true)
-	utils.CheckReplication(t, clusterInfo, shard0.Vttablets[0], shard0.Vttablets[1:], 10*time.Second)
-	utils.WaitForSuccessfulRecoveryCount(t, clusterInfo.ClusterInstance.VTOrcProcesses[0], logic.ElectNewPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
-	utils.WaitForSuccessfulPRSCount(t, clusterInfo.ClusterInstance.VTOrcProcesses[0], keyspace.Name, shard0.Name, 1)
-}
-
-// Cases to test:
-// 1. create cluster with 1 replica and 1 rdonly, let orc choose primary
-// verify rdonly is not elected, only replica
-// verify replication is setup
-func TestKeyspaceShard(t *testing.T) {
-	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
-	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 1, 1, []string{"--clusters-to-watch", "ks/0"}, cluster.VTOrcConfiguration{
-		PreventCrossCellFailover: true,
-	}, cluster.DefaultVtorcsByCell, "")
-	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
-	shard0 := &keyspace.Shards[0]
-
-	utils.CheckPrimaryTablet(t, clusterInfo, shard0.Vttablets[0], true)
-	utils.CheckReplication(t, clusterInfo, shard0.Vttablets[0], shard0.Vttablets[1:], 10*time.Second)
-	utils.WaitForSuccessfulRecoveryCount(t, clusterInfo.ClusterInstance.VTOrcProcesses[0], logic.ElectNewPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
-	utils.WaitForSuccessfulPRSCount(t, clusterInfo.ClusterInstance.VTOrcProcesses[0], keyspace.Name, shard0.Name, 1)
+			utils.CheckPrimaryTablet(t, clusterInfo, shard0.Vttablets[0], true)
+			utils.CheckReplication(t, clusterInfo, shard0.Vttablets[0], shard0.Vttablets[1:], 10*time.Second)
+			utils.WaitForSuccessfulRecoveryCount(t, clusterInfo.ClusterInstance.VTOrcProcesses[0], logic.ElectNewPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
+			utils.WaitForSuccessfulPRSCount(t, clusterInfo.ClusterInstance.VTOrcProcesses[0], keyspace.Name, shard0.Name, 1)
+		})
+	}
 }
 
 // Cases to test:
@@ -913,19 +905,7 @@ func TestReplicationStoppedWithSemiSyncBlocked(t *testing.T) {
 
 	// Identify the replica (acker) and rdonly (non-acker).
 	// One of the 2 replicas was elected primary, so 1 replica remains.
-	var replica, rdonly *cluster.Vttablet
-	for _, tablet := range shard0.Vttablets {
-		if tablet.Alias == primary.Alias {
-			continue
-		}
-		if tablet.Type == "rdonly" {
-			rdonly = tablet
-		} else {
-			replica = tablet
-		}
-	}
-	require.NotNil(t, replica, "should have a REPLICA tablet")
-	require.NotNil(t, rdonly, "should have an RDONLY tablet")
+	replica, rdonly := utils.FindReplicaAndRdonly(t, shard0, primary)
 
 	allNonPrimary := []*cluster.Vttablet{replica, rdonly}
 	utils.CheckReplication(t, clusterInfo, primary, allNonPrimary, 15*time.Second)
