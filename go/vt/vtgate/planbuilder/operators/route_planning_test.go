@@ -80,9 +80,11 @@ func TestCheckCrossKeyspaceJoin(t *testing.T) {
 		return &Table{
 			QTable: &QueryTable{Table: sqlparser.NewTableName("ref")},
 			VTable: &vindexes.BaseTable{
-				Name:         sqlparser.NewIdentifierCS("ref"),
-				Keyspace:     ks,
-				ReferencedBy: map[string]*vindexes.BaseTable{copyKs: {}},
+				Name:     sqlparser.NewIdentifierCS("ref"),
+				Keyspace: ks,
+				ReferencedBy: map[string]*vindexes.BaseTable{
+					copyKs: {Name: sqlparser.NewIdentifierCS("refcopy")},
+				},
 			},
 		}
 	}
@@ -289,6 +291,9 @@ func TestCheckCrossKeyspaceJoin(t *testing.T) {
 			rhs:  makeRoute(ks2),
 			vschema: &mockVSchema{
 				preventCrossKeyspaceReads: map[string]bool{"ks1": true, "ks2": true},
+				tables: map[string]*vindexes.BaseTable{
+					"refcopy": {Name: sqlparser.NewIdentifierCS("refcopy"), Keyspace: ks2},
+				},
 			},
 		},
 		{
@@ -297,6 +302,9 @@ func TestCheckCrossKeyspaceJoin(t *testing.T) {
 			rhs:  noneRouteOver(ks2, sourcedTable(ks2, "ks1")),
 			vschema: &mockVSchema{
 				preventCrossKeyspaceReads: map[string]bool{"ks1": true, "ks2": true},
+				tables: map[string]*vindexes.BaseTable{
+					"src": {Name: sqlparser.NewIdentifierCS("src"), Keyspace: ks1},
+				},
 			},
 		},
 		{
@@ -328,6 +336,9 @@ func TestCheckCrossKeyspaceJoin(t *testing.T) {
 			rhs: makeRoute(ks2),
 			vschema: &mockVSchema{
 				preventCrossKeyspaceReads: map[string]bool{"ks1": true, "ks2": true},
+				tables: map[string]*vindexes.BaseTable{
+					"refcopy": {Name: sqlparser.NewIdentifierCS("refcopy"), Keyspace: ks2},
+				},
 			},
 			expectPanic: true,
 		},

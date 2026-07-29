@@ -452,21 +452,13 @@ func allRealTablesHaveCopyIn(ctx *plancontext.PlanningContext, op Operator, ks *
 }
 
 func tableHasCopyIn(ctx *plancontext.PlanningContext, vt *vindexes.BaseTable, ks *vindexes.Keyspace) bool {
-	if vt.Keyspace == ks {
-		return true
+	for _, name := range copyCandidates(vt, ks) {
+		src, _, _, _, _, err := ctx.VSchema.FindTableOrVindex(name)
+		if err == nil && src != nil && src.Keyspace == ks {
+			return true
+		}
 	}
-	if _, referenced := vt.ReferencedBy[ks.Name]; referenced {
-		return true
-	}
-	if vt.Source == nil {
-		return false
-	}
-	if qualifier := vt.Source.TableName.Qualifier.String(); qualifier != "" {
-		return qualifier == ks.Name
-	}
-	// an unqualified source declaration resolves through the vschema
-	src, _, _, _, _, err := ctx.VSchema.FindTableOrVindex(vt.Source.TableName)
-	return err == nil && src != nil && src.Keyspace == ks
+	return false
 }
 
 // crossKeyspaceAccountable returns the keyspace the route genuinely reads
