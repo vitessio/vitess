@@ -405,17 +405,19 @@ func (bh *S3BackupHandle) ReadFile(ctx context.Context, filename string) (io.Rea
 }
 
 // downloadBufferSize computes the GetObjectBufferSize and validates that the
-// resulting per-file memory usage stays within maxPerFileMemory.
+// resulting per-file memory usage stays within maxPerFileMemory. The total
+// per-file allocation is 2× the transfer window: once for the SDK's internal
+// GetObjectBufferSize and once for the bufio.Reader that coalesces small reads.
 func downloadBufferSize(partSize int64, concurrency int) (int64, error) {
 	if partSize > math.MaxInt64/int64(concurrency) {
 		return 0, fmt.Errorf("--s3-backup-download-part-size (%d) * --s3-backup-download-concurrency (%d) overflows int64", partSize, concurrency)
 	}
 	size := partSize * int64(concurrency)
-	if size > maxPerFileMemory {
+	if size > maxPerFileMemory/2 {
 		return 0, fmt.Errorf(
-			"--s3-backup-download-part-size (%s) * --s3-backup-download-concurrency (%d) = %s exceeds per-file memory limit of %s; reduce part size or concurrency",
+			"--s3-backup-download-part-size (%s) * --s3-backup-download-concurrency (%d) = %s; total per-file allocation (2x for SDK buffer + read buffer) would be %s, exceeding limit of %s; reduce part size or concurrency",
 			humanize.IBytes(uint64(partSize)), concurrency,
-			humanize.IBytes(uint64(size)), humanize.IBytes(uint64(maxPerFileMemory)),
+			humanize.IBytes(uint64(size)), humanize.IBytes(uint64(size*2)), humanize.IBytes(uint64(maxPerFileMemory)),
 		)
 	}
 	return size, nil

@@ -907,14 +907,14 @@ func TestDownloadBufferSizeValidation(t *testing.T) {
 		},
 		{
 			name:        "exceeds per-file memory limit",
-			partSize:    256 * 1024 * 1024, // 256MiB
-			concurrency: 8,                 // 2GiB total
-			wantErr:     "exceeds per-file memory limit",
+			partSize:    128 * 1024 * 1024, // 128MiB
+			concurrency: 5,                 // 640MiB window, 1280MiB total (2x) > 1GiB limit
+			wantErr:     "exceeding limit",
 		},
 		{
-			name:        "exactly at limit",
-			partSize:    256 * 1024 * 1024, // 256MiB
-			concurrency: 4,                 // 1GiB = maxPerFileMemory
+			name:        "exactly at half-limit boundary",
+			partSize:    128 * 1024 * 1024, // 128MiB
+			concurrency: 4,                 // 512MiB window = maxPerFileMemory/2
 		},
 	}
 
