@@ -99,6 +99,14 @@ func haveIncomparablePositions(a, b replication.Position) bool {
 	return !a.AtLeast(b) && !b.AtLeast(a)
 }
 
+// haveReciprocallyContainedPositions returns true if two unequal positions contain each
+// other. Containment can't order these: MariaDB GTID containment ignores the origin
+// server, so positions like 0-1-10 and 0-2-10 "contain" each other while holding
+// different histories (a split brain).
+func haveReciprocallyContainedPositions(a, b replication.Position) bool {
+	return a.AtLeast(b) && b.AtLeast(a) && !a.Equal(b)
+}
+
 // hasUniformCombinedPosition returns true when every candidate has the same Combined position. On the
 // output of filterToMostAdvancedCombined a false result means the leading candidates have
 // incomparable positions, as the filter already removed anything dominated.

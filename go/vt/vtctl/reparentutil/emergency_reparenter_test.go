@@ -6289,6 +6289,21 @@ func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
 		Executed: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
 	}
 
+	// MariaDB GTID containment ignores the origin server, so these two positions contain
+	// each other while holding a different write for sequence 10
+	positionMariadbServer1 := &RelayLogPositions{
+		Combined: replication.MustParsePosition(replication.MariadbFlavorID, "0-1-10"),
+		Executed: replication.MustParsePosition(replication.MariadbFlavorID, "0-1-10"),
+	}
+	positionMariadbServer2 := &RelayLogPositions{
+		Combined: replication.MustParsePosition(replication.MariadbFlavorID, "0-2-10"),
+		Executed: replication.MustParsePosition(replication.MariadbFlavorID, "0-2-10"),
+	}
+	positionMariadbServer1Seq11 := &RelayLogPositions{
+		Combined: replication.MustParsePosition(replication.MariadbFlavorID, "0-1-11"),
+		Executed: replication.MustParsePosition(replication.MariadbFlavorID, "0-1-11"),
+	}
+
 	tests := []struct {
 		name                 string
 		validCandidates      map[string]*RelayLogPositions
@@ -6559,6 +6574,72 @@ func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
 							Uid:  404,
 						},
 						Hostname: "ignored tablet",
+					},
+				},
+			},
+			err: "split brain detected between servers",
+		}, {
+			// reciprocally contained but unequal positions (MariaDB GTIDs with the same
+			// domain and sequence from different origin servers) are divergent histories
+			// that containment can't order, so ERS must fail closed instead of picking
+			// a side of the divergence by tiebreak
+			name: "split brain detection on reciprocal but unequal mariadb positions",
+			validCandidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": positionMariadbServer1,
+				"zone1-0000000101": positionMariadbServer2,
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+			},
+			err: "split brain detected between servers",
+		}, {
+			// the divergent pair can sit behind a candidate that dominates both of them,
+			// so reciprocal containment must be checked between every pair of candidates,
+			// not just against the winning position
+			name: "split brain detection on reciprocal mariadb positions behind the winner",
+			validCandidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": positionMariadbServer1Seq11,
+				"zone1-0000000101": positionMariadbServer1,
+				"zone1-0000000102": positionMariadbServer2,
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+				"zone1-0000000102": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
 					},
 				},
 			},

@@ -268,7 +268,7 @@ See [#18529](https://github.com/vitessio/vitess/issues/18529).
 
 GTID containment is pairwise, so a candidate set can mix comparable and divergent histories: candidate A at `p:1-100,a:1-10` is strictly ahead of B at `p:1-100,a:1-5`, while C at `p:1-100,c:1-3` is incomparable with both. The reparent sorter that both `EmergencyReparentShard` and `PlannedReparentShard` use compared such candidates non-transitively, so ordering could depend on map iteration or RPC completion order, and `PlannedReparentShard` could select B even though A was known to be more advanced.
 
-Candidates are now ordered by GTID dominance before the existing promotion-rule, buffer-pool, and tablet-alias tiebreakers, so a dominated candidate can never rank ahead of its dominator regardless of input order. `EmergencyReparentShard` still rejects incomparable candidates as split brain, and `PlannedReparentShard` still chooses among incomparable maximal candidates.
+Candidates are now ordered by GTID dominance before the existing promotion-rule, buffer-pool, and tablet-alias tiebreakers, so a dominated candidate can never rank ahead of its dominator regardless of input order. `EmergencyReparentShard` still rejects incomparable candidates as split brain, and `PlannedReparentShard` still chooses among incomparable maximal candidates. Positions that contain each other without being equal (possible with MariaDB GTIDs, where containment ignores the origin server) are now also rejected by `EmergencyReparentShard` as split brain, wherever the pair sits among the candidates; previously a leading pair failed with an internal sorting error, while a pair behind a more advanced candidate was not detected at all.
 
 See [#20579](https://github.com/vitessio/vitess/issues/20579).
 
