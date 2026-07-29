@@ -871,6 +871,28 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `GREATEST(JSON_OBJECT(), JSON_ARRAY())`,
 			result:     `VARCHAR("{}")`,
 		},
+		{
+			// MySQL's single-byte character sets — and binary — mark 0xA0 as
+			// whitespace around numeric text; multibyte sets do not.
+			expression: `CAST(_latin1 X'A031' AS DECIMAL(20, 6))`,
+			result:     "DECIMAL(1.000000)",
+		},
+		{
+			expression: `CAST(_binary X'A031' AS DECIMAL(20, 6))`,
+			result:     "DECIMAL(1.000000)",
+		},
+		{
+			expression: `CAST(_latin1 X'31A0' AS DECIMAL(20, 6))`,
+			result:     "DECIMAL(1.000000)",
+		},
+		{
+			expression: `CAST(_latin1 X'A020A031' AS DECIMAL(20, 6))`,
+			result:     "DECIMAL(1.000000)",
+		},
+		{
+			expression: `CAST(_utf8mb4 X'C2A031' AS DECIMAL(20, 6))`,
+			result:     "DECIMAL(0.000000)",
+		},
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")

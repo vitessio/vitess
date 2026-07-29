@@ -170,7 +170,7 @@ func NewFromString(s string) (d Decimal, err error) {
 
 	dotPos := -1
 	expPos := -1
-	expNum := -1
+	expStart := -1
 	i := 0
 	var num bool
 	var exp int64
@@ -190,9 +190,9 @@ next:
 		switch {
 		case s[i] == '-' || s[i] == '+':
 			// A sign is allowed at the start of the number and at the start of
-			// the exponent, nowhere else. With no exponent seen yet expNum is
-			// -1, so the second test collapses into the first.
-			if i != start && i != expNum {
+			// the exponent, nowhere else. With no exponent seen yet expStart is
+			// -1, so the second test never matches.
+			if i != start && i != expStart {
 				break next
 			}
 		case s[i] >= '0' && s[i] <= '9':
@@ -208,14 +208,17 @@ next:
 				break next
 			}
 			expPos = i
-			num = false
-			// MySQL reads the exponent past any spaces and tabs — those two
-			// bytes only — between the marker and the sign, so they belong to
-			// the number here and nowhere else.
-			for i+1 < maxLen && (s[i+1] == ' ' || s[i+1] == '\t') {
+			// MySQL reads the exponent with my_strtoll10, which steps over
+			// spaces and tabs before the sign and the digits, so '1e +5' is
+			// 100000. Only those two bytes: a vertical tab or a newline here
+			// leaves the exponent unread and the mantissa as a partial value.
+			i++
+			for i < maxLen && (s[i] == ' ' || s[i] == '\t') {
 				i++
 			}
-			expNum = i + 1
+			expStart = i
+			num = false
+			continue
 		default:
 			break next
 		}
@@ -253,7 +256,7 @@ next:
 
 	var expOverflow bool
 	if expPos != -1 {
-		e, _ := fastparse.ParseInt64(strings.TrimPrefix(strings.TrimLeft(s[expPos+1:i], " \t"), "+"), 10)
+		e, _ := fastparse.ParseInt64(strings.TrimPrefix(s[expStart:i], "+"), 10)
 		switch {
 		case e > ExponentLimit:
 			e = ExponentLimit
@@ -377,11 +380,14 @@ func parseLargeDecimal(integral, fractional []byte) (*big.Int, error) {
 	return new(big.Int).SetBits(z), nil
 }
 
-// isSpace covers the bytes MySQL's character sets count as whitespace around
-// numeric text, which include vertical tab and form feed.
+// isSpace reports the bytes MySQL skips around numeric text. It reads them
+// through latin1's character table whatever the string's own charset is, so a
+// vertical tab, a form feed and a 0xA0 all count as space. 0xA0 is reachable
+// from latin1 and binary text, where it stands for a non-breaking space; in
+// utf8mb4 that character is 0xC2 0xA0, and the 0xC2 ends the number first.
 func isSpace(c byte) bool {
 	switch c {
-	case ' ', '\t', '\n', '\r', '\v', '\f':
+	case ' ', '\t', '\n', '\v', '\f', '\r', 0xA0:
 		return true
 	default:
 		return false

@@ -953,11 +953,33 @@ func SignedExponents(yield Query) {
 // conversion stops there — so these stay on CAST … AS DECIMAL.
 func NumericTextWhitespace(yield Query) {
 	for _, text := range []string{
-		"\v+1", "\f-1", "\v\f 1", "1\v", "1\f",
-		"1e +5", "1e\t-5", "1e \t+5", "1e  +2", "1e 2", " 1e +2 ",
-		"1e\n+2", "1e\v2", "1e\f2", "1e+ 2", "1 e+2", "1e ", "1e +x",
+		"\v+1", "\f-1", "\v1", "\v\f\n\r 1", "1\v", "1\f", "+ 1",
+		"1e +5", "1e -5", "1e\t-5", "1e \t+5", "1e 5", "1e  5",
+		"1E   -5", "1.5e 2", ".5e +3", "-1.5e +3", " 1e 2 ",
+		"1e\n+2", "1e\v2", "1e\f2", "1e \v5", "1e+ 2", "1e + 5", "1 e+2",
+		"1e ", "1e +", "1e +x", "1e --5", "1e -+5", "1e", "e5",
 	} {
 		yield(fmt.Sprintf("CAST('%s' AS DECIMAL(20, 6))", text), nil, false)
+	}
+
+	// Past ASCII, single-byte character sets — and binary — read 0xA0 as
+	// whitespace too. Multibyte sets do not, and their no-break space is more
+	// than one byte, so the utf8mb4 spelling pins that nothing is trimmed
+	// there.
+	for _, doc := range []string{
+		"_latin1 X'A031'",
+		"_binary X'A031'",
+		"_latin1 X'31A0'",
+		"_latin1 X'A020A031'",
+		"_latin1 X'31A032'",
+		// The exponent's own reader skips only spaces and tabs whatever the
+		// character set, while a 0xA0 after the exponent is plain trailing
+		// whitespace.
+		"_latin1 X'3165A032'",
+		"_latin1 X'316532A0'",
+		"_utf8mb4 X'C2A031'",
+	} {
+		yield(fmt.Sprintf("CAST(%s AS DECIMAL(20, 6))", doc), nil, false)
 	}
 }
 

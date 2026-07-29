@@ -225,24 +225,37 @@ func TestNewFromStringLeadingPlus(t *testing.T) {
 	}
 }
 
-// TestNewFromStringWhitespace covers the whitespace MySQL reads as part of
-// numeric text: vertical tab and form feed count as leading and trailing
-// whitespace, and the exponent is read past any spaces and tabs — those two
-// bytes only — between its marker and its sign. MySQL 8.0.46 reads every
-// spelling here to the same value.
+// TestNewFromStringWhitespace covers the whitespace MySQL skips around numeric
+// text: a vertical tab, a form feed and a 0xA0 are leading and trailing space
+// like a blank or a tab, and a blank or a tab may sit between the exponent
+// marker and the exponent it introduces. MySQL 8.0.46 reads every spelling
+// here to the same value.
 func TestNewFromStringWhitespace(t *testing.T) {
 	for in, want := range map[string]string{
-		"\v+1":    "1",
-		"\f-1":    "-1",
-		"\v\f 1":  "1",
-		"1\v":     "1",
-		"1\f":     "1",
-		"1e +5":   "100000",
-		"1e\t-5":  "0.00001",
-		"1e \t+5": "100000",
-		"1e  +2":  "100",
-		"1e 2":    "100",
-		" 1e +2 ": "100",
+		"\v+1":       "1",
+		"\f-1":       "-1",
+		"\v1":        "1",
+		"1\v":        "1",
+		"1\f":        "1",
+		"\v\f\n\r 1": "1",
+		// 0xA0 is a non-breaking space in latin1, and the reader reads a string
+		// through latin1's character table whatever its own charset is.
+		"\xa01":        "1",
+		"1\xa0":        "1",
+		"\xa0-1":       "-1",
+		"\xa0\t \xa01": "1",
+		"1e +5":        "100000",
+		"1e -5":        "0.00001",
+		"1e\t-5":       "0.00001",
+		"1e \t+5":      "100000",
+		"1e 5":         "100000",
+		"1e  5":        "100000",
+		"1e\t+5":       "100000",
+		"1E   -5":      "0.00001",
+		"1.5e 2":       "150",
+		".5e +3":       "500",
+		"-1.5e +3":     "-1500",
+		" 1e 2 ":       "100",
 	} {
 		t.Run(in, func(t *testing.T) {
 			d, err := NewFromString(in)
@@ -250,22 +263,38 @@ func TestNewFromStringWhitespace(t *testing.T) {
 			require.Equal(t, want, d.String())
 		})
 	}
+}
 
-	// Any other whitespace ends the number where it stands, as does a space
-	// past the exponent's sign. The value read up to there comes back with
-	// the error, and is what MySQL truncates such text to.
+// TestNewFromStringWhitespaceBoundary pins the spellings that stop short of a
+// number MySQL would read whole. Each one keeps the mantissa parsed so far as
+// its value and reports the string as invalid, so a caller that ignores the
+// error lands on the same partial value MySQL truncates to.
+func TestNewFromStringWhitespaceBoundary(t *testing.T) {
 	for in, want := range map[string]string{
-		"1e\n+2": "1",
-		"1e\v2":  "1",
-		"1e\f2":  "1",
-		"1e+ 2":  "1",
-		"1 e+2":  "1",
-		"1e ":    "1",
+		// Whitespace belongs before the exponent's sign, not after it.
+		"1e+ 5":  "1",
+		"1e + 5": "1",
+		"1e +":   "1",
 		"1e +x":  "1",
+		// The exponent marker itself has to follow the mantissa directly.
+		"1 e+5": "1",
+		// Only a blank or a tab is skipped after the marker.
+		"1e\v5":   "1",
+		"1e\f5":   "1",
+		"1e\n5":   "1",
+		"1e \v5":  "1",
+		"1e\xa05": "1",
+		// Whitespace after the marker still needs an exponent behind it.
+		"1e ": "1",
+		// One sign, not two.
+		"1e --5": "1",
+		"1e -+5": "1",
+		// A sign introduces a number, so whitespace cannot follow it either.
+		"+ 1": "0",
 	} {
 		t.Run(in, func(t *testing.T) {
 			d, err := NewFromString(in)
-			require.Error(t, err)
+			require.ErrorContains(t, err, "invalid decimal string")
 			require.Equal(t, want, d.String())
 		})
 	}
