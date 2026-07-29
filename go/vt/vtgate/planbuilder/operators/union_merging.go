@@ -232,16 +232,78 @@ func tryMergeNoneUnion(
 		routing = &AnyShardRouting{keyspace: noneKeyspaces[0]}
 		owner = noneRoute
 	default:
-		// the other side's routing is retained, but only when it targets the
-		// keyspace holding the none side's tables: they exist nowhere else.
+		// the other side's routing is retained when it targets the keyspace
+		// holding the none side's tables — or, failing that, when every real
+		// table of the none side has a reference copy there: the branch is
+		// then rewritten to read those copies, so the merged query text only
+		// names tables that exist in that keyspace.
 		if len(noneKeyspaces) != 1 || noneKeyspaces[0] != otherRouting.Keyspace() {
-			return nil, nil, false
+			rewrittenNone := rewriteNoneBranchToKeyspace(ctx, noneRoute, otherRouting.Keyspace())
+			if rewrittenNone == nil {
+				return nil, nil, false
+			}
+			if noneRoute == lhsRoute {
+				lhsRoute = rewrittenNone
+			} else {
+				rhsRoute = rewrittenNone
+			}
 		}
 		routing = otherRouting
 	}
 
 	op, exprs := createTrivialMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routing, owner)
 	return op, exprs, true
+}
+
+// rewriteNoneBranchToKeyspace points the none route's tables at the reference
+// copies living in ks, or returns nil if any table has none. A routing
+// degrades to none before alternates are attached, so each copy is resolved
+// from the vschema through the same lookup that builds alternate routes,
+// keeping routing rules in effect. Only leaf routes are moved, for the same
+// normalization reasons as tryAlternateUnionMerge.
+func rewriteNoneBranchToKeyspace(ctx *plancontext.PlanningContext, route *Route, ks *vindexes.Keyspace) *Route {
+	if ks == nil {
+		return nil
+	}
+	if !ctx.SemTable.DMLTargets.IsEmpty() && TableID(route).IsOverlapping(ctx.SemTable.DMLTargets) {
+		return nil
+	}
+
+	type tableSwap struct {
+		tbl       *Table
+		altQTable *QueryTable
+		altVTable *vindexes.BaseTable
+	}
+	var swaps []tableSwap
+	resolvable := true
+	_ = Visit(route.Source, func(op Operator) error {
+		if _, ok := op.(*Union); ok {
+			resolvable = false
+			return io.EOF
+		}
+		tbl, ok := op.(*Table)
+		if !ok || tbl.VTable == nil || tbl.QTable == nil {
+			return nil
+		}
+		alt := resolveTableCopyIn(ctx, tbl, ks)
+		if alt == nil {
+			resolvable = false
+			return io.EOF
+		}
+		swaps = append(swaps, tableSwap{tbl: tbl, altQTable: alt.QTable, altVTable: alt.VTable})
+		return nil
+	})
+	if !resolvable || len(swaps) == 0 {
+		return nil
+	}
+
+	for _, s := range swaps {
+		s.tbl.QTable, s.tbl.VTable = s.altQTable, s.altVTable
+	}
+
+	rewritten := *route
+	rewritten.Routing = &NoneRouting{keyspace: ks}
+	return &rewritten
 }
 
 // tryAlternateUnionMerge retries a declined cross-keyspace pairing by moving
