@@ -65,11 +65,9 @@ func (jm *joinMerger) mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs
 
 	// an unsharded/reference route can be merged with anything going to that keyspace
 	case a == anyShard && sameKeyspace:
-		// Except when the reference table is the preserved side of an outer join and
-		// the merged route is multi-shard: the reference table has the same rows on
-		// every shard, so an unmatched preserved row would come back once per shard
-		// instead of once. A single-shard route runs once and cannot duplicate.
-		if !jm.joinType.IsInner() {
+		// Except when the merge owes the rows a reference table keeps on the preserved side
+		// of an outer join: only a single-shard route returns each of them once.
+		if owesReferenceRows(ctx, jm.joinType, lhsRoute, rhsRoute) {
 			if !routingB.OpCode().IsSingleShard() {
 				debugNoRewrite("apply join merge blocked: reference table on the preserved side of a %s", jm.joinType.ToString())
 				return nil
@@ -115,6 +113,29 @@ func (jm *joinMerger) mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs
 		}
 		return nil
 	}
+}
+
+// owesReferenceRows reports whether a merge of these two routes has to produce the rows that an
+// outer join preserves on a reference side exactly once. A reference table has the same rows on
+// every shard, so a multi-shard route returns each unmatched preserved row once per shard.
+// Checking the opcode rather than the routing type leaves unsharded routes out: there is only one
+// shard to read them from.
+//
+// A multi-table DML that only writes to the other side is the exception. Its preserved rows are
+// never returned, and an unmatched one has no row to update or delete, so reading it once per
+// shard writes nothing extra. Requiring a target on the other side keeps this to the DML's own
+// row source: an outer join further down, in a subquery, does have its rows read.
+func owesReferenceRows(ctx *plancontext.PlanningContext, joinType sqlparser.JoinType, preserved, other *Route) bool {
+	if joinType.IsInner() || preserved.Routing.OpCode() != engine.Reference {
+		return false
+	}
+
+	targets := ctx.SemTable.DMLTargets
+	writesOnlyToTheOtherSide := targets.NotEmpty() &&
+		TableID(other).IsOverlapping(targets) &&
+		!TableID(preserved).IsOverlapping(targets)
+
+	return !writesOnlyToTheOtherSide
 }
 
 func mergeAnyShardRoutings(ctx *plancontext.PlanningContext, a, b *AnyShardRouting, joinPredicates []sqlparser.Expr, joinType sqlparser.JoinType) *AnyShardRouting {
@@ -277,11 +298,7 @@ func getKeyspaceName(routing Routing) string {
 }
 
 func (jm *joinMerger) merge(ctx *plancontext.PlanningContext, op1, op2 *Route, r Routing, conditions ...engine.Condition) *Route {
-	// A reference table on the preserved side of an outer join keeps its unmatched rows, and it
-	// has the same rows on every shard. Checking the opcode rather than the routing type leaves
-	// unsharded routes out: there is only one shard to read them from.
-	originated := !jm.joinType.IsInner() && op1.Routing.OpCode() == engine.Reference
-	preserved, canMerge := referenceRowsInvariant(r, originated, op1, op2)
+	preserved, canMerge := referenceRowsInvariant(r, owesReferenceRows(ctx, jm.joinType, op1, op2), op1, op2)
 	if !canMerge {
 		debugNoRewrite("apply join merge blocked: %s routing would widen a route that has to stay single-shard", r.OpCode().String())
 		return nil
