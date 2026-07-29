@@ -923,6 +923,23 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `CAST(_utf16 X'00A00031' AS DECIMAL(20, 6))`,
 			result:     "DECIMAL(1.000000)",
 		},
+		{
+			// A lone surrogate is not a character. MySQL rejects the literal
+			// outright; here it reads as '?', and the conversion must
+			// terminate rather than stall on the invalid unit.
+			expression: `CAST(_utf16 X'D800' AS DECIMAL(20, 6))`,
+			result:     "DECIMAL(0.000000)",
+		},
+		{
+			expression: `CAST(_utf16le X'00D8' AS DECIMAL(20, 6))`,
+			result:     "DECIMAL(0.000000)",
+		},
+		{
+			// The failed conversion surfaces as NULL, not as a stalled
+			// evaluation.
+			expression: `CONVERT(_utf16 X'D800' USING latin1)`,
+			result:     "NULL",
+		},
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")
