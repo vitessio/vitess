@@ -18,7 +18,9 @@ package reparentutil
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -328,6 +330,27 @@ func getValidCandidatesAndPositionsAsList(validCandidates map[string]*RelayLogPo
 		tabletPositions = append(tabletPositions, position)
 	}
 	return validTablets, tabletPositions, nil
+}
+
+// isCancellationError returns true if err is a context cancellation, either as the
+// sentinel error or as a gRPC code (server-side wrapping loses the sentinel). A deadline
+// expiry isn't a cancellation, that's how a genuinely stuck tablet fails a wait.
+func isCancellationError(err error) bool {
+	return errors.Is(err, context.Canceled) || vterrors.Code(err) == vtrpc.Code_CANCELED
+}
+
+// removeTabletsByAlias returns tablets minus the ones with the given aliases.
+func removeTabletsByAlias(tablets []*topodatapb.Tablet, aliases []string) []*topodatapb.Tablet {
+	if len(aliases) == 0 {
+		return tablets
+	}
+	result := make([]*topodatapb.Tablet, 0, len(tablets))
+	for _, tablet := range tablets {
+		if !slices.Contains(aliases, topoproto.TabletAliasString(tablet.Alias)) {
+			result = append(result, tablet)
+		}
+	}
+	return result
 }
 
 // restrictValidCandidates is used to restrict some candidates from being considered eligible for becoming the intermediate source or the final promotion candidate
