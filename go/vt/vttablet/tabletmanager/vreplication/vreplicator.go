@@ -1150,6 +1150,15 @@ func writesetUniqueKeysFromSpec(plan *TablePlan, tableSpec *sqlparser.TableSpec)
 			// writeset key needed.
 			continue
 		}
+		for _, colName := range indexColNames {
+			if _, ok := plan.WritesetCollationMismatchColumns[colName]; ok {
+				// The index's uniqueness is enforced under the target's
+				// collation but its values hash under the streamed one:
+				// target-equal values could hash apart and miss conflicts, so
+				// no faithful writeset key exists for this index.
+				return nil, true
+			}
+		}
 		uniqueKeys = append(uniqueKeys, indexColNames)
 	}
 	return uniqueKeys, false

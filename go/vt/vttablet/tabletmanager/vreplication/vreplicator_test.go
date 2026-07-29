@@ -69,9 +69,30 @@ func TestWritesetUniqueKeysFromSpec(t *testing.T) {
 		name              string
 		ddl               string
 		identityCols      []string
+		mismatchCols      []string
 		wantUniqueKeys    [][]string
 		wantMustSerialize bool
 	}{
+		{
+			// A unique-key column whose streamed and target collations
+			// differ: the hash equality no longer matches the uniqueness the
+			// target enforces, force serialization.
+			name:              "collation-mismatched unique secondary serializes",
+			ddl:               "create table t1 (id int not null, email varchar(64) not null, primary key(id), unique key uk_email(email))",
+			identityCols:      []string{"id"},
+			mismatchCols:      []string{"email"},
+			wantMustSerialize: true,
+		},
+		{
+			// A collation mismatch on a column outside every hashable unique
+			// key must not serialize: identity-covered keys emit no writeset
+			// key at all.
+			name:           "collation mismatch outside the unique keys is ignored",
+			ddl:            "create table t1 (id int not null, email varchar(64) not null, b varchar(64), primary key(id), unique key uk_email(email), unique key uk_idb(id, b))",
+			identityCols:   []string{"id"},
+			mismatchCols:   []string{"b"},
+			wantUniqueKeys: [][]string{{"email"}},
+		},
 		{
 			// No usable identity but a unique-not-null secondary the
 			// PK-based writeset can't reason about: force serialization.
@@ -140,6 +161,12 @@ func TestWritesetUniqueKeysFromSpec(t *testing.T) {
 			plan := &TablePlan{
 				TargetName:      "t1",
 				IdentityColumns: tc.identityCols,
+			}
+			if len(tc.mismatchCols) > 0 {
+				plan.WritesetCollationMismatchColumns = make(map[string]struct{}, len(tc.mismatchCols))
+				for _, col := range tc.mismatchCols {
+					plan.WritesetCollationMismatchColumns[col] = struct{}{}
+				}
 			}
 			uniqueKeys, mustSerialize := writesetUniqueKeysFromSpec(plan, tableSpec)
 			assert.Equal(t, tc.wantMustSerialize, mustSerialize)

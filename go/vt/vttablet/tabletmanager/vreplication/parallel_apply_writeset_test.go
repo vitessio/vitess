@@ -1430,6 +1430,201 @@ func TestBuildTxnWritesetBacktickedDirectColumnPlanStaysSupported(t *testing.T) 
 	assert.Equal(t, "email", tplan.Fields[1].Name)
 }
 
+// TestBuildTxnWritesetSelectStarGeneratedColumnIsMarkedUnsupported covers a
+// select * plan whose target table has a generated column: the DML builders
+// skip generated columns and the target recomputes them, so the streamed slot
+// carries values the target does not enforce. Hashing them could miss real
+// conflicts (a generated unique or FK member), so the plan must be marked
+// unsupported — and the select * branch must compute the flag at all.
+func TestBuildTxnWritesetSelectStarGeneratedColumnIsMarkedUnsupported(t *testing.T) {
+	vttablet.InitVReplicationConfigDefaults()
+	vr := &vreplicator{workflowConfig: vttablet.DefaultVReplicationConfig}
+	plan, err := vr.buildReplicatorPlan(
+		getSource(&binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{
+			Match: "t1",
+		}}}),
+		map[string][]*ColumnInfo{"t1": {
+			{Name: "id", IsPK: true},
+			{Name: "val", IsGenerated: true},
+		}},
+		nil,
+		binlogplayer.NewStats(),
+		collations.MySQL8(),
+		sqlparser.NewTestParser(),
+	)
+	require.NoError(t, err)
+
+	tplan, err := plan.buildExecutionPlan(&binlogdatapb.FieldEvent{
+		TableName: "t1",
+		Fields: []*querypb.Field{
+			{Name: "id", Type: querypb.Type_INT64},
+			{Name: "val", Type: querypb.Type_VARCHAR},
+		},
+	})
+	require.NoError(t, err)
+	assert.True(t, tplan.HasUnsupportedWritesetMapping)
+}
+
+// TestBuildTxnWritesetSelectStarPlanStaysSupported guards the flip side: a
+// plain select * plan with no generated columns and matching collations must
+// stay writeset-supported.
+func TestBuildTxnWritesetSelectStarPlanStaysSupported(t *testing.T) {
+	vttablet.InitVReplicationConfigDefaults()
+	vr := &vreplicator{workflowConfig: vttablet.DefaultVReplicationConfig}
+	plan, err := vr.buildReplicatorPlan(
+		getSource(&binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{
+			Match: "t1",
+		}}}),
+		map[string][]*ColumnInfo{"t1": {
+			{Name: "id", IsPK: true},
+			{Name: "val"},
+		}},
+		nil,
+		binlogplayer.NewStats(),
+		collations.MySQL8(),
+		sqlparser.NewTestParser(),
+	)
+	require.NoError(t, err)
+
+	tplan, err := plan.buildExecutionPlan(&binlogdatapb.FieldEvent{
+		TableName: "t1",
+		Fields: []*querypb.Field{
+			{Name: "id", Type: querypb.Type_INT64},
+			{Name: "val", Type: querypb.Type_VARCHAR},
+		},
+	})
+	require.NoError(t, err)
+	assert.False(t, tplan.HasUnsupportedWritesetMapping)
+}
+
+// TestBuildTxnWritesetIdentityCollationMismatch covers a text identity column
+// whose streamed collation (used by the writeset hasher) differs from the
+// collation the target enforces: values the target considers equal (e.g. case
+// variants under a target _ci collation) could hash apart, so the plan must
+// be marked unsupported. Matching collations must stay supported, and a
+// mismatch on a non-identity column must not flip the flag — it is recorded
+// for the unique-key and FK checks instead.
+func TestBuildTxnWritesetIdentityCollationMismatch(t *testing.T) {
+	vttablet.InitVReplicationConfigDefaults()
+	generalCI := uint32(collations.MySQL8().LookupByName("utf8mb4_general_ci"))
+	buildPlan := func(t *testing.T, colInfos []*ColumnInfo, fields []*querypb.Field) *TablePlan {
+		vr := &vreplicator{workflowConfig: vttablet.DefaultVReplicationConfig}
+		plan, err := vr.buildReplicatorPlan(
+			getSource(&binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{
+				Match: "t1",
+			}}}),
+			map[string][]*ColumnInfo{"t1": colInfos},
+			nil,
+			binlogplayer.NewStats(),
+			collations.MySQL8(),
+			sqlparser.NewTestParser(),
+		)
+		require.NoError(t, err)
+		tplan, err := plan.buildExecutionPlan(&binlogdatapb.FieldEvent{TableName: "t1", Fields: fields})
+		require.NoError(t, err)
+		return tplan
+	}
+
+	t.Run("identity mismatch is marked unsupported", func(t *testing.T) {
+		tplan := buildPlan(t,
+			[]*ColumnInfo{{Name: "id", IsPK: true, Collation: "utf8mb4_0900_ai_ci"}},
+			[]*querypb.Field{{Name: "id", Type: querypb.Type_VARCHAR, Charset: generalCI}},
+		)
+		assert.True(t, tplan.HasUnsupportedWritesetMapping)
+	})
+	t.Run("matching collation stays supported", func(t *testing.T) {
+		tplan := buildPlan(t,
+			[]*ColumnInfo{{Name: "id", IsPK: true, Collation: "utf8mb4_general_ci"}},
+			[]*querypb.Field{{Name: "id", Type: querypb.Type_VARCHAR, Charset: generalCI}},
+		)
+		assert.False(t, tplan.HasUnsupportedWritesetMapping)
+	})
+	t.Run("non-identity mismatch is recorded but stays supported", func(t *testing.T) {
+		tplan := buildPlan(t,
+			[]*ColumnInfo{
+				{Name: "id", IsPK: true},
+				{Name: "email", Collation: "utf8mb4_0900_ai_ci"},
+			},
+			[]*querypb.Field{
+				{Name: "id", Type: querypb.Type_INT64},
+				{Name: "email", Type: querypb.Type_VARCHAR, Charset: generalCI},
+			},
+		)
+		assert.False(t, tplan.HasUnsupportedWritesetMapping)
+		assert.Contains(t, tplan.WritesetCollationMismatchColumns, "email")
+	})
+}
+
+// TestBuildTxnWritesetFKCollationMismatchForcesSerialization covers FK-joined
+// columns whose streamed and target collations differ: the child/parent hash
+// equality the scheduler relies on no longer matches the equality the target
+// enforces, so the transaction must be forced onto the serial path.
+func TestBuildTxnWritesetFKCollationMismatchForcesSerialization(t *testing.T) {
+	newPlans := func(childMismatch, parentMismatch map[string]struct{}) map[string]*TablePlan {
+		return map[string]*TablePlan{
+			"parent": {
+				TargetName: "parent",
+				Fields:     []*querypb.Field{{Name: "id", Type: querypb.Type_VARCHAR}},
+				PKIndices:  []bool{true},
+
+				WritesetCollationMismatchColumns: parentMismatch,
+			},
+			"child": {
+				TargetName: "child",
+				Fields: []*querypb.Field{
+					{Name: "id", Type: querypb.Type_INT64},
+					{Name: "parent_id", Type: querypb.Type_VARCHAR},
+				},
+				PKIndices: []bool{true, false},
+
+				WritesetCollationMismatchColumns: childMismatch,
+			},
+		}
+	}
+	fkRefs := map[string][]fkConstraintRef{
+		"child": {{ParentTable: "parent", ChildColumnNames: []string{"parent_id"}, ReferencedColumnNames: []string{"id"}}},
+	}
+	childEvent := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_ROW,
+		RowEvent: &binlogdatapb.RowEvent{TableName: "child", RowChanges: []*binlogdatapb.RowChange{{
+			After: &querypb.Row{Values: []byte("542"), Lengths: []int64{1, 2}},
+		}}},
+	}
+
+	t.Run("child column mismatch forces serialization", func(t *testing.T) {
+		keys, err := buildTxnWriteset(
+			newPlans(map[string]struct{}{"parent_id": {}}, nil),
+			fkRefs,
+			buildParentFKRefs(fkRefs),
+			[]*binlogdatapb.VEvent{childEvent},
+		)
+		require.Error(t, err)
+		require.ErrorContains(t, err, "collation")
+		require.Nil(t, keys)
+	})
+	t.Run("parent referenced column mismatch forces serialization", func(t *testing.T) {
+		keys, err := buildTxnWriteset(
+			newPlans(nil, map[string]struct{}{"id": {}}),
+			fkRefs,
+			buildParentFKRefs(fkRefs),
+			[]*binlogdatapb.VEvent{childEvent},
+		)
+		require.Error(t, err)
+		require.ErrorContains(t, err, "collation")
+		require.Nil(t, keys)
+	})
+	t.Run("no mismatch stays parallel", func(t *testing.T) {
+		keys, err := buildTxnWriteset(
+			newPlans(nil, nil),
+			fkRefs,
+			buildParentFKRefs(fkRefs),
+			[]*binlogdatapb.VEvent{childEvent},
+		)
+		require.NoError(t, err)
+		require.Len(t, keys, 2)
+	})
+}
+
 // keySetsIntersect reports whether two writeset key slices share any key.
 func keySetsIntersect(a, b []uint64) bool {
 	set := make(map[uint64]struct{}, len(a))

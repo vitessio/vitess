@@ -32,6 +32,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
@@ -2951,6 +2952,26 @@ func TestScheduleItems_CopyStateForceGlobal(t *testing.T) {
 	assert.True(t, got.forceGlobal)
 }
 
+// targetCharsetField returns a streamed text field carrying the target
+// column's real collation, the way an actual vstreamer FIELD event always
+// does (vstreamer populates Field.Charset from the source column, falling
+// back to the connection default). A charset-less text field would be
+// hashed as raw bytes and trip the streamed-vs-target collation guard.
+func targetCharsetField(t *testing.T, vp *vplayer, tableName, colName string, fieldType querypb.Type) *querypb.Field {
+	t.Helper()
+	for _, colInfo := range vp.vr.colInfoMap[tableName] {
+		if colInfo == nil || !strings.EqualFold(colInfo.Name, colName) {
+			continue
+		}
+		require.NotEmpty(t, colInfo.Collation, "no collation recorded for %s.%s", tableName, colName)
+		id := vp.vr.vre.env.CollationEnv().LookupByName(colInfo.Collation)
+		require.NotEqual(t, collations.Unknown, id, "unknown collation %q", colInfo.Collation)
+		return &querypb.Field{Name: colName, Type: fieldType, Charset: uint32(id)}
+	}
+	require.FailNowf(t, "column not found", "column %s not found in colInfoMap for %s", colName, tableName)
+	return nil
+}
+
 // TestScheduleItems_UniqueSecondaryIndexEmitsWritesetKey pins that a plain
 // unique secondary no longer force-serializes: the scheduled txn carries a
 // writeset that includes the unique-key conflict key (so colliding unique
@@ -3002,7 +3023,7 @@ func TestScheduleItems_UniqueSecondaryIndexEmitsWritesetKey(t *testing.T) {
 			TableName: tableName,
 			Fields: []*querypb.Field{
 				{Name: "id", Type: querypb.Type_INT32},
-				{Name: "email", Type: querypb.Type_VARCHAR},
+				targetCharsetField(t, vp, tableName, "email", querypb.Type_VARCHAR),
 			},
 		},
 	}, false))
@@ -3138,7 +3159,7 @@ func TestApplyEvent_FIELDEmitsWritesetKeyForUniqueSecondaryIndex(t *testing.T) {
 			TableName: tableName,
 			Fields: []*querypb.Field{
 				{Name: "id", Type: querypb.Type_INT32},
-				{Name: "email", Type: querypb.Type_VARCHAR},
+				targetCharsetField(t, vp, tableName, "email", querypb.Type_VARCHAR),
 			},
 		},
 	}, false))
@@ -3256,7 +3277,7 @@ func TestApplyEvent_FIELDCachesExtraUniqueSecondaryLookup(t *testing.T) {
 			TableName: tableName,
 			Fields: []*querypb.Field{
 				{Name: "id", Type: querypb.Type_INT32},
-				{Name: "email", Type: querypb.Type_VARCHAR},
+				targetCharsetField(t, vp, tableName, "email", querypb.Type_VARCHAR),
 			},
 		},
 	}
@@ -3318,7 +3339,7 @@ func TestApplyEvent_FIELDCachesNoExtraUniqueSecondaryLookup(t *testing.T) {
 			TableName: tableName,
 			Fields: []*querypb.Field{
 				{Name: "id", Type: querypb.Type_INT32},
-				{Name: "email", Type: querypb.Type_VARCHAR},
+				targetCharsetField(t, vp, tableName, "email", querypb.Type_VARCHAR),
 			},
 		},
 	}
@@ -3380,7 +3401,7 @@ func TestApplyEvent_FIELDEmitsWritesetKeyForNullableUniqueSecondaryIndex(t *test
 			TableName: tableName,
 			Fields: []*querypb.Field{
 				{Name: "id", Type: querypb.Type_INT32},
-				{Name: "email", Type: querypb.Type_VARCHAR},
+				targetCharsetField(t, vp, tableName, "email", querypb.Type_VARCHAR),
 			},
 		},
 	}, false))
@@ -3679,7 +3700,7 @@ func TestApplyEvent_FIELDAfterExecutedDDLRefreshesUniqueSecondaryLookup(t *testi
 			TableName: tableName,
 			Fields: []*querypb.Field{
 				{Name: "id", Type: querypb.Type_INT32},
-				{Name: "email", Type: querypb.Type_VARCHAR},
+				targetCharsetField(t, vp, tableName, "email", querypb.Type_VARCHAR),
 			},
 		},
 	}
@@ -3760,7 +3781,7 @@ func TestWorkerLoop_FIELDRefreshesPublishedDDLBarrierState(t *testing.T) {
 			TableName: tableName,
 			Fields: []*querypb.Field{
 				{Name: "id", Type: querypb.Type_INT32},
-				{Name: "email", Type: querypb.Type_VARCHAR},
+				targetCharsetField(t, vp, tableName, "email", querypb.Type_VARCHAR),
 			},
 		},
 	}
@@ -3962,7 +3983,7 @@ func TestApplyEvent_FIELDRefreshTargetInvalidatesUniqueSecondaryCache(t *testing
 			TableName: tableName,
 			Fields: []*querypb.Field{
 				{Name: "id", Type: querypb.Type_INT32},
-				{Name: "email", Type: querypb.Type_VARCHAR},
+				targetCharsetField(t, vp, tableName, "email", querypb.Type_VARCHAR),
 			},
 		},
 	}, false))
@@ -4037,7 +4058,7 @@ func TestApplyEvent_FIELDRefreshTargetInvalidatesUniqueSecondaryCacheAcrossMulti
 			TableName: tableName,
 			Fields: []*querypb.Field{
 				{Name: "id", Type: querypb.Type_INT32},
-				{Name: "email", Type: querypb.Type_VARCHAR},
+				targetCharsetField(t, vp, tableName, "email", querypb.Type_VARCHAR),
 			},
 		},
 	}, false))
@@ -6492,7 +6513,7 @@ func TestCommitLoop_EXECIGNOREIdempotentAddUniqueIndexInvalidatesUniqueSecondary
 			TableName: tableName,
 			Fields: []*querypb.Field{
 				{Name: "id", Type: querypb.Type_INT32},
-				{Name: "email", Type: querypb.Type_VARCHAR},
+				targetCharsetField(t, vp, tableName, "email", querypb.Type_VARCHAR),
 			},
 		},
 	}, false))

@@ -89,6 +89,7 @@ func (rp *ReplicatorPlan) buildExecutionPlan(fieldEvent *binlogdatapb.FieldEvent
 			trimmed.Name = strings.Trim(trimmed.Name, "`")
 			tplanv.Fields = append(tplanv.Fields, trimmed)
 		}
+		tplanv.WritesetCollationMismatchColumns = writesetCollationMismatchColumns(tplanv.Fields, rp.ColInfoMap[prelim.TargetName], rp.collationEnv)
 		tplanv.HasUnsupportedWritesetMapping = hasUnsupportedWritesetMapping(&tplanv, tplanv.Fields)
 		return &tplanv, nil
 	}
@@ -98,6 +99,8 @@ func (rp *ReplicatorPlan) buildExecutionPlan(fieldEvent *binlogdatapb.FieldEvent
 		return nil, vterrors.Wrapf(err, "failed to build replication plan for %s table", fieldEvent.TableName)
 	}
 	tplan.Fields = fieldEvent.Fields
+	tplan.WritesetCollationMismatchColumns = writesetCollationMismatchColumns(tplan.Fields, rp.ColInfoMap[prelim.TargetName], rp.collationEnv)
+	tplan.HasUnsupportedWritesetMapping = hasUnsupportedWritesetMapping(tplan, tplan.Fields)
 	return tplan, nil
 }
 
@@ -122,12 +125,87 @@ func hasUnsupportedWritesetMapping(plan *TablePlan, streamedFields []*querypb.Fi
 		if cexpr == nil || !cexpr.colName.Equal(sqlparser.NewIdentifierCI(field.Name)) {
 			return true
 		}
+		if cexpr.isGenerated {
+			// The target recomputes generated columns and the DML builders
+			// skip them, so the streamed slot's values are not what the
+			// target enforces: hashing them for a generated unique or FK
+			// member would produce misleading writeset keys.
+			return true
+		}
 		sourceCol, ok := cexpr.expr.(*sqlparser.ColName)
 		if !ok || !sourceCol.Name.Equal(sqlparser.NewIdentifierCI(field.Name)) || !sourceCol.Qualifier.IsEmpty() {
 			return true
 		}
 	}
+	for i, isPK := range plan.PKIndices {
+		if !isPK {
+			continue
+		}
+		// The identity hash must agree with the target's PK equality: a
+		// collation-mismatched identity column could hash target-equal
+		// values apart, so the table serializes.
+		name := strings.ToLower(strings.Trim(streamedFields[i].Name, "`"))
+		if _, ok := plan.WritesetCollationMismatchColumns[name]; ok {
+			return true
+		}
+	}
 	return false
+}
+
+// writesetCollationMismatchColumns returns the lowered names of streamed
+// columns whose hashing collation diverges from the collation the target
+// enforces. The writeset hasher digests text values under the STREAMED
+// field's collation (see writesetDigestAddFieldValue), while the identity,
+// unique-key, and FK constraints it protects are enforced under the TARGET
+// column's collation. When those differ (e.g. a _bin source feeding a _ci
+// target), values the target considers equal can hash apart, so
+// target-conflicting transactions could receive disjoint writesets and
+// execute out of order. Columns recorded here force serialization wherever
+// they participate in a writeset key: identity columns in
+// hasUnsupportedWritesetMapping, unique keys in writesetUniqueKeysFromSpec,
+// and FK-joined columns in validateFKStreamedFieldCompatibility.
+func writesetCollationMismatchColumns(streamedFields []*querypb.Field, colInfos []*ColumnInfo, collationEnv *collations.Environment) map[string]struct{} {
+	if len(streamedFields) == 0 || len(colInfos) == 0 || collationEnv == nil {
+		return nil
+	}
+	targetByName := make(map[string]*ColumnInfo, len(colInfos))
+	for _, colInfo := range colInfos {
+		if colInfo != nil {
+			targetByName[strings.ToLower(colInfo.Name)] = colInfo
+		}
+	}
+	var mismatched map[string]struct{}
+	for _, field := range streamedFields {
+		if field == nil {
+			continue
+		}
+		name := strings.ToLower(strings.Trim(field.Name, "`"))
+		colInfo, ok := targetByName[name]
+		if !ok {
+			// Not a target column: it can never participate in a
+			// target-enforced constraint.
+			continue
+		}
+		// Mirror writesetDigestAddFieldValue: text fields with a charset are
+		// digested under that (streamed) collation, everything else as raw
+		// bytes. buildColInfoMap records a collation only for target text
+		// columns, so an empty target collation means raw target semantics.
+		var mismatch bool
+		if sqltypes.IsText(field.Type) && field.Charset != 0 {
+			// An unknown or empty target collation resolves to Unknown and
+			// conservatively mismatches.
+			mismatch = collationEnv.LookupByName(colInfo.Collation) != collations.ID(field.Charset)
+		} else {
+			mismatch = colInfo.Collation != ""
+		}
+		if mismatch {
+			if mismatched == nil {
+				mismatched = make(map[string]struct{})
+			}
+			mismatched[name] = struct{}{}
+		}
+	}
+	return mismatched
 }
 
 // buildFromFields builds a full TablePlan, but uses the field info as the
@@ -256,10 +334,15 @@ type TablePlan struct {
 	// HasUnsupportedWritesetMapping means the streamed FIELD layout cannot be
 	// mapped positionally back to target PK/FK columns for safe writeset hashing.
 	HasUnsupportedWritesetMapping bool
-	Stats                         *binlogplayer.Stats
-	FieldsToSkip                  map[string]bool
-	ConvertCharset                map[string](*binlogdatapb.CharsetConversion)
-	HasExtraSourcePkColumns       bool
+	// WritesetCollationMismatchColumns holds the lowered names of streamed
+	// columns whose hashing collation diverges from the collation the target
+	// enforces (see writesetCollationMismatchColumns). Any writeset key that
+	// would touch one of them must force serialization instead.
+	WritesetCollationMismatchColumns map[string]struct{}
+	Stats                            *binlogplayer.Stats
+	FieldsToSkip                     map[string]bool
+	ConvertCharset                   map[string](*binlogdatapb.CharsetConversion)
+	HasExtraSourcePkColumns          bool
 
 	TablePlanBuilder *tablePlanBuilder
 	// PartialInserts is a dynamically generated cache of insert ParsedQueries, which update only some columns.

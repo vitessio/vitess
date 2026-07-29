@@ -532,9 +532,29 @@ func validateFKStreamedFieldCompatibility(childPlan *TablePlan, childFieldIdx ma
 	}
 	for i := range refs {
 		ref := &refs[i]
+		// A collation-mismatched FK child column hashes values under the
+		// streamed collation while the target enforces the FK match under
+		// its own: target-equal values could hash apart, so the child/parent
+		// conflict edge cannot be trusted. Checked before the parent-plan
+		// skip below: the child side emits FK keys whether or not the parent
+		// has streamed yet.
+		for _, childCol := range ref.ChildColumnNames {
+			if _, ok := childPlan.WritesetCollationMismatchColumns[strings.ToLower(childCol)]; ok {
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+					"FK child column %q referencing %s hashes under a streamed collation that differs from the target's: forcing serialization",
+					childCol, ref.ParentTable)
+			}
+		}
 		parentPlan := planByTarget[ref.ParentTable]
 		if parentPlan == nil || len(parentPlan.Fields) == 0 {
 			continue
+		}
+		for _, refCol := range ref.ReferencedColumnNames {
+			if _, ok := parentPlan.WritesetCollationMismatchColumns[strings.ToLower(refCol)]; ok {
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+					"FK referenced column %q on parent table %s hashes under a streamed collation that differs from the target's: forcing serialization",
+					refCol, ref.ParentTable)
+			}
 		}
 		parentFieldIdx := make(map[string]int, len(parentPlan.Fields))
 		for j, f := range parentPlan.Fields {
