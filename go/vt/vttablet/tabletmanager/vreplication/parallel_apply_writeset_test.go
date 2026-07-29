@@ -526,6 +526,29 @@ func TestBuildTxnWritesetFailsClosedWithoutUsableIdentity(t *testing.T) {
 	require.True(t, writesetErrorForcesSerialization(err), "missing identity must serialize the txn, not fail the workflow")
 }
 
+// TestBuildTxnWritesetUnknownCollationForcesSerialization covers a streamed
+// text field whose collation the hasher does not know: no faithful digest
+// exists, but serial row application does not need one, so the error must
+// route the transaction to the serial path rather than fail the workflow.
+func TestBuildTxnWritesetUnknownCollationForcesSerialization(t *testing.T) {
+	plan := &TablePlan{
+		TargetName: "t1",
+		// A collation ID the hasher's registry does not know.
+		Fields:    []*querypb.Field{{Name: "id", Type: querypb.Type_VARCHAR, Charset: 9999}},
+		PKIndices: []bool{true},
+	}
+	row := &querypb.Row{Values: []byte("a"), Lengths: []int64{1}}
+	change := &binlogdatapb.RowChange{After: row}
+	rowEvent := &binlogdatapb.RowEvent{TableName: "t1", RowChanges: []*binlogdatapb.RowChange{change}}
+	vevent := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_ROW, RowEvent: rowEvent}
+
+	keys, err := buildTxnWriteset(map[string]*TablePlan{"t1": plan}, nil, nil, []*binlogdatapb.VEvent{vevent})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "unknown collation")
+	require.Nil(t, keys)
+	require.True(t, writesetErrorForcesSerialization(err), "an unknown streamed collation must serialize the txn, not fail the workflow")
+}
+
 func TestWritesetKeysForChangeMissingPlan(t *testing.T) {
 	keySet := map[uint64]struct{}{}
 	err := writesetKeysForChange(nil, "t1", nil, nil, keySet)

@@ -803,9 +803,10 @@ func workerLocalVPlayer(vp *vplayer) vplayer {
 }
 
 // writesetErrorForcesSerialization flags the specific writeset-build errors
-// (partial row image, missing streamed fields) that mean we cannot prove
-// absence of conflict for the txn, so it must take the serial path. Other
-// writeset errors propagate as real failures.
+// (partial row image, missing streamed fields, hasher limitations like an
+// unknown streamed collation) that mean we cannot prove absence of conflict
+// for the txn, so it must take the serial path — which needs no writeset at
+// all. Other writeset errors propagate as real failures.
 func writesetErrorForcesSerialization(err error) bool {
 	if vterrors.Code(err) != vtrpcpb.Code_FAILED_PRECONDITION {
 		return false
@@ -813,7 +814,8 @@ func writesetErrorForcesSerialization(err error) bool {
 	return strings.Contains(err.Error(), "partial row image on table ") ||
 		strings.Contains(err.Error(), "not in streamed fields") ||
 		strings.Contains(err.Error(), "no usable writeset identity") ||
-		strings.Contains(err.Error(), "streamed field metadata mismatch")
+		strings.Contains(err.Error(), "streamed field metadata mismatch") ||
+		strings.Contains(err.Error(), "unknown collation ")
 }
 
 // computeLastEventTimestamp scans events in reverse to find the last event
