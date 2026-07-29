@@ -24,13 +24,7 @@ import (
 	"math/rand/v2"
 	"os/exec"
 	"path"
-<<<<<<< HEAD
-||||||| parent of bf2a56ab9e (vttestserver: fail, don't panic, on a vschema missing a table or vindex (#20740))
-	"strconv"
-=======
 	"slices"
-	"strconv"
->>>>>>> bf2a56ab9e (vttestserver: fail, don't panic, on a vschema missing a table or vindex (#20740))
 	"strings"
 	"testing"
 	"time"
@@ -429,15 +423,6 @@ func assertColumnVindex(t *testing.T, cluster vttest.LocalCluster, expected colu
 
 	err := vtctlclient.RunCommandAndWait(ctx, server, args, func(e *logutilpb.Event) {
 		var keyspace vschemapb.Keyspace
-<<<<<<< HEAD
-		if err := protojson.Unmarshal([]byte(e.Value), &keyspace); err != nil {
-			t.Error(err)
-		}
-||||||| parent of bf2a56ab9e (vttestserver: fail, don't panic, on a vschema missing a table or vindex (#20740))
-		if err := protojson.Unmarshal([]byte(e.Value), &keyspace); err != nil {
-			assert.NoError(t, err)
-		}
-=======
 		require.NoError(t, protojson.Unmarshal([]byte(e.Value), &keyspace))
 
 		// Look the table and vindex up before dereferencing them, so that a
@@ -452,7 +437,6 @@ func assertColumnVindex(t *testing.T, cluster vttest.LocalCluster, expected colu
 
 		actualVindex, ok := keyspace.Vindexes[expected.vindex]
 		require.Truef(t, ok, "keyspace %s has no vindex %s in its vschema, found vindexes %v", expected.keyspace, expected.vindex, slices.Sorted(maps.Keys(keyspace.Vindexes)))
->>>>>>> bf2a56ab9e (vttestserver: fail, don't panic, on a vschema missing a table or vindex (#20740))
 
 		assertEqual(t, actualVindex.Type, expected.vindexType, "Actual vindex type different from expected")
 		assertEqual(t, columnVindex.Name, expected.vindex, "Actual vindex name different from expected")
