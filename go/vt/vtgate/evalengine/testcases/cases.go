@@ -935,6 +935,14 @@ func SignedExponents(yield Query) {
 			yield(fmt.Sprintf("CAST(%s AS JSON) = CAST(%s AS JSON)", literal, literal), nil, false)
 		}
 	}
+
+	// A JSON string reaches the decimal through its own conversion branch,
+	// separate from the one a JSON number takes. A few signed spellings cover
+	// that caller without repeating the matrix.
+	for _, s := range []string{"1e+5", "+1", " -1"} {
+		literal := fmt.Sprintf(`'"%s"'`, s)
+		yield(fmt.Sprintf("CAST(CAST(%s AS JSON) AS DECIMAL(20, 6))", literal), nil, false)
+	}
 }
 
 func BitwiseOperatorsUnary(yield Query) {
