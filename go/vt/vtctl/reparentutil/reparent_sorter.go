@@ -43,11 +43,13 @@ func newReparentSorter(tablets []*topodatapb.Tablet, positions []*RelayLogPositi
 		tablets:   tablets,
 		positions: positions,
 		combinedDominatedCount: dominatedCountsForSort(tablets, positions, func(moreAdvanced, lessAdvanced *RelayLogPositions) bool {
-			return hasDominantPosition(moreAdvanced.Combined, lessAdvanced.Combined)
+			return moreAdvanced.Combined.AtLeast(lessAdvanced.Combined) &&
+				!lessAdvanced.Combined.AtLeast(moreAdvanced.Combined)
 		}),
 		executedDominatedCount: dominatedCountsForSort(tablets, positions, func(moreAdvanced, lessAdvanced *RelayLogPositions) bool {
 			return moreAdvanced.Combined.Equal(lessAdvanced.Combined) &&
-				hasDominantPosition(moreAdvanced.Executed, lessAdvanced.Executed)
+				moreAdvanced.Executed.AtLeast(lessAdvanced.Executed) &&
+				!lessAdvanced.Executed.AtLeast(moreAdvanced.Executed)
 		}),
 		durability:       durability,
 		innodbBufferPool: innodbBufferPool,
@@ -82,62 +84,14 @@ func (rs *reparentSorter) Less(i, j int) bool {
 		return true
 	}
 
-<<<<<<< HEAD
-	// sort by combined positions. if equal, also sort by the executed GTID positions.
-	jPositions := rs.positions[j]
-	iPositions := rs.positions[i]
-
-	if !iPositions.AtLeast(jPositions) {
-		// [i] does not have all GTIDs that [j] does
-		return false
-||||||| parent of da4e714f37 (`reparentutil`: order reparent candidates by GTID dominance for a consistent sort (#20728))
-	jPositions := rs.positions[j]
-	iPositions := rs.positions[i]
-
-	// sort by dominance of the combined positions first. GTID positions are partially
-	// ordered, so a pair can also be incomparable (disjoint UUIDs); those fall through to
-	// the tiebreakers below to keep the sort deterministic. this can't make the sort a
-	// total order, so findMostAdvanced re-checks the winner after sorting.
-	if hasDominantPosition(iPositions.Combined, jPositions.Combined) {
-		return true
-	}
-	if hasDominantPosition(jPositions.Combined, iPositions.Combined) {
-		return false
-=======
 	if rs.combinedDominatedCount[i] != rs.combinedDominatedCount[j] {
 		return rs.combinedDominatedCount[i] < rs.combinedDominatedCount[j]
->>>>>>> da4e714f37 (`reparentutil`: order reparent candidates by GTID dominance for a consistent sort (#20728))
 	}
-<<<<<<< HEAD
-	if !jPositions.AtLeast(iPositions) {
-		// [j] does not have all GTIDs that [i] does
-		return true
-||||||| parent of da4e714f37 (`reparentutil`: order reparent candidates by GTID dominance for a consistent sort (#20728))
-
-	// if the combined positions are equal, sort by the executed GTID positions. this
-	// prefers tablets with less SQL delay, which would otherwise slow down the reparent.
-	if iPositions.Combined.Equal(jPositions.Combined) {
-		if hasDominantPosition(iPositions.Executed, jPositions.Executed) {
-			return true
-		}
-		if hasDominantPosition(jPositions.Executed, iPositions.Executed) {
-			return false
-		}
-=======
 
 	if rs.executedDominatedCount[i] != rs.executedDominatedCount[j] {
 		return rs.executedDominatedCount[i] < rs.executedDominatedCount[j]
->>>>>>> da4e714f37 (`reparentutil`: order reparent candidates by GTID dominance for a consistent sort (#20728))
 	}
 
-<<<<<<< HEAD
-	// at this point, both have the same GTIDs
-	// so we check their promotion rules
-||||||| parent of da4e714f37 (`reparentutil`: order reparent candidates by GTID dominance for a consistent sort (#20728))
-	// at this point, neither tablet is ahead of the other
-	// so we check their promotion rules
-=======
->>>>>>> da4e714f37 (`reparentutil`: order reparent candidates by GTID dominance for a consistent sort (#20728))
 	jPromotionRule := policy.PromotionRule(rs.durability, rs.tablets[j])
 	iPromotionRule := policy.PromotionRule(rs.durability, rs.tablets[i])
 
@@ -151,7 +105,16 @@ func (rs *reparentSorter) Less(i, j int) bool {
 		}
 	}
 
-	return !jPromotionRule.BetterThan(iPromotionRule)
+	if jPromotionRule != iPromotionRule {
+		return !jPromotionRule.BetterThan(iPromotionRule)
+	}
+
+	// All else equal, use the full tablet alias as a stable tiebreaker so
+	// that sort order is deterministic across runs, including across cells.
+	if rs.tablets[i].Alias.Cell != rs.tablets[j].Alias.Cell {
+		return rs.tablets[i].Alias.Cell < rs.tablets[j].Alias.Cell
+	}
+	return rs.tablets[i].Alias.Uid < rs.tablets[j].Alias.Uid
 }
 
 // dominatedCountsForSort returns, for each candidate, how many other candidates
@@ -181,23 +144,11 @@ func dominatedCountsForSort(tablets []*topodatapb.Tablet, positions []*RelayLogP
 				continue
 			}
 			if dominates(positions[j], positions[i]) {
-				dominatedCounts[i]++ // one more candidate strictly dominates i
+				dominatedCounts[i]++
 			}
 		}
 	}
 	return dominatedCounts
-}
-
-// hasDominantReparentPosition reports whether moreAdvanced is strictly ahead of
-// lessAdvanced under the same two-level order the sorter uses: a strictly greater
-// received (Combined) history, or an equal received history with strictly more of it
-// applied (Executed). findMostAdvanced uses it as a defense-in-depth check that the
-// sort really did place the maximum at index 0 — it should never find a candidate that
-// dominates the chosen winner.
-func hasDominantReparentPosition(moreAdvanced, lessAdvanced *RelayLogPositions) bool {
-	return hasDominantPosition(moreAdvanced.Combined, lessAdvanced.Combined) ||
-		(moreAdvanced.Combined.Equal(lessAdvanced.Combined) &&
-			hasDominantPosition(moreAdvanced.Executed, lessAdvanced.Executed))
 }
 
 // sortTabletsForReparent sorts the tablets, given their positions for emergency reparent shard and planned reparent shard.
