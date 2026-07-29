@@ -121,21 +121,21 @@ func (jm *joinMerger) mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs
 // Checking the opcode rather than the routing type leaves unsharded routes out: there is only one
 // shard to read them from.
 //
-// A multi-table DML that only writes to the other side is the exception. Its preserved rows are
-// never returned, and an unmatched one has no row to update or delete, so reading it once per
-// shard writes nothing extra. Requiring a target on the other side keeps this to the DML's own
-// row source: an outer join further down, in a subquery, does have its rows read.
+// A multi-table DML is the exception when the join is its own row source. Nothing reads the
+// preserved rows then: an unmatched one has no row to update or delete on the other side, and a
+// reference table that is itself the target has a physical copy on every shard to write to. A
+// target among these two routes is what says the DML writes through this join rather than reading
+// it from further down, where an outer join in a subquery does have its rows read.
 func owesReferenceRows(ctx *plancontext.PlanningContext, joinType sqlparser.JoinType, preserved, other *Route) bool {
 	if joinType.IsInner() || preserved.Routing.OpCode() != engine.Reference {
 		return false
 	}
 
 	targets := ctx.SemTable.DMLTargets
-	writesOnlyToTheOtherSide := targets.NotEmpty() &&
-		TableID(other).IsOverlapping(targets) &&
-		!TableID(preserved).IsOverlapping(targets)
+	isDirectDMLRowSource := targets.NotEmpty() &&
+		TableID(preserved).Merge(TableID(other)).IsOverlapping(targets)
 
-	return !writesOnlyToTheOtherSide
+	return !isDirectDMLRowSource
 }
 
 func mergeAnyShardRoutings(ctx *plancontext.PlanningContext, a, b *AnyShardRouting, joinPredicates []sqlparser.Expr, joinType sqlparser.JoinType) *AnyShardRouting {
