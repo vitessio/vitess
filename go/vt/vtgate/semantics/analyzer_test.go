@@ -361,6 +361,40 @@ func TestColumnListLengthChecking(t *testing.T) {
 		query: "with recursive x(a) as (select 1, 2), y as (select 1 from x), z as (select 1 from y) select * from z",
 		err:   mismatch,
 	}, {
+		name:  "unused cte chain reading the mismatched declared name",
+		query: "with recursive x(a) as (select 1, 2), y as (select a from x) select 1",
+	}, {
+		name:  "used cte chain reading the mismatched declared name",
+		query: "with recursive x(a) as (select 1, 2), y as (select a from x) select * from y",
+		err:   mismatch,
+	}, {
+		name:  "self-referencing mismatched cte reading its declared name while unused",
+		query: "with recursive x(a) as (select 1, 2 union all select a + 1, 2 from x) select 1",
+	}, {
+		name:  "declared column list over an unexpandable star",
+		query: "with recursive x(a, b) as (select * from t) select a from x",
+	}, {
+		name:  "derived table mismatch inside an unused cte",
+		query: "with recursive y as (select * from (select 1, 2) x(a)) select 1",
+	}, {
+		name:  "derived table mismatch read inside an unused cte",
+		query: "with recursive y as (select a from (select 1, 2) x(a)) select 1",
+	}, {
+		name:  "union derived table mismatch inside an unused cte",
+		query: "with recursive y as (select * from (select 1, 2 union select 3, 4) x(a)) select 1",
+	}, {
+		name:  "derived table mismatch inside a used cte",
+		query: "with recursive y as (select * from (select 1, 2) x(a)) select * from y",
+		err:   mismatch,
+	}, {
+		name:  "derived table mismatch inside a two-level used chain",
+		query: "with recursive y as (select * from (select 1, 2) x(a)), z as (select 1 from y) select * from z",
+		err:   mismatch,
+	}, {
+		name:  "derived table mismatch in the executed part of a recursive with",
+		query: "with recursive x(a) as (select 1 union all select a + 1 from x where a < 3) select a from (select 1, 2) d(a)",
+		err:   mismatch,
+	}, {
 		name:  "derived table with a declared column list matching a qualified star after join using",
 		query: "select a from (select r.* from authoritative l join authoritative r using (col1)) x(a, b, c)",
 	}, {
@@ -378,7 +412,7 @@ func TestColumnListLengthChecking(t *testing.T) {
 				require.NoError(t, err)
 				return
 			}
-			require.EqualError(t, err, tc.err)
+			require.ErrorContains(t, err, tc.err)
 		})
 	}
 }
