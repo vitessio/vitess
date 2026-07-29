@@ -1075,5 +1075,124 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "Multi-table update whose only target is the sharded side still merges the reference outer join",
+    "query": "update ref r left join `user` u on r.col = u.col set u.foo = 4",
+    "skip_e2e": true,
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "UPDATE",
+      "Original": "update ref r left join `user` u on r.col = u.col set u.foo = 4",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "update ref as r left join `user` as u on r.col = u.col set u.foo = 4"
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Multi-table delete whose only target is the sharded side still merges the reference outer join",
+    "query": "delete u from ref r left join `user` u on r.col = u.col",
+    "skip_e2e": true,
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "DELETE",
+      "Original": "delete u from ref r left join `user` u on r.col = u.col",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "KsidLength": 1,
+        "KsidVindex": "user_index",
+        "OwnedVindexQuery": "select u.Id, u.`Name`, u.Costly from ref as r left join `user` as u on r.col = u.col for update",
+        "Query": "delete u from ref as r left join `user` as u on r.col = u.col"
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "A reference outer join a DML reads rather than writes through is still not merged",
+    "query": "update music set foo = 4 where user_id in (select r.col from ref r left join `user` u on r.col = u.col)",
+    "skip_e2e": true,
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "UPDATE",
+      "Original": "update music set foo = 4 where user_id in (select r.col from ref r left join `user` u on r.col = u.col)",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutIn",
+        "PulloutVars": [
+          "__sq_has_values",
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Join",
+            "Variant": "LeftJoin",
+            "JoinColumnIndexes": "L:0",
+            "JoinVars": {
+              "r_col": 0
+            },
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Reference",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select r.col from ref as r where 1 != 1",
+                "Query": "select r.col from ref as r lock in share mode"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from `user` as u where 1 != 1",
+                "Query": "select 1 from `user` as u where u.col = :r_col lock in share mode"
+              }
+            ]
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "Update",
+            "Variant": "IN",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "Query": "update music set foo = 4 where :__sq_has_values and user_id in ::__vals",
+            "Values": [
+              "::__sq1"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.ref",
+        "user.user"
+      ]
+    }
   }
 ]
