@@ -2419,16 +2419,17 @@
     }
   },
   {
-    "comment": "Recursive CTE with a declared column list renaming the seed columns: filters resolve through the declared names positionally",
-    "query": "with recursive cte(current_id, depth) as (select id, 0 from user where id = 5 union all select e.user_id, cte.depth + 1 from cte join user_extra e on e.user_id = cte.current_id where cte.depth < 10) select 1 from cte",
+    "comment": "Recursive CTE with a declared column list renaming the seed columns: filters and the projection resolve through the declared names positionally",
+    "query": "with recursive cte(current_id, depth) as (select id, 0 from user where id = 5 union all select e.user_id, cte.depth + 1 from cte join user_extra e on e.user_id = cte.current_id where cte.depth < 10) select current_id, depth from cte",
     "plan": {
       "Type": "Complex",
       "QueryType": "SELECT",
-      "Original": "with recursive cte(current_id, depth) as (select id, 0 from user where id = 5 union all select e.user_id, cte.depth + 1 from cte join user_extra e on e.user_id = cte.current_id where cte.depth < 10) select 1 from cte",
+      "Original": "with recursive cte(current_id, depth) as (select id, 0 from user where id = 5 union all select e.user_id, cte.depth + 1 from cte join user_extra e on e.user_id = cte.current_id where cte.depth < 10) select current_id, depth from cte",
       "Instructions": {
-        "OperatorType": "Projection",
-        "Expressions": [
-          "1 as 1"
+        "OperatorType": "SimpleProjection",
+        "ColumnNames": [
+          "0:current_id",
+          "1:depth"
         ],
         "Inputs": [
           {
@@ -2472,6 +2473,56 @@
       },
       "TablesUsed": [
         "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "Recursive CTE with a declared column list whose names swap the seed aliases: resolution stays positional",
+    "query": "with recursive cte(user_id, id) as (select id, user_id from user_extra where id = 5 union all select e.id, e.user_id from cte join user_extra e on e.id = cte.id where cte.user_id < 10) select user_id, id from cte",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "with recursive cte(user_id, id) as (select id, user_id from user_extra where id = 5 union all select e.id, e.user_id from cte join user_extra e on e.id = cte.id where cte.user_id < 10) select user_id, id from cte",
+      "Instructions": {
+        "OperatorType": "SimpleProjection",
+        "ColumnNames": [
+          "0:user_id",
+          "1:id"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "RecurseCTE",
+            "JoinVars": {
+              "cte_id": 1,
+              "cte_user_id": 0
+            },
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select id, user_id from user_extra where 1 != 1",
+                "Query": "select id, user_id from user_extra where id = 5"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select e.id, e.user_id from user_extra as e where 1 != 1",
+                "Query": "select e.id, e.user_id from user_extra as e where :cte_user_id < 10 and e.id = :cte_id"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
         "user.user_extra"
       ]
     }

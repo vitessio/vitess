@@ -1059,3 +1059,15 @@ func TestRecursiveCTETermFilter(t *testing.T) {
 
 	mcmp.Exec("with recursive chain as (select id1, id2, 0 as depth from t1 where id1 = 1 union all select t.id1, t.id2, chain.depth + 1 from chain join t1 t on t.id1 = chain.id2 where chain.depth < 3) select id1, id2, depth from chain order by depth")
 }
+
+// TestRecursiveCTEDeclaredColumnList runs the same unmerged recursive CTE with
+// a declared column list, referencing the declared names in the term join, the
+// term filter, and the projection; they resolve positionally to the seed.
+func TestRecursiveCTEDeclaredColumnList(t *testing.T) {
+	mcmp, closer := start(t)
+	t.Cleanup(closer)
+
+	mcmp.Exec("insert into t1(id1, id2) values (1,2), (2,3), (3,4), (4,5), (5,6)")
+
+	mcmp.Exec("with recursive chain(cur, nxt, depth) as (select id1, id2, 0 from t1 where id1 = 1 union all select t.id1, t.id2, chain.depth + 1 from chain join t1 t on t.id1 = chain.nxt where chain.depth < 3) select cur, nxt, depth from chain order by depth")
+}
