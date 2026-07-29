@@ -44,17 +44,17 @@ var (
 	_ registry.ThrottlingStrategyHandler = (*TabletThrottlerStrategy)(nil)
 	_ registry.StrategyFactory           = (*tabletThrottlerStrategyFactory)(nil)
 
-	_metricsPrefix = querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER.String()
+	_metricsPrefix = "TabletThrottler"
 
 	cacheMisses           = stats.NewCounter(_metricsPrefix+"CacheMisses", "incoming query throttler cache misses")
 	cacheHits             = stats.NewCounter(_metricsPrefix+"CacheHits", "incoming query throttler cache hits")
 	cacheRefreshFailures  = stats.NewCounter(_metricsPrefix+"CacheRefreshFailures", "background tablet throttler cache refreshes that did not produce a fresh state (e.g. timeouts)")
 	cacheStaleRefreshes   = stats.NewCounter(_metricsPrefix+"CacheStaleRefreshes", "background refresh ticks that observed the cache already older than the staleness threshold (queries are silently failing open against stale state)")
 	cacheStaleConsumption = stats.NewCounter(_metricsPrefix+"CacheStaleConsumption", "hot-path cache reads that discarded a state older than the staleness threshold and failed open (prevents indefinite throttling during a metrics outage)")
-	decisionCount         = stats.NewCountersWithMultiLabels(_metricsPrefix+"DecisionCount", "tablet throttler decisions by outcome and reason", []string{"tablet_type", "stmt_type", "path", "outcome", "reason"})
-	fastDecisionLatency   = stats.NewMultiTimings(_metricsPrefix+"FastDecisionLatencyMicroseconds", "fast-path tablet throttler decision latency in microseconds", []string{"tablet_type", "outcome"})
-	fullDecisionLatency   = stats.NewMultiTimings(_metricsPrefix+"FullDecisionLatencyMicroseconds", "full-path tablet throttler decision latency in microseconds", []string{"tablet_type", "stmt_type", "outcome"})
-	cacheLoadLatency      = stats.NewMultiTimings(_metricsPrefix+"CacheLoadLatencyMilliseconds", "tablet throttler cache load latency in milliseconds", []string{"status"})
+	decisionCount         = stats.NewCountersWithMultiLabels(_metricsPrefix+"DecisionCount", "tablet throttler decisions by outcome and reason", []string{"TabletType", "StmtType", "Path", "Outcome", "Reason"})
+	fastDecisionLatency   = stats.NewMultiTimings(_metricsPrefix+"FastDecisionLatencyMicroseconds", "fast-path tablet throttler decision latency in microseconds", []string{"TabletType", "Outcome"})
+	fullDecisionLatency   = stats.NewMultiTimings(_metricsPrefix+"FullDecisionLatencyMicroseconds", "full-path tablet throttler decision latency in microseconds", []string{"TabletType", "StmtType", "Outcome"})
+	cacheLoadLatency      = stats.NewMultiTimings(_metricsPrefix+"CacheLoadLatencyMilliseconds", "tablet throttler cache load latency in milliseconds", []string{"Status"})
 )
 
 func init() {
@@ -368,10 +368,9 @@ func (s *TabletThrottlerStrategy) isStale(state *cacheState) bool {
 // Returns:
 //   - ThrottleDecision containing detailed information about the throttling decision.
 func (s *TabletThrottlerStrategy) Evaluate(ctx context.Context, targetTabletType topodatapb.TabletType, parsedQuery *sqlparser.ParsedQuery, statementType sqlparser.StatementType, transactionID int64, attrs registry.QueryAttributes) registry.ThrottleDecision {
-	// FOR DDL statements parsedQuery can be nil because ParsedQuery is `plan.FullQuery` which is nil for DDL statements.
-	// `plan.go` file has `func Build(env *vtenv.Environment, statement sqlparser.Statement, tables map[string]*schema.Table, dbName string, viewsEnabled bool) (plan *Plan, err error)`
-	// This function for ALTER MIGRATION and REVERT MIGRATION does not pass FullQuery and hence parsedQuery comes as nil here.
-	// TODO(Siddharth) Discuss with OSS folks why this is the case, ideally having FullQuery in Plan for Alter and Revert should be harmless.
+	// For DDL statements parsedQuery can be nil because ParsedQuery is `plan.FullQuery`, which is
+	// nil for DDL statements. In plan.go, `Build(...)` does not set FullQuery for ALTER MIGRATION
+	// and REVERT MIGRATION, so parsedQuery arrives nil here. Fail open in that case.
 	if parsedQuery == nil {
 		return registry.ThrottleDecision{
 			Throttle: false,

@@ -297,17 +297,18 @@ func (qt *QueryThrottler) Throttle(ctx context.Context, tabletType topodatapb.Ta
 }
 
 // startSrvKeyspaceWatch starts watching the SrvKeyspace for event-driven config updates.
-// This method performs two critical operations:
-//  1. Initial Configuration Load (with retry):
-//     Fetches the current SrvKeyspace configuration from the topology server using GetSrvKeyspace.
-//     This is essential for tablets starting up or restarting, as they need immediate access to
-//     throttling rules without waiting for a configuration change event.
+// This method performs two operations:
+//  1. Initial Configuration Load (best-effort, single attempt):
+//     Fetches the current SrvKeyspace configuration from the topology server using GetSrvKeyspace
+//     so a starting/restarting tablet has throttling rules immediately, without waiting for a
+//     change event. A failure here is only logged: the watch below delivers the current value on
+//     establishment and retries transient errors, so recovery does not depend on this load.
 //  2. Watch Establishment:
 //     Starts a background goroutine that watches for future SrvKeyspace changes using WatchSrvKeyspace.
 //     This ensures the tablet receives real-time configuration updates throughout its lifecycle.
 //
-// Thread Safety: This method uses the watchStarted atomic flag to ensure it only runs once, even if called
-// concurrently. Only the first caller will actually start the watch; subsequent calls return early.
+// Thread Safety: the watchStarted atomic flag guards the watch goroutine so at most one is ever
+// started. The initial load runs on each call; in practice InitDBConfig calls this exactly once.
 func (qt *QueryThrottler) startSrvKeyspaceWatch() {
 	// Pre-flight validation: ensure required fields are set
 	if qt.srvTopoServer == nil || qt.keyspace == "" {
@@ -315,9 +316,10 @@ func (qt *QueryThrottler) startSrvKeyspaceWatch() {
 		return
 	}
 
-	// Phase 1: Load initial configuration with retry logic
-	// This ensures tablets have the correct throttling config immediately after startup/restart.
-	// TODO(Siddharth) add retry for this initial load
+	// Phase 1: Best-effort initial configuration load (single attempt).
+	// This gives tablets the throttling config immediately after startup/restart. On failure we
+	// only log: the watch established in Phase 2 provides the current value and retries transient
+	// errors, so recovery does not depend on this load succeeding.
 	srvKS, err := qt.srvTopoServer.GetSrvKeyspace(qt.ctx, qt.cell, qt.keyspace)
 	if err != nil {
 		log.Warn(fmt.Sprintf("QueryThrottler: failed to load initial config for keyspace=%s (GetSrvKeyspace): %v", qt.keyspace, err))
@@ -336,7 +338,11 @@ func (qt *QueryThrottler) startSrvKeyspaceWatch() {
 		return
 	}
 	watchCtx, cancel := context.WithCancel(qt.ctx)
+	// Publish the cancel func under qt.mu so this write is synchronized with Shutdown's
+	// read of qt.cancelWatchContext (Shutdown holds qt.mu when it reads and calls it).
+	qt.mu.Lock()
 	qt.cancelWatchContext = cancel
+	qt.mu.Unlock()
 
 	go func() {
 		// WatchSrvKeyspace will:
