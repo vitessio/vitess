@@ -225,6 +225,52 @@ func TestNewFromStringLeadingPlus(t *testing.T) {
 	}
 }
 
+// TestNewFromStringWhitespace covers the whitespace MySQL reads as part of
+// numeric text: vertical tab and form feed count as leading and trailing
+// whitespace, and the exponent is read past any spaces and tabs — those two
+// bytes only — between its marker and its sign. MySQL 8.0.46 reads every
+// spelling here to the same value.
+func TestNewFromStringWhitespace(t *testing.T) {
+	for in, want := range map[string]string{
+		"\v+1":    "1",
+		"\f-1":    "-1",
+		"\v\f 1":  "1",
+		"1\v":     "1",
+		"1\f":     "1",
+		"1e +5":   "100000",
+		"1e\t-5":  "0.00001",
+		"1e \t+5": "100000",
+		"1e  +2":  "100",
+		"1e 2":    "100",
+		" 1e +2 ": "100",
+	} {
+		t.Run(in, func(t *testing.T) {
+			d, err := NewFromString(in)
+			require.NoError(t, err)
+			require.Equal(t, want, d.String())
+		})
+	}
+
+	// Any other whitespace ends the number where it stands, as does a space
+	// past the exponent's sign. The value read up to there comes back with
+	// the error, and is what MySQL truncates such text to.
+	for in, want := range map[string]string{
+		"1e\n+2": "1",
+		"1e\v2":  "1",
+		"1e\f2":  "1",
+		"1e+ 2":  "1",
+		"1 e+2":  "1",
+		"1e ":    "1",
+		"1e +x":  "1",
+	} {
+		t.Run(in, func(t *testing.T) {
+			d, err := NewFromString(in)
+			require.Error(t, err)
+			require.Equal(t, want, d.String())
+		})
+	}
+}
+
 // TestNewFromStringZeroExponent pins the formatting of a zero written with a
 // positive exponent. String trims the padding away, but FormatMySQL keeps the
 // scale it is asked for, so a stale exponent surfaces as leading zeros.

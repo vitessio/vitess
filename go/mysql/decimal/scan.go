@@ -170,6 +170,7 @@ func NewFromString(s string) (d Decimal, err error) {
 
 	dotPos := -1
 	expPos := -1
+	expNum := -1
 	i := 0
 	var num bool
 	var exp int64
@@ -189,9 +190,9 @@ next:
 		switch {
 		case s[i] == '-' || s[i] == '+':
 			// A sign is allowed at the start of the number and at the start of
-			// the exponent, nowhere else. With no exponent seen yet expPos is
+			// the exponent, nowhere else. With no exponent seen yet expNum is
 			// -1, so the second test collapses into the first.
-			if i != start && i != expPos+1 {
+			if i != start && i != expNum {
 				break next
 			}
 		case s[i] >= '0' && s[i] <= '9':
@@ -203,12 +204,18 @@ next:
 				break next
 			}
 		case s[i] == 'e' || s[i] == 'E':
-			if expPos == -1 {
-				expPos = i
-				num = false
-			} else {
+			if expPos != -1 {
 				break next
 			}
+			expPos = i
+			num = false
+			// MySQL reads the exponent past any spaces and tabs — those two
+			// bytes only — between the marker and the sign, so they belong to
+			// the number here and nowhere else.
+			for i+1 < maxLen && (s[i+1] == ' ' || s[i+1] == '\t') {
+				i++
+			}
+			expNum = i + 1
 		default:
 			break next
 		}
@@ -246,7 +253,7 @@ next:
 
 	var expOverflow bool
 	if expPos != -1 {
-		e, _ := fastparse.ParseInt64(strings.TrimPrefix(s[expPos+1:i], "+"), 10)
+		e, _ := fastparse.ParseInt64(strings.TrimPrefix(strings.TrimLeft(s[expPos+1:i], " \t"), "+"), 10)
 		switch {
 		case e > ExponentLimit:
 			e = ExponentLimit
@@ -370,9 +377,11 @@ func parseLargeDecimal(integral, fractional []byte) (*big.Int, error) {
 	return new(big.Int).SetBits(z), nil
 }
 
+// isSpace covers the bytes MySQL's character sets count as whitespace around
+// numeric text, which include vertical tab and form feed.
 func isSpace(c byte) bool {
 	switch c {
-	case ' ', '\t', '\n', '\r':
+	case ' ', '\t', '\n', '\r', '\v', '\f':
 		return true
 	default:
 		return false

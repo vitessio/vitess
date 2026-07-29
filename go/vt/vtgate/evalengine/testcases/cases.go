@@ -47,6 +47,7 @@ var Cases = []TestCase{
 	{Run: LargeIntegers},
 	{Run: DecimalClamping},
 	{Run: SignedExponents},
+	{Run: NumericTextWhitespace},
 	{Run: BitwiseOperatorsUnary},
 	{Run: BitwiseOperators},
 	{Run: WeightString},
@@ -942,6 +943,21 @@ func SignedExponents(yield Query) {
 	for _, s := range []string{"1e+5", "+1", " -1"} {
 		literal := fmt.Sprintf(`'"%s"'`, s)
 		yield(fmt.Sprintf("CAST(CAST(%s AS JSON) AS DECIMAL(20, 6))", literal), nil, false)
+	}
+}
+
+// NumericTextWhitespace covers the whitespace MySQL reads as part of numeric
+// text converted to a decimal: vertical tab and form feed around the number,
+// and spaces or tabs between the exponent marker and its sign. Only the
+// decimal conversion reads whitespace after the marker — the double
+// conversion stops there — so these stay on CAST … AS DECIMAL.
+func NumericTextWhitespace(yield Query) {
+	for _, text := range []string{
+		"\v+1", "\f-1", "\v\f 1", "1\v", "1\f",
+		"1e +5", "1e\t-5", "1e \t+5", "1e  +2", "1e 2", " 1e +2 ",
+		"1e\n+2", "1e\v2", "1e\f2", "1e+ 2", "1 e+2", "1e ", "1e +x",
+	} {
+		yield(fmt.Sprintf("CAST('%s' AS DECIMAL(20, 6))", text), nil, false)
 	}
 }
 
