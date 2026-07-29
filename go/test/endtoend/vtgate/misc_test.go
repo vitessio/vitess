@@ -1094,7 +1094,7 @@ func TestJoinWithMergedRouteWithPredicate(t *testing.T) {
 	utils.AssertMatches(t, conn, "select t3.id7, t2.id3, t3.id6 from t1 join t3 on t1.id2 = t3.id5 join t2 on t3.id6 = t2.id3 where t1.id2 = 13", `[[INT64(8) INT64(5) INT64(5)]]`)
 }
 
-func TestRowCountExceed(t *testing.T) {
+func TestStreamingRowCountNotLimited(t *testing.T) {
 	conn, _ := start(t)
 	defer func() {
 		// needs special delete logic as it exceeds row count.
@@ -1108,7 +1108,13 @@ func TestRowCountExceed(t *testing.T) {
 		utils.Exec(t, conn, fmt.Sprintf("insert into t1 (id1, id2) values (%d, %d)", i, i+1))
 	}
 
-	utils.AssertContainsError(t, conn, "select id1 from t1 where id1 < 1000", `Row count exceeded 100`)
+	// The tablet's --queryserver-config-max-result-size limit ("row count
+	// exceeded") is only enforced when the full result is buffered. A streamed
+	// query is delivered incrementally and is not subject to the limit, so it
+	// returns all matching rows. Use the OLAP workload, which always streams.
+	utils.Exec(t, conn, "set workload = olap")
+	qr := utils.Exec(t, conn, "select id1 from t1 where id1 < 1000")
+	assert.Len(t, qr.Rows, 250)
 }
 
 func TestDDLTargeted(t *testing.T) {
@@ -1387,11 +1393,16 @@ func getVtgateApiErrorCounts(t *testing.T) float64 {
 		return 0
 	}
 	mapErrors := apiErr.(map[string]any)
-	val, exists := mapErrors["Execute.ks.primary.ALREADY_EXISTS"]
-	if exists {
-		return val.(float64)
+	// The error is counted under the operation of the RPC that carried it, which
+	// is Execute for a buffered query and StreamExecute for a streamed one. Sum
+	// both so the count is independent of the delivery mode.
+	var total float64
+	for _, op := range []string{"Execute", "StreamExecute"} {
+		if val, exists := mapErrors[op+".ks.primary.ALREADY_EXISTS"]; exists {
+			total += val.(float64)
+		}
 	}
-	return 0
+	return total
 }
 
 func getVar(t *testing.T, key string) any {

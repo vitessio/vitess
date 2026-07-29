@@ -749,21 +749,33 @@ func (qe *QueryEngine) handleHTTPConsolidations(response http.ResponseWriter, re
 		acl.SendError(response, err)
 		return
 	}
-	items := qe.consolidator.Items()
 	response.Header().Set("Content-Type", "text/plain")
-	if items == nil {
+
+	nonStreaming := qe.consolidator.Items()
+	var streaming []sync2.ConsolidatorCacheItem
+	if qe.streamConsolidator != nil {
+		streaming = qe.streamConsolidator.Items()
+	}
+	if nonStreaming == nil && streaming == nil {
 		response.Write([]byte("empty\n"))
 		return
 	}
-	fmt.Fprintf(response, "Length: %d\n", len(items))
+	fmt.Fprintf(response, "Length: %d\n", len(nonStreaming)+len(streaming))
+	qe.writeConsolidations(response, "non-streaming", nonStreaming)
+	qe.writeConsolidations(response, "streaming", streaming)
+}
+
+// writeConsolidations renders one consolidator's items, tagging each line with the
+// execution path (streaming or non-streaming) so identical queries from different
+// paths are distinguishable. The count stays the first colon-delimited token's
+// trailing number so the line remains machine-parseable.
+func (qe *QueryEngine) writeConsolidations(response http.ResponseWriter, label string, items []sync2.ConsolidatorCacheItem) {
 	for _, v := range items {
-		var query string
+		query := v.Query
 		if qe.redactUIQuery {
 			query, _ = qe.env.Environment().Parser().RedactSQLQuery(v.Query)
-		} else {
-			query = v.Query
 		}
-		fmt.Fprintf(response, "%v: %s\n", v.Count, query)
+		fmt.Fprintf(response, "%s %v: %s\n", label, v.Count, query)
 	}
 }
 

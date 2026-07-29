@@ -290,6 +290,23 @@ func (tsv *TabletServer) loadQueryTimeoutWithOptions(options *querypb.ExecuteOpt
 	return time.Duration(tsv.QueryTimeout.Load())
 }
 
+// streamTimeout returns the request timeout and the shutdown allowance for a
+// streaming query. An OLTP workload keeps the same timeout semantics as the
+// buffered Execute path, so that streaming an OLTP query does not silently drop
+// its query timeout. Other workloads retain the historical behavior of bounding
+// only transactional streams with the OLAP transaction timeout. Returning the
+// OLAP transaction timeout for an UNSPECIFIED workload is deliberate: it avoids
+// TxTimeoutForWorkload mapping UNSPECIFIED to the OLTP timeout.
+func (tsv *TabletServer) streamTimeout(transactionID int64, options *querypb.ExecuteOptions) (time.Duration, bool) {
+	if options.GetWorkload() == querypb.ExecuteOptions_OLTP {
+		return tsv.loadQueryTimeoutWithTxAndOptions(transactionID, options), transactionID != 0
+	}
+	if transactionID != 0 {
+		return getTransactionTimeout(options, tsv.config, querypb.ExecuteOptions_OLAP), true
+	}
+	return 0, false
+}
+
 // onlineDDLExecutorToggleTableBuffer is called by onlineDDLExecutor as a callback function. onlineDDLExecutor
 // uses it to start/stop query buffering for a given table.
 // It is onlineDDLExecutor's responsibility to make sure buffering is stopped after some definite amount of time.
@@ -1021,14 +1038,7 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, session queryservice
 }
 
 func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, settings []string, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
-	allowOnShutdown := false
-	var timeout time.Duration
-	if transactionID != 0 {
-		allowOnShutdown = true
-		// Use the transaction timeout. StreamExecute calls happen for OLAP only,
-		// so we can directly fetch the OLAP TX timeout.
-		timeout = getTransactionTimeout(options, tsv.config, querypb.ExecuteOptions_OLAP)
-	}
+	timeout, allowOnShutdown := tsv.streamTimeout(transactionID, options)
 
 	return tsv.execRequest(
 		ctx, timeout,
@@ -1743,7 +1753,7 @@ func (tsv *TabletServer) ReserveExecute(ctx context.Context, session queryservic
 	return state, result, err
 }
 
-// ReserveStreamExecute combines Begin and StreamExecute.
+// ReserveStreamExecute combines Reserve and StreamExecute.
 func (tsv *TabletServer) ReserveStreamExecute(
 	ctx context.Context,
 	session queryservice.Session,
@@ -1755,7 +1765,46 @@ func (tsv *TabletServer) ReserveStreamExecute(
 	options *querypb.ExecuteOptions,
 	callback func(*sqltypes.Result) error,
 ) (state queryservice.ReservedState, err error) {
-	return state, tsv.streamExecute(ctx, target, sql, bindVariables, transactionID, 0, settings, options, callback)
+	err = tsv.streamExecute(ctx, target, sql, bindVariables, transactionID, 0, settings, options, callback)
+	// If there is an error and the error message is about allowing query in reserved connection only,
+	// then we do not return an error from here and continue to use the reserved connection path.
+	// This is specially for statements like FLUSH ... WITH READ LOCK that need a reserved connection.
+	// The reserved-connection check runs before any rows are streamed, so it is safe to retry here.
+	if err == nil || !strings.Contains(err.Error(), "not allowed without reserved connection") {
+		return state, err
+	}
+
+	// needs a reserved connection to execute the query.
+	state.TabletAlias = tsv.alias
+
+	allowOnShutdown := transactionID != 0
+	timeout := tsv.loadQueryTimeoutWithTxAndOptions(transactionID, options)
+
+	err = tsv.execRequest(
+		ctx, timeout,
+		"Reserve", "", bindVariables,
+		target, options, allowOnShutdown,
+		func(ctx context.Context, logStats *tabletenv.LogStats) error {
+			defer tsv.stats.QueryTimings.Record("RESERVE", time.Now())
+			targetType, err := tsv.resolveTargetType(ctx, target)
+			if err != nil {
+				return err
+			}
+			defer tsv.stats.QueryTimingsByTabletType.Record(targetType.String(), time.Now())
+			state.ReservedID, err = tsv.te.Reserve(ctx, options, transactionID, settings)
+			if err != nil {
+				return err
+			}
+			logStats.TransactionID = transactionID
+			logStats.ReservedID = state.ReservedID
+			return nil
+		},
+	)
+	if err != nil {
+		return state, err
+	}
+
+	return state, tsv.streamExecute(ctx, target, sql, bindVariables, transactionID, state.ReservedID, nil, options, callback)
 }
 
 // Release implements the QueryService interface
