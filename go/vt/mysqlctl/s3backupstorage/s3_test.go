@@ -908,13 +908,13 @@ func TestDownloadBufferSizeValidation(t *testing.T) {
 		{
 			name:        "exceeds per-file memory limit",
 			partSize:    128 * 1024 * 1024, // 128MiB
-			concurrency: 5,                 // 640MiB window, 1280MiB total (2x) > 1GiB limit
-			wantErr:     "exceeding limit",
+			concurrency: 8,                 // window=1GiB + part=128MiB = 1152MiB > 1GiB limit
+			wantErr:     "exceeds limit",
 		},
 		{
-			name:        "exactly at half-limit boundary",
-			partSize:    128 * 1024 * 1024, // 128MiB
-			concurrency: 4,                 // 512MiB window = maxPerFileMemory/2
+			name:        "at boundary - fits exactly",
+			partSize:    100 * 1024 * 1024, // 100MiB
+			concurrency: 9,                 // window=900MiB + part=100MiB = 1000MiB < 1GiB
 		},
 	}
 
@@ -932,11 +932,35 @@ func TestDownloadBufferSizeValidation(t *testing.T) {
 	}
 }
 
+// closeTrackingTransport wraps an http.RoundTripper and replaces response
+// bodies with a trackingBody that records Close calls.
+type closeTrackingTransport struct {
+	wrapped    http.RoundTripper
+	bodyClosed atomic.Int32
+}
+
+func (t *closeTrackingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	resp, err := t.wrapped.RoundTrip(req)
+	if err != nil {
+		return resp, err
+	}
+	if req.Method == "GET" {
+		resp.Body = &trackingBody{ReadCloser: resp.Body, closed: &t.bodyClosed}
+	}
+	return resp, err
+}
+
+type trackingBody struct {
+	io.ReadCloser
+	closed *atomic.Int32
+}
+
+func (b *trackingBody) Close() error {
+	b.closed.Add(1)
+	return b.ReadCloser.Close()
+}
+
 func TestReadFileZeroLengthObjectCloser(t *testing.T) {
-	// Track whether the HTTP response body gets closed. For zero-length objects
-	// the transfer manager's singleDownload path returns the raw S3 response body
-	// (an io.ReadCloser). cancelingReader must propagate Close() to it.
-	var bodyClosed atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "HEAD" {
 			w.Header().Set("Content-Length", "0")
@@ -944,12 +968,6 @@ func TestReadFileZeroLengthObjectCloser(t *testing.T) {
 			return
 		}
 		if r.Method == "GET" {
-			// httptest records close via the CloseNotifier, but we track via
-			// a hijacked connection — instead, use the server-side close signal.
-			// The SDK will wrap this body; we observe the close via the
-			// atomic counter checked after rc.Close() below. Since the HTTP
-			// layer also tracks body close, we just need to verify no leak.
-			bodyClosed.Add(1)
 			w.Header().Set("Content-Length", "0")
 			w.WriteHeader(http.StatusOK)
 			return
@@ -973,10 +991,16 @@ func TestReadFileZeroLengthObjectCloser(t *testing.T) {
 	downloadPartSize = 8 * 1024 * 1024
 	downloadConcurrency = 5
 
+	// Use a custom transport that tracks response body Close calls
+	tracker := &closeTrackingTransport{
+		wrapped: &http.Transport{},
+	}
+
 	s3Client := s3.New(s3.Options{
 		Region:       "us-east-1",
 		BaseEndpoint: aws.String(server.URL),
 		UsePathStyle: true,
+		HTTPClient:   &http.Client{Transport: tracker},
 		Credentials: aws.CredentialsProviderFunc(func(_ context.Context) (aws.Credentials, error) {
 			return aws.Credentials{AccessKeyID: "test", SecretAccessKey: "test"}, nil
 		}),
@@ -1003,12 +1027,16 @@ func TestReadFileZeroLengthObjectCloser(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, data)
 
+	// Body must not be closed yet — only our explicit Close should trigger it
+	assert.Equal(t, int32(0), tracker.bodyClosed.Load(),
+		"response body should not be closed before rc.Close()")
+
 	err = rc.Close()
 	require.NoError(t, err)
 
-	// Verify the GET was actually issued (confirms the zero-length path was taken)
-	assert.Equal(t, int32(1), bodyClosed.Load(),
-		"expected exactly one GET request for zero-length object")
+	// After Close, the underlying response body must have been closed
+	assert.Equal(t, int32(1), tracker.bodyClosed.Load(),
+		"response body should be closed exactly once after rc.Close()")
 }
 
 func TestReadFileOnWriteHandle(t *testing.T) {

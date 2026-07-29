@@ -396,28 +396,30 @@ func (bh *S3BackupHandle) ReadFile(ctx context.Context, filename string) (io.Rea
 	// The transfer manager's concurrentReader spawns Concurrency goroutines per
 	// Read() call. Vitess's restore pipe (pgzip) reads through a small buffer
 	// (~4 KiB), so without coalescing, each tiny Read() creates a full worker
-	// pool — ~1.3M goroutine lifecycles per GiB. A bufio.Reader sized to the
-	// transfer window ensures the SDK's Read() is called with a buffer large
-	// enough to fill all workers in one pass.
-	buffered := bufio.NewReaderSize(out.Body, int(bufferSize))
+	// pool — ~1.3M goroutine lifecycles per GiB. A one-part bufio.Reader is
+	// sufficient: the SDK's GetObjectBufferSize already manages the full transfer
+	// window internally; this buffer only needs to coalesce small downstream reads
+	// into a part-sized read for the SDK.
+	buffered := bufio.NewReaderSize(out.Body, int(downloadPartSize))
 
 	return &cancelingReader{Reader: buffered, body: out.Body, cancel: cancel}, nil
 }
 
 // downloadBufferSize computes the GetObjectBufferSize and validates that the
 // resulting per-file memory usage stays within maxPerFileMemory. The total
-// per-file allocation is 2× the transfer window: once for the SDK's internal
-// GetObjectBufferSize and once for the bufio.Reader that coalesces small reads.
+// per-file allocation is the SDK's GetObjectBufferSize (partSize × concurrency)
+// plus one part for the bufio.Reader that coalesces small reads.
 func downloadBufferSize(partSize int64, concurrency int) (int64, error) {
 	if partSize > math.MaxInt64/int64(concurrency) {
 		return 0, fmt.Errorf("--s3-backup-download-part-size (%d) * --s3-backup-download-concurrency (%d) overflows int64", partSize, concurrency)
 	}
 	size := partSize * int64(concurrency)
-	if size > maxPerFileMemory/2 {
+	totalPerFile := size + partSize
+	if totalPerFile > maxPerFileMemory {
 		return 0, fmt.Errorf(
-			"--s3-backup-download-part-size (%s) * --s3-backup-download-concurrency (%d) = %s; total per-file allocation (2x for SDK buffer + read buffer) would be %s, exceeding limit of %s; reduce part size or concurrency",
-			humanize.IBytes(uint64(partSize)), concurrency,
-			humanize.IBytes(uint64(size)), humanize.IBytes(uint64(size*2)), humanize.IBytes(uint64(maxPerFileMemory)),
+			"per-file memory (SDK buffer %s + read buffer %s = %s) exceeds limit of %s; reduce --s3-backup-download-part-size or --s3-backup-download-concurrency",
+			humanize.IBytes(uint64(size)), humanize.IBytes(uint64(partSize)),
+			humanize.IBytes(uint64(totalPerFile)), humanize.IBytes(uint64(maxPerFileMemory)),
 		)
 	}
 	return size, nil
