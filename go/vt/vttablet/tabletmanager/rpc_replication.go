@@ -340,17 +340,22 @@ func (tm *TabletManager) RestartReplication(ctx context.Context, semiSync bool) 
 		return err
 	}
 
-	semiSyncAction, err := tm.convertBoolToSemiSyncAction(ctx, semiSync)
+	// Once STOP succeeds, use a fresh bounded context so caller cancellation
+	// cannot leave replication stopped.
+	postStopCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), topo.RemoteOperationTimeout)
+	defer cancel()
+
+	semiSyncAction, err := tm.convertBoolToSemiSyncAction(postStopCtx, semiSync)
 	if err != nil {
 		return err
 	}
 
-	if err := tm.fixSemiSync(ctx, tm.Tablet().Type, semiSyncAction); err != nil {
+	if err := tm.fixSemiSync(postStopCtx, tm.Tablet().Type, semiSyncAction); err != nil {
 		return err
 	}
 
 	// Start replication
-	return tm.startReplicationRecoverable(ctx)
+	return tm.startReplicationRecoverable(postStopCtx)
 }
 
 // StartReplicationUntilAfter will start the replication and let it catch up
