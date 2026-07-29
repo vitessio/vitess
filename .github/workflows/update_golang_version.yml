@@ -46,7 +46,14 @@ jobs:
           ref: ${{ matrix.branch }}
 
       - name: Set up Go
-        uses: ./.github/actions/setup-go
+        # The shared setup-go action is resolved from the matrix.branch
+        # checkout, where it may not exist or may be outdated. This job only
+        # compiles the small go-upgrade tool once a day, so caching is not
+        # worth it anyway.
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+          cache: false
 
       - name: Detect new version and update codebase
         env:
