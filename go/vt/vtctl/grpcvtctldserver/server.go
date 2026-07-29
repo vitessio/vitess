@@ -2392,13 +2392,12 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 						mu.Unlock()
 						return fmt.Errorf("GetShard(%s/%s) failed: %w", ks.keyspace, ks.shard, getErr)
 					}
-					// A zero shard-record term (e.g. briefly after a promotion)
-					// keeps the seed, so transient cases stay best-effort.
-					if t := si.GetPrimaryTermStartTime(); !t.IsZero() {
-						mu.Lock()
+					t := si.GetPrimaryTermStartTime()
+					mu.Lock()
+					if t.After(truePrimaryByShard[key]) {
 						truePrimaryByShard[key] = t
-						mu.Unlock()
 					}
+					mu.Unlock()
 					return nil
 				})
 			}
