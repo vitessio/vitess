@@ -1022,6 +1022,52 @@ func TestRestoreRetriesSettingsRestore(t *testing.T) {
 	}
 }
 
+// TestRestoreReconnectsWhenSettingsRestoreLosesConnection covers a settings
+// restore whose connection dies mid-SET when there are no replication threads
+// to reconcile: the status probe -- which is what resets a broken connection
+// in the reconcile path -- is never reached there, so the settings-only path
+// must reconnect itself rather than retry the dead connection until the
+// restore deadline (holding Close's bounded wait with it).
+func TestRestoreReconnectsWhenSettingsRestoreLosesConnection(t *testing.T) {
+	const (
+		restoreFlushLog     = "SET GLOBAL innodb_flush_log_at_trx_commit = 2"
+		restoreSyncBinlog   = "SET GLOBAL sync_binlog = 0"
+		restoreSyncRelayLog = "SET GLOBAL sync_relay_log = 10000"
+	)
+
+	db := fakesqldb.New(t)
+	defer db.Close()
+	db.AddQuery("SELECT 1", &sqltypes.Result{})
+	for _, query := range []string{restoreFlushLog, restoreSyncBinlog, restoreSyncRelayLog} {
+		db.AddQuery(query, &sqltypes.Result{})
+	}
+	// The first SET loses its connection mid-statement.
+	var dropped atomic.Bool
+	db.SetBeforeFunc(restoreFlushLog, func() {
+		if dropped.CompareAndSwap(false, true) {
+			db.CloseAllConnections()
+		}
+	})
+
+	params := db.ConnParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+	testMysqld := NewMysqld(dbc)
+	defer testMysqld.Close()
+
+	// No threads to reconcile: the restoration's only work is the settings.
+	state := &replicaShutdownState{
+		flushLogAtTrxCommit: "2",
+		syncBinlog:          "0",
+		syncRelayLog:        "10000",
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	testMysqld.restoreReplicaAfterFailedShutdown(ctx, state, 10*time.Millisecond, 30*time.Second)
+	assert.GreaterOrEqual(t, db.GetQueryCalledNum(restoreSyncRelayLog), 1,
+		"the settings must be restored on a fresh connection after the first one broke")
+}
+
 // TestReplicaShutdownSkipsUnavailableThreadCommands covers flavors whose
 // replication-thread commands cannot be executed: the file position flavor
 // returns "unsupported" for them, so the crash-safety preparation must not

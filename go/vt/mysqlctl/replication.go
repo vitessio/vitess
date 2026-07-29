@@ -554,6 +554,12 @@ func (mysqld *Mysqld) restoreReplicaAfterFailedShutdown(ctx context.Context, sta
 			if settingsRestored {
 				return
 			}
+			// A failed SET may mean this connection broke, and with no
+			// threads to reconcile the status probe below -- which is what
+			// resets a broken connection -- is never reached: reconnect for
+			// the next attempt.
+			conn.Close()
+			conn = nil
 			continue
 		}
 		// Reconcile the replication threads rather than fire a single START: an
