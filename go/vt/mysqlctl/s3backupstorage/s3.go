@@ -24,6 +24,7 @@ limitations under the License.
 package s3backupstorage
 
 import (
+	"bufio"
 	"context"
 	"crypto/md5"
 	"crypto/tls"
@@ -63,6 +64,11 @@ import (
 const (
 	sseCustomerPrefix = "sse_c:"
 	MaxPartSize       = 1024 * 1024 * 1024 * 5 // 5GiB - limited by AWS https://docs.aws.amazon.com/AmazonS3/latest/userguide/qfacts.html
+
+	// maxPerFileMemory caps the transfer-manager buffer per concurrent restore
+	// file. Restore opens up to 4 files concurrently, so this limits total
+	// download buffering to ~4 GiB in the worst case.
+	maxPerFileMemory int64 = 1024 * 1024 * 1024 // 1 GiB
 )
 
 var (
@@ -346,6 +352,11 @@ func (bh *S3BackupHandle) ReadFile(ctx context.Context, filename string) (io.Rea
 		return nil, fmt.Errorf("--s3-backup-download-concurrency must be >= 1, got %d", downloadConcurrency)
 	}
 
+	bufferSize, err := downloadBufferSize(downloadPartSize, downloadConcurrency)
+	if err != nil {
+		return nil, err
+	}
+
 	// The transfer manager calls HeadObject internally to determine object size,
 	// but does not forward SSE-C params to that call (aws-sdk-go-v2 bug). We work
 	// around this by wrapping the client to inject SSE-C params into HeadObject.
@@ -366,10 +377,7 @@ func (bh *S3BackupHandle) ReadFile(ctx context.Context, filename string) (io.Rea
 		o.GetObjectType = tmtypes.GetObjectRanges
 		o.PartSizeBytes = downloadPartSize
 		o.Concurrency = downloadConcurrency
-		// Size buffer so the SDK fills all workers in one wave. Without this,
-		// the 50MiB default means floor(50MiB/partSize) parts are scheduled per
-		// Read() — at parts above 25MiB that serializes the download entirely.
-		o.GetObjectBufferSize = min(downloadPartSize*int64(downloadConcurrency), 1<<30)
+		o.GetObjectBufferSize = bufferSize
 	})
 
 	readCtx, cancel := context.WithCancel(ctx)
@@ -384,18 +392,49 @@ func (bh *S3BackupHandle) ReadFile(ctx context.Context, filename string) (io.Rea
 		cancel()
 		return nil, err
 	}
-	return &cancelingReader{Reader: out.Body, cancel: cancel}, nil
+
+	// The transfer manager's concurrentReader spawns Concurrency goroutines per
+	// Read() call. Vitess's restore pipe (pgzip) reads through a small buffer
+	// (~4 KiB), so without coalescing, each tiny Read() creates a full worker
+	// pool — ~1.3M goroutine lifecycles per GiB. A bufio.Reader sized to the
+	// transfer window ensures the SDK's Read() is called with a buffer large
+	// enough to fill all workers in one pass.
+	buffered := bufio.NewReaderSize(out.Body, int(bufferSize))
+
+	return &cancelingReader{Reader: buffered, body: out.Body, cancel: cancel}, nil
 }
 
-// cancelingReader wraps an io.Reader and cancels its context on Close,
-// aborting any in-flight transfer-manager ranged GETs.
+// downloadBufferSize computes the GetObjectBufferSize and validates that the
+// resulting per-file memory usage stays within maxPerFileMemory.
+func downloadBufferSize(partSize int64, concurrency int) (int64, error) {
+	if partSize > math.MaxInt64/int64(concurrency) {
+		return 0, fmt.Errorf("--s3-backup-download-part-size (%d) * --s3-backup-download-concurrency (%d) overflows int64", partSize, concurrency)
+	}
+	size := partSize * int64(concurrency)
+	if size > maxPerFileMemory {
+		return 0, fmt.Errorf(
+			"--s3-backup-download-part-size (%s) * --s3-backup-download-concurrency (%d) = %s exceeds per-file memory limit of %s; reduce part size or concurrency",
+			humanize.IBytes(uint64(partSize)), concurrency,
+			humanize.IBytes(uint64(size)), humanize.IBytes(uint64(maxPerFileMemory)),
+		)
+	}
+	return size, nil
+}
+
+// cancelingReader wraps a transfer-manager reader with context cancellation and
+// proper resource cleanup. It also preserves the underlying body's Close method
+// for the zero-length object path where the SDK returns the raw S3 response body.
 type cancelingReader struct {
 	io.Reader
+	body   io.Reader
 	cancel context.CancelFunc
 }
 
 func (r *cancelingReader) Close() error {
 	r.cancel()
+	if c, ok := r.body.(io.Closer); ok {
+		return c.Close()
+	}
 	return nil
 }
 
