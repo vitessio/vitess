@@ -320,6 +320,26 @@ func (s StatementType) String() string {
 	}
 }
 
+// validStatementTypeNames is the set of names StatementType.String() can return.
+// It is derived from the enum so it cannot drift from String(); StmtKill must
+// remain the last StatementType constant for the range to cover every value.
+var validStatementTypeNames = func() map[string]struct{} {
+	names := make(map[string]struct{})
+	for s := StmtUnknown; s <= StmtKill; s++ {
+		names[s.String()] = struct{}{}
+	}
+	return names
+}()
+
+// IsValidStatementType reports whether name is a canonical StatementType name,
+// i.e. a value StatementType.String() can produce. Use it to validate
+// externally-supplied statement-type strings (e.g. query-throttler rule keys)
+// against what the runtime can actually emit.
+func IsValidStatementType(name string) bool {
+	_, ok := validStatementTypeNames[name]
+	return ok
+}
+
 // IsDML returns true if the query is an INSERT, UPDATE or DELETE statement.
 func IsDML(sql string) bool {
 	switch Preview(sql) {

@@ -32,6 +32,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/proto/vttime"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
@@ -212,7 +213,17 @@ func validateQueryThrottlerConfigContent(cfg *querythrottler.Config) error {
 	}
 
 	for tabletType, stmtRuleSet := range tsc.GetTabletRules() {
+		// Reject tablet types the runtime can never emit. targetTabletType.String()
+		// only produces canonical TabletType_name values, so an exact round-trip
+		// rejects typos ("PRIMAY"), wrong case ("primary"), and aliases ("MASTER").
+		if v, ok := topodatapb.TabletType_value[tabletType]; !ok || topodatapb.TabletType(v).String() != tabletType {
+			return fmt.Errorf("unknown tablet type %q", tabletType)
+		}
 		for stmtType, metricRuleSet := range stmtRuleSet.GetStatementRules() {
+			// Reject statement types the runtime can never emit (StatementType.String()).
+			if !sqlparser.IsValidStatementType(stmtType) {
+				return fmt.Errorf("unknown statement type %q (tablet_type=%s)", stmtType, tabletType)
+			}
 			for metricName, rule := range metricRuleSet.GetMetricRules() {
 				if _, _, err := base.DisaggregateMetricName(metricName); err != nil {
 					return fmt.Errorf("unknown metric name %q (tablet_type=%s, statement=%s)", metricName, tabletType, stmtType)

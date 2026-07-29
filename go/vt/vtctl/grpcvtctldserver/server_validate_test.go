@@ -237,6 +237,62 @@ func TestValidateQueryThrottlerConfigRequest(t *testing.T) {
 			},
 			wantErr: `unknown metric name "lags" (tablet_type=PRIMARY, statement=SELECT)`,
 		},
+		{
+			name: "unknown tablet type",
+			req: &vtctldatapb.UpdateQueryThrottlerConfigRequest{
+				Keyspace: "ks1",
+				QueryThrottlerConfig: &querythrottlerpb.Config{
+					Enabled:  true,
+					Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
+					TabletStrategyConfig: &querythrottlerpb.TabletStrategyConfig{
+						TabletRules: map[string]*querythrottlerpb.StatementRuleSet{
+							"PRIMAY": {
+								StatementRules: map[string]*querythrottlerpb.MetricRuleSet{
+									"SELECT": {
+										MetricRules: map[string]*querythrottlerpb.MetricRule{
+											"lag": {
+												Thresholds: []*querythrottlerpb.ThrottleThreshold{
+													{Above: 5.0, Throttle: 100},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: `unknown tablet type "PRIMAY"`,
+		},
+		{
+			name: "unknown statement type",
+			req: &vtctldatapb.UpdateQueryThrottlerConfigRequest{
+				Keyspace: "ks1",
+				QueryThrottlerConfig: &querythrottlerpb.Config{
+					Enabled:  true,
+					Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
+					TabletStrategyConfig: &querythrottlerpb.TabletStrategyConfig{
+						TabletRules: map[string]*querythrottlerpb.StatementRuleSet{
+							"PRIMARY": {
+								StatementRules: map[string]*querythrottlerpb.MetricRuleSet{
+									"SELEC": {
+										MetricRules: map[string]*querythrottlerpb.MetricRule{
+											"lag": {
+												Thresholds: []*querythrottlerpb.ThrottleThreshold{
+													{Above: 5.0, Throttle: 100},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: `unknown statement type "SELEC" (tablet_type=PRIMARY)`,
+		},
 	}
 
 	for _, tt := range tests {
