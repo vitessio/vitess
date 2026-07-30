@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations/charset"
 )
@@ -357,6 +358,18 @@ func TestWildcardMatches(t *testing.T) {
 
 	testWildcardMatches(t, "utf8mb4_0900_bin", '?', '*', '\\', wildcardTestCases)
 	testWildcardMatches(t, "utf8mb4_0900_as_cs", '?', '*', '\\', wildcardTestCases)
+}
+
+func TestWildcardManyMetacharAsTrailByte(t *testing.T) {
+	// The custom match-many metacharacter 0x5F is a valid sjis trail
+	// byte, so the pattern 81 5F is one literal character and not a
+	// prefix pattern. The prefix shortcut in the byte pre-scan must
+	// leave it to the full parser.
+	coll := testcollation(t, "sjis_japanese_ci")
+	pat := coll.Wildcard([]byte("\x81\x5f"), '#', '_', 0)
+	require.True(t, pat.Match([]byte("\x81\x5f")))
+	require.False(t, pat.Match([]byte("\x81\x40")))
+	require.False(t, pat.Match([]byte("\x81\x5f\x40")))
 }
 
 func BenchmarkWildcardMatching(b *testing.B) {

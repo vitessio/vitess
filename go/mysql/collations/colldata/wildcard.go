@@ -652,7 +652,12 @@ func newMultibyteWildcardMatcher(
 				pattern:  pat,
 				isPrefix: false,
 			}
-		case many == len(pat)-1 && many > 0:
+		// The prefix shortcut reads the terminal byte without a decode.
+		// This is safe because the trail bytes of the multibyte charsets
+		// are all 0x30 or larger, so a metacharacter byte below 0x30
+		// cannot be the tail of a multibyte character. A custom
+		// metacharacter above that limit goes through the full parse.
+		case many == len(pat)-1 && many > 0 && chMany < 0x30:
 			return &fastMatcher{
 				collate:  collate,
 				pattern:  pat[:len(pat)-1],
