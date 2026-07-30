@@ -55,6 +55,49 @@ func (cached *fastMatcher) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+<<<<<<< HEAD
+||||||| parent of f4c5768f83 (charset: ensure DecodeRune always advances on malformed input (#20753))
+
+=======
+
+func (cached *multibytePatternChar) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(8)
+	}
+	return size
+}
+
+func (cached *multibyteWildcard) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field sort *[256]byte
+	if cached.sort != nil {
+		size += hack.RuntimeAllocSize(int64(cap(*cached.sort)))
+	}
+	// field charset vitess.io/vitess/go/mysql/collations/charset.Charset
+	if cc, ok := cached.charset.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field pattern []vitess.io/vitess/go/mysql/collations/colldata.multibytePatternChar
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.pattern)) * int64(8))
+		for _, elem := range cached.pattern {
+			size += elem.CachedSize(false)
+		}
+	}
+	return size
+}
+
+>>>>>>> f4c5768f83 (charset: ensure DecodeRune always advances on malformed input (#20753))
 func (cached *unicodeWildcard) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
