@@ -297,3 +297,59 @@ func TestCharsetFuzzWalking(t *testing.T) {
 		})
 	}
 }
+
+// TestCollationFuzzWildcard compares wildcard matching with MySQL's LIKE for
+// a set of collations with different comparison rules: case folding, accent
+// folding, contractions, expansions, supplementary characters, and the
+// wildcard metacharacters themselves.
+func TestCollationFuzzWildcard(t *testing.T) {
+	seed, iterations := fuzzConfig(t)
+
+	names := []string{
+		"utf8mb4_swedish_ci", "utf8mb4_danish_ci", "utf8mb4_unicode_ci",
+		"utf8mb4_general_ci", "utf8mb4_0900_ai_ci", "utf8mb4_da_0900_ai_ci",
+		"utf8mb4_0900_bin", "utf8mb4_bin", "latin1_swedish_ci",
+		"sjis_japanese_ci", "utf16_unicode_ci",
+	}
+	alphabet := []rune{'a', 'A', 'å', 'Å', 's', 'S', 'ß', 0x6F22, 0x1F60A, 0x1F4A9, ' ', '%', '_', '\\'}
+
+	conn := mysqlconn(t)
+	defer conn.Close()
+
+	fuzzString := func(rng *rand.Rand, cs charset.Charset) []byte {
+		var out []byte
+		var enc [8]byte
+		for range rng.IntN(7) {
+			r := alphabet[rng.IntN(len(alphabet))]
+			if w := cs.EncodeRune(enc[:], r); w > 0 {
+				out = append(out, enc[:w]...)
+			}
+		}
+		return out
+	}
+
+	for _, name := range names {
+		t.Run(name, func(t *testing.T) {
+			coll := colldata.Lookup(collations.MySQL8().LookupByName(name))
+			cs := coll.Charset()
+			rng := rand.New(rand.NewPCG(uint64(seed), 1))
+			for range iterations {
+				pattern := fuzzString(rng, cs)
+				input := fuzzString(rng, cs)
+				vitessMatch := coll.Wildcard(pattern, 0, 0, 0).Match(input)
+
+				query := fmt.Sprintf("SELECT CONVERT(X'%x' USING %s) LIKE CONVERT(X'%x' USING %s) COLLATE %s",
+					input, cs.Name(), pattern, cs.Name(), name)
+				res, err := conn.ExecuteFetch(query, 1, false)
+				require.NoError(t, err, "query: %s", query)
+				mysqlMatch := res.Rows[0][0].ToString() == "1"
+
+				if vitessMatch != mysqlMatch {
+					t.Errorf("%s: Wildcard(%X).Match(%X) = %v, but MySQL LIKE returns %v",
+						name, pattern, input, vitessMatch, mysqlMatch)
+					return
+				}
+			}
+		})
+	}
+}
