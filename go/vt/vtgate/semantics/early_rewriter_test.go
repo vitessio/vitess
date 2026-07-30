@@ -175,6 +175,20 @@ func TestExpandStar(t *testing.T) {
 		sql:    "select 1 from t1 join t5 using (b) where b = 12",
 		expSQL: "select 1 from t1 join t5 on t1.b = t5.b where t1.b = 12",
 	}, {
+		// USING coalescing applies to an unqualified * only: a qualified star
+		// returns every column of its table, join columns included
+		sql:    "select t2.* from t2 join t4 using (c1)",
+		expSQL: "select t2.c1, t2.c2 from t2 join t4 on t2.c1 = t4.c1",
+	}, {
+		sql:    "select t4.* from t2 join t4 using (c1)",
+		expSQL: "select t4.c1, t4.c4 from t2 join t4 on t2.c1 = t4.c1",
+	}, {
+		sql:    "select t2.*, t4.* from t2 join t4 using (c1)",
+		expSQL: "select t2.c1, t2.c2, t4.c1, t4.c4 from t2 join t4 on t2.c1 = t4.c1",
+	}, {
+		sql:    "select t1.*, t5.* from t1 join t5 using (b)",
+		expSQL: "select t1.a, t1.b, t1.c, t5.a, t5.b from t1 join t5 on t1.b = t5.b",
+	}, {
 		sql:    "select * from (select 12) as t",
 		expSQL: "select `12` from (select 12 from dual) as t",
 	}, {
