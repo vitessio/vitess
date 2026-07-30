@@ -241,12 +241,19 @@ func FindPositionsOfAllCandidates(
 		}
 
 		// A demoted/former primary applies no relay log, so its executed position
-		// is authoritative. Initialize Executed as well as Combined so that in
-		// RelayLogPositions.AtLeast it compares equal to an equally-advanced
-		// replica (whose Executed is reconciled up after its relay-log wait),
-		// letting election fall through to the promotion-rule/version tiebreakers
-		// instead of ranking the former primary behind.
-		positionMap[alias] = &RelayLogPositions{Combined: executedPosition, Executed: executedPosition}
+		// is authoritative. For GTID-based shards, initialize Executed as well as
+		// Combined so that in RelayLogPositions.AtLeast it compares equal to an
+		// equally-advanced replica (whose Executed is reconciled up to Combined
+		// after its relay-log wait), letting election fall through to the
+		// promotion-rule/version tiebreakers instead of ranking the former primary
+		// behind. On non-GTID shards there is no such Executed reconcile — replicas
+		// keep Executed zero (their executed position lives in Combined) — so leave
+		// Executed zero here too, matching the replicas and preserving the prior
+		// non-GTID position ordering.
+		positionMap[alias] = &RelayLogPositions{Combined: executedPosition}
+		if isGTIDBased {
+			positionMap[alias].Executed = executedPosition
+		}
 	}
 
 	return positionMap, isGTIDBased, nil

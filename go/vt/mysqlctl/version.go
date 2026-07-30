@@ -20,6 +20,8 @@ limitations under the License.
 
 package mysqlctl
 
+import "cmp"
+
 type ServerVersion struct {
 	Major, Minor, Patch int
 }
@@ -37,7 +39,7 @@ func (v *ServerVersion) atLeast(compare ServerVersion) bool {
 	return false
 }
 
-func (v *ServerVersion) IsSameRelease(compare ServerVersion) bool {
+func (v *ServerVersion) isSameRelease(compare ServerVersion) bool {
 	return v.Major == compare.Major && v.Minor == compare.Minor
 }
 
@@ -66,26 +68,15 @@ const mysql80BugfixOnlyPatch = 34
 // across families (e.g. MariaDB vs MySQL) is not meaningful.
 func (v *ServerVersion) CompareForReplication(compare ServerVersion) int {
 	if v.Major != compare.Major {
-		return sign(v.Major - compare.Major)
+		return cmp.Compare(v.Major, compare.Major)
 	}
 	if v.Minor != compare.Minor {
-		return sign(v.Minor - compare.Minor)
+		return cmp.Compare(v.Minor, compare.Minor)
 	}
 	// Same major.minor. Only within the pre-bugfix-only 8.0 series does the patch
 	// affect replication compatibility.
 	if v.Major == 8 && v.Minor == 0 && min(v.Patch, compare.Patch) < mysql80BugfixOnlyPatch {
-		return sign(v.Patch - compare.Patch)
+		return cmp.Compare(v.Patch, compare.Patch)
 	}
 	return 0
-}
-
-func sign(n int) int {
-	switch {
-	case n < 0:
-		return -1
-	case n > 0:
-		return 1
-	default:
-		return 0
-	}
 }

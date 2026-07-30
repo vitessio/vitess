@@ -255,6 +255,43 @@ func TestFindPositionsOfAllCandidates_PrimaryExecutedInitialized(t *testing.T) {
 		"equally-advanced replica must be at least as advanced as the former primary")
 }
 
+// TestFindPositionsOfAllCandidates_PrimaryExecutedZeroOnNonGTID verifies that on
+// a non-GTID (file-position) shard, a former primary's Executed position is left
+// zero, matching how replicas are stored (their executed position lives in
+// Combined, Executed zero). This preserves the prior non-GTID position ordering:
+// initializing the primary's Executed would make it strictly dominate an
+// equally-advanced replica on the executed tiebreak, changing who leads. Version-
+// aware election is GTID-only, so the former primary must not be reordered here.
+func TestFindPositionsOfAllCandidates_PrimaryExecutedZeroOnNonGTID(t *testing.T) {
+	t.Parallel()
+
+	const filePos = "FilePos/mysql-bin.0001:100"
+
+	positionMap, isGTIDBased, err := FindPositionsOfAllCandidates(
+		map[string]*replicationdatapb.StopReplicationStatus{
+			"r1": {After: &replicationdatapb.Status{
+				RelayLogPosition: filePos,
+				Position:         filePos,
+			}},
+		},
+		map[string]*replicationdatapb.PrimaryStatus{
+			"p1": {Position: filePos},
+		},
+	)
+	require.NoError(t, err)
+	require.False(t, isGTIDBased)
+
+	primary := positionMap["p1"]
+	require.NotNil(t, primary)
+
+	executed, err := replication.DecodePosition(filePos)
+	require.NoError(t, err)
+	assert.True(t, primary.Combined.Equal(executed),
+		"primary candidate Combined must hold its executed position, got %v", primary.Combined)
+	assert.True(t, primary.Executed.IsZero(),
+		"primary candidate Executed must stay zero on a non-GTID shard, got %v", primary.Executed)
+}
+
 // TestFindPositionsOfAllCandidates_ErrorNotDuplicated verifies that when
 // FindPositionsOfAllCandidates wraps an error the underlying cause message is
 // not repeated twice in the output. vterrors.Wrapf already appends the cause
