@@ -66,7 +66,7 @@ func TestLookupHashNew(t *testing.T) {
 		"to":         "toc",
 		"write_only": "invalid",
 	})
-	assert.EqualError(t, err, "write_only value must be 'true' or 'false': 'invalid'", "Create(bad_scatter)")
+	require.EqualError(t, err, "write_only value must be 'true' or 'false': 'invalid'", "Create(bad_scatter)")
 	if err == nil {
 		unknownParams := vdx.(ParamValidating).UnknownParams()
 		require.Empty(t, unknownParams)
@@ -176,7 +176,7 @@ func TestLookupHashVerify(t *testing.T) {
 	assert.Equal(t, []bool{false}, got, "lookuphash.Verify(mismatch)")
 
 	_, err = lookuphash.Verify(t.Context(), vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("bogus")})
-	assert.EqualError(t, err, "lookup.Verify.vunhash: invalid keyspace id: 626f677573", "lookuphash.Verify(bogus)")
+	require.EqualError(t, err, "lookup.Verify.vunhash: invalid keyspace id: 626f677573", "lookuphash.Verify(bogus)")
 
 	// writeOnly true should always yield true.
 	lookuphash = createLookup(t, "lookup_hash", true)

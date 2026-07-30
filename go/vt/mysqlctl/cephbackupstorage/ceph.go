@@ -109,12 +109,17 @@ func (bh *CephBackupHandle) AddFile(ctx context.Context, filename string, filesi
 	return writer, nil
 }
 
+// Wait implements BackupHandle.
+func (bh *CephBackupHandle) Wait() {
+	bh.waitGroup.Wait()
+}
+
 // EndBackup implements BackupHandle.
 func (bh *CephBackupHandle) EndBackup(ctx context.Context) error {
 	if bh.readOnly {
 		return errors.New("EndBackup cannot be called on read-only backup")
 	}
-	bh.waitGroup.Wait()
+	bh.Wait()
 	// Return the saved PutObject() errors, if any.
 	return bh.Error()
 }

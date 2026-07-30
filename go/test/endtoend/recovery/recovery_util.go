@@ -46,7 +46,7 @@ var (
 // VerifyQueriesUsingVtgate verifies queries using vtgate.
 func VerifyQueriesUsingVtgate(t *testing.T, session *vtgateconn.VTGateSession, query string, value string) {
 	qr, err := session.Execute(context.Background(), query, nil, false)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, value, fmt.Sprintf("%v", qr.Rows[0][0]))
 }
 
@@ -65,7 +65,7 @@ func RestoreTablet(t *testing.T, localCluster *cluster.LocalProcessCluster, tabl
 		_, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("CreateKeyspace", restoreKSName,
 			"--type=SNAPSHOT", "--base-keyspace="+keyspaceName,
 			"--snapshot-timestamp", restoreTime.Format(time.RFC3339))
-		require.Nil(t, err)
+		require.NoError(t, err)
 	}
 
 	if UseXb {
@@ -83,14 +83,14 @@ func RestoreTablet(t *testing.T, localCluster *cluster.LocalProcessCluster, tabl
 
 	tablet.VttabletProcess.ServingStatus = ""
 	err = tablet.VttabletProcess.Setup()
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	err = tablet.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, 20*time.Second)
-	require.Nil(t, err)
+	require.NoError(t, err)
 }
 
 // InsertData inserts data.
 func InsertData(t *testing.T, tablet *cluster.Vttablet, index int, keyspaceName string) {
 	_, err := tablet.VttabletProcess.QueryTablet(fmt.Sprintf("insert into vt_insert_test (id, msg) values (%d, 'test %d')", index, index), keyspaceName, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 }

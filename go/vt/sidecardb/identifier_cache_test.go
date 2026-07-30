@@ -42,7 +42,7 @@ func TestIdentifierCache(t *testing.T) {
 	cache, err := GetIdentifierCache()
 	require.Error(t, err)
 	require.Nil(t, cache)
-	require.Equal(t, err.Error(), errIdentifierCacheUninitialized)
+	require.Equal(t, errIdentifierCacheUninitialized, err.Error())
 	// Create the cache to use for lookups of the sidecar database
 	// identifier in use by each keyspace.
 	var created bool

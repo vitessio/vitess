@@ -80,17 +80,17 @@ func TestScope(t *testing.T) {
 	// - TimedIncrement on new stats2 increments stats2 scope but not stats1.
 	stats1.TimedIncrement(duration)
 
-	require.Equal(t, 1, len(count.Counts()))
+	require.Len(t, count.Counts(), 1)
 	require.Equal(t, int64(1), count.Counts()[path1])
-	require.Equal(t, 1, len(durationNs.Counts()))
+	require.Len(t, durationNs.Counts(), 1)
 	require.Equal(t, duration.Nanoseconds(), durationNs.Counts()[path1])
 
 	stats2.TimedIncrement(duration)
 
-	require.Equal(t, 2, len(count.Counts()))
+	require.Len(t, count.Counts(), 2)
 	require.Equal(t, int64(1), count.Counts()[path1])
 	require.Equal(t, int64(1), count.Counts()[path2])
-	require.Equal(t, 2, len(durationNs.Counts()))
+	require.Len(t, durationNs.Counts(), 2)
 	require.Equal(t, duration.Nanoseconds(), durationNs.Counts()[path1])
 	require.Equal(t, duration.Nanoseconds(), durationNs.Counts()[path2])
 
@@ -105,11 +105,11 @@ func TestScope(t *testing.T) {
 	path3 := strings.Join([]string{BackupEngine.String(), "Test", "Test"}, ".")
 	stats3.TimedIncrement(duration)
 
-	require.Equal(t, 3, len(count.Counts()))
+	require.Len(t, count.Counts(), 3)
 	require.Equal(t, int64(1), count.Counts()[path1])
 	require.Equal(t, int64(1), count.Counts()[path2])
 	require.Equal(t, int64(1), count.Counts()[path3])
-	require.Equal(t, 3, len(durationNs.Counts()))
+	require.Len(t, durationNs.Counts(), 3)
 	require.Equal(t, duration.Nanoseconds(), durationNs.Counts()[path1])
 	require.Equal(t, duration.Nanoseconds(), durationNs.Counts()[path2])
 	require.Equal(t, duration.Nanoseconds(), durationNs.Counts()[path3])
@@ -136,22 +136,22 @@ func TestTimedIncrement(t *testing.T) {
 
 	stats.TimedIncrement(duration)
 
-	require.Equal(t, 0, len(bytes.Counts()))
+	require.Empty(t, bytes.Counts())
 
-	require.Equal(t, 1, len(count.Counts()))
+	require.Len(t, count.Counts(), 1)
 	require.Equal(t, int64(1), count.Counts()[path])
 
-	require.Equal(t, 1, len(durationNs.Counts()))
+	require.Len(t, durationNs.Counts(), 1)
 	require.Equal(t, duration.Nanoseconds(), durationNs.Counts()[path])
 
 	stats.TimedIncrement(duration)
 
-	require.Equal(t, 0, len(bytes.Counts()))
+	require.Empty(t, bytes.Counts())
 
-	require.Equal(t, 1, len(count.Counts()))
+	require.Len(t, count.Counts(), 1)
 	require.Equal(t, int64(2), count.Counts()[path])
 
-	require.Equal(t, 1, len(durationNs.Counts()))
+	require.Len(t, durationNs.Counts(), 1)
 	require.Equal(t, 2*duration.Nanoseconds(), durationNs.Counts()[path])
 }
 
@@ -168,22 +168,22 @@ func TestTimedIncrementBytes(t *testing.T) {
 
 	stats.TimedIncrementBytes(incBytes, duration)
 
-	require.Equal(t, 1, len(bytes.Counts()))
+	require.Len(t, bytes.Counts(), 1)
 	require.Equal(t, int64(incBytes), bytes.Counts()[path])
 
-	require.Equal(t, 0, len(count.Counts()))
+	require.Empty(t, count.Counts())
 
-	require.Equal(t, 1, len(durationNs.Counts()))
+	require.Len(t, durationNs.Counts(), 1)
 	require.Equal(t, duration.Nanoseconds(), durationNs.Counts()[path])
 
 	stats.TimedIncrementBytes(incBytes, duration)
 
-	require.Equal(t, 1, len(bytes.Counts()))
+	require.Len(t, bytes.Counts(), 1)
 	require.Equal(t, int64(2*incBytes), bytes.Counts()[path])
 
-	require.Equal(t, 0, len(count.Counts()))
+	require.Empty(t, count.Counts())
 
-	require.Equal(t, 1, len(durationNs.Counts()))
+	require.Len(t, durationNs.Counts(), 1)
 	require.Equal(t, 2*duration.Nanoseconds(), durationNs.Counts()[path])
 }
 

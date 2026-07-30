@@ -1113,6 +1113,17 @@ func (tsv *TabletServer) BeginStreamExecute(
 	options *querypb.ExecuteOptions,
 	callback func(*sqltypes.Result) error,
 ) (queryservice.TransactionState, error) {
+	// Disable hot row protection in case of reserve connection.
+	if tsv.enableHotRowProtection && reservedID == 0 {
+		txDone, err := tsv.beginWaitForSameRangeTransactions(ctx, target, options, sql, bindVariables)
+		if err != nil {
+			return queryservice.TransactionState{}, err
+		}
+		if txDone != nil {
+			defer txDone()
+		}
+	}
+
 	state, err := tsv.begin(ctx, target, postBeginQueries, reservedID, nil, options)
 	if err != nil {
 		return state, err

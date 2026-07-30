@@ -47,7 +47,7 @@ func TestEvalResultToBooleanStrict(t *testing.T) {
 		t.Run(fmt.Sprintf("ToBooleanStrict() %s expected true (success)", name), func(t *testing.T) {
 			result, err := (&EvalResult{v: res, collationEnv: collations.MySQL8()}).ToBooleanStrict()
 			require.NoError(t, err, name)
-			require.Equal(t, true, result, name)
+			require.True(t, result, name)
 		})
 	}
 	for _, res := range falseValues {
@@ -55,7 +55,7 @@ func TestEvalResultToBooleanStrict(t *testing.T) {
 		t.Run(fmt.Sprintf("ToBooleanStrict() %s expected false (success)", name), func(t *testing.T) {
 			result, err := (&EvalResult{v: res, collationEnv: collations.MySQL8()}).ToBooleanStrict()
 			require.NoError(t, err, name)
-			require.Equal(t, false, result, name)
+			require.False(t, result, name)
 		})
 	}
 	for _, res := range invalid {

@@ -145,7 +145,7 @@ func TestSubqueryParentAliasErrors(t *testing.T) {
 				assert.ErrorContains(t, err, tc.errSubstr)
 				return
 			}
-			require.NotNil(t, st.NotUnshardedErr, "expected an error from Analyze or via NotUnshardedErr")
+			require.Error(t, st.NotUnshardedErr, "expected an error from Analyze or via NotUnshardedErr")
 			assert.ErrorContains(t, st.NotUnshardedErr, tc.errSubstr)
 		})
 	}

@@ -105,7 +105,7 @@ func TestExecuteOptional(t *testing.T) {
 			if tc.expectedError == "" {
 				assert.NoError(t, err)
 			} else {
-				assert.Error(t, err)
+				require.Error(t, err)
 				assert.ErrorContains(t, err, tc.expectedError)
 			}
 		})
@@ -226,7 +226,7 @@ func TestExecuteAsReadPipe(t *testing.T) {
 
 	stderr, waitErr := waitFunc()
 	assert.Empty(t, stderr)
-	assert.NoError(t, waitErr)
+	require.NoError(t, waitErr)
 	assert.Equal(t, HOOK_SUCCESS, status)
 }
 
@@ -281,7 +281,7 @@ func TestExecuteAsWritePipe(t *testing.T) {
 
 	stderr, waitErr := waitFunc()
 	assert.Empty(t, stderr)
-	assert.NoError(t, waitErr)
+	require.NoError(t, waitErr)
 	assert.Equal(t, HOOK_SUCCESS, status)
 }
 
@@ -290,6 +290,6 @@ func TestExecuteAsWritePipeErrorFindingHook(t *testing.T) {
 	var writer strings.Builder
 	writerPtr := &writer
 	_, _, status, err := h.ExecuteAsWritePipe(writerPtr)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Equal(t, HOOK_DOES_NOT_EXIST, status)
 }

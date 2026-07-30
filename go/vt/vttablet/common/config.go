@@ -65,7 +65,6 @@ type VReplicationConfig struct {
 	ParallelInsertWorkers      int
 	ParallelReplicationWorkers int
 	TabletTypesStr             string
-	EnableHttpLog              bool // Enable the /debug/vrlog endpoint
 	MaxRowJSONBytes            int64
 
 	// Config parameters applicable to the source side (vstreamer)
@@ -112,7 +111,6 @@ func GetVReplicationConfigDefaults(useCached bool) *VReplicationConfig {
 		ParallelInsertWorkers:      vreplicationParallelInsertWorkers,
 		ParallelReplicationWorkers: cappedParallelReplicationWorkers(vreplicationParallelReplicationWorkers),
 		TabletTypesStr:             vreplicationTabletTypesStr,
-		EnableHttpLog:              vreplicationEnableHttpLog,
 		MaxRowJSONBytes:            vreplicationMaxRowJSONBytes,
 
 		VStreamPacketSizeOverride:              false,

@@ -32,7 +32,7 @@ func init() {
 
 func TestDetach(t *testing.T) {
 	detachedCoordinates := testCoordinates.Detach()
-	require.Equal(t, detachedCoordinates.LogFile, "//mysql-bin.000010:108")
+	require.Equal(t, "//mysql-bin.000010:108", detachedCoordinates.LogFile)
 	require.Equal(t, detachedCoordinates.LogPos, testCoordinates.LogPos)
 }
 
@@ -53,19 +53,39 @@ func TestDetachedCoordinates2(t *testing.T) {
 }
 
 func TestPreviousFileCoordinates(t *testing.T) {
-	previous, err := testCoordinates.PreviousFileCoordinates()
-
-	require.NoError(t, err)
-	require.Equal(t, previous.LogFile, "mysql-bin.000009")
-	require.Equal(t, previous.LogPos, uint64(0))
+	tests := []struct {
+		name        string
+		coordinates BinlogCoordinates
+		wantLogFile string
+		wantErr     bool
+	}{
+		{name: "standard", coordinates: BinlogCoordinates{LogFile: "mysql-bin.000010", LogPos: 108}, wantLogFile: "mysql-bin.000009"},
+		{name: "five digit suffix", coordinates: BinlogCoordinates{LogFile: "mysql-bin.00017", LogPos: 104}, wantLogFile: "mysql-bin.00016"},
+		{name: "decrement hundreds", coordinates: BinlogCoordinates{LogFile: "mysql-bin.00100", LogPos: 104}, wantLogFile: "mysql-bin.00099"},
+		{name: "dotted hostname prefix", coordinates: BinlogCoordinates{LogFile: "mysql.00.prod.com.00100", LogPos: 104}, wantLogFile: "mysql.00.prod.com.00099"},
+		{name: "underflow errors", coordinates: BinlogCoordinates{LogFile: "mysql.00.prod.com.00000", LogPos: 104}, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			previous, err := tt.coordinates.PreviousFileCoordinates()
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tt.wantLogFile, previous.LogFile)
+			require.Equal(t, tt.coordinates.Type, previous.Type)
+			require.Equal(t, uint64(0), previous.LogPos)
+		})
+	}
 }
 
 func TestNextFileCoordinates(t *testing.T) {
 	next, err := testCoordinates.NextFileCoordinates()
 
 	require.NoError(t, err)
-	require.Equal(t, next.LogFile, "mysql-bin.000011")
-	require.Equal(t, next.LogPos, uint64(0))
+	require.Equal(t, "mysql-bin.000011", next.LogFile)
+	require.Equal(t, uint64(0), next.LogPos)
 }
 
 func TestBinlogCoordinates(t *testing.T) {
@@ -89,34 +109,6 @@ func TestBinlogCoordinates(t *testing.T) {
 	require.True(t, c1.SmallerThanOrEquals(&c3))
 }
 
-func TestBinlogPrevious(t *testing.T) {
-	c1 := BinlogCoordinates{LogFile: "mysql-bin.00017", LogPos: 104}
-	cres, err := c1.PreviousFileCoordinates()
-
-	require.NoError(t, err)
-	require.Equal(t, c1.Type, cres.Type)
-	require.Equal(t, cres.LogFile, "mysql-bin.00016")
-
-	c2 := BinlogCoordinates{LogFile: "mysql-bin.00100", LogPos: 104}
-	cres, err = c2.PreviousFileCoordinates()
-
-	require.NoError(t, err)
-	require.Equal(t, c1.Type, cres.Type)
-	require.Equal(t, cres.LogFile, "mysql-bin.00099")
-
-	c3 := BinlogCoordinates{LogFile: "mysql.00.prod.com.00100", LogPos: 104}
-	cres, err = c3.PreviousFileCoordinates()
-
-	require.NoError(t, err)
-	require.Equal(t, c1.Type, cres.Type)
-	require.Equal(t, cres.LogFile, "mysql.00.prod.com.00099")
-
-	c4 := BinlogCoordinates{LogFile: "mysql.00.prod.com.00000", LogPos: 104}
-	_, err = c4.PreviousFileCoordinates()
-
-	require.Error(t, err)
-}
-
 func TestBinlogCoordinatesAsKey(t *testing.T) {
 	m := make(map[BinlogCoordinates]bool)
 
@@ -130,22 +122,22 @@ func TestBinlogCoordinatesAsKey(t *testing.T) {
 	m[c3] = true
 	m[c4] = true
 
-	require.Equal(t, len(m), 3)
+	require.Len(t, m, 3)
 }
 
 func TestFileNumberDistance(t *testing.T) {
 	c1 := BinlogCoordinates{LogFile: "mysql-bin.00017", LogPos: 104}
 	c2 := BinlogCoordinates{LogFile: "mysql-bin.00022", LogPos: 104}
 
-	require.Equal(t, c1.FileNumberDistance(&c1), 0)
-	require.Equal(t, c1.FileNumberDistance(&c2), 5)
-	require.Equal(t, c2.FileNumberDistance(&c1), -5)
+	require.Equal(t, 0, c1.FileNumberDistance(&c1))
+	require.Equal(t, 5, c1.FileNumberDistance(&c2))
+	require.Equal(t, -5, c2.FileNumberDistance(&c1))
 }
 
 func TestFileNumber(t *testing.T) {
 	c1 := BinlogCoordinates{LogFile: "mysql-bin.00017", LogPos: 104}
 	fileNum, numLen := c1.FileNumber()
 
-	require.Equal(t, fileNum, 17)
-	require.Equal(t, numLen, 5)
+	require.Equal(t, 17, fileNum)
+	require.Equal(t, 5, numLen)
 }

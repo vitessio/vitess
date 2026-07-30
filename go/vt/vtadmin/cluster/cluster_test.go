@@ -166,7 +166,7 @@ func TestCreateKeyspace(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tt.expected, resp)
 		})
 	}
@@ -257,7 +257,7 @@ func TestCreateShard(t *testing.T) {
 			defer tt.tc.Cluster.Close()
 			_, err := tt.tc.Cluster.CreateShard(ctx, tt.req)
 			if tt.shouldErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 			} else {
 				require.NoError(t, err)
 			}
@@ -349,7 +349,7 @@ func TestDeleteKeyspace(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tt.expected, resp)
 		})
 	}
@@ -480,7 +480,7 @@ func TestDeleteShards(t *testing.T) {
 			defer tt.tc.Cluster.Close()
 			_, err := tt.tc.Cluster.DeleteShards(ctx, tt.req)
 			if tt.shouldErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 			} else {
 				require.NoError(t, err)
 			}
@@ -606,9 +606,9 @@ func TestFindTablet(t *testing.T) {
 			tablet, err := cluster.FindTablet(ctx, tt.filter)
 
 			if tt.expectedError != nil {
-				assert.True(t, errors.Is(err, tt.expectedError), "expected error type %w does not match actual error type %w", err, tt.expectedError)
+				assert.ErrorIs(t, err, tt.expectedError)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				utils.MustMatch(t, tt.expected, tablet)
 			}
 		})
@@ -815,7 +815,7 @@ func TestFindTablets(t *testing.T) {
 			defer cluster.Close()
 			tablets, err := cluster.FindTablets(ctx, tt.filter, tt.n)
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			testutil.AssertTabletSlicesEqual(t, tt.expected, tablets)
 		})
 	}
@@ -1200,7 +1200,7 @@ func TestFindWorkflows(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			testutil.AssertClusterWorkflowsEqual(t, tt.expected, workflows)
 		})
 	}
@@ -1715,7 +1715,7 @@ func TestGetSchema(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tt.expected, schema)
 		})
 	}
@@ -2699,7 +2699,7 @@ func TestGetSchema(t *testing.T) {
 					}
 				}
 
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				testutil.AssertSchemaSlicesEqual(t, []*vtadminpb.Schema{tt.expected}, []*vtadminpb.Schema{schema})
 			})
 		}
@@ -3027,7 +3027,7 @@ func TestGetVSchema(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tt.expected, vschema)
 		})
 	}
@@ -3183,7 +3183,7 @@ func TestGetWorkflow(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tt.expected, workflow)
 		})
 	}
@@ -3348,7 +3348,7 @@ func TestGetWorkflows(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			testutil.AssertClusterWorkflowsEqual(t, tt.expected, workflows)
 		})
 	}

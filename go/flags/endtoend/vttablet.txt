@@ -62,10 +62,12 @@ Flags:
       --binlog-player-grpc-key string                                    the key to use to connect
       --binlog-player-grpc-server-name string                            the server name to use to validate server certificate
       --binlog-player-protocol string                                    the protocol to download binlogs from a vttablet (default "grpc")
+      --builtinbackup-file-chunk-size uint                               Size of each chunk (in bytes) when splitting large files for parallel backup/restore. (default 1073741824)
+      --builtinbackup-file-chunk-threshold uint                          Files larger than this size (in bytes) are split into chunks for parallel backup/restore. 0 disables chunking.
       --builtinbackup-file-read-buffer-size uint                         read files using an IO buffer of this many bytes. Golang defaults are used when set to 0.
       --builtinbackup-file-write-buffer-size uint                        write files using an IO buffer of this many bytes. Golang defaults are used when set to 0. (default 2097152)
       --builtinbackup-incremental-restore-path string                    the directory where incremental restore files, namely binlog files, are extracted to. In k8s environments, this should be set to a directory that is shared between the vttablet and mysqld pods. The path should exist. When empty, the default OS temp dir is assumed.
-      --builtinbackup-mysqld-timeout duration                            how long to wait for mysqld to shutdown at the start of the backup. (default 10m0s)
+      --builtinbackup-mysqld-timeout duration                            how long to wait for mysqld to shutdown at the start of the backup. Raised to the mysqld shutdown timeout of the backup request plus a grace period when that is larger. (default 10m0s)
       --builtinbackup-progress duration                                  how often to send progress updates when backing up large files. (default 5s)
       --catch-sigpipe                                                    catch and ignore SIGPIPE on stdout and stderr if specified
       --ceph-backup-storage-config string                                Path to JSON config file for ceph backup storage. (default "ceph_backup_config.json")
@@ -139,6 +141,7 @@ Flags:
       --dba-idle-timeout duration                                        Idle timeout for dba connections (default 1m0s)
       --dba-pool-size int                                                Size of the connection pool for dba connections (default 20)
       --degraded-threshold duration                                      replication lag after which a replica is considered degraded (default 30s)
+      --demote-primary-lock-wait-timeout duration                        Sets the session lock_wait_timeout when enabling super_read_only during a primary demotion. 0 leaves it unset and uses the default of the MySQL server.
       --disk-write-dir string                                            if provided, tablet will attempt to write a file to this directory to check if the disk is stalled
       --disk-write-interval duration                                     how often to write to the disk to check whether it is stalled (default 5s)
       --disk-write-timeout duration                                      if writes exceed this duration, the disk is considered stalled (default 30s)
@@ -250,6 +253,7 @@ Flags:
       --mysql-shell-dump-flags string                                    flags to pass to mysql shell dump utility. This should be a JSON string and will be saved in the MANIFEST (default "{\"threads\": 4}")
       --mysql-shell-flags string                                         execution flags to pass to mysqlsh binary to be used during dump/load (default "--defaults-file=/dev/null --js -h localhost")
       --mysql-shell-load-flags string                                    flags to pass to mysql shell load utility. This should be a JSON string (default "{\"threads\": 4, \"loadUsers\": true, \"updateGtidSet\": \"replace\", \"skipBinlog\": true, \"progressFile\": \"\"}")
+      --mysql-shell-restore-skip-version-check                           skip the MySQL version compatibility check when restoring from a mysql-shell backup
       --mysql-shell-should-drain                                         decide if we should drain while taking a backup or continue to serving traffic
       --mysql-shell-speedup-restore                                      speed up restore by disabling redo logging and double write buffer during the restore process
       --mysql-shutdown-timeout duration                                  Timeout to use when MySQL is being shut down. (default 5m0s)
@@ -341,6 +345,7 @@ Flags:
       --service-map strings                                              comma separated list of services to enable (or disable if prefixed with '-') Example: grpc-queryservice
       --serving-state-grace-period duration                              how long to pause after broadcasting health to vtgate, before enforcing a new serving state
       --shard-sync-retry-delay duration                                  delay between retries of updates to keep the tablet and its shard record in sync (default 30s)
+      --shard-tablet-health-interval duration                            Interval at which this tablet pings its shard's current primary when --track-shard-tablet-health is set. The per-ping timeout is twice this interval. (default 1s)
       --shutdown-grace-period duration                                   how long to wait for queries and transactions to complete during graceful shutdown. (default 3s)
       --skip-user-metrics                                                If true, user based stats are not recorded.
       --sql-max-length-errors int                                        truncate queries in error logs to the given length (default unlimited)
@@ -403,6 +408,7 @@ Flags:
       --tracing-enable-logging                                           whether to enable logging in the tracing service
       --tracing-sampling-rate float                                      sampling rate for traces as a probability between 0.0 and 1.0 (default 0.1)
       --track-schema-versions                                            When enabled, vttablet will store versions of schemas at each position that a DDL is applied and allow retrieval of the schema corresponding to a position
+      --track-shard-tablet-health                                        If set, this tablet periodically pings its shard's current primary and reports the primary's vttablet liveness in the FullStatus RPC. Used by VTOrc to form a quorum before failing over an unreachable primary vttablet.
       --transaction-limit-by-component                                   Include CallerID.component when considering who the user is for the purpose of transaction limit.
       --transaction-limit-by-principal                                   Include CallerID.principal when considering who the user is for the purpose of transaction limit. (default true)
       --transaction-limit-by-subcomponent                                Include CallerID.subcomponent when considering who the user is for the purpose of transaction limit.
@@ -422,7 +428,6 @@ Flags:
       --vreplication-copy-phase-duration duration                        Duration for each copy phase loop (before running the next catchup: default 1h) (default 1h0m0s)
       --vreplication-copy-phase-max-innodb-history-list-length int       The maximum InnoDB transaction history that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet (default 10000000)
       --vreplication-copy-phase-max-mysql-replication-lag int            The maximum MySQL replication lag (in seconds) that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet (default 43200)
-      --vreplication-enable-http-log                                     Enable the /debug/vrlog HTTP endpoint, which will produce a log of the events replicated on primary tablets in the target keyspace by all VReplication workflows that are in the running/replicating phase.
       --vreplication-experimental-flags int                              (Bitmask) of experimental features in vreplication to enable (default 7)
       --vreplication-heartbeat-update-interval int                       Frequency (in seconds, default 1, max 60) at which the time_updated column of a vreplication stream when idling (default 1)
       --vreplication-max-row-json-bytes int                              Maximum combined byte size of JSON columns in a single row during VReplication copy and replay phases. 0 means unlimited.

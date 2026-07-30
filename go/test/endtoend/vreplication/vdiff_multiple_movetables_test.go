@@ -86,7 +86,7 @@ func TestMultipleConcurrentVDiffs(t *testing.T) {
 			tables:         tables,
 		}, workflowFlavorVtctld)
 		mt.Create()
-		waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKeyspace, workflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
+		require.NoError(t, waitForWorkflowState(vc, fmt.Sprintf("%s.%s", targetKeyspace, workflowName), binlogdatapb.VReplicationWorkflowState_Running.String()))
 		catchup(t, targetTab, workflowName, "MoveTables")
 	}
 

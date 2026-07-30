@@ -89,7 +89,7 @@ func TestAggregateName(t *testing.T) {
 			metricName:     LoadAvgMetricName,
 		},
 	}
-	assert.Equal(t, 3*len(KnownMetricNames), len(aggregatedMetricNames))
+	assert.Len(t, aggregatedMetricNames, 3*len(KnownMetricNames))
 	for _, tcase := range tcases {
 		t.Run(tcase.aggregatedName, func(t *testing.T) {
 			scope, metricName, err := DisaggregateMetricName(tcase.aggregatedName)
@@ -103,7 +103,7 @@ func TestAggregateName(t *testing.T) {
 				assert.ErrorContains(t, err, tcase.expectErr)
 				return
 			}
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.NotEqual(t, UndefinedScope, scope)
 			assert.Equal(t, tcase.scope, scope)
 			assert.Equal(t, tcase.metricName, metricName)
@@ -122,22 +122,22 @@ func TestAggregateName(t *testing.T) {
 func TestScopeFromString(t *testing.T) {
 	{
 		scope, err := ScopeFromString("")
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, UndefinedScope, scope)
 	}
 	{
 		scope, err := ScopeFromString("self")
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, SelfScope, scope)
 	}
 	{
 		scope, err := ScopeFromString("shard")
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, ShardScope, scope)
 	}
 	{
 		_, err := ScopeFromString("something")
-		assert.ErrorContains(t, err, "unknown scope")
+		require.ErrorContains(t, err, "unknown scope")
 	}
 	{
 		_, err := ScopeFromString("self/lag")

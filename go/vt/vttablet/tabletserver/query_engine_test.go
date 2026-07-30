@@ -46,6 +46,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema/schematest"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -66,7 +67,7 @@ func TestStrictMode(t *testing.T) {
 	qe := NewQueryEngine(env, se)
 	qe.se.InitDBConfig(newDBConfigs(db).DbaWithDB())
 	qe.se.Open()
-	assert.NoError(t, qe.Open())
+	require.NoError(t, qe.Open())
 	qe.Close()
 
 	// Check that we fail if STRICT_TRANS_TABLES or STRICT_ALL_TABLES is not set.
@@ -79,7 +80,7 @@ func TestStrictMode(t *testing.T) {
 	)
 	qe = NewQueryEngine(env, se)
 	err := qe.Open()
-	assert.EqualError(t, err, "require sql_mode to be STRICT_TRANS_TABLES or STRICT_ALL_TABLES: got ''", "Open")
+	require.EqualError(t, err, "require sql_mode to be STRICT_TRANS_TABLES or STRICT_ALL_TABLES: got ''", "Open")
 	qe.Close()
 
 	// Test that we succeed if the enforcement flag is off.
@@ -279,6 +280,183 @@ func TestStreamQueryPlanCache(t *testing.T) {
 	require.NotNil(t, firstPlan, "plan should not be nil")
 	assertPlanCacheSize(t, qe, 1)
 	qe.ClearQueryPlanCache()
+}
+
+// TestGetStreamPlanFiltersRulesByAllTables ensures the streaming plan path
+// filters query rules using every table the statement touches, matching the
+// non-streaming path. A multi-table DML/SELECT has plan.Table == nil, so
+// filtering by the single TableName() would silently skip table-scoped rules.
+func TestGetStreamPlanFiltersRulesByAllTables(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	schematest.AddDefaultQueries(db)
+
+	qe := newTestQueryEngine(10*time.Second, true, newDBConfigs(db))
+	qe.se.Open()
+	qe.Open()
+	defer qe.Close()
+
+	// A rule scoped to the second table of a multi-table statement. plan.Table
+	// is nil for multi-table queries, so a single-table-name filter would drop
+	// it.
+	const sourceName = "test stream rules"
+	qr := rules.NewQueryRule("deny test_table_02", "deny_t2", rules.QRFailRetry)
+	qr.AddTableCond("test_table_02")
+	qrs := rules.New()
+	qrs.Add(qr)
+	qe.queryRuleSources.UnRegisterSource(sourceName)
+	qe.queryRuleSources.RegisterSource(sourceName)
+	defer qe.queryRuleSources.UnRegisterSource(sourceName)
+	require.NoError(t, qe.queryRuleSources.SetRules(sourceName, qrs))
+
+	// getStreamPlan is exercised directly with a populated schema so the
+	// planbuilder resolves the referenced tables (the schema engine in this
+	// test harness does not populate the table map).
+	curSchema := &currentSchema{
+		tables: map[string]*schema.Table{
+			"test_table_01": {Name: sqlparser.NewIdentifierCS("test_table_01")},
+			"test_table_02": {Name: sqlparser.NewIdentifierCS("test_table_02")},
+		},
+	}
+
+	testcases := []struct {
+		name string
+		sql  string
+	}{
+		{"multi-table DML", "update test_table_01, test_table_02 set test_table_01.pk = 1"},
+		{"multi-table select", "select test_table_01.pk from test_table_01 join test_table_02 on test_table_01.pk = test_table_02.pk"},
+	}
+	for _, tcase := range testcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			plan, err := qe.getStreamPlan(curSchema, tcase.sql)
+			require.NoError(t, err)
+			require.Nil(t, plan.Table, "expected a multi-table plan with no single table")
+			require.NotNil(t, plan.Rules.Find("deny_t2"), "table-scoped query rule must apply to multi-table streamed query")
+		})
+	}
+}
+
+// A rule using the deprecated SelectStream plan name applies to streaming-path
+// plans for every statement shape the pre-v25 streaming planner labeled
+// SelectStream, and never to buffered-execution plans of the same statements.
+func TestSelectStreamRuleAppliesOnlyToStreamingPlans(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	schematest.AddDefaultQueries(db)
+
+	qe := newTestQueryEngine(10*time.Second, true, newDBConfigs(db))
+	qe.se.Open()
+	qe.Open()
+	defer qe.Close()
+
+	const sourceName = "test legacy stream rules"
+	qr := rules.NewQueryRule("deny streamed reads", "deny_streamed_reads", rules.QRFail)
+	qr.AddPlanCond(planbuilder.PlanSelectStream)
+	qrs := rules.New()
+	qrs.Add(qr)
+	qe.queryRuleSources.RegisterSource(sourceName)
+	defer qe.queryRuleSources.UnRegisterSource(sourceName)
+	require.NoError(t, qe.queryRuleSources.SetRules(sourceName, qrs))
+
+	// getStreamPlan and getPlan are exercised directly with a populated schema
+	// so the planbuilder resolves the referenced tables (the schema engine in
+	// this test harness does not populate the table map).
+	curSchema := &currentSchema{
+		tables: map[string]*schema.Table{
+			"test_table_01": {Name: sqlparser.NewIdentifierCS("test_table_01")},
+			"seq":           {Name: sqlparser.NewIdentifierCS("seq"), Type: schema.Sequence},
+		},
+	}
+
+	testcases := []struct {
+		name   string
+		sql    string
+		planID planbuilder.PlanType
+	}{
+		{"select", "select pk from test_table_01", planbuilder.PlanSelect},
+		{"impossible-where select", "select pk from test_table_01 where 1 != 1", planbuilder.PlanSelectImpossible},
+		{"lock-function select", "select get_lock('foo', 10)", planbuilder.PlanSelectLockFunc},
+		{"next-value select", "select next value from seq", planbuilder.PlanNextval},
+		{"explain", "explain test_table_01", planbuilder.PlanSelect},
+		{"show", "show tables", planbuilder.PlanShow},
+		{"show vitess_migrations", "show vitess_migrations", planbuilder.PlanShowMigrations},
+		{"show other", "show engine innodb status", planbuilder.PlanOtherRead},
+	}
+	for _, tcase := range testcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			// The private helpers return the plan together with the errNoCache
+			// sentinel for non-cacheable statements like SHOW; the public
+			// GetPlan/GetStreamPlan wrappers strip it the same way.
+			streamPlan, err := qe.getStreamPlan(curSchema, tcase.sql)
+			if err != nil {
+				require.ErrorIs(t, err, errNoCache)
+			}
+			require.Equal(t, tcase.planID, streamPlan.PlanID)
+			require.NotNil(t, streamPlan.Rules.Find("deny_streamed_reads"),
+				"SelectStream rule must apply to the streaming-path plan")
+
+			execPlan, err := qe.getPlan(curSchema, tcase.sql, false)
+			if err != nil {
+				require.ErrorIs(t, err, errNoCache)
+			}
+			require.Equal(t, tcase.planID, execPlan.PlanID)
+			require.Nil(t, execPlan.Rules.Find("deny_streamed_reads"),
+				"SelectStream rule must not apply to the buffered-execution plan")
+		})
+	}
+}
+
+// Streamed ANALYZE keeps matching rules keyed on OtherRead — its pre-v25
+// streaming plan type — and does not match legacy SelectStream rules. On the
+// buffered path, where ANALYZE has always planned as Select, neither rule
+// applies.
+func TestStreamedAnalyzeLegacyRuleMatching(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	schematest.AddDefaultQueries(db)
+
+	qe := newTestQueryEngine(10*time.Second, true, newDBConfigs(db))
+	qe.se.Open()
+	qe.Open()
+	defer qe.Close()
+
+	const sourceName = "test analyze legacy rules"
+	qrs := rules.New()
+	otherReadRule := rules.NewQueryRule("deny other reads", "deny_other_read", rules.QRFail)
+	otherReadRule.AddPlanCond(planbuilder.PlanOtherRead)
+	qrs.Add(otherReadRule)
+	selectStreamRule := rules.NewQueryRule("deny streamed reads", "deny_streamed_reads", rules.QRFail)
+	selectStreamRule.AddPlanCond(planbuilder.PlanSelectStream)
+	qrs.Add(selectStreamRule)
+	qe.queryRuleSources.RegisterSource(sourceName)
+	defer qe.queryRuleSources.UnRegisterSource(sourceName)
+	require.NoError(t, qe.queryRuleSources.SetRules(sourceName, qrs))
+
+	curSchema := &currentSchema{
+		tables: map[string]*schema.Table{
+			"test_table_01": {Name: sqlparser.NewIdentifierCS("test_table_01")},
+		},
+	}
+
+	streamPlan, err := qe.getStreamPlan(curSchema, "analyze table test_table_01")
+	if err != nil {
+		require.ErrorIs(t, err, errNoCache)
+	}
+	require.Equal(t, planbuilder.PlanSelect, streamPlan.PlanID)
+	require.NotNil(t, streamPlan.Rules.Find("deny_other_read"),
+		"an OtherRead rule must keep applying to streamed ANALYZE")
+	require.Nil(t, streamPlan.Rules.Find("deny_streamed_reads"),
+		"a SelectStream rule must not apply to streamed ANALYZE")
+
+	execPlan, err := qe.getPlan(curSchema, "analyze table test_table_01", false)
+	if err != nil {
+		require.ErrorIs(t, err, errNoCache)
+	}
+	require.Equal(t, planbuilder.PlanSelect, execPlan.PlanID)
+	require.Nil(t, execPlan.Rules.Find("deny_other_read"),
+		"an OtherRead rule must not apply to buffered ANALYZE")
+	require.Nil(t, execPlan.Rules.Find("deny_streamed_reads"),
+		"a SelectStream rule must not apply to buffered ANALYZE")
 }
 
 func TestNoStreamQueryPlanCache(t *testing.T) {

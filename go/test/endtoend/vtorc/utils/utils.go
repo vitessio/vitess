@@ -383,6 +383,24 @@ func ShardPrimaryTablet(t *testing.T, clusterInfo *VTOrcClusterInfo, keyspace *c
 	}
 }
 
+// FindReplicaAndRdonly returns the shard's replica tablet (the "replica"-type tablet that is
+// not the given primary) and its rdonly tablet. It fails the test if either cannot be found.
+func FindReplicaAndRdonly(t *testing.T, shard *cluster.Shard, primary *cluster.Vttablet) (replica, rdonly *cluster.Vttablet) {
+	t.Helper()
+	for _, tablet := range shard.Vttablets {
+		// we know we have only two replica tablets, so the one not the primary must be the other replica
+		if tablet.Alias != primary.Alias && tablet.Type == "replica" {
+			replica = tablet
+		}
+		if tablet.Type == "rdonly" {
+			rdonly = tablet
+		}
+	}
+	require.NotNil(t, replica, "could not find replica tablet")
+	require.NotNil(t, rdonly, "could not find rdonly tablet")
+	return replica, rdonly
+}
+
 // CheckPrimaryTablet waits until the specified tablet becomes the primary tablet
 // Makes sure the tablet type is primary, and its health check agrees.
 func CheckPrimaryTablet(t *testing.T, clusterInfo *VTOrcClusterInfo, tablet *cluster.Vttablet, checkServing bool) {
@@ -594,7 +612,7 @@ func RunSQL(t *testing.T, sql string, tablet *cluster.Vttablet, db string) (*sql
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	conn, err := mysql.Connect(ctx, &tabletParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	// RunSQL
@@ -609,7 +627,7 @@ func RunSQLs(t *testing.T, sqls []string, tablet *cluster.Vttablet, db string) e
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutDuration*time.Second)
 	defer cancel()
 	conn, err := mysql.Connect(ctx, &tabletParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	// Run SQLs
@@ -691,7 +709,7 @@ func ResetPrimaryLogs(t *testing.T, curPrimary *cluster.Vttablet) {
 
 	binLogsOutput, err := RunSQL(t, "SHOW BINARY LOGS", curPrimary, "")
 	require.NoError(t, err)
-	require.True(t, len(binLogsOutput.Rows) >= 2, "there should be atlease 2 binlog files")
+	require.GreaterOrEqual(t, len(binLogsOutput.Rows), 2, "there should be atlease 2 binlog files")
 
 	lastLogFile := binLogsOutput.Rows[len(binLogsOutput.Rows)-1][0].ToString()
 
@@ -1038,9 +1056,9 @@ func WaitForSuccessfulRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcPr
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
 		vars := vtorcInstance.GetVars()
 		successfulRecoveriesMap, ok := vars["SuccessfulRecoveries"].(map[string]any)
-		require.True(c, ok, "SuccessfulRecoveries metric not yet available")
+		assert.True(c, ok, "SuccessfulRecoveries metric not yet available")
 		successCount := GetIntFromValue(successfulRecoveriesMap[mapKey])
-		assert.EqualValues(c, countExpected, successCount)
+		assert.Equal(c, countExpected, successCount)
 	}, timeout, time.Second, "timed out waiting for successful recovery count")
 }
 
@@ -1066,7 +1084,7 @@ func WaitForSuccessfulPRSCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess
 		vars := vtorcInstance.GetVars()
 		prsCountsMap := vars["PlannedReparentCounts"].(map[string]any)
 		successCount := GetIntFromValue(prsCountsMap[mapKey])
-		assert.EqualValues(c, countExpected, successCount)
+		assert.Equal(c, countExpected, successCount)
 	}, timeout, time.Second, "timed out waiting for successful PRS count")
 }
 
@@ -1079,7 +1097,7 @@ func WaitForSuccessfulERSCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess
 		vars := vtorcInstance.GetVars()
 		ersCountsMap := vars["EmergencyReparentCounts"].(map[string]any)
 		successCount := GetIntFromValue(ersCountsMap[mapKey])
-		assert.EqualValues(c, countExpected, successCount)
+		assert.Equal(c, countExpected, successCount)
 	}, timeout, time.Second, "timed out waiting for successful ERS count")
 }
 
@@ -1096,7 +1114,7 @@ func WaitForShardERSDisabledState(t *testing.T, vtorcInstance *cluster.VTOrcProc
 		vars := vtorcInstance.GetVars()
 		ersDisabledMap := vars["EmergencyReparentShardDisabled"].(map[string]any)
 		disabledValue := GetIntFromValue(ersDisabledMap[mapKey])
-		assert.EqualValues(c, expectedValue, disabledValue)
+		assert.Equal(c, expectedValue, disabledValue)
 	}, timeout, time.Second, "timed out waiting for shard ERS-disabled state")
 }
 
@@ -1137,7 +1155,7 @@ func WaitForDetectedProblems(t *testing.T, vtorcInstance *cluster.VTOrcProcess, 
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
 		vars := vtorcInstance.GetVars()
 		problems, ok := vars["DetectedProblems"].(map[string]any)
-		require.True(c, ok, "DetectedProblems metric not yet available")
+		assert.True(c, ok, "DetectedProblems metric not yet available")
 		actual, ok := problems[key]
 		actual = GetIntFromValue(actual)
 		assert.True(c, ok,
@@ -1167,7 +1185,7 @@ func WaitForInstancePollSecondsExceededCount(t *testing.T, vtorcInstance *cluste
 		vars := vtorcInstance.GetVars()
 		exceeded := GetIntFromValue(vars["DiscoveriesInstancePollSecondsExceeded"])
 		if enforceEquality {
-			ok := assert.EqualValues(c, minCountExpected, exceeded,
+			ok := assert.Equal(c, minCountExpected, exceeded,
 				"The metric DiscoveriesInstancePollSecondsExceeded should be %v but is %v",
 				minCountExpected, exceeded,
 			)
@@ -1227,7 +1245,7 @@ func SemiSyncExtensionLoaded(t *testing.T, tablet *cluster.Vttablet) (mysql.Semi
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	conn, err := mysql.Connect(ctx, &tabletParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	return conn.SemiSyncExtensionLoaded()

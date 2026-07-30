@@ -18,6 +18,7 @@ limitations under the License.
 package json
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -30,7 +31,7 @@ func TestParseRawNumber(t *testing.T) {
 		f := func(s, expectedRN, expectedTail string) {
 			t.Helper()
 
-			flen, ok := readFloat(s)
+			flen, _, ok := readFloat(s)
 			require.Truef(t, ok, "unexpected error when parsing '%s'", s)
 
 			rn, tail := s[:flen], s[flen:]
@@ -48,16 +49,15 @@ func TestParseRawNumber(t *testing.T) {
 		f("-12.345E+67 tail", "-12.345E+67", " tail")
 		f("-12.345E-67,tail", "-12.345E-67", ",tail")
 		f("-1234567.8e+90tail", "-1234567.8e+90", "tail")
-		f("12.tail", "12.", "tail")
-		f(".2tail", ".2", "tail")
-		f("-.2tail", "-.2", "tail")
+		f("0.2tail", "0.2", "tail")
+		f("-0.2tail", "-0.2", "tail")
 	})
 
 	t.Run("error", func(t *testing.T) {
 		f := func(s, expectedTail string) {
 			t.Helper()
 
-			flen, ok := readFloat(s)
+			flen, _, ok := readFloat(s)
 			require.False(t, ok, "expecting non-nil error")
 			require.Equalf(t, expectedTail, s[flen:], "unexpected tail; got %q; want %q", s[flen:], expectedTail)
 		}
@@ -68,7 +68,267 @@ func TestParseRawNumber(t *testing.T) {
 		f(",", ",")
 		f("{", "{")
 		f("\"", "\"")
+
+		// A decimal point needs a digit on either side of it, and a number
+		// opens with a minus or a digit.
+		f("12.tail", "tail")
+		f(".2tail", ".2tail")
+		f("-.2tail", ".2tail")
+		f("+1tail", "+1tail")
 	})
+}
+
+// TestParseNumberTooBigForDouble covers the boundary MySQL puts on JSON
+// numbers: a number it cannot store as a double makes the whole document
+// invalid, rather than being kept at the precision it was written to.
+// Underflow is not rejected — it flushes to zero.
+func TestParseNumberTooBigForDouble(t *testing.T) {
+	tooManyDigits := "1" + strings.Repeat("0", 309)
+
+	t.Run("accepted", func(t *testing.T) {
+		for _, doc := range []string{
+			"1e308",
+			"-1e308",
+			"1.7976931348623157e308",
+			"-1.7976931348623157e308",
+			"99999999999999999999999999999999999999999",
+			"1" + strings.Repeat("0", 307),
+			// Underflow keeps the document valid and reads as zero.
+			"1e-400",
+			"1e-1000",
+			"1e-1024",
+			"0." + strings.Repeat("0", 400) + "1",
+			// Digits a double has room for, moved out of the way by a negative
+			// exponent.
+			"1" + strings.Repeat("0", 307) + "e-1",
+			"1" + strings.Repeat("0", 307) + "e-400",
+			"-1" + strings.Repeat("0", 307) + "e-400",
+			"0." + strings.Repeat("0", 400) + "1e-400",
+			// A written sign and a padded exponent are spellings, not
+			// magnitudes, and none of these is anywhere near the limit.
+			"1e+0",
+			"1e-0",
+			"1e0000000000",
+			"1e-0000000000",
+			"1e+308",
+			"1e00000000000000000308",
+			// A written exponent is bounded by where it puts the decimal
+			// point, so digits after the point buy the same number of places
+			// back. Zero is subject to the bound like anything else.
+			"0e308",
+			"-0e308",
+			"0.0e309",
+			"0.00e310",
+			"0.1e309",
+			"0.01e310",
+			"0." + strings.Repeat("0", 400) + "1e700",
+		} {
+			t.Run(startEndString(doc), func(t *testing.T) {
+				var p Parser
+				v, err := p.Parse(doc)
+				require.NoError(t, err)
+				require.Equal(t, TypeNumber, v.Type())
+			})
+		}
+	})
+
+	t.Run("rejected", func(t *testing.T) {
+		for _, doc := range []string{
+			"1e309",
+			"-1e309",
+			"1e1025",
+			"1.7976931348623159e308",
+			"1e+309",
+			tooManyDigits,
+			// One place past what the digits after the point buy back. These
+			// all convert to zero, so only the exponent as written rules them
+			// out.
+			"0e309",
+			"-0e309",
+			"0e+309",
+			"0e1000",
+			"0.0e310",
+			"0.00e311",
+			"0.1e310",
+			"0.01e311",
+			"0." + strings.Repeat("0", 400) + "1e710",
+			// Within the written bound, but too big once converted.
+			"10e308",
+			"1" + strings.Repeat("0", 30) + "e279",
+			// More digits than a double has room for. The digits are read before
+			// the exponent is applied, so a negative exponent does not buy the
+			// room back however far it moves the decimal point afterwards.
+			"1" + strings.Repeat("0", 320) + "e-20",
+			"1" + strings.Repeat("0", 350) + "e-50",
+			"1" + strings.Repeat("0", 400) + "e-400",
+			"-1" + strings.Repeat("0", 400) + "e-400",
+			"1" + strings.Repeat("0", 400) + ".5e-400",
+			strings.Repeat("9", 400) + "e-100",
+			// A number anywhere in the document invalidates all of it.
+			"[1, 1e309]",
+			`{"a": 1e309}`,
+			"[[1e309]]",
+		} {
+			t.Run(startEndString(doc), func(t *testing.T) {
+				var p Parser
+				_, err := p.Parse(doc)
+				require.ErrorContains(t, err, "number too big to be stored in double")
+			})
+		}
+	})
+
+	// A negative exponent is not bounded, only stopped before it overflows the
+	// int it accumulates into, and what sends a number through the conversion at
+	// all is being written to more digits than a double holds. These cross the
+	// two, so the exponent is read into an int that cannot hold it and then
+	// scales a significand: written past that stop, it lands wherever the
+	// overflow leaves it, which can be a power of ten the table does not go up
+	// to. Each of these stays valid and reads as zero. MySQL 8.0.46 accepts all
+	// three and reads them as zero too.
+	t.Run("a negative exponent written past what an int holds", func(t *testing.T) {
+		for _, doc := range []string{
+			strings.Repeat("9", 400) + "e-" + strings.Repeat("2", 306),
+			"-" + strings.Repeat("9", 400) + "e-" + strings.Repeat("2", 306),
+			strings.Repeat("1", 400) + "." + strings.Repeat("5", 20) + "e-" + strings.Repeat("2", 306),
+		} {
+			t.Run(startEndString(doc), func(t *testing.T) {
+				var p Parser
+				v, err := p.Parse(doc)
+				require.NoError(t, err)
+
+				f, ok := v.Float64()
+				require.True(t, ok)
+				require.Zero(t, f)
+			})
+		}
+	})
+
+	// The significand accumulates one digit at a time, and each step rounds
+	// the multiplication and the addition separately, the way MySQL's builds
+	// run the loop. Fusing the two into one rounding — which the Go compiler
+	// may do on arm64 unless the conversion in mysqlNumberFits stops it —
+	// moves the accumulation an ULP for these documents, and that is enough
+	// to push them over the largest double. MySQL 8.0.45, 8.4.11 and 9.4.0
+	// accept all of them.
+	t.Run("each accumulation step rounds on its own", func(t *testing.T) {
+		for _, doc := range []string{
+			"17976931348623154547712857878e280",
+			"179769313486231559524062337652e279",
+			"179769313486231577704643761e282",
+			"1797693134862315724800793889e281",
+		} {
+			t.Run(startEndString(doc), func(t *testing.T) {
+				var p Parser
+				_, err := p.Parse(doc)
+				require.NoError(t, err)
+			})
+		}
+	})
+
+	// Right at the top of the range the answer turns on how a number was
+	// written rather than on what it is worth. The digits are split between a
+	// significand and a power of ten to scale it by, and where that split falls
+	// decides which way the last place rounds — so writing the same value to one
+	// more digit moves the split and can move the answer with it.
+	t.Run("spelling at the largest double", func(t *testing.T) {
+		for _, tc := range []struct {
+			doc  string
+			fits bool
+		}{
+			{"1.7976931348623157e308", true},
+			{"1.7976931348623158e308", false},
+			{"1.79769313486231580e308", true},
+			{"1.797693134862315800e308", true},
+			{"1.79769313486231581e308", true},
+			{"1.79769313486231585e308", true},
+			{"1.7976931348623159e308", false},
+			{"1.7976931348623157081e308", true},
+			{"17976931348623157e292", true},
+			{"17976931348623158e292", false},
+			{"179769313486231580e291", true},
+			{"1797693134862315800e290", false},
+			{"17976931348623158000000e286", false},
+		} {
+			t.Run(tc.doc, func(t *testing.T) {
+				var p Parser
+				_, err := p.Parse(tc.doc)
+				if tc.fits {
+					require.NoError(t, err)
+				} else {
+					require.ErrorContains(t, err, "number too big to be stored in double")
+				}
+			})
+		}
+	})
+}
+
+// TestParseNumberGrammar covers the shapes JSON's grammar allows a number to
+// take. A number opens with a minus or a digit, an integer part of more than
+// one digit does not open with a zero, and a decimal point has digits on both
+// sides of it. MySQL holds documents to the same grammar, and nan is not a
+// number to either of them.
+func TestParseNumberGrammar(t *testing.T) {
+	t.Run("accepted", func(t *testing.T) {
+		for _, doc := range []string{
+			"0", "-0", "0.5", "-0.5", "1", "-1", "1.2", "0e0", "-0e0",
+			"1e5", "1E5", "1e007", "1e+007", "1e-5", "0.0",
+			"[0,1,2]", `{"a":-0.5,"b":[1e5]}`,
+		} {
+			t.Run(doc, func(t *testing.T) {
+				var p Parser
+				_, err := p.Parse(doc)
+				require.NoError(t, err)
+			})
+		}
+	})
+
+	t.Run("rejected", func(t *testing.T) {
+		for _, doc := range []string{
+			// An integer part that opens with a zero.
+			"007", "-003", "01", "00", "00.5", "01.5", "[007]",
+			// A decimal point missing a digit on one side.
+			".2", "-.2", "12.", "-12.", "1.e5", `{"a": .2}`, "[12.]",
+			// A written plus.
+			"+1", "+1.5", "+0", "[+1]",
+			// Not a number at all.
+			"nan", "NaN", "NAN", "[nan]", `{"a": nan}`, "-nan", ".", "-",
+		} {
+			t.Run(doc, func(t *testing.T) {
+				var p Parser
+				_, err := p.Parse(doc)
+				require.Error(t, err)
+			})
+		}
+	})
+}
+
+// TestParseErrorAbbreviatesTheDocument covers how much of a rejected document
+// its error names. Nothing bounds how long a document may be, and Parse copies
+// the message it wraps, so naming the text in full hands a client its own
+// document back twice over. Each rejection abbreviates what it names, as the
+// unparsed tail alongside it already did.
+func TestParseErrorAbbreviatesTheDocument(t *testing.T) {
+	long := strings.Repeat("9", 100000)
+
+	for _, tc := range []struct {
+		name string
+		doc  string
+	}{
+		{name: "a number too big for a double", doc: "1" + long},
+		{name: "a written plus", doc: "+" + long},
+		{name: "a decimal point with nothing before it", doc: "." + long},
+		{name: "a decimal point with nothing after it", doc: long + "."},
+		{name: "nan", doc: "nan" + long},
+		{name: "nothing the grammar has a shape for", doc: "q" + long},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var p Parser
+			_, err := p.Parse(tc.doc)
+			require.Error(t, err)
+			require.NotContains(t, err.Error(), strings.Repeat("9", 200),
+				"the error carries the document it is reporting on")
+		})
+	}
 }
 
 func TestUnescapeStringBestEffort(t *testing.T) {
@@ -332,7 +592,7 @@ func TestParserParse(t *testing.T) {
 		require.Equal(t, "array", tp.String())
 		a, ok := v.Array()
 		require.True(t, ok, "unexpected error")
-		require.Zerof(t, len(a), "unexpected number of items in empty array: %d; want 0", len(a))
+		require.Emptyf(t, a, "unexpected number of items in empty array: %d; want 0", len(a))
 		require.Equalf(t, "[]", v.String(), "unexpected string representation of empty array")
 	})
 
@@ -522,5 +782,31 @@ func TestParserParse(t *testing.T) {
 		require.Equalf(t, TypeObject, v.Type(), "unexpected type obtained for object: %#v", v)
 
 		require.Equalf(t, want, v.String(), "unexpected string representation for object")
+	})
+}
+
+// TestMarshalToBlob verifies that marshaling a blob or bit value appends to
+// the caller's buffer instead of discarding previously accumulated output.
+func TestMarshalToBlob(t *testing.T) {
+	// base64("foo") == "Zm9v".
+	const encoded = `"base64:type15:Zm9v"`
+
+	t.Run("bare", func(t *testing.T) {
+		require.Equal(t, encoded, string(NewBlob("foo").MarshalTo(nil)))
+		require.Equal(t, encoded, string(NewBit("foo").MarshalTo(nil)))
+	})
+
+	t.Run("inside-array", func(t *testing.T) {
+		v := NewArray([]*Value{NewString("a"), NewBlob("foo")})
+		require.Equal(t, `["a", `+encoded+`]`, string(v.MarshalTo(nil)))
+
+		v = NewArray([]*Value{NewString("a"), NewBit("foo")})
+		require.Equal(t, `["a", `+encoded+`]`, string(v.MarshalTo(nil)))
+	})
+
+	t.Run("inside-object", func(t *testing.T) {
+		var obj Object
+		obj.Add("k", NewBlob("foo"))
+		require.Equal(t, `{"k": `+encoded+`}`, string(NewObject(obj).MarshalTo(nil)))
 	})
 }

@@ -195,9 +195,8 @@ return user.NeedsMigration() && migrate(user) || user
 - **No naked returns in non-trivial functions** - For functions with named return values, avoid bare `return` and explicitly return all result values (very small helpers are the only exception). This does not prohibit plain `return` in `func f() { ... }` when used for early-exit/guard clauses.
 - **Reduce nesting** - Prefer early returns and guard clauses over deeply nested `if` conditions
 - **Copyright header** - New Go files must include the project copyright header with the current year
-- **Always run `gofumpt -w`** on changed Go files before committing - this is mandatory
-- **Always run `goimports -local "vitess.io/vitess" -w`** on changed Go files before committing
-- **Always run `golangci-lint run --path-mode=abs --timeout 10m`** (from the `go/` directory, scoped to the changed package(s)) before reporting work complete. CI runs it and will surface modernize/style issues that `go vet`, `gofumpt`, and `goimports` do not — for example:
+- **Always run `scripts/fmt <changed-go-files>`** before committing - this is mandatory
+- **Always run `golangci-lint run --path-mode=abs --timeout 10m`** (from the `go/` directory, scoped to the changed package(s)) before reporting work complete. CI runs it and will surface modernize/style issues that `go vet` and `scripts/fmt` do not — for example:
   - `waitgroup`: prefer `WaitGroup.Go(func() { ... })` over `wg.Add(1); go func() { defer wg.Done(); ... }()`
   - `rangeint`: prefer `for range N` over `for i := 0; i < N; i++` when the index is unused
   - `bloop`: prefer `b.Loop()` over `for i := 0; i < b.N; i++` in benchmarks
@@ -240,9 +239,17 @@ return user.NeedsMigration() && migrate(user) || user
 - Changelog summaries are for key changes all users should know about — internal implementation details don't belong there
 - Keep PRs clean of unrelated diffs (e.g., stray `package-lock.json` changes, `go.sum` without `go mod tidy`)
 
-### EmergencyReparentShard (ERS)
-- ERS must prioritize **certainty** that we picked the most-advanced candidate
-- Changes should prioritize reducing points of failure - avoid new RPCs or work that may delay or make ERS more brittle
+### Release Cycle & Compatibility
+Vitess ships a major release roughly every 6 months, each supported for 12 months (see the [release cycle](https://vitess.io/docs/releases/release-cycle/) docs and `doc/internal/release/versioning.md`). Some changes therefore take 1-3 release cycles to complete — recognize when a task needs multi-release staging and propose the staged plan instead of doing it all in one release.
+
+- **Backwards AND forwards compatibility** must hold between consecutive major versions ([VEP-1](https://github.com/vitessio/enhancements/blob/main/veps/vep-1.md)) — clusters run mixed-version components during rolling upgrades, and downgrade by one major version must work too. CI enforces this via the `upgrade_downgrade_test_*` workflows (the `_next_release` variants test against the next major)
+- **Deprecation is a multi-release cycle** (minimum; maintainers may extend it):
+  - Behavior changes: release N announces + warns (default unchanged, opt-in flag), release N+1 may flip the default (old behavior restorable via the now-deprecated flag), release N+2 removes the flag/old behavior
+  - Simple removals (obsolete utilities, flags): warn in release N, remove in release N+1
+  - Never remove or change a default in the same release that introduces the deprecation warning
+- **Protobuf changes must be wire-compatible in both directions**: never renumber, retype, or reuse removed field numbers; new fields must tolerate being absent (an older peer never sends them) and their zero value must preserve existing behavior. The VTGate RPC protos are public API per `doc/internal/release/versioning.md`
+- **Data written by a live system** (topology data, Vitess-internal tables, on-disk formats) is covered by the same promise — a change that breaks the upgrade *or downgrade* path of a running cluster is a breaking change even if the data is "internal"
+- Experimental features are excluded from the compatibility promise and the deprecation rules
 
 ## :mag: Debugging & Troubleshooting
 
@@ -417,8 +424,7 @@ Me: "Now let's optimize without breaking functionality"
 Before considering any work "done":
 - [ ] Tests pass and cover the feature
 - [ ] Code is clean and readable
-    - [ ] Golang code passes the `gofumpt` formatter
-    - [ ] Golang code passes the `goimports -local "vitess.io/vitess" -w ...` formatter
+    - [ ] Golang code passes `scripts/fmt <changed-go-files>`
 - [ ] Edge cases are handled
 - [ ] Performance is acceptable
 - [ ] Documentation is updated if needed

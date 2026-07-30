@@ -2347,7 +2347,7 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 		var terminalErr error
 		if event.Type == binlogdatapb.VEventType_DDL {
 			var err error
-			ddlExecuted, err = vp.applyDDLEvent(ctx, event, nil)
+			ddlExecuted, err = vp.applyDDLEvent(ctx, event)
 			if err != nil {
 				if !errors.Is(err, io.EOF) {
 					return err

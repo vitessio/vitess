@@ -75,7 +75,7 @@ func TestMustWriteJSON(t *testing.T) {
 	res, err := os.ReadFile(tmpFile)
 	require.NoError(t, err)
 
-	require.EqualValues(t, `{
+	require.Equal(t, `{
   "StringField": "tricky text to test text",
   "IntField": 32,
   "BoolField": true,

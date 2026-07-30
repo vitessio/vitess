@@ -478,7 +478,7 @@ func TestPlannedReparentShardWaitForPositionFail(t *testing.T) {
 
 	// run PlannedReparentShard
 	err := vp.Run([]string{"PlannedReparentShard", "--wait_replicas_timeout", "10s", "--keyspace_shard", newPrimary.Tablet.Keyspace + "/" + newPrimary.Tablet.Shard, "--new_primary", topoproto.TabletAliasString(newPrimary.Tablet.Alias)})
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "replication on primary-elect cell1-0000000001 did not catch up in time")
 
 	// now check that DemotePrimary was undone and old primary is still primary
@@ -585,7 +585,7 @@ func TestPlannedReparentShardWaitForPositionTimeout(t *testing.T) {
 
 	// run PlannedReparentShard
 	err := vp.Run([]string{"PlannedReparentShard", "--wait_replicas_timeout", "10s", "--keyspace_shard", newPrimary.Tablet.Keyspace + "/" + newPrimary.Tablet.Shard, "--new_primary", topoproto.TabletAliasString(newPrimary.Tablet.Alias)})
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "replication on primary-elect cell1-0000000001 did not catch up in time")
 
 	// now check that DemotePrimary was undone and old primary is still primary
@@ -901,7 +901,7 @@ func TestPlannedReparentShardPromoteReplicaFail(t *testing.T) {
 	// run PlannedReparentShard
 	err := vp.Run([]string{"PlannedReparentShard", "--wait_replicas_timeout", "10s", "--keyspace_shard", newPrimary.Tablet.Keyspace + "/" + newPrimary.Tablet.Shard, "--new_primary", topoproto.TabletAliasString(newPrimary.Tablet.Alias)})
 
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "some error")
 
 	// when promote fails, we don't call UndoDemotePrimary, so the old primary should be read-only

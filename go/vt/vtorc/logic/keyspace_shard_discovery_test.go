@@ -236,7 +236,7 @@ func verifyKeyspaceInfo(t *testing.T, keyspaceName string, keyspace *topodatapb.
 	if errString != "" {
 		assert.EqualError(t, err, errString)
 	} else {
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, keyspaceName, ksInfo.KeyspaceName())
 		assert.True(t, topotools.KeyspaceEquality(keyspace, ksInfo.Keyspace))
 	}

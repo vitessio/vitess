@@ -134,7 +134,7 @@ func TestGetWorkflowCopyStates(t *testing.T) {
 	copyStates, err := wf.getWorkflowCopyStates(ctx, &topo.TabletInfo{
 		Tablet: tablet,
 	}, []int32{1})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Len(t, copyStates, 2)
 
 	state1 := &vtctldatapb.Workflow_Stream_CopyState{
@@ -240,7 +240,7 @@ func TestFetchCopyStatesByShardStream(t *testing.T) {
 		},
 	}
 	copyStatesByStreamId, err := wf.fetchCopyStatesByShardStream(ctx, readVReplicationResponse)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	copyStates1 := copyStatesByStreamId["-80/1"]
 	copyStates2 := copyStatesByStreamId["-80/2"]

@@ -421,6 +421,11 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	var lastpk *querypb.Row
 	var pkfields []*querypb.Field
 
+	// Errors observed inside the VStreamRows callback. The callback returns
+	// io.EOF on the first Fail; the post-VStreamRows drain reports them
+	// alongside any concurrent insert workers that race in afterwards.
+	var preTerrs []error
+
 	// Use this for task sequencing.
 	var prevCh <-chan *vcopierCopyTaskResult
 
@@ -501,7 +506,8 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 			buf.Myprintf(
 				"insert into _vt.copy_state (lastpk, vrepl_id, table_name) values (%a, %s, %s)", ":lastpk",
 				strconv.Itoa(int(vc.vr.id)),
-				encodeString(tableName))
+				encodeString(tableName),
+			)
 			addLatestCopyState := buf.ParsedQuery()
 			copyWorkQueue.open(addLatestCopyState, pkfields, tablePlan)
 		}
@@ -582,19 +588,25 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		// * We keep lastpk up-to-date.
 		select {
 		case result := <-resultCh:
-			if result != nil {
-				switch result.state {
-				case vcopierCopyTaskCancel:
-					log.Warn(fmt.Sprintf("task was canceled in workflow %s: %v", vc.vr.WorkflowName, result.err))
-					return io.EOF
-				case vcopierCopyTaskComplete:
-					// Collect lastpk. Needed for logging at the end.
-					lastpk = result.args.lastpk
-				case vcopierCopyTaskFail:
-					return vterrors.Wrapf(result.err, "task error")
-				}
-			} else {
+			if result == nil {
 				return io.EOF
+			}
+			switch result.state {
+			case vcopierCopyTaskCancel:
+				log.Warn(fmt.Sprintf("task was canceled in workflow %s: %v", vc.vr.WorkflowName, result.err))
+				return io.EOF
+			case vcopierCopyTaskFail:
+				// Defer the report to the post-VStreamRows drain so
+				// concurrent insert workers that race in after this read
+				// are included. The Fail aggregate is logged by the
+				// post-VStreamRows drain.
+				if result.err != nil {
+					preTerrs = append(preTerrs, result.err)
+				}
+				return io.EOF
+			case vcopierCopyTaskComplete:
+				// Collect lastpk. Needed for logging at the end.
+				lastpk = result.args.lastpk
 			}
 		default:
 		}
@@ -606,34 +618,36 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	// and will wait until all workers are returned to the worker pool.
 	copyWorkQueue.close()
 
-	// When tasks are executed async, there may be tasks that complete (or fail)
-	// after the last VStreamRows callback exits. Get the lastpk from completed
-	// tasks, or errors from failed ones.
+	// Drain late-arriving task results (async tasks that finished after
+	// VStreamRows exited). Seed with preTerrs from the VStreamRows
+	// callback. formatTaskError partitions sentinel dependent-batch
+	// failures out from real root-cause errors.
 	var empty bool
-	var terrs []error
+	terrs := preTerrs
 	for !empty {
 		select {
 		case result := <-resultCh:
 			switch result.state {
 			case vcopierCopyTaskCancel:
-				// A task cancellation probably indicates an expired context due
-				// to a PlannedReparentShard or elapsed copy phase duration,
-				// neither of which are error conditions.
+				// A task cancellation probably indicates an expired
+				// context due to a PlannedReparentShard or elapsed copy
+				// phase duration, neither of which are error conditions.
 			case vcopierCopyTaskComplete:
 				// Get the latest lastpk, purely for logging purposes.
 				lastpk = result.args.lastpk
 			case vcopierCopyTaskFail:
 				// Aggregate non-nil errors.
-				terrs = append(terrs, result.err)
+				if result.err != nil {
+					terrs = append(terrs, result.err)
+				}
 			}
 		default:
 			empty = true
 		}
 	}
-	if len(terrs) > 0 {
-		terr := vterrors.Aggregate(terrs)
+	if terr := formatTaskError(terrs); terr != nil {
 		log.Warn(fmt.Sprintf("task error in workflow %s: %v", vc.vr.WorkflowName, terr))
-		return vterrors.Wrapf(terr, "task error")
+		return terr
 	}
 
 	// Get the last committed pk into a loggable form.
@@ -859,6 +873,67 @@ func (vtl *vcopierCopyTaskLifecycle) onResult() *vcopierCopyTaskResultHooks {
 	return vtl.resultHooks
 }
 
+// dependentBatchFailure tags errors produced by awaitCompletion. They convey
+// only that a concurrent insert worker's batch did not reach Complete — never
+// the root cause. formatTaskError partitions these out so the real error
+// becomes the message and dependent-batch failures become a count (#20316).
+type dependentBatchFailure struct {
+	msg  string
+	code vtrpcpb.Code
+}
+
+func (e *dependentBatchFailure) Error() string { return e.msg }
+
+// ErrorCode satisfies vterrors.ErrorWithCode. The ctx.Done() awaitCompletion
+// site sets Code_CANCELED so tryAdvance maps it to vcopierCopyTaskCancel;
+// other sites leave code unset and report Code_UNKNOWN.
+func (e *dependentBatchFailure) ErrorCode() vtrpcpb.Code {
+	if e.code == vtrpcpb.Code_OK {
+		return vtrpcpb.Code_UNKNOWN
+	}
+	return e.code
+}
+
+// partitionTaskErrors splits errors collected from a batch of copy tasks into
+// real root-cause errors and dependent-batch failures (concurrent insert
+// worker tasks that merely stalled waiting on a failed batch).
+func partitionTaskErrors(errs []error) (root, dependent []error) {
+	for _, e := range errs {
+		if e == nil {
+			continue
+		}
+		var dbf *dependentBatchFailure
+		if errors.As(e, &dbf) {
+			dependent = append(dependent, e)
+		} else {
+			root = append(root, e)
+		}
+	}
+	return root, dependent
+}
+
+// formatTaskError combines a batch of copy-task errors into the single error
+// that gets surfaced to the operator (via vreplication_log). Real errors
+// dominate the message; dependent-batch failures collapse to a count.
+// Returns nil if there were no errors to report.
+func formatTaskError(errs []error) error {
+	root, dependent := partitionTaskErrors(errs)
+	switch {
+	case len(root) > 0 && len(dependent) > 0:
+		return vterrors.Wrapf(vterrors.Aggregate(root),
+			"task error (+%d batches failed waiting on this to complete)", len(dependent))
+	case len(root) > 0:
+		return vterrors.Wrapf(vterrors.Aggregate(root), "task error")
+	case len(dependent) > 0:
+		return vterrors.Errorf(vterrors.Code(dependent[0]),
+			"task error: %d batches failed waiting on a concurrent insert worker's batch to complete; "+
+				"original failure not captured this retry (see earlier rows for the root cause)",
+			len(dependent))
+	default:
+		return nil
+	}
+}
+
 // tryAdvance is a convenient way of wrapping up lifecycle hooks with task
 // execution steps. E.g.:
 //
@@ -973,13 +1048,13 @@ func (vth *vcopierCopyTaskHooks) awaitCompletion(resultCh <-chan *vcopierCopyTas
 		select {
 		case result := <-resultCh:
 			if result == nil {
-				return errors.New("channel was closed before a result received")
+				return &dependentBatchFailure{msg: "channel was closed before a result received"}
 			}
 			if !vcopierCopyTaskStateIsDone(result.state) {
-				return errors.New("received result is not done")
+				return &dependentBatchFailure{msg: "received result is not done"}
 			}
 			if result.state != vcopierCopyTaskComplete {
-				return errors.New("received result is not complete")
+				return &dependentBatchFailure{msg: "received result is not complete"}
 			}
 			return nil
 		case <-ctx.Done():
@@ -990,7 +1065,7 @@ func (vth *vcopierCopyTaskHooks) awaitCompletion(resultCh <-chan *vcopierCopyTas
 			// Task execution will detect the presence of the error, mark this
 			// task canceled, and abort. Subsequent tasks won't execute because
 			// this task didn't complete.
-			return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
+			return &dependentBatchFailure{msg: "context has expired", code: vtrpcpb.Code_CANCELED}
 		}
 	})
 }

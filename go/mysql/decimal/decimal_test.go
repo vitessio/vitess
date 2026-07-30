@@ -149,9 +149,7 @@ func TestNewFromFloatRandom(t *testing.T) {
 		}
 		in := (rand.Float64() - 0.5) * math.MaxFloat64 * 2
 		want, err := NewFromString(strconv.FormatFloat(in, 'f', -1, 64))
-		if !assert.NoError(t, err) {
-			continue
-		}
+		require.NoError(t, err)
 		got := NewFromFloat(in)
 		assert.True(t, want.Equal(got))
 	}
@@ -257,7 +255,7 @@ func TestNewFromStringErrs(t *testing.T) {
 
 	for s, o := range tests {
 		out, err := NewFromString(s)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Equal(t, o, out.String())
 	}
 }
@@ -572,7 +570,7 @@ func TestDecimal_QuoRem(t *testing.T) {
 		assert.Truef(t, q.Equal(expectedQ) && r.Equal(expectedR), "bad QuoRem division %s , %s , %d got %v, %v expected %s , %s", inp4.d, inp4.d2, prec, q, r, inp4.q, inp4.r)
 		assert.True(t, d.Equal(d2.mul(q).Add(r)))
 		assert.True(t, q.Equal(q.Truncate(prec)))
-		assert.Lessf(t, r.Abs().Cmp(d2.Abs().mul(New(1, -prec))), 0, "remainder too large: d=%v, d2= %v, prec=%d, q=%v, r=%v", d, d2, prec, q, r)
+		assert.Negativef(t, r.Abs().Cmp(d2.Abs().mul(New(1, -prec))), "remainder too large: d=%v, d2= %v, prec=%d, q=%v, r=%v", d, d2, prec, q, r)
 		assert.GreaterOrEqualf(t, r.value.Sign()*d.value.Sign(), 0, "signum of divisor and rest do not match: d=%v, d2= %v, prec=%d, q=%v, r=%v", d, d2, prec, q, r)
 	}
 }
@@ -625,7 +623,7 @@ func TestDecimal_QuoRem2(t *testing.T) {
 		assert.True(t, q.Equal(q.Truncate(prec)))
 
 		// rule 3: abs(r)<abs(d) * 10^(-prec)
-		assert.Lessf(t, r.Abs().Cmp(d2.Abs().mul(New(1, -prec))), 0, "remainder too large, d=%v, d2=%v, prec=%d, q=%v, r=%v", d, d2, prec, q, r)
+		assert.Negativef(t, r.Abs().Cmp(d2.Abs().mul(New(1, -prec))), "remainder too large, d=%v, d2=%v, prec=%d, q=%v, r=%v", d, d2, prec, q, r)
 		// rule 4: r and d have the same sign
 		assert.GreaterOrEqualf(t, r.value.Sign()*d.value.Sign(), 0, "signum of divisor and rest do not match, d=%v, d2=%v, prec=%d, q=%v, r=%v", d, d2, prec, q, r)
 	}
@@ -715,8 +713,8 @@ func TestSizeAndScaleFromString(t *testing.T) {
 	for _, testcase := range testcases {
 		t.Run(testcase.value, func(t *testing.T) {
 			siz, scale := SizeAndScaleFromString(testcase.value)
-			assert.EqualValues(t, testcase.sizeExpected, siz)
-			assert.EqualValues(t, testcase.scaleExpected, scale)
+			assert.Equal(t, testcase.sizeExpected, siz)
+			assert.Equal(t, testcase.scaleExpected, scale)
 		})
 	}
 }

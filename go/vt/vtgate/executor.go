@@ -480,6 +480,11 @@ func (e *Executor) finalizeLogStats(logStats *logstats.LogStats, mysqlCtx vtgate
 	if mysqlCtx != nil {
 		mysqlCtx.SetQueryWasSlow(logStats.SlowQuery)
 	}
+	if ingressBytes, ok := vtgateservice.IngressBytesFromContext(logStats.Ctx); ok {
+		logStats.IngressBytes = ingressBytes
+	} else if mysqlCtx != nil {
+		logStats.IngressBytes = mysqlCtx.IngressBytes()
+	}
 	if logStats.SlowQuery && logStats.StmtType != "" && logStats.PlanType != "" && logStats.TabletType != "" {
 		slowQueries.Add([]string{logStats.StmtType, logStats.PlanType, logStats.TabletType}, 1)
 	}
@@ -1300,6 +1305,23 @@ func (e *Executor) getCachedOrBuildPlan(
 		return nil, false, nil, err
 	}
 
+	preparedPlan := planKey.Query != ""
+	if preparedPlan {
+		// MySQL rejects statement text that itself manages prepared
+		// statements with ER_UNSUPPORTED_PS. The check must run before the
+		// statement is planned: planning an EXECUTE plans its stored
+		// statement text, and the gRPC API lets clients store arbitrary
+		// text in the session's prepared-statement map, so nested EXECUTE
+		// text would otherwise recurse through the planner without bound.
+		// No statement is returned with the error so that a failed
+		// binary-protocol prepare does not fall back to accepting the
+		// statement with NULL field types.
+		switch stmt.(type) {
+		case *sqlparser.PrepareStmt, *sqlparser.ExecuteStmt, *sqlparser.DeallocateStmt:
+			return nil, false, nil, vterrors.NewErrorf(vtrpcpb.Code_UNIMPLEMENTED, vterrors.UnsupportedPS, "This command is not supported in the prepared statement protocol yet")
+		}
+	}
+
 	defer func() {
 		if err == nil {
 			vcursor.CheckForReservedConnection(setVarComment, stmt)
@@ -1317,7 +1339,6 @@ func (e *Executor) getCachedOrBuildPlan(
 	vcursor.SetForeignKeyCheckState(qh.ForeignKeyChecks)
 
 	paramsCount := uint16(0)
-	preparedPlan := planKey.Query != ""
 	if preparedPlan {
 		// We need to count the number of arguments in the statement before we plan the query.
 		// Planning could add additional arguments to the statement.
@@ -1557,13 +1578,29 @@ func (e *Executor) Prepare(ctx context.Context, method string, safeSession *econ
 }
 
 func (e *Executor) prepare(ctx context.Context, safeSession *econtext.SafeSession, sql string, logStats *logstats.LogStats) ([]*querypb.Field, uint16, error) {
-	// Start an implicit transaction if necessary.
-	if !safeSession.Autocommit && !safeSession.InTransaction() {
-		if err := e.txConn.Begin(ctx, safeSession, nil); err != nil {
+	stmtType := sqlparser.Preview(sql)
+	if stmtType == sqlparser.StmtUnknown {
+		// Preview only looks at the first keyword, so statements starting with
+		// a WITH clause come back as unknown. Classify those from the AST, but
+		// only rescue the statements handlePrepare can count parameters for
+		// (WITH ... SELECT/INSERT/REPLACE/UPDATE/DELETE). Anything else stays
+		// unknown and is rejected below, rather than being reported to the
+		// client as a zero-parameter success.
+		stmt, err := e.env.Parser().Parse(sql)
+		if err != nil {
+			// The statement stays unknown, and an unparseable statement is
+			// never SHOW, so record the type and clear warnings the way the
+			// code below does before returning the syntax error.
+			logStats.StmtType = stmtType.String()
+			safeSession.ClearWarnings()
 			return nil, 0, err
 		}
+		switch astType := sqlparser.ASTToStatementType(stmt); astType {
+		case sqlparser.StmtSelect, sqlparser.StmtInsert, sqlparser.StmtReplace,
+			sqlparser.StmtUpdate, sqlparser.StmtDelete:
+			stmtType = astType
+		}
 	}
-	stmtType := sqlparser.Preview(sql)
 	logStats.StmtType = stmtType.String()
 
 	// Mysql warnings are scoped to the current session, but are
@@ -1878,7 +1915,10 @@ func (e *Executor) PlanPrepareStmt(ctx context.Context, safeSession *econtext.Sa
 	// creating this log stats to not interfere with the original log stats.
 	lStats := logstats.NewLogStats(ctx, "prepare", query, safeSession.GetSessionUUID(), nil, streamlog.GetQueryLogConfig())
 	plan, _, _, err := e.fetchOrCreatePlan(ctx, safeSession, query, nil, false, true, lStats, false)
-	return plan, err
+	if err != nil {
+		return nil, err
+	}
+	return plan, nil
 }
 
 func (e *Executor) Close() {

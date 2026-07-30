@@ -342,7 +342,7 @@ func TestQueryExecutorPlans(t *testing.T) {
 			qre := newTestQueryExecutorWithRowsLimit(ctx, tsv, tcase.input, 0, tcase.passThrough && tcase.inDMLExec)
 			got, err := qre.Execute()
 			if tcase.outsideTxErr || (tcase.errorWant != "" && !tcase.onlyInTxErr) {
-				assert.EqualError(t, err, tcase.errorWant)
+				require.EqualError(t, err, tcase.errorWant)
 			} else {
 				require.NoError(t, err, tcase.input)
 				assert.Equal(t, tcase.resultWant, got, tcase.input)
@@ -673,7 +673,7 @@ func TestExecDDLSchemaTableCountLimit(t *testing.T) {
 				}
 			} else {
 				require.Error(t, err)
-				assert.ErrorContains(t, err, tc.wantErrContains)
+				require.ErrorContains(t, err, tc.wantErrContains)
 				assert.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err))
 			}
 		})
@@ -786,7 +786,7 @@ func TestQueryExecutorLimitFailure(t *testing.T) {
 			// Test outside a transaction.
 			qre := newTestQueryExecutor(ctx, tsv, tcase.input, 0)
 			_, err := qre.Execute()
-			assert.Error(t, err)
+			require.Error(t, err)
 			assert.Contains(t, err.Error(), tcase.err)
 			assert.Equal(t, tcase.logWant, qre.logStats.RewrittenSQL(), tcase.input)
 
@@ -800,7 +800,7 @@ func TestQueryExecutorLimitFailure(t *testing.T) {
 
 			qre = newTestQueryExecutor(ctx, tsv, tcase.input, state.TransactionID)
 			_, err = qre.Execute()
-			assert.Error(t, err)
+			require.Error(t, err)
 			assert.Contains(t, err.Error(), tcase.err)
 
 			want := tcase.logWant
@@ -1005,7 +1005,7 @@ func TestQueryExecutorMessageStreamACL(t *testing.T) {
 		return io.EOF
 	})
 
-	assert.EqualError(t, err, `MessageStream command denied to user 'u2', in groups [non-admin], for table 'msg' (ACL check error)`)
+	require.EqualError(t, err, `MessageStream command denied to user 'u2', in groups [non-admin], for table 'msg' (ACL check error)`)
 	require.Equalf(t, vtrpcpb.Code_PERMISSION_DENIED, vterrors.Code(err), "qre.Execute: %v, want %v", vterrors.Code(err), vtrpcpb.Code_PERMISSION_DENIED)
 }
 
@@ -1130,7 +1130,7 @@ func TestQueryExecutorTableAclDualTableExempt(t *testing.T) {
 	_, err := qre.Execute()
 	require.Equalf(t, vtrpcpb.Code_PERMISSION_DENIED, vterrors.Code(err), "qre.Execute: %v, want %v", vterrors.Code(err), vtrpcpb.Code_PERMISSION_DENIED)
 
-	assert.EqualError(t, err, `SelectImpossible command denied to user 'basic_username' for table 'test_table' (ACL check error)`)
+	require.EqualError(t, err, `SelectImpossible command denied to user 'basic_username' for table 'test_table' (ACL check error)`)
 
 	// table acl should be ignored when querying against dual table
 	query = "select @@version_comment from dual limit 1"
@@ -1253,7 +1253,7 @@ func TestQueryExecutorTableAclExemptACL(t *testing.T) {
 	// query should fail because current user do not have read permissions
 	_, err := qre.Execute()
 	require.Equalf(t, vtrpcpb.Code_PERMISSION_DENIED, vterrors.Code(err), "qre.Execute: %v, want %v", vterrors.Code(err), vtrpcpb.Code_PERMISSION_DENIED)
-	assert.EqualError(t, err, `Select command denied to user 'u2', in groups [eng, beta], for table 'test_table' (ACL check error)`)
+	require.EqualError(t, err, `Select command denied to user 'u2', in groups [eng, beta], for table 'test_table' (ACL check error)`)
 
 	// table acl should be ignored since this is an exempt user.
 	username = "exempt-acl"
@@ -1472,8 +1472,8 @@ func TestReplaceSchemaName(t *testing.T) {
 	// Test streaming execute.
 	{
 		qre := newTestQueryExecutorStreaming(ctx, tsv, inQuery, 0)
-		// Stream only replaces schema name when plan is PlanSelectStream.
-		assert.Equal(t, planbuilder.PlanSelectStream, qre.plan.PlanID)
+		// Stream only replaces schema name when plan is PlanSelect.
+		assert.Equal(t, planbuilder.PlanSelect, qre.plan.PlanID)
 		// Any value other than nil should cause QueryExecutor to replace the
 		// schema name.
 		qre.bindVars[sqltypes.BvReplaceSchemaName] = sqltypes.NullBindVariable
@@ -1484,6 +1484,271 @@ func TestReplaceSchemaName(t *testing.T) {
 		})
 		require.NoError(t, err)
 	}
+}
+
+// A SELECT carrying a lock function can also reference an information_schema
+// table rewritten by vtgate, so both execution paths must resolve
+// :__vtschemaname before the query reaches MySQL. Lock functions require a
+// reserved connection, so both paths run on a transaction connection here.
+func TestReplaceSchemaNameSelectLockFunc(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+
+	queryFmt := "select get_lock('vt_lock', 10) from information_schema.`schema_name` where `schema_name` = %s"
+	inQuery := fmt.Sprintf(queryFmt, ":"+sqltypes.BvSchemaName)
+	wantQueryExec := fmt.Sprintf(queryFmt, fmt.Sprintf(
+		"'%s' limit %d",
+		db.Name(),
+		10001,
+	))
+	wantQueryStream := fmt.Sprintf(queryFmt, fmt.Sprintf(
+		"'%s'",
+		db.Name(),
+	))
+
+	ctx := t.Context()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+
+	db.AddQuery(wantQueryExec, &sqltypes.Result{
+		Fields: getTestTableFields(),
+	})
+
+	db.AddQuery(wantQueryStream, &sqltypes.Result{
+		Fields: getTestTableFields(),
+	})
+
+	target := tsv.sm.Target()
+
+	// Test non streaming execute.
+	{
+		txID := newTransaction(tsv, nil)
+		defer func() { _, _ = tsv.Rollback(ctx, target, txID) }()
+		qre := newTestQueryExecutor(ctx, tsv, inQuery, txID)
+		require.Equal(t, planbuilder.PlanSelectLockFunc, qre.plan.PlanID)
+		qre.bindVars[sqltypes.BvReplaceSchemaName] = sqltypes.NullBindVariable
+		_, err := qre.Execute()
+		require.NoError(t, err)
+		require.Contains(t, qre.bindVars, sqltypes.BvSchemaName)
+	}
+
+	// Test streaming execute.
+	{
+		txID := newTransaction(tsv, nil)
+		defer func() { _, _ = tsv.Rollback(ctx, target, txID) }()
+		qre := newTestQueryExecutorStreaming(ctx, tsv, inQuery, txID)
+		require.Equal(t, planbuilder.PlanSelectLockFunc, qre.plan.PlanID)
+		qre.bindVars[sqltypes.BvReplaceSchemaName] = sqltypes.NullBindVariable
+		err := qre.Stream(func(_ *sqltypes.Result) error { return nil })
+		require.NoError(t, err)
+		require.Contains(t, qre.bindVars, sqltypes.BvSchemaName)
+	}
+}
+
+// TestQueryExecutorStreamDML verifies that DML executed on the streaming path
+// (StreamExecute) runs through the same transactional machinery as Execute and
+// delivers its single result through the callback. Before the fix for #19561
+// and #19564, BuildStreaming rejected DML outright and Stream had no DML
+// handling, so DML in OLAP mode could not start an implicit transaction.
+func TestQueryExecutorStreamDML(t *testing.T) {
+	dmlResult := &sqltypes.Result{RowsAffected: 1}
+
+	testcases := []struct {
+		input     string
+		dbQuery   string
+		planWant  planbuilder.PlanType
+		inTxQuery string
+	}{
+		{
+			input:    "insert into test_table(a) values(1)",
+			dbQuery:  "insert into test_table(a) values (1)",
+			planWant: planbuilder.PlanInsert,
+		},
+		{
+			input:    "update test_table set a=1",
+			dbQuery:  "update test_table set a = 1 limit 10001",
+			planWant: planbuilder.PlanUpdateLimit,
+		},
+		{
+			input:    "delete from test_table where pk = 1",
+			dbQuery:  "delete from test_table where pk = 1 limit 10001",
+			planWant: planbuilder.PlanDeleteLimit,
+		},
+	}
+
+	for _, tcase := range testcases {
+		t.Run(tcase.input, func(t *testing.T) {
+			db := setUpQueryExecutorTest(t)
+			defer db.Close()
+			db.AddQuery(tcase.dbQuery, dmlResult)
+			ctx := t.Context()
+			tsv := newTestTabletServer(ctx, noFlags, db)
+			defer tsv.StopService()
+
+			// Run the DML outside a transaction (autocommit).
+			qre := newTestQueryExecutorStreaming(ctx, tsv, tcase.input, 0)
+			require.Equal(t, tcase.planWant, qre.plan.PlanID)
+
+			var got *sqltypes.Result
+			err := qre.Stream(func(result *sqltypes.Result) error {
+				got = result
+				return nil
+			})
+			require.NoError(t, err)
+			require.Equal(t, dmlResult, got)
+			// The streamed DML result must be reflected in the query log,
+			// just like the non-streaming Execute path.
+			assert.Equal(t, int(dmlResult.RowsAffected), qre.logStats.RowsAffected)
+
+			// Run the DML inside an existing transaction.
+			target := tsv.sm.Target()
+			state, err := tsv.Begin(ctx, nil, target, nil)
+			require.NoError(t, err)
+			defer tsv.Commit(ctx, target, state.TransactionID)
+
+			qre = newTestQueryExecutorStreaming(ctx, tsv, tcase.input, state.TransactionID)
+			got = nil
+			err = qre.Stream(func(result *sqltypes.Result) error {
+				got = result
+				return nil
+			})
+			require.NoError(t, err)
+			require.Equal(t, dmlResult, got)
+		})
+	}
+}
+
+// TestQueryExecutorStreamDMLErrorStatsOnPermissionDenied verifies that a streamed
+// DML rejected by checkPermissions (a QRFail query rule) still records per-table
+// error stats, matching the non-streaming Execute path. The permission and request
+// throttler checks run early, before the DML reaches the database, so streamDML's
+// stats defer must be registered ahead of them to record these rejections.
+func TestQueryExecutorStreamDMLErrorStatsOnPermissionDenied(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+
+	query := "insert into test_table(a) values(1)"
+
+	bannedAddr := "127.0.0.1"
+	bannedUser := "u2"
+
+	denyRule := rules.NewQueryRule("disable insert", "disable insert", rules.QRFail)
+	denyRule.SetIPCond(bannedAddr)
+	denyRule.SetUserCond(bannedUser)
+	denyRule.AddPlanCond(planbuilder.PlanInsert)
+	denyRule.AddTableCond("test_table")
+
+	rulesName := "denyListStreamDMLQRFail"
+	qrs := rules.New()
+	qrs.Add(denyRule)
+
+	callInfo := &fakecallinfo.FakeCallInfo{
+		Remote: bannedAddr,
+		User:   bannedUser,
+	}
+	ctx := callinfo.NewContext(t.Context(), callInfo)
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+	tsv.qe.queryRuleSources.UnRegisterSource(rulesName)
+	tsv.qe.queryRuleSources.RegisterSource(rulesName)
+	defer tsv.qe.queryRuleSources.UnRegisterSource(rulesName)
+	require.NoError(t, tsv.qe.queryRuleSources.SetRules(rulesName, qrs))
+
+	qre := newTestQueryExecutorStreaming(ctx, tsv, query, 0)
+	require.Equal(t, planbuilder.PlanInsert, qre.plan.PlanID)
+
+	errCountBefore := tsv.qe.queryErrorCounts.Counts()["test_table.Insert"]
+	err := qre.Stream(func(*sqltypes.Result) error { return nil })
+	require.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
+
+	errCountAfter := tsv.qe.queryErrorCounts.Counts()["test_table.Insert"]
+	assert.Equal(t, errCountBefore+1, errCountAfter,
+		"streamed DML rejected by checkPermissions must record per-table error stats like Execute")
+}
+
+// TestQueryExecutorStreamErrorStatsOnPermissionDenied verifies that a streamed
+// SELECT rejected by checkPermissions (a QRFail query rule) still records
+// per-table error stats, matching the non-streaming Execute path. Stream's
+// stats defer reads the named error return, so it observes the rejections from
+// the permission and request throttler checks even though they run before any
+// query execution; this test pins the defer being registered ahead of those
+// checks.
+func TestQueryExecutorStreamErrorStatsOnPermissionDenied(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+
+	query := "select * from test_table"
+
+	bannedAddr := "127.0.0.1"
+	bannedUser := "u2"
+
+	denyRule := rules.NewQueryRule("disable select", "disable select", rules.QRFail)
+	denyRule.SetIPCond(bannedAddr)
+	denyRule.SetUserCond(bannedUser)
+	denyRule.AddPlanCond(planbuilder.PlanSelect)
+	denyRule.AddTableCond("test_table")
+
+	rulesName := "denyListStreamSelectQRFail"
+	qrs := rules.New()
+	qrs.Add(denyRule)
+
+	callInfo := &fakecallinfo.FakeCallInfo{
+		Remote: bannedAddr,
+		User:   bannedUser,
+	}
+	ctx := callinfo.NewContext(t.Context(), callInfo)
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+	tsv.qe.queryRuleSources.UnRegisterSource(rulesName)
+	tsv.qe.queryRuleSources.RegisterSource(rulesName)
+	defer tsv.qe.queryRuleSources.UnRegisterSource(rulesName)
+	require.NoError(t, tsv.qe.queryRuleSources.SetRules(rulesName, qrs))
+
+	qre := newTestQueryExecutorStreaming(ctx, tsv, query, 0)
+	require.Equal(t, planbuilder.PlanSelect, qre.plan.PlanID)
+
+	errCountBefore := tsv.qe.queryErrorCounts.Counts()["test_table.Select"]
+	err := qre.Stream(func(*sqltypes.Result) error { return nil })
+	require.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
+
+	errCountAfter := tsv.qe.queryErrorCounts.Counts()["test_table.Select"]
+	assert.Equal(t, errCountBefore+1, errCountAfter,
+		"streamed SELECT rejected by checkPermissions must record per-table error stats like Execute")
+}
+
+// TestQueryExecutorStreamDMLAppliesQueryTimeout verifies that autocommit DML on
+// the streaming path runs under the query timeout, like the non-streaming
+// Execute path. StreamExecute leaves the request timeout unset when there is no
+// transaction (transactionID == 0), so without applying it for DML a stuck
+// INSERT/UPDATE/DELETE would run without a query deadline.
+func TestQueryExecutorStreamDMLAppliesQueryTimeout(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+
+	query := "insert into test_table(a) values(1)"
+	db.AddQuery("insert into test_table(a) values (1)", &sqltypes.Result{RowsAffected: 1})
+
+	ctx := t.Context()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+
+	qre := newTestQueryExecutorStreaming(ctx, tsv, query, 0)
+	require.Equal(t, planbuilder.PlanInsert, qre.plan.PlanID)
+
+	// Precondition: the executor context starts without a deadline. The unit test
+	// bypasses StreamExecute, which is where a transaction's timeout is set.
+	_, ok := qre.ctx.Deadline()
+	require.False(t, ok)
+
+	err := qre.Stream(func(*sqltypes.Result) error { return nil })
+	require.NoError(t, err)
+
+	// streamDML must have bounded the autocommit DML with the query timeout,
+	// mirroring Execute's loadQueryTimeoutWithTxAndOptions(0, options).
+	deadline, ok := qre.ctx.Deadline()
+	require.True(t, ok, "autocommit streamed DML must run under the query timeout, like Execute")
+	assert.LessOrEqual(t, time.Until(deadline), tsv.loadQueryTimeout(),
+		"the deadline must come from the query timeout")
 }
 
 func TestQueryExecutorShouldConsolidate(t *testing.T) {
@@ -1595,7 +1860,7 @@ func TestQueryExecutorShouldConsolidate(t *testing.T) {
 			// Execute query.
 
 			_, err := qre.Execute()
-			require.Nil(t, err)
+			require.NoError(t, err)
 
 			// Verify expectations.
 
@@ -1610,7 +1875,7 @@ func TestQueryExecutorShouldConsolidate(t *testing.T) {
 					require.Equal(t, 0, fakePendingResult.WaitCalls)
 				}
 			} else {
-				require.Len(t, fakeConsolidator.CreateCalls, 0)
+				require.Empty(t, fakeConsolidator.CreateCalls)
 			}
 
 			if tcase.expectExec {
@@ -1772,7 +2037,7 @@ func TestQueryExecutorConsolidatorRejectOnCap(t *testing.T) {
 			if tc.wantErr {
 				require.Error(t, err)
 				assert.Equal(t, tc.wantErrCode, vterrors.Code(err))
-				assert.ErrorContains(t, err, tc.wantErrMsg)
+				require.ErrorContains(t, err, tc.wantErrMsg)
 			} else {
 				require.NoError(t, err)
 				require.NotNil(t, got)
@@ -1803,16 +2068,16 @@ func TestGetConnectionLogStats(t *testing.T) {
 	// getConn() happy path
 	qre := newTestQueryExecutor(ctx, tsv, input, 0)
 	conn, err := qre.getConn()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, conn)
-	assert.True(t, qre.logStats.WaitingForConnection > 0)
+	assert.Positive(t, qre.logStats.WaitingForConnection)
 
 	// getStreamConn() happy path
 	qre = newTestQueryExecutor(ctx, tsv, input, 0)
 	conn, err = qre.getStreamConn()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, conn)
-	assert.True(t, qre.logStats.WaitingForConnection > 0)
+	assert.Positive(t, qre.logStats.WaitingForConnection)
 
 	// Close the db connection to induce connection errors
 	db.Close()
@@ -1820,14 +2085,14 @@ func TestGetConnectionLogStats(t *testing.T) {
 	// getConn() error path
 	qre = newTestQueryExecutor(ctx, tsv, input, 0)
 	_, err = qre.getConn()
-	assert.Error(t, err)
-	assert.True(t, qre.logStats.WaitingForConnection > 0)
+	require.Error(t, err)
+	assert.Positive(t, qre.logStats.WaitingForConnection)
 
 	// getStreamConn() error path
 	qre = newTestQueryExecutor(ctx, tsv, input, 0)
 	_, err = qre.getStreamConn()
-	assert.Error(t, err)
-	assert.True(t, qre.logStats.WaitingForConnection > 0)
+	require.Error(t, err)
+	assert.Positive(t, qre.logStats.WaitingForConnection)
 }
 
 type executorFlags int64

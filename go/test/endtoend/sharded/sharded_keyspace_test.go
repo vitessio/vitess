@@ -106,9 +106,9 @@ func TestShardedKeyspace(t *testing.T) {
 	shard1Primary := shard1.Vttablets[0]
 	shard2Primary := shard2.Vttablets[0]
 	err := clusterInstance.VtctldClientProcess.InitializeShard(keyspaceName, shard1.Name, cell, shard1Primary.TabletUID)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	err = clusterInstance.VtctldClientProcess.InitializeShard(keyspaceName, shard2.Name, cell, shard2Primary.TabletUID)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	err = clusterInstance.StartVTOrc(cell, keyspaceName)
 	require.NoError(t, err)
@@ -117,10 +117,10 @@ func TestShardedKeyspace(t *testing.T) {
 	// are the same.
 	// apply the schema on the second shard.
 	_, err = shard1Primary.VttabletProcess.QueryTablet(sqlSchema, keyspaceName, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	_, err = shard2Primary.VttabletProcess.QueryTablet(sqlSchemaReverse, keyspaceName, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	if err = clusterInstance.VtctldClientProcess.ApplyVSchema(keyspaceName, vSchema); err != nil {
 		log.Error(err.Error())
@@ -140,17 +140,17 @@ func TestShardedKeyspace(t *testing.T) {
 	_, _ = shard2Primary.VttabletProcess.QueryTablet("insert into vt_select_test (id, msg) values (10, 'test 10')", keyspaceName, true)
 
 	err = clusterInstance.VtctldClientProcess.ExecuteCommand("Validate", "--ping-tablets")
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	rows, err := shard1Primary.VttabletProcess.QueryTablet("select id, msg from vt_select_test order by id", keyspaceName, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, `[[INT64(1) VARCHAR("test 1")]]`, fmt.Sprintf("%v", rows.Rows))
 
 	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ValidateSchemaShard", fmt.Sprintf("%s/%s", keyspaceName, shard1.Name))
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ValidateSchemaShard", fmt.Sprintf("%s/%s", keyspaceName, shard1.Name))
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	output, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ValidateSchemaKeyspace", keyspaceName)
 	require.NoError(t, err)
@@ -162,20 +162,20 @@ func TestShardedKeyspace(t *testing.T) {
 	assert.Contains(t, output, shard2Primary.Alias+": CREATE TABLE")
 
 	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ValidateVersionShard", fmt.Sprintf("%s/%s", keyspaceName, shard1.Name))
-	require.Nil(t, err)
+	require.NoError(t, err)
 	err = clusterInstance.VtctldClientProcess.ExecuteCommand("GetPermissions", shard1.Vttablets[1].Alias)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ValidatePermissionsShard", fmt.Sprintf("%s/%s", keyspaceName, shard1.Name))
-	require.Nil(t, err)
+	require.NoError(t, err)
 	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ValidatePermissionsKeyspace", keyspaceName)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	rows, err = shard1Primary.VttabletProcess.QueryTablet("select id, msg from vt_select_test order by id", keyspaceName, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, `[[INT64(1) VARCHAR("test 1")]]`, fmt.Sprintf("%v", rows.Rows))
 
 	rows, err = shard2Primary.VttabletProcess.QueryTablet("select id, msg from vt_select_test order by id", keyspaceName, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, `[[INT64(10) VARCHAR("test 10")]]`, fmt.Sprintf("%v", rows.Rows))
 }
 

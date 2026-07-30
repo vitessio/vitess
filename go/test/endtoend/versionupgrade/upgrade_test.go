@@ -129,7 +129,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestShards(t *testing.T) {
-	assert.Equal(t, 2, len(clusterInstance.Keyspaces[0].Shards))
+	assert.Len(t, clusterInstance.Keyspaces[0].Shards, 2)
 }
 
 func TestDeploySchema(t *testing.T) {
@@ -144,13 +144,13 @@ func TestDeploySchema(t *testing.T) {
 		{
 			sqlQuery := fmt.Sprintf(createTable, tableName)
 			result, err := clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(keyspaceName, sqlQuery, cluster.ApplySchemaParams{DDLStrategy: ""})
-			require.Nil(t, err, result)
+			require.NoError(t, err, result)
 		}
 		for i := range clusterInstance.Keyspaces[0].Shards {
 			sqlQuery := fmt.Sprintf(insertIntoTable, tableName)
 			tablet := clusterInstance.Keyspaces[0].Shards[i].Vttablets[0]
 			_, err := tablet.VttabletProcess.QueryTablet(sqlQuery, keyspaceName, true)
-			require.Nil(t, err)
+			require.NoError(t, err)
 		}
 	}
 
@@ -172,8 +172,8 @@ func checkTables(t *testing.T, showTableName string, expectCount int) {
 func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName string, expectCount int) {
 	query := fmt.Sprintf(`show tables like '%%%s%%';`, showTableName)
 	queryResult, err := tablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
-	require.Nil(t, err)
-	assert.Equal(t, expectCount, len(queryResult.Rows))
+	require.NoError(t, err)
+	assert.Len(t, queryResult.Rows, expectCount)
 }
 
 // TestTablesData checks the data in tables
@@ -186,7 +186,7 @@ func TestTablesData(t *testing.T) {
 			sqlQuery := fmt.Sprintf(selectFromTable, tableName)
 			tablet := clusterInstance.Keyspaces[0].Shards[i].Vttablets[0]
 			queryResult, err := tablet.VttabletProcess.QueryTablet(sqlQuery, keyspaceName, true)
-			require.Nil(t, err)
+			require.NoError(t, err)
 			require.NotNil(t, queryResult)
 			row := queryResult.Named().Row()
 			require.NotNil(t, row)

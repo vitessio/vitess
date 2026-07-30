@@ -2353,7 +2353,7 @@ func TestScheduleItems_PostDDLCreateTableDoesNotBlockUnrelatedTable(t *testing.T
 	ddlTxn, err := scheduler.nextReady(ctx)
 	require.NoError(t, err)
 	require.Equal(t, binlogdatapb.VEventType_DDL, ddlTxn.payload.events[0].Type)
-	_, err = vp.applyDDLEvent(ctx, ddlTxn.payload.events[0], nil)
+	_, err = vp.applyDDLEvent(ctx, ddlTxn.payload.events[0])
 	require.NoError(t, err)
 	require.NoError(t, scheduler.markCommitted(ddlTxn))
 

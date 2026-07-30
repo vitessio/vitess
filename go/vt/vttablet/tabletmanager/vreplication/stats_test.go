@@ -196,7 +196,7 @@ func TestVReplicationStats(t *testing.T) {
 	require.Eventually(t, func() bool { return len(blpStats.VReplicationLagGauges.Get()["1"]) > 0 }, 10*time.Second, 500*time.Millisecond)
 	vals := blpStats.VReplicationLagGauges.Get()["1"]
 	require.Len(t, vals, 1)
-	require.Equal(t, int(vals[0]), 10)
+	require.Equal(t, 10, int(vals[0]))
 
 	blpStats.DDLEventActions.Add(binlogdatapb.OnDDLAction_IGNORE.String(), 4)
 	blpStats.DDLEventActions.Add(binlogdatapb.OnDDLAction_EXEC.String(), 3)

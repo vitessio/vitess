@@ -618,6 +618,24 @@ func TestJoinAggregation(t *testing.T) {
 	mcmp.Exec(`SELECT t1.name, CAST(SUM(b.bet_amount) AS DECIMAL(20,6)) AS bet_amount FROM bet_logs as b LEFT JOIN t1 ON b.merchant_game_id = t1.t1_id GROUP BY b.merchant_game_id`)
 }
 
+// TestJoinAggregationEmptyLeft is a regression test for https://github.com/vitessio/vitess/issues/20365.
+// When the left-hand side of an aggregation through a join returns no rows, vtgate fetches the
+// right-hand leg's column metadata using the field (impossible) query. That query must run under
+// the session's sql_mode, exactly like the main query. It previously dropped the
+// SET_VAR(sql_mode = ...) hint, so the field probe failed with errno 1055 under the tablet's
+// strict default sql_mode.
+func TestJoinAggregationEmptyLeft(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	// Only the right-hand table has rows; bet_logs (the left-hand side) stays empty, so the
+	// join falls back to the field probe to learn the t1 leg's columns.
+	mcmp.Exec("insert into t1(t1_id, `name`, `value`, shardkey) values(1,'a1','foo',100), (2,'b1','foo',200)")
+
+	mcmp.Exec("set @@sql_mode = ' '")
+	mcmp.Exec(`SELECT t1.name, SUM(b.bet_amount) AS bet_amount FROM bet_logs as b LEFT JOIN t1 ON b.merchant_game_id = t1.t1_id GROUP BY b.merchant_game_id`)
+}
+
 // TestGroupConcatAggregation tests the group_concat function with vitess doing the aggregation.
 func TestGroupConcatAggregation(t *testing.T) {
 	mcmp, closer := start(t)
@@ -640,7 +658,7 @@ func TestGroupConcatAggregation(t *testing.T) {
 }
 
 func compareRow(t *testing.T, mRes *sqltypes.Result, vtRes *sqltypes.Result, grpCols []int, fCols []int) {
-	require.Equal(t, len(mRes.Rows), len(vtRes.Rows), "mysql and vitess result count does not match")
+	require.Len(t, vtRes.Rows, len(mRes.Rows), "mysql and vitess result count does not match")
 	for _, row := range vtRes.Rows {
 		var grpKey string
 		var grpKeySb634 strings.Builder

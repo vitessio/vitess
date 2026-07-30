@@ -114,7 +114,7 @@ func TestNocacheListArgs(t *testing.T) {
 		},
 	)
 	require.NoError(t, err)
-	assert.Equal(t, 2, len(qr.Rows))
+	assert.Len(t, qr.Rows, 2)
 
 	qr, err = client.Execute(
 		query,
@@ -123,7 +123,7 @@ func TestNocacheListArgs(t *testing.T) {
 		},
 	)
 	require.NoError(t, err)
-	assert.Equal(t, 1, len(qr.Rows))
+	assert.Len(t, qr.Rows, 1)
 
 	qr, err = client.Execute(
 		query,
@@ -132,7 +132,7 @@ func TestNocacheListArgs(t *testing.T) {
 		},
 	)
 	require.NoError(t, err)
-	assert.Equal(t, 1, len(qr.Rows))
+	assert.Len(t, qr.Rows, 1)
 
 	// Error case
 	_, err = client.Execute(
@@ -149,7 +149,7 @@ func TestIntegrityError(t *testing.T) {
 	client := framework.NewClient()
 	_, err := client.Execute("insert into vitess_test values(1, null, null, null)", nil)
 	want := "Duplicate entry '1'"
-	assert.ErrorContains(t, err, want)
+	require.ErrorContains(t, err, want)
 	compareIntDiff(t, framework.DebugVars(), "Errors/ALREADY_EXISTS", vstart, 1)
 }
 
@@ -497,11 +497,11 @@ func TestDBAStatements(t *testing.T) {
 
 	qr, err = client.Execute("describe vitess_a", nil)
 	require.NoError(t, err)
-	assert.Equal(t, 4, len(qr.Rows))
+	assert.Len(t, qr.Rows, 4)
 
 	qr, err = client.Execute("explain vitess_a", nil)
 	require.NoError(t, err)
-	assert.Equal(t, 4, len(qr.Rows))
+	assert.Len(t, qr.Rows, 4)
 }
 
 type testLogger struct {
@@ -549,10 +549,10 @@ func TestClientFoundRows(t *testing.T) {
 	defer client.Execute("delete from vitess_test where intval= 124", nil)
 
 	// CLIENT_FOUND_ROWS flag is off.
-	assert.NoError(t, client.Begin(false))
+	require.NoError(t, client.Begin(false))
 	qr, err := client.Execute("update vitess_test set charval='aa' where intval=124", nil)
 	require.NoError(t, err)
-	assert.Equal(t, 0, len(qr.Rows))
+	assert.Empty(t, qr.Rows)
 	assert.NoError(t, client.Rollback())
 
 	// CLIENT_FOUND_ROWS flag is on.
@@ -683,7 +683,7 @@ func TestSelectBooleanSystemVariables(t *testing.T) {
 		)
 		require.NoError(t, err)
 		require.NotEmpty(t, qr.Fields, "fields should not be empty")
-		require.Equal(t, tc.Type, qr.Fields[0].Type, fmt.Sprintf("invalid type, wants: %+v, but got: %+v\n", tc.Type, qr.Fields[0].Type))
+		require.Equal(t, tc.Type, qr.Fields[0].Type, "invalid type, wants: %+v, but got: %+v\n", tc.Type, qr.Fields[0].Type)
 	}
 }
 
@@ -734,7 +734,7 @@ func TestSysSchema(t *testing.T) {
 	WHERE table_schema = 'vttest' and table_name = 'a'
 	ORDER BY ordinal_position`, nil)
 	require.NoError(t, err)
-	require.Equal(t, 2, len(qr.Rows))
+	require.Len(t, qr.Rows, 2)
 
 	// is_nullable
 	assert.Equal(t, `VARCHAR("NO")`, qr.Rows[0][8].String())
@@ -833,7 +833,7 @@ func TestShowTablesWithSizes(t *testing.T) {
 	assert.GreaterOrEqual(t, len(rs.Rows), len(expectedTables))
 
 	for _, row := range rs.Rows {
-		assert.Equal(t, 6, len(row))
+		assert.Len(t, row, 6)
 
 		tableName := row[0].ToString()
 		switch tableName {
@@ -843,20 +843,20 @@ func TestShowTablesWithSizes(t *testing.T) {
 
 			assert.True(t, row[2].IsIntegral())
 			createTime, err := row[2].ToCastInt64()
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Positive(t, createTime)
 
 			// TABLE_COMMENT
-			assert.Equal(t, "", row[3].ToString())
+			assert.Empty(t, row[3].ToString())
 
 			assert.True(t, row[4].IsDecimal())
 			fileSize, err := row[4].ToCastInt64()
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Positive(t, fileSize)
 
 			assert.True(t, row[4].IsDecimal())
 			allocatedSize, err := row[5].ToCastInt64()
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Positive(t, allocatedSize)
 
 			actualTables = append(actualTables, tableName)
@@ -866,7 +866,7 @@ func TestShowTablesWithSizes(t *testing.T) {
 
 			assert.True(t, row[2].IsIntegral())
 			createTime, err := row[2].ToCastInt64()
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Positive(t, createTime)
 
 			// TABLE_COMMENT
@@ -882,20 +882,20 @@ func TestShowTablesWithSizes(t *testing.T) {
 
 			assert.True(t, row[2].IsIntegral())
 			createTime, err := row[2].ToCastInt64()
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Positive(t, createTime)
 
 			// TABLE_COMMENT
-			assert.Equal(t, "", row[3].ToString())
+			assert.Empty(t, row[3].ToString())
 
 			assert.True(t, row[4].IsDecimal())
 			fileSize, err := row[4].ToCastInt64()
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Positive(t, fileSize)
 
 			assert.True(t, row[5].IsDecimal())
 			allocatedSize, err := row[5].ToCastInt64()
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Positive(t, allocatedSize)
 
 			actualTables = append(actualTables, tableName)
@@ -905,27 +905,27 @@ func TestShowTablesWithSizes(t *testing.T) {
 
 			assert.True(t, row[2].IsIntegral())
 			createTime, err := row[2].ToCastInt64()
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Positive(t, createTime)
 
 			// TABLE_COMMENT
-			assert.Equal(t, "", row[3].ToString())
+			assert.Empty(t, row[3].ToString())
 
 			assert.True(t, row[4].IsDecimal())
 			fileSize, err := row[4].ToCastInt64()
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Positive(t, fileSize)
 
 			assert.True(t, row[5].IsDecimal())
 			allocatedSize, err := row[5].ToCastInt64()
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Positive(t, allocatedSize)
 
 			actualTables = append(actualTables, tableName)
 		}
 	}
 
-	assert.Equal(t, len(expectedTables), len(actualTables))
+	assert.Len(t, actualTables, len(expectedTables))
 	assert.ElementsMatch(t, expectedTables, actualTables)
 }
 
@@ -1207,7 +1207,7 @@ func TestTuple(t *testing.T) {
 
 	res, err = client.Execute("select * from vitess_a where (eid, id) in ::__vals", bv)
 	require.NoError(t, err)
-	require.Zero(t, len(res.Rows))
+	require.Empty(t, res.Rows)
 }
 
 // TestMaxRows tests different scenarios with max rows.

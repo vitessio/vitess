@@ -104,7 +104,7 @@ func TestSecureTransport(t *testing.T) {
 
 	// initialize cluster
 	_, err := clusterSetUp(t)
-	require.Nil(t, err, "setup failed")
+	require.NoError(t, err, "setup failed")
 
 	primaryTablet := *clusterInstance.Keyspaces[0].Shards[0].Vttablets[0]
 	replicaTablet := *clusterInstance.Keyspaces[0].Shards[0].Vttablets[1]

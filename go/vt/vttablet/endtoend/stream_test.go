@@ -36,10 +36,8 @@ import (
 
 func TestStreamUnion(t *testing.T) {
 	qr, err := framework.NewClient().StreamExecute("select 1 from dual union select 1 from dual", nil)
-	if !assert.NoError(t, err) {
-		return
-	}
-	assert.Equal(t, 1, len(qr.Rows))
+	require.NoError(t, err)
+	assert.Len(t, qr.Rows, 1)
 }
 
 func populateStressQuery(client *framework.QueryClient, rowCount int, rowContent string) error {
@@ -104,22 +102,24 @@ func TestStreamConsolidation(t *testing.T) {
 
 	start := make(chan struct{})
 	var finish sync.WaitGroup
+	// require.* is unsafe on a worker goroutine, so record per-worker results and assert after finish.Wait().
+	errs := make([]error, Workers)
+	rowCounts := make([]int, Workers)
 
 	// Spawn N workers at the same time to stress test the stream consolidator
-	for range Workers {
+	for i := range Workers {
 		finish.Go(func() {
 			// block all the workers so they all perform their queries at the same time
 			<-start
 
-			var rowCount int
-			err := client.Stream("select * from vitess_stress", nil, func(result *sqltypes.Result) error {
+			rowCount := 0
+			errs[i] = client.Stream("select * from vitess_stress", nil, func(result *sqltypes.Result) error {
 				for _, r := range result.Rows {
 					rowCount += len(r)
 				}
 				return nil
 			})
-			require.NoError(t, err)
-			require.Equal(t, 2200, rowCount)
+			rowCounts[i] = rowCount
 		})
 	}
 
@@ -127,20 +127,20 @@ func TestStreamConsolidation(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 	close(start)
 	finish.Wait()
+	for i := range Workers {
+		require.NoError(t, errs[i])
+		require.Equal(t, 2200, rowCounts[i])
+	}
 }
 
 func TestStreamBigData(t *testing.T) {
 	client := framework.NewClient()
 	err := populateBigData(client)
-	if !assert.NoError(t, err) {
-		return
-	}
+	require.NoError(t, err)
 	defer client.Execute("delete from vitess_big", nil)
 
 	qr, err := client.StreamExecute("select * from vitess_big b1, vitess_big b2 order by b1.id, b2.id", nil)
-	if !assert.NoError(t, err) {
-		return
-	}
+	require.NoError(t, err)
 	row10 := framework.RowsToStrings(qr)[10]
 	want := []string{
 		"0",
@@ -175,17 +175,13 @@ func TestStreamBigDataInTx(t *testing.T) {
 	client := framework.NewClient()
 	defer client.Release()
 	err := populateBigData(client)
-	if !assert.NoError(t, err) {
-		return
-	}
+	require.NoError(t, err)
 	defer func() {
 		framework.NewClient().Execute("delete from vitess_big", nil)
 	}()
 
 	qr, err := client.StreamBeginExecuteWithOptions("select * from vitess_big b1, vitess_big b2 order by b1.id, b2.id", nil, nil, nil)
-	if !assert.NoError(t, err) {
-		return
-	}
+	require.NoError(t, err)
 	row10 := framework.RowsToStrings(qr)[10]
 	want := []string{
 		"0",
@@ -219,9 +215,7 @@ func TestStreamBigDataInTx(t *testing.T) {
 func TestStreamTerminate(t *testing.T) {
 	client := framework.NewClient()
 	err := populateBigData(client)
-	if !assert.NoError(t, err) {
-		return
-	}
+	require.NoError(t, err)
 	defer client.Execute("delete from vitess_big", nil)
 
 	called := false

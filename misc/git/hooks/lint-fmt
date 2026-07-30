@@ -17,10 +17,9 @@
 # caches the pinned version on demand.
 GOLANGCI_LINT_MODFILE="$(git rev-parse --show-toplevel)/tools/golangci-lint/go.mod"
 
-# Lint only changed packages. Packages in nested Go modules (e.g.
-# test/antithesis) are skipped: golangci-lint can only typecheck
-# packages belonging to the module it runs in, and CI doesn't lint
-# them either.
+# Lint only changed packages. Packages in nested Go modules
+# are skipped: golangci-lint can only typecheck belonging
+# to the module it runs in, and CI doesn't lint them either.
 changed_pkgs=$(git diff --cached --name-only --diff-filter=ACM -- '*.go' \
   | xargs -n1 dirname \
   | sort -u \

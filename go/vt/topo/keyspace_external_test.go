@@ -166,7 +166,7 @@ func TestServerGetServingShards(t *testing.T) {
 			if tt.shards > 0 {
 				shardNames, err = key.GenerateShardRanges(tt.shards, 0)
 				require.NoError(t, err)
-				require.Equal(t, tt.shards, len(shardNames))
+				require.Len(t, shardNames, tt.shards)
 				for _, shardName := range shardNames {
 					err = ts.CreateShard(ctx, keyspace, shardName)
 					require.NoError(t, err)

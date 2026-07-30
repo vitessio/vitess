@@ -22,6 +22,7 @@ import (
 
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestFloatOrDuration_ValidFloat64Input verifies that a float64 input
@@ -32,7 +33,7 @@ func TestFloatOrDuration_ValidFloat64Input(t *testing.T) {
 
 	FloatDuration(fs, &duration, "test_flag", 10*time.Second, "Test flag")
 	err := fs.Parse([]string{"--test_flag=2"})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, 2*time.Second, duration)
 }
 
@@ -44,7 +45,7 @@ func TestFloatOrDuration_ValidDurationInput(t *testing.T) {
 
 	FloatDuration(fs, &duration, "test_flag", 10*time.Second, "Test flag")
 	err := fs.Parse([]string{"--test_flag=1m30s"})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, 90*time.Second, duration)
 }
 
@@ -57,7 +58,7 @@ func TestFloatOrDuration_DefaultValue(t *testing.T) {
 	defaultValue := 15 * time.Second
 	FloatDuration(fs, &duration, "test_flag", defaultValue, "Test flag")
 	err := fs.Parse([]string{})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, defaultValue, duration)
 }
 
@@ -69,7 +70,7 @@ func TestFloatOrDuration_InvalidInput(t *testing.T) {
 
 	FloatDuration(fs, &duration, "test_flag", 10*time.Second, "Test flag")
 	err := fs.Parse([]string{"--test_flag=invalid"})
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "value must be either a float64 (interpreted as seconds) or a valid time.Duration")
 }
 
@@ -83,7 +84,7 @@ func TestFloatOrDuration_MultipleFlags(t *testing.T) {
 	FloatDuration(fs, &duration2, "flag2", 20*time.Second, "Second test flag")
 
 	err := fs.Parse([]string{"--flag1=2.5", "--flag2=1m"})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, 2500*time.Millisecond, duration1)
 	assert.Equal(t, 1*time.Minute, duration2)
 }

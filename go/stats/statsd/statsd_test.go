@@ -62,7 +62,7 @@ func TestStatsdCounter(t *testing.T) {
 		found = true
 		if kv.Key == name {
 			sb.addExpVar(kv)
-			assert.NoError(t, sb.statsdClient.Flush(), "Error flushing")
+			require.NoError(t, sb.statsdClient.Flush(), "Error flushing")
 
 			bytes := make([]byte, 4096)
 			n, err := server.Read(bytes)
@@ -87,7 +87,7 @@ func TestStatsdGauge(t *testing.T) {
 		if kv.Key == name {
 			found = true
 			sb.addExpVar(kv)
-			assert.NoError(t, sb.statsdClient.Flush(), "Error flushing")
+			require.NoError(t, sb.statsdClient.Flush(), "Error flushing")
 
 			bytes := make([]byte, 4096)
 			n, err := server.Read(bytes)
@@ -112,7 +112,7 @@ func TestStatsdGaugeFloat64(t *testing.T) {
 		if kv.Key == name {
 			found = true
 			sb.addExpVar(kv)
-			assert.NoError(t, sb.statsdClient.Flush(), "Error flushing")
+			require.NoError(t, sb.statsdClient.Flush(), "Error flushing")
 
 			bytes := make([]byte, 4096)
 			n, err := server.Read(bytes)
@@ -138,7 +138,7 @@ func TestStatsdGaugeFunc(t *testing.T) {
 		if kv.Key == name {
 			found = true
 			sb.addExpVar(kv)
-			assert.NoError(t, sb.statsdClient.Flush(), "Error flushing")
+			require.NoError(t, sb.statsdClient.Flush(), "Error flushing")
 
 			bytes := make([]byte, 4096)
 			n, err := server.Read(bytes)
@@ -163,7 +163,7 @@ func TestStatsdCounterDuration(t *testing.T) {
 		if kv.Key == name {
 			found = true
 			sb.addExpVar(kv)
-			assert.NoError(t, sb.statsdClient.Flush(), "Error flushing")
+			require.NoError(t, sb.statsdClient.Flush(), "Error flushing")
 			bytes := make([]byte, 4096)
 			n, err := server.Read(bytes)
 			require.NoError(t, err)
@@ -186,7 +186,7 @@ func TestStatsdCountersWithSingleLabel(t *testing.T) {
 		if kv.Key == name {
 			found = true
 			sb.addExpVar(kv)
-			assert.NoError(t, sb.statsdClient.Flush(), "Error flushing")
+			require.NoError(t, sb.statsdClient.Flush(), "Error flushing")
 			bytes := make([]byte, 4096)
 			n, err := server.Read(bytes)
 			require.NoError(t, err)
@@ -216,7 +216,7 @@ func TestStatsdCountersWithMultiLabels(t *testing.T) {
 		if kv.Key == name {
 			found = true
 			sb.addExpVar(kv)
-			assert.NoError(t, sb.statsdClient.Flush(), "Error flushing")
+			require.NoError(t, sb.statsdClient.Flush(), "Error flushing")
 
 			bytes := make([]byte, 4096)
 			n, err := server.Read(bytes)
@@ -245,7 +245,7 @@ func TestStatsdCountersFuncWithMultiLabels(t *testing.T) {
 		if kv.Key == name {
 			found = true
 			sb.addExpVar(kv)
-			assert.NoError(t, sb.statsdClient.Flush(), "Error flushing")
+			require.NoError(t, sb.statsdClient.Flush(), "Error flushing")
 			bytes := make([]byte, 4096)
 			n, err := server.Read(bytes)
 			require.NoError(t, err)
@@ -275,7 +275,7 @@ func TestStatsdGaugesWithMultiLabels(t *testing.T) {
 		if kv.Key == name {
 			found = true
 			sb.addExpVar(kv)
-			assert.NoError(t, sb.statsdClient.Flush(), "Error flushing")
+			require.NoError(t, sb.statsdClient.Flush(), "Error flushing")
 			bytes := make([]byte, 4096)
 			n, err := server.Read(bytes)
 			require.NoError(t, err)
@@ -302,7 +302,7 @@ func TestStatsdGaugesFuncWithMultiLabels(t *testing.T) {
 		if kv.Key == name {
 			found = true
 			sb.addExpVar(kv)
-			assert.NoError(t, sb.statsdClient.Flush(), "Error flushing")
+			require.NoError(t, sb.statsdClient.Flush(), "Error flushing")
 			bytes := make([]byte, 4096)
 			n, err := server.Read(bytes)
 			require.NoError(t, err)
@@ -332,7 +332,7 @@ func TestStatsdGaugesWithSingleLabel(t *testing.T) {
 		if kv.Key == name {
 			found = true
 			sb.addExpVar(kv)
-			assert.NoError(t, sb.statsdClient.Flush(), "Error flushing")
+			require.NoError(t, sb.statsdClient.Flush(), "Error flushing")
 			bytes := make([]byte, 4096)
 			n, err := server.Read(bytes)
 			require.NoError(t, err)
@@ -355,7 +355,7 @@ func TestStatsdMultiTimings(t *testing.T) {
 		if kv.Key == name {
 			found = true
 			sb.addExpVar(kv)
-			assert.NoError(t, sb.statsdClient.Flush(), "Error flushing")
+			require.NoError(t, sb.statsdClient.Flush(), "Error flushing")
 			bytes := make([]byte, 49152)
 			n, err := server.Read(bytes)
 			require.NoError(t, err)
@@ -378,7 +378,7 @@ func TestStatsdTimings(t *testing.T) {
 		if kv.Key == name {
 			found = true
 			sb.addExpVar(kv)
-			assert.NoError(t, sb.statsdClient.Flush(), "Error flushing")
+			require.NoError(t, sb.statsdClient.Flush(), "Error flushing")
 			bytes := make([]byte, 49152)
 			n, err := server.Read(bytes)
 			require.NoError(t, err)
@@ -403,7 +403,7 @@ func TestStatsdHistogram(t *testing.T) {
 		if kv.Key == name {
 			found = true
 			sb.addExpVar(kv)
-			assert.NoError(t, sb.statsdClient.Flush(), "Error flushing")
+			require.NoError(t, sb.statsdClient.Flush(), "Error flushing")
 			bytes := make([]byte, 4096)
 			n, err := server.Read(bytes)
 			require.NoError(t, err)
@@ -425,7 +425,7 @@ func TestStatsdHistogram(t *testing.T) {
 
 func TestMakeCommonTags(t *testing.T) {
 	res1 := makeCommonTags(map[string]string{})
-	assert.Equal(t, 0, len(res1))
+	assert.Empty(t, res1)
 	expected2 := []string{"a:b", "c:d"}
 	res2 := makeCommonTags(map[string]string{"a": "b", "c": "d"})
 	assert.ElementsMatch(t, expected2, res2)

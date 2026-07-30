@@ -139,7 +139,7 @@ func onlineDDLTest(t *testing.T, args []string, expectedQuery string) {
 	wr := wrangler.New(vtenv.NewTestEnv(), logger, fakeTopo, &tmc)
 
 	err := vtctl.RunCommand(ctx, wr, args)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.NotEmpty(t, err.Error())
 	containsExpectedError := false
 	expectedErrors := []string{

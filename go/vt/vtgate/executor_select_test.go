@@ -197,7 +197,7 @@ func TestSystemVariablesMySQLBelow80(t *testing.T) {
 		{Sql: "set sql_mode = 'only_full_group_by'", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
 		{Sql: "select /*+ SET_VAR(sql_mode = 'only_full_group_by') */ :vtg1 /* INT64 */ from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
 	}
-	require.Equal(t, len(wantQueries), len(sbc1.Queries))
+	require.Len(t, sbc1.Queries, len(wantQueries))
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 }
 
@@ -1721,7 +1721,7 @@ func TestSelectScatterPartial(t *testing.T) {
 	conns[2].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
 	results, err := executorExec(ctx, executor, session, "select id from `user`", nil)
 	wantErr := "TestExecutor.40-60.primary"
-	assert.ErrorContainsf(t, err, wantErr, "want error %v, got %v", wantErr, err)
+	require.ErrorContainsf(t, err, wantErr, "want error %v, got %v", wantErr, err)
 	if vterrors.Code(err) != vtrpcpb.Code_RESOURCE_EXHAUSTED {
 		assert.Failf(t, "wrong error code", "want error code Code_RESOURCE_EXHAUSTED, but got %v", vterrors.Code(err))
 	}
@@ -1782,7 +1782,7 @@ func TestSelectScatterPartialOLAP(t *testing.T) {
 	// Fail 1 of N without the directive fails the whole operation
 	conns[2].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
 	results, err := executorStream(ctx, executor, "select id from `user`")
-	assert.EqualError(t, err, "target: TestExecutor.40-60.primary: RESOURCE_EXHAUSTED error")
+	require.EqualError(t, err, "target: TestExecutor.40-60.primary: RESOURCE_EXHAUSTED error")
 	assert.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err))
 	assert.Nil(t, results)
 	testQueryLog(t, executor, logChan, "TestExecuteStream", "SELECT", "select id from `user`", 8)
@@ -1790,7 +1790,7 @@ func TestSelectScatterPartialOLAP(t *testing.T) {
 	// Fail 1 of N with the directive succeeds with 7 rows
 	results, err = executorStream(ctx, executor, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user")
 	require.NoError(t, err)
-	assert.EqualValues(t, 7, len(results.Rows))
+	assert.Len(t, results.Rows, 7)
 	testQueryLog(t, executor, logChan, "TestExecuteStream", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from `user`", 8)
 
 	// If all shards fail, the operation should also fail
@@ -1859,19 +1859,19 @@ func TestSelectScatterPartialOLAP2(t *testing.T) {
 	// Fail 1 of N with the directive succeeds with 7 rows
 	results, err = executorStream(ctx, executor, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user")
 	require.NoError(t, err)
-	assert.EqualValues(t, 7, len(results.Rows))
+	assert.Len(t, results.Rows, 7)
 	testQueryLog(t, executor, logChan, "TestExecuteStream", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from `user`", 8)
 
 	// order by
 	results, err = executorStream(ctx, executor, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user order by id")
 	require.NoError(t, err)
-	assert.EqualValues(t, 7, len(results.Rows))
+	assert.Len(t, results.Rows, 7)
 	testQueryLog(t, executor, logChan, "TestExecuteStream", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from `user` order by id asc", 8)
 
 	// order by and limit
 	results, err = executorStream(ctx, executor, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user order by id limit 5")
 	require.NoError(t, err)
-	assert.EqualValues(t, 5, len(results.Rows))
+	assert.Len(t, results.Rows, 5)
 	testQueryLog(t, executor, logChan, "TestExecuteStream", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from `user` order by id asc limit 5", 8)
 }
 
@@ -2941,8 +2941,8 @@ func TestSubQueryAndQueryWithLimit(t *testing.T) {
 	exec(executor, econtext.NewSafeSession(&vtgatepb.Session{
 		TargetString: "@primary",
 	}), "select id1, id2 from t1 where id1 >= ( select id1 from t1 order by id1 asc limit 1) limit 100")
-	require.Equal(t, 2, len(sbc1.Queries))
-	require.Equal(t, 2, len(sbc2.Queries))
+	require.Len(t, sbc1.Queries, 2)
+	require.Len(t, sbc2.Queries, 2)
 
 	// sub query is evaluated first, and sees a limit of 1
 	assert.Equal(t, sqltypes.Int64BindVariable(1), sbc1.Queries[0].BindVariables["__upper_limit"])
@@ -2993,7 +2993,7 @@ func TestSelectUsingMultiEqualOnLookupColumn(t *testing.T) {
 
 	require.NoError(t, err)
 
-	require.Len(t, sbc1.Queries, 0)
+	require.Empty(t, sbc1.Queries)
 	require.Len(t, sbc2.Queries, 1)
 
 	require.Equal(t, []*querypb.BoundQuery{{
@@ -3111,6 +3111,83 @@ func TestSelectBindvarswithPrepare(t *testing.T) {
 	assert.Empty(t, sbc2.Queries)
 }
 
+func TestPrepareWithCTE(t *testing.T) {
+	testcases := []struct {
+		name        string
+		sql         string
+		paramsCount uint16
+	}{{
+		name:        "recursive cte select",
+		sql:         "with recursive rec as (select id from main1 where id = ? union all select id + 1 from rec where id < ?) select id from rec",
+		paramsCount: 2,
+	}, {
+		name:        "cte update",
+		sql:         "with cte as (select id from main1 where id = ?) update simple set name = ? where id in (select id from cte)",
+		paramsCount: 2,
+	}, {
+		name:        "cte delete",
+		sql:         "with cte as (select id from main1 where id = ?) delete from simple where id in (select id from cte)",
+		paramsCount: 1,
+	}}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			executor, _, _, _, ctx := createExecutorEnv(t)
+			session := &vtgatepb.Session{TargetString: KsTestUnsharded}
+
+			_, paramsCount, err := executorPrepare(ctx, executor, session, tc.sql)
+			require.NoError(t, err)
+			require.Equal(t, tc.paramsCount, paramsCount)
+		})
+	}
+}
+
+// A statement whose first keyword Preview does not recognize but that parses to
+// a type prepare cannot count parameters for (DO discards its expression list)
+// must be rejected rather than reported to the client as a zero-parameter
+// success, which would defer a parameter-count mismatch to execution time.
+func TestPrepareUnknownParseableStatementRejected(t *testing.T) {
+	executor, _, _, _, ctx := createExecutorEnv(t)
+	session := &vtgatepb.Session{TargetString: KsTestUnsharded}
+
+	_, paramsCount, err := executorPrepare(ctx, executor, session, "do ?")
+	require.Error(t, err)
+	require.Zero(t, paramsCount)
+}
+
+// Preparing a statement whose first keyword Preview does not recognize and that
+// fails to parse must clear session warnings, like every other non-SHOW
+// statement, so a later SHOW WARNINGS does not report stale warnings.
+func TestPrepareClearsWarningsOnParseError(t *testing.T) {
+	executor, _, _, _, ctx := createExecutorEnv(t)
+	session := econtext.NewSafeSession(&vtgatepb.Session{
+		TargetString: KsTestUnsharded,
+		Warnings:     []*querypb.QueryWarning{{Code: 234, Message: "oh noes"}},
+	})
+
+	_, _, err := executor.Prepare(ctx, "TestExecute", session, "bad select id from t1")
+	require.Error(t, err)
+	require.Empty(t, session.Warnings)
+}
+
+// A statement whose first keyword Preview does not recognize and that fails to
+// parse has no known statement type, so its query log record reports the
+// statement type as unknown rather than leaving the field empty.
+func TestPrepareParseErrorLogsUnknownStatementType(t *testing.T) {
+	executor, _, _, _, ctx := createExecutorEnv(t)
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
+
+	logChan := executor.queryLogger.Subscribe("Test")
+	t.Cleanup(func() { executor.queryLogger.Unsubscribe(logChan) })
+
+	_, _, err := executor.Prepare(ctx, "TestExecute", session, "bad select id from t1")
+	require.Error(t, err)
+
+	logStats := getQueryLog(logChan)
+	require.NotNil(t, logStats)
+	require.Equal(t, "UNKNOWN", logStats.StmtType)
+}
+
 func assertOptimizedPlanCondition(t *testing.T, executor *Executor, sql string, condition ...engine.Condition) *engine.PlanSwitcher {
 	var plan *engine.Plan
 	executor.ForEachPlan(func(p *engine.Plan) bool {
@@ -3123,7 +3200,7 @@ func assertOptimizedPlanCondition(t *testing.T, executor *Executor, sql string, 
 	assert.NotNil(t, plan, "plan not found")
 	sp, ok := plan.Instructions.(*engine.PlanSwitcher)
 	require.True(t, ok, "specialized plan not created")
-	require.Equal(t, len(condition), len(sp.Conditions), "specialized plan conditions count mismatch")
+	require.Len(t, sp.Conditions, len(condition), "specialized plan conditions count mismatch")
 	for i, cond := range condition {
 		assert.Equal(t, cond.A, sp.Conditions[i].A)
 		assert.Equal(t, cond.B, sp.Conditions[i].B)
@@ -4653,7 +4730,7 @@ func TestStreamJoinQuery(t *testing.T) {
 	for range 64 {
 		wantResult.Rows = append(wantResult.Rows, wantRow)
 	}
-	require.Equal(t, len(wantResult.Rows), len(result.Rows))
+	require.Len(t, result.Rows, len(wantResult.Rows))
 	for idx := range 64 {
 		utils.MustMatch(t, wantResult.Rows[idx], result.Rows[idx], "mismatched on: ", strconv.Itoa(idx))
 	}
@@ -4692,7 +4769,7 @@ func TestSysVarGlobalAndSession(t *testing.T) {
 	_, err = executorExecSession(t.Context(), executor, session,
 		"set @@innodb_lock_wait_timeout = 40", nil)
 	require.NoError(t, err)
-	require.EqualValues(t, "40", session.SystemVariables["innodb_lock_wait_timeout"])
+	require.Equal(t, "40", session.SystemVariables["innodb_lock_wait_timeout"])
 
 	qr, err = executorExecSession(t.Context(), executor, session,
 		"select @@innodb_lock_wait_timeout", nil)
