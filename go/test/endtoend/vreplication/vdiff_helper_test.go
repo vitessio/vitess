@@ -39,7 +39,7 @@ const (
 	vdiffTimeout             = 180 * time.Second // We can leverage auto retry on error with this longer-than-usual timeout
 	maxDiffDurationTimeout   = 5 * time.Minute
 	vdiffRetryTimeout        = 30 * time.Second
-	vdiffStatusCheckInterval = 5 * time.Second
+	vdiffStatusCheckInterval = 1 * time.Second
 	vdiffRetryInterval       = 5 * time.Second
 )
 
@@ -71,8 +71,10 @@ func waitForVDiff2ToCompleteWithTimeout(t *testing.T, ksWorkflow, cells, uuid st
 	// goroutine (go-require).
 	go func() {
 		defer func() { ch <- true }()
-		for {
-			time.Sleep(vdiffStatusCheckInterval)
+		for i := 0; ; i++ {
+			if i > 0 {
+				time.Sleep(vdiffStatusCheckInterval)
+			}
 			var err error
 			_, jsonStr, err = performVDiff2Action(t, ksWorkflow, cells, "show", uuid, false)
 			if !assert.NoError(t, err) {

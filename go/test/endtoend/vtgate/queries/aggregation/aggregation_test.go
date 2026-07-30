@@ -34,6 +34,14 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 	// ensure that the vschema and the tables have been created before running any tests
 	_ = utils.WaitForAuthoritative(t, keyspaceName, "t1", clusterInstance.VtgateProcess.ReadVSchema)
 
+	return startWithoutSchemaTracking(t)
+}
+
+// startWithoutSchemaTracking must be used by tests that run vtgate with
+// --schema-change-signal=false: with schema tracking disabled the tables
+// never become authoritative in the vschema, so waiting for that would
+// always burn the full WaitForAuthoritative timeout.
+func startWithoutSchemaTracking(t *testing.T) (utils.MySQLCompare, func()) {
 	mcmp, err := utils.NewMySQLCompare(t, vtParams, mysqlParams)
 	require.NoError(t, err)
 
@@ -531,7 +539,7 @@ func TestScalarAggregate(t *testing.T) {
 		vtParams = clusterInstance.GetVTParams(keyspaceName)
 	}()
 
-	mcmp, closer := start(t)
+	mcmp, closer := startWithoutSchemaTracking(t)
 	defer closer()
 
 	mcmp.Exec("insert into aggr_test(id, val1, val2) values(1,'a',1), (2,'A',1), (3,'b',1), (4,'c',3), (5,'c',4)")
