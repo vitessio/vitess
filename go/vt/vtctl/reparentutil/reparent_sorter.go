@@ -29,17 +29,28 @@ import (
 // reparentSorter sorts tablets by GTID positions and Promotion rules aimed at finding the best
 // candidate for intermediate promotion in emergency reparent shard, and the new primary in planned reparent shard
 type reparentSorter struct {
-	tablets          []*topodatapb.Tablet
-	positions        []*RelayLogPositions
-	innodbBufferPool []int
-	durability       policy.Durabler
+	tablets                []*topodatapb.Tablet
+	positions              []*RelayLogPositions
+	combinedDominatedCount []int
+	executedDominatedCount []int
+	innodbBufferPool       []int
+	durability             policy.Durabler
 }
 
 // newReparentSorter creates a new reparentSorter
 func newReparentSorter(tablets []*topodatapb.Tablet, positions []*RelayLogPositions, innodbBufferPool []int, durability policy.Durabler) *reparentSorter {
 	return &reparentSorter{
-		tablets:          tablets,
-		positions:        positions,
+		tablets:   tablets,
+		positions: positions,
+		combinedDominatedCount: dominatedCountsForSort(tablets, positions, func(moreAdvanced, lessAdvanced *RelayLogPositions) bool {
+			return moreAdvanced.Combined.AtLeast(lessAdvanced.Combined) &&
+				!lessAdvanced.Combined.AtLeast(moreAdvanced.Combined)
+		}),
+		executedDominatedCount: dominatedCountsForSort(tablets, positions, func(moreAdvanced, lessAdvanced *RelayLogPositions) bool {
+			return moreAdvanced.Combined.Equal(lessAdvanced.Combined) &&
+				moreAdvanced.Executed.AtLeast(lessAdvanced.Executed) &&
+				!lessAdvanced.Executed.AtLeast(moreAdvanced.Executed)
+		}),
 		durability:       durability,
 		innodbBufferPool: innodbBufferPool,
 	}
@@ -52,6 +63,8 @@ func (rs *reparentSorter) Len() int { return len(rs.tablets) }
 func (rs *reparentSorter) Swap(i, j int) {
 	rs.tablets[i], rs.tablets[j] = rs.tablets[j], rs.tablets[i]
 	rs.positions[i], rs.positions[j] = rs.positions[j], rs.positions[i]
+	rs.combinedDominatedCount[i], rs.combinedDominatedCount[j] = rs.combinedDominatedCount[j], rs.combinedDominatedCount[i]
+	rs.executedDominatedCount[i], rs.executedDominatedCount[j] = rs.executedDominatedCount[j], rs.executedDominatedCount[i]
 	if len(rs.innodbBufferPool) != 0 {
 		rs.innodbBufferPool[i], rs.innodbBufferPool[j] = rs.innodbBufferPool[j], rs.innodbBufferPool[i]
 	}
@@ -71,21 +84,14 @@ func (rs *reparentSorter) Less(i, j int) bool {
 		return true
 	}
 
-	// sort by combined positions. if equal, also sort by the executed GTID positions.
-	jPositions := rs.positions[j]
-	iPositions := rs.positions[i]
-
-	if !iPositions.AtLeast(jPositions) {
-		// [i] does not have all GTIDs that [j] does
-		return false
-	}
-	if !jPositions.AtLeast(iPositions) {
-		// [j] does not have all GTIDs that [i] does
-		return true
+	if rs.combinedDominatedCount[i] != rs.combinedDominatedCount[j] {
+		return rs.combinedDominatedCount[i] < rs.combinedDominatedCount[j]
 	}
 
-	// at this point, both have the same GTIDs
-	// so we check their promotion rules
+	if rs.executedDominatedCount[i] != rs.executedDominatedCount[j] {
+		return rs.executedDominatedCount[i] < rs.executedDominatedCount[j]
+	}
+
 	jPromotionRule := policy.PromotionRule(rs.durability, rs.tablets[j])
 	iPromotionRule := policy.PromotionRule(rs.durability, rs.tablets[i])
 
@@ -109,6 +115,40 @@ func (rs *reparentSorter) Less(i, j int) bool {
 		return rs.tablets[i].Alias.Cell < rs.tablets[j].Alias.Cell
 	}
 	return rs.tablets[i].Alias.Uid < rs.tablets[j].Alias.Uid
+}
+
+// dominatedCountsForSort returns, for each candidate, how many other candidates
+// strictly dominate it under the dominates predicate. The result is only meaningful
+// as a sort key: a lower count means more advanced, and the maximal candidates that
+// nothing dominates all have count 0.
+//
+// This count is what lets Less sort safely. dominates is only a partial order, so
+// comparing two candidates head-to-head is not transitive — with an incomparable
+// third candidate in play, sort.Sort can otherwise seat a dominated candidate above
+// the one that dominates it. Counting dominators sidesteps that, because dominates
+// itself is transitive: whatever dominates a candidate also dominates everything below
+// it, so a dominated candidate always has a strictly higher count than its dominator.
+// Ordering by ascending count therefore never places a candidate ahead of one that
+// dominates it.
+//
+// Counts are not unique. Incomparable candidates (e.g. divergent GTID histories) can
+// share a count; the caller breaks those ties with its remaining preferences.
+func dominatedCountsForSort(tablets []*topodatapb.Tablet, positions []*RelayLogPositions, dominates func(*RelayLogPositions, *RelayLogPositions) bool) []int {
+	dominatedCounts := make([]int, len(positions))
+	for i := range positions {
+		if tablets[i] == nil {
+			continue
+		}
+		for j := range positions {
+			if i == j || tablets[j] == nil {
+				continue
+			}
+			if dominates(positions[j], positions[i]) {
+				dominatedCounts[i]++
+			}
+		}
+	}
+	return dominatedCounts
 }
 
 // sortTabletsForReparent sorts the tablets, given their positions for emergency reparent shard and planned reparent shard.
