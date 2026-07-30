@@ -367,7 +367,14 @@ Tablets that do not report a version (e.g. running an older Vitess build) are tr
 
 **Flavor compatibility:** version comparison is only applied when all candidates belong to the same flavor family. MySQL and Percona Server share a version lineage and are compared against each other; MariaDB is a separate lineage, so a shard mixing MariaDB with MySQL/Percona disables version-aware election and falls back to the previous position/promotion ordering (with a warning logged).
 
-For ERS specifically, version-aware election is further restricted to GTID-based (MySQL/Percona) shards. On non-GTID shards (file-position replication, MariaDB), ERS compares candidates on their executed positions and does not reconcile equally-advanced candidates to a common applied position, so it retains the previous position/promotion ordering with no version tiebreak.
+**ERS is version-aware only for MySQL-GTID shards; PRS applies to all single-family shards.** This is a deliberate asymmetry between the two operations:
+
+- **PRS** applies version-aware election whenever all candidates share one flavor family (see above), including MariaDB-only shards and shards using file-position (non-GTID) replication. PRS always catches the elected tablet up to the old primary's exact position before completing, so replication position is not a data-safety concern for PRS and preferring a compatible version is safe.
+- **ERS** applies version-aware election only when the shard uses MySQL GTID-based replication (`MySQL56` GTID sets — i.e. MySQL or Percona Server). ERS is **not** version-aware, and retains the previous position/promotion ordering with no version tiebreak, when:
+  - the shard uses file-position (non-GTID) replication, or
+  - the shard uses MariaDB (whose GTID sets are not `MySQL56`-based and take the same non-GTID code path).
+
+  ERS prioritizes certainty that it picked the most-advanced candidate to minimize data loss, and only the MySQL-GTID path reconciles equally-advanced candidates to a common applied position after the relay-log wait — which is what lets the version tiebreak fire without misordering candidates by position. On the other paths ERS compares candidates on their executed positions and leaves version out of the decision.
 
 See [#20211](https://github.com/vitessio/vitess/pull/20211) for details.
 
