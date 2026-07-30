@@ -184,43 +184,5 @@ func (c *Collation_multibyte) WeightStringLen(numCodepoints int) int {
 }
 
 func (c *Collation_multibyte) Wildcard(pat []byte, matchOne rune, matchMany rune, escape rune) WildcardPattern {
-<<<<<<< HEAD
-	var equals func(rune, rune) bool
-	var sortOrder = c.sort
-
-	if sortOrder != nil {
-		equals = func(a, b rune) bool {
-			if a < 128 && b < 128 {
-				return sortOrder[a] == sortOrder[b]
-			}
-			return a == b
-		}
-	} else {
-		equals = func(a, b rune) bool {
-			return a == b
-		}
-	}
-
-	return newUnicodeWildcardMatcher(c.charset, equals, c.Collate, pat, matchOne, matchMany, escape)
-||||||| parent of f4c5768f83 (charset: ensure DecodeRune always advances on malformed input (#20753))
-	var equals func(rune, rune) bool
-	sortOrder := c.sort
-
-	if sortOrder != nil {
-		equals = func(a, b rune) bool {
-			if a < 128 && b < 128 {
-				return sortOrder[a] == sortOrder[b]
-			}
-			return a == b
-		}
-	} else {
-		equals = func(a, b rune) bool {
-			return a == b
-		}
-	}
-
-	return newUnicodeWildcardMatcher(c.charset, equals, c.Collate, pat, matchOne, matchMany, escape)
-=======
 	return newMultibyteWildcardMatcher(c.charset, c.sort, c.Collate, pat, matchOne, matchMany, escape)
->>>>>>> f4c5768f83 (charset: ensure DecodeRune always advances on malformed input (#20753))
 }

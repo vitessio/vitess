@@ -55,10 +55,6 @@ func (cached *fastMatcher) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
-<<<<<<< HEAD
-||||||| parent of f4c5768f83 (charset: ensure DecodeRune always advances on malformed input (#20753))
-
-=======
 
 func (cached *multibytePatternChar) CachedSize(alloc bool) int64 {
 	if cached == nil {
@@ -97,7 +93,6 @@ func (cached *multibyteWildcard) CachedSize(alloc bool) int64 {
 	return size
 }
 
->>>>>>> f4c5768f83 (charset: ensure DecodeRune always advances on malformed input (#20753))
 func (cached *unicodeWildcard) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
