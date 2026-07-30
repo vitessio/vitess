@@ -376,6 +376,8 @@ Tablets that do not report a version (e.g. running an older Vitess build) are tr
 
   ERS prioritizes certainty that it picked the most-advanced candidate to minimize data loss, and only the MySQL-GTID path reconciles equally-advanced candidates to a common applied position after the relay-log wait — which is what lets the version tiebreak fire without misordering candidates by position. On the other paths ERS compares candidates on their executed positions and leaves version out of the decision.
 
+**Upgrade ordering for non-`REPLICA` tablets:** version-aware election only considers `REPLICA`-type candidates, but a completed reparent repoints every non-`RESTORE` tablet (including `RDONLY`) to the new primary. Because the election prefers the lowest-version replica, all other replicas are at least as new as the winner and replicate safely; a non-`REPLICA` tablet on an *older* MySQL version, however, could be made to replicate from a newer-version primary, which is not guaranteed safe. To avoid this during a rolling MySQL upgrade, upgrade non-`REPLICA` tablets (e.g. `RDONLY`) **before** `REPLICA` tablets, so that no older non-`REPLICA` tablet ever needs to replicate from a newer elected primary. This is operational guidance — PRS does not enforce the ordering or fail when it is not followed.
+
 See [#20211](https://github.com/vitessio/vitess/pull/20211) for details.
 
 ### <a id="minor-changes-backup"/>Backup/Restore</a>
