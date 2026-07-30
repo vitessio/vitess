@@ -176,6 +176,11 @@ func TestMalformedInput(t *testing.T) {
 
 	sjis := testcollation(t, "sjis_japanese_ci")
 	require.Equal(t, []byte{0x81}, sjis.WeightString(nil, []byte{0x81}, 0))
+
+	for _, name := range []string{"utf32_general_ci", "utf32_unicode_ci"} {
+		coll := testcollation(t, name)
+		require.Empty(t, coll.WeightString(nil, []byte{0xFF, 0xFF, 0xFF, 0xFF}, 0))
+	}
 }
 
 func TestIsPrefix(t *testing.T) {

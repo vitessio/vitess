@@ -90,10 +90,17 @@ func decodeSJIS(src []byte, table *[65536]uint16) (rune, int, bool) {
 	if c0 >= 0xA1 && c0 <= 0xDF {
 		return rune(table[c0]), 1, true
 	}
+	if c0 < 0x81 || (0x9F < c0 && c0 < 0xE0) || 0xFC < c0 {
+		return utf8.RuneError, 1, false
+	}
 	if len(src) < 2 {
 		return utf8.RuneError, 1, false
 	}
-	sj := uint16(c0)<<8 | uint16(src[1])
+	c1 := src[1]
+	if c1 < 0x40 || c1 == 0x7F || 0xFC < c1 {
+		return utf8.RuneError, 1, false
+	}
+	sj := uint16(c0)<<8 | uint16(c1)
 	if cp := table[sj]; cp != 0 {
 		return rune(cp), 2, true
 	}
