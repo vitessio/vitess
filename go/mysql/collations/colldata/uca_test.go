@@ -292,6 +292,17 @@ func TestWildcardMySQLParity(t *testing.T) {
 		{"sjis_japanese_ci", "\x81", "\x81", true},
 		{"sjis_japanese_ci", "A\x81", "A\x81", true},
 		{"sjis_japanese_ci", "\x81", "A", false},
+		// MySQL reads a dangling lead byte before a terminal '%' as one
+		// literal byte, and the wildcard stays live: the pattern matches
+		// every input that starts with the byte.
+		{"sjis_japanese_ci", "\x81%", "\x81", true},
+		{"sjis_japanese_ci", "\x81%", "\x81\x40", true},
+		{"sjis_japanese_ci", "\x81%", "\x81\x41", true},
+		{"sjis_japanese_ci", "\x81%", "\x81%", true},
+		{"sjis_japanese_ci", "\x81%", "\x81\x40\x41", true},
+		{"sjis_japanese_ci", "\x81%", "", false},
+		{"sjis_japanese_ci", "\x81%", "\x82", false},
+		{"sjis_japanese_ci", "\x81%", "A", false},
 	}
 	for _, tc := range testCases {
 		coll := testcollation(t, tc.collation)
