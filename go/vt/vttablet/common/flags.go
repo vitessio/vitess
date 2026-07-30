@@ -57,9 +57,6 @@ var (
 	VStreamerBinlogRotationThreshold = int64(64 * 1024 * 1024) // 64MiB
 	VStreamerDefaultPacketSize       = 250000
 	VStreamerUseDynamicPacketSize    = true
-
-	// Enable the /debug/vrlog HTTP endpoint.
-	vreplicationEnableHttpLog = false
 )
 
 func GetVReplicationNetReadTimeout() int {
@@ -102,5 +99,15 @@ func registerFlags(fs *pflag.FlagSet) {
 
 	fs.Uint64Var(&mysql.ZstdInMemoryDecompressorMaxSize, "binlog-in-memory-decompressor-max-size", mysql.ZstdInMemoryDecompressorMaxSize, "This value sets the uncompressed transaction payload size at which we switch from in-memory buffer based decompression to the slower streaming mode.")
 
+<<<<<<< HEAD
 	fs.BoolVar(&vreplicationEnableHttpLog, "vreplication-enable-http-log", vreplicationEnableHttpLog, "Enable the /debug/vrlog HTTP endpoint, which will produce a log of the events replicated on primary tablets in the target keyspace by all VReplication workflows that are in the running/replicating phase.")
+||||||| parent of 657662e78b (VReplication: Remove internal undocumented VRLog feature (#20467))
+	fs.BoolVar(&vreplicationEnableHttpLog, "vreplication-enable-http-log", vreplicationEnableHttpLog, "Enable the /debug/vrlog HTTP endpoint, which will produce a log of the events replicated on primary tablets in the target keyspace by all VReplication workflows that are in the running/replicating phase.")
+	fs.Var(nonNegativeInt64Flag{value: &vreplicationMaxRowJSONBytes}, "vreplication-max-row-json-bytes", "Maximum combined byte size of JSON columns in a single row during VReplication copy and replay phases. 0 means unlimited.")
+=======
+	fs.Var(nonNegativeInt64Flag{value: &vreplicationMaxRowJSONBytes}, "vreplication-max-row-json-bytes", "Maximum combined byte size of JSON columns in a single row during VReplication copy and replay phases. 0 means unlimited.")
+
+	fs.Bool("vreplication-enable-http-log", false, "(DEPRECATED) This flag is a no-op: the /debug/vrlog HTTP endpoint it enabled has been removed.")
+	_ = fs.MarkDeprecated("vreplication-enable-http-log", "this flag is a no-op and will be removed in v26")
+>>>>>>> 657662e78b (VReplication: Remove internal undocumented VRLog feature (#20467))
 }
