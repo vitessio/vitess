@@ -170,19 +170,41 @@ func (rs *reparentSorter) Less(i, j int) bool {
 	return rs.lessERS(i, j)
 }
 
+// comparePosition orders by replication position using the same partial-order
+// semantics as findMostAdvanced's split-brain check: a candidate whose Combined
+// position dominates wins; at an equal Combined position the one whose Executed
+// position dominates wins, preferring less SQL delay, which would otherwise slow
+// down the reparent. GTID positions are only partially ordered, so a pair can be
+// incomparable (disjoint UUIDs); comparePosition returns -1 if [i] is more
+// advanced, +1 if [j] is, and 0 when neither dominates (equal or incomparable),
+// leaving the decision to the next tiebreaker. This can't make the sort a total
+// order, so findMostAdvanced re-checks the winner after sorting.
+func (rs *reparentSorter) comparePosition(i, j int) int {
+	iPositions := rs.positions[i]
+	jPositions := rs.positions[j]
+
+	if hasDominantPosition(iPositions.Combined, jPositions.Combined) {
+		return -1
+	}
+	if hasDominantPosition(jPositions.Combined, iPositions.Combined) {
+		return 1
+	}
+	if iPositions.Combined.Equal(jPositions.Combined) {
+		if hasDominantPosition(iPositions.Executed, jPositions.Executed) {
+			return -1
+		}
+		if hasDominantPosition(jPositions.Executed, iPositions.Executed) {
+			return 1
+		}
+	}
+	return 0
+}
+
 // lessERS sorts for ERS: position > promotion rules > version > buffer pool > alias.
 // Position is paramount because ERS must minimize data loss.
 func (rs *reparentSorter) lessERS(i, j int) bool {
-	jPositions := rs.positions[j]
-	iPositions := rs.positions[i]
-
-	if !iPositions.AtLeast(jPositions) {
-		// [i] is missing GTIDs that [j] has — [j] is more advanced
-		return false
-	}
-	if !jPositions.AtLeast(iPositions) {
-		// [j] is missing GTIDs that [i] has — [i] is more advanced
-		return true
+	if v := rs.comparePosition(i, j); v != 0 {
+		return v < 0
 	}
 
 	jPromotionRule := policy.PromotionRule(rs.durability, rs.tablets[j])
@@ -219,16 +241,8 @@ func (rs *reparentSorter) lessPRS(i, j int) bool {
 		return v < 0
 	}
 
-	jPositions := rs.positions[j]
-	iPositions := rs.positions[i]
-
-	if !iPositions.AtLeast(jPositions) {
-		// [i] is missing GTIDs that [j] has — [j] is more advanced
-		return false
-	}
-	if !jPositions.AtLeast(iPositions) {
-		// [j] is missing GTIDs that [i] has — [i] is more advanced
-		return true
+	if v := rs.comparePosition(i, j); v != 0 {
+		return v < 0
 	}
 
 	if v := rs.compareBufferPool(i, j); v != 0 {

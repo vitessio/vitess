@@ -49,12 +49,16 @@ Follow these steps precisely to resolve merge conflicts in a Vitess backport PR.
   ```
   gh pr view <upstream-number> --repo vitessio/vitess --json files
   ```
-- Check out the backport branch in a worktree to isolate the work from the main checkout:
+- Check out the backport branch in a worktree to isolate the work from the main checkout. Create it under `.claude/worktrees/` (already gitignored) so it stays inside the allowed working directory:
   ```
   git fetch origin <headRefName>
-  git worktree add /tmp/backport-<number> origin/<headRefName>
-  cd /tmp/backport-<number>
+  git worktree add .claude/worktrees/backport-<number> origin/<headRefName>
   ```
+- Then `cd` into the worktree **once, as its own standalone command**:
+  ```
+  cd .claude/worktrees/backport-<number>
+  ```
+  The shell working directory persists between commands, so all subsequent commands (git, go test, make, etc.) must be run plain from the worktree — **never prepend `cd <dir> && ...` to a command**. Compound `cd` prefixes don't match pre-approved permission rules and force a permission prompt on every command.
 
 ## Step 3: Rebase onto latest base branch
 
@@ -191,10 +195,10 @@ The backport branch may be based on a stale version of the release branch. **Alw
     ```
     gh pr merge <number> --repo vitessio/vitess --squash --auto
     ```
-- If we created a git worktree in Step 2, clean it up:
+- If we created a git worktree in Step 2, clean it up. First `cd` back to the main repo root as its own standalone command, then remove the worktree:
   ```
-  cd <original-directory>
-  git worktree remove <worktree-path>
+  cd <main-repo-root>
+  git worktree remove .claude/worktrees/backport-<number>
   ```
 
 ## Handling CI failures

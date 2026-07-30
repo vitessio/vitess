@@ -254,7 +254,7 @@ func init() {
 }
 
 func registerBuiltinBackupEngineFlags(fs *pflag.FlagSet) {
-	utils.SetFlagDurationVar(fs, &BuiltinBackupMysqldTimeout, "builtinbackup-mysqld-timeout", BuiltinBackupMysqldTimeout, "how long to wait for mysqld to shutdown at the start of the backup.")
+	utils.SetFlagDurationVar(fs, &BuiltinBackupMysqldTimeout, "builtinbackup-mysqld-timeout", BuiltinBackupMysqldTimeout, "how long to wait for mysqld to shutdown at the start of the backup. Raised to the mysqld shutdown timeout of the backup request plus a grace period when that is larger.")
 	utils.SetFlagDurationVar(fs, &builtinBackupProgress, "builtinbackup-progress", builtinBackupProgress, "how often to send progress updates when backing up large files.")
 	fs.UintVar(&builtinBackupFileReadBufferSize, "builtinbackup-file-read-buffer-size", builtinBackupFileReadBufferSize, "read files using an IO buffer of this many bytes. Golang defaults are used when set to 0.")
 	fs.UintVar(&builtinBackupFileWriteBufferSize, "builtinbackup-file-write-buffer-size", builtinBackupFileWriteBufferSize, "write files using an IO buffer of this many bytes. Golang defaults are used when set to 0.")
@@ -593,7 +593,10 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 	}
 
 	// shutdown mysqld
-	shutdownCtx, cancel := context.WithTimeout(ctx, BuiltinBackupMysqldTimeout)
+	// The engine timeout must not undercut the shutdown timeout the caller
+	// asked for, otherwise this context expires while mysqld is still
+	// shutting down cleanly and the backup is aborted for no reason.
+	shutdownCtx, cancel := context.WithTimeout(ctx, max(BuiltinBackupMysqldTimeout, params.MysqlShutdownTimeout+MysqldShutdownGracePeriod))
 	err = params.Mysqld.Shutdown(shutdownCtx, params.Cnf, true, params.MysqlShutdownTimeout)
 	defer cancel()
 	if err != nil {
