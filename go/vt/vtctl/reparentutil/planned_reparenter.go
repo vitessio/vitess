@@ -319,9 +319,24 @@ func (pr *PlannedReparenter) performGracefulPromotion(
 func (pr *PlannedReparenter) performInitialPromotion(
 	ctx context.Context,
 	primaryElect *topodatapb.Tablet,
+	tabletMap map[string]*topo.TabletInfo,
 	opts PlannedReparentOptions,
 ) (string, error) {
 	primaryElectAliasStr := topoproto.TabletAliasString(primaryElect.Alias)
+
+	// Unlike the other PRS paths, initial promotion calls InitPrimary directly and
+	// never catches the primary-elect up to another tablet's position — there is no
+	// current primary to catch up to. The election may have preferred this candidate
+	// on a tiebreaker (e.g. MySQL version) even though a peer is more advanced, so we
+	// must confirm the elect contains every reachable tablet's transactions before
+	// promoting it; otherwise InitPrimary would silently discard the transactions only
+	// the peer holds. This mirrors the dominance check performPotentialPromotion runs
+	// on the no-clear-primary path. Position.AtLeast also rejects incomparable GTID
+	// sets, so a divergent peer fails the check rather than being silently dropped.
+	if err := pr.checkPrimaryElectContainsAllPositions(ctx, primaryElect, tabletMap); err != nil {
+		return "", err
+	}
+
 	promoteCtx, promoteCancel := context.WithTimeout(ctx, opts.WaitReplicasTimeout)
 	defer promoteCancel()
 
@@ -345,6 +360,56 @@ func (pr *PlannedReparenter) performInitialPromotion(
 	}
 
 	return rp, nil
+}
+
+// checkPrimaryElectContainsAllPositions verifies that the primary-elect's
+// replication position is at least as advanced as every other reachable tablet's,
+// so that promoting it (via InitPrimary, with no catch-up) cannot discard
+// transactions another tablet holds. It returns an error if any tablet has a
+// position the elect does not contain, including a position that is incomparable
+// with the elect's (divergent GTID history).
+func (pr *PlannedReparenter) checkPrimaryElectContainsAllPositions(
+	ctx context.Context,
+	primaryElect *topodatapb.Tablet,
+	tabletMap map[string]*topo.TabletInfo,
+) error {
+	primaryElectAliasStr := topoproto.TabletAliasString(primaryElect.Alias)
+
+	posCtx, posCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer posCancel()
+
+	electPosStr, err := pr.tmc.PrimaryPosition(posCtx, primaryElect)
+	if err != nil {
+		return vterrors.Wrapf(err, "cannot get replication position of primary-elect %v", primaryElectAliasStr)
+	}
+	electPos, err := replication.DecodePosition(electPosStr)
+	if err != nil {
+		return vterrors.Wrapf(err, "cannot decode replication position (%v) of primary-elect %v", electPosStr, primaryElectAliasStr)
+	}
+
+	for alias, tabletInfo := range tabletMap {
+		if alias == primaryElectAliasStr {
+			continue
+		}
+		if tabletInfo.Type == topodatapb.TabletType_RESTORE {
+			continue
+		}
+
+		posStr, err := pr.tmc.PrimaryPosition(posCtx, tabletInfo.Tablet)
+		if err != nil {
+			return vterrors.Wrapf(err, "cannot get replication position of tablet %v; all tablets must be reachable to safely promote primary-elect %v during initial promotion", alias, primaryElectAliasStr)
+		}
+		pos, err := replication.DecodePosition(posStr)
+		if err != nil {
+			return vterrors.Wrapf(err, "cannot decode replication position (%v) for tablet %v", posStr, alias)
+		}
+
+		if !electPos.AtLeast(pos) {
+			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "tablet %v (position: %v) contains transactions not found in primary-elect %v (position: %v)", alias, pos, primaryElectAliasStr, electPos)
+		}
+	}
+
+	return nil
 }
 
 func (pr *PlannedReparenter) performPartialPromotionRecovery(ctx context.Context, primaryElect *topodatapb.Tablet) (string, error) {
@@ -607,7 +672,7 @@ func (pr *PlannedReparenter) reparentShardLocked(
 	case currentPrimary == nil && ev.ShardInfo.PrimaryTermStartTime == nil:
 		// Case (1): no primary has been elected ever. Initialize
 		// the primary-elect tablet
-		reparentJournalPos, err = pr.performInitialPromotion(ctx, ev.NewPrimary, opts)
+		reparentJournalPos, err = pr.performInitialPromotion(ctx, ev.NewPrimary, tabletMap, opts)
 		needsRefresh = true
 	case currentPrimary == nil && ev.ShardInfo.PrimaryTermStartTime != nil:
 		// Case (2): no clear current primary. Try to find a safe promotion

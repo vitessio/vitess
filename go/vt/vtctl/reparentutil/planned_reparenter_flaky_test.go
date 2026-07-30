@@ -1840,6 +1840,7 @@ func TestPlannedReparenter_performInitialPromotion(t *testing.T) {
 		keyspace     string
 		shard        string
 		primaryElect *topodatapb.Tablet
+		tabletMap    map[string]*topo.TabletInfo
 
 		expectedPos string
 		shouldErr   bool
@@ -1847,6 +1848,12 @@ func TestPlannedReparenter_performInitialPromotion(t *testing.T) {
 		{
 			name: "successful promotion",
 			tmc: &testutil.TabletManagerClient{
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000200": {Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10"},
+				},
 				InitPrimaryResults: map[string]struct {
 					Result string
 					Error  error
@@ -1866,12 +1873,56 @@ func TestPlannedReparenter_performInitialPromotion(t *testing.T) {
 					Uid:  200,
 				},
 			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000200": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 200}}},
+			},
 			expectedPos: "successful reparent journal position",
 			shouldErr:   false,
 		},
 		{
+			// A peer holds transactions the version-preferred primary-elect does not,
+			// so the dominance guard must reject the promotion rather than let
+			// InitPrimary discard them.
+			name: "primary-elect behind a peer is rejected",
+			tmc: &testutil.TabletManagerClient{
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000200": {Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10"},
+					"zone1-0000000201": {Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-100"},
+				},
+				InitPrimaryResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000200": {Result: "should not be reached", Error: nil},
+				},
+			},
+			ev:       &events.Reparent{},
+			keyspace: "testkeyspace",
+			shard:    "-",
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  200,
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000200": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 200}}},
+				"zone1-0000000201": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 201}}},
+			},
+			shouldErr: true,
+		},
+		{
 			name: "primary-elect fails to promote",
 			tmc: &testutil.TabletManagerClient{
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000200": {Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10"},
+				},
 				InitPrimaryResults: map[string]struct {
 					Result string
 					Error  error
@@ -1890,11 +1941,20 @@ func TestPlannedReparenter_performInitialPromotion(t *testing.T) {
 					Uid:  200,
 				},
 			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000200": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 200}}},
+			},
 			shouldErr: true,
 		},
 		{
 			name: "promotion succeeds but parent context times out",
 			tmc: &testutil.TabletManagerClient{
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000200": {Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10"},
+				},
 				InitPrimaryPostDelays: map[string]time.Duration{
 					"zone1-0000000200": time.Millisecond * 100, // 10x the parent context timeout
 				},
@@ -1916,6 +1976,9 @@ func TestPlannedReparenter_performInitialPromotion(t *testing.T) {
 					Cell: "zone1",
 					Uid:  200,
 				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000200": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 200}}},
 			},
 			shouldErr: true,
 		},
@@ -1950,6 +2013,7 @@ func TestPlannedReparenter_performInitialPromotion(t *testing.T) {
 			pos, err := pr.performInitialPromotion(
 				ctx,
 				tt.primaryElect,
+				tt.tabletMap,
 				PlannedReparentOptions{durability: durability},
 			)
 
@@ -2881,6 +2945,15 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 		{
 			name: "shard initialization",
 			tmc: &testutil.TabletManagerClient{
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					// Elect (200) is at least as advanced as the peer (100), so the
+					// initial-promotion dominance guard passes.
+					"zone1-0000000200": {Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10"},
+					"zone1-0000000100": {Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10"},
+				},
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000200": nil,
 				},
@@ -2964,6 +3037,15 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 		{
 			name: "shard initialization with no new primary provided",
 			tmc: &testutil.TabletManagerClient{
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					// Elect (200, at 1-2) dominates the empty peer (100), so the
+					// initial-promotion dominance guard passes.
+					"zone1-0000000200": {Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-2"},
+					"zone1-0000000100": {Position: ""},
+				},
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000200": nil,
 				},
