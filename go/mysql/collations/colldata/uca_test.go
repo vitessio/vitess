@@ -287,6 +287,11 @@ func TestWildcardMySQLParity(t *testing.T) {
 		{"utf8mb4_swedish_ci", "\\", "\\", true},
 		{"sjis_japanese_ci", "\x5C", "", false},
 		{"sjis_japanese_ci", "\x5C", "\x5C", true},
+		// A literal pattern with bytes that do not decode still compares byte
+		// by byte, as in MySQL.
+		{"sjis_japanese_ci", "\x81", "\x81", true},
+		{"sjis_japanese_ci", "A\x81", "A\x81", true},
+		{"sjis_japanese_ci", "\x81", "A", false},
 	}
 	for _, tc := range testCases {
 		coll := testcollation(t, tc.collation)
