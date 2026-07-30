@@ -95,6 +95,7 @@ type (
 		*mysqlctl.FakeMysqlDaemon
 		cancel                   context.CancelFunc
 		postStopTimeoutRemaining chan time.Duration
+		stopDelay                time.Duration
 	}
 )
 
@@ -108,7 +109,12 @@ func (d *demotePrimaryStallQS) IsServing() bool {
 }
 
 func (rmd *restartReplicationMysqlDaemon) StopReplication(context.Context, map[string]string) error {
-	rmd.cancel()
+	if rmd.cancel != nil {
+		rmd.cancel()
+	}
+	if rmd.stopDelay > 0 {
+		time.Sleep(rmd.stopDelay)
+	}
 	return nil
 }
 
@@ -574,7 +580,40 @@ func TestRestartReplicationUsesCallerTimeoutAfterStop(t *testing.T) {
 	err := tm.RestartReplication(ctx, false)
 	require.NoError(t, err)
 	require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
-	assert.Greater(t, <-postStopTimeoutRemaining, topo.RemoteOperationTimeout)
+	assert.LessOrEqual(t, <-postStopTimeoutRemaining, topo.RemoteOperationTimeout,
+		"post-STOP budget must be capped at RemoteOperationTimeout")
+}
+
+// TestRestartReplicationDeductsPreStopTimeFromPostStopBudget verifies time spent
+// before and during STOP is deducted from the post-STOP timeout budget.
+func TestRestartReplicationDeductsPreStopTimeFromPostStopBudget(t *testing.T) {
+	oldRemoteOpTimeout := topo.RemoteOperationTimeout
+	topo.RemoteOperationTimeout = 30 * time.Second
+	t.Cleanup(func() {
+		topo.RemoteOperationTimeout = oldRemoteOpTimeout
+	})
+
+	fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+	fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{"START REPLICA"}
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	t.Cleanup(cancel)
+
+	postStopTimeoutRemaining := make(chan time.Duration, 1)
+	restartMysqlDaemon := &restartReplicationMysqlDaemon{
+		FakeMysqlDaemon:          fakeMysqlDaemon,
+		postStopTimeoutRemaining: postStopTimeoutRemaining,
+		stopDelay:                time.Second,
+	}
+	tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), fakeMysqlDaemon, nil)
+	tm.MysqlDaemon = restartMysqlDaemon
+
+	err := tm.RestartReplication(ctx, false)
+	require.NoError(t, err)
+	require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
+
+	remaining := <-postStopTimeoutRemaining
+	assert.Greater(t, remaining, 8*time.Second)
+	assert.Less(t, remaining, 9500*time.Millisecond, "time spent in STOP must be deducted from the post-STOP budget")
 }
 
 // TestRestartReplicationRecoversFromRecoverableReplicationInitializationError verifies RestartReplication self-heals recoverable init failures.

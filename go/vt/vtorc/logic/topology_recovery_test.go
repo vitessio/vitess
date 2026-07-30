@@ -34,6 +34,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
@@ -1411,39 +1413,114 @@ func TestReconcileStaleTopoPrimaryTopoTimeout(t *testing.T) {
 	})
 }
 
-func TestRestartReplicationEnsuresReplicationIsStartedAfterError(t *testing.T) {
+func TestRestartReplicationFallback(t *testing.T) {
 	oldTMC := tmc
 	t.Cleanup(func() {
 		tmc = oldTMC
 	})
 
-	mockController := gomock.NewController(t)
-	mockTMC := tmcmock.NewMockTabletManagerClient(mockController)
-	tmc = mockTMC
+	oldRemoteOpTimeout := topo.RemoteOperationTimeout
+	topo.RemoteOperationTimeout = 100 * time.Millisecond
+	t.Cleanup(func() {
+		topo.RemoteOperationTimeout = oldRemoteOpTimeout
+	})
 
 	tablet := &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}}
-	ctx, cancel := context.WithCancel(t.Context())
-	t.Cleanup(cancel)
+	logger := log.NewPrefixedLogger("test-restart-replication-fallback")
 
-	gomock.InOrder(
+	setup := func(t *testing.T) *tmcmock.MockTabletManagerClient {
+		mockController := gomock.NewController(t)
+		mockTMC := tmcmock.NewMockTabletManagerClient(mockController)
+		tmc = mockTMC
+		return mockTMC
+	}
+
+	// The server may have run STOP REPLICA before timing out, so the fallback
+	// must run while the recovery context is still alive.
+	t.Run("fallback starts replication after RPC timeout", func(t *testing.T) {
+		mockTMC := setup(t)
+		ctx, cancel := context.WithCancel(t.Context())
+		t.Cleanup(cancel)
+
+		gomock.InOrder(
+			mockTMC.EXPECT().
+				RestartReplication(gomock.Any(), tablet, true).
+				DoAndReturn(func(restartCtx context.Context, _ *topodatapb.Tablet, _ bool) error {
+					<-restartCtx.Done()
+					return restartCtx.Err()
+				}),
+			mockTMC.EXPECT().
+				StartReplication(gomock.Any(), tablet, true).
+				DoAndReturn(func(ctx context.Context, _ *topodatapb.Tablet, _ bool) error {
+					require.NoError(t, ctx.Err())
+					_, ok := ctx.Deadline()
+					require.True(t, ok, "cleanup context must have a deadline")
+					return nil
+				}),
+		)
+
+		err := restartReplication(ctx, tablet, true, logger)
+		require.ErrorIs(t, err, context.DeadlineExceeded)
+	})
+
+	// When the fallback also fails, the returned error must still unwrap to
+	// the original RestartReplication error so callers can match on it.
+	t.Run("fallback failure preserves original error", func(t *testing.T) {
+		mockTMC := setup(t)
+
+		gomock.InOrder(
+			mockTMC.EXPECT().
+				RestartReplication(gomock.Any(), tablet, true).
+				DoAndReturn(func(restartCtx context.Context, _ *topodatapb.Tablet, _ bool) error {
+					<-restartCtx.Done()
+					return restartCtx.Err()
+				}),
+			mockTMC.EXPECT().
+				StartReplication(gomock.Any(), tablet, true).
+				Return(errors.New("start failed")),
+		)
+
+		err := restartReplication(t.Context(), tablet, true, logger)
+		require.ErrorIs(t, err, context.DeadlineExceeded)
+		require.ErrorContains(t, err, "failed to ensure replication was started")
+	})
+
+	// A canceled recovery context means the recovery is being torn down; the
+	// detached fallback would only delay eg.Wait() and the next recovery.
+	t.Run("fallback skipped when recovery context is canceled", func(t *testing.T) {
+		mockTMC := setup(t)
+		ctx, cancel := context.WithCancel(t.Context())
+		t.Cleanup(cancel)
+
 		mockTMC.EXPECT().
 			RestartReplication(gomock.Any(), tablet, true).
 			DoAndReturn(func(context.Context, *topodatapb.Tablet, bool) error {
 				cancel()
 				return context.Canceled
-			}),
+			})
 		mockTMC.EXPECT().
-			StartReplication(gomock.Any(), tablet, true).
-			DoAndReturn(func(ctx context.Context, _ *topodatapb.Tablet, _ bool) error {
-				require.NoError(t, ctx.Err())
-				_, ok := ctx.Deadline()
-				require.True(t, ok, "cleanup context must have a deadline")
-				return nil
-			}),
-	)
+			StartReplication(gomock.Any(), gomock.Any(), gomock.Any()).
+			Times(0)
 
-	err := restartReplication(ctx, tablet, true)
-	require.ErrorIs(t, err, context.Canceled)
+		err := restartReplication(ctx, tablet, true, logger)
+		require.ErrorIs(t, err, context.Canceled)
+	})
+
+	// On transport errors the RPC never reached the tablet, so STOP cannot
+	// have run and the fallback would waste a full RemoteOperationTimeout.
+	t.Run("fallback skipped when tablet is unreachable", func(t *testing.T) {
+		mockTMC := setup(t)
+
+		mockTMC.EXPECT().
+			RestartReplication(gomock.Any(), tablet, true).
+			Return(status.Error(codes.Unavailable, "connection refused"))
+		mockTMC.EXPECT().
+			StartReplication(gomock.Any(), gomock.Any(), gomock.Any()).
+			Times(0)
+
+		err := restartReplication(t.Context(), tablet, true, logger)
+		require.Equal(t, codes.Unavailable, status.Code(err))
+	})
 }
 
 // TestRestartDirectReplicasTimeout verifies that restartDirectReplicas does not block forever if replication RPCs hang.
@@ -1598,7 +1675,7 @@ func TestRestartDirectReplicasTimeout(t *testing.T) {
 		case result := <-resultCh:
 			require.True(t, result.attempted, "recovery must be attempted")
 			require.NotNil(t, result.topologyRecovery, "topology recovery record must be returned")
-			require.ErrorContains(t, result.err, context.DeadlineExceeded.Error(), "restartDirectReplicas must timeout and return when a replication RPC hangs indefinitely")
+			require.ErrorIs(t, result.err, context.DeadlineExceeded, "restartDirectReplicas must timeout and return when a replication RPC hangs indefinitely")
 		default:
 			require.FailNowf(t, "restartDirectReplicas did not return", "expected timeout after %s when replication RPCs hang indefinitely", 2*topo.RemoteOperationTimeout)
 		}

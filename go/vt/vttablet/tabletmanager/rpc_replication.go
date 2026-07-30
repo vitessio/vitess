@@ -327,11 +327,6 @@ func (tm *TabletManager) StartReplication(ctx context.Context, semiSync bool) er
 // RestartReplication will stop replication and then start it again
 func (tm *TabletManager) RestartReplication(ctx context.Context, semiSync bool) error {
 	log.Info("RestartReplication")
-	postStopTimeout := topo.RemoteOperationTimeout
-	if deadline, ok := ctx.Deadline(); ok {
-		postStopTimeout = time.Until(deadline)
-	}
-
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return err
 	}
@@ -345,8 +340,14 @@ func (tm *TabletManager) RestartReplication(ctx context.Context, semiSync bool) 
 		return err
 	}
 
-	// Once STOP succeeds, reuse the caller's timeout budget with cancellation
-	// detached so caller cancellation cannot leave replication stopped.
+	// Once STOP succeeds, run the post-STOP work with cancellation detached so
+	// caller cancellation cannot leave replication stopped. The detached work is
+	// bounded by the caller's remaining budget, capped at RemoteOperationTimeout,
+	// so the action lock cannot be held well beyond the caller's deadline.
+	postStopTimeout := topo.RemoteOperationTimeout
+	if deadline, ok := ctx.Deadline(); ok {
+		postStopTimeout = min(time.Until(deadline), postStopTimeout)
+	}
 	postStopCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), postStopTimeout)
 	defer cancel()
 

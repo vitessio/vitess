@@ -31,6 +31,8 @@ import (
 
 	"github.com/patrickmn/go-cache"
 	"golang.org/x/sync/errgroup"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
@@ -574,7 +576,7 @@ func restartDirectReplicas(ctx context.Context, analysisEntry *inst.DetectionAna
 			// Determine if this replica should use semi-sync based on the durability policy
 			semiSync := policy.IsReplicaSemiSync(durabilityPolicy, primaryTablet, tablet)
 
-			if err := restartReplication(ctx, tablet, semiSync); err != nil {
+			if err := restartReplication(ctx, tablet, semiSync, logger); err != nil {
 				logger.Error(fmt.Sprintf("Failed to restart replication on %s: %v", tabletAliasString, err))
 				return err
 			}
@@ -604,7 +606,7 @@ func getShardTablets(ctx context.Context, keyspace, shard string) ([]*topo.Table
 }
 
 // restartReplication calls RestartReplication RPC for the given tablet with a timeout.
-func restartReplication(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) error {
+func restartReplication(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool, logger *log.PrefixedLogger) error {
 	restartCtx, restartCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	err := tmc.RestartReplication(restartCtx, tablet, semiSync)
 	restartCancel()
@@ -612,10 +614,17 @@ func restartReplication(ctx context.Context, tablet *topodatapb.Tablet, semiSync
 		return nil
 	}
 
+	// Skip the fallback when the recovery context is done, since the detached
+	// fallback cannot be canceled and would only delay recovery teardown, or
+	// when the RPC never reached the tablet, in which case STOP cannot have run.
+	if ctx.Err() != nil || status.Code(err) == codes.Unavailable {
+		return err
+	}
+
 	// TODO: Remove this StartReplication fallback in v26, when all supported
 	// vttablets include detached post-STOP cleanup in RestartReplication.
 	tabletAlias := topoproto.TabletAliasString(tablet.Alias)
-	log.Warn("RestartReplication failed; attempting to ensure replication is started",
+	logger.Warn("RestartReplication failed; attempting to ensure replication is started",
 		slog.String("tablet", tabletAlias),
 		slog.Any("error", err),
 	)
@@ -623,7 +632,9 @@ func restartReplication(ctx context.Context, tablet *topodatapb.Tablet, semiSync
 	startCtx, startCancel := context.WithTimeout(context.WithoutCancel(ctx), topo.RemoteOperationTimeout)
 	defer startCancel()
 	if startErr := tmc.StartReplication(startCtx, tablet, semiSync); startErr != nil {
-		return vterrors.Wrapf(err, "failed to ensure replication was started on tablet %s after RestartReplication error (%v)", tabletAlias, startErr)
+		// Wrap with %w (not vterrors.Wrapf, which has no Unwrap) so callers can
+		// still match on the original RestartReplication error.
+		return fmt.Errorf("failed to ensure replication was started on tablet %s after RestartReplication error (%v): %w", tabletAlias, startErr, err)
 	}
 
 	return err
