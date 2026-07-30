@@ -414,6 +414,9 @@ func downloadBufferSize(partSize int64, concurrency int) (int64, error) {
 		return 0, fmt.Errorf("--s3-backup-download-part-size (%d) * --s3-backup-download-concurrency (%d) overflows int64", partSize, concurrency)
 	}
 	size := partSize * int64(concurrency)
+	if size > math.MaxInt64-partSize {
+		return 0, fmt.Errorf("--s3-backup-download-part-size (%d) * --s3-backup-download-concurrency (%d) + part size overflows int64", partSize, concurrency)
+	}
 	totalPerFile := size + partSize
 	if totalPerFile > maxPerFileMemory {
 		return 0, fmt.Errorf(

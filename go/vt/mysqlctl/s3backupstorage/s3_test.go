@@ -900,9 +900,15 @@ func TestDownloadBufferSizeValidation(t *testing.T) {
 			concurrency: 5,
 		},
 		{
-			name:        "overflow",
+			name:        "multiplication overflow",
 			partSize:    math.MaxInt64,
 			concurrency: 2,
+			wantErr:     "overflows int64",
+		},
+		{
+			name:        "addition overflow",
+			partSize:    math.MaxInt64/2 + 1,
+			concurrency: 1,
 			wantErr:     "overflows int64",
 		},
 		{
