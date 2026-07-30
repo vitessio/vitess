@@ -217,6 +217,13 @@ func newUnicodeWildcardMatcher(
 		}
 	}
 
+	// The matcher can stay alive in the plan cache, so a large spare
+	// capacity is copied away instead of retained; 256 runes are one
+	// kibibyte.
+	if cap(parsedPattern)-len(parsedPattern) >= 256 {
+		parsedPattern = append(make([]rune, 0, len(parsedPattern)), parsedPattern...)
+	}
+
 	return &unicodeWildcard{
 		equals:  equals,
 		charset: cs,
@@ -681,9 +688,9 @@ func newMultibyteWildcardMatcher(
 	chOneWidth, chManyWidth, chEscWidth := metaWidth(chOne), metaWidth(chMany), metaWidth(chEsc)
 
 	// Each pattern character consumes at least one byte, so the number of
-	// bytes bounds the token count; for a pattern with multibyte characters
-	// this reserves up to twice the needed space, which keeps the parse to a
-	// single pass over the pattern.
+	// bytes bounds the token count, and the parse stays a single pass; a
+	// pattern with multibyte characters leaves spare capacity, which is
+	// trimmed before the matcher is returned.
 	parsedPattern := make([]multibytePatternChar, 0, len(pat))
 	for len(pat) > 0 {
 		cp, width, ok := cs.DecodeRune(pat)
@@ -749,6 +756,13 @@ func newMultibyteWildcardMatcher(
 				}
 			}
 		}
+	}
+
+	// The matcher can stay alive in the plan cache, so a large spare
+	// capacity is copied away instead of retained; 128 tokens are one
+	// kibibyte.
+	if cap(parsedPattern)-len(parsedPattern) >= 128 {
+		parsedPattern = append(make([]multibytePatternChar, 0, len(parsedPattern)), parsedPattern...)
 	}
 
 	return &multibyteWildcard{

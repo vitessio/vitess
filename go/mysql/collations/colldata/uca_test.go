@@ -318,6 +318,18 @@ func BenchmarkWildcardLargePattern(b *testing.B) {
 			_ = coll.Wildcard(wildcard, 0, 0, 0)
 		}
 	})
+
+	collEuc := testcollation(b, "eucjpms_japanese_ci")
+	threeByte := bytes.Repeat([]byte("\x8f\xa2\xafab"), 256*1024)
+	wildcard3 := append(append([]byte{}, threeByte...), '%')
+	wildcard3 = append(wildcard3, threeByte...)
+
+	b.Run("wildcard-threebyte", func(b *testing.B) {
+		b.ReportAllocs()
+		for range b.N {
+			_ = collEuc.Wildcard(wildcard3, 0, 0, 0)
+		}
+	})
 }
 
 func TestIsPrefix(t *testing.T) {

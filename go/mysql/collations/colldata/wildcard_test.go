@@ -17,6 +17,7 @@ limitations under the License.
 package colldata
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -370,6 +371,30 @@ func TestWildcardManyMetacharAsTrailByte(t *testing.T) {
 	require.True(t, pat.Match([]byte("\x81\x5f")))
 	require.False(t, pat.Match([]byte("\x81\x40")))
 	require.False(t, pat.Match([]byte("\x81\x5f\x40")))
+}
+
+func TestWildcardPatternSpareCapacity(t *testing.T) {
+	// The parsers reserve one token per pattern byte to keep the parse
+	// a single pass. Multibyte characters then leave spare capacity,
+	// and the matcher must not retain a large spare in the plan cache.
+	t.Run("multibyte", func(t *testing.T) {
+		coll := testcollation(t, "eucjpms_japanese_ci")
+		chunk := bytes.Repeat([]byte("\x8f\xa2\xaf"), 1024)
+		pat := append(append(append([]byte{}, chunk...), '%'), chunk...)
+		m := coll.Wildcard(pat, 0, 0, 0)
+		mb, ok := m.(*multibyteWildcard)
+		require.True(t, ok)
+		require.Less(t, cap(mb.pattern)-len(mb.pattern), 128)
+	})
+	t.Run("unicode", func(t *testing.T) {
+		coll := testcollation(t, "utf8mb4_general_ci")
+		chunk := bytes.Repeat([]byte("あ"), 1024)
+		pat := append(append(append([]byte{}, chunk...), '%'), chunk...)
+		m := coll.Wildcard(pat, 0, 0, 0)
+		uw, ok := m.(*unicodeWildcard)
+		require.True(t, ok)
+		require.Less(t, cap(uw.pattern)-len(uw.pattern), 256)
+	})
 }
 
 func BenchmarkWildcardMatching(b *testing.B) {
