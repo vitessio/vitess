@@ -372,6 +372,14 @@ func TestWildcardManyMetacharAsTrailByte(t *testing.T) {
 	require.True(t, pat.Match([]byte("\x81\x5f")))
 	require.False(t, pat.Match([]byte("\x81\x40")))
 	require.False(t, pat.Match([]byte("\x81\x5f\x40")))
+
+	// A negative match-many rune is not a character and can never mark a
+	// wildcard; byte conversion would wrap -95 to the valid single-byte
+	// character 0xA1, so the pattern is a two-character literal.
+	pat = coll.Wildcard([]byte("\x61\xa1"), 0, -95, 0)
+	require.True(t, pat.Match([]byte("\x61\xa1")))
+	require.False(t, pat.Match([]byte("abc")))
+	require.False(t, pat.Match([]byte("\x61")))
 }
 
 func TestWildcardTrailingManyFastPath(t *testing.T) {
