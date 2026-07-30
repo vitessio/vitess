@@ -832,15 +832,22 @@ func (erp *EmergencyReparenter) findMostAdvanced(
 	// We have already removed the tablets with errant GTIDs before calling this function. At this point our winning position must be a
 	// superset of all the other valid positions. If any position is incomparable with it, then we have a split brain scenario, and we
 	// should cancel the ERS. Split brain is about divergent received history, so we only compare the Combined positions; the Executed
-	// positions can be transiently incomparable at an equal Combined position (multi-threaded apply gaps) without any divergence
+	// positions can be transiently incomparable at an equal Combined position (multi-threaded apply gaps) without any divergence.
+	// Reciprocally contained but unequal positions are divergent too, containment just can't order them (MariaDB GTID containment
+	// ignores the origin server), so they must also fail closed. The divergent pair can sit behind a candidate that dominates both
+	// of them, so reciprocal containment is checked between every pair of candidates, not just against the winning position
 	for i, position := range tabletPositions {
 		if haveIncomparablePositions(winningPosition.Combined, position.Combined) {
 			return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "split brain detected between servers - %s and %s", topoproto.TabletAliasString(winningPrimaryTablet.Alias), topoproto.TabletAliasString(validTablets[i].Alias))
 		}
-		// The sort can't guarantee a maximum at index 0 when some positions are incomparable, so also reject a winner that
-		// another candidate dominates. This is an invariant check that should never fire, not an expected path
-		if hasDominantPosition(position.Combined, winningPosition.Combined) {
+		// Keep the sort's maximum-at-index-zero guarantee as a defense-in-depth invariant.
+		if hasDominantReparentPosition(position, winningPosition) {
 			return nil, nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "candidate sorting error: %s has a more advanced position than the chosen candidate %s", topoproto.TabletAliasString(validTablets[i].Alias), topoproto.TabletAliasString(winningPrimaryTablet.Alias))
+		}
+		for j := i + 1; j < len(tabletPositions); j++ {
+			if haveReciprocallyContainedPositions(position.Combined, tabletPositions[j].Combined) {
+				return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "split brain detected between servers - %s and %s", topoproto.TabletAliasString(validTablets[i].Alias), topoproto.TabletAliasString(validTablets[j].Alias))
+			}
 		}
 	}
 

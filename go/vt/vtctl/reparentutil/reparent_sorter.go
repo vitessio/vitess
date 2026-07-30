@@ -115,18 +115,27 @@ const (
 
 // reparentSorter sorts tablets for candidate election during reparent operations.
 type reparentSorter struct {
-	tablets          []*topodatapb.Tablet
-	positions        []*RelayLogPositions
-	innodbBufferPool []int
-	mysqlVersions    []mysqlctl.ServerVersion
-	durability       policy.Durabler
-	mode             SortMode
+	tablets                []*topodatapb.Tablet
+	positions              []*RelayLogPositions
+	combinedDominatedCount []int
+	executedDominatedCount []int
+	innodbBufferPool       []int
+	mysqlVersions          []mysqlctl.ServerVersion
+	durability             policy.Durabler
+	mode                   SortMode
 }
 
 func newReparentSorter(tablets []*topodatapb.Tablet, positions []*RelayLogPositions, innodbBufferPool []int, mysqlVersions []mysqlctl.ServerVersion, durability policy.Durabler, mode SortMode) *reparentSorter {
 	return &reparentSorter{
-		tablets:          tablets,
-		positions:        positions,
+		tablets:   tablets,
+		positions: positions,
+		combinedDominatedCount: dominatedCountsForSort(tablets, positions, func(moreAdvanced, lessAdvanced *RelayLogPositions) bool {
+			return hasDominantPosition(moreAdvanced.Combined, lessAdvanced.Combined)
+		}),
+		executedDominatedCount: dominatedCountsForSort(tablets, positions, func(moreAdvanced, lessAdvanced *RelayLogPositions) bool {
+			return moreAdvanced.Combined.Equal(lessAdvanced.Combined) &&
+				hasDominantPosition(moreAdvanced.Executed, lessAdvanced.Executed)
+		}),
 		durability:       durability,
 		innodbBufferPool: innodbBufferPool,
 		mysqlVersions:    mysqlVersions,
@@ -141,6 +150,8 @@ func (rs *reparentSorter) Len() int { return len(rs.tablets) }
 func (rs *reparentSorter) Swap(i, j int) {
 	rs.tablets[i], rs.tablets[j] = rs.tablets[j], rs.tablets[i]
 	rs.positions[i], rs.positions[j] = rs.positions[j], rs.positions[i]
+	rs.combinedDominatedCount[i], rs.combinedDominatedCount[j] = rs.combinedDominatedCount[j], rs.combinedDominatedCount[i]
+	rs.executedDominatedCount[i], rs.executedDominatedCount[j] = rs.executedDominatedCount[j], rs.executedDominatedCount[i]
 	if len(rs.innodbBufferPool) != 0 {
 		rs.innodbBufferPool[i], rs.innodbBufferPool[j] = rs.innodbBufferPool[j], rs.innodbBufferPool[i]
 	}
@@ -170,32 +181,30 @@ func (rs *reparentSorter) Less(i, j int) bool {
 	return rs.lessERS(i, j)
 }
 
-// comparePosition orders by replication position using the same partial-order
-// semantics as findMostAdvanced's split-brain check: a candidate whose Combined
-// position dominates wins; at an equal Combined position the one whose Executed
-// position dominates wins, preferring less SQL delay, which would otherwise slow
-// down the reparent. GTID positions are only partially ordered, so a pair can be
-// incomparable (disjoint UUIDs); comparePosition returns -1 if [i] is more
-// advanced, +1 if [j] is, and 0 when neither dominates (equal or incomparable),
-// leaving the decision to the next tiebreaker. This can't make the sort a total
-// order, so findMostAdvanced re-checks the winner after sorting.
+// comparePosition orders by replication position using the precomputed dominated
+// counts (how many other candidates strictly dominate each one). A lower count is
+// more advanced. Combined dominance takes precedence; at an equal count it falls
+// through to the Executed-dominated count, which prefers less SQL delay that would
+// otherwise slow down the reparent. GTID positions are only partially ordered, so
+// counts are not unique: incomparable candidates (disjoint UUIDs) can share a count,
+// in which case comparePosition returns 0 and leaves the decision to the next
+// tiebreaker. Counting dominators keeps the sort transitive-safe where a naive
+// pairwise comparison is not; findMostAdvanced still re-checks the winner after
+// sorting.
+//
+// Returns -1 if [i] is more advanced, +1 if [j] is, and 0 when neither dominates.
 func (rs *reparentSorter) comparePosition(i, j int) int {
-	iPositions := rs.positions[i]
-	jPositions := rs.positions[j]
-
-	if hasDominantPosition(iPositions.Combined, jPositions.Combined) {
-		return -1
-	}
-	if hasDominantPosition(jPositions.Combined, iPositions.Combined) {
-		return 1
-	}
-	if iPositions.Combined.Equal(jPositions.Combined) {
-		if hasDominantPosition(iPositions.Executed, jPositions.Executed) {
+	if rs.combinedDominatedCount[i] != rs.combinedDominatedCount[j] {
+		if rs.combinedDominatedCount[i] < rs.combinedDominatedCount[j] {
 			return -1
 		}
-		if hasDominantPosition(jPositions.Executed, iPositions.Executed) {
-			return 1
+		return 1
+	}
+	if rs.executedDominatedCount[i] != rs.executedDominatedCount[j] {
+		if rs.executedDominatedCount[i] < rs.executedDominatedCount[j] {
+			return -1
 		}
+		return 1
 	}
 	return 0
 }
@@ -283,6 +292,52 @@ func (rs *reparentSorter) compareAlias(i, j int) bool {
 		return rs.tablets[i].Alias.Cell < rs.tablets[j].Alias.Cell
 	}
 	return rs.tablets[i].Alias.Uid < rs.tablets[j].Alias.Uid
+}
+
+// dominatedCountsForSort returns, for each candidate, how many other candidates
+// strictly dominate it under the dominates predicate. The result is only meaningful
+// as a sort key: a lower count means more advanced, and the maximal candidates that
+// nothing dominates all have count 0.
+//
+// This count is what lets Less sort safely. dominates is only a partial order, so
+// comparing two candidates head-to-head is not transitive — with an incomparable
+// third candidate in play, sort.Sort can otherwise seat a dominated candidate above
+// the one that dominates it. Counting dominators sidesteps that, because dominates
+// itself is transitive: whatever dominates a candidate also dominates everything below
+// it, so a dominated candidate always has a strictly higher count than its dominator.
+// Ordering by ascending count therefore never places a candidate ahead of one that
+// dominates it.
+//
+// Counts are not unique. Incomparable candidates (e.g. divergent GTID histories) can
+// share a count; the caller breaks those ties with its remaining preferences.
+func dominatedCountsForSort(tablets []*topodatapb.Tablet, positions []*RelayLogPositions, dominates func(*RelayLogPositions, *RelayLogPositions) bool) []int {
+	dominatedCounts := make([]int, len(positions))
+	for i := range positions {
+		if tablets[i] == nil {
+			continue
+		}
+		for j := range positions {
+			if i == j || tablets[j] == nil {
+				continue
+			}
+			if dominates(positions[j], positions[i]) {
+				dominatedCounts[i]++ // one more candidate strictly dominates i
+			}
+		}
+	}
+	return dominatedCounts
+}
+
+// hasDominantReparentPosition reports whether moreAdvanced is strictly ahead of
+// lessAdvanced under the same two-level order the sorter uses: a strictly greater
+// received (Combined) history, or an equal received history with strictly more of it
+// applied (Executed). findMostAdvanced uses it as a defense-in-depth check that the
+// sort really did place the maximum at index 0 — it should never find a candidate that
+// dominates the chosen winner.
+func hasDominantReparentPosition(moreAdvanced, lessAdvanced *RelayLogPositions) bool {
+	return hasDominantPosition(moreAdvanced.Combined, lessAdvanced.Combined) ||
+		(moreAdvanced.Combined.Equal(lessAdvanced.Combined) &&
+			hasDominantPosition(moreAdvanced.Executed, lessAdvanced.Executed))
 }
 
 // sortTabletsForReparent sorts tablets for candidate election.

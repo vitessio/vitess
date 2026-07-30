@@ -90,7 +90,7 @@ func (rlp *RelayLogPositions) IsZero() bool {
 // hasDominantPosition returns true if position a is strictly ahead of position b, meaning
 // a contains everything b has, plus more.
 func hasDominantPosition(a, b replication.Position) bool {
-	return a.AtLeast(b) && !a.Equal(b)
+	return a.AtLeast(b) && !b.AtLeast(a)
 }
 
 // haveIncomparablePositions returns true if neither position contains the other. Replication
@@ -98,6 +98,14 @@ func hasDominantPosition(a, b replication.Position) bool {
 // or errant GTIDs).
 func haveIncomparablePositions(a, b replication.Position) bool {
 	return !a.AtLeast(b) && !b.AtLeast(a)
+}
+
+// haveReciprocallyContainedPositions returns true if two unequal positions contain each
+// other. Containment can't order these: MariaDB GTID containment ignores the origin
+// server, so positions like 0-1-10 and 0-2-10 "contain" each other while holding
+// different histories (a split brain).
+func haveReciprocallyContainedPositions(a, b replication.Position) bool {
+	return a.AtLeast(b) && b.AtLeast(a) && !a.Equal(b)
 }
 
 // hasUniformCombinedPosition returns true when every candidate has the same Combined position. On the
