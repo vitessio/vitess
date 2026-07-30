@@ -234,6 +234,42 @@ func TestWildcardSupplementaryChars(t *testing.T) {
 	require.True(t, general.Wildcard([]byte("%💩%"), 0, 0, 0).Match([]byte("😊")), "utf8mb4_general_ci: '😊' must match '%%💩%%'")
 }
 
+func TestWildcardMySQLParity(t *testing.T) {
+	testCases := []struct {
+		collation string
+		pattern   string
+		input     string
+		match     bool
+	}{
+		// MySQL compares LIKE character by character: two different
+		// supplementary characters do not match under the legacy UCA
+		// collations, even though Collate weighs both as U+FFFD.
+		{"utf8mb4_swedish_ci", "💩", "😊", false},
+		{"utf8mb4_swedish_ci", "😊", "😊", true},
+		{"utf8mb4_swedish_ci", "💩%", "😊x", false},
+		{"utf8mb4_swedish_ci", "😊%", "😊x", true},
+		{"utf8mb4_swedish_ci", "A", "a", true},
+		{"utf8mb4_swedish_ci", "", "", true},
+		{"utf8mb4_swedish_ci", "", "a", false},
+		{"utf16_unicode_ci", "\xD8\x3D\xDC\xA9", "\xD8\x3D\xDE\x0A", false},
+		{"utf16_unicode_ci", "\xD8\x3D\xDE\x0A", "\xD8\x3D\xDE\x0A", true},
+		// LIKE does not apply contractions or expansions.
+		{"utf8mb4_danish_ci", "å", "aa", false},
+		{"utf8mb4_danish_ci", "å%", "aax", false},
+		{"utf8mb4_da_0900_ai_ci", "å", "aa", false},
+		{"utf8mb4_da_0900_ai_ci", "å%", "aax", false},
+		{"utf8mb4_0900_ai_ci", "ss", "ß", false},
+		{"utf8mb4_0900_ai_ci", "ß", "ss", false},
+		{"utf8mb4_0900_ai_ci", "ß", "ß", true},
+		{"utf8mb4_0900_ai_ci", "A", "a", true},
+	}
+	for _, tc := range testCases {
+		coll := testcollation(t, tc.collation)
+		match := coll.Wildcard([]byte(tc.pattern), 0, 0, 0).Match([]byte(tc.input))
+		require.Equal(t, tc.match, match, "%s: %q LIKE %q", tc.collation, tc.input, tc.pattern)
+	}
+}
+
 func TestIsPrefix(t *testing.T) {
 	collations := []string{
 		"utf8mb4_0900_ai_ci",
