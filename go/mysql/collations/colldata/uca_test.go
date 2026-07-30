@@ -280,12 +280,39 @@ func TestWildcardMySQLParity(t *testing.T) {
 		{"ujis_japanese_ci", "\x5C_", "\xA1\xC0A", false},
 		{"eucjpms_japanese_ci", "\xAD\xF5_", "\xA2\xE5A", false},
 		{"eucjpms_japanese_ci", "\xA2\xE5_", "\xA2\xE5A", true},
+		// A pattern that ends in the escape character matches the escape
+		// character as a literal.
+		{"utf8mb4_swedish_ci", "\\", "", false},
+		{"utf8mb4_swedish_ci", "\\", "A", false},
+		{"utf8mb4_swedish_ci", "\\", "\\", true},
+		{"sjis_japanese_ci", "\x5C", "", false},
+		{"sjis_japanese_ci", "\x5C", "\x5C", true},
 	}
 	for _, tc := range testCases {
 		coll := testcollation(t, tc.collation)
 		match := coll.Wildcard([]byte(tc.pattern), 0, 0, 0).Match([]byte(tc.input))
 		require.Equal(t, tc.match, match, "%s: %q LIKE %q", tc.collation, tc.input, tc.pattern)
 	}
+}
+
+func BenchmarkWildcardLargePattern(b *testing.B) {
+	coll := testcollation(b, "cp932_japanese_ci")
+	literal := bytes.Repeat([]byte("\x93\xFAab"), 256*1024)
+	wildcard := append(append([]byte{}, literal...), '%')
+	wildcard = append(wildcard, literal...)
+
+	b.Run("literal", func(b *testing.B) {
+		b.ReportAllocs()
+		for range b.N {
+			_ = coll.Wildcard(literal, 0, 0, 0)
+		}
+	})
+	b.Run("wildcard", func(b *testing.B) {
+		b.ReportAllocs()
+		for range b.N {
+			_ = coll.Wildcard(wildcard, 0, 0, 0)
+		}
+	})
 }
 
 func TestIsPrefix(t *testing.T) {

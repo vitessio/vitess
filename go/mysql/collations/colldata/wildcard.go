@@ -587,10 +587,16 @@ type multibyteWildcard struct {
 
 // multibytePatternChar is one parsed pattern element: a wildcard when match
 // is patternMatchOne or patternMatchMany, otherwise the byte sequence of one
-// literal character.
+// literal character, stored inline so that a large pattern costs eight bytes
+// per character.
 type multibytePatternChar struct {
+	ch    [4]byte
 	match int16
-	ch    []byte
+	width uint8
+}
+
+func (p *multibytePatternChar) literal() []byte {
+	return p.ch[:p.width]
 }
 
 func newMultibyteWildcardMatcher(
@@ -602,7 +608,6 @@ func newMultibyteWildcardMatcher(
 	var escape bool
 	var escapeChar []byte
 	var chOneCount, chManyCount, chEscCount int
-	parsedPattern := make([]multibytePatternChar, 0, len(pat))
 	patOriginal := pat
 
 	if chOne == 0 {
@@ -630,47 +635,54 @@ func newMultibyteWildcardMatcher(
 	}
 	chOneWidth, chManyWidth, chEscWidth := metaWidth(chOne), metaWidth(chMany), metaWidth(chEsc)
 
-	for len(pat) > 0 {
-		cp, width, ok := cs.DecodeRune(pat)
+	// The first pass classifies the pattern without any allocation, so the
+	// common literal and trailing-wildcard patterns return a fastMatcher
+	// before the per-character tokens exist.
+	var elements int
+	lastMany := false
+	for p := pat; len(p) > 0; {
+		cp, width, ok := cs.DecodeRune(p)
 		if !ok {
 			return nopMatcher{}
 		}
-		ch := pat[:width]
-		pat = pat[width:]
+		p = p[width:]
 
 		if escape {
-			parsedPattern = append(parsedPattern, multibytePatternChar{ch: ch})
 			escape = false
+			elements++
+			lastMany = false
 			continue
 		}
 
 		switch {
 		case cp == chOne && width == chOneWidth:
 			chOneCount++
-			parsedPattern = append(parsedPattern, multibytePatternChar{match: patternMatchOne})
+			elements++
+			lastMany = false
 		case cp == chMany && width == chManyWidth:
 			chManyCount++
-			if len(parsedPattern) > 0 && parsedPattern[len(parsedPattern)-1].match == patternMatchMany {
-				continue
+			if !lastMany {
+				elements++
 			}
-			parsedPattern = append(parsedPattern, multibytePatternChar{match: patternMatchMany})
+			lastMany = true
 		case cp == chEsc && width == chEscWidth:
 			chEscCount++
 			escape = true
-			escapeChar = ch
 		default:
-			parsedPattern = append(parsedPattern, multibytePatternChar{ch: ch})
+			elements++
+			lastMany = false
 		}
 	}
 	if escape {
-		parsedPattern = append(parsedPattern, multibytePatternChar{ch: escapeChar})
+		elements++
+		lastMany = false
 	}
 
 	// if we have a collation callback, we can detect some common cases for
 	// patterns here and optimize them away without having to return a full
 	// WildcardPattern
 	if collate != nil {
-		if len(parsedPattern) == 0 {
+		if elements == 0 {
 			return emptyMatcher{}
 		}
 		if chOneCount == 0 && chEscCount == 0 {
@@ -681,7 +693,7 @@ func newMultibyteWildcardMatcher(
 					isPrefix: false,
 				}
 			}
-			if chManyCount == 1 && chMany < utf8.RuneSelf && parsedPattern[len(parsedPattern)-1].match == patternMatchMany {
+			if chManyCount == 1 && chMany < utf8.RuneSelf && lastMany {
 				return &fastMatcher{
 					collate:  collate,
 					pattern:  patOriginal[:len(patOriginal)-1],
@@ -691,6 +703,44 @@ func newMultibyteWildcardMatcher(
 		}
 	}
 
+	parsedPattern := make([]multibytePatternChar, 0, elements)
+	escape = false
+	appendLiteral := func(ch []byte) {
+		var token multibytePatternChar
+		token.width = uint8(copy(token.ch[:], ch))
+		parsedPattern = append(parsedPattern, token)
+	}
+	for len(pat) > 0 {
+		// the first pass validated the whole pattern
+		cp, width, _ := cs.DecodeRune(pat)
+		ch := pat[:width]
+		pat = pat[width:]
+
+		if escape {
+			appendLiteral(ch)
+			escape = false
+			continue
+		}
+
+		switch {
+		case cp == chOne && width == chOneWidth:
+			parsedPattern = append(parsedPattern, multibytePatternChar{match: patternMatchOne})
+		case cp == chMany && width == chManyWidth:
+			if len(parsedPattern) > 0 && parsedPattern[len(parsedPattern)-1].match == patternMatchMany {
+				continue
+			}
+			parsedPattern = append(parsedPattern, multibytePatternChar{match: patternMatchMany})
+		case cp == chEsc && width == chEscWidth:
+			escape = true
+			escapeChar = ch
+		default:
+			appendLiteral(ch)
+		}
+	}
+	if escape {
+		appendLiteral(escapeChar)
+	}
+
 	return &multibyteWildcard{
 		sort:    sortOrder,
 		charset: cs,
@@ -698,14 +748,14 @@ func newMultibyteWildcardMatcher(
 	}
 }
 
-func (wc *multibyteWildcard) equals(a, b []byte) bool {
-	if len(a) == 1 && len(b) == 1 {
+func (wc *multibyteWildcard) equals(p *multibytePatternChar, b []byte) bool {
+	if p.width == 1 && len(b) == 1 {
 		if wc.sort != nil {
-			return wc.sort[a[0]] == wc.sort[b[0]]
+			return wc.sort[p.ch[0]] == wc.sort[b[0]]
 		}
-		return a[0] == b[0]
+		return p.ch[0] == b[0]
 	}
-	return bytes.Equal(a, b)
+	return bytes.Equal(p.literal(), b)
 }
 
 func (wc *multibyteWildcard) Match(in []byte) bool {
@@ -750,7 +800,7 @@ retry:
 		if !ok {
 			return matchFail
 		}
-		if wc.equals(p0.ch, in[:width]) {
+		if wc.equals(&p0, in[:width]) {
 			break
 		}
 		in = in[width:]
@@ -786,7 +836,7 @@ func (wc *multibyteWildcard) matchRecursive(in []byte, pat []multibytePatternCha
 
 		switch {
 		case pat[0].match == patternMatchOne:
-		case wc.equals(pat[0].ch, in[:width]):
+		case wc.equals(&pat[0], in[:width]):
 		default:
 			return matchFail
 		}
@@ -836,7 +886,7 @@ retry:
 			if !ok {
 				return false
 			}
-			if len(p) == 0 || !wc.equals(p0.ch, s[:width]) {
+			if len(p) == 0 || !wc.equals(&p0, s[:width]) {
 				goto starCheck
 			}
 			s = s[width:]
