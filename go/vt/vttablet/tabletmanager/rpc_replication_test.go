@@ -117,6 +117,20 @@ func TestPrimaryStatusIncludesServerVersion(t *testing.T) {
 	assert.Equal(t, "Ver 8.0.35", status.ServerVersion)
 }
 
+func TestReplicationStatusIncludesServerVersion(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "cell1")
+	tm := newTestTM(t, ts, 1, "ks", "0", nil)
+
+	fakeMysqlDaemon := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
+	fakeMysqlDaemon.Version = "Ver 8.0.35"
+
+	status, err := tm.ReplicationStatus(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "Ver 8.0.35", status.ServerVersion)
+}
+
 func TestDemotePrimaryIncludesServerVersion(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
