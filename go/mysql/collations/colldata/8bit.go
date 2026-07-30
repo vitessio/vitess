@@ -110,7 +110,7 @@ func (c *Collation_8bit_bin) WeightStringLen(numBytes int) int {
 }
 
 func (c *Collation_8bit_bin) Wildcard(pat []byte, matchOne rune, matchMany rune, escape rune) WildcardPattern {
-	return newEightbitWildcardMatcher(&sortOrderIdentity, c, pat, matchOne, matchMany, escape)
+	return newEightbitWildcardMatcher(&sortOrderIdentity, c.Collate, pat, matchOne, matchMany, escape)
 }
 
 func (c *Collation_8bit_bin) ToLower(dst, src []byte) []byte {
@@ -227,7 +227,7 @@ func (c *Collation_8bit_simple_ci) WeightStringLen(numBytes int) int {
 }
 
 func (c *Collation_8bit_simple_ci) Wildcard(pat []byte, matchOne rune, matchMany rune, escape rune) WildcardPattern {
-	return newEightbitWildcardMatcher(c.sort, c, pat, matchOne, matchMany, escape)
+	return newEightbitWildcardMatcher(c.sort, c.Collate, pat, matchOne, matchMany, escape)
 }
 
 func weightStringPadingSimple(padChar byte, dst []byte, numCodepoints int, padToMax bool) []byte {
@@ -324,7 +324,7 @@ func (c *Collation_binary) WeightStringLen(numBytes int) int {
 }
 
 func (c *Collation_binary) Wildcard(pat []byte, matchOne rune, matchMany rune, escape rune) WildcardPattern {
-	return newEightbitWildcardMatcher(&sortOrderIdentity, c, pat, matchOne, matchMany, escape)
+	return newEightbitWildcardMatcher(&sortOrderIdentity, c.Collate, pat, matchOne, matchMany, escape)
 }
 
 func (c *Collation_binary) ToLower(dst, raw []byte) []byte {

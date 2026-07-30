@@ -226,7 +226,7 @@ func (c *Collation_utf8mb4_uca_0900) Wildcard(pat []byte, matchOne rune, matchMa
 	// MySQL compares LIKE character by character and does not apply the
 	// expansions and contractions that Collate applies, so 'ß' = 'ss' is
 	// true and 'ß' LIKE 'ss' is false.
-	return newUnicodeWildcardMatcher(charset.Charset_utf8mb4{}, c.uca, nil, pat, matchOne, matchMany, escape)
+	return newUnicodeWildcardMatcher(charset.Charset_utf8mb4{}, c.uca.WeightsEqual, nil, pat, matchOne, matchMany, escape)
 }
 
 func (c *Collation_utf8mb4_uca_0900) ToLower(dst, src []byte) []byte {
@@ -280,12 +280,11 @@ func (c *Collation_utf8mb4_0900_bin) WeightStringLen(numBytes int) int {
 	return numBytes
 }
 
-func (c *Collation_utf8mb4_0900_bin) WeightsEqual(left, right rune) bool {
-	return left == right
-}
-
 func (c *Collation_utf8mb4_0900_bin) Wildcard(pat []byte, matchOne rune, matchMany rune, escape rune) WildcardPattern {
-	return newUnicodeWildcardMatcher(charset.Charset_utf8mb4{}, c, c, pat, matchOne, matchMany, escape)
+	equals := func(a, b rune) bool {
+		return a == b
+	}
+	return newUnicodeWildcardMatcher(charset.Charset_utf8mb4{}, equals, c.Collate, pat, matchOne, matchMany, escape)
 }
 
 func (c *Collation_utf8mb4_0900_bin) ToLower(dst, src []byte) []byte {
@@ -408,5 +407,5 @@ func (c *Collation_uca_legacy) Wildcard(pat []byte, matchOne rune, matchMany run
 	// MySQL compares LIKE character by character, without contractions, and
 	// two different supplementary characters are not equal to each other in
 	// LIKE even when both weigh as the replacement character in Collate.
-	return newUnicodeWildcardMatcher(c.uca.Charset(), c.uca, nil, pat, matchOne, matchMany, escape)
+	return newUnicodeWildcardMatcher(c.uca.Charset(), c.uca.WeightsEqual, nil, pat, matchOne, matchMany, escape)
 }
