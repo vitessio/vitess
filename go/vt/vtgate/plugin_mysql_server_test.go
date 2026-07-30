@@ -2375,6 +2375,71 @@ func TestTempTableHeartbeatFailingLaneBypassForServingTablet(t *testing.T) {
 		"a failing-marked tablet the healthcheck sees serving must bypass the full lane, not queue behind it")
 }
 
+// TestTempTableHeartbeatQueuedBeatPromotedOnRecovery proves a beat already
+// queued behind a full failing lane is not stuck there when its tablet
+// recovers: the serving check before queueing is a one-shot and the queued
+// goroutine holds the route's in-flight marker, so later sweeps cannot
+// reconsider it — the queued wait itself must re-check the healthcheck and
+// promote the beat to the healthy path, without taking or releasing any lane
+// slot.
+func TestTempTableHeartbeatQueuedBeatPromotedOnRecovery(t *testing.T) {
+	origInterval := tempTableHeartbeatTime
+	tempTableHeartbeatTime = 30 * time.Second
+	t.Cleanup(func() { tempTableHeartbeatTime = origInterval })
+
+	executor, _, _, _, ctx := createExecutorEnv(t)
+	vsm := newVStreamManager(executor.resolver.resolver, executor.serv, "aa")
+	vtg := newVTGate(executor, executor.resolver, vsm, nil, executor.scatterConn.gateway)
+	vh := newVtgateHandler(vtg)
+	hc := executor.scatterConn.gateway.hc.(*discovery.FakeHealthCheck)
+
+	// Fill every failing-lane slot with a stuck, not-serving tablet.
+	release := make(chan struct{})
+	var stuck []*gatedBeatConn
+	for i := range tempTableFailingBeatConcurrency {
+		stuck = append(stuck, storeGatedFailingTablet(vh, hc, i, release, assert.AnError))
+	}
+	hbCtx, hbCancel := context.WithCancel(ctx)
+	var wgs []*sync.WaitGroup
+	t.Cleanup(func() {
+		hbCancel()
+		close(release)
+		for _, wg := range wgs {
+			wg.Wait()
+		}
+	})
+	wgs = append(wgs, vh.dispatchTempTableBeats(hbCtx))
+	inFlight := func() int64 {
+		var n int64
+		for _, c := range stuck {
+			n += c.execCount.Load()
+		}
+		return n
+	}
+	require.Eventually(t, func() bool { return inFlight() == int64(tempTableFailingBeatConcurrency) }, 5*time.Second, time.Millisecond,
+		"every failing-lane slot must fill")
+
+	// A failing, NOT-serving tablet queues behind the full lane.
+	qs := hc.AddFakeTablet("aa", "recoveringhost", 8888, "recoverks", "0", topodatapb.TabletType_PRIMARY, false /* serving */, 1, nil,
+		func(tablet *topodatapb.Tablet) queryservice.QueryService {
+			return &gatedBeatConn{SandboxConn: sandboxconn.NewSandboxConn(tablet)}
+		})
+	recovering := qs.(*gatedBeatConn)
+	rt := recovering.Tablet()
+	c := &mysql.Conn{ConnectionID: 800}
+	vh.tempTableConns.Store(c, &tempTableConn{targets: tempTargets(tempTableHeartbeatTarget{
+		target: &querypb.Target{Keyspace: rt.Keyspace, Shard: rt.Shard, TabletType: rt.Type}, alias: rt.Alias, reservedID: 801, failures: 1,
+	})})
+	wgs = append(wgs, vh.dispatchTempTableBeats(hbCtx))
+
+	// The tablet recovers while its beat waits in the queue: the queued wait
+	// must promote it to the healthy path promptly — the blockers never
+	// release their slots.
+	hc.SetServing(rt, true)
+	require.Eventually(t, func() bool { return recovering.execCount.Load() >= 1 }, 5*time.Second, 5*time.Millisecond,
+		"a queued beat whose tablet recovered must be promoted and sent without a lane slot freeing")
+}
+
 // TestTempTableHeartbeatQueuedBeatSurvivesRepublish proves a beat that waits
 // behind the failing-lane semaphore is still delivered after a command
 // republishes its (unchanged) reservation while it waits. The claim step

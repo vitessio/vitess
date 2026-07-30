@@ -91,7 +91,7 @@ func NewTxPool(env tabletenv.Env, limiter txlimiter.TxLimiter) *TxPool {
 	axp := &TxPool{
 		env:     env,
 		scp:     NewStatefulConnPool(env),
-		ticks:   timer.NewTimer(txKillerTimeoutInterval(config)),
+		ticks:   timer.NewTimer(txKillerTimeoutInterval(config, 0)),
 		limiter: limiter,
 		txStats: env.Exporter().NewTimings("Transactions", "Transaction stats", "operation"),
 		tempTableIdleKills: env.Exporter().NewCounter("TempTableIdleTimeoutKills",
@@ -122,15 +122,35 @@ func NewTxPool(env tabletenv.Env, limiter txlimiter.TxLimiter) *TxPool {
 // that will kill long-running transactions.
 func (tp *TxPool) Open(appParams, dbaParams, appDebugParams dbconfigs.Connector) {
 	tp.scp.Open(appParams, dbaParams, appDebugParams)
-	if tp.ticks.Interval() > 0 {
-		tp.ticks.Start(func() { tp.transactionKiller() })
-	}
+	// Always start the killer goroutine: with a non-positive interval it
+	// parks dormant on its message channel, so a later auto-mode wait_timeout
+	// publish can wake it with SetMysqlWaitTimeout -> SetInterval. The old
+	// interval-gated start would leave the temp-table idle timeout with no
+	// reaper whenever both transaction timeouts are disabled.
+	tp.ticks.Start(func() { tp.transactionKiller() })
 }
 
 // Close closes the TxPool. A closed pool can be reopened.
 func (tp *TxPool) Close() {
 	tp.ticks.Stop()
 	tp.scp.Close()
+}
+
+// SetMysqlWaitTimeout publishes mysqld's @@global.wait_timeout for the
+// temp-table idle timeout's auto mode and retimes the connection killer: a
+// dormant timer (both transaction timeouts disabled) is woken, and a slower
+// one is tightened, so auto-governed connections always have a reaper.
+// The tick only ever shrinks here — a raised wait_timeout keeps the shorter
+// tick, which just checks a little more often than strictly needed.
+func (tp *TxPool) SetMysqlWaitTimeout(waitTimeout time.Duration) {
+	tp.scp.SetMysqlWaitTimeout(waitTimeout)
+	desired := txKillerTimeoutInterval(tp.env.Config(), waitTimeout)
+	if desired <= 0 {
+		return
+	}
+	if current := tp.ticks.Interval(); current <= 0 || desired < current {
+		tp.ticks.SetInterval(desired)
+	}
 }
 
 // AdjustLastID adjusts the last transaction id to be at least
@@ -222,9 +242,9 @@ func (tp *TxPool) GetAndLock(connID tx.ConnID, reason string) (*StatefulConnecti
 	// (the critical section is CPU-only, so it outlasts even a heavy
 	// scheduler or GC stall) while still bounding the wait if something is
 	// truly wedged.
-	if blockedByBriefHold(err) {
-		deadline := time.Now().Add(1 * time.Second)
-		for err != nil && time.Now().Before(deadline) && blockedByBriefHold(err) {
+	if wait := briefHoldWaitBudget(err); wait > 0 {
+		deadline := time.Now().Add(wait)
+		for err != nil && time.Now().Before(deadline) && briefHoldWaitBudget(err) > 0 {
 			time.Sleep(100 * time.Microsecond)
 			conn, err = tp.scp.GetAndLock(connID, reason)
 		}
@@ -235,16 +255,26 @@ func (tp *TxPool) GetAndLock(connID tx.ConnID, reason string) (*StatefulConnecti
 	return conn, nil
 }
 
-// blockedByBriefHold reports whether err is the pool's in-use error for a
-// holder that is guaranteed to release quickly: a keepalive touch (CPU-only,
-// microseconds) or a temp-table activity refresh (one trivial statement round
-// trip). Any other holder — a real client query — fails fast as before.
-func blockedByBriefHold(err error) bool {
+// briefHoldWaitBudget returns how long a caller should wait out the holder
+// named in the pool's in-use error, or zero for holders that are not
+// guaranteed to release quickly (a real client query fails fast as before).
+// A keepalive touch is CPU-only — microseconds — so one second is already
+// generous. An activity refresh runs one trivial statement bounded by its own
+// one-second context (tempTableActivityRefreshTimeout); waiting twice that
+// guarantees the foreground command outwaits any refresh rather than
+// returning an in-use error to the client.
+func briefHoldWaitBudget(err error) time.Duration {
 	if err == nil || !errors.Is(err, pools.ErrInUse) {
-		return false
+		return 0
 	}
 	msg := err.Error()
-	return strings.Contains(msg, reservedKeepAlivePurpose) || strings.Contains(msg, reservedActivityRefreshPurpose)
+	switch {
+	case strings.Contains(msg, reservedKeepAlivePurpose):
+		return 1 * time.Second
+	case strings.Contains(msg, reservedActivityRefreshPurpose):
+		return 2 * time.Second
+	}
+	return 0
 }
 
 // KeepAliveReserved refreshes the idle timers of a reserved connection
@@ -583,9 +613,24 @@ func (tp *TxPool) txComplete(conn *StatefulConnection, reason tx.ReleaseReason) 
 	conn.CleanTxState()
 }
 
-func txKillerTimeoutInterval(config *tabletenv.TabletConfig) time.Duration {
-	return smallerTimeout(
+// txKillerTimeoutInterval derives the killer's tick from the shortest enabled
+// timeout it enforces: the OLTP and OLAP transaction timeouts plus the
+// temp-table idle timeout — the explicit flag value, or in auto mode the
+// published mysqld wait_timeout (autoWaitTimeout, zero until the first
+// successful read). Without the temp-table term, disabling both transaction
+// timeouts would leave the timer dormant and the temp-table timeout with no
+// reaper at all.
+func txKillerTimeoutInterval(config *tabletenv.TabletConfig, autoWaitTimeout time.Duration) time.Duration {
+	shortest := smallerTimeout(
 		config.TxTimeoutForWorkload(querypb.ExecuteOptions_OLAP),
 		config.TxTimeoutForWorkload(querypb.ExecuteOptions_OLTP),
-	) / 10
+	)
+	tempTableIdle := config.TempTableIdleTimeout
+	if tempTableIdle < 0 {
+		tempTableIdle = autoWaitTimeout
+	}
+	if tempTableIdle > 0 {
+		shortest = smallerTimeout(shortest, tempTableIdle)
+	}
+	return shortest / 10
 }

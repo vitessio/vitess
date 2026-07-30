@@ -436,6 +436,20 @@ func TestTempTable(t *testing.T) {
 	qr, err = gsession.Execute(ctx, `select id from grpc_temp_t order by id`, nil, false)
 	require.NoError(t, err, "a gRPC session's temp table must survive idling past the tablet transaction timeout")
 	require.Len(t, qr.Rows, 3, "the temp table's rows must survive the idle window")
+
+	// Temporary-table DDL gets no implicit commit in MySQL: inside an open
+	// transaction it must neither commit the transaction nor be rejected, and
+	// the temporary table — unlike the transaction's row changes, which are
+	// transactional even for InnoDB temp tables — survives the ROLLBACK.
+	before := utils.Exec(t, conn1, `select count(*) from allDefaults`)
+	utils.Exec(t, conn1, `begin`)
+	utils.Exec(t, conn1, `insert into allDefaults () values ()`)
+	utils.Exec(t, conn1, `create temporary table temp_trx_t(id bigint primary key)`)
+	utils.Exec(t, conn1, `insert into temp_trx_t(id) values (1)`)
+	utils.Exec(t, conn1, `rollback`)
+	utils.AssertMatches(t, conn1, `select count(*) from allDefaults`, fmt.Sprintf("%v", before.Rows))
+	utils.AssertMatches(t, conn1, `select count(*) from temp_trx_t`, `[[INT64(0)]]`)
+	utils.Exec(t, conn1, `drop temporary table temp_trx_t`)
 }
 
 func TestReservedConnDML(t *testing.T) {

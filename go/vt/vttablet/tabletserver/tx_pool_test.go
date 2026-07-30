@@ -1015,9 +1015,16 @@ func TestTxPoolGetAndLockWaitsOutKeepAlive(t *testing.T) {
 	got.Unlock()
 
 	// A temp-table activity refresh holds the connection for one trivial
-	// statement round trip; a colliding caller waits that out too.
+	// statement round trip; a colliding caller waits that out too — with a
+	// budget above the refresh's own context deadline, so the foreground
+	// command outwaits any refresh instead of failing.
 	held, err = txPool.scp.GetAndLock(id, reservedActivityRefreshPurpose)
 	require.NoError(t, err)
+	_, inUseErr := txPool.scp.GetAndLock(id, "probe")
+	require.Equal(t, 2*time.Second, briefHoldWaitBudget(inUseErr),
+		"an activity-refresh hold must be waited out past the refresh's 1s context bound")
+	require.Greater(t, briefHoldWaitBudget(inUseErr), tempTableActivityRefreshWaitProbe,
+		"the foreground wait budget must exceed the refresh's own deadline")
 	go func() {
 		time.Sleep(20 * time.Millisecond)
 		held.Unlock()
@@ -1031,7 +1038,63 @@ func TestTxPoolGetAndLockWaitsOutKeepAlive(t *testing.T) {
 	require.NoError(t, err)
 	_, err = txPool.GetAndLock(id, "for another query")
 	require.ErrorContains(t, err, "in use: for query")
+	require.Zero(t, briefHoldWaitBudget(err), "a client-query hold gets no wait budget")
 	held.Release(tx.ConnRelease)
+}
+
+// tempTableActivityRefreshWaitProbe mirrors the vtgate-side refresh context
+// bound (temp_table_refresh.go); the wait budget must stay above it.
+const tempTableActivityRefreshWaitProbe = 1 * time.Second
+
+// TestTxKillerTimeoutInterval pins the killer's tick derivation: the shortest
+// enabled timeout it enforces, including the temp-table idle timeout —
+// explicit or auto-published — so disabling both transaction timeouts does
+// not leave temp-table reservations without a reaper.
+func TestTxKillerTimeoutInterval(t *testing.T) {
+	cases := []struct {
+		name            string
+		oltp, olap      time.Duration
+		tempIdle        time.Duration
+		autoWaitTimeout time.Duration
+		want            time.Duration
+	}{
+		{name: "tx timeouts only", oltp: 30 * time.Second, olap: 30 * time.Second, tempIdle: 0, want: 3 * time.Second},
+		{name: "explicit temp idle with tx timeouts disabled", tempIdle: 100 * time.Second, want: 10 * time.Second},
+		{name: "auto temp idle with tx timeouts disabled", tempIdle: -1, autoWaitTimeout: 28800 * time.Second, want: 2880 * time.Second},
+		{name: "auto unknown keeps timer dormant", tempIdle: -1, want: 0},
+		{name: "everything disabled", tempIdle: 0, want: 0},
+		{name: "shorter temp idle tightens the tick", oltp: 30 * time.Second, olap: 30 * time.Second, tempIdle: 10 * time.Second, want: time.Second},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := tabletenv.NewDefaultConfig()
+			cfg.Oltp.TxTimeout = tc.oltp
+			cfg.Olap.TxTimeout = tc.olap
+			cfg.TempTableIdleTimeout = tc.tempIdle
+			assert.Equal(t, tc.want, txKillerTimeoutInterval(cfg, tc.autoWaitTimeout))
+		})
+	}
+}
+
+// TestTxPoolSetMysqlWaitTimeoutRetimesKiller verifies the auto-mode publisher
+// wakes a dormant killer (both transaction timeouts disabled) and tightens a
+// slower one, but never loosens the tick.
+func TestTxPoolSetMysqlWaitTimeoutRetimesKiller(t *testing.T) {
+	env := newEnv("TabletServerTest")
+	env.Config().Oltp.TxTimeout = 0
+	env.Config().Olap.TxTimeout = 0
+	env.Config().TempTableIdleTimeout = -1
+	txPool, _ := newTxPoolWithEnv(env)
+	require.Zero(t, txPool.ticks.Interval(), "with everything disabled the killer starts dormant")
+
+	txPool.SetMysqlWaitTimeout(600 * time.Second)
+	require.Equal(t, 60*time.Second, txPool.ticks.Interval(), "the auto publish must wake the dormant killer")
+
+	txPool.SetMysqlWaitTimeout(6000 * time.Second)
+	require.Equal(t, 60*time.Second, txPool.ticks.Interval(), "a raised wait_timeout must not loosen the tick")
+
+	txPool.SetMysqlWaitTimeout(60 * time.Second)
+	require.Equal(t, 6*time.Second, txPool.ticks.Interval(), "a lowered wait_timeout must tighten the tick")
 }
 
 // TestTxPoolBeginWaitsOutKeepAlive verifies that starting a transaction on a
@@ -1090,6 +1153,7 @@ func TestTempTableIdleTimeoutTimerSelection(t *testing.T) {
 		marked      bool          // holdsTempTables
 		managed     bool          // keepAliveManaged
 		inTx        bool
+		captured    time.Duration // @@session.wait_timeout captured on the conn
 		want        time.Duration
 	}{
 		{name: "flag off, unmarked", flag: 0, want: txTimeout},
@@ -1108,12 +1172,19 @@ func TestTempTableIdleTimeoutTimerSelection(t *testing.T) {
 		{name: "auto, marked managed", flag: -1, waitTimeout: 8 * time.Hour, marked: true, managed: true, want: txTimeout},
 		{name: "auto, marked unmanaged in tx", flag: -1, waitTimeout: 8 * time.Hour, marked: true, inTx: true, want: txTimeout},
 		{name: "auto with unknown wait_timeout is disabled", flag: -1, waitTimeout: 0, marked: true, want: txTimeout},
+		// The connection's captured @@session.wait_timeout is the deadline
+		// mysqld actually enforces, so auto prefers it over the global mirror
+		// and keeps it stable across a runtime SET GLOBAL.
+		{name: "auto prefers the captured session value", flag: -1, waitTimeout: 8 * time.Hour, captured: 111 * time.Second, marked: true, want: 111 * time.Second},
+		{name: "auto keeps the captured value when the global changes", flag: -1, waitTimeout: 600 * time.Second, captured: 111 * time.Second, marked: true, want: 111 * time.Second},
+		{name: "explicit ignores the captured session value", flag: 5 * time.Minute, captured: 111 * time.Second, marked: true, want: 5 * time.Minute},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			env.Config().TempTableIdleTimeout = tc.flag
 			txPool.scp.SetMysqlWaitTimeout(tc.waitTimeout)
 			conn.holdsTempTables = tc.marked
+			conn.sessionWaitTimeout = tc.captured
 			conn.keepAliveManaged = tc.managed
 			if tc.inTx {
 				conn.txProps = &tx.Properties{}

@@ -120,4 +120,107 @@ func TestTempTableActivityRefresh(t *testing.T) {
 	})
 	require.Len(t, r.dueTargets(sameIDOtherTablet), 1,
 		"the same reserved id on a different tablet must not be suppressed by the rate limiter")
+
+	// A non-positive heartbeat interval disables the activity fanout too: the
+	// rate limiter could not suppress anything, so every query would launch a
+	// refresh per reservation.
+	origInterval := tempTableHeartbeatTime
+	tempTableHeartbeatTime = 0
+	require.Empty(t, r.dueTargets(newSession(45, 0)), "a zero interval must disable the activity fanout")
+	tempTableHeartbeatTime = origInterval
+
+	// Shard sessions arrive in the client-roundtripped session, so one
+	// command's fanout is capped; entries beyond the cap are not stamped and
+	// refresh progressively on later activity.
+	fresh := newTempTableActivityRefresher(nil)
+	wide := &vtgatepb.Session{
+		Autocommit:   true,
+		TargetString: "@primary",
+		Options:      &querypb.ExecuteOptions{HasCreatedTempTables: true},
+	}
+	for i := range tempTableRefreshMaxPerCommand + 10 {
+		wide.ShardSessions = append(wide.ShardSessions, &vtgatepb.Session_ShardSession{
+			Target: &querypb.Target{
+				Keyspace:   lookupTablet.Keyspace,
+				Shard:      lookupTablet.Shard,
+				TabletType: lookupTablet.Type,
+			},
+			TabletAlias: lookupTablet.Alias,
+			ReservedId:  int64(1000 + i),
+		})
+	}
+	wideSession := econtext.NewSafeSession(wide)
+	require.Len(t, fresh.dueTargets(wideSession), tempTableRefreshMaxPerCommand,
+		"one command's fanout must be capped")
+	require.NotEmpty(t, fresh.dueTargets(wideSession),
+		"entries beyond the cap must not be stamped, so later activity picks them up")
+
+	// The global in-flight bound skips launches and un-stamps the skipped
+	// targets so the next activity retries them.
+	bounded := newTempTableActivityRefresher(nil)
+	bounded.inFlight.Store(tempTableRefreshMaxInFlight)
+	boundedSession := econtext.NewSafeSession(&vtgatepb.Session{
+		Autocommit:   true,
+		TargetString: "@primary",
+		Options:      &querypb.ExecuteOptions{HasCreatedTempTables: true},
+		ShardSessions: []*vtgatepb.Session_ShardSession{{
+			Target: &querypb.Target{
+				Keyspace:   lookupTablet.Keyspace,
+				Shard:      lookupTablet.Shard,
+				TabletType: lookupTablet.Type,
+			},
+			TabletAlias: lookupTablet.Alias,
+			ReservedId:  4242,
+		}},
+	})
+	bounded.onSessionActivity(ctx, boundedSession)
+	require.EqualValues(t, tempTableRefreshMaxInFlight, bounded.inFlight.Load(),
+		"no refresh may launch beyond the in-flight bound")
+	require.Len(t, bounded.dueTargets(boundedSession), 1,
+		"a target skipped at the in-flight bound must be un-stamped so the next activity retries it")
+}
+
+// TestTempTableCommandLease verifies the command-scoped lease: an immediate
+// refresh when the command starts, and a settling refresh when it stops —
+// which also covers a session whose first temp table was created by the
+// command itself. stop is idempotent.
+func TestTempTableCommandLease(t *testing.T) {
+	executor, _, _, sbclookup, ctx := createExecutorEnv(t)
+	sbclookup.RequireQueriesLocking()
+	lookupTablet := sbclookup.Tablet()
+
+	session := econtext.NewSafeSession(&vtgatepb.Session{
+		Autocommit:   true,
+		TargetString: "@primary",
+		Options:      &querypb.ExecuteOptions{HasCreatedTempTables: true},
+		ShardSessions: []*vtgatepb.Session_ShardSession{{
+			Target: &querypb.Target{
+				Keyspace:   lookupTablet.Keyspace,
+				Shard:      lookupTablet.Shard,
+				TabletType: lookupTablet.Type,
+			},
+			TabletAlias: lookupTablet.Alias,
+			ReservedId:  77,
+		}},
+	})
+
+	r := executor.tempTableRefresher
+	stop := r.commandLease(ctx, session)
+	refreshed := func() bool {
+		for _, q := range sbclookup.GetQueries() {
+			if q.Sql == tempTableActivityRefreshQuery {
+				return true
+			}
+		}
+		return false
+	}
+	assert.Eventually(t, refreshed, 30*time.Second, 10*time.Millisecond,
+		"the lease must fire an immediate refresh at command start")
+	stop()
+	stop() // idempotent
+
+	// A session without temp tables leases as a no-op.
+	noTemp := econtext.NewSafeSession(&vtgatepb.Session{Autocommit: true, TargetString: "@primary"})
+	stopNoop := r.commandLease(ctx, noTemp)
+	stopNoop()
 }

@@ -271,6 +271,12 @@ func (e *Executor) Execute(
 	defer span.Finish()
 
 	logStats := logstats.NewLogStats(ctx, method, sql, safeSession.GetSessionUUID(), bindVars, streamlog.GetQueryLogConfig())
+	// The command is real activity on this session: lease refreshes for the
+	// session's idle temp-table reserved connections for as long as it runs
+	// (a long query or stream on one shard must not let another shard's
+	// reservation idle out), with a settling refresh when it completes.
+	stopLease := e.tempTableRefresher.commandLease(ctx, safeSession)
+	defer stopLease()
 	stmtType, result, err := e.execute(ctx, mysqlCtx, safeSession, sql, bindVars, prepared, logStats)
 	logStats.Error = err
 	if result == nil {
@@ -296,10 +302,6 @@ func (e *Executor) Execute(
 
 	err = errorTransform.TransformError(err)
 	err = vterrors.TruncateError(err, truncateErrorLen)
-
-	// The command was real activity on this session: fan it out to the
-	// session's idle temp-table reserved connections (fire-and-forget).
-	e.tempTableRefresher.onSessionActivity(ctx, safeSession)
 
 	return result, err
 }
@@ -338,6 +340,10 @@ func (e *Executor) StreamExecute(
 	defer span.Finish()
 
 	logStats := logstats.NewLogStats(ctx, method, sql, safeSession.GetSessionUUID(), bindVars, streamlog.GetQueryLogConfig())
+	// See Execute: the lease keeps the session's idle temp-table reserved
+	// connections refreshed for the whole life of the stream.
+	stopLease := e.tempTableRefresher.commandLease(ctx, safeSession)
+	defer stopLease()
 	srr := &streaminResultReceiver{callback: callback}
 	var err error
 
@@ -454,10 +460,6 @@ func (e *Executor) StreamExecute(
 
 	err = errorTransform.TransformError(err)
 	err = vterrors.TruncateError(err, truncateErrorLen)
-
-	// The command was real activity on this session: fan it out to the
-	// session's idle temp-table reserved connections (fire-and-forget).
-	e.tempTableRefresher.onSessionActivity(ctx, safeSession)
 
 	return err
 }

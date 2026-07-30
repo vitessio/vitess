@@ -985,16 +985,19 @@ func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (result *sqltypes.Re
 		defer conn.Release(tx.ConnRelease)
 	}
 
-	// A DDL statement should commit the current transaction in the VTGate.
-	// The change was made in PR: https://github.com/vitessio/vitess/pull/14110 in v18.
-	// DDL statement received by vttablet will be outside of a transaction.
-	if conn.txProps != nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "DDL statement executed inside a transaction")
-	}
-
 	isTemporaryTable := false
 	if ddlStmt, ok := qre.plan.FullStmt.(sqlparser.DDLStatement); ok {
 		isTemporaryTable = ddlStmt.IsTemporary()
+	}
+
+	// A DDL statement should commit the current transaction in the VTGate.
+	// The change was made in PR: https://github.com/vitessio/vitess/pull/14110 in v18.
+	// DDL statement received by vttablet will be outside of a transaction.
+	// Temporary-table DDL is the exception: MySQL gives it no implicit
+	// commit, and vtgate deliberately preserves the open transaction for it,
+	// so it runs on the transaction's connection like any other statement.
+	if conn.txProps != nil && !isTemporaryTable {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "DDL statement executed inside a transaction")
 	}
 	if !isTemporaryTable {
 		// Temporary tables are limited to the session creating them. There is no need to Reload()
@@ -1031,8 +1034,30 @@ func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (result *sqltypes.Re
 		// The session holds temporary-table state on this connection, so the
 		// temp-table idle timeout may govern its reclamation.
 		conn.markHoldsTempTables()
+		qre.captureSessionWaitTimeout(conn)
 	}
 	return result, nil
+}
+
+// captureSessionWaitTimeout records the connection's own
+// @@session.wait_timeout for the temp-table idle timeout's auto mode: it is
+// the deadline mysqld actually enforces on this connection, fixed when the
+// connection's thread started, unlike the pool's global mirror which follows
+// runtime SET GLOBAL changes. Best-effort: on any failure the connection
+// falls back to the global mirror.
+func (qre *QueryExecutor) captureSessionWaitTimeout(conn *StatefulConnection) {
+	if qre.tsv.config.TempTableIdleTimeout >= 0 {
+		return
+	}
+	qr, err := conn.Exec(qre.ctx, "select @@session.wait_timeout", 1, false, false /* keepConnOnTimeout */)
+	if err != nil || len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
+		return
+	}
+	seconds, err := qr.Rows[0][0].ToCastInt64()
+	if err != nil || seconds <= 0 {
+		return
+	}
+	conn.captureSessionWaitTimeout(time.Duration(seconds) * time.Second)
 }
 
 // checkCreateTableLimit rejects a CREATE TABLE/VIEW that would exceed the

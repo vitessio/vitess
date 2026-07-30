@@ -43,12 +43,29 @@ import (
 // exactly as MySQL would.
 const tempTableActivityRefreshQuery = "/* temp-table activity refresh */ select 1"
 
-// tempTableActivityRefreshTimeout bounds one background fanout.
-const tempTableActivityRefreshTimeout = 10 * time.Second
+// tempTableActivityRefreshTimeout bounds one background refresh — a single
+// trivial statement on one reserved connection. It is deliberately shorter
+// than the foreground wait-out deadline in TxPool.GetAndLock, so a foreground
+// command that collides with a refresh always outwaits it rather than
+// returning an in-use error to the client.
+const tempTableActivityRefreshTimeout = 1 * time.Second
 
 // tempTableRefreshPruneEvery bounds how many distinct reserved connections are
 // tracked between cleanups of entries whose connections are gone.
 const tempTableRefreshPruneEvery = 4096
+
+// tempTableRefreshMaxPerCommand caps how many reserved connections one command
+// can schedule refreshes for. Shard sessions arrive in the client-roundtripped
+// session, so their count is client-controlled; without a cap a hostile
+// session with tens of thousands of entries would fan a goroutine and RPC out
+// for each. Entries beyond the cap are not stamped, so a legitimate very-wide
+// session still refreshes progressively across its subsequent commands.
+const tempTableRefreshMaxPerCommand = 256
+
+// tempTableRefreshMaxInFlight bounds refresh goroutines across all sessions.
+// A target skipped at the bound has its rate-limiter stamp removed so the next
+// activity retries it.
+const tempTableRefreshMaxInFlight = 256
 
 type (
 	// tempTableActivityRefresher fans real session activity out to the
@@ -74,6 +91,10 @@ type (
 		// amortized batches.
 		lastRefresh       sync.Map // tempTableRefreshKey -> int64 (unix nanos)
 		insertsSincePrune atomic.Int64
+
+		// inFlight counts running refresh goroutines, enforcing
+		// tempTableRefreshMaxInFlight across all sessions.
+		inFlight atomic.Int64
 	}
 
 	// tempTableRefreshKey identifies one reserved connection across tablets.
@@ -87,6 +108,7 @@ type (
 		target     *querypb.Target
 		alias      *topodatapb.TabletAlias
 		reservedID int64
+		key        tempTableRefreshKey
 	}
 )
 
@@ -109,14 +131,22 @@ func (r *tempTableActivityRefresher) onSessionActivity(ctx context.Context, sess
 	}
 	// Each target refreshes independently with its own timeout, so one slow
 	// or unreachable tablet cannot starve the others' refreshes. Concurrency
-	// is naturally bounded by the session's shard-session count. The refresh
-	// must survive the request that triggered it: context.WithoutCancel
-	// keeps the caller id and tracing values while detaching from the
-	// request's cancellation.
+	// is bounded per command by the dueTargets cap and globally by
+	// tempTableRefreshMaxInFlight; a target skipped at the global bound has
+	// its stamp removed so the next activity retries it. The refresh must
+	// survive the request that triggered it: context.WithoutCancel keeps the
+	// caller id and tracing values while detaching from the request's
+	// cancellation.
 	detached := context.WithoutCancel(ctx)
 	for _, t := range targets {
+		if r.inFlight.Add(1) > tempTableRefreshMaxInFlight {
+			r.inFlight.Add(-1)
+			r.lastRefresh.Delete(t.key)
+			continue
+		}
 		rctx, cancel := context.WithTimeout(detached, tempTableActivityRefreshTimeout)
 		go func(t tempTableRefreshTarget) {
+			defer r.inFlight.Add(-1)
 			defer cancel()
 			r.refresh(rctx, t)
 		}(t)
@@ -133,11 +163,23 @@ func (r *tempTableActivityRefresher) dueTargets(session *econtext.SafeSession) [
 	if !session.GetOptions().GetHasCreatedTempTables() {
 		return nil
 	}
+	// A non-positive interval disables vtgate's temp-table keepalive
+	// machinery entirely — the background sweeper and this activity fanout
+	// alike (without an interval the rate limiter could not suppress
+	// anything, and every query would launch a refresh per reservation).
+	// The tablet-side idle timeout is unaffected.
 	interval := tempTableHeartbeatTime
+	if interval <= 0 {
+		return nil
+	}
 	now := time.Now().UnixNano()
 	var due []tempTableRefreshTarget
 	for _, ss := range session.ShardSessionsForCleanup() {
-		if ss.GetReservedId() == 0 || ss.GetTransactionId() != 0 {
+		if len(due) >= tempTableRefreshMaxPerCommand {
+			break
+		}
+		if ss.GetReservedId() == 0 || ss.GetTransactionId() != 0 ||
+			ss.GetTarget() == nil || ss.GetTabletAlias() == nil {
 			continue
 		}
 		key := tempTableRefreshKey{
@@ -157,9 +199,53 @@ func (r *tempTableActivityRefresher) dueTargets(session *econtext.SafeSession) [
 			target:     ss.GetTarget(),
 			alias:      ss.GetTabletAlias(),
 			reservedID: ss.GetReservedId(),
+			key:        key,
 		})
 	}
 	return due
+}
+
+// commandLease covers one client command with activity refreshes: one at the
+// start, one per interval while the command runs, and one when it settles. A
+// start-or-end-only refresh leaves a gap Graham pointed out: a query or
+// stream running on shard B for longer than shard A's idle timeout would let
+// A's temp table expire mid-command even though the session is visibly
+// active. The rate limiter dedupes the start/tick/end calls, so a short
+// command still costs at most one refresh per connection. The returned stop
+// is idempotent and fires the settling refresh, which also covers a session
+// whose first temporary table was created by this very command.
+func (r *tempTableActivityRefresher) commandLease(ctx context.Context, session *econtext.SafeSession) func() {
+	if r == nil || session == nil {
+		return func() {}
+	}
+	r.onSessionActivity(ctx, session)
+	var done chan struct{}
+	if interval := tempTableHeartbeatTime; interval > 0 && session.GetOptions().GetHasCreatedTempTables() {
+		done = make(chan struct{})
+		go func() {
+			ticker := time.NewTicker(interval)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ticker.C:
+					r.onSessionActivity(ctx, session)
+				case <-done:
+					return
+				case <-ctx.Done():
+					return
+				}
+			}
+		}()
+	}
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			if done != nil {
+				close(done)
+			}
+			r.onSessionActivity(ctx, session)
+		})
+	}
 }
 
 // refresh runs the ordinary refresh statement on one reserved connection,

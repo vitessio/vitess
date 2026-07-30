@@ -204,7 +204,7 @@ func NewTabletServer(ctx context.Context, env *vtenv.Environment, name string, c
 	// The temp-table idle timeout's auto mode mirrors this mysqld's
 	// wait_timeout: the query engine reads it (dba pool, schema-reload
 	// cadence) and the stateful pool's connection killer consumes it.
-	tsv.qe.publishMysqlWaitTimeout = tsv.te.txPool.scp.SetMysqlWaitTimeout
+	tsv.qe.publishMysqlWaitTimeout = tsv.te.txPool.SetMysqlWaitTimeout
 	tsv.messager = messager.NewEngine(tsv, tsv.se, tsv.vstreamer)
 
 	tsv.tableGC = gc.NewTableGC(tsv, topoServer, tsv.lagThrottler)

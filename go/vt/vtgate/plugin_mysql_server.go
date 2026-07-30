@@ -470,6 +470,13 @@ func (vh *vtgateHandler) snapshotTempTableRoute(route string) []tempTableBeatIte
 // broad outage produces.
 const tempTableFailingBeatConcurrency = 32
 
+// tempTableFailingBeatRecheckInterval is how often a beat queued for the
+// failing lane re-checks the tablet's healthcheck state while it waits for a
+// slot: a tablet that recovers behind a full backlog is promoted to the
+// healthy path instead of staying stuck until the still-failing routes ahead
+// of it burn their beat budgets.
+const tempTableFailingBeatRecheckInterval = 1 * time.Second
+
 // failingBeatSem returns the semaphore that bounds concurrent beats to failing
 // tablets, creating it on first use so a zero-value handler works.
 func (vh *vtgateHandler) failingBeatSem() chan struct{} {
@@ -548,13 +555,31 @@ func (vh *vtgateHandler) dispatchTempTableBeats(ctx context.Context) *sync.WaitG
 				// outage has already eaten into the tablet timeout. In-flight
 				// suppression keeps this to one queued beat per tablet, so the
 				// backlog is bounded by the number of failing tablets, not growing.
+				// While queued, periodically re-check the healthcheck: the
+				// serving check before queueing is a one-shot, and this
+				// goroutine holds the route's in-flight marker, so later
+				// sweeps cannot reconsider a tablet that recovered while it
+				// waited. A tablet the healthcheck sees serving again is
+				// promoted out of the queue (no slot taken — the blockers
+				// keep theirs) and beaten immediately on the healthy path.
 				sem := vh.failingBeatSem()
-				select {
-				case sem <- struct{}{}:
-					defer func() { <-sem }()
-				case <-ctx.Done():
-					return
+				recheck := time.NewTicker(tempTableFailingBeatRecheckInterval)
+			laneWait:
+				for {
+					select {
+					case sem <- struct{}{}:
+						defer func() { <-sem }()
+						break laneWait
+					case <-recheck.C:
+						if vh.vtg != nil && vh.vtg.gw != nil && vh.vtg.gw.TabletSeemsServing(items[0].target.alias) {
+							break laneWait
+						}
+					case <-ctx.Done():
+						recheck.Stop()
+						return
+					}
 				}
+				recheck.Stop()
 				// Re-snapshot after the wait: a reservation added to this route
 				// while it was queued is missed by the pre-wait snapshot, and
 				// in-flight suppression kept the next sweep from picking it up, so

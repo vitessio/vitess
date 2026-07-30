@@ -61,6 +61,15 @@ type StatefulConnection struct {
 	// refreshes the connection. Both are sticky by design.
 	holdsTempTables  bool
 	keepAliveManaged bool
+
+	// sessionWaitTimeout is this connection's own @@session.wait_timeout,
+	// captured when its first temporary-table DDL runs. mysqld fixed the
+	// session value when the connection's thread started, so it — not the
+	// current global — is the deadline mysqld actually enforces on this
+	// connection. Zero until captured (fall back to the pool's global
+	// mirror). Written under the same exclusive-execution discipline as the
+	// marks above.
+	sessionWaitTimeout time.Duration
 }
 
 // Properties contains meta information about the connection
@@ -122,25 +131,34 @@ func (sc *StatefulConnection) usesTempTableIdleTimeout() bool {
 
 // tempTableIdleTimeout resolves --queryserver-config-temp-table-idle-timeout:
 // 0 disables the feature, a positive value is used as-is, and a negative
-// value (auto, the default) mirrors this mysqld's @@global.wait_timeout —
-// zero, and therefore disabled, until a read of it succeeds.
-// The auto value tracks @@global.wait_timeout, while each MySQL connection
-// enforces the @@session value it captured when its thread started — the two
-// can diverge after a runtime SET GLOBAL. Tracking the global is safe in both
-// directions: if the global drops below a connection's session value the
-// tablet reclaims earlier than mysqld would (conservative), and if it rises
-// above, mysqld reclaims first and the tablet discovers the dead connection
-// through the existing connection-closed paths. Per-connection capture would
-// add bookkeeping without changing either outcome.
+// value (auto, the default) mirrors mysqld's wait_timeout. Auto prefers the
+// connection's own captured @@session.wait_timeout — mysqld fixed that value
+// when the connection's thread started, and it is the deadline mysqld
+// actually enforces, so a later SET GLOBAL neither reclaims this
+// connection's temp tables early (global lowered) nor leaves a socket mysqld
+// already closed at its older, shorter deadline occupying the stateful pool
+// until a longer new one (global raised). Before the first temporary-table
+// DDL captures the session value, the pool's global mirror — zero, and
+// therefore disabled, until a read of it succeeds — is the fallback.
 func (sc *StatefulConnection) tempTableIdleTimeout() time.Duration {
 	configured := sc.env.Config().TempTableIdleTimeout
 	switch {
 	case configured >= 0:
 		return configured
+	case sc.sessionWaitTimeout > 0:
+		return sc.sessionWaitTimeout
 	case sc.pool == nil:
 		return 0
 	default:
 		return sc.pool.MysqlWaitTimeout()
+	}
+}
+
+// captureSessionWaitTimeout records the connection's own
+// @@session.wait_timeout for auto mode, once; see tempTableIdleTimeout.
+func (sc *StatefulConnection) captureSessionWaitTimeout(waitTimeout time.Duration) {
+	if sc.sessionWaitTimeout == 0 && waitTimeout > 0 {
+		sc.sessionWaitTimeout = waitTimeout
 	}
 }
 

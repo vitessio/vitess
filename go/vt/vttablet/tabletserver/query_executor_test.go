@@ -236,6 +236,19 @@ func TestQueryExecutorPlans(t *testing.T) {
 			onlyInTxErr: true,
 			errorWant:   "DDL statement executed inside a transaction",
 		}, {
+			// Temporary-table DDL gets no implicit commit in MySQL, so unlike
+			// ordinary DDL it is allowed inside an open transaction and runs
+			// on the transaction's connection.
+			input: "create temporary table temp_t(id bigint)",
+			dbResponses: []dbResponse{{
+				query:  "create temporary table temp_t (\n\tid bigint\n)",
+				result: emptyResult,
+			}},
+			resultWant: emptyResult,
+			planWant:   "DDL",
+			logWant:    "create temporary table temp_t (\n\tid bigint\n)",
+			inTxWant:   "create temporary table temp_t (\n\tid bigint\n)",
+		}, {
 			input: "savepoint a",
 			dbResponses: []dbResponse{{
 				query:  "savepoint a",

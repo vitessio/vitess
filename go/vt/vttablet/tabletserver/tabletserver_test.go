@@ -2408,12 +2408,20 @@ func TestReserveExecute_WithoutTx(t *testing.T) {
 	// stale mark only costs a longer idle grace).
 	db.AddQueryPattern("create temporary table .*", &sqltypes.Result{})
 	db.AddQueryPattern("drop temporary table .*", &sqltypes.Result{})
+	db.AddQuery("select @@session.wait_timeout", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("@@session.wait_timeout", "int64"),
+		"12345",
+	))
 	_, err = tsv.Execute(ctx, nil, &target, "create temporary table temp_t(id int)", nil, 0, state.ReservedID, nil)
 	require.NoError(t, err)
 	conn, err := tsv.te.txPool.GetAndLock(state.ReservedID, "for test")
 	require.NoError(t, err)
 	assert.True(t, conn.holdsTempTables, "a temp-table DDL must mark the connection")
 	assert.False(t, conn.keepAliveManaged)
+	// Auto mode captures the connection's own @@session.wait_timeout — the
+	// deadline mysqld actually enforces on it — when the first temp DDL runs.
+	assert.Equal(t, 12345*time.Second, conn.sessionWaitTimeout,
+		"the first temp-table DDL must capture the connection's session wait_timeout")
 	conn.Unlock()
 	assert.EqualValues(t, 1, tsv.te.txPool.scp.tempTableUnmanaged.Load(), "the marked, unmanaged connection must be on the gauge")
 
