@@ -313,3 +313,7 @@ func (c Charset_gb18030) SupportsSupplementaryChars() bool {
 func (Charset_gb18030) MaxWidth() int {
 	return 4
 }
+
+func (Charset_gb18030) MinWidth() int {
+	return 1
+}

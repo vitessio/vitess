@@ -146,15 +146,14 @@ func newUnicodeWildcardMatcher(
 	// for example sjis 81 5F and 5C both decode to the backslash; MySQL
 	// compares the metacharacters in the pattern's own encoding, so the
 	// multibyte form is an ordinary character.
-	var enc [4]byte
-	asciiWidth := cs.EncodeRune(enc[:], 'A')
 	metaWidth := func(ch rune) int {
 		if ch >= utf8.RuneSelf {
+			var enc [4]byte
 			if w := cs.EncodeRune(enc[:], ch); w > 0 {
 				return w
 			}
 		}
-		return asciiWidth
+		return cs.MinWidth()
 	}
 	chOneWidth, chManyWidth, chEscWidth := metaWidth(chOne), metaWidth(chMany), metaWidth(chEsc)
 
@@ -665,15 +664,14 @@ func newMultibyteWildcardMatcher(
 	// A character in the pattern is a wildcard or an escape only when its
 	// encoded width is the width of the metacharacter itself; see
 	// newUnicodeWildcardMatcher.
-	var enc [4]byte
-	asciiWidth := cs.EncodeRune(enc[:], 'A')
 	metaWidth := func(ch rune) int {
 		if ch >= utf8.RuneSelf {
+			var enc [4]byte
 			if w := cs.EncodeRune(enc[:], ch); w > 0 {
 				return w
 			}
 		}
-		return asciiWidth
+		return cs.MinWidth()
 	}
 	chOneWidth, chManyWidth, chEscWidth := metaWidth(chOne), metaWidth(chMany), metaWidth(chEsc)
 
