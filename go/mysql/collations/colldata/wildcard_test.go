@@ -373,6 +373,53 @@ func TestWildcardManyMetacharAsTrailByte(t *testing.T) {
 	require.False(t, pat.Match([]byte("\x81\x5f\x40")))
 }
 
+func TestWildcardTrailingManyFastPath(t *testing.T) {
+	// A pattern with a single trailing match-many builds a prefix
+	// fastMatcher. The strip must remove the full encoded width of the
+	// metacharacter, which is two bytes for utf16.
+	coll := testcollation(t, "utf8mb4_general_ci")
+	m := coll.Wildcard([]byte("abc%"), 0, 0, 0)
+	fm, ok := m.(*fastMatcher)
+	require.True(t, ok)
+	require.True(t, fm.isPrefix)
+	require.Equal(t, []byte("abc"), fm.pattern)
+	require.True(t, m.Match([]byte("abcdef")))
+	require.False(t, m.Match([]byte("abd")))
+
+	coll = testcollation(t, "utf16_bin")
+	m = coll.Wildcard([]byte("\x00a\x00b\x00%"), 0, 0, 0)
+	fm, ok = m.(*fastMatcher)
+	require.True(t, ok)
+	require.True(t, fm.isPrefix)
+	require.Equal(t, []byte("\x00a\x00b"), fm.pattern)
+	require.True(t, m.Match([]byte("\x00a\x00b\x00c")))
+	require.False(t, m.Match([]byte("\x00a\x00c")))
+}
+
+func TestWildcardMatcherCachedSize(t *testing.T) {
+	// A wildcard matcher is retained by cached plans. Its reported size
+	// must cover only matcher-owned memory and never the shared
+	// collation or charset data; sizegen walks non-empty interface
+	// fields, so such a field can pull the collation singletons in.
+	collations := []string{
+		"utf8mb4_0900_ai_ci", "utf8mb4_0900_bin", "utf8mb4_general_ci",
+		"utf8mb4_bin", "utf8mb4_swedish_ci", "latin1_swedish_ci",
+		"sjis_japanese_ci", "utf16_unicode_ci",
+	}
+	for _, collName := range collations {
+		coll := testcollation(t, collName)
+		for _, pat := range []string{"hello", "he%o", "%hello%", "abc%"} {
+			m := coll.Wildcard([]byte(pat), 0, 0, 0)
+			sized, ok := m.(interface{ CachedSize(alloc bool) int64 })
+			if !ok {
+				continue
+			}
+			size := sized.CachedSize(true)
+			require.LessOrEqualf(t, size, int64(1024), "%s wildcard %q reports %d bytes", collName, pat, size)
+		}
+	}
+}
+
 func TestWildcardPatternSpareCapacity(t *testing.T) {
 	// The parsers reserve one token per pattern byte to keep the parse
 	// a single pass. Multibyte characters then leave spare capacity,

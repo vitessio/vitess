@@ -207,10 +207,10 @@ func newUnicodeWildcardMatcher(
 					isPrefix: false,
 				}
 			}
-			if chManyCount == 1 && chMany < utf8.RuneSelf && parsedPattern[len(parsedPattern)-1] == chMany {
+			if chManyCount == 1 && parsedPattern[len(parsedPattern)-1] == patternMatchMany {
 				return &fastMatcher{
 					collate:  collate,
-					pattern:  patOriginal[:len(patOriginal)-1],
+					pattern:  patOriginal[:len(patOriginal)-chManyWidth],
 					isPrefix: true,
 				}
 			}
