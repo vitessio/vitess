@@ -216,6 +216,24 @@ func TestMalformedInput(t *testing.T) {
 	require.Equal(t, []byte{0x41, 0x80}, charset.Slice(ascii, []byte{0x41, 0x80, 0x42}, 0, 2))
 }
 
+func TestWildcardSupplementaryChars(t *testing.T) {
+	for _, name := range []string{"utf8mb4_swedish_ci", "utf8mb4_turkish_ci", "utf8mb4_unicode_ci", "utf8mb4_general_ci"} {
+		coll := testcollation(t, name)
+		require.False(t, coll.Wildcard([]byte("a%"), 0, 0, 0).Match([]byte("😊x")), "%s: '😊x' must not match 'a%%'", name)
+		require.True(t, coll.Wildcard([]byte("😊"), 0, 0, 0).Match([]byte("😊")), "%s: '😊' must match '😊'", name)
+	}
+
+	// The legacy UCA collations weigh distinct supplementary characters as
+	// equal only to themselves, while utf8mb4_general_ci weighs them all as
+	// the replacement character; both verified against MySQL 8.0.
+	for _, name := range []string{"utf8mb4_swedish_ci", "utf8mb4_turkish_ci", "utf8mb4_unicode_ci"} {
+		coll := testcollation(t, name)
+		require.False(t, coll.Wildcard([]byte("%💩%"), 0, 0, 0).Match([]byte("😊")), "%s: '😊' must not match '%%💩%%'", name)
+	}
+	general := testcollation(t, "utf8mb4_general_ci")
+	require.True(t, general.Wildcard([]byte("%💩%"), 0, 0, 0).Match([]byte("😊")), "utf8mb4_general_ci: '😊' must match '%%💩%%'")
+}
+
 func TestIsPrefix(t *testing.T) {
 	collations := []string{
 		"utf8mb4_0900_ai_ci",
