@@ -96,6 +96,11 @@ func (Charset_8bit) Slice(src []byte, from, to int) []byte {
 	return src[from:to]
 }
 
-func (Charset_8bit) Validate(src []byte) bool {
+func (e *Charset_8bit) Validate(src []byte) bool {
+	for _, b := range src {
+		if e.ToUnicode[b] == 0 && b != 0 {
+			return false
+		}
+	}
 	return true
 }

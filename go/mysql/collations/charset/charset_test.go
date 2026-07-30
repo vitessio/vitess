@@ -189,6 +189,8 @@ func TestDecodeRuneValidity(t *testing.T) {
 		{"utf16le unpaired surrogate", Charset_utf16le{}, []byte{0x00, 0xD8}, RuneError, 2, false},
 		{"ucs2 valid RuneError", Charset_ucs2{}, []byte{0xFF, 0xFD}, RuneError, 2, true},
 		{"ucs2 invalid", Charset_ucs2{}, []byte{0x00}, RuneError, 1, false},
+		{"ucs2 high surrogate", Charset_ucs2{}, []byte{0xD8, 0x00}, RuneError, 2, false},
+		{"ucs2 low surrogate", Charset_ucs2{}, []byte{0xDC, 0x00}, RuneError, 2, false},
 		{"utf32 valid RuneError", Charset_utf32{}, []byte{0x00, 0x00, 0xFF, 0xFD}, RuneError, 4, true},
 		{"utf32 invalid", Charset_utf32{}, []byte{0x00}, RuneError, 1, false},
 		{"utf32 surrogate", Charset_utf32{}, []byte{0x00, 0x00, 0xD8, 0x00}, RuneError, 4, false},

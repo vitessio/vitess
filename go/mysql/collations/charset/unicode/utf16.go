@@ -187,7 +187,11 @@ func (Charset_ucs2) DecodeRune(p []byte) (rune, int, bool) {
 	if len(p) < 2 {
 		return utf8.RuneError, len(p), false
 	}
-	return rune(p[0])<<8 | rune(p[1]), 2, true
+	r := rune(p[0])<<8 | rune(p[1])
+	if surr1 <= r && r < surr3 {
+		return utf8.RuneError, 2, false
+	}
+	return r, 2, true
 }
 
 func (Charset_ucs2) SupportsSupplementaryChars() bool {

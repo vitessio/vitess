@@ -206,6 +206,14 @@ func TestMalformedInput(t *testing.T) {
 	out, err = charset.Convert(nil, charset.Charset_utf8mb4{}, []byte{0x41, 0x80, 0x42}, greek)
 	require.NoError(t, err)
 	require.Equal(t, []byte("A\u0080B"), out)
+
+	require.False(t, charset.Validate(ascii, []byte{0x41, 0x80, 0x42}))
+	require.True(t, charset.Validate(ascii, []byte{0x41, 0x00, 0x42}))
+	require.False(t, charset.Validate(greek, []byte{0x41, 0xD2, 0x42}))
+	require.True(t, charset.Validate(greek, []byte{0x41, 0x80, 0x42}))
+
+	require.Equal(t, 3, charset.Length(ascii, []byte{0x41, 0x80, 0x42}))
+	require.Equal(t, []byte{0x41, 0x80}, charset.Slice(ascii, []byte{0x41, 0x80, 0x42}, 0, 2))
 }
 
 func TestIsPrefix(t *testing.T) {
