@@ -444,6 +444,32 @@ func TestWildcardPatternSpareCapacity(t *testing.T) {
 	})
 }
 
+func TestWildcardEightbitFastPath(t *testing.T) {
+	// The literal and the prefix fast paths return before the token
+	// slice exists, so a construction allocates only the matcher and
+	// the collate callback.
+	coll := testcollation(t, "latin1_swedish_ci")
+	for _, tc := range []struct {
+		pat    string
+		prefix bool
+	}{
+		{"hello", false},
+		{"hello%", true},
+	} {
+		m := coll.Wildcard([]byte(tc.pat), 0, 0, 0)
+		fm, ok := m.(*fastMatcher)
+		require.True(t, ok)
+		require.Equal(t, tc.prefix, fm.isPrefix)
+		require.True(t, m.Match([]byte("hello")))
+		require.False(t, m.Match([]byte("hellx")))
+		pat := []byte(tc.pat)
+		allocs := testing.AllocsPerRun(100, func() {
+			_ = coll.Wildcard(pat, 0, 0, 0)
+		})
+		require.LessOrEqualf(t, allocs, 2.0, "pattern %q allocates %v times", tc.pat, allocs)
+	}
+}
+
 func BenchmarkWildcardMatching(b *testing.B) {
 	type bench struct {
 		input []byte

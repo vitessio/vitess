@@ -395,10 +395,7 @@ func newEightbitWildcardMatcher(
 	collate func(left []byte, right []byte, isPrefix bool) int,
 	pat []byte, chOneRune, chManyRune, chEscRune rune,
 ) WildcardPattern {
-	var escape bool
-	parsedPattern := make([]int16, 0, len(pat))
 	var chOne, chMany, chEsc byte = '_', '%', '\\'
-	var chOneCount, chManyCount, chEscCount int
 
 	if chOneRune > 255 || chManyRune > 255 || chEscRune > 255 {
 		return nopMatcher{}
@@ -412,6 +409,34 @@ func newEightbitWildcardMatcher(
 	if chEscRune != 0 {
 		chEsc = byte(chEscRune)
 	}
+
+	// Every character is one byte, so a metacharacter byte in the pattern
+	// is always a metacharacter and the scan is exact: a pattern without
+	// the metacharacter bytes is a literal, and a pattern whose only
+	// metacharacter is a terminal match-many is a prefix.
+	if collate != nil && bytes.IndexByte(pat, chOne) < 0 && bytes.IndexByte(pat, chEsc) < 0 {
+		if len(pat) == 0 {
+			return emptyMatcher{}
+		}
+		switch many := bytes.IndexByte(pat, chMany); {
+		case many < 0:
+			return &fastMatcher{
+				collate:  collate,
+				pattern:  pat,
+				isPrefix: false,
+			}
+		case many == len(pat)-1 && many > 0:
+			return &fastMatcher{
+				collate:  collate,
+				pattern:  pat[:len(pat)-1],
+				isPrefix: true,
+			}
+		}
+	}
+
+	var escape bool
+	parsedPattern := make([]int16, 0, len(pat))
+	var chOneCount, chManyCount, chEscCount int
 
 	for _, ch := range pat {
 		if escape {
