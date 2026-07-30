@@ -23,6 +23,7 @@ import (
 	"io"
 	"os"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -464,11 +465,8 @@ func (tmc *fakeTMClient) GetSchema(ctx context.Context, tablet *topodatapb.Table
 		TableDefinitions: make([]*tabletmanagerdatapb.TableDefinition, 0),
 	}
 	for _, td := range tmc.schema.TableDefinitions {
-		for _, t := range request.Tables {
-			if td.Name == t {
-				filtered.TableDefinitions = append(filtered.TableDefinitions, td)
-				break
-			}
+		if slices.Contains(request.Tables, td.Name) {
+			filtered.TableDefinitions = append(filtered.TableDefinitions, td)
 		}
 	}
 	return filtered, nil

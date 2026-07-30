@@ -17,6 +17,7 @@ limitations under the License.
 package vdiff
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -90,25 +91,30 @@ func TestSourcePKColsOrdering(t *testing.T) {
 			sourceQuery:       "select a, b, c from t order by a asc, b asc",
 			wantSourcePkCols:  []int{0, 1},
 		},
+		{
+			name:              "column swap alias does not shadow real pk",
+			columns:           []string{"a", "b"},
+			primaryKeyColumns: []string{"a"},
+			sourceQuery:       "select b as a, a as b from t order by a asc",
+			wantSourcePkCols:  []int{1},
+		},
+		{
+			name:              "column swap composite pk prefers colname over alias",
+			columns:           []string{"a", "b", "c"},
+			primaryKeyColumns: []string{"a", "b"},
+			sourceQuery:       "select b as a, a as b, c from t order by a asc, b asc",
+			wantSourcePkCols:  []int{1, 0},
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			fieldTypes := ""
-			for i := range tc.columns {
-				if i > 0 {
-					fieldTypes += "|"
-				}
-				fieldTypes += "varbinary"
+			types := make([]string, len(tc.columns))
+			for i := range types {
+				types[i] = "varbinary"
 			}
-
-			fields := ""
-			for i, col := range tc.columns {
-				if i > 0 {
-					fields += "|"
-				}
-				fields += col
-			}
+			fieldTypes := strings.Join(types, "|")
+			fields := strings.Join(tc.columns, "|")
 
 			table := &tabletmanagerdatapb.TableDefinition{
 				Name:              tc.name,
