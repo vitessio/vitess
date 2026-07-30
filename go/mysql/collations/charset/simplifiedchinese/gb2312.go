@@ -110,7 +110,12 @@ func (Charset_gb2312) DecodeRune(src []byte) (rune, int, bool) {
 		return utf8.RuneError, 1, false
 	}
 
-	r := (uint16(c0)<<8 | uint16(src[1])) & 0x7f7f
+	c1 := src[1]
+	if c0 < 0xa1 || 0xf7 < c0 || c1 < 0xa1 || 0xfe < c1 {
+		return utf8.RuneError, 1, false
+	}
+
+	r := (uint16(c0)<<8 | uint16(c1)) & 0x7f7f
 	switch {
 	case gb2312Decode0min <= r && r <= gb2312Decode0max:
 		r = gb2312Decode0[r-gb2312Decode0min]

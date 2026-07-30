@@ -52,13 +52,6 @@ func (Charset_gb18030) EncodeRune(dst []byte, r rune) int {
 			goto write2
 		}
 	case encode1Low <= r && r < encode1High:
-		// Microsoft's Code Page 936 extends GBK 1.0 to encode the euro sign U+20AC
-		// as 0x80. The HTML5 specification at http://encoding.spec.whatwg.org/#gbk
-		// says to treat "gbk" as Code Page 936.
-		if r == '€' {
-			r = 0x80
-			goto write1
-		}
 		if r2 = rune(encode1[r-encode1Low]); r2 != 0 {
 			goto write2
 		}
@@ -126,13 +119,7 @@ func (Charset_gb18030) DecodeRune(src []byte) (rune, int, bool) {
 	case c0 < utf8.RuneSelf:
 		return rune(c0), 1, true
 
-	// Microsoft's Code Page 936 extends GBK 1.0 to encode the euro sign U+20AC
-	// as 0x80. The HTML5 specification at http://encoding.spec.whatwg.org/#gbk
-	// says to treat "gbk" as Code Page 936.
-	case c0 == 0x80:
-		return '€', 1, true
-
-	case c0 < 0xff:
+	case 0x81 <= c0 && c0 < 0xff:
 		if len(src) < 2 {
 			return utf8.RuneError, 1, false
 		}
@@ -143,14 +130,14 @@ func (Charset_gb18030) DecodeRune(src []byte) (rune, int, bool) {
 			c1 -= 0x40
 		case 0x80 <= c1 && c1 < 0xff:
 			c1 -= 0x41
-		case isgb18030 && 0x30 <= c1 && c1 < 0x40:
+		case isgb18030 && 0x30 <= c1 && c1 < 0x3a:
 			if len(src) < 4 {
 				// The second byte here is always ASCII, so we can set size
 				// to 1 in all cases.
 				return utf8.RuneError, 1, false
 			}
 			c2 := src[2]
-			if c2 < 0x81 {
+			if c2 < 0x81 || 0xfe < c2 {
 				return utf8.RuneError, 1, false
 			}
 			c3 := src[3]
@@ -176,7 +163,7 @@ func (Charset_gb18030) DecodeRune(src []byte) (rune, int, bool) {
 			if 0 <= r && r < 0x100000 {
 				r += 0x10000
 			} else {
-				return utf8.RuneError, 1, false
+				return utf8.RuneError, 4, false
 			}
 			return r, 4, true
 		default:

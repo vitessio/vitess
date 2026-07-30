@@ -221,6 +221,37 @@ func TestConvert(t *testing.T) {
 			want:       []byte("?"),
 			err:        "Cannot convert string",
 		},
+		{
+			src:        []byte{0xF8, 0xA1, 0xA1},
+			srcCharset: Charset_gb2312{},
+			dst:        nil,
+			dstCharset: Charset_utf8mb4{},
+			want:       []byte("?\u3000"),
+			err:        "Cannot convert string",
+		},
+		{
+			src:        []byte{0x41, 0x84, 0x31, 0xA5, 0x30, 0x42},
+			srcCharset: Charset_gb18030{},
+			dst:        nil,
+			dstCharset: Charset_utf8mb4{},
+			want:       []byte("A?B"),
+			err:        "Cannot convert string",
+		},
+		{
+			src:        []byte{0x80, 0x41},
+			srcCharset: Charset_gb18030{},
+			dst:        nil,
+			dstCharset: Charset_utf8mb4{},
+			want:       []byte("?A"),
+			err:        "Cannot convert string",
+		},
+		{
+			src:        []byte("A€B"),
+			srcCharset: Charset_utf8mb4{},
+			dst:        nil,
+			dstCharset: Charset_gb18030{},
+			want:       []byte{0x41, 0xA2, 0xE3, 0x42},
+		},
 	}
 
 	for _, tc := range testCases {

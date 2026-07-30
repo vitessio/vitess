@@ -181,6 +181,31 @@ func TestMalformedInput(t *testing.T) {
 		coll := testcollation(t, name)
 		require.Empty(t, coll.WeightString(nil, []byte{0xFF, 0xFF, 0xFF, 0xFF}, 0))
 	}
+
+	ascii := testcollation(t, "ascii_general_ci").Charset()
+	r, width, ok := ascii.DecodeRune([]byte{0x80})
+	require.Equal(t, charset.RuneError, r)
+	require.Equal(t, 1, width)
+	require.False(t, ok)
+	r, width, ok = ascii.DecodeRune([]byte{0x00})
+	require.Equal(t, rune(0), r)
+	require.Equal(t, 1, width)
+	require.True(t, ok)
+
+	out, err := charset.Convert(nil, charset.Charset_utf8mb4{}, []byte{0x41, 0x80, 0x42}, ascii)
+	require.ErrorContains(t, err, "Cannot convert string")
+	require.Equal(t, []byte("A?B"), out)
+	out, err = charset.Convert(nil, charset.Charset_utf8mb4{}, []byte{0x41, 0x00, 0x42}, ascii)
+	require.NoError(t, err)
+	require.Equal(t, []byte{0x41, 0x00, 0x42}, out)
+
+	greek := testcollation(t, "greek_general_ci").Charset()
+	out, err = charset.Convert(nil, charset.Charset_utf8mb4{}, []byte{0x41, 0xD2, 0x42}, greek)
+	require.ErrorContains(t, err, "Cannot convert string")
+	require.Equal(t, []byte("A?B"), out)
+	out, err = charset.Convert(nil, charset.Charset_utf8mb4{}, []byte{0x41, 0x80, 0x42}, greek)
+	require.NoError(t, err)
+	require.Equal(t, []byte("A\u0080B"), out)
 }
 
 func TestIsPrefix(t *testing.T) {
