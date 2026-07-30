@@ -156,12 +156,13 @@ func (c *Collation_unicode_general_ci) WeightStringLen(numBytes int) int {
 	return ((numBytes + 3) / 4) * 2
 }
 
-func (c *Collation_unicode_general_ci) Wildcard(pat []byte, matchOne rune, matchMany rune, escape rune) WildcardPattern {
+func (c *Collation_unicode_general_ci) WeightsEqual(left, right rune) bool {
 	sort := c.unicase.unicodeSort
-	equals := func(a, b rune) bool {
-		return sort(a) == sort(b)
-	}
-	return newUnicodeWildcardMatcher(c.charset, equals, c.Collate, pat, matchOne, matchMany, escape)
+	return sort(left) == sort(right)
+}
+
+func (c *Collation_unicode_general_ci) Wildcard(pat []byte, matchOne rune, matchMany rune, escape rune) WildcardPattern {
+	return newUnicodeWildcardMatcher(c.charset, c, c, pat, matchOne, matchMany, escape)
 }
 
 type Collation_unicode_bin struct {
@@ -345,11 +346,12 @@ func (c *Collation_unicode_bin) WeightStringLen(numBytes int) int {
 	return ((numBytes + 3) / 4) * 3
 }
 
+func (c *Collation_unicode_bin) WeightsEqual(left, right rune) bool {
+	return left == right
+}
+
 func (c *Collation_unicode_bin) Wildcard(pat []byte, matchOne rune, matchMany rune, escape rune) WildcardPattern {
-	equals := func(a, b rune) bool {
-		return a == b
-	}
-	return newUnicodeWildcardMatcher(c.charset, equals, c.Collate, pat, matchOne, matchMany, escape)
+	return newUnicodeWildcardMatcher(c.charset, c, c, pat, matchOne, matchMany, escape)
 }
 
 func collationBinary(left, right []byte, rightPrefix bool) int {

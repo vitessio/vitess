@@ -88,27 +88,38 @@ func (emptyMatcher) Match(in []byte) bool {
 //   - when the wildcard pattern has a single '%' (patternMatchMany) and it is the very last
 //     character of the pattern (in this case, we set isPrefix to true to use prefix-match collation)
 type fastMatcher struct {
-	collate  func(left, right []byte, isPrefix bool) int
+	collate  collator
 	pattern  []byte
 	isPrefix bool
 }
 
+// collator and weightsEqualer are the slices of a collation that wildcard
+// matching needs; taking them as interfaces instead of function values keeps
+// a Wildcard call from allocating closures for per-collation constants.
+type collator interface {
+	Collate(left, right []byte, isPrefix bool) int
+}
+
+type weightsEqualer interface {
+	WeightsEqual(left, right rune) bool
+}
+
 func (cm *fastMatcher) Match(in []byte) bool {
-	return cm.collate(in, cm.pattern, cm.isPrefix) == 0
+	return cm.collate.Collate(in, cm.pattern, cm.isPrefix) == 0
 }
 
 // unicodeWildcard is an implementation of WildcardPattern for multibyte charsets;
 // it is used for all UCA collations, multibyte collations and all Unicode-based collations
 type unicodeWildcard struct {
-	equals  func(a, b rune) bool
+	equals  weightsEqualer
 	charset charset.Charset
 	pattern []rune
 }
 
 func newUnicodeWildcardMatcher(
 	cs charset.Charset,
-	equals func(a rune, b rune) bool,
-	collate func(left []byte, right []byte, isPrefix bool) int,
+	equals weightsEqualer,
+	collate collator,
 	pat []byte, chOne, chMany, chEsc rune,
 ) WildcardPattern {
 	var escape bool
@@ -259,7 +270,7 @@ retry:
 			if !ok {
 				return false
 			}
-			if !wc.equals(c0, p0) {
+			if !wc.equals.WeightsEqual(c0, p0) {
 				goto starCheck
 			}
 			s = s[width:]
@@ -325,7 +336,7 @@ retry:
 		if !ok {
 			return matchFail
 		}
-		if wc.equals(cpIn, p0) {
+		if wc.equals.WeightsEqual(cpIn, p0) {
 			break
 		}
 		in = in[width:]
@@ -361,7 +372,7 @@ func (wc *unicodeWildcard) matchRecursive(in []byte, pat []rune, depth int) matc
 
 		switch {
 		case pat[0] == patternMatchOne:
-		case wc.equals(pat[0], cpIn):
+		case wc.equals.WeightsEqual(pat[0], cpIn):
 		default:
 			return matchFail
 		}
@@ -385,7 +396,7 @@ type eightbitWildcard struct {
 
 func newEightbitWildcardMatcher(
 	sort *[256]byte,
-	collate func(left []byte, right []byte, isPrefix bool) int,
+	collate collator,
 	pat []byte, chOneRune, chManyRune, chEscRune rune,
 ) WildcardPattern {
 	var escape bool
@@ -617,7 +628,7 @@ func (p *multibytePatternChar) literal() []byte {
 func newMultibyteWildcardMatcher(
 	cs charset.Charset,
 	sortOrder *[256]byte,
-	collate func(left []byte, right []byte, isPrefix bool) int,
+	collate collator,
 	pat []byte, chOne, chMany, chEsc rune,
 ) WildcardPattern {
 	var escape bool

@@ -184,5 +184,5 @@ func (c *Collation_multibyte) WeightStringLen(numCodepoints int) int {
 }
 
 func (c *Collation_multibyte) Wildcard(pat []byte, matchOne rune, matchMany rune, escape rune) WildcardPattern {
-	return newMultibyteWildcardMatcher(c.charset, c.sort, c.Collate, pat, matchOne, matchMany, escape)
+	return newMultibyteWildcardMatcher(c.charset, c.sort, c, pat, matchOne, matchMany, escape)
 }

@@ -334,14 +334,16 @@ var wildcardTestCases = []wildcardtest{
 	{"bLah", "", false},
 }
 
-func identity(a, b rune) bool {
-	return a == b
+type identityEqualer struct{}
+
+func (identityEqualer) WeightsEqual(left, right rune) bool {
+	return left == right
 }
 
 func TestWildcardMatches(t *testing.T) {
 	t.Run("UnicodeWildcardMatcher (no optimization)", func(t *testing.T) {
 		for _, tc := range wildcardTestCases {
-			wildcard := newUnicodeWildcardMatcher(charset.Charset_utf8mb4{}, identity, nil, []byte(tc.pat), '?', '*', '\\')
+			wildcard := newUnicodeWildcardMatcher(charset.Charset_utf8mb4{}, identityEqualer{}, nil, []byte(tc.pat), '?', '*', '\\')
 			match := wildcard.Match([]byte(tc.in))
 			assert.Equal(t, tc.match, match, "wildcard(%q, %q) = %v (expected %v)", tc.in, tc.pat, match, tc.match)
 		}
@@ -370,7 +372,7 @@ func BenchmarkWildcardMatching(b *testing.B) {
 	for _, tc := range wildcardTestCases {
 		patterns = append(patterns, bench{
 			input: []byte(tc.in),
-			m1:    newUnicodeWildcardMatcher(charset.Charset_utf8mb4{}, identity, nil, []byte(tc.pat), '?', '*', '\\'),
+			m1:    newUnicodeWildcardMatcher(charset.Charset_utf8mb4{}, identityEqualer{}, nil, []byte(tc.pat), '?', '*', '\\'),
 			m2:    newEightbitWildcardMatcher(&sortOrderIdentity, nil, []byte(tc.pat), '?', '*', '\\'),
 		})
 	}
