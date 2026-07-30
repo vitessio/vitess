@@ -262,6 +262,17 @@ func TestWildcardMySQLParity(t *testing.T) {
 		{"utf8mb4_0900_ai_ci", "ß", "ss", false},
 		{"utf8mb4_0900_ai_ci", "ß", "ß", true},
 		{"utf8mb4_0900_ai_ci", "A", "a", true},
+		// Consecutive many-wildcards must not turn into a literal '%' in
+		// the Collate shortcut of the eight-bit matcher.
+		{"latin1_swedish_ci", "%%", "SS", true},
+		{"latin1_swedish_ci", "a%%", "ab", true},
+		{"latin1_swedish_ci", "a%", "ab", true},
+		{"latin1_swedish_ci", "a%%", "bb", false},
+		// sjis 81 5F decodes to the same rune as the backslash, but MySQL
+		// reads the escape character in the pattern's own encoding, so the
+		// two-byte form is an ordinary character.
+		{"sjis_japanese_ci", "S\x81\x5Fa_", "sAA", false},
+		{"sjis_japanese_ci", "\x81\x5F", "\x81\x5F", true},
 	}
 	for _, tc := range testCases {
 		coll := testcollation(t, tc.collation)

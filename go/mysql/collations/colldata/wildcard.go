@@ -125,6 +125,24 @@ func newUnicodeWildcardMatcher(
 		chEsc = '\\'
 	}
 
+	// A character in the pattern is a wildcard or an escape only when its
+	// encoded width is the width of the metacharacter itself. Some charsets
+	// decode a multibyte character to the same rune as an ASCII character,
+	// for example sjis 81 5F and 5C both decode to the backslash; MySQL
+	// compares the metacharacters in the pattern's own encoding, so the
+	// multibyte form is an ordinary character.
+	var enc [4]byte
+	asciiWidth := cs.EncodeRune(enc[:], 'A')
+	metaWidth := func(ch rune) int {
+		if ch >= utf8.RuneSelf {
+			if w := cs.EncodeRune(enc[:], ch); w > 0 {
+				return w
+			}
+		}
+		return asciiWidth
+	}
+	chOneWidth, chManyWidth, chEscWidth := metaWidth(chOne), metaWidth(chMany), metaWidth(chEsc)
+
 	for len(pat) > 0 {
 		cp, width, ok := cs.DecodeRune(pat)
 		if !ok {
@@ -138,17 +156,17 @@ func newUnicodeWildcardMatcher(
 			continue
 		}
 
-		switch cp {
-		case chOne:
+		switch {
+		case cp == chOne && width == chOneWidth:
 			chOneCount++
 			parsedPattern = append(parsedPattern, patternMatchOne)
-		case chMany:
+		case cp == chMany && width == chManyWidth:
+			chManyCount++
 			if len(parsedPattern) > 0 && parsedPattern[len(parsedPattern)-1] == patternMatchMany {
 				continue
 			}
-			chManyCount++
 			parsedPattern = append(parsedPattern, patternMatchMany)
-		case chEsc:
+		case cp == chEsc && width == chEscWidth:
 			chEscCount++
 			escape = true
 		default:
@@ -384,10 +402,10 @@ func newEightbitWildcardMatcher(
 			chOneCount++
 			parsedPattern = append(parsedPattern, patternMatchOne)
 		case chMany:
+			chManyCount++
 			if len(parsedPattern) > 0 && parsedPattern[len(parsedPattern)-1] == patternMatchMany {
 				continue
 			}
-			chManyCount++
 			parsedPattern = append(parsedPattern, patternMatchMany)
 		case chEsc:
 			chEscCount++
