@@ -1027,28 +1027,43 @@ func (td *tableDiffer) getSourcePKCols() error {
 	td.tablePlan.sourcePkCols = make([]int, 0, len(sourceTable.PrimaryKeyColumns))
 	for _, pkc := range sourceTable.PrimaryKeyColumns {
 		found := false
+		// Pass 1: match by underlying ColName (direct source column match).
+		// This must run first so that an alias shadowing a PK name cannot
+		// win over the real source column (e.g., "select b as a, a as b").
 		for i, selExpr := range sourceSelect.SelectExprs.Exprs {
 			aliasedExpr, ok := selExpr.(*sqlparser.AliasedExpr)
 			if !ok {
 				continue
 			}
-			colname := ""
 			switch ct := aliasedExpr.Expr.(type) {
 			case *sqlparser.ColName:
-				colname = ct.Name.String()
+				if strings.EqualFold(pkc, ct.Name.String()) {
+					td.tablePlan.sourcePkCols = append(td.tablePlan.sourcePkCols, i)
+					found = true
+				}
 			case *sqlparser.FuncExpr:
-				colname = aliasedExpr.As.String()
+				if strings.EqualFold(pkc, aliasedExpr.As.String()) {
+					td.tablePlan.sourcePkCols = append(td.tablePlan.sourcePkCols, i)
+					found = true
+				}
 			}
-			if strings.EqualFold(pkc, colname) {
-				td.tablePlan.sourcePkCols = append(td.tablePlan.sourcePkCols, i)
-				found = true
+			if found {
 				break
 			}
-			// Also check the alias for cross-table filters (e.g., "select c0 as c1 from t2")
-			if !aliasedExpr.As.IsEmpty() && strings.EqualFold(pkc, aliasedExpr.As.String()) {
-				td.tablePlan.sourcePkCols = append(td.tablePlan.sourcePkCols, i)
-				found = true
-				break
+		}
+		// Pass 2: fallback to alias match for cross-table filters
+		// (e.g., "select c0 as c1 from t2" where target PK is c1).
+		if !found {
+			for i, selExpr := range sourceSelect.SelectExprs.Exprs {
+				aliasedExpr, ok := selExpr.(*sqlparser.AliasedExpr)
+				if !ok {
+					continue
+				}
+				if !aliasedExpr.As.IsEmpty() && strings.EqualFold(pkc, aliasedExpr.As.String()) {
+					td.tablePlan.sourcePkCols = append(td.tablePlan.sourcePkCols, i)
+					found = true
+					break
+				}
 			}
 		}
 		if !found {
