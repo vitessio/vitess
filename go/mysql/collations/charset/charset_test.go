@@ -169,6 +169,44 @@ func TestDecodeRuneWidthContract(t *testing.T) {
 	}
 }
 
+func TestGB18030PUAMapping(t *testing.T) {
+	cs := Charset_gb18030{}
+	testCases := []struct {
+		bytes []byte
+		r     rune
+	}{
+		{[]byte{0xA1, 0x40}, 0xE4C6},
+		{[]byte{0xFE, 0xFE}, 0xE4C5},
+		{[]byte{0xAA, 0xA1}, 0xE000},
+		{[]byte{0xA8, 0xBC}, 0x1E3F},
+		{[]byte{0xA3, 0xA0}, 0xE5E5},
+		{[]byte{0x81, 0x35, 0xF4, 0x37}, 0xE7C7},
+		{[]byte{0xA2, 0xE3}, 0x20AC},
+	}
+	for _, tc := range testCases {
+		r, width, ok := cs.DecodeRune(tc.bytes)
+		require.True(t, ok, "DecodeRune(%X)", tc.bytes)
+		require.Equal(t, tc.r, r, "DecodeRune(%X)", tc.bytes)
+		require.Equal(t, len(tc.bytes), width, "DecodeRune(%X)", tc.bytes)
+
+		var buf [4]byte
+		require.Equal(t, len(tc.bytes), cs.EncodeRune(buf[:], tc.r), "EncodeRune(%U)", tc.r)
+		require.Equal(t, tc.bytes, buf[:len(tc.bytes)], "EncodeRune(%U)", tc.r)
+	}
+
+	// every structurally valid two-byte sequence maps to a codepoint
+	for lead := 0x81; lead <= 0xFE; lead++ {
+		for trail := 0x40; trail <= 0xFE; trail++ {
+			if trail == 0x7F {
+				continue
+			}
+			r, width, ok := cs.DecodeRune([]byte{byte(lead), byte(trail)})
+			require.True(t, ok, "DecodeRune(%X %X) = %U", lead, trail, r)
+			require.Equal(t, 2, width)
+		}
+	}
+}
+
 func TestDecodeRuneValidity(t *testing.T) {
 	testCases := []struct {
 		name      string
