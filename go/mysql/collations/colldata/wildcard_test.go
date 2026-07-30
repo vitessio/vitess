@@ -496,6 +496,27 @@ func TestWildcardCollapsedRunAllocation(t *testing.T) {
 		require.NotNil(t, m)
 		require.Lessf(t, ms.TotalAlloc-before, uint64(256*1024), "%s: construction allocated %d bytes", collName, ms.TotalAlloc-before)
 	}
+
+	// The reservation reduction must not fire when the match-many byte is
+	// not its own marker, or the parser grows the token slice step by
+	// step. A fixed-width charset can hold the byte inside an unrelated
+	// character: the utf16 bytes 25 25 are the literal U+2525. A rune
+	// shared with match-one classifies every occurrence as match-one.
+	utf16Coll := testcollation(t, "utf16_unicode_ci")
+	utf16Pat := bytes.Repeat([]byte{0x25, 0x25}, 512*1024)
+	allocs := testing.AllocsPerRun(3, func() {
+		_ = utf16Coll.Wildcard(utf16Pat, 0, 0, 0)
+	})
+	require.LessOrEqualf(t, allocs, 8.0, "utf16 literal pattern construction allocates %v times", allocs)
+
+	aliasPat := bytes.Repeat([]byte{'_'}, 1024*1024)
+	for _, collName := range []string{"sjis_japanese_ci", "utf8mb4_0900_ai_ci", "latin1_swedish_ci"} {
+		coll := testcollation(t, collName)
+		allocs := testing.AllocsPerRun(3, func() {
+			_ = coll.Wildcard(aliasPat, '_', '_', 0)
+		})
+		require.LessOrEqualf(t, allocs, 8.0, "%s: aliased metacharacter construction allocates %v times", collName, allocs)
+	}
 }
 
 func BenchmarkWildcardMatching(b *testing.B) {
