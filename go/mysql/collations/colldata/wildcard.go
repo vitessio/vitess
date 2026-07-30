@@ -41,6 +41,7 @@ limitations under the License.
 package colldata
 
 import (
+	"bytes"
 	"unicode/utf8"
 
 	"vitess.io/vitess/go/mysql/collations/charset"
@@ -570,5 +571,290 @@ starCheck:
 		return false
 	}
 	str = str[1:]
+	goto retry
+}
+
+// multibyteWildcard is an implementation of WildcardPattern used for the
+// multibyte charsets. It compares characters by their byte sequences, as
+// MySQL does: some of these charsets encode one rune with more than one byte
+// sequence, for example sjis 5C and 81 5F, and the different sequences are
+// not equal to each other in LIKE.
+type multibyteWildcard struct {
+	sort    *[256]byte
+	charset charset.Charset
+	pattern []multibytePatternChar
+}
+
+// multibytePatternChar is one parsed pattern element: a wildcard when match
+// is patternMatchOne or patternMatchMany, otherwise the byte sequence of one
+// literal character.
+type multibytePatternChar struct {
+	match int16
+	ch    []byte
+}
+
+func newMultibyteWildcardMatcher(
+	cs charset.Charset,
+	sortOrder *[256]byte,
+	collate func(left []byte, right []byte, isPrefix bool) int,
+	pat []byte, chOne, chMany, chEsc rune,
+) WildcardPattern {
+	var escape bool
+	var escapeChar []byte
+	var chOneCount, chManyCount, chEscCount int
+	parsedPattern := make([]multibytePatternChar, 0, len(pat))
+	patOriginal := pat
+
+	if chOne == 0 {
+		chOne = '_'
+	}
+	if chMany == 0 {
+		chMany = '%'
+	}
+	if chEsc == 0 {
+		chEsc = '\\'
+	}
+
+	// A character in the pattern is a wildcard or an escape only when its
+	// encoded width is the width of the metacharacter itself; see
+	// newUnicodeWildcardMatcher.
+	var enc [4]byte
+	asciiWidth := cs.EncodeRune(enc[:], 'A')
+	metaWidth := func(ch rune) int {
+		if ch >= utf8.RuneSelf {
+			if w := cs.EncodeRune(enc[:], ch); w > 0 {
+				return w
+			}
+		}
+		return asciiWidth
+	}
+	chOneWidth, chManyWidth, chEscWidth := metaWidth(chOne), metaWidth(chMany), metaWidth(chEsc)
+
+	for len(pat) > 0 {
+		cp, width, ok := cs.DecodeRune(pat)
+		if !ok {
+			return nopMatcher{}
+		}
+		ch := pat[:width]
+		pat = pat[width:]
+
+		if escape {
+			parsedPattern = append(parsedPattern, multibytePatternChar{ch: ch})
+			escape = false
+			continue
+		}
+
+		switch {
+		case cp == chOne && width == chOneWidth:
+			chOneCount++
+			parsedPattern = append(parsedPattern, multibytePatternChar{match: patternMatchOne})
+		case cp == chMany && width == chManyWidth:
+			chManyCount++
+			if len(parsedPattern) > 0 && parsedPattern[len(parsedPattern)-1].match == patternMatchMany {
+				continue
+			}
+			parsedPattern = append(parsedPattern, multibytePatternChar{match: patternMatchMany})
+		case cp == chEsc && width == chEscWidth:
+			chEscCount++
+			escape = true
+			escapeChar = ch
+		default:
+			parsedPattern = append(parsedPattern, multibytePatternChar{ch: ch})
+		}
+	}
+	if escape {
+		parsedPattern = append(parsedPattern, multibytePatternChar{ch: escapeChar})
+	}
+
+	// if we have a collation callback, we can detect some common cases for
+	// patterns here and optimize them away without having to return a full
+	// WildcardPattern
+	if collate != nil {
+		if len(parsedPattern) == 0 {
+			return emptyMatcher{}
+		}
+		if chOneCount == 0 && chEscCount == 0 {
+			if chManyCount == 0 {
+				return &fastMatcher{
+					collate:  collate,
+					pattern:  patOriginal,
+					isPrefix: false,
+				}
+			}
+			if chManyCount == 1 && chMany < utf8.RuneSelf && parsedPattern[len(parsedPattern)-1].match == patternMatchMany {
+				return &fastMatcher{
+					collate:  collate,
+					pattern:  patOriginal[:len(patOriginal)-1],
+					isPrefix: true,
+				}
+			}
+		}
+	}
+
+	return &multibyteWildcard{
+		sort:    sortOrder,
+		charset: cs,
+		pattern: parsedPattern,
+	}
+}
+
+func (wc *multibyteWildcard) equals(a, b []byte) bool {
+	if len(a) == 1 && len(b) == 1 {
+		if wc.sort != nil {
+			return wc.sort[a[0]] == wc.sort[b[0]]
+		}
+		return a[0] == b[0]
+	}
+	return bytes.Equal(a, b)
+}
+
+func (wc *multibyteWildcard) Match(in []byte) bool {
+	if wildcardRecursionDepth == 0 {
+		return wc.matchIter(in, wc.pattern)
+	}
+	return wc.matchRecursive(in, wc.pattern, 0) == matchOK
+}
+
+func (wc *multibyteWildcard) matchMany(in []byte, pat []multibytePatternChar, depth int) match {
+	cs := wc.charset
+	var p0 multibytePatternChar
+
+many:
+	if len(pat) == 0 {
+		return matchOK
+	}
+	p0 = pat[0]
+	pat = pat[1:]
+
+	switch p0.match {
+	case patternMatchMany:
+		goto many
+	case patternMatchOne:
+		_, width, ok := cs.DecodeRune(in)
+		if !ok {
+			return matchFail
+		}
+		in = in[width:]
+		goto many
+	}
+
+	if len(in) == 0 {
+		return matchOver
+	}
+
+retry:
+	var width int
+	for len(in) > 0 {
+		var ok bool
+		_, width, ok = cs.DecodeRune(in)
+		if !ok {
+			return matchFail
+		}
+		if wc.equals(p0.ch, in[:width]) {
+			break
+		}
+		in = in[width:]
+	}
+
+	if len(in) == 0 {
+		return matchOver
+	}
+	in = in[width:]
+
+	m := wc.matchRecursive(in, pat, depth+1)
+	if m == matchFail {
+		goto retry
+	}
+	return m
+}
+
+func (wc *multibyteWildcard) matchRecursive(in []byte, pat []multibytePatternChar, depth int) match {
+	if depth >= wildcardRecursionDepth {
+		return matchFail
+	}
+
+	cs := wc.charset
+	for len(pat) > 0 {
+		if pat[0].match == patternMatchMany {
+			return wc.matchMany(in, pat[1:], depth)
+		}
+
+		_, width, ok := cs.DecodeRune(in)
+		if !ok {
+			return matchFail
+		}
+
+		switch {
+		case pat[0].match == patternMatchOne:
+		case wc.equals(pat[0].ch, in[:width]):
+		default:
+			return matchFail
+		}
+
+		in = in[width:]
+		pat = pat[1:]
+	}
+
+	if len(in) == 0 {
+		return matchOK
+	}
+	return matchFail
+}
+
+func (wc *multibyteWildcard) matchIter(str []byte, pat []multibytePatternChar) bool {
+	var s []byte
+	var p []multibytePatternChar
+	star := false
+	cs := wc.charset
+
+retry:
+	s = str
+	p = pat
+	for len(s) > 0 {
+		var p0 multibytePatternChar
+		if len(p) > 0 {
+			p0 = p[0]
+		}
+
+		switch p0.match {
+		case patternMatchOne:
+			_, width, ok := cs.DecodeRune(s)
+			if !ok {
+				return false
+			}
+			s = s[width:]
+		case patternMatchMany:
+			star = true
+			str = s
+			pat = p[1:]
+			if len(pat) == 0 {
+				return true
+			}
+			goto retry
+		default:
+			_, width, ok := cs.DecodeRune(s)
+			if !ok {
+				return false
+			}
+			if len(p) == 0 || !wc.equals(p0.ch, s[:width]) {
+				goto starCheck
+			}
+			s = s[width:]
+		}
+		p = p[1:]
+	}
+	return len(p) == 0 || (len(p) == 1 && p[0].match == patternMatchMany)
+
+starCheck:
+	if !star {
+		return false
+	}
+	if len(str) > 0 {
+		_, width, ok := cs.DecodeRune(str)
+		if !ok {
+			return false
+		}
+		str = str[width:]
+	}
 	goto retry
 }

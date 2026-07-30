@@ -273,6 +273,13 @@ func TestWildcardMySQLParity(t *testing.T) {
 		// two-byte form is an ordinary character.
 		{"sjis_japanese_ci", "S\x81\x5Fa_", "sAA", false},
 		{"sjis_japanese_ci", "\x81\x5F", "\x81\x5F", true},
+		// Some Japanese charsets encode one rune with more than one byte
+		// sequence; MySQL does not compare the different sequences as equal.
+		{"cp932_japanese_ci", "\xFA\xC2_", "\xED\xA6A", false},
+		{"cp932_japanese_ci", "\xFA\xC2_", "\xFA\xC2A", true},
+		{"ujis_japanese_ci", "\x5C_", "\xA1\xC0A", false},
+		{"eucjpms_japanese_ci", "\xAD\xF5_", "\xA2\xE5A", false},
+		{"eucjpms_japanese_ci", "\xA2\xE5_", "\xA2\xE5A", true},
 	}
 	for _, tc := range testCases {
 		coll := testcollation(t, tc.collation)
