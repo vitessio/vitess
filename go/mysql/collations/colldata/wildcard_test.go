@@ -18,6 +18,7 @@ package colldata
 
 import (
 	"bytes"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -467,6 +468,25 @@ func TestWildcardEightbitFastPath(t *testing.T) {
 			_ = coll.Wildcard(pat, 0, 0, 0)
 		})
 		require.LessOrEqualf(t, allocs, 2.0, "pattern %q allocates %v times", tc.pat, allocs)
+	}
+}
+
+func TestWildcardCollapsedRunAllocation(t *testing.T) {
+	// A pattern that is mostly match-many characters collapses to a
+	// handful of tokens, so the construction must not reserve one token
+	// per pattern byte: a large bound LIKE pattern would then allocate a
+	// multiple of its own size.
+	pat := bytes.Repeat([]byte{'%'}, 1024*1024)
+	for _, collName := range []string{"sjis_japanese_ci", "utf8mb4_0900_ai_ci", "latin1_swedish_ci"} {
+		coll := testcollation(t, collName)
+		var ms runtime.MemStats
+		runtime.GC()
+		runtime.ReadMemStats(&ms)
+		before := ms.TotalAlloc
+		m := coll.Wildcard(pat, 0, 0, 0)
+		runtime.ReadMemStats(&ms)
+		require.NotNil(t, m)
+		require.Lessf(t, ms.TotalAlloc-before, uint64(256*1024), "%s: construction allocated %d bytes", collName, ms.TotalAlloc-before)
 	}
 }
 

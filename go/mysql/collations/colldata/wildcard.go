@@ -157,7 +157,17 @@ func newUnicodeWildcardMatcher(
 	}
 	chOneWidth, chManyWidth, chEscWidth := metaWidth(chOne), metaWidth(chMany), metaWidth(chEsc)
 
-	parsedPattern := make([]rune, 0, len(pat))
+	// A run of match-many characters collapses to one token and a run
+	// always has a non-wildcard neighbor, so the token count is bounded by
+	// the other bytes plus the number of runs, and the reservation stays
+	// small for a pattern that is mostly wildcards.
+	reserve := len(pat)
+	if chMany < utf8.RuneSelf {
+		if manyCount := bytes.Count(pat, []byte{byte(chMany)}); manyCount > 0 {
+			reserve = len(pat) - manyCount + min(manyCount, len(pat)-manyCount+1)
+		}
+	}
+	parsedPattern := make([]rune, 0, reserve)
 
 	for len(pat) > 0 {
 		cp, width, ok := cs.DecodeRune(pat)
@@ -435,7 +445,15 @@ func newEightbitWildcardMatcher(
 	}
 
 	var escape bool
-	parsedPattern := make([]int16, 0, len(pat))
+	// A run of match-many characters collapses to one token and a run
+	// always has a non-wildcard neighbor, so the token count is bounded by
+	// the other bytes plus the number of runs, and the reservation stays
+	// small for a pattern that is mostly wildcards.
+	reserve := len(pat)
+	if manyCount := bytes.Count(pat, []byte{chMany}); manyCount > 0 {
+		reserve = len(pat) - manyCount + min(manyCount, len(pat)-manyCount+1)
+	}
+	parsedPattern := make([]int16, 0, reserve)
 	var chOneCount, chManyCount, chEscCount int
 
 	for _, ch := range pat {
@@ -712,11 +730,20 @@ func newMultibyteWildcardMatcher(
 	}
 	chOneWidth, chManyWidth, chEscWidth := metaWidth(chOne), metaWidth(chMany), metaWidth(chEsc)
 
-	// Each pattern character consumes at least one byte, so the number of
-	// bytes bounds the token count, and the parse stays a single pass; a
-	// pattern with multibyte characters leaves spare capacity, which is
-	// trimmed before the matcher is returned.
-	parsedPattern := make([]multibytePatternChar, 0, len(pat))
+	// Each pattern character consumes at least one byte, a run of
+	// match-many characters collapses to one token, and a run always has a
+	// non-wildcard neighbor, so the token count is bounded by the other
+	// bytes plus the number of runs. The reservation stays small for a
+	// pattern that is mostly wildcards, and the parse stays a single pass;
+	// multibyte characters leave spare capacity, which is trimmed before
+	// the matcher is returned.
+	reserve := len(pat)
+	if chMany < utf8.RuneSelf {
+		if manyCount := bytes.Count(pat, []byte{byte(chMany)}); manyCount > 0 {
+			reserve = len(pat) - manyCount + min(manyCount, len(pat)-manyCount+1)
+		}
+	}
+	parsedPattern := make([]multibytePatternChar, 0, reserve)
 	for len(pat) > 0 {
 		cp, width, ok := cs.DecodeRune(pat)
 		if !ok {
