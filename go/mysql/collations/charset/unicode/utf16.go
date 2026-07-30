@@ -189,6 +189,11 @@ func (Charset_ucs2) DecodeRune(p []byte) (rune, int, bool) {
 	}
 	r := rune(p[0])<<8 | rune(p[1])
 	if surr1 <= r && r < surr3 {
+		// Rejecting surrogate code units is deliberately stricter than
+		// MySQL, which accepts them as ucs2 data and only fails once they
+		// are converted to another character set. Treating them as malformed
+		// here, like the utf16 and utf32 decoders do in both systems, keeps
+		// a conversion from producing U+FFFD without reporting an error.
 		return utf8.RuneError, 2, false
 	}
 	return r, 2, true

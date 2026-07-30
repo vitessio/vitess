@@ -164,6 +164,11 @@ func (Charset_eucjpms) EncodeRune(dst []byte, r rune) int {
 	return ujisEncodeRune(dst, r, &table_jis208_eucjpmsEncode, &table_jis212_eucjpmsEncode)
 }
 
+// DecodeRune reports an incomplete character at the end of the input as
+// malformed, so conversions substitute '?' and return an error. This is a
+// deliberate divergence: MySQL's eucjpms converter drops such a character
+// without any warning, unlike its sjis and ujis converters, which raise
+// warning 1300 for the same input.
 func (Charset_eucjpms) DecodeRune(src []byte) (rune, int, bool) {
 	return ujisDecodeRune(src, &table_jis208_eucjpmsDecode, &table_jis212_eucjpmsDecode)
 }
