@@ -17,6 +17,7 @@ limitations under the License.
 package evalengine
 
 import (
+	"sync"
 	"testing"
 	"time"
 
@@ -109,9 +110,9 @@ func TestTranslateSimplification(t *testing.T) {
 		{"ifnull(null, 23)", ok(`case when null is null then 23 else null`), ok(`23`)},
 		{"nullif(1, 1)", ok(`case when 1 = 1 then null else 1`), ok(`null`)},
 		{"nullif(1, 2)", ok(`case when 1 = 2 then null else 1`), ok(`1`)},
-		{"12 between 5 and 20", ok("12 >= 5 and 12 <= 20"), ok(`1`)},
-		{"12 not between 5 and 20", ok("12 < 5 or 12 > 20"), ok(`0`)},
-		{"2 not between 5 and 20", ok("2 < 5 or 2 > 20"), ok(`1`)},
+		{"12 between 5 and 20", ok("12 between 5 and 20"), ok(`1`)},
+		{"12 not between 5 and 20", ok("12 not between 5 and 20"), ok(`0`)},
+		{"2 not between 5 and 20", ok("2 not between 5 and 20"), ok(`1`)},
 		{"json->\"$.c\"", ok("JSON_EXTRACT(`json`, '$.c')"), ok("JSON_EXTRACT(`json`, '$.c')")},
 		{"json->>\"$.c\"", ok("JSON_UNQUOTE(JSON_EXTRACT(`json`, '$.c'))"), ok("JSON_UNQUOTE(JSON_EXTRACT(`json`, '$.c'))")},
 	}
@@ -156,6 +157,220 @@ func TestTranslateSimplification(t *testing.T) {
 			}
 			assert.Equal(t, tc.simplified.literal, sqlparser.String(simplified))
 		})
+	}
+}
+
+// TestTranslateFoldedJSONLiterals tests that JSON values produced by constant
+// folding compile, evaluate and format as CAST('<json>' AS JSON) literals; a
+// bare string literal would compare as a JSON string scalar, not a document.
+func TestTranslateFoldedJSONLiterals(t *testing.T) {
+	testCases := []struct {
+		expression string
+		simplified string
+		row        sqltypes.Value
+		result     sqltypes.Value
+	}{{
+		expression: `j = json_array(1)`,
+		simplified: `j = cast('[1]' as json)`,
+		row:        sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[1]`)),
+		result:     sqltypes.NewInt64(1),
+	}, {
+		expression: `coalesce(j, json_array(1, 2))`,
+		simplified: `coalesce(j, cast('[1, 2]' as json))`,
+		row:        sqltypes.NULL,
+		result:     sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[1, 2]`)),
+	}, {
+		expression: `coalesce(j, json_object('a', 1))`,
+		simplified: `coalesce(j, cast('{"a": 1}' as json))`,
+		row:        sqltypes.NULL,
+		result:     sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"a": 1}`)),
+	}, {
+		expression: `coalesce(j, cast('"foo"' as json))`,
+		simplified: `coalesce(j, cast('"foo"' as json))`,
+		row:        sqltypes.NULL,
+		result:     sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`"foo"`)),
+	}, {
+		// wide decimals must keep their exact serialization and not
+		// round-trip through float64
+		expression: `coalesce(j, json_array(123456789012.12345678))`,
+		simplified: `coalesce(j, cast('[123456789012.12345678]' as json))`,
+		row:        sqltypes.NULL,
+		result:     sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[123456789012.12345678]`)),
+	}, {
+		// a JSON null literal is a JSON value, not a SQL NULL
+		expression: `coalesce(j, cast('null' as json))`,
+		simplified: `coalesce(j, cast('null' as json))`,
+		row:        sqltypes.NULL,
+		result:     sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`null`)),
+	}, {
+		expression: `coalesce(j, null)`,
+		simplified: `coalesce(j, null)`,
+		row:        sqltypes.NULL,
+		result:     sqltypes.NULL,
+	}}
+
+	venv := vtenv.NewTestEnv()
+	fields := FieldResolver([]*querypb.Field{
+		{Name: "j", Type: sqltypes.TypeJSON, Charset: collations.CollationUtf8mb4ID},
+	})
+
+	for _, tc := range testCases {
+		t.Run(tc.expression, func(t *testing.T) {
+			astExpr, err := venv.Parser().ParseExpr(tc.expression)
+			require.NoError(t, err)
+
+			translated, err := Translate(astExpr, &Config{
+				ResolveColumn: fields.Column,
+				ResolveType:   fields.Type,
+				Collation:     venv.CollationEnv().DefaultConnectionCharset(),
+				Environment:   venv,
+			})
+			require.NoError(t, err)
+			assert.Equal(t, tc.simplified, sqlparser.String(translated))
+
+			env := NewExpressionEnv(t.Context(), nil, NewEmptyVCursor(venv, time.Local))
+			env.Row = []sqltypes.Value{tc.row}
+
+			compiled, err := env.Evaluate(translated)
+			require.NoError(t, err)
+			assert.Equal(t, tc.result, compiled.Value(collations.MySQL8().DefaultConnectionCharset()))
+
+			interpreted, err := env.EvaluateAST(translated)
+			require.NoError(t, err)
+			assert.Equal(t, tc.result, interpreted.Value(collations.MySQL8().DefaultConnectionCharset()))
+		})
+	}
+}
+
+// TestTranslateFoldedJSONLiteralOwnership tests that evaluating a translated
+// expression never mutates a folded JSON literal: JSON_REMOVE updates its
+// input in place, and translated expressions are reused across evaluations.
+func TestTranslateFoldedJSONLiteralOwnership(t *testing.T) {
+	testCases := []struct {
+		expression string
+		paths      []string
+		results    []string
+	}{{
+		expression: `json_remove(json_array(1, 2, 3), :p)`,
+		paths:      []string{`$[0]`, `$[1]`, `$[2]`},
+		results:    []string{`[2, 3]`, `[1, 3]`, `[1, 2]`},
+	}, {
+		expression: `json_remove(json_object('a', json_array(1, 2, 3)), :p)`,
+		paths:      []string{`$.a[0]`, `$.a[1]`, `$.a[2]`},
+		results:    []string{`{"a": [2, 3]}`, `{"a": [1, 3]}`, `{"a": [1, 2]}`},
+	}}
+
+	venv := vtenv.NewTestEnv()
+	coll := collations.MySQL8().DefaultConnectionCharset()
+
+	translate := func(t *testing.T, expression string) *UntypedExpr {
+		astExpr, err := venv.Parser().ParseExpr(expression)
+		require.NoError(t, err)
+		translated, err := Translate(astExpr, &Config{
+			Collation:   coll,
+			Environment: venv,
+		})
+		require.NoError(t, err)
+		untyped, ok := translated.(*UntypedExpr)
+		require.True(t, ok, "expected *UntypedExpr, got %T", translated)
+		return untyped
+	}
+	newEnv := func(path string) *ExpressionEnv {
+		env := EmptyExpressionEnv(venv)
+		env.BindVars = map[string]*querypb.BindVariable{
+			"p": sqltypes.StringBindVariable(path),
+		}
+		return env
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.expression, func(t *testing.T) {
+			t.Run("interpreted", func(t *testing.T) {
+				translated := translate(t, tc.expression)
+				for i, path := range tc.paths {
+					env := newEnv(path)
+					res, err := env.EvaluateAST(translated)
+					require.NoError(t, err)
+					assert.Equal(t, tc.results[i], res.Value(coll).ToString())
+				}
+			})
+			t.Run("compiled", func(t *testing.T) {
+				translated := translate(t, tc.expression)
+				for i, path := range tc.paths {
+					env := newEnv(path)
+					compiled, err := translated.Compile(env)
+					require.NoError(t, err)
+					res, err := env.Evaluate(compiled)
+					require.NoError(t, err)
+					assert.Equal(t, tc.results[i], res.Value(coll).ToString())
+				}
+			})
+		})
+	}
+}
+
+// TestTranslateFoldedJSONLiteralConcurrency evaluates a single translated
+// expression containing a folded JSON literal from multiple goroutines; with
+// -race, this catches evaluations sharing the literal's document.
+func TestTranslateFoldedJSONLiteralConcurrency(t *testing.T) {
+	venv := vtenv.NewTestEnv()
+	coll := collations.MySQL8().DefaultConnectionCharset()
+
+	astExpr, err := venv.Parser().ParseExpr(`json_remove(json_array(1, 2, 3), :p)`)
+	require.NoError(t, err)
+	translated, err := Translate(astExpr, &Config{
+		Collation:   coll,
+		Environment: venv,
+	})
+	require.NoError(t, err)
+	untyped, ok := translated.(*UntypedExpr)
+	require.True(t, ok, "expected *UntypedExpr, got %T", translated)
+
+	paths := []string{`$[0]`, `$[1]`, `$[2]`}
+	results := []string{`[2, 3]`, `[1, 3]`, `[1, 2]`}
+
+	const goroutines, evaluations = 8, 100
+	errs := make([]error, goroutines)
+	observed := make([][]string, goroutines)
+
+	var wg sync.WaitGroup
+	for g := range goroutines {
+		observed[g] = make([]string, evaluations)
+		wg.Go(func() {
+			for i := range evaluations {
+				n := (g + i) % len(paths)
+
+				env := EmptyExpressionEnv(venv)
+				env.BindVars = map[string]*querypb.BindVariable{
+					"p": sqltypes.StringBindVariable(paths[n]),
+				}
+
+				var res EvalResult
+				var err error
+				if g%2 == 0 {
+					res, err = env.EvaluateAST(untyped)
+				} else {
+					var compiled *CompiledExpr
+					compiled, err = untyped.Compile(env)
+					if err == nil {
+						res, err = env.Evaluate(compiled)
+					}
+				}
+				if err != nil {
+					errs[g] = err
+					return
+				}
+				observed[g][i] = res.Value(coll).ToString()
+			}
+		})
+	}
+	wg.Wait()
+
+	for g := range goroutines {
+		require.NoErrorf(t, errs[g], "goroutine %d", g)
+		for i, got := range observed[g] {
+			assert.Equal(t, results[(g+i)%len(paths)], got)
+		}
 	}
 }
 
@@ -479,4 +694,103 @@ func TestBindVarType(t *testing.T) {
 		Environment: venv,
 	})
 	require.NoError(t, err)
+}
+
+// TestInExprJSONScanPrefix pins the translation-time IN type-scan prefix:
+// MySQL inspects RHS elements in order and stops after the first one that is
+// not constant for one execution, the stopper included. Bind parameters and
+// statement-stable functions continue the scan; columns and volatile
+// functions stop it.
+func TestInExprJSONScanPrefix(t *testing.T) {
+	testCases := []struct {
+		expression string
+		prefix     int
+		domain     inJSONDomain
+	}{
+		{`0 IN (1, '0', JSON_ARRAY())`, 3, inJSONYes},
+		{`0 IN (:v, '0', JSON_ARRAY())`, 3, inJSONYes},
+		{`0 IN (:v + 1, '0', JSON_ARRAY())`, 3, inJSONYes},
+		{`0 IN (NOW(), '0', JSON_ARRAY())`, 3, inJSONYes},
+		{`0 IN (CURDATE(), '0', JSON_ARRAY())`, 3, inJSONYes},
+		{`0 IN (USER(), '0', JSON_ARRAY())`, 3, inJSONYes},
+		{`0 IN (DATABASE(), '0', JSON_ARRAY())`, 3, inJSONYes},
+		{`0 IN (column0, '0', JSON_ARRAY())`, 1, inJSONUnknown},
+		{`0 IN (column0 + 1, '0', JSON_ARRAY())`, 1, inJSONUnknown},
+		{`0 IN (SYSDATE(), '0', JSON_ARRAY())`, 1, inJSONNo},
+		{`0 IN (UUID(), '0', JSON_ARRAY())`, 1, inJSONNo},
+		{`0 IN (RANDOM_BYTES(8), '0', JSON_ARRAY())`, 1, inJSONNo},
+		{`0 IN ('0', 1)`, 2, inJSONNo},
+		{`JSON_ARRAY() IN (column0, '0')`, 1, inJSONYes},
+	}
+
+	venv := vtenv.NewTestEnv()
+	fields := []*querypb.Field{{Name: "column0", Type: sqltypes.Int64, ColumnType: "BIGINT"}}
+	for _, tc := range testCases {
+		t.Run(tc.expression, func(t *testing.T) {
+			expr, err := venv.Parser().ParseExpr(tc.expression)
+			require.NoError(t, err)
+
+			translated, err := Translate(expr, &Config{
+				ResolveColumn:     FieldResolver(fields).Column,
+				Collation:         collations.CollationUtf8mb4ID,
+				Environment:       venv,
+				NoConstantFolding: true,
+				NoCompilation:     true,
+			})
+			require.NoError(t, err)
+
+			in, ok := translated.(*UntypedExpr).ir.(*InExpr)
+			require.True(t, ok, "expected an InExpr translation")
+			assert.Equal(t, tc.prefix, in.JSONScanRHS, "wrong type-scan prefix")
+			assert.Equal(t, tc.domain, in.PrefixJSON, "wrong declared-JSON tri-state")
+		})
+	}
+}
+
+// TestBetweenExprFormatRoundTrip checks that formatting a translated BETWEEN
+// preserves the parentheses of equal- and lower-precedence operands: the
+// formatted SQL must reparse to the same value.
+func TestBetweenExprFormatRoundTrip(t *testing.T) {
+	testCases := []struct {
+		expression string
+		formatted  string
+		result     string
+	}{
+		{`(0 AND 1) BETWEEN 0 AND 0`, `(0 and 1) between 0 and 0`, `INT64(1)`},
+		{`1 BETWEEN (0 BETWEEN 0 AND 1) AND 2`, `1 between (0 between 0 and 1) and 2`, `INT64(1)`},
+		{`5 NOT BETWEEN (0 BETWEEN 0 AND 1) AND 2`, `5 not between (0 between 0 and 1) and 2`, `INT64(1)`},
+	}
+
+	venv := vtenv.NewTestEnv()
+	cfg := &Config{
+		Collation:         collations.CollationUtf8mb4ID,
+		Environment:       venv,
+		NoConstantFolding: true,
+		NoCompilation:     true,
+	}
+	for _, tc := range testCases {
+		t.Run(tc.expression, func(t *testing.T) {
+			expr, err := venv.Parser().ParseExpr(tc.expression)
+			require.NoError(t, err)
+			translated, err := Translate(expr, cfg)
+			require.NoError(t, err)
+
+			buf := sqlparser.NewTrackedBuffer(nil)
+			translated.(*UntypedExpr).ir.format(buf)
+			require.Equal(t, tc.formatted, buf.String())
+
+			env := EmptyExpressionEnv(venv)
+			res, err := env.Evaluate(translated)
+			require.NoError(t, err)
+			require.Equal(t, tc.result, res.String())
+
+			reparsed, err := venv.Parser().ParseExpr(buf.String())
+			require.NoError(t, err)
+			retranslated, err := Translate(reparsed, cfg)
+			require.NoError(t, err)
+			res, err = env.Evaluate(retranslated)
+			require.NoError(t, err)
+			assert.Equal(t, tc.result, res.String())
+		})
+	}
 }
