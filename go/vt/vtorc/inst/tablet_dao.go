@@ -157,4 +157,3 @@ func SaveTablet(tablet *topodatapb.Tablet) error {
 	)
 	return err
 }
-

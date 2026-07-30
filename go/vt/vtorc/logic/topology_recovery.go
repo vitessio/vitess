@@ -1027,7 +1027,7 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 				seen := make(map[string]bool)
 				var shardCells []string
 				for _, ti := range shardTablets {
-					if cell := ti.Tablet.Alias.Cell; !seen[cell] {
+					if cell := ti.Alias.Cell; !seen[cell] {
 						seen[cell] = true
 						shardCells = append(shardCells, cell)
 					}

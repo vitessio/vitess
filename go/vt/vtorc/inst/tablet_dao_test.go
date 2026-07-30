@@ -132,4 +132,3 @@ func TestReadTabletCountsByCell(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, map[string]int64{"cell1": 100}, tabletCounts)
 }
-
