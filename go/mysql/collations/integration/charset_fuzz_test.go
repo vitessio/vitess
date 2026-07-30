@@ -309,9 +309,20 @@ func TestCollationFuzzWildcard(t *testing.T) {
 		"utf8mb4_swedish_ci", "utf8mb4_danish_ci", "utf8mb4_unicode_ci",
 		"utf8mb4_general_ci", "utf8mb4_0900_ai_ci", "utf8mb4_da_0900_ai_ci",
 		"utf8mb4_0900_bin", "utf8mb4_bin", "latin1_swedish_ci",
-		"sjis_japanese_ci", "utf16_unicode_ci",
+		"sjis_japanese_ci", "cp932_japanese_ci", "ujis_japanese_ci",
+		"eucjpms_japanese_ci", "utf16_unicode_ci",
 	}
 	alphabet := []rune{'a', 'A', 'å', 'Å', 's', 'S', 'ß', 0x6F22, 0x1F60A, 0x1F4A9, ' ', '%', '_', '\\'}
+
+	// Byte sequences that decode to a rune with more than one encoding in
+	// the Japanese charsets; MySQL does not compare the different encodings
+	// as equal.
+	aliases := map[string][][]byte{
+		"sjis":    {{0x5C}, {0x81, 0x5F}},
+		"cp932":   {{0x5C}, {0x81, 0x5F}, {0xED, 0xA6}, {0xFA, 0xC2}},
+		"ujis":    {{0x5C}, {0xA1, 0xC0}},
+		"eucjpms": {{0xA2, 0xE5}, {0xAD, 0xF5}},
+	}
 
 	conn := mysqlconn(t)
 	defer conn.Close()
@@ -320,6 +331,10 @@ func TestCollationFuzzWildcard(t *testing.T) {
 		var out []byte
 		var enc [8]byte
 		for range rng.IntN(7) {
+			if alias := aliases[cs.Name()]; alias != nil && rng.IntN(4) == 0 {
+				out = append(out, alias[rng.IntN(len(alias))]...)
+				continue
+			}
 			r := alphabet[rng.IntN(len(alphabet))]
 			if w := cs.EncodeRune(enc[:], r); w > 0 {
 				out = append(out, enc[:w]...)
