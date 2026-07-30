@@ -29,8 +29,10 @@
         - [PREPARE statements no longer report the prepared statement's tables](#vtgate-prepare-tables-used)
         - [Preparing a statement no longer starts an implicit transaction](#vtgate-prepare-no-implicit-tx)
         - [Stricter validation of SQL-level PREPARE statements](#vtgate-prepare-stricter-validation)
+        - [Stricter PROXY protocol v1 header validation](#vtgate-proxy-protocol-v1-strictness)
     - **[Reparent](#minor-changes-reparent)**
         - [`EmergencyReparentShard` no longer waits on replicas that cannot win the election](#ers-lagging-relay-log-wait)
+        - [Reparent candidate ordering now respects partially ordered GTID histories](#reparent-gtid-candidate-ordering)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
         - [Query timeouts no longer kill reserved connections outside transactions](#vttablet-reserved-conn-kill-query)
@@ -284,6 +286,21 @@ Additionally, `PREPARE ... FROM ?` is now a syntax error, matching MySQL: the gr
 
 See [#20562](https://github.com/vitessio/vitess/pull/20562) for details.
 
+#### <a id="vtgate-proxy-protocol-v1-strictness"/>Stricter PROXY protocol v1 header validation</a>
+
+On listeners with `--proxy-protocol` enabled, malformed PROXY protocol v1 headers that earlier versions tolerated are now rejected, and the connection is closed before the MySQL handshake. This also comes from the go-proxyproto upgrade, which brought the v1 parser in line with the PROXY protocol specification. The newly rejected forms are:
+
+- `TCP6` headers whose address fields contain plain IPv4 addresses. The specification requires addresses in IPv6 format on a `TCP6` line; the nginx OSS stream module is known to emit the IPv4 form when it proxies between address families (for example, an IPv6 client reaching an IPv4 upstream).
+- Port fields with leading zeros (`01234`) or a sign (`+80`).
+- Header lines with extra fields after the destination port.
+- IPv6 addresses carrying a zone identifier (`fe80::1%eth0`).
+
+Specification-conformant v1 headers, as emitted by HAProxy, AWS load balancers, and common nginx configurations, are unaffected.
+
+**Impact**: Deployments whose proxy emits one of the forms above — most notably the nginx stream module proxying between IPv6 clients and IPv4 upstreams — will have those connections rejected before the MySQL handshake. Configure the proxy to emit specification-conformant headers (for nginx, listen on a matching address family or on a v4-mapped socket so addresses are rendered in IPv6 form).
+
+See [#20733](https://github.com/vitessio/vitess/pull/20733) for details.
+
 ### <a id="minor-changes-reparent"/>Reparent</a>
 
 #### <a id="ers-lagging-relay-log-wait"/>`EmergencyReparentShard` no longer waits on replicas that cannot win the election</a>
@@ -297,6 +314,14 @@ This mirrors a tradeoff `orchestrator` made before Vitess: it never gated dead-p
 **Impact**: emergency failovers now succeed in shard states where they previously timed out. A reparent can succeed while some replicas are still catching up; they are repointed and continue replicating under the new primary. No flags were added or changed.
 
 See [#18529](https://github.com/vitessio/vitess/issues/18529).
+
+#### <a id="reparent-gtid-candidate-ordering"/>Reparent candidate ordering now respects partially ordered GTID histories</a>
+
+GTID containment is pairwise, so a candidate set can mix comparable and divergent histories: candidate A at `p:1-100,a:1-10` is strictly ahead of B at `p:1-100,a:1-5`, while C at `p:1-100,c:1-3` is incomparable with both. The reparent sorter that both `EmergencyReparentShard` and `PlannedReparentShard` use compared such candidates non-transitively, so ordering could depend on map iteration or RPC completion order, and `PlannedReparentShard` could select B even though A was known to be more advanced.
+
+Candidates are now ordered by GTID dominance before the existing promotion-rule, buffer-pool, and tablet-alias tiebreakers, so a dominated candidate can never rank ahead of its dominator regardless of input order. `EmergencyReparentShard` still rejects incomparable candidates as split brain, and `PlannedReparentShard` still chooses among incomparable maximal candidates. Positions that contain each other without being equal (possible with MariaDB GTIDs, where containment ignores the origin server) are now also rejected by `EmergencyReparentShard` as split brain, wherever the pair sits among the candidates; previously a leading pair failed with an internal sorting error, while a pair behind a more advanced candidate was not detected at all.
+
+See [#20579](https://github.com/vitessio/vitess/issues/20579).
 
 ### <a id="minor-changes-vttablet"/>VTTablet</a>
 

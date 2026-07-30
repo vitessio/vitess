@@ -72,10 +72,7 @@ jobs:
 
     - name: Set up Go
       if: steps.changes.outputs.examples == 'true'
-      uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
-      with:
-        go-version-file: go.mod
-        cache: ${{ (github.base_ref == 'main' || (github.base_ref == '' && github.ref_name == 'main')) && 'true' || 'false' }}
+      uses: ./.github/actions/setup-go
 
     - name: Tune the OS
       if: steps.changes.outputs.examples == 'true'
