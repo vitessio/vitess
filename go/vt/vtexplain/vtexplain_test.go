@@ -182,6 +182,59 @@ func TestExplain(t *testing.T) {
 	}
 }
 
+func TestExplainSequenceTableCommentCase(t *testing.T) {
+	const (
+		vSchema = `{
+  "commerce": {
+    "sharded": false,
+    "tables": {
+      "customer": {
+        "auto_increment": {
+          "column": "id",
+          "sequence": "commerce.customer_seq"
+        }
+      },
+      "customer_seq": {
+        "type": "sequence"
+      }
+    }
+  }
+}`
+		schema = `create table customer (
+  id bigint not null,
+  email varchar(128),
+  primary key(id)
+);
+create table customer_seq (
+  id bigint not null,
+  next_id bigint,
+  cache bigint,
+  primary key(id)
+) %s 'vitess_sequence';`
+		query = "insert into customer(email) values ('alice@example.com')"
+	)
+
+	for _, keyword := range []string{"comment", "COMMENT", "CoMmEnT"} {
+		t.Run(keyword, func(t *testing.T) {
+			ctx := utils.LeakCheckContext(t)
+			ts := memorytopo.NewServer(ctx, Cell)
+			opts := defaultTestOpts()
+			opts.ExecutionMode = ModeMulti
+			srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
+			vte, err := Init(ctx, vtenv.NewTestEnv(), ts, vSchema, fmt.Sprintf(schema, keyword), "", opts, srvTopoCounts)
+			require.NoError(t, err)
+			t.Cleanup(vte.Stop)
+
+			explains, err := vte.Run(query)
+			require.NoError(t, err)
+
+			explainText, err := vte.ExplainsAsText(explains)
+			require.NoError(t, err)
+			require.Contains(t, explainText, "select next_id, cache from customer_seq where id = 0 for update")
+		})
+	}
+}
+
 func TestErrors(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 	ts := memorytopo.NewServer(ctx, Cell)
