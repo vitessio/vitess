@@ -55,7 +55,6 @@ func (cached *fastMatcher) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
-
 func (cached *multibytePatternChar) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -66,7 +65,6 @@ func (cached *multibytePatternChar) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
-
 func (cached *multibyteWildcard) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -92,7 +90,6 @@ func (cached *multibyteWildcard) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
-
 func (cached *unicodeWildcard) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
