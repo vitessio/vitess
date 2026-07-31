@@ -163,10 +163,11 @@ func newUnicodeWildcardMatcher(
 	// small for a pattern that is mostly wildcards.
 	// The reduction needs the match-many byte to be its own marker: a rune
 	// shared with match-one classifies as match-one and never collapses,
-	// and in a charset with a wider minimum width the byte can sit inside
-	// an unrelated character, so the count says nothing about wildcards.
+	// in a charset with a wider minimum width the byte can sit inside an
+	// unrelated character, and a negative rune wraps to an unrelated byte,
+	// so in these cases the count says nothing about wildcards.
 	reserve := len(pat)
-	if chMany != chOne && chMany < utf8.RuneSelf && cs.MinWidth() == 1 {
+	if chMany != chOne && chMany >= 0 && chMany < utf8.RuneSelf && cs.MinWidth() == 1 {
 		if manyCount := bytes.Count(pat, []byte{byte(chMany)}); manyCount > 0 {
 			reserve = len(pat) - manyCount + min(manyCount, len(pat)-manyCount+1)
 		}
@@ -748,9 +749,10 @@ func newMultibyteWildcardMatcher(
 	// multibyte characters leave spare capacity, which is trimmed before
 	// the matcher is returned.
 	// The reduction needs the match-many byte to be its own marker: a rune
-	// shared with match-one classifies as match-one and never collapses.
+	// shared with match-one classifies as match-one and never collapses,
+	// and a negative rune wraps to an unrelated byte.
 	reserve := len(pat)
-	if chMany != chOne && chMany < utf8.RuneSelf {
+	if chMany != chOne && chMany >= 0 && chMany < utf8.RuneSelf {
 		if manyCount := bytes.Count(pat, []byte{byte(chMany)}); manyCount > 0 {
 			reserve = len(pat) - manyCount + min(manyCount, len(pat)-manyCount+1)
 		}

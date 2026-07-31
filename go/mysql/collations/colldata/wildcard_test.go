@@ -517,6 +517,18 @@ func TestWildcardCollapsedRunAllocation(t *testing.T) {
 		})
 		require.LessOrEqualf(t, allocs, 8.0, "%s: aliased metacharacter construction allocates %v times", collName, allocs)
 	}
+
+	// A negative match-many rune never marks a wildcard, but its byte
+	// conversion wraps to 'a', so every pattern byte would count as a
+	// collapsible wildcard while the parser appends every rune literally.
+	negPat := bytes.Repeat([]byte{'a'}, 1024*1024)
+	for _, collName := range []string{"sjis_japanese_ci", "utf8mb4_0900_ai_ci"} {
+		coll := testcollation(t, collName)
+		allocs := testing.AllocsPerRun(3, func() {
+			_ = coll.Wildcard(negPat, 0, -159, 0)
+		})
+		require.LessOrEqualf(t, allocs, 8.0, "%s: negative metacharacter construction allocates %v times", collName, allocs)
+	}
 }
 
 func BenchmarkWildcardMatching(b *testing.B) {
