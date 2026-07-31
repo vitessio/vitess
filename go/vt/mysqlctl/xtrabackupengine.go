@@ -186,9 +186,19 @@ func closeBackupFiles(ctx context.Context, cancel context.CancelFunc, timeout ti
 	// further calls to cancel().
 	watchdogDone := make(chan struct{})
 	// closingFinished, guarded by mu, records that every Close() call returned.
-	// The watchdog checks it under the same lock before cancelling, so a close
-	// that finishes first always wins the race against a firing timer: no
-	// cancel() happens on a successful close, even at the timeout boundary.
+	// The watchdog checks it under the same lock before cancelling, so once
+	// closing is marked finished the watchdog cannot cancel.
+	//
+	// This narrows but cannot fully eliminate the boundary race: "Close()
+	// returned" only becomes observable via the statement that sets this flag
+	// (below), so a timer that fires in the few-instruction gap between the
+	// final Close() returning and mu.Lock() can still win the lock, see false,
+	// and cancel(). That gap is irreducible — no completion signal (flag,
+	// channel close/send, timer.Stop()) can land atomically with Close()
+	// returning. The consequence, given the caller drains and inspects uploads
+	// via bh.Wait()/bh.Error() before writing the MANIFEST, is at worst a rare
+	// spurious backup failure that gets retried — never the recreate-after-
+	// abort corruption this whole change exists to prevent.
 	var mu sync.Mutex
 	closingFinished := false
 	go func() {
