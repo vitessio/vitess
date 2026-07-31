@@ -76,9 +76,9 @@ const (
 	resetLastIDValue  = 18446744073709547416
 	userLabelDisabled = "UserLabelDisabled"
 
-	// sessionWaitTimeoutProbeTimeout bounds the one-time best-effort probe of
-	// a reserved connection's @@session.wait_timeout after its first
-	// temporary-table DDL; see captureSessionWaitTimeout.
+	// sessionWaitTimeoutProbeTimeout caps the best-effort probe of a reserved
+	// connection's @@session.wait_timeout, run before a temporary-table DDL
+	// until a capture succeeds; see captureSessionWaitTimeout.
 	sessionWaitTimeoutProbeTimeout = 5 * time.Second
 )
 
@@ -1056,9 +1056,10 @@ func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (result *sqltypes.Re
 // the deadline mysqld actually enforces on this connection, fixed when the
 // connection's thread started, unlike the pool's global mirror which follows
 // runtime SET GLOBAL changes. Best-effort: on a benign failure (probe error,
-// unusable value) the connection falls back to the global mirror. The probe
-// runs at most once per connection, BEFORE the temporary-table DDL that
-// needs it: preserving the connection through a probe timeout is itself only
+// unusable value) the connection falls back to the global mirror until a
+// later temporary-table DDL's probe captures a value. The probe stops once a
+// capture succeeds, and runs BEFORE the temporary-table DDL that needs it:
+// preserving the connection through a probe timeout is itself only
 // best-effort (a KILL QUERY that fails or does not unblock the statement
 // escalates to killing the whole connection, and inside a transaction the
 // connection is always killed), so the probe precedes the user-visible state

@@ -137,11 +137,9 @@ func (sc *StatefulConnection) usesTempTableIdleTimeout() bool {
 // actually enforces, so a later SET GLOBAL neither reclaims this
 // connection's temp tables early (global lowered) nor leaves a socket mysqld
 // already closed at its older, shorter deadline occupying the stateful pool
-// until a longer new one (global raised). Before a temporary-table DDL
-// outside a transaction captures the session value (the probe never runs
-// inside one, where a timeout would cost the whole connection), the pool's
-// global mirror — zero, and therefore disabled, until a read of it succeeds
-// — is the fallback.
+// until a longer new one (global raised). Until a temporary-table DDL's
+// probe captures the session value, the pool's global mirror — zero, and
+// therefore disabled, until a read of it succeeds — is the fallback.
 func (sc *StatefulConnection) tempTableIdleTimeout() time.Duration {
 	configured := sc.env.Config().TempTableIdleTimeout
 	switch {
@@ -157,7 +155,8 @@ func (sc *StatefulConnection) tempTableIdleTimeout() time.Duration {
 }
 
 // captureSessionWaitTimeout records the connection's own
-// @@session.wait_timeout for auto mode, once; see tempTableIdleTimeout.
+// @@session.wait_timeout for auto mode; the first successful capture wins.
+// See tempTableIdleTimeout.
 func (sc *StatefulConnection) captureSessionWaitTimeout(waitTimeout time.Duration) {
 	if sc.sessionWaitTimeout == 0 && waitTimeout > 0 {
 		sc.sessionWaitTimeout = waitTimeout

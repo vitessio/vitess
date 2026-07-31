@@ -1035,10 +1035,12 @@ func TestTxPoolGetAndLockWaitsOutKeepAlive(t *testing.T) {
 
 	// The caller's own deadline still bounds the wait: a short-deadline
 	// context colliding with a hold that never releases returns the in-use
-	// error naming the holder. The hold is still in place when the caller
-	// gives up — proving the wait ended at the caller's deadline rather than
-	// at the hold's release, without racing a wall clock the CI runner may
-	// stall.
+	// error naming the holder — under the context's own code, not ABORTED,
+	// because vtgate rolls a transaction back on ABORTED shard errors and a
+	// command that never acquired the connection must not force that. The
+	// hold is still in place when the caller gives up — proving the wait
+	// ended at the caller's deadline rather than at the hold's release,
+	// without racing a wall clock the CI runner may stall.
 	held, err = txPool.scp.GetAndLock(id, reservedActivityRefreshPurpose)
 	require.NoError(t, err)
 	shortCtx, cancel := context.WithTimeout(ctx, 300*time.Millisecond)
@@ -1046,18 +1048,33 @@ func TestTxPoolGetAndLockWaitsOutKeepAlive(t *testing.T) {
 	_, err = txPool.GetAndLock(shortCtx, id, "for query")
 	require.ErrorContains(t, err, reservedActivityRefreshPurpose,
 		"a wait cut short by the caller's context reports the in-use holder")
+	require.Equal(t, vtrpcpb.Code_DEADLINE_EXCEEDED, vterrors.Code(err),
+		"a wait ended by the caller's deadline must carry the context's code, not ABORTED")
+	canceledCtx, cancelNow := context.WithCancel(ctx)
+	cancelNow()
+	_, err = txPool.GetAndLock(canceledCtx, id, "for query")
+	require.ErrorContains(t, err, reservedActivityRefreshPurpose)
+	require.Equal(t, vtrpcpb.Code_CANCELED, vterrors.Code(err),
+		"a wait ended by the caller's cancellation must carry CANCELED")
 	_, stillHeld := txPool.scp.GetAndLock(id, "probe")
 	require.ErrorContains(t, stillHeld, reservedActivityRefreshPurpose,
 		"the hold must still be in place when the caller's context gives up")
 	held.Unlock()
 
-	// Any other holder still fails fast with the in-use error.
+	// Any other holder still fails fast with the in-use error, and keeps its
+	// ABORTED code even under a dead caller context: only a wait this
+	// function chose to run — a brief hold — reports the context's code.
 	held, err = txPool.scp.GetAndLock(id, "for query")
 	require.NoError(t, err)
 	_, rawErr := txPool.scp.GetAndLock(id, "probe")
 	require.False(t, isBriefHoldInUse(rawErr), "a client-query hold is not a brief hold")
 	_, err = txPool.GetAndLock(ctx, id, "for another query")
 	require.ErrorContains(t, err, "in use: for query")
+	require.Equal(t, vtrpcpb.Code_ABORTED, vterrors.Code(err))
+	_, err = txPool.GetAndLock(canceledCtx, id, "for another query")
+	require.ErrorContains(t, err, "in use: for query")
+	require.Equal(t, vtrpcpb.Code_ABORTED, vterrors.Code(err),
+		"a real client holder fails fast with ABORTED regardless of the caller's context")
 	held.Release(tx.ConnRelease)
 }
 

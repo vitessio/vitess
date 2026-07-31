@@ -268,10 +268,19 @@ func (tp *TxPool) GetAndLock(ctx context.Context, connID tx.ConnID, reason strin
 		}
 	}
 	if err != nil {
-		// Deliberately the same ABORTED in-use shape whether the wait was
-		// cut short by the caller's context or never started: it names the
-		// actual holder, which a bare context error would hide, and callers
-		// classify every GetAndLock failure uniformly.
+		// A wait the caller's own context ended is not an ABORTED: vtgate
+		// marks a transaction for rollback on ABORTED shard errors, and a
+		// command that never acquired — let alone used — the connection must
+		// not force an otherwise untouched transaction to roll back over an
+		// internal keepalive or refresh outliving the caller's deadline. It
+		// returns the context's own code (CANCELED or DEADLINE_EXCEEDED)
+		// while still naming the holder, which a bare context error would
+		// hide. Every other failure — a real client holder, a vanished
+		// connection, a backstop-tripping wedged hold — keeps the ABORTED
+		// in-use shape it always had.
+		if ctxErr := ctx.Err(); ctxErr != nil && isBriefHoldInUse(err) {
+			return nil, vterrors.Errorf(vterrors.Code(ctxErr), "transaction %d: %v: %v", connID, ctxErr, err)
+		}
 		return nil, vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction %d: %v", connID, err)
 	}
 	return conn, nil
