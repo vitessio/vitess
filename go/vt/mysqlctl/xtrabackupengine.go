@@ -181,17 +181,30 @@ func closeFile(wc io.WriteCloser, fileName string, logger logutil.Logger, finalE
 // bh.Wait()/EndBackup().
 func closeBackupFiles(ctx context.Context, cancel context.CancelFunc, timeout time.Duration, destFiles []io.WriteCloser, backupFileName string, numStripes int, logger logutil.Logger, finalErr *error) {
 	done := make(chan struct{})
+	// watchdogDone is closed when the watchdog goroutine exits, so we can wait
+	// for it to fully finish before returning and be sure it will make no
+	// further calls to cancel().
+	watchdogDone := make(chan struct{})
+	// closingFinished, guarded by mu, records that every Close() call returned.
+	// The watchdog checks it under the same lock before cancelling, so a close
+	// that finishes first always wins the race against a firing timer: no
+	// cancel() happens on a successful close, even at the timeout boundary.
+	var mu sync.Mutex
+	closingFinished := false
 	go func() {
+		defer close(watchdogDone)
 		timer := time.NewTimer(timeout)
 
 		select {
 		case <-done:
 			timer.Stop()
 		case <-timer.C:
-			select {
-			case <-done:
+			mu.Lock()
+			defer mu.Unlock()
+			if closingFinished {
+				// Closing finished just as the timer fired; don't cancel an
+				// otherwise-successful, still-in-flight upload.
 				return
-			default:
 			}
 			logger.Errorf("Timed out waiting for Close() on backup file to complete")
 			// Cancelling the Context that was originally passed to bh.AddFile()
@@ -212,10 +225,20 @@ func closeBackupFiles(ctx context.Context, cancel context.CancelFunc, timeout ti
 		closeFile(file, filename, logger, finalErr)
 	}
 
+	// Mark closing finished under the lock before signalling the watchdog, so a
+	// timer that fires at this instant observes the flag and suppresses its
+	// cancel() instead of aborting a successful close.
+	mu.Lock()
+	closingFinished = true
+	mu.Unlock()
 	// Signal the watchdog to stop waiting now that closing has finished. This
 	// must not call cancel(): closing successfully doesn't mean any
 	// background upload started by bh.AddFile() has finished too.
 	close(done)
+	// Wait for the watchdog to fully exit before returning, so no cancel() can
+	// fire after this function returns and abort an in-flight S3/Ceph upload
+	// that hasn't been drained yet by bh.Wait()/EndBackup().
+	<-watchdogDone
 }
 
 // ExecuteBackup runs a backup based on given params. This could be a full or incremental backup.
