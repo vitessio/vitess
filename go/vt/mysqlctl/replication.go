@@ -473,6 +473,14 @@ func (mysqld *Mysqld) showReplicationStatusDirectContext(ctx context.Context, co
 // for connectTimeout is it treated as exiting after all -- with nothing left
 // to restore -- so that a pending restoration cannot hold Close's bounded
 // wait for the full restore deadline when mysqld is already gone.
+//
+// Role changes (promotion, RESET REPLICA ALL) do not serialize with this
+// restoration, so every pass re-verifies that the server is still a replica
+// BEFORE touching the durability settings, and the restoration ends the
+// moment it is not: relaxed replica-catchup settings must not land on (or
+// clobber the configuration of) a newly promoted primary. The window of a
+// single in-flight SET racing the role change cannot be closed from this
+// layer.
 func (mysqld *Mysqld) restoreReplicaAfterFailedShutdown(ctx context.Context, state *replicaShutdownState, pollInterval, connectTimeout time.Duration) {
 	var conn *dbconnpool.DBConnection
 	defer func() {
@@ -531,6 +539,31 @@ func (mysqld *Mysqld) restoreReplicaAfterFailedShutdown(ctx context.Context, sta
 			unreachableSince = time.Time{}
 			conn = c
 		}
+		// Verify the server is still a replica before every pass: a role
+		// change does not serialize with this restoration, and a relaxed
+		// durability SET must not land after one. The probe also resets a
+		// connection a failed statement may have broken.
+		status, err := mysqld.showReplicationStatusDirectContext(ctx, conn)
+		if err != nil {
+			if errors.Is(err, mysql.ErrNotReplica) {
+				// The server stopped being a replica while we were restoring
+				// (e.g. it was promoted, or its replication configuration was
+				// reset): there are no threads left to reconcile, and its
+				// durability settings are the new role's to manage.
+				log.Warn("the server is no longer a replica; ending the replica state restoration after a failed shutdown without touching the durability settings")
+				return
+			}
+			// The read may have failed because this connection broke:
+			// reconnect for the next attempt.
+			log.Warn(
+				"failed to read the replication status while restoring the replica state after a failed shutdown; retrying",
+				slog.Any("error", err),
+			)
+			conn.Close()
+			conn = nil
+			continue
+		}
+		statusObserved = true
 		if !settingsRestored {
 			// Only count the settings as restored once every SET succeeded, so
 			// that a transient failure (e.g. on a connection the shutdown
@@ -556,12 +589,6 @@ func (mysqld *Mysqld) restoreReplicaAfterFailedShutdown(ctx context.Context, sta
 			if settingsRestored {
 				return
 			}
-			// A failed SET may mean this connection broke, and with no
-			// threads to reconcile the status probe below -- which is what
-			// resets a broken connection -- is never reached: reconnect for
-			// the next attempt.
-			conn.Close()
-			conn = nil
 			continue
 		}
 		// Reconcile the replication threads rather than fire a single START: an
@@ -571,26 +598,6 @@ func (mysqld *Mysqld) restoreReplicaAfterFailedShutdown(ctx context.Context, sta
 		// landing afterwards would leave replication stopped -- so wait for any
 		// interrupted stop to settle (observed as its thread reporting stopped),
 		// start whatever should be running, and verify the result.
-		status, err := mysqld.showReplicationStatusDirectContext(ctx, conn)
-		if err != nil {
-			if errors.Is(err, mysql.ErrNotReplica) {
-				// The server stopped being a replica while we were restoring
-				// (e.g. it was promoted, or its replication configuration was
-				// reset): there are no threads left to reconcile.
-				log.Warn("the server is no longer a replica; ending the replica state restoration after a failed shutdown")
-				return
-			}
-			// The read may have failed because this connection broke:
-			// reconnect for the next attempt.
-			log.Warn(
-				"failed to read the replication status while restoring the replica state after a failed shutdown; retrying",
-				slog.Any("error", err),
-			)
-			conn.Close()
-			conn = nil
-			continue
-		}
-		statusObserved = true
 		receiverRunning := status.IOState == replication.ReplicationStateRunning ||
 			status.IOState == replication.ReplicationStateConnecting
 		applierRunning := status.SQLState == replication.ReplicationStateRunning

@@ -937,9 +937,10 @@ func TestTakeoverConnectFailureKeepsRestoreOwnership(t *testing.T) {
 
 // TestRestoreStopsWhenNoLongerReplica covers the server ceasing to be a
 // replica mid-restoration (e.g. it was promoted, or its replication
-// configuration was reset): there are no threads left to reconcile, so the
-// restoration must stop rather than retry the status read for its whole
-// budget -- holding Close's bounded wait with it.
+// configuration was reset): there are no threads left to reconcile and the
+// durability settings are the new role's to manage, so the restoration must
+// stop -- without writing the relaxed settings -- rather than retry for its
+// whole budget, holding Close's bounded wait with it.
 func TestRestoreStopsWhenNoLongerReplica(t *testing.T) {
 	const (
 		showReplicaStatus   = "SHOW REPLICA STATUS"
@@ -975,7 +976,7 @@ func TestRestoreStopsWhenNoLongerReplica(t *testing.T) {
 	defer cancel()
 	testMysqld.restoreReplicaAfterFailedShutdown(ctx, state, 10*time.Millisecond, 30*time.Second)
 	assert.Equal(t, 1, db.GetQueryCalledNum(showReplicaStatus), "the restoration must stop on the first not-a-replica answer instead of retrying")
-	assert.Equal(t, 1, db.GetQueryCalledNum(restoreFlushLog), "the durability settings must still be restored")
+	assert.Zero(t, db.GetQueryCalledNum(restoreFlushLog), "a server that is no longer a replica must not receive the relaxed durability settings")
 }
 
 // TestRestoreRetriesSettingsRestore covers a transient failure while
@@ -991,6 +992,10 @@ func TestRestoreRetriesSettingsRestore(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	db.AddQuery("SELECT 1", &sqltypes.Result{})
+	db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("Source_Host|Replica_IO_Running|Replica_SQL_Running", "varchar|varchar|varchar"),
+		"source|No|No",
+	))
 	for _, query := range []string{restoreFlushLog, restoreSyncBinlog, restoreSyncRelayLog} {
 		db.AddQuery(query, &sqltypes.Result{})
 	}
@@ -1162,6 +1167,67 @@ func TestRestoreRetriesSettingsWhenThreadStartUnavailable(t *testing.T) {
 	assert.Zero(t, db.GetQueryCalledNum(unsupported))
 }
 
+// TestRestoreStopsSettingsWhenPromotedMidRestore covers a role change racing
+// the restoration (Codex review): promotion and RESET REPLICA ALL do not
+// serialize with the restore, so every pass must verify the server is still a
+// replica BEFORE applying the relaxed durability settings, and the
+// restoration must end the moment it is not. Otherwise a retrying SET could
+// land on -- and clobber the configuration of -- a newly promoted primary.
+func TestRestoreStopsSettingsWhenPromotedMidRestore(t *testing.T) {
+	const (
+		showReplicaStatus   = "SHOW REPLICA STATUS"
+		restoreFlushLog     = "SET GLOBAL innodb_flush_log_at_trx_commit = 2"
+		restoreSyncBinlog   = "SET GLOBAL sync_binlog = 0"
+		restoreSyncRelayLog = "SET GLOBAL sync_relay_log = 10000"
+	)
+
+	db := fakesqldb.New(t)
+	defer db.Close()
+	db.AddQuery("SELECT 1", &sqltypes.Result{})
+	db.AddQuery(showReplicaStatus, sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("Source_Host|Replica_IO_Running|Replica_SQL_Running", "varchar|varchar|varchar"),
+		"source|Yes|Yes",
+	))
+	for _, query := range []string{restoreSyncBinlog, restoreSyncRelayLog} {
+		db.AddQuery(query, &sqltypes.Result{})
+	}
+	// The first setting keeps failing, so the restoration keeps retrying it.
+	db.AddQuery(restoreFlushLog, &sqltypes.Result{})
+	db.AddRejectedQuery(restoreFlushLog, assert.AnError)
+	// The server is promoted while the restoration is retrying: from the
+	// fourth status probe on, it is no longer a replica. (BeforeFunc runs
+	// after the current call's result is fetched, so a swap on the third
+	// probe takes effect on the fourth.)
+	var probes atomic.Int64
+	db.SetBeforeFunc(showReplicaStatus, func() {
+		if probes.Add(1) == 3 {
+			db.AddQuery(showReplicaStatus, &sqltypes.Result{})
+		}
+	})
+
+	params := db.ConnParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+	testMysqld := NewMysqld(dbc)
+	defer testMysqld.Close()
+
+	state := &replicaShutdownState{
+		startReceiver:       true,
+		startApplier:        true,
+		flushLogAtTrxCommit: "2",
+		syncBinlog:          "0",
+		syncRelayLog:        "10000",
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	testMysqld.restoreReplicaAfterFailedShutdown(ctx, state, 10*time.Millisecond, 30*time.Second)
+
+	// Three passes saw a replica and were allowed to try the settings; the
+	// fourth observed the promotion and must not have touched them first.
+	assert.Equal(t, 3, db.GetQueryCalledNum(restoreFlushLog),
+		"no settings write may happen on a pass that observed the promotion")
+}
+
 // TestRestoreReconnectsWhenSettingsRestoreLosesConnection covers a settings
 // restore whose connection dies mid-SET when there are no replication threads
 // to reconcile: the status probe -- which is what resets a broken connection
@@ -1178,6 +1244,10 @@ func TestRestoreReconnectsWhenSettingsRestoreLosesConnection(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	db.AddQuery("SELECT 1", &sqltypes.Result{})
+	db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("Source_Host|Replica_IO_Running|Replica_SQL_Running", "varchar|varchar|varchar"),
+		"source|No|No",
+	))
 	for _, query := range []string{restoreFlushLog, restoreSyncBinlog, restoreSyncRelayLog} {
 		db.AddQuery(query, &sqltypes.Result{})
 	}
@@ -1903,6 +1973,92 @@ func TestShutdownWaitHonorsCancellation(t *testing.T) {
 		require.FailNow(t, "attempt A did not return")
 	}
 	testMysqld.Close()
+}
+
+// TestShutdownSerializesAcrossMysqldInstances covers shutdown attempts from
+// separate processes (Codex review): each mysqlctl CLI invocation builds its
+// own Mysqld object, so the in-process gate cannot serialize them, and one
+// failed attempt's background restoration could reset the durability fence
+// beneath another process's shutdown. The interprocess lock must make a
+// second instance wait the first out -- including its pending restoration,
+// which the first instance holds the lock across until Close. flock
+// contention is per open file description, so a second Mysqld in this
+// process contends exactly as a second process would.
+func TestShutdownSerializesAcrossMysqldInstances(t *testing.T) {
+	const (
+		readDurability      = "SELECT @@global.innodb_flush_log_at_trx_commit, @@global.sync_binlog, @@global.sync_relay_log"
+		setFlushLog         = "SET GLOBAL innodb_flush_log_at_trx_commit = 1"
+		setSyncBinlog       = "SET GLOBAL sync_binlog = 1"
+		setSyncRelayLog     = "SET GLOBAL sync_relay_log = 1"
+		flushEngineLogs     = "FLUSH NO_WRITE_TO_BINLOG ENGINE LOGS"
+		flushBinaryLogs     = "FLUSH NO_WRITE_TO_BINLOG BINARY LOGS"
+		flushRelayLogs      = "FLUSH NO_WRITE_TO_BINLOG RELAY LOGS"
+		stopIOThread        = "STOP REPLICA IO_THREAD"
+		stopSQLThread       = "STOP REPLICA SQL_THREAD"
+		restoreFlushLog     = "SET GLOBAL innodb_flush_log_at_trx_commit = 2"
+		restoreSyncBinlog   = "SET GLOBAL sync_binlog = 0"
+		restoreSyncRelayLog = "SET GLOBAL sync_relay_log = 10000"
+	)
+
+	db := fakesqldb.New(t)
+	defer db.Close()
+	db.AddQuery("SELECT 1", &sqltypes.Result{})
+	db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("Source_Host|Replica_IO_Running|Replica_SQL_Running", "varchar|varchar|varchar"),
+		"source|Yes|Yes",
+	))
+	db.AddQuery(readDurability, sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"@@global.innodb_flush_log_at_trx_commit|@@global.sync_binlog|@@global.sync_relay_log",
+			"int64|int64|int64",
+		),
+		"2|0|10000",
+	))
+	for _, query := range []string{
+		setFlushLog, setSyncBinlog, setSyncRelayLog, flushEngineLogs, flushBinaryLogs, flushRelayLogs,
+		stopIOThread, stopSQLThread, restoreFlushLog, restoreSyncBinlog, restoreSyncRelayLog,
+	} {
+		db.AddQuery(query, &sqltypes.Result{})
+	}
+	db.AddQueryPattern("kill .*", &sqltypes.Result{})
+
+	// No hooks, and mysqladmin has no server to talk to: the shutdown itself
+	// fails, arming the restoration.
+	t.Setenv("VTROOT", t.TempDir())
+	dir := t.TempDir()
+	cnf := &Mycnf{
+		SocketFile: filepath.Join(dir, "mysql.sock"),
+		PidFile:    filepath.Join(dir, "mysql.pid"),
+	}
+	require.NoError(t, os.WriteFile(cnf.PidFile, []byte("12345\n"), 0o600))
+
+	params := db.ConnParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+
+	// Instance A's shutdown fails, arming a restoration; A holds the
+	// interprocess lock until Close.
+	mysqldA := NewMysqld(dbc)
+	err := mysqldA.Shutdown(t.Context(), cnf, false, 30*time.Second)
+	require.Error(t, err)
+	require.NotContains(t, err.Error(), "concurrent mysqld shutdown")
+
+	// Instance B (a separate "process") must wait behind A rather than
+	// interleave with A's restoration.
+	mysqldB := NewMysqld(dbc)
+	defer mysqldB.Close()
+	bCtx, bCancel := context.WithTimeout(t.Context(), 2*time.Second)
+	defer bCancel()
+	err = mysqldB.Shutdown(bCtx, cnf, false, 30*time.Second)
+	require.ErrorContains(t, err, "waiting for a concurrent mysqld shutdown in another process")
+
+	// A closes -- after its restoration finished -- releasing the lock: B's
+	// retry now proceeds to its own attempt and fails on the shutdown itself,
+	// not on the lock.
+	mysqldA.Close()
+	err = mysqldB.Shutdown(t.Context(), cnf, false, 30*time.Second)
+	require.Error(t, err)
+	require.NotContains(t, err.Error(), "concurrent mysqld shutdown")
 }
 
 // TestConcurrentShutdownAttemptsSerialize covers two overlapping shutdown

@@ -157,6 +157,15 @@ type Mysqld struct {
 	shutdownGateOnce sync.Once
 	shutdownGateCh   chan struct{}
 
+	// shutdownFlock* hold the per-instance interprocess shutdown lock (see
+	// acquireShutdownFlock): the in-process gate above cannot serialize
+	// attempts from separate processes. Held from the first crash-safe
+	// shutdown attempt until Close so a pending restoration stays covered.
+	shutdownFlockGateOnce sync.Once
+	shutdownFlockGateCh   chan struct{}
+	shutdownFlockMu       sync.Mutex
+	shutdownFlock         *os.File
+
 	// pendingRestoreMu guards the pending-restore bookkeeping below, which
 	// tracks background replica-state restorations armed by a failed shutdown:
 	// Close waits for them before the process exits, and a retrying shutdown
@@ -750,6 +759,18 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 	}
 	mysqld.mutex.Unlock()
 
+	// Serialize with shutdown attempts from other processes before judging
+	// or changing any state: the in-process gate below only covers attempts
+	// sharing this Mysqld object. A zero preparation budget opts out of the
+	// crash-safety machinery entirely -- including this lock -- to stay an
+	// immediate, no-wait shutdown.
+	preparationBudget := replicaShutdownPreparationBudget(shutdownTimeout)
+	if preparationBudget > 0 {
+		if err := mysqld.acquireShutdownFlock(ctx, cnf); err != nil {
+			return err
+		}
+	}
+
 	// possibly mysql is already shutdown, check for a few files first
 	if mysqldAlreadyStopped(cnf) {
 		log.Warn("assuming mysqld already shut down - no socket, no pid file found")
@@ -767,7 +788,7 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 		return fmt.Errorf("preflight_mysqld_shutdown hook failed: %v", hr.String())
 	}
 
-	return mysqld.shutdownWithReplicaCrashSafety(ctx, replicaShutdownPreparationBudget(shutdownTimeout), func() error {
+	return mysqld.shutdownWithReplicaCrashSafety(ctx, preparationBudget, func() error {
 		return mysqld.executeShutdown(ctx, cnf, waitForMysqld, shutdownTimeout)
 	})
 }
@@ -1756,6 +1777,10 @@ func (mysqld *Mysqld) Close() {
 			log.Warn("timed out waiting for a pending replica state restoration before closing")
 		}
 	}
+
+	// The pending restorations (if any) have finished: release the
+	// interprocess shutdown lock so another process's shutdown can proceed.
+	mysqld.releaseShutdownFlock()
 
 	if mysqld.dbaPool != nil {
 		mysqld.dbaPool.Close()
