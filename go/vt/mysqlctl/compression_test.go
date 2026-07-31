@@ -173,6 +173,18 @@ func TestLz4CompressionLevelMapping(t *testing.T) {
 	require.Equal(t, lz4.Level9, lz4CompressionLevel(10))
 }
 
+func TestLz4ConcurrencyBlocksMapping(t *testing.T) {
+	// A --backup-storage-number-blocks value of 0 selected serial
+	// compression in the lz4 v2 writer, while the v4 concurrency option
+	// reads any non-positive value as GOMAXPROCS, so 0 maps to 1 — the
+	// value the v4 writer treats as serial. Other values pass through:
+	// negative means GOMAXPROCS in both versions.
+	require.Equal(t, 1, lz4ConcurrencyBlocks(0))
+	require.Equal(t, -1, lz4ConcurrencyBlocks(-1))
+	require.Equal(t, 1, lz4ConcurrencyBlocks(1))
+	require.Equal(t, 2, lz4ConcurrencyBlocks(2))
+}
+
 func TestUnSupportedBuiltinCompressors(t *testing.T) {
 	logger := logutil.NewMemoryLogger()
 

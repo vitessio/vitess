@@ -67,6 +67,22 @@ var (
 	}
 )
 
+type (
+	// writeCloserOnly hides every method of the wrapped writer except
+	// Write and Close. The lz4 writer's ReadFrom only accepts a writer
+	// with nothing written to it yet, while io.Copy and io.CopyN select
+	// the destination's ReadFrom whenever the source has no visible
+	// WriteTo; repeated copies into one compressor — the striped
+	// xtrabackup backup round-robins io.CopyN over its destination
+	// writers — would then fail after the first copy. Hiding the method
+	// keeps every copy on the plain Write path.
+	writeCloserOnly struct{ io.WriteCloser }
+	// readCloserOnly hides every method of the wrapped reader except
+	// Read and Close; the lz4 reader's WriteTo carries the same
+	// fresh-stream restriction as the writer's ReadFrom.
+	readCloserOnly struct{ io.ReadCloser }
+)
+
 func init() {
 	for _, cmd := range []string{"vtbackup", "vtcombo", "vttablet", "vttestserver"} {
 		servenv.OnParseFor(cmd, registerBackupCompressionFlags)
@@ -238,21 +254,18 @@ func newBuiltinDecompressor(engine string, reader io.Reader, logger logutil.Logg
 	return decompressor, err
 }
 
-type (
-	// writeCloserOnly hides every method of the wrapped writer except
-	// Write and Close. The lz4 writer's ReadFrom only accepts a writer
-	// with nothing written to it yet, while io.Copy and io.CopyN select
-	// the destination's ReadFrom whenever the source has no visible
-	// WriteTo; repeated copies into one compressor — the striped
-	// xtrabackup backup round-robins io.CopyN over its destination
-	// writers — would then fail after the first copy. Hiding the method
-	// keeps every copy on the plain Write path.
-	writeCloserOnly struct{ io.WriteCloser }
-	// readCloserOnly hides every method of the wrapped reader except
-	// Read and Close; the lz4 reader's WriteTo carries the same
-	// fresh-stream restriction as the writer's ReadFrom.
-	readCloserOnly struct{ io.ReadCloser }
-)
+// lz4ConcurrencyBlocks maps the --backup-storage-number-blocks value to
+// the lz4 concurrency option. A value of 0 selected serial compression
+// in the lz4 v2 writer, while the v4 option reads any non-positive value
+// as GOMAXPROCS, so 0 maps to 1 — the value the v4 writer treats as
+// serial. A negative value means GOMAXPROCS in both versions and passes
+// through.
+func lz4ConcurrencyBlocks(blocks int) int {
+	if blocks == 0 {
+		return 1
+	}
+	return blocks
+}
 
 // lz4CompressionLevel maps the numeric --compression-level value onto the
 // lz4 level enum; lz4.CompressionLevelOption rejects any value outside the
@@ -293,7 +306,7 @@ func newBuiltinCompressor(engine string, writer io.Writer, logger logutil.Logger
 	case Lz4Compressor:
 		lz4Writer := lz4.NewWriter(writer)
 		if err := lz4Writer.Apply(
-			lz4.ConcurrencyOption(backupCompressBlocks),
+			lz4.ConcurrencyOption(lz4ConcurrencyBlocks(backupCompressBlocks)),
 			lz4.CompressionLevelOption(lz4CompressionLevel(compressionLevel)),
 		); err != nil {
 			return compressor, vterrors.Wrap(err, "cannot create lz4 compressor")
