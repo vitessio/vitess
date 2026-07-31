@@ -266,6 +266,12 @@ func (dbc *Conn) execOnceMulti(ctx context.Context, query string, maxrows int, w
 		// it to finish so that the kill statement completes and the dba
 		// pool connection is released before we return.
 		wg.Wait()
+		if more {
+			// The stateless termination only kills the query, leaving the
+			// connection open with this result's trailing resultsets unread.
+			// Close it so it cannot be recycled into the pool mid-stream.
+			dbc.Close()
+		}
 		return nil, false, dbc.Err()
 	}
 	// Check for errors set by an explicit Kill call from another
