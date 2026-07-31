@@ -190,8 +190,24 @@ func FindPositionsOfAllCandidates(
 		replicationStatusMap[alias] = &status
 	}
 
+	// Decode former-primary executed positions up front so their flavor can
+	// participate in the GTID/non-GTID detection below. A former primary was not
+	// replicating, so it has no relay-log position; its executed position is
+	// authoritative and is what we key its flavor off. It is exempt from the
+	// empty-relay-log check that applies to replicas.
+	primaryPositions := make(map[string]replication.Position, len(primaryStatusMap))
+	for alias, primaryStatus := range primaryStatusMap {
+		executedPosition, err := replication.DecodePosition(primaryStatus.Position)
+		if err != nil {
+			return nil, false, vterrors.Wrapf(err, "could not decode a primary status executed position for tablet %v", alias)
+		}
+		primaryPositions[alias] = executedPosition
+	}
+
 	// Determine if we're GTID-based. If we are, we'll need to look for errant
-	// GTIDs below.
+	// GTIDs below. Both replicas and former primaries contribute to detection so
+	// that a shard whose only reachable candidates are former primaries is still
+	// correctly classified.
 	var (
 		isGTIDBased                bool
 		isNonGTIDBased             bool
@@ -210,6 +226,20 @@ func FindPositionsOfAllCandidates(
 			// GTID-based relay log positions, we will return the error recorded
 			// here.
 			emptyRelayPosErrorRecorder.RecordError(vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "encountered tablet %v with no relay log position, when at least one other tablet in the status map has GTID based relay log positions", alias))
+		}
+	}
+
+	// Fold former-primary flavors into detection. A zero position (a former primary
+	// with no executed transactions) tells us nothing about the flavor, so skip it
+	// rather than treating it as non-GTID.
+	for _, pos := range primaryPositions {
+		if pos.IsZero() {
+			continue
+		}
+		if _, ok := pos.GTIDSet.(replication.Mysql56GTIDSet); ok {
+			isGTIDBased = true
+		} else {
+			isNonGTIDBased = true
 		}
 	}
 
@@ -234,12 +264,7 @@ func FindPositionsOfAllCandidates(
 		}
 	}
 
-	for alias, primaryStatus := range primaryStatusMap {
-		executedPosition, err := replication.DecodePosition(primaryStatus.Position)
-		if err != nil {
-			return nil, false, vterrors.Wrapf(err, "could not decode a primary status executed position for tablet %v", alias)
-		}
-
+	for alias, executedPosition := range primaryPositions {
 		// A demoted/former primary applies no relay log, so its executed position
 		// is authoritative. For GTID-based shards, initialize Executed as well as
 		// Combined so that in RelayLogPositions.AtLeast it compares equal to an

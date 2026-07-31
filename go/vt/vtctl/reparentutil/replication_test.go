@@ -292,6 +292,86 @@ func TestFindPositionsOfAllCandidates_PrimaryExecutedZeroOnNonGTID(t *testing.T)
 		"primary candidate Executed must stay zero on a non-GTID shard, got %v", primary.Executed)
 }
 
+// TestFindPositionsOfAllCandidates_FlavorFromPrimaryStatus verifies that GTID/
+// non-GTID detection inspects the primary status map, not just the replica status
+// map. When every reachable candidate is a former primary (empty statusMap), the
+// flavor must still be classified from the primary positions, and a shard mixing
+// GTID and non-GTID positions across the two maps must be rejected.
+func TestFindPositionsOfAllCandidates_FlavorFromPrimaryStatus(t *testing.T) {
+	t.Parallel()
+
+	const (
+		gtid    = "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5"
+		filePos = "FilePos/mysql-bin.0001:100"
+	)
+
+	tests := []struct {
+		name          string
+		statusMap     map[string]*replicationdatapb.StopReplicationStatus
+		primaryMap    map[string]*replicationdatapb.PrimaryStatus
+		wantGTIDBased bool
+		wantErr       string
+	}{
+		{
+			name:          "primary-only MySQL56 is detected as GTID-based",
+			primaryMap:    map[string]*replicationdatapb.PrimaryStatus{"p1": {Position: gtid}},
+			wantGTIDBased: true,
+		},
+		{
+			name:          "primary-only FilePos is detected as non-GTID-based",
+			primaryMap:    map[string]*replicationdatapb.PrimaryStatus{"p1": {Position: filePos}},
+			wantGTIDBased: false,
+		},
+		{
+			name: "GTID replica mixed with FilePos former primary is rejected",
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"r1": {After: &replicationdatapb.Status{RelayLogPosition: gtid, Position: gtid}},
+			},
+			primaryMap: map[string]*replicationdatapb.PrimaryStatus{"p1": {Position: filePos}},
+			wantErr:    "mix of GTID-based and non GTID-based",
+		},
+		{
+			// A former primary with an empty executed position is flavor-agnostic and
+			// must not be counted as non-GTID; otherwise it would falsely trip the
+			// mixed-mode guard against the GTID replicas. This pins the IsZero() skip
+			// in the flavor detection.
+			name: "GTID replica with a zero-position former primary stays GTID-based",
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"r1": {After: &replicationdatapb.Status{RelayLogPosition: gtid, Position: gtid}},
+			},
+			primaryMap:    map[string]*replicationdatapb.PrimaryStatus{"p1": {Position: ""}},
+			wantGTIDBased: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			positionMap, isGTIDBased, err := FindPositionsOfAllCandidates(tt.statusMap, tt.primaryMap)
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tt.wantGTIDBased, isGTIDBased)
+
+			// The former primary's Executed position is initialized only on a
+			// GTID-based shard (see TestFindPositionsOfAllCandidates_PrimaryExecuted*).
+			primary := positionMap["p1"]
+			require.NotNil(t, primary)
+			executed, decErr := replication.DecodePosition(tt.primaryMap["p1"].Position)
+			require.NoError(t, decErr)
+			assert.True(t, primary.Combined.Equal(executed), "primary Combined must hold its executed position")
+			if tt.wantGTIDBased {
+				assert.True(t, primary.Executed.Equal(executed), "primary Executed must be initialized on a GTID-based shard")
+			} else {
+				assert.True(t, primary.Executed.IsZero(), "primary Executed must stay zero on a non-GTID shard")
+			}
+		})
+	}
+}
+
 // TestFindPositionsOfAllCandidates_ErrorNotDuplicated verifies that when
 // FindPositionsOfAllCandidates wraps an error the underlying cause message is
 // not repeated twice in the output. vterrors.Wrapf already appends the cause
