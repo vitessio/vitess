@@ -382,15 +382,33 @@ func (be *XtrabackupEngine) backupFiles(
 	// This context also allows us to immediately abort AddFiles if we encountered
 	// an error in this function.
 	addFilesCtx, cancelAddFiles := context.WithCancel(ctx)
-	// Abort any straggling background uploads (S3, Ceph) once this function
-	// is failing anyway, instead of letting them run to completion pointlessly.
 	// This must run after closeBackupFiles below, so it's deferred first:
 	// defers run LIFO, and closeBackupFiles needs addFilesCtx to still be live
 	// while it closes destFiles.
 	defer func() {
 		if finalErr != nil {
+			// We're already failing: cancel first so any straggling
+			// background uploads (S3, Ceph) stop as promptly as possible,
+			// then drain them. Without this wait, the caller could invoke
+			// AbortBackup() while an upload is still in flight; AbortBackup
+			// only removes objects that already exist in storage, so an
+			// upload landing after that removal would recreate part of the
+			// backup we're trying to discard.
 			cancelAddFiles()
+			bh.Wait()
+			return
 		}
+
+		// Drain any in-flight background uploads (S3, Ceph) and surface
+		// their errors before letting the caller proceed to write the
+		// MANIFEST, for the same reason: the MANIFEST must not be written
+		// (and the backup must not be reported usable) while an upload that
+		// could still fail is outstanding.
+		bh.Wait()
+		if err := bh.Error(); err != nil {
+			finalErr = vterrors.Wrap(err, "error uploading backup file")
+		}
+		cancelAddFiles()
 	}()
 
 	destFiles, err := addStripeFiles(addFilesCtx, params, bh, backupFileName, numStripes)
