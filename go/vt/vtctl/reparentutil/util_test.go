@@ -1639,6 +1639,68 @@ func TestFindPositionForTablet(t *testing.T) {
 			expectedLag:      0,
 			expectedPosition: "",
 		}, {
+			// A not-yet-replicating tablet (ERNotReplica) has an empty position but its
+			// MySQL version is still recovered from PrimaryStatus so version-aware
+			// election can consider it during an uninitialized-shard bootstrap.
+			name: "no replication status recovers version from PrimaryStatus",
+			tmc: &testutil.TabletManagerClient{
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Error: vterrors.ToGRPC(vterrors.Wrap(mysql.ErrNotReplica, "before status failed")),
+					},
+				},
+				PrimaryStatusResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000100": {
+						Status: &replicationdatapb.PrimaryStatus{ServerVersion: "Ver 8.0.35"},
+					},
+				},
+			},
+			tablet: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			expectedLag:           0,
+			expectedPosition:      "",
+			expectedServerVersion: "Ver 8.0.35",
+		}, {
+			// When the tablet is not replicating and the best-effort PrimaryStatus
+			// fetch also fails, we fall back to an empty (unknown) version rather than
+			// failing — ElectNewPrimary treats it as unknown-version.
+			name: "no replication status falls back to unknown version when PrimaryStatus fails",
+			tmc: &testutil.TabletManagerClient{
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Error: vterrors.ToGRPC(vterrors.Wrap(mysql.ErrNotReplica, "before status failed")),
+					},
+				},
+				PrimaryStatusResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000100": {Error: assert.AnError},
+				},
+			},
+			tablet: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			expectedLag:           0,
+			expectedPosition:      "",
+			expectedServerVersion: "",
+		}, {
 			name: "relay log",
 			tmc: &testutil.TabletManagerClient{
 				ReplicationStatusResults: map[string]struct {

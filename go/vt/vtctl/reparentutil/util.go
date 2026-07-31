@@ -225,8 +225,21 @@ func findTabletPositionLagBackupStatus(ctx context.Context, tablet *topodatapb.T
 	if err != nil {
 		sqlErr, isSQLErr := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
 		if isSQLErr && sqlErr != nil && sqlErr.Number() == sqlerror.ERNotReplica {
-			logger.Warningf("no replication statue from %v, using empty gtid set", topoproto.TabletAliasString(tablet.Alias))
-			return rlp, 0, false, false, "", nil
+			logger.Warningf("no replication status from %v, using empty gtid set", topoproto.TabletAliasString(tablet.Alias))
+			// The tablet is not replicating (e.g. an uninitialized shard, where every
+			// candidate hits this path). Its position is legitimately empty, but we still
+			// want its MySQL version for version-aware election — otherwise every
+			// not-yet-replicating candidate would be treated as unknown-version and a
+			// newer mysqld could be elected during a mixed-version bootstrap. Recover the
+			// version from PrimaryStatus, a read-only RPC. Best-effort: on failure fall
+			// back to unknown version rather than failing the election.
+			serverVersion := ""
+			if primaryStatus, psErr := tmc.PrimaryStatus(ctx, tablet); psErr == nil {
+				serverVersion = primaryStatus.ServerVersion
+			} else {
+				logger.Warningf("could not get MySQL version from %v via PrimaryStatus: %v", topoproto.TabletAliasString(tablet.Alias), psErr)
+			}
+			return rlp, 0, false, false, serverVersion, nil
 		}
 		logger.Warningf("failed to get replication status from %v, ignoring tablet: %v", topoproto.TabletAliasString(tablet.Alias), err)
 		return rlp, 0, false, false, "", err
