@@ -62,13 +62,7 @@ jobs:
 
     - name: Set up Go
       if: steps.mode.outputs.is_full_run == 'true' || steps.changes.outputs.changed_files == 'true'
-      uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
-      with:
-        go-version-file: go.mod
-        cache: ${{ (github.base_ref == 'main' || (github.base_ref == '' && github.ref_name == 'main')) && 'true' || 'false' }}
-        cache-dependency-path: |
-          go.sum
-          tools/**/go.sum
+      uses: ./.github/actions/setup-go
 
     - name: Detect changed Go packages
       if: steps.mode.outputs.is_full_run != 'true' && steps.changes.outputs.changed_files == 'true'
