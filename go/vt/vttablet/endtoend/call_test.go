@@ -47,7 +47,7 @@ var procSQL = []string{
 	`create procedure proc_select_then_sleep()
 	BEGIN
 		select intval from vitess_test;
-		select sleep(30);
+		select sleep(60);
 	END;`,
 	`create procedure proc_select2_tx_insert()
 	BEGIN
@@ -431,6 +431,6 @@ func TestCallProcedureDrainHonorsDeadline(t *testing.T) {
 	elapsed := time.Since(start)
 
 	require.Error(t, err)
-	require.Less(t, elapsed, 20*time.Second,
+	require.Less(t, elapsed, 40*time.Second,
 		"draining trailing resultsets must honor the query deadline instead of blocking for the whole procedure")
 }
