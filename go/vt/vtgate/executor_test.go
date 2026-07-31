@@ -2960,7 +2960,7 @@ func TestExecutorTruncateErrors(t *testing.T) {
 	require.EqualError(t, err, "syntax error at posi [TRUNCATED]")
 
 	_, _, err = executor.Prepare(t.Context(), "TestExecute", session, "invalid statement")
-	assert.EqualError(t, err, "[BUG] unrecognized p [TRUNCATED]")
+	assert.EqualError(t, err, "syntax error at posi [TRUNCATED]")
 }
 
 func TestPrepareDoesNotStartTransaction(t *testing.T) {

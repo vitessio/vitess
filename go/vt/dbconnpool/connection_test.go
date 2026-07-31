@@ -19,10 +19,12 @@ package dbconnpool
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 )
 
@@ -45,4 +47,39 @@ func TestDBConnectionExecuteFetchMultiConnError(t *testing.T) {
 	require.Error(t, err)
 	require.ErrorContains(t, err, "Lost connection to MySQL server during query")
 	require.True(t, conn.IsClosed(), "a connection error must mark the connection closed so it is not reused")
+}
+
+// TestExecuteStreamFetchCarriesOKPacket verifies that ExecuteStreamFetch forwards
+// the OK-packet RowsAffected and InsertID to the callback for a query that
+// produces no result set (e.g. a CALL of a procedure that performs DML), matching
+// the buffered ExecuteFetch path.
+func TestExecuteStreamFetchCarriesOKPacket(t *testing.T) {
+	db := fakesqldb.New(t)
+	t.Cleanup(db.Close)
+
+	const query = "CALL sp_insert()"
+	db.AddQuery(query, &sqltypes.Result{
+		RowsAffected:    7,
+		InsertID:        99,
+		InsertIDChanged: true,
+	})
+
+	conn, err := NewDBConnection(t.Context(), dbconfigs.New(db.ConnParams()))
+	require.NoError(t, err)
+	t.Cleanup(conn.Close)
+
+	got := &sqltypes.Result{}
+	err = conn.ExecuteStreamFetch(query, func(r *sqltypes.Result) error {
+		got.RowsAffected += r.RowsAffected
+		if r.InsertIDChanged {
+			got.InsertID = r.InsertID
+			got.InsertIDChanged = true
+		}
+		return nil
+	}, func() *sqltypes.Result { return &sqltypes.Result{} }, 4096)
+	require.NoError(t, err)
+
+	assert.EqualValues(t, 7, got.RowsAffected, "streamed OK packet must carry RowsAffected to the callback")
+	assert.EqualValues(t, 99, got.InsertID, "streamed OK packet must carry InsertID to the callback")
+	assert.True(t, got.InsertIDChanged)
 }
