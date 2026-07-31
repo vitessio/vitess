@@ -187,10 +187,16 @@ func TestCloseBackupFilesDoesNotCancelContextOnSuccess(t *testing.T) {
 	}()
 
 	// Wait for closeBackupFiles to finish (up to 5 seconds) using the
-	// test-guideline-approved require.Eventually instead of t.Fatal.
+	// test-guideline-approved require.Eventually instead of t.Fatal. Poll
+	// non-blockingly so a regression that hangs closeBackupFiles fails the
+	// test at the deadline instead of blocking on <-done indefinitely.
 	require.Eventually(t, func() bool {
-		<-done
-		return true
+		select {
+		case <-done:
+			return true
+		default:
+			return false
+		}
 	}, 5*time.Second, 10*time.Millisecond)
 
 	require.NoError(t, finalErr)
@@ -220,10 +226,16 @@ func TestCloseBackupFilesCancelsOnRealTimeout(t *testing.T) {
 		closeBackupFiles(ctx, cancel, 50*time.Millisecond, destFiles, "backup", len(destFiles), logger, &finalErr)
 	}()
 
-	// Wait for closeBackupFiles to finish (up to 5 seconds).
+	// Wait for closeBackupFiles to finish (up to 5 seconds). Poll
+	// non-blockingly so a regression that hangs closeBackupFiles fails the
+	// test at the deadline instead of blocking on <-done indefinitely.
 	require.Eventually(t, func() bool {
-		<-done
-		return true
+		select {
+		case <-done:
+			return true
+		default:
+			return false
+		}
 	}, 5*time.Second, 10*time.Millisecond)
 
 	assert.ErrorIs(t, finalErr, context.Canceled)
