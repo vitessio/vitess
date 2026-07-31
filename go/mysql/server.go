@@ -119,12 +119,6 @@ type Handler interface {
 	// execute query.
 	ComStmtExecute(c *Conn, prepare *PrepareData, callback func(*sqltypes.Result) error) error
 
-	// ComPing notifies the handler that the connection received a
-	// COM_PING. The server answers the ping itself; this is a liveness
-	// signal only — MySQL counts a ping as connection activity — and the
-	// handler must not block.
-	ComPing(c *Conn)
-
 	// ComRegisterReplica is called when a connection receives a ComRegisterReplica request
 	ComRegisterReplica(c *Conn, replicaHost string, replicaPort uint16, replicaUser string, replicaPassword string) error
 
@@ -146,6 +140,23 @@ type Handler interface {
 	Env() *vtenv.Environment
 }
 
+// ConnActivityObserver is an optional interface a Handler may additionally
+// implement to observe every command a connection receives — including the
+// ones the server answers locally (COM_PING, COM_SET_OPTION, and the
+// prepared-statement bookkeeping commands), which never reach the Handler's
+// own methods. MySQL counts any command as connection activity, restarting
+// the connection's idle wait_timeout clock; a handler mirroring that
+// semantic needs to see the locally answered commands too. It is a
+// separate, optional interface — rather than a Handler method — so that
+// adding it is not a breaking change for existing Handler implementations.
+//
+// ConnActivity is called from the connection's serving goroutine as each
+// command is dispatched, before it is handled and whatever its outcome;
+// implementations must not block.
+type ConnActivityObserver interface {
+	ConnActivity(c *Conn)
+}
+
 // UnimplementedHandler implemnts all of the optional callbacks so as to satisy
 // the Handler interface. Intended to be embedded into your custom Handler
 // implementation without needing to define every callback and to help be forwards
@@ -156,7 +167,6 @@ func (UnimplementedHandler) NewConnection(*Conn)      {}
 func (UnimplementedHandler) ConnectionReady(*Conn)    {}
 func (UnimplementedHandler) ConnectionClosed(*Conn)   {}
 func (UnimplementedHandler) ComResetConnection(*Conn) {}
-func (UnimplementedHandler) ComPing(*Conn)            {}
 
 // Listener is the MySQL server protocol listener.
 type Listener struct {

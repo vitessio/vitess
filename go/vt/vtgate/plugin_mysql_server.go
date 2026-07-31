@@ -184,6 +184,10 @@ type tempTableConn struct {
 	closed bool
 }
 
+// The mysql server only delivers connection-activity notifications to
+// handlers that implement the optional observer interface.
+var _ mysql.ConnActivityObserver = (*vtgateHandler)(nil)
+
 // vtgateHandler implements the Listener interface.
 // It stores the Session in the ClientData of a Connection.
 type vtgateHandler struct {
@@ -1428,21 +1432,23 @@ func deferFirstOKOnlyResult(callback func(*sqltypes.Result) error) (func(*sqltyp
 	}
 }
 
-// ComPing treats a client ping as session activity, as mysqld does: the
-// liveness signal fans out to the session's temp-table reserved connections,
-// so a client that keeps its connection alive with periodic pings does not
-// lose its temporary tables at mysqld's wait_timeout. Non-blocking — the
-// fanout runs in the background while the server answers the ping.
-func (vh *vtgateHandler) ComPing(c *mysql.Conn) {
-	// Read the session directly: a ping on a connection that never ran a
+// ConnActivity treats any client command — including the ones the mysql
+// server answers locally, like COM_PING and the prepared-statement
+// bookkeeping commands — as session activity, as mysqld does: the liveness
+// signal fans out to the session's temp-table reserved connections, so a
+// client that keeps its connection alive with periodic pings does not lose
+// its temporary tables at mysqld's wait_timeout. Non-blocking — the fanout
+// runs in the background while the server answers the command.
+func (vh *vtgateHandler) ConnActivity(c *mysql.Conn) {
+	// Read the session directly: activity on a connection that never ran a
 	// query has no session and nothing to refresh.
 	session, _ := c.ClientData.(*vtgatepb.Session)
 	if session == nil || !session.GetOptions().GetHasCreatedTempTables() {
 		return
 	}
 	ctx := mysqlConnCallerContext(callinfo.MysqlCallInfo(context.Background(), c), c)
-	// The per-connection goroutine serializes ComPing with the connection's
-	// other commands, so wrapping the live session here is safe.
+	// The per-connection goroutine serializes ConnActivity with the
+	// connection's other commands, so wrapping the live session here is safe.
 	vh.vtg.executor.tempTableRefresher.onSessionActivity(ctx, econtext.NewSafeSession(session))
 }
 

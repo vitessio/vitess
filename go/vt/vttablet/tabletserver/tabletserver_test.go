@@ -2378,21 +2378,24 @@ func TestReserveBeginExecute(t *testing.T) {
 		assert.Contains(t, splitOutput, exp, "expected queries to run")
 	}
 
-	// A temp-table DDL inside the transaction marks the connection but must
-	// not probe @@session.wait_timeout: a timed-out statement inside a
-	// transaction always costs the whole connection, so the best-effort probe
-	// can never be made safe there. Capture falls back to the pool's global
-	// mirror instead.
+	// A temp-table DDL inside a transaction probes and captures too: the
+	// probe precedes the DDL, so even here — where a probe timeout always
+	// costs the whole connection — a lost connection surfaces as the DDL's
+	// error, and a first-temp-DDL-in-transaction connection is not left tied
+	// to the mutable global mirror after commit.
 	db.AddQueryPattern("create temporary table .*", &sqltypes.Result{})
+	db.AddQuery("select @@session.wait_timeout", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("@@session.wait_timeout", "int64"),
+		"54321",
+	))
 	_, err = tsv.Execute(ctx, nil, &target, "create temporary table temp_t(id int)", nil, state.TransactionID, state.ReservedID, nil)
 	require.NoError(t, err)
 	conn, err := tsv.te.txPool.GetAndLock(state.ReservedID, "for test")
 	require.NoError(t, err)
 	assert.True(t, conn.holdsTempTables, "a temp-table DDL must mark the connection")
-	assert.Zero(t, conn.sessionWaitTimeout, "no capture inside a transaction")
+	assert.Equal(t, 54321*time.Second, conn.sessionWaitTimeout,
+		"the first temp-table DDL must capture the session wait_timeout inside a transaction too")
 	conn.Unlock()
-	assert.NotContains(t, db.QueryLog(), "select @@session.wait_timeout",
-		"the wait_timeout probe must not run inside a transaction")
 
 	err = tsv.Release(ctx, &target, state.TransactionID, state.ReservedID)
 	require.NoError(t, err)
@@ -2440,6 +2443,15 @@ func TestReserveExecute_WithoutTx(t *testing.T) {
 	assert.Equal(t, 12345*time.Second, conn.sessionWaitTimeout,
 		"the first temp-table DDL must capture the connection's session wait_timeout")
 	conn.Unlock()
+
+	// Ordering is load-bearing: the probe must precede the DDL, so that a
+	// probe that costs the connection fails the DDL visibly instead of
+	// destroying the temp table after the DDL already reported success.
+	probeIdx := strings.Index(db.QueryLog(), "select @@session.wait_timeout")
+	ddlIdx := strings.Index(db.QueryLog(), "create temporary table")
+	require.NotEqual(t, -1, probeIdx, "the probe must run")
+	require.NotEqual(t, -1, ddlIdx, "the DDL must run")
+	assert.Less(t, probeIdx, ddlIdx, "the wait_timeout probe must run before the temp-table DDL")
 	assert.EqualValues(t, 1, tsv.te.txPool.scp.tempTableUnmanaged.Load(), "the marked, unmanaged connection must be on the gauge")
 
 	_, err = tsv.Execute(ctx, nil, &target, "drop temporary table temp_t", nil, 0, state.ReservedID, nil)
@@ -2480,6 +2492,23 @@ func TestReserveExecute_WithoutTx(t *testing.T) {
 	assert.Equal(t, 12345*time.Second, conn.sessionWaitTimeout,
 		"the probe must run on a context detached from the (canceled) request context")
 	assert.False(t, conn.IsClosed(), "the probe must not kill the connection")
+	conn.Unlock()
+	err = tsv.Release(ctx, &target, 0, state.ReservedID)
+	require.NoError(t, err)
+
+	// A benign probe failure must not fail the DDL: with the probe query
+	// erroring, the temp table is still created and capture falls back to
+	// the pool's global mirror (no value recorded, retried on the next
+	// temp-table DDL).
+	db.DeleteQuery("select @@session.wait_timeout")
+	state, _, err = tsv.ReserveExecute(ctx, nil, &target, nil, "set sql_mode = ''", nil, 0, nil)
+	require.NoError(t, err)
+	_, err = tsv.Execute(ctx, nil, &target, "create temporary table temp_t(id int)", nil, 0, state.ReservedID, nil)
+	require.NoError(t, err, "a failed wait_timeout probe must not fail the temp-table DDL")
+	conn, err = tsv.te.txPool.GetAndLock(state.ReservedID, "for test")
+	require.NoError(t, err)
+	assert.True(t, conn.holdsTempTables, "the DDL must still mark the connection")
+	assert.Zero(t, conn.sessionWaitTimeout, "no capture on a failed probe")
 	conn.Unlock()
 	err = tsv.Release(ctx, &target, 0, state.ReservedID)
 	require.NoError(t, err)

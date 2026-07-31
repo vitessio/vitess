@@ -1123,6 +1123,19 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 
 	c.currentCommandIngressBytes = c.GetAndResetBytesRead()
 
+	// Any client command restarts mysqld's idle wait_timeout clock on a
+	// direct connection — including the ones this server answers locally
+	// (ping, set-option, prepared-statement bookkeeping), which never reach
+	// the handler's own methods. Notify a handler that observes connection
+	// activity here, in one place, before dispatch and whatever the
+	// command's outcome. ComQuit is excluded: the client is leaving, there
+	// is no idle wait to restart.
+	if data[0] != ComQuit {
+		if observer, ok := handler.(ConnActivityObserver); ok {
+			observer.ConnActivity(c)
+		}
+	}
+
 	switch data[0] {
 	case ComQuit:
 		c.recycleReadPacket()
@@ -1138,7 +1151,7 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 		}
 		return c.handleComQuery(handler, data)
 	case ComPing:
-		return c.handleComPing(handler)
+		return c.handleComPing()
 	case ComSetOption:
 		return c.handleComSetOption(data)
 	case ComPrepare:
@@ -1514,7 +1527,7 @@ func (c *Conn) handleComSetOption(data []byte) bool {
 	return true
 }
 
-func (c *Conn) handleComPing(handler Handler) bool {
+func (c *Conn) handleComPing() bool {
 	c.recycleReadPacket()
 	// Return error if listener was shut down and OK otherwise
 	if c.listener.shutdown.Load() {
@@ -1522,9 +1535,6 @@ func (c *Conn) handleComPing(handler Handler) bool {
 			return false
 		}
 	} else {
-		// A ping is connection activity in MySQL: let the handler observe
-		// it (non-blocking) before the OK is written.
-		handler.ComPing(c)
 		if err := c.writeOKPacket(&PacketOK{statusFlags: c.StatusFlags}); err != nil {
 			log.Error(fmt.Sprintf("Error writing ComPing result to %s: %v", c, err))
 			return false

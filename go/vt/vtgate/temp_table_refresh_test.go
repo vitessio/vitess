@@ -184,19 +184,20 @@ func TestTempTableActivityRefresh(t *testing.T) {
 	// COM_PING is session activity too: on a direct MySQL connection a ping
 	// resets wait_timeout, so a ping-only client through vtgate must likewise
 	// keep its temp-table reserved connections alive. The ping is answered
-	// locally by the protocol layer; the handler hook fans the refresh out.
+	// locally by the protocol layer; the connection-activity observer fans
+	// the refresh out.
 	vh := newVtgateHandler(&VTGate{executor: executor})
 	pingConn := mysql.GetTestConn()
 	pingConn.ClientData = newSession(52, 0).Session
-	vh.ComPing(pingConn)
+	vh.ConnActivity(pingConn)
 	assert.Eventually(t, func() bool {
 		return slices.Contains(sbclookup.GetExecuteReservedIDs(), int64(52))
 	}, 30*time.Second, 10*time.Millisecond,
 		"a client ping must fan a refresh out to the session's temp-table reserved connections")
 
-	// A ping on a connection that never ran a query has no session and must
+	// Activity on a connection that never ran a query has no session and must
 	// be a no-op.
-	vh.ComPing(mysql.GetTestConn())
+	vh.ConnActivity(mysql.GetTestConn())
 
 	// The lease ticker reads shard-session state concurrently with the
 	// command's own execution, which updates TransactionId and ReservedId in

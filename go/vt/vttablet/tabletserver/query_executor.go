@@ -1031,6 +1031,14 @@ func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (result *sqltypes.Re
 			return nil, err
 		}
 	}
+	if isTemporaryTable {
+		// Capture before the DDL: keeping the connection through a probe
+		// failure is only best-effort, so the probe must precede the
+		// user-visible state change — a connection it costs then surfaces as
+		// this statement's error instead of silently undoing a DDL already
+		// reported successful.
+		qre.captureSessionWaitTimeout(conn)
+	}
 	result, err = qre.execStatefulConn(conn, sql, true)
 	if err != nil {
 		return nil, err
@@ -1039,7 +1047,6 @@ func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (result *sqltypes.Re
 		// The session holds temporary-table state on this connection, so the
 		// temp-table idle timeout may govern its reclamation.
 		conn.markHoldsTempTables()
-		qre.captureSessionWaitTimeout(conn)
 	}
 	return result, nil
 }
@@ -1048,19 +1055,22 @@ func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (result *sqltypes.Re
 // @@session.wait_timeout for the temp-table idle timeout's auto mode: it is
 // the deadline mysqld actually enforces on this connection, fixed when the
 // connection's thread started, unlike the pool's global mirror which follows
-// runtime SET GLOBAL changes. Best-effort: on any failure the connection
-// falls back to the global mirror. The probe must never undo the user
-// statement that just succeeded, so it runs at most once per connection, on
-// its own bounded context detached from the request (whose deadline expiring
-// mid-probe would otherwise kill the connection — dropping the just-created
-// temporary table — after execDDL already reported success), keeping the
-// connection even if the probe itself times out, and never inside a
-// transaction, where a timed-out statement always costs the whole connection.
+// runtime SET GLOBAL changes. Best-effort: on a benign failure (probe error,
+// unusable value) the connection falls back to the global mirror. The probe
+// runs at most once per connection, BEFORE the temporary-table DDL that
+// needs it: preserving the connection through a probe timeout is itself only
+// best-effort (a KILL QUERY that fails or does not unblock the statement
+// escalates to killing the whole connection, and inside a transaction the
+// connection is always killed), so the probe precedes the user-visible state
+// change and any connection loss it causes surfaces as the DDL's own error
+// rather than silently undoing a statement already reported successful. The
+// bounded context detached from the request keeps the client's deadline or
+// cancellation from cutting the probe short.
 func (qre *QueryExecutor) captureSessionWaitTimeout(conn *StatefulConnection) {
 	if qre.tsv.config.TempTableIdleTimeout >= 0 {
 		return
 	}
-	if conn.sessionWaitTimeout != 0 || conn.IsInTransaction() {
+	if conn.sessionWaitTimeout != 0 {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(qre.ctx), sessionWaitTimeoutProbeTimeout)
