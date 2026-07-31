@@ -120,6 +120,7 @@ func TestCallProcedure(t *testing.T) {
 			if tc.wantRows {
 				require.NotEmpty(t, qr.Rows, "single-resultset procedure should return its rows")
 			}
+			assert.False(t, qr.IsMoreResultsExists(), "the returned result must carry the final status, not the first resultset's more-results flag")
 		})
 	}
 }
@@ -158,6 +159,7 @@ func TestCallProcedureBufferedAfterStreamedInTx(t *testing.T) {
 	qr, err := client.Execute("call proc_select1()", nil)
 	require.NoError(t, err)
 	require.NotEmpty(t, qr.Rows, "single-resultset procedure should return its rows")
+	assert.False(t, qr.IsMoreResultsExists(), "the returned result must carry the final status, not the first resultset's more-results flag")
 
 	// The next query sees its own result, proving the CALL's trailing packet was
 	// drained rather than left on the connection.

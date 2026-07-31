@@ -1358,6 +1358,9 @@ func (qre *QueryExecutor) execCallProc() (*sqltypes.Result, error) {
 		conn.Close()
 		return nil, vterrors.New(vtrpcpb.Code_CANCELED, "Transaction not concluded inside the stored procedure, leaking transaction from stored procedure is not allowed")
 	}
+	// A single-resultset call's first resultset still carries the
+	// more-results flag; report the connection's final status instead.
+	qr.StatusFlags = final.StatusFlags
 	return qr, nil
 }
 
@@ -1384,6 +1387,9 @@ func (qre *QueryExecutor) execProc(conn *StatefulConnection) (*sqltypes.Result, 
 		conn.Close()
 		return nil, vterrors.New(vtrpcpb.Code_CANCELED, "Transaction state change inside the stored procedure is not allowed")
 	}
+	// A single-resultset call's first resultset still carries the
+	// more-results flag; report the connection's final status instead.
+	qr.StatusFlags = final.StatusFlags
 	return qr, nil
 }
 
