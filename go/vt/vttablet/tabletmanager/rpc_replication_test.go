@@ -945,6 +945,16 @@ func TestStopReplicationAndGetStatus_ServerVersion(t *testing.T) {
 			}
 
 			require.NotNil(t, resp.Status)
+
+			// ServerVersion is only populated on the success paths. On error returns
+			// the RPC layer discards the status (grpctmserver copies it only when
+			// err == nil), so the tablet deliberately skips the version fetch there to
+			// avoid an unobservable MySQL query under the TabletManager lock.
+			if tc.expectErr != "" {
+				require.Empty(t, resp.Status.Before.ServerVersion)
+				return
+			}
+
 			require.Equal(t, "Ver 8.0.35", resp.Status.Before.ServerVersion)
 			if resp.Status.After != nil {
 				require.Equal(t, "Ver 8.0.35", resp.Status.After.ServerVersion)
