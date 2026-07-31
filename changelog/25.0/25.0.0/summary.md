@@ -315,6 +315,9 @@ When set to `true`, `vtbackup` fails instead, exiting without creating or prunin
 enable it, since a base backup with errant GTIDs propagates those transactions into every backup taken from it, and a
 tablet restoring from such a backup refuses to join the replication graph and fails to start.
 
+The comparison requires MySQL GTID replication. On other flavors, such as MySQL with GTIDs disabled or MariaDB, the
+positions cannot be compared and `true` fails the backup.
+
 Existing `--init-backup-sql-queries` that generate local GTIDs will trigger this. Configure those statements to avoid
 binary logging, using forms such as `LOCAL` or `NO_WRITE_TO_BINLOG`, or execute them with `sql_log_bin` disabled.
 

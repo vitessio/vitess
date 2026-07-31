@@ -243,7 +243,7 @@ func init() {
 	Main.Flags().Var((*topoproto.TabletTypeListFlag)(&initSQLTabletTypes), "init-backup-tablet-types", "Tablet types used for the backup where the init SQL queries (--init-backup-sql-queries) will be executed after catch-up replication, before initializing the backup")
 	Main.Flags().DurationVar(&initSQLTimeout, "init-backup-sql-timeout", initSQLTimeout, "At what point should we time out the init SQL query (--init-backup-sql-queries) work and either fail the backup job (--init-backup-sql-fail-on-error) or continue on with the backup")
 	Main.Flags().BoolVar(&initSQLFailOnError, "init-backup-sql-fail-on-error", false, "Whether or not to fail the backup if the init SQL queries (--init-backup-sql-queries) fail, which includes if they fail to complete before the specified timeout (--init-backup-sql-timeout)")
-	utils.SetFlagBoolVar(Main.Flags(), &verifyBackupErrantGTIDs, "verify-backup-errant-gtids", verifyBackupErrantGTIDs, "Fail the backup if errant GTIDs are detected relative to the current primary. When disabled, errant GTIDs are only logged as a warning.")
+	utils.SetFlagBoolVar(Main.Flags(), &verifyBackupErrantGTIDs, "verify-backup-errant-gtids", verifyBackupErrantGTIDs, "Fail the backup if errant GTIDs are detected relative to the current primary. When disabled, errant GTIDs are only logged as a warning. Requires MySQL GTID replication, and fails the backup on other flavors.")
 
 	// vttablet-like flags
 	utils.SetFlagStringVar(Main.Flags(), &initDbNameOverride, "init-db-name-override", initDbNameOverride, "(init parameter) override the name of the db used by vttablet")
@@ -614,7 +614,7 @@ func runBackup(ctx context.Context, topoServer *topo.Server, mysqld *mysqlctl.My
 				return err
 			}
 
-			log.Warn("base backup failed errant GTID verification, taking a backup anyway because --verify-backup-errant-gtids is disabled", slog.Any("error", err))
+			log.Warn("restored data failed errant GTID verification, taking a backup anyway because --verify-backup-errant-gtids is disabled", slog.Any("error", err))
 		}
 	}
 

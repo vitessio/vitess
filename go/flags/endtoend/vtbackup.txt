@@ -260,7 +260,7 @@ Flags:
       --topo-zk-tls-cert string                                     the cert to use to connect to the zk topo server, requires topo-zk-tls-key, enables TLS
       --topo-zk-tls-key string                                      the key to use to connect to the zk topo server, enables TLS
       --upgrade-safe                                                Whether to use innodb_fast_shutdown=0 for the backup so it is safe to use for MySQL upgrades.
-      --verify-backup-errant-gtids                                  Fail the backup if errant GTIDs are detected relative to the current primary. When disabled, errant GTIDs are only logged as a warning.
+      --verify-backup-errant-gtids                                  Fail the backup if errant GTIDs are detected relative to the current primary. When disabled, errant GTIDs are only logged as a warning. Requires MySQL GTID replication, and fails the backup on other flavors.
   -v, --version                                                     print binary version
       --xbstream-restore-flags string                               Flags to pass to xbstream command during restore. These should be space separated and will be added to the end of the command. These need to match the ones used for backup e.g. --compress / --decompress, --encrypt / --decrypt
       --xtrabackup-backup-flags string                              Flags to pass to backup command. These should be space separated and will be added to the end of the command
