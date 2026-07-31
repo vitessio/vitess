@@ -28,6 +28,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pierrec/lz4/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -156,6 +157,20 @@ func TestBuiltinCompressorsSequentialCopyN(t *testing.T) {
 			require.Equal(t, sha256.Sum256(data), sha256.Sum256(decompressed.Bytes()))
 		})
 	}
+}
+
+func TestLz4CompressionLevelMapping(t *testing.T) {
+	// A negative --compression-level selected an unlimited hash-chain
+	// search depth in the lz4 v2 writer, so it maps to the deepest named
+	// level; 0 and 1 keep the fast profile, and 2 through 9 select the
+	// matching named levels.
+	require.Equal(t, lz4.Level9, lz4CompressionLevel(-1))
+	require.Equal(t, lz4.Fast, lz4CompressionLevel(0))
+	require.Equal(t, lz4.Fast, lz4CompressionLevel(1))
+	require.Equal(t, lz4.Level2, lz4CompressionLevel(2))
+	require.Equal(t, lz4.Level5, lz4CompressionLevel(5))
+	require.Equal(t, lz4.Level9, lz4CompressionLevel(9))
+	require.Equal(t, lz4.Level9, lz4CompressionLevel(10))
 }
 
 func TestUnSupportedBuiltinCompressors(t *testing.T) {

@@ -256,17 +256,19 @@ type (
 
 // lz4CompressionLevel maps the numeric --compression-level value onto the
 // lz4 level enum; lz4.CompressionLevelOption rejects any value outside the
-// named constants. Values at or below 1 map to the fast compressor: the
-// hash-chain search depth of 1 that such values previously requested does
-// almost no searching, so the fast compressor is the closest match. Values
-// from 2 through 9 map onto the matching hash-chain levels, whose fixed
-// search depths grow from 1024 (Level2) to 131072 (Level9).
+// named constants. A negative value selected an unlimited hash-chain
+// search depth in the lz4 v2 writer, so it maps to the deepest named
+// level. Values 0 and 1 map to the fast compressor: the hash-chain search
+// depth of 1 that a value of 1 previously requested does almost no
+// searching, so the fast compressor is the closest match. Values from 2
+// through 9 map onto the matching hash-chain levels, whose fixed search
+// depths grow from 1024 (Level2) to 131072 (Level9).
 func lz4CompressionLevel(level int) lz4.CompressionLevel {
 	switch {
+	case level < 0 || level >= 9:
+		return lz4.Level9
 	case level <= 1:
 		return lz4.Fast
-	case level >= 9:
-		return lz4.Level9
 	default:
 		return lz4.Level1 << (level - 1)
 	}
