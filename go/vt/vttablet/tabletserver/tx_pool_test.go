@@ -57,13 +57,13 @@ func TestTxPoolExecuteCommit(t *testing.T) {
 	conn.Unlock()
 
 	// get the connection and execute a query on it
-	conn2, err := txPool.GetAndLock(id, "")
+	conn2, err := txPool.GetAndLock(ctx, id, "")
 	require.NoError(t, err)
 	_, _ = conn2.Exec(ctx, sql, 1, true, false /* keepConnOnTimeout */)
 	conn2.Unlock()
 
 	// get the connection again and now commit it
-	conn3, err := txPool.GetAndLock(id, "")
+	conn3, err := txPool.GetAndLock(ctx, id, "")
 	require.NoError(t, err)
 
 	_, err = txPool.Commit(ctx, conn3)
@@ -138,7 +138,7 @@ func TestTxPoolRollbackNonBusy(t *testing.T) {
 	require.NoError(t, err)
 
 	// Trying to get back to conn2 should not work since the transaction has been rolled back
-	_, err = txPool.GetAndLock(conn2.ReservedID(), "")
+	_, err = txPool.GetAndLock(ctx, conn2.ReservedID(), "")
 	require.Error(t, err)
 
 	conn1.Release(tx.TxCommit)
@@ -342,7 +342,7 @@ func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
 	txPool.Close()
 
 	assertErrorMatch := func(id int64, reason string) {
-		conn, err := txPool.GetAndLock(id, "for query")
+		conn, err := txPool.GetAndLock(ctx, id, "for query")
 		if err == nil { //
 			conn.ReleaseString("fail")
 			assert.Fail(t, "expected to get an error")
@@ -962,7 +962,7 @@ func TestTxPoolKeepAliveReserved(t *testing.T) {
 	require.True(t, conn.keepAliveManaged, "a keepalive touch must mark the connection keepalive-managed")
 
 	// A busy connection counts as alive.
-	relocked, err := txPool.GetAndLock(id, "for test")
+	relocked, err := txPool.GetAndLock(ctx, id, "for test")
 	require.NoError(t, err)
 	require.NoError(t, txPool.KeepAliveReserved(id))
 	relocked.Unlock()
@@ -975,7 +975,7 @@ func TestTxPoolKeepAliveReserved(t *testing.T) {
 	require.Eventually(t, func() bool {
 		return txPool.KeepAliveReserved(id) != nil
 	}, 30*time.Second, 10*time.Millisecond, "keepalive must detect the peer-closed connection")
-	_, err = txPool.GetAndLock(id, "for test")
+	_, err = txPool.GetAndLock(ctx, id, "for test")
 	require.ErrorContains(t, err, fmt.Sprintf("transaction %d: ", id), "the dead connection must have been released")
 
 	// A connection that no longer exists reports the gone shape.
@@ -1010,41 +1010,56 @@ func TestTxPoolGetAndLockWaitsOutKeepAlive(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 		held.Unlock()
 	}()
-	got, err := txPool.GetAndLock(id, "for query")
+	got, err := txPool.GetAndLock(ctx, id, "for query")
 	require.NoError(t, err, "a caller must wait out a keepalive hold, not fail")
 	got.Unlock()
 
-	// A temp-table activity refresh holds the connection for one trivial
-	// statement round trip; a colliding caller waits that out too — with a
-	// budget above the refresh's own context deadline, so the foreground
-	// command outwaits any refresh instead of failing.
+	// A refresh whose statement wedged holds the lock through its KILL QUERY
+	// cleanup — well past the refresh's own 1s context bound. The foreground
+	// caller must keep waiting under its own context until the hold actually
+	// releases, not race a fixed budget against the kill budgets: this hold
+	// outlives the old 2s wait budget, which failed the caller with an
+	// in-use error here.
 	held, err = txPool.scp.GetAndLock(id, reservedActivityRefreshPurpose)
 	require.NoError(t, err)
-	_, inUseErr := txPool.scp.GetAndLock(id, "probe")
-	require.Equal(t, 2*time.Second, briefHoldWaitBudget(inUseErr),
-		"an activity-refresh hold must be waited out past the refresh's 1s context bound")
-	require.Greater(t, briefHoldWaitBudget(inUseErr), tempTableActivityRefreshWaitProbe,
-		"the foreground wait budget must exceed the refresh's own deadline")
 	go func() {
-		time.Sleep(20 * time.Millisecond)
+		time.Sleep(3 * time.Second)
 		held.Unlock()
 	}()
-	got, err = txPool.GetAndLock(id, "for query")
-	require.NoError(t, err, "a caller must wait out an activity-refresh hold, not fail")
+	start := time.Now()
+	got, err = txPool.GetAndLock(ctx, id, "for query")
+	require.NoError(t, err, "a caller must outwait an activity-refresh hold for as long as its context allows, not fail at a fixed budget")
+	require.Greater(t, time.Since(start), 2*time.Second,
+		"the success must come from outwaiting the hold past the old 2s fixed budget, not from an early release")
 	got.Unlock()
+
+	// The caller's own deadline still bounds the wait: a short-deadline
+	// context colliding with a hold that never releases returns the in-use
+	// error naming the holder. The hold is still in place when the caller
+	// gives up — proving the wait ended at the caller's deadline rather than
+	// at the hold's release, without racing a wall clock the CI runner may
+	// stall.
+	held, err = txPool.scp.GetAndLock(id, reservedActivityRefreshPurpose)
+	require.NoError(t, err)
+	shortCtx, cancel := context.WithTimeout(ctx, 300*time.Millisecond)
+	defer cancel()
+	_, err = txPool.GetAndLock(shortCtx, id, "for query")
+	require.ErrorContains(t, err, reservedActivityRefreshPurpose,
+		"a wait cut short by the caller's context reports the in-use holder")
+	_, stillHeld := txPool.scp.GetAndLock(id, "probe")
+	require.ErrorContains(t, stillHeld, reservedActivityRefreshPurpose,
+		"the hold must still be in place when the caller's context gives up")
+	held.Unlock()
 
 	// Any other holder still fails fast with the in-use error.
 	held, err = txPool.scp.GetAndLock(id, "for query")
 	require.NoError(t, err)
-	_, err = txPool.GetAndLock(id, "for another query")
+	_, rawErr := txPool.scp.GetAndLock(id, "probe")
+	require.False(t, isBriefHoldInUse(rawErr), "a client-query hold is not a brief hold")
+	_, err = txPool.GetAndLock(ctx, id, "for another query")
 	require.ErrorContains(t, err, "in use: for query")
-	require.Zero(t, briefHoldWaitBudget(err), "a client-query hold gets no wait budget")
 	held.Release(tx.ConnRelease)
 }
-
-// tempTableActivityRefreshWaitProbe mirrors the vtgate-side refresh context
-// bound (temp_table_refresh.go); the wait budget must stay above it.
-const tempTableActivityRefreshWaitProbe = 1 * time.Second
 
 // TestTxKillerTimeoutInterval pins the killer's tick derivation: the shortest
 // enabled timeout it enforces, including the temp-table idle timeout —
@@ -1231,7 +1246,7 @@ func TestTempTableIdleTimeoutReclaimsAbandonedConns(t *testing.T) {
 	// Past the transaction timeout the connection must still be alive: the
 	// temp-table idle timer governs it now.
 	time.Sleep(1500 * time.Millisecond)
-	relocked, err := txPool.GetAndLock(id, "for test")
+	relocked, err := txPool.GetAndLock(ctx, id, "for test")
 	require.NoError(t, err, "an unmanaged temp-table connection must survive the transaction timeout")
 	relocked.Unlock()
 	require.Equal(t, int64(0), txPool.tempTableIdleKills.Get()-startingTempTableKills)
@@ -1242,7 +1257,7 @@ func TestTempTableIdleTimeoutReclaimsAbandonedConns(t *testing.T) {
 		return txPool.tempTableIdleKills.Get()-startingTempTableKills == 1
 	}, 30*time.Second, 100*time.Millisecond, "the temp-table idle timer must reclaim the connection")
 	assert.Equal(t, int64(1), txPool.env.Stats().KillCounters.Counts()["ReservedConnection"]-startingRcKills)
-	_, err = txPool.GetAndLock(id, "for test")
+	_, err = txPool.GetAndLock(ctx, id, "for test")
 	require.Error(t, err, "the reclaimed connection must be gone")
 }
 

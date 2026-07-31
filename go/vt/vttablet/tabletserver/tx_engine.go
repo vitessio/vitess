@@ -299,7 +299,7 @@ func (te *TxEngine) Commit(ctx context.Context, transactionID int64) (int64, str
 	defer span.Finish()
 	var query string
 	var err error
-	connID, err := te.txFinish(transactionID, tx.TxCommit, func(conn *StatefulConnection) error {
+	connID, err := te.txFinish(ctx, transactionID, tx.TxCommit, func(conn *StatefulConnection) error {
 		query, err = te.txPool.Commit(ctx, conn)
 		return err
 	})
@@ -312,13 +312,13 @@ func (te *TxEngine) Rollback(ctx context.Context, transactionID int64) (int64, e
 	span, ctx := trace.NewSpan(ctx, "TxEngine.Rollback")
 	defer span.Finish()
 
-	return te.txFinish(transactionID, tx.TxRollback, func(conn *StatefulConnection) error {
+	return te.txFinish(ctx, transactionID, tx.TxRollback, func(conn *StatefulConnection) error {
 		return te.txPool.Rollback(ctx, conn)
 	})
 }
 
-func (te *TxEngine) txFinish(transactionID int64, reason tx.ReleaseReason, f func(*StatefulConnection) error) (int64, error) {
-	conn, err := te.txPool.GetAndLock(transactionID, reason.String())
+func (te *TxEngine) txFinish(ctx context.Context, transactionID int64, reason tx.ReleaseReason, f func(*StatefulConnection) error) (int64, error) {
+	conn, err := te.txPool.GetAndLock(ctx, transactionID, reason.String())
 	if err != nil {
 		return 0, err
 	}
@@ -665,7 +665,7 @@ func (te *TxEngine) Reserve(ctx context.Context, options *querypb.ExecuteOptions
 		return conn.ReservedID(), nil
 	}
 
-	conn, err := te.txPool.GetAndLock(txID, "to reserve")
+	conn, err := te.txPool.GetAndLock(ctx, txID, "to reserve")
 	if err != nil {
 		return 0, err
 	}
@@ -709,8 +709,8 @@ func (te *TxEngine) taintConn(ctx context.Context, conn *StatefulConnection, pre
 }
 
 // Release closes the underlying connection.
-func (te *TxEngine) Release(connID int64) error {
-	conn, err := te.txPool.GetAndLock(connID, "for release")
+func (te *TxEngine) Release(ctx context.Context, connID int64) error {
+	conn, err := te.txPool.GetAndLock(ctx, connID, "for release")
 	if err != nil {
 		return err
 	}

@@ -1856,7 +1856,7 @@ func (tsv *TabletServer) Release(ctx context.Context, target *querypb.Target, tr
 			logStats.ReservedID = reservedID
 			if reservedID != 0 {
 				// Release to close the underlying connection.
-				return tsv.te.Release(reservedID)
+				return tsv.te.Release(ctx, reservedID)
 			}
 			// Rollback to cleanup the transaction before returning to the pool.
 			_, err = tsv.te.Rollback(ctx, transactionID)

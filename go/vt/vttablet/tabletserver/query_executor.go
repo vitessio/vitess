@@ -182,7 +182,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		if queryservice.IsReservedConnActivityRefresh(qre.ctx) {
 			lockPurpose = reservedActivityRefreshPurpose
 		}
-		conn, err = qre.tsv.te.txPool.GetAndLock(qre.connID, lockPurpose)
+		conn, err = qre.tsv.te.txPool.GetAndLock(qre.ctx, qre.connID, lockPurpose)
 		if err != nil {
 			return nil, err
 		}
@@ -389,7 +389,7 @@ func (qre *QueryExecutor) streamAdminPlan() (*sqltypes.Result, error) {
 // stateful plans, for streamed plans that run a dedicated executor rather
 // than the generic streaming SQL path.
 func (qre *QueryExecutor) txConnStreamExec() (*sqltypes.Result, error) {
-	conn, err := qre.tsv.te.txPool.GetAndLock(qre.connID, "for streaming query")
+	conn, err := qre.tsv.te.txPool.GetAndLock(qre.ctx, qre.connID, "for streaming query")
 	if err != nil {
 		return nil, err
 	}
@@ -650,7 +650,7 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 	// close rather than attempt a drain-and-recover — while a clean stream runs
 	// the post-stream safety checks.
 	if qre.connID != 0 {
-		txConn, err := qre.tsv.te.txPool.GetAndLock(qre.connID, "for streaming query")
+		txConn, err := qre.tsv.te.txPool.GetAndLock(qre.ctx, qre.connID, "for streaming query")
 		if err != nil {
 			return err
 		}
@@ -1063,9 +1063,11 @@ func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (result *sqltypes.Re
 // escalates to killing the whole connection, and inside a transaction the
 // connection is always killed), so the probe precedes the user-visible state
 // change and any connection loss it causes surfaces as the DDL's own error
-// rather than silently undoing a statement already reported successful. The
-// bounded context detached from the request keeps the client's deadline or
-// cancellation from cutting the probe short.
+// rather than silently undoing a statement already reported successful.
+// Because no user-visible state exists before the DDL, the probe runs under
+// the request's own context — a canceled or expired request sends nothing and
+// gives the reservation straight back — capped at the probe timeout so a
+// stuck mysqld cannot pin the connection to a long request deadline.
 func (qre *QueryExecutor) captureSessionWaitTimeout(conn *StatefulConnection) {
 	if qre.tsv.config.TempTableIdleTimeout >= 0 {
 		return
@@ -1073,7 +1075,10 @@ func (qre *QueryExecutor) captureSessionWaitTimeout(conn *StatefulConnection) {
 	if conn.sessionWaitTimeout != 0 {
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(qre.ctx), sessionWaitTimeoutProbeTimeout)
+	if qre.ctx.Err() != nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(qre.ctx, sessionWaitTimeoutProbeTimeout)
 	defer cancel()
 	qr, err := conn.Exec(ctx, "select @@session.wait_timeout", 1, false, true /* keepConnOnTimeout */)
 	if err != nil || len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {

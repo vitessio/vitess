@@ -162,7 +162,7 @@ func TestTabletServerPrimaryToReplica(t *testing.T) {
 	require.NoError(t, err)
 
 	// This makes txid2 busy
-	conn2, err := tsv.te.txPool.GetAndLock(state2.TransactionID, "for query")
+	conn2, err := tsv.te.txPool.GetAndLock(ctx, state2.TransactionID, "for query")
 	require.NoError(t, err)
 	ch := make(chan bool)
 	go func() {
@@ -2390,7 +2390,7 @@ func TestReserveBeginExecute(t *testing.T) {
 	))
 	_, err = tsv.Execute(ctx, nil, &target, "create temporary table temp_t(id int)", nil, state.TransactionID, state.ReservedID, nil)
 	require.NoError(t, err)
-	conn, err := tsv.te.txPool.GetAndLock(state.ReservedID, "for test")
+	conn, err := tsv.te.txPool.GetAndLock(ctx, state.ReservedID, "for test")
 	require.NoError(t, err)
 	assert.True(t, conn.holdsTempTables, "a temp-table DDL must mark the connection")
 	assert.Equal(t, 54321*time.Second, conn.sessionWaitTimeout,
@@ -2434,7 +2434,7 @@ func TestReserveExecute_WithoutTx(t *testing.T) {
 	))
 	_, err = tsv.Execute(ctx, nil, &target, "create temporary table temp_t(id int)", nil, 0, state.ReservedID, nil)
 	require.NoError(t, err)
-	conn, err := tsv.te.txPool.GetAndLock(state.ReservedID, "for test")
+	conn, err := tsv.te.txPool.GetAndLock(ctx, state.ReservedID, "for test")
 	require.NoError(t, err)
 	assert.True(t, conn.holdsTempTables, "a temp-table DDL must mark the connection")
 	assert.False(t, conn.keepAliveManaged)
@@ -2456,7 +2456,7 @@ func TestReserveExecute_WithoutTx(t *testing.T) {
 
 	_, err = tsv.Execute(ctx, nil, &target, "drop temporary table temp_t", nil, 0, state.ReservedID, nil)
 	require.NoError(t, err)
-	conn, err = tsv.te.txPool.GetAndLock(state.ReservedID, "for test")
+	conn, err = tsv.te.txPool.GetAndLock(ctx, state.ReservedID, "for test")
 	require.NoError(t, err)
 	assert.True(t, conn.holdsTempTables, "DROP TEMPORARY TABLE must not unmark the connection")
 	conn.Unlock()
@@ -2474,25 +2474,33 @@ func TestReserveExecute_WithoutTx(t *testing.T) {
 	err = tsv.Release(ctx, &target, 0, state.ReservedID)
 	require.NoError(t, err)
 
-	// The probe must never undo the user's DDL: it runs on its own bounded
-	// context detached from the request, and keeps the connection on a
-	// timeout. Probe a fresh connection under an already-canceled request
-	// context — capture still succeeds and the connection survives, where a
-	// probe on the request context would fail and, expiring mid-statement,
-	// would have killed the connection.
+	// The probe respects request cancellation: it precedes the DDL, so no
+	// user-visible state exists yet and there is nothing to shield from the
+	// client's own cancellation — an already-canceled request must not send
+	// the hidden probe to MySQL at all, must capture nothing, and must leave
+	// the connection intact; the DDL itself returns the cancellation.
 	state, _, err = tsv.ReserveExecute(ctx, nil, &target, nil, "set sql_mode = ''", nil, 0, nil)
 	require.NoError(t, err)
-	conn, err = tsv.te.txPool.GetAndLock(state.ReservedID, "for test")
+	conn, err = tsv.te.txPool.GetAndLock(ctx, state.ReservedID, "for test")
 	require.NoError(t, err)
 	require.Zero(t, conn.sessionWaitTimeout, "fresh connection must have no captured wait_timeout yet")
+	probesBefore := strings.Count(db.QueryLog(), "select @@session.wait_timeout")
 	canceledCtx, cancel := context.WithCancel(ctx)
 	cancel()
 	qre := &QueryExecutor{ctx: canceledCtx, tsv: tsv}
 	qre.captureSessionWaitTimeout(conn)
-	assert.Equal(t, 12345*time.Second, conn.sessionWaitTimeout,
-		"the probe must run on a context detached from the (canceled) request context")
-	assert.False(t, conn.IsClosed(), "the probe must not kill the connection")
+	assert.Equal(t, probesBefore, strings.Count(db.QueryLog(), "select @@session.wait_timeout"),
+		"a canceled request must not send the wait_timeout probe to MySQL")
+	assert.Zero(t, conn.sessionWaitTimeout, "no capture under a canceled request")
+	assert.False(t, conn.IsClosed(), "a canceled request's skipped probe must leave the connection intact")
 	conn.Unlock()
+	ddlsBefore := strings.Count(db.QueryLog(), "create temporary table")
+	_, err = tsv.Execute(canceledCtx, nil, &target, "create temporary table temp_t(id int)", nil, 0, state.ReservedID, nil)
+	require.Error(t, err, "a canceled request's temp-table DDL must return the cancellation")
+	assert.Equal(t, ddlsBefore, strings.Count(db.QueryLog(), "create temporary table"),
+		"a canceled request's DDL must not reach MySQL")
+	assert.Equal(t, probesBefore, strings.Count(db.QueryLog(), "select @@session.wait_timeout"),
+		"a canceled request's DDL must not probe either")
 	err = tsv.Release(ctx, &target, 0, state.ReservedID)
 	require.NoError(t, err)
 
@@ -2505,7 +2513,7 @@ func TestReserveExecute_WithoutTx(t *testing.T) {
 	require.NoError(t, err)
 	_, err = tsv.Execute(ctx, nil, &target, "create temporary table temp_t(id int)", nil, 0, state.ReservedID, nil)
 	require.NoError(t, err, "a failed wait_timeout probe must not fail the temp-table DDL")
-	conn, err = tsv.te.txPool.GetAndLock(state.ReservedID, "for test")
+	conn, err = tsv.te.txPool.GetAndLock(ctx, state.ReservedID, "for test")
 	require.NoError(t, err)
 	assert.True(t, conn.holdsTempTables, "the DDL must still mark the connection")
 	assert.Zero(t, conn.sessionWaitTimeout, "no capture on a failed probe")

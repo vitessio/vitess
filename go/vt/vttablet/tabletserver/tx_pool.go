@@ -225,56 +225,70 @@ const reservedKeepAlivePurpose = "for reserved connection keepalive"
 // reservedActivityRefreshPurpose is the purpose string a temp-table activity
 // refresh locks the reserved connection under while it runs its trivial
 // statement. Like a keepalive touch, a client command that collides with one
-// waits it out instead of failing with an in-use error; unlike a touch the
-// hold spans one statement round trip on the local mysqld, still well inside
-// the wait-out deadline.
+// waits it out instead of failing with an in-use error; the hold normally
+// spans one statement round trip on the local mysqld, but if the statement
+// wedges, the refresh keeps the lock through its KILL QUERY and
+// connection-kill cleanup budgets — so the colliding caller waits under its
+// own context rather than against a fixed deadline (see GetAndLock).
 const reservedActivityRefreshPurpose = "for temp-table activity refresh"
+
+// briefHoldWaitBackstop bounds the brief-hold wait-out loop in GetAndLock for
+// callers whose context carries no deadline. It is a safety net against the
+// pathological combination of such a context with a holder that never
+// releases (which the holders' own bounded budgets should make impossible) —
+// not a tuning constant sized against those budgets.
+const briefHoldWaitBackstop = 30 * time.Second
 
 // GetAndLock fetches the connection associated to the connID and blocks it from concurrent use
 // You must call Unlock on TxConnection once done.
-func (tp *TxPool) GetAndLock(connID tx.ConnID, reason string) (*StatefulConnection, error) {
+//
+// A keepalive touch or a temp-table activity refresh holds the connection
+// only briefly — a touch for the microseconds of a CPU-only check, a refresh
+// for one trivial statement round trip that, on a stalled mysqld, can
+// stretch through the statement's KILL QUERY and connection-kill cleanup
+// budgets. Both release on a bounded schedule, so a caller that collides
+// with one retries until the holder lets go rather than failing the client's
+// command with an in-use error — waiting as long as its own context allows,
+// with a generous backstop for contexts without a deadline. Other holders
+// (real client work) still fail fast as before.
+func (tp *TxPool) GetAndLock(ctx context.Context, connID tx.ConnID, reason string) (*StatefulConnection, error) {
 	conn, err := tp.scp.GetAndLock(connID, reason)
-	// A keepalive holds the connection only for the microseconds it takes
-	// to check and refresh it, and it never issues queries or waits on the
-	// network — so a caller that collides with one briefly waits it out
-	// rather than failing the client's query (or release) with an in-use
-	// error. One retry is the norm; the deadline is deliberately generous
-	// (the critical section is CPU-only, so it outlasts even a heavy
-	// scheduler or GC stall) while still bounding the wait if something is
-	// truly wedged.
-	if wait := briefHoldWaitBudget(err); wait > 0 {
-		deadline := time.Now().Add(wait)
-		for err != nil && time.Now().Before(deadline) && briefHoldWaitBudget(err) > 0 {
-			time.Sleep(100 * time.Microsecond)
+	if isBriefHoldInUse(err) {
+		backstop := time.Now().Add(briefHoldWaitBackstop)
+		sleep := 100 * time.Microsecond
+		for err != nil && isBriefHoldInUse(err) && ctx.Err() == nil && time.Now().Before(backstop) {
+			time.Sleep(sleep)
+			// Back off toward 10ms: a keepalive hold is gone within a retry
+			// or two, while a refresh stuck in kill cleanup can hold the
+			// lock for seconds — no point hammering the pool mutex.
+			if sleep < 10*time.Millisecond {
+				sleep *= 2
+			}
 			conn, err = tp.scp.GetAndLock(connID, reason)
 		}
 	}
 	if err != nil {
+		// Deliberately the same ABORTED in-use shape whether the wait was
+		// cut short by the caller's context or never started: it names the
+		// actual holder, which a bare context error would hide, and callers
+		// classify every GetAndLock failure uniformly.
 		return nil, vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction %d: %v", connID, err)
 	}
 	return conn, nil
 }
 
-// briefHoldWaitBudget returns how long a caller should wait out the holder
-// named in the pool's in-use error, or zero for holders that are not
-// guaranteed to release quickly (a real client query fails fast as before).
-// A keepalive touch is CPU-only — microseconds — so one second is already
-// generous. An activity refresh runs one trivial statement bounded by its own
-// one-second context (tempTableActivityRefreshTimeout); waiting twice that
-// guarantees the foreground command outwaits any refresh rather than
-// returning an in-use error to the client.
-func briefHoldWaitBudget(err error) time.Duration {
+// isBriefHoldInUse reports whether err is the pool's in-use error naming a
+// holder that is guaranteed to release the connection on a bounded schedule —
+// a keepalive touch or a temp-table activity refresh — so a colliding
+// foreground caller should wait it out for as long as its own deadline
+// allows. Any other holder (a real client query) fails fast as before.
+func isBriefHoldInUse(err error) bool {
 	if err == nil || !errors.Is(err, pools.ErrInUse) {
-		return 0
+		return false
 	}
 	msg := err.Error()
-	switch {
-	case strings.Contains(msg, reservedKeepAlivePurpose):
-		return 1 * time.Second
-	case strings.Contains(msg, reservedActivityRefreshPurpose):
-		return 2 * time.Second
-	}
-	return 0
+	return strings.Contains(msg, reservedKeepAlivePurpose) ||
+		strings.Contains(msg, reservedActivityRefreshPurpose)
 }
 
 // KeepAliveReserved refreshes the idle timers of a reserved connection
@@ -388,7 +402,7 @@ func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions, re
 		// Use the TxPool wrapper (not tp.scp directly) so a BEGIN on a
 		// reserved connection that a keepalive touch is momentarily holding
 		// waits the touch out instead of failing with an in-use error.
-		conn, err = tp.GetAndLock(reservedID, "start transaction on reserve conn")
+		conn, err = tp.GetAndLock(ctx, reservedID, "start transaction on reserve conn")
 		if err != nil {
 			return nil, "", "", err
 		}

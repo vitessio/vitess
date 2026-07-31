@@ -104,7 +104,7 @@ func TestTxEngineClose(t *testing.T) {
 	c.Unlock()
 	go func() {
 		time.Sleep(10 * time.Millisecond)
-		_, err := te.txPool.GetAndLock(c.ReservedID(), "return")
+		_, err := te.txPool.GetAndLock(ctx, c.ReservedID(), "return")
 		assert.NoError(t, err)
 		te.txPool.RollbackAndRelease(ctx, c)
 	}()
@@ -202,7 +202,7 @@ func TestTxEngineRenewFails(t *testing.T) {
 	connID, _, err := te.ReserveBegin(ctx, options, nil)
 	require.NoError(t, err)
 
-	conn, err := te.txPool.GetAndLock(connID, "for test")
+	conn, err := te.txPool.GetAndLock(ctx, connID, "for test")
 	require.NoError(t, err)
 	conn.Unlock() // but we keep holding on to it... sneaky....
 
@@ -749,7 +749,7 @@ func TestTxEngineFailReserve(t *testing.T) {
 
 	txID, _, _, err := te.Begin(ctx, 0, nil, options)
 	require.NoError(t, err)
-	conn, err := te.txPool.GetAndLock(txID, "for test")
+	conn, err := te.txPool.GetAndLock(ctx, txID, "for test")
 	require.NoError(t, err)
 	conn.Unlock() // but we keep holding on to it... sneaky....
 
