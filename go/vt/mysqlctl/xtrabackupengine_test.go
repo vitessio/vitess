@@ -32,6 +32,20 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
+type (
+	// ctxAwareCloser simulates a backend (e.g. GCS) whose Close() blocks on
+	// upload completion and respects context cancellation.
+	ctxAwareCloser struct {
+		ctx context.Context
+	}
+)
+
+func (c ctxAwareCloser) Write(p []byte) (int, error) { return len(p), nil }
+func (c ctxAwareCloser) Close() error {
+	<-c.ctx.Done()
+	return c.ctx.Err()
+}
+
 func TestFindReplicationPosition(t *testing.T) {
 	input := `MySQL binlog position: filename 'vt-0476396352-bin.000005', position '310088991', GTID of the last change '145e508e-ae54-11e9-8ce6-46824dd1815e:1-3,
 	1e51f8be-ae54-11e9-a7c6-4280a041109b:1-3,
@@ -152,18 +166,6 @@ func TestShouldDrainForBackupXtrabackup(t *testing.T) {
 	assert.True(t, be.ShouldDrainForBackup(&tabletmanagerdatapb.BackupRequest{}))
 }
 
-// ctxAwareCloser simulates a backend (e.g. GCS) whose Close() blocks on
-// upload completion and respects context cancellation.
-type ctxAwareCloser struct {
-	ctx context.Context
-}
-
-func (c ctxAwareCloser) Write(p []byte) (int, error) { return len(p), nil }
-func (c ctxAwareCloser) Close() error {
-	<-c.ctx.Done()
-	return c.ctx.Err()
-}
-
 // TestCloseBackupFilesDoesNotCancelContextOnSuccess guards against a
 // regression where closeBackupFiles cancelled ctx as soon as all files
 // finished closing. On backends like S3 and Ceph, that ctx is also used by a
@@ -231,9 +233,12 @@ func TestCloseBackupFilesCancelsOnRealTimeout(t *testing.T) {
 		closeBackupFiles(ctx, cancel, 50*time.Millisecond, destFiles, "backup", len(destFiles), logger, &finalErr)
 	}()
 
-	// Wait for closeBackupFiles to finish (up to 5 seconds). Poll
-	// non-blockingly so a regression that hangs closeBackupFiles fails the
-	// test at the deadline instead of blocking on <-done indefinitely.
+	// The ctxAwareCloser blocks until the watchdog cancels ctx, so this path
+	// is deterministic in outcome — it only needs a generous, CI-safe deadline
+	// for how long we wait. A resource-starved runner can pause the goroutine
+	// for multiple seconds before the 50ms watchdog fires, so use 30s. Poll
+	// non-blockingly so a regression that hangs closeBackupFiles fails the test
+	// at the deadline instead of blocking on <-done indefinitely.
 	require.Eventually(t, func() bool {
 		select {
 		case <-done:
@@ -241,7 +246,7 @@ func TestCloseBackupFilesCancelsOnRealTimeout(t *testing.T) {
 		default:
 			return false
 		}
-	}, 5*time.Second, 10*time.Millisecond)
+	}, 30*time.Second, 10*time.Millisecond)
 
 	assert.ErrorIs(t, finalErr, context.Canceled)
 	assert.Contains(t, logger.String(), "Timed out waiting for Close()")
