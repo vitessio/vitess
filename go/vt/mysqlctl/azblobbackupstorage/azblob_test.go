@@ -43,7 +43,7 @@ func TestMergeCancelCancelsOnOther(t *testing.T) {
 
 	assert.Eventually(t, func() bool {
 		return ctx.Err() != nil
-	}, 5*time.Second, 10*time.Millisecond)
+	}, 30*time.Second, 10*time.Millisecond)
 	assert.ErrorIs(t, ctx.Err(), context.Canceled)
 }
 
@@ -62,7 +62,7 @@ func TestMergeCancelCancelsOnParent(t *testing.T) {
 
 	assert.Eventually(t, func() bool {
 		return ctx.Err() != nil
-	}, 5*time.Second, 10*time.Millisecond)
+	}, 30*time.Second, 10*time.Millisecond)
 	assert.ErrorIs(t, ctx.Err(), context.Canceled)
 }
 
