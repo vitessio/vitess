@@ -157,6 +157,12 @@ func newUnicodeWildcardMatcher(
 	}
 	chOneWidth, chManyWidth, chEscWidth := metaWidth(chOne), metaWidth(chMany), metaWidth(chEsc)
 
+	// A decode consumes at least the minimum character width and appends
+	// at most one token, so a charset with a wider minimum width divides
+	// the reservation: one token per pattern byte would hold a multiple
+	// of the needed capacity for the fixed-width unicode charsets.
+	minWidth := cs.MinWidth()
+	reserve := (len(pat) + minWidth - 1) / minWidth
 	// A run of match-many characters collapses to one token and a run
 	// always has a non-wildcard neighbor, so the token count is bounded by
 	// the other bytes plus the number of runs, and the reservation stays
@@ -166,8 +172,7 @@ func newUnicodeWildcardMatcher(
 	// in a charset with a wider minimum width the byte can sit inside an
 	// unrelated character, and a negative rune wraps to an unrelated byte,
 	// so in these cases the count says nothing about wildcards.
-	reserve := len(pat)
-	if chMany != chOne && chMany >= 0 && chMany < utf8.RuneSelf && cs.MinWidth() == 1 {
+	if minWidth == 1 && chMany != chOne && chMany >= 0 && chMany < utf8.RuneSelf {
 		if manyCount := bytes.Count(pat, []byte{byte(chMany)}); manyCount > 0 {
 			reserve = len(pat) - manyCount + min(manyCount, len(pat)-manyCount+1)
 		}

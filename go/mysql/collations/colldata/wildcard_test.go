@@ -518,6 +518,38 @@ func TestWildcardCollapsedRunAllocation(t *testing.T) {
 		require.LessOrEqualf(t, allocs, 8.0, "%s: aliased metacharacter construction allocates %v times", collName, allocs)
 	}
 
+	// A fixed-width charset decodes at most one character per MinWidth
+	// bytes, so the token reservation must divide by the character width:
+	// one token per pattern byte holds twice the needed capacity for
+	// utf16 and four times for utf32, and the spare-capacity trim then
+	// copies the tokens a second time.
+	for _, tc := range []struct {
+		collName string
+		width    int
+	}{
+		{"utf16_unicode_ci", 2},
+		{"utf32_unicode_ci", 4},
+	} {
+		coll := testcollation(t, tc.collName)
+		encodeASCII := func(ch byte) []byte {
+			c := make([]byte, tc.width)
+			c[tc.width-1] = ch
+			return c
+		}
+		widePat := bytes.Repeat(encodeASCII('a'), (512*1024)/tc.width)
+		widePat = append(widePat, encodeASCII('%')...)
+		widePat = append(widePat, bytes.Repeat(encodeASCII('b'), (512*1024)/tc.width)...)
+		var ms runtime.MemStats
+		runtime.GC()
+		runtime.ReadMemStats(&ms)
+		before := ms.TotalAlloc
+		m := coll.Wildcard(widePat, 0, 0, 0)
+		runtime.ReadMemStats(&ms)
+		require.NotNil(t, m)
+		limit := uint64(4*len(widePat)/tc.width + 256*1024)
+		require.Lessf(t, ms.TotalAlloc-before, limit, "%s: construction allocated %d bytes", tc.collName, ms.TotalAlloc-before)
+	}
+
 	// A negative match-many rune never marks a wildcard, but its byte
 	// conversion wraps to 'a', so every pattern byte would count as a
 	// collapsible wildcard while the parser appends every rune literally.
