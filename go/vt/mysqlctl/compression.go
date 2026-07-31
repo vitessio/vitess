@@ -28,7 +28,7 @@ import (
 	"github.com/google/shlex"
 	"github.com/klauspost/compress/zstd"
 	"github.com/klauspost/pgzip"
-	"github.com/pierrec/lz4"
+	"github.com/pierrec/lz4/v4"
 	"github.com/planetscale/pargzip"
 	"github.com/spf13/pflag"
 
@@ -238,6 +238,24 @@ func newBuiltinDecompressor(engine string, reader io.Reader, logger logutil.Logg
 	return decompressor, err
 }
 
+// lz4CompressionLevel maps the numeric --compression-level value onto the
+// lz4 level enum; lz4.CompressionLevelOption rejects any value outside the
+// named constants. Values at or below 1 map to the fast compressor: the
+// hash-chain search depth of 1 that such values previously requested does
+// almost no searching, so the fast compressor is the closest match. Values
+// from 2 through 9 map onto the matching hash-chain levels, whose fixed
+// search depths grow from 1024 (Level2) to 131072 (Level9).
+func lz4CompressionLevel(level int) lz4.CompressionLevel {
+	switch {
+	case level <= 1:
+		return lz4.Fast
+	case level >= 9:
+		return lz4.Level9
+	default:
+		return lz4.Level1 << (level - 1)
+	}
+}
+
 // This returns a writer that will compress the data using the specified engine before writing to the underlying writer.
 func newBuiltinCompressor(engine string, writer io.Writer, logger logutil.Logger) (compressor io.WriteCloser, err error) {
 	switch engine {
@@ -255,9 +273,12 @@ func newBuiltinCompressor(engine string, writer io.Writer, logger logutil.Logger
 		gzip.CompressionLevel = compressionLevel
 		compressor = gzip
 	case Lz4Compressor:
-		lz4Writer := lz4.NewWriter(writer).WithConcurrency(backupCompressBlocks)
-		lz4Writer.Header = lz4.Header{
-			CompressionLevel: compressionLevel,
+		lz4Writer := lz4.NewWriter(writer)
+		if err := lz4Writer.Apply(
+			lz4.ConcurrencyOption(backupCompressBlocks),
+			lz4.CompressionLevelOption(lz4CompressionLevel(compressionLevel)),
+		); err != nil {
+			return compressor, vterrors.Wrap(err, "cannot create lz4 compressor")
 		}
 		compressor = lz4Writer
 	case ZstdCompressor:

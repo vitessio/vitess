@@ -19,8 +19,11 @@ package mysqlctl
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/binary"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"strings"
 	"testing"
 	"time"
@@ -75,6 +78,45 @@ func TestBuiltinCompressors(t *testing.T) {
 
 			decompressor.Close()
 			assert.Equal(t, data, decompressed.Bytes())
+		})
+	}
+}
+
+// TestBuiltinCompressorsMultiBlock round-trips a payload larger than one
+// lz4 block (4 MiB) that alternates incompressible pages with zero pages,
+// the shape a database file gives the backup engine. This drives the
+// decompressors through their multi-block paths, with long literal runs
+// followed by matches inside every block; a round trip of a few bytes
+// never leaves the first block.
+func TestBuiltinCompressorsMultiBlock(t *testing.T) {
+	logger := logutil.NewMemoryLogger()
+	rnd := rand.New(rand.NewPCG(1, 2))
+	const pageSize = 16 * 1024
+	data := make([]byte, 9*1024*1024)
+	for page := 0; page < len(data)/pageSize; page += 2 {
+		pageBytes := data[page*pageSize : (page+1)*pageSize]
+		for i := 0; i < len(pageBytes); i += 8 {
+			binary.LittleEndian.PutUint64(pageBytes[i:], rnd.Uint64())
+		}
+	}
+
+	for _, engine := range []string{"pgzip", "pargzip", "lz4", "zstd"} {
+		t.Run(engine, func(t *testing.T) {
+			var compressed, decompressed bytes.Buffer
+			compressor, err := newBuiltinCompressor(engine, &compressed, logger)
+			require.NoError(t, err)
+			_, err = io.Copy(compressor, bytes.NewReader(data))
+			require.NoError(t, err)
+			require.NoError(t, compressor.Close())
+
+			decompressor, err := newBuiltinDecompressor(engine, &compressed, logger)
+			require.NoError(t, err)
+			_, err = io.Copy(&decompressed, decompressor)
+			require.NoError(t, err)
+			require.NoError(t, decompressor.Close())
+
+			require.Equal(t, len(data), decompressed.Len())
+			require.Equal(t, sha256.Sum256(data), sha256.Sum256(decompressed.Bytes()))
 		})
 	}
 }
