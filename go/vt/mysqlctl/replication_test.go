@@ -514,6 +514,7 @@ func TestRestoreReplicaAfterFailedShutdown(t *testing.T) {
 		rejectedQuery    string
 		boundedCtx       bool
 		wantSet          int
+		wantSetAtLeast   bool
 		wantStart        string
 		wantStartAtLeast bool
 	}{
@@ -544,9 +545,12 @@ func TestRestoreReplicaAfterFailedShutdown(t *testing.T) {
 			name:          "settings restore fails but threads are still restarted",
 			state:         state(true, true),
 			rejectedQuery: restoreFlushLog,
-			// The failing setting is retried on the convergence pass.
-			wantSet:   2,
-			wantStart: startReplication,
+			// The persistently failing setting keeps the restoration retrying
+			// until its deadline: bound it and expect repeated attempts.
+			boundedCtx:     true,
+			wantSet:        2,
+			wantSetAtLeast: true,
+			wantStart:      startReplication,
 		},
 		{
 			name:             "thread restart failure is tolerated",
@@ -595,7 +599,11 @@ func TestRestoreReplicaAfterFailedShutdown(t *testing.T) {
 				defer cancel()
 			}
 			testMysqld.restoreReplicaAfterFailedShutdown(ctx, testCase.state, 10*time.Millisecond, 30*time.Second)
-			assert.Equal(t, testCase.wantSet, db.GetQueryCalledNum(restoreFlushLog))
+			if testCase.wantSetAtLeast {
+				assert.GreaterOrEqual(t, db.GetQueryCalledNum(restoreFlushLog), testCase.wantSet)
+			} else {
+				assert.Equal(t, testCase.wantSet, db.GetQueryCalledNum(restoreFlushLog))
+			}
 			for _, start := range []string{startReplication, startSQLThread, startIOThread} {
 				got := db.GetQueryCalledNum(start)
 				switch {
@@ -1020,6 +1028,138 @@ func TestRestoreRetriesSettingsRestore(t *testing.T) {
 	case <-time.After(30 * time.Second):
 		require.FailNow(t, "the restoration did not complete after the setting recovered")
 	}
+}
+
+// TestRestoreRetriesSettingsWhenThreadsAlreadyConverged covers a transient
+// durability-setting failure while the replication threads already report the
+// desired state: the reconcile convergence must not end the restoration with
+// the settings still at the shutdown fence values (a live replica left
+// permanently on sync_binlog=1 etc.), but keep retrying them within the
+// budget.
+func TestRestoreRetriesSettingsWhenThreadsAlreadyConverged(t *testing.T) {
+	const (
+		showReplicaStatus   = "SHOW REPLICA STATUS"
+		restoreFlushLog     = "SET GLOBAL innodb_flush_log_at_trx_commit = 2"
+		restoreSyncBinlog   = "SET GLOBAL sync_binlog = 0"
+		restoreSyncRelayLog = "SET GLOBAL sync_relay_log = 10000"
+		startReplication    = "START REPLICA"
+	)
+
+	db := fakesqldb.New(t)
+	defer db.Close()
+	db.AddQuery("SELECT 1", &sqltypes.Result{})
+	// Both threads already run as desired: the reconcile has nothing to do.
+	db.AddQuery(showReplicaStatus, sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("Source_Host|Replica_IO_Running|Replica_SQL_Running", "varchar|varchar|varchar"),
+		"source|Yes|Yes",
+	))
+	for _, query := range []string{restoreFlushLog, restoreSyncBinlog, restoreSyncRelayLog, startReplication} {
+		db.AddQuery(query, &sqltypes.Result{})
+	}
+	// The first setting fails to begin with.
+	db.AddRejectedQuery(restoreFlushLog, assert.AnError)
+
+	params := db.ConnParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+	testMysqld := NewMysqld(dbc)
+	defer testMysqld.Close()
+
+	state := &replicaShutdownState{
+		startReceiver:       true,
+		startApplier:        true,
+		flushLogAtTrxCommit: "2",
+		syncBinlog:          "0",
+		syncRelayLog:        "10000",
+	}
+	restored := make(chan struct{})
+	go func() {
+		defer close(restored)
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), 30*time.Second)
+		defer cancel()
+		testMysqld.restoreReplicaAfterFailedShutdown(ctx, state, 10*time.Millisecond, 30*time.Second)
+	}()
+
+	// The restoration must keep retrying the failing setting instead of
+	// declaring convergence on the threads alone.
+	assert.Eventually(t, func() bool {
+		return db.GetQueryCalledNum(restoreFlushLog) >= 3
+	}, 30*time.Second, 10*time.Millisecond, "the restoration converged without restoring the durability settings")
+	// The setting recovers: the restoration must now complete, and it must
+	// never have restarted the already-running threads.
+	db.DeleteRejectedQuery(restoreFlushLog)
+	select {
+	case <-restored:
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "the restoration did not complete after the setting recovered")
+	}
+	assert.Zero(t, db.GetQueryCalledNum(startReplication))
+}
+
+// TestRestoreRetriesSettingsWhenThreadStartUnavailable covers the same gap on
+// flavors without executable replication-thread commands (file position, MySQL
+// Group Replication): having nothing to start must only skip the thread
+// start, not abandon a durability-settings restore that is still retrying.
+func TestRestoreRetriesSettingsWhenThreadStartUnavailable(t *testing.T) {
+	const (
+		showSlaveStatus     = "SHOW SLAVE STATUS"
+		restoreFlushLog     = "SET GLOBAL innodb_flush_log_at_trx_commit = 2"
+		restoreSyncBinlog   = "SET GLOBAL sync_binlog = 0"
+		restoreSyncRelayLog = "SET GLOBAL sync_relay_log = 10000"
+		unsupported         = "unsupported"
+	)
+
+	db := fakesqldb.New(t)
+	defer db.Close()
+	db.AddQuery("SELECT 1", &sqltypes.Result{})
+	// The threads are observed stopped, so the restoration would want to
+	// start them -- but the file position flavor has no executable start.
+	db.AddQuery(showSlaveStatus, sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("Master_Host|Slave_IO_Running|Slave_SQL_Running", "varchar|varchar|varchar"),
+		"source|No|No",
+	))
+	for _, query := range []string{restoreFlushLog, restoreSyncBinlog, restoreSyncRelayLog, unsupported} {
+		db.AddQuery(query, &sqltypes.Result{})
+	}
+	// The first setting fails to begin with.
+	db.AddRejectedQuery(restoreFlushLog, assert.AnError)
+
+	params := db.ConnParams()
+	cp := *params
+	cp.Flavor = replication.FilePosFlavorID
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+	testMysqld := NewMysqld(dbc)
+	defer testMysqld.Close()
+
+	state := &replicaShutdownState{
+		startReceiver:       true,
+		startApplier:        true,
+		flushLogAtTrxCommit: "2",
+		syncBinlog:          "0",
+		syncRelayLog:        "10000",
+	}
+	restored := make(chan struct{})
+	go func() {
+		defer close(restored)
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), 30*time.Second)
+		defer cancel()
+		testMysqld.restoreReplicaAfterFailedShutdown(ctx, state, 10*time.Millisecond, 30*time.Second)
+	}()
+
+	// The restoration must keep retrying the failing setting rather than end
+	// with the unavailable thread start.
+	assert.Eventually(t, func() bool {
+		return db.GetQueryCalledNum(restoreFlushLog) >= 3
+	}, 30*time.Second, 10*time.Millisecond, "the restoration gave up the settings when the thread start was unavailable")
+	// The setting recovers: the restoration must now complete without ever
+	// issuing the "unsupported" start.
+	db.DeleteRejectedQuery(restoreFlushLog)
+	select {
+	case <-restored:
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "the restoration did not complete after the setting recovered")
+	}
+	assert.Zero(t, db.GetQueryCalledNum(unsupported))
 }
 
 // TestRestoreReconnectsWhenSettingsRestoreLosesConnection covers a settings
@@ -1667,15 +1807,18 @@ func TestShutdownIdempotentWhenStoppedWhileQueued(t *testing.T) {
 // already failed with DeadlineExceeded must not shut mysqld down afterwards.
 func TestShutdownWaitHonorsCancellation(t *testing.T) {
 	const (
-		readDurability  = "SELECT @@global.innodb_flush_log_at_trx_commit, @@global.sync_binlog, @@global.sync_relay_log"
-		setFlushLog     = "SET GLOBAL innodb_flush_log_at_trx_commit = 1"
-		setSyncBinlog   = "SET GLOBAL sync_binlog = 1"
-		setSyncRelayLog = "SET GLOBAL sync_relay_log = 1"
-		flushEngineLogs = "FLUSH NO_WRITE_TO_BINLOG ENGINE LOGS"
-		flushBinaryLogs = "FLUSH NO_WRITE_TO_BINLOG BINARY LOGS"
-		flushRelayLogs  = "FLUSH NO_WRITE_TO_BINLOG RELAY LOGS"
-		stopIOThread    = "STOP REPLICA IO_THREAD"
-		stopSQLThread   = "STOP REPLICA SQL_THREAD"
+		readDurability      = "SELECT @@global.innodb_flush_log_at_trx_commit, @@global.sync_binlog, @@global.sync_relay_log"
+		setFlushLog         = "SET GLOBAL innodb_flush_log_at_trx_commit = 1"
+		setSyncBinlog       = "SET GLOBAL sync_binlog = 1"
+		setSyncRelayLog     = "SET GLOBAL sync_relay_log = 1"
+		flushEngineLogs     = "FLUSH NO_WRITE_TO_BINLOG ENGINE LOGS"
+		flushBinaryLogs     = "FLUSH NO_WRITE_TO_BINLOG BINARY LOGS"
+		flushRelayLogs      = "FLUSH NO_WRITE_TO_BINLOG RELAY LOGS"
+		stopIOThread        = "STOP REPLICA IO_THREAD"
+		stopSQLThread       = "STOP REPLICA SQL_THREAD"
+		restoreFlushLog     = "SET GLOBAL innodb_flush_log_at_trx_commit = 2"
+		restoreSyncBinlog   = "SET GLOBAL sync_binlog = 0"
+		restoreSyncRelayLog = "SET GLOBAL sync_relay_log = 10000"
 	)
 
 	db := fakesqldb.New(t)
@@ -1692,7 +1835,12 @@ func TestShutdownWaitHonorsCancellation(t *testing.T) {
 		),
 		"2|0|10000",
 	))
-	for _, query := range []string{setFlushLog, setSyncBinlog, setSyncRelayLog, flushEngineLogs, flushBinaryLogs, flushRelayLogs, stopIOThread, stopSQLThread} {
+	// Attempt A's failed shutdown arms a restoration; its settings must be
+	// servable or Close would wait out the full restore budget.
+	for _, query := range []string{
+		setFlushLog, setSyncBinlog, setSyncRelayLog, flushEngineLogs, flushBinaryLogs, flushRelayLogs,
+		stopIOThread, stopSQLThread, restoreFlushLog, restoreSyncBinlog, restoreSyncRelayLog,
+	} {
 		db.AddQuery(query, &sqltypes.Result{})
 	}
 	db.AddQueryPattern("kill .*", &sqltypes.Result{})

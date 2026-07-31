@@ -496,6 +496,8 @@ func (mysqld *Mysqld) restoreReplicaAfterFailedShutdown(ctx context.Context, sta
 				switch {
 				case cycleReceiver:
 					log.Warn("gave up cycling the replication receiver after a failed shutdown; its connection-failover monitor may be left stopped")
+				case statusObserved && !needReceiver && !needApplier && !settingsRestored:
+					log.Warn("gave up restoring the durability settings after a failed shutdown; the replica keeps the safer full-durability settings")
 				case statusObserved && !needReceiver && !needApplier:
 					log.Warn("the replication threads are running as desired after a failed shutdown, but an interrupted stop may still be draining; if replication stops later it must be restarted externally (e.g. by VTOrc)")
 				default:
@@ -604,7 +606,11 @@ func (mysqld *Mysqld) restoreReplicaAfterFailedShutdown(ctx context.Context, sta
 		}
 		needReceiver = state.startReceiver && !receiverRunning
 		needApplier = state.startApplier && !applierRunning
-		if !needReceiver && !needApplier && !pendingReceiver && !pendingApplier && !cycleReceiver {
+		// Convergence also requires the durability settings: returning on the
+		// threads alone would leave a transiently failed SET permanently at
+		// the shutdown fence value (full per-commit syncing) on a live
+		// replica -- the very regression this restoration undoes.
+		if settingsRestored && !needReceiver && !needApplier && !pendingReceiver && !pendingApplier && !cycleReceiver {
 			log.Warn("shutdown failed after replication was stopped to make the replica crash-safe; restored the previous replication state")
 			return
 		}
@@ -636,8 +642,13 @@ func (mysqld *Mysqld) restoreReplicaAfterFailedShutdown(ctx context.Context, sta
 			}
 			if !replicationThreadCommandAvailable(start) {
 				// Flavors without executable replication-thread commands have
-				// nothing to start, matching the preparation's skipped stops.
-				return
+				// nothing to start, matching the preparation's skipped stops
+				// -- but only once the settings restore has also finished:
+				// returning earlier would abandon a retry still in progress.
+				if settingsRestored {
+					return
+				}
+				continue
 			}
 			if _, err := mysqld.executeFetchDirectContext(ctx, conn, start); err != nil {
 				log.Warn(
