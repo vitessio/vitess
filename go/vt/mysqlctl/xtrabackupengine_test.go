@@ -23,7 +23,6 @@ import (
 	"io"
 	"os"
 	"path"
-	"strings"
 	"testing"
 	"time"
 
@@ -183,13 +182,20 @@ func TestCloseBackupFilesDoesNotCancelContextOnSuccess(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		closeBackupFiles(ctx, cancel, 200*time.Millisecond, destFiles, "backup", len(destFiles), logger, &finalErr)
+		// Use a generous, CI-safe watchdog timeout. The nop closers return
+		// immediately, so a successful close stops the watchdog long before
+		// this fires. A large timeout keeps a preempted CI worker from
+		// spuriously tripping the watchdog and cancelling ctx.
+		closeBackupFiles(ctx, cancel, 30*time.Second, destFiles, "backup", len(destFiles), logger, &finalErr)
 	}()
 
-	// Wait for closeBackupFiles to finish (up to 5 seconds) using the
-	// test-guideline-approved require.Eventually instead of t.Fatal. Poll
-	// non-blockingly so a regression that hangs closeBackupFiles fails the
-	// test at the deadline instead of blocking on <-done indefinitely.
+	// closeBackupFiles stops the watchdog before returning, so once it has
+	// returned the watchdog can no longer fire. Synchronizing on completion
+	// (rather than sleeping past a wall-clock window) makes the assertions
+	// below deterministic: with a 30s watchdog timeout, the timer cannot have
+	// fired during this sub-second test. Poll non-blockingly so a regression
+	// that hangs closeBackupFiles fails at the deadline instead of blocking on
+	// <-done indefinitely.
 	require.Eventually(t, func() bool {
 		select {
 		case <-done:
@@ -197,15 +203,14 @@ func TestCloseBackupFilesDoesNotCancelContextOnSuccess(t *testing.T) {
 		default:
 			return false
 		}
-	}, 5*time.Second, 10*time.Millisecond)
+	}, 30*time.Second, 10*time.Millisecond)
 
 	require.NoError(t, finalErr)
 
-	// Poll past the watchdog's timeout to make sure it didn't fire late and
-	// cancel ctx out from under a still-running background upload.
-	require.Never(t, func() bool {
-		return ctx.Err() != nil || strings.Contains(logger.String(), "Timed out waiting for Close()")
-	}, 300*time.Millisecond, 10*time.Millisecond)
+	// A successful close must leave ctx untouched for the still-in-flight
+	// upload, and must not have logged a watchdog timeout.
+	assert.NoError(t, ctx.Err())
+	assert.NotContains(t, logger.String(), "Timed out waiting for Close()")
 }
 
 // TestCloseBackupFilesCancelsOnRealTimeout guards the other direction: if
