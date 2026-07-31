@@ -906,8 +906,8 @@ func TestTakeoverConnectFailureKeepsRestoreOwnership(t *testing.T) {
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
 
-	err := testMysqld.shutdownWithReplicaCrashSafety(t.Context(), 200*time.Millisecond, func() error {
-		return assert.AnError
+	err := testMysqld.shutdownWithReplicaCrashSafety(t.Context(), 200*time.Millisecond, func() (bool, error) {
+		return false, assert.AnError
 	})
 	require.ErrorIs(t, err, assert.AnError)
 	assert.Eventually(t, func() bool {
@@ -918,8 +918,8 @@ func TestTakeoverConnectFailureKeepsRestoreOwnership(t *testing.T) {
 	// restoration but its preparation cannot connect, and the shutdown fails
 	// again.
 	db.EnableConnFail()
-	err = testMysqld.shutdownWithReplicaCrashSafety(t.Context(), 200*time.Millisecond, func() error {
-		return assert.AnError
+	err = testMysqld.shutdownWithReplicaCrashSafety(t.Context(), 200*time.Millisecond, func() (bool, error) {
+		return false, assert.AnError
 	})
 	require.ErrorIs(t, err, assert.AnError)
 
@@ -1416,8 +1416,8 @@ func TestShutdownRestoresReplicaAfterLatePreparation(t *testing.T) {
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
 
-	err := testMysqld.shutdownWithReplicaCrashSafety(t.Context(), 100*time.Millisecond, func() error {
-		return assert.AnError
+	err := testMysqld.shutdownWithReplicaCrashSafety(t.Context(), 100*time.Millisecond, func() (bool, error) {
+		return false, assert.AnError
 	})
 	require.ErrorIs(t, err, assert.AnError)
 	// The mutation is still blocked, so nothing has been restored yet.
@@ -1478,8 +1478,8 @@ func TestCloseWaitsForPendingReplicaRestore(t *testing.T) {
 	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
 	testMysqld := NewMysqld(dbc)
 
-	err := testMysqld.shutdownWithReplicaCrashSafety(t.Context(), 100*time.Millisecond, func() error {
-		return assert.AnError
+	err := testMysqld.shutdownWithReplicaCrashSafety(t.Context(), 100*time.Millisecond, func() (bool, error) {
+		return false, assert.AnError
 	})
 	require.ErrorIs(t, err, assert.AnError)
 
@@ -1571,8 +1571,8 @@ func TestRestoreSurvivesClosedPools(t *testing.T) {
 	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
 	testMysqld := NewMysqld(dbc)
 
-	err := testMysqld.shutdownWithReplicaCrashSafety(t.Context(), 100*time.Millisecond, func() error {
-		return assert.AnError
+	err := testMysqld.shutdownWithReplicaCrashSafety(t.Context(), 100*time.Millisecond, func() (bool, error) {
+		return false, assert.AnError
 	})
 	require.ErrorIs(t, err, assert.AnError)
 
@@ -1676,8 +1676,8 @@ func TestTakeoverTimeoutHandsOffToReplacementRestore(t *testing.T) {
 	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
 	testMysqld := NewMysqld(dbc)
 
-	err := testMysqld.shutdownWithReplicaCrashSafety(t.Context(), 200*time.Millisecond, func() error {
-		return assert.AnError
+	err := testMysqld.shutdownWithReplicaCrashSafety(t.Context(), 200*time.Millisecond, func() (bool, error) {
+		return false, assert.AnError
 	})
 	require.ErrorIs(t, err, assert.AnError)
 	assert.Eventually(t, func() bool {
@@ -1695,8 +1695,8 @@ func TestTakeoverTimeoutHandsOffToReplacementRestore(t *testing.T) {
 
 	// The retry cannot take the restoration over in time: it must proceed
 	// without preparation but hand ownership to a replacement on failure.
-	err = testMysqld.shutdownWithReplicaCrashSafety(t.Context(), 200*time.Millisecond, func() error {
-		return assert.AnError
+	err = testMysqld.shutdownWithReplicaCrashSafety(t.Context(), 200*time.Millisecond, func() (bool, error) {
+		return false, assert.AnError
 	})
 	require.ErrorIs(t, err, assert.AnError)
 	assert.Equal(t, 1, db.GetQueryCalledNum(readDurability), "the retry must not prepare during a failed takeover")
@@ -1779,9 +1779,9 @@ func TestShutdownCancelledDuringPreparationSkipsShutdown(t *testing.T) {
 	defer cancel()
 	done := make(chan error, 1)
 	go func() {
-		done <- testMysqld.shutdownWithReplicaCrashSafety(ctx, 30*time.Second, func() error {
+		done <- testMysqld.shutdownWithReplicaCrashSafety(ctx, 30*time.Second, func() (bool, error) {
 			shutdownCalled.Store(true)
-			return assert.AnError
+			return false, assert.AnError
 		})
 	}()
 	select {
@@ -1927,10 +1927,10 @@ func TestShutdownWaitHonorsCancellation(t *testing.T) {
 	defer releaseA()
 	aDone := make(chan error, 1)
 	go func() {
-		aDone <- testMysqld.shutdownWithReplicaCrashSafety(t.Context(), 200*time.Millisecond, func() error {
+		aDone <- testMysqld.shutdownWithReplicaCrashSafety(t.Context(), 200*time.Millisecond, func() (bool, error) {
 			close(aEntered)
 			<-aRelease
-			return assert.AnError
+			return false, assert.AnError
 		})
 	}()
 	select {
@@ -1946,9 +1946,9 @@ func TestShutdownWaitHonorsCancellation(t *testing.T) {
 	defer bCancel()
 	bDone := make(chan error, 1)
 	go func() {
-		bDone <- testMysqld.shutdownWithReplicaCrashSafety(bCtx, 200*time.Millisecond, func() error {
+		bDone <- testMysqld.shutdownWithReplicaCrashSafety(bCtx, 200*time.Millisecond, func() (bool, error) {
 			close(bEntered)
-			return assert.AnError
+			return false, assert.AnError
 		})
 	}()
 	select {
@@ -1973,6 +1973,155 @@ func TestShutdownWaitHonorsCancellation(t *testing.T) {
 		require.FailNow(t, "attempt A did not return")
 	}
 	testMysqld.Close()
+}
+
+// TestShutdownInitiatedFailureKeepsFence covers a shutdown that fails AFTER
+// being initiated (Graham's review): a successful mysqld_shutdown hook hands
+// off an asynchronous stop, and the pid/socket wait then expires while mysqld
+// is still reachable. mysqld is presumed to still be going down, so the
+// failure must NOT arm the replica-state restoration: relaxing the durability
+// settings and restarting replication beneath the pending stop would reopen
+// the exact hole the fence closed.
+func TestShutdownInitiatedFailureKeepsFence(t *testing.T) {
+	const (
+		readDurability      = "SELECT @@global.innodb_flush_log_at_trx_commit, @@global.sync_binlog, @@global.sync_relay_log"
+		setFlushLog         = "SET GLOBAL innodb_flush_log_at_trx_commit = 1"
+		setSyncBinlog       = "SET GLOBAL sync_binlog = 1"
+		setSyncRelayLog     = "SET GLOBAL sync_relay_log = 1"
+		flushEngineLogs     = "FLUSH NO_WRITE_TO_BINLOG ENGINE LOGS"
+		flushBinaryLogs     = "FLUSH NO_WRITE_TO_BINLOG BINARY LOGS"
+		flushRelayLogs      = "FLUSH NO_WRITE_TO_BINLOG RELAY LOGS"
+		stopIOThread        = "STOP REPLICA IO_THREAD"
+		stopSQLThread       = "STOP REPLICA SQL_THREAD"
+		restoreFlushLog     = "SET GLOBAL innodb_flush_log_at_trx_commit = 2"
+		restoreSyncBinlog   = "SET GLOBAL sync_binlog = 0"
+		restoreSyncRelayLog = "SET GLOBAL sync_relay_log = 10000"
+		startReplication    = "START REPLICA"
+	)
+
+	db := fakesqldb.New(t)
+	defer db.Close()
+	db.AddQuery("SELECT 1", &sqltypes.Result{})
+	db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("Source_Host|Replica_IO_Running|Replica_SQL_Running", "varchar|varchar|varchar"),
+		"source|Yes|Yes",
+	))
+	db.AddQuery(readDurability, sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"@@global.innodb_flush_log_at_trx_commit|@@global.sync_binlog|@@global.sync_relay_log",
+			"int64|int64|int64",
+		),
+		"2|0|10000",
+	))
+	for _, query := range []string{
+		setFlushLog, setSyncBinlog, setSyncRelayLog, flushEngineLogs, flushBinaryLogs, flushRelayLogs,
+		stopIOThread, stopSQLThread, restoreFlushLog, restoreSyncBinlog, restoreSyncRelayLog, startReplication,
+	} {
+		db.AddQuery(query, &sqltypes.Result{})
+	}
+	db.AddQueryPattern("kill .*", &sqltypes.Result{})
+
+	// The mysqld_shutdown hook succeeds, handing off an asynchronous stop
+	// that never arrives: the pid file stays and the wait expires.
+	vtroot := t.TempDir()
+	t.Setenv("VTROOT", vtroot)
+	hookDir := filepath.Join(vtroot, "vthook")
+	require.NoError(t, os.MkdirAll(hookDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(hookDir, "mysqld_shutdown"), []byte("#!/bin/sh\nexit 0\n"), 0o755))
+	dir := t.TempDir()
+	cnf := &Mycnf{
+		SocketFile: filepath.Join(dir, "mysql.sock"),
+		PidFile:    filepath.Join(dir, "mysql.pid"),
+	}
+	require.NoError(t, os.WriteFile(cnf.PidFile, []byte("12345\n"), 0o600))
+
+	params := db.ConnParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+	testMysqld := NewMysqld(dbc)
+
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	err := testMysqld.Shutdown(ctx, cnf, true, 30*time.Second)
+	require.Error(t, err, "the pid/socket wait must expire")
+
+	// Close first: it waits out any pending restoration, so the assertions
+	// below deterministically observe whether one was armed.
+	testMysqld.Close()
+	assert.Zero(t, db.GetQueryCalledNum(restoreFlushLog), "an initiated shutdown must keep the durability fence")
+	assert.Zero(t, db.GetQueryCalledNum(startReplication), "an initiated shutdown must not restart replication beneath the pending stop")
+}
+
+// TestShutdownProceedsWhenFlockSetupFails covers an environment where the
+// interprocess shutdown lock cannot even be created (e.g. a read-only
+// directory): the crash-safety machinery is best effort and must degrade to
+// proceeding without cross-process serialization rather than veto the
+// shutdown itself.
+func TestShutdownProceedsWhenFlockSetupFails(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("directory permissions do not restrict root")
+	}
+	const (
+		readDurability      = "SELECT @@global.innodb_flush_log_at_trx_commit, @@global.sync_binlog, @@global.sync_relay_log"
+		setFlushLog         = "SET GLOBAL innodb_flush_log_at_trx_commit = 1"
+		setSyncBinlog       = "SET GLOBAL sync_binlog = 1"
+		setSyncRelayLog     = "SET GLOBAL sync_relay_log = 1"
+		flushEngineLogs     = "FLUSH NO_WRITE_TO_BINLOG ENGINE LOGS"
+		flushBinaryLogs     = "FLUSH NO_WRITE_TO_BINLOG BINARY LOGS"
+		flushRelayLogs      = "FLUSH NO_WRITE_TO_BINLOG RELAY LOGS"
+		stopIOThread        = "STOP REPLICA IO_THREAD"
+		stopSQLThread       = "STOP REPLICA SQL_THREAD"
+		restoreFlushLog     = "SET GLOBAL innodb_flush_log_at_trx_commit = 2"
+		restoreSyncBinlog   = "SET GLOBAL sync_binlog = 0"
+		restoreSyncRelayLog = "SET GLOBAL sync_relay_log = 10000"
+	)
+
+	db := fakesqldb.New(t)
+	defer db.Close()
+	db.AddQuery("SELECT 1", &sqltypes.Result{})
+	db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("Source_Host|Replica_IO_Running|Replica_SQL_Running", "varchar|varchar|varchar"),
+		"source|Yes|Yes",
+	))
+	db.AddQuery(readDurability, sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"@@global.innodb_flush_log_at_trx_commit|@@global.sync_binlog|@@global.sync_relay_log",
+			"int64|int64|int64",
+		),
+		"2|0|10000",
+	))
+	for _, query := range []string{
+		setFlushLog, setSyncBinlog, setSyncRelayLog, flushEngineLogs, flushBinaryLogs, flushRelayLogs,
+		stopIOThread, stopSQLThread, restoreFlushLog, restoreSyncBinlog, restoreSyncRelayLog,
+	} {
+		db.AddQuery(query, &sqltypes.Result{})
+	}
+	db.AddQueryPattern("kill .*", &sqltypes.Result{})
+
+	t.Setenv("VTROOT", t.TempDir())
+	dir := t.TempDir()
+	cnf := &Mycnf{
+		SocketFile: filepath.Join(dir, "mysql.sock"),
+		PidFile:    filepath.Join(dir, "mysql.pid"),
+	}
+	require.NoError(t, os.WriteFile(cnf.PidFile, []byte("12345\n"), 0o600))
+	// The lock file cannot be created next to the pid file.
+	require.NoError(t, os.Chmod(dir, 0o500))
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+
+	params := db.ConnParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+	testMysqld := NewMysqld(dbc)
+
+	err := testMysqld.Shutdown(t.Context(), cnf, false, 30*time.Second)
+	require.Error(t, err, "the shutdown itself still fails: there is no server to stop")
+	require.NotContains(t, err.Error(), "shutdown lock", "a lock setup failure must not veto the shutdown")
+	// The crash-safety flow ran end to end: the fence was applied and the
+	// failed shutdown armed the restoration, which Close waits out.
+	testMysqld.Close()
+	assert.GreaterOrEqual(t, db.GetQueryCalledNum(setFlushLog), 1, "the preparation must still run")
+	assert.GreaterOrEqual(t, db.GetQueryCalledNum(restoreFlushLog), 1, "the restoration must still run")
 }
 
 // TestShutdownSerializesAcrossMysqldInstances covers shutdown attempts from
@@ -2127,10 +2276,10 @@ func TestConcurrentShutdownAttemptsSerialize(t *testing.T) {
 	aRelease := make(chan struct{})
 	aDone := make(chan error, 1)
 	go func() {
-		aDone <- testMysqld.shutdownWithReplicaCrashSafety(t.Context(), 200*time.Millisecond, func() error {
+		aDone <- testMysqld.shutdownWithReplicaCrashSafety(t.Context(), 200*time.Millisecond, func() (bool, error) {
 			close(aEntered)
 			<-aRelease
-			return assert.AnError
+			return false, assert.AnError
 		})
 	}()
 	select {
@@ -2144,10 +2293,10 @@ func TestConcurrentShutdownAttemptsSerialize(t *testing.T) {
 	bFence := -1
 	bDone := make(chan error, 1)
 	go func() {
-		bDone <- testMysqld.shutdownWithReplicaCrashSafety(t.Context(), 200*time.Millisecond, func() error {
+		bDone <- testMysqld.shutdownWithReplicaCrashSafety(t.Context(), 200*time.Millisecond, func() (bool, error) {
 			bFence = db.GetQueryCalledNum(setFlushLog)
 			close(bEntered)
-			return assert.AnError
+			return false, assert.AnError
 		})
 	}()
 	assert.Never(t, func() bool {
@@ -2256,16 +2405,16 @@ func TestShutdownRetryTakesOverRestoreWithBlockedStop(t *testing.T) {
 	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
 	testMysqld := NewMysqld(dbc)
 
-	err := testMysqld.shutdownWithReplicaCrashSafety(t.Context(), 100*time.Millisecond, func() error {
-		return assert.AnError
+	err := testMysqld.shutdownWithReplicaCrashSafety(t.Context(), 100*time.Millisecond, func() (bool, error) {
+		return false, assert.AnError
 	})
 	require.ErrorIs(t, err, assert.AnError)
 
 	// The retry takes over the pending restoration: it must not re-capture
 	// state (that would read the half-restored state), but it must re-apply a
 	// fresh fence.
-	err = testMysqld.shutdownWithReplicaCrashSafety(t.Context(), 100*time.Millisecond, func() error {
-		return assert.AnError
+	err = testMysqld.shutdownWithReplicaCrashSafety(t.Context(), 100*time.Millisecond, func() (bool, error) {
+		return false, assert.AnError
 	})
 	require.ErrorIs(t, err, assert.AnError)
 	assert.Equal(t, 1, db.GetQueryCalledNum(readDurability), "the retry must not re-capture state while a restoration is pending")
@@ -2343,8 +2492,8 @@ func TestShutdownRetryRefencesDuringPendingRestore(t *testing.T) {
 	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
 	testMysqld := NewMysqld(dbc)
 
-	err := testMysqld.shutdownWithReplicaCrashSafety(t.Context(), 200*time.Millisecond, func() error {
-		return assert.AnError
+	err := testMysqld.shutdownWithReplicaCrashSafety(t.Context(), 200*time.Millisecond, func() (bool, error) {
+		return false, assert.AnError
 	})
 	require.ErrorIs(t, err, assert.AnError)
 
@@ -2357,9 +2506,9 @@ func TestShutdownRetryRefencesDuringPendingRestore(t *testing.T) {
 	// The retry must re-apply a fresh fence before invoking the shutdown: the
 	// previous fence is gone.
 	fenceAtShutdown := -1
-	err = testMysqld.shutdownWithReplicaCrashSafety(t.Context(), 200*time.Millisecond, func() error {
+	err = testMysqld.shutdownWithReplicaCrashSafety(t.Context(), 200*time.Millisecond, func() (bool, error) {
 		fenceAtShutdown = db.GetQueryCalledNum(setFlushLog)
-		return assert.AnError
+		return false, assert.AnError
 	})
 	require.ErrorIs(t, err, assert.AnError)
 	assert.Equal(t, 2, fenceAtShutdown, "the retry must re-apply the fence before shutting down")
@@ -2419,8 +2568,8 @@ func TestShutdownSkipsRestoreForPreMutationHang(t *testing.T) {
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
 
-	err := testMysqld.shutdownWithReplicaCrashSafety(t.Context(), 100*time.Millisecond, func() error {
-		return assert.AnError
+	err := testMysqld.shutdownWithReplicaCrashSafety(t.Context(), 100*time.Millisecond, func() (bool, error) {
+		return false, assert.AnError
 	})
 	require.ErrorIs(t, err, assert.AnError)
 
@@ -2843,16 +2992,16 @@ func TestShutdownSkipsPreparationForZeroTimeout(t *testing.T) {
 	defer testMysqld.Close()
 
 	shutdownCalled := false
-	err := testMysqld.shutdownWithReplicaCrashSafety(t.Context(), 0, func() error {
+	err := testMysqld.shutdownWithReplicaCrashSafety(t.Context(), 0, func() (bool, error) {
 		shutdownCalled = true
-		return nil
+		return false, nil
 	})
 	require.NoError(t, err)
 	assert.True(t, shutdownCalled, "the shutdown itself must still run")
 	assert.Zero(t, db.GetQueryCalledNum("SHOW REPLICA STATUS"), "the preparation must not run with a zero timeout")
 
-	err = testMysqld.shutdownWithReplicaCrashSafety(t.Context(), 0, func() error {
-		return assert.AnError
+	err = testMysqld.shutdownWithReplicaCrashSafety(t.Context(), 0, func() (bool, error) {
+		return false, assert.AnError
 	})
 	require.ErrorIs(t, err, assert.AnError, "a failing shutdown's error must pass through unchanged")
 	assert.Zero(t, db.GetQueryCalledNum("SHOW REPLICA STATUS"), "the preparation must not run with a zero timeout")

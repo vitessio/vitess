@@ -52,6 +52,14 @@ func shutdownFlockPath(cnf *Mycnf) string {
 // crashes releases its lock through the OS. Cross-process waiters therefore
 // wait a prior attempt's restoration out -- bounded by their own ctx --
 // rather than take it over the way same-object retries do.
+//
+// Lock SETUP failures -- opening or locking the file for any reason other
+// than contention -- degrade to proceeding without cross-process
+// serialization rather than failing the shutdown: the crash-safety machinery
+// is best effort and must never veto a shutdown (e.g. on a read-only
+// directory or a filesystem without flock support). Contention keeps its
+// meaning: waiting for another process's attempt is real serialization,
+// bounded by the caller's ctx.
 func (mysqld *Mysqld) acquireShutdownFlock(ctx context.Context, cnf *Mycnf) error {
 	// The gate lets exactly one goroutine per object run the lock loop;
 	// same-object concurrency is then serialized by the shutdown gate.
@@ -75,7 +83,12 @@ func (mysqld *Mysqld) acquireShutdownFlock(ctx context.Context, cnf *Mycnf) erro
 	path := shutdownFlockPath(cnf)
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
-		return vterrors.Wrapf(err, "failed to open the shutdown lock file %s", path)
+		log.Warn(
+			"cannot open the interprocess shutdown lock file; proceeding without cross-process shutdown serialization",
+			slog.String("lock_file", path),
+			slog.Any("error", err),
+		)
+		return nil
 	}
 	logged := false
 	for {
@@ -88,7 +101,12 @@ func (mysqld *Mysqld) acquireShutdownFlock(ctx context.Context, cnf *Mycnf) erro
 		}
 		if !errors.Is(err, syscall.EWOULDBLOCK) {
 			f.Close()
-			return vterrors.Wrapf(err, "failed to lock the shutdown lock file %s", path)
+			log.Warn(
+				"cannot lock the interprocess shutdown lock file; proceeding without cross-process shutdown serialization",
+				slog.String("lock_file", path),
+				slog.Any("error", err),
+			)
+			return nil
 		}
 		if !logged {
 			log.Warn(

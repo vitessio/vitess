@@ -788,7 +788,7 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 		return fmt.Errorf("preflight_mysqld_shutdown hook failed: %v", hr.String())
 	}
 
-	return mysqld.shutdownWithReplicaCrashSafety(ctx, preparationBudget, func() error {
+	return mysqld.shutdownWithReplicaCrashSafety(ctx, preparationBudget, func() (bool, error) {
 		return mysqld.executeShutdown(ctx, cnf, waitForMysqld, shutdownTimeout)
 	})
 }
@@ -809,7 +809,7 @@ func replicaShutdownPreparationBudget(shutdownTimeout time.Duration) time.Durati
 // preparation, executes the shutdown via executeShutdown, and -- when the
 // shutdown fails, leaving mysqld running -- makes a best-effort attempt to
 // restore the replica state the preparation changed.
-func (mysqld *Mysqld) shutdownWithReplicaCrashSafety(ctx context.Context, preparationTimeout time.Duration, executeShutdown func() error) error {
+func (mysqld *Mysqld) shutdownWithReplicaCrashSafety(ctx context.Context, preparationTimeout time.Duration, executeShutdown func() (bool, error)) error {
 	// Serialize the whole sequence -- preparation, shutdown, restore handoff
 	// -- against concurrent attempts (e.g. overlapping mysqlctld shutdown
 	// RPCs): a failed attempt's restore must never reset the durability fence
@@ -833,7 +833,8 @@ func (mysqld *Mysqld) shutdownWithReplicaCrashSafety(ctx context.Context, prepar
 	// A non-positive preparation budget means the caller asked for an
 	// immediate, no-wait shutdown: skip the preparation entirely.
 	if preparationTimeout <= 0 {
-		return executeShutdown()
+		_, err := executeShutdown()
+		return err
 	}
 	// A previous failed shutdown may still be restoring the replica state it
 	// changed: its restoration resets the durability settings first and can
@@ -880,8 +881,11 @@ func (mysqld *Mysqld) shutdownWithReplicaCrashSafety(ctx context.Context, prepar
 					mysqld.armReplicaRestore(ctx, pending.state, pending.done)
 					return vterrors.Wrap(err, "shutdown cancelled while taking over a previous replica state restoration")
 				}
-				shutdownErr := executeShutdown()
-				if shutdownErr != nil {
+				initiated, shutdownErr := executeShutdown()
+				if shutdownErr != nil && !initiated {
+					// An initiated shutdown that then failed is presumed
+					// still in progress: do not restore beneath it (see the
+					// initiated check on the main path below).
 					mysqld.armReplicaRestore(ctx, pending.state, pending.done)
 				}
 				return shutdownErr
@@ -945,11 +949,12 @@ func (mysqld *Mysqld) shutdownWithReplicaCrashSafety(ctx context.Context, prepar
 	// through to the restore handoff below so anything the preparation
 	// changed is still converged back.
 	var shutdownErr error
+	shutdownInitiated := false
 	if err := ctx.Err(); err != nil {
 		log.Warn("shutdown cancelled during the crash-safety preparation; not executing the shutdown")
 		shutdownErr = vterrors.Wrap(err, "shutdown cancelled during the crash-safety preparation")
 	} else {
-		shutdownErr = executeShutdown()
+		shutdownInitiated, shutdownErr = executeShutdown()
 	}
 	if shutdownErr == nil {
 		// The crash-safety preparation above is best effort and already logged
@@ -957,6 +962,18 @@ func (mysqld *Mysqld) shutdownWithReplicaCrashSafety(ctx context.Context, prepar
 		// so that callers which restart or clean up afterwards are not misled
 		// into treating mysqld as still running.
 		return nil
+	}
+	if shutdownInitiated {
+		// The shutdown was initiated before it failed: a successful
+		// mysqld_shutdown hook may have handed off an asynchronous stop, or
+		// mysqladmin delivered SHUTDOWN and the pid/socket wait then expired.
+		// mysqld is presumed to still be going down, so restoring -- relaxing
+		// the durability settings and restarting replication beneath that
+		// stop -- would reopen the exact hole the fence closed. Keep the
+		// fence; if mysqld unexpectedly stays up it stays safely fenced, and
+		// external recovery (e.g. VTOrc) restarts replication.
+		log.Warn("shutdown failed after being initiated; keeping the crash-safety fence in place")
+		return shutdownErr
 	}
 	if !preparationDone {
 		// The preparation outlived its deadline, and any statement it had in
@@ -1057,14 +1074,21 @@ func mysqldAlreadyStopped(cnf *Mycnf) bool {
 // executeShutdown performs the mysqld shutdown itself -- via the
 // mysqld_shutdown hook when one exists, or mysqladmin otherwise -- and
 // optionally waits for the process to fully exit.
-func (mysqld *Mysqld) executeShutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bool, shutdownTimeout time.Duration) error {
+// executeShutdown reports, along with its error, whether the shutdown was
+// initiated before the failure: a successful mysqld_shutdown hook may hand
+// off an asynchronous stop, and mysqladmin may deliver SHUTDOWN and then give
+// up waiting, so a subsequent pid/socket-wait expiry does NOT mean mysqld
+// keeps running -- it is presumed still going down. Callers must not treat an
+// initiated failure as a failure to shut down when deciding to restore the
+// replica state.
+func (mysqld *Mysqld) executeShutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bool, shutdownTimeout time.Duration) (initiated bool, err error) {
 	// Recheck under the shutdown gate: Shutdown's own already-stopped check
 	// runs before attempts are serialized, so a concurrent attempt may have
 	// stopped mysqld while this one was queued or preparing. Report the same
 	// idempotent success instead of a spurious hook/mysqladmin failure.
 	if mysqldAlreadyStopped(cnf) {
 		log.Warn("assuming mysqld already shut down - no socket, no pid file found")
-		return nil
+		return false, nil
 	}
 
 	// try the mysqld shutdown hook, if any
@@ -1078,19 +1102,19 @@ func (mysqld *Mysqld) executeShutdown(ctx context.Context, cnf *Mycnf, waitForMy
 		log.Info("No mysqld_shutdown hook, running mysqladmin directly")
 		dir, err := vtenv.VtMysqlRoot()
 		if err != nil {
-			return err
+			return false, err
 		}
 		name, err := binaryPath(dir, "mysqladmin")
 		if err != nil {
-			return err
+			return false, err
 		}
 		params, err := mysqld.dbcfgs.DbaConnector().MysqlParams()
 		if err != nil {
-			return err
+			return false, err
 		}
 		cnf, err := mysqld.defaultsExtraFile(params)
 		if err != nil {
-			return err
+			return false, err
 		}
 		defer os.Remove(cnf)
 		args := []string{
@@ -1102,7 +1126,7 @@ func (mysqld *Mysqld) executeShutdown(ctx context.Context, cnf *Mycnf, waitForMy
 		}
 		env, err := buildLdPaths()
 		if err != nil {
-			return err
+			return false, err
 		}
 		if _, output, err := execCmd(name, args, env, dir, nil); err != nil {
 			// mysqladmin exits non-zero when its --shutdown-timeout expires
@@ -1118,8 +1142,13 @@ func (mysqld *Mysqld) executeShutdown(ctx context.Context, cnf *Mycnf, waitForMy
 			// The error is only suppressed when the wait below will run:
 			// for waitForMysqld=false callers a nil return would claim a
 			// shutdown nothing verified, so they get the error as before.
-			if !waitForMysqld || !mysqladminAbortedWaiting(output) {
-				return err
+			if !mysqladminAbortedWaiting(output) {
+				// The SHUTDOWN command was never delivered.
+				return false, err
+			}
+			if !waitForMysqld {
+				// Delivered, but nothing below will verify the outcome.
+				return true, err
 			}
 			log.Warn("mysqladmin gave up waiting for mysqld to stop, waiting on pid/socket files instead", slog.Any("error", err))
 			var cancel context.CancelFunc
@@ -1128,7 +1157,7 @@ func (mysqld *Mysqld) executeShutdown(ctx context.Context, cnf *Mycnf, waitForMy
 		}
 	default:
 		// hook failed, we report error
-		return fmt.Errorf("mysqld_shutdown hook failed: %v", hr.String())
+		return false, fmt.Errorf("mysqld_shutdown hook failed: %v", hr.String())
 	}
 
 	// Wait for mysqld to really stop. Use the socket and pid files as a
@@ -1137,10 +1166,10 @@ func (mysqld *Mysqld) executeShutdown(ctx context.Context, cnf *Mycnf, waitForMy
 	if waitForMysqld {
 		log.Info(fmt.Sprintf("Mysqld.Shutdown: waiting for socket file (%v) and pid file (%v) to disappear", cnf.SocketFile, cnf.PidFile))
 		if err := waitForMysqldExit(ctx, cnf.SocketFile, cnf.PidFile); err != nil {
-			return err
+			return true, err
 		}
 	}
-	return nil
+	return true, nil
 }
 
 // StartAfterExit waits for a mysqld process that shut itself down (e.g. after a
