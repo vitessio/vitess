@@ -672,7 +672,7 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 			if changedTx {
 				return vterrors.New(vtrpcpb.Code_CANCELED, "Transaction state change inside the stored procedure is not allowed")
 			}
-			return nil
+			return qre.streamFetchLastInsertID(conn.Conn, streamCallback)
 		}
 		return err
 	}
@@ -705,7 +705,7 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 		if leakedTx {
 			return vterrors.New(vtrpcpb.Code_CANCELED, "Transaction not concluded inside the stored procedure, leaking transaction from stored procedure is not allowed")
 		}
-		return nil
+		return qre.streamFetchLastInsertID(dbConn.Conn, streamCallback)
 	}
 	return err
 }
@@ -1805,8 +1805,31 @@ func (qre *QueryExecutor) execStreamSQL(conn *connpool.PooledConn, isTransaction
 	if err != nil || lastInsertIDSet || !qre.options.GetFetchLastInsertId() {
 		return err
 	}
+	if qre.plan.PlanID == p.PlanCallProc {
+		// A stored procedure call still has its trailing status unread at this
+		// point — either pending on the wire or captured as the connection's
+		// streaming OK packet. A buffered query issued here would clobber or
+		// consume that state, so the caller fetches the last insert id after
+		// the trailing status has been drained.
+		return nil
+	}
 	res := &sqltypes.Result{}
 	if err = qre.fetchLastInsertID(ctx, conn.Conn, res); err != nil {
+		return err
+	}
+	if res.InsertIDUpdated() {
+		return callback(res)
+	}
+	return nil
+}
+
+// streamFetchLastInsertID runs the last-insert-id follow-up for a streamed
+// stored procedure call and delivers the value over the stream callback. It
+// must only run after the call's trailing status has been drained, so the
+// follow-up query meets a clean connection.
+func (qre *QueryExecutor) streamFetchLastInsertID(conn *connpool.Conn, callback StreamCallback) error {
+	res := &sqltypes.Result{}
+	if err := qre.fetchLastInsertID(qre.ctx, conn, res); err != nil {
 		return err
 	}
 	if res.InsertIDUpdated() {

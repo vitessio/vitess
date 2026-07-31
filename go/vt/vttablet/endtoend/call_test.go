@@ -182,6 +182,36 @@ func TestCallProcedureFetchLastInsertID(t *testing.T) {
 	require.NotEmpty(t, qr.Rows, "single-resultset procedure should return its rows")
 }
 
+// With the FetchLastInsertId option set, a streamed CALL issues follow-up
+// queries on the same connection. Those follow-ups must not clobber the
+// captured OK-packet state that a no-resultset CALL's trailing-status check
+// relies on, and must not run while a single-resultset CALL's trailing OK
+// packet is still pending on the connection.
+func TestCallProcedureStreamingFetchLastInsertID(t *testing.T) {
+	opts := &querypb.ExecuteOptions{
+		IncludedFields:    querypb.ExecuteOptions_ALL,
+		FetchLastInsertId: true,
+	}
+	newClient := func(t *testing.T) *framework.QueryClient {
+		ctx, cancel := context.WithTimeout(
+			callerid.NewContext(context.Background(), &vtrpcpb.CallerID{}, &querypb.VTGateCallerID{Username: "dev"}),
+			30*time.Second)
+		t.Cleanup(cancel)
+		return framework.NewClientWithContext(ctx)
+	}
+
+	t.Run("no resultset", func(t *testing.T) {
+		_, err := newClient(t).StreamExecuteWithOptions("call proc_tx_commit()", nil, opts)
+		require.NoError(t, err)
+	})
+
+	t.Run("single resultset", func(t *testing.T) {
+		qr, err := newClient(t).StreamExecuteWithOptions("call proc_select1()", nil, opts)
+		require.NoError(t, err)
+		require.NotEmpty(t, qr.Rows, "single-resultset procedure should return its rows")
+	})
+}
+
 func TestCallProcedureStreaming(t *testing.T) {
 	client := framework.NewClient()
 	type testcases struct {
