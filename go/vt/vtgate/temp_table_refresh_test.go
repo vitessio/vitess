@@ -18,12 +18,14 @@ package vtgate
 
 import (
 	"slices"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql"
 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -178,7 +180,67 @@ func TestTempTableActivityRefresh(t *testing.T) {
 		"no refresh may launch beyond the in-flight bound")
 	require.Len(t, bounded.dueTargets(boundedSession), 1,
 		"a target skipped at the in-flight bound must be un-stamped so the next activity retries it")
+
+	// COM_PING is session activity too: on a direct MySQL connection a ping
+	// resets wait_timeout, so a ping-only client through vtgate must likewise
+	// keep its temp-table reserved connections alive. The ping is answered
+	// locally by the protocol layer; the handler hook fans the refresh out.
+	vh := newVtgateHandler(&VTGate{executor: executor})
+	pingConn := mysql.GetTestConn()
+	pingConn.ClientData = newSession(52, 0).Session
+	vh.ComPing(pingConn)
+	assert.Eventually(t, func() bool {
+		return slices.Contains(sbclookup.GetExecuteReservedIDs(), int64(52))
+	}, 30*time.Second, 10*time.Millisecond,
+		"a client ping must fan a refresh out to the session's temp-table reserved connections")
+
+	// A ping on a connection that never ran a query has no session and must
+	// be a no-op.
+	vh.ComPing(mysql.GetTestConn())
+
+	// The lease ticker reads shard-session state concurrently with the
+	// command's own execution, which updates TransactionId and ReservedId in
+	// place via AppendOrUpdate under the session mutex. dueTargets must read a
+	// snapshot taken under that mutex, not the live protos: this section fails
+	// under the race detector if it reads them directly.
+	racy := newTempTableActivityRefresher(nil)
+	racySession := newSession(4300, 0)
+	racySession.Session.InReservedConn = true
+	liveShardSession := racySession.ShardSessionsForCleanup()[0]
+	target := liveShardSession.Target
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		for i := range 2000 {
+			err := racySession.AppendOrUpdate(target, &refreshTestActionInfo{
+				transactionID: int64(i % 2 * 7),
+				reservedID:    4300,
+				alias:         lookupTablet.Alias,
+			}, liveShardSession, vtgatepb.TransactionMode_MULTI)
+			assert.NoError(t, err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for range 2000 {
+			racy.dueTargets(racySession)
+		}
+	}()
+	wg.Wait()
 }
+
+// refreshTestActionInfo is a minimal econtext.ShardActionInfo for driving
+// AppendOrUpdate in tests.
+type refreshTestActionInfo struct {
+	transactionID, reservedID int64
+	alias                     *topodatapb.TabletAlias
+}
+
+func (i *refreshTestActionInfo) TransactionID() int64           { return i.transactionID }
+func (i *refreshTestActionInfo) ReservedID() int64              { return i.reservedID }
+func (i *refreshTestActionInfo) RowsAffected() bool             { return false }
+func (i *refreshTestActionInfo) Alias() *topodatapb.TabletAlias { return i.alias }
 
 // TestTempTableCommandLease verifies the command-scoped lease: an immediate
 // refresh when the command starts, and a settling refresh when it stops —

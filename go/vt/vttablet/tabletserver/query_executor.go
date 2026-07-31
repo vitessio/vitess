@@ -75,6 +75,11 @@ const (
 	resetLastIDQuery  = "select last_insert_id(18446744073709547416)"
 	resetLastIDValue  = 18446744073709547416
 	userLabelDisabled = "UserLabelDisabled"
+
+	// sessionWaitTimeoutProbeTimeout bounds the one-time best-effort probe of
+	// a reserved connection's @@session.wait_timeout after its first
+	// temporary-table DDL; see captureSessionWaitTimeout.
+	sessionWaitTimeoutProbeTimeout = 5 * time.Second
 )
 
 var (
@@ -1044,12 +1049,23 @@ func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (result *sqltypes.Re
 // the deadline mysqld actually enforces on this connection, fixed when the
 // connection's thread started, unlike the pool's global mirror which follows
 // runtime SET GLOBAL changes. Best-effort: on any failure the connection
-// falls back to the global mirror.
+// falls back to the global mirror. The probe must never undo the user
+// statement that just succeeded, so it runs at most once per connection, on
+// its own bounded context detached from the request (whose deadline expiring
+// mid-probe would otherwise kill the connection — dropping the just-created
+// temporary table — after execDDL already reported success), keeping the
+// connection even if the probe itself times out, and never inside a
+// transaction, where a timed-out statement always costs the whole connection.
 func (qre *QueryExecutor) captureSessionWaitTimeout(conn *StatefulConnection) {
 	if qre.tsv.config.TempTableIdleTimeout >= 0 {
 		return
 	}
-	qr, err := conn.Exec(qre.ctx, "select @@session.wait_timeout", 1, false, false /* keepConnOnTimeout */)
+	if conn.sessionWaitTimeout != 0 || conn.IsInTransaction() {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(qre.ctx), sessionWaitTimeoutProbeTimeout)
+	defer cancel()
+	qr, err := conn.Exec(ctx, "select @@session.wait_timeout", 1, false, true /* keepConnOnTimeout */)
 	if err != nil || len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
 		return
 	}

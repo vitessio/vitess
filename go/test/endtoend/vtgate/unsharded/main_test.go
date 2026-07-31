@@ -164,6 +164,18 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
+		// Run every mysqld with the short wait_timeout from extra_my.cnf so
+		// TestTempTable can prove that a ping-only client outlives it.
+		wd, err := os.Getwd()
+		if err != nil {
+			log.Error(err.Error())
+			return 1
+		}
+		if err := os.Setenv("EXTRA_MY_CNF", wd+"/extra_my.cnf"); err != nil {
+			log.Error(err.Error())
+			return 1
+		}
+
 		clusterInstance = cluster.NewCluster(cell, hostname)
 		defer clusterInstance.Teardown()
 
@@ -450,6 +462,27 @@ func TestTempTable(t *testing.T) {
 	utils.AssertMatches(t, conn1, `select count(*) from allDefaults`, fmt.Sprintf("%v", before.Rows))
 	utils.AssertMatches(t, conn1, `select count(*) from temp_trx_t`, `[[INT64(0)]]`)
 	utils.Exec(t, conn1, `drop temporary table temp_trx_t`)
+
+	// COM_PING is session activity: on a direct MySQL connection a periodic
+	// ping resets wait_timeout, so through vtgate it must keep the session's
+	// temp-table reserved connection alive too. The cluster's mysqld runs
+	// with wait_timeout=30 (extra_my.cnf), and the background heartbeat never
+	// reaches mysqld (asserted above), so a ping-only client outlives the
+	// 30s deadline only because each ping fans an ordinary refresh query out
+	// to the reserved connection.
+	conn3, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn3.Close()
+	utils.Exec(t, conn3, `create temporary table ping_temp_t(id bigint primary key)`)
+	utils.Exec(t, conn3, `insert into ping_temp_t(id) values (1)`)
+	pingDeadline := time.Now().Add(40 * time.Second)
+	for time.Now().Before(pingDeadline) {
+		require.NoError(t, conn3.Ping())
+		time.Sleep(2 * time.Second)
+	}
+	// The temporary table must have survived: a ping-only client through
+	// vtgate keeps its reserved connection past mysqld's wait_timeout.
+	utils.AssertMatches(t, conn3, `select id from ping_temp_t`, `[[INT64(1)]]`)
 }
 
 func TestReservedConnDML(t *testing.T) {

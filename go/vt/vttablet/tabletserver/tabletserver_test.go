@@ -2377,6 +2377,23 @@ func TestReserveBeginExecute(t *testing.T) {
 	for _, exp := range expected {
 		assert.Contains(t, splitOutput, exp, "expected queries to run")
 	}
+
+	// A temp-table DDL inside the transaction marks the connection but must
+	// not probe @@session.wait_timeout: a timed-out statement inside a
+	// transaction always costs the whole connection, so the best-effort probe
+	// can never be made safe there. Capture falls back to the pool's global
+	// mirror instead.
+	db.AddQueryPattern("create temporary table .*", &sqltypes.Result{})
+	_, err = tsv.Execute(ctx, nil, &target, "create temporary table temp_t(id int)", nil, state.TransactionID, state.ReservedID, nil)
+	require.NoError(t, err)
+	conn, err := tsv.te.txPool.GetAndLock(state.ReservedID, "for test")
+	require.NoError(t, err)
+	assert.True(t, conn.holdsTempTables, "a temp-table DDL must mark the connection")
+	assert.Zero(t, conn.sessionWaitTimeout, "no capture inside a transaction")
+	conn.Unlock()
+	assert.NotContains(t, db.QueryLog(), "select @@session.wait_timeout",
+		"the wait_timeout probe must not run inside a transaction")
+
 	err = tsv.Release(ctx, &target, state.TransactionID, state.ReservedID)
 	require.NoError(t, err)
 }
@@ -2432,11 +2449,38 @@ func TestReserveExecute_WithoutTx(t *testing.T) {
 	assert.True(t, conn.holdsTempTables, "DROP TEMPORARY TABLE must not unmark the connection")
 	conn.Unlock()
 
+	// The probe runs once per connection: the second temp-table DDL (the
+	// drop) must not incur another mysqld round trip.
+	assert.Equal(t, 1, strings.Count(db.QueryLog(), "select @@session.wait_timeout"),
+		"the session wait_timeout probe must run at most once per connection")
+
 	// A keepalive touch marks the connection keepalive-managed, taking it off
 	// the unmanaged temp-table gauge.
 	require.NoError(t, tsv.te.txPool.KeepAliveReserved(state.ReservedID))
 	assert.Zero(t, tsv.te.txPool.scp.tempTableUnmanaged.Load(), "a keepalive-managed connection must leave the gauge")
 
+	err = tsv.Release(ctx, &target, 0, state.ReservedID)
+	require.NoError(t, err)
+
+	// The probe must never undo the user's DDL: it runs on its own bounded
+	// context detached from the request, and keeps the connection on a
+	// timeout. Probe a fresh connection under an already-canceled request
+	// context — capture still succeeds and the connection survives, where a
+	// probe on the request context would fail and, expiring mid-statement,
+	// would have killed the connection.
+	state, _, err = tsv.ReserveExecute(ctx, nil, &target, nil, "set sql_mode = ''", nil, 0, nil)
+	require.NoError(t, err)
+	conn, err = tsv.te.txPool.GetAndLock(state.ReservedID, "for test")
+	require.NoError(t, err)
+	require.Zero(t, conn.sessionWaitTimeout, "fresh connection must have no captured wait_timeout yet")
+	canceledCtx, cancel := context.WithCancel(ctx)
+	cancel()
+	qre := &QueryExecutor{ctx: canceledCtx, tsv: tsv}
+	qre.captureSessionWaitTimeout(conn)
+	assert.Equal(t, 12345*time.Second, conn.sessionWaitTimeout,
+		"the probe must run on a context detached from the (canceled) request context")
+	assert.False(t, conn.IsClosed(), "the probe must not kill the connection")
+	conn.Unlock()
 	err = tsv.Release(ctx, &target, 0, state.ReservedID)
 	require.NoError(t, err)
 }

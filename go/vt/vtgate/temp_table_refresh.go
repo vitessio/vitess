@@ -174,17 +174,20 @@ func (r *tempTableActivityRefresher) dueTargets(session *econtext.SafeSession) [
 	}
 	now := time.Now().UnixNano()
 	var due []tempTableRefreshTarget
-	for _, ss := range session.ShardSessionsForCleanup() {
+	// Snapshots, not the live shard-session protos: the lease ticker calls
+	// this concurrently with the command's own execution, which updates
+	// TransactionId and ReservedId on the live protos as it runs.
+	for _, ss := range session.ShardSessionSnapshots() {
 		if len(due) >= tempTableRefreshMaxPerCommand {
 			break
 		}
-		if ss.GetReservedId() == 0 || ss.GetTransactionId() != 0 ||
-			ss.GetTarget() == nil || ss.GetTabletAlias() == nil {
+		if ss.ReservedID == 0 || ss.TransactionID != 0 ||
+			ss.Target == nil || ss.TabletAlias == nil {
 			continue
 		}
 		key := tempTableRefreshKey{
-			alias:      topoproto.TabletAliasString(ss.GetTabletAlias()),
-			reservedID: ss.GetReservedId(),
+			alias:      topoproto.TabletAliasString(ss.TabletAlias),
+			reservedID: ss.ReservedID,
 		}
 		if last, ok := r.lastRefresh.Load(key); ok {
 			if now-last.(int64) < interval.Nanoseconds() {
@@ -196,9 +199,9 @@ func (r *tempTableActivityRefresher) dueTargets(session *econtext.SafeSession) [
 		}
 		r.lastRefresh.Store(key, now)
 		due = append(due, tempTableRefreshTarget{
-			target:     ss.GetTarget(),
-			alias:      ss.GetTabletAlias(),
-			reservedID: ss.GetReservedId(),
+			target:     ss.Target,
+			alias:      ss.TabletAlias,
+			reservedID: ss.ReservedID,
 			key:        key,
 		})
 	}

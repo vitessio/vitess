@@ -1138,7 +1138,7 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 		}
 		return c.handleComQuery(handler, data)
 	case ComPing:
-		return c.handleComPing()
+		return c.handleComPing(handler)
 	case ComSetOption:
 		return c.handleComSetOption(data)
 	case ComPrepare:
@@ -1514,7 +1514,7 @@ func (c *Conn) handleComSetOption(data []byte) bool {
 	return true
 }
 
-func (c *Conn) handleComPing() bool {
+func (c *Conn) handleComPing(handler Handler) bool {
 	c.recycleReadPacket()
 	// Return error if listener was shut down and OK otherwise
 	if c.listener.shutdown.Load() {
@@ -1522,6 +1522,9 @@ func (c *Conn) handleComPing() bool {
 			return false
 		}
 	} else {
+		// A ping is connection activity in MySQL: let the handler observe
+		// it (non-blocking) before the OK is written.
+		handler.ComPing(c)
 		if err := c.writeOKPacket(&PacketOK{statusFlags: c.StatusFlags}); err != nil {
 			log.Error(fmt.Sprintf("Error writing ComPing result to %s: %v", c, err))
 			return false

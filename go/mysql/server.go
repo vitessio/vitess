@@ -119,6 +119,12 @@ type Handler interface {
 	// execute query.
 	ComStmtExecute(c *Conn, prepare *PrepareData, callback func(*sqltypes.Result) error) error
 
+	// ComPing notifies the handler that the connection received a
+	// COM_PING. The server answers the ping itself; this is a liveness
+	// signal only — MySQL counts a ping as connection activity — and the
+	// handler must not block.
+	ComPing(c *Conn)
+
 	// ComRegisterReplica is called when a connection receives a ComRegisterReplica request
 	ComRegisterReplica(c *Conn, replicaHost string, replicaPort uint16, replicaUser string, replicaPassword string) error
 
@@ -150,6 +156,7 @@ func (UnimplementedHandler) NewConnection(*Conn)      {}
 func (UnimplementedHandler) ConnectionReady(*Conn)    {}
 func (UnimplementedHandler) ConnectionClosed(*Conn)   {}
 func (UnimplementedHandler) ComResetConnection(*Conn) {}
+func (UnimplementedHandler) ComPing(*Conn)            {}
 
 // Listener is the MySQL server protocol listener.
 type Listener struct {

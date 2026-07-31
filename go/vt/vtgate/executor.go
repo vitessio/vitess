@@ -1626,6 +1626,11 @@ func isValidPayloadSize(query string) bool {
 // Prepare executes a prepare statements.
 func (e *Executor) Prepare(ctx context.Context, method string, safeSession *econtext.SafeSession, sql string) (fld []*querypb.Field, paramsCount uint16, err error) {
 	logStats := logstats.NewLogStats(ctx, method, sql, safeSession.GetSessionUUID(), nil, streamlog.GetQueryLogConfig())
+	// Preparing a statement is session activity too — MySQL resets
+	// wait_timeout for COM_STMT_PREPARE — so it leases refreshes for the
+	// session's idle temp-table reserved connections like Execute does.
+	stopLease := e.tempTableRefresher.commandLease(ctx, safeSession)
+	defer stopLease()
 	fld, paramsCount, err = e.prepare(ctx, safeSession, sql, logStats)
 	logStats.Error = err
 

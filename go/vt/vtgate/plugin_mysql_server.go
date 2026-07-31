@@ -56,6 +56,7 @@ import (
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/binlogacl"
+	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttls"
@@ -1425,6 +1426,24 @@ func deferFirstOKOnlyResult(callback func(*sqltypes.Result) error) (func(*sqltyp
 	return streamCallback, func() *sqltypes.Result {
 		return deferredResult
 	}
+}
+
+// ComPing treats a client ping as session activity, as mysqld does: the
+// liveness signal fans out to the session's temp-table reserved connections,
+// so a client that keeps its connection alive with periodic pings does not
+// lose its temporary tables at mysqld's wait_timeout. Non-blocking — the
+// fanout runs in the background while the server answers the ping.
+func (vh *vtgateHandler) ComPing(c *mysql.Conn) {
+	// Read the session directly: a ping on a connection that never ran a
+	// query has no session and nothing to refresh.
+	session, _ := c.ClientData.(*vtgatepb.Session)
+	if session == nil || !session.GetOptions().GetHasCreatedTempTables() {
+		return
+	}
+	ctx := mysqlConnCallerContext(callinfo.MysqlCallInfo(context.Background(), c), c)
+	// The per-connection goroutine serializes ComPing with the connection's
+	// other commands, so wrapping the live session here is safe.
+	vh.vtg.executor.tempTableRefresher.onSessionActivity(ctx, econtext.NewSafeSession(session))
 }
 
 func (vh *vtgateHandler) WarningCount(c *mysql.Conn) uint16 {

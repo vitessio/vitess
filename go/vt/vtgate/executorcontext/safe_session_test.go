@@ -272,3 +272,38 @@ func TestPrepareDataConcurrentAccess(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+// TestShardSessionSnapshots verifies the snapshot accessor: it covers pre,
+// normal, and post shard sessions in order, and the returned snapshots are
+// copies — a later in-place update of the live proto (as AppendOrUpdate
+// performs during query execution) must not show through.
+func TestShardSessionSnapshots(t *testing.T) {
+	alias := &topodatapb.TabletAlias{Cell: "cell", Uid: 1}
+	shardSession := func(shard string, reservedID, transactionID int64) *vtgatepb.Session_ShardSession {
+		return &vtgatepb.Session_ShardSession{
+			Target:        &querypb.Target{Keyspace: "keyspace", Shard: shard},
+			TabletAlias:   alias,
+			ReservedId:    reservedID,
+			TransactionId: transactionID,
+		}
+	}
+	session := NewSafeSession(&vtgatepb.Session{
+		InReservedConn: true,
+		PreSessions:    []*vtgatepb.Session_ShardSession{shardSession("pre", 1, 0)},
+		ShardSessions:  []*vtgatepb.Session_ShardSession{shardSession("main", 2, 20)},
+		PostSessions:   []*vtgatepb.Session_ShardSession{shardSession("post", 3, 0)},
+	})
+
+	snapshots := session.ShardSessionSnapshots()
+	require.Len(t, snapshots, 3)
+	assert.Equal(t, "pre", snapshots[0].Target.Shard)
+	assert.Equal(t, "main", snapshots[1].Target.Shard)
+	assert.Equal(t, "post", snapshots[2].Target.Shard)
+	assert.EqualValues(t, 2, snapshots[1].ReservedID)
+	assert.EqualValues(t, 20, snapshots[1].TransactionID)
+	assert.Equal(t, alias, snapshots[1].TabletAlias)
+
+	session.ShardSessions[0].TransactionId = 999
+	assert.EqualValues(t, 20, snapshots[1].TransactionID,
+		"a snapshot must not observe later in-place updates of the live shard session")
+}

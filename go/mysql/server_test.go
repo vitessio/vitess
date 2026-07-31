@@ -81,6 +81,7 @@ type testHandler struct {
 	result   *sqltypes.Result
 	err      error
 	warnings uint16
+	pings    int
 }
 
 func (th *testHandler) LastConn() *Conn {
@@ -117,6 +118,18 @@ func (th *testHandler) NewConnection(c *Conn) {
 	th.mu.Lock()
 	defer th.mu.Unlock()
 	th.lastConn = c
+}
+
+func (th *testHandler) ComPing(c *Conn) {
+	th.mu.Lock()
+	defer th.mu.Unlock()
+	th.pings++
+}
+
+func (th *testHandler) Pings() int {
+	th.mu.Lock()
+	defer th.mu.Unlock()
+	return th.pings
 }
 
 func (th *testHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error {
@@ -1566,6 +1579,10 @@ func TestListenerShutdown(t *testing.T) {
 
 	err = conn.Ping()
 	require.NoError(t, err)
+	// A ping is connection activity: the handler must be notified so it can
+	// propagate the liveness signal (vtgate refreshes temp-table reserved
+	// connections on it).
+	require.Equal(t, 1, th.Pings(), "the handler must observe a served ping")
 
 	l.Shutdown()
 
@@ -1575,6 +1592,7 @@ func TestListenerShutdown(t *testing.T) {
 
 	err = conn.Ping()
 	require.EqualError(t, err, "Server shutdown in progress (errno 1053) (sqlstate 08S01)")
+	require.Equal(t, 1, th.Pings(), "a ping refused during shutdown must not notify the handler")
 	sqlErr, ok := err.(*sqlerror.SQLError)
 	require.True(t, ok, "Wrong error type: %T", err)
 
