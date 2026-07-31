@@ -2001,6 +2001,13 @@ func TestPlannedReparenter_performInitialPromotion(t *testing.T) {
 
 			pr := NewPlannedReparenter(ts, tt.tmc, logger)
 
+			// performInitialPromotion re-checks the shard lock before promoting, so
+			// hold it for the duration of the call.
+			lockCtx, unlock, lockErr := ts.LockShard(ctx, tt.keyspace, tt.shard, "test lock for performInitialPromotion")
+			require.NoError(t, lockErr)
+			defer unlock(&lockErr)
+			ctx = lockCtx
+
 			if tt.ctxTimeout > 0 {
 				_ctx, cancel := context.WithTimeout(ctx, tt.ctxTimeout)
 				defer cancel()
@@ -2012,6 +2019,8 @@ func TestPlannedReparenter_performInitialPromotion(t *testing.T) {
 			require.NoError(t, err)
 			pos, err := pr.performInitialPromotion(
 				ctx,
+				tt.keyspace,
+				tt.shard,
 				tt.primaryElect,
 				tt.tabletMap,
 				PlannedReparentOptions{durability: durability},
@@ -2026,6 +2035,51 @@ func TestPlannedReparenter_performInitialPromotion(t *testing.T) {
 			assert.Equal(t, tt.expectedPos, pos)
 		})
 	}
+}
+
+// TestPlannedReparenter_performInitialPromotion_lostLock verifies that if the
+// shard lock is not held when performInitialPromotion runs, it aborts before
+// calling InitPrimary rather than promoting after the lock was lost during the
+// position scan.
+func TestPlannedReparenter_performInitialPromotion_lostLock(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "zone1")
+	defer ts.Close()
+
+	testutil.AddShards(ctx, t, ts, &vtctldatapb.Shard{Keyspace: "testkeyspace", Name: "-"})
+
+	// InitPrimary would return an error if it were reached; the lock check must
+	// fire first, so the promotion is never attempted.
+	tmc := &testutil.TabletManagerClient{
+		PrimaryPositionResults: map[string]struct {
+			Position string
+			Error    error
+		}{
+			"zone1-0000000200": {Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10"},
+		},
+		InitPrimaryResults: map[string]struct {
+			Result string
+			Error  error
+		}{
+			"zone1-0000000200": {Result: "should not be reached"},
+		},
+	}
+
+	pr := NewPlannedReparenter(ts, tmc, logutil.NewMemoryLogger())
+	durability, err := policy.GetDurabilityPolicy(policy.DurabilityNone)
+	require.NoError(t, err)
+
+	primaryElect := &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 200}}
+	tabletMap := map[string]*topo.TabletInfo{
+		"zone1-0000000200": {Tablet: primaryElect},
+	}
+
+	// Note: ctx does not hold the shard lock.
+	_, err = pr.performInitialPromotion(ctx, "testkeyspace", "-", primaryElect, tabletMap, PlannedReparentOptions{durability: durability})
+	require.Error(t, err)
+	assert.ErrorContains(t, err, lostTopologyLockMsg)
 }
 
 func TestPlannedReparenter_performPartialPromotionRecovery(t *testing.T) {

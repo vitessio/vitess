@@ -318,6 +318,8 @@ func (pr *PlannedReparenter) performGracefulPromotion(
 
 func (pr *PlannedReparenter) performInitialPromotion(
 	ctx context.Context,
+	keyspace string,
+	shard string,
 	primaryElect *topodatapb.Tablet,
 	tabletMap map[string]*topo.TabletInfo,
 	opts PlannedReparentOptions,
@@ -335,6 +337,10 @@ func (pr *PlannedReparenter) performInitialPromotion(
 	// sets, so a divergent peer fails the check rather than being silently dropped.
 	if err := pr.checkPrimaryElectContainsAllPositions(ctx, primaryElect, tabletMap); err != nil {
 		return "", err
+	}
+
+	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
+		return "", vterrors.Wrap(err, lostTopologyLockMsg)
 	}
 
 	promoteCtx, promoteCancel := context.WithTimeout(ctx, opts.WaitReplicasTimeout)
@@ -672,7 +678,7 @@ func (pr *PlannedReparenter) reparentShardLocked(
 	case currentPrimary == nil && ev.ShardInfo.PrimaryTermStartTime == nil:
 		// Case (1): no primary has been elected ever. Initialize
 		// the primary-elect tablet
-		reparentJournalPos, err = pr.performInitialPromotion(ctx, ev.NewPrimary, tabletMap, opts)
+		reparentJournalPos, err = pr.performInitialPromotion(ctx, keyspace, shard, ev.NewPrimary, tabletMap, opts)
 		needsRefresh = true
 	case currentPrimary == nil && ev.ShardInfo.PrimaryTermStartTime != nil:
 		// Case (2): no clear current primary. Try to find a safe promotion
