@@ -121,6 +121,43 @@ func TestBuiltinCompressorsMultiBlock(t *testing.T) {
 	}
 }
 
+// TestBuiltinCompressorsSequentialCopyN writes through the compressor with
+// two sequential io.CopyN calls, the shape the striped xtrabackup backup
+// produces when it round-robins blocks across destination writers. io.CopyN
+// hides the source's WriteTo, so io.Copy selects the destination's ReadFrom
+// when one exists; a compressor must therefore accept writes through any
+// mix of entry points, not only a single one on a fresh writer.
+func TestBuiltinCompressorsSequentialCopyN(t *testing.T) {
+	logger := logutil.NewMemoryLogger()
+	rnd := rand.New(rand.NewPCG(3, 4))
+	data := make([]byte, 512*1024)
+	for i := 0; i < len(data); i += 8 {
+		binary.LittleEndian.PutUint64(data[i:], rnd.Uint64())
+	}
+
+	for _, engine := range []string{"pgzip", "pargzip", "lz4", "zstd"} {
+		t.Run(engine, func(t *testing.T) {
+			var compressed, decompressed bytes.Buffer
+			compressor, err := newBuiltinCompressor(engine, &compressed, logger)
+			require.NoError(t, err)
+			reader := bytes.NewReader(data)
+			half := int64(len(data) / 2)
+			_, err = io.CopyN(compressor, reader, half)
+			require.NoError(t, err)
+			_, err = io.CopyN(compressor, reader, int64(len(data))-half)
+			require.NoError(t, err)
+			require.NoError(t, compressor.Close())
+
+			decompressor, err := newBuiltinDecompressor(engine, &compressed, logger)
+			require.NoError(t, err)
+			_, err = io.Copy(&decompressed, decompressor)
+			require.NoError(t, err)
+			require.NoError(t, decompressor.Close())
+			require.Equal(t, sha256.Sum256(data), sha256.Sum256(decompressed.Bytes()))
+		})
+	}
+}
+
 func TestUnSupportedBuiltinCompressors(t *testing.T) {
 	logger := logutil.NewMemoryLogger()
 

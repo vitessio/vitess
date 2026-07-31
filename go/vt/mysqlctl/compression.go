@@ -222,7 +222,7 @@ func newBuiltinDecompressor(engine string, reader io.Reader, logger logutil.Logg
 		}
 		decompressor = d
 	case Lz4Compressor:
-		decompressor = io.NopCloser(lz4.NewReader(reader))
+		decompressor = readCloserOnly{io.NopCloser(lz4.NewReader(reader))}
 	case ZstdCompressor:
 		d, err := zstd.NewReader(reader)
 		if err != nil {
@@ -237,6 +237,22 @@ func newBuiltinDecompressor(engine string, reader io.Reader, logger logutil.Logg
 	logger.Infof("Decompressing backup using engine %q", engine)
 	return decompressor, err
 }
+
+type (
+	// writeCloserOnly hides every method of the wrapped writer except
+	// Write and Close. The lz4 writer's ReadFrom only accepts a writer
+	// with nothing written to it yet, while io.Copy and io.CopyN select
+	// the destination's ReadFrom whenever the source has no visible
+	// WriteTo; repeated copies into one compressor — the striped
+	// xtrabackup backup round-robins io.CopyN over its destination
+	// writers — would then fail after the first copy. Hiding the method
+	// keeps every copy on the plain Write path.
+	writeCloserOnly struct{ io.WriteCloser }
+	// readCloserOnly hides every method of the wrapped reader except
+	// Read and Close; the lz4 reader's WriteTo carries the same
+	// fresh-stream restriction as the writer's ReadFrom.
+	readCloserOnly struct{ io.ReadCloser }
+)
 
 // lz4CompressionLevel maps the numeric --compression-level value onto the
 // lz4 level enum; lz4.CompressionLevelOption rejects any value outside the
@@ -280,7 +296,7 @@ func newBuiltinCompressor(engine string, writer io.Writer, logger logutil.Logger
 		); err != nil {
 			return compressor, vterrors.Wrap(err, "cannot create lz4 compressor")
 		}
-		compressor = lz4Writer
+		compressor = writeCloserOnly{lz4Writer}
 	case ZstdCompressor:
 		zst, err := zstd.NewWriter(writer, zstd.WithEncoderLevel(zstd.EncoderLevel(compressionLevel)))
 		if err != nil {
