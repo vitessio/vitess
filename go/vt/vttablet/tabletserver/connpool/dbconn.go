@@ -231,9 +231,46 @@ func (dbc *Conn) ExecOnce(ctx context.Context, query string, maxrows int, wantfi
 // ExecMulti executes the query and returns its first result set together with a
 // flag reporting whether more result sets remain on the connection. Unlike Exec,
 // it neither drains nor errors on trailing result sets, leaving the caller to
-// inspect them via FetchNext. It does not retry on connection errors.
+// inspect them via FetchNext. Like Exec, it reconnects and retries once after a
+// connection error on the initial execute — nothing has been read at that
+// point, so the retry cannot duplicate or lose result sets.
 func (dbc *Conn) ExecMulti(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, bool, error) {
-	return dbc.execOnceMulti(ctx, query, maxrows, wantfields, false)
+	span, ctx := trace.NewSpan(ctx, "DBConn.ExecMulti")
+	defer span.Finish()
+
+	for attempt := 1; attempt <= 2; attempt++ {
+		r, more, err := dbc.execOnceMulti(ctx, query, maxrows, wantfields, false)
+		switch {
+		case err == nil:
+			// Success.
+			return r, more, nil
+		case sqlerror.IsConnLostDuringQuery(err):
+			// Query probably killed. Don't retry.
+			return nil, false, err
+		case !sqlerror.IsConnErr(err):
+			// Not a connection error. Don't retry.
+			return nil, false, err
+		case attempt == 2:
+			// Reached the retry limit.
+			return nil, false, err
+		}
+
+		// Conn error. Retry if context has not expired.
+		select {
+		case <-ctx.Done():
+			return nil, false, err
+		default:
+		}
+
+		if reconnectErr := dbc.Reconnect(ctx); reconnectErr != nil {
+			dbc.env.CheckMySQL()
+			// Return the error of the reconnect and not the original connection error.
+			return nil, false, reconnectErr
+		}
+
+		// Reconnect succeeded. Retry query at second attempt.
+	}
+	panic("unreachable")
 }
 
 // ExecOnceMulti is ExecMulti for a connection that is inside a transaction.
