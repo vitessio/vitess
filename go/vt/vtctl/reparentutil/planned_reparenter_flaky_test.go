@@ -1915,6 +1915,81 @@ func TestPlannedReparenter_performInitialPromotion(t *testing.T) {
 			shouldErr: true,
 		},
 		{
+			// A peer's position fetch fails during the concurrent scan. The error
+			// must be aggregated across the goroutines and abort the promotion — we
+			// can't prove the elect dominates a tablet we couldn't reach. Uses three
+			// tablets so the fan-out and error aggregation are exercised, not just a
+			// single pair.
+			name: "peer position fetch failure aborts promotion",
+			tmc: &testutil.TabletManagerClient{
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000200": {Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10"},
+					"zone1-0000000201": {Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10"},
+					"zone1-0000000202": {Error: assert.AnError},
+				},
+				InitPrimaryResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000200": {Result: "should not be reached"},
+				},
+			},
+			ev:       &events.Reparent{},
+			keyspace: "testkeyspace",
+			shard:    "-",
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  200,
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000200": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 200}}},
+				"zone1-0000000201": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 201}}},
+				"zone1-0000000202": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 202}}},
+			},
+			shouldErr: true,
+		},
+		{
+			// The peer's position is incomparable with the elect's (disjoint GTID
+			// histories — different source UUIDs, neither a superset of the other).
+			// AtLeast is false in both directions, so the dominance guard must reject
+			// the promotion rather than silently pick a side of the divergence.
+			name: "incomparable peer position is rejected",
+			tmc: &testutil.TabletManagerClient{
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000200": {Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10"},
+					"zone1-0000000201": {Position: "MySQL56/A1B2C3D4-71CA-11E1-9E33-C80AA9429562:1-10"},
+				},
+				InitPrimaryResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000200": {Result: "should not be reached"},
+				},
+			},
+			ev:       &events.Reparent{},
+			keyspace: "testkeyspace",
+			shard:    "-",
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  200,
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000200": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 200}}},
+				"zone1-0000000201": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 201}}},
+			},
+			shouldErr: true,
+		},
+		{
 			name: "primary-elect fails to promote",
 			tmc: &testutil.TabletManagerClient{
 				PrimaryPositionResults: map[string]struct {
