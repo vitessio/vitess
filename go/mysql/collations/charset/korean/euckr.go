@@ -85,53 +85,48 @@ write2:
 	return 2
 }
 
-func (Charset_euckr) DecodeRune(src []byte) (rune, int) {
+func (Charset_euckr) DecodeRune(src []byte) (rune, int, bool) {
 	if len(src) < 1 {
-		return utf8.RuneError, 0
+		return utf8.RuneError, 0, false
 	}
 
 	switch c0 := src[0]; {
 	case c0 < utf8.RuneSelf:
-		return rune(c0), 1
+		return rune(c0), 1, true
 
 	case 0x81 <= c0 && c0 < 0xff:
 		if len(src) < 2 {
-			return utf8.RuneError, 1
+			return utf8.RuneError, 1, false
+		}
+		c1 := src[1]
+		if c1 < 0x41 || (0x5a < c1 && c1 < 0x61) || (0x7a < c1 && c1 < 0x81) || 0xfe < c1 {
+			return utf8.RuneError, 1, false
 		}
 		var r rune
-		c1 := src[1]
 		if c0 < 0xc7 {
 			r = 178 * rune(c0-0x81)
 			switch {
-			case 0x41 <= c1 && c1 < 0x5b:
+			case c1 < 0x5b:
 				r += rune(c1) - (0x41 - 0*26)
-			case 0x61 <= c1 && c1 < 0x7b:
+			case c1 < 0x7b:
 				r += rune(c1) - (0x61 - 1*26)
-			case 0x81 <= c1 && c1 < 0xff:
-				r += rune(c1) - (0x81 - 2*26)
 			default:
-				goto decError
+				r += rune(c1) - (0x81 - 2*26)
 			}
-		} else if 0xa1 <= c1 && c1 < 0xff {
+		} else if 0xa1 <= c1 {
 			r = 178*(0xc7-0x81) + rune(c0-0xc7)*94 + rune(c1-0xa1)
 		} else {
-			goto decError
+			return utf8.RuneError, 2, false
 		}
 		if int(r) < len(decode) {
-			r = rune(decode[r])
-			if r != 0 {
-				return r, 2
+			if r = rune(decode[r]); r != 0 {
+				return r, 2, true
 			}
 		}
-
-	decError:
-		if c1 < utf8.RuneSelf {
-			return utf8.RuneError, 1
-		}
-		return utf8.RuneError, 2
+		return utf8.RuneError, 2, false
 
 	default:
-		return utf8.RuneError, 1
+		return utf8.RuneError, 1, false
 	}
 
 }
