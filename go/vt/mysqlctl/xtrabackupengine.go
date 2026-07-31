@@ -188,6 +188,11 @@ func closeBackupFiles(ctx context.Context, cancel context.CancelFunc, timeout ti
 		case <-done:
 			timer.Stop()
 		case <-timer.C:
+			select {
+			case <-done:
+				return
+			default:
+			}
 			logger.Errorf("Timed out waiting for Close() on backup file to complete")
 			// Cancelling the Context that was originally passed to bh.AddFile()
 			// should hopefully cause Close() calls on the file that AddFile()
