@@ -23,6 +23,7 @@ import (
 	"io"
 	"os"
 	"path"
+	"strings"
 	"testing"
 	"time"
 
@@ -201,11 +202,11 @@ func TestCloseBackupFilesDoesNotCancelContextOnSuccess(t *testing.T) {
 
 	require.NoError(t, finalErr)
 
-	// Wait past the watchdog's timeout to make sure it didn't fire late and
+	// Poll past the watchdog's timeout to make sure it didn't fire late and
 	// cancel ctx out from under a still-running background upload.
-	time.Sleep(300 * time.Millisecond)
-	assert.NoError(t, ctx.Err())
-	assert.NotContains(t, logger.String(), "Timed out waiting for Close()")
+	require.Never(t, func() bool {
+		return ctx.Err() != nil || strings.Contains(logger.String(), "Timed out waiting for Close()")
+	}, 300*time.Millisecond, 10*time.Millisecond)
 }
 
 // TestCloseBackupFilesCancelsOnRealTimeout guards the other direction: if
