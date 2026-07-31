@@ -656,7 +656,7 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 				txConn.Close()
 				return rewriteOUTParamError(err)
 			}
-			trailing, multipleResultsets, err := qre.callProcTrailingStatus(conn.Conn, true)
+			trailing, multipleResultsets, err := qre.callProcTrailingStatus(conn.Conn, sql, true)
 			if err != nil {
 				txConn.Close()
 				return err
@@ -689,7 +689,7 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 			dbConn.Close()
 			return rewriteOUTParamError(err)
 		}
-		trailing, multipleResultsets, err := qre.callProcTrailingStatus(dbConn.Conn, false)
+		trailing, multipleResultsets, err := qre.callProcTrailingStatus(dbConn.Conn, sql, false)
 		if err != nil {
 			dbConn.Close()
 			return err
@@ -1422,7 +1422,7 @@ func (qre *QueryExecutor) execDBConnMulti(conn *connpool.PooledConn, sql string)
 		return nil, nil, false, rewriteOUTParamError(err)
 	}
 	if more {
-		trailing, multipleResultsets, err = qre.callProcTrailingStatus(conn.Conn, false)
+		trailing, multipleResultsets, err = qre.callProcTrailingStatus(conn.Conn, sql, false)
 		if err != nil {
 			conn.Close()
 			return nil, nil, false, err
@@ -1459,7 +1459,7 @@ func (qre *QueryExecutor) execStatefulConnMulti(conn *StatefulConnection, sql st
 		return nil, nil, false, rewriteOUTParamError(err)
 	}
 	if more {
-		trailing, multipleResultsets, err = qre.callProcTrailingStatus(conn.UnderlyingDBConn().Conn, true)
+		trailing, multipleResultsets, err = qre.callProcTrailingStatus(conn.UnderlyingDBConn().Conn, sql, true)
 		if err != nil {
 			conn.Close()
 			return nil, nil, false, err
@@ -1481,12 +1481,20 @@ func (qre *QueryExecutor) execStatefulConnMulti(conn *StatefulConnection, sql st
 // resultset's EOF always reports more results; reading one more result tells a
 // single-resultset call (only the trailing packet remains) from a multi-resultset
 // one. It serves both the streaming and buffered paths.
-func (qre *QueryExecutor) callProcTrailingStatus(conn *connpool.Conn, insideTxn bool) (trailing *sqltypes.Result, multipleResultsets bool, err error) {
+func (qre *QueryExecutor) callProcTrailingStatus(conn *connpool.Conn, sql string, insideTxn bool) (trailing *sqltypes.Result, multipleResultsets bool, err error) {
 	if okResult := conn.StreamOKResult(); okResult != nil {
 		// No resultset was streamed, so the OK packet's status flags are all there
 		// is to inspect.
 		return &sqltypes.Result{StatusFlags: okResult.StatusFlags}, false, nil
 	}
+
+	// The exec/stream wrapper that ran the CALL has already cleared the
+	// connection's current query, but the connection stays occupied until the
+	// trailing resultsets are drained — which blocks while the procedure keeps
+	// running. Keep the CALL visible to live-query inspection and kill
+	// diagnostics for that window.
+	conn.SetCurrent(sql)
+	defer conn.ClearCurrent()
 
 	trailing, err = conn.FetchNextWithTermination(qre.ctx, mysql.FETCH_NO_ROWS, false, insideTxn)
 	if err != nil {

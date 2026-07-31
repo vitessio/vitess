@@ -681,6 +681,20 @@ func (dbc *Conn) Current() string {
 	return ""
 }
 
+// SetCurrent records query as the statement currently occupying the
+// connection, so live-query inspection and kill diagnostics can report it
+// while resultsets are read outside the Exec/Stream wrappers (which only
+// track their own span, e.g. while a stored procedure call's trailing
+// resultsets are drained).
+func (dbc *Conn) SetCurrent(query string) {
+	dbc.current.Store(&query)
+}
+
+// ClearCurrent removes the query recorded by SetCurrent.
+func (dbc *Conn) ClearCurrent() {
+	dbc.current.Store(nil)
+}
+
 // ID returns the connection id.
 func (dbc *Conn) ID() int64 {
 	return dbc.conn.ID()

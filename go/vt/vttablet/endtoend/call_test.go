@@ -434,3 +434,36 @@ func TestCallProcedureDrainHonorsDeadline(t *testing.T) {
 	require.Less(t, elapsed, 40*time.Second,
 		"draining trailing resultsets must honor the query deadline instead of blocking for the whole procedure")
 }
+
+// A stored procedure call occupies its connection until the trailing
+// resultsets have been drained, which can take arbitrarily long. The live
+// query list and kill diagnostics read the connection's current query, so the
+// CALL must stay visible for that entire window, not just while the first
+// resultset is read.
+func TestCallProcedureDrainKeepsQueryVisible(t *testing.T) {
+	client := framework.NewClient()
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := client.Execute("call proc_select_then_sleep()", nil)
+		done <- err
+	}()
+
+	// Sample the live query list once the CALL has been running for a while:
+	// the first resultset arrives within milliseconds, so a query that has
+	// been running for seconds is blocked draining the trailing resultsets.
+	var call framework.LiveQuery
+	require.Eventually(t, func() bool {
+		for _, q := range framework.LiveQueryz() {
+			if q.Duration > int64(2*time.Second) {
+				call = q
+				return true
+			}
+		}
+		return false
+	}, 30*time.Second, 100*time.Millisecond, "expected the CALL to stay registered in the live query list")
+	assert.Contains(t, call.Query, "proc_select_then_sleep", "the live query list must report the CALL while its trailing resultsets are drained")
+
+	require.NoError(t, framework.StreamTerminate(call.ConnID))
+	require.Error(t, <-done, "terminating the drained CALL must surface an error")
+}
