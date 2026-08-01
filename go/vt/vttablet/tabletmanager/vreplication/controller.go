@@ -344,7 +344,16 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		// non-recoverable BUT it has persisted beyond the retry limit
 		// (maxTimeToRetryError). In addition, we cannot restart a workflow
 		// started with AtomicCopy which has _any_ error during copy phase.
-		if (err != nil && vr.WorkflowSubType == int32(binlogdatapb.VReplicationWorkflowSubType_AtomicCopy) && vr.state == binlogdatapb.VReplicationWorkflowState_Copying) ||
+		// The copy-phase check consults both signals: vr.getState() is only
+		// updated by setState calls, and AtomicCopy's copy path (copyAll)
+		// never calls setState(Copying) — only initTablesForCopy does, on
+		// first start — so after a tablet restart the in-memory state stays
+		// at its zero value for the whole remaining copy and a copy-phase
+		// error would be misclassified as retryable. isInCopyPhase() is
+		// refreshed from the durable _vt.copy_state contents on every
+		// loadSettings call and covers the restarted-copy case.
+		if (err != nil && vr.WorkflowSubType == int32(binlogdatapb.VReplicationWorkflowSubType_AtomicCopy) &&
+			(vr.getState() == binlogdatapb.VReplicationWorkflowState_Copying || vr.isInCopyPhase())) ||
 			isUnrecoverableError(err) ||
 			!ct.lastWorkflowError.ShouldRetry() {
 			err = vterrors.Wrapf(err, TerminalErrorIndicator)
