@@ -1105,10 +1105,6 @@ func (vc *VCursorImpl) CheckForReservedConnection(setVarComment string, stmt sql
 		return
 	}
 	switch stmt.(type) {
-	case *sqlparser.Do:
-		if vc.ShardDestination() != nil {
-			vc.NeedsReservedConn()
-		}
 	// If the statement supports optimizer hints or a transaction statement or a SET statement
 	// no reserved connection is needed
 	case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback, *sqlparser.Savepoint,

@@ -977,6 +977,10 @@ func TestRowCount(t *testing.T) {
 	_, err = executorExec(ctx, executor, session, "delete from user where id in (42, 24)", map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	testRowCount(t, ctx, executor, session, 2)
+
+	_, err = executorExec(ctx, executor, session, "do 1", map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+	testRowCount(t, ctx, executor, session, 0)
 }
 
 func testRowCount(t *testing.T, ctx context.Context, executor *Executor, session *vtgatepb.Session, wantRowCount int64) {

@@ -812,21 +812,17 @@ options:PassthroughDMLs
   "TableName": ""
 }
 
-# do
+# do, planned like any other opaque admin statement
 "do 1"
 {
   "PlanID": "OtherAdmin",
-  "TableName": "",
-  "FullQuery": "do 1"
+  "TableName": ""
 }
 
-# do with get_lock needs a reserved connection
 "do get_lock('x', 0)"
 {
   "PlanID": "OtherAdmin",
-  "TableName": "",
-  "FullQuery": "do get_lock('x', 0)",
-  "NeedsReservedConn": true
+  "TableName": ""
 }
 
 # syntax error

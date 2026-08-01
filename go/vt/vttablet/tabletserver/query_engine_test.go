@@ -336,10 +336,7 @@ func TestGetStreamPlanFiltersRulesByAllTables(t *testing.T) {
 	}
 }
 
-// A DO that acquires an advisory lock is marked NeedsReservedConn so execution
-// refuses to run it without a reserved connection (which would leak the lock
-// onto a pooled connection), matching SELECT get_lock(...). A plain DO is not.
-func TestDoLockFuncNeedsReservedConn(t *testing.T) {
+func TestDoPlanRunsWithoutReservedConn(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	schematest.AddDefaultQueries(db)
@@ -353,13 +350,10 @@ func TestDoLockFuncNeedsReservedConn(t *testing.T) {
 
 	t.Run("do get_lock", func(t *testing.T) {
 		plan, err := qe.getPlan(curSchema, "do get_lock('x', 0)", false)
-		// DO is cacheable, so no errNoCache sentinel comes back with the plan.
 		require.NoError(t, err)
 		require.Equal(t, planbuilder.PlanOtherAdmin, plan.PlanID)
-		require.True(t, plan.NeedsReservedConn)
-		// Without a reserved connection it is rejected; with one it is allowed.
-		require.ErrorContains(t, plan.IsValid(false, false), "not allowed without reserved connection")
-		require.NoError(t, plan.IsValid(true, false))
+		require.False(t, plan.NeedsReservedConn)
+		require.NoError(t, plan.IsValid(false, false))
 	})
 
 	t.Run("do without lock", func(t *testing.T) {

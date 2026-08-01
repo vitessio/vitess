@@ -159,7 +159,7 @@
     }
   },
   {
-    "comment": "DO mixing an ordinary expression before a lock function, each planned as its own source and executed in order",
+    "comment": "DO mixing an ordinary expression with a lock function plans as one SELECT, like the SELECT form",
     "query": "do 1, get_lock('mylock', 5)",
     "plan": {
       "Type": "Complex",
@@ -169,63 +169,15 @@
         "OperatorType": "Discard",
         "Inputs": [
           {
-            "OperatorType": "Projection",
-            "Expressions": [
-              "1 as 1"
-            ],
-            "Inputs": [
-              {
-                "OperatorType": "SingleRow"
-              }
-            ]
-          },
-          {
             "OperatorType": "Lock",
             "Keyspace": {
               "Name": "main",
               "Sharded": false
             },
             "TargetDestination": "KeyspaceID(00)",
-            "FieldQuery": "select get_lock('mylock', 5) from dual where 1 != 1",
+            "FieldQuery": "select 1, get_lock('mylock', 5) from dual where 1 != 1",
             "lock_func": [
               "get_lock('mylock', 5)"
-            ]
-          }
-        ]
-      }
-    }
-  },
-  {
-    "comment": "DO mixing a lock function before an ordinary expression, each planned as its own source and executed in order",
-    "query": "do get_lock('mylock', 5), 1",
-    "plan": {
-      "Type": "Complex",
-      "QueryType": "DO",
-      "Original": "do get_lock('mylock', 5), 1",
-      "Instructions": {
-        "OperatorType": "Discard",
-        "Inputs": [
-          {
-            "OperatorType": "Lock",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "TargetDestination": "KeyspaceID(00)",
-            "FieldQuery": "select get_lock('mylock', 5) from dual where 1 != 1",
-            "lock_func": [
-              "get_lock('mylock', 5)"
-            ]
-          },
-          {
-            "OperatorType": "Projection",
-            "Expressions": [
-              "1 as 1"
-            ],
-            "Inputs": [
-              {
-                "OperatorType": "SingleRow"
-              }
             ]
           }
         ]

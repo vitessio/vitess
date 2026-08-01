@@ -277,16 +277,11 @@ func (cached *Discard) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(24)
+		size += int64(16)
 	}
-	// field Sources []vitess.io/vitess/go/vt/vtgate/engine.Primitive
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Sources)) * int64(16))
-		for _, elem := range cached.Sources {
-			if cc, ok := elem.(cachedObject); ok {
-				size += cc.CachedSize(true)
-			}
-		}
+	// field Source vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Source.(cachedObject); ok {
+		size += cc.CachedSize(true)
 	}
 	return size
 }

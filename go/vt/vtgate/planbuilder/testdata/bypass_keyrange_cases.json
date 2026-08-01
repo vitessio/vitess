@@ -230,5 +230,28 @@
         "Query": "select count(*), col from unsharded join vt_main.t1 where exists (select 1 from t2 join information_schema.`tables` where `table_name` = 't3')"
       }
     }
+  },
+  {
+    "comment": "DO bypass sends a synthetic SELECT, so bind variables resolve through the ordinary SELECT plan",
+    "query": "do 1",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "DO",
+      "Original": "do 1",
+      "Instructions": {
+        "OperatorType": "Discard",
+        "Inputs": [
+          {
+            "OperatorType": "Send",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "TargetDestination": "ExactKeyRange(-)",
+            "Query": "select 1 from dual"
+          }
+        ]
+      }
+    }
   }
 ]

@@ -26,26 +26,21 @@ import (
 
 var _ Primitive = (*Discard)(nil)
 
-// Discard executes its Sources in order for their side effects only and
-// discards the results, reporting a plain OK with 0 rows affected.
+// Discard executes its Source for its side effects and discards the result.
 type Discard struct {
-	Sources []Primitive
+	Source Primitive
 }
 
 func (d *Discard) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	for _, src := range d.Sources {
-		if _, err := vcursor.ExecutePrimitive(ctx, src, bindVars, false); err != nil {
-			return nil, err
-		}
+	if _, err := vcursor.ExecutePrimitive(ctx, d.Source, bindVars, false); err != nil {
+		return nil, err
 	}
 	return &sqltypes.Result{}, nil
 }
 
 func (d *Discard) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	for _, src := range d.Sources {
-		if _, err := vcursor.ExecutePrimitive(ctx, src, bindVars, false); err != nil {
-			return err
-		}
+	if _, err := vcursor.ExecutePrimitive(ctx, d.Source, bindVars, false); err != nil {
+		return err
 	}
 	return callback(&sqltypes.Result{})
 }
@@ -55,16 +50,11 @@ func (d *Discard) GetFields(ctx context.Context, vcursor VCursor, bindVars map[s
 }
 
 func (d *Discard) Inputs() ([]Primitive, []map[string]any) {
-	return d.Sources, nil
+	return []Primitive{d.Source}, nil
 }
 
 func (d *Discard) NeedsTransaction() bool {
-	for _, src := range d.Sources {
-		if src.NeedsTransaction() {
-			return true
-		}
-	}
-	return false
+	return d.Source.NeedsTransaction()
 }
 
 func (d *Discard) description() PrimitiveDescription {

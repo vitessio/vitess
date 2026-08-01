@@ -534,44 +534,6 @@ func TestQueryExecutorSelectImpossible(t *testing.T) {
 	}
 }
 
-// TestExecOtherResolvesBindVarsForDo verifies that a normalized DO statement
-// (which the tablet plans as PlanOtherAdmin) has its bind variables resolved
-// before being sent to MySQL, so the placeholder does not reach the connection.
-// Both the pooled (autocommit) and in-transaction execution paths are covered.
-func TestExecOtherResolvesBindVarsForDo(t *testing.T) {
-	db := setUpQueryExecutorTest(t)
-	defer db.Close()
-
-	// Only the resolved form is registered; if the placeholder leaks through,
-	// the fake DB rejects the query and Execute fails.
-	db.AddQuery("do 1", &sqltypes.Result{})
-
-	ctx := t.Context()
-	tsv := newTestTabletServer(ctx, noFlags, db)
-	defer tsv.StopService()
-
-	t.Run("pooled connection", func(t *testing.T) {
-		qre := newTestQueryExecutor(ctx, tsv, "do :vtg1", 0)
-		qre.bindVars["vtg1"] = sqltypes.Int64BindVariable(1)
-
-		_, err := qre.Execute()
-		require.NoError(t, err)
-	})
-
-	t.Run("in transaction", func(t *testing.T) {
-		target := tsv.sm.Target()
-		state, err := tsv.Begin(ctx, nil, target, nil)
-		require.NoError(t, err)
-		defer tsv.Commit(ctx, target, state.TransactionID)
-
-		qre := newTestQueryExecutor(ctx, tsv, "do :vtg1", state.TransactionID)
-		qre.bindVars["vtg1"] = sqltypes.Int64BindVariable(1)
-
-		_, err = qre.Execute()
-		require.NoError(t, err)
-	})
-}
-
 // TestDisableOnlineDDL checks whether disabling online DDLs throws the correct error or not
 func TestDisableOnlineDDL(t *testing.T) {
 	db := setUpQueryExecutorTest(t)

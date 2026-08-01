@@ -469,7 +469,8 @@ func saveSessionStats(safeSession *econtext.SafeSession, stmtType sqlparser.Stat
 	switch stmtType {
 	case sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete:
 		safeSession.RowCount = int64(rowsAffected)
-	case sqlparser.StmtDDL, sqlparser.StmtSet, sqlparser.StmtBegin, sqlparser.StmtCommit, sqlparser.StmtRollback, sqlparser.StmtFlush:
+	case sqlparser.StmtDDL, sqlparser.StmtSet, sqlparser.StmtBegin, sqlparser.StmtCommit, sqlparser.StmtRollback, sqlparser.StmtFlush,
+		sqlparser.StmtDo:
 		safeSession.RowCount = 0
 	}
 }

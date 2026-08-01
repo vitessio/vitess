@@ -35,7 +35,7 @@ func TestDiscardExecute(t *testing.T) {
 		results: []*sqltypes.Result{inputResult},
 	}
 
-	disc := &Discard{Sources: []Primitive{fp}}
+	disc := &Discard{Source: fp}
 
 	result, err := disc.TryExecute(t.Context(), &noopVCursor{}, bindVars, false)
 	require.NoError(t, err)
@@ -50,39 +50,12 @@ func TestDiscardExecute(t *testing.T) {
 	fp.ExpectLog(t, []string{`Execute  false`})
 }
 
-// TestDiscardExecuteAllSources verifies that every source (as produced for a DO
-// list that mixes lock functions and ordinary expressions) is executed and its
-// result discarded.
-func TestDiscardExecuteAllSources(t *testing.T) {
-	fp1 := &fakePrimitive{results: []*sqltypes.Result{{}}}
-	fp2 := &fakePrimitive{results: []*sqltypes.Result{{}}}
-	fp3 := &fakePrimitive{results: []*sqltypes.Result{{}}}
-
-	disc := &Discard{Sources: []Primitive{fp1, fp2, fp3}}
-
-	result, err := disc.TryExecute(t.Context(), &noopVCursor{}, make(map[string]*querypb.BindVariable), false)
-	require.NoError(t, err)
-	assert.Empty(t, result.Rows)
-	assert.Empty(t, result.Fields)
-
-	fp1.ExpectLog(t, []string{`Execute  false`})
-	fp2.ExpectLog(t, []string{`Execute  false`})
-	fp3.ExpectLog(t, []string{`Execute  false`})
-}
-
 func TestDiscardExecuteError(t *testing.T) {
-	// The second source fails; the error propagates and later sources are
-	// not reached.
-	ok := &fakePrimitive{results: []*sqltypes.Result{{}}}
 	boom := &fakePrimitive{sendErr: errors.New("source failed")}
-	never := &fakePrimitive{results: []*sqltypes.Result{{}}}
-	disc := &Discard{Sources: []Primitive{ok, boom, never}}
+	disc := &Discard{Source: boom}
 
 	_, err := disc.TryExecute(t.Context(), &noopVCursor{}, make(map[string]*querypb.BindVariable), false)
 	assert.ErrorContains(t, err, "source failed")
-
-	ok.ExpectLog(t, []string{`Execute  false`})
-	never.ExpectLog(t, nil)
 }
 
 func TestDiscardStreamExecute(t *testing.T) {
@@ -91,7 +64,7 @@ func TestDiscardStreamExecute(t *testing.T) {
 	fp := &fakePrimitive{
 		results: []*sqltypes.Result{inputResult},
 	}
-	disc := &Discard{Sources: []Primitive{fp}}
+	disc := &Discard{Source: fp}
 
 	var results []*sqltypes.Result
 	err := disc.TryStreamExecute(t.Context(), &noopVCursor{}, make(map[string]*querypb.BindVariable), false, func(r *sqltypes.Result) error {
@@ -107,26 +80,19 @@ func TestDiscardStreamExecute(t *testing.T) {
 }
 
 func TestDiscardStreamExecuteError(t *testing.T) {
-	// The second source fails; the error propagates and later sources are
-	// not reached.
-	ok := &fakePrimitive{results: []*sqltypes.Result{{}}}
 	boom := &fakePrimitive{sendErr: errors.New("source failed")}
-	never := &fakePrimitive{results: []*sqltypes.Result{{}}}
-	disc := &Discard{Sources: []Primitive{ok, boom, never}}
+	disc := &Discard{Source: boom}
 
 	err := disc.TryStreamExecute(t.Context(), &noopVCursor{}, make(map[string]*querypb.BindVariable), false, func(*sqltypes.Result) error {
-		assert.Fail(t, "callback should not be invoked when a source fails")
+		assert.Fail(t, "callback should not be invoked when the source fails")
 		return nil
 	})
 	assert.ErrorContains(t, err, "source failed")
-
-	ok.ExpectLog(t, []string{`Execute  false`})
-	never.ExpectLog(t, nil)
 }
 
 func TestDiscardGetFields(t *testing.T) {
 	fp := &fakePrimitive{}
-	disc := &Discard{Sources: []Primitive{fp}}
+	disc := &Discard{Source: fp}
 
 	// DO never returns column information to the client.
 	result, err := disc.GetFields(t.Context(), &noopVCursor{}, make(map[string]*querypb.BindVariable))
@@ -134,17 +100,15 @@ func TestDiscardGetFields(t *testing.T) {
 	assert.Empty(t, result.Fields)
 	assert.Empty(t, result.Rows)
 
-	// GetFields must not touch the sources.
+	// GetFields must not touch the source.
 	fp.ExpectLog(t, nil)
 }
 
 func TestDiscardInputs(t *testing.T) {
-	fp1 := &fakePrimitive{}
-	fp2 := &fakePrimitive{}
-	disc := &Discard{Sources: []Primitive{fp1, fp2}}
+	fp := &fakePrimitive{}
+	disc := &Discard{Source: fp}
 
 	inputs, _ := disc.Inputs()
-	require.Len(t, inputs, 2)
-	assert.Same(t, fp1, inputs[0])
-	assert.Same(t, fp2, inputs[1])
+	require.Len(t, inputs, 1)
+	assert.Same(t, fp, inputs[0])
 }
