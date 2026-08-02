@@ -1085,6 +1085,10 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 
 	sourceKeyspace := req.SourceKeyspace
 	targetKeyspace := req.TargetKeyspace
+	if workflowType == binlogdatapb.VReplicationWorkflowType_MoveTables && sourceKeyspace == targetKeyspace {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "source and target keyspace must be different for MoveTables workflows")
+	}
+
 	// Enforce the table-selection invariants at the RPC boundary, mirroring
 	// the vtctldclient validation in common.ValidateTableSelection: VTAdmin
 	// forwards a raw request and direct gRPC callers bypass the CLI checks.
@@ -1092,7 +1096,8 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 	// silently move only the explicit subset, and a request with no selection
 	// at all would only fail later, after topo access, with a less clear
 	// error. Combining an include list with exclude_tables is supported
-	// behavior.
+	// behavior. This runs after the keyspace check so that the more
+	// fundamental source/target error still takes precedence.
 	if req.AllTables && len(req.IncludeTables) > 0 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot specify both all_tables and an explicit list of tables to include")
 	}
@@ -1101,10 +1106,6 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "exclude_tables requires all_tables or an explicit list of tables to include")
 		}
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "either all_tables or an explicit list of tables to include must be specified")
-	}
-
-	if workflowType == binlogdatapb.VReplicationWorkflowType_MoveTables && sourceKeyspace == targetKeyspace {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "source and target keyspace must be different for MoveTables workflows")
 	}
 
 	var (

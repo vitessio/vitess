@@ -17,11 +17,27 @@ limitations under the License.
 package migrate
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 )
+
+// registerCommands binds flags to the package-level command vars, so it can
+// only run once per test binary; the resulting tree is shared by the tests.
+var (
+	testRoot         = &cobra.Command{Use: "test"}
+	registerTestOnce sync.Once
+)
+
+func testCommand(t *testing.T, path ...string) *cobra.Command {
+	t.Helper()
+	registerTestOnce.Do(func() { registerCommands(testRoot) })
+	cmd, _, err := testRoot.Find(path)
+	require.NoError(t, err)
+	return cmd
+}
 
 // TestCreatePreRunETableSelection runs the create command's PreRunE with the
 // flag forms an operator or automation actually passes. pflag marks --tables=
@@ -30,12 +46,7 @@ import (
 // rejected here rather than reaching the server-side guard (or, against an
 // older vtctld, the late "no tables to move" failure).
 func TestCreatePreRunETableSelection(t *testing.T) {
-	// registerCommands binds flags to the package-level command vars, so it
-	// can only run once per test binary.
-	root := &cobra.Command{Use: "test"}
-	registerCommands(root)
-	cmd, _, err := root.Find([]string{"Migrate", "create"})
-	require.NoError(t, err)
+	cmd := testCommand(t, "Migrate", "create")
 
 	tests := []struct {
 		name    string
