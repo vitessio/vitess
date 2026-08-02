@@ -453,6 +453,9 @@ func (tsv *TabletServer) StartService(target *querypb.Target, dbcfgs *dbconfigs.
 // should be called before process termination, or if MySQL is unreachable.
 // Under normal circumstances, SetServingType should be called.
 func (tsv *TabletServer) StopService() {
+	// Shut down the query throttler before closing the underlying services so its
+	// background strategy updater stops polling before qThrottler is torn down.
+	tsv.queryThrottler.Shutdown()
 	tsv.sm.StopService()
 }
 
@@ -1163,7 +1166,8 @@ func (tsv *TabletServer) beginWaitForSameRangeTransactions(ctx context.Context, 
 			}
 
 			return waitErr
-		})
+		},
+	)
 	return txDone, err
 }
 
@@ -2072,6 +2076,9 @@ func (tsv *TabletServer) HandlePanic(err *error) {
 
 // Close shuts down any remaining go routines
 func (tsv *TabletServer) Close(ctx context.Context) error {
+	// Shut down the query throttler before closing the underlying services so its
+	// background strategy updater stops polling before qThrottler is torn down.
+	tsv.queryThrottler.Shutdown()
 	tsv.sm.closeAll()
 	tsv.stats.Stop()
 	return nil

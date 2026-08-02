@@ -213,6 +213,13 @@ func (qt *QueryThrottler) Shutdown() {
 	}
 }
 
+// IsShutdown reports whether Shutdown has been called. Used to verify lifecycle wiring.
+func (qt *QueryThrottler) IsShutdown() bool {
+	qt.mu.Lock()
+	defer qt.mu.Unlock()
+	return qt.shutdown
+}
+
 // InitDBConfig initializes the keyspace for the config watch and loads the initial configuration.
 // This method is called by TabletServer during the tablet initialization sequence (see
 // go/vt/vttablet/tabletserver/tabletserver.go:InitDBConfig), which happens when:
