@@ -57,8 +57,9 @@ type EmergencyReparenter struct {
 // EmergencyReparentShard operations. Options are passed by value, so it is safe
 // for callers to mutate and reuse options structs for multiple calls.
 type EmergencyReparentOptions struct {
-	NewPrimaryAlias *topodatapb.TabletAlias
-	IgnoreReplicas  sets.Set[string]
+	NewPrimaryAlias          *topodatapb.TabletAlias
+	AllowSplitBrainPromotion bool
+	IgnoreReplicas           sets.Set[string]
 	// WaitAllTablets is used to specify whether ERS should wait for all the tablets to return and not proceed
 	// further after n-1 tablets have returned.
 	WaitAllTablets            bool
@@ -91,9 +92,15 @@ type relayLogWaitResult struct {
 }
 
 // counters for Emergency Reparent Shard
-var ersCounter = stats.NewCountersWithMultiLabels(
-	"EmergencyReparentCounts", "Number of times Emergency Reparent Shard has been run",
-	[]string{"Keyspace", "Shard", "Result"},
+var (
+	ersCounter = stats.NewCountersWithMultiLabels(
+		"EmergencyReparentCounts", "Number of times Emergency Reparent Shard has been run",
+		[]string{"Keyspace", "Shard", "Result"},
+	)
+	ersSplitBrainOverrides = stats.NewCountersWithMultiLabels(
+		"EmergencyReparentSplitBrainOverrides", "Number of Emergency Reparent Shard split-brain detections accepted for an explicitly selected primary",
+		[]string{"Keyspace", "Shard"},
+	)
 )
 
 // NewEmergencyReparenter returns a new EmergencyReparenter object, ready to
@@ -123,6 +130,9 @@ func (erp *EmergencyReparenter) ReparentShard(ctx context.Context, keyspace stri
 	var err error
 	statsLabels := []string{keyspace, shard}
 
+	if err = validateEmergencyReparentOptions(opts); err != nil {
+		return nil, err
+	}
 	opts.lockAction = erp.getLockAction(opts.NewPrimaryAlias)
 	// First step is to lock the shard for the given operation, if not already locked
 	if err = topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
@@ -163,6 +173,16 @@ func (erp *EmergencyReparenter) getLockAction(newPrimaryAlias *topodatapb.Tablet
 	}
 
 	return action
+}
+
+func validateEmergencyReparentOptions(opts EmergencyReparentOptions) error {
+	if !opts.AllowSplitBrainPromotion {
+		return nil
+	}
+	if opts.NewPrimaryAlias == nil || topoproto.TabletAliasIsZero(opts.NewPrimaryAlias) {
+		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "--allow-split-brain-promotion requires --new-primary")
+	}
+	return nil
 }
 
 // reparentShardLocked performs Emergency Reparent Shard operation assuming that the shard is already locked
@@ -302,12 +322,35 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	// of waiting for every candidate and failing on any error.
 	waitCandidates := validCandidates
 	requireAll := true
+	splitBrainOverrideActive := false
+	var suspectedSplitBrainCandidates map[string]*RelayLogPositions
 	if isGTIDBased {
 		waitCandidates = filterToMostAdvancedCombined(validCandidates, erp.logger)
-		// Leading candidates with incomparable positions are a suspected split brain:
-		// wait for all of them so a failed one isn't dropped before findMostAdvanced
-		// sees it
 		requireAll = !hasUniformCombinedPosition(waitCandidates)
+		if requireAll {
+			leadingPositions := describeCombinedPositions(waitCandidates)
+			if !opts.AllowSplitBrainPromotion {
+				suspectedSplitBrainCandidates = maps.Clone(waitCandidates)
+			} else {
+				requestedPrimary := topoproto.TabletAliasString(opts.NewPrimaryAlias)
+				requestedCandidate, ok := waitCandidates[requestedPrimary]
+				if !ok {
+					return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "requested primary %s is not a leading candidate in the suspected split-brain: %s", requestedPrimary, leadingPositions)
+				}
+
+				splitBrainOverrideActive = true
+				ersSplitBrainOverrides.Add([]string{keyspace, shard}, 1)
+				erp.logger.Warningf("EmergencyReparentShard split-brain promotion allowed in keyspace %s shard %s for new primary %s; the divergent branches of the other leading candidates (%s) are discarded and those tablets may require re-cloning", keyspace, shard, requestedPrimary, leadingPositions)
+
+				// Promote exactly the requested primary and discard the divergent branches.
+				// Reducing the candidate set here means the relay-log wait, the errant-GTID
+				// skip, and the election all operate on that one tablet: only it needs to apply
+				// its relay logs, so a wedged losing branch cannot block the recovery this
+				// override exists for.
+				validCandidates = map[string]*RelayLogPositions{requestedPrimary: requestedCandidate}
+				waitCandidates = validCandidates
+			}
+		}
 	}
 
 	// Keep the pre-wait candidates around: tablets that fail the wait are removed from
@@ -341,7 +384,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	}
 
 	// For GTID based replication, we will run errant GTID detection.
-	if isGTIDBased {
+	if isGTIDBased && !splitBrainOverrideActive {
 		// Failed waiters are only ever removed from a uniform leading group (a
 		// requireAll wait aborts on failure instead of removing anyone), so a failed
 		// tablet received exactly what the surviving leaders received, including every
@@ -413,6 +456,18 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 				if err != nil {
 					return err
 				}
+			}
+		}
+
+		if len(suspectedSplitBrainCandidates) > 0 {
+			survivingLeaders := 0
+			for alias := range suspectedSplitBrainCandidates {
+				if _, ok := validCandidates[alias]; ok {
+					survivingLeaders++
+				}
+			}
+			if survivingLeaders != 1 {
+				return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "suspected split-brain: leading candidates have incomparable Combined GTID positions: %s; specify --new-primary with --allow-split-brain-promotion to continue", describeCombinedPositions(suspectedSplitBrainCandidates))
 			}
 		}
 

@@ -184816,6 +184816,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {boolean|null} [prevent_cross_cell_promotion] EmergencyReparentShardRequest prevent_cross_cell_promotion
          * @property {boolean|null} [wait_for_all_tablets] EmergencyReparentShardRequest wait_for_all_tablets
          * @property {topodata.TabletAlias.$Properties|null} [expected_primary] EmergencyReparentShardRequest expected_primary
+         * @property {boolean|null} [allow_split_brain_promotion] EmergencyReparentShardRequest allow_split_brain_promotion
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -184913,6 +184914,14 @@ export const vtctldata = $root.vtctldata = (() => {
         EmergencyReparentShardRequest.prototype.expected_primary = null;
 
         /**
+         * EmergencyReparentShardRequest allow_split_brain_promotion.
+         * @member {boolean} allow_split_brain_promotion
+         * @memberof vtctldata.EmergencyReparentShardRequest
+         * @instance
+         */
+        EmergencyReparentShardRequest.prototype.allow_split_brain_promotion = false;
+
+        /**
          * Creates a new EmergencyReparentShardRequest instance using the specified properties.
          * @function create
          * @memberof vtctldata.EmergencyReparentShardRequest
@@ -184961,6 +184970,8 @@ export const vtctldata = $root.vtctldata = (() => {
                 writer.uint32(/* id 7, wireType 0 =*/56).bool(message.wait_for_all_tablets);
             if (message.expected_primary != null && $Object.hasOwnProperty.call(message, "expected_primary"))
                 $root.topodata.TabletAlias.encode(message.expected_primary, writer.uint32(/* id 8, wireType 2 =*/66).fork(), _depth + 1).ldelim();
+            if (message.allow_split_brain_promotion != null && $Object.hasOwnProperty.call(message, "allow_split_brain_promotion"))
+                writer.uint32(/* id 9, wireType 0 =*/72).bool(message.allow_split_brain_promotion);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -185070,6 +185081,15 @@ export const vtctldata = $root.vtctldata = (() => {
                         message.expected_primary = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.expected_primary);
                         continue;
                     }
+                case 9: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.allow_split_brain_promotion = value;
+                        else
+                            delete message.allow_split_brain_promotion;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -185149,6 +185169,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 if (error)
                     return "expected_primary." + error;
             }
+            if (message.allow_split_brain_promotion != null && $Object.hasOwnProperty.call(message, "allow_split_brain_promotion"))
+                if (typeof message.allow_split_brain_promotion !== "boolean")
+                    return "allow_split_brain_promotion: boolean expected";
             return null;
         };
 
@@ -185207,6 +185230,9 @@ export const vtctldata = $root.vtctldata = (() => {
                     throw $TypeError(".vtctldata.EmergencyReparentShardRequest.expected_primary: object expected");
                 message.expected_primary = $root.topodata.TabletAlias.fromObject(object.expected_primary, _depth + 1);
             }
+            if (object.allow_split_brain_promotion != null)
+                if (object.allow_split_brain_promotion)
+                    message.allow_split_brain_promotion = $Boolean(object.allow_split_brain_promotion);
             return message;
         };
 
@@ -185237,6 +185263,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 object.prevent_cross_cell_promotion = false;
                 object.wait_for_all_tablets = false;
                 object.expected_primary = null;
+                object.allow_split_brain_promotion = false;
             }
             if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
                 object.keyspace = message.keyspace;
@@ -185257,6 +185284,8 @@ export const vtctldata = $root.vtctldata = (() => {
                 object.wait_for_all_tablets = message.wait_for_all_tablets;
             if (message.expected_primary != null && $Object.hasOwnProperty.call(message, "expected_primary"))
                 object.expected_primary = $root.topodata.TabletAlias.toObject(message.expected_primary, options, _depth + 1);
+            if (message.allow_split_brain_promotion != null && $Object.hasOwnProperty.call(message, "allow_split_brain_promotion"))
+                object.allow_split_brain_promotion = message.allow_split_brain_promotion;
             return object;
         };
 

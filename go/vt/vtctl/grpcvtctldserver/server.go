@@ -1311,6 +1311,7 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 	span.Annotate("keyspace", req.Keyspace)
 	span.Annotate("shard", req.Shard)
 	span.Annotate("new_primary_alias", topoproto.TabletAliasString(req.NewPrimary))
+	span.Annotate("allow_split_brain_promotion", req.AllowSplitBrainPromotion)
 
 	ignoreReplicaAliases := topoproto.TabletAliasList(req.IgnoreReplicas).ToStringSlice()
 	span.Annotate("ignore_replicas", strings.Join(ignoreReplicaAliases, ","))
@@ -1340,6 +1341,7 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 		req.Shard,
 		reparentutil.EmergencyReparentOptions{
 			NewPrimaryAlias:           req.NewPrimary,
+			AllowSplitBrainPromotion:  req.AllowSplitBrainPromotion,
 			IgnoreReplicas:            sets.New(ignoreReplicaAliases...),
 			WaitReplicasTimeout:       waitReplicasTimeout,
 			WaitAllTablets:            req.WaitForAllTablets,

@@ -68,6 +68,7 @@ func TestFindPositionsOfAllCandidates(t *testing.T) {
 		expected          []string
 		expectedGTIDBased bool
 		shouldErr         bool
+		errContains       string
 	}{
 		{
 			name: "success",
@@ -110,6 +111,30 @@ func TestFindPositionsOfAllCandidates(t *testing.T) {
 			shouldErr:         false,
 		},
 		{
+			name:      "GTID-based primary only",
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{},
+			primaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{
+				"p1": {
+					Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+				},
+			},
+			expected:          []string{"p1"},
+			expectedGTIDBased: true,
+			shouldErr:         false,
+		},
+		{
+			name:      "non-GTID-based primary only",
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{},
+			primaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{
+				"p1": {
+					Position: "FilePos/mysql-bin.0001:10",
+				},
+			},
+			expected:          []string{"p1"},
+			expectedGTIDBased: false,
+			shouldErr:         false,
+		},
+		{
 			name: "mixed replication modes",
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"r1": {
@@ -125,8 +150,47 @@ func TestFindPositionsOfAllCandidates(t *testing.T) {
 					},
 				},
 			},
-			expected:  nil,
-			shouldErr: true,
+			expected:    nil,
+			shouldErr:   true,
+			errContains: "encountered mix of GTID-based and non GTID-based relay logs",
+		},
+		{
+			name: "GTID-based primary with non-GTID-based replica",
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"r1": {
+					After: &replicationdatapb.Status{
+						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+						RelayLogPosition: "FilePos/mysql-bin.0001:10",
+					},
+				},
+			},
+			primaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{
+				"p1": {
+					Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+				},
+			},
+			expected:    nil,
+			shouldErr:   true,
+			errContains: "encountered mix of GTID-based and non GTID-based relay logs",
+		},
+		{
+			name: "non-GTID-based primary with GTID-based replica",
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"r1": {
+					After: &replicationdatapb.Status{
+						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+					},
+				},
+			},
+			primaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{
+				"p1": {
+					Position: "FilePos/mysql-bin.0001:10",
+				},
+			},
+			expected:    nil,
+			shouldErr:   true,
+			errContains: "encountered mix of GTID-based and non GTID-based relay logs",
 		},
 		{
 			name: "tablet without relay log position",
@@ -162,7 +226,12 @@ func TestFindPositionsOfAllCandidates(t *testing.T) {
 					},
 				},
 			},
-			expected:  []string{"r1", "r2"},
+			primaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{
+				"p1": {
+					Position: "FilePos/mysql-bin.0001:100",
+				},
+			},
+			expected:  []string{"r1", "r2", "p1"},
 			shouldErr: false,
 		},
 		{
@@ -192,7 +261,10 @@ func TestFindPositionsOfAllCandidates(t *testing.T) {
 			actual, isGTIDBased, err := FindPositionsOfAllCandidates(tt.statusMap, tt.primaryStatusMap)
 			require.Equal(t, tt.expectedGTIDBased, isGTIDBased)
 			if tt.shouldErr {
-				assert.Error(t, err)
+				require.Error(t, err)
+				if tt.errContains != "" {
+					require.ErrorContains(t, err, tt.errContains)
+				}
 				return
 			}
 
@@ -2036,6 +2108,25 @@ func TestHasUniformCombinedPosition(t *testing.T) {
 			assert.Equal(t, tt.want, hasUniformCombinedPosition(tt.candidates))
 		})
 	}
+}
+
+func TestDescribeCombinedPositions(t *testing.T) {
+	candidates := map[string]*RelayLogPositions{
+		"zone2-0000000102": {
+			Combined: mustPosition(t, "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb:1-7"),
+		},
+		"zone1-0000000101": {
+			Combined: mustPosition(t, "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:1-6"),
+		},
+		"zone1-0000000100": {
+			Combined: mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"),
+		},
+	}
+
+	assert.Equal(t,
+		"zone1-0000000100=3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5, zone1-0000000101=aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:1-6, zone2-0000000102=bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb:1-7",
+		describeCombinedPositions(candidates),
+	)
 }
 
 func TestFilterToMostAdvancedCombined(t *testing.T) {

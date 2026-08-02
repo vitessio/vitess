@@ -55,7 +55,7 @@ func init() {
 	addCommand("Shards", command{
 		name:   "EmergencyReparentShard",
 		method: commandEmergencyReparentShard,
-		params: "--keyspace_shard=<keyspace/shard> [--new_primary=<tablet alias>] [--wait_replicas_timeout=<duration>] [--ignore_replicas=<tablet alias list>] [--prevent_cross_cell_promotion=<true/false>]",
+		params: "--keyspace_shard=<keyspace/shard> [--new_primary=<tablet alias>] [--allow-split-brain-promotion] [--wait_replicas_timeout=<duration>] [--ignore_replicas=<tablet alias list>] [--prevent_cross_cell_promotion=<true/false>]",
 		help:   "Reparents the shard to the new primary. Assumes the old primary is dead and not responding.",
 	})
 	addCommand("Shards", command{
@@ -170,6 +170,7 @@ func commandEmergencyReparentShard(ctx context.Context, wr *wrangler.Wrangler, s
 	waitReplicasTimeout := subFlags.Duration("wait_replicas_timeout", topo.RemoteOperationTimeout, "time to wait for replicas to catch up in reparenting")
 	keyspaceShard := subFlags.String("keyspace_shard", "", "keyspace/shard of the shard that needs to be reparented")
 	newPrimary := subFlags.String("new_primary", "", "optional alias of a tablet that should be the new primary. If not specified, Vitess will select the best candidate")
+	allowSplitBrainPromotion := subFlags.Bool("allow-split-brain-promotion", false, "allow promoting --new-primary when divergent GTID histories are detected")
 	preventCrossCellPromotion := subFlags.Bool("prevent_cross_cell_promotion", false, "only promotes a new primary from the same cell as the previous primary")
 	ignoreReplicasList := subFlags.String("ignore_replicas", "", "comma-separated list of replica tablet aliases to ignore during emergency reparent")
 	waitForAllTablets := subFlags.Bool("wait_for_all_tablets", false, "should ERS wait for all the tablets to respond. Useful when all the tablets are reachable")
@@ -188,6 +189,10 @@ func commandEmergencyReparentShard(ctx context.Context, wr *wrangler.Wrangler, s
 		return errors.New("action EmergencyReparentShard requires --keyspace_shard=<keyspace/shard>")
 	}
 
+	if *allowSplitBrainPromotion && *newPrimary == "" {
+		return errors.New("--allow-split-brain-promotion requires --new_primary")
+	}
+
 	keyspace, shard, err := topoproto.ParseKeyspaceShard(*keyspaceShard)
 	if err != nil {
 		return err
@@ -199,9 +204,9 @@ func commandEmergencyReparentShard(ctx context.Context, wr *wrangler.Wrangler, s
 			return err
 		}
 	}
-
 	return wr.EmergencyReparentShard(ctx, keyspace, shard, reparentutil.EmergencyReparentOptions{
 		NewPrimaryAlias:           tabletAlias,
+		AllowSplitBrainPromotion:  *allowSplitBrainPromotion,
 		WaitAllTablets:            *waitForAllTablets,
 		WaitReplicasTimeout:       *waitReplicasTimeout,
 		IgnoreReplicas:            topoproto.ParseTabletSet(*ignoreReplicasList),
